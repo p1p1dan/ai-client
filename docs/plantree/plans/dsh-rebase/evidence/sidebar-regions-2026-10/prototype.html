@@ -1,0 +1,3007 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>侧栏分区与首页原型 · issue #6 v4（dsh.8 现状 vs 方案）</title>
+<style>
+/* =====================================================================
+   Static preview prototype for GitHub issue #6 (the left 「聊天」 sidebar and,
+   from v2, a home page in the center column). Not product code; nothing here
+   is imported by the app.
+
+   - 现状 (current) is the dsh.8 build (feat/dsh-p0-probe @ 6ca5bf42): the
+     issue #3 prototype's 方案 view plus the deviations listed in decision 167
+     section 26. Its "nothing open" stand-in is dsh.8's own start screen.
+   - 方案 (proposal) v2 is issue #6 as the user ruled it after seeing v1
+     (2026-10-10): the sidebar's top region is only 「正在活动」, folders are
+     ordered by activity, and the center column has a home page. v1 (the
+     two-segment 「最近」) stays one toolbar switch away.
+   - v3 (user ruling 2026-10-10) changes only the home page: a title naming the
+     work bar's repository, 最近对话, and the real composer docked where a
+     conversation has it. v2's home (two buttons) is one toolbar switch away.
+   - v4 (user feedback 2026-10-10) re-sets the home page only: a quieter title
+     anchored at the golden section (or the middle) of the area over the
+     composer, 5 recent chats, the branch picked on the home switched at send
+     time, and the prompt shown when a running chat blocks that switch.
+   - Colour tokens are copied verbatim from src/renderer/styles/globals.css
+     (:root = Flexoki light, .dark = Flexoki dark). The two NEW tokens
+     (--text-section, --foreground-soft) are proposals, marked below.
+   - Utility classes reuse Tailwind's class NAMES with hand-written
+     declarations matching Tailwind v4 output at the desktop (`sm:`)
+     breakpoint, so the markup reads like the class strings the
+     implementation would write.
+   - All data is synthetic (no real titles, repositories, users or emails).
+   ===================================================================== */
+
+/* ---- tokens: globals.css :root (Flexoki Light) ---- */
+:root {
+  --panel-bg-opacity: 1;
+  --font-size-base: 16px;
+  --background: oklch(0.9931 0.012 96.42 / var(--panel-bg-opacity, 1));
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.97 0.0106 100.82 / var(--panel-bg-opacity, 1));
+  --card-foreground: oklch(0.1696 0.0017 17.32);
+  --popover: oklch(0.97 0.0106 100.82 / var(--panel-bg-opacity, 1));
+  --popover-foreground: oklch(0.1696 0.0017 17.32);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --primary-foreground: oklch(0.9931 0.012 96.42);
+  --secondary: oklch(0.962 0.0111 89.72);
+  --secondary-foreground: oklch(0.1696 0.0017 17.32);
+  --muted: oklch(0.965 0.0093 99.98 / var(--panel-bg-opacity, 1));
+  --muted-foreground: oklch(0.4531 0.005 91.5);
+  --accent: oklch(0.935 0.0122 96.43);
+  --accent-foreground: oklch(0.1696 0.0017 17.32);
+  --accent-primary: oklch(0.8109 0.1131 56.61);
+  --selection: oklch(0.91 0.0109 95.17);
+  --hover: oklch(0.935 0.0122 96.43);
+  --status-running: oklch(0.4818 0.1315 254.79);
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --destructive-foreground: oklch(0.9931 0.012 96.42);
+  --success: oklch(0.5593 0.1335 122.92);
+  --success-foreground: oklch(0.9931 0.012 96.42);
+  --warning: oklch(0.5665 0.1523 45.02);
+  --warning-foreground: oklch(0.9931 0.012 96.42);
+  --info: oklch(0.4818 0.1315 254.79);
+  --info-foreground: oklch(0.9931 0.012 96.42);
+  --folder: oklch(0.6333 0.1295 85.81);
+  --border: oklch(0.875 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);
+  --ring: oklch(0.5665 0.1523 45.02);
+  --radius: 0.375rem;
+}
+/* ---- tokens: globals.css .dark (Flexoki Dark) ---- */
+.dark {
+  --background: oklch(0.1981 0.0032 17.43 / var(--panel-bg-opacity, 1));
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --card: oklch(0.262 0.0037 48.55 / var(--panel-bg-opacity, 1));
+  --card-foreground: oklch(0.8463 0.0137 102.05);
+  --popover: oklch(0.262 0.0037 48.55 / var(--panel-bg-opacity, 1));
+  --popover-foreground: oklch(0.8463 0.0137 102.05);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --primary-foreground: oklch(0.1981 0.0032 17.43);
+  --secondary: oklch(0.276 0.0024 67.71);
+  --secondary-foreground: oklch(0.8463 0.0137 102.05);
+  --muted: oklch(0.268 0.0025 67.7 / var(--panel-bg-opacity, 1));
+  --muted-foreground: oklch(0.6956 0.0103 93.62);
+  --accent: oklch(0.305 0.0029 17.32);
+  --accent-foreground: oklch(0.8463 0.0137 102.05);
+  --accent-primary: oklch(0.8109 0.1131 56.61);
+  --selection: oklch(0.325 0.0029 17.31);
+  --hover: oklch(0.305 0.0029 17.32);
+  --status-running: oklch(0.5988 0.1104 247);
+  --destructive: oklch(0.597 0.1692 28.38);
+  --destructive-foreground: oklch(0.1981 0.0032 17.43);
+  --success: oklch(0.7227 0.1178 117.2);
+  --success-foreground: oklch(0.1981 0.0032 17.43);
+  --warning: oklch(0.6576 0.1539 49.3);
+  --warning-foreground: oklch(0.1981 0.0032 17.43);
+  --info: oklch(0.5988 0.1104 247);
+  --info-foreground: oklch(0.1981 0.0032 17.43);
+  --folder: oklch(0.7346 0.1462 87.46);
+  --border: oklch(0.34 0.0038 84.58);
+  --input: oklch(0.3651 0.0044 67.69);
+  --ring: oklch(0.6576 0.1539 49.3);
+}
+/* ---- PROPOSED tokens for issue #6 (not in globals.css yet) ----
+   --foreground-soft: chat titles (L3), one step below --foreground, alpha-free.
+   v2 (user ruling 2026-10-10): derived, the oklab midpoint of --foreground and
+   --muted-foreground, declared once in :root like --tool-arg. It renders
+   #31302F light / #B6B5AC dark (within dE 0.012 of Flexoki base-850 /
+   base-300) and follows whatever palette sets those two, sync-terminal too.
+   `.ink-800` / `.ink-850` pin Flexoki literals for comparison (v1 = ink-800). */
+:root { --foreground-soft: color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground)); }
+:root.ink-800 { --foreground-soft: oklch(0.3651 0.0044 67.69); }
+:root.ink-800.dark { --foreground-soft: oklch(0.7721 0.0128 96.47); }
+:root.ink-850 { --foreground-soft: oklch(0.3214 0.0038 84.58); }
+:root.ink-850.dark { --foreground-soft: oklch(0.7721 0.0128 96.47); }
+/* ---- @theme: type, radius, font stacks ---- */
+:root {
+  --radius-xs: 0.25rem;
+  --radius-sm: var(--radius);
+  --radius-md: 0.625rem;
+  --radius-lg: 0.75rem;
+  --text-2xs: 10px;
+  --text-code: 0.8125rem;
+  --text-meta: 0.875rem;
+  --text-ui: 0.9375rem;
+  /* PROPOSED: the 16px tier (L0 panel title, L1 section titles, session bar title) */
+  --text-section: 1rem;
+  --text-title: 1.125rem;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable Text", "Segoe UI",
+    "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+    "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "SFMono-Regular", "Menlo",
+    "Cascadia Mono", "Consolas", "Liberation Mono", "DejaVu Sans Mono",
+    "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    monospace;
+}
+
+/* ---- base (Tailwind preflight subset + globals.css @layer base) ---- */
+*, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; border: 0 solid var(--border); }
+html { font-size: var(--font-size-base); font-family: var(--font-sans); line-height: 1.5;
+  font-synthesis-weight: none; -webkit-text-size-adjust: 100%; }
+body { background: var(--background); color: var(--foreground); font-size: var(--text-ui); line-height: 1.55; }
+button, input { font: inherit; font-feature-settings: inherit; letter-spacing: inherit; color: inherit;
+  background-color: transparent; border-radius: 0; }
+button, [role="button"] { cursor: pointer; }
+svg { display: block; vertical-align: middle; }
+input::placeholder { color: color-mix(in oklab, var(--muted-foreground) 72%, transparent); opacity: 1; }
+*:focus-visible { outline: none; box-shadow: none; }
+* { user-select: none; }
+
+/* ---- components: Badge (ui/badge.tsx, desktop sizes) ---- */
+.badge { position: relative; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center;
+  gap: .25rem; white-space: nowrap; border-radius: var(--radius-sm); border: 1px solid transparent; font-weight: 500; }
+.badge svg:not([class*="opacity-"]) { opacity: .8; }
+.badge svg { flex-shrink: 0; pointer-events: none; }
+.badge-lg { height: 1.375rem; min-width: 1.375rem; padding: 0 calc(.375rem - 1px);
+  font-size: .875rem; line-height: calc(1.25 / .875); }
+.badge-warning { background-color: color-mix(in oklab, var(--warning) 8%, transparent); color: var(--warning); }
+.dark .badge-warning { background-color: color-mix(in oklab, var(--warning) 16%, transparent); }
+.badge-destructive { background-color: var(--destructive); color: #fff; }
+
+/* ---- components: Button (ui/button.tsx; desktop `sm:` sizes) ---- */
+.btn { position: relative; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: .5rem;
+  white-space: nowrap; border: 1px solid transparent; font-weight: 500; font-size: .875rem; text-transform: lowercase;
+  letter-spacing: .01em; border-radius: 10px; }
+.btn svg { margin-inline: -.125rem; flex-shrink: 0; pointer-events: none; }
+.btn svg:not([class*="opacity-"]) { opacity: .8; }
+.btn svg:not([class*="size-"]) { width: 1rem; height: 1rem; }
+.btn-xs { height: 1.5rem; gap: .25rem; padding: 0 calc(.5rem - 1px); font-size: .75rem; line-height: calc(1 / .75);
+  border-radius: 8px; }
+.btn-xs svg:not([class*="size-"]) { width: .875rem; height: .875rem; }
+.btn-icon-xs { width: 1.5rem; height: 1.5rem; border-radius: 8px; }
+.btn-icon-xs svg:not([class*="size-"]) { width: .875rem; height: .875rem; }
+@supports (corner-shape: squircle) {
+  .btn, .btn-xs, .btn-icon-xs { corner-shape: squircle; border-radius: 50px; }
+}
+.btn-outline { border-color: var(--border); background-color: var(--background); background-clip: padding-box;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+.dark .btn-outline { background-color: color-mix(in oklab, var(--input) 32%, transparent); background-clip: border-box; }
+.btn-outline:hover { background-color: color-mix(in oklab, var(--accent) 50%, transparent); }
+.btn-ghost { border-color: transparent; }
+.btn-ghost:hover { background-color: var(--accent); }
+
+/* ---- components: InputGroup (ui/input-group.tsx) ---- */
+.input-group { position: relative; display: inline-flex; width: 100%; min-width: 0; align-items: center;
+  border-radius: var(--radius-lg); border: 1px solid var(--input); background-color: var(--background);
+  background-clip: padding-box; font-size: .875rem; line-height: calc(1.25 / .875);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+.input-group::before { content: ''; pointer-events: none; position: absolute; inset: 0;
+  border-radius: calc(var(--radius-lg) - 1px); box-shadow: 0 1px rgb(0 0 0 / .04); }
+.input-group.rounded-sm::before { border-radius: calc(var(--radius-sm) - 1px); }
+.dark .input-group { background-color: color-mix(in oklab, var(--input) 32%, transparent); background-clip: border-box; }
+.dark .input-group::before { box-shadow: 0 -1px rgb(255 255 255 / .08); }
+.input-group > [data-slot="input-control"] { display: contents; }
+.input-group input { height: 1.625rem; width: 100%; min-width: 0; line-height: 1.625rem; outline: none;
+  padding-inline: .375rem calc(.625rem - 1px); }
+.input-group-addon { display: flex; cursor: text; align-items: center; justify-content: center; gap: .5rem;
+  order: -9999; padding-inline-start: calc(.625rem - 1px); }
+.input-group-addon svg { margin-inline: -.125rem; }
+.input-group-addon svg:not([class*="opacity-"]) { opacity: .8; }
+
+/* ---- components: ScrollArea (ui/scroll-area.tsx + @base-ui/react 1.1.0) ----
+   Root: `size-full min-h-0` + inline `position: relative`. Viewport: `h-full`
+   + inline `overflow: scroll` with the native bar hidden. The scrollbar is an
+   absolutely positioned overlay (`m-1 w-1.5`), visible only while hovering or
+   scrolling; the 「滚动条」 toggle draws it as if hovered. */
+.viewport { overflow: scroll; scrollbar-width: none; overscroll-behavior: contain; }
+.viewport::-webkit-scrollbar { display: none; }
+.sa-bar { position: absolute; top: 0; bottom: 0; right: 0; margin: .25rem; width: .375rem; pointer-events: none; }
+.sa-thumb { position: absolute; left: 0; right: 0; border-radius: 9999px;
+  background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
+/* scrollFade="bottom" (FADE_BOTTOM in scroll-area.tsx), driven by --oy-end */
+.fade-b { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - min(1.5rem, var(--oy-end, 0px))), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - min(1.5rem, var(--oy-end, 0px))), transparent); }
+
+/* ---- utilities (Tailwind names, desktop values) ---- */
+.flex { display: flex; } .inline-flex { display: inline-flex; } .grid { display: grid; }
+.hidden { display: none; } .block { display: block; }
+.flex-col { flex-direction: column; } .flex-1 { flex: 1 1 0%; }
+.shrink-0 { flex-shrink: 0; } .shrink { flex-shrink: 1; } .shrink-\[1000\] { flex-shrink: 1000; }
+.items-center { align-items: center; } .justify-center { justify-content: center; } .justify-end { justify-content: flex-end; }
+.justify-items-end { justify-items: end; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-rows-\[auto_minmax\(0\,1fr\)\] { grid-template-rows: auto minmax(0, 1fr); }
+.min-w-0 { min-width: 0; } .min-w-20 { min-width: 5rem; } .min-h-0 { min-height: 0; }
+.w-full { width: 100%; } .h-full { height: 100%; } .size-full { width: 100%; height: 100%; }
+.max-h-\[33\%\] { max-height: 33%; } .max-h-\[25\%\] { max-height: 25%; }
+.relative { position: relative; } .absolute { position: absolute; } .sticky { position: sticky; }
+.inset-0 { inset: 0; } .top-0 { top: 0; }
+.z-10 { z-index: 10; } .isolate { isolation: isolate; }
+.-mx-2 { margin-inline: -.5rem; } .ml-auto { margin-left: auto; }
+.mt-0\.5 { margin-top: .125rem; } .mt-1 { margin-top: .25rem; } .mt-2 { margin-top: .5rem; }
+.overflow-hidden { overflow: hidden; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.text-left { text-align: left; } .text-right { text-align: right; }
+.col-start-1 { grid-column-start: 1; } .row-start-1 { grid-row-start: 1; }
+.h-1\.5 { height: .375rem; } .w-1\.5 { width: .375rem; } .size-1\.5 { width: .375rem; height: .375rem; }
+.size-2\.5 { width: .625rem; height: .625rem; }
+.size-3 { width: .75rem; height: .75rem; }
+.h-3\.5 { height: .875rem; } .w-3\.5 { width: .875rem; } .size-3\.5 { width: .875rem; height: .875rem; }
+.w-4 { width: 1rem; } .size-4 { width: 1rem; height: 1rem; } .size-4\.5 { width: 1.125rem; height: 1.125rem; }
+.size-5 { width: 1.25rem; height: 1.25rem; } .size-6 { width: 1.5rem; height: 1.5rem; }
+.h-6 { height: 1.5rem; } .w-6 { width: 1.5rem; }
+.h-7 { height: 1.75rem; } .h-8 { height: 2rem; } .w-8 { width: 2rem; } .h-9 { height: 2.25rem; }
+.w-10 { width: 2.5rem; } .w-\[60px\] { width: 60px; } .max-w-24 { max-width: 6rem; }
+.p-2 { padding: .5rem; } .px-1 { padding-inline: .25rem; } .px-2 { padding-inline: .5rem; }
+.px-3 { padding-inline: .75rem; } .px-4 { padding-inline: 1rem; }
+.pt-0\.5 { padding-top: .125rem; } .pb-2 { padding-bottom: .5rem; } .pl-3 { padding-left: .75rem; }
+.gap-0\.5 { gap: .125rem; } .gap-1 { gap: .25rem; } .gap-1\.5 { gap: .375rem; } .gap-2 { gap: .5rem; }
+:where(.space-y-0\.5 > :not(:last-child)) { margin-bottom: .125rem; }
+:where(.space-y-1 > :not(:last-child)) { margin-bottom: .25rem; }
+:where(.space-y-2 > :not(:last-child)) { margin-bottom: .5rem; }
+.text-xs { font-size: .75rem; line-height: calc(1 / .75); }
+.text-meta { font-size: var(--text-meta); line-height: 1.5; }
+.text-ui { font-size: var(--text-ui); line-height: 1.5; }
+.text-section { font-size: var(--text-section); line-height: 1.5; }
+.font-normal { font-weight: 400; } .font-medium { font-weight: 500; } .font-semibold { font-weight: 600; }
+.tracking-\[0\.04em\] { letter-spacing: .04em; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+.text-foreground { color: var(--foreground); } .text-muted-foreground { color: var(--muted-foreground); }
+.text-foreground-soft { color: var(--foreground-soft); }
+.text-accent-foreground { color: var(--accent-foreground); } .text-primary-foreground { color: var(--primary-foreground); }
+.text-folder { color: var(--folder); } .text-success { color: var(--success); }
+.text-destructive { color: var(--destructive); } .text-status-running { color: var(--status-running); }
+.bg-background { background-color: var(--background); } .bg-card { background-color: var(--card); }
+.bg-card\/40 { background-color: color-mix(in oklab, var(--card) 40%, transparent); }
+.bg-selection { background-color: var(--selection); } .bg-warning { background-color: var(--warning); }
+.bg-success { background-color: var(--success); } .bg-destructive { background-color: var(--destructive); }
+.bg-primary { background-color: var(--primary); } .bg-muted { background-color: var(--muted); }
+.bg-status-running { background-color: var(--status-running); }
+.border { border-width: 1px; } .border-b { border-bottom-width: 1px; } .border-t { border-top-width: 1px; }
+.border-r { border-right-width: 1px; }
+.border-border { border-color: var(--border); } .border-primary { border-color: var(--primary); }
+.border-muted-foreground { border-color: var(--muted-foreground); }
+.rounded-xs { border-radius: var(--radius-xs); } .rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); } .rounded-full { border-radius: 9999px; }
+.opacity-0 { opacity: 0; }
+.scroll-pt-8 { scroll-padding-top: 2rem; }
+/* variants come after the base utilities, as in Tailwind's output */
+.sm\:text-meta { font-size: var(--text-meta); line-height: 1.5; }
+.sm\:size-5 { width: 1.25rem; height: 1.25rem; }
+.hover\:bg-hover:hover { background-color: var(--hover); }
+.focus-visible\:bg-hover:focus-visible { background-color: var(--hover); }
+.has-focus-visible\:bg-hover:has(:focus-visible) { background-color: var(--hover); }
+.group:hover .group-hover\:hidden, .group:focus-within .group-focus-within\:hidden { display: none; }
+.group:hover .group-hover\:flex, .group:focus-within .group-focus-within\:flex { display: flex; }
+.group:hover .group-hover\:invisible, .group:focus-within .group-focus-within\:invisible { visibility: hidden; }
+.group:hover .group-hover\:opacity-100, .group:focus-within .group-focus-within\:opacity-100 { opacity: 1; }
+
+/* ---- issue #6 v2: home page, entries, center column ---- */
+/* Button size `default` (desktop sm:h-8) and variant `default` (ui/button.tsx) */
+.btn-md { height: 2rem; padding: 0 calc(.75rem - 1px); }
+.btn-primary { border-color: var(--primary); background-color: var(--primary); color: var(--primary-foreground);
+  box-shadow: 0 1px 2px 0 color-mix(in oklab, var(--primary) 24%, transparent), inset 0 1px rgb(255 255 255 / .16); }
+.btn-primary:hover { border-color: var(--accent-primary); background-color: color-mix(in oklab, var(--primary) 90%, transparent); }
+.rail-sep { width: 1.5rem; height: 0; flex-shrink: 0; margin: .25rem 0; border-top: 1px solid var(--border); }
+.mx-auto { margin-inline: auto; } .max-w-reading { max-width: 45rem; } .max-w-sm { max-width: 24rem; }
+.max-w-\[45\%\] { max-width: 45%; }
+.px-6 { padding-inline: 1.5rem; } .pt-5 { padding-top: 1.25rem; } .pt-12 { padding-top: 3rem; }
+.pb-6 { padding-bottom: 1.5rem; } .pb-12 { padding-bottom: 3rem; } .pl-2 { padding-left: .5rem; }
+.mt-3 { margin-top: .75rem; } .mt-6 { margin-top: 1.5rem; } .mt-8 { margin-top: 2rem; } .mt-auto { margin-top: auto; }
+.mb-3 { margin-bottom: .75rem; } .mb-6 { margin-bottom: 1.5rem; }
+.gap-3 { gap: .75rem; } .w-12 { width: 3rem; } .size-12 { width: 3rem; height: 3rem; }
+.text-center { text-align: center; } .rounded-lg { border-radius: var(--radius-lg); }
+.text-title { font-size: var(--text-title); }
+.text-primary { color: var(--primary); }
+.bg-primary\/10 { background-color: color-mix(in oklab, var(--primary) 10%, transparent); }
+.border-l { border-left-width: 1px; }
+/* SessionBar toggles (barToggleClass): h-6, text-meta, muted */
+.bar-btn { display: inline-flex; align-items: center; gap: .25rem; height: 1.5rem; padding: 0 .5rem; border-radius: var(--radius-sm);
+  font-size: var(--text-meta); line-height: 1.5; color: var(--muted-foreground); }
+/* stand-ins for content the preview does not draw */
+.ph-line { height: .75rem; border-radius: 9999px; background: color-mix(in oklab, var(--muted-foreground) 16%, transparent); }
+.ph-bubble { margin-left: auto; width: 55%; height: 2.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--card); }
+.composer-ph { display: flex; flex-direction: column; min-height: 6.5rem; padding: .75rem; border: 1px solid var(--border);
+  border-radius: var(--radius-lg); background: var(--card); box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+.send-ph { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 9999px;
+  background: var(--primary); color: var(--primary-foreground); }
+/* 「仓库顺序标注」 overlay (prototype only) */
+.ann-col { position: relative; flex-shrink: 0; height: 100%; border-left: 1px dashed rgb(220 0 160 / .5); }
+.ann-head { position: absolute; top: 44px; left: 10px; right: 8px; font: 600 14px/20px var(--font-sans); color: rgb(190 0 140); }
+.ann-label { position: absolute; left: 10px; height: 18px; white-space: nowrap; padding: 0 6px; border-radius: 3px;
+  font: 600 12px/18px var(--font-sans); color: #fff; background: rgb(220 0 160 / .85); }
+
+/* ---- issue #6 v3: the home page with the real composer ---- */
+/* --text-chat-body is globals.css's D1 value (17px: chat prose and the composer).
+   PROPOSED --text-display: the home title. v4: 26px / 1.3, the sentence 400 and
+   the workspace 600. v3 drew it at 28px / 600 (kept as .text-display-v3 for the
+   comparison). Both are >= 18px, so the heading tracking -0.01em is allowed
+   (design-system "Letter-spacing"). */
+:root { --text-chat-body: 17px; --text-display: 1.625rem; }
+.text-display { font-size: var(--text-display); line-height: 1.3; }
+.text-display-v3 { font-size: 1.75rem; line-height: 1.3; }
+.font-heading { font-family: var(--font-sans); }
+.tracking-\[-0\.01em\] { letter-spacing: -0.01em; }
+.min-h-full { min-height: 100%; } .min-h-18\.5 { min-height: 4.625rem; }
+.ms-auto { margin-inline-start: auto; } .-me-1 { margin-inline-end: -.25rem; } .mx-3 { margin-inline: .75rem; }
+.mt-1\.5 { margin-top: .375rem; } .mt-10 { margin-top: 2.5rem; } .my-2 { margin-block: .5rem; }
+.max-w-md { max-width: 28rem; } .max-w-40 { max-width: 10rem; } .max-w-56 { max-width: 14rem; } .max-w-60 { max-width: 15rem; }
+.p-1 { padding: .25rem; } .pt-0 { padding-top: 0; } .pb-1 { padding-bottom: .25rem; } .pb-3\.5 { padding-bottom: .875rem; }
+.px-1\.5 { padding-inline: .375rem; } .py-1\.5 { padding-block: .375rem; }
+.h-3 { height: .75rem; } .w-3 { width: .75rem; }
+.place-items-center { place-items: center; } .whitespace-nowrap { white-space: nowrap; } .opacity-80 { opacity: .8; }
+.rounded-t-xs { border-top-left-radius: var(--radius-xs); border-top-right-radius: var(--radius-xs); }
+.rounded-t-md { border-top-left-radius: var(--radius-md); border-top-right-radius: var(--radius-md); }
+.grid-rows-\[minmax\(0\,1fr\)\] { grid-template-rows: minmax(0, 1fr); }
+/* the home title: the workspace is the work bar's repository, in the brand ink */
+.home-ws { display: inline-flex; align-items: center; gap: .2em; max-width: 14em; vertical-align: top; color: var(--primary); }
+.home-ws svg { width: .8em; height: .8em; flex-shrink: 0; color: var(--folder); }
+.home-ws > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-spacer-top { flex: 2 1 0%; min-height: 3rem; }
+.home-spacer-bottom { flex: 3 1 0%; min-height: 2rem; }
+/* ChatComposer pieces (middleColumnLayout.ts, desktop values). The textarea is
+   drawn as its placeholder: session = one line of calc(--text-chat-body * 1.5),
+   empty = min-h-14 with the textarea's own 5px block padding. */
+.composer-input { width: 100%; min-height: calc(var(--text-chat-body) * 1.5 * var(--composer-rows, 1)); overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; font-size: var(--text-chat-body); line-height: calc(var(--text-chat-body) * 1.5);
+  color: color-mix(in oklab, var(--muted-foreground) 72%, transparent); }
+.composer-input-empty { min-height: 3.5rem; padding-block: 5px; }
+/* ComposerRoundButton: size-6 rounded-full; send / enqueue foreground, stop destructive */
+.round-btn { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem;
+  border-radius: 9999px; border: 1px solid transparent; }
+.round-send { border-color: var(--foreground); background: var(--foreground); color: var(--background); }
+.round-stop { border-color: var(--destructive); background: var(--destructive); color: var(--destructive-foreground); }
+.round-disabled { opacity: .64; }
+/* BranchSwitcher size="xs" (SelectTrigger): transparent border, input-coloured on hover / open */
+.branch-trigger { display: inline-flex; min-width: 0; max-width: 15rem; flex-shrink: 1; align-items: center; gap: .25rem;
+  padding: .25rem .5rem; border: 1px solid transparent; border-radius: var(--radius-md); font-size: .75rem; line-height: 1rem;
+  color: var(--muted-foreground); }
+.branch-trigger:hover:not(:disabled), .branch-trigger.branch-open { border-color: var(--input); color: var(--foreground); }
+.branch-trigger:disabled { opacity: .64; cursor: default; }
+/* the work bar's popups (coss Combobox / Select popup chrome; CJK at 14px) */
+.menu-popup { position: absolute; z-index: 50; display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--popover); color: var(--popover-foreground);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / .1), 0 4px 6px -4px rgb(0 0 0 / .1); }
+.menu-head, .menu-foot { flex-shrink: 0; }
+.menu-list { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.menu-list::-webkit-scrollbar { display: none; }
+.menu-label { padding: .25rem .5rem; font-size: var(--text-meta); line-height: 1.5; color: var(--muted-foreground); }
+.menu-item { display: grid; grid-template-columns: 1rem minmax(0, 1fr); align-items: center; gap: .5rem; min-height: 1.75rem;
+  padding: .25rem 1rem .25rem .5rem; border-radius: var(--radius-sm); font-size: var(--text-meta); line-height: 1.25rem; }
+.menu-item:hover { background: var(--accent); color: var(--accent-foreground); }
+.menu-check { display: flex; align-items: center; justify-content: center; }
+.menu-sep { height: 1px; margin: .25rem .5rem; background: var(--border); }
+.menu-empty { padding: .5rem; text-align: center; font-size: var(--text-meta); color: var(--muted-foreground); }
+.menu-foot { border-top: 1px solid var(--border); padding: .25rem; }
+.menu-foot-btn { display: flex; width: 100%; height: 1.75rem; align-items: center; gap: .5rem; padding: 0 .5rem;
+  border-radius: var(--radius-sm); font-size: var(--text-ui); line-height: 1.5; }
+.menu-foot-btn:hover { background: var(--hover); }
+/* the first message, as the timeline shows it right after the send (stand-in) */
+.user-bubble { max-width: 80%; padding: .5rem .75rem; border-radius: var(--radius-lg); background: var(--secondary);
+  border: 1px solid var(--border); font-size: var(--text-chat-body); line-height: 1.55; }
+/* LeftNav's empty state: EmptyMedia variant="icon" (two tilted ghost cards behind) */
+.empty-media { position: relative; margin-bottom: 1.5rem; }
+.empty-card { position: relative; display: flex; width: 2.25rem; height: 2.25rem; flex-shrink: 0; align-items: center;
+  justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card);
+  color: var(--foreground); box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+.empty-ghost { position: absolute; bottom: 1px; box-shadow: none; }
+.empty-ghost-l { transform-origin: bottom left; transform: translateX(-.125rem) rotate(-10deg) scale(.84); }
+.empty-ghost-r { transform-origin: bottom right; transform: translateX(.125rem) rotate(10deg) scale(.84); }
+
+/* ---- issue #6 v4: the anchored home title, the send-time branch ---- */
+/* The title's centre sits at --home4-anchor of the area over the composer
+   (container-query units of that area): the top spacer is the anchor minus half
+   the title's line box. The recent list hangs below. When the block would come
+   closer than 2rem to the composer, the top spacer shrinks (the only item that
+   may) and the block slides up; at 3rem it stops and the area scrolls. */
+.home4-area { container-type: size; }
+.home4-col { display: flex; flex-direction: column; height: 100%; padding-inline: 1.5rem; }
+.home4-pos-golden { --home4-anchor: 38.2cqh; }
+.home4-pos-center { --home4-anchor: 50cqh; }
+.home4-t-v4 { --home4-title-half: calc(var(--text-display) * 0.65); }
+.home4-t-v3 { --home4-title-half: calc(1.75rem * 0.65); }
+.home4-top { flex: 0 1 auto; height: calc(var(--home4-anchor) - var(--home4-title-half)); min-height: 3rem; }
+.home4-body { flex: 0 0 auto; }
+.home4-bottom { flex: 1 0 auto; min-height: 2rem; }
+/* The v4 title: a quiet sentence (400, secondary ink) around one emphasised
+   token (600, foreground): the workspace, or PiLab when there is none. */
+.home4-title { font-family: var(--font-sans); font-size: var(--text-display); line-height: 1.3; font-weight: 400;
+  letter-spacing: -0.01em; color: var(--muted-foreground); }
+.home4-em { display: inline-block; max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  vertical-align: bottom; font-weight: 600; color: var(--foreground); }
+.cjkwin .home4-em { font-weight: 700; }
+.cjkwin .alert-title { font-weight: 400; }
+.composer-input-typed { color: var(--foreground); }
+/* v4.1: the empty composer rests at --composer-rows lines (2 by default, user 2026-10-10) of
+   the chat body line box; content still grows it to the existing 8-line cap. */
+/* coss Tooltip (ui/tooltip.tsx: rounded-md border bg-popover shadow-md px-2 py-1),
+   text lifted from its text-xs (12px) to 14px for CJK; BranchColumn's max-w-66. */
+.tip-popup { position: absolute; z-index: 50; max-width: 16.5rem; padding: .25rem .5rem; border: 1px solid var(--border);
+  border-radius: var(--radius-md); background: var(--popover); color: var(--popover-foreground);
+  font-size: var(--text-meta); line-height: 1.5; text-wrap: balance;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / .05), 0 2px 4px -2px rgb(0 0 0 / .05); }
+/* coss Alert variant="warning" (ui/alert.tsx), as ModelMissingNotice uses it
+   above the composer card (`className="mb-2"`): icon | title | actions. */
+.alert { position: relative; display: grid; grid-template-columns: 1rem minmax(0, 1fr) auto; align-items: start;
+  column-gap: .5rem; row-gap: .125rem; width: 100%; padding: .75rem .875rem; border: 1px solid var(--border);
+  border-radius: var(--radius-md); font-size: .875rem; line-height: 1.25rem; color: var(--card-foreground); }
+.alert > svg { width: 1rem; height: 1.25rem; }
+.alert-warning { border-color: color-mix(in oklab, var(--warning) 32%, transparent);
+  background-color: color-mix(in oklab, var(--warning) 4%, transparent); }
+.alert-warning > svg { color: var(--warning); }
+.alert-title { grid-column-start: 2; font-weight: 500; }
+.alert-action { grid-column-start: 3; grid-row: 1 / 3; align-self: center; display: flex; gap: .25rem; }
+.mb-2 { margin-bottom: .5rem; }
+
+/* ---- 「CJK / Win10 字重」 simulation ----
+   Microsoft YaHei UI has Light / Regular / Bold only, Segoe UI (Win10) has no
+   500: a requested 500 falls to 400 and 600 rounds up to Bold 700. This dev
+   box's CJK face (Noto Sans CJK SC, Regular / Bold) already behaves that way
+   for Chinese; the toggle makes the Latin text follow too. */
+.cjkwin .font-medium, .cjkwin .badge, .cjkwin .btn { font-weight: 400; }
+.cjkwin .font-semibold { font-weight: 700; }
+
+/* ---- prototype shell (not part of the design) ---- */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
+body.shot .spin { animation: none; }
+.proto-root { position: relative; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
+  background: var(--background); color: var(--foreground); }
+.titlebar .logo { width: 20px; height: 20px; border-radius: 5px; border: 1px solid var(--border); background: var(--muted); }
+.app { position: relative; display: flex; flex: 1 1 0%; min-height: 0; }
+.dock { position: relative; display: flex; height: 100%; flex-shrink: 0; }
+.rail-mark { position: absolute; top: .375rem; bottom: .375rem; left: -.375rem; width: .125rem;
+  border-radius: 9999px; background: var(--primary); }
+.center-note { padding: 12px 16px; line-height: 1.6; }
+.guide { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed rgb(220 0 160 / .75); }
+.guide-label { position: absolute; transform: translateX(-50%); padding: 0 3px; white-space: nowrap; font: 600 11px/14px var(--font-mono);
+  color: #fff; background: rgb(220 0 160 / .85); border-radius: 3px; }
+#stage { display: flex; gap: 24px; align-items: flex-start; padding: 16px; }
+.cmp { display: flex; gap: 16px; align-items: flex-start; }
+.cmp-label { height: 28px; display: flex; align-items: center; font-size: 14px; font-weight: 600; color: var(--foreground); }
+.cmp-label small { margin-left: 8px; font-weight: 400; color: var(--muted-foreground); font-size: 14px; }
+body.shot { overflow: hidden; }
+body.shot #stage { display: inline-flex; padding: 0; gap: 0; }
+body.shot #controls, body.shot #report { display: none; }
+#controls { position: sticky; top: 0; z-index: 100; display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 16px;
+  border-bottom: 1px solid var(--border); background: var(--card); font-size: 14px; }
+#controls .grp { display: flex; align-items: center; gap: 6px; }
+#controls .grp > span { color: var(--muted-foreground); }
+#controls .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+#controls .seg button { padding: 2px 10px; border-right: 1px solid var(--border); }
+#controls .seg button:last-child { border-right: 0; }
+#controls .seg button[aria-pressed="true"] { background: var(--selection); font-weight: 600; }
+#controls label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+#report { margin: 0 16px 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card); font: 12px/1.45 var(--font-mono); white-space: pre-wrap; max-width: 1200px; }
+</style>
+</head>
+<body>
+<!--ICONS:BEGIN-->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="i-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-list-checks" viewBox="0 0 24 24"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></symbol>
+<symbol id="i-list-filter" viewBox="0 0 24 24"><path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/></symbol>
+<symbol id="i-chevrons-down-up" viewBox="0 0 24 24"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-folder-open" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-ellipsis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-trash-2" viewBox="0 0 24 24"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+<symbol id="i-shield-question" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-loader-circle" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-house" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+<symbol id="i-arrow-left-right" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></symbol>
+<symbol id="i-messages-square" viewBox="0 0 24 24"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"/></symbol>
+<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></symbol>
+<symbol id="i-send-horizontal" viewBox="0 0 24 24"><path d="M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z"/><path d="M6 12h16"/></symbol>
+<symbol id="i-square" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/></symbol>
+<symbol id="i-list-plus" viewBox="0 0 24 24"><path d="M16 5H3"/><path d="M11 12H3"/><path d="M16 19H3"/><path d="M18 9v6"/><path d="M21 12h-6"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+<symbol id="i-chevrons-up-down" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+<symbol id="i-folder-git-2" viewBox="0 0 24 24"><path d="M18 19a5 5 0 0 1-5-5v8"/><path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"/><circle cx="13" cy="12" r="2"/><circle cx="20" cy="19" r="2"/></symbol>
+<symbol id="i-message-square" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="i-git-branch" viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+<symbol id="i-file-code" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/></symbol>
+<symbol id="i-square-terminal" viewBox="0 0 24 24"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+<symbol id="i-panel-left-close" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></symbol>
+<symbol id="i-blocks" viewBox="0 0 24 24"><path d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2"/><rect x="14" y="2" width="8" height="8" rx="1"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></symbol>
+</svg>
+<!--ICONS:END-->
+<div id="controls"></div>
+<div id="stage"></div>
+<pre id="report"></pre>
+<script>
+(() => {
+  'use strict';
+
+  // ------------------------------------------------------------------ state
+  const params = new URLSearchParams(location.search);
+  const pick = (v, allowed, dflt) => (allowed.includes(v) ? v : dflt);
+  const on = (k) => params.get(k) === '1'; // off unless =1
+  const notOff = (k) => params.get(k) !== '0'; // on unless =0
+  const SHOT = on('shot');
+  const st = {
+    mode: pick(params.get('mode'), ['current', 'proposal', 'compare'], 'proposal'),
+    theme: pick(params.get('theme'), ['light', 'dark'], 'light'),
+    w: pick(params.get('w'), ['280', '360', '500'], '280'),
+    h: pick(params.get('h'), ['720', '900', '1080'], '900'),
+    full: notOff('full'),
+    // issue #6 v2
+    top: pick(params.get('top'), ['v2', 'v1'], 'v2'),
+    scene: pick(params.get('scene'), ['startup', 'busy', 'newuser', 'norepo'], 'startup'),
+    center: pick(params.get('center'), ['home', 'chat'], 'home'),
+    open: params.get('open') || 's1',
+    entry: pick(params.get('entry'), ['rail', 'toolbar', 'none'], 'rail'),
+    order: pick(params.get('order'), ['activity', 'original'], 'activity'),
+    // issue #6 v3: the home page (v2 = two buttons + 最近对话), the work bar's
+    // repository (auto = the most recently active one), an open work-bar menu,
+    // and 「sent」: the first message has gone out from the home page.
+    home: pick(params.get('home'), ['v4', 'v3', 'v2'], 'v4'),
+    target: params.get('target') || 'auto',
+    menu: pick(params.get('menu'), ['none', 'repo', 'branch'], 'none'),
+    sent: on('sent'),
+    // issue #6 v4: the title's style (v3 kept for comparison) and position, the
+    // branch picked on the home (switched at send time; '' = the current one),
+    // a tooltip drawn as if hovered, text in the composer, and the prompt shown
+    // when a running chat blocks the switch at send time.
+    title: pick(params.get('title'), ['v4', 'v3'], 'v4'),
+    pos: pick(params.get('pos'), ['golden', 'center'], 'golden'),
+    branch: params.get('branch') || '',
+    tip: pick(params.get('tip'), ['none', 'branch-lock'], 'none'),
+    typed: on('typed'),
+    blocked: on('blocked'),
+    // v4.1: the empty composer's resting height (方案 only): dsh.8's one line, 2, 3 or 4 lines; the user settled on 2 (2026-10-10).
+    composer: pick(params.get('composer'), ['current', '2', '3', '4'], '2'),
+    // states
+    recent: pick(params.get('recent'), ['expanded', 'collapsed'], 'expanded'),
+    active: pick(params.get('active'), ['less', 'all'], 'less'),
+    lower: pick(params.get('lower'), ['less', 'all'], 'less'),
+    homemore: pick(params.get('homemore'), ['less', 'all'], 'less'),
+    rscroll: pick(params.get('rscroll'), ['top', 'bottom'], 'top'),
+    scroll: pick(params.get('scroll'), ['top', 'mid', 'bottom'], 'top'),
+    folders: pick(params.get('folders'), ['open', 'collapsed'], 'open'),
+    ink: pick(params.get('ink'), ['mix', 'soft850', 'soft', 'fg'], 'mix'),
+    cjk: on('cjk'),
+    guides: on('guides'),
+    bars: on('bars'),
+    fade: notOff('fade'),
+    ann: on('ann'),
+  };
+  if (SHOT) document.body.classList.add('shot');
+  // The blocked prompt is about a branch picked before the lock arrived.
+  if (st.blocked && !st.branch) st.branch = 'feature/home-composer';
+
+  // ------------------------------------------------------------------- data
+  // Synthetic. Issue #3's 26 repository folders (one empty) with 54 chats and
+  // 4 temporary chats, plus the 「临时工作区」 folder (the synthetic Temp
+  // project, listed last) with 2 chats: 60 chats. In the 「使用中」 scene
+  // seven of them are active (host-bound or running); in the 「启动时」 scene
+  // none is — nothing is started on the engine right after a launch.
+  // v3 adds 「新用户」 (three repositories, no chat yet) and 「没有仓库」
+  // (a fresh install: no repository, no chat).
+  // Clock frozen so ages and screenshots are stable.
+  const MIN = 60000;
+  const NOW = new Date(2026, 9, 9, 15, 20, 0).getTime();
+  const RECENT_WINDOW = 48 * 60 * MIN;
+  const LIMIT = {
+    current: { active: Infinity, lower: 7 }, // dsh.8: decision 167 section 1
+    proposal: { active: 5, lower: 5 }, // issue #6 ruling 4 (v1); v2 keeps 5 for 「正在活动」
+  };
+  const FOLDER_LIMIT = 8;
+  const HOME_LIMIT = 10;
+  const D = 1440;
+  // Window width for each window height option (1280x720, 1440x900, 1920x1080).
+  const WIN_W = { 720: 1280, 900: 1440, 1080: 1920 };
+
+  const S = (id, title, ageMin, extra = {}) => ({ id, title, ageMin, ...extra });
+  const F = (id, name, branch, sessions, extra = {}) => ({ id, name, branch, sessions, ...extra });
+  const ALL_FOLDERS = [
+    F('atlas', 'atlas-web', 'main', [
+      S('a1', '为结算流程补充端到端测试用例', 25, { wt: 'feature/checkout-e2e-tests', unread: true, bound: true }),
+      S('a2', '优化首页首屏加载时间', 300),
+      S('a3', '统一按钮组件的尺寸与圆角', 1800),
+      S('a4', '修复暗色主题下的对比度不足', 3120),
+      S('a5', '生成 API 文档并校对示例', 3 * D),
+      S('a6', '分析错误日志中的高频异常', 5 * D),
+      S('a7', '设计通知中心的数据结构', 7 * D),
+      S('a8', '补全国际化词条中的英文残留', 14 * D),
+      S('a9', '把表单校验逻辑抽成通用钩子', 21 * D),
+      S('a10', 'New chat', 30 * D),
+    ]),
+    F('beacon', 'beacon-api', 'develop', [
+      S('b1', '梳理权限审批的边界情况', 6, { status: 'waiting', bound: true, pending: 2 }),
+      S('b2', '给速率限制补充集成测试', 2900),
+    ], { diff: [12, 4] }),
+    F('cobalt', 'cobalt-cli', 'main', [
+      S('c1', '为子命令补全 shell 自动补全脚本', 660, { bound: true }),
+      S('c2', '修复 Windows 路径分隔符问题', 3 * D),
+    ]),
+    F('delta', 'delta-docs', 'main', [
+      S('d1', '把 README 拆成多页文档站', 840),
+      S('d2', '校对安装指南里的命令', 6 * D),
+    ]),
+    F('ember', 'ember-ui', 'main', [
+      S('e1', '实现可折叠的侧边面板组件', 2400),
+      S('e2', '补充组件快照测试', 7 * D),
+    ]),
+    F('fjord', 'fjord-sync', 'main', [
+      S('f1', '设计离线同步的冲突解决策略', 3 * D),
+      S('f2', '压测增量同步接口', 14 * D),
+    ]),
+    F('garnet', 'garnet-ml', 'main', [
+      S('g1', '整理训练数据清洗脚本', 5 * D),
+      S('g2', '评估模型推理延迟', 21 * D),
+    ]),
+    F('harbor', 'harbor-infra', 'main', [S('h1', '编写 Terraform 模块的变量说明', 2940)]),
+    F('iris', 'iris-mobile', 'main', [S('i1', '修复安卓端键盘遮挡输入框', 4 * D)]),
+    F('juniper', 'juniper-etl', 'main', [S('j1', '优化每日汇总任务的执行时间', 6 * D)]),
+    F('kestrel', 'kestrel-auth', 'main', [S('k1', '接入短信验证码的限流', 7 * D)]),
+    F('lumen', 'lumen-site', 'master', [
+      S('l1', '整理本周发布说明草稿', 5 * D, { legacy: true }),
+      S('l2', '更新落地页文案与配图说明', 8 * D),
+    ]),
+    F('mosaic', 'mosaic-design', 'main', [S('m1', '整理设计令牌命名规范', 14 * D)]),
+    F('nimbus', 'nimbus-agent', 'main', [
+      S('s1', '拉取远端更新', 0.2, { status: 'running', bound: true }),
+      S('s2', '重构侧栏会话列表的层级与间距', 18, { bound: true, wt: 'feature/sidebar-hierarchy' }),
+      S('s3', '修复登录页在弱网下反复跳转的问题', 180, { wt: 'fix/login-redirect-loop' }),
+      S('s4', '解释这段正则为什么会回溯超时', 420),
+      S('s5', '给 CLI 增加 --dry-run 参数', 1200),
+      S('s6', 'New chat', 1560),
+      S('s7', '写一份数据库索引优化方案', 3000),
+      S('s8', '评估迁移到新版路由库的工作量', 3 * D),
+      S('s9', '检查依赖许可证并生成清单', 4 * D),
+      S('s10', '排查构建产物体积突然变大的原因', 6 * D),
+      S('s11', '把图片上传改成分片续传', 9 * D),
+      S('s12', '复查缓存失效策略的边界条件', 12 * D),
+    ], { diff: [128, 36] }),
+    F('onyx', 'onyx-billing', 'main', [S('o1', '核对账单导出的金额精度', 21 * D)]),
+    // Remote: the derivation gives remote repositories no branch today, so the
+    // folder row says only 「远程」 (decision 167 section 14).
+    F('pylon', 'pylon-gateway', null, [
+      S('p1', '排查网关偶发 502 的原因', 540, { bound: true }),
+      S('p2', '梳理灰度发布的回滚步骤', 4 * D),
+    ], { remote: true }),
+    F('quartz', 'quartz-search', 'main', [
+      S('q1', '调研流式输出卡顿的原因', 120, { status: 'failed' }),
+      S('q2', '对比两种分词方案的召回率', 6 * D),
+    ]),
+    F('raven', 'raven-notify', 'main', [S('r1', '合并重复的推送通道配置', 30 * D)]),
+    F('sable', 'sable-admin', 'main', [S('sa1', '给后台列表加批量操作', 32 * D)]),
+    F('tundra', 'tundra-cache', 'main', [S('t1', '分析缓存命中率下降的原因', 60 * D)]),
+    F('umber', 'umber-report', 'release/2026.10', [S('u1', '生成季度报表的图表模板', 5 * D)]),
+    F('vertex', 'vertex-sdk', 'main', [S('v1', '为 SDK 增加重试与退避', 15 * D)]),
+    F('willow', 'willow-blog', 'main', [S('w1', '迁移博客评论系统', 90 * D)]),
+    F('xenon', 'xenon-bench', 'main', [S('x1', '搭建基准测试的对比看板', 42 * D)]),
+    F('yarrow', 'yarrow-bot', 'main', [S('y1', '让机器人支持多轮追问', 120 * D)]),
+    F('zephyr', 'zephyr-tools', 'main', []),
+    // The synthetic Temp project (setting "temporary workspaces" on): no branch,
+    // no repository menu, three hover actions per row (decision 167 section 22).
+    F('tempws', '临时工作区', null, [
+      S('tw1', '试跑一段日志解析脚本', 3 * D),
+      S('tw2', '对比两种 CSV 解析库的速度', 10 * D),
+    ], { tempWorkspace: true }),
+  ];
+  const ALL_TEMP = [
+    S('tmp1', '把这段 JSON 转成 TypeScript 类型', 240, { bound: true }),
+    S('tmp2', '比较两种排序算法的复杂度', 3 * D),
+    S('tmp3', '帮我起草一份会议纪要模板', 7 * D),
+    S('tmp4', 'New chat', 14 * D),
+  ];
+  // dsh.8 at startup: the tree sync activates a blank 「新建对话」 seed in the
+  // selected repository (`aiclient-selected-repo`); assumed nimbus-agent here.
+  const SEED_FOLDER = 'nimbus';
+  const NEWUSER_FOLDERS = [F('atlas', 'atlas-web', 'main', []), F('beacon', 'beacon-api', 'develop', []), F('cobalt', 'cobalt-cli', 'main', [])];
+  // The scene's folders and temporary chats (set by useData).
+  let FOLDERS = ALL_FOLDERS;
+  let TEMP = ALL_TEMP;
+  // v3 「已从首页发送」: the conversation the home page's first message started.
+  const SENT_MESSAGE = '把首页的版式规则整理成一份说明，包括标题、最近对话和输入框的位置。';
+  const SENT_TITLE = '整理首页的版式规则';
+  const KNOWN = new Set([...ALL_FOLDERS.flatMap((f) => f.sessions.map((s) => s.id)), ...ALL_TEMP.map((s) => s.id), 'new1']);
+  if (!KNOWN.has(st.open)) st.open = 's1';
+
+  // The session list of the root being rendered or measured (scene-dependent),
+  // and the conversation open in its center column (null = the home page).
+  let SESSIONS = [];
+  let byId = new Map();
+  let SELECTED = null;
+  let RENDER_MODE = 'proposal';
+  const useData = (mode) => {
+    RENDER_MODE = mode;
+    // Only 「使用中」 has live chats; every other scene is right after a launch.
+    const quiet = st.scene !== 'busy';
+    FOLDERS = st.scene === 'newuser' ? NEWUSER_FOLDERS : st.scene === 'norepo' ? [] : ALL_FOLDERS;
+    TEMP = st.scene === 'newuser' || st.scene === 'norepo' ? [] : ALL_TEMP;
+    const list = [];
+    const mk = (s, folder, live = false) => {
+      const status = quiet && !live ? 'idle' : s.status || 'idle';
+      return {
+        ...s,
+        folder,
+        temp: !folder,
+        updatedAt: NOW - Math.round(s.ageMin * MIN),
+        status,
+        busy: status === 'running' || status === 'waiting',
+        failed: status === 'failed',
+        bound: (!quiet || live) && !!s.bound,
+        unread: (!quiet || live) && !!s.unread,
+        pending: quiet && !live ? 0 : s.pending || 0,
+      };
+    };
+    for (const f of FOLDERS) for (const s of f.sessions) list.push(mk(s, f));
+    for (const s of TEMP) list.push(mk(s, null));
+    // dsh.8 has no "no conversation" state: its stand-in for the home page is
+    // the blank seed chat the tree sync opens at startup (none without a repository).
+    const seedFolder = FOLDERS.find((f) => f.id === SEED_FOLDER) || null;
+    const seed = mode === 'current' && st.center === 'home' && !!seedFolder;
+    if (seed) list.push(mk(S('seed', 'New chat', 0), seedFolder));
+    SESSIONS = list;
+    // v3: the first message sent from the home page started a conversation in
+    // the work bar's repository; it is running, so it is also 「正在活动」.
+    const sent = mode === 'proposal' && st.home !== 'v2' && st.sent;
+    if (sent) {
+      const target = homeTargetFolder();
+      // v4: a branch picked on the home was switched to at send time.
+      const branchNow = target ? homeDraftBranch(target) || undefined : undefined;
+      list.push(mk(S('new1', SENT_TITLE, 0, { status: 'running', bound: true, firstMessage: SENT_MESSAGE, branchNow }), target, true));
+    }
+    byId = new Map(list.map((s) => [s.id, s]));
+    SELECTED =
+      sent && st.center === 'chat' ? 'new1' : st.center === 'chat' ? (byId.has(st.open) ? st.open : null) : seed ? 'seed' : null;
+  };
+
+  // Interaction state that is not worth a URL parameter.
+  const ui = { collapsed: new Set(), showAll: new Set(), tempCollapsed: false };
+  const syncFolders = () => {
+    const n = FOLDERS.filter((f) => ui.collapsed.has(f.id)).length;
+    st.folders = n === FOLDERS.length ? 'collapsed' : n === 0 ? 'open' : 'mixed';
+  };
+  if (st.folders === 'collapsed') for (const f of ALL_FOLDERS) ui.collapsed.add(f.id);
+
+  // ----------------------------------------------------------- derivations
+  const byUpdated = (a, b) => b.updatedAt - a.updatedAt;
+  // deriveActiveRows: host-bound or busy; busy first, then last activity.
+  const activeRows = () =>
+    SESSIONS.filter((s) => s.bound || s.busy).sort((a, b) => Number(b.busy) - Number(a.busy) || byUpdated(a, b));
+  // deriveRecentRows: busy or touched within 48h, newest first.
+  const recentAll = () => SESSIONS.filter((s) => s.busy || NOW - s.updatedAt <= RECENT_WINDOW).sort(byUpdated);
+  // v1: the lower segment drops EVERY upper row (folded ones included) before its cap.
+  const recentLower = () => {
+    const upper = new Set(activeRows().map((s) => s.id));
+    return recentAll().filter((s) => !upper.has(s.id));
+  };
+  // A capped list: N rows + 「查看更多（rest）」, or all + 「收起」.
+  const capRows = (rows, limit, showAll) => {
+    if (showAll || rows.length <= limit) return { rows, hidden: 0, collapsible: showAll && rows.length > limit };
+    return { rows: rows.slice(0, limit), hidden: rows.length - limit, collapsible: false };
+  };
+  const folderRows = (f) => SESSIONS.filter((s) => s.folder === f).sort(byUpdated);
+  const tempRows = () => SESSIONS.filter((s) => s.temp).sort(byUpdated);
+  // limitFolderRows: 8 rows; the open chat is appended when it sorts past the cap.
+  const limitFolder = (rows, showAll) => {
+    if (rows.length <= FOLDER_LIMIT) return { rows, hidden: 0, collapsible: false };
+    if (showAll) return { rows, hidden: 0, collapsible: true };
+    const vis = rows.slice(0, FOLDER_LIMIT);
+    const pinned = rows.slice(FOLDER_LIMIT).find((r) => r.id === SELECTED);
+    if (pinned) vis.push(pinned);
+    return { rows: vis, hidden: rows.length - vis.length, collapsible: false };
+  };
+  // v2: a folder's last activity = its newest chat's.
+  const lastActivity = (f) => {
+    const rows = SESSIONS.filter((s) => s.folder === f);
+    return rows.length ? Math.max(...rows.map((s) => s.updatedAt)) : null;
+  };
+  // v2 ruling: folders by last activity, newest first; folders without chats
+  // after them in their old relative order; 「临时工作区」 always last.
+  // Array.prototype.sort is stable, so ties keep the old order too.
+  const orderedFolders = (P) => {
+    if (!P || st.order === 'original') return FOLDERS;
+    const repos = FOLDERS.filter((f) => !f.tempWorkspace);
+    const withChats = repos.filter((f) => lastActivity(f) != null).sort((a, b) => lastActivity(b) - lastActivity(a));
+    return [...withChats, ...repos.filter((f) => lastActivity(f) == null), ...FOLDERS.filter((f) => f.tempWorkspace)];
+  };
+  // Home page: every chat, newest first, grouped by local calendar day.
+  const homeRows = () => [...SESSIONS].sort(byUpdated);
+  const homeGroup = (ts) => {
+    const today = new Date(NOW);
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return ts >= today.getTime() ? '今天' : ts >= yesterday.getTime() ? '昨天' : '更早';
+  };
+
+  // ------------------------------------------------------------ formatting
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const attrNl = (s) => esc(s).replace(/\n/g, '&#10;');
+  const shownTitle = (s) => (s.title === 'New chat' ? '新建对话' : s.title);
+  // src/renderer/lib/relativeTime.ts formatRelativeAge
+  const relAge = (ts) => {
+    const diff = NOW - ts;
+    const H = 60 * MIN;
+    const DAY = 24 * H;
+    if (diff < MIN) return 'now';
+    if (diff < H) return `${Math.floor(diff / MIN)}m`;
+    if (diff < DAY) return `${Math.floor(diff / H)}h`;
+    if (diff < 7 * DAY) return `${Math.floor(diff / DAY)}d`;
+    if (diff < 30 * DAY) return `${Math.floor(diff / (7 * DAY))}w`;
+    if (diff < 365 * DAY) return `${Math.floor(diff / (30 * DAY))}mo`;
+    return `${Math.floor(diff / (365 * DAY))}y`;
+  };
+  // formatAbsoluteDateTime: always date + time (YYYY-MM-DD HH:MM).
+  const absDateTime = (ts) => {
+    const d = new Date(ts);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  // lastBranchSegment (decision 167 section 2): feature/x -> x
+  const lastSeg = (name) => name.split('/').filter(Boolean).pop() || name;
+  // sidebarRowTooltip's second line; also the home page row's L4 text.
+  const whereOf = (s) => {
+    if (s.temp) return '临时对话';
+    const f = s.folder;
+    const branch = s.wt || f.branch;
+    const where = branch ? `${f.name} · ${branch}` : f.name;
+    return f.remote ? `${where}（远程）` : where;
+  };
+  const tooltip = (s) => `${shownTitle(s)}\n${whereOf(s)}\n更新于 ${absDateTime(s.updatedAt)}`;
+
+  const ic = (name, cls = '') =>
+    `<svg class="${cls}" data-icon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+  const iconBtn = (name, cls, label, iconCls = '', action = '', extra = '') =>
+    `<button type="button" data-slot="button" class="btn btn-ghost btn-icon-xs ${cls}" aria-label="${label}" title="${label}"${action ? ` data-action="${action}"` : ''}${extra}>${ic(name, iconCls)}</button>`;
+  // L1 title buttons: size-6, icon size-3.5, muted (decision 167).
+  const headBtn = (name, label, action = '') => iconBtn(name, 'size-6 text-muted-foreground', label, 'size-3.5', action);
+
+  // ------------------------------------------------------- shared row bits
+  const markerInner = (s) => {
+    if (s.busy) {
+      return s.status === 'waiting'
+        ? '<span role="img" aria-label="等待审批" title="等待审批" class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"></span>'
+        : ic('loader-circle', 'size-3 shrink-0 text-status-running spin');
+    }
+    if (s.unread) {
+      return `<span role="img" aria-label="离开期间已完成" title="离开期间已完成" class="h-1.5 w-1.5 shrink-0 rounded-full ${s.failed ? 'bg-destructive' : 'bg-success'}"></span>`;
+    }
+    if (s.bound) {
+      return '<span aria-hidden="true" title="正在后台运行" class="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground"></span>';
+    }
+    return '';
+  };
+  const LEGACY_HINT = '这个对话迁移到当前引擎之后，又在 1.0.x 里继续聊过。';
+  const badges = (s) => {
+    let h = '';
+    if (s.legacy) h += `<span data-slot="badge" class="badge badge-lg badge-warning shrink-0" title="${LEGACY_HINT}">1.0.x</span>`;
+    if (s.pending) {
+      h += `<span data-slot="badge" class="badge badge-lg badge-warning shrink-0 gap-0.5 tabular-nums" title="${s.pending} 个待审批请求">${ic('shield-question', 'size-3.5')}${s.pending}</span>`;
+    }
+    if (s.failed) h += '<span data-slot="badge" class="badge badge-lg badge-destructive shrink-0">失败</span>';
+    return h;
+  };
+  const timeAndActions = (s) => {
+    // Temporary-workspace rows carry a third (delete) action; both boxes widen together.
+    const tw = !!(s.folder && s.folder.tempWorkspace);
+    const box = tw ? 'w-[60px]' : 'w-10';
+    return (
+      `<span class="shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden ${box}" data-level="4" data-time>${relAge(s.updatedAt)}</span>` +
+      `<div class="hidden shrink-0 items-center justify-end group-hover:flex group-focus-within:flex ${box}">` +
+      iconBtn('archive', 'size-5 sm:size-5', '归档', 'size-3.5') +
+      iconBtn('x', 'size-5 sm:size-5', '从列表中移除', 'size-3.5') +
+      (tw ? iconBtn('trash-2', 'size-5 text-muted-foreground sm:size-5', '删除', 'size-3.5') : '') +
+      '</div>'
+    );
+  };
+
+  // A chat row. 现状: text-ui 15px, foreground. 方案: text-meta 14px and, unless
+  // open, --foreground-soft (the 「正文色（dsh.8）」 option keeps foreground).
+  const row = (s, depth, inRecent, P) => {
+    const active = s.id === SELECTED;
+    const ctx =
+      !inRecent && s.wt
+        ? `<span class="min-w-0 max-w-24 shrink truncate text-meta text-muted-foreground" data-level="4" data-context title="${esc(s.wt)}">${esc(lastSeg(s.wt))}</span>`
+        : '';
+    const size = P ? 'text-meta' : 'text-ui';
+    const ink = P && st.ink !== 'fg' ? 'text-foreground-soft ' : '';
+    const state = active ? 'bg-selection text-accent-foreground' : `${ink}hover:bg-hover focus-visible:bg-hover`;
+    return (
+      `<div role="button" tabindex="0" class="group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left ${size} ${state}" title="${attrNl(tooltip(s))}" data-row data-session="${s.id}" data-depth="${depth}" data-box="L3" data-action="open" data-sid="${s.id}"${s.folder && s.folder.tempWorkspace ? ' data-tw' : ''}>` +
+      `<span class="flex w-4 shrink-0 items-center justify-center" data-slot-marker>${markerInner(s)}</span>` +
+      `<span class="min-w-20 flex-1 truncate" data-level="3" data-title data-align-depth="${depth}">${esc(shownTitle(s))}</span>` +
+      badges(s) +
+      ctx +
+      timeAndActions(s) +
+      '</div>'
+    );
+  };
+  const subLabel = (text, extra = '') =>
+    `<div class="flex h-6 items-center px-2 text-meta text-muted-foreground${extra}" data-level="4" data-sublabel data-box="L4">${text}</div>`;
+  const auxRow = (text, depth, slot = '', attrs = '') =>
+    `<button type="button" class="flex h-6 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover" data-more data-box="L4" ${attrs}><span class="flex w-4 shrink-0 items-center justify-center" aria-hidden="true">${slot}</span><span class="min-w-0 truncate" data-level="4" data-align-depth="${depth}">${text}</span></button>`;
+
+  // Folder row: unchanged by issue #6 (L2 stays text-ui 15px / 600 / foreground).
+  const folderHeader = (f) => {
+    const collapsed = ui.collapsed.has(f.id);
+    const branchText = f.tempWorkspace ? '' : f.remote ? (f.branch ? `${f.branch} · 远程` : '远程') : f.branch;
+    const tip = f.tempWorkspace
+      ? f.name
+      : `${f.name}${f.branch ? `\n主工作区分支：${f.branch}` : ''}${f.remote ? '\n远程仓库' : ''}`;
+    const diff = f.diff
+      ? `<span class="col-start-1 row-start-1 flex items-center gap-1 text-meta tabular-nums group-hover:invisible group-focus-within:invisible" data-level="4"><span class="text-success">+${f.diff[0]}</span><span class="text-destructive">-${f.diff[1]}</span></span>`
+      : '';
+    const hoverBtn = 'size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 sm:size-5';
+    return (
+      `<div class="group flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-ui hover:bg-hover has-focus-visible:bg-hover" data-folder-row data-box="L2">` +
+      `<button type="button" class="flex min-w-0 flex-1 items-center gap-1.5 text-left" title="${attrNl(tip)}" data-action="folder-toggle" data-fid="${f.id}">` +
+      ic(collapsed ? 'folder' : 'folder-open', 'size-4 shrink-0 text-folder') +
+      `<span class="min-w-0 truncate font-semibold" data-level="2" data-name data-align-depth="0">${esc(f.name)}</span>` +
+      (branchText
+        ? `<span class="min-w-0 shrink-[1000] truncate text-meta text-muted-foreground" data-level="4" data-branch>${esc(branchText)}</span>`
+        : '') +
+      '</button>' +
+      `<span class="grid shrink-0 justify-items-end">${diff}<span class="col-start-1 row-start-1 flex items-center">` +
+      (f.tempWorkspace ? '' : iconBtn('ellipsis', hoverBtn, '仓库操作', 'size-3.5')) +
+      iconBtn('plus', hoverBtn, '新建对话', 'size-3.5', f.tempWorkspace ? '' : 'new-in-folder', f.tempWorkspace ? '' : ` data-fid="${f.id}"`) +
+      '</span></span></div>'
+    );
+  };
+  const folderBlock = (f, P) => {
+    let body = '';
+    if (!ui.collapsed.has(f.id)) {
+      const rows = folderRows(f);
+      const lim = limitFolder(rows, ui.showAll.has(f.id));
+      body = lim.rows.map((s) => row(s, 1, false, P)).join('');
+      if (lim.hidden) body += auxRow(`查看更多（${lim.hidden}）`, 1, '', `data-action="folder-more" data-fid="${f.id}"`);
+      else if (lim.collapsible) body += auxRow('收起', 1, '', `data-action="folder-less" data-fid="${f.id}"`);
+      if (!rows.length) body += auxRow('新建对话', 1, ic('plus', 'size-3.5'), `data-action="new-in-folder" data-fid="${f.id}"`);
+      body = `<div class="mt-0.5 space-y-0.5 pl-3">${body}</div>`;
+    }
+    return `<section data-folder="${f.id}">${folderHeader(f)}${body}</section>`;
+  };
+
+  // v1 / dsh.8 「最近」: upper segment 「正在活动」, lower segment 「48 小时内」.
+  // 现状 (dsh.8): upper uncapped, lower 7. 方案 v1: 5 + 5, both foldable.
+  const recentInner = (P) => {
+    const L = P ? LIMIT.proposal : LIMIT.current;
+    const act = activeRows();
+    const upper = capRows(act, L.active, st.active === 'all');
+    const lower = capRows(recentLower(), L.lower, st.lower === 'all');
+    const showLower = st.recent !== 'collapsed' && lower.rows.length > 0;
+    let html = '';
+    if (act.length) {
+      let g = subLabel('正在活动') + upper.rows.map((s) => row(s, 0, true, P)).join('');
+      if (upper.hidden) g += auxRow(`查看更多（${upper.hidden}）`, 0, '', 'data-action="active-more"');
+      else if (upper.collapsible) g += auxRow('收起', 0, '', 'data-action="active-less"');
+      html += `<div role="group" aria-label="正在活动" class="space-y-0.5" data-segment="active">${g}</div>`;
+    }
+    if (showLower) {
+      let g = (act.length ? subLabel('48 小时内', ' mt-1') : '') + lower.rows.map((s) => row(s, 0, true, P)).join('');
+      if (lower.hidden) g += auxRow(`查看更多（${lower.hidden}）`, 0, '', 'data-action="lower-more"');
+      else if (lower.collapsible) g += auxRow('收起', 0, '', 'data-action="lower-less"');
+      html += `<div ${act.length ? 'role="group" aria-label="48 小时内" ' : ''}class="space-y-0.5" data-segment="lower">${g}</div>`;
+    }
+    return html;
+  };
+  // v2 「正在活动」 region: one list, 5 rows + 「查看更多（N）」 / 「收起」.
+  const activeInner = () => {
+    const up = capRows(activeRows(), LIMIT.proposal.active, st.active === 'all');
+    let g = up.rows.map((s) => row(s, 0, true, true)).join('');
+    if (up.hidden) g += auxRow(`查看更多（${up.hidden}）`, 0, '', 'data-action="active-more"');
+    else if (up.collapsible) g += auxRow('收起', 0, '', 'data-action="active-less"');
+    return g;
+  };
+  const topChevron = (name) =>
+    st.recent === 'collapsed'
+      ? headBtn('chevron-right', `展开${name}`, 'toggle-recent')
+      : headBtn('chevron-down', `收起${name}`, 'toggle-recent');
+  const tempChevron = () =>
+    ui.tempCollapsed
+      ? headBtn('chevron-right', '展开临时对话', 'temp-toggle')
+      : headBtn('chevron-down', '收起临时对话', 'temp-toggle');
+
+  // ============================================================ 现状 (dsh.8)
+  // LeftNav.tsx @ 6ca5bf42: ONE ScrollArea; three L1 sections with sticky h-8
+  // titles (two-layer opaque background); `isolate p-2` list root.
+  const headerCurrent = (label, actions) =>
+    '<div class="sticky top-0 z-10 -mx-2 bg-background" data-sticky>' +
+    `<div class="flex h-8 items-center bg-card/40 px-4" data-box="L1">` +
+    `<p class="min-w-0 truncate text-ui font-semibold tracking-[0.04em] text-foreground" data-level="1">${label}</p>` +
+    `<div class="ml-auto flex shrink-0 items-center gap-0.5">${actions}</div>` +
+    '</div></div>';
+  const sectionCurrent = (id, label, actions, body, first) =>
+    `<section class="-mx-2 px-2${first ? '' : ' mt-2 border-t'}" data-section="${id}">${headerCurrent(label, actions)}${body}</section>`;
+  const listCurrent = () => {
+    if (!FOLDERS.length) {
+      // LeftNav's showAddRepositoryEmptyState: the card, then the temporary chats (none here).
+      return (
+        '<div class="relative size-full min-h-0 flex-1" data-scroll-root data-list-area>' +
+        `<div class="viewport h-full" data-viewport data-scroll="list"><div class="isolate p-2" data-list>${emptyRepoCard()}</div></div>` +
+        '</div>'
+      );
+    }
+    const rb = recentInner(false);
+    const recent = sectionCurrent('top', '最近', topChevron('最近'), rb ? `<div class="mt-0.5 space-y-0.5">${rb}</div>` : '', true);
+    const repos = sectionCurrent(
+      'repos',
+      '仓库列表',
+      headBtn('list-filter', '筛选会话') + headBtn('folder-plus', '添加仓库'),
+      `<div class="mt-0.5 space-y-1">${FOLDERS.map((f) => folderBlock(f, false)).join('')}</div>`,
+      false
+    );
+    const tr = tempRows();
+    const temp = tr.length
+      ? sectionCurrent(
+          'temp',
+          '临时对话',
+          tempChevron(),
+          ui.tempCollapsed ? '' : `<div class="mt-0.5 space-y-0.5">${limitFolder(tr, false).rows.map((s) => row(s, 0, false, false)).join('')}</div>`,
+          false
+        )
+      : '';
+    return (
+      '<div class="relative size-full min-h-0 flex-1" data-scroll-root data-list-area>' +
+      `<div class="viewport h-full scroll-pt-8" data-viewport data-scroll="list"><div class="isolate p-2" data-list>${recent}${repos}${temp}</div></div>` +
+      '</div>'
+    );
+  };
+
+  // ================================================================ 方案 (#6)
+  // Regions in a flex column. Each region is a two-row grid: the L1 title
+  // (auto) and a ScrollArea (minmax(0,1fr)). The top region and Temporary
+  // chats are content-sized up to 33% / 25% of the list area; Repositories
+  // takes the rest. No sticky titles: no title is inside a scroll viewport.
+  // `grid-cols-1` (minmax(0,1fr)) is load-bearing: the implicit `auto` column
+  // would grow to the rows' min-content width (nowrap titles) and push every
+  // row past the panel's right edge.
+  const headerProposal = (label, actions) =>
+    `<div class="flex h-8 items-center px-4" data-box="L1">` +
+    `<p class="min-w-0 truncate text-section font-semibold tracking-[0.04em] text-foreground" data-level="1">${label}</p>` +
+    `<div class="ml-auto flex shrink-0 items-center gap-0.5">${actions}</div>` +
+    '</div>';
+  const region = (id, label, actions, inner, cls, attrs = '') =>
+    `<section class="grid min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] ${cls}" data-region="${id}" data-section="${id}"${attrs}>` +
+    headerProposal(label, actions) +
+    '<div class="relative size-full min-h-0" data-scroll-root>' +
+    `<div class="viewport h-full" data-viewport data-scroll="${id}">${inner ? `<div class="px-2 pt-0.5 pb-2" data-list>${inner}</div>` : ''}</div>` +
+    '</div></section>';
+  const listProposal = () => {
+    let top = '';
+    if (st.top === 'v1') {
+      const rb = recentInner(true);
+      top = region('top', '最近', topChevron('最近'), rb ? `<div class="space-y-0.5">${rb}</div>` : '', 'max-h-[33%] shrink-0', ' data-top="v1"');
+    } else if (activeRows().length) {
+      // v2: only 「正在活动」; the whole region (title included) is gone when nothing is active.
+      top = region(
+        'top',
+        '正在活动',
+        topChevron('正在活动'),
+        st.recent === 'collapsed' ? '' : `<div class="space-y-0.5">${activeInner()}</div>`,
+        'max-h-[33%] shrink-0',
+        ' data-top="v2"'
+      );
+    }
+    const repos = !FOLDERS.length
+      ? // No repository: dsh.8's empty-state card in place of the region (no title).
+        `<section class="grid min-h-0 grid-cols-1 grid-rows-[minmax(0,1fr)] flex-1${top ? ' border-t' : ''}" data-region="repos" data-section="repos">` +
+        '<div class="relative size-full min-h-0" data-scroll-root>' +
+        `<div class="viewport h-full" data-viewport data-scroll="repos"><div class="px-2 pt-2 pb-2" data-list>${emptyRepoCard()}</div></div>` +
+        '</div></section>'
+      : region(
+      'repos',
+      '仓库列表',
+      // Ruling 5: collapse all, filter, add — same size-6 / size-3.5 buttons.
+      headBtn('chevrons-down-up', '全部折叠', 'collapse-all') + headBtn('list-filter', '筛选会话') + headBtn('folder-plus', '添加仓库'),
+      `<div class="space-y-1">${orderedFolders(true).map((f) => folderBlock(f, true)).join('')}</div>`,
+      `flex-1${top ? ' border-t' : ''}`
+    );
+    const tr = tempRows();
+    const temp = tr.length
+      ? region(
+          'temp',
+          '临时对话',
+          tempChevron(),
+          ui.tempCollapsed ? '' : `<div class="space-y-0.5">${limitFolder(tr, false).rows.map((s) => row(s, 0, false, true)).join('')}</div>`,
+          'max-h-[25%] shrink-0 border-t'
+        )
+      : '';
+    return `<div class="flex min-h-0 flex-1 flex-col" data-list-area>${top}${repos}${temp}</div>`;
+  };
+
+  // ------------------------------------------------------------ app chrome
+  // WindowTitleBar (Windows / Linux): h-8 including its border-b.
+  const titleBar = () =>
+    '<div class="titlebar flex h-8 shrink-0 items-center border-b bg-background" data-titlebar>' +
+    '<div class="flex h-8 items-center gap-1.5 px-2"><span class="logo"></span>' +
+    '<span class="text-xs font-medium text-muted-foreground">AI Client</span></div></div>';
+  // DockTitle (shared by all five panels): 现状 text-ui 15px / 600, 方案 text-section 16px / 600.
+  const dockTitle = (P) =>
+    `<div class="flex h-9 shrink-0 items-center gap-2 border-b px-3" data-box="L0"><span class="min-w-0 flex-1 truncate ${P ? 'text-section' : 'text-ui'} font-semibold" data-level="0">聊天</span></div>`;
+  // Toolbar + search. v2 entry (b): a 「首页」 button left of 「＋新建」.
+  const toolbar = (P) =>
+    '<div class="space-y-2 border-b p-2" data-toolbar>' +
+    '<div class="flex items-center gap-1" data-toolbar-row>' +
+    (P && st.entry === 'toolbar'
+      ? `<button type="button" data-slot="button" class="btn btn-outline btn-xs h-6 sm:text-meta" title="首页" data-home-entry="toolbar" data-action="go-home">${ic('house', 'h-3.5 w-3.5')}首页</button>`
+      : '') +
+    `<button type="button" data-slot="button" class="btn btn-outline btn-xs h-6 sm:text-meta" title="${P && st.home !== 'v2' ? '新建对话（回到首页）' : '在 nimbus-agent 中新建对话'}"${P && st.home !== 'v2' ? ' data-action="go-home"' : ''}>${ic('plus', 'h-3.5 w-3.5')}新建</button>` +
+    `<button type="button" data-slot="button" class="btn btn-outline btn-xs h-6 min-w-0 sm:text-meta" title="添加仓库">${ic('folder-plus', 'h-3.5 w-3.5 shrink-0')}<span class="min-w-0 truncate">添加仓库</span></button>` +
+    `<button type="button" data-slot="button" class="btn btn-ghost btn-icon-xs ml-auto h-6 w-6 shrink-0" aria-label="选择要归档的会话" title="选择要归档的会话">${ic('list-checks', 'h-3.5 w-3.5')}</button></div>` +
+    '<div class="input-group h-7 rounded-sm" data-slot="input-group" role="group">' +
+    '<span data-slot="input-control" data-size="sm"><input data-slot="input" placeholder="搜索会话" aria-label="搜索会话" /></span>' +
+    `<div class="input-group-addon" data-align="inline-start" data-slot="input-group-addon">${ic('search', 'size-4 text-muted-foreground')}</div></div>` +
+    '</div>';
+  // Rail. v2 entry (a): a 「首页」 button above the five surfaces, set off by a
+  // divider — it changes the center column, not the left panel.
+  const rail = (P) => {
+    const top = [['message-square', 'chat', true], ['git-branch', 'git', false], ['file-code', 'files', false], ['square-terminal', 'terminal', false], ['activity', 'run', false]];
+    return (
+      '<nav class="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card pb-2" style="width:44px" data-rail>' +
+      '<div class="h-9 shrink-0"></div>' +
+      (P && st.entry === 'rail'
+        ? `<button type="button" class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-hover" title="首页" aria-label="首页" data-home-entry="rail" data-action="go-home">${ic('house', 'size-4.5')}</button><div class="rail-sep" aria-hidden="true"></div>`
+        : '') +
+      top
+        .map(
+          ([n, id, a]) =>
+            `<button type="button" class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${a ? 'bg-selection text-foreground' : 'text-muted-foreground'}" data-surface="${id}">${a ? '<span class="rail-mark"></span>' : ''}${ic(n, 'size-4.5')}</button>`
+        )
+        .join('') +
+      '<div class="flex-1"></div>' +
+      ['panel-left-close', 'blocks', 'settings']
+        .map(
+          (n) =>
+            `<button type="button" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground">${ic(n, 'size-4.5')}</button>`
+        )
+        .join('') +
+      '</nav>'
+    );
+  };
+  // UserFooterPill: border-t + p-2 + an h-6 trigger = 41px.
+  const footer = () =>
+    '<div class="flex shrink-0 items-center gap-1 border-t p-2" data-footer><button type="button" class="flex h-6 min-w-0 flex-1 items-center gap-2 rounded-sm px-1">' +
+    '<span class="size-4 shrink-0 rounded-full bg-muted border"></span><span class="min-w-0 flex-1 truncate text-left text-meta">demo@example.com</span></button></div>';
+
+  // ----------------------------------------------------------- center column
+  // Narrow stub (「整窗」 off): v1's 320px column, only the h-9 bar and a note.
+  const centerStub = (P) => {
+    const s = SELECTED ? byId.get(SELECTED) : null;
+    const titleCls = `min-w-0 truncate ${P ? 'text-section' : 'text-ui'} text-foreground`;
+    const note = !s
+      ? '中栏是首页；打开「整窗」看全貌。'
+      : P
+        ? '中栏只为示意同一条 h-9 顶栏。<br />会话栏标题 16px 400，与左栏「聊天」（16px 600）同字号、用字重区分。'
+        : '中栏只为示意同一条 h-9 顶栏。<br />会话栏标题 15px 400（决策 167 §6）。';
+    const dot = s && s.status === 'running' ? '<span aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-status-running"></span>' : '';
+    return (
+      '<div class="flex min-w-0 flex-col" style="width:320px" data-center data-center-kind="stub">' +
+      '<div class="flex h-9 shrink-0 items-center gap-2 overflow-hidden border-b bg-card/40 px-2"><div class="flex min-w-0 items-center gap-1.5">' +
+      `${dot}<span class="${titleCls}" data-sessionbar-title>${s ? esc(shownTitle(s)) : '首页'}</span></div></div>` +
+      `<div class="center-note text-meta text-muted-foreground">${note}</div></div>`
+    );
+  };
+  const barBtn = (icon, label) => `<span class="bar-btn shrink-0">${ic(icon, 'size-3.5')}<span>${label}</span></span>`;
+  // SessionBar. kind: home (方案, nothing open), chat, seed (dsh.8's blank startup chat).
+  const sessionBar = (P, kind, s) => {
+    const title = kind === 'home' ? '首页' : s ? esc(shownTitle(s)) : '未打开对话';
+    const dot = s && s.status === 'running' ? '<span aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-status-running"></span>' : '';
+    let right = '';
+    if (kind === 'chat') right += barBtn('git-branch', '会话分支') + barBtn('arrow-left-right', '审阅');
+    // v3: 「＋」 opens the home page with the open chat's repository on the work bar.
+    const plusAction =
+      P && st.home !== 'v2'
+        ? s && s.folder && !s.folder.tempWorkspace
+          ? ` data-action="new-in-folder" data-fid="${s.folder.id}"`
+          : ' data-action="go-home"'
+        : '';
+    right += `<button type="button" class="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-hover" aria-label="新建对话" title="新建对话"${plusAction}>${ic('plus', 'size-3.5')}</button>`;
+    if (kind !== 'home' && s) {
+      right += `<div class="flex shrink-0 items-center gap-0.5 border-l pl-2">${barBtn('square-terminal', '终端')}${barBtn('layers', '后台任务')}${barBtn('users', '子代理')}</div>`;
+    }
+    return (
+      '<div class="flex h-9 shrink-0 items-center gap-2 overflow-hidden border-b bg-card/40 px-2" data-sessionbar>' +
+      `<div class="min-w-0 flex-1"><div class="flex min-w-0 items-center gap-1.5">${dot}<span class="min-w-0 truncate ${P ? 'text-section' : 'text-ui'} text-foreground" data-sessionbar-title>${title}</span></div></div>` +
+      right +
+      '</div>'
+    );
+  };
+  // Composer stand-in (the real ChatComposer is not part of this preview).
+  const composerPh = () =>
+    '<div class="shrink-0 px-6 pb-6" data-composer><div class="composer-ph mx-auto w-full max-w-reading">' +
+    '<div class="text-ui text-muted-foreground">输入框（占位）</div>' +
+    `<div class="mt-auto flex items-center justify-end"><span class="send-ph">${ic('arrow-up', 'size-3.5')}</span></div>` +
+    '</div></div>';
+  // An open conversation: placeholder bars, not real content.
+  const chatBody = (s) =>
+    '<div class="flex min-h-0 flex-1 flex-col" data-chat-body>' +
+    '<div class="min-h-0 flex-1 overflow-hidden px-6 pt-5"><div class="mx-auto w-full max-w-reading">' +
+    `<div class="mb-3 text-meta text-muted-foreground">对话内容（占位）：${esc(shownTitle(s))}</div>` +
+    '<div class="ph-bubble"></div>' +
+    `<div class="mt-3 space-y-2">${['92%', '86%', '64%'].map((w) => `<div class="ph-line" style="width:${w}"></div>`).join('')}</div>` +
+    '<div class="ph-bubble mt-6" style="width:40%"></div>' +
+    `<div class="mt-3 space-y-2">${['88%', '72%', '90%', '45%'].map((w) => `<div class="ph-line" style="width:${w}"></div>`).join('')}</div>` +
+    '</div></div>' +
+    composerPh() +
+    '</div>';
+  // dsh.8's start screen (ChatWelcomeCard over the composer), for the 现状 startup state.
+  const startScreen = () =>
+    '<div class="flex min-h-0 flex-1 flex-col" data-start-screen>' +
+    '<div class="flex min-h-0 flex-1 items-center justify-center px-6"><div class="mb-6 flex flex-col items-center gap-3 text-center">' +
+    `<div class="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">${ic('messages-square', 'size-6')}</div>` +
+    '<h2 class="font-semibold text-foreground text-title">开始对话</h2>' +
+    '<p class="max-w-sm text-meta text-muted-foreground">AI 会在 nimbus-agent 里干活，直接说你想做什么。</p>' +
+    '</div></div>' +
+    composerPh() +
+    '</div>';
+  // v2 home page: 新建对话 (primary), 添加仓库 (secondary), 最近对话 (today / yesterday / earlier).
+  const homeRow = (s) =>
+    `<div role="button" tabindex="0" class="group flex h-9 w-full items-center gap-2 rounded-sm px-2 text-left text-ui hover:bg-hover focus-visible:bg-hover" title="${attrNl(tooltip(s))}" data-home-row data-session="${s.id}" data-action="open" data-sid="${s.id}">` +
+    `<span class="flex w-4 shrink-0 items-center justify-center" data-slot-marker>${markerInner(s)}</span>` +
+    `<span class="min-w-0 flex-1 truncate text-foreground" data-title data-home-part="title">${esc(shownTitle(s))}</span>` +
+    badges(s) +
+    `<span class="min-w-0 max-w-[45%] shrink truncate text-meta text-muted-foreground" data-place data-home-part="meta">${esc(whereOf(s))}</span>` +
+    `<span class="w-12 shrink-0 text-right text-meta text-muted-foreground tabular-nums" data-time data-home-part="meta">${relAge(s.updatedAt)}</span>` +
+    '</div>';
+  const homeAux = (text, action) =>
+    `<button type="button" class="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover" data-home-more data-action="${action}"><span class="w-4 shrink-0" aria-hidden="true"></span><span>${text}</span></button>`;
+  const homeTarget = () => orderedFolders(true).find((f) => !f.tempWorkspace && folderRows(f).length) || null;
+  const homePage = () => {
+    const rows = homeRows();
+    const shown = st.homemore === 'all' ? rows : rows.slice(0, HOME_LIMIT);
+    let list = '';
+    let group = null;
+    for (const s of shown) {
+      const g = homeGroup(s.updatedAt);
+      if (g !== group) {
+        list += `<div class="flex h-6 items-center px-2 text-meta text-muted-foreground${group ? ' mt-3' : ''}" data-home-group data-home-part="meta">${g}</div>`;
+        group = g;
+      }
+      list += homeRow(s);
+    }
+    if (rows.length > shown.length) list += homeAux(`查看更多（${rows.length - shown.length}）`, 'home-more');
+    else if (rows.length > HOME_LIMIT) list += homeAux('收起', 'home-less');
+    const target = homeTarget();
+    return (
+      '<div class="viewport min-h-0 flex-1" data-home-scroll>' +
+      '<div class="mx-auto w-full max-w-reading px-6 pt-12 pb-12" data-home>' +
+      // px-2: the buttons start in the heading's column (x of 「最近对话」).
+      '<div class="flex items-center gap-2 px-2" data-home-actions>' +
+      `<button type="button" data-slot="button" class="btn btn-primary btn-md" data-home-new title="${target ? `在 ${esc(target.name)} 中新建对话（最近活动的仓库）` : '新建临时对话（没有仓库）'}">${ic('plus')}新建对话</button>` +
+      `<button type="button" data-slot="button" class="btn btn-outline btn-md" data-home-add title="添加仓库">${ic('folder-plus')}添加仓库</button>` +
+      '</div>' +
+      '<section class="mt-8" data-home-recent>' +
+      '<div class="flex h-8 items-center px-2"><h2 class="text-section font-semibold tracking-[0.04em] text-foreground" data-home-heading data-home-part="heading">最近对话</h2></div>' +
+      `<div class="mt-0.5 space-y-0.5">${list}</div>` +
+      '</section></div></div>'
+    );
+  };
+  // ========================================= v3: the home page with the real composer
+  // Drawn after ChatComposer.tsx, ComposerTargetBar.tsx, TargetFolderSelect.tsx,
+  // BranchColumn.tsx / BranchSwitcher.tsx and middleColumnLayout.ts @ 6ca5bf42.
+  // Two geometries:
+  //  - 'session' (docked): the card, then the target row BELOW it (`mt-2 h-6`),
+  //    host `pb-3.5`. Conversations use it, and so does v3's home, so sending
+  //    the first message does not move the card.
+  //  - 'empty': dsh.8's start screen: the target row is a tab ABOVE the card
+  //    (`mx-3 h-7 rounded-t-md bg-muted`), host `pb-6`. Drawn for 现状 only.
+  const branchOfChat = (s) => (s ? s.branchNow || s.wt || (s.folder && s.folder.branch) : null);
+  // v4 (user ruling 2026-10-10): the branch picked on the home is a draft,
+  // switched to at send time; null = stay on the current branch.
+  const homeDraftBranch = (folder) =>
+    st.home === 'v4' && st.branch && folder && folder.branch && !folder.remote && st.branch !== folder.branch ? st.branch : null;
+  const homeLockText = (folder) => `${folder.name} 有对话正在运行，结束后才能切换分支`;
+  // composerColumns.ts `checkout-busy`: another conversation is running in the same checkout.
+  const checkoutBusy = (folder, dir, self) =>
+    SESSIONS.some((x) => x !== self && x.folder === folder && x.busy && (x.wt || null) === dir);
+  const searchBox = (placeholder, extra = '') =>
+    `<div class="input-group h-7 rounded-sm${extra}" role="group"><span data-slot="input-control"><input placeholder="${placeholder}" aria-label="${placeholder}" /></span><div class="input-group-addon">${ic('search', 'size-4 text-muted-foreground')}</div></div>`;
+  // TargetFolderSelect's trigger (targetTriggerClass). v3 shows it on the home
+  // even without a repository (「未选仓库」), so there is always a place to pick
+  // or add one.
+  const folderTrigger = (folder) =>
+    `<button type="button" class="inline-flex h-6 min-w-0 items-center gap-1.5 rounded-sm px-2 text-ui hover:bg-hover${st.menu === 'repo' ? ' bg-selection' : ''}" title="${folder ? `~/code/${esc(folder.name)}` : '选择或添加仓库'}" data-folder-trigger data-action="menu-repo">` +
+    ic('folder', `size-3.5 shrink-0 ${folder ? 'text-folder' : 'text-muted-foreground'}`) +
+    `<span class="max-w-40 truncate ${folder ? 'text-foreground' : 'text-muted-foreground'}" data-folder-label>${folder ? esc(folder.name) : '未选仓库'}</span>` +
+    ic('chevron-down', 'size-3.5 shrink-0 text-muted-foreground') +
+    '</button>';
+  // LockedRepoLabel (session mode). v3 gives a temporary chat a label too, so the
+  // row keeps its 32px and the card does not drop when such a chat opens.
+  const lockedRepo = (folder) =>
+    `<span class="inline-flex h-6 min-w-0 items-center gap-1.5 whitespace-nowrap px-2 text-ui text-muted-foreground" title="${folder ? '当前对话已绑定该仓库 —— 要换仓库请新建对话' : '临时对话：在一个私有的临时目录里进行'}" data-locked-repo>` +
+    ic(folder ? 'folder' : 'message-square', 'size-3.5 shrink-0') +
+    `<span class="min-w-0 max-w-60 truncate" data-folder-label>${folder ? esc(folder.name) : '临时对话'}</span>` +
+    (folder ? ic('lock', 'size-3 shrink-0') : '') +
+    '</span>';
+  // BranchColumn -> BranchSwitcher size="xs": SelectTrigger appends ChevronsUpDown;
+  // 12px text as in dsh.8 (branch names are Latin; see the README for 「选择分支...」).
+  const branchTrigger = (branch, lock) =>
+    '<span class="flex min-w-0 items-center gap-1">' +
+    `<button type="button" class="branch-trigger${st.menu === 'branch' ? ' branch-open' : ''}"${lock ? ' disabled' : ' data-action="menu-branch"'} title="${lock || esc(branch)}" data-branch-trigger>` +
+    ic('git-branch', 'h-3 w-3 shrink-0') +
+    `<span class="min-w-0 flex-1 truncate">${esc(branch)}</span>` +
+    ic('chevrons-up-down', 'size-4 shrink-0 opacity-80 -me-1') +
+    '</button>' +
+    (lock ? `<span class="inline-flex size-6 shrink-0 items-center justify-center text-muted-foreground" title="${lock}" data-branch-lock>${ic('lock', 'size-3.5')}</span>` : '') +
+    '</span>';
+  const runLocation = (folder) =>
+    `<span class="inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap px-1.5 text-meta text-muted-foreground" title="运行位置（只读）" data-run-location>${ic(folder && folder.remote ? 'server' : 'monitor', 'size-3.5')}${folder && folder.remote ? 'ssh-devbox' : '本机'}</span>`;
+  const targetRow = (geometry, kind, s, folder) => {
+    const cls = geometry === 'empty' ? 'mx-3 flex h-7 items-center gap-1 rounded-t-md bg-muted px-2' : 'mt-2 flex h-6 items-center gap-1';
+    let html = kind === 'chat' ? lockedRepo(folder) : folderTrigger(folder);
+    const branch = kind === 'chat' ? branchOfChat(s) : folder && (homeDraftBranch(folder) || folder.branch);
+    if (folder && branch && !folder.remote) {
+      const self = kind === 'chat' ? s : null;
+      const dir = kind === 'chat' ? s.wt || null : null;
+      const lock =
+        self && self.busy
+          ? '当前对话正在运行 —— 切换分支前先停止它'
+          : checkoutBusy(folder, dir, self)
+            ? kind === 'home' && st.home === 'v4'
+              ? homeLockText(folder)
+              : '同一检出下有另一个对话在运行 —— 切换分支前先停止它'
+            : '';
+      html += branchTrigger(branch, lock);
+    }
+    html += runLocation(folder);
+    return `<div class="${cls}" data-target-row>${html}</div>`;
+  };
+  // TargetFolderSelect's popup (coss Combobox, w-70, capped at min(room, 23rem)).
+  // Groups as buildFolderMenu: 最近 = up to 5 projects by their newest chat;
+  // 本机 / 远程仓库 = every project. v3 adds 「不选仓库（临时对话）」 at the end
+  // of the list and the 「添加仓库」 label over the footer's three add buttons.
+  const repoMenu = (folder) => {
+    const repos = FOLDERS.filter((f) => !f.tempWorkspace);
+    const recents = repos
+      .filter((f) => lastActivity(f) != null)
+      .sort((a, b) => lastActivity(b) - lastActivity(a))
+      .slice(0, 5);
+    const item = (f) =>
+      `<div class="menu-item${folder === f ? ' menu-item-current' : ''}" role="option" data-action="pick-repo" data-fid="${f.id}">` +
+      `<span class="menu-check">${folder === f ? ic('check', 'size-4') : ''}</span>` +
+      `<span class="flex min-w-0 items-center gap-2">${ic('folder', 'size-3.5 shrink-0 text-folder')}<span class="truncate">${esc(f.name)}</span></span></div>`;
+    const groups = [];
+    if (recents.length) groups.push(`<div class="menu-label">最近</div>${recents.map(item).join('')}`);
+    const local = repos.filter((f) => !f.remote);
+    const remote = repos.filter((f) => f.remote);
+    if (local.length) groups.push(`<div class="menu-label">本机</div>${local.map(item).join('')}`);
+    if (remote.length) groups.push(`<div class="menu-label">远程仓库</div>${remote.map(item).join('')}`);
+    const none =
+      `<div class="menu-item${folder ? '' : ' menu-item-current'}" role="option" data-action="pick-repo" data-fid="unbound" data-pick-unbound>` +
+      `<span class="menu-check">${folder ? '' : ic('check', 'size-4')}</span>` +
+      `<span class="flex min-w-0 items-center gap-2">${ic('message-square', 'size-3.5 shrink-0 text-muted-foreground')}<span class="truncate">不选仓库（临时对话）</span></span></div>`;
+    const list = (groups.length ? groups.join('<div class="menu-sep"></div>') + '<div class="menu-sep"></div>' : '<div class="menu-empty">还没有仓库</div>') + none;
+    const foot = (inner) => `<div class="menu-foot-btn" data-add-repo>${inner}</div>`;
+    const temp = FOLDERS.some((f) => f.tempWorkspace)
+      ? foot('<span class="flex-1 truncate text-left">新建文件夹</span><span class="shrink-0 text-meta text-muted-foreground">新建临时工作区</span>')
+      : '';
+    return (
+      '<div class="menu-popup" style="width:17.5rem" data-menu-popup="repo">' +
+      `<div class="menu-head border-b p-1">${searchBox('搜索文件夹…')}</div>` +
+      `<div class="menu-list p-1" data-menu-list>${list}</div>` +
+      `<div class="menu-foot" data-menu-foot><div class="menu-label">添加仓库</div>${foot('使用已有目录…')}${foot('克隆…')}${foot('添加远程…')}${temp}</div>` +
+      '</div>'
+    );
+  };
+  // BranchSwitcher's popup (coss Select, w-56). CJK lifted to 14px where dsh.8
+  // renders it at 12px (the two group labels and 「创建新分支...」).
+  const BRANCHES = { local: ['develop', 'feature/home-composer', 'fix/login-redirect-loop'], remote: ['origin/main', 'origin/develop'] };
+  const branchMenu = (folder) => {
+    const current = folder.branch;
+    // The check marks the pick (v4: the draft), the dot the checkout's branch.
+    const selected = homeDraftBranch(folder) || current;
+    const item = (b, isCurrent) =>
+      `<div class="menu-item${b === selected ? ' menu-item-current' : ''}" role="option" data-action="pick-branch" data-branch="${esc(b)}">` +
+      `<span class="menu-check">${b === selected ? ic('check', 'size-4') : ''}</span>` +
+      `<span class="flex min-w-0 items-center gap-2">${isCurrent ? '<span class="size-1.5 shrink-0 rounded-full bg-success"></span>' : ''}<span class="truncate">${esc(b)}</span></span></div>`;
+    const locals = [current, ...BRANCHES.local.filter((b) => b !== current)];
+    return (
+      '<div class="menu-popup" style="width:14rem" data-menu-popup="branch">' +
+      `<div class="menu-head p-2">${searchBox('搜索分支...', ' my-2')}</div>` +
+      `<div class="menu-head px-2 pb-1"><div class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-meta text-muted-foreground" data-create-branch>${ic('plus', 'h-3.5 w-3.5')}创建新分支...</div></div>` +
+      `<div class="menu-list p-1" data-menu-list><div class="menu-label">本地分支</div>${locals.map((b) => item(b, b === current)).join('')}` +
+      `<div class="menu-label">远程分支</div>${BRANCHES.remote.map((b) => item(b, false)).join('')}</div>` +
+      '</div>'
+    );
+  };
+  const menuPopup = (folder) => {
+    if (st.menu === 'repo') return repoMenu(folder);
+    if (st.menu === 'branch' && folder && folder.branch && !folder.remote) return branchMenu(folder);
+    return '';
+  };
+  // v4: the branch lock's tooltip, drawn as if hovered (BranchColumn's Tooltip).
+  const tipPopup = (folder) => {
+    if (st.tip !== 'branch-lock' || !folder || folder.remote || !folder.branch || !checkoutBusy(folder, null, null)) return '';
+    const text = st.home === 'v4' ? homeLockText(folder) : '同一检出下有另一个对话在运行 —— 切换分支前先停止它';
+    return `<div class="tip-popup" role="tooltip" data-tip-popup>${esc(text)}</div>`;
+  };
+  // v4: the send found the checkout locked after a branch had been picked. The
+  // message is not sent and stays in the composer; coss Alert (warning) above
+  // the card, where ModelMissingNotice sits.
+  const sendBlockedAlert = (folder) => {
+    const to = homeDraftBranch(folder) || 'feature/home-composer';
+    return (
+      '<div role="alert" class="alert alert-warning mb-2" data-send-blocked>' +
+      ic('lock') +
+      `<div class="alert-title">${esc(folder.name)} 有对话正在运行，现在不能切到 ${esc(to)}</div>` +
+      '<div class="alert-action">' +
+      `<button type="button" data-slot="button" class="btn btn-outline btn-xs h-6 sm:text-meta" data-action="blocked-current">改在 ${esc(folder.branch)} 上发送</button>` +
+      '<button type="button" data-slot="button" class="btn btn-ghost btn-xs h-6 sm:text-meta" data-action="blocked-cancel">取消</button>' +
+      '</div></div>'
+    );
+  };
+  // ChatComposer: the card (textarea + bar) and the target row.
+  const composerReal = (geometry, kind, s, folder) => {
+    const running = !!(s && s.busy);
+    const placeholder = running
+      ? '回合进行中 —— Enter 排队，Ctrl+Enter 并入当前回合…'
+      : kind === 'chat'
+        ? '继续输入…'
+        : '输入消息…';
+    const attach = `<span class="grid size-6 shrink-0 place-items-center rounded-sm text-muted-foreground" title="添加附件">${ic('plus', 'size-3.5')}</span>`;
+    const permission = `<span class="inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-ui"${s ? '' : ' title="作用于新建的对话。"'}>${ic('shield', 'size-3.5 shrink-0')}<span class="text-muted-foreground">改动前确认</span></span>`;
+    const model = `<span class="inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-sm px-2 text-ui"><span class="min-w-0 truncate text-muted-foreground">自动</span>${ic('chevron-down', 'size-3.5 shrink-0 text-muted-foreground')}</span>`;
+    const actions = running
+      ? `<span class="round-btn round-stop" title="停止当前回合">${ic('square', 'size-3')}</span><span class="round-btn round-send round-disabled" title="加入队列">${ic('list-plus', 'size-3')}</span>`
+      : `<button type="button" class="round-btn round-send" title="发送消息"${kind === 'home' ? ' data-action="send"' : ''} data-send>${ic('send-horizontal', 'size-3')}</button>`;
+    const bar = (middle) =>
+      `<div class="${geometry === 'empty' ? 'mt-1.5 flex items-center gap-2' : 'flex min-w-0 items-center gap-2'}" data-composer-bar>${attach}${permission}${middle}<div class="ms-auto flex shrink-0 items-center gap-1.5">${model}${actions}</div></div>`;
+    // v4: text typed on the home (kept after a blocked send).
+    const typed = kind === 'home' && st.home === 'v4' && (st.typed || st.blocked);
+    // v4.1: same rows on the home and in a conversation, so sending still does not move the card.
+    const rows = geometry === 'session' && RENDER_MODE === 'proposal' && st.composer !== 'current' ? Number(st.composer) : 1;
+    const input = `<div class="composer-input${geometry === 'empty' ? ' composer-input-empty' : ''}${typed ? ' composer-input-typed' : ''}"${rows > 1 ? ` style="--composer-rows:${rows}"` : ''} data-composer-input>${typed ? esc(SENT_MESSAGE) : placeholder}</div>`;
+    const blocked = kind === 'home' && st.home === 'v4' && st.blocked && folder && folder.branch && !folder.remote ? sendBlockedAlert(folder) : '';
+    const hasRow = geometry !== 'empty' || !!folder;
+    const card =
+      geometry === 'empty'
+        ? `<div class="relative rounded-md${hasRow ? ' rounded-t-xs' : ''} border border-border bg-card p-2" data-composer-card>${input}${bar('<span class="flex min-w-0 flex-1"></span>')}</div>`
+        : `<div class="relative flex min-h-18.5 gap-2 rounded-md border border-border bg-card p-2" data-composer-card><div class="flex min-w-0 flex-1 flex-col gap-2">${input}${bar('')}</div></div>`;
+    const row = hasRow ? targetRow(geometry, kind, s, folder) : '';
+    return (
+      `<div class="shrink-0 px-6 pt-0 ${geometry === 'empty' ? 'pb-6' : 'pb-3.5'}" data-composer-host>` +
+      `<div class="relative mx-auto w-full max-w-reading" data-composer>${geometry === 'empty' ? row + card : blocked + card + row}${kind === 'home' ? menuPopup(folder) + tipPopup(folder) : ''}</div>` +
+      '</div>'
+    );
+  };
+  // The home's composer target: picked on its bar (`target`); by default the
+  // most recently active repository; null = no repository (a temporary chat).
+  const homeTargetFolder = () => {
+    if (st.target === 'unbound') return null;
+    const repos = FOLDERS.filter((f) => !f.tempWorkspace);
+    const picked = repos.find((f) => f.id === st.target);
+    if (picked) return picked;
+    const active = repos.filter((f) => lastActivity(f) != null).sort((a, b) => lastActivity(b) - lastActivity(a));
+    return active[0] || repos[0] || null;
+  };
+  const homeTitle = (folder) =>
+    folder
+      ? `在 <span class="home-ws" title="${esc(folder.name)}" data-home-ws>${ic('folder')}<span>${esc(folder.name)}</span></span> 与 PiLab 一起进行创造吧`
+      : '与 PiLab 一起进行创造吧';
+  const homeSub = (folder) => {
+    if (folder) return '';
+    // Two deliberate lines: CJK has no word boundaries, so a free wrap at
+    // max-w-md would break mid-phrase (「在下 / 方工作栏」).
+    const text = FOLDERS.some((f) => !f.tempWorkspace)
+      ? '这次对话不绑定仓库，会在一个私有的临时目录里进行。'
+      : '还没有添加仓库，这次对话会在一个私有的临时目录里进行。<br />在下方工作栏可以添加仓库。';
+    return `<p class="mx-auto mt-3 max-w-md text-ui text-muted-foreground" data-home-sub>${text}</p>`;
+  };
+  // v3 home: the title, 最近对话 (v2's list), and the composer docked at the bottom.
+  // Spacers 2 : 3 put a short page's title a little above the middle of the area
+  // over the composer; a long page scrolls under the title area's bottom fade.
+  const homeV3 = () => {
+    const folder = homeTargetFolder();
+    const rows = homeRows();
+    let recent = '';
+    if (rows.length) {
+      const shown = st.homemore === 'all' ? rows : rows.slice(0, HOME_LIMIT);
+      let list = '';
+      let group = null;
+      for (const s of shown) {
+        const g = homeGroup(s.updatedAt);
+        if (g !== group) {
+          list += `<div class="flex h-6 items-center px-2 text-meta text-muted-foreground${group ? ' mt-3' : ''}" data-home-group data-home-part="meta">${g}</div>`;
+          group = g;
+        }
+        list += homeRow(s);
+      }
+      if (rows.length > shown.length) list += homeAux(`查看更多（${rows.length - shown.length}）`, 'home-more');
+      else if (rows.length > HOME_LIMIT) list += homeAux('收起', 'home-less');
+      recent =
+        '<section class="mt-10" data-home-recent>' +
+        '<div class="flex h-8 items-center px-2"><h2 class="text-section font-semibold tracking-[0.04em] text-foreground" data-home-heading data-home-part="heading">最近对话</h2></div>' +
+        `<div class="mt-0.5 space-y-0.5">${list}</div>` +
+        '</section>';
+    }
+    return (
+      '<div class="relative min-h-0 flex-1" data-home-area data-scroll-root>' +
+      '<div class="viewport h-full" data-viewport data-scroll="home">' +
+      '<div class="flex min-h-full flex-col px-6">' +
+      '<div class="home-spacer-top"></div>' +
+      '<div class="mx-auto w-full max-w-reading" data-home-v3>' +
+      `<div class="text-center" data-home-hero><h1 class="font-heading text-display-v3 font-semibold tracking-[-0.01em] text-foreground" data-home-title>${homeTitle(folder)}</h1>${homeSub(folder)}</div>` +
+      recent +
+      '</div>' +
+      '<div class="home-spacer-bottom"></div>' +
+      '</div></div></div>' +
+      composerReal('session', 'home', null, folder)
+    );
+  };
+  // ========================================= v4: the anchored title, 5 recent chats
+  // User feedback on v3 (2026-10-10): the title was too loud, put it at the
+  // middle or the golden section, show fewer recent chats. The layout is pure
+  // CSS (see .home4-*): the title's centre at 38.2% / 50% of the area over the
+  // composer, the list hanging below it, the block sliding up only when the
+  // list would crowd the composer.
+  const HOME4_LIMIT = 5;
+  const homeTitleV4 = (folder) =>
+    folder
+      ? `在 <span class="home4-em" title="${esc(folder.name)}" data-home-ws>${esc(folder.name)}</span> 与 PiLab 一起进行创造吧`
+      : '与 <span class="home4-em" data-home-brand>PiLab</span> 一起进行创造吧';
+  const homeV4 = () => {
+    const folder = homeTargetFolder();
+    const rows = homeRows();
+    const all = st.homemore === 'all';
+    let recent = '';
+    if (rows.length) {
+      const shown = all ? rows : rows.slice(0, HOME4_LIMIT);
+      let list = '';
+      let group = null;
+      for (const s of shown) {
+        // Five rows read fine by their own times; the full list keeps v2's day groups.
+        if (all) {
+          const g = homeGroup(s.updatedAt);
+          if (g !== group) {
+            list += `<div class="flex h-6 items-center px-2 text-meta text-muted-foreground${group ? ' mt-3' : ''}" data-home-group data-home-part="meta">${g}</div>`;
+            group = g;
+          }
+        }
+        list += homeRow(s);
+      }
+      if (rows.length > shown.length) list += homeAux(`查看更多（${rows.length - shown.length}）`, 'home-more');
+      else if (rows.length > HOME4_LIMIT) list += homeAux('收起', 'home-less');
+      // Secondary: a quiet 14px label instead of v3's 16px / 600 section title.
+      recent =
+        '<section class="mt-10" data-home-recent>' +
+        '<div class="flex h-7 items-center px-2"><h2 class="text-meta font-normal text-muted-foreground" data-home-heading data-home-part="heading">最近对话</h2></div>' +
+        `<div class="mt-0.5 space-y-0.5">${list}</div>` +
+        '</section>';
+    }
+    const h1 =
+      st.title === 'v3'
+        ? `<h1 class="font-heading text-display-v3 font-semibold tracking-[-0.01em] text-foreground" data-home-title>${homeTitle(folder)}</h1>`
+        : `<h1 class="home4-title" data-home-title>${homeTitleV4(folder)}</h1>`;
+    return (
+      '<div class="relative min-h-0 flex-1 home4-area" data-home-area data-scroll-root>' +
+      '<div class="viewport h-full" data-viewport data-scroll="home">' +
+      `<div class="home4-col home4-pos-${st.pos} home4-t-${st.title}" data-home-col>` +
+      '<div class="home4-top" data-home-top></div>' +
+      '<div class="home4-body mx-auto w-full max-w-reading" data-home-v4>' +
+      `<div class="text-center" data-home-hero>${h1}${homeSub(folder)}</div>` +
+      recent +
+      '</div>' +
+      '<div class="home4-bottom"></div>' +
+      '</div></div></div>' +
+      composerReal('session', 'home', null, folder)
+    );
+  };
+  // v3 conversation: the timeline (placeholder) over the same docked composer.
+  const chatBodyV3 = (s) => {
+    const inner = s.firstMessage
+      ? `<div class="flex justify-end"><div class="user-bubble" data-first-message>${esc(s.firstMessage)}</div></div>` +
+        `<div class="mt-4 flex items-center gap-2">${ic('loader-circle', 'size-3 shrink-0 text-status-running spin')}<div class="ph-line" style="width:38%"></div></div>`
+      : `<div class="mb-3 text-meta text-muted-foreground">对话内容（占位）：${esc(shownTitle(s))}</div>` +
+        '<div class="ph-bubble"></div>' +
+        `<div class="mt-3 space-y-2">${['92%', '86%', '64%'].map((w) => `<div class="ph-line" style="width:${w}"></div>`).join('')}</div>` +
+        '<div class="ph-bubble mt-6" style="width:40%"></div>' +
+        `<div class="mt-3 space-y-2">${['88%', '72%', '90%', '45%'].map((w) => `<div class="ph-line" style="width:${w}"></div>`).join('')}</div>`;
+    return (
+      '<div class="relative min-h-0 flex-1" data-chat-area data-scroll-root>' +
+      '<div class="viewport h-full" data-viewport data-scroll="timeline"><div class="px-6 pt-5 pb-2"><div class="mx-auto w-full max-w-reading">' +
+      inner +
+      '</div></div></div></div>' +
+      composerReal('session', 'chat', s, s.folder)
+    );
+  };
+  // dsh.8's start screen with the real composer (empty geometry), for 现状.
+  const startScreenV3 = (s) => {
+    const folder = s ? s.folder : null;
+    return (
+      '<div class="flex min-h-0 flex-1 flex-col" data-start-screen>' +
+      '<div class="flex min-h-0 flex-1 items-center justify-center px-6"><div class="mb-6 flex flex-col items-center gap-3 text-center">' +
+      `<div class="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">${ic('messages-square', 'size-6')}</div>` +
+      '<h2 class="font-semibold text-foreground text-title">开始对话</h2>' +
+      `<p class="max-w-sm text-meta text-muted-foreground">${folder ? `AI 会在 ${esc(folder.name)} 里干活，直接说你想做什么。` : '直接输入即可，这次对话会在一个私有的临时目录里进行。'}</p>` +
+      '</div></div>' +
+      composerReal('empty', 'seed', s, folder) +
+      '</div>'
+    );
+  };
+  // LeftNav's empty state (no repository): ui/empty.tsx as LeftNav configures it.
+  const emptyRepoCard = () =>
+    '<div class="flex min-w-0 flex-col items-center justify-center gap-3 p-2 text-center" data-empty-repos>' +
+    '<div class="empty-media" aria-hidden="true"><div class="empty-card empty-ghost empty-ghost-l"></div><div class="empty-card empty-ghost empty-ghost-r"></div>' +
+    `<div class="empty-card">${ic('folder-git-2', 'size-4.5')}</div></div>` +
+    '<div class="flex max-w-sm flex-col items-center text-center"><div class="text-ui" style="line-height:1">添加仓库</div><div class="mt-1 text-meta text-muted-foreground">添加一个仓库开始使用。</div></div>' +
+    `<button type="button" data-slot="button" class="btn btn-outline btn-xs h-6 sm:text-meta">${ic('plus', 'h-3.5 w-3.5')}添加仓库</button>` +
+    '</div>';
+  const centerFull = (P, width) => {
+    // v3 / v4 draw the real composer (both views); v2 keeps its stand-ins.
+    const real = st.home !== 'v2';
+    let kind = 'chat';
+    let s = SELECTED ? byId.get(SELECTED) : null;
+    let body;
+    if (s && SELECTED !== 'seed') body = real ? chatBodyV3(s) : chatBody(s);
+    else if (P) {
+      kind = 'home';
+      s = null;
+      body = st.home === 'v4' ? homeV4() : st.home === 'v3' ? homeV3() : homePage();
+    } else {
+      kind = 'seed';
+      body = real ? startScreenV3(s) : startScreen();
+    }
+    return (
+      `<div class="flex min-w-0 shrink-0 flex-col" style="width:${width}px" data-center data-center-kind="${kind}">` +
+      sessionBar(P, kind, s) +
+      body +
+      '</div>'
+    );
+  };
+  // 「顺序标注」: a column beside the panel naming why each folder sits where it does.
+  const annCol = () => '<div class="ann-col" style="width:320px" data-ann-col data-proto-overlay></div>';
+
+  const appHtml = (mode, withCenter) => {
+    useData(mode);
+    const P = mode === 'proposal';
+    const W = Number(st.w);
+    const centerW = WIN_W[st.h] - 44 - W;
+    return (
+      `<div class="proto-root" data-proto-root data-mode="${mode}" style="height:${st.h}px">` +
+      titleBar() +
+      `<div class="app"><div class="dock bg-card/40">${rail(P)}` +
+      `<div class="relative flex h-full min-w-0 flex-col overflow-hidden border-r" style="width:${st.w}px" data-panel>` +
+      dockTitle(P) +
+      // LeftDock's mount stack: the chat surface sits in an `absolute inset-0` layer.
+      '<div class="relative isolate min-h-0 flex-1"><div class="absolute inset-0 z-10"><aside class="flex h-full w-full min-w-0 flex-col">' +
+      toolbar(P) +
+      (P ? listProposal() : listCurrent()) +
+      '</aside></div></div>' +
+      footer() +
+      '<div data-guides data-proto-overlay></div>' +
+      '</div></div>' +
+      (withCenter ? (st.ann ? annCol() : st.full ? centerFull(P, centerW) : centerStub(P)) : '') +
+      '</div></div>'
+    );
+  };
+  const inkLabel = () =>
+    ({ mix: '对话标题：派生式（≈ base-850）', soft850: '对话标题：base-850', soft: '对话标题：base-800', fg: '对话标题：正文色（dsh.8）' })[st.ink];
+  const compareHtml = () =>
+    '<div class="cmp">' +
+    [
+      ['current', '现状（dsh.8）', 'LeftNav.tsx @ 6ca5bf42'],
+      ['proposal', `方案（#6 ${st.top}）`, inkLabel()],
+    ]
+      .map(([m, label, sub]) => `<div><div class="cmp-label">${label}<small>${sub}</small></div>${appHtml(m, false)}</div>`)
+      .join('') +
+    '</div>';
+
+  // ------------------------------------------------------------ post-render
+  const drawGuides = (root) => {
+    const host = root.querySelector('[data-guides]');
+    const W = Number(st.w);
+    host.innerHTML = [16, 38, 50, W - 1 - 16]
+      .map(
+        (x, i) =>
+          `<div class="guide" style="left:${x}px"></div><div class="guide-label" style="left:${x}px;top:${40 + (i % 2) * 16}px">${x === W - 1 - 16 ? 'R-16' : x}</div>`
+      )
+      .join('');
+    host.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:50';
+  };
+  const drawOrderAnn = (root) => {
+    const col = root.querySelector('[data-ann-col]');
+    if (!col) return;
+    const P = root.dataset.mode === 'proposal';
+    const cr = col.getBoundingClientRect();
+    const vp = root.querySelector('[data-section="repos"] [data-viewport]');
+    const vr = vp.getBoundingClientRect();
+    let html = `<div class="ann-head">${P && st.order === 'activity' ? '仓库顺序：按文件夹内最后一个对话的活动时间' : '仓库顺序：添加仓库的先后（dsh.8）'}</div>`;
+    root.querySelectorAll('[data-section="repos"] [data-folder]').forEach((sec, i) => {
+      const r = sec.querySelector('[data-folder-row]').getBoundingClientRect();
+      if (r.top < vr.top - 0.5 || r.bottom > vr.bottom + 0.5) return;
+      const f = FOLDERS.find((x) => x.id === sec.dataset.folder);
+      const la = lastActivity(f);
+      const why = f.tempWorkspace ? '临时工作区：固定在最后' : la == null ? '没有对话：排在有对话的后面，保持原顺序' : `最后活动 ${relAge(la)}（${absDateTime(la).slice(5)}）`;
+      html += `<div class="ann-label" style="top:${Math.round(r.top - cr.top + (r.height - 18) / 2)}px">${i + 1}. ${why}</div>`;
+    });
+    col.innerHTML = html;
+  };
+  // Overlay scrollbar (as if hovered) and the bottom fade, per ScrollArea.
+  const decorate = (root) => {
+    for (const sr of root.querySelectorAll('[data-scroll-root]')) {
+      const vp = sr.querySelector(':scope > [data-viewport]');
+      // v2 ruling 2: the fade sits on the top region and on Temporary chats.
+      // v3: the home's upper area and the timeline always fade (scrollFade="bottom").
+      const fades =
+        (st.fade && (vp.dataset.scroll === 'top' || vp.dataset.scroll === 'temp')) ||
+        vp.dataset.scroll === 'home' ||
+        vp.dataset.scroll === 'timeline';
+      const update = () => {
+        const range = vp.scrollHeight - vp.clientHeight;
+        vp.style.setProperty('--oy-end', `${Math.max(0, range - vp.scrollTop)}px`);
+        vp.classList.toggle('fade-b', fades);
+        let bar = sr.querySelector(':scope > .sa-bar');
+        if (!st.bars || range <= 1) {
+          if (bar) bar.remove();
+          return;
+        }
+        if (!bar) {
+          bar = document.createElement('div');
+          bar.className = 'sa-bar';
+          bar.innerHTML = '<div class="sa-thumb"></div>';
+          sr.appendChild(bar);
+        }
+        const track = bar.clientHeight;
+        const thumb = Math.max(16, (vp.clientHeight / vp.scrollHeight) * track);
+        bar.firstChild.style.height = `${thumb}px`;
+        bar.firstChild.style.top = `${(vp.scrollTop / range) * (track - thumb)}px`;
+      };
+      vp.addEventListener('scroll', update, { passive: true });
+      update();
+    }
+  };
+  // The work bar's menus open upward (session geometry), 4px above their trigger
+  // and flush with its left edge, capped by the room above: the folder Combobox
+  // at min(room, 23rem), the branch Select at the room alone.
+  const placeMenus = (root) => {
+    const rr = root.getBoundingClientRect();
+    for (const popup of root.querySelectorAll('[data-menu-popup]')) {
+      const wrap = popup.closest('[data-composer]');
+      const anchor = wrap.querySelector(popup.dataset.menuPopup === 'repo' ? '[data-folder-trigger]' : '[data-branch-trigger]');
+      if (!anchor) continue;
+      const w = wrap.getBoundingClientRect();
+      const a = anchor.getBoundingClientRect();
+      const room = a.top - rr.top - 4 - 5;
+      popup.style.left = `${Math.round(a.left - w.left)}px`;
+      popup.style.bottom = `${Math.round(w.bottom - a.top + 4)}px`;
+      popup.style.maxHeight = `${Math.floor(popup.dataset.menuPopup === 'repo' ? Math.min(368, room) : room)}px`;
+      const list = popup.querySelector('[data-menu-list]');
+      const range = list.scrollHeight - list.clientHeight;
+      list.style.setProperty('--oy-end', `${Math.max(0, range - list.scrollTop)}px`);
+      list.classList.toggle('fade-b', range > 1);
+    }
+    // v4: the lock's tooltip, centred over the lock icon, 4px above it (side top).
+    for (const tip of root.querySelectorAll('[data-tip-popup]')) {
+      const wrap = tip.closest('[data-composer]');
+      const anchor = wrap.querySelector('[data-branch-lock]');
+      if (!anchor) {
+        tip.remove();
+        continue;
+      }
+      const w = wrap.getBoundingClientRect();
+      const a = anchor.getBoundingClientRect();
+      const t = tip.getBoundingClientRect();
+      tip.style.left = `${Math.round(a.left + a.width / 2 - w.left - t.width / 2)}px`;
+      tip.style.bottom = `${Math.round(w.bottom - a.top + 4)}px`;
+    }
+  };
+  const applyListScroll = (vp) => {
+    if (st.scroll === 'mid') {
+      // Anchor: the folder holding the selected chat, 40px below the viewport top.
+      const anchor = vp.querySelector('[data-folder="nimbus"]');
+      if (anchor) vp.scrollTop = Math.round(vp.scrollTop + anchor.getBoundingClientRect().top - vp.getBoundingClientRect().top - 40);
+    } else if (st.scroll === 'bottom') {
+      vp.scrollTop = vp.scrollHeight;
+    }
+  };
+  const captureScroll = () => {
+    const saved = {};
+    for (const root of document.querySelectorAll('[data-proto-root]')) {
+      for (const vp of root.querySelectorAll('[data-viewport], [data-home-scroll]')) {
+        saved[`${root.dataset.mode}:${vp.dataset.scroll || 'home'}`] = vp.scrollTop;
+      }
+    }
+    return saved;
+  };
+  const postRender = (saved) => {
+    for (const root of document.querySelectorAll('[data-proto-root]')) {
+      useData(root.dataset.mode);
+      for (const vp of root.querySelectorAll('[data-viewport], [data-home-scroll]')) {
+        const key = `${root.dataset.mode}:${vp.dataset.scroll || 'home'}`;
+        if (saved && key in saved) vp.scrollTop = saved[key];
+        else if (vp.dataset.scroll === 'list' || vp.dataset.scroll === 'repos') applyListScroll(vp);
+        else if (vp.dataset.scroll === 'top' && st.rscroll === 'bottom') vp.scrollTop = vp.scrollHeight;
+      }
+      if (st.guides) drawGuides(root);
+      decorate(root);
+      placeMenus(root);
+      drawOrderAnn(root);
+    }
+  };
+
+  // --------------------------------------------------------------- measure
+  const round1 = (n) => Math.round(n * 10) / 10;
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  const textOf = (el) => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const CJK = /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u3000-\u303F]/;
+  // Computed colour -> OKLab (oklch / oklab / rgb / color(srgb) forms).
+  const toLin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const fromSrgb = (r, g, b) => {
+    const [R, G, B] = [r, g, b].map(toLin);
+    const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+    const mm = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+    const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+    return {
+      L: 0.2104542553 * l + 0.793617785 * mm - 0.0040720468 * s,
+      a: 1.9779984951 * l - 2.428592205 * mm + 0.4505937099 * s,
+      b: 0.0259040371 * l + 0.7827717662 * mm - 0.808675766 * s,
+    };
+  };
+  const lab = (c) => {
+    let m = /oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+([\d.]+)/.exec(c);
+    if (m) {
+      const L = m[2] ? Number(m[1]) / 100 : Number(m[1]);
+      const h = (Number(m[4]) * Math.PI) / 180;
+      return { L, a: Number(m[3]) * Math.cos(h), b: Number(m[3]) * Math.sin(h) };
+    }
+    m = /oklab\(\s*([\d.]+)(%?)\s+(-?[\d.e-]+)\s+(-?[\d.e-]+)/.exec(c);
+    if (m) return { L: m[2] ? Number(m[1]) / 100 : Number(m[1]), a: Number(m[3]), b: Number(m[4]) };
+    m = /color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(c);
+    if (m) return fromSrgb(Number(m[1]), Number(m[2]), Number(m[3]));
+    m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/.exec(c);
+    if (m) return fromSrgb(Number(m[1]) / 255, Number(m[2]) / 255, Number(m[3]) / 255);
+    return null;
+  };
+  const dE = (x, y) => (x && y ? Math.hypot(x.L - y.L, x.a - y.a, x.b - y.b) : null);
+
+  const measureRoot = (root) => {
+    const mode = root.dataset.mode;
+    useData(mode);
+    const P = mode === 'proposal';
+    const V2 = P && st.top === 'v2';
+    const panel = root.querySelector('[data-panel]');
+    const pr = panel.getBoundingClientRect();
+    const relX = (x) => round1(x - pr.left);
+    const W = Math.round(pr.width);
+    const H = Number(st.h);
+    const listArea = root.querySelector('[data-list-area]');
+    const la = listArea.getBoundingClientRect();
+    const first = (sel) => [...root.querySelectorAll(sel)].find(visible) || null;
+    const hOf = (sel) => {
+      const el = root.querySelector(sel);
+      return el ? round2(el.getBoundingClientRect().height) : null;
+    };
+    const out = {
+      mode,
+      top: P ? st.top : 'dsh.8',
+      panelWidth: W,
+      windowHeight: H,
+      rootWidth: Math.round(root.getBoundingClientRect().width),
+      listAreaHeight: round2(la.height),
+      checks: {},
+      regions: null,
+    };
+
+    // (0) the shell chrome adds up like the real app: list area = window - 186
+    const chrome = { titleBar: hOf('[data-titlebar]'), dockTitle: hOf('[data-box="L0"]'), toolbar: hOf('[data-toolbar]'), footer: hOf('[data-footer]') };
+    out.checks.shellChrome = {
+      // The search box is inline-flex, so the toolbar's line box carries a
+      // fraction of a pixel of baseline allowance (77.25 here): +-0.5px.
+      pass:
+        Math.abs(la.height - (H - 186)) <= 0.5 &&
+        Object.entries({ titleBar: 32, dockTitle: 36, toolbar: 77, footer: 41 }).every(([k, v]) => Math.abs(chrome[k] - v) <= 0.5),
+      chrome,
+      expectedListArea: H - 186,
+    };
+
+    // (1) font size / weight per level (and the session bar title on the same h-9 line)
+    const EXP = P
+      ? { 0: [16, 600], 1: [16, 600], 2: [15, 600], 3: [14, 400], 4: [14, 400], bar: [16, 400] }
+      : { 0: [15, 600], 1: [15, 600], 2: [15, 600], 3: [15, 400], 4: [14, 400], bar: [15, 400] };
+    const wOf = (w) => (st.cjk && w === 600 ? 700 : w);
+    const seen = {};
+    const fontBad = [];
+    const checkFont = (el, key) => {
+      const cs = getComputedStyle(el);
+      const fs = parseFloat(cs.fontSize);
+      const fw = Number(cs.fontWeight);
+      (seen[key] = seen[key] || new Set()).add(`${fs}px/${fw}`);
+      const [efs, efw] = EXP[key === 'bar' ? 'bar' : key.slice(1)];
+      if (fs !== efs || fw !== wOf(efw)) {
+        if (!fontBad.some((v) => v.level === key && v.fontSize === fs && v.fontWeight === fw)) {
+          fontBad.push({ level: key, text: textOf(el), fontSize: fs, fontWeight: fw, expected: [efs, wOf(efw)] });
+        }
+      }
+    };
+    root.querySelectorAll('[data-panel] [data-level]').forEach((el) => {
+      if (el.closest('[data-slot="button"],[data-slot="badge"]') || !visible(el)) return;
+      checkFont(el, `L${el.dataset.level}`);
+    });
+    const bar = root.querySelector('[data-sessionbar-title]');
+    if (bar) checkFont(bar, 'bar');
+    out.checks.levelFonts = {
+      // Without a repository the panel shows only the empty-state card (no L1 / L2 / L4).
+      pass: fontBad.length === 0 && (FOLDERS.length ? ['L0', 'L1', 'L2', 'L4'] : ['L0']).every((k) => seen[k]),
+      expected: Object.fromEntries(Object.entries(EXP).map(([k, [s, w]]) => [k, `${s}px/${wOf(w)}`])),
+      seen: Object.fromEntries(Object.entries(seen).sort().map(([k, v]) => [k, [...v]])),
+      violations: fontBad,
+    };
+
+    // (2) title ink: L3 = --foreground-soft (the open row: foreground); L1 / L2 = foreground.
+    // v2 default: --foreground-soft IS color-mix(in oklab, foreground 50%, muted-foreground).
+    const probe = (value) => {
+      const s = document.createElement('span');
+      s.style.color = value;
+      panel.appendChild(s);
+      const c = getComputedStyle(s).color;
+      s.remove();
+      return c;
+    };
+    const fg = probe('var(--foreground)');
+    const soft = probe('var(--foreground-soft)');
+    const derived = probe('color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground))');
+    const accentFg = probe('var(--accent-foreground)');
+    const wantSoft = P && st.ink !== 'fg';
+    const inkBad = [];
+    let nSel = 0;
+    let nOther = 0;
+    root.querySelectorAll('[data-row] [data-title]').forEach((t) => {
+      if (!visible(t)) return;
+      const selected = t.closest('[data-row]').classList.contains('bg-selection');
+      const want = selected ? accentFg : wantSoft ? soft : fg;
+      if (selected) nSel += 1;
+      else nOther += 1;
+      const got = getComputedStyle(t).color;
+      if (got !== want && inkBad.length < 6) inkBad.push({ session: t.closest('[data-row]').dataset.session, selected, got, want });
+    });
+    root.querySelectorAll('[data-level="1"], [data-level="2"]').forEach((el) => {
+      const got = getComputedStyle(el).color;
+      if (got !== fg && inkBad.length < 6) inkBad.push({ level: el.dataset.level, text: textOf(el), got, want: fg });
+    });
+    const derivedOk = !P || st.ink !== 'mix' || soft === derived;
+    out.checks.titleInk = {
+      pass: inkBad.length === 0 && (nOther > 0 || SESSIONS.every((x) => x.id === SELECTED)) && derivedOk,
+      expected: wantSoft ? (st.ink === 'mix' ? 'color-mix(in oklab, foreground 50%, muted-foreground)' : '--foreground-soft') : '--foreground',
+      derivedEqualsToken: derivedOk,
+      rows: { open: nSel, others: nOther },
+      colors: { foreground: fg, foregroundSoft: soft, derived },
+      deltaE: {
+        foregroundToSoft: round2(dE(lab(fg), lab(soft))),
+        softToMuted: round2(dE(lab(soft), lab(probe('var(--muted-foreground)')))),
+      },
+      violations: inkBad,
+    };
+
+    // (3) regions: top <= 33%, Temporary chats <= 25%, tiled, content-sized up to the cap
+    if (P) {
+      const info = (id, pct) => {
+        const el = root.querySelector(`[data-region="${id}"]`);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        const vp = el.querySelector('[data-viewport]');
+        const content = vp.firstElementChild ? vp.firstElementChild.getBoundingClientRect().height : 0;
+        const hdr = el.querySelector('[data-box="L1"]');
+        const header = hdr ? hdr.getBoundingClientRect().height : 0;
+        const border = parseFloat(getComputedStyle(el).borderTopWidth);
+        const natural = border + header + content;
+        const cap = pct ? la.height * pct : null;
+        const overflow = vp.scrollHeight - vp.clientHeight > 0.5;
+        return {
+          title: hdr ? textOf(hdr.querySelector('[data-level="1"]')) : '（空状态卡片）',
+          top: round2(r.top - la.top),
+          height: round2(r.height),
+          pctOfList: round2((r.height / la.height) * 100),
+          cap: cap == null ? null : round2(cap),
+          natural: round2(natural),
+          viewport: round2(vp.clientHeight),
+          scrollRange: Math.round(vp.scrollHeight - vp.clientHeight),
+          overflow,
+          // content-sized: as tall as its content, or at the cap and scrolling
+          contentSized: cap == null ? true : overflow ? Math.abs(r.height - cap) <= 1 : Math.abs(r.height - natural) <= 1,
+        };
+      };
+      const R = { top: info('top', 0.33), repos: info('repos', null), temp: info('temp', 0.25) };
+      const list = [R.top, R.repos, R.temp].filter(Boolean);
+      let tiled = Math.abs(list[0].top) <= 0.5;
+      for (let i = 1; i < list.length; i++) tiled = tiled && Math.abs(list[i].top - (list[i - 1].top + list[i - 1].height)) <= 0.5;
+      const sum = list.reduce((acc, r) => acc + r.height, 0);
+      tiled = tiled && Math.abs(sum - la.height) <= 1;
+      out.regions = R;
+      out.checks.regions = {
+        pass:
+          (!R.top || (R.top.height <= R.top.cap + 1 && R.top.contentSized)) &&
+          (!R.temp || (R.temp.height <= R.temp.cap + 1 && R.temp.contentSized)) &&
+          tiled,
+        tiled,
+        sum: round2(sum),
+        listArea: round2(la.height),
+      };
+    } else {
+      out.checks.regions = { pass: false, note: '现状只有一个滚动区，「最近」「仓库列表」「临时对话」在同一个视口里' };
+    }
+
+    // (4) scrolling the repository list leaves the other regions where they are
+    {
+      const scroller = P ? root.querySelector('[data-region="repos"] [data-viewport]') : root.querySelector('[data-viewport]');
+      const watched = [...root.querySelectorAll('[data-section="top"], [data-section="temp"]')].flatMap((sec) =>
+        [sec.querySelector('[data-box="L1"]'), sec.querySelector('[data-row]')].filter(Boolean)
+      );
+      const snap = () => watched.map((el) => el.getBoundingClientRect().top);
+      const saved = scroller.scrollTop;
+      scroller.scrollTop = 0;
+      const a = snap();
+      scroller.scrollTop = scroller.scrollHeight;
+      const b = snap();
+      scroller.scrollTop = saved;
+      const range = Math.round(scroller.scrollHeight - scroller.clientHeight);
+      const moved = Math.max(0, ...a.map((v, i) => Math.abs(v - b[i])));
+      out.checks.regionsIndependent = {
+        pass: range === 0 || moved < 0.5,
+        reposScrollRange: range,
+        otherRegionsMovedPx: round1(moved),
+        watched: watched.length,
+      };
+    }
+
+    // (5) L1 titles sit outside every scroll viewport
+    {
+      const l1 = [...root.querySelectorAll('[data-level="1"]')];
+      const inside = l1.filter((el) => el.closest('[data-viewport]')).map(textOf);
+      out.checks.l1OutsideScroll = { pass: (l1.length > 0 || !FOLDERS.length) && inside.length === 0, titles: l1.length, insideViewport: inside };
+    }
+
+    // (6a) v1 / dsh.8 「最近」 two segments
+    if (!V2) {
+      const sec = root.querySelector('[data-section="top"]');
+      const L = P ? LIMIT.proposal : LIMIT.current;
+      const act = activeRows();
+      const lowerAll = recentLower();
+      const expectSeg = (total, limit, showAll) =>
+        showAll || total <= limit
+          ? { rows: total, aux: showAll && total > limit ? '收起' : null }
+          : { rows: limit, aux: `查看更多（${total - limit}）` };
+      const got = (el) =>
+        el ? { rows: el.querySelectorAll('[data-row]').length, aux: textOf(el.querySelector('[data-more]') || document.createElement('i')) || null } : null;
+      const eUp = act.length ? expectSeg(act.length, L.active, st.active === 'all') : null;
+      const eLow = st.recent === 'collapsed' || !lowerAll.length ? null : expectSeg(lowerAll.length, L.lower, st.lower === 'all');
+      const segUp = sec.querySelector('[data-segment="active"]');
+      const segLow = sec.querySelector('[data-segment="lower"]');
+      const gUp = got(segUp);
+      const gLow = got(segLow);
+      const ids = [...sec.querySelectorAll('[data-row]')].map((r) => r.dataset.session);
+      const dup = [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))];
+      const activeIds = new Set(act.map((s) => s.id));
+      const leak = segLow ? [...segLow.querySelectorAll('[data-row]')].map((r) => r.dataset.session).filter((id) => activeIds.has(id)) : [];
+      const capOk = !P || ((st.active === 'all' || !gUp || gUp.rows <= 5) && (st.lower === 'all' || !gLow || gLow.rows <= 5));
+      out.checks.recentSegments = {
+        pass: same(eUp, gUp) && same(eLow, gLow) && dup.length === 0 && leak.length === 0 && capOk,
+        upper: { total: act.length, expected: eUp, got: gUp },
+        lower: { total: lowerAll.length, expected: eLow, got: gLow },
+        duplicates: dup,
+        lowerHoldsActiveChats: leak,
+        selectedRowHighlights: SELECTED ? root.querySelectorAll(`[data-row][data-session="${SELECTED}"].bg-selection`).length : 0,
+      };
+    } else {
+      out.checks.recentSegments = { applicable: false, pass: true };
+    }
+
+    // (6b) v2 「正在活动」: <= 5 + 「查看更多（N）」, hidden (title included) when nothing is active
+    if (V2) {
+      const act = activeRows();
+      const reg = root.querySelector('[data-region="top"]');
+      const list = root.querySelector('[data-list-area]');
+      let pass;
+      let detail;
+      if (!act.length) {
+        pass = !reg;
+        detail = { active: 0, regionShown: !!reg };
+      } else {
+        const collapsed = st.recent === 'collapsed';
+        const rows = reg ? reg.querySelectorAll('[data-row]').length : -1;
+        const aux = reg ? textOf(reg.querySelector('[data-more]') || document.createElement('i')) || null : null;
+        const expRows = collapsed ? 0 : st.active === 'all' ? act.length : Math.min(5, act.length);
+        const expAux = collapsed || act.length <= 5 ? null : st.active === 'all' ? '收起' : `查看更多（${act.length - 5}）`;
+        const ids = reg ? [...reg.querySelectorAll('[data-row]')].map((r) => r.dataset.session) : [];
+        pass =
+          !!reg &&
+          list.firstElementChild === reg &&
+          textOf(reg.querySelector('[data-level="1"]')) === '正在活动' &&
+          rows === expRows &&
+          aux === expAux &&
+          new Set(ids).size === ids.length &&
+          (st.active === 'all' || rows <= 5);
+        detail = { active: act.length, rows, expectedRows: expRows, aux, expectedAux: expAux, collapsed };
+      }
+      out.checks.activeRegion = { pass, ...detail };
+      out.checks.noLowerSegment = {
+        pass: !root.querySelector('[data-segment="lower"]') && !root.querySelector('[data-sublabel]') && !panel.textContent.includes('48 小时内'),
+      };
+    } else {
+      out.checks.activeRegion = { applicable: false, pass: true };
+      out.checks.noLowerSegment = { applicable: false, pass: true };
+    }
+
+    // (7) folder order: v2 by last activity (empties after, Temp last); otherwise addition order
+    {
+      const got = [...root.querySelectorAll('[data-section="repos"] [data-folder]')].map((s) => s.dataset.folder);
+      const folderOf = (id) => FOLDERS.find((f) => f.id === id);
+      let pass;
+      const byActivity = P && st.order === 'activity';
+      if (byActivity) {
+        const repos = got.filter((id) => !folderOf(id).tempWorkspace);
+        const acts = repos.map((id) => lastActivity(folderOf(id)));
+        const firstEmpty = acts.findIndex((a) => a == null);
+        const withChats = firstEmpty < 0 ? acts : acts.slice(0, firstEmpty);
+        const empties = firstEmpty < 0 ? [] : repos.slice(firstEmpty);
+        const originalEmpties = FOLDERS.filter((f) => !f.tempWorkspace && lastActivity(f) == null).map((f) => f.id);
+        pass =
+          got.length === FOLDERS.length &&
+          (!FOLDERS.some((f) => f.tempWorkspace) || got[got.length - 1] === 'tempws') &&
+          withChats.every((a, i) => a != null && (i === 0 || a <= withChats[i - 1])) &&
+          (firstEmpty < 0 || acts.slice(firstEmpty).every((a) => a == null)) &&
+          same(empties, originalEmpties);
+      } else {
+        pass = same(got, FOLDERS.map((f) => f.id));
+      }
+      out.checks.folderOrder = {
+        pass,
+        rule: byActivity ? '按最后活动时间（无对话的在后、临时工作区最后）' : '添加仓库的先后',
+        order: got.map((id) => {
+          const a = lastActivity(folderOf(id));
+          return `${folderOf(id).name}${a == null ? '' : `@${relAge(a)}`}`;
+        }),
+      };
+    }
+
+    // (8) issue #3's x coordinates stay
+    const left = (el) => (el ? relX(el.getBoundingClientRect().left) : null);
+    const time = first('[data-row] [data-time]');
+    const coords = {
+      L0TextX: left(first('[data-level="0"]')),
+      L1TextX: left(first('[data-level="1"]')),
+      sublabelTextX: (() => {
+        const el = first('[data-sublabel]');
+        return el ? relX(el.getBoundingClientRect().left + parseFloat(getComputedStyle(el).paddingLeft)) : null;
+      })(),
+      folderIconX: left(first('[data-folder-row] [data-icon]')),
+      folderNameX: left(first('[data-level="2"]')),
+      unnestedSlotX: left(first('[data-row][data-depth="0"] [data-slot-marker]')),
+      unnestedTitleX: left(first('[data-row][data-depth="0"] [data-title]')),
+      inFolderSlotX: left(first('[data-row][data-depth="1"] [data-slot-marker]')),
+      inFolderTitleX: left(first('[data-row][data-depth="1"] [data-title]')),
+      timeBoxRightInset: time ? round1(pr.right - 1 - time.getBoundingClientRect().right) : null,
+    };
+    const want = { L1TextX: 16, sublabelTextX: 16, folderNameX: 38, unnestedTitleX: 38, inFolderTitleX: 50, timeBoxRightInset: 16 };
+    const off = Object.entries(want).filter(([k, v]) => coords[k] != null && Math.abs(coords[k] - v) > 0.5);
+    out.coords = coords;
+    out.checks.coordsKept = { pass: off.length === 0, expected: want, off: Object.fromEntries(off.map(([k]) => [k, coords[k]])) };
+
+    // (9) title widths (280: in-folder rows without context text or alert badges >= 160)
+    {
+      const plain1 = [];
+      const ctx1 = [];
+      const badge1 = [];
+      const tw1 = [];
+      const any0 = [];
+      root.querySelectorAll('[data-row]').forEach((r) => {
+        if (!visible(r)) return;
+        const t = r.querySelector('[data-title]');
+        const w = round1(t.getBoundingClientRect().width);
+        const hasCtx = !!r.querySelector('[data-context]');
+        const hasBadge = !!r.querySelector('[data-slot="badge"]');
+        // Temporary-workspace rows: a 60px time box (three hover actions) by design.
+        if (r.dataset.depth === '1') (r.hasAttribute('data-tw') ? tw1 : hasCtx ? ctx1 : hasBadge ? badge1 : plain1).push(w);
+        else any0.push(w);
+      });
+      const stats = (a) => (a.length ? { n: a.length, min: Math.min(...a), max: Math.max(...a) } : null);
+      const titleFs = (() => {
+        const t = first('[data-row] [data-title]');
+        return t ? parseFloat(getComputedStyle(t).fontSize) : null;
+      })();
+      out.titleWidths = {
+        inFolderPlain: stats(plain1),
+        inFolderWithContext: stats(ctx1),
+        inFolderWithAlertBadge: stats(badge1),
+        inFolderTempWorkspace: stats(tw1),
+        unnested: stats(any0),
+        titleFontSize: titleFs,
+        cjkCharsInFolderPlain: plain1.length && titleFs ? Math.floor(Math.min(...plain1) / titleFs) : null,
+        cjkCharsUnnested: any0.length && titleFs ? Math.floor(Math.max(...any0) / titleFs) : null,
+      };
+      if (W === 280) {
+        const floorOk = ctx1.concat(badge1, tw1).every((w) => w >= 80 - 0.5);
+        out.checks.titleWidth160 = {
+          applicable: plain1.length > 0,
+          pass: plain1.length === 0 || (Math.min(...plain1) >= 160 - 0.5 && floorOk),
+          inFolderPlainMin: plain1.length ? Math.min(...plain1) : null,
+          othersMin: ctx1.concat(badge1, tw1).length ? Math.min(...ctx1.concat(badge1, tw1)) : null,
+        };
+      }
+    }
+
+    // (10) nothing spills out of a row's content box (sidebar rows, home rows, the toolbar row)
+    {
+      const overflow = [];
+      root
+        .querySelectorAll(
+          '[data-row],[data-folder-row],[data-folder-row] > button,[data-box="L1"],[data-more],[data-sublabel],[data-home-row],[data-toolbar-row],[data-target-row],[data-composer-bar]'
+        )
+        .forEach((r) => {
+          if (!visible(r)) return;
+          const rr = r.getBoundingClientRect();
+          const cs = getComputedStyle(r);
+          const lo = rr.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft) - 0.5;
+          const hi = rr.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight) + 0.5;
+          const spill = [];
+          for (const c of r.children) {
+            if (!visible(c) || getComputedStyle(c).position === 'absolute') continue;
+            const cr = c.getBoundingClientRect();
+            if (cr.width === 0) continue;
+            if (cr.left < lo || cr.right > hi) spill.push({ child: textOf(c) || c.tagName.toLowerCase(), byLeft: round1(lo - cr.left), byRight: round1(cr.right - hi) });
+          }
+          if (r.scrollWidth > r.clientWidth + 1) spill.push({ scrollWidth: r.scrollWidth, clientWidth: r.clientWidth });
+          if (spill.length) overflow.push({ row: r.dataset.session || textOf(r), spill });
+        });
+      out.checks.noRowOverflow = { pass: overflow.length === 0, count: overflow.length, overflow: overflow.slice(0, 8) };
+    }
+
+    // (11) no CJK text under 14px anywhere in the window (prototype overlays excluded)
+    {
+      const small = [];
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (!CJK.test(n.data)) continue;
+        const el = n.parentElement;
+        if (!visible(el) || el.closest('[data-proto-overlay]')) continue;
+        const fs = parseFloat(getComputedStyle(el).fontSize);
+        if (fs < 14) small.push({ text: n.data.trim().slice(0, 12), fontSize: fs });
+      }
+      root.querySelectorAll('input').forEach((inp) => {
+        const fs = parseFloat(getComputedStyle(inp).fontSize);
+        if (CJK.test(inp.placeholder || '') && fs < 14) small.push({ text: inp.placeholder, fontSize: fs, placeholder: true });
+      });
+      out.checks.noSmallCjk = { pass: small.length === 0, violations: small };
+    }
+
+    // (12) same-depth titles share one x
+    {
+      const xs = {};
+      root.querySelectorAll('[data-panel] [data-align-depth]').forEach((el) => {
+        if (!visible(el)) return;
+        const d = `depth${el.dataset.alignDepth}`;
+        const x = relX(el.getBoundingClientRect().left);
+        xs[d] = xs[d] || new Map();
+        xs[d].set(x, (xs[d].get(x) || 0) + 1);
+      });
+      out.checks.sameDepthX = {
+        pass: Object.values(xs).every((m) => Math.max(...m.keys()) - Math.min(...m.keys()) <= 0.5),
+        xByDepth: Object.fromEntries(
+          Object.entries(xs).map(([d, m]) => [d, Object.fromEntries([...m].sort((a, b) => a[0] - b[0]).map(([x, n]) => [String(x), n]))])
+        ),
+      };
+    }
+
+    // (13) carriers between adjacent levels (colour counts at dE_ok >= 0.02)
+    {
+      const secs = [...root.querySelectorAll('[data-section]')];
+      const bgL = (lab(getComputedStyle(root).backgroundColor) || {}).L;
+      const describe = (el, lvl) => {
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        const box = el.closest('[data-box]') || el;
+        const er = el.getBoundingClientRect();
+        const icon = [...box.querySelectorAll('[data-icon]')].find(
+          (i) => visible(i) && !i.closest('[data-slot="button"]') && i.getBoundingClientRect().right <= er.left + 0.5
+        );
+        const fw = Number(cs.fontWeight);
+        const c = lab(cs.color);
+        return {
+          text: textOf(el),
+          fontSize: parseFloat(cs.fontSize),
+          fontWeight: fw,
+          winWeight: fw === 500 ? 400 : fw >= 600 ? 700 : fw,
+          color: cs.color,
+          lab: c,
+          contrastL: c && bgL != null ? round2(Math.abs(c.L - bgL)) : null,
+          letterSpacingEm: round2(parseFloat(cs.letterSpacing) / parseFloat(cs.fontSize) || 0),
+          boxHeight: round1(box.getBoundingClientRect().height),
+          textX: relX(er.left),
+          leadingIcon: !!icon,
+          divider:
+            lvl === 0
+              ? parseFloat(getComputedStyle(box).borderBottomWidth) > 0
+              : lvl === 1
+                ? secs.some((s) => parseFloat(getComputedStyle(s).borderTopWidth) > 0)
+                : false,
+        };
+      };
+      const reps = [
+        describe(first('[data-level="0"]'), 0),
+        describe(first('[data-level="1"]'), 1),
+        describe(first('[data-level="2"]'), 2),
+        describe(root.querySelector('[data-folder="atlas"] [data-row][data-session="a2"] [data-title]'), 3),
+        describe(first('[data-folder="atlas"] [data-more] [data-align-depth]'), 4),
+      ];
+      const carriersOf = (a, b) => {
+        const d = [];
+        if (Math.abs(a.fontSize - b.fontSize) >= 1) d.push('字号');
+        if (a.winWeight !== b.winWeight) d.push('字重');
+        if ((dE(a.lab, b.lab) || 0) >= 0.02) d.push('颜色');
+        if (Math.abs(a.letterSpacingEm - b.letterSpacingEm) >= 0.01) d.push('字距');
+        if (Math.abs(a.boxHeight - b.boxHeight) >= 2) d.push('行高');
+        if (Math.abs(a.textX - b.textX) >= 6) d.push('缩进');
+        if (a.leadingIcon !== b.leadingIcon) d.push('图标');
+        if (a.divider !== b.divider) d.push('分隔线');
+        return d;
+      };
+      const notWeaker = (hi, lo) =>
+        hi.fontSize >= lo.fontSize &&
+        hi.winWeight >= lo.winWeight &&
+        (hi.contrastL == null || lo.contrastL == null || hi.contrastL >= lo.contrastL - 0.005);
+      const pairs = [[0, 1], [1, 2], [2, 3], [3, 4], [1, 3], [1, 4]].map(([i, j]) => {
+        const a = reps[i];
+        const b = reps[j];
+        if (!a || !b) return { pair: `L${i}-L${j}`, adjacent: j === i + 1, missing: true };
+        const c = carriersOf(a, b);
+        return {
+          pair: `L${i}-L${j}`,
+          adjacent: j === i + 1,
+          carriers: c,
+          count: c.length,
+          colorDeltaE: round2(dE(a.lab, b.lab)),
+          higherNotWeaker: notWeaker(a, b),
+        };
+      });
+      out.carriers = { levels: reps.map((r) => (r ? { ...r, lab: undefined } : r)), pairs };
+      const adj = pairs.filter((p) => p.adjacent);
+      const missing = adj.some((p) => p.missing);
+      out.checks.carriers = {
+        applicable: !missing,
+        pass: missing || adj.every((p) => p.count >= 2),
+        adjacentCounts: Object.fromEntries(adj.map((p) => [p.pair, p.missing ? null : p.count])),
+      };
+      out.checks.monotonic = {
+        info: true,
+        applicable: !missing,
+        pass: missing || adj.every((p) => p.higherNotWeaker),
+        weakerThanLowerLevel: adj.filter((p) => !p.missing && !p.higherNotWeaker).map((p) => p.pair),
+      };
+    }
+
+    // (14) the Repositories title: collapse all, filter, add — 24px buttons, 14px icons
+    if (P && FOLDERS.length) {
+      const hdr = root.querySelector('[data-region="repos"] [data-box="L1"]');
+      const btns = [...hdr.querySelectorAll('button')];
+      const labels = btns.map((b) => b.getAttribute('aria-label'));
+      const sizes = btns.map((b) => {
+        const r = b.getBoundingClientRect();
+        const i = b.querySelector('svg').getBoundingClientRect();
+        return [round1(r.width), round1(r.height), round1(i.width), round1(i.height)];
+      });
+      out.checks.reposHeaderButtons = {
+        pass:
+          same(labels, ['全部折叠', '筛选会话', '添加仓库']) &&
+          sizes.every((s) => same(s, [24, 24, 14, 14])) &&
+          btns[0].title === '全部折叠' &&
+          !!btns[0].querySelector('use[href="#i-chevrons-down-up"]'),
+        labels,
+        sizes,
+        lastButtonRightInset: btns.length ? round1(pr.right - 1 - btns[btns.length - 1].getBoundingClientRect().right) : null,
+      };
+    }
+
+    // (15) after "collapse all": no chat rows under any folder, temporary chats untouched
+    {
+      const all = FOLDERS.length > 0 && FOLDERS.every((f) => ui.collapsed.has(f.id));
+      if (all) {
+        const folderRowsShown = root.querySelectorAll('[data-section="repos"] [data-row]').length;
+        const openIcons = root.querySelectorAll('[data-section="repos"] [data-folder-row] use[href="#i-folder-open"]').length;
+        const folders = root.querySelectorAll('[data-section="repos"] [data-folder-row]').length;
+        const tempShown = root.querySelectorAll('[data-section="temp"] [data-row]').length;
+        out.checks.collapseAll = {
+          pass: folderRowsShown === 0 && openIcons === 0 && folders === FOLDERS.length && tempShown === (ui.tempCollapsed ? 0 : tempRows().length),
+          folders,
+          chatRowsUnderFolders: folderRowsShown,
+          openFolderIcons: openIcons,
+          temporaryChatRows: tempShown,
+        };
+      } else {
+        out.checks.collapseAll = { applicable: false, pass: true };
+      }
+    }
+
+    // (16) the home page: exactly 新建对话 + 添加仓库 + 最近对话, on the reading column
+    const home = root.querySelector('[data-home]');
+    if (P && st.home === 'v2' && root.querySelector('[data-center-kind="home"]')) {
+      const center = root.querySelector('[data-center]');
+      const rowsAll = homeRows();
+      const rows = [...home.querySelectorAll('[data-home-row]')];
+      const expRows = st.homemore === 'all' ? rowsAll.length : Math.min(HOME_LIMIT, rowsAll.length);
+      const more = home.querySelector('[data-home-more]');
+      const expMore = rowsAll.length > HOME_LIMIT ? (st.homemore === 'all' ? '收起' : `查看更多（${rowsAll.length - HOME_LIMIT}）`) : null;
+      const groups = [...home.querySelectorAll('[data-home-group]')].map(textOf);
+      const groupOk =
+        groups.every((g, i) => ['今天', '昨天', '更早'].indexOf(g) > (i ? ['今天', '昨天', '更早'].indexOf(groups[i - 1]) : -1)) &&
+        rows.every((r) => {
+          let label = r.previousElementSibling;
+          while (label && !label.hasAttribute('data-home-group')) label = label.previousElementSibling;
+          return label && textOf(label) === homeGroup(byId.get(r.dataset.session).updatedAt);
+        });
+      const newBtn = home.querySelector('[data-home-new]');
+      const addBtn = home.querySelector('[data-home-add]');
+      const actions = home.querySelector('[data-home-actions]');
+      const heading = home.querySelector('[data-home-heading]');
+      const fontOf = (el) => (el ? [parseFloat(getComputedStyle(el).fontSize), Number(getComputedStyle(el).fontWeight)] : null);
+      const fonts = {
+        heading: fontOf(heading),
+        title: fontOf(home.querySelector('[data-home-part="title"]')),
+        meta: fontOf(home.querySelector('[data-home-row] [data-place]')),
+        group: fontOf(home.querySelector('[data-home-group]')),
+        buttons: [newBtn, addBtn].map((b) => (b ? parseFloat(getComputedStyle(b).fontSize) : null)),
+      };
+      const hr = home.getBoundingClientRect();
+      const cr = center.getBoundingClientRect();
+      const leftGap = round1(hr.left - cr.left);
+      const rightGap = round1(cr.right - hr.right);
+      const barTitle = textOf(root.querySelector('[data-sessionbar-title]'));
+      out.home = { rows: rows.length, groups, fonts, widthPx: round1(hr.width), leftGap, rightGap, target: newBtn ? newBtn.title : null };
+      out.checks.home = {
+        pass:
+          !!newBtn &&
+          newBtn.classList.contains('btn-primary') &&
+          textOf(newBtn) === '新建对话' &&
+          !!addBtn &&
+          addBtn.classList.contains('btn-outline') &&
+          textOf(addBtn) === '添加仓库' &&
+          actions.querySelectorAll('button').length === 2 &&
+          !!heading &&
+          textOf(heading) === '最近对话' &&
+          home.children.length === 2 &&
+          rows.length === expRows &&
+          (more ? textOf(more) : null) === expMore &&
+          groupOk &&
+          same(fonts.heading, [16, wOf(600)]) &&
+          // v3's scenes without any chat: no row to take the fonts from
+          (!rowsAll.length || (same(fonts.title, [15, 400]) && same(fonts.meta, [14, 400]) && same(fonts.group, [14, 400]))) &&
+          fonts.buttons.every((s) => s >= 14) &&
+          barTitle === '首页' &&
+          !root.querySelector('[data-composer]') &&
+          hr.width <= 720.5 &&
+          (cr.width < 720 + 48 || Math.abs(leftGap - rightGap) <= 1),
+        rows: { got: rows.length, expected: expRows },
+        more: { got: more ? textOf(more) : null, expected: expMore },
+        groups,
+        fonts,
+        sessionBarTitle: barTitle,
+        readingWidth: round1(hr.width),
+      };
+    } else {
+      out.checks.home = { applicable: false, pass: true };
+    }
+
+    // (17) the way back to the home page: (a) rail top, (b) panel toolbar
+    if (P && st.entry !== 'none') {
+      const btn = root.querySelector(`[data-home-entry="${st.entry}"]`);
+      let pass = !!btn && (btn.title === '首页' || btn.getAttribute('aria-label') === '首页');
+      const detail = {};
+      if (btn && st.entry === 'rail') {
+        const chatBtn = root.querySelector('[data-rail] [data-surface="chat"]');
+        const r = btn.getBoundingClientRect();
+        pass = pass && r.bottom <= chatBtn.getBoundingClientRect().top && Math.round(r.width) === 32 && Math.round(r.height) === 32;
+        detail.size = [round1(r.width), round1(r.height)];
+        detail.surfacesShiftedPx = round1(chatBtn.getBoundingClientRect().top - r.top);
+      }
+      if (btn && st.entry === 'toolbar') {
+        const rowEl = btn.parentElement;
+        const rr = rowEl.getBoundingClientRect();
+        const kids = [...rowEl.children].map((c) => c.getBoundingClientRect());
+        const inside = kids.every((k) => k.left >= rr.left - 0.5 && k.right <= rr.right + 0.5);
+        const noOverlap = kids.every((k, i) => i === 0 || k.left >= kids[i - 1].right - 0.5);
+        pass = pass && rowEl.firstElementChild === btn && textOf(btn) === '首页' && inside && noOverlap;
+        detail.freePx = round1(rr.right - kids[kids.length - 2].right - kids[kids.length - 1].width);
+        detail.buttonWidths = kids.map((k) => round1(k.width));
+      }
+      out.checks.homeEntry = { pass, entry: st.entry, ...detail };
+    } else {
+      out.checks.homeEntry = { applicable: false, pass: true };
+    }
+
+    // (18) v3 home: only the title, 最近对话 and the composer; the title names the bar's repository
+    if (P && st.home === 'v3' && root.querySelector('[data-center-kind="home"]')) {
+      const center = root.querySelector('[data-center]');
+      const cr = center.getBoundingClientRect();
+      const title = root.querySelector('[data-home-title]');
+      const ws = root.querySelector('[data-home-ws]');
+      const label = root.querySelector('[data-target-row] [data-folder-label]');
+      const firstInRow = root.querySelector('[data-target-row]').firstElementChild;
+      const target = homeTargetFolder();
+      const rowsAll = homeRows();
+      const rows = [...root.querySelectorAll('[data-home-row]')];
+      const expRows = st.homemore === 'all' ? rowsAll.length : Math.min(HOME_LIMIT, rowsAll.length);
+      const more = root.querySelector('[data-home-more]');
+      const expMore = rowsAll.length > HOME_LIMIT ? (st.homemore === 'all' ? '收起' : `查看更多（${rowsAll.length - HOME_LIMIT}）`) : null;
+      const fontOf = (el) => (el ? [parseFloat(getComputedStyle(el).fontSize), Number(getComputedStyle(el).fontWeight)] : null);
+      const tcs = getComputedStyle(title);
+      const titleFont = [parseFloat(tcs.fontSize), Number(tcs.fontWeight), round2(parseFloat(tcs.letterSpacing) / parseFloat(tcs.fontSize))];
+      const fonts = {
+        heading: fontOf(root.querySelector('[data-home-heading]')),
+        title: fontOf(root.querySelector('[data-home-part="title"]')),
+        meta: fontOf(root.querySelector('[data-home-row] [data-place]')),
+        group: fontOf(root.querySelector('[data-home-group]')),
+      };
+      const host = root.querySelector('[data-composer-host]').getBoundingClientRect();
+      const area = root.querySelector('[data-home-area]').getBoundingClientRect();
+      const hero = root.querySelector('[data-home-hero]').getBoundingClientRect();
+      const heroRatio = round2((hero.top + hero.height / 2 - area.top) / area.height);
+      const wsText = ws ? (ws.textContent || '').trim() : null;
+      const labelText = label ? (label.textContent || '').trim() : null;
+      const wsOk = target ? wsText === target.name && labelText === target.name : !ws && labelText === '未选仓库';
+      const barTitle = textOf(root.querySelector('[data-sessionbar-title]'));
+      const homeEl = root.querySelector('[data-home-v3]');
+      out.home3 = {
+        target: target ? target.name : null,
+        title: (title.textContent || '').trim(),
+        titleFont,
+        heroCenterRatio: heroRatio,
+        rows: rows.length,
+        upperAreaHeight: round1(area.height),
+        contentHeight: round1(homeEl.getBoundingClientRect().height),
+        readingWidth: round1(homeEl.getBoundingClientRect().width),
+      };
+      out.checks.homeV3 = {
+        pass:
+          !root.querySelector('[data-home-new], [data-home-add]') &&
+          wsOk &&
+          !!firstInRow &&
+          firstInRow.hasAttribute('data-folder-trigger') &&
+          rows.length === expRows &&
+          (more ? textOf(more) : null) === expMore &&
+          same(titleFont, [28, wOf(600), -0.01]) &&
+          (!rowsAll.length ||
+            (same(fonts.heading, [16, wOf(600)]) && same(fonts.title, [15, 400]) && same(fonts.meta, [14, 400]) && same(fonts.group, [14, 400]))) &&
+          barTitle === '首页' &&
+          Math.abs(cr.bottom - host.bottom) <= 0.5 &&
+          (rowsAll.length > 0 || (heroRatio >= 0.3 && heroRatio <= 0.5)) &&
+          round1(homeEl.getBoundingClientRect().width) <= 720.5,
+        twoButtonsGone: !root.querySelector('[data-home-new], [data-home-add]'),
+        titleNamesTheBarRepository: wsOk,
+        titleWorkspace: wsText,
+        barRepository: labelText,
+        rows: { got: rows.length, expected: expRows },
+        more: { got: more ? textOf(more) : null, expected: expMore },
+        titleFont,
+        fonts,
+        heroCenterRatio: heroRatio,
+        composerPinned: round1(cr.bottom - host.bottom),
+        sessionBarTitle: barTitle,
+      };
+    } else {
+      out.checks.homeV3 = { applicable: false, pass: true };
+    }
+
+    // (19) the composer does not move between the home and the conversation it starts.
+    // The other state is rendered as an invisible clone over the same column.
+    if (st.home === 'v3' && st.full && !st.ann && root.querySelector('[data-center] [data-composer-card]')) {
+      const real = root.querySelector('[data-center]');
+      const kindNow = real.dataset.centerKind;
+      const save = { center: st.center, sent: st.sent, open: st.open };
+      if (P) {
+        if (kindNow === 'home') Object.assign(st, { center: 'chat', sent: true, open: 'new1' });
+        else Object.assign(st, { center: 'home', sent: false });
+      } else if (kindNow === 'seed') Object.assign(st, { center: 'chat', open: 's1' });
+      else Object.assign(st, { center: 'home' });
+      useData(mode);
+      const html = centerFull(P, WIN_W[st.h] - 44 - Number(st.w));
+      Object.assign(st, save);
+      useData(mode);
+      const holder = document.createElement('div');
+      holder.innerHTML = html;
+      const clone = holder.firstElementChild;
+      clone.style.position = 'absolute';
+      clone.style.top = '0';
+      clone.style.left = `${real.offsetLeft}px`;
+      clone.style.height = '100%';
+      clone.style.visibility = 'hidden';
+      real.parentElement.appendChild(clone);
+      const rect = (el) => {
+        const r = el.getBoundingClientRect();
+        return { x: round1(r.left), y: round1(r.top), w: round1(r.width), h: round1(r.height) };
+      };
+      const a = rect(real.querySelector('[data-composer-card]'));
+      const bCard = clone.querySelector('[data-composer-card]');
+      const b = bCard ? rect(bCard) : null;
+      const rowA = real.querySelector('[data-target-row]');
+      const rowB = clone.querySelector('[data-target-row]');
+      const rowDelta = rowA && rowB ? round1(rowB.getBoundingClientRect().top - rowA.getBoundingClientRect().top) : null;
+      const otherKind = clone.dataset.centerKind;
+      clone.remove();
+      const d = b ? { x: round1(b.x - a.x), y: round1(b.y - a.y), w: round1(b.w - a.w), h: round1(b.h - a.h) } : null;
+      const stable = !!d && Math.abs(d.x) <= 1 && Math.abs(d.y) <= 1 && Math.abs(d.w) <= 1 && Math.abs(d.h) <= 1 && rowDelta != null && Math.abs(rowDelta) <= 1;
+      out.checks.composerStable = {
+        ...(P ? {} : { info: true }),
+        pass: stable,
+        from: kindNow,
+        to: otherKind,
+        card: a,
+        otherCard: b,
+        delta: d,
+        targetRowDelta: rowDelta,
+      };
+    } else {
+      out.checks.composerStable = { applicable: false, pass: true };
+    }
+
+    // (20) the work bar's menus, drawn open: above their trigger, inside the window, the right content
+    if (P && st.home === 'v3' && st.menu !== 'none' && root.querySelector('[data-center-kind="home"]')) {
+      const popup = root.querySelector(`[data-menu-popup="${st.menu}"]`);
+      const anchor = root.querySelector(st.menu === 'repo' ? '[data-folder-trigger]' : '[data-branch-trigger]');
+      if (!popup || !anchor) {
+        out.checks.menuOpen = { pass: st.menu === 'branch' && !anchor, note: '没有分支列时不画分支菜单' };
+      } else {
+        const p = popup.getBoundingClientRect();
+        const an = anchor.getBoundingClientRect();
+        const rr = root.getBoundingClientRect();
+        const text = popup.textContent || '';
+        const repos = FOLDERS.filter((f) => !f.tempWorkspace);
+        const hasRecents = repos.some((f) => lastActivity(f) != null);
+        const content =
+          st.menu === 'repo'
+            ? ['添加仓库', '使用已有目录…', '克隆…', '添加远程…', '不选仓库（临时对话）'].every((t) => text.includes(t)) &&
+              (repos.length ? text.includes('本机') : text.includes('还没有仓库')) &&
+              (!hasRecents || text.includes('最近'))
+            : ['本地分支', '远程分支', '创建新分支...'].every((t) => text.includes(t));
+        out.checks.menuOpen = {
+          pass: p.bottom <= an.top + 0.5 && p.top >= rr.top && p.left >= rr.left && p.right <= rr.right && content,
+          menu: st.menu,
+          gapAboveTrigger: round1(an.top - p.bottom),
+          height: round1(p.height),
+          width: round1(p.width),
+          content,
+        };
+      }
+    } else {
+      out.checks.menuOpen = { applicable: false, pass: true };
+    }
+    return out;
+  };
+
+  window.__measure = () => ({
+    state: { ...st, ui: { collapsed: [...ui.collapsed], showAll: [...ui.showAll], tempCollapsed: ui.tempCollapsed } },
+    roots: [...document.querySelectorAll('[data-proto-root]')].map(measureRoot),
+  });
+  window.__pageSize = () => {
+    const r = document.getElementById('stage').getBoundingClientRect();
+    return { w: Math.ceil(r.width), h: Math.ceil(r.height) };
+  };
+
+  // --------------------------------------------------------------- controls
+  const CONTROLS = [
+    ['mode', '视图', [['current', '现状（dsh.8）'], ['proposal', '方案（#6）'], ['compare', '并排对比']]],
+    ['top', '顶区', [['v2', 'v2 只有正在活动'], ['v1', 'v1 最近两段']]],
+    ['home', '首页', [['v4', 'v4 标题锚定 + 5 条'], ['v3', 'v3 标题 + 10 条'], ['v2', 'v2 两个按钮 + 最近对话']]],
+    ['title', '标题样式（v4）', [['v4', '新样式'], ['v3', 'v3 样式（对照）']]],
+    ['pos', '标题位置（v4）', [['golden', '黄金分割 38.2%'], ['center', '垂直居中 50%']]],
+    ['composer', '输入框高度', [['current', '现状（dsh.8）'], ['2', '2 行（定稿）'], ['3', '3 行'], ['4', '4 行']]],
+    ['scene', '场景', [['startup', '启动时（没有正在活动）'], ['busy', '使用中（7 个正在活动）'], ['newuser', '新用户（有仓库、没有对话）'], ['norepo', '没有仓库']]],
+    ['center', '中栏', [['home', '首页'], ['chat', '打开一个对话']]],
+    ['entry', '首页入口', [['rail', '(a) 导轨最上方（已选）'], ['toolbar', '(b) 工具条「新建」左边'], ['none', '不画']]],
+    ['target', '工作栏仓库（v3）', [['auto', '默认：最近活动的仓库'], ['atlas', 'atlas-web'], ['beacon', 'beacon-api'], ['unbound', '不选仓库']]],
+    ['menu', '工作栏菜单（v3）', [['none', '收起'], ['repo', '仓库菜单'], ['branch', '分支菜单']]],
+    ['branch', '首页分支（v4，发送时切）', [['', '当前分支'], ['feature/home-composer', 'feature/home-composer']]],
+    ['tip', '悬停提示（v4）', [['none', '不画'], ['branch-lock', '分支锁']]],
+    ['order', '仓库顺序', [['activity', '按活动时间'], ['original', '添加先后（dsh.8）']]],
+    ['theme', '主题', [['light', '浅色'], ['dark', '深色']]],
+    ['w', '面板宽度', [['280', '280'], ['360', '360'], ['500', '500']]],
+    ['h', '窗口', [['720', '1280×720'], ['900', '1440×900'], ['1080', '1920×1080']]],
+    ['recent', '顶区标题箭头', [['expanded', '展开'], ['collapsed', '折叠']]],
+    ['active', '正在活动', [['less', '收起（默认）'], ['all', '已点查看更多']]],
+    ['lower', '48 小时内（v1）', [['less', '收起（默认）'], ['all', '已点查看更多']]],
+    ['homemore', '首页最近对话', [['less', '前 10 条'], ['all', '已点查看更多']]],
+    ['rscroll', '顶区滚动', [['top', '顶部'], ['bottom', '底部']]],
+    ['scroll', '仓库列表滚动', [['top', '顶部'], ['mid', '中段'], ['bottom', '底部']]],
+    ['folders', '仓库文件夹', [['open', '全部展开'], ['collapsed', '全部折叠']]],
+    ['ink', '对话标题颜色', [['mix', '派生式（≈ base-850，已选）'], ['soft850', 'base-850'], ['soft', 'base-800（v1 默认）'], ['fg', '正文色（dsh.8）']]],
+  ];
+  const TOGGLES = [
+    ['full', '整窗（含中栏）'],
+    ['sent', '已从首页发送（v3 模拟）'],
+    ['typed', '输入框里有文字（v4）'],
+    ['blocked', '发送被锁拦下（v4）'],
+    ['fade', '区底渐隐'],
+    ['bars', '滚动条（模拟悬停）'],
+    ['ann', '仓库顺序标注'],
+    ['cjk', 'CJK / Win10 字重（600→700）'],
+    ['guides', '对齐参考线'],
+  ];
+  // Changing these re-lays the page out: scroll positions start over.
+  const RESET_SCROLL = new Set(['mode', 'w', 'h', 'scroll', 'rscroll', 'top', 'scene', 'center', 'order', 'home', 'pos', 'title', 'composer']);
+  const renderControls = () => {
+    const el = document.getElementById('controls');
+    el.innerHTML =
+      CONTROLS.map(
+        ([key, label, opts]) =>
+          `<div class="grp"><span>${label}</span><div class="seg">${opts
+            .map(([v, t]) => `<button type="button" data-key="${key}" data-v="${v}" aria-pressed="${st[key] === v}">${t}</button>`)
+            .join('')}</div></div>`
+      ).join('') +
+      `<div class="grp">${TOGGLES.map(([key, t]) => `<label><input type="checkbox" data-toggle="${key}" ${st[key] ? 'checked' : ''} />${t}</label>`).join('')}</div>`;
+  };
+  document.getElementById('controls').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-key]');
+    if (!b) return;
+    const key = b.dataset.key;
+    st[key] = b.dataset.v;
+    // v4: a draft branch belongs to the repository it was picked in.
+    if (key === 'target') st.branch = '';
+    if (key === 'folders') {
+      ui.collapsed.clear();
+      if (st.folders === 'collapsed') for (const f of FOLDERS) ui.collapsed.add(f.id);
+    }
+    apply({ keepScroll: !RESET_SCROLL.has(key) });
+  });
+  document.getElementById('controls').addEventListener('change', (e) => {
+    const t = e.target.closest('input[data-toggle]');
+    if (!t) return;
+    st[t.dataset.toggle] = t.checked;
+    // 「已从首页发送」 shows the conversation it started; off, back to the home page.
+    if (t.dataset.toggle === 'sent') {
+      st.center = t.checked ? 'chat' : 'home';
+      st.menu = 'none';
+    }
+    // 「发送被锁拦下」: nimbus-agent busy (使用中), a branch picked before the lock, on the home.
+    if (t.dataset.toggle === 'blocked' && t.checked) {
+      st.home = 'v4';
+      st.scene = 'busy';
+      st.target = 'auto';
+      st.center = 'home';
+      st.menu = 'none';
+      st.sent = false;
+      if (!st.branch) st.branch = 'feature/home-composer';
+    }
+    apply({ keepScroll: !['full', 'ann', 'sent'].includes(t.dataset.toggle) });
+  });
+  // Clicks inside the panels: the prototype's own interactions.
+  document.getElementById('stage').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-action]');
+    if (!a) return;
+    const fid = a.dataset.fid;
+    let keep = true;
+    switch (a.dataset.action) {
+      case 'toggle-recent':
+        st.recent = st.recent === 'collapsed' ? 'expanded' : 'collapsed';
+        break;
+      case 'active-more':
+        st.active = 'all';
+        break;
+      case 'active-less':
+        st.active = 'less';
+        break;
+      case 'lower-more':
+        st.lower = 'all';
+        break;
+      case 'lower-less':
+        st.lower = 'less';
+        break;
+      case 'home-more':
+        st.homemore = 'all';
+        break;
+      case 'home-less':
+        st.homemore = 'less';
+        break;
+      case 'folder-toggle':
+        if (ui.collapsed.has(fid)) ui.collapsed.delete(fid);
+        else ui.collapsed.add(fid);
+        syncFolders();
+        break;
+      case 'folder-more':
+        ui.showAll.add(fid);
+        break;
+      case 'folder-less':
+        ui.showAll.delete(fid);
+        break;
+      case 'collapse-all':
+        // Every folder in Repositories, the 「临时工作区」 folder included.
+        // The 「临时对话」 region is not a folder and keeps its own state.
+        for (const f of FOLDERS) ui.collapsed.add(f.id);
+        syncFolders();
+        break;
+      case 'temp-toggle':
+        ui.tempCollapsed = !ui.tempCollapsed;
+        break;
+      case 'open':
+        st.center = 'chat';
+        st.open = a.dataset.sid && KNOWN.has(a.dataset.sid) ? a.dataset.sid : st.open;
+        st.menu = 'none';
+        break;
+      case 'go-home':
+        st.center = 'home';
+        st.menu = 'none';
+        keep = false;
+        break;
+      // v3: the work bar on the home page
+      case 'new-in-folder':
+        st.center = 'home';
+        st.target = fid;
+        st.branch = '';
+        st.menu = 'none';
+        keep = false;
+        break;
+      case 'menu-repo':
+        st.menu = st.menu === 'repo' ? 'none' : 'repo';
+        break;
+      case 'menu-branch':
+        st.menu = st.menu === 'branch' ? 'none' : 'branch';
+        break;
+      case 'pick-repo':
+        st.target = fid;
+        st.branch = '';
+        st.menu = 'none';
+        break;
+      case 'pick-branch': {
+        // v4: a draft for this send; picking the current branch clears it.
+        useData('proposal');
+        const f = homeTargetFolder();
+        const b = a.dataset.branch || '';
+        st.branch = st.home === 'v4' && f && b !== f.branch ? b : '';
+        st.menu = 'none';
+        break;
+      }
+      case 'send': {
+        // v4: a branch picked before a chat started running in this checkout
+        // cannot be switched to now: do not send, ask (the text stays).
+        useData('proposal');
+        const f = homeTargetFolder();
+        if (f && homeDraftBranch(f) && checkoutBusy(f, null, null)) {
+          st.blocked = true;
+          st.typed = true;
+          st.menu = 'none';
+          st.tip = 'none';
+          break;
+        }
+        st.sent = true;
+        st.center = 'chat';
+        st.open = 'new1';
+        st.menu = 'none';
+        st.tip = 'none';
+        st.blocked = false;
+        st.typed = false;
+        keep = false;
+        break;
+      }
+      case 'blocked-current':
+        // 「改在 <当前分支> 上发送」: drop the draft branch and send.
+        st.branch = '';
+        st.blocked = false;
+        st.typed = false;
+        st.tip = 'none';
+        st.sent = true;
+        st.center = 'chat';
+        st.open = 'new1';
+        st.menu = 'none';
+        keep = false;
+        break;
+      case 'blocked-cancel':
+        // 「取消」: nothing is sent; the message stays in the composer.
+        st.blocked = false;
+        break;
+      default:
+        return;
+    }
+    apply({ keepScroll: keep });
+  });
+
+  const NAMES = {
+    shellChrome: '列表区高度 = 窗口高 − 186',
+    levelFonts: '字号字重（L0–L4、会话栏标题）',
+    titleInk: '对话标题颜色（打开的那行用正文色）',
+    regions: '分区：33% / 25% 上限、按内容伸缩、首尾相接',
+    regionsIndependent: '滚动仓库列表时另外两区不动',
+    l1OutsideScroll: '板块标题不在任何滚动区内',
+    recentSegments: '「最近」两段计数、查看更多（N）、不重复',
+    activeRegion: '「正在活动」≤5 + 查看更多（N），为空时整区隐藏',
+    noLowerSegment: '侧栏没有「48 小时内」段',
+    folderOrder: '仓库顺序',
+    coordsKept: '#3 横坐标（16 / 38 / 50 / 右 16）',
+    titleWidth160: '280 宽文件夹内标题 ≥160px',
+    noRowOverflow: '行内不溢出',
+    noSmallCjk: '中文 ≥14px',
+    sameDepthX: '同深度对齐',
+    carriers: '相邻层级 ≥2 个区分载体',
+    monotonic: '高一级不弱于低一级（参考）',
+    reposHeaderButtons: '「仓库列表」标题栏三个按钮',
+    collapseAll: '全部折叠',
+    home: '首页 v2：新建对话 + 添加仓库 + 最近对话',
+    homeEntry: '回到首页的入口',
+    homeV3: '首页 v3：标题 + 最近对话 + 输入框；标题里的仓库 = 工作栏仓库',
+    composerStable: '首页与对话页的输入框位置、宽度一致（±1px）',
+    menuOpen: '工作栏菜单：在触发器上方、窗口内、内容齐全',
+  };
+  const summary = (m) =>
+    m.roots
+      .map((r) => {
+        const lines = [`【${r.mode === 'proposal' ? `方案（#6 ${r.top}）` : '现状（dsh.8）'}】面板 ${r.panelWidth}px · 窗口高 ${r.windowHeight} · 列表区 ${r.listAreaHeight}px`];
+        for (const [k, v] of Object.entries(r.checks)) {
+          if (v.applicable === false) continue;
+          lines.push(`  ${v.pass ? '✓' : '✗'} ${NAMES[k] || k}`);
+        }
+        if (r.regions) {
+          for (const [k, v] of Object.entries(r.regions)) {
+            if (v) lines.push(`  区 ${k}「${v.title}」: 高 ${v.height}（${v.pctOfList}%${v.cap ? `，上限 ${v.cap}` : ''}），内容 ${v.natural}，${v.overflow ? `区内滚动 ${v.scrollRange}px` : '不滚动'}`);
+          }
+        }
+        lines.push(`  仓库顺序 ${r.checks.folderOrder.order.join(' → ')}`);
+        if (r.home) lines.push(`  首页 ${JSON.stringify(r.home)}`);
+        if (r.home3) lines.push(`  首页 v3 ${JSON.stringify(r.home3)}`);
+        if (r.checks.composerStable && r.checks.composerStable.applicable !== false) {
+          const c = r.checks.composerStable;
+          lines.push(`  输入框 ${c.from} → ${c.to}：卡片位移 ${JSON.stringify(c.delta)}，工作栏位移 ${c.targetRowDelta}`);
+        }
+        lines.push(`  坐标 ${JSON.stringify(r.coords)}`);
+        lines.push(`  标题宽 ${JSON.stringify(r.titleWidths)}`);
+        lines.push(`  颜色 ΔE ${JSON.stringify(r.checks.titleInk.deltaE)}`);
+        lines.push(`  载体 ${r.carriers.pairs.map((p) => `${p.pair}:${(p.carriers || []).join('+') || '无'}`).join('  ')}`);
+        return lines.join('\n');
+      })
+      .join('\n\n');
+
+  const apply = (opts = {}) => {
+    const saved = opts.keepScroll ? captureScroll() : null;
+    document.documentElement.classList.toggle('dark', st.theme === 'dark');
+    document.documentElement.classList.toggle('ink-850', st.ink === 'soft850');
+    document.documentElement.classList.toggle('ink-800', st.ink === 'soft');
+    document.body.classList.toggle('cjkwin', st.cjk);
+    const stage = document.getElementById('stage');
+    stage.innerHTML = st.mode === 'compare' ? compareHtml() : appHtml(st.mode, true);
+    postRender(saved);
+    if (!SHOT) {
+      renderControls();
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(st)) if (v !== 'mixed') q.set(k, v === true ? '1' : v === false ? '0' : v);
+      // Firefox may refuse history writes on file:// pages; the page works without them.
+      try {
+        history.replaceState(null, '', `?${q}`);
+      } catch {
+        // ignore
+      }
+      document.getElementById('report').textContent = summary(window.__measure());
+    }
+  };
+  apply();
+})();
+</script>
+</body>
+</html>
