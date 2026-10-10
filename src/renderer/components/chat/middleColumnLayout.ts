@@ -39,10 +39,18 @@ export interface MiddleColumnModeInput {
  * Decide whether the middle column shows the centered empty state or the
  * docked session state. Rules are evaluated in order and short-circuit —
  * order matters (see T-28 design doc §1 decision table).
+ *
+ * Decision 174 (issue #6, second wave): no conversation open is the HOME page,
+ * and the home page docks the composer exactly where a conversation does —
+ * the same card, the work bar under it — so sending the first message from it
+ * moves nothing (user ruling 2026-10-10). It used to be `empty`, the start
+ * screen's geometry, which put the work bar above a taller card and made the
+ * card jump on the first send. `empty` is left for a blank conversation that
+ * exists but has not started, which no "new chat" entry creates any more.
  */
 export function deriveMiddleColumnMode(input: MiddleColumnModeInput): MiddleColumnMode {
   if (input.sessionId == null) {
-    return 'empty';
+    return 'session';
   }
   if (input.messageCount > 0) {
     return 'session';
@@ -256,11 +264,25 @@ export function composerCardClass(
  */
 export const COMPOSER_TEXTAREA_LINE_SCALE = 1.5;
 
+/**
+ * Decision 174 (issue #6, user ruling 2026-10-10 — "输入框太小气"): the docked
+ * composer's empty textarea rests at two body-tier lines, on the home page and
+ * in a conversation alike, so the first send still moves nothing. A draft
+ * still grows it to the eight-line cap (`composerTextareaClass('session')`).
+ * At the 17px default that is 17 × 1.5 × 2 = 51px and a 101px card.
+ */
+export const COMPOSER_TEXTAREA_MIN_ROWS = 2;
+
 export function composerFollowHeightBreakdown(): {
   border: number;
   padding: number;
-  /** Row 1: the textarea, at the DEFAULT body size (16px → 1.5 → 24px). */
+  /**
+   * Row 1: the textarea at rest, at the DEFAULT body size — its minimum of
+   * `textareaLines` line boxes (17px → × 1.5 → × 2 = 51px since decision 174).
+   */
   textareaRow: number;
+  /** How many body-tier lines the empty textarea rests at (`COMPOSER_TEXTAREA_MIN_ROWS`). */
+  textareaLines: number;
   /** Row 2: the control strip, on the fixed button tier. */
   controlRow: number;
   /**
@@ -277,7 +299,8 @@ export function composerFollowHeightBreakdown(): {
   // The body tier's default lives in `@shared/types/chatTypography` (the store,
   // the settings UI and `globals.css` all key off the same number); this module
   // only multiplies it by the line scale its own class string spells.
-  const textareaRow = DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE;
+  const textareaLines = COMPOSER_TEXTAREA_MIN_ROWS;
+  const textareaRow = DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE * textareaLines;
   const controlRow = COMPOSER_CONTROL_SIZE; // 24px button tier, size-6 / h-6
   const rows = 2; // row 1: the textarea; row 2: the control strip
   const rowGap = 8; // composerRowsClass()'s `gap-2`
@@ -285,6 +308,7 @@ export function composerFollowHeightBreakdown(): {
     border,
     padding,
     textareaRow,
+    textareaLines,
     controlRow,
     rows,
     rowGap,
@@ -674,7 +698,9 @@ export function composerTextareaClass(mode: MiddleColumnMode): string {
   // T104 re-expresses both the resting row and the cap through
   // `--text-chat-body` rather than dropping them: they were 24px and 192px
   // literals, and the row they measure is exactly the derived line box above.
-  return 'w-full p-0 [&_textarea]:text-chat-body [&_textarea]:min-h-[calc(var(--text-chat-body)*1.5)] [&_textarea]:max-h-[calc(var(--text-chat-body)*1.5*8)] [&_textarea]:resize-none [&_textarea]:px-0 [&_textarea]:py-0 [&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]';
+  // Decision 174: the floor is two of those line boxes
+  // (`COMPOSER_TEXTAREA_MIN_ROWS`), the cap still eight.
+  return 'w-full p-0 [&_textarea]:text-chat-body [&_textarea]:min-h-[calc(var(--text-chat-body)*1.5*2)] [&_textarea]:max-h-[calc(var(--text-chat-body)*1.5*8)] [&_textarea]:resize-none [&_textarea]:px-0 [&_textarea]:py-0 [&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]';
 }
 
 /**
@@ -795,8 +821,7 @@ export function targetRowClass(mode: MiddleColumnMode): string {
  * mode being a card with a squared-off top edge and no tab above it.
  *
  * It narrows `shouldRenderTargetRow` rather than restating it: that function's
- * empty branch returns true for any targetable workspace regardless of the
- * branch/run-location slots (those only gate the SESSION row), so a targetable
+ * empty branch returns true for any targetable workspace, so a targetable
  * workspace is the entire condition. Calling through keeps one predicate.
  */
 export function composerHasProtrusion(input: {
@@ -809,38 +834,47 @@ export function composerHasProtrusion(input: {
   return shouldRenderTargetRow({
     mode: 'empty',
     hasTargetableWorkspace: input.hasTargetableWorkspace,
-    showBranchSelect: false,
-    hasRunLocation: false,
   });
 }
 
-/** Target row slots: session mode drops the folder slot (A07 §08②). */
-export function targetRowSlots(mode: MiddleColumnMode): {
+/**
+ * Target row slots. A conversation's row drops the folder DROPDOWN (A07 §08②:
+ * the repository is a locked label there). The home page keeps it — it is
+ * where the next conversation's repository is picked — and so does the empty
+ * (start-screen) row of a blank conversation.
+ */
+export function targetRowSlots(
+  mode: MiddleColumnMode,
+  opts?: { home?: boolean }
+): {
   folder: boolean;
   branch: boolean;
   runLocation: boolean;
 } {
-  return { folder: mode === 'empty', branch: true, runLocation: true };
+  return { folder: mode === 'empty' || opts?.home === true, branch: true, runLocation: true };
 }
 
 /**
- * Whether the target row should render at all. A non-targetable workspace
- * always hides it. In session mode, a row with neither a branch dropdown nor
- * a run-location label would just be 24px of dead space, so it collapses.
+ * Whether the target row should render at all.
+ *
+ * Session mode — every conversation, and the home page — always renders it
+ * (decision 174, issue #6): its first column is never empty (the home page's
+ * repository dropdown, a conversation's locked repository, or 「临时对话」 for
+ * one with no repository), and a row that came and went with the branch or
+ * run-location slots moved the card 32px between conversations — and between
+ * the home page and the conversation its first send opens.
+ *
+ * The empty (start-screen) row still needs a targetable workspace: there it is
+ * a tab joined to the card (`composerHasProtrusion`), drawn only with a folder.
  */
 export function shouldRenderTargetRow(input: {
   mode: MiddleColumnMode;
   hasTargetableWorkspace: boolean;
-  showBranchSelect: boolean;
-  hasRunLocation: boolean;
 }): boolean {
-  if (!input.hasTargetableWorkspace) {
-    return false;
-  }
-  if (input.mode === 'empty') {
+  if (input.mode === 'session') {
     return true;
   }
-  return input.showBranchSelect || input.hasRunLocation;
+  return input.hasTargetableWorkspace;
 }
 
 // ---- Status line ----
@@ -1255,8 +1289,12 @@ export function composerPlaceholder(
     // something the user has to deal with first, which a legacy chat can meet
     // like any other (its workspace gone, a queue waiting).
     if (input.movesOnSend) return t(MOVES_ON_SEND_PLACEHOLDER);
-    // Decision 144: no engine name (the 1.0.x prompt named Pi).
-    return input.mode === 'session' ? t('Send follow-up…') : t('Send a message…');
+    // Decision 144: no engine name (the 1.0.x prompt named Pi). Decision 174:
+    // the home page docks in session mode but starts a conversation, so it
+    // asks for the first message.
+    return input.mode === 'session' && input.hasSession
+      ? t('Send follow-up…')
+      : t('Send a message…');
   }
   return t('Cannot send right now…');
 }

@@ -341,8 +341,12 @@ describe('the send latch is per-session, and its readers are exhaustively pinned
     ]) {
       expect(source, `user-facing reader missing: ${reader}`).toContain(reader);
     }
-    // Two target-bar instances (empty mode and session mode) and the chip.
-    expect(offsets('sending={sendingHere}')).toHaveLength(3);
+    // The empty-mode target bar and the chip. The session-mode bar takes the
+    // per-session flag too, except on the home page (decision 174), where no
+    // conversation exists yet and its only send of its own is the branch
+    // switch before one is made.
+    expect(offsets('sending={sendingHere}')).toHaveLength(2);
+    expect(source).toContain('sending={onHome ? homeSwitching : sendingHere}');
     // `sending: sendingHere,` covers the placeholder and deriveActionButtons.
     expect(offsets('sending: sendingHere,')).toHaveLength(2);
     // The stale global forms must not come back through any door.

@@ -15,6 +15,13 @@ export interface TerminalWorkspaceSnapshot {
   activeSessionId: string | null;
   sessions: readonly { id: string; workspaceId: string }[];
   workspaces: readonly { id: string; path: string; kind: WorkspaceKind }[];
+  /**
+   * Decision 174: the home page's draft repository, used while no
+   * conversation is open — by the left terminal panel, which follows the
+   * workspace on screen. The right column's terminal belongs to the
+   * conversation (decision 128) and does not pass it.
+   */
+  homeWorkspaceId?: string | null;
 }
 
 export type TerminalWorkspaceUnavailableReason = 'no-session' | 'no-workspace' | 'no-path';
@@ -42,16 +49,21 @@ export function resolveTerminalWorkspace(
   snapshot: TerminalWorkspaceSnapshot
 ): TerminalWorkspaceResolution {
   const { activeSessionId, sessions, workspaces } = snapshot;
-  if (!activeSessionId) {
+  let workspaceId: string;
+  if (activeSessionId) {
+    const session = sessions.find((candidate) => candidate.id === activeSessionId);
+    if (!session) {
+      return { status: 'unavailable', reason: 'no-session' };
+    }
+    workspaceId = session.workspaceId;
+  } else if (snapshot.homeWorkspaceId) {
+    // Decision 174: the home page — its draft repository.
+    workspaceId = snapshot.homeWorkspaceId;
+  } else {
     return { status: 'unavailable', reason: 'no-session' };
   }
 
-  const session = sessions.find((candidate) => candidate.id === activeSessionId);
-  if (!session) {
-    return { status: 'unavailable', reason: 'no-session' };
-  }
-
-  const workspace = workspaces.find((candidate) => candidate.id === session.workspaceId);
+  const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
   if (!workspace) {
     return { status: 'unavailable', reason: 'no-workspace' };
   }

@@ -286,12 +286,14 @@ function detachRuntime(sessionId: string): void {
  * external-setState bridge (the red-line `chatSessions.ts` stays untouched),
  * mirroring `touchLiveUpdatedAt` below.
  *
- * Hands `activeSessionId` over to the adjacent row — the one that slides into
- * the removed row's slot, else the previous row — and falls back to `null`,
- * which is the Composer's empty state (`composerBarClass('empty')`), when the
- * list is now empty. Per-session leftovers (timeline, host binding, parked
- * permission/question, history error) are dropped with the row so nothing
- * keeps pointing at a session the user can no longer reach.
+ * Removing the conversation on screen opens the home page (`activeSessionId:
+ * null`). Decision 174 (issue #6, second wave): it used to hand over to the
+ * adjacent row of the store's list — an order the sidebar does not show, so
+ * the chat that appeared was effectively arbitrary — and the user ruled out
+ * picking a conversation for them (the start-up chat and `ChatWorkspace`'s
+ * automatic pick went with the same ruling). Per-session leftovers (timeline,
+ * host binding, parked permission/question, history error) are dropped with
+ * the row so nothing keeps pointing at a session the user can no longer reach.
  */
 function removeSessionRow(sessionId: string): void {
   const state = useChatSessionsStore.getState();
@@ -302,7 +304,6 @@ function removeSessionRow(sessionId: string): void {
 
   markSessionsRetired([sessionId]);
   const sessions = state.sessions.filter((item) => item.id !== sessionId);
-  const neighbour = sessions[index] ?? sessions[index - 1];
   const messages = { ...state.messages };
   delete messages[sessionId];
   const historyErrors = { ...state.historyErrors };
@@ -310,8 +311,7 @@ function removeSessionRow(sessionId: string): void {
 
   useChatSessionsStore.setState({
     sessions,
-    activeSessionId:
-      state.activeSessionId === sessionId ? (neighbour?.id ?? null) : state.activeSessionId,
+    activeSessionId: state.activeSessionId === sessionId ? null : state.activeSessionId,
     recentSessionIds: state.recentSessionIds.filter((id) => id !== sessionId),
     hostBoundSessionIds: state.hostBoundSessionIds.filter((id) => id !== sessionId),
     messages,

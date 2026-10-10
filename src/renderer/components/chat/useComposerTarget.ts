@@ -21,6 +21,7 @@ import { useRepositoryRuntimeContext } from '@/hooks/useRepositoryRuntimeContext
 import { useI18n } from '@/i18n';
 import { createChatSessionOnWorkspace, retargetChatSession } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useHomeDraftStore } from '@/stores/homeDraft';
 import { useSettingsStore } from '@/stores/settings';
 import { useTempWorkspaceStore } from '@/stores/tempWorkspace';
 import {
@@ -35,6 +36,7 @@ import {
   runLocationLabel,
 } from './composerTarget';
 import { markForkDraftCarry } from './forkDraftCarry';
+import type { HomeTarget } from './homeTarget';
 // D48 S1: `computeEverHostBound` moved out of this file — the agent picker's
 // lock and the target bar's lock have to be the same sentence, and this file
 // already had two documented mirrors elsewhere in the tree.
@@ -47,6 +49,12 @@ export interface UseComposerTargetResult {
   runLocation: { text: string; tone: 'local' | 'remote' } | null;
   /** User picked a workspace in either dropdown. */
   selectTarget: (workspaceId: string) => void;
+  /**
+   * Decision 174: 「不选仓库（临时对话）」 — the home page's next conversation
+   * gets no repository. `undefined` off the home page: a conversation's
+   * repository is not changed from its work bar.
+   */
+  selectUnbound?: () => void;
   /**
    * New Folder footer action: creates a temp workspace, then auto-switches to
    * it. `undefined` when the `temporaryWorkspaceEnabled` setting is off
@@ -85,6 +93,13 @@ interface PendingTarget {
 function applyPendingTarget(nextWorkspaceId: string, pending: PendingTarget): boolean {
   const state = useChatSessionsStore.getState();
   if (state.activeSessionId !== pending.sourceSessionId) return true;
+  // Decision 174: started on the home page (no conversation open) — the new
+  // folder becomes the home page's draft target. Nothing is made until a send.
+  if (pending.sourceSessionId === null) {
+    const workspace = state.workspaces.find((ws) => ws.id === nextWorkspaceId);
+    if (workspace) useHomeDraftStore.getState().setPick({ kind: 'path', path: workspace.path });
+    return true;
+  }
   const sourceSession = pending.sourceSessionId
     ? state.sessions.find((session) => session.id === pending.sourceSessionId)
     : undefined;
@@ -128,6 +143,12 @@ function applyPendingTarget(nextWorkspaceId: string, pending: PendingTarget): bo
 export function useComposerTarget(input: {
   sending: boolean;
   disabled?: boolean;
+  /**
+   * Decision 174: the home page's resolved draft target, passed while no
+   * conversation is open (`useHomeTarget`). The work bar then describes and
+   * picks THAT target; a pick only writes the draft, it never makes a chat.
+   */
+  home?: HomeTarget | null;
 }): UseComposerTargetResult {
   const { t } = useI18n();
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
@@ -139,10 +160,21 @@ export function useComposerTarget(input: {
     state.activeSessionId ? (state.messages[state.activeSessionId]?.length ?? 0) : 0
   );
 
-  const target = useMemo(
-    () => resolveActiveTarget({ activeSessionId, sessions, workspaces, projects }),
-    [activeSessionId, sessions, workspaces, projects]
-  );
+  const homeWorkspace = input.home ? input.home.workspace : null;
+  const onHome = activeSessionId === null && input.home != null;
+  const target = useMemo<ActiveTarget>(() => {
+    if (onHome) {
+      return {
+        session: undefined,
+        workspace: homeWorkspace ?? undefined,
+        project: homeWorkspace
+          ? projects.find((project) => project.id === homeWorkspace.projectId)
+          : undefined,
+        cwd: homeWorkspace?.path ?? null,
+      };
+    }
+    return resolveActiveTarget({ activeSessionId, sessions, workspaces, projects });
+  }, [onHome, homeWorkspace, activeSessionId, sessions, workspaces, projects]);
 
   const everHostBound = computeEverHostBound(target.session, hostBoundSessionIds);
 
@@ -184,6 +216,16 @@ export function useComposerTarget(input: {
   const selectTarget = useCallback(
     (workspaceId: string) => {
       if (input.disabled) {
+        return;
+      }
+      // Decision 174 (user ruling 2026-10-10): on the home page a pick is only
+      // a draft. The conversation is made by the send, on this target — where
+      // the old "no conversation → fork one onto the target" made a blank chat
+      // the moment a folder was picked.
+      if (onHome) {
+        if (input.sending) return;
+        const workspace = workspaces.find((ws) => ws.id === workspaceId);
+        if (workspace) useHomeDraftStore.getState().setPick({ kind: 'path', path: workspace.path });
         return;
       }
       const plan = planTargetChange({
@@ -234,8 +276,23 @@ export function useComposerTarget(input: {
           return;
       }
     },
-    [input.disabled, input.sending, target.session, workspaces, messageCount, everHostBound, t]
+    [
+      input.disabled,
+      input.sending,
+      onHome,
+      target.session,
+      workspaces,
+      messageCount,
+      everHostBound,
+      t,
+    ]
   );
+
+  const selectUnboundImpl = useCallback(() => {
+    if (input.disabled || input.sending) return;
+    useHomeDraftStore.getState().setPick({ kind: 'unbound' });
+  }, [input.disabled, input.sending]);
+  const selectUnbound = onHome ? selectUnboundImpl : undefined;
 
   // ---- Pending target flow (batch 3): temp workspace / new worktree creation ----
 
@@ -353,6 +410,7 @@ export function useComposerTarget(input: {
     blocked,
     runLocation,
     selectTarget,
+    selectUnbound,
     createTempTarget,
     awaitWorkspaceAtPath,
     worktreeRepoPath,

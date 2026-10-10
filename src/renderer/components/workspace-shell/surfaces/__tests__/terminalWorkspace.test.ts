@@ -22,6 +22,24 @@ describe('resolveTerminalWorkspace', () => {
     });
   });
 
+  // Decision 174 (issue #6, second wave): the left terminal panel follows the
+  // workspace on screen — on the home page, its draft repository.
+  it('on the home page, opens in the draft repository', () => {
+    expect(
+      resolveTerminalWorkspace({ ...BASE, activeSessionId: null, homeWorkspaceId: 'w2' })
+    ).toEqual({ status: 'ready', path: '/repo/feature', isTemp: false });
+    expect(resolveTerminalWorkspace({ ...BASE, activeSessionId: null })).toEqual({
+      status: 'unavailable',
+      reason: 'no-session',
+    });
+  });
+
+  it('a selected id that names no session is no-session, whatever the home page picked', () => {
+    expect(
+      resolveTerminalWorkspace({ ...BASE, activeSessionId: 'gone', homeWorkspaceId: 'w2' })
+    ).toEqual({ status: 'unavailable', reason: 'no-session' });
+  });
+
   it('follows the active session rather than the first one', () => {
     expect(resolveTerminalWorkspace({ ...BASE, activeSessionId: 's2' })).toEqual({
       status: 'ready',

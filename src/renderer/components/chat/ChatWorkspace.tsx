@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useMessageMetadataStore } from '@/stores/messageMetadataRegistry';
@@ -27,7 +27,6 @@ import { PendingQuestionDock } from './PendingQuestionDock';
 import type { RunSendOrigin } from './queueRelease';
 import { SessionPanelStrips } from './SessionPanelStrips';
 import { SubwindowRegion } from './SessionSubwindows';
-import { isStartupSeedSession } from './sessionIndex/sessionTitle';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
@@ -37,9 +36,17 @@ interface ChatWorkspaceProps {
   className?: string;
   /** Opens the shared AddRepositoryDialog (owned by App) — threaded down to ComposerTargetBar. */
   onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
+  /**
+   * Decision 174 (issue #6, second wave): what fills the column above the
+   * composer while no conversation is open — the home page. Passed in rather
+   * than imported because it lives in `workspace-shell/` (it reuses the
+   * sidebar's row pieces), which this module may not import. Without it the
+   * room is left empty and the composer still docks at the bottom.
+   */
+  home?: ReactNode;
 }
 
-export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps) {
+export function ChatWorkspace({ className, onAddRepository, home }: ChatWorkspaceProps) {
   const initRuntime = useChatSessionsStore((state) => state.initRuntime);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
@@ -237,16 +244,18 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     pruneSessionScopedRendererState(sessionIds);
   }, [sessions]);
 
-  // After tree sync, activeSessionId can point at a removed demo id — pick a live one.
+  // Decision 174 (issue #6, user ruling 2026-10-10): nothing is picked for the
+  // user any more. The open conversation going away (a repository removed under
+  // it, a dismissed row) leaves the column on the home page; this used to select
+  // the start-up chat or the first conversation in its place.
   useEffect(() => {
-    if (activeSessionId && sessions.some((session) => session.id === activeSessionId)) {
-      return;
-    }
-    const fallback = sessions.find(isStartupSeedSession) ?? sessions[0] ?? null;
-    if (fallback) {
-      selectSession(fallback.id);
+    if (activeSessionId && !sessions.some((session) => session.id === activeSessionId)) {
+      selectSession(null);
     }
   }, [activeSessionId, sessions, selectSession]);
+
+  // Decision 174: no conversation open is the home page.
+  const onHome = activeSessionId === null;
 
   return (
     <section className={cn('relative flex min-h-0 flex-col', className)} style={chatSurfaceStyle}>
@@ -261,7 +270,11 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
       {/* dsh-rebase P1-7b (decision 109): the background jobs and
           subagents windows float over the room above the composer and
           nowhere else — `SubwindowRegion` lays their layer over it. */}
-      {renderedMode === 'session' && (
+      {/* Decision 174: the home page takes the timeline's place and nothing
+          else — the composer below is the same instance a conversation docks,
+          so the first send moves neither the card nor its work bar. */}
+      {onHome && (home ?? <div aria-hidden className="min-h-0 flex-1" />)}
+      {!onHome && renderedMode === 'session' && (
         <SubwindowRegion sessionId={activeSessionId}>
           <MessageTimeline
             sessionId={activeSessionId}
@@ -275,7 +288,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
       {/* dsh-rebase P1-7a (decisions 068 / 109): the todo card and the
           goal bar, above the answerable cards, which stay nearest the
           composer. Session mode only: an empty chat has neither. */}
-      {renderedMode === 'session' && <SessionPanelStrips sessionId={activeSessionId} />}
+      {!onHome && renderedMode === 'session' && <SessionPanelStrips sessionId={activeSessionId} />}
       {/* F5: the only answerable copy of a live question. Above the
           composer rather than in the timeline so it cannot scroll away
           while the session waits on it. */}

@@ -21,7 +21,7 @@
  */
 
 import type { TempWorkspaceItem } from '@shared/types';
-import { Blocks, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-react';
+import { Blocks, House, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-react';
 import { type Ref, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import {
@@ -36,6 +36,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { openHome } from '@/stores/homeDraft';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { LeftNav } from './LeftNav';
 import { derivePanelTabs, type PanelTab } from './panelTabsModel';
@@ -191,6 +192,13 @@ export function LeftDock({
             The rail's old `pt-1` is dropped — with the spacer it would push the
             icons 4px below the content they are meant to align with. */}
         <div aria-hidden className="h-9 shrink-0" />
+        {/* Decision 174 (issue #6, user ruling 2026-10-10, entry (a)): the home
+            page, above the five panels and set off from them by a short rule —
+            it changes the center column, not the left panel. Reachable from
+            every panel. No pressed state on the home page: the session bar
+            already says 「首页」, and 「聊天」 below keeps its own. */}
+        <RailIconButton label={t('Home')} icon={House} onClick={() => openHome()} />
+        <div aria-hidden data-rail-separator="" className="my-1 h-0 w-6 shrink-0 border-t" />
         {tabs.map((tab) => (
           <RailButton
             key={tab.id}

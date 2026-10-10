@@ -8,10 +8,31 @@ import { useI18n } from '@/i18n';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import type { BranchColumnModel } from './composerColumns';
 
+/**
+ * Decision 174 (issue #6, user ruling 2026-10-10): on the home page the branch
+ * column records the branch the NEXT conversation should start on; the home
+ * send checks it out (or creates it) just before it makes the conversation.
+ * Nothing is switched while the user browses.
+ */
+export interface BranchColumnDraft {
+  /** The repository's name, for the lock's sentence. */
+  repositoryName: string;
+  /** The branch picked for the send; `null` stays on the checkout's own branch. */
+  branch: string | null;
+  /** A branch from the list (the checkout's own branch clears the draft). */
+  onPick: (branch: string) => void;
+  /** 「创建新分支...」: the branch is created — and switched to — at send time. */
+  onCreate: (name: string) => void;
+  /** The send is switching to it right now (the trigger shows the spinner). */
+  switching?: boolean;
+}
+
 interface BranchColumnProps {
   column: BranchColumnModel;
   disabled?: boolean;
   disabledReason?: string;
+  /** Decision 174: present on the home page — picks become a draft. */
+  draft?: BranchColumnDraft;
 }
 
 /**
@@ -39,8 +60,12 @@ interface BranchColumnProps {
  * The current branch comes from the workspace tree's worktree list. When that
  * list could not be read the chip has no name to show, and 「选择分支」 alone
  * read as "no branch" (decision 162): the same one-line error says so instead.
+ *
+ * Decision 174 (issue #6): on the home page (`draft`) nothing is switched here.
+ * A pick is recorded for the next conversation and switched to by its send,
+ * under the same two locks; see `homeTarget.ts`'s `planHomeBranchSwitch`.
  */
-export function BranchColumn({ column, disabled, disabledReason }: BranchColumnProps) {
+export function BranchColumn({ column, disabled, disabledReason, draft }: BranchColumnProps) {
   const { t } = useI18n();
   const branches = useGitBranches(column.workdir, { skipMerged: true });
   const checkout = useGitCheckout();
@@ -54,19 +79,31 @@ export function BranchColumn({ column, disabled, disabledReason }: BranchColumnP
 
   if (!column.workdir) return null;
 
-  const isCheckingOut = checkout.isPending || createBranch.isPending;
+  const isCheckingOut = draft
+    ? draft.switching === true
+    : checkout.isPending || createBranch.isPending;
   const locked = column.lock !== null;
+  // Decision 174: on the home page the lock is about the repository, not a
+  // conversation the user is looking at — there is none — so it names it.
   const lockReason =
     column.lock === 'session-running'
       ? t('This conversation is running — stop it before switching branches')
       : column.lock === 'checkout-busy'
-        ? t('Another conversation is running in this checkout — stop it before switching branches')
+        ? draft
+          ? t('{{repo}} has a chat running — the branch can be switched once it ends', {
+              repo: draft.repositoryName,
+            })
+          : t(
+              'Another conversation is running in this checkout — stop it before switching branches'
+            )
         : disabledReason;
 
   return (
     <span className="flex min-w-0 items-center gap-1">
       <BranchSwitcher
-        currentBranch={column.currentBranch}
+        // Decision 174: the trigger and the check name the branch this send
+        // will use; the green dot still marks the checkout's own branch.
+        currentBranch={draft?.branch ?? column.currentBranch}
         branches={branches.data}
         size="xs"
         isLoading={branches.isPending}
@@ -78,6 +115,10 @@ export function BranchColumn({ column, disabled, disabledReason }: BranchColumnP
         }}
         onCheckout={(branch) => {
           setError(null);
+          if (draft) {
+            draft.onPick(branch);
+            return;
+          }
           const workdir = column.workdir;
           if (!workdir) return;
           checkout.mutate(
@@ -92,6 +133,10 @@ export function BranchColumn({ column, disabled, disabledReason }: BranchColumnP
         }}
         onCreateBranch={async (name) => {
           setError(null);
+          if (draft) {
+            draft.onCreate(name);
+            return;
+          }
           const workdir = column.workdir;
           if (!workdir) return;
           try {
@@ -119,7 +164,8 @@ export function BranchColumn({ column, disabled, disabledReason }: BranchColumnP
           >
             <Lock className="size-3.5" />
           </TooltipTrigger>
-          <TooltipPopup className="max-w-66">{lockReason}</TooltipPopup>
+          {/* Decision 174: 14px — the reason is CJK, and coss's popup is 12px. */}
+          <TooltipPopup className="max-w-66 text-meta">{lockReason}</TooltipPopup>
         </Tooltip>
       )}
 

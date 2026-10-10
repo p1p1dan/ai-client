@@ -23,7 +23,7 @@ import {
   limitActiveRows,
   limitFolderRows,
   orderFoldersByActivity,
-  resolveNewSessionTarget,
+  resolveHomePreselect,
   resolveNewSessionWorkspaceId,
   sidebarFolderNameForDisplay,
   sidebarRowPlace,
@@ -346,73 +346,84 @@ describe('resolveNewSessionWorkspaceId', () => {
   });
 });
 
-describe('resolveNewSessionTarget', () => {
+/**
+ * Decision 174 (issue #6, second wave): the sidebar's 「＋新建」 opens the home
+ * page with the corresponding repository picked — the focused folder, else the
+ * open conversation's — and otherwise picks nothing, leaving the home page's
+ * own default (most recent activity). `resolveNewSessionTarget`, which chose
+ * where a blank conversation was made at once, went with that change.
+ */
+describe('resolveHomePreselect', () => {
   const folders = buildSidebarFolders({ projects, workspaces, sessions: [] });
 
   it('prefers the focused folder over the active session', () => {
-    const target = resolveNewSessionTarget({
-      focusedProjectId: 'p-empty',
-      folders,
-      activeSession: { workspaceId: 'ws-main' },
-      workspaces,
-    });
-    expect(target).toEqual({ workspaceId: 'ws-empty', folderName: 'newhp' });
+    expect(
+      resolveHomePreselect({
+        focusedProjectId: 'p-empty',
+        folders,
+        activeSession: { workspaceId: 'ws-main' },
+        workspaces,
+      })
+    ).toEqual({ workspaceId: 'ws-empty', path: '/newhp', folderName: 'newhp' });
   });
 
   it('falls back to the active session workspace when nothing is focused', () => {
-    const target = resolveNewSessionTarget({
-      focusedProjectId: null,
-      folders,
-      activeSession: { workspaceId: 'ws-wt' },
-      workspaces,
-    });
-    expect(target).toEqual({ workspaceId: 'ws-wt', folderName: 'ai-client' });
+    expect(
+      resolveHomePreselect({
+        focusedProjectId: null,
+        folders,
+        activeSession: { workspaceId: 'ws-wt' },
+        workspaces,
+      })
+    ).toEqual({ workspaceId: 'ws-wt', path: '/repo-wt', folderName: 'ai-client' });
   });
 
-  it('falls back to the first usable workspace when both focus and active session are absent', () => {
-    const target = resolveNewSessionTarget({
-      focusedProjectId: null,
-      folders,
-      activeSession: undefined,
-      workspaces,
-    });
-    expect(target).toEqual({ workspaceId: 'ws-main', folderName: 'ai-client' });
+  it('picks nothing when neither a focused folder nor an open conversation names one', () => {
+    expect(
+      resolveHomePreselect({
+        focusedProjectId: null,
+        folders,
+        activeSession: undefined,
+        workspaces,
+      })
+    ).toBeNull();
   });
 
-  it('self-heals when the focused folder was deleted, falling through to the next tier', () => {
-    const target = resolveNewSessionTarget({
-      focusedProjectId: 'p-deleted',
-      folders,
-      activeSession: { workspaceId: 'ws-wt' },
-      workspaces,
-    });
-    expect(target).toEqual({ workspaceId: 'ws-wt', folderName: 'ai-client' });
+  it('falls through to the active session when the focused folder was deleted', () => {
+    expect(
+      resolveHomePreselect({
+        focusedProjectId: 'p-deleted',
+        folders,
+        activeSession: { workspaceId: 'ws-wt' },
+        workspaces,
+      })?.workspaceId
+    ).toBe('ws-wt');
   });
 
-  // R5 round-2 (B1): every fallback target must still be reachable in the nav.
-  it('skips an active session whose workspace no longer exists', () => {
-    const target = resolveNewSessionTarget({
-      focusedProjectId: null,
-      folders,
-      activeSession: { workspaceId: 'ws-deleted' },
-      workspaces,
-    });
-    expect(target).toEqual({ workspaceId: 'ws-main', folderName: 'ai-client' });
+  // R5 round-2 (B1): a target must still be reachable in the nav.
+  it('picks nothing for an active session whose workspace no longer exists', () => {
+    expect(
+      resolveHomePreselect({
+        focusedProjectId: null,
+        folders,
+        activeSession: { workspaceId: 'ws-deleted' },
+        workspaces,
+      })
+    ).toBeNull();
   });
 
-  it('skips an active session whose project has no folder row (orphan workspace)', () => {
-    // `ws-temp` belongs to `p-temp`, which is not in `projects` — creating a
-    // chat there would land in a folder the sidebar never renders.
-    const target = resolveNewSessionTarget({
-      focusedProjectId: null,
-      folders,
-      activeSession: { workspaceId: 'ws-temp' },
-      workspaces,
-    });
-    expect(target).toEqual({ workspaceId: 'ws-main', folderName: 'ai-client' });
+  it('picks nothing for an active session whose project has no folder row (orphan workspace)', () => {
+    expect(
+      resolveHomePreselect({
+        focusedProjectId: null,
+        folders,
+        activeSession: { workspaceId: 'ws-temp' },
+        workspaces,
+      })
+    ).toBeNull();
   });
 
-  it('disables the button (null target) when the focused folder has no usable workspace', () => {
+  it('picks nothing — never another folder — when the focused folder has no usable workspace', () => {
     const seedProjects: ChatProject[] = [...projects, { id: 'p-seed', name: 'seed-repo' }];
     const seedWorkspaces: ChatWorkspace[] = [
       ...workspaces,
@@ -423,33 +434,19 @@ describe('resolveNewSessionTarget', () => {
       workspaces: seedWorkspaces,
       sessions: [],
     });
-
-    const target = resolveNewSessionTarget({
-      focusedProjectId: 'p-seed',
-      folders: seedFolders,
-      activeSession: { workspaceId: 'ws-main' },
-      workspaces: seedWorkspaces,
-    });
-
-    // Falling through to `ws-main` would create the chat in a different folder
-    // than the button's own title names — a silent redirect (D1).
-    expect(target).toEqual({ workspaceId: null, folderName: 'seed-repo' });
+    expect(
+      resolveHomePreselect({
+        focusedProjectId: 'p-seed',
+        folders: seedFolders,
+        activeSession: { workspaceId: 'ws-main' },
+        workspaces: seedWorkspaces,
+      })
+    ).toBeNull();
   });
 
-  it('skips orphan workspaces in the last-resort scan instead of taking the first one', () => {
-    const orphanFirst: ChatWorkspace[] = [
-      { id: 'ws-temp', projectId: 'p-temp', name: 'Scratch', kind: 'temp', path: '/tmp/scratch' },
-      ...workspaces.filter((ws) => ws.id !== 'ws-temp'),
-    ];
-
-    const target = resolveNewSessionTarget({
-      focusedProjectId: null,
-      folders,
-      activeSession: undefined,
-      workspaces: orphanFirst,
-    });
-
-    expect(target).toEqual({ workspaceId: 'ws-main', folderName: 'ai-client' });
+  it('the immediate-create resolver is gone from the module', async () => {
+    const mod = (await import('../sidebarTree')) as Record<string, unknown>;
+    expect(mod.resolveNewSessionTarget).toBeUndefined();
   });
 });
 

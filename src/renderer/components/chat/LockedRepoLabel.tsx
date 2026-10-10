@@ -1,4 +1,4 @@
-import { Folder, Lock } from 'lucide-react';
+import { Folder, Lock, MessageSquare } from 'lucide-react';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 
@@ -44,9 +44,41 @@ export function LockedRepoLabel({ label, path, reason }: LockedRepoLabelProps) {
         <span className="min-w-0 max-w-60 truncate">{label}</span>
         <Lock className="size-3 shrink-0" />
       </TooltipTrigger>
-      <TooltipPopup className="max-w-80">
+      {/* Decision 174: 14px — the reason is CJK, and coss's popup is 12px. */}
+      <TooltipPopup className="max-w-80 text-meta">
         <span className="block">{reason}</span>
         {path && <span className="mt-1 block font-mono text-code opacity-80">{path}</span>}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/**
+ * Decision 174 (issue #6, second wave): a conversation with no repository — a
+ * temporary chat — names that in the repository's column, as a label with the
+ * same height and inset as `LockedRepoLabel`. Its work bar used to render
+ * nothing at all in that case, so its card sat 32px lower than every other
+ * conversation's (and than the home page's).
+ */
+export function TemporaryChatLabel() {
+  const { t } = useI18n();
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="note"
+            aria-label={t('Temporary chat')}
+            className="inline-flex h-6 min-w-0 cursor-default items-center gap-1.5 whitespace-nowrap px-2 text-ui text-muted-foreground"
+          />
+        }
+      >
+        <MessageSquare className="size-3.5 shrink-0" />
+        <span className="min-w-0 max-w-60 truncate">{t('Temporary chat')}</span>
+      </TooltipTrigger>
+      <TooltipPopup className="max-w-80 text-meta">
+        {t('Temporary chat — it runs in a private temporary folder')}
       </TooltipPopup>
     </Tooltip>
   );

@@ -60,17 +60,11 @@ import { Spinner } from '@/components/ui/spinner';
 import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import {
-  createOrReuseChatSessionOnWorkspace,
-  createOrReuseUnboundChatSession,
-} from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { openHome } from '@/stores/homeDraft';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
-import {
-  canCreateSessionOnWorkspace,
-  shouldShowAddRepositoryEmptyState,
-} from './addRepositoryEntry';
+import { shouldShowAddRepositoryEmptyState } from './addRepositoryEntry';
 import { projectIdForRepo, workspaceIdFor } from './deriveChatWorkspaceTree';
 import { endSessionRuntime } from './endSessionRuntime';
 import { sumFolderDiffTotals } from './folderDiffStats';
@@ -92,7 +86,7 @@ import {
   limitActiveRows,
   limitFolderRows,
   orderFoldersByActivity,
-  resolveNewSessionTarget,
+  resolveHomePreselect,
   type SidebarRowPlace,
   type SidebarSessionRow,
   sidebarFolderNameForDisplay,
@@ -151,10 +145,10 @@ export function LeftNav({
   // D1 (round-5): sidebar-local "which folder is the user targeting" state.
   // T-26 deliberately removed the cross-cutting store `selectedWorkspaceId`
   // (folder click is UI-only, e.g. expandedProjects above) — this stays local
-  // to LeftNav and only feeds the header "New" button's target resolution,
-  // it never becomes the source of truth for "where to run" (that's the
-  // Composer target bar, T-27). Decision 137 §3: only picking a conversation
-  // writes it now; a folder header click no longer does.
+  // to LeftNav and only feeds the header "New" button's preselection on the
+  // home page (decision 174), it never becomes the source of truth for "where
+  // to run" (that's the Composer target bar, T-27). Decision 137 §3: only
+  // picking a conversation writes it now; a folder header click no longer does.
   const [focusedProjectId, setFocusedProjectId] = useState<string | null>(null);
   // Decision 170 (issue #6 ruling 2): the Active now region's chevron folds
   // its whole list. Memory only and open by default, like Temporary chats: the
@@ -438,53 +432,33 @@ export function LeftNav({
   const noMatches =
     queryActive && activeRows.length === 0 && visibleFolders.length === 0 && !unboundFolder;
 
-  // D1 (round-5): resolved fresh every render from the live `folders` list —
-  // never cache `newSessionTarget.workspaceId` itself — so a deleted focused
-  // project self-heals to the next fallback tier instead of pointing at
-  // nothing. `folders` is always the full project list — `visibleFolders`
-  // must NOT be used here: while a search is active it hides folders with no
-  // title hits, which would make the resolver skip the focused/active folder
-  // and silently create the chat somewhere else.
-  const newSessionTarget = resolveNewSessionTarget({
-    focusedProjectId,
-    folders,
-    activeSession,
-    workspaces,
-  });
-  const effectiveWorkspaceId = newSessionTarget.workspaceId;
-  // The fallback target can be a seed workspace with an empty path, and while
-  // the empty state is up the created session would render nowhere.
-  const canStartNewSession = canCreateSessionOnWorkspace(effectiveWorkspaceId, workspaces);
-  // No folder selection visual (T-26 decision holds) — the title is the only
-  // surface that makes the resolved target discoverable.
-  // U22: the button is never disabled now, so the title carries the difference —
-  // it names the folder when there is one and says "temporary" when there is not,
-  // rather than leaving the user to guess where the chat landed.
-  const newSessionButtonTitle = !canStartNewSession
-    ? t('New temporary chat (no repository)')
-    : workspaces.find((workspace) => workspace.id === effectiveWorkspaceId)?.kind === 'temp'
-      ? t('New chat in existing directory: {{path}}', {
-          path: workspaces.find((workspace) => workspace.id === effectiveWorkspaceId)?.path ?? '',
-        })
-      : newSessionTarget.folderName
-        ? t('New session in {{folder}}', { folder: newSessionTarget.folderName })
-        : undefined;
-
+  /**
+   * Decision 174 (issue #6, second wave; user ruling 2026-10-10): 「＋新建」
+   * opens the home page instead of making a blank conversation, with the
+   * corresponding repository picked — the folder of the conversation last
+   * opened from here, else the open conversation's (`resolveHomePreselect`).
+   * Resolved at click time from the live `folders` list (never `visibleFolders`,
+   * which a search narrows). Already on the home page, it changes nothing: the
+   * user's own pick there stands.
+   */
   const handleNewSession = () => {
-    // U22: no targetable workspace is not "nothing to do" — it is exactly the
-    // unbound case U05 made sendable. This button used to return silently on a
-    // machine with no repository added, which was the only entry point to a
-    // session there, so the composer stayed permanently disabled.
-    //
-    // create-or-reuse: if the ACTIVE session is already a brand-new, empty
-    // chat, this reuses it (stays put, or retargets in place) instead of
-    // creating another throwaway session next to it — see
-    // chatSessionActions.ts's createOrReuseChatSessionOnWorkspace.
-    if (!effectiveWorkspaceId || !canStartNewSession) {
-      createOrReuseUnboundChatSession();
+    if (activeSessionId === null) {
+      openHome();
       return;
     }
-    createOrReuseChatSessionOnWorkspace(effectiveWorkspaceId);
+    const preselect = resolveHomePreselect({
+      focusedProjectId,
+      folders,
+      activeSession,
+      workspaces,
+    });
+    openHome(preselect ? { kind: 'path', path: preselect.path } : undefined);
+  };
+
+  /** Decision 174: a folder's 「＋」 and its empty 「新建对话」 row — the home page, this repository picked. */
+  const openHomeInFolder = (workspaceId: string) => {
+    const workspace = workspaceById.get(workspaceId);
+    openHome(workspace ? { kind: 'path', path: workspace.path } : undefined);
   };
 
   /**
@@ -683,10 +657,9 @@ export function LeftNav({
           )}
         </ContextMenuPrimitive.Trigger>
         <MenuPopup align="start" side="bottom" className="min-w-40">
-          {/* Same guard as the three "New" buttons: this menu item creates the
-              same kind of session they do, so leaving it unconditional would
-              keep one route open for piling up empty shells. */}
-          <MenuItem onClick={() => createOrReuseUnboundChatSession()}>
+          {/* Decision 174: the home page with 「不选仓库（临时对话）」 picked;
+              the temporary chat is made by its first send. */}
+          <MenuItem onClick={() => openHome({ kind: 'unbound' })}>
             <Plus className="size-4" />
             {t('New temporary chat')}
           </MenuItem>
@@ -740,7 +713,7 @@ export function LeftNav({
               variant="outline"
               size="xs"
               className="h-6 sm:text-meta"
-              title={newSessionButtonTitle}
+              title={t('New chat (opens the home page)')}
               onClick={handleNewSession}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -1059,12 +1032,9 @@ export function LeftNav({
                                   size="icon-xs"
                                   className="size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 sm:size-5"
                                   aria-label={t('New chat')}
-                                  title={t('New chat in existing directory: {{path}}', {
-                                    path: workspaceById.get(newSessionWorkspaceId)?.path ?? '',
-                                  })}
-                                  onClick={() =>
-                                    createOrReuseChatSessionOnWorkspace(newSessionWorkspaceId)
-                                  }
+                                  title={t('New session in {{folder}}', { folder: folderName })}
+                                  // Decision 174: the home page, this repository picked.
+                                  onClick={() => openHomeInFolder(newSessionWorkspaceId)}
                                 >
                                   <Plus className="size-3.5" />
                                 </Button>
@@ -1135,9 +1105,7 @@ export function LeftNav({
                                 newSessionWorkspaceId && (
                                   <SidebarAuxRow
                                     icon={<Plus className="size-3.5" />}
-                                    onClick={() =>
-                                      createOrReuseChatSessionOnWorkspace(newSessionWorkspaceId)
-                                    }
+                                    onClick={() => openHomeInFolder(newSessionWorkspaceId)}
                                   >
                                     {t('New chat')}
                                   </SidebarAuxRow>

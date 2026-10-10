@@ -69,6 +69,7 @@ import {
 import { useI18n } from './i18n';
 import { initCloneProgressListener } from './stores/cloneTasks';
 import { useEditorStore } from './stores/editor';
+import { preselectAddedRepository } from './stores/homeDraft';
 import { useLegacyMigrationStore } from './stores/legacyMigration';
 import { startPermissionGateWatch } from './stores/permissionGate';
 import { startPlanApprovalPostureWatch } from './stores/planApprovalPosture';
@@ -858,6 +859,8 @@ export default function App() {
       const existingRepo = findExistingRepository(candidate);
       if (existingRepo) {
         handleSelectRepo(existingRepo.path);
+        // Decision 174: on the home page the repository becomes its draft target.
+        preselectAddedRepository(existingRepo.path);
         return;
       }
 
@@ -865,6 +868,7 @@ export default function App() {
       saveRepositories(updated);
 
       handleSelectRepo(candidate.path);
+      preselectAddedRepository(candidate.path);
     },
     [
       createRepositoryEntry,
@@ -882,6 +886,7 @@ export default function App() {
       const existingRepo = findExistingRepository(candidate);
       if (existingRepo) {
         handleSelectRepo(existingRepo.path);
+        preselectAddedRepository(existingRepo.path);
         return;
       }
 
@@ -889,6 +894,7 @@ export default function App() {
       saveRepositories(updated);
 
       handleSelectRepo(candidate.path);
+      preselectAddedRepository(candidate.path);
     },
     [
       createRepositoryEntry,
@@ -912,12 +918,14 @@ export default function App() {
       const existingRepo = findExistingRepository(candidate);
       if (existingRepo) {
         handleSelectRepo(existingRepo.path);
+        preselectAddedRepository(existingRepo.path);
         return;
       }
 
       const updated = [...repositories, candidate];
       saveRepositories(updated);
       handleSelectRepo(candidate.path);
+      preselectAddedRepository(candidate.path);
     },
     [
       createRepositoryEntry,

@@ -30,25 +30,22 @@ describe('U22 unbound chat entry points', () => {
     // ("without one, this chat runs in a private temporary folder") had no path
     // behind it and the composer stayed permanently greyed out.
     expect(nav).not.toContain('disabled={!canStartNewSession}');
-    expect(nav).toContain('createOrReuseUnboundChatSession');
+    expect(nav).not.toMatch(/onClick=\{handleNewSession\}[^>]*disabled/);
   });
 
-  it('falls back to an unbound session instead of returning early', () => {
-    // Sliced to the function's closing brace rather than a character budget:
-    // `stripComments` blanks comments in place, so a fixed window would be
-    // mostly whitespace and would silently stop covering the body.
+  it('opens the home page instead of making a chat (decision 174)', () => {
+    // Decision 174 (issue #6, second wave; user ruling 2026-10-10): 「＋新建」
+    // opens the home page with the corresponding repository picked, and the
+    // conversation is made by the first send there — on that repository, or as
+    // a temporary chat when none is picked or none exists. Nothing is made on
+    // the click, bound or unbound. Sliced to the function's closing brace.
     const start = nav.indexOf('const handleNewSession');
     const handler = nav.slice(start, nav.indexOf('\n  };', start));
-    // Both calls now go through the create-or-reuse wrappers (the New-button
-    // idempotency guard); the fallback ORDER this test exists to pin is
-    // unchanged.
-    expect(handler).toContain('createOrReuseUnboundChatSession()');
-    // The bound path must still win when a workspace IS available, or every
-    // chat would land in a scratch directory.
-    expect(handler).toContain('createOrReuseChatSessionOnWorkspace(effectiveWorkspaceId)');
-    expect(handler.indexOf('createOrReuseUnboundChatSession()')).toBeLessThan(
-      handler.indexOf('createOrReuseChatSessionOnWorkspace(effectiveWorkspaceId)')
-    );
+    expect(handler).toContain('openHome(');
+    expect(handler).toContain('resolveHomePreselect(');
+    expect(handler).not.toContain('createOrReuseUnboundChatSession');
+    expect(handler).not.toContain('createOrReuseChatSessionOnWorkspace');
+    expect(nav).not.toContain('createOrReuse');
   });
 
   it('U28: the start screen has no button — the composer itself is the entry', () => {
@@ -68,7 +65,12 @@ describe('U22 unbound chat entry points', () => {
     const composerPath = path.join(process.cwd(), 'src/renderer/components/chat/ChatComposer.tsx');
     const composer = stripComments(readFileSync(composerPath, 'utf8'), composerPath);
     // The first send is what creates the conversation, the way pix does it.
-    expect(composer).toContain('const sessionId = activeSessionId ?? createUnboundChatSession();');
+    // Decision 174: on the home page the send makes it on the work bar's draft
+    // target (`sendFromHome`) and hands it to `runSend`; the unbound fallback
+    // stays for a caller with nothing selected and no such conversation.
+    expect(composer).toContain(
+      'const sessionId = options.home?.sessionId ?? activeSessionId ?? createUnboundChatSession();'
+    );
     expect(composer).not.toContain('if (!canSend || !activeSessionId) {');
   });
 });

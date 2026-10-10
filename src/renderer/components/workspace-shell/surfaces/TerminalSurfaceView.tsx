@@ -46,6 +46,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { SURFACE_ESCAPE_HOLD_ATTR } from '../shellLayoutModel';
 import type { SurfaceViewProps } from '../surfaceViews';
+import { useHomeWorkspace } from '../useWorkspaceRootPath';
 import {
   resolveTerminalWorkspace,
   type TerminalWorkspaceUnavailableReason,
@@ -71,7 +72,15 @@ export function TerminalSurfaceView({ surfaceId }: SurfaceViewProps) {
   const activeSurfaceId = useShellLayoutStore((state) => state.activeSurfaceId);
   const expanded = useShellLayoutStore((state) => state.expanded);
 
-  const resolution = resolveTerminalWorkspace({ activeSessionId, sessions, workspaces });
+  // Decision 174: on the home page, the repository its work bar picked.
+  const homeWorkspaceId = useHomeWorkspace()?.id ?? null;
+
+  const resolution = resolveTerminalWorkspace({
+    activeSessionId,
+    sessions,
+    workspaces,
+    homeWorkspaceId,
+  });
   const ready = resolution.status === 'ready';
 
   return (

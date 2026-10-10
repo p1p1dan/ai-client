@@ -82,6 +82,11 @@ export function createChatSessionOnWorkspace(
 }
 
 /**
+ * Decision 174 (issue #6, second wave): no caller any more — `/new` opens the
+ * home page with the conversation's repository picked, and the first send
+ * there makes the chat. Kept, with its tests, while decision 174 awaits
+ * approval (its §2.6 is what retired the caller).
+ *
  * `/new` slash command. Deliberately NOT routed through
  * `createOrReuseChatSessionOnWorkspace`'s fresh-empty-session reuse: this is
  * an explicit "start a sibling chat in the same directory" command a user
@@ -308,6 +313,11 @@ export function retargetChatSession(sessionId: string, workspaceId: string): boo
 }
 
 /**
+ * Decision 174 (issue #6, second wave): no UI entry calls this, or its unbound
+ * twin below, any more — every 「新建」 opens the home page and the first send
+ * there makes the conversation, so there is no blank chat to reuse. Both are
+ * kept, with their tests, while decision 174 awaits approval.
+ *
  * Idempotent guard in front of `createChatSessionOnWorkspace`, shared by the
  * three "start a new chat" entry points (LeftNav's header "+ New", a
  * folder's own "+", and SessionBar's "+"). Clicking New while the ACTIVE

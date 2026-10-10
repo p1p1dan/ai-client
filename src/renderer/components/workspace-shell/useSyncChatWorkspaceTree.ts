@@ -5,22 +5,13 @@
 
 import { canonicalPathKey } from '@shared/utils/path';
 import { useQueries } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import { TEMP_REPO_ID } from '@/App/constants';
 import { ensureRepositoryId, STORAGE_KEYS } from '@/App/storage';
-import {
-  dropDismissedSessions,
-  hasDismissedSessions,
-} from '@/components/chat/sessionIndex/dismissedSessions';
-import {
-  LEGACY_SEED_TITLE,
-  NEW_CHAT_TITLE,
-  STARTUP_SEED_ID_PREFIX,
-} from '@/components/chat/sessionIndex/sessionTitle';
+import { dropDismissedSessions } from '@/components/chat/sessionIndex/dismissedSessions';
 import { gitRepoQueryKey } from '@/hooks/gitRepoQueryKey';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
-import { uniqueId } from '@/lib/uniqueId';
 import {
   type ChatSession,
   type ChatSessionsState,
@@ -38,10 +29,13 @@ import {
 } from './deriveChatWorkspaceTree';
 
 /**
- * dsh-rebase decision 144: the start-up chat is named like every chat "New"
- * creates. It used to carry the development-era demo name `Live Agent Host`.
+ * The store's two DEMO rows (`chatSessions.ts`, a red-line file whose initial
+ * state is left as it is). Decision 174 (issue #6, second wave): neither
+ * survives the first tree sync any more. `session-live` used to be renamed into
+ * the start-up chat — a blank 「新建对话」 the app opened on — and the home page
+ * replaced that chat: the app now opens on no conversation at all.
  */
-const LIVE_SESSION_TITLE = NEW_CHAT_TITLE;
+const DEMO_SESSION_IDS: ReadonlySet<string> = new Set(['session-live', 'session-welcome']);
 
 function readRepositoriesFromStorage(): Repository[] {
   try {
@@ -55,17 +49,6 @@ function readRepositoriesFromStorage(): Repository[] {
   } catch {
     return [];
   }
-}
-
-function createLiveSession(workspace: ChatWorkspace): ChatSession {
-  return {
-    id: uniqueId(STARTUP_SEED_ID_PREFIX),
-    projectId: workspace.projectId,
-    workspaceId: workspace.id,
-    title: LIVE_SESSION_TITLE,
-    status: 'idle',
-    updatedAt: Date.now(),
-  };
 }
 
 function seedFallbackWorkspace(
@@ -99,42 +82,38 @@ function seedFallbackWorkspace(
 export interface RebindResult {
   sessions: ChatSession[];
   hostBoundSessionIds: string[];
-  activeSessionId: string | null;
-  /** True when a Live session was auto-created by this pass (A4 gate). */
-  seeded: boolean;
 }
 
 function rebindSessionsToTree(
   sessions: ChatSession[],
   workspaces: ChatWorkspace[],
   preferredWorkspaceId: string | null,
-  hostBoundSessionIds: string[],
-  allowSeed: boolean
+  hostBoundSessionIds: string[]
 ): RebindResult {
   const workspaceById = new Map(workspaces.map((ws) => [ws.id, ws]));
   const preferred =
     (preferredWorkspaceId ? workspaceById.get(preferredWorkspaceId) : undefined) ?? workspaces[0];
 
-  if (!preferred) {
-    return { sessions: [], hostBoundSessionIds: [], activeSessionId: null, seeded: false };
-  }
-
   const bound = new Set(hostBoundSessionIds);
   const nextBound = new Set<string>();
   const remapped: ChatSession[] = [];
+  const keep = (session: ChatSession) => {
+    remapped.push(session);
+    if (bound.has(session.id)) {
+      nextBound.add(session.id);
+    }
+  };
 
   for (const session of sessions) {
-    // Drop seed welcome demo once real tree is available.
-    if (session.id === 'session-welcome') {
+    // Decision 174: the store's DEMO rows are dropped once a real tree exists —
+    // `session-welcome` always was; `session-live` used to become the start-up
+    // chat, which the home page replaced.
+    if (DEMO_SESSION_IDS.has(session.id)) {
       continue;
     }
 
-    const workspace = workspaceById.get(session.workspaceId);
-    if (workspace) {
-      remapped.push(session);
-      if (bound.has(session.id)) {
-        nextBound.add(session.id);
-      }
+    if (workspaceById.has(session.workspaceId)) {
+      keep(session);
       continue;
     }
 
@@ -147,19 +126,17 @@ function rebindSessionsToTree(
     // && unbound` arm); this pass had no matching arm, so it fell through to
     // the orphan rule below and DROPPED every temp chat that had already run a
     // turn. That is D6 (dev-box pass 2026-09-17): temp chats vanished from the
-    // sidebar the moment anything moved the workspace tree — a temp workspace
-    // added or removed, a worktree list arriving, the selected repository
-    // changing — and reappeared only after a restart, because the startup path
-    // rebuilds from the index rows, which were never touched.
+    // sidebar the moment anything moved the workspace tree.
     //
-    // An unsent unbound draft (no marker, no runtime identity) still falls
-    // through to the rebind below: adopting it into the first repository the
-    // user adds is the U22 behaviour, and it has no history to misplace.
-    if (!session.workspaceId && (session.unbound != null || session.runtimeIdentity != null)) {
-      remapped.push(session);
-      if (bound.has(session.id)) {
-        nextBound.add(session.id);
-      }
+    // Decision 174 (issue #6, second wave): an unsent one stays unbound too.
+    // U22 adopted it into the first repository the user added, because the
+    // start screen's blank chat was the only way to talk before a repository
+    // existed; the home page makes the chat at send time, on the target the
+    // user picked, so a temporary chat never changes into a repository's. And a
+    // machine with no repository at all keeps its temporary chats through a
+    // sync, where the old early return dropped every row.
+    if (!session.workspaceId) {
+      keep(session);
       continue;
     }
 
@@ -167,7 +144,7 @@ function rebindSessionsToTree(
     // currently Host-bound yet still carry a persisted runtime identity; moving
     // that identity to another repository would resume one checkout's history
     // against another checkout's cwd.
-    if (bound.has(session.id) || session.runtimeIdentity != null) {
+    if (bound.has(session.id) || session.runtimeIdentity != null || !preferred) {
       continue;
     }
 
@@ -179,44 +156,9 @@ function rebindSessionsToTree(
     });
   }
 
-  // By id: the seed's title is now the same `New chat` any draft carries, so
-  // the title alone no longer tells the seed apart. A row with the old seed
-  // title still counts, as it did before the rename.
-  const hasLive = remapped.some(
-    (session) =>
-      session.title === LEGACY_SEED_TITLE || session.id.startsWith(STARTUP_SEED_ID_PREFIX)
-  );
-  let seeded = false;
-  if (!hasLive && allowSeed) {
-    remapped.unshift(createLiveSession(preferred));
-    seeded = true;
-  }
-
-  // Retire the fixed DEMO id `session-live` — Host rejects duplicate createSession.
-  for (let i = 0; i < remapped.length; i++) {
-    const session = remapped[i];
-    if (session?.id === 'session-live') {
-      const nextId = uniqueId(STARTUP_SEED_ID_PREFIX);
-      nextBound.delete('session-live');
-      remapped[i] = {
-        ...session,
-        id: nextId,
-        projectId: preferred.projectId,
-        workspaceId: preferred.id,
-        title: LIVE_SESSION_TITLE,
-        updatedAt: Date.now(),
-      };
-    }
-  }
-
-  const activeSessionId =
-    remapped.find((session) => session.workspaceId === preferred.id)?.id ?? remapped[0]?.id ?? null;
-
   return {
     sessions: remapped,
     hostBoundSessionIds: [...nextBound],
-    activeSessionId,
-    seeded,
   };
 }
 
@@ -248,19 +190,21 @@ export type TreeSyncPatch = Pick<
 
 /**
  * The session half of a tree-sync write, as a pure function so vitest can
- * cover the two rules that only exist because of user actions (R5 round-2,
- * A4) — inside the effect body they were unreachable:
+ * cover the rules that only exist because of user actions (R5 round-2, A4) —
+ * inside the effect body they were unreachable:
  *
- * 1. Auto-seeding a Live session is a first-run convenience, not a repair. It
- *    happens only when the user has never removed a row in this run AND the
- *    session list is empty. Otherwise a later tree signature change (a worktree
- *    list arriving, a repo added) would undo a deliberate Close by putting a
- *    fresh session back into an emptied nav.
- * 2. Rows dismissed in this run are filtered out of the write-back, and
- *    `activeSessionId` is only overwritten when the previous one no longer
- *    exists (or a seed just happened). The removal handover in
- *    `removeSessionRow` already picked the right neighbour; re-deriving
- *    "first session in the preferred workspace" here would silently undo it.
+ * 1. Rows dismissed in this run are filtered out of the write-back, so a later
+ *    tree signature change (a worktree list arriving, a repo added) cannot put
+ *    a deliberately closed row back.
+ * 2. `activeSessionId` is kept while that conversation still exists, and is
+ *    `null` — the home page — otherwise. Decision 174 (issue #6, second wave,
+ *    user ruling 2026-10-10): nothing is picked in its place any more. The
+ *    start-up chat this pass used to seed (and the "first session of the
+ *    preferred workspace" it then selected) is gone; the app opens on the home
+ *    page and stays there until the user opens or sends a conversation. The
+ *    removal handover in `removeSessionRow` still picks a neighbour when the
+ *    open conversation is removed from the list — that write happens before
+ *    this pass and is left alone here.
  */
 export function resolveTreeSyncPatch(input: {
   prev: TreeSyncPrevState;
@@ -268,24 +212,18 @@ export function resolveTreeSyncPatch(input: {
   preferredWorkspaceId: string | null;
 }): TreeSyncPatch {
   const { prev } = input;
-  const allowSeed = prev.sessions.length === 0 && !hasDismissedSessions();
   const rebound = rebindSessionsToTree(
     prev.sessions,
     input.workspaces,
     input.preferredWorkspaceId,
-    prev.hostBoundSessionIds,
-    allowSeed
+    prev.hostBoundSessionIds
   );
 
   const sessions = dropDismissedSessions(rebound.sessions);
   const exists = (id: string | null): boolean =>
     id != null && sessions.some((session) => session.id === id);
 
-  const activeSessionId = exists(prev.activeSessionId)
-    ? prev.activeSessionId
-    : exists(rebound.activeSessionId)
-      ? rebound.activeSessionId
-      : (sessions[0]?.id ?? null);
+  const activeSessionId = exists(prev.activeSessionId) ? prev.activeSessionId : null;
 
   const recentSessionIds = [
     ...(activeSessionId ? [activeSessionId] : []),
@@ -510,7 +448,11 @@ export function useSyncChatWorkspaceTree({
 
   const signatureRef = useRef<string>('');
 
-  useEffect(() => {
+  // A layout effect (decision 174): the first write drops the store's DEMO row
+  // and leaves no conversation open, and it has to land before the first paint
+  // — after it the column shows the home page, before it the DEMO row's blank
+  // start screen, which would flash for a frame on every launch.
+  useLayoutEffect(() => {
     const signature = workspaceTreeSignature(tree.projects, tree.workspaces, preferredWorkspaceId);
     if (signature === signatureRef.current) {
       return;

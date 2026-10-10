@@ -2,6 +2,7 @@ import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentD
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { DEFAULT_RUNTIME_PERMISSION } from '@shared/types/runtimePermission';
 import type { FileSearchResult } from '@shared/types/search';
+import { QueryClientContext } from '@tanstack/react-query';
 import {
   File as FileIcon,
   FileText,
@@ -15,6 +16,7 @@ import {
   memo,
   type ReactNode,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -26,11 +28,12 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
+import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import { cn } from '@/lib/utils';
 import {
   applyAutoSessionTitle,
   applyForkSessionTitle,
-  createChatSessionInCurrentDirectory,
+  createChatSessionOnWorkspace,
   createUnboundChatSession,
   showCompactionSummary,
   stopChatSession,
@@ -47,6 +50,7 @@ import {
 } from '@/stores/composerDrafts';
 import { useContinueIntentStore } from '@/stores/continueIntent';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
+import { type HomeTargetPick, openHome, useHomeDraftStore } from '@/stores/homeDraft';
 import { selectIsMigrating, useLegacyMigrationStore } from '@/stores/legacyMigration';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
@@ -93,8 +97,9 @@ import { ComposerTargetBar } from './ComposerTargetBar';
 import { ComposerUsageChip } from './ComposerUsageChip';
 import { deriveChatEmptySurface } from './chatEmptyState';
 import { runCompactCommand } from './compactCommand';
+import { buildBranchColumn } from './composerColumns';
 import { onComposerFocusRequest } from './composerFocus';
-import { resolveActiveTarget } from './composerTarget';
+import { isTargetableWorkspace, resolveActiveTarget } from './composerTarget';
 import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
@@ -107,14 +112,22 @@ import {
   goalPrefill,
   planGoalStart,
 } from './goalStart';
+import { HomeSendBlockedNotice } from './HomeSendBlockedNotice';
 import {
   ENGINE_UNAVAILABLE_HINT,
   encodePiResumeError,
   isEngineUnavailableError,
   isLegacyMigrationRefusal,
 } from './historyError';
+import { runHomeBranchSwitch } from './homeBranchSwitch';
+import { planHomeBranchSwitch } from './homeTarget';
 import { ModelMissingNotice } from './ModelMissingNotice';
-import { type QueuedMessage, selectSessionQueue } from './messageQueue';
+import {
+  createEmptyState as createEmptyQueueState,
+  enqueue as previewEnqueue,
+  type QueuedMessage,
+  selectSessionQueue,
+} from './messageQueue';
 import {
   COMPOSER_BAR_LEADING,
   COMPOSER_BAR_TRAILING,
@@ -201,6 +214,7 @@ import {
 } from './slashCommands';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useComposerPopupPlacement } from './useComposerPopupPlacement';
+import { readHomeTarget, useHomeTarget } from './useHomeTarget';
 import { useHostStatus } from './useHostStatus';
 import { usePiModelCatalog } from './usePiModelCatalog';
 import { useQueueRelease } from './useQueueRelease';
@@ -750,8 +764,52 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const scratchCwd = useScratchWorkspaceStore((state) =>
     activeSessionId ? (state.pathsBySession[activeSessionId] ?? null) : null
   );
-  /** Where this chat actually runs: its bound folder, else its scratch dir. */
-  const effectiveCwd = cwd ?? activeSession?.unbound?.workspacePath ?? scratchCwd;
+  /**
+   * Decision 174 (issue #6, second wave): no conversation open is the home
+   * page. The composer docks there exactly as in a conversation, and its work
+   * bar picks the DRAFT target (`useHomeTarget`) the send makes the
+   * conversation on.
+   */
+  const onHome = activeSessionId === null;
+  const home = useHomeTarget();
+  const homeWorkspace = onHome ? home.target.workspace : null;
+  /**
+   * The home send's own step before the conversation exists: switching to the
+   * branch picked on the home page (user ruling 2026-10-10: on the home page a
+   * branch is switched to at send time). `homeSendPendingRef` is its
+   * synchronous latch, `homeSwitching` what the screen shows.
+   */
+  const homeSendPendingRef = useRef(false);
+  const [homeSwitching, setHomeSwitching] = useState(false);
+  /**
+   * The home send found the checkout locked (a conversation is running in it)
+   * after a branch had been picked: nothing was sent and nothing switched, and
+   * the notice above the card asks what to do. The text stays in the box.
+   */
+  const [homeSendBlocked, setHomeSendBlocked] = useState<{
+    repositoryName: string;
+    branch: string;
+    currentBranch: string | null;
+  } | null>(null);
+  // Optional on purpose: the app always provides one, and a composer mounted
+  // without it (unit tests) still switches — it just has nothing to refresh.
+  const queryClient = useContext(QueryClientContext);
+  // The notice belongs to one target and one pick: leaving the home page, or
+  // picking another repository or branch, retires it.
+  const homeWorkspaceId = homeWorkspace?.id ?? null;
+  const homeDraftBranchName = onHome ? (home.draftBranch?.name ?? null) : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the three values are the triggers, not inputs
+  useEffect(() => {
+    setHomeSendBlocked(null);
+  }, [onHome, homeWorkspaceId, homeDraftBranchName]);
+  /**
+   * Where this chat actually runs: its bound folder, else its scratch dir. On
+   * the home page, the draft target's folder (so `@` finds files in the
+   * repository the next conversation will run in); none for a temporary chat.
+   */
+  const effectiveCwd = onHome
+    ? (homeWorkspace?.path ?? null)
+    : (cwd ?? activeSession?.unbound?.workspacePath ?? scratchCwd);
   // U09-1: does the empty card wear the joined tab? `cwd` is already
   // `workspace && isTargetableWorkspace(workspace) ? path : null` (see
   // `resolveActiveTarget`), which is exactly the predicate `ComposerTargetBar`
@@ -1179,19 +1237,25 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (action.type === 'runtime') return false;
 
     switch (action.type) {
-      case 'new':
-        if (
-          !createChatSessionInCurrentDirectory(
-            inFlightRef.current && inFlightSessionIdRef.current === activeSessionId
-          )
-        ) {
-          toastManager.add({
-            type: 'info',
-            title: t('Stop the current turn before starting a new chat'),
-          });
-          return true;
-        }
+      case 'new': {
+        // Decision 174 (issue #6, second wave): every 「新建」 opens the home
+        // page, with this conversation's repository picked (none for a
+        // temporary chat), and the conversation is made by the first send. A
+        // turn still running here keeps running — it is not this command's to
+        // stop, which is why the old "stop the current turn first" refusal went.
+        const state = useChatSessionsStore.getState();
+        const current = state.sessions.find((session) => session.id === state.activeSessionId);
+        const workspace = current
+          ? state.workspaces.find((ws) => ws.id === current.workspaceId)
+          : undefined;
+        const preselect: HomeTargetPick | undefined = current
+          ? workspace && isTargetableWorkspace(workspace)
+            ? { kind: 'path', path: workspace.path }
+            : { kind: 'unbound' }
+          : undefined;
+        openHome(preselect);
         break;
+      }
       case 'settings':
         useSettingsIntentStore.getState().requestSettings();
         break;
@@ -1320,6 +1384,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
     if (action === 'blocked') return;
 
+    // Decision 174: the home page. The conversation is made by this send, on
+    // the work bar's draft target — not before, and not as a temporary chat
+    // when a repository is picked.
+    if (!activeSessionId) {
+      await sendFromHome(trimmed, action);
+      return;
+    }
+
     if (action === 'send') {
       // R3 fix: capture BEFORE runSend — the user's own echo for THIS send
       // has not landed on the timeline yet at this point, so this reads
@@ -1384,6 +1456,148 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // (decision 2.2): the draft is now owned by the queue entry.
     updateValue('');
     attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
+  };
+
+  /**
+   * Decision 174 (issue #6, second wave; user rulings 2026-10-10): the send from
+   * the home page, which makes the conversation.
+   *
+   * 1. The draft target and branch are read fresh (`readHomeTarget`): the title
+   *    and the work bar showed them, and this is what they described.
+   * 2. A branch picked on the home page is switched to first, before anything
+   *    exists — or not at all: under the branch column's locks
+   *    (`planHomeBranchSwitch`) nothing is sent and nothing is switched, and
+   *    the notice above the card asks; a failed checkout is reported and the
+   *    draft stays. Either way no conversation is left behind.
+   * 3. The conversation is made on the target — `createChatSessionOnWorkspace`,
+   *    or a temporary chat — and the send runs on it with the target's own
+   *    directory. The old path took the directory from the render's `cwd`,
+   *    which for a conversation made on this keystroke is the empty value of a
+   *    render that had none, so the chat landed in a scratch directory.
+   *
+   * `enqueue` (another conversation's send holds the composer's one send slot)
+   * makes the conversation the same way and queues the message in it, as a
+   * message typed into that conversation would be.
+   */
+  const sendFromHome = async (trimmed: string, action: 'send' | 'enqueue') => {
+    if (homeSendPendingRef.current) return;
+    const { target, draftBranch } = readHomeTarget();
+    const workspace = target.workspace;
+    const sentDraftIds = attachments.drafts.map((draft) => draft.id);
+
+    if (workspace && draftBranch) {
+      const state = useChatSessionsStore.getState();
+      const column = buildBranchColumn({
+        sessions: state.sessions,
+        workspaces: state.workspaces,
+        activeSessionId: null,
+        fallbackWorkspaceId: workspace.id,
+      });
+      const plan = planHomeBranchSwitch({ draft: draftBranch, lock: column.lock });
+      if (plan.kind === 'blocked') {
+        setHomeSendBlocked({
+          repositoryName: target.repositoryName ?? workspace.name,
+          branch: plan.branch,
+          currentBranch: workspace.branch ?? null,
+        });
+        return;
+      }
+      if (plan.kind === 'switch') {
+        homeSendPendingRef.current = true;
+        setHomeSwitching(true);
+        try {
+          await runHomeBranchSwitch(plan, queryClient);
+        } catch (cause) {
+          toastManager.add({
+            type: 'error',
+            title: t('Could not switch to {{branch}}; the message was not sent', {
+              branch: plan.branch,
+            }),
+            description: unwrapIpcErrorMessage(cause),
+          });
+          return;
+        } finally {
+          homeSendPendingRef.current = false;
+          setHomeSwitching(false);
+        }
+        // Switched: the pick has done its job.
+        useHomeDraftStore.getState().setBranch(null);
+        // The user may have moved on while git ran — opened a conversation, or
+        // changed the message. Then this send stops here; the next Enter sends
+        // what is in the box, on the branch now checked out.
+        if (useChatSessionsStore.getState().activeSessionId !== null) return;
+        const liveIds = getLiveAttachmentDrafts().map((draft) => draft.id);
+        if (
+          valueRef.current.trim() !== trimmed ||
+          liveIds.length !== sentDraftIds.length ||
+          liveIds.some((id, index) => id !== sentDraftIds[index])
+        ) {
+          return;
+        }
+      }
+    }
+
+    // `runSend`'s own guards, checked BEFORE the conversation is made: a send
+    // that would be skipped must not leave a blank conversation selected (it
+    // would also carry the box's text away from the home page's draft).
+    if (action === 'send' && (!canSend || inFlightRef.current || stoppingRef.current)) return;
+    const drafts = attachments.drafts;
+    if (action === 'enqueue') {
+      // A brand-new conversation's queue is empty, so only the message itself
+      // can be refused — checked on a scratch queue before anything is made.
+      const preview = previewEnqueue(createEmptyQueueState(), {
+        id: 'home-preview',
+        sessionId: 'home-preview',
+        text: trimmed,
+        attachments: drafts,
+        queuedAt: Date.now(),
+      });
+      if (!preview.ok) {
+        setQueueNotice(preview.message);
+        return;
+      }
+    }
+
+    const sessionId = workspace
+      ? createChatSessionOnWorkspace(workspace.id)
+      : createUnboundChatSession();
+    if (!sessionId) return;
+
+    if (action === 'enqueue') {
+      const queued: QueuedMessage = {
+        id: nextQueuedMessageId(),
+        sessionId,
+        text: trimmed,
+        attachments: drafts,
+        queuedAt: Date.now(),
+      };
+      useMessageQueueStore.getState().enqueue(queued);
+      setQueueNotice(null);
+      onSendStart?.('direct');
+      updateValue('');
+      attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
+      return;
+    }
+
+    // Synchronous from the line above to `runSend`'s commit point: the box is
+    // cleared before React renders the new conversation, so the draft switch
+    // parks nothing for the home page.
+    const outcome = await runSend(trimmed, drafts, {
+      clearComposerValue: true,
+      origin: 'direct',
+      home: { sessionId, workspacePath: workspace?.path ?? null },
+    });
+    maybeApplyFirstMessageTitle(sessionId, trimmed, outcome, false);
+  };
+
+  /**
+   * 「改在 <当前分支> 上发送」: drop the picked branch and send as it stands.
+   * 「取消」 only closes the notice; the message stays in the box.
+   */
+  const sendHomeOnCurrentBranch = () => {
+    useHomeDraftStore.getState().setBranch(null);
+    setHomeSendBlocked(null);
+    void handleSend();
   };
 
   /**
@@ -1818,6 +2032,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
        * composer, unsent, when the worker has nothing to re-run.
        */
       retryLastTurn?: { fallbackText: string };
+      /**
+       * Decision 174: the home send — the conversation it just made on the
+       * draft target, and that target's directory (`null`: a temporary chat,
+       * whose directory the handshake allocates). The render this runs from
+       * had no conversation, so neither may come from its `activeSessionId`
+       * or `cwd`.
+       */
+      home?: { sessionId: string; workspacePath: string | null };
     }
   ): Promise<RunEntryOutcome> => {
     const { origin, retryLastTurn } = options;
@@ -1839,11 +2061,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
      *
      * Resolved here, before anything is committed, so every line below reads
      * the same `sessionId` whether it was picked in the sidebar or made on
-     * this keystroke. It is an unbound chat because the only way to be in this
-     * state is to have no targetable folder; if one is later bound, the
-     * ordinary retarget path handles it.
+     * this keystroke.
+     *
+     * Decision 174 (issue #6, second wave) replaced U28's "with no
+     * conversation, make a temporary one here": no conversation is the home
+     * page, whose send makes the conversation on the work bar's draft target
+     * (a repository, or none) before calling this, and hands it in as
+     * `options.home`. The unbound fallback only stays for a caller that
+     * reaches here with nothing selected and no such conversation.
      */
-    const sessionId = activeSessionId ?? createUnboundChatSession();
+    const sessionId = options.home?.sessionId ?? activeSessionId ?? createUnboundChatSession();
     captureSessionGenerationPreferences(sessionId, chatAgentDefaults);
     inFlightRef.current = true;
     inFlightSessionIdRef.current = sessionId;
@@ -1864,7 +2091,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // failure lands in the same catch every other handshake failure does and
     // the user's text is preserved by `finalizeOutcome`), never here — this
     // prologue is deliberately synchronous up to the commit point.
-    let workspacePath = cwd ?? activeSession?.unbound?.workspacePath ?? '';
+    let workspacePath = options.home
+      ? (options.home.workspacePath ?? '')
+      : (cwd ?? activeSession?.unbound?.workspacePath ?? '');
     // R11, D48 S2 form: an explicit per-(session, agent) choice, else this
     // agent's template, else NOTHING — `undefined` means `Automatic`, i.e. the
     // key leaves the payload and the runtime's own default serves the turn
@@ -4247,6 +4476,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             {statusHint}
           </div>
         ))}
+      {/* Decision 174: the home send found the checkout locked after a branch
+          was picked — nothing sent, nothing switched. Where the model-missing
+          card sits, the same coss Alert; it grows upward, the card stays. */}
+      {onHome && homeSendBlocked && (
+        <HomeSendBlockedNotice
+          className="mb-2"
+          repositoryName={homeSendBlocked.repositoryName}
+          branch={homeSendBlocked.branch}
+          currentBranch={homeSendBlocked.currentBranch}
+          onSendOnCurrent={sendHomeOnCurrentBranch}
+          onCancel={() => setHomeSendBlocked(null)}
+        />
+      )}
       {/* T-28 §3.6: one ComposerTargetBar instance, rendered at one of two
             positions by mode — never both at once. Empty mode keeps the bar
             above the card; session mode docks it below.
@@ -4496,7 +4738,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       {mode === 'session' && (
         <ComposerTargetBar
           mode={mode}
-          sending={sendingHere}
+          // Decision 174: on the home page the only send of its own is the
+          // branch switch before the conversation exists.
+          sending={onHome ? homeSwitching : sendingHere}
           disabled={disabled}
           onAddRepository={onAddRepository}
         />

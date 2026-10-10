@@ -135,7 +135,8 @@ describe('archiveSessionIndexEntry — indexed session (unchanged happy path)', 
     // Archiving the session the user is looking at must not leave the Composer
     // pointing at it for the length of the round-trip (or forever, if the
     // refresh fails) — so the handover is already done when refresh runs.
-    expect(seen).toEqual([{ ids: ['s2'], active: 's2' }]);
+    // Decision 174: the handover is to the home page, not to a neighbour.
+    expect(seen).toEqual([{ ids: ['s2'], active: null }]);
     expect(isSessionRetired('s1')).toBe(true);
   });
 
@@ -333,26 +334,33 @@ describe('closeSessionAndRemoveRow — detach + drop the row for this run', () =
   });
 });
 
+/**
+ * Decision 174 (issue #6, second wave): removing the conversation on screen
+ * opens the home page. It used to hand over to the adjacent row of the store's
+ * list — an order the sidebar does not show — and the user ruled out picking a
+ * conversation for them.
+ */
 describe('activeSessionId handover on removal', () => {
-  it('moves to the row that slides into the removed slot', async () => {
+  it('opens the home page instead of the row that slides into the removed slot', async () => {
     stubChatApi();
     seedStore([session('s1'), session('s2'), session('s3')], { activeSessionId: 's2' });
 
     await closeSessionAndRemoveRow('s2', refresh);
 
-    expect(useChatSessionsStore.getState().activeSessionId).toBe('s3');
+    expect(useChatSessionsStore.getState().activeSessionId).toBeNull();
+    expect(useChatSessionsStore.getState().sessions.map((item) => item.id)).toEqual(['s1', 's3']);
   });
 
-  it('falls back to the previous row when the removed one was last', async () => {
+  it('opens the home page when the removed one was last in the list, too', async () => {
     stubChatApi();
     seedStore([session('s1'), session('s2')], { activeSessionId: 's2' });
 
     await closeSessionAndRemoveRow('s2', refresh);
 
-    expect(useChatSessionsStore.getState().activeSessionId).toBe('s1');
+    expect(useChatSessionsStore.getState().activeSessionId).toBeNull();
   });
 
-  it('drops to the empty state (null) when the last session goes', async () => {
+  it('drops to the home page (null) when the last session goes', async () => {
     stubChatApi();
     seedStore([session('only')], { activeSessionId: 'only' });
 

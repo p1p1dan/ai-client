@@ -17,27 +17,15 @@ import { LEGACY_SEED_TITLE, NEW_CHAT_TITLE } from '@shared/sessionTitles';
 /**
  * `NEW_CHAT_TITLE` is the title every "new chat" path gives a chat before its
  * first message names it (`createChatSessionOnWorkspace`,
- * `createUnboundChatSession`, the fork target, and — dsh-rebase decision 144 —
- * the start-up seed), stored as that English identifier; {@link
- * displaySessionTitle} is how it reads on screen. `LEGACY_SEED_TITLE` is the
- * start-up seed's pre-decision-144 title. Both live in `@shared/sessionTitles`
- * since decision 145, where Main reads them to name a fork of a chat that
- * still carries one.
+ * `createUnboundChatSession`, the fork target), stored as that English
+ * identifier; {@link displaySessionTitle} is how it reads on screen.
+ * `LEGACY_SEED_TITLE` is the pre-decision-144 title of the start-up chat the
+ * app used to open on (decision 174 retired that chat for the home page; rows
+ * an older build saved under it still read as placeholders). Both live in
+ * `@shared/sessionTitles` since decision 145, where Main reads them to name a
+ * fork of a chat that still carries one.
  */
 export { LEGACY_SEED_TITLE, NEW_CHAT_TITLE };
-
-/** Id prefix of the empty chat the app opens on at start-up (`useSyncChatWorkspaceTree`). */
-export const STARTUP_SEED_ID_PREFIX = 'session-live';
-
-/**
- * The start-up chat while it is still the untouched seed: its id and the
- * placeholder it was created with. A row still carrying the pre-decision-144
- * seed title counts on the title alone, as every row did before the rename.
- */
-export function isStartupSeedSession(session: { id: string; title: string }): boolean {
-  if (session.title === LEGACY_SEED_TITLE) return true;
-  return session.id.startsWith(STARTUP_SEED_ID_PREFIX) && session.title === NEW_CHAT_TITLE;
-}
 
 /**
  * dsh-rebase P1-7e problem 9 (decision 144): the stored placeholder titles are

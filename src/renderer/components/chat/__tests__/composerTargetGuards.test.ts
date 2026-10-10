@@ -86,9 +86,33 @@ function collectImportStatements(content: string, file: string): string[] {
  * below cannot be bypassed by a second call site.
  */
 describe('no in-place checkout from the chat tree', () => {
-  it('references useGitCheckout in exactly one file, BranchColumn.tsx', () => {
+  // Decision 174 (issue #6): the home send's branch switch is the second entry
+  // point, and the only other one. It takes a `switch` plan, which only
+  // `planHomeBranchSwitch` produces — under the same two locks.
+  it('names the checkout in exactly two files: BranchColumn.tsx and homeBranchSwitch.ts', () => {
     const offenders = findMatches(/git\.checkout|onCheckout|useGitCheckout/);
-    expect(offenders).toEqual(['BranchColumn.tsx']);
+    expect(offenders.sort()).toEqual(['BranchColumn.tsx', 'homeBranchSwitch.ts']);
+  });
+
+  it('the home switch runs only a lock-checked plan', () => {
+    const switchPath = path.join(CHAT_DIR, 'homeBranchSwitch.ts');
+    const homeSwitch = stripComments(readFileSync(switchPath, 'utf8'), switchPath);
+    expect(homeSwitch).toContain("plan: Extract<HomeBranchPlan, { kind: 'switch' }>");
+    const targetPath = path.join(CHAT_DIR, 'homeTarget.ts');
+    const target = stripComments(readFileSync(targetPath, 'utf8'), targetPath);
+    expect(target).toContain("lock === 'checkout-busy' || lock === 'session-running'");
+    const composerPath = path.join(CHAT_DIR, 'ChatComposer.tsx');
+    const composerSource = stripComments(readFileSync(composerPath, 'utf8'), composerPath);
+    const composerSend = composerSource.slice(
+      composerSource.indexOf('const sendFromHome = async'),
+      composerSource.indexOf('const sendHomeOnCurrentBranch = ')
+    );
+    expect(composerSend).toContain(
+      'planHomeBranchSwitch({ draft: draftBranch, lock: column.lock })'
+    );
+    expect(composerSend.indexOf('planHomeBranchSwitch(')).toBeLessThan(
+      composerSend.indexOf('runHomeBranchSwitch(')
+    );
   });
 
   it('BranchColumn.tsx is the only chat file that may name the checkout IPC', () => {
@@ -171,8 +195,11 @@ describe('the target-change block is scoped to this session (T091)', () => {
 
   it('the target bar is fed the per-session latch, in both composer modes', () => {
     // Two instances, one per mode (empty / session) — never both at once, but
-    // both must be scoped.
-    expect(composer.match(/sending=\{sendingHere\}/g) ?? []).toHaveLength(3);
+    // both must be scoped. The third match is the attachment chips. Decision
+    // 174: on the home page the session-mode bar takes the home send's own
+    // pre-send step instead — no conversation exists there to own a send.
+    expect(composer.match(/sending=\{sendingHere\}/g) ?? []).toHaveLength(2);
+    expect(composer).toContain('sending={onHome ? homeSwitching : sendingHere}');
     expect(composer).not.toContain('sending={sending}');
   });
 
@@ -187,13 +214,18 @@ describe('the target-change block is scoped to this session (T091)', () => {
     expect(hook).not.toContain('useTurnSendStatusStore');
   });
 
-  it('the /new slash command asks the same question, about the same session', () => {
-    // The one reader that was already correct before T091, and the shape every
-    // other one now matches: the synchronous latch AND an identity check
-    // against the session the command was typed into.
-    expect(composer).toContain(
-      'inFlightRef.current && inFlightSessionIdRef.current === activeSessionId'
+  it('the /new slash command opens the home page and leaves a running turn alone (decision 174)', () => {
+    // It used to make a blank chat, and refused while the chat it was typed in
+    // had a send in flight. Every 「新建」 now opens the home page with this
+    // conversation's repository picked; nothing is made and nothing stopped,
+    // so there is no latch to ask.
+    const newCase = composer.slice(
+      composer.indexOf("case 'new': {"),
+      composer.indexOf("case 'settings':")
     );
+    expect(newCase).toContain('openHome(preselect)');
+    expect(newCase).not.toContain('inFlightRef');
+    expect(composer).not.toContain('createChatSessionInCurrentDirectory');
   });
 
   it('a send belonging to ANOTHER session leaves this one retargetable', () => {

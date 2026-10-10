@@ -95,18 +95,22 @@ describe('[U05-b] the composer can send without a bound folder', () => {
   });
 
   it('never hands an empty workspacePath to createSession', () => {
-    // Reuse /new's inherited directory before allocating a new scratch folder.
-    expect(COMPOSER).toContain(
-      "let workspacePath = cwd ?? activeSession?.unbound?.workspacePath ?? ''"
+    // Reuse an inherited directory before allocating a new scratch folder.
+    // Decision 174: the home send hands in the directory of the target it made
+    // the conversation on — the render it runs from had no conversation, so
+    // its `cwd` was empty and the chat used to land in a scratch directory.
+    expect(COMPOSER).toMatch(
+      /let workspacePath = options\.home\s*\?\s*\(options\.home\.workspacePath \?\? ''\)\s*:\s*\(cwd \?\? activeSession\?\.unbound\?\.workspacePath \?\? ''\);/
     );
     expect(COMPOSER).toMatch(/createSession\(\{\s*sessionId,\s*workspacePath,/);
   });
 
   it('reads the scratch directory for cwd-dependent features', () => {
     // @-file search and the status line must name the directory the agent is
-    // actually in, not the folder the chat does not have.
-    expect(COMPOSER).toContain(
-      'const effectiveCwd = cwd ?? activeSession?.unbound?.workspacePath ?? scratchCwd'
+    // actually in, not the folder the chat does not have. Decision 174: on the
+    // home page, the draft target's folder.
+    expect(COMPOSER).toMatch(
+      /const effectiveCwd = onHome\s*\?\s*\(homeWorkspace\?\.path \?\? null\)\s*:\s*\(cwd \?\? activeSession\?\.unbound\?\.workspacePath \?\? scratchCwd\);/
     );
     expect(COMPOSER).toContain('rootPath: effectiveCwd');
   });

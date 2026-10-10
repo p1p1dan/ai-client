@@ -5,14 +5,18 @@
 import { useGitStatus } from '@/hooks/useGit';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { countChangedFiles } from './surfaceRegistry';
+import { useHomeWorkspace } from './useWorkspaceRootPath';
 
 export function useGitChangeCount(): number {
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
+  // Decision 174: on the home page, the repository its work bar picked.
+  const homeWorkspace = useHomeWorkspace();
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
-  const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
+  const activeWorkspace =
+    homeWorkspace ?? workspaces.find((ws) => ws.id === activeSession?.workspaceId);
   const path = activeWorkspace?.path || null;
 
   // isActive=false makes useGitStatus's refetchInterval resolve to false

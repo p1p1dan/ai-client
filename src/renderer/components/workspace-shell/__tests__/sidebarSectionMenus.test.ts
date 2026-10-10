@@ -42,10 +42,11 @@ describe('S1 partition context menus', () => {
     expect(unboundSection).not.toContain('FolderOpen');
     expect(unboundSection).not.toContain('group flex h-7');
     expect(unboundSection).toContain("{t('New temporary chat')}");
-    // Goes through the same create-or-reuse wrapper as the three New buttons,
-    // so this menu item cannot be the one route left for stacking up empty
-    // shell sessions.
-    expect(unboundSection).toContain('createOrReuseUnboundChatSession()');
+    // Decision 174 (issue #6, second wave): like every 「新建」 it opens the
+    // home page — here with 「不选仓库（临时对话）」 picked — and the
+    // temporary chat is made by its first send, so no empty shell is made.
+    expect(unboundSection).toContain("openHome({ kind: 'unbound' })");
+    expect(unboundSection).not.toContain('createOrReuseUnboundChatSession');
   });
 
   it('the projects partition offers Add Repository', () => {

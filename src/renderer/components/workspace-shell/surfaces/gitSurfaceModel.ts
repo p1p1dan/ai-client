@@ -214,6 +214,12 @@ export interface GitWorkdirSnapshot {
   activeSessionId: string | null;
   sessions: readonly GitWorkdirSnapshotSession[];
   workspaces: readonly GitWorkdirSnapshotWorkspace[];
+  /**
+   * Decision 174: the home page's draft repository, used while no
+   * conversation is open (`useHomeWorkspace`). Absent or null: no session is
+   * `no-session`, as before.
+   */
+  homeWorkspaceId?: string | null;
 }
 
 export type GitWorkdirResolution =
@@ -239,11 +245,17 @@ export type GitWorkdirResolution =
  */
 export function resolveGitWorkdir(snapshot: GitWorkdirSnapshot): GitWorkdirResolution {
   const activeSession = snapshot.sessions.find((s) => s.id === snapshot.activeSessionId);
-  if (!activeSession) {
+  let workspaceId: string;
+  if (activeSession) {
+    workspaceId = activeSession.workspaceId;
+  } else if (snapshot.activeSessionId === null && snapshot.homeWorkspaceId) {
+    // Decision 174: the home page — its draft repository.
+    workspaceId = snapshot.homeWorkspaceId;
+  } else {
     return { reason: 'no-session' };
   }
 
-  const workspace = snapshot.workspaces.find((w) => w.id === activeSession.workspaceId);
+  const workspace = snapshot.workspaces.find((w) => w.id === workspaceId);
   if (!workspace || !workspace.path) {
     return { reason: 'no-path' };
   }

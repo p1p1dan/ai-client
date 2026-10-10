@@ -7,8 +7,11 @@
 
 const COMPOSER_FOCUS_EVENT = 'aiclient:composer-focus';
 
-/** Ask the composer of `sessionId` to take focus. */
-export function requestComposerFocus(sessionId: string): void {
+/**
+ * Ask the composer of `sessionId` to take focus. `null` is the home page's
+ * composer (decision 174: the session bar's 「＋」 there).
+ */
+export function requestComposerFocus(sessionId: string | null): void {
   window.dispatchEvent(new CustomEvent(COMPOSER_FOCUS_EVENT, { detail: { sessionId } }));
 }
 

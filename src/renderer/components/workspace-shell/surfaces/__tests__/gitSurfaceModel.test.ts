@@ -356,6 +356,38 @@ describe('resolveGitWorkdir', () => {
     expect(resolution).toEqual({ reason: 'no-session' });
   });
 
+  // Decision 174 (issue #6, second wave): on the home page (no conversation
+  // open) the panel shows the repository the home page's work bar picked.
+  it('on the home page, resolves the draft repository', () => {
+    expect(
+      resolveGitWorkdir({
+        activeSessionId: null,
+        sessions: [],
+        workspaces: [{ id: 'w1', path: '/repo', gitEnabled: true }],
+        homeWorkspaceId: 'w1',
+      })
+    ).toEqual({ workdir: '/repo' });
+    expect(
+      resolveGitWorkdir({
+        activeSessionId: null,
+        sessions: [],
+        workspaces: [{ id: 'w1', path: '/repo', gitEnabled: false }],
+        homeWorkspaceId: 'w1',
+      })
+    ).toEqual({ reason: 'not-git', judgedPath: '/repo' });
+  });
+
+  it('a conversation on screen wins over the home page repository', () => {
+    expect(
+      resolveGitWorkdir({
+        activeSessionId: 'missing',
+        sessions: [],
+        workspaces: [{ id: 'w1', path: '/repo', gitEnabled: true }],
+        homeWorkspaceId: 'w1',
+      })
+    ).toEqual({ reason: 'no-session' });
+  });
+
   it('reports no-session when the active session id does not resolve', () => {
     const resolution = resolveGitWorkdir({
       activeSessionId: 'missing',

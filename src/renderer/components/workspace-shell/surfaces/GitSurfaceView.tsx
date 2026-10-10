@@ -66,6 +66,7 @@ import { useEditorStore } from '@/stores/editor';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { SURFACE_ESCAPE_HOLD_ATTR } from '../shellLayoutModel';
 import type { ContextSurfaceId } from '../surfaceRegistry';
+import { useHomeWorkspace } from '../useWorkspaceRootPath';
 import { GitBranchControl } from './GitBranchControl';
 import { GitHistoryList } from './GitHistoryList';
 import {
@@ -160,14 +161,18 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
   const sessions = useChatSessionsStore((s) => s.sessions);
   const workspaces = useChatSessionsStore((s) => s.workspaces);
 
+  // Decision 174: on the home page, the repository its work bar picked.
+  const homeWorkspaceId = useHomeWorkspace()?.id ?? null;
+
   const resolution = useMemo<GitWorkdirResolution>(
     () =>
       resolveGitWorkdir({
         activeSessionId,
         sessions,
         workspaces,
+        homeWorkspaceId,
       }),
-    [activeSessionId, sessions, workspaces]
+    [activeSessionId, sessions, workspaces, homeWorkspaceId]
   );
   const workdir = 'workdir' in resolution ? resolution.workdir : null;
 

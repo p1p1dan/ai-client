@@ -1,5 +1,6 @@
 import { ArrowLeftRight, GitBranch, Layers, Plus, Terminal, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { requestComposerFocus } from '@/components/chat/composerFocus';
 import { SessionTreeDialog } from '@/components/chat/SessionTreeDialog';
 import { displaySessionTitle } from '@/components/chat/sessionIndex/sessionTitle';
 import { deriveJobsWindowView, deriveSubagentsWindowView } from '@/components/chat/subwindowsModel';
@@ -9,11 +10,8 @@ import { Ident } from '@/components/ui/ident';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import {
-  createOrReuseChatSessionOnWorkspace,
-  createOrReuseUnboundChatSession,
-} from '@/stores/chatSessionActions';
 import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
+import { openHome } from '@/stores/homeDraft';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { type SubwindowKey, useSessionSubwindowsStore } from '@/stores/sessionSubwindows';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
@@ -117,21 +115,18 @@ export function SessionBar({
   // offers — so "idle" is read through the store's next-turn view.
   const isIdle = (statusForNextTurn(activeSession) ?? 'idle') === 'idle';
 
-  // "New chat" targets the folder the current chat lives in. With no folder
-  // behind the current chat it starts a temporary one instead of doing nothing —
-  // same rule U22 gave the sidebar's New button.
-  //
-  // create-or-reuse: since this target IS the active session's own workspace,
-  // a fresh empty active session always resolves to "already there" (stay
-  // put) here — never a retarget — see chatSessionActions.ts's
-  // createOrReuseChatSessionOnWorkspace / createOrReuseUnboundChatSession.
-  const newSessionWorkspaceId = activeWorkspace?.path?.trim() ? activeWorkspace.id : null;
+  // Decision 174 (issue #6, second wave): "New chat" opens the home page with
+  // the folder the current chat lives in picked; for a temporary chat the home
+  // page keeps its own pick (its default: the most recently active repository).
+  // On the home page itself there is nothing to open — the button hands the
+  // keyboard to the composer, which is where a new chat starts.
   const startNewChat = () => {
-    if (newSessionWorkspaceId) {
-      createOrReuseChatSessionOnWorkspace(newSessionWorkspaceId);
+    if (!activeSession) {
+      requestComposerFocus(null);
       return;
     }
-    createOrReuseUnboundChatSession();
+    const path = activeWorkspace?.path?.trim() ? activeWorkspace.path : null;
+    openHome(path ? { kind: 'path', path } : undefined);
   };
 
   const title = (
@@ -140,9 +135,10 @@ export function SessionBar({
       {/* Decision 167 §6: 400 — the same size as the sidebar's 「聊天」 on this
           h-9 line, told apart by weight (panel name 600, chat name 400). The
           old `font-medium` rendered as 400 on Windows anyway. Decision 170
-          (issue #6 ruling 3): both are 16px (`text-section`) now. */}
+          (issue #6 ruling 3): both are 16px (`text-section`) now. Decision
+          174: no conversation open is the home page, and the bar says so. */}
       <span className="min-w-0 truncate text-section text-foreground">
-        {activeSession ? displaySessionTitle(activeSession.title, t) : t('No conversation open')}
+        {activeSession ? displaySessionTitle(activeSession.title, t) : t('Home')}
       </span>
       {/* P1-7e e6 (decision 145): 「临时」 is CJK, so the title's own
           `text-meta`, not 10px (design system, CJK cascade rule 3). */}

@@ -325,18 +325,21 @@ export function sidebarRowTooltip(input: {
   t?: Translate;
 }): string {
   const t = input.t ?? englishTranslate;
-  const { place } = input;
-  let where: string;
-  if (place.folderName === null) {
-    where = t('Temporary chats');
-  } else {
-    where = place.branch ? `${place.folderName} · ${place.branch}` : place.folderName;
-    if (place.remote) where = t('{{place}} (remote)', { place: where });
-  }
   const updated = t('Updated {{time}}', {
     time: formatAbsoluteDateTime(input.updatedAt, input.locale),
   });
-  return [input.title, where, updated].join('\n');
+  return [input.title, sidebarRowWhere(input.place, t), updated].join('\n');
+}
+
+/**
+ * The tooltip's second line on its own — 「文件夹 · 分支」, 「临时对话」 for a
+ * chat with no repository, 「（远程）」 after a remote one. Decision 174: the
+ * home page's 「最近对话」 shows it on the row itself (its L4 text).
+ */
+export function sidebarRowWhere(place: SidebarRowPlace, t: Translate = englishTranslate): string {
+  if (place.folderName === null) return t('Temporary chats');
+  const where = place.branch ? `${place.folderName} · ${place.branch}` : place.folderName;
+  return place.remote ? t('{{place}} (remote)', { place: where }) : where;
 }
 
 function normalizeQuery(query: string | undefined): string {
@@ -414,6 +417,25 @@ function toRow(session: ChatSession, workspace: ChatWorkspace | undefined): Side
       ? { legacyDiverged: true as const }
       : {}),
   };
+}
+
+/**
+ * Decision 174 (issue #6, second wave): the rows of the given conversations,
+ * in the sidebar's own shape — for the home page's 「最近对话」, which lists
+ * them with the same markers, badges and tooltip. A chat with no repository is
+ * read as one (`isUnboundSessionRow`) even when it still names a workspace.
+ */
+export function sidebarRowsForSessions(
+  sessions: readonly ChatSession[],
+  workspaces: readonly ChatWorkspace[]
+): SidebarSessionRow[] {
+  const workspaceById = new Map(workspaces.map((ws) => [ws.id, ws] as const));
+  return sessions.map((session) =>
+    toRow(
+      session,
+      isUnboundSessionRow(session) ? undefined : workspaceById.get(session.workspaceId)
+    )
+  );
 }
 
 function byUpdatedAtDesc(a: SidebarSessionRow, b: SidebarSessionRow): number {
@@ -532,69 +554,55 @@ export function buildUnboundFolder(input: {
   };
 }
 
-export interface NewSessionTarget {
-  workspaceId: string | null;
-  /** Folder name for the resolved target — drives the header "New" button's
-   * dynamic title (D1, round-5): T-26 removed folder selection state, so the
-   * title is the only surface left that makes the implicit target discoverable. */
-  folderName: string | null;
+/** Where the home page opened by the sidebar's 「＋新建」 puts its draft target. */
+export interface HomePreselect {
+  workspaceId: string;
+  path: string;
+  /** The folder's name as the sidebar knows it. */
+  folderName: string;
 }
 
 /**
- * Resolves which workspace the sidebar's own "New" affordances (header
- * button) should target, and which folder that resolves to.
+ * Decision 174 (issue #6, second wave; user ruling 2026-10-10): the sidebar's
+ * 「＋新建」 opens the home page with the corresponding repository picked —
+ * the folder of the conversation the user last opened from the sidebar, else
+ * the open conversation's own. `null` picks nothing, and the home page keeps
+ * its own default (the most recently active repository).
  *
- * Resolution order (round-5 D1 ruling): the folder the user last focused
- * (a session picked in it — decision 137 §3 took the header click out, so the
- * selected conversation decides) → the active session's
- * workspace (pre-existing fallback) → the first usable workspace that belongs
- * to a folder actually on screen (pre-existing fallback, tightened below).
- *
- * `folders` must be freshly derived (e.g. from `buildSidebarFolders`) on
- * every call, never cached alongside a stored `focusedProjectId` — if the
- * focused project was since deleted it simply won't be found here and
- * resolution falls through to the next tier on its own (self-healing).
- *
- * R5 round-2 (B1) tightened two things:
- *
- * - A focused folder that resolves to no usable workspace now returns a null
- *   target (disabled button) instead of falling through. Falling through would
- *   create the chat in a *different* folder than the one the button's title
- *   names — a silent redirect, which is exactly what D1 set out to remove.
- * - Every fallback target is verified alive: the workspace must still exist,
- *   be usable (non-empty path), and its project must still have a folder row.
- *   A stale `activeSession.workspaceId` (workspace deleted, or its project
- *   removed) otherwise resolved to a target that renders nowhere.
+ * This replaces `resolveNewSessionTarget`, which chose where a blank
+ * conversation was created at once. Two of its rules stay:
+ * - a focused folder that has no usable workspace answers `null` rather than
+ *   falling through to another folder (R5 round-2 B1: no silent redirect);
+ * - a fallback target must still be alive — a usable workspace of a folder
+ *   that is on screen.
+ * Its last tier ("the first usable workspace") is gone: with nothing to go on,
+ * the home page's own default is the better answer — the first repository by
+ * activity, not the first one ever added.
  */
-export function resolveNewSessionTarget(input: {
+export function resolveHomePreselect(input: {
   focusedProjectId: string | null;
   folders: readonly SidebarFolder[];
   activeSession: Pick<ChatSession, 'workspaceId'> | undefined;
   workspaces: readonly ChatWorkspace[];
-}): NewSessionTarget {
+}): HomePreselect | null {
+  const workspaceById = new Map(input.workspaces.map((ws) => [ws.id, ws] as const));
   const focusedFolder = input.folders.find((folder) => folder.projectId === input.focusedProjectId);
   if (focusedFolder) {
-    // Null `newSessionWorkspaceId` is a deliberate disabled state, not a miss.
-    return { workspaceId: focusedFolder.newSessionWorkspaceId, folderName: focusedFolder.name };
+    const workspace = focusedFolder.newSessionWorkspaceId
+      ? workspaceById.get(focusedFolder.newSessionWorkspaceId)
+      : undefined;
+    return workspace && isUsableWorkspace(workspace)
+      ? { workspaceId: workspace.id, path: workspace.path, folderName: focusedFolder.name }
+      : null;
   }
-
-  const folderByProject = new Map(
-    input.folders.map((folder) => [folder.projectId, folder] as const)
-  );
-  const isReachable = (ws: ChatWorkspace): boolean =>
-    isUsableWorkspace(ws) && folderByProject.has(ws.projectId);
-
   const active = input.activeSession
-    ? input.workspaces.find((ws) => ws.id === input.activeSession?.workspaceId)
+    ? workspaceById.get(input.activeSession.workspaceId)
     : undefined;
-  const target = active && isReachable(active) ? active : input.workspaces.find(isReachable);
-  if (!target) {
-    return { workspaceId: null, folderName: null };
-  }
-  return {
-    workspaceId: target.id,
-    folderName: folderByProject.get(target.projectId)?.name ?? null,
-  };
+  const folder = active
+    ? input.folders.find((item) => item.projectId === active.projectId)
+    : undefined;
+  if (!active || !folder || !isUsableWorkspace(active)) return null;
+  return { workspaceId: active.id, path: active.path, folderName: folder.name };
 }
 
 /**

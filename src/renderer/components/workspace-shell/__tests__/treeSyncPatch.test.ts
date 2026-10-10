@@ -13,7 +13,8 @@ import { resolveTreeSyncPatch, type TreeSyncPrevState } from '../useSyncChatWork
  * session on every tree signature change with no live row present, and to
  * overwrite `activeSessionId` from its own derivation. Both silently undid the
  * user's Close/Archive — the row came back (or the Composer jumped) the next
- * time a worktree list or a repo add changed the tree.
+ * time a worktree list or a repo add changed the tree. Decision 174 (issue #6)
+ * took both out entirely: nothing is seeded, nothing is picked.
  */
 
 const workspaces: ChatWorkspace[] = [
@@ -55,42 +56,58 @@ beforeEach(() => {
   resetDismissedSessionRows();
 });
 
-describe('resolveTreeSyncPatch — auto-seed gate', () => {
-  it('seeds a Live session on a cold start (empty list, nothing dismissed yet)', () => {
+/**
+ * Decision 174 (issue #6, second wave; user ruling 2026-10-10): the app opens on
+ * the home page — no conversation at all. The start-up chat this pass used to
+ * seed (and to rename out of the store's DEMO row) is gone, and so is "pick the
+ * first conversation" when the open one goes away.
+ */
+describe('resolveTreeSyncPatch — no start-up chat (decision 174)', () => {
+  it('seeds nothing on a cold start: the home page', () => {
     const result = patch(prevState());
 
-    expect(result.sessions).toHaveLength(1);
-    // Decision 144: named like every chat "New" creates, not `Live Agent Host`.
-    expect(result.sessions[0]?.title).toBe('New chat');
-    expect(result.sessions[0]?.id.startsWith('session-live')).toBe(true);
-    expect(result.activeSessionId).toBe(result.sessions[0]?.id);
-    expect(result.recentSessionIds).toEqual([result.sessions[0]?.id]);
-  });
-
-  it('never re-seeds after the user removed a row in this run', () => {
-    markSessionDismissed('closed-one');
-
-    const result = patch(prevState());
-
-    // The user emptied the nav on purpose; a later tree change must not put a
-    // session back behind their back.
     expect(result.sessions).toEqual([]);
     expect(result.activeSessionId).toBeNull();
     expect(result.recentSessionIds).toEqual([]);
   });
 
-  it('renames the retired DEMO seed to the new-chat title (decision 144)', () => {
+  it('seeds nothing after the user removed a row in this run either', () => {
+    markSessionDismissed('closed-one');
+
+    const result = patch(prevState());
+
+    expect(result.sessions).toEqual([]);
+    expect(result.activeSessionId).toBeNull();
+    expect(result.recentSessionIds).toEqual([]);
+  });
+
+  it('drops the store DEMO rows instead of renaming one into a start-up chat', () => {
     const result = patch(
       prevState({
-        sessions: [session('session-live', { title: 'Live Agent Host' })],
+        sessions: [
+          session('session-live', { title: 'Live Agent Host' }),
+          session('session-welcome', { title: 'Welcome' }),
+        ],
         activeSessionId: 'session-live',
+        recentSessionIds: ['session-live', 'session-welcome'],
       })
     );
 
-    expect(result.sessions).toHaveLength(1);
-    expect(result.sessions[0]?.id).not.toBe('session-live');
-    expect(result.sessions[0]?.id.startsWith('session-live')).toBe(true);
-    expect(result.sessions[0]?.title).toBe('New chat');
+    expect(result.sessions).toEqual([]);
+    expect(result.activeSessionId).toBeNull();
+    expect(result.recentSessionIds).toEqual([]);
+  });
+
+  it('keeps a real conversation whose id merely starts like the old seed', () => {
+    // Rows an older build saved from its start-up chat (`session-live-…`) are
+    // ordinary conversations now; only the two DEMO ids themselves go.
+    const saved = session('session-live-abc123', {
+      title: 'Fix the build',
+      runtimeIdentity: 'd-1',
+    });
+    const result = patch(prevState({ sessions: [saved] }));
+
+    expect(result.sessions.map((item) => item.id)).toEqual(['session-live-abc123']);
   });
 
   it('does not seed while any session already exists', () => {
@@ -126,12 +143,13 @@ describe('resolveTreeSyncPatch — activeSessionId handover', () => {
     expect(result.activeSessionId).toBe('s2');
   });
 
-  it('re-points active only when the previous one is gone', () => {
+  it('opens the home page when the previous one is gone — nothing is picked (decision 174)', () => {
     const result = patch(
       prevState({ sessions: [session('s1'), session('s2')], activeSessionId: 'deleted' })
     );
 
-    expect(result.activeSessionId).toBe('s1');
+    expect(result.activeSessionId).toBeNull();
+    expect(result.sessions.map((item) => item.id)).toEqual(['s1', 's2']);
   });
 
   it('falls to the empty state instead of keeping a dangling active id', () => {
@@ -143,14 +161,14 @@ describe('resolveTreeSyncPatch — activeSessionId handover', () => {
     expect(result.activeSessionId).toBeNull();
   });
 
-  it('never points active at a row that was filtered out', () => {
+  it('never points active at a row that was filtered out, and picks no other', () => {
     markSessionDismissed('s1');
 
     const result = patch(
       prevState({ sessions: [session('s1'), session('s2')], activeSessionId: 's1' })
     );
 
-    expect(result.activeSessionId).toBe('s2');
+    expect(result.activeSessionId).toBeNull();
   });
 });
 
@@ -191,10 +209,9 @@ describe('resolveTreeSyncPatch — empty workspace tree (T27-a)', () => {
     });
   });
 
-  it('supports add → remove-last → re-add without retaining or duplicating the old session', () => {
-    const added = patch(prevState());
-    const firstSessionId = added.sessions[0]?.id;
-    expect(firstSessionId).toBeTruthy();
+  it('supports add → remove-last → re-add without retaining the old session or seeding one', () => {
+    const added = patch(prevState({ sessions: [session('s1')], activeSessionId: 's1' }));
+    expect(added.sessions.map((item) => item.id)).toEqual(['s1']);
 
     const removed = resolveTreeSyncPatch({
       prev: { ...prevState(), ...added },
@@ -202,11 +219,13 @@ describe('resolveTreeSyncPatch — empty workspace tree (T27-a)', () => {
       preferredWorkspaceId: null,
     });
     expect(removed.sessions).toEqual([]);
+    expect(removed.activeSessionId).toBeNull();
 
+    // Decision 174: re-adding the repository brings back the home page, not a
+    // fresh blank chat.
     const readded = patch({ ...prevState(), ...removed });
-    expect(readded.sessions).toHaveLength(1);
-    expect(readded.sessions[0]?.id).not.toBe(firstSessionId);
-    expect(new Set(readded.sessions.map((item) => item.id)).size).toBe(1);
+    expect(readded.sessions).toEqual([]);
+    expect(readded.activeSessionId).toBeNull();
   });
 
   it('drops a restored runtime session when its repository disappears instead of rebinding it', () => {
@@ -252,13 +271,14 @@ describe('resolveTreeSyncPatch — empty workspace tree (T27-a)', () => {
 });
 
 describe('resolveTreeSyncPatch — same-path dual identity (round-6 review M3/N2)', () => {
-  it('seeds the Live session onto the registered-folder main, not the parent worktree entry, when both share a path', () => {
+  it('rebinds an unsent draft onto the registered-folder main, not the parent worktree entry, when both share a path', () => {
     // D2's deliberate dual identity: one directory backs both the parent
     // project's `worktree` entry and the registered folder's own `main`.
-    // preferredWorkspaceId is looked up by id (not path), so the seed must
-    // land on whichever entry `preferredWorkspaceId` names — here the aaa
+    // preferredWorkspaceId is looked up by id (not path), so a rebound draft
+    // must land on whichever entry `preferredWorkspaceId` names — here the aaa
     // project's main — even though the parent's worktree entry for the same
-    // path is listed first.
+    // path is listed first. (Decision 174: this was the start-up chat's seat;
+    // with no seed any more, the orphaned unsent draft is what lands there.)
     const aaaPath = '/repo/aaa';
     const dualWorkspaces: ChatWorkspace[] = [
       {
@@ -278,7 +298,7 @@ describe('resolveTreeSyncPatch — same-path dual identity (round-6 review M3/N2
     ];
 
     const result = resolveTreeSyncPatch({
-      prev: prevState(),
+      prev: prevState({ sessions: [session('draft', { workspaceId: 'ws-gone' })] }),
       workspaces: dualWorkspaces,
       preferredWorkspaceId: `ws:main:${aaaPath}`,
     });
@@ -345,15 +365,28 @@ describe('resolveTreeSyncPatch — unbound chats (D6)', () => {
     expect(result.sessions[0]?.workspaceId).toBe('');
   });
 
-  it('still adopts an unsent unbound draft into the preferred workspace (U22)', () => {
-    // No marker and no runtime identity: nothing has run in it, so there is no
-    // history to misplace, and attaching it to the repository the user just
-    // added is the behaviour U22 asked for.
+  it('keeps an unsent unbound draft unbound — no U22 adoption (decision 174)', () => {
+    // U22 adopted it into the first repository the user added, because the
+    // start screen's blank chat was the only way to talk before a repository
+    // existed. The home page makes the conversation at send time on the target
+    // the user picked, so a temporary chat never turns into a repository's.
     const draft = session('session-draft', { projectId: '', workspaceId: '' });
     const result = patch(prevState({ sessions: [draft] }));
 
-    expect(result.sessions[0]?.workspaceId).toBe('ws-main');
-    expect(result.sessions[0]?.projectId).toBe('p1');
+    expect(result.sessions[0]?.workspaceId).toBe('');
+    expect(result.sessions[0]?.projectId).toBe('');
+  });
+
+  it('keeps temporary chats through a sync with no workspace at all (decision 174)', () => {
+    const temp = unbound('session-temp', { runtimeIdentity: 'pi-1' });
+    const result = resolveTreeSyncPatch({
+      prev: prevState({ sessions: [temp, session('s1')], activeSessionId: 'session-temp' }),
+      workspaces: [],
+      preferredWorkspaceId: null,
+    });
+
+    expect(result.sessions.map((item) => item.id)).toEqual(['session-temp']);
+    expect(result.activeSessionId).toBe('session-temp');
   });
 
   it('still drops an orphan whose repository disappeared', () => {

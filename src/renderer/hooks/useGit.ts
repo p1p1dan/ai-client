@@ -75,10 +75,11 @@ export function useGitCommit() {
 
 /**
  * Everything a HEAD move makes stale. Every checkout / create-branch entry
- * point goes through `useGitCheckout` / `useGitCreateBranch`, so this is the
- * one place that decides what refreshes.
+ * point goes through `useGitCheckout` / `useGitCreateBranch` — or, for the
+ * home page's send (decision 174), `runHomeBranchSwitch`, which calls this
+ * directly — so this is the one place that decides what refreshes.
  */
-function invalidateBranchQueries(queryClient: QueryClient, workdir: string) {
+export function invalidateBranchQueries(queryClient: QueryClient, workdir: string) {
   return Promise.all(
     [
       gitQueryKeys.status(workdir),

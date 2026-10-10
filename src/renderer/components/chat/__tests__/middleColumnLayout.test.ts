@@ -14,6 +14,7 @@ import {
   COMPOSER_POPUP_GAP,
   COMPOSER_POPUP_VIEWPORT_MARGIN,
   COMPOSER_TEXTAREA_LINE_SCALE,
+  COMPOSER_TEXTAREA_MIN_ROWS,
   composerActionGroupClass,
   composerAttachButtonClass,
   composerBarClass,
@@ -87,13 +88,19 @@ function baseInput(overrides: Partial<MiddleColumnModeInput> = {}): MiddleColumn
 }
 
 describe('deriveMiddleColumnMode', () => {
-  it('returns empty when there is no active session', () => {
-    expect(deriveMiddleColumnMode(baseInput({ sessionId: null }))).toBe('empty');
+  // Decision 174 (issue #6, second wave): no conversation open is the home
+  // page, which docks the composer exactly where a conversation does — so the
+  // first send from it moves nothing. It used to be the start screen's `empty`.
+  it('returns session (the home page) when there is no active session', () => {
+    expect(deriveMiddleColumnMode(baseInput({ sessionId: null }))).toBe('session');
   });
 
-  it('returns empty when sessionId is null even though a send was attempted earlier', () => {
+  it('returns session for the home page whatever else the input says', () => {
     expect(deriveMiddleColumnMode(baseInput({ sessionId: null, sendAttempted: true }))).toBe(
-      'empty'
+      'session'
+    );
+    expect(deriveMiddleColumnMode(baseInput({ sessionId: null, status: 'running' }))).toBe(
+      'session'
     );
   });
 
@@ -308,13 +315,19 @@ describe('composerCardClass', () => {
         breakdown.rowGap +
         breakdown.controlRow
     ).toBe(breakdown.total);
-    expect(breakdown.total).toBe(75.5);
+    // Decision 174 (issue #6): the empty textarea rests at two body-tier lines
+    // (17 × 1.5 × 2 = 51px), so the card is 2 + 16 + 51 + 8 + 24 = 101px.
+    expect(breakdown.total).toBe(101);
 
-    // The textarea's row is not a free 25.5 either: it is the body tier times the
-    // line scale the session textarea's `min-h`/`leading` calc actually spells
-    // (asserted against that class string in `composerTextareaClass`'s group
-    // below, so the same expression is checked from both ends).
-    expect(breakdown.textareaRow).toBe(DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE);
+    // The textarea's row is not a free 51 either: it is the body tier times the
+    // line scale the session textarea's `min-h`/`leading` calc actually spells,
+    // times the resting line count (asserted against that class string in
+    // `composerTextareaClass`'s group below, so the same expression is checked
+    // from both ends).
+    expect(breakdown.textareaLines).toBe(COMPOSER_TEXTAREA_MIN_ROWS);
+    expect(breakdown.textareaRow).toBe(
+      DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE * COMPOSER_TEXTAREA_MIN_ROWS
+    );
 
     // The inter-row gap is not a free number either: it is whatever
     // `composerRowsClass()` spells, so the two cannot drift apart.
@@ -323,9 +336,9 @@ describe('composerCardClass', () => {
     expect((gapStep as number) * 4).toBe(breakdown.rowGap);
 
     // `min-h-18.5` (74px) is the FLOOR, not the height: the card grows with the
-    // body tier above 16px. At the 17px default the content (75.5px) exceeds the
-    // floor by 1.5px — that is the deal the breakdown documents, and why
-    // `min-h-*` is the right utility here rather than `h-*`.
+    // body tier above 16px. At the 17px default with two resting lines the
+    // content (101px) is well above it — that is the deal the breakdown
+    // documents, and why `min-h-*` is the right utility here rather than `h-*`.
     const step = stepValue(cls, /(?:^|\s)min-h-(\d+(?:\.\d+)?)(?:\s|$)/);
     expect(step).not.toBeNull();
     expect((step as number) * 4).toBe(74);
@@ -431,22 +444,12 @@ describe('composerHasProtrusion', () => {
   });
 
   // The predicate must stay tied to `shouldRenderTargetRow`, not drift into a
-  // second opinion about when the bar exists: in empty mode the branch and
-  // run-location slots gate nothing, so they cannot change the answer.
-  it('matches shouldRenderTargetRow regardless of the branch/run-location slots', () => {
-    for (const showBranchSelect of [true, false]) {
-      for (const hasRunLocation of [true, false]) {
-        for (const hasTargetableWorkspace of [true, false]) {
-          expect(composerHasProtrusion({ mode: 'empty', hasTargetableWorkspace })).toBe(
-            shouldRenderTargetRow({
-              mode: 'empty',
-              hasTargetableWorkspace,
-              showBranchSelect,
-              hasRunLocation,
-            })
-          );
-        }
-      }
+  // second opinion about when the bar exists.
+  it('matches shouldRenderTargetRow in empty mode', () => {
+    for (const hasTargetableWorkspace of [true, false]) {
+      expect(composerHasProtrusion({ mode: 'empty', hasTargetableWorkspace })).toBe(
+        shouldRenderTargetRow({ mode: 'empty', hasTargetableWorkspace })
+      );
     }
   });
 });
@@ -550,13 +553,16 @@ describe('composerTextareaClass', () => {
     expect(cls).toContain('[&_textarea]:min-h-14');
   });
 
-  it('collapses the follow-up input to one body-tier line box', () => {
+  it('rests the follow-up input at two body-tier line boxes (decision 174)', () => {
     // T104: the resting row is no longer the literal `min-h-6`. It is derived
     // from the body tier so the same class works at every setting the reader
-    // can pick; 24px (the old literal) is what it computes to at the 16px
-    // default, and that is what `composerFollowHeightBreakdown()` counts.
+    // can pick. Decision 174 (issue #6, user ruling 2026-10-10): two lines, on
+    // the home page and in a conversation alike — the `*2` is
+    // `COMPOSER_TEXTAREA_MIN_ROWS`, and that is what
+    // `composerFollowHeightBreakdown()` counts.
+    expect(COMPOSER_TEXTAREA_MIN_ROWS).toBe(2);
     expect(composerTextareaClass('session')).toContain(
-      '[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5)]'
+      '[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5*2)]'
     );
   });
 
@@ -584,36 +590,36 @@ describe('composerTextareaClass', () => {
     expect(composerTextareaClass('empty')).toContain('[&_textarea]:text-chat-body');
     // leading and min-h must be the SAME expression: a line box and a floor
     // derived from two different scales is how the resting line ends up sitting
-    // high in its own box again (the round-2 defect this pair fixed).
+    // high in its own box again (the round-2 defect this pair fixed). The floor
+    // is a whole number of those line boxes (decision 174: two).
     expect(cls).toContain('[&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]');
-    expect(cls).toContain('[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5)]');
+    expect(cls).toContain('[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5*2)]');
   });
 
-  it('T104: at the 17px default the derived row is the 25.5px the card arithmetic was built on', () => {
+  it('T104 / decision 174: at the 17px default the derived row is the 51px the card arithmetic was built on', () => {
     // The cross-check between the class string and the breakdown: the same
-    // expression, evaluated at D1's default, has to be the number the 75.5px
-    // resting contract was derived from — otherwise "nothing moves for a reader
-    // who never opens the setting" is false.
+    // expression, evaluated at D1's default, has to be the number the 101px
+    // resting contract was derived from.
     expect(composerFollowHeightBreakdown().textareaRow).toBe(
-      DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE
+      DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE * COMPOSER_TEXTAREA_MIN_ROWS
     );
-    expect(composerFollowHeightBreakdown().textareaRow).toBe(25.5);
+    expect(composerFollowHeightBreakdown().textareaRow).toBe(51);
   });
 
-  it('T104: the derived row stays one line box at the extremes of the body range', () => {
+  it('T104: the derived row stays a whole number of line boxes at the extremes of the body range', () => {
     // The other end of the same claim: the expression is what makes the row
     // work at every setting, so the line box stays proportional — 18px at the
     // 12px floor, 36px at the 24px ceiling — instead of the 24px literal the
-    // old pair froze. Above the default the textarea's row is the taller of the
-    // card's two rows; below it, the control strip's fixed 24px is.
+    // old pair froze. Decision 174: the resting textarea is two of them, so it
+    // lies between two lines at the floor and two at the ceiling.
     expect(CHAT_BODY_FONT_SIZE_MIN * COMPOSER_TEXTAREA_LINE_SCALE).toBe(18);
     expect(CHAT_BODY_FONT_SIZE_MAX * COMPOSER_TEXTAREA_LINE_SCALE).toBe(36);
     const breakdown = composerFollowHeightBreakdown();
     expect(breakdown.textareaRow).toBeGreaterThan(
-      CHAT_BODY_FONT_SIZE_MIN * COMPOSER_TEXTAREA_LINE_SCALE
+      CHAT_BODY_FONT_SIZE_MIN * COMPOSER_TEXTAREA_LINE_SCALE * COMPOSER_TEXTAREA_MIN_ROWS
     );
     expect(breakdown.textareaRow).toBeLessThan(
-      CHAT_BODY_FONT_SIZE_MAX * COMPOSER_TEXTAREA_LINE_SCALE
+      CHAT_BODY_FONT_SIZE_MAX * COMPOSER_TEXTAREA_LINE_SCALE * COMPOSER_TEXTAREA_MIN_ROWS
     );
   });
 
@@ -780,51 +786,37 @@ describe('targetRowClass / targetRowSlots', () => {
     expect(targetRowSlots('empty')).toEqual({ folder: true, branch: true, runLocation: true });
   });
 
-  it('drops the folder slot in session mode', () => {
+  it('drops the folder slot in a conversation (session mode)', () => {
     expect(targetRowSlots('session')).toEqual({ folder: false, branch: true, runLocation: true });
+  });
+
+  // Decision 174 (issue #6): the home page docks in session mode and keeps the
+  // folder dropdown — it is where the next conversation's repository is picked.
+  it('keeps the folder slot on the home page', () => {
+    expect(targetRowSlots('session', { home: true })).toEqual({
+      folder: true,
+      branch: true,
+      runLocation: true,
+    });
   });
 });
 
 describe('shouldRenderTargetRow', () => {
-  it('renders nothing without a targetable workspace, in either mode', () => {
-    expect(
-      shouldRenderTargetRow({
-        mode: 'empty',
-        hasTargetableWorkspace: false,
-        showBranchSelect: true,
-        hasRunLocation: true,
-      })
-    ).toBe(false);
-    expect(
-      shouldRenderTargetRow({
-        mode: 'session',
-        hasTargetableWorkspace: false,
-        showBranchSelect: true,
-        hasRunLocation: true,
-      })
-    ).toBe(false);
+  it('renders nothing in empty mode without a targetable workspace', () => {
+    expect(shouldRenderTargetRow({ mode: 'empty', hasTargetableWorkspace: false })).toBe(false);
   });
 
-  it('renders the empty-mode row even when branch and run location are unavailable', () => {
-    expect(
-      shouldRenderTargetRow({
-        mode: 'empty',
-        hasTargetableWorkspace: true,
-        showBranchSelect: false,
-        hasRunLocation: false,
-      })
-    ).toBe(true);
+  it('renders the empty-mode row whenever there is a targetable workspace', () => {
+    expect(shouldRenderTargetRow({ mode: 'empty', hasTargetableWorkspace: true })).toBe(true);
   });
 
-  it('renders nothing in session mode when neither branch nor run location is available', () => {
-    expect(
-      shouldRenderTargetRow({
-        mode: 'session',
-        hasTargetableWorkspace: true,
-        showBranchSelect: false,
-        hasRunLocation: false,
-      })
-    ).toBe(false);
+  // Decision 174 (issue #6, user ruling 2026-10-10): the session row — every
+  // conversation, and the home page — is always drawn, so the card sits at the
+  // same height everywhere: a temporary chat shows 「临时对话」 and the home
+  // page its repository dropdown, even with no repository at all.
+  it('always renders the session-mode row, with or without a targetable workspace', () => {
+    expect(shouldRenderTargetRow({ mode: 'session', hasTargetableWorkspace: true })).toBe(true);
+    expect(shouldRenderTargetRow({ mode: 'session', hasTargetableWorkspace: false })).toBe(true);
   });
 });
 
@@ -1316,7 +1308,9 @@ describe('composerPlaceholder', () => {
           unbound: true,
           attachmentCount: 0,
         })
-      ).toBe(mode === 'session' ? 'Send follow-up…' : 'Send a message…');
+        // Decision 174: no session is the home page, which docks in session
+        // mode but starts a conversation — it asks for the first message.
+      ).toBe('Send a message…');
 
       // The workspace complaint is now scoped to a session that EXISTS: it
       // describes a broken binding, which a chat that was never created cannot

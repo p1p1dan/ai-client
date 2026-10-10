@@ -4158,3 +4158,40 @@ Object.assign(zhTranslations, {
   'Collapse active chats': '收起正在活动',
   'Collapse all repositories': '全部折叠',
 });
+
+// Home page (issue #6)
+/**
+ * dsh-rebase decision 174 (GitHub issue #6, second wave): the home page
+ * (`HomeView`), its entry on the rail and in the session bar, the composer's
+ * work bar there (`TargetFolderSelect`, `BranchColumn`, `TemporaryChatLabel`)
+ * and the notice a locked checkout raises on the home send
+ * (`HomeSendBlockedNotice`). 「昨天」 (`Yesterday`), 「查看更多（N）」,
+ * 「收起」, 「添加仓库」 and 「取消」 reuse existing entries.
+ */
+Object.assign(zhTranslations, {
+  Home: '首页',
+  'Recent conversations': '最近对话',
+  Today: '今天',
+  Earlier: '更早',
+  'Create with PiLab in {{workspace}}': '在 {{workspace}} 与 PiLab 一起进行创造吧',
+  'Create with PiLab': '与 PiLab 一起进行创造吧',
+  'This chat is not bound to a repository; it runs in a private temporary folder.':
+    '这次对话不绑定仓库，会在一个私有的临时目录里进行。',
+  'No repository added yet; this chat runs in a private temporary folder.':
+    '还没有添加仓库，这次对话会在一个私有的临时目录里进行。',
+  'You can add a repository from the bar below.': '在下方工作栏可以添加仓库。',
+  'No repository chosen': '未选仓库',
+  'Choose or add a repository': '选择或添加仓库',
+  'No repository (temporary chat)': '不选仓库（临时对话）',
+  'No repositories yet': '还没有仓库',
+  'Temporary chat': '临时对话',
+  'Temporary chat — it runs in a private temporary folder': '临时对话：在一个私有的临时目录里进行',
+  'New chat (opens the home page)': '新建对话（回到首页）',
+  '{{repo}} has a chat running — the branch can be switched once it ends':
+    '{{repo}} 有对话正在运行，结束后才能切换分支',
+  '{{repo}} has a chat running — it cannot switch to {{branch}} now':
+    '{{repo}} 有对话正在运行，现在不能切到 {{branch}}',
+  'Send on {{branch}} instead': '改在 {{branch}} 上发送',
+  'Send on the current branch instead': '改在当前分支上发送',
+  'Could not switch to {{branch}}; the message was not sent': '无法切换到 {{branch}}，消息没有发送',
+});

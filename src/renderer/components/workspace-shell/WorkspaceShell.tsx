@@ -35,6 +35,7 @@ import {
   resolveShellChrome,
   type ShellAllocation,
 } from './centerLayoutModel';
+import { HomeView } from './HomeView';
 import { LeftDock } from './LeftDock';
 import { deriveTerminalButtonState, resolveRightColumnOccupant } from './rightColumnModel';
 import { SessionBar } from './SessionBar';
@@ -520,7 +521,13 @@ export function WorkspaceShell({
                 terminalState={terminalState}
                 onToggleTerminal={toggleTerminal}
               />
-              <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
+              {/* Decision 174 (issue #6): the home page fills the column while
+                  no conversation is open; ChatWorkspace keeps the composer. */}
+              <ChatWorkspace
+                className="min-w-0 flex-1"
+                onAddRepository={onAddRepository}
+                home={<HomeView />}
+              />
               {editorAllocated && chatVisible && (
                 <ShellResizeHandle
                   side="right"

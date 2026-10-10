@@ -38,7 +38,8 @@ export function RunLocationIndicator({ text, tone }: RunLocationIndicatorProps) 
         <Icon className="size-3.5 text-muted-foreground" />
         {text}
       </TooltipTrigger>
-      <TooltipPopup className="max-w-66">
+      {/* Decision 174: 14px — the sentence is CJK, and coss's popup is 12px. */}
+      <TooltipPopup className="max-w-66 text-meta">
         {t(
           'Read-only indicator. The run location is derived from the repository: local shows This PC, remote shows the connection name; it is hidden entirely when unknown.'
         )}

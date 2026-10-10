@@ -25,7 +25,6 @@ import {
   displaySessionTitle,
   fallbackSessionTitle,
   isPlaceholderTitle,
-  isStartupSeedSession,
   LEGACY_SEED_TITLE,
   NEW_CHAT_TITLE,
 } from '../sessionIndex/sessionTitle';
@@ -220,11 +219,12 @@ describe('chat titles and the start-up chat (decision 138 rule 21)', () => {
     expect(isPlaceholderTitle('会话 srd2ne')).toBe(false);
   });
 
-  it('knows the start-up chat by its id while it is untouched', () => {
-    expect(isStartupSeedSession({ id: 'session-live-abc', title: NEW_CHAT_TITLE })).toBe(true);
-    expect(isStartupSeedSession({ id: 'session-live-abc', title: 'Fix the build' })).toBe(false);
-    expect(isStartupSeedSession({ id: 'session-123', title: NEW_CHAT_TITLE })).toBe(false);
-    expect(isStartupSeedSession({ id: 'anything', title: LEGACY_SEED_TITLE })).toBe(true);
+  // Decision 174 (issue #6, second wave): the start-up chat is gone (the app
+  // opens on the home page), and so is the predicate that recognised it.
+  it('no longer exports a start-up chat recognizer', async () => {
+    const titles = await import('../sessionIndex/sessionTitle');
+    expect('isStartupSeedSession' in titles).toBe(false);
+    expect('STARTUP_SEED_ID_PREFIX' in titles).toBe(false);
   });
 });
 

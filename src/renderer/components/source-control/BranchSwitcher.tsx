@@ -16,6 +16,14 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
+/**
+ * Decision 174 (issue #6): the group names 「本地分支」「远程分支」 at 14px / 400.
+ * `SelectGroupLabel` takes its props after its own class, so this replaces the
+ * primitive's `text-xs font-medium` rather than merging with it — the rest of
+ * its class is restated here.
+ */
+export const BRANCH_GROUP_LABEL_CLASS = 'px-2 py-1.5 text-meta text-muted-foreground';
+
 interface BranchSwitcherProps {
   currentBranch: string | null;
   branches?: GitBranch[];
@@ -123,7 +131,14 @@ export function BranchSwitcher({
         ) : (
           <GitBranchIcon className={cn('shrink-0', size === 'md' ? 'h-3.5 w-3.5' : 'h-3 w-3')} />
         )}
-        <SelectValue className={cn('min-w-0 flex-1 truncate', size === 'xs' && 'text-xs')}>
+        {/* Decision 174 (issue #6): a branch name is Latin and stays 12px in the
+            xs chip; the CJK fallback 「选择分支...」 is lifted to 14px. */}
+        <SelectValue
+          className={cn(
+            'min-w-0 flex-1 truncate',
+            size === 'xs' && (currentBranch ? 'text-xs' : 'text-meta')
+          )}
+        >
           {currentBranch || t('Select branch')}
         </SelectValue>
       </SelectTrigger>
@@ -167,7 +182,8 @@ export function BranchSwitcher({
                     }
                   }}
                   placeholder={t('Branch name...')}
-                  className="text-xs"
+                  // Decision 174: 14px — the placeholder is CJK.
+                  className="text-meta"
                   disabled={isCreatingBranch}
                   autoFocus
                 />
@@ -176,9 +192,10 @@ export function BranchSwitcher({
                 )}
               </div>
             ) : (
+              // Decision 174 (issue #6): 14px — 「创建新分支...」 is CJK.
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-meta text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                 onClick={() => setIsCreating(true)}
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -198,14 +215,18 @@ export function BranchSwitcher({
         {/* Local branches */}
         {!isLoading && localBranches.length > 0 && (
           <SelectGroup>
-            <SelectGroupLabel>{t('Local branches')}</SelectGroupLabel>
+            <SelectGroupLabel className={BRANCH_GROUP_LABEL_CLASS}>
+              {t('Local branches')}
+            </SelectGroupLabel>
             {localBranches.map((branch) => (
               <Tooltip key={branch.name}>
                 <TooltipTrigger render={<span />}>
                   <SelectItem value={branch.name}>
                     <div className="flex items-center gap-2 min-w-0">
                       {branch.current && (
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" />
+                        // The checkout's own branch (decision 174: the check is
+                        // the branch picked, which on the home page may differ).
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
                       )}
                       <span className="min-w-0 truncate">{branch.name}</span>
                     </div>
@@ -220,7 +241,9 @@ export function BranchSwitcher({
         {/* Remote branches */}
         {!isLoading && remoteBranches.length > 0 && (
           <SelectGroup>
-            <SelectGroupLabel>{t('Remote branches')}</SelectGroupLabel>
+            <SelectGroupLabel className={BRANCH_GROUP_LABEL_CLASS}>
+              {t('Remote branches')}
+            </SelectGroupLabel>
             {remoteBranches.map((branch) => (
               <Tooltip key={branch.name}>
                 <TooltipTrigger render={<span />}>
@@ -238,7 +261,8 @@ export function BranchSwitcher({
 
         {/* Empty state */}
         {!isLoading && localBranches.length === 0 && remoteBranches.length === 0 && (
-          <div className="py-4 text-center text-xs text-muted-foreground">
+          // Decision 174: 14px — 「未找到分支」 is CJK.
+          <div className="py-4 text-center text-meta text-muted-foreground">
             {searchQuery ? t('No branches found') : t('No branches available')}
           </div>
         )}
