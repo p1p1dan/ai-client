@@ -87,6 +87,12 @@
  * A turn DSH ends in error carries DSH's sentence and our failure code
  * (`dshFailureCodes.ts`).
  *
+ * Prompt cache (decision 173 B2, issue #9): with `deps.cacheChain` the history
+ * cache also folds the session's cache chain, each route judged by the plan's
+ * protocol and cache retention (`cacheChainReport.ts`); a notable step's
+ * verdict rides its settled usage, and one nothing local explains is logged,
+ * beside the host's prefix evidence (`REQUEST_SCOPE_SERVICE`).
+ *
  * Identity (decisions 006 and 007): Main's durable `sessionFile` is a small
  * stub, `$DSH_HOME/aiclient-sessions/<dshSessionId>.dsh.json`, naming the DSH
  * session `aiclient-<logical id>`. A new session is flushed to disk BEFORE the
@@ -139,6 +145,11 @@ import {
   RUN_WITHOUT_GOAL_TEXT,
 } from '../../shared/planReview.ts';
 import { resolveSettingSources } from '../../shared/settingSources.ts';
+import {
+  type ClientPrefixEvidence,
+  REQUEST_SCOPE_SERVICE,
+  type RequestScopeView,
+} from '../../shared/types/requestScope.ts';
 import {
   type DshGoalActivation,
   type PermissionDecisionId,
@@ -201,6 +212,7 @@ import type { AttachedGate, DshPermissionHost } from '../permissions/permissionH
 import { admitUserContent, type DshAttachmentStore, type DshUserContent } from './attachments.ts';
 import { BridgeSessionError } from './bridgeErrors.ts';
 import type { BridgeSessionRuntime, BridgeSessionRuntimeOptions } from './bridgeRpcServer.ts';
+import { dshCacheChainOptions } from './cacheChainReport.ts';
 import {
   compactOutcome,
   DSH_COMMAND_ERROR_TYPE,
@@ -387,6 +399,11 @@ export interface DshBridgeOptionalServices {
   tools: DshToolRegistryView;
   /** `ctx.planMode` (decision 169): DSH's plan mode, following our gate's. */
   planMode: DshPlanModeView;
+  /**
+   * Decision 173 B1: the host's request scope, provided by host.ts; its prefix
+   * evidence goes beside a step's cache verdict (`liveEvents.ts`).
+   */
+  [REQUEST_SCOPE_SERVICE]: RequestScopeView;
 }
 
 /**
@@ -580,6 +597,14 @@ export interface DshBridgeDeps {
    * Windows 8.3 expansion here.
    */
   realpathSync?: SyncRealpath;
+  /**
+   * Decision 173 B2 (issue #9): follow the session's prompt-cache chain
+   * (`historyCache.ts`), routes judged by `modelPlan` (`cacheChainReport.ts`),
+   * for the settled usage's `cache` and the `cache-chain:` log lines.
+   * plugin.ts turns it on unless `AICLIENT_RUNTIME_CACHE_CHAIN=0`; absent or
+   * false, nothing is folded, sent or logged.
+   */
+  cacheChain?: boolean;
 }
 
 /**
@@ -822,7 +847,13 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       () => this.ctx.get?.('tools'),
       () => this.handle?.agent
     );
-    this.historyCache = new DshHistoryCache(this.query, options.log, presentCall);
+    // Decision 173 B2: the cache chain is folded with the timeline, per session.
+    this.historyCache = new DshHistoryCache(
+      this.query,
+      options.log,
+      presentCall,
+      deps.cacheChain ? dshCacheChainOptions(() => deps.modelPlan?.()) : undefined
+    );
     this.retired = new DshRetiredHistory(this.query, options.log);
     this.router = new DshModelRouter(() => deps.modelPlan?.(), options.log);
     this.modelId = options.model;
@@ -890,6 +921,9 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       },
       now: this.now,
       presentCall,
+      cacheStep: (seq) => this.historyCache.cacheStep(seq),
+      prefixEvidence: () => this.prefixEvidence(),
+      log: (line) => this.options.log?.(line),
     });
     this.jobs = new DshJobsTracker({
       owner: () => this.dshSessionId,
@@ -931,6 +965,20 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
         | undefined;
     } catch (error) {
       this.options.log?.('[dsh-bridge] usage projections unreadable', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Decision 173 B1: the host's newest prefix evidence on this session's
+   * agent requests. Undefined from a host without the request scope (its
+   * switch off, an older host), and on a failed read.
+   */
+  private prefixEvidence(): ClientPrefixEvidence | undefined {
+    if (!this.dshSessionId) return undefined;
+    try {
+      return this.ctx.get?.(REQUEST_SCOPE_SERVICE)?.evidenceFor(this.dshSessionId);
+    } catch {
       return undefined;
     }
   }

@@ -12,11 +12,22 @@
 
 import { MODEL_NOT_CONFIGURED } from '../../shared/dshFailureCodes.ts';
 import { type DshRouteMode, resolveRoute } from '../../shared/dshModelPlan/route.ts';
-import type { DshEffortLevel, DshModelPlan } from '../../shared/dshModelPlan/types.ts';
+import type {
+  DshEffortLevel,
+  DshModelPlan,
+  DshPlanRoute,
+} from '../../shared/dshModelPlan/types.ts';
 import { BridgeSessionError } from './bridgeErrors.ts';
 
 /** The plan as the host provides it (`aiclientModelPlan`): no nonce, nothing secret. */
-export type DshBridgeModelPlan = Pick<DshModelPlan, 'revision' | 'defaultModel' | 'index'>;
+export type DshBridgeModelPlan = Pick<DshModelPlan, 'revision' | 'defaultModel' | 'index'> & {
+  /**
+   * The routes, by the name DSH gives a step's `provider`, as far as decision
+   * 173 reads them (`cacheChainReport.ts`): protocol and cache retention.
+   * Routing never reads them.
+   */
+  readonly routes?: Readonly<Record<string, Partial<Pick<DshPlanRoute, 'api' | 'cacheRetention'>>>>;
+};
 
 /** What `installModelSelection` routes a request to (`@deepseek-ai/dsh-agent`). */
 export interface DshModelSelection {

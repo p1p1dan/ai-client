@@ -1,4 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  applyCacheChain,
+  type CacheChainOptions,
+  type CacheStepVerdict,
+  initCacheChain,
+  viewCacheChain,
+} from '../../../shared/cacheChain.ts';
 import { projectDshHistory } from '../../../shared/dshHistory/projection.ts';
 import {
   AICLIENT_LOOP_GUARD_DENIAL,
@@ -7,7 +14,9 @@ import {
 } from '../../../shared/dshHistory/types.ts';
 import type { ToolCallPresentation } from '../../../shared/dshToolPresentation.ts';
 import { readPiUsagePayload } from '../../../shared/piUsage.ts';
+import type { ClientPrefixEvidence } from '../../../shared/types/requestScope.ts';
 import { TURN_CEILING_CANCEL_REASON } from '../../loopGuard/constants.ts';
+import type { DshCacheStep } from '../historyCache.ts';
 import {
   type BridgeDraft,
   type CommandSendView,
@@ -45,15 +54,28 @@ function harness(
     command?: CommandSendView;
     /** Decision 131: the plugin-title presenter the runtime hands in. */
     presentCall?: (name: string, args: unknown) => ToolCallPresentation | undefined;
+    /**
+     * Decision 173: fold the session's cache chain with these route options,
+     * each event before the translation sees it, as the runtime's history
+     * cache does. Absent: the check is off.
+     */
+    chain?: CacheChainOptions;
+    /** Decision 173: stands in for the history cache's answer instead of `chain`. */
+    cacheStep?: (seq: number) => DshCacheStep | undefined;
+    /** Decision 173: the host's newest prefix evidence on the session's requests. */
+    evidence?: () => ClientPrefixEvidence | undefined;
   } = {}
 ) {
   const events: Emitted[] = [];
+  const lines: string[] = [];
   let turn: LiveTurn | null =
     options.turn === undefined ? { requestId: 'turn-1', synthetic: false } : options.turn;
   let clock = 1_000;
   let seq = 0;
   let pendingCommand = options.command;
   const commands = new Map<string, CommandSendView>();
+  const chain = options.chain ? initCacheChain() : undefined;
+  let lastStep: { seq: number; verdict: CacheStepVerdict } | undefined;
   const live = new DshLiveEvents({
     // As the runtime: an event's own requestId (a command send's) wins over the turn's.
     emit: (event: BridgeDraft) =>
@@ -88,11 +110,28 @@ function harness(
     commandSend: (commandId) => commands.get(commandId),
     now: () => clock,
     ...(options.presentCall ? { presentCall: options.presentCall } : {}),
+    ...(options.cacheStep
+      ? { cacheStep: options.cacheStep }
+      : chain
+        ? {
+            cacheStep: (at: number) =>
+              lastStep?.seq === at
+                ? { verdict: lastStep.verdict, totals: viewCacheChain(chain).totals }
+                : undefined,
+          }
+        : {}),
+    ...(options.evidence ? { prefixEvidence: options.evidence } : {}),
+    log: (line: string) => lines.push(line),
   });
   const durable = (type: string, data: Record<string, unknown>) => {
     seq += 1;
     const event = { type, seq, time: 1_790_000_000_000 + seq, data };
     log.push(event);
+    // The history cache folds the event first (`dshSessionRuntime.ts`).
+    if (chain && options.chain) {
+      const verdict = applyCacheChain(chain, event, options.chain);
+      if (verdict) lastStep = { seq, verdict };
+    }
     live.onSessionEvent(event);
     return event;
   };
@@ -104,6 +143,8 @@ function harness(
     live,
     events,
     log,
+    /** Decision 173: the lines written to the bridge's log. */
+    lines,
     durable,
     frame,
     chunk,
@@ -848,5 +889,220 @@ describe('DshLiveEvents — command sends (P1-4d2, decisions 099 rule 9, 113)', 
     h.durable('command/run', { commandId: 'cmd-a-4', name: 'compact', source: { kind: 'user' } });
     h.durable('command/done', { commandId: 'cmd-a-4', kind: 'success', text: 'Compacted 3' });
     expect(h.events).toEqual([]);
+  });
+});
+
+describe('DshLiveEvents — the prompt cache of each step (decision 173 B2)', () => {
+  const CLAUDE = { kind: 'model', provider: 'claude', model: 'claude-opus-5-5' };
+  const GLM = { kind: 'model', provider: 'zhipu-ai-glm', model: 'glm-5.3' };
+  /** As `dshCacheChainOptions` answers for a plan whose one anthropic-messages route is `claude`. */
+  const FOLLOW_CLAUDE: CacheChainOptions = {
+    cacheAware: (provider) => provider === 'claude',
+    ttlMsFor: () => undefined,
+  };
+  type Harness = ReturnType<typeof harness>;
+
+  /**
+   * One model step: its start, `request` (what the host's fetch wrapper saw
+   * while the step waited), its answer with usage, its end. Returns the
+   * step's settled usage.
+   */
+  function step(
+    h: Harness,
+    turn: number,
+    index: number,
+    usage: { read?: number; write?: number },
+    {
+      source = CLAUDE,
+      request,
+    }: { source?: Record<string, unknown>; request?: (startedAt: number) => void } = {}
+  ): Record<string, unknown> | undefined {
+    const start = h.durable('step/start', { turn, step: index });
+    request?.(start.time);
+    h.durable('assistant/message', {
+      turn,
+      step: index,
+      message: {
+        id: `a${turn}.${index}`,
+        role: 'assistant',
+        source,
+        content: [{ type: 'text', text: 'ok' }],
+      },
+      usage: {
+        inputTokens: 2,
+        outputTokens: 10,
+        ...(usage.read ? { cacheReadTokens: usage.read } : {}),
+        ...(usage.write ? { cacheWriteTokens: usage.write } : {}),
+      },
+    });
+    h.durable('step/end', { turn, step: index });
+    return h.of('usage.updated').at(-1)?.payload;
+  }
+
+  /** Two steps of an append-only chain: the second reads what the first cached. */
+  function warmChain(h: Harness): void {
+    step(h, 1, 1, { write: 10_000 });
+    step(h, 1, 2, { read: 10_000, write: 2_000 });
+  }
+
+  it('[D173-LIVE-1] sends a rebuild nothing explains with its settled usage, and logs it', () => {
+    let evidence: ClientPrefixEvidence | undefined;
+    const h = harness({ chain: FOLLOW_CLAUDE, evidence: () => evidence });
+    expect(step(h, 1, 1, { write: 10_000 })).not.toHaveProperty('cache');
+    expect(step(h, 1, 2, { read: 10_000, write: 2_000 })).not.toHaveProperty('cache');
+    const settled = step(
+      h,
+      1,
+      3,
+      { write: 13_000 },
+      {
+        request: (at) => {
+          evidence = { verdict: { kind: 'append', added: 2 }, requestSeq: 3, at };
+        },
+      }
+    );
+    const cache = {
+      turn: 1,
+      step: 3,
+      kind: 'rebuild',
+      explained: false,
+      lost: 12_002,
+      prompt: 13_002,
+      read: 0,
+      write: 13_000,
+      prevPrompt: 12_002,
+      prefix: 'append',
+      session: { unexplained: 1, unexplainedLostTokens: 12_002 },
+    };
+    expect(settled?.cache).toEqual(cache);
+    expect(readPiUsagePayload(settled)?.cache).toEqual(cache);
+    expect(h.lines).toEqual([
+      'cache-chain: upstream cache inconsistency session=aiclient-s1 step=t1s3 kind=rebuild prompt=13002 prev=12002 read=0 write=13000 lost=12002 matched=- prefix=append',
+    ]);
+  });
+
+  it('[D173-LIVE-2] sends an explained rebuild with its causes, and logs nothing', () => {
+    const h = harness({ chain: FOLLOW_CLAUDE });
+    warmChain(h);
+    h.durable('plan/mode', { active: false });
+    const settled = step(h, 1, 3, { write: 13_000 });
+    expect(settled?.cache).toMatchObject({
+      kind: 'rebuild',
+      explained: true,
+      causes: ['plan-mode'],
+      session: { unexplained: 0, unexplainedLostTokens: 0 },
+    });
+    expect(h.lines).toEqual([]);
+  });
+
+  it('[D173-LIVE-3] says nothing while the check is switched off', () => {
+    const h = harness({
+      evidence: () => ({
+        verdict: {
+          kind: 'diverged',
+          at: 'system',
+          truncated: false,
+          prevMessages: 2,
+          messages: 3,
+        },
+        requestSeq: 1,
+        at: 1_790_000_000_000,
+      }),
+    });
+    warmChain(h);
+    const rebuilt = step(h, 1, 3, { write: 13_000 });
+    expect(rebuilt).toMatchObject({ input: 2, cacheWrite: 13_000 });
+    expect(h.of('usage.updated').some((event) => 'cache' in event.payload)).toBe(false);
+    expect(h.lines).toEqual([]);
+  });
+
+  it('[D173-LIVE-4] never judges a route it does not follow', () => {
+    const h = harness({ chain: FOLLOW_CLAUDE });
+    step(h, 1, 1, { write: 50_000 }, { source: GLM });
+    step(h, 1, 2, { write: 60_000 }, { source: GLM });
+    step(h, 1, 3, { read: 1_000 }, { source: GLM });
+    expect(h.of('usage.updated').some((event) => 'cache' in event.payload)).toBe(false);
+    expect(h.lines).toEqual([]);
+  });
+
+  it('[D173-LIVE-5] flags our own request diverging when nothing local explains it', () => {
+    let evidence: ClientPrefixEvidence | undefined;
+    const diverged = (requestSeq: number) => (at: number) => {
+      evidence = {
+        verdict: {
+          kind: 'diverged',
+          at: 'messages',
+          index: 1,
+          role: 'assistant',
+          truncated: false,
+          prevMessages: 3,
+          messages: 5,
+        },
+        requestSeq,
+        at,
+      };
+    };
+    const h = harness({ chain: FOLLOW_CLAUDE, evidence: () => evidence });
+    step(h, 1, 1, { write: 10_000 });
+    // A warm step sends no verdict, but the divergence is ours to look at.
+    const warm = step(h, 1, 2, { read: 10_000, write: 2_000 }, { request: diverged(2) });
+    expect(warm).not.toHaveProperty('cache');
+    expect(h.lines).toEqual([
+      'cache-chain: client request diverged without a logged cause session=aiclient-s1 step=t1s2 at=messages index=1/5 role=assistant truncated=false request=2',
+    ]);
+    // A compaction since the step before accounts for the next one.
+    h.durable('compaction/start', { compactionId: 'c1', turn: 1 });
+    h.durable('compaction/end', { compactionId: 'c1', turn: 1 });
+    const compacted = step(h, 1, 3, { read: 4_000, write: 1_000 }, { request: diverged(3) });
+    expect(compacted?.cache).toMatchObject({
+      kind: 'shrink',
+      explained: true,
+      causes: ['compaction'],
+      prefix: 'diverged',
+    });
+    expect(h.lines).toHaveLength(1);
+  });
+
+  it("[D173-LIVE-6] gives a step only its own request's evidence", () => {
+    let evidence: ClientPrefixEvidence | undefined;
+    const seen = (requestSeq: number) => (at: number) => {
+      evidence = { verdict: { kind: 'append', added: 1 }, requestSeq, at };
+    };
+    const h = harness({ chain: FOLLOW_CLAUDE, evidence: () => evidence });
+    step(h, 1, 1, { write: 10_000 }, { request: seen(1) });
+    // The watch saw nothing of step 2's request: step 1's evidence is not its.
+    const unseen = step(h, 1, 2, { write: 12_000 });
+    expect(unseen?.cache).toMatchObject({ kind: 'rebuild' });
+    expect(unseen?.cache).not.toHaveProperty('prefix');
+    expect(h.lines.at(-1)).toMatch(/ prefix=-$/);
+
+    // A retried step: the host keeps what it found on the first attempt (the
+    // retry repeats that request), seen inside the step all the same.
+    const start = h.durable('step/start', { turn: 1, step: 3 });
+    seen(2)(start.time);
+    h.durable('assistant/attempt', { turn: 1, step: 3, attemptId: 'att-3a' });
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 3,
+      message: { id: 'a1.3', role: 'assistant', source: CLAUDE, content: [] },
+      usage: { inputTokens: 2, outputTokens: 10, cacheWriteTokens: 13_000 },
+    });
+    expect(h.of('usage.updated').at(-1)?.payload.cache).toMatchObject({
+      kind: 'rebuild',
+      prefix: 'append',
+    });
+    expect(h.lines.at(-1)).toMatch(/ step=t1s3 .* prefix=append$/);
+  });
+
+  it('[D173-LIVE-7] keeps the bill when the verdict cannot be read', () => {
+    const h = harness({
+      cacheStep: () => {
+        throw new Error('cache gone');
+      },
+    });
+    const settled = step(h, 1, 1, { write: 10_000 });
+    expect(settled).toMatchObject({ input: 2, output: 10, cacheWrite: 10_000 });
+    expect(settled).not.toHaveProperty('cache');
+    expect(h.lines).toEqual([]);
   });
 });

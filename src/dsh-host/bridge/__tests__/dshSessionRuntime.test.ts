@@ -30,6 +30,7 @@ import {
   type SessionStub,
   stubPathFor,
 } from '../dshSessionRuntime.ts';
+import type { DshBridgeModelPlan } from '../modelRoute.ts';
 import { testPermissionHost } from './permissionTestHost.ts';
 import { TEST_PLAN } from './testPlan.ts';
 
@@ -1580,5 +1581,118 @@ describe('DshSessionRuntime — questions (P1-4d3, decisions 098 and 114)', () =
     await vi.waitFor(() =>
       expect(responseOf('r3')).toMatchObject({ ok: true, result: { handled: false } })
     );
+  });
+});
+
+describe('DshSessionRuntime — the prompt cache of each step (decision 173 B2)', () => {
+  type Emitted = { type: string; payload?: Record<string, unknown> };
+  const T0 = 1_790_000_000_000;
+  /** The test plan, with its routes as the host provides them: the gateway on anthropic-messages. */
+  const ROUTED: DshBridgeModelPlan = {
+    ...TEST_PLAN,
+    routes: {
+      'aiclient-gateway': { api: 'anthropic-messages', cacheRetention: 'long' },
+      'thinker~2': { api: 'openai-completions', cacheRetention: 'long' },
+    },
+  };
+  const at = (seq: number, type: string, data: unknown): DshLogEvent => ({
+    type,
+    seq,
+    time: T0 + seq,
+    data,
+  });
+  function step(seq: number, index: number, provider: string, write: number): DshLogEvent[] {
+    return [
+      at(seq, 'step/start', { turn: 1, step: index }),
+      at(seq + 1, 'assistant/message', {
+        turn: 1,
+        step: index,
+        message: {
+          id: `a${seq + 1}`,
+          role: 'assistant',
+          source: { kind: 'model', provider, model: 'fake-1' },
+          content: [{ type: 'text', text: 'ok' }],
+        },
+        usage: { inputTokens: 2, outputTokens: 10, cacheWriteTokens: write },
+      }),
+      at(seq + 2, 'step/end', { turn: 1, step: index }),
+    ];
+  }
+  /** One turn on `provider`: a cold step, then one that reads none of it back. */
+  const rebuilt = (provider = 'aiclient-gateway') => [
+    at(0, 'turn/start', { turn: 1 }),
+    ...step(1, 1, provider, 10_000),
+    ...step(4, 2, provider, 12_000),
+  ];
+  /** What the host's request scope says of step 2's request. */
+  const STEP_2_REQUEST = { verdict: { kind: 'append', added: 2 }, requestSeq: 2, at: T0 + 4 };
+
+  /** A new session on a context that also offers the request scope; its emitted events and log lines. */
+  async function opened(depsOverride: Partial<DshBridgeDeps>) {
+    const dsh = fakeDsh();
+    const evidenceFor = vi.fn(() => STEP_2_REQUEST);
+    const ctx = {
+      ...dsh.ctx,
+      get: (name: string) => (name === 'aiclientRequestScope' ? { evidenceFor } : undefined),
+    } as unknown as DshBridgeContext;
+    const emitted: Emitted[] = [];
+    const lines: string[] = [];
+    const bridge = runtime(
+      ctx,
+      {
+        emit: (event) => emitted.push(event as Emitted),
+        log: (...args) => {
+          if (typeof args[0] === 'string' && args[0].startsWith('cache-chain:'))
+            lines.push(args[0]);
+        },
+      },
+      depsOverride
+    );
+    await bridge.bootstrap();
+    const settled = () =>
+      emitted
+        .filter((event) => event.type === 'usage.updated')
+        .map((event) => event.payload?.cache);
+    return { dsh, evidenceFor, settled, lines };
+  }
+
+  it('[D173-RT-1] sends and logs the rebuild of a followed route, with its request’s evidence', async () => {
+    const { dsh, evidenceFor, settled, lines } = await opened({
+      cacheChain: true,
+      modelPlan: () => ROUTED,
+    });
+    for (const event of rebuilt()) dsh.append(event);
+    expect(evidenceFor).toHaveBeenCalledWith(DSH_ID);
+    expect(settled()).toEqual([
+      undefined,
+      {
+        turn: 1,
+        step: 2,
+        kind: 'rebuild',
+        explained: false,
+        lost: 10_002,
+        prompt: 12_002,
+        read: 0,
+        write: 12_000,
+        prevPrompt: 10_002,
+        prefix: 'append',
+        session: { unexplained: 1, unexplainedLostTokens: 10_002 },
+      },
+    ]);
+    expect(lines).toEqual([
+      `cache-chain: upstream cache inconsistency session=${DSH_ID} step=t1s2 kind=rebuild prompt=12002 prev=10002 read=0 write=12000 lost=10002 matched=- prefix=append`,
+    ]);
+  });
+
+  it.each([
+    ['switched off', { modelPlan: () => ROUTED }, 'aiclient-gateway'],
+    ['on a route of another protocol', { cacheChain: true, modelPlan: () => ROUTED }, 'thinker~2'],
+    ['with a plan that names no route', { cacheChain: true }, 'aiclient-gateway'],
+  ])('[D173-RT-2] says nothing %s', async (_label, depsOverride, provider) => {
+    const { dsh, evidenceFor, settled, lines } = await opened(depsOverride);
+    for (const event of rebuilt(provider)) dsh.append(event);
+    expect(settled()).toEqual([undefined, undefined]);
+    expect(lines).toEqual([]);
+    if (!('cacheChain' in depsOverride)) expect(evidenceFor).not.toHaveBeenCalled();
   });
 });

@@ -14,7 +14,11 @@
  *   `assistant/message.usage`           usage.updated, settled, with the context
  *                                       occupancy (`contextPressure`) and the
  *                                       session total (`tokenUsage`) of
- *                                       dsh-token-meter; no cost (rule 1)
+ *                                       dsh-token-meter; no cost (rule 1); a
+ *                                       notable step's cache verdict as `cache`,
+ *                                       and the `cache-chain:` log lines of an
+ *                                       unexplained one (decision 173 B2,
+ *                                       `cacheChainReport.ts`)
  *   `tool/result`                       tool.completed with the row flags and the
  *                                       review of DSH's diff card (rules 5, 6)
  *   `llm/retry` / `llm/retry-started`   the retry banner, and its end (rule 3)
@@ -68,21 +72,26 @@ import type { ToolCallPresentation } from '../../shared/dshToolPresentation.ts';
 import type { PiSessionUsage } from '../../shared/piTurnRollup.ts';
 import {
   buildPiInterimUsagePayload,
+  buildPiUsageCacheStep,
   buildPiUsagePayload,
   type PiContextUsage,
+  type PiUsageCacheStep,
 } from '../../shared/piUsage.ts';
 import {
   countStreamingLines,
   STREAMING_TOOL_ARGS_KEY,
   type StreamingToolArgs,
 } from '../../shared/streamingToolArgs.ts';
+import type { ClientPrefixEvidence } from '../../shared/types/requestScope.ts';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import type { TurnOrigin } from '../../shared/types/sessionHistory.ts';
+import { cacheChainLogLines, stepPrefixEvidence } from './cacheChainReport.ts';
 import {
   DSH_COMMAND_ERROR_TYPE,
   DSH_COMMAND_MESSAGE_PREFIX,
   DSH_COMMAND_RESULT_TYPE,
 } from './commands.ts';
+import type { DshCacheStep } from './historyCache.ts';
 
 // ---- shapes -----------------------------------------------------------------
 
@@ -175,6 +184,21 @@ export interface DshLiveEventsHost {
    * Absent: no row carries one.
    */
   presentCall?(name: string, args: unknown): ToolCallPresentation | undefined;
+  /**
+   * Decision 173 B2: the cache verdict of the step the `assistant/message`
+   * at `seq` recorded (`DshHistoryCache.cacheStep`: the history cache folds
+   * each event before this translation sees it). Absent, or undefined, while
+   * the check is off or the cache has not folded that event: no `cache`, no
+   * log line.
+   */
+  cacheStep?(seq: number): DshCacheStep | undefined;
+  /**
+   * Decision 173 B1: the host's newest prefix evidence on this session's
+   * agent requests (`RequestScopeView.evidenceFor`), when it keeps any.
+   */
+  prefixEvidence?(): ClientPrefixEvidence | undefined;
+  /** One line for the bridge's log (the app log); absent, nothing is written. */
+  log?(line: string): void;
 }
 
 /** A send that carried a command line (P1-4d2): its request and the renderer's attempt. */
@@ -360,6 +384,13 @@ export class DshLiveEvents {
    * model event), and whether a head came out of it (P1-4d1, decision 072).
    */
   private batch: { first: boolean; headed: boolean } = { first: false, headed: false };
+  /** Decision 173: the current step's `step/start`, where its window opens (`stepPrefixEvidence`). */
+  private stepStart: { turn: number; step: number; at: number } | undefined;
+  /**
+   * Decision 173: the prefix evidence the last step was given, so no request
+   * goes to two. Kept across turns, as the host keeps it.
+   */
+  private given: { sessionId: string; evidence: ClientPrefixEvidence } | undefined;
 
   constructor(host: DshLiveEventsHost) {
     this.host = host;
@@ -377,6 +408,7 @@ export class DshLiveEvents {
     this.execStarted.clear();
     this.backgroundJobs.clear();
     this.batch = { first: false, headed: false };
+    this.stepStart = undefined;
   }
 
   // ---- P1-7b: execution start and live output ----------------------------------------
@@ -685,9 +717,19 @@ export class DshLiveEvents {
       case 'user/message':
         this.onUserMessage(event);
         return;
+      case 'step/start': {
+        const turn = numberOf(data.turn);
+        const step = numberOf(data.step);
+        const at = numberOf(event.time);
+        this.stepStart =
+          turn !== undefined && step !== undefined && at !== undefined
+            ? { turn, step, at }
+            : undefined;
+        return;
+      }
       case 'assistant/message':
         this.batch.first = false;
-        this.onAssistantMessage(data);
+        this.onAssistantMessage(data, event);
         return;
       case 'assistant/attempt':
         this.batch.first = false;
@@ -855,7 +897,7 @@ export class DshLiveEvents {
     this.emit({ type: 'message.completed', payload: { messageId } });
   }
 
-  private onAssistantMessage(data: Row): void {
+  private onAssistantMessage(data: Row, event: DshSessionEvent): void {
     const message = this.stepMessage(Number(data.turn), Number(data.step));
     const content = (recordOf(data.message)?.content as unknown[] | undefined) ?? [];
     content.forEach((block, index) => {
@@ -877,16 +919,17 @@ export class DshLiveEvents {
         }
       }
     });
-    this.settledUsage(data);
+    this.settledUsage(data, event);
   }
 
   /**
    * Decision 099 rule 1: the step's own usage, settled, beside the context
    * occupancy and the session's running total — all dsh-token-meter's. A
    * step Stop cut mid-stream reports none; it says so (`unreported`, T125)
-   * rather than a row of zeros that reads as "free".
+   * rather than a row of zeros that reads as "free". Decision 173: a notable
+   * step also carries its cache verdict (`cache`).
    */
-  private settledUsage(data: Row): void {
+  private settledUsage(data: Row, event: DshSessionEvent): void {
     const usage = recordOf(data.usage);
     if (!usage && data.interrupted !== true) return;
     const step = usage ? turnUsageOf(usage) : { input: 0, output: 0 };
@@ -896,9 +939,39 @@ export class DshLiveEvents {
       contextOf(view?.contextPressure, usage ? step : undefined),
       sessionOf(view?.tokenUsage, this.host.usageSteps()),
       null,
-      { unreported: !usage }
+      { unreported: !usage, cache: usage ? this.cacheStep(event) : null }
     );
     if (payload) this.emit({ type: 'usage.updated', payload });
+  }
+
+  /**
+   * Decision 173 B2: the verdict the history cache gave the step this
+   * `assistant/message` recorded — written to the log when no local event
+   * explains it, or when its request diverged without a cause — and, when
+   * notable, as the settled usage's `cache`. Nothing here may cost the step
+   * its usage.
+   */
+  private cacheStep(event: DshSessionEvent): PiUsageCacheStep | null {
+    try {
+      const found = this.host.cacheStep?.(event.seq);
+      if (!found) return null;
+      const { verdict, totals } = found;
+      const sessionId = this.host.dshSessionId();
+      const start = this.stepStart;
+      const evidence = stepPrefixEvidence(
+        this.host.prefixEvidence?.(),
+        {
+          from: start?.turn === verdict.turn && start.step === verdict.step ? start.at : undefined,
+          to: numberOf(event.time),
+        },
+        this.given?.sessionId === sessionId ? this.given.evidence : undefined
+      );
+      if (evidence) this.given = { sessionId, evidence };
+      for (const line of cacheChainLogLines(sessionId, verdict, evidence)) this.host.log?.(line);
+      return buildPiUsageCacheStep(verdict, totals, evidence?.verdict.kind);
+    } catch {
+      return null;
+    }
   }
 
   private onToolCall(data: Row): void {

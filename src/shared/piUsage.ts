@@ -27,8 +27,19 @@
  * field rather than deriving one from character counts.
  */
 
+import {
+  CACHE_CAUSES,
+  CACHE_STEP_KINDS,
+  type CacheCause,
+  type CacheChainTotals,
+  type CacheStepKind,
+  type CacheStepRef,
+  type CacheStepVerdict,
+  isNotableVerdict,
+} from './cacheChain.ts';
 import type { PiSessionUsage } from './piTurnRollup';
 import { readSessionUsage } from './piTurnRollup.ts';
+import type { ClientPrefixVerdict } from './types/requestScope.ts';
 
 /**
  * Token and cost totals for one turn.
@@ -120,6 +131,51 @@ export type PiUsagePayload = PiTurnUsage & {
    * instead of them. Only ever `true`, same shape and reason as `pending`.
    */
   unreported?: true;
+  /**
+   * Decision 173 (issue #9) — what became of this step's prompt cache. Only on
+   * a settled payload, and only when the step is notable: see
+   * {@link PiUsageCacheStep}.
+   */
+  cache?: PiUsageCacheStep;
+};
+
+/**
+ * Decision 173 (issue #9) — one step's prompt-cache verdict (`cacheChain.ts`),
+ * beside its bill.
+ *
+ * Sent only on a notable step (`isNotableVerdict`: a rebuild, a shrink, or a
+ * read of an older step's cache) of a route the bridge follows
+ * (anthropic-messages). A warm, cold, untracked or turn-shrink step carries
+ * no `cache`, and nothing does while the check is switched off
+ * (`AICLIENT_RUNTIME_CACHE_CHAIN=0`). Numbers only, never content.
+ */
+export type PiUsageCacheStep = {
+  /** DSH's coordinates of the step this payload settles. */
+  turn: number;
+  step: number;
+  kind: CacheStepKind;
+  /** A local event since the step before explains it (`causes`); false is what the alert is about. */
+  explained: boolean;
+  /** Those local events, in order of first sight; omitted when there are none. */
+  causes?: CacheCause[];
+  /** Cached tokens processed again: the step before's prompt less this read; omitted when 0. */
+  lost?: number;
+  /** input + read + write. */
+  prompt: number;
+  read: number;
+  write: number;
+  /** The step before's prompt. */
+  prevPrompt?: number;
+  /** The older step whose cached size this read reproduces: requests alternate between caches. */
+  matched?: CacheStepRef;
+  /**
+   * How the request that served this step related to the session's previous
+   * request (decision 173 B1, the host's prefix watch), when the bridge could
+   * tell which request that was. `append` and `same` clear the client.
+   */
+  prefix?: ClientPrefixVerdict['kind'];
+  /** The session so far: notable steps nothing local explains, and the tokens their rebuilds and shrinks lost. */
+  session: Pick<CacheChainTotals, 'unexplained' | 'unexplainedLostTokens'>;
 };
 
 /** The two arcs of an occupancy ring, plus the figures printed beside them. */
@@ -326,19 +382,21 @@ function streamStarted(message: Record<string, unknown>): boolean {
  *
  * `marks.unreported` is the caller's {@link isUnreportedTurnUsage} verdict on
  * the message this usage came from; the numbers are passed through unchanged
- * either way.
+ * either way. `marks.cache` is the step's {@link buildPiUsageCacheStep}, kept
+ * to the keys the reader knows.
  */
 export function buildPiUsagePayload(
   usage: unknown,
   contextUsage?: unknown,
   sessionUsage?: PiSessionUsage | null,
   delegatedUsage?: PiTurnUsage | null,
-  marks: { unreported?: boolean } = {}
+  marks: { unreported?: boolean; cache?: PiUsageCacheStep | null } = {}
 ): PiUsagePayload | null {
   const source = record(usage);
   if (!source) return null;
   const cost = record(source.cost);
   const context = readContextUsage(contextUsage);
+  const cache = readCacheStep(marks.cache);
   // Not `?? 0`: an absent `reasoning` is "this call reported no breakdown",
   // and folding it into a `0` would make it indistinguishable from a provider
   // that measured zero (see the field's doc comment on `PiTurnUsage`).
@@ -358,6 +416,121 @@ export function buildPiUsagePayload(
     ...(delegatedUsage ? { delegated: delegatedUsage } : {}),
     // T125: omitted rather than `false`, so a merge cannot leave it behind.
     ...(marks.unreported ? { unreported: true as const } : {}),
+    // Decision 173: a notable step's cache verdict only.
+    ...(cache ? { cache } : {}),
+  };
+}
+
+/**
+ * Decision 173: the settled payload's `cache` for one step's verdict, or
+ * `null` when the step is not notable (`isNotableVerdict`) — a warm, cold,
+ * untracked or turn-shrink step says nothing. `totals` are the session's as
+ * of this step; `prefix` is the kind of the prefix evidence the bridge
+ * matched to the step's request, when it found one.
+ */
+export function buildPiUsageCacheStep(
+  verdict: CacheStepVerdict,
+  totals: Pick<CacheChainTotals, 'unexplained' | 'unexplainedLostTokens'>,
+  prefix?: ClientPrefixVerdict['kind']
+): PiUsageCacheStep | null {
+  if (!isNotableVerdict(verdict)) return null;
+  return {
+    turn: verdict.turn,
+    step: verdict.step,
+    kind: verdict.kind,
+    explained: verdict.explained,
+    ...(verdict.causes.length > 0 ? { causes: [...verdict.causes] } : {}),
+    ...(verdict.lost > 0 ? { lost: verdict.lost } : {}),
+    prompt: verdict.prompt,
+    read: verdict.read,
+    write: verdict.write,
+    ...(verdict.prevPrompt !== undefined ? { prevPrompt: verdict.prevPrompt } : {}),
+    ...(verdict.matched
+      ? { matched: { turn: verdict.matched.turn, step: verdict.matched.step } }
+      : {}),
+    ...(prefix ? { prefix } : {}),
+    session: {
+      unexplained: totals.unexplained,
+      unexplainedLostTokens: totals.unexplainedLostTokens,
+    },
+  };
+}
+
+const PREFIX_KINDS: ReadonlySet<unknown> = new Set<ClientPrefixVerdict['kind']>([
+  'first',
+  'same',
+  'append',
+  'diverged',
+]);
+
+/** A token count: finite and not negative. */
+function tokenCount(value: unknown): number | null {
+  const count = finiteNumber(value);
+  return count !== null && count >= 0 ? count : null;
+}
+
+function readStepRef(value: unknown): CacheStepRef | null {
+  const source = record(value);
+  const turn = finiteNumber(source?.turn);
+  const step = finiteNumber(source?.step);
+  return turn !== null && step !== null ? { turn, step } : null;
+}
+
+/**
+ * Narrow a `cache` block to the keys {@link PiUsageCacheStep} names. `null`
+ * when any required one is missing or malformed: half a verdict would read
+ * as a different one. An unknown cause is dropped, an unknown prefix kind left
+ * out.
+ */
+function readCacheStep(value: unknown): PiUsageCacheStep | null {
+  const source = record(value);
+  if (!source) return null;
+  const at = readStepRef(source);
+  const kind = (CACHE_STEP_KINDS as readonly unknown[]).includes(source.kind)
+    ? (source.kind as CacheStepKind)
+    : null;
+  const prompt = tokenCount(source.prompt);
+  const read = tokenCount(source.read);
+  const write = tokenCount(source.write);
+  const session = record(source.session);
+  const unexplained = tokenCount(session?.unexplained);
+  const unexplainedLostTokens = tokenCount(session?.unexplainedLostTokens);
+  if (
+    !at ||
+    !kind ||
+    typeof source.explained !== 'boolean' ||
+    prompt === null ||
+    read === null ||
+    write === null ||
+    unexplained === null ||
+    unexplainedLostTokens === null
+  ) {
+    return null;
+  }
+  const causes = Array.isArray(source.causes)
+    ? source.causes.filter((cause): cause is CacheCause =>
+        (CACHE_CAUSES as readonly unknown[]).includes(cause)
+      )
+    : [];
+  const lost = tokenCount(source.lost);
+  const prevPrompt = tokenCount(source.prevPrompt);
+  const matched = readStepRef(source.matched);
+  return {
+    turn: at.turn,
+    step: at.step,
+    kind,
+    explained: source.explained,
+    ...(causes.length > 0 ? { causes } : {}),
+    ...(lost !== null && lost > 0 ? { lost } : {}),
+    prompt,
+    read,
+    write,
+    ...(prevPrompt !== null ? { prevPrompt } : {}),
+    ...(matched ? { matched } : {}),
+    ...(PREFIX_KINDS.has(source.prefix)
+      ? { prefix: source.prefix as ClientPrefixVerdict['kind'] }
+      : {}),
+    session: { unexplained, unexplainedLostTokens },
   };
 }
 
@@ -380,6 +553,7 @@ export function readPiUsagePayload(payload: unknown): PiUsagePayload | null {
   const session = readSessionUsage(source.session);
   const delegated = readDelegatedUsage(source.delegated);
   const reasoning = finiteNumber(source.reasoning);
+  const cache = readCacheStep(source.cache);
   return {
     input,
     output,
@@ -392,6 +566,7 @@ export function readPiUsagePayload(payload: unknown): PiUsagePayload | null {
     ...(session ? { session } : {}),
     ...(delegated ? { delegated } : {}),
     ...(source.unreported === true ? { unreported: true as const } : {}),
+    ...(cache ? { cache } : {}),
   };
 }
 

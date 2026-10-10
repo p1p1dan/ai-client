@@ -11,8 +11,28 @@
  * Only events that arrive while the log is being read are buffered: anything
  * earlier is in the observation, and after a gap the next read starts over
  * from a fresh observation instead of trusting a fold that missed an event.
+ *
+ * Decision 173 (issue #9): beside the timeline it folds the session's prompt
+ * cache chain (`shared/cacheChain.ts`), from the same events in the same
+ * order, when given the routes' options. Kept here because this cache lives as
+ * long as the session does — across turns, which the live translation's state
+ * does not — and every read of a reopened session starts from its fold of the
+ * whole log. The chain is the plain JSON state `restoreCacheChain` reads; it
+ * is rebuilt from the log at every read, never restored, and leaves the
+ * timeline untouched.
  */
 
+import {
+  applyCacheChain,
+  type CacheChainOptions,
+  type CacheChainState,
+  type CacheChainTotals,
+  type CacheChainView,
+  type CacheStepVerdict,
+  foldCacheChain,
+  initCacheChain,
+  viewCacheChain,
+} from '../../shared/cacheChain.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { DshHistoryFold } from '../../shared/dshHistory/projection.ts';
 import { buildDshSessionTree, dshLeafCheckpoint } from '../../shared/dshHistory/tree.ts';
@@ -43,13 +63,25 @@ export interface DshSessionQuery {
 
 type CacheState = 'empty' | 'loading' | 'ready' | 'stale';
 
+/** A step's cache verdict, with the session's totals as of it. */
+export interface DshCacheStep {
+  readonly verdict: CacheStepVerdict;
+  readonly totals: Readonly<CacheChainTotals>;
+}
+
 export class DshHistoryCache {
   private readonly query: DshSessionQuery;
   private readonly log: (...args: unknown[]) => void;
   /** Decision 131: the live rows' own presenter, so a plugin call replays with its title. */
   private readonly presentCall: DshToolPresenter | undefined;
+  /** Decision 173: what the plan says of each route's cache; absent, no chain is kept. */
+  private readonly chainOptions: CacheChainOptions | undefined;
   private sessionId = '';
   private fold = new DshHistoryFold();
+  /** Decision 173: the session's cache chain, at the fold's cursor; undefined when not kept. */
+  private chain: CacheChainState | undefined;
+  /** The step the last appended event recorded, by that event's seq. */
+  private lastStep: { seq: number; verdict: CacheStepVerdict } | undefined;
   private state: CacheState = 'empty';
   /** Events delivered while an observation is in flight. */
   private pending: DshLogEvent[] = [];
@@ -59,11 +91,13 @@ export class DshHistoryCache {
   constructor(
     query: DshSessionQuery,
     log: (...args: unknown[]) => void = () => undefined,
-    presentCall?: DshToolPresenter
+    presentCall?: DshToolPresenter,
+    chainOptions?: CacheChainOptions
   ) {
     this.query = query;
     this.log = log;
     this.presentCall = presentCall;
+    this.chainOptions = chainOptions;
   }
 
   /** Starts over for `sessionId`; call `load` once the session is open. */
@@ -71,6 +105,8 @@ export class DshHistoryCache {
     this.generation += 1;
     this.sessionId = sessionId;
     this.fold = this.newFold();
+    this.chain = this.chainOptions ? initCacheChain() : undefined;
+    this.lastStep = undefined;
     this.state = 'empty';
     this.pending = [];
     this.loading = null;
@@ -135,6 +171,25 @@ export class DshHistoryCache {
     return this.fold.lastTurnEnd;
   }
 
+  /**
+   * Decision 173: the cache verdict of the step the event at `seq` recorded,
+   * when that event is the last one folded — the live translation asks right
+   * after `push`. Undefined when no chain is kept, the event recorded no step,
+   * or it was not folded one at a time (a read in flight buffered it, a gap
+   * dropped it).
+   */
+  cacheStep(seq: number): DshCacheStep | undefined {
+    const chain = this.chain;
+    const last = this.lastStep;
+    if (!chain || last?.seq !== seq) return undefined;
+    return { verdict: last.verdict, totals: viewCacheChain(chain).totals };
+  }
+
+  /** Decision 173: the session's cache chain as of the fold's cursor; undefined when none is kept. */
+  cacheChainView(): CacheChainView | undefined {
+    return this.chain ? viewCacheChain(this.chain) : undefined;
+  }
+
   page(offset?: number, limit?: number): SessionHistoryPage {
     return paginateHistory(this.fold.messages(), offset, limit);
   }
@@ -178,6 +233,8 @@ export class DshHistoryCache {
       const fold = this.newFold();
       for (const event of observation.events) fold.push(event);
       this.fold = fold;
+      this.chain = this.foldChain(observation.events);
+      this.lastStep = undefined;
       this.state = 'ready';
       const pending = this.pending;
       this.pending = [];
@@ -204,6 +261,32 @@ export class DshHistoryCache {
       return false;
     }
     this.fold.push(event);
+    this.applyChain(event);
     return true;
+  }
+
+  /** Decision 173: the chain of a whole log, or undefined when none is kept or it cannot be folded. */
+  private foldChain(events: readonly DshLogEvent[]): CacheChainState | undefined {
+    if (!this.chainOptions) return undefined;
+    try {
+      return foldCacheChain(events, this.chainOptions);
+    } catch (error) {
+      this.log('[dsh-bridge] cache chain not folded', this.sessionId, error);
+      return undefined;
+    }
+  }
+
+  /** One more event of the chain. A failure costs the chain until the next read, never the timeline. */
+  private applyChain(event: DshLogEvent): void {
+    const chain = this.chain;
+    if (!chain || !this.chainOptions) return;
+    try {
+      const verdict = applyCacheChain(chain, event, this.chainOptions);
+      if (verdict) this.lastStep = { seq: event.seq, verdict };
+    } catch (error) {
+      this.chain = undefined;
+      this.lastStep = undefined;
+      this.log('[dsh-bridge] cache chain dropped', this.sessionId, error);
+    }
   }
 }

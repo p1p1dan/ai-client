@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import type { CacheStepVerdict } from '../cacheChain';
 import {
   buildPiInterimUsagePayload,
+  buildPiUsageCacheStep,
   buildPiUsagePayload,
   deriveCacheHitRate,
   isPendingUsagePayload,
   isUnreportedTurnUsage,
   type PiTurnUsage,
+  type PiUsageCacheStep,
   readPiUsagePayload,
 } from '../piUsage';
 
@@ -442,5 +445,131 @@ describe('T125 · a cut request whose cost the provider never reported', () => {
     );
     // Not a pending tick: settled-bill surfaces must still fold it.
     expect(isPendingUsagePayload(built)).toBe(false);
+  });
+});
+
+describe('decision 173 · a notable step carries its cache verdict', () => {
+  /** A step's verdict as `cacheChain.ts` writes it: issue #9's step 17 by default. */
+  const verdict = (overrides: Partial<CacheStepVerdict> = {}): CacheStepVerdict => ({
+    turn: 1,
+    step: 17,
+    provider: 'claude',
+    model: 'claude-opus-5-5',
+    prompt: 174_880,
+    read: 36_848,
+    write: 138_030,
+    input: 2,
+    prevPrompt: 157_890,
+    lost: 121_042,
+    kind: 'rebuild',
+    explained: false,
+    causes: [],
+    gapMs: 41_000,
+    ...overrides,
+  });
+  const TOTALS = { unexplained: 3, unexplainedLostTokens: 185_171 };
+  const SETTLED = { input: 2, output: 900, cacheRead: 36_848, cacheWrite: 138_030 };
+
+  it('keeps the numbers and the step, never the route or the timing', () => {
+    expect(buildPiUsageCacheStep(verdict(), TOTALS, 'append')).toEqual({
+      turn: 1,
+      step: 17,
+      kind: 'rebuild',
+      explained: false,
+      lost: 121_042,
+      prompt: 174_880,
+      read: 36_848,
+      write: 138_030,
+      prevPrompt: 157_890,
+      prefix: 'append',
+      session: { unexplained: 3, unexplainedLostTokens: 185_171 },
+    });
+  });
+
+  it('names the causes of an explained step and the older step a read came from', () => {
+    expect(
+      buildPiUsageCacheStep(
+        verdict({ kind: 'shrink', explained: true, causes: ['plan-mode', 'series'] }),
+        TOTALS
+      )
+    ).toMatchObject({ kind: 'shrink', explained: true, causes: ['plan-mode', 'series'] });
+    const matched = buildPiUsageCacheStep(
+      verdict({ kind: 'warm', read: 169_776, lost: 0, matched: { turn: 1, step: 14 } }),
+      TOTALS
+    );
+    expect(matched).toMatchObject({ kind: 'warm', matched: { turn: 1, step: 14 } });
+    expect(matched).not.toHaveProperty('lost');
+    expect(matched).not.toHaveProperty('prefix');
+  });
+
+  it.each([
+    ['warm', verdict({ kind: 'warm', lost: 2 })],
+    ['cold', verdict({ kind: 'cold', lost: 0, prevPrompt: undefined })],
+    ['untracked', verdict({ kind: 'untracked', lost: 0, prevPrompt: undefined })],
+    ['turn-shrink', verdict({ kind: 'turn-shrink' })],
+  ])('says nothing of a %s step', (_kind, step) => {
+    expect(buildPiUsageCacheStep(step, TOTALS)).toBeNull();
+  });
+
+  it('rides the settled payload and reads back as built', () => {
+    const cache = buildPiUsageCacheStep(verdict(), TOTALS, 'diverged');
+    const built = buildPiUsagePayload(SETTLED, undefined, null, null, { cache });
+    expect(built?.cache).toEqual(cache);
+    expect(readPiUsagePayload(built)).toEqual(built);
+    expect(buildPiUsagePayload(SETTLED, undefined, null, null, { cache: null })).not.toHaveProperty(
+      'cache'
+    );
+    // A payload an older build produced has none.
+    expect(readPiUsagePayload({ input: 1, output: 2 })).not.toHaveProperty('cache');
+  });
+
+  it('keeps only the keys it knows, on both ends', () => {
+    const cache = buildPiUsageCacheStep(verdict({ causes: ['compaction'] }), TOTALS, 'same');
+    const noisy = {
+      ...cache,
+      provider: 'claude',
+      gapMs: 5,
+      input: 2,
+      causes: ['compaction', 'weather'],
+      prefix: 'sideways',
+      matched: { turn: 1, step: 3, seq: 9 },
+      session: { ...TOTALS, steps: 80 },
+    };
+    const read = readPiUsagePayload({ ...SETTLED, cache: noisy })?.cache;
+    expect(read).toEqual({
+      turn: 1,
+      step: 17,
+      kind: 'rebuild',
+      explained: false,
+      causes: ['compaction'],
+      lost: 121_042,
+      prompt: 174_880,
+      read: 36_848,
+      write: 138_030,
+      prevPrompt: 157_890,
+      matched: { turn: 1, step: 3 },
+      session: { unexplained: 3, unexplainedLostTokens: 185_171 },
+    });
+    // The builder narrows the same way.
+    expect(
+      buildPiUsagePayload(SETTLED, undefined, null, null, {
+        cache: noisy as unknown as PiUsageCacheStep,
+      })?.cache
+    ).toEqual(read);
+  });
+
+  it.each([
+    ['an unknown kind', { kind: 'tepid' }],
+    ['no explanation flag', { explained: 'no' }],
+    ['a negative read', { read: -1 }],
+    ['no prompt', { prompt: undefined }],
+    ['no step', { step: undefined }],
+    ['no session totals', { session: undefined }],
+    ['malformed session totals', { session: { unexplained: 1 } }],
+  ])('drops a cache block with %s, and keeps the bill', (_label, broken) => {
+    const cache = { ...buildPiUsageCacheStep(verdict(), TOTALS), ...broken };
+    const read = readPiUsagePayload({ ...SETTLED, cache });
+    expect(read).toMatchObject({ input: 2, output: 900, cacheRead: 36_848 });
+    expect(read).not.toHaveProperty('cache');
   });
 });
