@@ -14,6 +14,7 @@ import {
   MATCH_WINDOW,
   MAX_KEPT_VERDICTS,
   restoreCacheChain,
+  rewriteOf,
   viewCacheChain,
 } from '../cacheChain.ts';
 
@@ -158,7 +159,9 @@ describe('the issue #9 log', () => {
     ]);
     // 88 Claude steps: one cold, 87 judged (63 warm, 17 shrinks, 7 rebuilds);
     // 24 lossy plus 4 warm ones that read another chain's cache are notable,
-    // and only step 69 (362,578 tokens lost) is explained.
+    // and only step 69 (362,578 tokens lost) is explained. The alert's counts
+    // leave the 4 warm reads out: 23 = 7 + 17 - step 69, and their rewrite is
+    // below both what they lost (5,305,920) and what they wrote (4,715,060).
     expect(totals).toEqual({
       steps: 219,
       evaluated: 87,
@@ -167,7 +170,26 @@ describe('the issue #9 log', () => {
       unexplained: 27,
       lostTokens: 5_668_498,
       unexplainedLostTokens: 5_305_920,
+      unexplainedRebuilds: 23,
+      unexplainedRewriteTokens: 3_792_292,
     });
+    const lossy = verdicts.filter(
+      (entry) =>
+        isUnexplainedVerdict(entry) && (entry.kind === 'rebuild' || entry.kind === 'shrink')
+    );
+    expect(lossy.map(rewriteOf).reduce((sum, tokens) => sum + tokens, 0)).toBe(3_792_292);
+    expect(verdicts.filter(isUnexplainedVerdict).filter((entry) => rewriteOf(entry) === 0)).toEqual(
+      [at(1, 3), at(1, 37), at(1, 39), at(1, 43)]
+    );
+  });
+
+  it('rewrites what step 15 lost, and only what step 74 wrote', () => {
+    // Step 14's prompt 169,778 read back down to 14,764: 155,014 lost, 142,368 written.
+    expect(rewriteOf(at(1, 15))).toBe(142_368);
+    expect(rewriteOf(at(1, 17))).toBe(121_042);
+    // Back on the long chain: 392,447 lost against step 73, but only 7,125 written.
+    expect(at(1, 74)).toMatchObject({ lost: 392_447, write: 7_125 });
+    expect(rewriteOf(at(1, 74))).toBe(7_125);
   });
 
   it('survives a JSON round trip mid-step, and skips what it already holds', () => {
@@ -291,7 +313,65 @@ describe('the cache chain', () => {
       unexplained: 0,
       lostTokens: 0,
       unexplainedLostTokens: 0,
+      unexplainedRebuilds: 0,
+      unexplainedRewriteTokens: 0,
     });
+  });
+
+  it('counts the unexplained rebuilds and shrinks and their rewrite, not a read of another chain', () => {
+    const log = new Log()
+      .step(1, 1, { write: 10_000 })
+      .step(1, 2, { read: 10_000, write: 2_000 })
+      // Reads nothing back: 12,002 lost, 14,000 written.
+      .step(1, 3, { write: 14_000 })
+      // Reads what step 2 cached: another chain, but nothing lost to speak of.
+      .step(1, 4, { read: 12_000, write: 3_000 })
+      .event('plan/mode', { active: true })
+      .step(1, 5, { write: 16_000 })
+      // Shrinks: 12,002 lost, only 1,000 written.
+      .step(1, 6, { read: 4_000, write: 1_000 });
+    const { verdicts, totals } = viewCacheChain(log.fold());
+    expect(
+      verdicts.map((entry) => [entry.kind, entry.explained, entry.matched?.step, rewriteOf(entry)])
+    ).toEqual([
+      ['cold', false, undefined, 0],
+      ['warm', false, undefined, 0],
+      ['rebuild', false, undefined, 12_002],
+      ['warm', false, 2, 0],
+      ['rebuild', true, undefined, 15_002],
+      ['shrink', false, undefined, 1_000],
+    ]);
+    expect(totals).toEqual({
+      steps: 6,
+      evaluated: 5,
+      rebuilds: 2,
+      shrinks: 1,
+      unexplained: 3,
+      lostTokens: 39_006,
+      unexplainedLostTokens: 24_004,
+      unexplainedRebuilds: 2,
+      unexplainedRewriteTokens: 13_002,
+    });
+  });
+
+  it.each([
+    [
+      'a rebuild that wrote more than it lost',
+      { kind: 'rebuild', lost: 12_002, write: 14_000 },
+      12_002,
+    ],
+    [
+      'a shrink that wrote less than it lost',
+      { kind: 'shrink', lost: 12_002, write: 1_000 },
+      1_000,
+    ],
+    ['a rebuild that wrote nothing', { kind: 'rebuild', lost: 12_002, write: 0 }, 0],
+    ['a warm read of another chain', { kind: 'warm', lost: 2_002, write: 3_000 }, 0],
+    ['a turn-shrink', { kind: 'turn-shrink', lost: 9_000, write: 3_000 }, 0],
+    ['a cold step', { kind: 'cold', lost: 0, write: 10_000 }, 0],
+    ['an untracked step', { kind: 'untracked', lost: 0, write: 10_000 }, 0],
+  ] as const)('rewrites min(lost, write) of a rebuild or shrink only: %s', (_label, step, rewrite) => {
+    expect(rewriteOf(step)).toBe(rewrite);
   });
 
   it('returns the verdict of the step an event recorded, and hands out views that stay put', () => {
@@ -455,6 +535,39 @@ describe('the cache chain', () => {
     });
   });
 
+  it('takes a new turn reading back an older step’s prefix as information only', () => {
+    // A healthy upstream that strips turn 1's thinking at the new user turn
+    // serves what step 1 cached (9,998), not what step 3 did.
+    const log = new Log()
+      .appendOnly(1, 3)
+      .event('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      .event('turn/start', { turn: 2 })
+      .step(2, 1, { read: 9_998, write: 1_000 });
+    const state = log.fold();
+    const verdict = lastStepVerdict(state);
+    expect(verdict).toMatchObject({
+      kind: 'turn-shrink',
+      prevPrompt: 14_000,
+      lost: 4_002,
+      matched: { turn: 1, step: 1 },
+      explained: false,
+    });
+    expect(verdict && isNotableVerdict(verdict)).toBe(false);
+    expect(verdict && isUnexplainedVerdict(verdict)).toBe(false);
+    expect(verdict && rewriteOf(verdict)).toBe(0);
+    expect(viewCacheChain(state).totals).toEqual({
+      steps: 4,
+      evaluated: 3,
+      rebuilds: 0,
+      shrinks: 0,
+      unexplained: 0,
+      lostTokens: 0,
+      unexplainedLostTokens: 0,
+      unexplainedRebuilds: 0,
+      unexplainedRewriteTokens: 0,
+    });
+  });
+
   it('matches no older step when the read is what the step before cached', () => {
     // Step 2 adds nothing, so it caches what step 1 did; step 3 reads that.
     const log = new Log()
@@ -514,6 +627,9 @@ describe('the cache chain', () => {
     expect(restoreCacheChain(json)).toBe(json);
     const refused = [
       { ...json, version: CACHE_CHAIN_STATE_VERSION + 1 },
+      // Version 1 kept no alert counts: its holder folds the log again.
+      { ...json, version: 1 },
+      { ...json, totals: { ...json.totals, unexplainedRewriteTokens: undefined } },
       { ...json, version: undefined },
       undefined,
       null,

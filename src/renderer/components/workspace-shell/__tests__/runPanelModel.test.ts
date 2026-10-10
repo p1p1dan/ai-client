@@ -387,8 +387,14 @@ describe('deriveRunPanelView — occupancy and usage (U06-b)', () => {
   });
 
   it('publishes the cache hit rate beside the raw cache counts (A1)', () => {
-    // 9_000 / (12_000 + 9_000), cache writes excluded from the base.
-    expect(deriveRunPanelView(input({ usage: usagePayload() })).cacheHitRate).toBe(43);
+    // Issue #9: 9_000 / (12_000 + 9_000 + 1_200) — the whole prompt is the base.
+    expect(deriveRunPanelView(input({ usage: usagePayload() })).cacheHitRate).toBe(41);
+    // A rebuild reads as the miss it is (issue #9's step: 36,848 read, 138,030 written).
+    expect(
+      deriveRunPanelView(
+        input({ usage: usagePayload({ input: 2, cacheRead: 36_848, cacheWrite: 138_030 }) })
+      ).cacheHitRate
+    ).toBe(21);
   });
 
   it('reports no cache hit rate when there is no usage to derive one from', () => {
@@ -399,8 +405,13 @@ describe('deriveRunPanelView — occupancy and usage (U06-b)', () => {
       deriveRunPanelView(input({ sessionId: null, usage: usagePayload() })).cacheHitRate
     ).toBeNull();
     expect(
-      deriveRunPanelView(input({ usage: usagePayload({ input: 0, cacheRead: 0 }) })).cacheHitRate
+      deriveRunPanelView(input({ usage: usagePayload({ input: 0, cacheRead: 0, cacheWrite: 0 }) }))
+        .cacheHitRate
     ).toBeNull();
+    // A prompt that was all written to the cache is a measured 0%, not unknown.
+    expect(
+      deriveRunPanelView(input({ usage: usagePayload({ input: 0, cacheRead: 0 }) })).cacheHitRate
+    ).toBe(0);
   });
 });
 

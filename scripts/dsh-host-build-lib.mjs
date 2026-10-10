@@ -116,8 +116,10 @@ export const BRIDGE_ENTRIES = [
     out: 'bundle/lib/bridge.js',
     row: 'aiclient-bridge',
     // The RPC server Main's channels speak to lives in bridge/ since dsh-rebase
-    // P1-12 step 4 (decision 147), when src/agent-host was deleted.
-    inputs: ['src/dsh-host/bridge/', 'src/shared/'],
+    // P1-12 step 4 (decision 147), when src/agent-host was deleted. Decision
+    // 173: a step's cache verdict names the gateway session the host's request
+    // tap derives (`gatewaySessionUuid`, imports node:crypto only).
+    inputs: ['src/dsh-host/bridge/', 'src/shared/', 'src/dsh-host/lib/sessionMetadata.ts'],
     externals: BRIDGE_EXTERNALS,
   },
   {

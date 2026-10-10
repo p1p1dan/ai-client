@@ -13,7 +13,10 @@
  * every step a verdict (`CacheStepKind`): did it reuse the step before's
  * cache, and if not, did a local event since then explain it (`CacheCause`)?
  * A notable step (`isNotableVerdict`) without one is unexplained: that is what
- * logs and alerts report. Explained ones are still shown.
+ * logs report. The session alert counts only the unexplained rebuilds and
+ * shrinks, and what they wrote again (`rewriteOf`): a warm step that read
+ * another chain's cache is flagged, not counted. Explained ones are still
+ * shown.
  *
  * Pure, deterministic and incremental, like `DshHistoryFold`
  * (`dshHistory/projection.ts`): events go in log order, one at a time, and
@@ -47,8 +50,11 @@ export const MATCH_WINDOW = 32;
 export const DEFAULT_TTL_MS = 5 * 60_000;
 /** Verdicts the state keeps (the newest); the totals count every step. */
 export const MAX_KEPT_VERDICTS = 500;
-/** The state's format; `restoreCacheChain` refuses any other, and the caller folds afresh. */
-export const CACHE_CHAIN_STATE_VERSION = 1;
+/**
+ * The state's format; `restoreCacheChain` refuses any other, and the caller
+ * folds afresh. 2: the totals count the unexplained rebuilds and their rewrite.
+ */
+export const CACHE_CHAIN_STATE_VERSION = 2;
 
 // ---- vocabulary ------------------------------------------------------------------
 
@@ -94,7 +100,8 @@ export type CacheCause = (typeof CACHE_CAUSES)[number];
  *   shrink        the prompt got shorter (`SHRINK_ABS`, `SHRINK_RATIO`), which
  *                 appending alone never does
  *   turn-shrink   the same at a turn's first step, where a provider may drop
- *                 earlier turns' thinking: shown, not counted as a shrink
+ *                 earlier turns' thinking: information only, never notable
+ *                 nor counted, whatever it read
  */
 export const CACHE_STEP_KINDS = [
   'untracked',
@@ -147,7 +154,10 @@ export interface CacheStepVerdict extends CacheStepRef {
   /** `causes` is not empty. */
   readonly explained: boolean;
   readonly causes: readonly CacheCause[];
-  /** A judged step read what an older step (not the one before) cached: requests alternate between caches. */
+  /**
+   * A judged step read what an older step (not the one before) cached:
+   * requests alternate between caches. Information only on a turn-shrink.
+   */
   readonly matched?: CacheStepRef;
   /**
    * From the step before's request start to this one's: each step's
@@ -171,6 +181,10 @@ export interface CacheChainTotals {
   lostTokens: number;
   /** The same over the unexplained ones. */
   unexplainedLostTokens: number;
+  /** Rebuilds and shrinks with no local cause: what the session alert counts. */
+  unexplainedRebuilds: number;
+  /** `rewriteOf` over them: cached tokens written again for nothing local. */
+  unexplainedRewriteTokens: number;
 }
 
 export interface CacheChainView {
@@ -296,6 +310,8 @@ export function initCacheChain(): CacheChainState {
       unexplained: 0,
       lostTokens: 0,
       unexplainedLostTokens: 0,
+      unexplainedRebuilds: 0,
+      unexplainedRewriteTokens: 0,
     },
   };
 }
@@ -543,7 +559,11 @@ function recordStep(
   if (lossy) totals.lostTokens += lost;
   if (isUnexplainedVerdict(verdict)) {
     totals.unexplained += 1;
-    if (lossy) totals.unexplainedLostTokens += lost;
+    if (lossy) {
+      totals.unexplainedLostTokens += lost;
+      totals.unexplainedRebuilds += 1;
+      totals.unexplainedRewriteTokens += rewriteOf(verdict);
+    }
   }
   return verdict;
 }
@@ -568,14 +588,34 @@ export function lastStepVerdict(state: CacheChainState): CacheStepVerdict | unde
   return state.verdicts.at(-1);
 }
 
-/** A rebuild, a shrink, or a read of another chain's cache: shown, explained or not. */
+/**
+ * A rebuild, a shrink, or a warm read of another chain's cache: shown,
+ * explained or not. A turn-shrink is information only, `matched` or not: a
+ * healthy upstream that strips the previous turns' thinking at a new user
+ * turn reads back an older step's prefix.
+ */
 export function isNotableVerdict(verdict: CacheStepVerdict): boolean {
-  return verdict.kind === 'rebuild' || verdict.kind === 'shrink' || verdict.matched !== undefined;
+  return (
+    verdict.kind === 'rebuild' ||
+    verdict.kind === 'shrink' ||
+    (verdict.kind === 'warm' && verdict.matched !== undefined)
+  );
 }
 
-/** A notable step no local event explains: what logs and alerts report. */
+/** A notable step no local event explains: what logs report, and `unexplained` counts. */
 export function isUnexplainedVerdict(verdict: CacheStepVerdict): boolean {
   return isNotableVerdict(verdict) && !verdict.explained;
+}
+
+/**
+ * What a rebuild or a shrink wrote again: tokens the step before had cached
+ * that this one wrote anew, min(`lost`, `write`). 0 for any other kind, a
+ * warm step that read another chain's cache included: what it lost is under
+ * the rebuild threshold.
+ */
+export function rewriteOf(verdict: Pick<CacheStepVerdict, 'kind' | 'lost' | 'write'>): number {
+  if (verdict.kind !== 'rebuild' && verdict.kind !== 'shrink') return 0;
+  return Math.max(0, Math.min(verdict.lost, verdict.write));
 }
 
 // ---- restore -----------------------------------------------------------------------
@@ -588,6 +628,8 @@ const TOTAL_KEYS: readonly (keyof CacheChainTotals)[] = [
   'unexplained',
   'lostTokens',
   'unexplainedLostTokens',
+  'unexplainedRebuilds',
+  'unexplainedRewriteTokens',
 ];
 
 function isCount(value: unknown): boolean {

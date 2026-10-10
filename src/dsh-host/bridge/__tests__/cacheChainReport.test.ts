@@ -156,6 +156,14 @@ describe('cacheChainLogLines', () => {
     ).toEqual([]);
     expect(cacheChainLogLines(SESSION, warm, evidence(5_000))).toEqual([]);
     expect(cacheChainLogLines(SESSION, rebuild({ kind: 'turn-shrink' }))).toEqual([]);
+    // A new user turn read back an older step's prefix: information only.
+    expect(
+      cacheChainLogLines(
+        SESSION,
+        rebuild({ kind: 'turn-shrink', matched: { turn: 1, step: 3 } }),
+        evidence(5_000, 18)
+      )
+    ).toEqual([]);
   });
 
   it.each([

@@ -85,7 +85,15 @@ import {
   waitToolStarts,
 } from './lib/experiment-host.ts';
 import { fakeGatewayPlan, type Message } from './lib/hostClient.ts';
-import { baseEnv, readMem, type Sandbox, sandbox, sleep } from './lib/kit.ts';
+import {
+  baseEnv,
+  descendants,
+  readMem,
+  type Sandbox,
+  sandbox,
+  sleep,
+  statusField,
+} from './lib/kit.ts';
 import {
   buildPrefixChains,
   type ChainedRequest,
@@ -147,18 +155,44 @@ function availableMb(): number {
   }
 }
 
+/**
+ * VmRSS summed over `pid` and its descendants, in kB; undefined when none
+ * reports one. A process that exited, or a zombie (its status has no Vm
+ * lines), is left out instead of turning the sum into NaN.
+ */
+function treeRssKb(pid: number): number | undefined {
+  let members: number[];
+  try {
+    members = [pid, ...descendants(pid)];
+  } catch {
+    return undefined;
+  }
+  let total: number | undefined;
+  for (const member of members) {
+    try {
+      const kb = statusField(readFileSync(`/proc/${member}/status`, 'utf8'), 'VmRSS');
+      if (Number.isFinite(kb)) total = (total ?? 0) + kb;
+    } catch {
+      // Exited between the listing and the read.
+    }
+  }
+  return total;
+}
+
+/** Megabytes for the report, `n/a` when the figure is unknown. */
+function mbText(mb: number | undefined): string {
+  return mb === undefined ? 'n/a' : `${mb} MB`;
+}
+
 /** The host's process tree RSS, sampled each second, and the machine's lowest MemAvailable. */
 function memoryWatch(pid: number | undefined) {
-  let peakTreeMb = 0;
+  let peakTreeMb: number | undefined;
   let minAvailableMb = availableMb();
   const tick = () => {
     minAvailableMb = Math.min(minAvailableMb, availableMb());
     if (pid === undefined) return;
-    try {
-      peakTreeMb = Math.max(peakTreeMb, Math.round(readMem(pid).treeRssKb / 1024));
-    } catch {
-      // The host exited between two samples.
-    }
+    const kb = treeRssKb(pid);
+    if (kb !== undefined) peakTreeMb = Math.max(peakTreeMb ?? 0, Math.round(kb / 1024));
   };
   tick();
   const timer = setInterval(tick, 1000);
@@ -168,7 +202,8 @@ function memoryWatch(pid: number | undefined) {
     hwmMb(): number | undefined {
       if (pid === undefined) return undefined;
       try {
-        return Math.round(readMem(pid).hwmKb / 1024);
+        const kb = readMem(pid).hwmKb;
+        return Number.isFinite(kb) ? Math.round(kb / 1024) : undefined;
       } catch {
         return undefined;
       }
@@ -1039,7 +1074,7 @@ function printSummary(
   }
   out.push(
     `simulated upstream: ${result.billing.map((b) => `${b.scenario} ${b.simulated}/${b.requests} billed, ${b.backendB} on B, ${b.coldReads} cold, ${b.compaction} compaction`).join('; ')}`,
-    `hosts: ${run.hosts.map((h) => `${h.label} peak tree RSS ${h.peakTreeMb ?? '?'} MB (VmHWM ${h.hwmMb ?? '?'} MB)`).join('; ')}`
+    `hosts: ${run.hosts.map((h) => `${h.label} peak tree RSS ${mbText(h.peakTreeMb)} (VmHWM ${mbText(h.hwmMb)})`).join('; ')}`
   );
   out.push('checks:');
   for (const [name, c] of checks) out.push(`  ${c.ok ? 'PASS' : 'FAIL'} ${name}: ${c.reason}`);

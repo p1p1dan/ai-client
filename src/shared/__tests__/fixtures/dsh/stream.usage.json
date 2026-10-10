@@ -231,6 +231,23 @@
         "cacheWrite": 0,
         "totalTokens": 0,
         "costUsd": 0
+      },
+      "cache": {
+        "turn": 0,
+        "step": 0,
+        "kind": "cold",
+        "explained": false,
+        "prompt": 0,
+        "read": 0,
+        "write": 0,
+        "prefix": "append",
+        "session": {
+          "unexplained": 0,
+          "unexplainedLostTokens": 0,
+          "unexplainedRebuilds": 0,
+          "unexplainedRewriteTokens": 0,
+          "gatewaySession": "id-13"
+        }
       }
     }
   },

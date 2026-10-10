@@ -64,6 +64,8 @@ function harness(
     cacheStep?: (seq: number) => DshCacheStep | undefined;
     /** Decision 173: the host's newest prefix evidence on the session's requests. */
     evidence?: () => ClientPrefixEvidence | undefined;
+    /** Decision 173: the gateway session the host names the session's requests after. */
+    gatewaySession?: () => string | undefined;
   } = {}
 ) {
   const events: Emitted[] = [];
@@ -121,6 +123,7 @@ function harness(
           }
         : {}),
     ...(options.evidence ? { prefixEvidence: options.evidence } : {}),
+    ...(options.gatewaySession ? { gatewaySession: options.gatewaySession } : {}),
     log: (line: string) => lines.push(line),
   });
   const durable = (type: string, data: Record<string, unknown>) => {
@@ -948,7 +951,22 @@ describe('DshLiveEvents — the prompt cache of each step (decision 173 B2)', ()
   it('[D173-LIVE-1] sends a rebuild nothing explains with its settled usage, and logs it', () => {
     let evidence: ClientPrefixEvidence | undefined;
     const h = harness({ chain: FOLLOW_CLAUDE, evidence: () => evidence });
-    expect(step(h, 1, 1, { write: 10_000 })).not.toHaveProperty('cache');
+    // The first write: nothing to read yet.
+    expect(step(h, 1, 1, { write: 10_000 })?.cache).toEqual({
+      turn: 1,
+      step: 1,
+      kind: 'cold',
+      explained: false,
+      prompt: 10_002,
+      read: 0,
+      write: 10_000,
+      session: {
+        unexplained: 0,
+        unexplainedLostTokens: 0,
+        unexplainedRebuilds: 0,
+        unexplainedRewriteTokens: 0,
+      },
+    });
     expect(step(h, 1, 2, { read: 10_000, write: 2_000 })).not.toHaveProperty('cache');
     const settled = step(
       h,
@@ -967,12 +985,18 @@ describe('DshLiveEvents — the prompt cache of each step (decision 173 B2)', ()
       kind: 'rebuild',
       explained: false,
       lost: 12_002,
+      rewrite: 12_002,
       prompt: 13_002,
       read: 0,
       write: 13_000,
       prevPrompt: 12_002,
       prefix: 'append',
-      session: { unexplained: 1, unexplainedLostTokens: 12_002 },
+      session: {
+        unexplained: 1,
+        unexplainedLostTokens: 12_002,
+        unexplainedRebuilds: 1,
+        unexplainedRewriteTokens: 12_002,
+      },
     };
     expect(settled?.cache).toEqual(cache);
     expect(readPiUsagePayload(settled)?.cache).toEqual(cache);
@@ -990,7 +1014,13 @@ describe('DshLiveEvents — the prompt cache of each step (decision 173 B2)', ()
       kind: 'rebuild',
       explained: true,
       causes: ['plan-mode'],
-      session: { unexplained: 0, unexplainedLostTokens: 0 },
+      rewrite: 12_002,
+      session: {
+        unexplained: 0,
+        unexplainedLostTokens: 0,
+        unexplainedRebuilds: 0,
+        unexplainedRewriteTokens: 0,
+      },
     });
     expect(h.lines).toEqual([]);
   });
@@ -1104,5 +1134,52 @@ describe('DshLiveEvents — the prompt cache of each step (decision 173 B2)', ()
     expect(settled).toMatchObject({ input: 2, output: 10, cacheWrite: 10_000 });
     expect(settled).not.toHaveProperty('cache');
     expect(h.lines).toEqual([]);
+  });
+
+  it('[D173-LIVE-8] names the gateway session the host names, while it does', () => {
+    const GATEWAY_SESSION = '0f1e2d3c-4b5a-5968-8776-a5b4c3d2e1f0';
+    let named: string | undefined = GATEWAY_SESSION;
+    const h = harness({ chain: FOLLOW_CLAUDE, gatewaySession: () => named });
+    expect(readPiUsagePayload(step(h, 1, 1, { write: 10_000 }))?.cache).toMatchObject({
+      kind: 'cold',
+      session: { gatewaySession: GATEWAY_SESSION },
+    });
+    step(h, 1, 2, { read: 10_000, write: 2_000 });
+    named = undefined;
+    const rebuilt = readPiUsagePayload(step(h, 1, 3, { write: 13_000 }))?.cache;
+    expect(rebuilt?.kind).toBe('rebuild');
+    expect(rebuilt?.session).not.toHaveProperty('gatewaySession');
+    const unnamed = harness({ chain: FOLLOW_CLAUDE });
+    expect(readPiUsagePayload(step(unnamed, 1, 1, { write: 10_000 }))?.cache?.session).toEqual({
+      unexplained: 0,
+      unexplainedLostTokens: 0,
+      unexplainedRebuilds: 0,
+      unexplainedRewriteTokens: 0,
+    });
+  });
+
+  it('[D173-LIVE-9] sends the first write once one is made, and never a new turn’s shorter prompt', () => {
+    const h = harness({ chain: FOLLOW_CLAUDE });
+    // Too short a prompt to cache: cold, with nothing written.
+    expect(step(h, 1, 1, {})).not.toHaveProperty('cache');
+    // Cold again (the step before cached nothing), and written: the first write.
+    expect(step(h, 1, 2, { write: 10_000 })?.cache).toMatchObject({
+      turn: 1,
+      step: 2,
+      kind: 'cold',
+      write: 10_000,
+    });
+    step(h, 1, 3, { read: 10_000, write: 2_000 });
+    // Turn 2 reads back only what step 2 cached: the new turn dropped part of
+    // turn 1 (a healthy upstream stripping its thinking). Information only:
+    // no `cache`, no log line, nothing counted.
+    const shorter = step(h, 2, 1, { read: 10_000, write: 500 });
+    expect(shorter).toMatchObject({ cacheRead: 10_000, cacheWrite: 500 });
+    expect(shorter).not.toHaveProperty('cache');
+    expect(h.lines).toEqual([]);
+    expect(readPiUsagePayload(step(h, 2, 2, { write: 20_000 }))?.cache).toMatchObject({
+      kind: 'rebuild',
+      session: { unexplained: 1, unexplainedRebuilds: 1 },
+    });
   });
 });

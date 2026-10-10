@@ -789,6 +789,22 @@ describe('bridge bundles (decision 011)', () => {
     ]);
   });
 
+  it('lets the bridge row take in the gateway session library, and no other host lib (decision 173)', () => {
+    const { failures } = checkBridgeMetafile(
+      {
+        inputs: {
+          'src/dsh-host/bridge/plugin.ts': {},
+          'src/dsh-host/bridge/dshSessionRuntime.ts': {},
+          'src/dsh-host/lib/sessionMetadata.ts': {},
+          'src/dsh-host/lib/requestTap.ts': {},
+        },
+        outputs: { 'x.js': { imports: [{ path: 'node:crypto', external: true }] } },
+      },
+      repoRoot
+    );
+    expect(failures).toEqual(['bridge bundle took in src/dsh-host/lib/requestTap.ts']);
+  });
+
   /** What each row injects; anything else is a change to its contract with DSH. */
   const ROW_INJECT = {
     'aiclient-bridge': [

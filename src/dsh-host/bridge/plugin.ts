@@ -18,7 +18,11 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { installModelSelection } from '@deepseek-ai/dsh-agent';
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
 import type { DshHostToMainMessage } from '../../shared/types/dshHostProtocol.ts';
-import { CACHE_CHAIN_ENV, isSwitchedOff } from '../../shared/types/requestScope.ts';
+import {
+  CACHE_CHAIN_ENV,
+  isSwitchedOff,
+  SESSION_METADATA_ENV,
+} from '../../shared/types/requestScope.ts';
 import { DshChannelMux } from './channelMux.ts';
 import { type CompletionLlm, DshCompletions } from './completions.ts';
 import {
@@ -144,6 +148,9 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
     permissionAgentDir: process.env[PERMISSION_AGENT_DIR_ENV]?.trim() || null,
     // Decision 173 B2: each step's prompt-cache reuse, unless switched off.
     cacheChain: !isSwitchedOff(process.env, CACHE_CHAIN_ENV),
+    // Decision 173 D: host.ts's request tap names each chat's gateway session
+    // in `metadata.user_id` by the same switch; the cache verdicts name it too.
+    sessionMetadata: !isSwitchedOff(process.env, SESSION_METADATA_ENV),
   };
   // P1-15 (decisions 039, 125): one-shot completions, routed by the same plan
   // as every chat turn, as completions (no effort unless one was chosen).

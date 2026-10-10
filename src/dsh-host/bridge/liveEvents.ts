@@ -15,8 +15,9 @@
  *                                       occupancy (`contextPressure`) and the
  *                                       session total (`tokenUsage`) of
  *                                       dsh-token-meter; no cost (rule 1); a
- *                                       notable step's cache verdict as `cache`,
- *                                       and the `cache-chain:` log lines of an
+ *                                       notable step's or a first write's cache
+ *                                       verdict as `cache`, and the
+ *                                       `cache-chain:` log lines of an
  *                                       unexplained one (decision 173 B2,
  *                                       `cacheChainReport.ts`)
  *   `tool/result`                       tool.completed with the row flags and the
@@ -197,6 +198,12 @@ export interface DshLiveEventsHost {
    * agent requests (`RequestScopeView.evidenceFor`), when it keeps any.
    */
   prefixEvidence?(): ClientPrefixEvidence | undefined;
+  /**
+   * Decision 173 D: the gateway session the host names this session's model
+   * requests after (`metadata.user_id`), for a `cache` block to carry. Absent,
+   * or undefined, while the host names none.
+   */
+  gatewaySession?(): string | undefined;
   /** One line for the bridge's log (the app log); absent, nothing is written. */
   log?(line: string): void;
 }
@@ -927,7 +934,7 @@ export class DshLiveEvents {
    * occupancy and the session's running total — all dsh-token-meter's. A
    * step Stop cut mid-stream reports none; it says so (`unreported`, T125)
    * rather than a row of zeros that reads as "free". Decision 173: a notable
-   * step also carries its cache verdict (`cache`).
+   * step, or a first write, also carries its cache verdict (`cache`).
    */
   private settledUsage(data: Row, event: DshSessionEvent): void {
     const usage = recordOf(data.usage);
@@ -948,8 +955,8 @@ export class DshLiveEvents {
    * Decision 173 B2: the verdict the history cache gave the step this
    * `assistant/message` recorded — written to the log when no local event
    * explains it, or when its request diverged without a cause — and, when
-   * notable, as the settled usage's `cache`. Nothing here may cost the step
-   * its usage.
+   * notable or a first write (`buildPiUsageCacheStep`), as the settled
+   * usage's `cache`. Nothing here may cost the step its usage.
    */
   private cacheStep(event: DshSessionEvent): PiUsageCacheStep | null {
     try {
@@ -968,7 +975,10 @@ export class DshLiveEvents {
       );
       if (evidence) this.given = { sessionId, evidence };
       for (const line of cacheChainLogLines(sessionId, verdict, evidence)) this.host.log?.(line);
-      return buildPiUsageCacheStep(verdict, totals, evidence?.verdict.kind);
+      return buildPiUsageCacheStep(verdict, totals, {
+        prefix: evidence?.verdict.kind,
+        gatewaySession: this.host.gatewaySession?.(),
+      });
     } catch {
       return null;
     }

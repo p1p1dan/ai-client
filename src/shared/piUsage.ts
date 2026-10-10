@@ -29,13 +29,13 @@
 
 import {
   CACHE_CAUSES,
-  CACHE_STEP_KINDS,
   type CacheCause,
   type CacheChainTotals,
   type CacheStepKind,
   type CacheStepRef,
   type CacheStepVerdict,
   isNotableVerdict,
+  rewriteOf,
 } from './cacheChain.ts';
 import type { PiSessionUsage } from './piTurnRollup';
 import { readSessionUsage } from './piTurnRollup.ts';
@@ -133,33 +133,59 @@ export type PiUsagePayload = PiTurnUsage & {
   unreported?: true;
   /**
    * Decision 173 (issue #9) — what became of this step's prompt cache. Only on
-   * a settled payload, and only when the step is notable: see
-   * {@link PiUsageCacheStep}.
+   * a settled payload, and only for the steps {@link buildPiUsageCacheStep}
+   * sends: see {@link PiUsageCacheStep}.
    */
   cache?: PiUsageCacheStep;
+};
+
+/**
+ * The verdicts a `cache` block carries. `warm` only with `matched`: a warm step
+ * is sent only when it read an older step's cache.
+ */
+export type PiUsageCacheKind = Extract<CacheStepKind, 'cold' | 'rebuild' | 'shrink' | 'warm'>;
+
+/**
+ * The session so far, as of the step a `cache` block settles (`cacheChain.ts`
+ * totals): what the session alert reads.
+ */
+export type PiUsageCacheSession = Pick<
+  CacheChainTotals,
+  'unexplained' | 'unexplainedLostTokens' | 'unexplainedRebuilds' | 'unexplainedRewriteTokens'
+> & {
+  /**
+   * The gateway session the host names in `metadata.user_id` (its
+   * `session_id`, decision 173 D): a UUID, for the copied diagnostics. Absent
+   * while that is switched off (`AICLIENT_RUNTIME_SESSION_METADATA=0`).
+   */
+  gatewaySession?: string;
 };
 
 /**
  * Decision 173 (issue #9) — one step's prompt-cache verdict (`cacheChain.ts`),
  * beside its bill.
  *
- * Sent only on a notable step (`isNotableVerdict`: a rebuild, a shrink, or a
- * read of an older step's cache) of a route the bridge follows
- * (anthropic-messages). A warm, cold, untracked or turn-shrink step carries
- * no `cache`, and nothing does while the check is switched off
- * (`AICLIENT_RUNTIME_CACHE_CHAIN=0`). Numbers only, never content.
+ * Sent for a step of a route the bridge follows (anthropic-messages) that is
+ * notable (`isNotableVerdict`: a rebuild, a shrink, or a warm read of an older
+ * step's cache), or cold and wrote the cache (the first write). A plain warm,
+ * a turn-shrink (information only, whatever it read), an untracked step and a
+ * cold one that wrote nothing carry no `cache`, and nothing does while the
+ * check is switched off (`AICLIENT_RUNTIME_CACHE_CHAIN=0`). Numbers and ids
+ * only, never content.
  */
 export type PiUsageCacheStep = {
   /** DSH's coordinates of the step this payload settles. */
   turn: number;
   step: number;
-  kind: CacheStepKind;
+  kind: PiUsageCacheKind;
   /** A local event since the step before explains it (`causes`); false is what the alert is about. */
   explained: boolean;
   /** Those local events, in order of first sight; omitted when there are none. */
   causes?: CacheCause[];
   /** Cached tokens processed again: the step before's prompt less this read; omitted when 0. */
   lost?: number;
+  /** A rebuild's or shrink's min(lost, write) (`rewriteOf`): cached tokens written again; omitted when 0. */
+  rewrite?: number;
   /** input + read + write. */
   prompt: number;
   read: number;
@@ -174,8 +200,7 @@ export type PiUsageCacheStep = {
    * tell which request that was. `append` and `same` clear the client.
    */
   prefix?: ClientPrefixVerdict['kind'];
-  /** The session so far: notable steps nothing local explains, and the tokens their rebuilds and shrinks lost. */
-  session: Pick<CacheChainTotals, 'unexplained' | 'unexplainedLostTokens'>;
+  session: PiUsageCacheSession;
 };
 
 /** The two arcs of an occupancy ring, plus the figures printed beside them. */
@@ -231,15 +256,17 @@ export function deriveContextOccupancy(
  * that changed — each shows up immediately as the rate falling, where the raw
  * token counts would only show up later as a bigger bill.
  *
- * ## Why the denominator excludes cache writes
+ * ## Why the denominator is the whole prompt (issue #9, decision 173)
  *
  * The question is "how much of this prompt was served from cache", so the
- * denominator is the prompt: `input` (the part billed uncached) plus
- * `cacheRead` (the part that came from cache). `cacheWrite` is what it cost to
- * PUT tokens into the cache for some later turn; counting it here would make
- * the very turn that warms a cache look like it missed twice over. Same formula
- * and same reasoning as PI-Desktop's `calculateCacheRate`
- * (`apps/desktop/src/lib/context-usage.ts`).
+ * denominator is the whole prompt: `input` (billed uncached), `cacheRead`
+ * (served from cache) and `cacheWrite` (processed and written to the cache).
+ * On Anthropic's usage the three are disjoint and add up to the prompt, the
+ * same `prompt` the cache chain judges (`cacheChain.ts`). The rate used to
+ * leave `cacheWrite` out (PI-Desktop's `calculateCacheRate`), which put a
+ * rebuild at 100%: issue #9's step 17 read 36,848 tokens, wrote 138,030 and
+ * had 2 uncached. Over the whole prompt it is 21%, and the step that first
+ * warms a cache reads as the miss it is.
  *
  * ## Why the rounding happens here
  *
@@ -251,20 +278,21 @@ export function deriveContextOccupancy(
  * ## `null` versus `0`
  *
  * `0` is a measurement: the prompt was billed and none of it came from cache.
- * `null` is the absence of one — no prompt tokens at all, or a `cacheRead` the
- * runtime did not report. Callers render `null` as nothing; printing it as `0%`
- * would assert a cache miss nobody measured. The fields are re-checked at
- * runtime rather than trusted from the type, because this payload crosses the
- * `Record<string, unknown>` boundary described at the top of this file.
+ * `null` is the absence of one — no prompt tokens at all, or a count of the
+ * prompt the runtime did not report. Callers render `null` as nothing;
+ * printing it as `0%` would assert a cache miss nobody measured. The fields
+ * are re-checked at runtime rather than trusted from the type, because this
+ * payload crosses the `Record<string, unknown>` boundary described at the top
+ * of this file.
  */
 export function deriveCacheHitRate(usage: PiTurnUsage | null | undefined): number | null {
   if (!usage) return null;
-  const input = finiteNumber(usage.input);
-  const cacheRead = finiteNumber(usage.cacheRead);
-  if (input === null || cacheRead === null || input < 0 || cacheRead < 0) return null;
-  const promptTokens = input + cacheRead;
-  // No prompt at all: nothing was served from cache, but nothing was billed
-  // uncached either, so there is no ratio to report.
+  const input = tokenCount(usage.input);
+  const cacheRead = tokenCount(usage.cacheRead);
+  const cacheWrite = tokenCount(usage.cacheWrite);
+  if (input === null || cacheRead === null || cacheWrite === null) return null;
+  const promptTokens = input + cacheRead + cacheWrite;
+  // No prompt at all: there is no ratio to report.
   if (promptTokens <= 0) return null;
   return Math.round((cacheRead / promptTokens) * 100);
 }
@@ -416,31 +444,55 @@ export function buildPiUsagePayload(
     ...(delegatedUsage ? { delegated: delegatedUsage } : {}),
     // T125: omitted rather than `false`, so a merge cannot leave it behind.
     ...(marks.unreported ? { unreported: true as const } : {}),
-    // Decision 173: a notable step's cache verdict only.
+    // Decision 173: the cache verdict of a step it is sent for only.
     ...(cache ? { cache } : {}),
   };
 }
 
 /**
+ * The kind a verdict is sent as, or null when it is not sent: a notable step
+ * (`isNotableVerdict`: a rebuild, a shrink, a warm read of an older step's
+ * cache) or a cold one that wrote the cache. A cold step that wrote nothing
+ * has no first write to show; a turn-shrink is information only.
+ */
+function sentKind(verdict: CacheStepVerdict): PiUsageCacheKind | null {
+  if (verdict.kind === 'cold') return verdict.write > 0 ? 'cold' : null;
+  if (!isNotableVerdict(verdict)) return null;
+  switch (verdict.kind) {
+    case 'rebuild':
+    case 'shrink':
+    case 'warm':
+      return verdict.kind;
+    default:
+      return null;
+  }
+}
+
+/**
  * Decision 173: the settled payload's `cache` for one step's verdict, or
- * `null` when the step is not notable (`isNotableVerdict`) — a warm, cold,
- * untracked or turn-shrink step says nothing. `totals` are the session's as
- * of this step; `prefix` is the kind of the prefix evidence the bridge
- * matched to the step's request, when it found one.
+ * `null` when the step is not sent (see {@link PiUsageCacheStep}). `totals`
+ * are the session's as of this step; `request.prefix` is the kind of the
+ * prefix evidence the bridge matched to the step's request, when it found
+ * one, and `request.gatewaySession` the gateway session the host names the
+ * session's requests after, while it does.
  */
 export function buildPiUsageCacheStep(
   verdict: CacheStepVerdict,
-  totals: Pick<CacheChainTotals, 'unexplained' | 'unexplainedLostTokens'>,
-  prefix?: ClientPrefixVerdict['kind']
+  totals: Omit<PiUsageCacheSession, 'gatewaySession'>,
+  request: { prefix?: ClientPrefixVerdict['kind']; gatewaySession?: string } = {}
 ): PiUsageCacheStep | null {
-  if (!isNotableVerdict(verdict)) return null;
+  const kind = sentKind(verdict);
+  if (!kind) return null;
+  const rewrite = rewriteOf(verdict);
+  const { prefix, gatewaySession } = request;
   return {
     turn: verdict.turn,
     step: verdict.step,
-    kind: verdict.kind,
+    kind,
     explained: verdict.explained,
     ...(verdict.causes.length > 0 ? { causes: [...verdict.causes] } : {}),
     ...(verdict.lost > 0 ? { lost: verdict.lost } : {}),
+    ...(rewrite > 0 ? { rewrite } : {}),
     prompt: verdict.prompt,
     read: verdict.read,
     write: verdict.write,
@@ -452,9 +504,19 @@ export function buildPiUsageCacheStep(
     session: {
       unexplained: totals.unexplained,
       unexplainedLostTokens: totals.unexplainedLostTokens,
+      unexplainedRebuilds: totals.unexplainedRebuilds,
+      unexplainedRewriteTokens: totals.unexplainedRewriteTokens,
+      ...(gatewaySession ? { gatewaySession } : {}),
     },
   };
 }
+
+const CACHE_KINDS: ReadonlySet<unknown> = new Set<PiUsageCacheKind>([
+  'cold',
+  'rebuild',
+  'shrink',
+  'warm',
+]);
 
 const PREFIX_KINDS: ReadonlySet<unknown> = new Set<ClientPrefixVerdict['kind']>([
   'first',
@@ -463,10 +525,21 @@ const PREFIX_KINDS: ReadonlySet<unknown> = new Set<ClientPrefixVerdict['kind']>(
   'diverged',
 ]);
 
+/**
+ * A gateway session id: a UUID, as `gatewaySessionUuid`
+ * (src/dsh-host/lib/sessionMetadata.ts) mints it.
+ */
+const GATEWAY_SESSION = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** A token count: finite and not negative. */
 function tokenCount(value: unknown): number | null {
   const count = finiteNumber(value);
   return count !== null && count >= 0 ? count : null;
+}
+
+/** A count older builds did not send: absent reads as 0, present as a token count. */
+function addedCount(value: unknown): number | null {
+  return value === undefined ? 0 : tokenCount(value);
 }
 
 function readStepRef(value: unknown): CacheStepRef | null {
@@ -478,32 +551,38 @@ function readStepRef(value: unknown): CacheStepRef | null {
 
 /**
  * Narrow a `cache` block to the keys {@link PiUsageCacheStep} names. `null`
- * when any required one is missing or malformed: half a verdict would read
- * as a different one. An unknown cause is dropped, an unknown prefix kind left
- * out.
+ * when any required one is missing or malformed, or a `warm` one has no
+ * `matched`: half a verdict would read as a different one. The session counts
+ * an older build did not send read as 0. An unknown cause is dropped; an
+ * unknown prefix kind, a `rewrite` on another kind than a rebuild or shrink
+ * and a gateway session that is no UUID are left out.
  */
 function readCacheStep(value: unknown): PiUsageCacheStep | null {
   const source = record(value);
   if (!source) return null;
   const at = readStepRef(source);
-  const kind = (CACHE_STEP_KINDS as readonly unknown[]).includes(source.kind)
-    ? (source.kind as CacheStepKind)
-    : null;
+  const kind = CACHE_KINDS.has(source.kind) ? (source.kind as PiUsageCacheKind) : null;
   const prompt = tokenCount(source.prompt);
   const read = tokenCount(source.read);
   const write = tokenCount(source.write);
+  const matched = readStepRef(source.matched);
   const session = record(source.session);
   const unexplained = tokenCount(session?.unexplained);
   const unexplainedLostTokens = tokenCount(session?.unexplainedLostTokens);
+  const unexplainedRebuilds = addedCount(session?.unexplainedRebuilds);
+  const unexplainedRewriteTokens = addedCount(session?.unexplainedRewriteTokens);
   if (
     !at ||
     !kind ||
+    (kind === 'warm' && !matched) ||
     typeof source.explained !== 'boolean' ||
     prompt === null ||
     read === null ||
     write === null ||
     unexplained === null ||
-    unexplainedLostTokens === null
+    unexplainedLostTokens === null ||
+    unexplainedRebuilds === null ||
+    unexplainedRewriteTokens === null
   ) {
     return null;
   }
@@ -513,8 +592,9 @@ function readCacheStep(value: unknown): PiUsageCacheStep | null {
       )
     : [];
   const lost = tokenCount(source.lost);
+  const rewrite = kind === 'rebuild' || kind === 'shrink' ? tokenCount(source.rewrite) : null;
   const prevPrompt = tokenCount(source.prevPrompt);
-  const matched = readStepRef(source.matched);
+  const gatewaySession = session?.gatewaySession;
   return {
     turn: at.turn,
     step: at.step,
@@ -522,6 +602,7 @@ function readCacheStep(value: unknown): PiUsageCacheStep | null {
     explained: source.explained,
     ...(causes.length > 0 ? { causes } : {}),
     ...(lost !== null && lost > 0 ? { lost } : {}),
+    ...(rewrite !== null && rewrite > 0 ? { rewrite } : {}),
     prompt,
     read,
     write,
@@ -530,7 +611,15 @@ function readCacheStep(value: unknown): PiUsageCacheStep | null {
     ...(PREFIX_KINDS.has(source.prefix)
       ? { prefix: source.prefix as ClientPrefixVerdict['kind'] }
       : {}),
-    session: { unexplained, unexplainedLostTokens },
+    session: {
+      unexplained,
+      unexplainedLostTokens,
+      unexplainedRebuilds,
+      unexplainedRewriteTokens,
+      ...(typeof gatewaySession === 'string' && GATEWAY_SESSION.test(gatewaySession)
+        ? { gatewaySession }
+        : {}),
+    },
   };
 }
 

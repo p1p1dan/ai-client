@@ -38,11 +38,10 @@ export interface TurnTokenTotals {
    * — checked against real session files, not assumed), so the two halves here
    * add back up to the total Pi billed.
    *
-   * Deliberately NOT `deriveCacheHitRate`'s `input + cacheRead` denominator:
-   * that one answers "how much of the prompt came from cache", where a cache
-   * WRITE must be excluded or the turn that warms a cache looks like it missed
-   * twice. This one answers "how much went up the wire", and a cache write went
-   * up the wire.
+   * The same sum as `deriveCacheHitRate`'s denominator since issue #9 (the
+   * whole prompt: a cache write is processed prompt too), asked a different
+   * question: that rate is "how much of the prompt came from cache", this is
+   * "how much went up the wire".
    */
   up: number;
   /** Completion tokens — the `↓` half. */

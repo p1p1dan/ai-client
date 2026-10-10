@@ -90,8 +90,10 @@
  * Prompt cache (decision 173 B2, issue #9): with `deps.cacheChain` the history
  * cache also folds the session's cache chain, each route judged by the plan's
  * protocol and cache retention (`cacheChainReport.ts`); a notable step's
- * verdict rides its settled usage, and one nothing local explains is logged,
- * beside the host's prefix evidence (`REQUEST_SCOPE_SERVICE`).
+ * verdict, or a first write's, rides its settled usage, with the chat's
+ * gateway session while `deps.sessionMetadata` says the host names one; one
+ * nothing local explains is logged, beside the host's prefix evidence
+ * (`REQUEST_SCOPE_SERVICE`).
  *
  * Identity (decisions 006 and 007): Main's durable `sessionFile` is a small
  * stub, `$DSH_HOME/aiclient-sessions/<dshSessionId>.dsh.json`, naming the DSH
@@ -208,6 +210,7 @@ import {
   type WorkerSubagentInterruptResult,
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
+import { gatewaySessionUuid } from '../lib/sessionMetadata.ts';
 import type { AttachedGate, DshPermissionHost } from '../permissions/permissionHost.ts';
 import { admitUserContent, type DshAttachmentStore, type DshUserContent } from './attachments.ts';
 import { BridgeSessionError } from './bridgeErrors.ts';
@@ -605,6 +608,14 @@ export interface DshBridgeDeps {
    * false, nothing is folded, sent or logged.
    */
   cacheChain?: boolean;
+  /**
+   * Decision 173 D: the host's request tap names this chat's gateway session
+   * in each anthropic-messages request (`metadata.user_id`), so a step's
+   * `cache` names it too (`gatewaySessionUuid`), for the copied diagnostics.
+   * plugin.ts turns it on unless `AICLIENT_RUNTIME_SESSION_METADATA=0`, the
+   * tap's own switch; absent or false, no `cache` names one.
+   */
+  sessionMetadata?: boolean;
 }
 
 /**
@@ -923,6 +934,12 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       presentCall,
       cacheStep: (seq) => this.historyCache.cacheStep(seq),
       prefixEvidence: () => this.prefixEvidence(),
+      ...(deps.sessionMetadata
+        ? {
+            gatewaySession: () =>
+              this.dshSessionId ? gatewaySessionUuid(this.dshSessionId) : undefined,
+          }
+        : {}),
       log: (line) => this.options.log?.(line),
     });
     this.jobs = new DshJobsTracker({

@@ -197,20 +197,21 @@ describe('the session rollup rides beside the turn totals (A2)', () => {
 });
 
 describe('deriveCacheHitRate', () => {
-  it('divides cache reads by the prompt, leaving cache writes out of the base', () => {
-    // 9_000 / (12_000 + 9_000) = 42.857…%. A denominator that also counted the
-    // 1_200 written would report 40% and make a cache-warming turn look worse
-    // than it was.
-    expect(deriveCacheHitRate(turn())).toBe(43);
-    expect(deriveCacheHitRate(turn({ cacheWrite: 500_000 }))).toBe(43);
+  it('divides cache reads by the whole prompt, cache writes included (decision 173)', () => {
+    // 9_000 / (12_000 + 9_000 + 1_200) = 40.54…%.
+    expect(deriveCacheHitRate(turn())).toBe(41);
+    expect(deriveCacheHitRate(turn({ cacheWrite: 500_000 }))).toBe(2);
+    // Issue #9's step 17: a rebuild that read only the system part back. The
+    // old base (input + read) put it at 100%.
+    expect(deriveCacheHitRate(turn({ input: 2, cacheRead: 36_848, cacheWrite: 138_030 }))).toBe(21);
   });
 
   it('rounds once, the way the composer chip rounds occupancy', () => {
     // 1 / 3 = 33.33…% and 2 / 3 = 66.66…%: half-up on the fractional part, so
     // a second `Math.round` in a view is a no-op rather than a disagreement.
-    expect(deriveCacheHitRate(turn({ input: 2, cacheRead: 1 }))).toBe(33);
-    expect(deriveCacheHitRate(turn({ input: 1, cacheRead: 2 }))).toBe(67);
-    expect(deriveCacheHitRate(turn({ input: 0, cacheRead: 7 }))).toBe(100);
+    expect(deriveCacheHitRate(turn({ input: 1, cacheRead: 1, cacheWrite: 1 }))).toBe(33);
+    expect(deriveCacheHitRate(turn({ input: 0, cacheRead: 2, cacheWrite: 1 }))).toBe(67);
+    expect(deriveCacheHitRate(turn({ input: 0, cacheRead: 7, cacheWrite: 0 }))).toBe(100);
   });
 
   it('reports 0 when the prompt was billed and none of it was cached', () => {
@@ -220,15 +221,14 @@ describe('deriveCacheHitRate', () => {
     // Also 0 with no caching in play at all — a provider that silently stopped
     // caching must read as 0%, not vanish.
     expect(deriveCacheHitRate(turn({ input: 12_000, cacheRead: 0, cacheWrite: 0 }))).toBe(0);
+    // And for a prompt written to the cache whole: it was processed, none of it read.
+    expect(deriveCacheHitRate(turn({ input: 0, cacheRead: 0, cacheWrite: 1_200 }))).toBe(0);
   });
 
   it('returns null when there are no prompt tokens to divide', () => {
     // The view must print nothing here. `0%` would assert a cache miss on a
     // turn that never billed a prompt.
-    expect(deriveCacheHitRate(turn({ input: 0, cacheRead: 0 }))).toBeNull();
-    // An empty prompt still outranks a cache write: nothing was read AND
-    // nothing was billed uncached, so there is no ratio, warmed cache or not.
-    expect(deriveCacheHitRate(turn({ input: 0, cacheRead: 0, cacheWrite: 1_200 }))).toBeNull();
+    expect(deriveCacheHitRate(turn({ input: 0, cacheRead: 0, cacheWrite: 0 }))).toBeNull();
   });
 
   it('treats an unreported or nonsensical count as unknown, not as zero', () => {
@@ -237,9 +237,14 @@ describe('deriveCacheHitRate', () => {
     expect(
       deriveCacheHitRate({ ...turn(), cacheRead: undefined } as unknown as PiTurnUsage)
     ).toBeNull();
+    expect(
+      deriveCacheHitRate({ ...turn(), cacheWrite: undefined } as unknown as PiTurnUsage)
+    ).toBeNull();
     expect(deriveCacheHitRate({ ...turn(), input: '12000' } as unknown as PiTurnUsage)).toBeNull();
     expect(deriveCacheHitRate(turn({ cacheRead: Number.NaN }))).toBeNull();
+    expect(deriveCacheHitRate(turn({ cacheWrite: Number.POSITIVE_INFINITY }))).toBeNull();
     expect(deriveCacheHitRate(turn({ cacheRead: -1 }))).toBeNull();
+    expect(deriveCacheHitRate(turn({ cacheWrite: -1 }))).toBeNull();
     expect(deriveCacheHitRate(turn({ input: -1 }))).toBeNull();
     expect(deriveCacheHitRate(null)).toBeNull();
     expect(deriveCacheHitRate(undefined)).toBeNull();
@@ -448,7 +453,7 @@ describe('T125 · a cut request whose cost the provider never reported', () => {
   });
 });
 
-describe('decision 173 · a notable step carries its cache verdict', () => {
+describe('decision 173 · a step carries its cache verdict', () => {
   /** A step's verdict as `cacheChain.ts` writes it: issue #9's step 17 by default. */
   const verdict = (overrides: Partial<CacheStepVerdict> = {}): CacheStepVerdict => ({
     turn: 1,
@@ -467,22 +472,73 @@ describe('decision 173 · a notable step carries its cache verdict', () => {
     gapMs: 41_000,
     ...overrides,
   });
-  const TOTALS = { unexplained: 3, unexplainedLostTokens: 185_171 };
+  /** Issue #9's first step: nothing to read yet, the whole prompt written. */
+  const first = verdict({
+    step: 1,
+    prompt: 43_975,
+    read: 0,
+    write: 43_973,
+    prevPrompt: undefined,
+    lost: 0,
+    kind: 'cold',
+    explained: true,
+    causes: ['plan-mode'],
+  });
+  const TOTALS = {
+    unexplained: 3,
+    unexplainedLostTokens: 206_206,
+    unexplainedRebuilds: 2,
+    unexplainedRewriteTokens: 185_171,
+  };
+  const GATEWAY_SESSION = '0f1e2d3c-4b5a-5968-8776-a5b4c3d2e1f0';
   const SETTLED = { input: 2, output: 900, cacheRead: 36_848, cacheWrite: 138_030 };
 
   it('keeps the numbers and the step, never the route or the timing', () => {
-    expect(buildPiUsageCacheStep(verdict(), TOTALS, 'append')).toEqual({
+    expect(
+      buildPiUsageCacheStep(verdict(), TOTALS, {
+        prefix: 'append',
+        gatewaySession: GATEWAY_SESSION,
+      })
+    ).toEqual({
       turn: 1,
       step: 17,
       kind: 'rebuild',
       explained: false,
       lost: 121_042,
+      // min(lost, write): the step before's prompt it had to write again.
+      rewrite: 121_042,
       prompt: 174_880,
       read: 36_848,
       write: 138_030,
       prevPrompt: 157_890,
       prefix: 'append',
-      session: { unexplained: 3, unexplainedLostTokens: 185_171 },
+      session: {
+        unexplained: 3,
+        unexplainedLostTokens: 206_206,
+        unexplainedRebuilds: 2,
+        unexplainedRewriteTokens: 185_171,
+        gatewaySession: GATEWAY_SESSION,
+      },
+    });
+  });
+
+  it('rewrites only what a shrink wrote, when it wrote less than it lost', () => {
+    // Issue #9's step 74: back on the long chain, 392,447 lost, 7,125 written.
+    const shrink = verdict({
+      step: 74,
+      kind: 'shrink',
+      prompt: 332_246,
+      read: 325_119,
+      write: 7_125,
+      prevPrompt: 717_566,
+      lost: 392_447,
+      matched: { turn: 1, step: 69 },
+    });
+    expect(buildPiUsageCacheStep(shrink, TOTALS)).toMatchObject({
+      kind: 'shrink',
+      lost: 392_447,
+      rewrite: 7_125,
+      matched: { turn: 1, step: 69 },
     });
   });
 
@@ -499,23 +555,51 @@ describe('decision 173 · a notable step carries its cache verdict', () => {
     );
     expect(matched).toMatchObject({ kind: 'warm', matched: { turn: 1, step: 14 } });
     expect(matched).not.toHaveProperty('lost');
+    // A read of another chain lost nothing: no rewrite.
+    expect(matched).not.toHaveProperty('rewrite');
     expect(matched).not.toHaveProperty('prefix');
+    expect(matched?.session).not.toHaveProperty('gatewaySession');
+  });
+
+  it('sends a cold step that wrote the cache: the first write', () => {
+    expect(buildPiUsageCacheStep(first, TOTALS, { gatewaySession: GATEWAY_SESSION })).toEqual({
+      turn: 1,
+      step: 1,
+      kind: 'cold',
+      explained: true,
+      causes: ['plan-mode'],
+      prompt: 43_975,
+      read: 0,
+      write: 43_973,
+      session: { ...TOTALS, gatewaySession: GATEWAY_SESSION },
+    });
   });
 
   it.each([
     ['warm', verdict({ kind: 'warm', lost: 2 })],
-    ['cold', verdict({ kind: 'cold', lost: 0, prevPrompt: undefined })],
+    ['cold that wrote nothing', { ...first, prompt: 18, write: 0 }],
     ['untracked', verdict({ kind: 'untracked', lost: 0, prevPrompt: undefined })],
     ['turn-shrink', verdict({ kind: 'turn-shrink' })],
+    [
+      'turn-shrink that read an older step’s cache',
+      verdict({ kind: 'turn-shrink', matched: { turn: 1, step: 3 } }),
+    ],
   ])('says nothing of a %s step', (_kind, step) => {
     expect(buildPiUsageCacheStep(step, TOTALS)).toBeNull();
   });
 
   it('rides the settled payload and reads back as built', () => {
-    const cache = buildPiUsageCacheStep(verdict(), TOTALS, 'diverged');
-    const built = buildPiUsagePayload(SETTLED, undefined, null, null, { cache });
-    expect(built?.cache).toEqual(cache);
-    expect(readPiUsagePayload(built)).toEqual(built);
+    for (const cache of [
+      buildPiUsageCacheStep(verdict(), TOTALS, {
+        prefix: 'diverged',
+        gatewaySession: GATEWAY_SESSION,
+      }),
+      buildPiUsageCacheStep(first, TOTALS),
+    ]) {
+      const built = buildPiUsagePayload(SETTLED, undefined, null, null, { cache });
+      expect(built?.cache).toEqual(cache);
+      expect(readPiUsagePayload(built)).toEqual(built);
+    }
     expect(buildPiUsagePayload(SETTLED, undefined, null, null, { cache: null })).not.toHaveProperty(
       'cache'
     );
@@ -523,8 +607,28 @@ describe('decision 173 · a notable step carries its cache verdict', () => {
     expect(readPiUsagePayload({ input: 1, output: 2 })).not.toHaveProperty('cache');
   });
 
+  it('reads a block from a build before the alert counts, as 0 and no gateway session', () => {
+    const built = buildPiUsageCacheStep(verdict(), TOTALS);
+    if (!built) throw new Error('a rebuild is sent');
+    const { session: _session, rewrite: _rewrite, ...older } = built;
+    const read = readPiUsagePayload({
+      ...SETTLED,
+      cache: { ...older, session: { unexplained: 3, unexplainedLostTokens: 206_206 } },
+    })?.cache;
+    expect(read).toMatchObject({ kind: 'rebuild', lost: 121_042 });
+    expect(read).not.toHaveProperty('rewrite');
+    expect(read?.session).toEqual({
+      unexplained: 3,
+      unexplainedLostTokens: 206_206,
+      unexplainedRebuilds: 0,
+      unexplainedRewriteTokens: 0,
+    });
+  });
+
   it('keeps only the keys it knows, on both ends', () => {
-    const cache = buildPiUsageCacheStep(verdict({ causes: ['compaction'] }), TOTALS, 'same');
+    const cache = buildPiUsageCacheStep(verdict({ causes: ['compaction'] }), TOTALS, {
+      prefix: 'same',
+    });
     const noisy = {
       ...cache,
       provider: 'claude',
@@ -533,7 +637,7 @@ describe('decision 173 · a notable step carries its cache verdict', () => {
       causes: ['compaction', 'weather'],
       prefix: 'sideways',
       matched: { turn: 1, step: 3, seq: 9 },
-      session: { ...TOTALS, steps: 80 },
+      session: { ...TOTALS, steps: 80, gatewaySession: 'aiclient-s1' },
     };
     const read = readPiUsagePayload({ ...SETTLED, cache: noisy })?.cache;
     expect(read).toEqual({
@@ -543,12 +647,14 @@ describe('decision 173 · a notable step carries its cache verdict', () => {
       explained: false,
       causes: ['compaction'],
       lost: 121_042,
+      rewrite: 121_042,
       prompt: 174_880,
       read: 36_848,
       write: 138_030,
       prevPrompt: 157_890,
       matched: { turn: 1, step: 3 },
-      session: { unexplained: 3, unexplainedLostTokens: 185_171 },
+      // A gateway session that is no UUID is left out.
+      session: TOTALS,
     });
     // The builder narrows the same way.
     expect(
@@ -556,16 +662,27 @@ describe('decision 173 · a notable step carries its cache verdict', () => {
         cache: noisy as unknown as PiUsageCacheStep,
       })?.cache
     ).toEqual(read);
+    // A rewrite only rides a rebuild or a shrink.
+    const cold = buildPiUsageCacheStep(first, TOTALS);
+    expect(readPiUsagePayload({ ...SETTLED, cache: { ...cold, rewrite: 5 } })?.cache).toEqual(cold);
   });
 
   it.each([
     ['an unknown kind', { kind: 'tepid' }],
+    ['an untracked kind', { kind: 'untracked' }],
+    ['a turn-shrink', { kind: 'turn-shrink' }],
+    ['a warm one that names no older step', { kind: 'warm' }],
     ['no explanation flag', { explained: 'no' }],
     ['a negative read', { read: -1 }],
     ['no prompt', { prompt: undefined }],
     ['no step', { step: undefined }],
     ['no session totals', { session: undefined }],
     ['malformed session totals', { session: { unexplained: 1 } }],
+    ['a negative rebuild count', { session: { ...TOTALS, unexplainedRebuilds: -1 } }],
+    [
+      'a rewrite total that is no number',
+      { session: { ...TOTALS, unexplainedRewriteTokens: '9' } },
+    ],
   ])('drops a cache block with %s, and keeps the bill', (_label, broken) => {
     const cache = { ...buildPiUsageCacheStep(verdict(), TOTALS), ...broken };
     const read = readPiUsagePayload({ ...SETTLED, cache });

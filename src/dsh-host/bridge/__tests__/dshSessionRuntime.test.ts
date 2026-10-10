@@ -19,6 +19,7 @@ import {
   WORKER_RETRY_UNAVAILABLE,
   WORKER_RPC_PROTOCOL_VERSION,
 } from '../../../shared/types/workerRpc.ts';
+import { gatewaySessionUuid } from '../../lib/sessionMetadata.ts';
 import { BridgeRpcServer, type BridgeSessionRuntimeOptions } from '../bridgeRpcServer.ts';
 import {
   type DshBridgeContext,
@@ -1664,24 +1665,63 @@ describe('DshSessionRuntime — the prompt cache of each step (decision 173 B2)'
     for (const event of rebuilt()) dsh.append(event);
     expect(evidenceFor).toHaveBeenCalledWith(DSH_ID);
     expect(settled()).toEqual([
-      undefined,
+      // The first write: no step before it to read from.
+      {
+        turn: 1,
+        step: 1,
+        kind: 'cold',
+        explained: false,
+        prompt: 10_002,
+        read: 0,
+        write: 10_000,
+        session: {
+          unexplained: 0,
+          unexplainedLostTokens: 0,
+          unexplainedRebuilds: 0,
+          unexplainedRewriteTokens: 0,
+        },
+      },
       {
         turn: 1,
         step: 2,
         kind: 'rebuild',
         explained: false,
         lost: 10_002,
+        rewrite: 10_002,
         prompt: 12_002,
         read: 0,
         write: 12_000,
         prevPrompt: 10_002,
         prefix: 'append',
-        session: { unexplained: 1, unexplainedLostTokens: 10_002 },
+        session: {
+          unexplained: 1,
+          unexplainedLostTokens: 10_002,
+          unexplainedRebuilds: 1,
+          unexplainedRewriteTokens: 10_002,
+        },
       },
     ]);
     expect(lines).toEqual([
       `cache-chain: upstream cache inconsistency session=${DSH_ID} step=t1s2 kind=rebuild prompt=12002 prev=10002 read=0 write=12000 lost=10002 matched=- prefix=append`,
     ]);
+  });
+
+  it('[D173-RT-3] names the chat’s gateway session while the host names one', async () => {
+    const { dsh, settled } = await opened({
+      cacheChain: true,
+      sessionMetadata: true,
+      modelPlan: () => ROUTED,
+    });
+    for (const event of rebuilt()) dsh.append(event);
+    const named = settled().map(
+      (cache) =>
+        (cache as { session?: { gatewaySession?: string } } | undefined)?.session?.gatewaySession
+    );
+    // The UUID the request tap puts in `metadata.user_id`, never the DSH id itself.
+    expect(named).toEqual([gatewaySessionUuid(DSH_ID), gatewaySessionUuid(DSH_ID)]);
+    expect(named[0]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
   });
 
   it.each([
