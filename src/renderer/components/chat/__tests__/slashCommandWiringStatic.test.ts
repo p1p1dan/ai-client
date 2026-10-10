@@ -39,11 +39,35 @@ describe('R02-c the slash menu works without a workspace', () => {
   });
 
   it('asks for the catalog without requiring a session', () => {
-    // `sessionId` is a hint that sharpens the answer in local mode, never a
-    // precondition.
+    // `sessionId` is a hint that sharpens the answer, never a precondition.
+    // Decision 175: the folder the menu is for goes with it, so Main can list
+    // that workspace's skills before any session runs there.
     expect(COMPOSER).toContain(
-      '.getSlashCommands(activeSessionId ? { sessionId: activeSessionId } : {})'
+      '.getSlashCommands(slashCatalogRequest(activeSessionId, effectiveCwd))'
     );
+    // A new folder (the home page's draft target changing) asks again.
+    expect(COMPOSER).toContain('}, [slashMenuActive, activeSessionId, effectiveCwd]);');
+  });
+});
+
+describe('decision 175: the home page has no conversation for some commands', () => {
+  it('filters the menu on the home page only', () => {
+    expect(COMPOSER).toContain(
+      'return filterSlashCommands(onHome ? homeSlashMenu(catalog) : catalog, slashQuery);'
+    );
+  });
+
+  it('answers a refused command before a DSH command could leave as a message', () => {
+    const run = COMPOSER.slice(COMPOSER.indexOf('const runBuiltinSlash'));
+    const body = run.slice(0, run.indexOf('const handleSend'));
+    const refusalAt = body.indexOf('homeSlashRefusal(parsed.name, parsed.args, source)');
+    expect(refusalAt).toBeGreaterThan(-1);
+    // Only with no conversation open, and ahead of the `runtime` exit: `/goal` is DSH's.
+    expect(body.lastIndexOf('if (!activeSessionId) {', refusalAt)).toBeGreaterThan(-1);
+    expect(refusalAt).toBeLessThan(body.indexOf("if (action.type === 'runtime') return false;"));
+    // Consumed: it never reaches the send.
+    const refusal = body.slice(refusalAt, body.indexOf("if (action.type === 'runtime')"));
+    expect(refusal).toContain('return true;');
   });
 });
 

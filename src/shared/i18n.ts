@@ -4337,3 +4337,18 @@ Object.assign(zhTranslations, {
   'Read the prefix of turn {{turn}}, step {{step}}': '读到回合 {{turn}} 第 {{step}} 步的前缀',
   '{{verdict}} (prefix diverged)': '{{verdict}}（前缀不一致）',
 });
+
+// Slash commands before start (#6 follow-up)
+/**
+ * dsh-rebase decision 175 (GitHub issue #6 follow-up): the hint a command
+ * gets when it is typed on the home page and needs an open conversation —
+ * `/archive`, `/compact`, and `/goal` without an objective
+ * (`homeSlashCommands.ts`).
+ */
+Object.assign(zhTranslations, {
+  'This command needs an open conversation': '这个命令需要先打开一个对话',
+  '/{{command}} works on an open conversation. Open one from the sidebar or the recent list, then run it there.':
+    '/{{command}} 作用于打开的对话。请先从侧栏或「最近对话」打开一个对话，再在那里输入。',
+  'To start a goal from here, write it after /goal. Showing, pausing, resuming, editing or clearing a goal works in its conversation.':
+    '要从这里开始一个目标，把目标写在 /goal 后面；查看、暂停、继续、修改或清除目标，要在目标所在的对话里进行。',
+});

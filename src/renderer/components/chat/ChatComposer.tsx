@@ -120,6 +120,7 @@ import {
   isLegacyMigrationRefusal,
 } from './historyError';
 import { runHomeBranchSwitch } from './homeBranchSwitch';
+import { homeSlashMenu, homeSlashRefusal, homeSlashRefusalToast } from './homeSlashCommands';
 import { planHomeBranchSwitch } from './homeTarget';
 import { ModelMissingNotice } from './ModelMissingNotice';
 import {
@@ -210,6 +211,7 @@ import {
   replaceSlashCommand,
   resolveSlashAction,
   type SlashCatalogItem,
+  slashCatalogRequest,
   slashRowsForDisplay,
 } from './slashCommands';
 import { useComposerAttachments } from './useComposerAttachments';
@@ -663,9 +665,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionResults, setMentionResults] = useState<FileSearchResult[]>([]);
   // R02-c slash commands. Unlike the @ popup above this needs NO cwd: the
-  // commands come from the agent's own configuration, and the start screen —
-  // which has no working directory yet — is exactly where someone reaches for
-  // `/new`.
+  // window's own commands and the user's skills need none, and a temporary
+  // chat before its first send has none. When there is one, the menu passes
+  // it on, for the project's skills (decision 175).
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [slashCatalog, setSlashCatalog] = useState<SlashCatalogItem[]>([]);
   const [slashIndex, setSlashIndex] = useState(0);
@@ -821,14 +823,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const mentionChips = useMemo(() => parseMentionChips(value), [value]);
   const mentionOpen = mentionQuery !== null && mentionResults.length > 0;
   // pi's commands merged with this window's own. `t` is passed in rather than
-  // read inside, so `buildSlashCatalog` stays pure and testable.
-  const slashResults = useMemo(
-    () =>
-      slashQuery === null
-        ? []
-        : filterSlashCommands(buildSlashCatalog(slashCatalog, t), slashQuery),
-    [slashCatalog, slashQuery, t]
-  );
+  // read inside, so `buildSlashCatalog` stays pure and testable. Decision 175:
+  // the home page has no conversation for `/archive` or `/compact` to act on.
+  const slashResults = useMemo(() => {
+    if (slashQuery === null) return [];
+    const catalog = buildSlashCatalog(slashCatalog, t);
+    return filterSlashCommands(onHome ? homeSlashMenu(catalog) : catalog, slashQuery);
+  }, [slashCatalog, slashQuery, t, onHome]);
   const slashOpen = slashQuery !== null && slashResults.length > 0;
   // F11: both popups are absolutely positioned inside this card and cannot flip
   // themselves, so the card is the anchor and one measurement serves both — a
@@ -1233,6 +1234,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     const source = buildSlashCatalog(slashCatalog, t).find(
       (item) => item.name === parsed.name
     )?.source;
+    // Decision 175: on the home page there is no conversation for these to act
+    // on. They used to go out as the first message of a new one; now the hint
+    // says so and the text stays in the box. Ahead of the `runtime` exit below:
+    // `/goal` is DSH's.
+    if (!activeSessionId) {
+      const refusal = homeSlashRefusal(parsed.name, parsed.args, source);
+      if (refusal) {
+        toastManager.add({ type: 'info', ...homeSlashRefusalToast(refusal, parsed.name, t) });
+        return true;
+      }
+    }
     const action = resolveSlashAction(parsed.name, parsed.args, source);
     if (action.type === 'runtime') return false;
 
@@ -1716,13 +1728,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // R02-c: fetch once per menu opening, not per keystroke — filtering is local.
   // Deliberately NOT debounced like the file search above: this is one in-process
   // RPC to a worker that already holds the list, and the menu should be populated
-  // the moment `/` is typed.
+  // the moment `/` is typed. Decision 175: it names the folder too — the home
+  // page's draft target, or the chat's own — so a workspace no session runs in
+  // yet gets its skills, read by Main.
   const slashMenuActive = slashQuery !== null;
   useEffect(() => {
     if (!slashMenuActive) return;
     let cancelled = false;
     window.electronAPI.chat
-      .getSlashCommands(activeSessionId ? { sessionId: activeSessionId } : {})
+      .getSlashCommands(slashCatalogRequest(activeSessionId, effectiveCwd))
       .then((result) => {
         // pi reports `description` as optional; the menu always renders a row,
         // so it is normalised here rather than defended against in every pure
@@ -1744,7 +1758,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     return () => {
       cancelled = true;
     };
-  }, [slashMenuActive, activeSessionId]);
+  }, [slashMenuActive, activeSessionId, effectiveCwd]);
 
   /**
    * Re-read the command prefix after the DOM has the new value.
@@ -1769,9 +1783,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // F4 (round-4 Codex NEEDS-FIX #3): `updateValue` writes `valueRef`
     // synchronously, same tick as `setValue` — see the ref's own comment.
     updateValue(next);
-    // R02-c: tracked before the cwd guard below. Slash commands come from the
-    // agent's configuration, not from the workspace, so the start screen — the
-    // very place someone reaches for `/new` — must still get a menu.
+    // R02-c: tracked before the cwd guard below. The menu needs no workspace —
+    // the window's commands and the user's skills come without one (decision
+    // 175 adds the project's when there is one) — so a chat with no folder yet
+    // must still get a menu.
     syncSlashQuery(next);
     if (composingRef.current || !effectiveCwd) {
       setMentionQuery(null);

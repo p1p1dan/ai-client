@@ -28,10 +28,16 @@ import {
 } from '@shared/types/sessionPermissionTier';
 import type {
   WorkerCapabilityInventory,
+  WorkerCommandsResult,
   WorkerInterjectWithdrawResult,
 } from '@shared/types/workerRpc';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
+import { currentDshSkillHomes } from '../services/agent-host/DshHostProcess';
 import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
+import {
+  composerSlashCommands,
+  listDshSkillsFromDisk,
+} from '../services/agent-host/dshSkillCatalog';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
 import { adoptTempWorkspace } from '../services/agent-host/TempWorkspaceService';
 import { WorkerManagerError, workerManager } from '../services/agent-host/WorkerManager';
@@ -43,6 +49,7 @@ import {
   readSessionReplayPage,
   SESSION_REPLAY_UNAVAILABLE,
 } from '../services/chat/SessionReplayReader';
+import { usableWorkspace } from '../services/legacyAssets/detectLegacyAssets';
 
 /** The window that sent this IPC call, when it still exists. */
 const windowCleanupAttached = new Set<number>();
@@ -839,19 +846,33 @@ export function registerChatHandlers(): void {
    *
    * No `requireLiveSession` and no `claimSessionForSender`, unlike every
    * neighbour here. This is a read that happens while the user types, including
-   * on the start screen where no session exists yet, and it does not act on a
+   * on the home page where no session exists yet, and it does not act on a
    * session — so gating it on one would turn the ordinary case into an error
    * the renderer has to translate back into "no commands".
+   *
+   * Decision 175: `workspacePath` is the folder the menu is for (the home
+   * page's draft target, or the chat's own). With no worker of that workspace
+   * up, its skills are read from disk by DSH's rules (`composerSlashCommands`).
+   * Only a local absolute path is read; anything else lists the user's skills.
    */
   ipcMain.handle(
     IPC_CHANNELS.CHAT_GET_SLASH_COMMANDS,
     async (
       _e,
-      payload: { sessionId?: string } = {}
-    ): Promise<Awaited<ReturnType<typeof workerManager.getSlashCommands>>> =>
-      workerManager.getSlashCommands({
-        ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
-      })
+      payload: { sessionId?: string; workspacePath?: string } = {}
+    ): Promise<WorkerCommandsResult> =>
+      composerSlashCommands(
+        {
+          ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
+          workspacePath: usableWorkspace(payload.workspacePath),
+        },
+        {
+          workers: workerManager,
+          listSkills: (workspacePath) =>
+            listDshSkillsFromDisk(workspacePath, currentDshSkillHomes()),
+          log: (message, error) => console.warn(message, error),
+        }
+      )
   );
 
   ipcMain.handle(

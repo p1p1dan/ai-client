@@ -123,6 +123,7 @@ import type { WorkerTransportExit } from './WorkerTransport';
 import {
   joinWorkerPath,
   normalizeWorkerPath,
+  sameWorkerDirectory,
   sessionWorkerKey,
   workspaceWorkerKey,
 } from './workerSessionKey';
@@ -411,6 +412,25 @@ export interface WorkerManagerSlotSnapshot {
   error: string | null;
   /** Its own restarts inside the current window (decision 020: host exits never add one). */
   restartAttempts: number;
+}
+
+/**
+ * Decision 175: the composer menu as the pool can answer it (`getSlashCommands`).
+ *
+ * - `session`: the named session's own worker.
+ * - `workspace`: another ready worker in the same workspace — same commands,
+ *   same project and user skills.
+ * - `none`: no ready worker knows the workspace. `commands` then holds only
+ *   the command rows of whichever worker is up (commands are registered on
+ *   the host, not per workspace; none up: empty), and the workspace's skills
+ *   are the caller's to list (`composerSlashCommands`, from disk).
+ */
+export interface WorkerSlashCommandsAnswer {
+  commands: WorkerSlashCommandInfo[];
+  truncated: boolean;
+  origin: 'session' | 'workspace' | 'none';
+  /** The workspace the menu is for: the session's own when the pool has it, else the one named. */
+  workspacePath: string | null;
 }
 
 const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60_000;
@@ -1466,36 +1486,47 @@ export class WorkerManager {
    *    row carries an absolute `path`, and half of them come from the
    *    answering worker's `<cwd>/.pi/skills` and `<cwd>/.pi/prompts`. A named
    *    session is therefore only ever answered by a worker with the same
-   *    `cwd`, and a session this pool has never started — the lazy-start case,
-   *    which has no entry and so no workspace to compare — gets an empty list
-   *    rather than another repository's menu.
+   *    `cwd`, never by another repository's.
    *
-   * The unnamed call is the start screen, where there is no session to hand a
-   * wrong list to and no workspace to match against; it keeps the any-worker
-   * fallback so the menu is not empty for the whole first turn.
+   * Decision 175 (GitHub issue #6 follow-up): the composer also names the
+   * workspace (`workspacePath`), so a session this pool has never started —
+   * the lazy-start case, with no entry to read a workspace off — and the home
+   * page (no session; the draft target's folder) are matched the same way.
+   * Where no ready worker knows the workspace, the answer is `none`: the
+   * command rows of any worker that is up (commands belong to the host, not
+   * to a workspace), with its skills left out, for the caller to put the
+   * workspace's own skills after (`composerSlashCommands`). The old unnamed
+   * call answered with whatever worker came first, its project's skills
+   * included.
    *
    * Not cached. The RPC is in-process message passing and the menu asks once
    * per open, while a cache would keep a skill the user just installed hidden
    * until something invalidated it.
    */
   async getSlashCommands(
-    input: { sessionId?: string } = {}
-  ): Promise<{ commands: WorkerSlashCommandInfo[]; truncated: boolean }> {
+    input: { sessionId?: string; workspacePath?: string | null } = {}
+  ): Promise<WorkerSlashCommandsAnswer> {
     const named = input.sessionId ? this.entriesBySession.get(input.sessionId) : undefined;
+    const workspacePath = named?.cwd ?? input.workspacePath ?? null;
     const isReady = (candidate: ManagedSlot): boolean =>
       candidate.state === 'ready' && candidate.slot !== null;
+    const ready = [...this.entriesBySession.values()].filter(isReady);
     let entry: ManagedSlot | undefined;
-    if (!input.sessionId) {
-      entry = [...this.entriesBySession.values()].find(isReady);
-    } else if (named && isReady(named)) {
+    let origin: WorkerSlashCommandsAnswer['origin'];
+    if (named && isReady(named)) {
       entry = named;
-    } else if (named) {
-      const workspace = named.cwd;
-      entry = [...this.entriesBySession.values()].find(
-        (candidate) => isReady(candidate) && candidate.cwd === workspace
-      );
+      origin = 'session';
+    } else {
+      // The composer's spelling of the folder, not the pool's normalized one:
+      // compared as a directory (separators, and case on Windows, folded).
+      entry =
+        workspacePath === null
+          ? undefined
+          : ready.find((candidate) => sameWorkerDirectory(candidate.cwd, workspacePath));
+      origin = entry ? 'workspace' : 'none';
+      entry ??= ready[0];
     }
-    if (!entry?.slot) return { commands: [], truncated: false };
+    if (!entry?.slot) return { commands: [], truncated: false, origin: 'none', workspacePath };
 
     const result = await entry.slot.request<WorkerCommandsResult, WorkerCommandsPayload>(
       'worker.commands',
@@ -1503,10 +1534,19 @@ export class WorkerManager {
     );
     // A malformed list costs the menu, never the session: unlike a tree or a
     // history page, nothing downstream acts on these rows.
-    if (!isWorkerCommandsResult(result)) return { commands: [], truncated: false };
+    if (!isWorkerCommandsResult(result)) {
+      return { commands: [], truncated: false, origin, workspacePath };
+    }
+    const commands = sanitizeWorkerCommandRows(result.commands);
+    if (origin !== 'none') {
+      return { commands, truncated: result.truncated === true, origin, workspacePath };
+    }
+    // Another workspace's worker: its commands hold here too, its skills do not.
     return {
-      commands: sanitizeWorkerCommandRows(result.commands),
-      truncated: result.truncated === true,
+      commands: commands.filter((row) => row.source !== 'skill'),
+      truncated: false,
+      origin,
+      workspacePath,
     };
   }
 

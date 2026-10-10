@@ -54,6 +54,21 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<{ name: string; descriptionKe
 ];
 
 /**
+ * Decision 175: what the menu asks Main for — the chat when there is one, and
+ * the folder the menu is for (the home page's draft target, the chat's own),
+ * so a workspace with no session up on the host still gets its skills.
+ */
+export function slashCatalogRequest(
+  sessionId: string | null,
+  workspacePath: string | null
+): { sessionId?: string; workspacePath?: string } {
+  return {
+    ...(sessionId ? { sessionId } : {}),
+    ...(workspacePath ? { workspacePath } : {}),
+  };
+}
+
+/**
  * Split a message that is entirely one command.
  *
  * Anchored at the start, and the whole message must be the command plus its

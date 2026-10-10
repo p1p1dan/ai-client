@@ -19,12 +19,14 @@
 
 import type { SpawnOptions } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { PI_MANAGED_AGENT_DIR_NAME } from '@shared/piModelConfig';
 import { app } from 'electron';
 import { getAppStateRoot } from '../appStatePaths';
 import { buildDshHostEnvironment } from './dshHostEnvironment';
 import { readDshPluginSelection } from './dshPluginSelection';
+import type { DshSkillHomes } from './dshSkillCatalog';
 
 export {
   buildDshHostEnvironment,
@@ -171,6 +173,23 @@ export function buildDshHostLaunch(
       platform: input.platform,
     }),
     privateDirs: [dshHome, cwd, nativeCacheDir],
+  };
+}
+
+/**
+ * Decision 175: where the host's `skill-filesystem` row looks besides the
+ * project, as this app launches the host — `customSkillDirs` under the
+ * `<agentDir>` the launch hands it (decision 101), its `DSH_HOME`, and DSH's
+ * default `agentsHome`. The host's environment drops `DSH_AGENTS_HOME` with
+ * the rest of the `DSH_` family, and keeps HOME / USERPROFILE, so its
+ * `homedir()` is Main's.
+ */
+export function currentDshSkillHomes(): DshSkillHomes {
+  const appStateRoot = getAppStateRoot();
+  return {
+    agentDir: dshPermissionAgentDir(appStateRoot),
+    dshHome: resolveDshHome({ isPackaged: app.isPackaged, appStateRoot }),
+    agentsHome: path.join(homedir(), '.agents'),
   };
 }
 

@@ -2748,6 +2748,21 @@ describe('WorkerManager dispose drain window', () => {
 });
 
 describe('WorkerManager slash commands', () => {
+  /** Decision 175: a worker whose list has a host-wide command and a skill of its workspace. */
+  function commandAndSkill(record: { request: ReturnType<typeof vi.fn> } | undefined) {
+    record?.request.mockImplementation(async (type: string) =>
+      type === 'worker.commands'
+        ? {
+            commands: [
+              { name: 'goal', source: 'command' },
+              { name: 'repo-skill', source: 'skill' },
+            ],
+            truncated: false,
+          }
+        : {}
+    );
+  }
+
   it('forwards to a ready worker and returns its list', async () => {
     const h = createHarness();
     await create(h.manager, 's1', 11);
@@ -2755,28 +2770,73 @@ describe('WorkerManager slash commands', () => {
     await expect(h.manager.getSlashCommands({ sessionId: 's1' })).resolves.toEqual({
       commands: [{ name: 'skill:from-s1', source: 'skill' }],
       truncated: false,
+      origin: 'session',
+      workspacePath: '/repo',
     });
   });
 
-  it('answers with an empty list when no worker exists at all', async () => {
-    // The start screen. Throwing here would make every caller translate the
-    // error back into "no commands".
+  it('the session’s own worker wins over the workspace the composer names', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+
+    await expect(
+      h.manager.getSlashCommands({ sessionId: 's1', workspacePath: '/elsewhere' })
+    ).resolves.toMatchObject({ origin: 'session', workspacePath: '/repo' });
+  });
+
+  it('answers none, with an empty list, when no worker exists at all', async () => {
+    // The home page on a fresh start. Throwing here would make every caller
+    // translate the error back into "no commands".
     const h = createHarness();
     await expect(h.manager.getSlashCommands()).resolves.toEqual({
       commands: [],
       truncated: false,
+      origin: 'none',
+      workspacePath: null,
+    });
+    await expect(h.manager.getSlashCommands({ workspacePath: '/repo' })).resolves.toEqual({
+      commands: [],
+      truncated: false,
+      origin: 'none',
+      workspacePath: '/repo',
     });
   });
 
-  it('still answers from the nearest worker when no session is named', async () => {
-    // The start screen: there is no session to hand a wrong list to, and the
-    // agent-dir and user scopes are the same for every worker.
+  it('with no session named, answers from a worker in the workspace named (the home page)', async () => {
     const h = createHarness();
     await create(h.manager, 's1', 11);
 
-    await expect(h.manager.getSlashCommands()).resolves.toEqual({
+    await expect(h.manager.getSlashCommands({ workspacePath: '/repo' })).resolves.toEqual({
       commands: [{ name: 'skill:from-s1', source: 'skill' }],
       truncated: false,
+      origin: 'workspace',
+      workspacePath: '/repo',
+    });
+    // The composer's spelling of the same directory still finds it.
+    await expect(h.manager.getSlashCommands({ workspacePath: '/repo/' })).resolves.toMatchObject({
+      origin: 'workspace',
+    });
+  });
+
+  // Decision 175 replaced "still answers from the nearest worker when no
+  // session is named": that answer carried the other repository's skills.
+  it('another workspace’s worker gives its commands, never its skills', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    commandAndSkill(h.records.find((entry) => entry.sessionId === 's1'));
+
+    await expect(h.manager.getSlashCommands({ workspacePath: '/elsewhere' })).resolves.toEqual({
+      commands: [{ name: 'goal', source: 'command' }],
+      truncated: false,
+      origin: 'none',
+      workspacePath: '/elsewhere',
+    });
+    // A temporary chat on the home page names no folder at all.
+    await expect(h.manager.getSlashCommands()).resolves.toEqual({
+      commands: [{ name: 'goal', source: 'command' }],
+      truncated: false,
+      origin: 'none',
+      workspacePath: null,
     });
   });
 
@@ -2796,18 +2856,21 @@ describe('WorkerManager slash commands', () => {
       ).toMatchObject({ state: 'error' })
     );
 
-    // Same cwd, so the project-scoped skills and prompts the live worker
-    // scanned are the ones this session would load too.
+    // Same cwd, so the project-scoped skills the live worker scanned are the
+    // ones this session would load too.
     await expect(h.manager.getSlashCommands({ sessionId: 'alpha-b' })).resolves.toEqual({
       commands: [{ name: 'skill:from-alpha-a', source: 'skill' }],
       truncated: false,
+      origin: 'workspace',
+      workspacePath: '/work/alpha',
     });
   });
 
-  it('never answers a named session from another workspace worker', async () => {
+  it('never answers a named session with another workspace’s skills', async () => {
     const h = createHarness({ createFailureAfter: 2, maxRestartAttempts: 1 });
     await h.manager.createSession({ sessionId: 'alpha', workspacePath: '/work/alpha' });
     await h.manager.createSession({ sessionId: 'beta', workspacePath: '/work/beta' });
+    commandAndSkill(h.records[0]);
     h.records[1].crash('worker died');
     await vi.waitFor(() =>
       expect(
@@ -2815,24 +2878,43 @@ describe('WorkerManager slash commands', () => {
       ).toMatchObject({ state: 'error' })
     );
 
+    // Beta's own folder, for the caller to read its skills from.
     await expect(h.manager.getSlashCommands({ sessionId: 'beta' })).resolves.toEqual({
-      commands: [],
+      commands: [{ name: 'goal', source: 'command' }],
       truncated: false,
+      origin: 'none',
+      workspacePath: '/work/beta',
     });
-    expect(h.records[0].request).not.toHaveBeenCalledWith('worker.commands', expect.anything());
   });
 
-  it('answers empty for a named session the pool has never started', async () => {
-    // The reported case: session B in another repo, created but never sent to,
-    // so it has no entry at all and no workspace this class can compare.
+  it('a named session the pool has never started is matched by the workspace the composer names', async () => {
+    // The reported case: a chat created but never sent to, so it has no entry
+    // and no workspace this class could read off one (decision 175).
     const h = createHarness();
     await h.manager.createSession({ sessionId: 'alpha', workspacePath: '/work/alpha' });
 
+    await expect(
+      h.manager.getSlashCommands({ sessionId: 'never-started', workspacePath: '/work/alpha' })
+    ).resolves.toEqual({
+      commands: [{ name: 'skill:from-alpha', source: 'skill' }],
+      truncated: false,
+      origin: 'workspace',
+      workspacePath: '/work/alpha',
+    });
+    await expect(
+      h.manager.getSlashCommands({ sessionId: 'never-started', workspacePath: '/work/beta' })
+    ).resolves.toEqual({
+      commands: [],
+      truncated: false,
+      origin: 'none',
+      workspacePath: '/work/beta',
+    });
     await expect(h.manager.getSlashCommands({ sessionId: 'never-started' })).resolves.toEqual({
       commands: [],
       truncated: false,
+      origin: 'none',
+      workspacePath: null,
     });
-    expect(h.records[0].request).not.toHaveBeenCalledWith('worker.commands', expect.anything());
   });
 
   it('does not require the session to be idle', async () => {
@@ -2867,6 +2949,8 @@ describe('WorkerManager slash commands', () => {
     await expect(h.manager.getSlashCommands({ sessionId: 's1' })).resolves.toEqual({
       commands: [{ name: 'good', source: 'skill' }],
       truncated: false,
+      origin: 'session',
+      workspacePath: '/repo',
     });
   });
 });
