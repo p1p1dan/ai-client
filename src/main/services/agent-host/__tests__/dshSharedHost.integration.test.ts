@@ -137,6 +137,8 @@ vi.mock('../../git/runtime', async () => {
     isWslGitRepository: () => false,
     spawnGit: (cwd: string, args: string[], options: Record<string, unknown> = {}) =>
       childProcess.spawn('git', args, { ...options, cwd }),
+    // Decision 162's read fallback (`gitReadFallback.ts`) asks for the env too.
+    createGitEnv: () => ({ ...process.env }),
   };
 });
 
