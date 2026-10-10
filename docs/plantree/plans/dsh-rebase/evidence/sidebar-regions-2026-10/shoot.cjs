@@ -92,7 +92,18 @@ const measurementsPath = path.join(here, 'measurements.json');
 
 // v1's parameters: the two-segment top region, the busy scene with 「拉取远端更新」
 // open, no home entry, addition order, base-800 titles, no fade, a 320px center.
-const V1 = { top: 'v1', scene: 'busy', center: 'chat', open: 's1', entry: 'none', order: 'original', ink: 'soft', fade: '0', full: '0', home: 'v2' };
+const V1 = {
+  top: 'v1',
+  scene: 'busy',
+  center: 'chat',
+  open: 's1',
+  entry: 'none',
+  order: 'original',
+  ink: 'soft',
+  fade: '0',
+  full: '0',
+  home: 'v2',
+};
 const v1 = (q) => ({ ...V1, ...q });
 // v2's home page (two buttons + 最近对话) and its center-column stand-ins.
 const v2 = (q) => ({ home: 'v2', ...q });
@@ -107,8 +118,14 @@ const SHOTS = [
   { file: '04-proposal-280x900-dark.png', q: v1({ mode: 'proposal', theme: 'dark' }) },
   { file: '05-proposal-280x720-light.png', q: v1({ mode: 'proposal', h: '720', bars: '1' }) },
   { file: '06-proposal-280x1080-light.png', q: v1({ mode: 'proposal', h: '1080' }) },
-  { file: '07-proposal-280x900-repos-mid.png', q: v1({ mode: 'proposal', scroll: 'mid', bars: '1' }) },
-  { file: '08-compare-280x900-repos-mid.png', q: v1({ mode: 'compare', scroll: 'mid', bars: '1' }) },
+  {
+    file: '07-proposal-280x900-repos-mid.png',
+    q: v1({ mode: 'proposal', scroll: 'mid', bars: '1' }),
+  },
+  {
+    file: '08-compare-280x900-repos-mid.png',
+    q: v1({ mode: 'compare', scroll: 'mid', bars: '1' }),
+  },
   {
     file: '09-proposal-280x900-recent-both-more.png',
     q: v1({ mode: 'proposal', active: 'all', lower: 'all', bars: '1' }),
@@ -117,8 +134,14 @@ const SHOTS = [
     file: '10-proposal-280x900-recent-scrolled-bottom.png',
     q: v1({ mode: 'proposal', rscroll: 'bottom', bars: '1' }),
   },
-  { file: '11-proposal-280x900-recent-collapsed.png', q: v1({ mode: 'proposal', recent: 'collapsed' }) },
-  { file: '12-proposal-280x900-collapse-all.png', q: v1({ mode: 'proposal', folders: 'collapsed' }) },
+  {
+    file: '11-proposal-280x900-recent-collapsed.png',
+    q: v1({ mode: 'proposal', recent: 'collapsed' }),
+  },
+  {
+    file: '12-proposal-280x900-collapse-all.png',
+    q: v1({ mode: 'proposal', folders: 'collapsed' }),
+  },
   { file: '13-proposal-360x900-light.png', q: v1({ mode: 'proposal', w: '360' }) },
   { file: '14-proposal-500x900-light.png', q: v1({ mode: 'proposal', w: '500' }) },
   { file: '15-compare-280x900-cjk-win.png', q: v1({ mode: 'compare', cjk: '1' }) },
@@ -126,14 +149,23 @@ const SHOTS = [
   { file: '17-proposal-280x900-ink-850.png', q: v1({ mode: 'proposal', ink: 'soft850' }) },
   { file: '18-proposal-280x900-guides.png', q: v1({ mode: 'proposal', guides: '1' }) },
   { file: '19-compare-280x900-dark.png', q: v1({ mode: 'compare', theme: 'dark' }) },
-  { file: '20-proposal-280x1080-recent-collapsed.png', q: v1({ mode: 'proposal', h: '1080', recent: 'collapsed' }) },
+  {
+    file: '20-proposal-280x1080-recent-collapsed.png',
+    q: v1({ mode: 'proposal', h: '1080', recent: 'collapsed' }),
+  },
   // v2 (2026-10-10). Defaults: top=v2, scene=startup, center=home, entry=rail,
   // order=activity, ink=mix (derived), fade on, full window.
   { file: '21-v2-1440x900-startup-home.png', q: v2({ mode: 'proposal' }) },
   { file: '22-v2-1440x900-busy-home.png', q: v2({ mode: 'proposal', scene: 'busy' }) },
-  { file: '23-v2-1440x900-busy-chat-entry-a.png', q: v2({ mode: 'proposal', scene: 'busy', center: 'chat' }) },
+  {
+    file: '23-v2-1440x900-busy-chat-entry-a.png',
+    q: v2({ mode: 'proposal', scene: 'busy', center: 'chat' }),
+  },
   { file: '24-v2-1440x900-startup-home-dark.png', q: v2({ mode: 'proposal', theme: 'dark' }) },
-  { file: '25-v2-1280x720-busy-home.png', q: v2({ mode: 'proposal', scene: 'busy', h: '720', bars: '1' }) },
+  {
+    file: '25-v2-1280x720-busy-home.png',
+    q: v2({ mode: 'proposal', scene: 'busy', h: '720', bars: '1' }),
+  },
   {
     file: '26-v2-1440x900-busy-chat-entry-b.png',
     q: v2({ mode: 'proposal', scene: 'busy', center: 'chat', entry: 'toolbar' }),
@@ -148,7 +180,10 @@ const SHOTS = [
   },
   { file: '29-v2-1440x900-home-more.png', q: v2({ mode: 'proposal', homemore: 'all' }) },
   { file: '30-current-1440x900-startup.png', q: v2({ mode: 'current', recent: 'collapsed' }) },
-  { file: '31-compare-280x900-busy-v2.png', q: v2({ mode: 'compare', scene: 'busy', center: 'chat' }) },
+  {
+    file: '31-compare-280x900-busy-v2.png',
+    q: v2({ mode: 'compare', scene: 'busy', center: 'chat' }),
+  },
   // v3 (2026-10-10): only the home page changes. Defaults: home=v3, target=auto
   // (the most recently active repository), menu=none, startup scene.
   { file: '32-v3-1440x900-home.png', q: v3({ mode: 'proposal' }) },
@@ -160,9 +195,18 @@ const SHOTS = [
   { file: '38-v3-1440x900-home-dark.png', q: v3({ mode: 'proposal', theme: 'dark' }) },
   { file: '39-v3-1280x720-home.png', q: v3({ mode: 'proposal', h: '720', bars: '1' }) },
   { file: '40-v3-1440x900-after-send.png', q: v3({ mode: 'proposal', sent: '1', center: 'chat' }) },
-  { file: '41-v3-composer-home-vs-sent.png', composite: ['32-v3-1440x900-home.png', '40-v3-1440x900-after-send.png'] },
-  { file: '42-current-1440x900-startup-real-composer.png', q: v3({ mode: 'current', recent: 'collapsed' }) },
-  { file: '43-v3-1440x900-norepo-repo-menu.png', q: v3({ mode: 'proposal', scene: 'norepo', menu: 'repo' }) },
+  {
+    file: '41-v3-composer-home-vs-sent.png',
+    composite: ['32-v3-1440x900-home.png', '40-v3-1440x900-after-send.png'],
+  },
+  {
+    file: '42-current-1440x900-startup-real-composer.png',
+    q: v3({ mode: 'current', recent: 'collapsed' }),
+  },
+  {
+    file: '43-v3-1440x900-norepo-repo-menu.png',
+    q: v3({ mode: 'proposal', scene: 'norepo', menu: 'repo' }),
+  },
   { file: '44-v3-1440x900-busy-home.png', q: v3({ mode: 'proposal', scene: 'busy' }) },
   { file: '45-v3-1440x900-home-unbound.png', q: v3({ mode: 'proposal', target: 'unbound' }) },
 ];
@@ -270,7 +314,8 @@ async function composite(win, shot, measuredByFile) {
   const a = cardOf(aFile);
   const b = cardOf(bFile);
   if (!a || !b) throw new Error(`composite ${shot.file}: shoot ${aFile} and ${bFile} first`);
-  const crop = (file) => nativeImage.createFromPath(path.join(outDir, file)).crop(STRIP).toDataURL();
+  const crop = (file) =>
+    nativeImage.createFromPath(path.join(outDir, file)).crop(STRIP).toDataURL();
   const guides = (c) =>
     [
       `<div class="g h" style="top:${c.y - STRIP.y}px"></div>`,
@@ -302,7 +347,14 @@ body{margin:0;background:#fffcf0;color:#100f0f;font:14px/20px "Noto Sans CJK SC"
   fs.writeFileSync(path.join(outDir, shot.file), image.toPNG());
   fs.rmSync(file, { force: true });
   const delta = { x: b.x - a.x, y: b.y - a.y, w: b.w - a.w, h: b.h - a.h };
-  return { file: shot.file, composite: shot.composite, strip: STRIP, image: image.getSize(), card: { [aFile]: a, [bFile]: b }, delta };
+  return {
+    file: shot.file,
+    composite: shot.composite,
+    strip: STRIP,
+    image: image.getSize(),
+    card: { [aFile]: a, [bFile]: b },
+    delta,
+  };
 }
 
 function failed(root, list) {
@@ -332,7 +384,8 @@ app.whenReady().then(async () => {
   const measuredByFile = new Map();
   if (fs.existsSync(measurementsPath)) {
     try {
-      for (const r of JSON.parse(fs.readFileSync(measurementsPath, 'utf8'))) measuredByFile.set(r.file, r);
+      for (const r of JSON.parse(fs.readFileSync(measurementsPath, 'utf8')))
+        measuredByFile.set(r.file, r);
     } catch {
       // start over
     }
@@ -345,7 +398,9 @@ app.whenReady().then(async () => {
         measuredByFile.set(r.file, r);
         const moved = Object.values(r.delta).some((v) => Math.abs(v) > 1);
         if (moved) failures += 1;
-        console.log(`${shot.file} ${JSON.stringify(r.image)} composite card delta ${JSON.stringify(r.delta)} ${moved ? 'MOVED' : 'ok'}`);
+        console.log(
+          `${shot.file} ${JSON.stringify(r.image)} composite card delta ${JSON.stringify(r.delta)} ${moved ? 'MOVED' : 'ok'}`
+        );
         continue;
       }
       await win.loadFile(path.join(here, 'prototype.html'), { query: { ...shot.q, shot: '1' } });
@@ -361,7 +416,9 @@ app.whenReady().then(async () => {
       let image = await nextPaint(win.webContents);
       const got = image.getSize();
       if (got.width !== size.w || got.height !== size.h) {
-        console.log(`  window clamped to ${got.width}x${got.height}, stitching ${size.w}x${size.h}`);
+        console.log(
+          `  window clamped to ${got.width}x${got.height}, stitching ${size.w}x${size.h}`
+        );
         image = await stitch(win.webContents, size.w, size.h);
       }
       fs.writeFileSync(path.join(outDir, shot.file), image.toPNG());
@@ -377,7 +434,9 @@ app.whenReady().then(async () => {
           }
           const bad = failed(r, FIDELITY);
           if (bad.length) failures += 1;
-          const goals = ['regions', 'regionsIndependent', 'l1OutsideScroll'].filter((k) => !r.checks[k].pass);
+          const goals = ['regions', 'regionsIndependent', 'l1OutsideScroll'].filter(
+            (k) => !r.checks[k].pass
+          );
           return `current:${bad.length ? `DRIFT(${bad.join(',')})` : 'faithful'}[issue-goals failing: ${goals.join(',') || 'none'}]`;
         })
         .join(' ');
