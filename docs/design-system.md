@@ -21,7 +21,8 @@
 > **仍未撤销**：
 >
 > - **字号 / 字族的全仓调用点迁移**：token 层已落齐（`@theme` 现有 `--text-2xs` / `--text-code` /
->   `--text-meta` / `--text-ui` / `--text-markdown` / `--text-title` 六个字号 token 与两条字族栈），
+>   `--text-meta` / `--text-ui` / `--text-markdown` / `--text-section` / `--text-title` 七个固定字号 token
+>   与两条字族栈；`--text-section` 是 2026-10-10 决策 170 加的 16px 档），
 >   调用点迁移**已覆盖 `chat/` 与 `workspace-shell/`**（含 D25 的 mono 白名单、tracking 梯度、`tabular-nums`）；
 >   **`source-control/` / `files/` / `git/` / `sessions/` 等其余目录的逐屏复核尚未完成**（D25 §5.5 工序 ④）。
 >   写新代码按本节；改旧代码不要单纯为了对齐档位而重排布局。
@@ -73,6 +74,7 @@ sRGB hex → OKLCH(D65) 转换后写入 `src/renderer/styles/globals.css` 的 `:
 | `secondary-foreground` | `#100F0F` | `#CECDC3` | — |
 | `muted` | `#f6f5ee` | `#1C1B1A` | 次要面板底（参与 `--panel-bg-opacity`） |
 | `muted-foreground` | `#575653` | `#9F9D96` | 次要文字（亮 7.20:1；暗 6.70:1，2026-08-18 D2-b 提档） |
+| `foreground-soft` | 派生 ≈ `#31302F` | 派生 ≈ `#B6B5AC` | **侧栏对话标题（L3）**，比正文低一级（决策 170，issue #6）。派生式 `color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground))`，只在 `:root` 声明一次，跟随亮 / 暗 / 同步终端主题；≈ Flexoki base-850 / base-300（ΔE 0.012 / 0.001）。对底 12.93:1 / 8.83:1，选中行改回正文色 |
 | `accent` | `#eeece3` | `#2d2b2b` | **交互覆盖底**（hover / 选中行）。`interactive.hover` 预乘实色 |
 | `accent-foreground` | `#100F0F` | `#CECDC3` | — |
 | `accent-primary` | `#F9AE77` | `#F9AE77` | 品牌强调（`primary.emphasis`）。**亮色有可读性红线，见下** |
@@ -141,6 +143,7 @@ Tailwind 的 `/N` 修饰符编译成 `color-mix(in oklab, X N%, transparent)`，
 | `accent` | ✅ | `hover:bg-accent/50` 是全仓既定的 hover 强度（145 处），不要改成 `bg-accent` |
 | `hover` | ❌ | 它已经是「满强度 hover」；加 `/N` 就退化成 `bg-accent/N`，语义自相冲突 |
 | `selection` | ❌ | 预乘实色，直接当选中底用 |
+| `foreground-soft` | ❌ | 派生的文字色（决策 170）；加 `/N` 就成了半透明字，在 hover / 选中底上对比度不可控 |
 | `status-running` | ✅ | 高饱和状态色，`bg-status-running/10` + `border-status-running/30` 是既定横幅写法 |
 | `accent-primary` | ✅ | 但亮色下用法受限，见下 |
 
@@ -396,8 +399,8 @@ ghost chip 静息态**没有任何外框**，「壳」只在交互时浮出。�
 
 ### Typography（字号）
 
-> **档位表已全部落成 `@theme` token（D25）。** 六个字号 token 均在 `globals.css` 的 `@theme` 中，
-> 直接写 `text-code` / `text-meta` / `text-ui` / `text-markdown` / `text-title` 即可，不要写任意值。
+> **档位表已全部落成 `@theme` token（D25）。** 七个固定字号 token 均在 `globals.css` 的 `@theme` 中，
+> 直接写 `text-code` / `text-meta` / `text-ui` / `text-markdown` / `text-section` / `text-title` 即可，不要写任意值。
 > 调用点迁移状态见文首时效警示。
 
 **四档语义体系保留**（对齐 OpenChamber `packages/ui/src/styles/design-system.css:21-27` 的桌面基线值），
@@ -410,7 +413,8 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 | meta | **14px**（0.875rem） | `--text-meta` | sans | 时间戳、statusLine、meta 行、footer、次级说明 |
 | ui | **15px**（0.9375rem） | `--text-ui` | sans | 侧栏行、按钮、label、段头、tab、下拉触发器 |
 | markdown | **15px**（0.9375rem） | `--text-markdown` | sans | 聊天正文、工具行动词、Markdown 全部内容、**以及所有标题 h1–h6** |
-| title | **18px**（1.125rem） | `--text-title` | sans | 设置页 L1 与对话框 / 抽屉标题（唯一 >15px 的档） |
+| section | **16px**（1rem） | `--text-section` | sans | 面板标题（`DockTitle`，五个面板共用）、侧栏「聊天」面板的板块标题（L1）、中栏会话栏标题（决策 170，issue #6；行高 1.5） |
+| title | **18px**（1.125rem） | `--text-title` | sans | 设置页 L1 与对话框 / 抽屉标题 |
 
 > **U01-a（2026-09-03）把 markdown 15→14、code 13→12**，对齐 pix 的正文与代码档
 > （[evidence-u01](./plantree/plans/pix-ui-alignment/topics/evidence-u01-numeric-scale.md)）。
@@ -422,9 +426,11 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 > ⚠️ **2026-09-24（`a86cefa4`，style(theme): 全站字号分级整体上调一档）在 U01-a 基础上再上调一档**：
 > code 12→13px、meta 13→14px、ui/markdown 14→15px，并为 code/markdown/meta/ui 补上各自的
 > `--line-height`（1.5 / 1.55）；`body` 选择器的字号仍跟随 `--text-ui`（因此随之变为 15px），
-> 行高 1.45→1.55。**上表已是这次调整后的当前值**；`--text-title` 保持 18px 不变，仍是唯一高于
-> 15px 的档。聊天区两档默认值同步上调（16→17px / 13→14px），见下方「已记录偏离」一节；
+> 行高 1.45→1.55。**上表已是这次调整后的当前值**；`--text-title` 保持 18px 不变。聊天区两档默认值同步上调（16→17px / 13→14px），见下方「已记录偏离」一节；
 > **已保存的旧对话字号设置不做迁移**（用户决定，2026-09-24）。
+>
+> 2026-10-10（决策 170，issue #6）新增 `--text-section` 16px：以前「`--text-title` 是唯一高于 15px 的档」的说法不再成立
+> （聊天区 `--text-chat-body` 默认 17px 也早已高于 15px）。
 
 **`--text-markdown` 与 `--text-ui` 现在同为 15px，但仍是两个 token**——理由与下面 meta/code 那条
 完全一样：**值相同，变更理由不同**（U01-a / 2026-09-24 之前，两者曾同为 pix 对齐后的 14px）。
@@ -451,6 +457,8 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 3. **color**：`markdown.heading1` / `heading2` … 各档取不同灰阶（flexoki-dark.json:132-133）
 
 **比例字体下缩字号确实省宽，但仍然不用字号做标题层级。**
+**唯一的例外是侧栏「聊天」面板**：issue #6 用户裁决（2026-10-10，决策 170）板块 / 文件夹 / 对话按 16 / 15 / 14 逐级变小，
+见「侧栏层级（聊天面板）」。其余地方照旧不用字号做标题层级。
 本文件旧版这里写的是「在全等宽 UI 里这条尤其重要：等宽字体放大后横向占位增长很快……」——
 该理由**随 D25 作废**（比例字体下缩字号是真省宽的）。结论不变，理由换成两条：
 
@@ -494,7 +502,7 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 
 ### 已记录偏离：聊天区两档字号**运行时可变**（D1 / D2，T104，2026-09-19）
 
-上表的六档字号 token 是**固定档位**——值由设计决定，不随用户设置变化。聊天区新增的
+上表的七档字号 token 是**固定档位**——值由设计决定，不随用户设置变化。聊天区新增的
 **`--text-chat-body`**（默认 17px）与 **`--text-chat-process`**（默认 14px）**不照这条走**：
 它们是本仓库里**唯一一对运行时可变**的字号 token，由设置在 [12, 24] / [12, 20] 内连续调节。
 完整决策见 [决策 032](plantree/plans/runtime-hardening/decisions/032-chat-typography-configurable-two-tiers.md)。
@@ -521,7 +529,7 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 
 - **回合状态行不参与**。`turnWorkGroupSummaryClass()` 与 `turnHeadClass()` 保持 `text-ui`（15px），
   见上方「已记录偏离：回合状态行用 `text-ui`（T097，2026-09-19）」。本次只管正文与过程。
-- **`--text-markdown` / `--text-ui` 未动**。本次是**切分与新增**，不是改档；六档的语义不变。
+- **`--text-markdown` / `--text-ui` 未动**。本次是**切分与新增**，不是改档；固定档的语义不变。
 - **默认值内部自洽**。17 / 14 这对现行出厂值下，输入框行高仍由正文字号派生
   （`--text-chat-body * 1.5`，17px 档算出 25.5px），表达式与档位数值保持一致——这条自洽性是本偏离
   继续成立的底气。T104 上线时的出厂值曾是 16 / 13（那时 16px 档算出的 24px 与旧写死值完全重合），
@@ -571,7 +579,7 @@ D25 的四档 + 一个例外：
 
 | 档 | 值 | 域 |
 |----|----|----|
-| 段头 | `+0.04em` | `Recent` / `Repositories` 之类的分组段头（A07 明文裁定值，D25 后**数值不变**，只换了理由）；即侧栏 L1 板块标题，600、`h-8`，见「侧栏层级（聊天面板）」 |
+| 段头 | `+0.04em` | `Active now` / `Repositories` 之类的分组段头（A07 明文裁定值，D25 后**数值不变**，只换了理由）；即侧栏 L1 板块标题，16px（`text-section`）、600、`h-8`，见「侧栏层级（聊天面板）」 |
 | 微标签 | `+0.02em` | ≤11px 的 badge / 角标 / `kbd` 内文——小号比例字需要开距 |
 | 按钮 | `+0.01em` | `ui/button.tsx` 基类已全局带 `tracking-[0.01em]`（比例字体下这条才开始真的起作用） |
 | 正文 / UI | `0` | 正文、侧栏行、Composer、工具行、meta —— **默认** |
@@ -630,9 +638,9 @@ D25 的四档 + 一个例外：
 | Component | Height | Tailwind |
 |-----------|--------|----------|
 | Tab 栏 | 36px | `h-9` |
-| 侧栏板块标题（L1，吸顶） | 32px | `h-8` |
+| 侧栏板块标题（L1，各区第一行，在区的滚动区之外） | 32px | `h-8` |
 | 树节点行（含侧栏文件夹行、对话行） | 28px | `h-7` |
-| 小按钮；侧栏辅助行（查看更多 / 收起 / 新建对话、段落小标签） | 24px | `h-6` |
+| 小按钮；侧栏辅助行（查看更多 / 收起 / 新建对话） | 24px | `h-6` |
 | 输入框 | 36px | `h-9` |
 
 ### 间距规范
@@ -655,7 +663,7 @@ D25 的四档 + 一个例外：
 | Surface 切换变更圆点 | 6px | `h-1.5 w-1.5` + `bg-info`（**仅 `git` surface**） |
 | Sidebar（左列） | 默认 280px，可拖 280–500 | `SIDEBAR_DEFAULT_WIDTH` / `SIDEBAR_MIN_WIDTH` / `SIDEBAR_MAX_WIDTH` |
 | Sidebar 折叠态 | 44px（只剩导轨） | `SIDEBAR_COLLAPSED_WIDTH = DOCK_RAIL_WIDTH` |
-| Sidebar 会话行宽度预算 | 面板 280px **含 1px 右边框**：文件夹内的行内容宽 **235px**（280 − 1 − p-2 16 − pl-3 12 − px-2 16），减 `w-4` 状态槽、两个 `gap-1.5`、`w-10` 时间盒后**标题 167px**；不嵌套的行 179px（决策 167 原型实测） | 标题 `min-w-20 flex-1`（下限）· 上下文文字（只给 worktree 行，分支最后一段）`min-w-0 max-w-24 shrink`（唯一让位者）· 时间/操作共用 `w-10` 定宽盒（操作按钮 `size-5 sm:size-5`，两枚正好 40px） |
+| Sidebar 会话行宽度预算 | 面板 280px **含 1px 右边框**：文件夹内的行内容宽 **235px**（280 − 1 − 区内列表 px-2 16 − pl-3 12 − px-2 16），减 `w-4` 状态槽、两个 `gap-1.5`、`w-10` 时间盒后**标题 167px**；不嵌套的行 179px（决策 167 原型实测，决策 170 不变） | 标题 `min-w-20 flex-1`（下限）· 上下文文字（只给 worktree 行，分支最后一段）`min-w-0 max-w-24 shrink`（唯一让位者）· 时间/操作共用 `w-10` 定宽盒（操作按钮 `size-5 sm:size-5`，两枚正好 40px） |
 | ContextPanel（右列） | min 250（D34，原 380）/ max 1400，默认 380 | `CONTEXT_PANEL_MIN_WIDTH` / `CONTEXT_PANEL_DEFAULT_WIDTH` / `CONTEXT_PANEL_MAX_WIDTH` |
 | ContextPanel 未测量兜底 | 600px | `CONTEXT_PANEL_FALLBACK_WIDTH` |
 | ContextPanel 收起 | 宽 0（常驻挂载 + `inert`） | — |
@@ -708,58 +716,86 @@ D25 的四档 + 一个例外：
 > 授权的「字号 / 行高 / 间距 / 圆角 / 灰阶」范围内。待 Q11 拍板后再改，见
 > [open-questions](./plantree/plans/pix-ui-alignment/open-questions.md)。
 
-### 侧栏层级（聊天面板）（issue #3，2026-10，决策 167）
+### 侧栏层级（聊天面板）（issue #3 / #6，2026-10，决策 167、170）
 
-适用于左栏「聊天」面板：`LeftDock` 的 `DockTitle` 加 `LeftNav`。其他面板的列表要套用 L2～L4 时单独确认。**验收依据是原型**：[`plantree/plans/dsh-rebase/evidence/sidebar-hierarchy-2026-10/`](./plantree/plans/dsh-rebase/evidence/sidebar-hierarchy-2026-10/README.md)（`prototype.html` 的「方案」视图，变体 A + X；58 个对话的全长验收图是 `shots/18-proposal-280-full-length.png`）。静态断言在 `workspace-shell/__tests__/sidebarHierarchyStatic.test.ts` 与 `sidebarRowBudgetStatic.test.ts`。
+适用于左栏「聊天」面板：`LeftDock` 的 `DockTitle` 加 `LeftNav`。其他面板的列表要套用 L2～L4 时单独确认。**验收依据是原型**：五级层级见 [`plantree/plans/dsh-rebase/evidence/sidebar-hierarchy-2026-10/`](./plantree/plans/dsh-rebase/evidence/sidebar-hierarchy-2026-10/README.md)（决策 167，issue #3）；三个分区、16 / 15 / 14 字号与对话标题颜色见 [`plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/`](./plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/README.md)（决策 170，issue #6；`prototype.html` 默认视图）。两者不一致时以后者为准。静态断言在 `workspace-shell/__tests__/sidebarHierarchyStatic.test.ts` 与 `sidebarRowBudgetStatic.test.ts`。
 
-**五级**。只用 400 / 600 两档字重；相邻两级至少有两个互相独立的区分载体（字号、字重、颜色、字距、行高、缩进、行首图标、分隔线）；500 不作任何一级的载体——Win10 的 Segoe UI 没有 500，中文回退的 Microsoft YaHei UI 只有 Light / Regular / Bold，**中文在 Win10 和 Win11 上 500 都显示成 400，600 显示成 Bold 700**。高一级在字号、（Windows 实际）字重、对比度上都不弱于低一级。
+**五级**。只用 400 / 600 两档字重；相邻两级至少有两个互相独立的区分载体（字号、字重、颜色、字距、行高、缩进、行首图标、分隔线）；500 不作任何一级的载体——Win10 的 Segoe UI 没有 500，中文回退的 Microsoft YaHei UI 只有 Light / Regular / Bold，**中文在 Win10 和 Win11 上 500 都显示成 400，600 显示成 Bold 700**。高一级在字号、（Windows 实际）字重、对比度上都不弱于低一级。字号按 issue #6 裁决逐级变小：板块 16 → 文件夹 15 → 对话 14（这是本文件「不用字号做标题层级」的唯一例外，见 Typography）。
 
 | 级 | 内容 | 字号 | 字重 | 颜色 | 高度 | 其他 |
 |---|---|---|---|---|---|---|
-| L0 面板标题 | 「聊天」（`DockTitle`，五个面板共用） | `text-ui` | 600 | `foreground` | `h-9` 标题栏 + `border-b`，不随列表滚动 | `px-3`，字距 0 |
-| L1 板块标题 | 「最近」「仓库列表」「临时对话」 | `text-ui` | 600 | `foreground` | `h-8` | 字距 `+0.04em`；非首个板块上方 `mt-2` + 通栏 `border-t`；板块内吸顶 |
-| L2 文件夹 | 仓库名 | `text-ui` | 600 | `foreground` | `h-7` | 图标 `size-4 text-folder`；`rounded-sm`；悬停与键盘焦点同一层底色 |
-| L3 对话 | 对话标题 | `text-ui` | 400 | `foreground` | `h-7` | 行首 `w-4` 状态槽永远占位；选中 `bg-selection`；`rounded-sm` |
-| L4 辅助 | 相对时间、查看更多 / 收起、新建对话、段落小标签、分支文字、改动合计、空状态 | `text-meta` | 400 | `muted-foreground`（改动合计 `success` / `destructive`） | 独立成行 `h-6` | 数字 `tabular-nums` |
+| L0 面板标题 | 「聊天」（`DockTitle`，五个面板共用） | `text-section` 16px | 600 | `foreground` | `h-9` 标题栏 + `border-b`，不随列表滚动 | `px-3`，字距 0 |
+| L1 板块标题 | 「正在活动」「仓库列表」「临时对话」 | `text-section` 16px | 600 | `foreground` | `h-8` | 字距 `+0.04em`；各区的第一行，在本区的滚动区之外；区与区之间通栏 `border-t` |
+| L2 文件夹 | 仓库名 | `text-ui` 15px | 600 | `foreground` | `h-7` | 图标 `size-4 text-folder`；`rounded-sm`；悬停与键盘焦点同一层底色 |
+| L3 对话 | 对话标题 | `text-meta` 14px | 400 | `foreground-soft`；**选中行恢复正文色**（`text-accent-foreground`） | `h-7` | 行首 `w-4` 状态槽永远占位；选中 `bg-selection`；`rounded-sm` |
+| L4 辅助 | 相对时间、查看更多 / 收起、新建对话、分支文字、改动合计、空状态 | `text-meta` 14px | 400 | `muted-foreground`（改动合计 `success` / `destructive`） | 独立成行 `h-6` | 数字 `tabular-nums` |
 
-同一条 `h-9` 线上，中栏会话栏的当前对话标题（`SessionBar`）是 `text-ui` 400：与「聊天」同字号，用字重区分「面板名 / 当前对话名」。
+同一条 `h-9` 线上，中栏会话栏的当前对话标题（`SessionBar`）是 `text-section` 16px 400：与「聊天」同字号，用字重区分「面板名 / 当前对话名」。`DockTitle` 是五个面板共用的，Git、文件、终端、运行四个面板的标题一起是 16px。
 
-**相邻层级的区分载体**（原型实测）：L0–L1 字距、行高；L1–L2 字距、行高、缩进、图标、分隔线；L2–L3 字重、缩进、图标；L3–L4 字号、颜色、行高；L1 与「查看更多」之间 7 个。
+**相邻层级的区分载体**（原型实测）：L0–L1 字距、行高；L1–L2 字号、字距、行高、缩进、图标、分隔线；L2–L3 字号、字重、颜色、缩进、图标；L3–L4 颜色、行高。L3 与 L4 同为 14px（中文最小 14px），同一行里的标题与时间、分支文字只靠颜色区分：正文 → 对话标题、对话标题 → 灰字的色差亮色都是 0.14、暗色都是 0.08（OKLab ΔE，可辨阈约 0.02），对话标题正好落在两者中点。
+
+**对话标题的颜色 `--foreground-soft`**：`color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground))`，只在 `:root` 声明一次（写法同 `--tool-arg`），`@theme` 桥接 `--color-foreground-soft`，工具类 `text-foreground-soft`。派生式会跟着亮 / 暗 / 同步终端主题走（`sync-terminal` 把 `--foreground`、`--muted-foreground` 改写在 `documentElement` 上），写死的 Flexoki 值在终端深色底上会看不见。不带 alpha，**不许加 `/N`**；它是颜色，不注册进 tailwind-merge 的 `font-size` 组。对比度见 Color System 表。
+
+**分区**（决策 170，issue #6 裁决 1）。列表区（搜索框下面、页脚上面）是纵向 flex `flex min-h-0 flex-1 flex-col`，里面三个区，从上到下：
+
+| 区 | 高度 | 滚动 | 区底渐隐 | 什么时候渲染 |
+|---|---|---|---|---|
+| 正在活动 | 按内容，上限是列表区的 33%（`max-h-[33%] shrink-0`） | 区内 | `scrollFade="bottom"` | 有正在活动的对话时；没有时**连标题一起不渲染**，仓库列表成为第一个区 |
+| 仓库列表 | 占剩余（`flex-1`） | 区内 | 无 | 有可用工作区时；没有时换成添加仓库的引导卡片（同样 `flex-1`，单行 grid，没有标题） |
+| 临时对话 | 按内容，上限 25%（`max-h-[25%] shrink-0`），固定在底部 | 区内 | `scrollFade="bottom"` | 有临时对话时 |
+
+- 每个区是两行 grid：`grid min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]`，第一行是 L1 标题，第二行是本区自己的 `ScrollArea`。`ScrollArea` 原语不改。
+  - `grid-cols-1` 是承重的：不写的话隐式列是 `auto`，会被行里不换行的标题撑到 min-content 宽度，整行冲出面板右边。
+  - 不要改用 flex 做区：flex 区的高度不确定，`ScrollArea` 根的 `height: 100%` 解析不出来，视口退回内容高度，不会滚。
+  - 百分比上限相对于列表区。列表区 → `aside`（`flex h-full flex-col`）→ `LeftDock` 的 `absolute inset-0` 层，这条链上不能插入按内容定高的容器。
+- 区内滚动内容 `px-2 pt-0.5 pb-2`。区与区之间只有通栏 `border-t`：仓库列表只在「正在活动」存在时才有上边框，临时对话总有。
+- 标题不在任何滚动视口里，所以**没有吸顶**：决策 167 的 `sticky`、两层底色（`bg-background` + `bg-card/40`）、背景图模式下的退化、列表根 `isolate`、视口 `scroll-pt-8` 都已撤掉。
+- 三个视口溢出时各自可以聚焦（base-ui 给 `tabIndex=0`），焦点环沿用原语的 `focus-visible:ring-2`。
+- 换算（Windows / Linux 无边框窗口，列表区 = 窗口高 − 186；关掉筛选时多 36px）：1280×720 列表区 534px，「正在活动」上限 176、「临时对话」上限 133；1440×900 是 714 / 236 / 178；1920×1080 是 894 / 295 / 223。1920×1080 屏幕开 150% 缩放就是 720 档。
 
 **结构与类名**：
 
-- 滚动视口 `scroll-pt-8`（写在 `ScrollArea` 根上：`*:data-[slot=scroll-area-viewport]:scroll-pt-8`），键盘焦点不落在吸顶标题下面；列表根 `isolate p-2`（`isolate` 让吸顶标题的 `z-10` 留在列表内，不盖住 `ScrollArea` 自绘的悬浮滚动条）。
-- 板块：`<section class="-mx-2 px-2">`，非首个再加 `mt-2 border-t`（`sidebarSectionClass(first)`）。带右键菜单的板块用 `ContextMenu.Trigger render={<section …/>}`，让吸顶标题的包含块就是板块本身。
-- 板块标题（`SidebarSectionHeader`）：外层 `sticky top-0 z-10 -mx-2 bg-background in-[.bg-image-enabled]:static`，内层 `flex h-8 items-center bg-card/40 px-4`——两层叠出面板自身的合成底色（`LeftDock` 根就是 `bg-background` 上叠 `bg-card/40`），吸顶时不透明；文字 `text-ui font-semibold tracking-[0.04em] text-foreground`；右侧按钮槽 `ml-auto flex items-center gap-0.5`，按钮 `size-6`、图标 `size-3.5`、`text-muted-foreground`。「仓库列表」保留筛选 / 添加两个图标位（D21）。
-  - **背景图开启时不吸顶**（`<body>` 上有 `.bg-image-enabled`，`--panel-bg-opacity` < 1）：`bg-background` 变成半透明，吸顶会让下面滚过的行透出来，所以退化成普通标题。
-  - 吸顶元素到滚动视口之间任何一层都不得有 `overflow` / `transform` / `filter` / `contain`（同「时间线折叠头吸顶」红线 3）。
-- 板块标题 → 第一项 `mt-0.5`；文件夹组之间 `space-y-1`；文件夹行 → 第一行 `mt-0.5`；对话行之间 `space-y-0.5`；文件夹内的行包在 `pl-3` 里。
+- 板块标题（`SidebarSectionHeader`）：`flex h-8 items-center px-4`，文字 `min-w-0 truncate text-section font-semibold tracking-[0.04em] text-foreground`；右侧按钮槽 `ml-auto flex shrink-0 items-center gap-0.5`，按钮 `Button variant="ghost" size="icon-xs"` 加 `size-6 text-muted-foreground`，图标 `size-3.5`，`aria-label` 与 `title` 用同一词条。
+  - 「正在活动」：箭头收起 / 展开整个列表（`ChevronDown` / `ChevronRight`，「收起正在活动」/「展开正在活动」），内存状态，默认展开。
+  - 「仓库列表」：三个按钮，顺序是「全部折叠」（`ChevronsDownUp`）、「筛选会话」（`ListFilter`）、「添加仓库」（`FolderPlus`）。
+  - 「临时对话」：箭头收起 / 展开（内存状态，与文件夹共用展开状态表，键 `UNBOUND_FOLDER_ID`）。
+- 带右键菜单的区（仓库列表、临时对话）用 `ContextMenu.Trigger render={<section …/>}`，菜单覆盖标题和区内空白。
+- 区内：文件夹组之间 `space-y-1`；文件夹行 → 第一行 `mt-0.5`；对话行之间 `space-y-0.5`；文件夹内的行包在 `pl-3` 里。
 - 文件夹行：`group flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-ui hover:bg-hover has-focus-visible:bg-hover`，内部按钮 `flex min-w-0 flex-1 items-center gap-1.5 text-left`：图标 → 名称 `min-w-0 truncate font-semibold`（`data-slot="sidebar-folder-name"`）→ 主工作区分支 `min-w-0 shrink-[1000] truncate text-meta text-muted-foreground`（分支先让，名称最后截断；远程仓库写「分支 · 远程」，拿不到分支时只写「远程」）。右侧改动合计与悬停按钮（`size-5 sm:size-5`、图标 `size-3.5`）共用一个 grid 格。悬停提示：名称 / 主工作区分支：x / 远程仓库。
-- 对话行：`group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-ui`，选中 `bg-selection text-accent-foreground`，否则 `hover:bg-hover focus-visible:bg-hover`。从左到右：
+- 对话行：`group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta`，选中 `bg-selection text-accent-foreground`，否则 `text-foreground-soft hover:bg-hover focus-visible:bg-hover`。重命名编辑框同为 `text-meta`，双击重命名时字不变大。从左到右：
   1. 状态槽 `flex w-4 shrink-0 items-center justify-center`：转圈 `size-3`；等待、未读、后台三种圆点 `size-1.5`；多选框 `size-3.5`；无状态时空着占位（标题不再随状态左右移）。
   2. 标题 `min-w-20 flex-1 truncate`。
-  3. 告警徽标：失败、待审批 N、`1.0.x`，统一 `Badge size="lg"`（桌面 14px），`shrink-0`。它们是状态，「最近」里也照常显示。
-  4. 上下文文字：只给非主工作区（`ChatWorkspace.kind === 'worktree'`）上的对话，内容是该工作区分支的**最后一段**（`feature/sidebar-redesign` 显示 `sidebar-redesign`，全名在它的悬停提示里），`min-w-0 max-w-24 shrink truncate text-meta text-muted-foreground`，是本行唯一让位者。「最近」里的行不显示。
+  3. 告警徽标：失败、待审批 N、`1.0.x`，统一 `Badge size="lg"`（桌面 14px），`shrink-0`。它们是状态，「正在活动」里也照常显示。
+  4. 上下文文字：只给非主工作区（`ChatWorkspace.kind === 'worktree'`）上的对话，内容是该工作区分支的**最后一段**（`feature/sidebar-redesign` 显示 `sidebar-redesign`，全名在它的悬停提示里），`min-w-0 max-w-24 shrink truncate text-meta text-muted-foreground`，是本行唯一让位者。「正在活动」里的行不显示。
   5. 时间 / 操作共用的 `w-10` 定宽盒；操作按钮 `size-5 sm:size-5`（两枚正好 40px；只写 `size-5` 会输给 `icon-xs` 变体的 `sm:size-6`）。临时工作区的行有第三枚删除按钮，两个盒子一起放宽到 60px。
 - 辅助行（查看更多、收起、新建对话；`SidebarAuxRow`）：`flex h-6 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover`，行首同样留 `w-4` 槽（新建对话在槽里放 `Plus size-3.5`），文字与同深度的标题对齐。
-- 段落小标签（「最近」的「正在活动」「48 小时内」；`SidebarSegmentLabel`）：`flex h-6 items-center px-2 text-meta text-muted-foreground`，第二个加 `mt-1`；每段是一个以小标签命名的 `role="group"`。
 - 工具栏 `Button size="xs"` 的文案一律加 `sm:text-meta`（变体桌面端是 12px 的 `sm:text-xs`，只写 `text-meta` 会输给媒体查询里的它）。
 
-**横向坐标**（面板左边框起，任何宽度都一样）：L0 文字 12；L1 文字、段落小标签、文件夹图标、不嵌套行的状态槽 16；文件夹名、不嵌套行（「最近」「临时对话」）的标题与辅助行文字 38；文件夹内行的状态槽 28、标题与辅助行文字 50；时间盒右缘距右边框 16。
+**横向坐标**（面板左边框起，任何宽度都一样）：L0 文字 12；L1 文字、文件夹图标、不嵌套行的状态槽 16；文件夹名、不嵌套行（「正在活动」「临时对话」）的标题与辅助行文字 38；文件夹内行的状态槽 28、标题与辅助行文字 50；时间盒右缘距右边框 16。
 
-**纵向**：板块之间 8px（`mt-2`）+ 1px 通栏分隔线 + 32px 标题；文件夹组之间 4px；板块标题 / 文件夹行 → 第一项 2px；对话行之间 2px；「最近」两段之间额外 4px。
+**纵向**：区与区之间是 1px 通栏分隔线，标题（32px）直接贴在分隔线下；第一个区的标题贴在工具条的下边框下。标题 → 第一项 2px；文件夹组之间 4px；文件夹行 → 第一行 2px；对话行之间 2px；区内容底部留 8px（滚到区底时看起来与旧的「区间 8px + 分隔线」一样）。
 
-**宽度预算**（280px 面板，含 1px 右边框）：文件夹内的行内容宽 235px，减状态槽、两个间距和时间盒后，**标题 167px**；不嵌套的行 179px。带告警徽标的行约 120px；worktree 行（带分支文字）在 280 时标题落到 80px 下限（原型按完整分支名量；只显示最后一段后通常更宽）。
+**宽度预算**（280px 面板，含 1px 右边框）：文件夹内的行内容宽 235px（280 − 1 − 区内列表 `px-2` 16 − `pl-3` 12 − 行 `px-2` 16），减状态槽、两个间距和时间盒后，**标题 167px**；不嵌套的行 179px。带告警徽标的行约 120px；worktree 行（带分支文字）在 280 时标题落到 80px 下限。14px 下 280 宽能放下的中文：文件夹内 11 字，不嵌套的 12 字；360 宽 17 / 18 字，500 宽 27 / 28 字。
 
-**「最近」**（决策 167 §1，取代决策 137 §1 的独立「正在活动」板块）：
+**「正在活动」**（决策 137 §1；决策 170 裁决 2，取代决策 167 §1 的「最近」两段）：
 
-- 上段「正在活动」：已在宿主上启动或正在跑回合；跑回合的在前，其余按最后活动时间；不设上限；「最近」折叠时照常显示。
-- 下段：跑回合或 48 小时内有活动，**先减去上段，再取前 7 条**（`deriveRecentRows` 的 `excludeSessionIds`）；「查看更多（N）」的 N 是去重后剩下的条数。
-- 同一个对话在「最近」里最多出现一次；所属文件夹里照常出现，两处都保留选中高亮。
-- 上段非空时显示小标签「正在活动」；两段都显示时才显示「48 小时内」。
-- 板块标题的箭头只收起下段；存储键与首次默认折叠不变（决策 137 §2）。
+- 列哪些：本次运行里已在宿主上启动的对话（`hostBoundSessionIds`），另加正在跑回合的。跑回合的在前，其余按最后活动时间。
+- 最多 5 条（`limitActiveRows`），多的收进「查看更多（N）」，展开后末尾是「收起」；展开只在本次运行内有效。搜索时列出全部命中。超过 5 条时选中的对话也可能被收起，不置顶（它在所属文件夹里照常显示、照常高亮）。
+- 行只显示状态槽、标题、告警徽标和时间，不显示 worktree 分支文字。同一个对话在所属文件夹里照常出现，两处都保留选中高亮。
+- 没有正在活动的对话时整区连标题都不渲染。
+- 「48 小时内」段与段落小标签已删除（移到首页，首页另起决策）；决策 137 §2 的存储键 `aiclient-sidebar-recent-collapsed` 废弃，不迁移（`App/storage.ts` 里留了「不要复用」的注释）。
 
-**临时对话**（变体 X）：独立的 L1 板块，行直接列在标题下（不嵌套），标题右侧箭头收起 / 展开，右键菜单「新建临时对话」与 8 条上限不变。临时会话（Temp Session）项目在「仓库列表」里显示为「临时工作区」，在显示层翻译（`sidebarFolderNameForDisplay`），派生层仍是标识符 `Temp`。
+**仓库列表的顺序**（决策 170 裁决 6）：
+
+- 文件夹按其内最近一个对话的最后活动时间（`updatedAt`）降序；没有对话的文件夹排在后面，保持原有相对顺序（仓库添加的先后）；「临时工作区」固定最后。排序是稳定的，时间相同的保持原顺序。只改显示顺序，不写回 `aiclient-repositories`。
+- 活动时间看全部对话（`deriveFolderLastActivity`），不看搜索结果，打字不会重排。
+- **指针或键盘焦点在仓库列表区内时冻结顺序，离开后再重排**（`applyHeldFolderOrder`）：进入时记下当时的顺序；冻结期间新出现的文件夹排在已记下的之后（「临时工作区」仍在最后），消失的直接去掉。
+  - 键盘焦点只算 `:focus-visible` 的焦点。鼠标点击会把焦点留在行上，若也算，指针离开后列表还会一直冻结。
+  - 从区内的行打开的菜单是 portal，但在 React 树里属于这个区，指针移到菜单上不算离开。
+
+**全部折叠**（决策 170 裁决 7）：折叠仓库列表里所有文件夹（含「临时工作区」），遍历全部文件夹，不是搜索过滤后的那些；逐个写 `false`，不清空展开状态表（「临时对话」区的箭头状态在同一张表里）。只有折叠，没有「全部展开」；点过之后单个文件夹照常可以再展开。
+
+**临时对话**（变体 X，决策 167 §5；决策 170 裁决 1）：独立的区，固定在底部，上限 25%；行直接列在标题下（不嵌套），右键菜单「新建临时对话」与 8 条上限不变。临时会话（Temp Session）项目在「仓库列表」里显示为「临时工作区」，在显示层翻译（`sidebarFolderNameForDisplay`），派生层仍是标识符 `Temp`。
 
 **分支与标签**（决策 167 §2，取代 D21-A「每行显示分支」）：文件夹行显示一次主工作区分支；对话行只在非主工作区时显示分支最后一段；远程标在文件夹行；行上不再有「临时」「远程」类别标签。
 
@@ -769,11 +805,13 @@ D25 的四档 + 一个例外：
 
 **红线（可静态断言，见上述两个测试文件）**：
 
-1. 侧栏 L0～L4 只出现 `text-meta` / `text-ui` 与 `font-normal` / `font-semibold`；`LeftNav`、`DockTitle`、会话栏标题不出现 `font-medium`（按钮、徽标原语自带的除外）。
+1. 侧栏 L0～L4 只出现 `text-meta` / `text-ui` / `text-section` 与 `font-normal` / `font-semibold`；`LeftNav`、`DockTitle`、会话栏标题不出现 `font-medium`（按钮、徽标原语自带的除外）。
 2. 侧栏任何可能出现中文的文字不小于 14px；`Button size="xs"` 的文案必须写 `sm:text-meta`。
 3. `h-7` / `h-6` 的行与输入框只用 `rounded-sm` / `rounded-xs`。
 4. 对话行的 `w-4` 状态槽永远渲染。
 5. 渲染层任何地方不得出现「绝对定位图标紧跟 `<Input`」。
+6. 板块标题不得放进任何滚动视口；区用两行 grid，`grid-cols-1` 不能省；侧栏里不再出现 `sticky`。
+7. `text-foreground-soft` 不加 `/N`。
 
 ## 字体族（分域：UI 比例 / 代码等宽）
 
