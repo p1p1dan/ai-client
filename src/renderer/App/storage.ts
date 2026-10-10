@@ -33,7 +33,9 @@ export const STORAGE_KEYS = {
   SC_REPO_LIST_EXPANDED: 'aiclient-sc-repo-list-expanded',
   SC_CHANGES_EXPANDED: 'aiclient-sc-changes-expanded',
   SC_HISTORY_EXPANDED: 'aiclient-sc-history-expanded',
-  SIDEBAR_RECENT_COLLAPSED: 'aiclient-sidebar-recent-collapsed', // T-26 sidebar Recent section
+  // Retired: 'aiclient-sidebar-recent-collapsed' (decision 137 §2's "Recent
+  // collapsed" flag). Decision 170 removed Recent and did not migrate it, so
+  // old installs still carry the value — do not reuse the key.
   // H/21 P1: the one-time "bring your Pi setup over" dialog has been shown.
   // Set whether the user ran the migration or dismissed it — the point is that
   // we offered, and the settings pane keeps the door open either way.

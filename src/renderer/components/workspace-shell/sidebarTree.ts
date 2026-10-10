@@ -30,10 +30,6 @@ import { TEMP_PROJECT_ID } from './deriveChatWorkspaceTree';
 export const LEGACY_DIVERGED_HINT =
   'This chat was continued in version 1.0.x after it moved to the current engine. Continuing it here moves that newer copy over as a chat of its own.';
 
-/** Recent keeps a session visible while active or touched within 48h (openchamber rule). */
-export const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000;
-/** Recent shows 7 rows by default, the rest behind "Show more" (openchamber rule). */
-export const RECENT_DEFAULT_LIMIT = 7;
 /**
  * Decision 137 §4: each folder lists this many rows until "View more" is
  * pressed. Search lifts it (`limitFolderRows`).
@@ -41,15 +37,10 @@ export const RECENT_DEFAULT_LIMIT = 7;
 export const FOLDER_DEFAULT_LIMIT = 8;
 
 /**
- * Decision 137 §2: Recent starts collapsed. Only a value the user wrote by
- * toggling the section counts — nothing stored (first run, cleared storage)
- * means collapsed, and so does anything that is not the literal `'false'`
- * the toggle writes for "expanded". Decision 167 §1 narrowed what collapsing
- * folds: only the lower segment — the "Active now" rows above it stay.
+ * Decision 170 (issue #6 ruling 2): the "Active now" region lists this many
+ * rows until "View more" is pressed. Search lifts it (`limitActiveRows`).
  */
-export function resolveRecentCollapsed(stored: string | null): boolean {
-  return stored !== 'false';
-}
+export const ACTIVE_DEFAULT_LIMIT = 5;
 
 /**
  * The git branch of the workspace a chat runs in. Decision 167 retired the
@@ -238,8 +229,8 @@ export function folderPrimaryChip(
  * Decision 167 §2 (replaces D21-A): inside its folder a row shows its branch
  * only when the chat runs on another workspace than the folder's main one —
  * a linked worktree. The folder row already names the main branch, and eight
- * rows repeating it was the issue. Rows in 「最近」 never show it (the caller
- * simply does not ask).
+ * rows repeating it was the issue. Rows in 「正在活动」 never show it (the
+ * caller simply does not ask).
  */
 export function chipShownInFolder(
   row: Pick<SidebarSessionRow, 'chip' | 'workspaceId'>,
@@ -364,11 +355,11 @@ function normalizeQuery(query: string | undefined): string {
  * temporary chat started in this run carries nothing but `workspaceId: ''`
  * until its first message lands.
  *
- * The three derivations below all keyed on the marker alone, so a just-created
- * temporary chat was filtered out of the Temporary group, out of Recent, and
- * out of the repository folders — i.e. out of the sidebar entirely — until a
- * send wrote the index and the sidebar remounted. Both shapes mean the same
- * thing, so both belong here.
+ * The derivations below all keyed on the marker alone, so a just-created
+ * temporary chat was filtered out of the Temporary group, out of Recent (the
+ * top region of the time), and out of the repository folders — i.e. out of the
+ * sidebar entirely — until a send wrote the index and the sidebar remounted.
+ * Both shapes mean the same thing, so both belong here.
  *
  * The complement still holds: a genuine orphan carries a NON-EMPTY workspaceId
  * that no longer resolves, and is still dropped.
@@ -665,6 +656,117 @@ export function limitFolderRows(input: FolderRowsLimitInput): FolderRowsLimitRes
   return { rows: visible, hiddenCount: total - visible.length, collapsible: false };
 }
 
+/**
+ * Decision 170 (issue #6 ruling 2): the "Active now" region lists its first
+ * {@link ACTIVE_DEFAULT_LIMIT} rows and hides the rest behind "View more (N)",
+ * ending in "Show less" once expanded — the folder cap's words and shape.
+ *
+ * Unlike a folder it pins nothing: the selected chat past the cap stays behind
+ * "View more" (it is still listed, and highlighted, in its own folder). A
+ * search lists every match, as in a folder.
+ */
+export function limitActiveRows(input: {
+  /** `deriveActiveRows`' result: running turns first, then last activity. */
+  rows: readonly SidebarSessionRow[];
+  showAll: boolean;
+  queryActive: boolean;
+}): FolderRowsLimitResult {
+  const total = input.rows.length;
+  if (input.queryActive || total <= ACTIVE_DEFAULT_LIMIT) {
+    return { rows: [...input.rows], hiddenCount: 0, collapsible: false };
+  }
+  if (input.showAll) {
+    return { rows: [...input.rows], hiddenCount: 0, collapsible: true };
+  }
+  return {
+    rows: input.rows.slice(0, ACTIVE_DEFAULT_LIMIT),
+    hiddenCount: total - ACTIVE_DEFAULT_LIMIT,
+    collapsible: false,
+  };
+}
+
+/**
+ * Decision 170 (issue #6 ruling 6): when each repository folder last saw
+ * activity — the newest `updatedAt` among its chats, grouped the way
+ * `buildSidebarFolders` groups them (by the workspace's project; unbound and
+ * orphaned chats belong to no folder). A folder with no chat has no entry.
+ *
+ * Deliberately blind to the search query: typing must not reorder the list.
+ */
+export function deriveFolderLastActivity(input: {
+  workspaces: readonly ChatWorkspace[];
+  sessions: readonly ChatSession[];
+}): Map<string, number> {
+  const workspaceById = new Map(input.workspaces.map((ws) => [ws.id, ws] as const));
+  const latest = new Map<string, number>();
+  for (const session of input.sessions) {
+    const workspace = workspaceById.get(session.workspaceId);
+    if (!workspace || isUnboundSessionRow(session)) continue;
+    const previous = latest.get(workspace.projectId);
+    if (previous === undefined || session.updatedAt > previous) {
+      latest.set(workspace.projectId, session.updatedAt);
+    }
+  }
+  return latest;
+}
+
+/**
+ * Decision 170 (issue #6 ruling 6): the repository list by activity.
+ *
+ * - Folders with chats come first, newest activity first.
+ * - Folders without a chat follow, in their old relative order (the order the
+ *   repositories were added in).
+ * - The Temp Session project (「临时工作区」) is always last.
+ *
+ * The sort is stable, so folders with the same activity keep their old order
+ * too. Only the display order changes; `aiclient-repositories` is not
+ * rewritten.
+ */
+export function orderFoldersByActivity<T extends Pick<SidebarFolder, 'projectId'>>(
+  folders: readonly T[],
+  lastActivity: ReadonlyMap<string, number>
+): T[] {
+  const withChats: T[] = [];
+  const withoutChats: T[] = [];
+  const temp: T[] = [];
+  for (const folder of folders) {
+    if (folder.projectId === TEMP_PROJECT_ID) temp.push(folder);
+    else if (lastActivity.has(folder.projectId)) withChats.push(folder);
+    else withoutChats.push(folder);
+  }
+  withChats.sort(
+    (a, b) => (lastActivity.get(b.projectId) ?? 0) - (lastActivity.get(a.projectId) ?? 0)
+  );
+  return [...withChats, ...withoutChats, ...temp];
+}
+
+/**
+ * Decision 170 (issue #6 ruling 6): while the pointer or keyboard focus is in
+ * the repository list its order is held — a folder must not move out from
+ * under the pointer because a chat elsewhere just finished a turn.
+ *
+ * `held` is the order captured when the hold began (null: no hold, the live
+ * order stands). Folders still present keep that order; a folder that
+ * appeared during the hold goes after them in live order; one that went away
+ * is dropped. The Temp Session project stays last either way.
+ */
+export function applyHeldFolderOrder<T extends Pick<SidebarFolder, 'projectId'>>(
+  live: readonly T[],
+  held: readonly string[] | null
+): T[] {
+  if (held === null) return [...live];
+  const rank = new Map(held.map((projectId, index) => [projectId, index] as const));
+  const kept = live
+    .filter((folder) => rank.has(folder.projectId))
+    .sort((a, b) => (rank.get(a.projectId) ?? 0) - (rank.get(b.projectId) ?? 0));
+  const added = live.filter((folder) => !rank.has(folder.projectId));
+  const ordered = [...kept, ...added];
+  return [
+    ...ordered.filter((folder) => folder.projectId !== TEMP_PROJECT_ID),
+    ...ordered.filter((folder) => folder.projectId === TEMP_PROJECT_ID),
+  ];
+}
+
 export interface ActiveRowsInput {
   sessions: readonly ChatSession[];
   workspaces: readonly ChatWorkspace[];
@@ -678,20 +780,21 @@ export interface ActiveRowsInput {
 }
 
 /**
- * Decision 137 §1 — "Active now". Since decision 167 §1 (user ruling
- * 2026-10-09) it is no longer a section of its own but the upper segment of
- * Recent, shown even while Recent is collapsed; the lower segment drops these
- * rows (`deriveRecentRows`' `excludeSessionIds`).
+ * Decision 137 §1 — "Active now". Decision 167 §1 made it the upper segment of
+ * a two-part Recent; decision 170 (issue #6 ruling 2, user 2026-10-10) made it
+ * the sidebar's whole top region again: Recent and its 48-hour list are gone,
+ * the region shows 5 rows behind "View more" (`limitActiveRows`) and is not
+ * rendered at all while this returns nothing.
  *
  * A conversation is listed while its session is started on the engine in this
  * run (`hostBoundSessionIds`: a send created or resumed it; a preview never
  * does) or while a turn of it is running. The binding is dropped when the pool
  * reclaims the session, the engine restarts, or the user ends the
- * conversation, so such a row leaves this section by itself.
+ * conversation, so such a row leaves this region by itself.
  *
  * Running turns come first, the rest by last activity. The same orphan and
- * search rules as Recent apply, so a search narrows this section too and an
- * unbound (temporary) chat is not mistaken for an orphan.
+ * search rules as the folders apply, so a search narrows this region too, and
+ * an unbound (temporary) chat is not mistaken for an orphan.
  */
 export function deriveActiveRows(input: ActiveRowsInput): SidebarSessionRow[] {
   const normalized = normalizeQuery(input.query);
@@ -755,86 +858,6 @@ export function splitBranchSuffix(title: string): TitleParts {
     }
   }
   return { base: title, suffix: null, spaced: false };
-}
-
-export interface RecentRowsInput {
-  sessions: readonly ChatSession[];
-  workspaces: readonly ChatWorkspace[];
-  /** Injected clock so tests and callers share one `Date.now()` per render. */
-  now: number;
-  /** True once the user pressed "Show more" — lifts the 7-row cap. */
-  showAll?: boolean;
-  query?: string;
-  /** T091: exempt from the title query — see `matchesQuery`. */
-  activeSessionId?: string | null;
-  /** Decision 145: see `SidebarTreeInput.t`. */
-  t?: Translate;
-  /**
-   * Decision 167 §1: the upper segment's rows (`deriveActiveRows`). Dropped
-   * BEFORE the 7-row cap, so the lower segment still lists up to 7 rows and
-   * "View more (N)" counts only what is really hidden.
-   */
-  excludeSessionIds?: ReadonlySet<string>;
-}
-
-export interface RecentRowsResult {
-  rows: SidebarSessionRow[];
-  /** Rows hidden behind "Show more" (0 when showAll or under the cap). */
-  hiddenCount: number;
-}
-
-/**
- * Cross-folder Recent section, openchamber rule: busy OR touched within 48h,
- * newest first, 7 rows + "Show more". Archived sessions never reach the store
- * (mergeSessionIndex drops them) and child sessions do not exist in this data
- * model yet (subagent layer deferred, open-q #17), so neither is re-filtered
- * here. Orphan sessions are excluded like in the folder tree — except unbound
- * ones (U13), which are not orphans and stay visible.
- *
- * Decision 167 §1: this is Recent's lower segment, so a chat already in the
- * upper one (`excludeSessionIds`) is left out before the cap — a chat appears
- * in Recent at most once.
- */
-export function deriveRecentRows(input: RecentRowsInput): RecentRowsResult {
-  const normalized = normalizeQuery(input.query);
-  const workspaceById = new Map(input.workspaces.map((ws) => [ws.id, ws] as const));
-
-  const excluded = input.excludeSessionIds;
-  const rows = input.sessions
-    .filter((session) => {
-      if (excluded?.has(session.id)) return false;
-      // U13: an unbound chat has no workspace by design and must not be
-      // filtered out with the genuinely orphaned rows — Recent is where the
-      // user looks first, and after a restart it is the fastest way back into
-      // one. Its row is marked `unbound` like in the Temporary chats section.
-      // T091: `isUnboundSessionRow` also admits the marker-less shape a
-      // temporary chat has before its first send; a genuine orphan (a
-      // non-empty workspaceId nothing resolves) is still dropped here.
-      if (!isUnboundSessionRow(session) && !workspaceById.has(session.workspaceId)) {
-        return false;
-      }
-      if (!matchesQuery(session, normalized, input.activeSessionId, input.t)) {
-        return false;
-      }
-      return (
-        isBusySessionStatus(session.status) || input.now - session.updatedAt <= RECENT_WINDOW_MS
-      );
-    })
-    .map((session) =>
-      toRow(
-        session,
-        isUnboundSessionRow(session) ? undefined : workspaceById.get(session.workspaceId)
-      )
-    )
-    .sort(byUpdatedAtDesc);
-
-  if (input.showAll || rows.length <= RECENT_DEFAULT_LIMIT) {
-    return { rows, hiddenCount: 0 };
-  }
-  return {
-    rows: rows.slice(0, RECENT_DEFAULT_LIMIT),
-    hiddenCount: rows.length - RECENT_DEFAULT_LIMIT,
-  };
 }
 
 /**

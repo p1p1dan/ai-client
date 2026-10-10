@@ -342,15 +342,16 @@ export function LeftDock({
  * row is gone the moment the panel closes, so the button that closed it went
  * with it and only Ctrl+B could bring it back.
  *
- * Decision 167 (issue #3): the L0 of the sidebar hierarchy — 15px / 600, no
- * tracking. At 14px it read smaller than the 15px section titles below it.
- * Shared by every panel, so all five titles take this size.
+ * Decision 167 (issue #3): the L0 of the sidebar hierarchy — 600, no
+ * tracking. Decision 170 (issue #6 ruling 3): 16px (`text-section`), the same
+ * tier as the region titles below it. Shared by every panel, so all five
+ * titles take this size.
  */
 function DockTitle({ labelKey }: { labelKey: string }) {
   const { t } = useI18n();
   return (
     <div className="flex h-9 shrink-0 items-center gap-2 border-b px-3">
-      <span className="min-w-0 flex-1 truncate text-ui font-semibold">{t(labelKey)}</span>
+      <span className="min-w-0 flex-1 truncate text-section font-semibold">{t(labelKey)}</span>
     </div>
   );
 }

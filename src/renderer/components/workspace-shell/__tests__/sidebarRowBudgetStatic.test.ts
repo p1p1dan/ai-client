@@ -8,12 +8,14 @@ import { DOCK_RAIL_WIDTH, SIDEBAR_DEFAULT_WIDTH } from '../shellLayoutModel';
  * The session row's width budget, as decision 167 (GitHub issue #3) laid it
  * out and the prototype measured it
  * (`docs/plantree/plans/dsh-rebase/evidence/sidebar-hierarchy-2026-10/`).
+ * Decision 170 (issue #6) kept the numbers: the list's `p-2` became each
+ * region's `px-2`, the same 16px across.
  *
  * At the 280px default (which includes the panel's 1px right border) a row
- * inside a folder has 280 - 1 - 16 (p-2) - 12 (pl-3) - 16 (px-2) = 235px of
- * content. Minus the 16px status slot, two 6px gaps and the 40px time box the
- * title gets 167px. Pi is the sole chat runtime and is not repeated as a
- * per-row badge; the branch is shown only on a worktree row.
+ * inside a folder has 280 - 1 - 16 (the region list's px-2) - 12 (pl-3) - 16
+ * (px-2) = 235px of content. Minus the 16px status slot, two 6px gaps and the
+ * 40px time box the title gets 167px. Pi is the sole chat runtime and is not
+ * repeated as a per-row badge; the branch is shown only on a worktree row.
  */
 
 const NAV_FILE = join(process.cwd(), 'src/renderer/components/workspace-shell/LeftNav.tsx');
@@ -21,9 +23,13 @@ const RAW = readFileSync(NAV_FILE, 'utf8');
 const CODE = stripComments(RAW, NAV_FILE);
 const ROW = CODE.slice(CODE.indexOf('function SessionRow('));
 
-/** The session row's own className, isolated so sibling rows cannot satisfy a scan. */
+/**
+ * The session row's own className, isolated so sibling rows cannot satisfy a
+ * scan. Decision 170 (issue #6 ruling 3): 14px (`text-meta`); the title still
+ * fits 11 CJK characters in a folder at 280px (12 when not nested).
+ */
 const SESSION_ROW_CLASS =
-  /'group flex h-7 w-full items-center gap-1\.5 overflow-hidden rounded-sm px-2 text-left text-ui'/;
+  /'group flex h-7 w-full items-center gap-1\.5 overflow-hidden rounded-sm px-2 text-left text-meta'/;
 
 describe('sidebar session row width budget', () => {
   it('keeps the row a single h-7 line with a clipping box', () => {
@@ -71,7 +77,7 @@ describe('sidebar session row width budget', () => {
 
   it('passes a branch only inside a folder, and only off the main workspace', () => {
     // Exactly one call site hands a branch down — the folder rows — and it
-    // asks `chipShownInFolder`; Recent and the temporary-chat section never do.
+    // asks `chipShownInFolder`; Active now and Temporary chats never do.
     expect(CODE.split('branch={').length - 1).toBe(1);
     expect(CODE).toContain('chipShownInFolder(row, primary) ? row.chip?.label : undefined');
   });

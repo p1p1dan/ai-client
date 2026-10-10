@@ -16,13 +16,13 @@ const nav = stripComments(readFileSync(navPath, 'utf8'), navPath);
 const rowSource = nav.slice(nav.indexOf('function SessionRow('));
 
 describe('S3 unread marker on the session row', () => {
-  it('every list the sidebar renders passes it — both Recent segments, folders and temporary chats', () => {
-    // Four call sites, four lists: Recent's upper ("Active now", decision 137;
-    // a segment of Recent since decision 167) and lower segments, the folders
-    // and the temporary-chat section. Missing one would leave a whole list
-    // silently unable to report a finished run.
-    expect(nav.split('unread={unreadSessionIds.includes(row.sessionId)}')).toHaveLength(5);
-    expect(nav.split('<SessionRow\n').length - 1).toBe(4);
+  it('every list the sidebar renders passes it — Active now, folders and temporary chats', () => {
+    // Three call sites, three lists: the Active now region (decision 137;
+    // decision 170 retired Recent's 48-hour segment beside it), the folders and
+    // the temporary-chat region. Missing one would leave a whole list silently
+    // unable to report a finished run.
+    expect(nav.split('unread={unreadSessionIds.includes(row.sessionId)}')).toHaveLength(4);
+    expect(nav.split('<SessionRow\n').length - 1).toBe(3);
     expect(nav).toContain(
       'const unreadSessionIds = useChatSessionsStore((state) => state.unreadSessionIds);'
     );

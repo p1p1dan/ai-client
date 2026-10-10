@@ -2,8 +2,8 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { STORAGE_KEYS } from '@/App/storage';
 import { applyRuntimeEvents, type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
+import { TEMP_PROJECT_ID } from '../deriveChatWorkspaceTree';
 import {
   ESCAPE_OWNING_POPUP_SELECTOR,
   SURFACE_ESCAPE_HOLD_ATTR,
@@ -12,12 +12,13 @@ import {
 
 /**
  * Decision 137 (user ruling, sidebar) and decision 138 (P1-7e e1), rendered
- * for real: "Active now" (since decision 167 the upper segment of Recent),
- * Recent collapsed by default, a folder header that only folds, folders capped
- * at 8 rows, the rename editor keeping its focus (point-check issue 26) and
- * the 1.0.x branch suffix kept whole (issue 32). Decision 167 (GitHub issue
- * #3): Recent listing a chat at most once, the branch on the folder row, and
- * the three-line row tooltip.
+ * for real: "Active now", a folder header that only folds, folders capped at 8
+ * rows, the rename editor keeping its focus (point-check issue 26) and the
+ * 1.0.x branch suffix kept whole (issue 32). Decision 167 (GitHub issue #3):
+ * the branch on the folder row and the three-line row tooltip. Decision 170
+ * (GitHub issue #6): the three regions — Active now capped at 5 and gone while
+ * empty, Recent retired — Collapse all, and folders ordered by activity, held
+ * while the pointer or keyboard focus is in the list.
  *
  * Stubbed like the other LeftNav mount tests: the persisted index (IPC),
  * session activation (starts a worker) and the diff-stats poller.
@@ -88,7 +89,6 @@ let root: ReturnType<typeof createRoot>;
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  localStorage.removeItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED);
   mocks.rename.mockClear();
   mocks.activate.mockClear();
   useChatSessionsStore.setState({
@@ -134,23 +134,31 @@ function allRows(scope: ParentNode = container): HTMLElement[] {
   return [...scope.querySelectorAll<HTMLElement>('[role="button"]')];
 }
 
-/** An L1 section, by its title (a `<p>` in the sticky header). */
+/** A region, by its L1 title (a `<p>` in the region's first grid row). */
 function sectionTitled(label: string): HTMLElement | null {
   const heading = [...container.querySelectorAll('p')].find((node) => node.textContent === label);
   return heading?.closest('section') ?? null;
 }
 
-/**
- * Decision 167 §1: one of Recent's two segments, by its small label — a
- * `role="group"` named by that label.
- */
-function segmentLabelled(label: string): HTMLElement | null {
-  return (
-    [...container.querySelectorAll<HTMLElement>('[role="group"]')].find((group) => {
-      const id = group.getAttribute('aria-labelledby');
-      return id !== null && document.getElementById(id)?.textContent === label;
-    }) ?? null
+/** The folder names in Repositories, top to bottom. */
+function folderOrder(): string[] {
+  return [...container.querySelectorAll('[data-slot="sidebar-folder-name"]')].map(
+    (node) => node.textContent ?? ''
   );
+}
+
+/**
+ * React derives enter / leave from `pointerover` / `pointerout` and their
+ * `relatedTarget`; `document.body` is outside the React root, so it reads as
+ * coming from (or going to) nowhere in the tree.
+ */
+async function pointer(type: 'pointerover' | 'pointerout', target: Element): Promise<void> {
+  const Pointer = (globalThis.PointerEvent ?? MouseEvent) as typeof MouseEvent;
+  await act(async () => {
+    target.dispatchEvent(
+      new Pointer(type, { bubbles: true, cancelable: true, relatedTarget: document.body })
+    );
+  });
 }
 
 /**
@@ -184,31 +192,16 @@ async function flush(): Promise<void> {
   });
 }
 
-describe('Recent (decision 137 §2)', () => {
-  it('starts collapsed and remembers the user expanding it', async () => {
+describe('Active now (decision 137 §1; the top region since decision 170)', () => {
+  it('is not rendered at all while nothing is started, so Repositories comes first', async () => {
     await render();
-    // Only the folder lists the chat; Recent is folded.
-    expect(rows('Chat a')).toHaveLength(1);
-
-    const toggle = container.querySelector<HTMLButtonElement>('[aria-label="Expand Recent"]');
-    expect(toggle).toBeTruthy();
-    await act(async () => toggle?.click());
-    expect(rows('Chat a')).toHaveLength(2);
-    expect(localStorage.getItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED)).toBe('false');
-
-    // A fresh mount reads the stored choice back.
-    await act(async () => root.unmount());
-    root = createRoot(container);
-    await render();
-    expect(rows('Chat a')).toHaveLength(2);
-  });
-});
-
-describe("Active now (decision 137 §1, Recent's upper segment since decision 167)", () => {
-  it('is absent while nothing is started on the engine', async () => {
-    await render();
-    expect(segmentLabelled('Active now')).toBeNull();
+    expect(sectionTitled('Active now')).toBeNull();
     expect(container.textContent).not.toContain('Active now');
+    // Decision 170 retired Recent: no other cross-folder list takes its place.
+    expect(container.textContent).not.toContain('Recent');
+    expect(rows('Chat a')).toHaveLength(1);
+    // The first region opens right under the toolbar, with no divider of its own.
+    expect(sectionTitled('Repositories')?.className).not.toContain('border-t');
   });
 
   it('lists started chats with running turns first, and marks running vs waiting', async () => {
@@ -223,16 +216,17 @@ describe("Active now (decision 137 §1, Recent's upper segment since decision 16
     });
     await render();
 
-    const section = segmentLabelled('Active now');
-    expect(section, 'the segment renders').toBeTruthy();
-    // It is a segment of Recent, not a section of its own.
-    expect(section?.closest('section')).toBe(sectionTitled('Recent'));
+    const region = sectionTitled('Active now');
+    expect(region, 'the region renders').toBeTruthy();
+    expect(region?.className).toContain('max-h-[33%]');
+    // Above Repositories, which then opens with the divider between them.
+    expect(sectionTitled('Repositories')?.className).toContain('border-t');
     // The row's tooltip starts with its title.
-    const listed = allRows(section as HTMLElement).map((node) => tooltipTitle(node));
+    const listed = allRows(region as HTMLElement).map((node) => tooltipTitle(node));
     // Running turns first (by last activity among them), then the rest.
     expect(listed).toEqual(['Chat running', 'Chat waiting', 'Chat idle-bound']);
 
-    const [running, waiting, idle] = allRows(section as HTMLElement);
+    const [running, waiting, idle] = allRows(region as HTMLElement);
     expect(running?.querySelector('[role="status"][aria-label="Running"]')).toBeTruthy();
     expect(waiting?.querySelector('[role="img"][aria-label="Waiting for an answer"]')).toBeTruthy();
     expect(waiting?.querySelector('[role="status"]')).toBeNull();
@@ -245,21 +239,21 @@ describe("Active now (decision 137 §1, Recent's upper segment since decision 16
       hostBoundSessionIds: ['a'],
     });
     await render();
-    expect(segmentLabelled('Active now')).toBeTruthy();
+    expect(sectionTitled('Active now')).toBeTruthy();
 
     await act(async () => {
       useChatSessionsStore.setState({ hostBoundSessionIds: [] });
     });
-    expect(segmentLabelled('Active now')).toBeNull();
+    expect(sectionTitled('Active now')).toBeNull();
   });
 
-  it('E6-37: chats the engine let go of (a plugin switch, the idle sweep) leave the section', async () => {
+  it('E6-37: chats the engine let go of (a plugin switch, the idle sweep) leave the region', async () => {
     useChatSessionsStore.setState({
       sessions: [chat('a'), chat('b')],
       hostBoundSessionIds: ['a', 'b'],
     });
     await render();
-    expect(allRows(segmentLabelled('Active now') as HTMLElement)).toHaveLength(2);
+    expect(allRows(sectionTitled('Active now') as HTMLElement)).toHaveLength(2);
 
     // What Main sends for each session `invalidateAll` retires (decision 145).
     await act(async () => {
@@ -276,15 +270,13 @@ describe("Active now (decision 137 §1, Recent's upper segment since decision 16
         )
       );
     });
-    expect(segmentLabelled('Active now')).toBeNull();
+    expect(sectionTitled('Active now')).toBeNull();
     // Still in their folder, only no longer marked as running in the background.
     expect(rows('Chat a')).toHaveLength(1);
     expect(rows('Chat a')[0]?.querySelector('[title="Running in the background"]')).toBeNull();
   });
-});
 
-describe('Recent lists a chat at most once (decision 167 §1)', () => {
-  it('keeps the upper segment while Recent is collapsed, and drops its rows from the lower one', async () => {
+  it('lists a chat once, and again in its folder — both rows carry the selection', async () => {
     useChatSessionsStore.setState({
       sessions: [chat('bound', { updatedAt: NOW }), chat('fresh', { updatedAt: NOW - 1000 })],
       hostBoundSessionIds: ['bound'],
@@ -292,52 +284,65 @@ describe('Recent lists a chat at most once (decision 167 §1)', () => {
     });
     await render();
 
-    // Collapsed by default (decision 137 §2): the upper segment stays.
-    const upper = segmentLabelled('Active now');
-    expect(allRows(upper as HTMLElement).map((node) => tooltipTitle(node))).toEqual(['Chat bound']);
-    expect(container.textContent).not.toContain('Last 48 hours');
-    // Once in Recent, once in its folder — both carry the selection.
+    const region = sectionTitled('Active now') as HTMLElement;
+    expect(allRows(region).map((node) => tooltipTitle(node))).toEqual(['Chat bound']);
     expect(rows('Chat bound')).toHaveLength(2);
     for (const row of rows('Chat bound')) expect(row.className).toContain('bg-selection');
-
-    await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="Expand Recent"]')?.click()
-    );
-    const lower = segmentLabelled('Last 48 hours');
-    expect(lower, 'the lower segment is labelled while the upper one is there').toBeTruthy();
-    expect(allRows(lower as HTMLElement).map((node) => tooltipTitle(node))).toEqual(['Chat fresh']);
-    // Still twice in all, not three times (the issue's screenshot).
-    expect(rows('Chat bound')).toHaveLength(2);
+    // A chat that is merely recent is listed in its folder only (decision 170).
+    expect(rows('Chat fresh')).toHaveLength(1);
   });
 
-  it('caps the lower segment after taking the upper rows out, and counts "View more" that way', async () => {
-    const twelve = Array.from({ length: 12 }, (_, i) =>
+  it('lists 5 rows, the rest behind "View more (N)", and "Show less" folds them back', async () => {
+    const seven = Array.from({ length: 7 }, (_, i) =>
       chat(`n${String(i).padStart(2, '0')}`, { updatedAt: NOW - i * 1000 })
     );
     useChatSessionsStore.setState({
-      sessions: twelve,
-      hostBoundSessionIds: ['n00', 'n04', 'n07'],
+      sessions: seven,
+      hostBoundSessionIds: seven.map((session) => session.id),
     });
-    localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, 'false');
     await render();
+    const region = () => sectionTitled('Active now') as HTMLElement;
+    expect(allRows(region())).toHaveLength(5);
+    expect(rows('Chat n05', region())).toHaveLength(0);
+    const more = [...region().querySelectorAll('button')].find(
+      (node) => node.textContent?.trim() === 'View more (2)'
+    );
+    expect(more, 'the region ends in View more (2)').toBeTruthy();
 
-    expect(allRows(segmentLabelled('Active now') as HTMLElement)).toHaveLength(3);
-    // 12 - 3 = 9 in the lower segment: 7 listed, 2 behind "View more".
-    expect(allRows(segmentLabelled('Last 48 hours') as HTMLElement)).toHaveLength(7);
-    expect(buttonText('View more (2)')).toBeTruthy();
-    // Counted before the dedupe it would have said 5.
-    expect(buttonText('View more (5)')).toBeUndefined();
-    // The folder is untouched: 8 listed, 4 behind its own "View more".
-    expect(buttonText('View more (4)')).toBeTruthy();
+    await act(async () => more?.click());
+    expect(allRows(region())).toHaveLength(7);
+    const less = [...region().querySelectorAll('button')].find(
+      (node) => node.textContent?.trim() === 'Show less'
+    );
+    expect(less).toBeTruthy();
+
+    await act(async () => less?.click());
+    expect(allRows(region())).toHaveLength(5);
   });
 
-  it('leaves the lower segment unlabelled when there is no upper one', async () => {
-    useChatSessionsStore.setState({ sessions: [chat('a'), chat('b')] });
-    localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, 'false');
+  it('its chevron folds the whole list, in memory only, open by default', async () => {
+    useChatSessionsStore.setState({ sessions: [chat('a')], hostBoundSessionIds: ['a'] });
+    const storedBefore = localStorage.length;
     await render();
-    expect(allRows(sectionTitled('Recent') as HTMLElement)).toHaveLength(2);
-    expect(container.textContent).not.toContain('Active now');
-    expect(container.textContent).not.toContain('Last 48 hours');
+    const region = () => sectionTitled('Active now') as HTMLElement;
+    expect(allRows(region())).toHaveLength(1);
+
+    await act(async () =>
+      region().querySelector<HTMLButtonElement>('[aria-label="Collapse active chats"]')?.click()
+    );
+    // The title stays; the whole list folds.
+    expect(region()).toBeTruthy();
+    expect(allRows(region())).toHaveLength(0);
+    expect(region().querySelector('[aria-label="Expand active chats"]')).toBeTruthy();
+    // The folder still lists it.
+    expect(rows('Chat a')).toHaveLength(1);
+    // Nothing is written: a restart opens it again.
+    expect(localStorage.length).toBe(storedBefore);
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(allRows(region())).toHaveLength(1);
   });
 });
 
@@ -367,8 +372,8 @@ describe('the branch lives on the folder row (decision 167 §2)', () => {
         chat('main-row', { updatedAt: NOW }),
         chat('worktree-row', { workspaceId: 'ws-alpha-wt', updatedAt: NOW - 1000 }),
       ],
+      hostBoundSessionIds: ['worktree-row'],
     });
-    localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, 'false');
   });
 
   it('names the main branch once on the folder row, with the name in its own slot', async () => {
@@ -391,10 +396,10 @@ describe('the branch lives on the folder row (decision 167 §2)', () => {
     expect(branch?.textContent).toBe('sidebar-redesign');
     expect(branch?.className).toContain('max-w-24');
 
-    const recent = sectionTitled('Recent') as HTMLElement;
-    const [inRecent] = rows('Chat worktree-row', recent);
-    expect(inRecent, 'the row is in Recent too').toBeTruthy();
-    expect(inRecent?.textContent).not.toContain('sidebar-redesign');
+    const active = sectionTitled('Active now') as HTMLElement;
+    const [inActive] = rows('Chat worktree-row', active);
+    expect(inActive, 'the row is in Active now too').toBeTruthy();
+    expect(inActive?.textContent).not.toContain('sidebar-redesign');
   });
 
   it('gives every row the three-line tooltip: title / folder · branch / updated', async () => {
@@ -427,6 +432,12 @@ describe('Temporary chats is a section of its own (decision 167 §5)', () => {
     await render();
     const section = sectionTitled('Temporary chats') as HTMLElement;
     expect(section, 'an L1 section titled Temporary chats').toBeTruthy();
+    // Decision 170: a region of its own, capped at 25%, under Repositories.
+    expect(section.className).toContain('max-h-[25%]');
+    expect(
+      (sectionTitled('Repositories') as HTMLElement).compareDocumentPosition(section) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     // Not a folder inside Repositories, and no folder-style header of its own.
     expect(section.closest('section')).toBe(section);
     expect(sectionTitled('Repositories')?.contains(section)).toBe(false);
@@ -475,7 +486,7 @@ describe('folders list 8 rows (decision 137 §4)', () => {
     useChatSessionsStore.setState({ sessions: eleven, activeSessionId: 'n10' });
     await render();
 
-    // 8 newest + the selected one (the oldest), Recent folded, nothing active.
+    // 8 newest + the selected one (the oldest); nothing active.
     expect(allRows()).toHaveLength(9);
     expect(rows('Chat n10')).toHaveLength(1);
     expect(rows('Chat n08')).toHaveLength(0);
@@ -504,13 +515,15 @@ describe('folders list 8 rows (decision 137 §4)', () => {
     expect(allRows()).toHaveLength(9);
   });
 
-  it('E6-40: Recent says "View more (N)" like a folder, not "Show more (N)"', async () => {
+  it('E6-40: Active now says "View more (N)" like a folder, not "Show more (N)"', async () => {
     const ten = eleven.slice(0, 10);
-    useChatSessionsStore.setState({ sessions: ten });
-    localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, 'false');
+    useChatSessionsStore.setState({
+      sessions: ten,
+      hostBoundSessionIds: ten.map((session) => session.id),
+    });
     await render();
-    // Recent lists 7 (3 hidden), the folder lists 8 (2 hidden).
-    expect(buttonText('View more (3)')).toBeTruthy();
+    // Active now lists 5 (5 hidden), the folder lists 8 (2 hidden).
+    expect(buttonText('View more (5)')).toBeTruthy();
     expect(buttonText('View more (2)')).toBeTruthy();
     expect(container.textContent).not.toContain('Show more');
   });
@@ -528,6 +541,204 @@ describe('folders list 8 rows (decision 137 §4)', () => {
     });
     expect(allRows()).toHaveLength(11);
     expect(buttonText('View more (3)')).toBeUndefined();
+  });
+});
+
+describe('Collapse all (decision 170, issue #6 ruling 7)', () => {
+  beforeEach(() => {
+    useChatSessionsStore.setState({
+      projects: [
+        { id: ALPHA, name: 'alpha' },
+        { id: BETA, name: 'beta' },
+        { id: TEMP_PROJECT_ID, name: 'Temp' },
+      ],
+      workspaces: [
+        { id: 'ws-alpha', projectId: ALPHA, name: 'Main', kind: 'main', path: '/repo/alpha' },
+        { id: 'ws-beta', projectId: BETA, name: 'Main', kind: 'main', path: '/repo/beta' },
+        {
+          id: 'ws-temp',
+          projectId: TEMP_PROJECT_ID,
+          name: 'Scratch',
+          kind: 'temp',
+          path: '/tmp/temp-session',
+        },
+      ],
+      sessions: [
+        chat('a'),
+        chat('b', { projectId: BETA, workspaceId: 'ws-beta' }),
+        chat('t', { projectId: TEMP_PROJECT_ID, workspaceId: 'ws-temp' }),
+        {
+          id: 'scratch',
+          projectId: '',
+          workspaceId: '',
+          title: 'Scratch chat',
+          status: 'idle',
+          updatedAt: NOW,
+          unbound: { workspacePath: '/tmp/scratch' },
+        },
+      ],
+    });
+  });
+
+  function collapseAll(): HTMLButtonElement | null {
+    return (sectionTitled('Repositories') as HTMLElement).querySelector<HTMLButtonElement>(
+      '[aria-label="Collapse all repositories"]'
+    );
+  }
+
+  it('folds every folder, the temporary workspaces included, and leaves Temporary chats open', async () => {
+    await render();
+    const repos = () => sectionTitled('Repositories') as HTMLElement;
+    expect(allRows(repos())).toHaveLength(3);
+    expect(collapseAll()?.getAttribute('title')).toBe('Collapse all repositories');
+
+    await act(async () => collapseAll()?.click());
+    expect(allRows(repos())).toHaveLength(0);
+    // The folder rows stay, closed.
+    expect(folderOrder()).toEqual(['alpha', 'beta', 'Temporary workspaces']);
+    // The Temporary chats region keeps its own flag in the same map.
+    expect(rows('Scratch chat', sectionTitled('Temporary chats') as HTMLElement)).toHaveLength(1);
+
+    // A folder still opens on its own; pressing again only folds (no "expand all").
+    await act(async () => folderHeader('alpha').click());
+    expect(rows('Chat a')).toHaveLength(1);
+    await act(async () => collapseAll()?.click());
+    expect(allRows(repos())).toHaveLength(0);
+  });
+
+  it('folds the folders a search is hiding as well', async () => {
+    await render();
+    const input = [...container.querySelectorAll('input')].find(
+      (node) => node.getAttribute('placeholder') === 'Search sessions'
+    ) as HTMLInputElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    const search = (text: string) =>
+      act(async () => {
+        setValue?.call(input, text);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+
+    await search('Chat a');
+    expect(folderOrder()).toEqual(['alpha']);
+    await act(async () => collapseAll()?.click());
+    await search('');
+    expect(allRows(sectionTitled('Repositories') as HTMLElement)).toHaveLength(0);
+  });
+});
+
+describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
+  const GAMMA = 'project:/repo/gamma';
+
+  beforeEach(() => {
+    useChatSessionsStore.setState({
+      // In the order they were added.
+      projects: [
+        { id: ALPHA, name: 'alpha' },
+        { id: GAMMA, name: 'gamma' },
+        { id: BETA, name: 'beta' },
+        { id: TEMP_PROJECT_ID, name: 'Temp' },
+      ],
+      workspaces: [
+        { id: 'ws-alpha', projectId: ALPHA, name: 'Main', kind: 'main', path: '/repo/alpha' },
+        { id: 'ws-gamma', projectId: GAMMA, name: 'Main', kind: 'main', path: '/repo/gamma' },
+        { id: 'ws-beta', projectId: BETA, name: 'Main', kind: 'main', path: '/repo/beta' },
+        {
+          id: 'ws-temp',
+          projectId: TEMP_PROJECT_ID,
+          name: 'Scratch',
+          kind: 'temp',
+          path: '/tmp/temp-session',
+        },
+      ],
+      sessions: [
+        chat('a', { updatedAt: NOW - 60_000 }),
+        chat('b', { projectId: BETA, workspaceId: 'ws-beta', updatedAt: NOW }),
+        // Newest of all, and still last.
+        chat('t', { projectId: TEMP_PROJECT_ID, workspaceId: 'ws-temp', updatedAt: NOW + 60_000 }),
+      ],
+    });
+  });
+
+  /** A turn in chat `id` ends: its folder's activity moves to `updatedAt`. */
+  const touch = (id: string, updatedAt: number) =>
+    act(async () => {
+      useChatSessionsStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === id ? { ...session, updatedAt } : session
+        ),
+      }));
+    });
+
+  it('newest activity first, folders without chats after them, temporary workspaces last', async () => {
+    await render();
+    expect(folderOrder()).toEqual(['beta', 'alpha', 'gamma', 'Temporary workspaces']);
+  });
+
+  it('holds the order while the pointer is in Repositories, and reorders once it leaves', async () => {
+    await render();
+    const inside = folderHeader('alpha');
+    await pointer('pointerover', inside);
+    await touch('a', NOW + 120_000);
+    expect(folderOrder()).toEqual(['beta', 'alpha', 'gamma', 'Temporary workspaces']);
+
+    await pointer('pointerout', inside);
+    expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
+  });
+
+  it('holds the order while keyboard focus is in Repositories', async () => {
+    await render();
+    await act(async () => folderHeader('gamma').focus());
+    await touch('a', NOW + 120_000);
+    expect(folderOrder()).toEqual(['beta', 'alpha', 'gamma', 'Temporary workspaces']);
+
+    await act(async () => (document.activeElement as HTMLElement | null)?.blur());
+    expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
+  });
+
+  it('a chat started in an empty folder during the hold moves it up only after the hold', async () => {
+    await render();
+    const inside = folderHeader('gamma');
+    await pointer('pointerover', inside);
+    await act(async () => {
+      useChatSessionsStore.setState((state) => ({
+        sessions: [
+          ...state.sessions,
+          chat('g', { projectId: GAMMA, workspaceId: 'ws-gamma', updatedAt: NOW + 120_000 }),
+        ],
+      }));
+    });
+    expect(folderOrder()).toEqual(['beta', 'alpha', 'gamma', 'Temporary workspaces']);
+    expect(rows('Chat g')).toHaveLength(1);
+
+    await pointer('pointerout', inside);
+    expect(folderOrder()).toEqual(['gamma', 'beta', 'alpha', 'Temporary workspaces']);
+  });
+
+  it('lets go when the focused row is removed, which sends no blur event', async () => {
+    useChatSessionsStore.setState((state) => ({
+      sessions: [...state.sessions, chat('a-old', { updatedAt: NOW - 120_000 })],
+    }));
+    await render();
+    await act(async () => rows('Chat a-old')[0]?.focus());
+    expect(document.activeElement?.textContent).toContain('Chat a-old');
+
+    // The row goes (its ✕, an archive): focus falls back to <body> silently.
+    await act(async () => {
+      useChatSessionsStore.setState((state) => ({
+        sessions: state.sessions.filter((session) => session.id !== 'a-old'),
+      }));
+    });
+    await touch('a', NOW + 120_000);
+    expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
+  });
+
+  it('nothing outside Repositories holds it', async () => {
+    useChatSessionsStore.setState({ hostBoundSessionIds: ['b'] });
+    await render();
+    const [activeRow] = rows('Chat b', sectionTitled('Active now') as HTMLElement);
+    await pointer('pointerover', activeRow as HTMLElement);
+    await touch('a', NOW + 120_000);
+    expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
   });
 });
 

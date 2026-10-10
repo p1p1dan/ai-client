@@ -2,13 +2,16 @@ import { translate, zhTranslations } from '@shared/i18n';
 import { LEGACY_FORK_TITLE_KEY } from '@shared/types/legacyMigration';
 import { describe, expect, it } from 'vitest';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
+import { TEMP_PROJECT_ID } from '../deriveChatWorkspaceTree';
 import {
+  ACTIVE_DEFAULT_LIMIT,
+  applyHeldFolderOrder,
   buildSidebarFolders,
   buildUnboundFolder,
   chipForWorkspace,
   chipShownInFolder,
   deriveActiveRows,
-  deriveRecentRows,
+  deriveFolderLastActivity,
   FOLDER_DEFAULT_LIMIT,
   folderBranchLabel,
   folderPrimaryChip,
@@ -17,12 +20,11 @@ import {
   isWaitingSessionStatus,
   LEGACY_DIVERGED_HINT,
   lastBranchSegment,
+  limitActiveRows,
   limitFolderRows,
-  RECENT_DEFAULT_LIMIT,
-  RECENT_WINDOW_MS,
+  orderFoldersByActivity,
   resolveNewSessionTarget,
   resolveNewSessionWorkspaceId,
-  resolveRecentCollapsed,
   sidebarFolderNameForDisplay,
   sidebarRowPlace,
   sidebarRowTooltip,
@@ -462,19 +464,20 @@ describe('decision 137 §3: a folder header click no longer activates anything',
   });
 });
 
-describe('resolveRecentCollapsed (decision 137 §2)', () => {
-  it('starts collapsed when nothing was stored', () => {
-    expect(resolveRecentCollapsed(null)).toBe(true);
-  });
-
-  it('remembers what the toggle wrote, under the same key as before', () => {
-    expect(resolveRecentCollapsed('true')).toBe(true);
-    expect(resolveRecentCollapsed('false')).toBe(false);
-  });
-
-  it('reads anything but an explicit expand as collapsed', () => {
-    expect(resolveRecentCollapsed('')).toBe(true);
-    expect(resolveRecentCollapsed('garbage')).toBe(true);
+describe('decision 170: Recent and its 48-hour window are gone from the sidebar', () => {
+  it('the Recent derivations and the stored-collapse reader are gone from the module', async () => {
+    // Issue #6 ruling 2: the top region is "Active now" alone; the 48-hour
+    // list moves to the home page, which derives its own. Pinned so a second
+    // cross-folder list cannot quietly come back into the sidebar.
+    const mod = (await import('../sidebarTree')) as Record<string, unknown>;
+    for (const name of [
+      'deriveRecentRows',
+      'RECENT_WINDOW_MS',
+      'RECENT_DEFAULT_LIMIT',
+      'resolveRecentCollapsed',
+    ]) {
+      expect(mod[name], name).toBeUndefined();
+    }
   });
 });
 
@@ -593,7 +596,7 @@ describe('deriveActiveRows (decision 137 §1)', () => {
     expect(deriveActiveRows({ sessions, workspaces, hostBoundSessionIds: [] })).toEqual([]);
   });
 
-  it('keeps a bound temporary chat and drops an orphan, like Recent', () => {
+  it('keeps a bound temporary chat and drops an orphan, like the folders', () => {
     const rows = deriveActiveRows({
       sessions: [
         session({ id: 's-temp', projectId: '', workspaceId: '' }),
@@ -666,95 +669,212 @@ describe('splitBranchSuffix (point-check issue 32, decision 138)', () => {
   });
 });
 
-describe('deriveRecentRows', () => {
-  it('keeps busy sessions and sessions touched within 48h, newest first', () => {
-    const { rows } = deriveRecentRows({
-      sessions: [
-        session({ id: 's-old-busy', status: 'running', updatedAt: NOW - RECENT_WINDOW_MS * 2 }),
-        session({ id: 's-fresh', updatedAt: NOW - 1000 }),
-        session({ id: 's-stale', updatedAt: NOW - RECENT_WINDOW_MS - 1 }),
-      ],
+describe('limitActiveRows (decision 170, issue #6 ruling 2)', () => {
+  /** `count` started chats, newest first — the region's input. */
+  const activeOf = (count: number) => {
+    const ids = Array.from({ length: count }, (_, i) => `s-${i}`);
+    return deriveActiveRows({
+      sessions: ids.map((id, i) => session({ id, updatedAt: NOW - i * 1000 })),
       workspaces,
-      now: NOW,
+      hostBoundSessionIds: ids,
     });
-    expect(rows.map((row) => row.sessionId)).toEqual(['s-fresh', 's-old-busy']);
-    expect(rows[1]?.busy).toBe(true);
+  };
+
+  it('caps at 5', () => {
+    expect(ACTIVE_DEFAULT_LIMIT).toBe(5);
   });
 
-  it('caps at 7 with a hidden count until showAll', () => {
-    const sessions = Array.from({ length: 10 }, (_, i) =>
-      session({ id: `s-${i}`, updatedAt: NOW - i })
-    );
-    const capped = deriveRecentRows({ sessions, workspaces, now: NOW });
-    expect(capped.rows).toHaveLength(RECENT_DEFAULT_LIMIT);
-    expect(capped.hiddenCount).toBe(3);
-
-    const all = deriveRecentRows({ sessions, workspaces, now: NOW, showAll: true });
-    expect(all.rows).toHaveLength(10);
-    expect(all.hiddenCount).toBe(0);
+  it('lists 5 or fewer rows whole, with nothing to toggle', () => {
+    const limited = limitActiveRows({ rows: activeOf(5), showAll: false, queryActive: false });
+    expect(limited.rows).toHaveLength(5);
+    expect(limited).toMatchObject({ hiddenCount: 0, collapsible: false });
   });
 
-  it('excludes orphan sessions like the folder tree does', () => {
-    const { rows } = deriveRecentRows({
-      sessions: [session({ id: 's-orphan', workspaceId: 'ws-gone' })],
-      workspaces,
-      now: NOW,
-    });
-    expect(rows).toEqual([]);
+  it('shows the first 5 and counts the rest behind "View more" (7 active: 5 + 2)', () => {
+    const limited = limitActiveRows({ rows: activeOf(7), showAll: false, queryActive: false });
+    expect(limited.rows.map((row) => row.sessionId)).toEqual(['s-0', 's-1', 's-2', 's-3', 's-4']);
+    expect(limited).toMatchObject({ hiddenCount: 2, collapsible: false });
   });
 
-  // Decision 167 §1: the lower segment of Recent drops what the upper one
-  // ("Active now") lists, BEFORE the cap — 16 chats in the 48-hour window, 3
-  // active, leave 13: 7 shown and "View more (6)", the prototype's numbers.
-  it('drops excluded rows before the 7-row cap, so the hidden count is after dedupe', () => {
-    const sessions = Array.from({ length: 16 }, (_, i) =>
-      session({ id: `s-${String(i).padStart(2, '0')}`, updatedAt: NOW - i * 1000 })
-    );
-    const active = deriveActiveRows({
-      sessions,
-      workspaces,
-      hostBoundSessionIds: ['s-00', 's-03', 's-09'],
+  it('lists everything once expanded, ending in "Show less"', () => {
+    const limited = limitActiveRows({ rows: activeOf(7), showAll: true, queryActive: false });
+    expect(limited.rows).toHaveLength(7);
+    expect(limited).toMatchObject({ hiddenCount: 0, collapsible: true });
+  });
+
+  it('pins nothing past the cap, unlike a folder: the open chat stays behind "View more"', () => {
+    // The open chat is still listed — and highlighted — in its own folder,
+    // whose cap does pin it (decision 137 §4). The README's question 6 left
+    // this region unpinned, and the user did not ask for it.
+    const limited = limitActiveRows({ rows: activeOf(7), showAll: false, queryActive: false });
+    expect(limited.rows.map((row) => row.sessionId)).not.toContain('s-6');
+    expect(limited.hiddenCount).toBe(2);
+  });
+
+  it('lists every match while a search is active', () => {
+    const limited = limitActiveRows({ rows: activeOf(9), showAll: false, queryActive: true });
+    expect(limited.rows).toHaveLength(9);
+    expect(limited).toMatchObject({ hiddenCount: 0, collapsible: false });
+  });
+});
+
+/**
+ * Decision 170 (issue #6 ruling 6): the repository list ordered by activity —
+ * folders with chats newest first, folders without chats after them in their
+ * old order, the Temp Session project last — and held while the user is in it.
+ */
+describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
+  const MIN = 60_000;
+  // In the order the repositories were added (`aiclient-repositories`).
+  const orderProjects: ChatProject[] = [
+    { id: 'p-atlas', name: 'atlas-web' },
+    { id: 'p-zephyr', name: 'zephyr-tools' },
+    { id: 'p-beacon', name: 'beacon-api' },
+    { id: 'p-yarrow', name: 'yarrow-bot' },
+    { id: 'p-nimbus', name: 'nimbus-agent' },
+    { id: TEMP_PROJECT_ID, name: 'Temp' },
+  ];
+  const orderWorkspaces: ChatWorkspace[] = [
+    { id: 'w-atlas', projectId: 'p-atlas', name: 'Main', kind: 'main', path: '/atlas' },
+    { id: 'w-zephyr', projectId: 'p-zephyr', name: 'Main', kind: 'main', path: '/zephyr' },
+    { id: 'w-beacon', projectId: 'p-beacon', name: 'Main', kind: 'main', path: '/beacon' },
+    {
+      id: 'w-beacon-wt',
+      projectId: 'p-beacon',
+      name: 'feat/x',
+      kind: 'worktree',
+      path: '/beacon-wt',
+    },
+    { id: 'w-yarrow', projectId: 'p-yarrow', name: 'Main', kind: 'main', path: '/yarrow' },
+    { id: 'w-nimbus', projectId: 'p-nimbus', name: 'Main', kind: 'main', path: '/nimbus' },
+    { id: 'w-temp', projectId: TEMP_PROJECT_ID, name: 'Scratch', kind: 'temp', path: '/tmp/s' },
+  ];
+  const orderSessions: ChatSession[] = [
+    session({
+      id: 'atlas-1',
+      projectId: 'p-atlas',
+      workspaceId: 'w-atlas',
+      updatedAt: NOW - 25 * MIN,
+    }),
+    // A folder's activity is its newest chat, on any of its workspaces.
+    session({
+      id: 'beacon-main',
+      projectId: 'p-beacon',
+      workspaceId: 'w-beacon',
+      updatedAt: NOW - 120 * MIN,
+    }),
+    session({
+      id: 'beacon-wt',
+      projectId: 'p-beacon',
+      workspaceId: 'w-beacon-wt',
+      updatedAt: NOW - 6 * MIN,
+    }),
+    session({ id: 'nimbus-1', projectId: 'p-nimbus', workspaceId: 'w-nimbus', updatedAt: NOW }),
+    // Newer than everything, and still last: the Temp Session project.
+    session({
+      id: 'temp-1',
+      projectId: TEMP_PROJECT_ID,
+      workspaceId: 'w-temp',
+      updatedAt: NOW + MIN,
+    }),
+    // Neither moves anything: an unbound chat has no folder, an orphan none left.
+    session({ id: 'unbound-1', projectId: '', workspaceId: '', updatedAt: NOW + 2 * MIN }),
+    session({
+      id: 'orphan-1',
+      projectId: 'p-yarrow',
+      workspaceId: 'w-gone',
+      updatedAt: NOW + 3 * MIN,
+    }),
+  ];
+  const ids = (folders: readonly { projectId: string }[]) => folders.map((f) => f.projectId);
+  const built = () =>
+    buildSidebarFolders({
+      projects: orderProjects,
+      workspaces: orderWorkspaces,
+      sessions: orderSessions,
     });
-    const excludeSessionIds = new Set(active.map((row) => row.sessionId));
-    const lower = deriveRecentRows({ sessions, workspaces, now: NOW, excludeSessionIds });
-    expect(lower.rows).toHaveLength(RECENT_DEFAULT_LIMIT);
-    expect(lower.hiddenCount).toBe(6);
-    expect(lower.rows.map((row) => row.sessionId)).toEqual([
-      's-01',
-      's-02',
-      's-04',
-      's-05',
-      's-06',
-      's-07',
-      's-08',
+
+  it('takes each folder s newest chat, grouped by the workspace s project', () => {
+    const activity = deriveFolderLastActivity({
+      workspaces: orderWorkspaces,
+      sessions: orderSessions,
+    });
+    expect(Object.fromEntries(activity)).toEqual({
+      'p-atlas': NOW - 25 * MIN,
+      'p-beacon': NOW - 6 * MIN,
+      'p-nimbus': NOW,
+      [TEMP_PROJECT_ID]: NOW + MIN,
+    });
+  });
+
+  it('orders folders with chats newest first, then the empty ones in their old order, Temp last', () => {
+    const activity = deriveFolderLastActivity({
+      workspaces: orderWorkspaces,
+      sessions: orderSessions,
+    });
+    expect(ids(orderFoldersByActivity(built(), activity))).toEqual([
+      'p-nimbus',
+      'p-beacon',
+      'p-atlas',
+      'p-zephyr',
+      'p-yarrow',
+      TEMP_PROJECT_ID,
     ]);
-    // A chat is in Recent at most once.
-    const all = deriveRecentRows({
-      sessions,
-      workspaces,
-      now: NOW,
-      showAll: true,
-      excludeSessionIds,
-    });
-    const listed = [...active, ...all.rows].map((row) => row.sessionId);
-    expect(new Set(listed).size).toBe(listed.length);
-    expect(listed).toHaveLength(16);
   });
 
-  it('a busy chat lives in the upper segment only', () => {
-    const sessions = [
-      session({ id: 's-busy', status: 'running', updatedAt: NOW - RECENT_WINDOW_MS * 2 }),
-      session({ id: 's-fresh', updatedAt: NOW - 1000 }),
-    ];
-    const active = deriveActiveRows({ sessions, workspaces, hostBoundSessionIds: [] });
-    expect(active.map((row) => row.sessionId)).toEqual(['s-busy']);
-    const lower = deriveRecentRows({
-      sessions,
-      workspaces,
-      now: NOW,
-      excludeSessionIds: new Set(active.map((row) => row.sessionId)),
+  it('keeps the old order between folders with the same activity (stable)', () => {
+    const folders = [{ projectId: 'a' }, { projectId: 'b' }, { projectId: 'c' }];
+    const activity = new Map([
+      ['a', NOW],
+      ['b', NOW + 1],
+      ['c', NOW],
+    ]);
+    expect(ids(orderFoldersByActivity(folders, activity))).toEqual(['b', 'a', 'c']);
+  });
+
+  it('a search does not reorder: the activity ignores which rows the query keeps', () => {
+    const activity = deriveFolderLastActivity({
+      workspaces: orderWorkspaces,
+      sessions: orderSessions,
     });
-    expect(lower.rows.map((row) => row.sessionId)).toEqual(['s-fresh']);
+    const searched = buildSidebarFolders({
+      projects: orderProjects,
+      workspaces: orderWorkspaces,
+      sessions: orderSessions,
+      query: 'atlas',
+    });
+    expect(ids(orderFoldersByActivity(searched, activity))).toEqual(
+      ids(orderFoldersByActivity(built(), activity))
+    );
+  });
+
+  it('a hold keeps the captured order while the live order changes', () => {
+    const live = [
+      { projectId: 'p-beacon' },
+      { projectId: 'p-nimbus' },
+      { projectId: TEMP_PROJECT_ID },
+    ];
+    expect(ids(applyHeldFolderOrder(live, null))).toEqual(ids(live));
+    expect(ids(applyHeldFolderOrder(live, ['p-nimbus', 'p-beacon', TEMP_PROJECT_ID]))).toEqual([
+      'p-nimbus',
+      'p-beacon',
+      TEMP_PROJECT_ID,
+    ]);
+  });
+
+  it('a folder added during the hold goes after the held ones, a removed one goes, Temp stays last', () => {
+    const live = [
+      { projectId: 'p-new' },
+      { projectId: 'p-beacon' },
+      { projectId: 'p-other-new' },
+      { projectId: TEMP_PROJECT_ID },
+    ];
+    expect(ids(applyHeldFolderOrder(live, ['p-nimbus', TEMP_PROJECT_ID, 'p-beacon']))).toEqual([
+      'p-beacon',
+      'p-new',
+      'p-other-new',
+      TEMP_PROJECT_ID,
+    ]);
   });
 });
 
@@ -860,17 +980,17 @@ describe('buildUnboundFolder (U13)', () => {
     expect(buildUnboundFolder({ sessions: [seeded], name: 'Temporary' })?.rows).toHaveLength(1);
   });
 
-  it('keeps unbound chats in Recent, where a real orphan is still excluded', () => {
-    const { rows } = deriveRecentRows({
+  it('keeps unbound chats in Active now, where a real orphan is still excluded', () => {
+    const rows = deriveActiveRows({
       sessions: [
         session({ id: 'u1', workspaceId: '', unbound }),
         session({ id: 'gone', workspaceId: 'ws-removed' }),
       ],
       workspaces,
-      now: NOW,
+      hostBoundSessionIds: ['u1', 'gone'],
     });
     expect(rows.map((row) => row.sessionId)).toEqual(['u1']);
-    expect(rows[0].unbound).toBe(true);
+    expect(rows[0]?.unbound).toBe(true);
   });
 });
 
@@ -899,8 +1019,12 @@ describe('a live-only temporary chat is visible before its first send (T091)', (
     expect(folder?.rows[0]?.unbound).toBe(true);
   });
 
-  it('appears in Recent', () => {
-    const { rows } = deriveRecentRows({ sessions: [liveOnly], workspaces, now: NOW });
+  it('appears in Active now once started', () => {
+    const rows = deriveActiveRows({
+      sessions: [liveOnly],
+      workspaces,
+      hostBoundSessionIds: ['live-temp'],
+    });
     expect(rows.map((row) => row.sessionId)).toEqual(['live-temp']);
     expect(rows[0]?.unbound).toBe(true);
   });
@@ -913,7 +1037,9 @@ describe('a live-only temporary chat is visible before its first send (T091)', (
   it('a genuine orphan — an unknown, NON-EMPTY workspaceId — is still dropped everywhere', () => {
     const orphan = session({ id: 'orphan', workspaceId: 'ws-removed' });
     expect(buildUnboundFolder({ sessions: [orphan], name: 'Temporary' })).toBeNull();
-    expect(deriveRecentRows({ sessions: [orphan], workspaces, now: NOW }).rows).toEqual([]);
+    expect(
+      deriveActiveRows({ sessions: [orphan], workspaces, hostBoundSessionIds: ['orphan'] })
+    ).toEqual([]);
     expect(
       buildSidebarFolders({ projects, workspaces, sessions: [orphan] }).flatMap(
         (folder) => folder.rows
@@ -996,25 +1122,26 @@ describe('the active session is never filtered out by a title query (T091)', () 
     ).toHaveLength(1);
   });
 
-  it('survives a non-matching query in Recent', () => {
+  it('survives a non-matching query in Active now', () => {
     const sessions = [
       session({ id: 'new', title: 'New chat' }),
       session({ id: 'match', title: 'Draft plan' }),
     ];
+    const hostBoundSessionIds = ['new', 'match'];
     expect(
-      deriveRecentRows({ sessions, workspaces, now: NOW, query: 'draft' }).rows.map(
+      deriveActiveRows({ sessions, workspaces, hostBoundSessionIds, query: 'draft' }).map(
         (row) => row.sessionId
       )
     ).toEqual(['match']);
     expect(
-      deriveRecentRows({
+      deriveActiveRows({
         sessions,
         workspaces,
-        now: NOW,
+        hostBoundSessionIds,
         query: 'draft',
         activeSessionId: 'new',
       })
-        .rows.map((row) => row.sessionId)
+        .map((row) => row.sessionId)
         .sort()
     ).toEqual(['match', 'new']);
   });
@@ -1047,9 +1174,16 @@ describe('the active session is never filtered out by a title query (T091)', () 
       expect(
         buildUnboundFolder({ sessions, name: 'Temporary', query: 'draft', activeSessionId })
       ).toEqual(buildUnboundFolder({ sessions, name: 'Temporary', query: 'draft' }));
+      const hostBoundSessionIds = ['a', 'b', 'c'];
       expect(
-        deriveRecentRows({ sessions, workspaces, now: NOW, query: 'draft', activeSessionId })
-      ).toEqual(deriveRecentRows({ sessions, workspaces, now: NOW, query: 'draft' }));
+        deriveActiveRows({
+          sessions,
+          workspaces,
+          hostBoundSessionIds,
+          query: 'draft',
+          activeSessionId,
+        })
+      ).toEqual(deriveActiveRows({ sessions, workspaces, hostBoundSessionIds, query: 'draft' }));
     }
   });
 });
@@ -1066,9 +1200,6 @@ describe('a search matches a title as the sidebar shows it (P1-7e e6, decision 1
   it('finds a `New chat` row by 「新建」 in Chinese, in every section', () => {
     const [folder] = buildSidebarFolders({ projects, workspaces, sessions, query: '新建', t: zh });
     expect(ids(folder?.rows ?? [])).toEqual(['named', 'placeholder']);
-    expect(
-      ids(deriveRecentRows({ sessions, workspaces, now: NOW, query: '新建', t: zh }).rows)
-    ).toEqual(['named', 'placeholder']);
     expect(
       ids(
         deriveActiveRows({

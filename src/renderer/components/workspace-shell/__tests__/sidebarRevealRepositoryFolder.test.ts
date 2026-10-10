@@ -4,7 +4,6 @@ import { toRemoteVirtualPath } from '@shared/utils/remotePath';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { STORAGE_KEYS } from '@/App/storage';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 
 /**
@@ -70,7 +69,6 @@ let root: ReturnType<typeof createRoot>;
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, 'false');
   openPath.mockClear();
   openPath.mockImplementation(async () => '');
   toasts.length = 0;

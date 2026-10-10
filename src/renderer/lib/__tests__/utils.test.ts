@@ -31,3 +31,28 @@ describe('cn (tailwind-merge font-size vs text-color conflict)', () => {
     expect(cn('text-muted-foreground', 'text-tool-arg')).toBe('text-tool-arg');
   });
 });
+
+/**
+ * Decision 170 (issue #6): the 16px tier `text-section` is a size, registered
+ * like the D25 tokens; `text-foreground-soft` is a colour and must stay in the
+ * colour group, so it replaces another colour and never a size.
+ */
+describe('cn with the sidebar region tokens (decision 170)', () => {
+  it('keeps a colour next to text-section, in either order', () => {
+    expect(cn('text-foreground', 'text-section')).toBe('text-foreground text-section');
+    expect(cn('text-section', 'text-foreground')).toBe('text-section text-foreground');
+    expect(cn('text-muted-foreground', 'text-section')).toBe('text-muted-foreground text-section');
+  });
+
+  it('dedupes text-section against the other size tokens', () => {
+    expect(cn('text-ui', 'text-section')).toBe('text-section');
+    expect(cn('text-section', 'text-meta')).toBe('text-meta');
+  });
+
+  it('treats text-foreground-soft as a colour: it keeps the size and replaces a colour', () => {
+    expect(cn('text-meta', 'text-foreground-soft')).toBe('text-meta text-foreground-soft');
+    expect(cn('text-foreground-soft', 'text-meta')).toBe('text-foreground-soft text-meta');
+    expect(cn('text-foreground', 'text-foreground-soft')).toBe('text-foreground-soft');
+    expect(cn('text-foreground-soft', 'text-accent-foreground')).toBe('text-accent-foreground');
+  });
+});

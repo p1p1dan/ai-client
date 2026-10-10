@@ -16,8 +16,9 @@ import { extendTailwindMerge } from 'tailwind-merge';
  *
  * `text-2xs` already happens to match the default t-shirt regex ("2xs") and
  * is registered here too for clarity/robustness rather than relying on that
- * coincidence. `text-tool-arg` is a colour token (not a size), so it is
- * deliberately left unregistered -- it belongs in `text-color`.
+ * coincidence. `text-tool-arg` and `text-foreground-soft` are colour tokens
+ * (not sizes), so they are deliberately left unregistered -- they belong in
+ * `text-color`.
  */
 const twMerge = extendTailwindMerge({
   extend: {
@@ -28,6 +29,8 @@ const twMerge = extendTailwindMerge({
         'text-markdown',
         'text-meta',
         'text-ui',
+        // Decision 170 (issue #6): the 16px tier.
+        'text-section',
         'text-title',
         // T104: the chat area's runtime-configurable pair -- same classifier
         // hazard as the tokens above, see this block's note.

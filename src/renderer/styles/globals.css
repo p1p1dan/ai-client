@@ -35,6 +35,8 @@
   --color-status-running: var(--status-running);
   --color-folder: var(--folder);
   --color-tool-arg: var(--tool-arg);
+  /* Decision 170 (issue #6): chat titles in the sidebar (L3). Do not add /N. */
+  --color-foreground-soft: var(--foreground-soft);
 
   /*
    * U01-a: radius scale tightened to pix's three tiers (6/10/12px). `--radius`
@@ -70,7 +72,14 @@
   --text-meta--line-height: 1.5;
   --text-ui: 0.9375rem;          /* 15px sans -- sidebar rows, buttons, labels, tabs, dropdown triggers */
   --text-ui--line-height: 1.5;
-  --text-title: 1.125rem;        /* 18px sans -- settings L1, the only tier above 15px */
+  /*
+   * Decision 170 (issue #6): the 16px tier -- panel titles (`DockTitle`, all
+   * five panels), the sidebar's region titles and the session bar title. The
+   * user ruled 16 / 15 / 14 for the chat sidebar's region / folder / chat.
+   */
+  --text-section: 1rem;          /* 16px sans */
+  --text-section--line-height: 1.5;
+  --text-title: 1.125rem;        /* 18px sans -- settings L1, dialog and sheet titles */
 
   /*
    * T104: the chat area's two configurable tiers. These are the ONLY two
@@ -276,6 +285,13 @@
        because its process rows sit much closer to the background. Lowering the
        mix is what widens the gap without touching a single size or weight. */
     --tool-arg: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
+    /* Decision 170 (issue #6): the sidebar's chat titles (L3), one step below
+     * --foreground -- the oklab midpoint of it and --muted-foreground (light
+     * ~Flexoki base-850, dark ~base-300). Declared once, as the tool-arg tier
+     * is: the var() references resolve on documentElement, so .dark and the
+     * sync-terminal inline overrides are picked up without a second
+     * declaration. Alpha-free; never add /N. */
+    --foreground-soft: color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground));
   }
 
   /* Flexoki Dark - flexoki-dark.json */

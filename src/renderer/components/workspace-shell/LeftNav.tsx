@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronsDownUp,
   Folder,
   FolderGit2,
   FolderMinus,
@@ -23,17 +24,16 @@ import {
   X,
 } from 'lucide-react';
 import {
+  type FocusEvent,
   type ReactNode,
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useReducer,
   useRef,
   useState,
 } from 'react';
 import type { Repository } from '@/App/constants';
-import { STORAGE_KEYS } from '@/App/storage';
 import { RepositorySettingsDialog } from '@/components/repository/RepositorySettingsDialog';
 import {
   AlertDialog,
@@ -76,11 +76,12 @@ import { endSessionRuntime } from './endSessionRuntime';
 import { sumFolderDiffTotals } from './folderDiffStats';
 import { SURFACE_ESCAPE_HOLD_ATTR } from './shellLayoutModel';
 import {
+  applyHeldFolderOrder,
   buildSidebarFolders,
   buildUnboundFolder,
   chipShownInFolder,
   deriveActiveRows,
-  deriveRecentRows,
+  deriveFolderLastActivity,
   folderBranchLabel,
   folderPrimaryChip,
   folderTooltip,
@@ -88,10 +89,10 @@ import {
   isWaitingSessionStatus,
   LEGACY_DIVERGED_HINT,
   lastBranchSegment,
+  limitActiveRows,
   limitFolderRows,
-  RECENT_DEFAULT_LIMIT,
+  orderFoldersByActivity,
   resolveNewSessionTarget,
-  resolveRecentCollapsed,
   type SidebarRowPlace,
   type SidebarSessionRow,
   sidebarFolderNameForDisplay,
@@ -111,14 +112,17 @@ import { useFolderDiffStatsPolling } from './useFolderDiffStats';
  * (now the dock's title row), the collapse button (on the rail since H/18 S4),
  * the account pill (`UserFooterPill`, so it survives a surface switch)
  * and the plugin entry + dialog (now the rail's bottom group). What stays is
- * exactly the session list — search, New / Add repository, Recent, the folder
- * tree and the temporary-chat group.
+ * exactly the session list — search, New / Add repository, the active chats,
+ * the folder tree and the temporary chats.
  *
- * Decision 167 (GitHub issue #3, prototype in
- * `docs/plantree/plans/dsh-rebase/evidence/sidebar-hierarchy-2026-10/`): three
- * L1 sections — Recent (with "Active now" as its upper segment), Repositories
- * and Temporary chats — each with a sticky h-8 title, below the dock's L0
- * title. Levels use weights 400 / 600 only; see `docs/design-system.md`,
+ * Decision 167 (GitHub issue #3) set the five levels; decision 170 (GitHub
+ * issue #6, prototype in
+ * `docs/plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/`) split the
+ * list into three regions, each with its own h-8 title and its own scroll
+ * area: Active now (content-sized, at most 33% of the list area, gone while
+ * nothing is active), Repositories (the rest) and Temporary chats
+ * (content-sized, at most 25%, at the bottom). Sizes 16 / 15 / 14 for region /
+ * folder / chat, weights 400 / 600 only; see `docs/design-system.md`,
  * 「侧栏层级（聊天面板）」.
  */
 interface LeftNavProps {
@@ -152,15 +156,13 @@ export function LeftNav({
   // Composer target bar, T-27). Decision 137 §3: only picking a conversation
   // writes it now; a folder header click no longer does.
   const [focusedProjectId, setFocusedProjectId] = useState<string | null>(null);
-  // Decision 137 §2: collapsed unless the user expanded it before (same key).
-  const [recentCollapsed, setRecentCollapsed] = useState(() => {
-    try {
-      return resolveRecentCollapsed(localStorage.getItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED));
-    } catch {
-      return true;
-    }
-  });
-  const [recentShowAll, setRecentShowAll] = useState(false);
+  // Decision 170 (issue #6 ruling 2): the Active now region's chevron folds
+  // its whole list. Memory only and open by default, like Temporary chats: the
+  // region is the one meant to be read at a glance. Decision 137 §2's stored
+  // "Recent collapsed" flag went away with Recent and is not migrated.
+  const [activeCollapsed, setActiveCollapsed] = useState(false);
+  // "View more" pressed on Active now — this run only, like a folder's.
+  const [activeShowAll, setActiveShowAll] = useState(false);
   // Decision 137 §4: folders whose "View more" was pressed. Memory only, so it
   // holds across conversation switches and a folder collapse, and a restart
   // brings every folder back to its first rows.
@@ -329,18 +331,6 @@ export function LeftNav({
 
   const isProjectExpanded = (projectId: string) => expandedProjects[projectId] !== false;
 
-  const toggleRecentCollapsed = () => {
-    setRecentCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, String(next));
-      } catch {
-        // Ignore storage errors (private mode / quota exceeded), same as other collapsed flags.
-      }
-      return next;
-    });
-  };
-
   const toggleSearchVisible = () => {
     setSearchVisible((prev) => {
       const next = !prev;
@@ -353,7 +343,7 @@ export function LeftNav({
   };
 
   // Coarse minute tick: nothing else re-renders an idle sidebar, so without
-  // it the age column freezes and the 48h Recent window never expires.
+  // it the age column freezes.
   const [, bumpClock] = useReducer((tick: number) => tick + 1, 0);
   useEffect(() => {
     const timer = setInterval(bumpClock, 60_000);
@@ -361,7 +351,7 @@ export function LeftNav({
   }, []);
 
   // Cheap at sidebar scale; a useMemo would be defeated by the per-render
-  // `now` anyway (Recent's 48h window needs a fresh clock every render).
+  // `now` anyway (the age column needs a fresh clock every render).
   const now = Date.now();
   // T091: `activeSessionId` is passed to every list derivation so a title query
   // never hides the conversation that is currently open — see `matchesQuery`.
@@ -391,8 +381,8 @@ export function LeftNav({
     t,
   });
   // Decision 137 §1: started on the engine in this run, or running a turn.
-  // Decision 167 §1: Recent's upper segment, derived first so the lower one
-  // can drop these rows before its 7-row cap.
+  // Decision 170 (issue #6 ruling 2): the whole top region — Recent and its
+  // 48-hour list are gone (they move to the home page).
   const activeRows = deriveActiveRows({
     sessions,
     workspaces,
@@ -401,18 +391,6 @@ export function LeftNav({
     activeSessionId,
     t,
   });
-  const recent = deriveRecentRows({
-    sessions,
-    workspaces,
-    now,
-    showAll: recentShowAll,
-    query,
-    activeSessionId,
-    t,
-    excludeSessionIds: new Set(activeRows.map((row) => row.sessionId)),
-  });
-  // Decision 167 §1: collapsing Recent folds only its lower segment.
-  const showRecentLower = !recentCollapsed && recent.rows.length > 0;
   // Decision 167 §3: every row's tooltip names where it runs, resolved from
   // the same lists the sidebar renders.
   const workspaceById = useMemo(
@@ -431,15 +409,34 @@ export function LeftNav({
   );
   const placeOf = (row: SidebarSessionRow): SidebarRowPlace =>
     sidebarRowPlace(row, workspaceById, folderNameByProjectId);
-  const activeSegmentLabelId = useId();
-  const recentSegmentLabelId = useId();
   const queryActive = query.trim().length > 0;
+  const limitedActive = limitActiveRows({
+    rows: activeRows,
+    showAll: activeShowAll,
+    queryActive,
+  });
+  // Decision 170 (issue #6 ruling 6): folders by last activity, the empty ones
+  // after them, the Temp Session project last. Display order only — the
+  // repository store keeps the order they were added in. Held while the
+  // pointer or keyboard focus is in the region, so nothing moves under a click.
+  const liveFolderOrder = orderFoldersByActivity(
+    folders,
+    deriveFolderLastActivity({ workspaces, sessions })
+  );
+  const reposHold = useRegionHold(!showAddRepositoryEmptyState);
+  const heldFolderOrder = useHeldOrder(
+    liveFolderOrder.map((folder) => folder.projectId),
+    reposHold.held
+  );
+  const orderedFolders = applyHeldFolderOrder(liveFolderOrder, heldFolderOrder);
   // While searching, folders with zero hits collapse away instead of leaving
   // a wall of empty headers; without a query every folder stays visible so
   // its "+ new chat" row remains reachable.
-  const visibleFolders = queryActive ? folders.filter((folder) => folder.rows.length > 0) : folders;
+  const visibleFolders = queryActive
+    ? orderedFolders.filter((folder) => folder.rows.length > 0)
+    : orderedFolders;
   const noMatches =
-    queryActive && recent.rows.length === 0 && visibleFolders.length === 0 && !unboundFolder;
+    queryActive && activeRows.length === 0 && visibleFolders.length === 0 && !unboundFolder;
 
   // D1 (round-5): resolved fresh every render from the live `folders` list —
   // never cache `newSessionTarget.workspaceId` itself — so a deleted focused
@@ -520,6 +517,90 @@ export function LeftNav({
   };
 
   /**
+   * Decision 170 (issue #6 ruling 7): fold every folder in Repositories, the
+   * Temp Session project included. Over `folders` (all of them), not
+   * `visibleFolders`, which a search narrows. One entry per folder rather than
+   * a reset: the Temporary chats region keeps its own flag in the same map
+   * (`UNBOUND_FOLDER_ID`) and is not part of this. Fold only — there is no
+   * "expand all".
+   */
+  const collapseAllFolders = () =>
+    setExpandedProjects((prev) => ({
+      ...prev,
+      ...Object.fromEntries(folders.map((folder) => [folder.projectId, false])),
+    }));
+
+  /**
+   * Decision 170 (issue #6 ruling 2): the top region, 「正在活动」 only —
+   * decision 137 §1's list, 5 rows behind "View more (N)". Not rendered at all
+   * (title included) while nothing is active, so Repositories is then the
+   * first region. The chevron folds the whole list (memory only).
+   */
+  const renderActiveRegion = () => {
+    if (activeRows.length === 0) return null;
+    return (
+      <section className={ACTIVE_REGION_CLASS}>
+        <SidebarSectionHeader title={t('Active now')}>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="size-6 text-muted-foreground"
+            aria-label={activeCollapsed ? t('Expand active chats') : t('Collapse active chats')}
+            title={activeCollapsed ? t('Expand active chats') : t('Collapse active chats')}
+            onClick={() => setActiveCollapsed((prev) => !prev)}
+          >
+            {activeCollapsed ? (
+              <ChevronRight className="size-3.5" />
+            ) : (
+              <ChevronDown className="size-3.5" />
+            )}
+          </Button>
+        </SidebarSectionHeader>
+        {!activeCollapsed && (
+          // Ruling 5: the bottom fade says the region holds more than it shows.
+          <ScrollArea scrollFade="bottom">
+            <div className="px-2 pt-0.5 pb-2">
+              <div className="space-y-0.5">
+                {limitedActive.rows.map((row) => (
+                  <SessionRow
+                    key={`active-${row.sessionId}`}
+                    row={row}
+                    place={placeOf(row)}
+                    now={now}
+                    active={activeSessionId === row.sessionId}
+                    started={hostBoundSessionIds.includes(row.sessionId)}
+                    unread={unreadSessionIds.includes(row.sessionId)}
+                    {...(selecting
+                      ? { selected: selection.has(row.sessionId), onToggleSelect: toggleSelected }
+                      : {})}
+                    pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
+                    onSelect={() => handleSelectSession(row.sessionId)}
+                    onClose={() => void close(row.sessionId)}
+                    onRename={(title) => void renameRow(row.sessionId, title)}
+                    onArchive={() => void archive(row.sessionId, true)}
+                  />
+                ))}
+                {limitedActive.hiddenCount > 0 ? (
+                  // Decision 145 §13's words, as on a folder.
+                  <SidebarAuxRow onClick={() => setActiveShowAll(true)}>
+                    {t('View more ({{count}})', { count: limitedActive.hiddenCount })}
+                  </SidebarAuxRow>
+                ) : (
+                  limitedActive.collapsible && (
+                    <SidebarAuxRow onClick={() => setActiveShowAll(false)}>
+                      {t('Show less')}
+                    </SidebarAuxRow>
+                  )
+                )}
+              </div>
+            </div>
+          </ScrollArea>
+        )}
+      </section>
+    );
+  };
+
+  /**
    * U13 — the temporary-chat group.
    *
    * Rendered from a helper rather than folded into the `visibleFolders` map
@@ -531,12 +612,13 @@ export function LeftNav({
    *
    * Decision 167 §5 (variant X): an L1 section of its own, not a folder in
    * Repositories — these chats belong to no repository. Its rows sit directly
-   * under the title like Recent's; the title's chevron folds them (the same
-   * memory-only state the old folder header kept), and the section lists its
-   * first rows behind the same "View more" as a repository folder (decision
-   * 137 §4, decision 138 §5).
+   * under the title; the title's chevron folds them (the same memory-only state
+   * the old folder header kept), and the section lists its first rows behind
+   * the same "View more" as a repository folder (decision 137 §4, decision
+   * 138 §5). Decision 170 (issue #6 ruling 1): a region of its own at the
+   * bottom, content-sized up to 25% of the list area, scrolling inside itself.
    */
-  const renderUnboundSection = (first: boolean) => {
+  const renderUnboundSection = () => {
     if (!unboundFolder) return null;
     const expanded = isProjectExpanded(UNBOUND_FOLDER_ID);
     const limited = limitFolderRows({
@@ -551,13 +633,14 @@ export function LeftNav({
       // row's menu instead, because Base UI's context-menu trigger stops the
       // event before it reaches this one.
       <ContextMenuPrimitive.Root>
-        <ContextMenuPrimitive.Trigger render={<section className={sidebarSectionClass(first)} />}>
+        <ContextMenuPrimitive.Trigger render={<section className={TEMPORARY_REGION_CLASS} />}>
           <SidebarSectionHeader title={unboundFolder.name}>
             <Button
               variant="ghost"
               size="icon-xs"
               className="size-6 text-muted-foreground"
               aria-label={expanded ? t('Collapse temporary chats') : t('Expand temporary chats')}
+              title={expanded ? t('Collapse temporary chats') : t('Expand temporary chats')}
               onClick={() =>
                 setExpandedProjects((prev) => ({ ...prev, [UNBOUND_FOLDER_ID]: !expanded }))
               }
@@ -570,28 +653,33 @@ export function LeftNav({
             </Button>
           </SidebarSectionHeader>
           {expanded && (
-            <div className="mt-0.5 space-y-0.5">
-              {limited.rows.map((row) => (
-                <SessionRow
-                  key={row.sessionId}
-                  row={row}
-                  place={placeOf(row)}
-                  now={now}
-                  active={activeSessionId === row.sessionId}
-                  started={hostBoundSessionIds.includes(row.sessionId)}
-                  unread={unreadSessionIds.includes(row.sessionId)}
-                  {...(selecting
-                    ? { selected: selection.has(row.sessionId), onToggleSelect: toggleSelected }
-                    : {})}
-                  pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
-                  onSelect={() => handleSelectSession(row.sessionId)}
-                  onClose={() => void close(row.sessionId)}
-                  onRename={(title) => void renameRow(row.sessionId, title)}
-                  onArchive={() => void archive(row.sessionId, true)}
-                />
-              ))}
-              {renderFolderLimitToggle(UNBOUND_FOLDER_ID, limited)}
-            </div>
+            // Ruling 5: the bottom fade, as on Active now.
+            <ScrollArea scrollFade="bottom">
+              <div className="px-2 pt-0.5 pb-2">
+                <div className="space-y-0.5">
+                  {limited.rows.map((row) => (
+                    <SessionRow
+                      key={row.sessionId}
+                      row={row}
+                      place={placeOf(row)}
+                      now={now}
+                      active={activeSessionId === row.sessionId}
+                      started={hostBoundSessionIds.includes(row.sessionId)}
+                      unread={unreadSessionIds.includes(row.sessionId)}
+                      {...(selecting
+                        ? { selected: selection.has(row.sessionId), onToggleSelect: toggleSelected }
+                        : {})}
+                      pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
+                      onSelect={() => handleSelectSession(row.sessionId)}
+                      onClose={() => void close(row.sessionId)}
+                      onRename={(title) => void renameRow(row.sessionId, title)}
+                      onArchive={() => void archive(row.sessionId, true)}
+                    />
+                  ))}
+                  {renderFolderLimitToggle(UNBOUND_FOLDER_ID, limited)}
+                </div>
+              </div>
+            </ScrollArea>
           )}
         </ContextMenuPrimitive.Trigger>
         <MenuPopup align="start" side="bottom" className="min-w-40">
@@ -707,203 +795,112 @@ export function LeftNav({
         )}
       </div>
 
-      {/* Decision 167: `scroll-pt-8` on the viewport keeps a row that takes
-          keyboard focus out from under a stuck h-8 section title. */}
-      <ScrollArea className="min-h-0 flex-1 *:data-[slot=scroll-area-viewport]:scroll-pt-8">
-        {/* `isolate`: the sticky section titles stack inside this list, so
-            they never paint over the ScrollArea's own overlay scrollbar (a
-            later sibling of the viewport with no z-index). */}
-        <div className="isolate p-2">
-          {showAddRepositoryEmptyState ? (
-            <>
-              {/* Seed sessions point at empty-path workspaces and cannot send,
-                      so surface the entry point instead of a misleading tree.
-                      U13: temporary chats are the exception — they run without a
-                      repository, so they are listed below the call to action. */}
-              <Empty className="gap-3 border-0 p-2 md:p-2">
-                <EmptyMedia variant="icon">
-                  <FolderGit2 className="h-4.5 w-4.5" />
-                </EmptyMedia>
-                <EmptyHeader>
-                  {/* D25 §3.3: EmptyTitle's shared base now carries a
+      {/* Decision 170 (issue #6 ruling 1): the list area is three regions in
+          a column — Active now, Repositories, Temporary chats — each a
+          two-row grid of its title and its own ScrollArea, so a long folder
+          list never pushes the other two out of view. The `max-h-*` caps
+          resolve against this column, whose height the dock's `absolute
+          inset-0` layer makes definite; no wrapper that sizes itself to its
+          content may go between the two. */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {renderActiveRegion()}
+        {showAddRepositoryEmptyState ? (
+          // Seed sessions point at empty-path workspaces and cannot send, so
+          // surface the entry point instead of a misleading tree. U13:
+          // temporary chats are the exception — they run without a
+          // repository, so their region stays below the call to action.
+          <section
+            className={cn(
+              'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)]',
+              activeRows.length > 0 && 'border-t'
+            )}
+          >
+            <ScrollArea>
+              <div className="p-2">
+                <Empty className="gap-3 border-0 p-2 md:p-2">
+                  <EmptyMedia variant="icon">
+                    <FolderGit2 className="h-4.5 w-4.5" />
+                  </EmptyMedia>
+                  <EmptyHeader>
+                    {/* D25 §3.3: EmptyTitle's shared base now carries a
                         negative tracking meant for its 18px default — this
-                        compact sidebar usage shrinks to 14px (text-ui) and
+                        compact sidebar usage shrinks to 15px (text-ui) and
                         may render CJK, so tracking must be cancelled back to
                         normal (negative tracking + CJK is the banned
                         combination). */}
-                  <EmptyTitle className="text-ui tracking-normal">{t('Add Repository')}</EmptyTitle>
-                  <EmptyDescription className="text-meta">
-                    {t('Add a repository to get started.')}
-                  </EmptyDescription>
-                </EmptyHeader>
+                    <EmptyTitle className="text-ui tracking-normal">
+                      {t('Add Repository')}
+                    </EmptyTitle>
+                    <EmptyDescription className="text-meta">
+                      {t('Add a repository to get started.')}
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="h-6 sm:text-meta"
+                    onClick={onAddRepository}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {t('Add Repository')}
+                  </Button>
+                </Empty>
+              </div>
+            </ScrollArea>
+          </section>
+        ) : (
+          // S1 (H/18): the projects partition's own right-click, covering its
+          // title row, the gaps between folders and any folder header with no
+          // repository behind it. Rendered AS the region.
+          <ContextMenuPrimitive.Root>
+            <ContextMenuPrimitive.Trigger
+              render={
+                <section
+                  className={cn(REPOSITORIES_REGION_CLASS, activeRows.length > 0 && 'border-t')}
+                />
+              }
+              // Ruling 6: hold the folder order while the pointer or keyboard
+              // focus is here (`useRegionHold`).
+              {...reposHold.regionProps}
+            >
+              {/* D21's filter / add slot, with Collapse all in front (ruling 7). */}
+              <SidebarSectionHeader title={t('Repositories')}>
                 <Button
-                  variant="outline"
-                  size="xs"
-                  className="h-6 sm:text-meta"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-6 text-muted-foreground"
+                  aria-label={t('Collapse all repositories')}
+                  title={t('Collapse all repositories')}
+                  onClick={collapseAllFolders}
+                >
+                  <ChevronsDownUp className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-6 text-muted-foreground"
+                  aria-label={t('Filter sessions')}
+                  title={t('Filter sessions')}
+                  aria-pressed={searchVisible}
+                  onClick={toggleSearchVisible}
+                >
+                  <ListFilter className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-6 text-muted-foreground"
+                  aria-label={t('Add Repository')}
+                  title={t('Add Repository')}
                   onClick={onAddRepository}
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  {t('Add Repository')}
+                  <FolderPlus className="size-3.5" />
                 </Button>
-              </Empty>
-              {renderUnboundSection(false)}
-            </>
-          ) : (
-            <>
-              {/* Decision 167 §1 (user ruling 2026-10-09, replaces decision 137
-                  §1's separate section): ONE Recent section in two segments.
-                  The upper one is decision 137's "Active now" — started on the
-                  engine in this run or running a turn, running turns first, no
-                  cap — and stays when Recent is collapsed. The lower one is
-                  the 48-hour list minus the upper rows, capped at 7. A chat is
-                  listed in Recent at most once, and still in its folder. */}
-              <section className={sidebarSectionClass(true)}>
-                <SidebarSectionHeader title={t('Recent')}>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="size-6 text-muted-foreground"
-                    aria-label={recentCollapsed ? t('Expand Recent') : t('Collapse Recent')}
-                    onClick={toggleRecentCollapsed}
-                  >
-                    {recentCollapsed ? (
-                      <ChevronRight className="size-3.5" />
-                    ) : (
-                      <ChevronDown className="size-3.5" />
-                    )}
-                  </Button>
-                </SidebarSectionHeader>
-                {(activeRows.length > 0 || showRecentLower) && (
-                  <div className="mt-0.5 space-y-0.5">
-                    {activeRows.length > 0 && (
-                      <div
-                        role="group"
-                        aria-labelledby={activeSegmentLabelId}
-                        className="space-y-0.5"
-                      >
-                        <SidebarSegmentLabel id={activeSegmentLabelId}>
-                          {t('Active now')}
-                        </SidebarSegmentLabel>
-                        {activeRows.map((row) => (
-                          <SessionRow
-                            key={`active-${row.sessionId}`}
-                            row={row}
-                            place={placeOf(row)}
-                            now={now}
-                            active={activeSessionId === row.sessionId}
-                            started={hostBoundSessionIds.includes(row.sessionId)}
-                            unread={unreadSessionIds.includes(row.sessionId)}
-                            {...(selecting
-                              ? {
-                                  selected: selection.has(row.sessionId),
-                                  onToggleSelect: toggleSelected,
-                                }
-                              : {})}
-                            pendingApprovalCount={
-                              pendingApprovalCountBySession.get(row.sessionId) ?? 0
-                            }
-                            onSelect={() => handleSelectSession(row.sessionId)}
-                            onClose={() => void close(row.sessionId)}
-                            onRename={(title) => void renameRow(row.sessionId, title)}
-                            onArchive={() => void archive(row.sessionId, true)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {showRecentLower && (
-                      // The lower segment is only labelled when the upper one
-                      // is there to tell it from; alone, it is simply Recent.
-                      <div
-                        {...(activeRows.length > 0
-                          ? { role: 'group', 'aria-labelledby': recentSegmentLabelId }
-                          : {})}
-                        className="space-y-0.5"
-                      >
-                        {activeRows.length > 0 && (
-                          <SidebarSegmentLabel id={recentSegmentLabelId} className="mt-1">
-                            {t('Last 48 hours')}
-                          </SidebarSegmentLabel>
-                        )}
-                        {recent.rows.map((row) => (
-                          <SessionRow
-                            key={`recent-${row.sessionId}`}
-                            row={row}
-                            place={placeOf(row)}
-                            now={now}
-                            active={activeSessionId === row.sessionId}
-                            started={hostBoundSessionIds.includes(row.sessionId)}
-                            unread={unreadSessionIds.includes(row.sessionId)}
-                            {...(selecting
-                              ? {
-                                  selected: selection.has(row.sessionId),
-                                  onToggleSelect: toggleSelected,
-                                }
-                              : {})}
-                            pendingApprovalCount={
-                              pendingApprovalCountBySession.get(row.sessionId) ?? 0
-                            }
-                            onSelect={() => handleSelectSession(row.sessionId)}
-                            onClose={() => void close(row.sessionId)}
-                            onRename={(title) => void renameRow(row.sessionId, title)}
-                            onArchive={() => void archive(row.sessionId, true)}
-                          />
-                        ))}
-                        {recent.hiddenCount > 0 ? (
-                          // P1-7e e6 (problem 40, decision 145): the same words
-                          // as a folder's cap (decision 137 §4). Decision 167:
-                          // N counts what the cap hides AFTER the upper
-                          // segment's rows were taken out.
-                          <SidebarAuxRow onClick={() => setRecentShowAll(true)}>
-                            {t('View more ({{count}})', { count: recent.hiddenCount })}
-                          </SidebarAuxRow>
-                        ) : (
-                          recentShowAll &&
-                          recent.rows.length > RECENT_DEFAULT_LIMIT && (
-                            <SidebarAuxRow onClick={() => setRecentShowAll(false)}>
-                              {t('Show less')}
-                            </SidebarAuxRow>
-                          )
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
+              </SidebarSectionHeader>
 
-              {/* S1 (H/18): the projects partition's own right-click, covering
-                  its title row, the gaps between folders and any folder header
-                  with no repository behind it. Rendered AS the section, so the
-                  sticky title's containing block is the partition itself. */}
-              <ContextMenuPrimitive.Root>
-                <ContextMenuPrimitive.Trigger
-                  render={<section className={sidebarSectionClass(false)} />}
-                >
-                  {/* D21: the filter / add icon slot stays on this title. */}
-                  <SidebarSectionHeader title={t('Repositories')}>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="size-6 text-muted-foreground"
-                      aria-label={t('Filter sessions')}
-                      title={t('Filter sessions')}
-                      aria-pressed={searchVisible}
-                      onClick={toggleSearchVisible}
-                    >
-                      <ListFilter className="size-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="size-6 text-muted-foreground"
-                      aria-label={t('Add Repository')}
-                      title={t('Add Repository')}
-                      onClick={onAddRepository}
-                    >
-                      <FolderPlus className="size-3.5" />
-                    </Button>
-                  </SidebarSectionHeader>
-
-                  <div className="mt-0.5 space-y-1">
+              <ScrollArea>
+                <div className="px-2 pt-0.5 pb-2">
+                  <div className="space-y-1">
                     {noMatches && (
                       <p className="px-2 py-1 text-meta text-muted-foreground">
                         {t('No matching sessions')}
@@ -1151,20 +1148,19 @@ export function LeftNav({
                       );
                     })}
                   </div>
-                </ContextMenuPrimitive.Trigger>
-                <MenuPopup align="start" side="bottom" className="min-w-40">
-                  <MenuItem onClick={() => onAddRepository?.()}>
-                    <FolderPlus className="size-4" />
-                    {t('Add Repository')}
-                  </MenuItem>
-                </MenuPopup>
-              </ContextMenuPrimitive.Root>
-
-              {renderUnboundSection(false)}
-            </>
-          )}
-        </div>
-      </ScrollArea>
+                </div>
+              </ScrollArea>
+            </ContextMenuPrimitive.Trigger>
+            <MenuPopup align="start" side="bottom" className="min-w-40">
+              <MenuItem onClick={() => onAddRepository?.()}>
+                <FolderPlus className="size-4" />
+                {t('Add Repository')}
+              </MenuItem>
+            </MenuPopup>
+          </ContextMenuPrimitive.Root>
+        )}
+        {renderUnboundSection()}
+      </div>
 
       {repoToConfigure && (
         <RepositorySettingsDialog
@@ -1249,61 +1245,122 @@ export function LeftNav({
 }
 
 /**
- * Decision 167: an L1 section. Full-bleed (`-mx-2 px-2` undoes the list's
- * `p-2`) so the divider above every section but the first runs edge to edge.
+ * Decision 170 (issue #6 ruling 1): the list area's three regions. Each is a
+ * two-row grid — the h-8 title (`auto`), then the region's own `ScrollArea`
+ * (`minmax(0,1fr)`) — so no title is inside a scroll viewport and nothing has
+ * to stick (decision 167's sticky titles, their two-layer background, the
+ * background-image fallback, `isolate` and `scroll-pt-8` are gone with it).
+ * Active now and Temporary chats are content-sized up to 33% / 25% of the list
+ * area; Repositories takes the rest. Regions meet at a full-width `border-t`.
+ *
+ * Two parts are load-bearing, both found on the prototype
+ * (`docs/plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/`):
+ * - `grid-cols-1`: the implicit `auto` column grows to the rows' min-content
+ *   width (nowrap titles) and pushes every row past the panel's right edge.
+ * - grid, not flex: a flex region's height is indefinite, so the ScrollArea
+ *   root's `height: 100%` never resolves and its viewport grows with the
+ *   content instead of scrolling. In the grid the capped region's second row
+ *   is definite and the viewport scrolls inside it.
  */
-function sidebarSectionClass(first: boolean): string {
-  return cn('-mx-2 px-2', !first && 'mt-2 border-t');
-}
+const ACTIVE_REGION_CLASS =
+  'grid max-h-[33%] min-h-0 shrink-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]';
+const REPOSITORIES_REGION_CLASS = 'grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]';
+const TEMPORARY_REGION_CLASS =
+  'grid max-h-[25%] min-h-0 shrink-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] border-t';
 
 /**
- * Decision 167: an L1 section title (15px / 600 / foreground, +0.04em, h-8),
- * sticky within its own section so a long list always says where it is.
- *
- * Two layers make the stuck title opaque in the panel's own colour: the outer
- * `bg-background` is the shell canvas, the inner `bg-card/40` is the same wash
- * `LeftDock`'s root lays over it. With a background image the four panel
- * surfaces turn translucent (`--panel-bg-opacity`), and a stuck title would
- * let the rows scrolling under it show through — so it stops sticking there
- * (`.bg-image-enabled` is set on <body> by `useBackgroundImage`). Nothing
- * between this element and the scroll viewport may set overflow, transform,
- * filter or contain: any of them silently breaks `sticky`.
+ * Decision 167 / 170: a region title (L1) — 16px / 600 / foreground, +0.04em,
+ * h-8. It is the region grid's first row, outside the region's scroll area.
  */
 function SidebarSectionHeader({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="sticky top-0 z-10 -mx-2 bg-background in-[.bg-image-enabled]:static">
-      <div className="flex h-8 items-center bg-card/40 px-4">
-        <p className="min-w-0 truncate text-ui font-semibold tracking-[0.04em] text-foreground">
-          {title}
-        </p>
-        {children && <div className="ml-auto flex shrink-0 items-center gap-0.5">{children}</div>}
-      </div>
+    <div className="flex h-8 items-center px-4">
+      <p className="min-w-0 truncate text-section font-semibold tracking-[0.04em] text-foreground">
+        {title}
+      </p>
+      {children && <div className="ml-auto flex shrink-0 items-center gap-0.5">{children}</div>}
     </div>
   );
 }
 
 /**
- * Decision 167 §1: the small label over one of Recent's two segments (L4).
- * It sits in the section title's column (x=16), not the rows' — aligned with
- * the titles it would read like the clickable "View more".
+ * Decision 170 (issue #6 ruling 6): the order a list had when a hold began,
+ * kept until the hold ends (null while there is none). Captured during render
+ * — React's "adjust state while rendering" pattern — so the first held render
+ * already uses it.
  */
-function SidebarSegmentLabel({
-  id,
-  className,
-  children,
-}: {
-  id: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      id={id}
-      className={cn('flex h-6 items-center px-2 text-meta text-muted-foreground', className)}
-    >
-      {children}
-    </div>
-  );
+function useHeldOrder(live: readonly string[], held: boolean): readonly string[] | null {
+  const [snapshot, setSnapshot] = useState<readonly string[] | null>(null);
+  if (held && snapshot === null) {
+    setSnapshot(live);
+    return live;
+  }
+  if (!held && snapshot !== null) {
+    setSnapshot(null);
+  }
+  return held ? snapshot : null;
+}
+
+/**
+ * Keyboard focus, as opposed to the focus a mouse click leaves on a row:
+ * `:focus-visible`. A browser that cannot answer counts as keyboard focus —
+ * holding the order a moment too long is the safe side.
+ */
+function hasKeyboardFocus(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  try {
+    return target.matches(':focus-visible');
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Decision 170 (issue #6 ruling 6): is the pointer, or keyboard focus, in a
+ * region? Spread `regionProps` on the region; `held` says whether it is.
+ *
+ * - Pointer: React computes enter / leave over its own tree, so a popup
+ *   portaled out of the region's DOM (a row's menu) still counts as inside.
+ * - Keyboard focus only: the focus a click leaves on a row must not keep the
+ *   region held after the pointer has gone. Focus moving into a portaled popup
+ *   arrives here as a fresh focus event, because React bubbles through portals.
+ * - A focused element that is removed (a row's ✕, 「新建对话」 in an empty
+ *   folder) takes focus with it and no blur event follows, and the region
+ *   itself goes away with the last repository. The check after every commit
+ *   lets go in both cases instead of holding for good.
+ */
+function useRegionHold(mounted: boolean) {
+  const [pointerInside, setPointerInside] = useState(false);
+  const [keyboardFocus, setKeyboardFocus] = useState(false);
+  const focusTargetRef = useRef<EventTarget | null>(null);
+
+  useEffect(() => {
+    if (!mounted) {
+      if (pointerInside) setPointerInside(false);
+      if (keyboardFocus) setKeyboardFocus(false);
+      return;
+    }
+    if (keyboardFocus && document.activeElement !== focusTargetRef.current) {
+      setKeyboardFocus(false);
+    }
+  });
+
+  return {
+    held: mounted && (pointerInside || keyboardFocus),
+    regionProps: {
+      onPointerEnter: () => setPointerInside(true),
+      onPointerLeave: () => setPointerInside(false),
+      onFocus: (event: FocusEvent<HTMLElement>) => {
+        focusTargetRef.current = event.target;
+        setKeyboardFocus(hasKeyboardFocus(event.target));
+      },
+      onBlur: (event: FocusEvent<HTMLElement>) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && event.currentTarget.contains(next)) return;
+        setKeyboardFocus(false);
+      },
+    },
+  };
 }
 
 /**
@@ -1356,7 +1413,7 @@ interface SessionRowProps {
   /**
    * Decision 167 §2: the full branch of a chat on a non-main workspace (a
    * linked worktree), passed only inside its folder (`chipShownInFolder`).
-   * The row shows its last segment; Recent never passes it.
+   * The row shows its last segment; Active now never passes it.
    */
   branch?: string;
   now: number;
@@ -1567,7 +1624,8 @@ function SessionRow({
           }}
           // Decision 167: the radius clamp rule (design system, Border
           // Radius) — the primitive's `rounded-lg` on h-6 renders as a pill.
-          className="h-6 flex-1 rounded-sm text-ui before:rounded-[calc(var(--radius-sm)-1px)]"
+          // Decision 170: the row's own 14px, so a rename does not grow the text.
+          className="h-6 flex-1 rounded-sm text-meta before:rounded-[calc(var(--radius-sm)-1px)]"
         />
       </div>
     );
@@ -1590,8 +1648,13 @@ function SessionRow({
             // makes the row's minimum content size exceed the track at the default
             // sidebar width, and without it the trailing items would spill past the
             // rounded edge instead of the branch text absorbing the deficit.
-            'group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-ui',
-            active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover focus-visible:bg-hover'
+            // Decision 170 (issue #6 rulings 3–4): 14px, and the title one step
+            // below the folder name's ink — `--foreground-soft`, never with /N
+            // — except on the open chat, which keeps the body colour.
+            'group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',
+            active
+              ? 'bg-selection text-accent-foreground'
+              : 'text-foreground-soft hover:bg-hover focus-visible:bg-hover'
           )}
           onClick={() => (onToggleSelect ? onToggleSelect(row.sessionId) : onSelect())}
           onDoubleClick={onToggleSelect ? undefined : beginRename}
@@ -1681,11 +1744,12 @@ function SessionRow({
           the row's identity and the only user-authored text on it, so it gets a
           floor and everything else yields to it. Without the floor `flex-1
           min-w-0` shrinks to whatever is left. Budget for an indented row at the
-          280px default (decision 167, measured on the prototype): the panel's
-          280 includes its 1px right border, so 280 - 1 - 16 (p-2) - 12 (pl-3) -
-          16 (px-2) = 235px of content; minus the 16px status slot, two 6px gaps
-          and the 40px time box, the title gets 167px (SIDEBAR_DEFAULT_WIDTH -
-          DOCK_RAIL_WIDTH = 280). */}
+          280px default (decision 167, measured on the prototype; decision 170
+          kept it): the panel's 280 includes its 1px right border, so 280 - 1 -
+          16 (the region list's px-2) - 12 (pl-3) - 16 (px-2) = 235px of
+          content; minus the 16px status slot, two 6px gaps and the 40px time
+          box, the title gets 167px (SIDEBAR_DEFAULT_WIDTH - DOCK_RAIL_WIDTH =
+          280). */}
           {titleParts.suffix === null ? (
             <span className="min-w-20 flex-1 truncate">{row.title}</span>
           ) : (
@@ -1704,7 +1768,7 @@ function SessionRow({
             </span>
           )}
           {/* Alert badges are state, not context, so they stay on every row —
-              Recent's included. Decision 167 unified them at Badge `lg` (14px
+              Active now's included. Decision 167 unified them at Badge `lg` (14px
               on desktop; revises decisions 144 §2 and 123 §13, which kept the
               Latin-only marks at `sm`'s 10px). */}
           {/* dsh-rebase P1-9e (decision 051): the legacy copy of a migrated

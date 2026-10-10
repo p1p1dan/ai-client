@@ -137,10 +137,11 @@ export function SessionBar({
   const title = (
     <div className="flex min-w-0 items-center gap-1.5">
       {busy && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-running" />}
-      {/* Decision 167 §6: 15px / 400 — the same size as the sidebar's 「聊天」 on
-          this h-9 line, told apart by weight (panel name 600, chat name 400).
-          The old `font-medium` rendered as 400 on Windows anyway. */}
-      <span className="min-w-0 truncate text-ui text-foreground">
+      {/* Decision 167 §6: 400 — the same size as the sidebar's 「聊天」 on this
+          h-9 line, told apart by weight (panel name 600, chat name 400). The
+          old `font-medium` rendered as 400 on Windows anyway. Decision 170
+          (issue #6 ruling 3): both are 16px (`text-section`) now. */}
+      <span className="min-w-0 truncate text-section text-foreground">
         {activeSession ? displaySessionTitle(activeSession.title, t) : t('No conversation open')}
       </span>
       {/* P1-7e e6 (decision 145): 「临时」 is CJK, so the title's own

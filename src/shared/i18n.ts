@@ -916,8 +916,6 @@ export const zhTranslations: Record<string, string> = {
   // Decision 138 (point-check issue 34): a sidebar rename that did not land.
   'Could not rename the chat': '重命名失败',
   'Filter sessions': '筛选会话',
-  'Expand Recent': '展开最近',
-  'Collapse Recent': '收起最近',
   'No matching sessions': '无匹配会话',
   'Settings Display Mode': '设置视图',
   'Switch to floating mode': '切换为浮动模式',
@@ -3960,12 +3958,12 @@ Object.assign(zhTranslations, {
 // Sidebar hierarchy (issue #3)
 /**
  * dsh-rebase decision 167 (GitHub issue #3): the 「聊天」 sidebar's section
- * hierarchy — Recent's lower segment label, the three-line row tooltip, the
- * folder row's tooltip, the Temporary chats section toggle and the Temp
- * Session project's display name (`LeftNav`, `sidebarTree`).
+ * hierarchy — the three-line row tooltip, the folder row's tooltip, the
+ * Temporary chats section toggle and the Temp Session project's display name
+ * (`LeftNav`, `sidebarTree`). Recent's 「48 小时内」 label went with Recent
+ * (decision 170).
  */
 Object.assign(zhTranslations, {
-  'Last 48 hours': '48 小时内',
   'Updated {{time}}': '更新于 {{time}}',
   'Main branch: {{branch}}': '主工作区分支：{{branch}}',
   'Remote repository': '远程仓库',
@@ -4146,4 +4144,17 @@ Object.assign(zhTranslations, {
   'The engine can no longer find it: the connection was re-established, or the chat was rewound, after it was sent':
     '引擎已找不到它：发出后连接重建过，或对话回退过',
   'Could not withdraw the message': '撤回失败',
+});
+
+// Sidebar regions (issue #6)
+/**
+ * dsh-rebase decision 170 (GitHub issue #6): the 「正在活动」 region's chevron
+ * and the 「仓库列表」 region's Collapse all button (`LeftNav`). 「全部折叠」 is
+ * a key of its own: 「折叠所有」 (`Collapse all`) and 「折叠所有文件夹」
+ * (`Collapse all folders`) belong to the changes tree and the file tree.
+ */
+Object.assign(zhTranslations, {
+  'Expand active chats': '展开正在活动',
+  'Collapse active chats': '收起正在活动',
+  'Collapse all repositories': '全部折叠',
 });

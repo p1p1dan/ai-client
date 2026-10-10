@@ -91,6 +91,43 @@ describe('[D2-1] globals.css minor-tier token value lock (F456 D2-b)', () => {
 });
 
 /**
+ * Decision 170 (GitHub issue #6): the two tokens the 「聊天」 sidebar's new
+ * hierarchy needs. `--foreground-soft` is the chat title's ink (user ruling:
+ * the oklab midpoint of the body colour and the muted one, written as a
+ * derivation so it follows light, dark and sync-terminal); `--text-section` is
+ * the 16px tier of region / panel / session-bar titles. Each must also be
+ * reachable as a utility — Tailwind v4 only emits `text-foreground-soft` when
+ * `@theme` bridges it, and `text-section` comes from the `--text-*` namespace.
+ */
+describe('decision 170: --foreground-soft and --text-section', () => {
+  const themeBlock = extractBlock('@theme');
+
+  it('--foreground-soft is the oklab midpoint of --foreground and --muted-foreground', () => {
+    expect(rootBlock).toContain(
+      '--foreground-soft: color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground));'
+    );
+  });
+
+  it('--foreground-soft is declared once, in :root only, and carries no alpha of its own', () => {
+    expect(source.split('--foreground-soft:').length - 1).toBe(1);
+    expect(darkBlock).not.toContain('--foreground-soft');
+    const declaration = /--foreground-soft:\s*([^;]+);/.exec(source)?.[1] ?? '';
+    expect(declaration).not.toContain('transparent');
+    expect(declaration).not.toMatch(/\/\s*[\d.]+\s*\)/);
+  });
+
+  it('@theme bridges it, so Tailwind emits text-foreground-soft', () => {
+    expect(themeBlock).toContain('--color-foreground-soft: var(--foreground-soft);');
+  });
+
+  it('--text-section is 16px with the 1.5 line height of its neighbours', () => {
+    expect(themeBlock).toContain('--text-section: 1rem;');
+    expect(themeBlock).toContain('--text-section--line-height: 1.5;');
+    expect(themeBlock.split('--text-section:').length - 1).toBe(1);
+  });
+});
+
+/**
  * FB9's font token, and the red line it has to stay on the right side of.
  *
  * `globals.css` states it directly: "this repo has no @font-face and no font
