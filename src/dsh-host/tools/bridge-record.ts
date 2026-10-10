@@ -74,6 +74,13 @@
  *                 Continue (`mode: 'retry'`) follows up the hidden continuation and
  *                 the turn answers; a second Continue after that success is refused
  *                 (`WORKER_RETRY_UNAVAILABLE`)
+ *   steer-withdraw  (issue #8, decision 172 §4; recorded last, so on a fresh
+ *                 host) while the first command sleeps, one note is steered and
+ *                 withdrawn (`worker.interject.withdraw` -> `withdrawn`), another
+ *                 steered and kept: the answer names only the kept one. Idle, the
+ *                 kept note answers `delivered` and an unknown attempt `not_found`.
+ *                 A Stop then leaves a third note in DSH's inbox (decision 094);
+ *                 withdrawn there, the next turn's answer does not name it either
  *
  * Attachment scenarios (P1-4c2, decisions 096 and 097), recorded last:
  *   image         a small PNG, sent to the image-capable `fake-vision`, reaches the
@@ -715,6 +722,10 @@ const SCENARIOS: Record<string, Scenario> = {
   // P1-7b (decisions 069, 119): background work. Last, for the same reason.
   'jobs-kill': jobsKillScenario,
   'sub-cont': subContScenario,
+  // Issue #8 (decision 172 §4): withdrawing an interjection. After the two
+  // above, so it opens a fresh shared host and every earlier sample keeps the
+  // host state it was recorded with.
+  'steer-withdraw': steerWithdrawScenario,
 };
 
 /** The id of the first tree node whose preview contains `text`, and the node after it. */
@@ -1046,6 +1057,72 @@ async function steerScenario(context: RecordContext, host: Host): Promise<Record
   }
   answers.idle = answerOf(await interject('interject-IDLE', 'STEER-NOTE-B nobody is running.'));
   return finish(context, session, [boot], [turn], { interject: answers });
+}
+
+/**
+ * Issue #8 (decision 172 §4): Ctrl+Enter messages taken back before a turn
+ * takes them in. While the first of two commands sleeps, one note is steered
+ * and withdrawn, another steered and kept: the model hears only the kept one.
+ * Once idle, withdrawing the kept note answers `delivered` (its echo went out)
+ * and an attempt nobody sent `not_found`. A Stop then leaves a third note in
+ * DSH's inbox (decision 094); withdrawn there, the next turn does not hear it.
+ * Each withdrawal is a cancelled inbox splice in `log`, and no row in `rpc.history`.
+ */
+async function steerWithdrawScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, 'steer-withdraw');
+  const { client } = session.host;
+  const { logicalSessionId } = session;
+  const interject = (attemptId: string, text: string) =>
+    client.call(session.ch, 'worker.interject', { logicalSessionId, attemptId, text });
+  const withdraw = (attemptId: string) =>
+    client.call(session.ch, 'worker.interject.withdraw', { logicalSessionId, attemptId });
+  const interjected: Message = {};
+  const withdrawn: Message = {};
+  const steered = await context.turn(
+    session,
+    'STEER-W',
+    'P1-STEER: two tool steps, one note taken back.',
+    async (from) => {
+      await waitForToolCall(session, from);
+      // Inside the first command's two-second sleep.
+      await sleep(500);
+      interjected.dropped = answerOf(
+        await interject('interject-DROP', 'STEER-NOTE-W this note is taken back.')
+      );
+      withdrawn.waiting = answerOf(await withdraw('interject-DROP'));
+      interjected.kept = answerOf(await interject('interject-KEEP', 'STEER-NOTE-K keep this one.'));
+    }
+  );
+  const reply = replyOf(steered);
+  if (!reply.includes('heard: STEER-NOTE-K.')) {
+    throw new Error(`steer-withdraw: the model heard other notes than the kept one: ${reply}`);
+  }
+  withdrawn.delivered = answerOf(await withdraw('interject-KEEP'));
+  withdrawn.unknown = answerOf(await withdraw('interject-NOBODY'));
+  const stopped = await context.turn(
+    session,
+    'STOP-W',
+    'P0-SLEEPTOOL {"token":"steer-withdraw","seconds":30} run a long command; I will stop you.',
+    async (from) => {
+      await waitForToolCall(session, from);
+      // Past the command's first echo, well before its sleep ends (as `stop-tool`).
+      await sleep(2_000);
+      interjected.stopped = answerOf(
+        await interject('interject-STOPPED', 'STEER-NOTE-S left waiting by the stop.')
+      );
+      await client.request(session.ch, 'worker.stop', { logicalSessionId, reason: 'user' });
+    }
+  );
+  withdrawn.afterStop = answerOf(await withdraw('interject-STOPPED'));
+  const next = await context.turn(session, 'STEER-ONE-W', 'P1-STEER-ONE: which notes reached you?');
+  const nextReply = replyOf(next);
+  if (!nextReply.includes('heard: STEER-NOTE-K.')) {
+    throw new Error(`steer-withdraw: the note withdrawn after the stop went out: ${nextReply}`);
+  }
+  return finish(context, session, [boot], [steered, stopped, next], {
+    interject: interjected,
+    withdraw: withdrawn,
+  });
 }
 
 /**

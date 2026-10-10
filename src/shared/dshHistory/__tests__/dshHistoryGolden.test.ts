@@ -158,6 +158,8 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'question',
     'rewind',
     'steer',
+    // Issue #8 (decision 172 §4): withdrawing an interjection.
+    'steer-withdraw',
     'stop-stream',
     'stop-tool',
     'stream',

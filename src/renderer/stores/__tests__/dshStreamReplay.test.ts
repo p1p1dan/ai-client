@@ -18,6 +18,7 @@ import {
 } from '@/components/chat/chatTurn';
 import { COMPACT_INSTRUCTIONS_UNSUPPORTED } from '@/components/chat/compactCommand';
 import { autoTurnHeadView, dshNoticeRowView } from '@/components/chat/dshTimelineRowModel';
+import { withdrawInterjection } from '@/components/chat/interjectionWithdraw';
 import {
   canRespondToPermission,
   derivePermissionAutoNote,
@@ -57,6 +58,7 @@ import {
   type ChatSessionsState,
   statusForNextTurn,
 } from '../chatSessions';
+import { resetComposerDraftsForTests, useComposerDraftsStore } from '../composerDrafts';
 import { resetResumeCandidatesForTests } from '../historyReplayMerge';
 import {
   mergePendingUserRows,
@@ -336,6 +338,7 @@ function scenario(name: string, body: (events: RuntimeEvent[], sessionId: string
 beforeEach(() => {
   resetResumeCandidatesForTests();
   usePendingUserMessagesStore.setState({ bySession: {} });
+  resetComposerDraftsForTests();
 });
 
 // ---- every recording ------------------------------------------------------------------
@@ -1180,6 +1183,76 @@ scenario('steer', (events, id) => {
 
   it('finds no turn to join once idle, so the composer sends normally', () => {
     expect(rpc.interject.idle.result).toEqual({ interjected: false, turnActive: false });
+  });
+});
+
+scenario('steer-withdraw', (events, id) => {
+  const rpc = loadRpc('steer-withdraw');
+  const awaiting = (attemptId: string, text: string): PendingUserMessage => ({
+    attemptId,
+    sessionId: id,
+    text,
+    attachments: [],
+    startedAt: 0,
+    awaitingDelivery: true,
+  });
+
+  it('the model hears the kept note only; a withdrawn one never becomes a row (issue #8)', () => {
+    const turns = turnsOf(replay(events), id);
+    expect(turns.map((turn) => turn.head)).toEqual([
+      'P1-STEER: two tool steps, one note taken back.',
+      'STEER-NOTE-K keep this one.',
+      'P0-SLEEPTOOL {"token":"steer-withdraw","seconds":30} run a long command; I will stop you.',
+      'P1-STEER-ONE: which notes reached you?',
+    ]);
+    expect(turns[1]?.answer).toBe('P1-STEER finished; heard: STEER-NOTE-K.');
+    expect(turns[3]?.answer).toBe('P1-STEER-ONE heard: STEER-NOTE-K.');
+    expect(JSON.stringify(events)).not.toMatch(/STEER-NOTE-[WS]/);
+    // While its turn ran, and after a Stop left it waiting (decision 094).
+    expect(rpc.withdraw.waiting.result).toEqual({ outcome: 'withdrawn' });
+    expect(rpc.withdraw.afterStop.result).toEqual({ outcome: 'withdrawn' });
+    // Too late, and never sent here.
+    expect(rpc.withdraw.delivered.result).toEqual({ outcome: 'delivered' });
+    expect(rpc.withdraw.unknown.result).toEqual({ outcome: 'not_found' });
+  });
+
+  it('a withdrawn bubble goes back to the box; the kept one is retired by its echo', async () => {
+    const pending = usePendingUserMessagesStore.getState();
+    pending.publish(awaiting('interject-DROP', 'STEER-NOTE-W this note is taken back.'));
+    pending.publish(awaiting('interject-KEEP', 'STEER-NOTE-K keep this one.'));
+    // The engine's recorded answer to the bubble's 「撤回」.
+    await expect(
+      withdrawInterjection(id, 'interject-DROP', async () => rpc.withdraw.waiting.result)
+    ).resolves.toEqual({ outcome: 'withdrawn' });
+    expect(useComposerDraftsStore.getState().takeOffered(id)).toBe(
+      'STEER-NOTE-W this note is taken back.'
+    );
+    for (const event of events) {
+      if (
+        event.type === 'message.started' &&
+        event.payload.role === 'user' &&
+        event.payload.attemptId
+      ) {
+        usePendingUserMessagesStore
+          .getState()
+          .acknowledgeAttempt(id, event.payload.attemptId, event.payload.messageId);
+      }
+    }
+    const { rows, awaitingDelivery } = mergePendingUserRows(
+      bucket(replay(events), id),
+      usePendingUserMessagesStore.getState().bySession[id] ?? []
+    );
+    expect(awaitingDelivery).toEqual([]);
+    expect(groupMessagesIntoTurns(rows).map((turn) => textOf(turn.user))).toContain(
+      'STEER-NOTE-K keep this one.'
+    );
+  });
+
+  it('reopened, it reads as it did live', () => {
+    const live = turnsOf(replay(events), id);
+    const reopened = turnsOf(reopen(id, rpc.history.page.messages), id);
+    expect(reopened.map((turn) => turn.head)).toEqual(live.map((turn) => turn.head));
+    expect(reopened.map((turn) => turn.answer)).toEqual(live.map((turn) => turn.answer));
   });
 });
 

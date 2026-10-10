@@ -1,0 +1,1283 @@
+{
+  "header": {
+    "version": 4,
+    "id": "aiclient-rec-steer-withdraw",
+    "createdAt": "<ms>",
+    "cwd": "<workspace>",
+    "isSeeded": false
+  },
+  "inheritedEventCount": 0,
+  "cursor": 47,
+  "events": [
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 0,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "P1-STEER: two tool steps, one note taken back."
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "id-1"
+          }
+        ]
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 1,
+      "time": "<ms>",
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 2,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 3,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 4,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "role": "system",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-prompt>"
+            }
+          ],
+          "source": {
+            "kind": "system-prompt"
+          },
+          "id": "id-2"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 5,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "P1-STEER: two tool steps, one note taken back."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        },
+        "role": "user",
+        "id": "id-1"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 6,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<runtime-context>"
+          }
+        ],
+        "source": {
+          "kind": "runtime-context",
+          "form": "snapshot",
+          "sections": [
+            {
+              "name": "aiclient:environment",
+              "text": "<aiclient:environment>"
+            },
+            {
+              "name": "sandbox:policy",
+              "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
+            },
+            {
+              "name": "approval:policy",
+              "text": "Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed."
+            },
+            {
+              "name": "aiclient:permission",
+              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: bypass. The user has turned off approval prompts entirely: available tools execute without approval, including shell commands whose operands cannot be resolved statically. Explicit deny rules and the tool whitelist remain enforced, and a denied call is still denied. Never bypass a denied tool or path by switching tools."
+            }
+          ]
+        },
+        "role": "user",
+        "id": "id-3"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "request/header",
+      "seq": 7,
+      "time": "<ms>",
+      "data": {
+        "header": {
+          "config": {
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "maxTokens": 8192
+          },
+          "adapterDefaults": {
+            "maxTokens": true
+          },
+          "tools": [
+            "ask_user_question",
+            "bash",
+            "create_goal",
+            "edit",
+            "exit_plan_mode",
+            "get_goal",
+            "glob",
+            "grep",
+            "interrupt_agent",
+            "job_kill",
+            "job_list",
+            "job_output",
+            "list_agents",
+            "read",
+            "read_image",
+            "send_message",
+            "skill",
+            "subagent",
+            "subagent_fork",
+            "todo_write",
+            "update_goal",
+            "workflow",
+            "write"
+          ]
+        },
+        "reason": "initial"
+      }
+    },
+    {
+      "type": "request/context",
+      "seq": 8,
+      "time": "<ms>",
+      "data": {
+        "provider": "aiclient-gateway",
+        "model": "fake-1",
+        "contextWindow": 200000
+      }
+    },
+    {
+      "type": "session/title",
+      "seq": 9,
+      "time": "<ms>",
+      "data": {
+        "title": "P1-STEER: two tool steps, one",
+        "messageSeqs": [5],
+        "source": {
+          "kind": "fallback"
+        }
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 10,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "toolu_id-4",
+              "name": "bash",
+              "arguments": "{\"command\":\"sleep 2; echo steer-step-1\",\"description\":\"First step\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-5",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-6"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-4",
+            "name": "bash",
+            "args": ["{\"command\":\"sleep 2; echo steer-step-1\",\"description\":\"First step\"}"]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-4",
+                "name": "bash",
+                "arguments": "{\"command\":\"sleep 2; echo steer-step-1\",\"description\":\"First step\"}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-5",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 11,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "callId": "toolu_id-4",
+        "name": "bash",
+        "arguments": "{\"command\":\"sleep 2; echo steer-step-1\",\"description\":\"First step\"}"
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 12,
+      "time": "<ms>",
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "STEER-NOTE-W this note is taken back."
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "id-7"
+          }
+        ]
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 13,
+      "time": "<ms>",
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": [],
+        "outcome": "canceled"
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 14,
+      "time": "<ms>",
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "STEER-NOTE-K keep this one."
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "id-8"
+          }
+        ]
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 15,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-4"
+          },
+          "toolCallId": "toolu_id-4",
+          "content": [
+            {
+              "type": "text",
+              "text": "steer-step-1\n"
+            }
+          ],
+          "isError": false,
+          "id": "id-9"
+        }
+      },
+      "sourceEventSeqs": [11],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 16,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 17,
+      "time": "<ms>",
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 18,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 19,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "STEER-NOTE-K keep this one."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        },
+        "role": "user",
+        "id": "id-8"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 20,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "toolu_id-10",
+              "name": "bash",
+              "arguments": "{\"command\":\"echo steer-step-2\",\"description\":\"Second step\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-11",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-12"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-10",
+            "name": "bash",
+            "args": ["{\"command\":\"echo steer-step-2\",\"description\":\"Second step\"}"]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-10",
+                "name": "bash",
+                "arguments": "{\"command\":\"echo steer-step-2\",\"description\":\"Second step\"}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-11",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 21,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "callId": "toolu_id-10",
+        "name": "bash",
+        "arguments": "{\"command\":\"echo steer-step-2\",\"description\":\"Second step\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 22,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-10"
+          },
+          "toolCallId": "toolu_id-10",
+          "content": [
+            {
+              "type": "text",
+              "text": "steer-step-2\n"
+            }
+          ],
+          "isError": false,
+          "id": "id-13"
+        }
+      },
+      "sourceEventSeqs": [21],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 23,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 24,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 25,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "P1-STEER finished; heard: STEER-NOTE-K."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-14",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "id": "id-15"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "text"
+            }
+          },
+          {
+            "type": "text-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "texts": ["P1-STEER finished; heard: STEER-NOTE-K."]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "text",
+                "text": "P1-STEER finished; heard: STEER-NOTE-K."
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "stop"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-14",
+                  "stopReason": "stop"
+                },
+                "blocks": [
+                  {
+                    "type": "text"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 26,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 27,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 28,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "P0-SLEEPTOOL {\"token\":\"steer-withdraw\",\"seconds\":30} run a long command; I will stop you."
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "id-16"
+          }
+        ]
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 29,
+      "time": "<ms>",
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 30,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 31,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 32,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "P0-SLEEPTOOL {\"token\":\"steer-withdraw\",\"seconds\":30} run a long command; I will stop you."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        },
+        "role": "user",
+        "id": "id-16"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 33,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "toolu_id-17",
+              "name": "bash",
+              "arguments": "{\"command\":\"echo \\\"sleep-tool steer-withdraw started\\\"; sleep 30; echo \\\"sleep-tool done\\\"\",\"description\":\"Run a long command\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-18",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-19"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-17",
+            "name": "bash",
+            "args": [
+              "{\"command\":\"echo \\\"sleep-tool steer-withdraw started\\\"; sleep 30; echo \\\"sleep-tool done\\\"\",\"description\":\"Run a long command\"}"
+            ]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-17",
+                "name": "bash",
+                "arguments": "{\"command\":\"echo \\\"sleep-tool steer-withdraw started\\\"; sleep 30; echo \\\"sleep-tool done\\\"\",\"description\":\"Run a long command\"}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-18",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 34,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "callId": "toolu_id-17",
+        "name": "bash",
+        "arguments": "{\"command\":\"echo \\\"sleep-tool steer-withdraw started\\\"; sleep 30; echo \\\"sleep-tool done\\\"\",\"description\":\"Run a long command\"}"
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 35,
+      "time": "<ms>",
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "STEER-NOTE-S left waiting by the stop."
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "id-20"
+          }
+        ]
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 36,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-17"
+          },
+          "toolCallId": "toolu_id-17",
+          "content": [
+            {
+              "type": "text",
+              "text": "Error: tool call aborted"
+            }
+          ],
+          "isError": true,
+          "id": "id-21"
+        },
+        "error": {
+          "name": "AbortError",
+          "code": "ABORTED"
+        }
+      },
+      "sourceEventSeqs": [34],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 37,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 38,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "reason": {
+          "kind": "aborted",
+          "reason": {
+            "kind": "user"
+          }
+        }
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 39,
+      "time": "<ms>",
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": [],
+        "outcome": "canceled"
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 40,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "P1-STEER-ONE: which notes reached you?"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "id-22"
+          }
+        ]
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 41,
+      "time": "<ms>",
+      "data": {
+        "turn": 3
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 42,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 43,
+      "time": "<ms>",
+      "data": {
+        "turn": 3,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 44,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "P1-STEER-ONE: which notes reached you?"
+          }
+        ],
+        "source": {
+          "kind": "user"
+        },
+        "role": "user",
+        "id": "id-22"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 45,
+      "time": "<ms>",
+      "data": {
+        "turn": 3,
+        "step": 1,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "P1-STEER-ONE heard: STEER-NOTE-K."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-23",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "id": "id-24"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "text"
+            }
+          },
+          {
+            "type": "text-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "texts": ["P1-STEER-ONE heard: STEER-NOTE-K."]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "text",
+                "text": "P1-STEER-ONE heard: STEER-NOTE-K."
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "stop"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-23",
+                  "stopReason": "stop"
+                },
+                "blocks": [
+                  {
+                    "type": "text"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 46,
+      "time": "<ms>",
+      "data": {
+        "turn": 3,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 47,
+      "time": "<ms>",
+      "data": {
+        "turn": 3,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}
