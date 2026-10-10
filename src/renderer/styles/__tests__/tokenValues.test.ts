@@ -128,6 +128,22 @@ describe('decision 170: --foreground-soft and --text-section', () => {
 });
 
 /**
+ * Decision 174 (issue #6, second wave): the home title's tier. 26px with a 1.3
+ * line height (the prototype's v4 value, down from v3's proposed 28px); it is a
+ * `--text-*` theme key so `text-display` exists as a utility, and it is
+ * declared once.
+ */
+describe('decision 174: --text-display', () => {
+  const themeBlock = extractBlock('@theme');
+
+  it('is 26px with a 1.3 line height, declared once in @theme', () => {
+    expect(themeBlock).toContain('--text-display: 1.625rem;');
+    expect(themeBlock).toContain('--text-display--line-height: 1.3;');
+    expect(source.split('--text-display:').length - 1).toBe(1);
+  });
+});
+
+/**
  * FB9's font token, and the red line it has to stay on the right side of.
  *
  * `globals.css` states it directly: "this repo has no @font-face and no font

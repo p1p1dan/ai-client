@@ -5,7 +5,8 @@ import { extendTailwindMerge } from 'tailwind-merge';
  * D25: tailwind-merge's default config only recognises font-size utilities
  * whose suffix is a themed t-shirt size (`xs`/`sm`/`md`/`lg`/`xl`, optionally
  * digit-prefixed) or an arbitrary value/variable. Our custom size tokens
- * (`text-code`, `text-markdown`, `text-meta`, `text-ui`, `text-title`) don't
+ * (`text-code`, `text-markdown`, `text-meta`, `text-ui`, `text-section`,
+ * `text-title`, `text-display`) don't
  * match that shape, so twMerge falls through to the `text-color` group --
  * which matches ANY bare word via its default `isAny` catch-all -- and
  * silently drops whatever text-color class came before it (e.g.
@@ -32,6 +33,8 @@ const twMerge = extendTailwindMerge({
         // Decision 170 (issue #6): the 16px tier.
         'text-section',
         'text-title',
+        // Decision 174 (issue #6, second wave): the home title's 26px tier.
+        'text-display',
         // T104: the chat area's runtime-configurable pair -- same classifier
         // hazard as the tokens above, see this block's note.
         'text-chat-body',
