@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>运行面板 · 逐步缓存原型 · issue #9 v1</title>
+<style>
+/* =====================================================================
+   Static preview prototype for GitHub issue #9 (decision 173 section 4.5):
+   a per-step cache view in the Run panel (`RunSurfaceView`, left dock
+   surface `run`), badges that explain every rebuild, and a session-level
+   warning when rebuilds have no local explanation. Not product code; nothing
+   here is imported by the app.
+
+   - The existing panel sections (status header, occupancy ring, metric rows,
+     the last-request usage group, the session group) are drawn as
+     RunSurfaceView.tsx renders them on feat/dsh-p0-probe today, so the new
+     group is seen in context. DSH prices nothing, so no cost rows.
+   - Colour tokens are copied verbatim from src/renderer/styles/globals.css
+     (:root = Flexoki light, .dark = Flexoki dark). No new token.
+   - Utility classes reuse Tailwind's class NAMES with hand-written
+     declarations matching Tailwind v4 output at the desktop (`sm:`)
+     breakpoint, so the markup reads like the class strings the
+     implementation would write. `@container` / `@md:` are Tailwind v4's
+     built-in container queries (@md = 28rem).
+   - All data is synthetic. State 3 follows the shape of the sanitized
+     issue #9 fixture (src/shared/__tests__/fixtures/cacheChain/).
+   ===================================================================== */
+
+/* ---- tokens: globals.css :root (Flexoki Light) ---- */
+:root {
+  --panel-bg-opacity: 1;
+  --font-size-base: 16px;
+  --background: oklch(0.9931 0.012 96.42 / var(--panel-bg-opacity, 1));
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.97 0.0106 100.82 / var(--panel-bg-opacity, 1));
+  --card-foreground: oklch(0.1696 0.0017 17.32);
+  --popover: oklch(0.97 0.0106 100.82 / var(--panel-bg-opacity, 1));
+  --popover-foreground: oklch(0.1696 0.0017 17.32);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --primary-foreground: oklch(0.9931 0.012 96.42);
+  --secondary: oklch(0.962 0.0111 89.72);
+  --secondary-foreground: oklch(0.1696 0.0017 17.32);
+  --muted: oklch(0.965 0.0093 99.98 / var(--panel-bg-opacity, 1));
+  --muted-foreground: oklch(0.4531 0.005 91.5);
+  --accent: oklch(0.935 0.0122 96.43);
+  --accent-foreground: oklch(0.1696 0.0017 17.32);
+  --accent-primary: oklch(0.8109 0.1131 56.61);
+  --selection: oklch(0.91 0.0109 95.17);
+  --hover: oklch(0.935 0.0122 96.43);
+  --status-running: oklch(0.4818 0.1315 254.79);
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --destructive-foreground: oklch(0.9931 0.012 96.42);
+  --success: oklch(0.5593 0.1335 122.92);
+  --success-foreground: oklch(0.9931 0.012 96.42);
+  --warning: oklch(0.5665 0.1523 45.02);
+  --warning-foreground: oklch(0.9931 0.012 96.42);
+  --info: oklch(0.4818 0.1315 254.79);
+  --info-foreground: oklch(0.9931 0.012 96.42);
+  --folder: oklch(0.6333 0.1295 85.81);
+  --border: oklch(0.875 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);
+  --ring: oklch(0.5665 0.1523 45.02);
+  --radius: 0.375rem;
+  --foreground-soft: color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground));
+}
+/* ---- tokens: globals.css .dark (Flexoki Dark) ---- */
+.dark {
+  --background: oklch(0.1981 0.0032 17.43 / var(--panel-bg-opacity, 1));
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --card: oklch(0.262 0.0037 48.55 / var(--panel-bg-opacity, 1));
+  --card-foreground: oklch(0.8463 0.0137 102.05);
+  --popover: oklch(0.262 0.0037 48.55 / var(--panel-bg-opacity, 1));
+  --popover-foreground: oklch(0.8463 0.0137 102.05);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --primary-foreground: oklch(0.1981 0.0032 17.43);
+  --secondary: oklch(0.276 0.0024 67.71);
+  --secondary-foreground: oklch(0.8463 0.0137 102.05);
+  --muted: oklch(0.268 0.0025 67.7 / var(--panel-bg-opacity, 1));
+  --muted-foreground: oklch(0.6956 0.0103 93.62);
+  --accent: oklch(0.305 0.0029 17.32);
+  --accent-foreground: oklch(0.8463 0.0137 102.05);
+  --accent-primary: oklch(0.8109 0.1131 56.61);
+  --selection: oklch(0.325 0.0029 17.31);
+  --hover: oklch(0.305 0.0029 17.32);
+  --status-running: oklch(0.5988 0.1104 247);
+  --destructive: oklch(0.597 0.1692 28.38);
+  --destructive-foreground: oklch(0.1981 0.0032 17.43);
+  --success: oklch(0.7227 0.1178 117.2);
+  --success-foreground: oklch(0.1981 0.0032 17.43);
+  --warning: oklch(0.6576 0.1539 49.3);
+  --warning-foreground: oklch(0.1981 0.0032 17.43);
+  --info: oklch(0.5988 0.1104 247);
+  --info-foreground: oklch(0.1981 0.0032 17.43);
+  --folder: oklch(0.7346 0.1462 87.46);
+  --border: oklch(0.34 0.0038 84.58);
+  --input: oklch(0.3651 0.0044 67.69);
+  --ring: oklch(0.6576 0.1539 49.3);
+}
+/* ---- @theme: radius, type, font stacks ---- */
+:root {
+  --radius-xs: 0.25rem;
+  --radius-sm: var(--radius);
+  --radius-md: 0.625rem;
+  --radius-lg: 0.75rem;
+  --text-2xs: 10px;
+  --text-code: 0.8125rem;
+  --text-meta: 0.875rem;
+  --text-ui: 0.9375rem;
+  --text-section: 1rem;
+  --text-title: 1.125rem;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable Text", "Segoe UI",
+    "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+    "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "SFMono-Regular", "Menlo",
+    "Cascadia Mono", "Consolas", "Liberation Mono", "DejaVu Sans Mono",
+    "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    monospace;
+}
+
+/* ---- base (Tailwind preflight subset + globals.css @layer base) ---- */
+*, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; border: 0 solid var(--border); }
+html { font-size: var(--font-size-base); font-family: var(--font-sans); line-height: 1.5;
+  font-synthesis-weight: none; -webkit-text-size-adjust: 100%; }
+body { background: var(--background); color: var(--foreground); font-size: var(--text-ui); line-height: 1.55; }
+button, input { font: inherit; font-feature-settings: inherit; letter-spacing: inherit; color: inherit;
+  background-color: transparent; border-radius: 0; }
+button, [role="button"] { cursor: pointer; }
+svg { display: block; vertical-align: middle; }
+*:focus-visible { outline: none; box-shadow: none; }
+* { user-select: none; }
+.select-text, .select-text * { user-select: text; }
+
+/* ---- components: Badge (ui/badge.tsx, desktop sizes) ---- */
+.badge { position: relative; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: .25rem;
+  white-space: nowrap; border-radius: var(--radius-sm); border: 1px solid transparent; font-weight: 500; outline: none; }
+.badge svg { flex-shrink: 0; pointer-events: none; }
+.badge svg:not([class*="opacity-"]) { opacity: .8; }
+/* focus-visible:ring-2 ring-ring ring-offset-1 ring-offset-background */
+.badge:focus-visible { box-shadow: 0 0 0 1px var(--background), 0 0 0 3px var(--ring); }
+/* size="lg": h-5.5 min-w-5.5 px-[calc(--spacing(1.5)-1px)] sm:text-sm (14px), the size the sidebar uses for CJK badges */
+.badge-lg { height: 1.375rem; min-width: 1.375rem; padding: 0 calc(.375rem - 1px); font-size: .875rem; line-height: calc(1.25 / .875); }
+/* size="sm": the existing elapsed chip (Latin digits only; 10px must not carry CJK) */
+.badge-sm { height: 1rem; min-width: 1rem; border-radius: calc(var(--radius-sm) - 2px); padding: 0 calc(.25rem - 1px); font-size: .625rem; }
+.badge-secondary { background-color: var(--secondary); color: var(--secondary-foreground); }
+.badge-info { background-color: color-mix(in oklab, var(--info) 8%, transparent); color: var(--info); }
+.dark .badge-info { background-color: color-mix(in oklab, var(--info) 16%, transparent); }
+.badge-warning { background-color: color-mix(in oklab, var(--warning) 8%, transparent); color: var(--warning); }
+.dark .badge-warning { background-color: color-mix(in oklab, var(--warning) 16%, transparent); }
+
+/* ---- components: Button (ui/button.tsx; desktop `sm:` sizes) ---- */
+.btn { position: relative; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: .5rem;
+  white-space: nowrap; border: 1px solid transparent; font-weight: 500; font-size: .875rem; text-transform: lowercase;
+  letter-spacing: .01em; border-radius: 10px; }
+.btn svg { margin-inline: -.125rem; flex-shrink: 0; pointer-events: none; }
+.btn svg:not([class*="opacity-"]) { opacity: .8; }
+.btn:active { transform: scale(.97); }
+.btn-xs { height: 1.5rem; gap: .25rem; padding: 0 calc(.5rem - 1px); font-size: .75rem; line-height: calc(1 / .75);
+  border-radius: 8px; }
+@supports (corner-shape: squircle) {
+  .btn, .btn-xs { corner-shape: squircle; border-radius: 50px; }
+}
+.btn-outline { border-color: var(--border); background-color: var(--background); background-clip: padding-box;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+.dark .btn-outline { background-color: color-mix(in oklab, var(--input) 32%, transparent); background-clip: border-box; }
+.btn-outline:hover { background-color: color-mix(in oklab, var(--accent) 50%, transparent); }
+.dark .btn-outline:hover { background-color: color-mix(in oklab, var(--input) 64%, transparent); }
+.btn:focus-visible { box-shadow: 0 0 0 1px var(--background), 0 0 0 3px var(--ring); }
+
+/* ---- components: Alert variant="warning" (ui/alert.tsx) ----
+   Icon + AlertTitle + AlertDescription, no AlertAction: the button sits in
+   the description column (see README). Grid = `has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr]`. */
+.alert { position: relative; display: grid; width: 100%; align-items: start; grid-template-columns: 1rem 1fr;
+  column-gap: .5rem; row-gap: .125rem; padding: .75rem .875rem; border: 1px solid var(--border);
+  border-radius: var(--radius-md); font-size: .875rem; line-height: 1.25rem; color: var(--card-foreground); }
+.alert > svg { width: 1rem; height: 1.25rem; }
+.alert-warning { border-color: color-mix(in oklab, var(--warning) 32%, transparent);
+  background-color: color-mix(in oklab, var(--warning) 4%, transparent); }
+.alert-warning > svg { color: var(--warning); }
+.alert-title { grid-column-start: 2; font-weight: 500; }
+.alert-desc { grid-column-start: 2; display: flex; flex-direction: column; gap: .625rem; color: var(--muted-foreground); }
+
+/* ---- components: Tooltip popup (ui/tooltip.tsx: rounded-md border bg-popover shadow-md px-2 py-1 text-balance),
+   text lifted from its text-xs (12px) to text-meta for CJK, width max-w-66 — as BranchColumn.tsx does.
+   The prototype positions it with JS (`position: fixed`), standing in for Base UI's portal. ---- */
+.tip-popup { position: fixed; z-index: 1000; max-width: 16.5rem; padding: .25rem .5rem; border: 1px solid var(--border);
+  border-radius: var(--radius-md); background: var(--popover); color: var(--popover-foreground);
+  font-size: var(--text-meta); line-height: 1.5; text-wrap: balance; pointer-events: none;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / .05), 0 2px 4px -2px rgb(0 0 0 / .05); }
+
+/* ---- utilities (Tailwind names, desktop values) ---- */
+.flex { display: flex; } .inline-flex { display: inline-flex; } .grid { display: grid; } .hidden { display: none; }
+.flex-col { flex-direction: column; } .flex-wrap { flex-wrap: wrap; } .flex-1 { flex: 1 1 0%; }
+.shrink-0 { flex-shrink: 0; } .shrink { flex-shrink: 1; }
+.items-center { align-items: center; } .items-start { align-items: flex-start; }
+.justify-center { justify-content: center; } .justify-end { justify-content: flex-end; }
+.self-start { align-self: flex-start; }
+.order-last { order: 9999; } .basis-full { flex-basis: 100%; }
+.min-w-0 { min-width: 0; } .min-h-0 { min-height: 0; } .max-w-full { max-width: 100%; }
+.w-full { width: 100%; } .h-full { height: 100%; }
+.relative { position: relative; } .absolute { position: absolute; } .inset-0 { inset: 0; }
+.inset-x-0 { left: 0; right: 0; } .top-0 { top: 0; } .isolate { isolation: isolate; } .z-10 { z-index: 10; }
+.overflow-hidden { overflow: hidden; } .overflow-y-auto { overflow-y: auto; }
+.pointer-events-none { pointer-events: none; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.text-left { text-align: left; } .text-right { text-align: right; }
+.ml-auto { margin-left: auto; }
+.mt-0\.5 { margin-top: .125rem; } .mt-1 { margin-top: .25rem; }
+.h-0\.5 { height: .125rem; } .h-2 { height: .5rem; } .w-2 { width: .5rem; }
+.size-3 { width: .75rem; height: .75rem; } .size-3\.5 { width: .875rem; height: .875rem; }
+.size-4 { width: 1rem; height: 1rem; } .size-4\.5 { width: 1.125rem; height: 1.125rem; }
+.h-6 { height: 1.5rem; } .h-7 { height: 1.75rem; } .h-8 { height: 2rem; } .w-8 { width: 2rem; } .h-9 { height: 2.25rem; }
+.w-12 { width: 3rem; } .h-20 { height: 5rem; } .w-20 { width: 5rem; }
+.p-2 { padding: .5rem; } .px-1 { padding-inline: .25rem; } .px-2 { padding-inline: .5rem; } .px-3 { padding-inline: .75rem; }
+.px-6 { padding-inline: 1.5rem; } .py-1 { padding-block: .25rem; } .pt-1 { padding-top: .25rem; } .pt-5 { padding-top: 1.25rem; }
+.pb-1 { padding-bottom: .25rem; } .pb-2 { padding-bottom: .5rem; } .pl-2 { padding-left: .5rem; } .pl-10 { padding-left: 2.5rem; }
+.gap-0\.5 { gap: .125rem; } .gap-1 { gap: .25rem; } .gap-1\.5 { gap: .375rem; } .gap-2 { gap: .5rem; } .gap-3 { gap: .75rem; }
+.gap-x-2 { column-gap: .5rem; }
+.text-2xs { font-size: var(--text-2xs); line-height: 14px; }
+.text-xs { font-size: .75rem; line-height: calc(1 / .75); }
+.text-meta { font-size: var(--text-meta); line-height: 1.5; }
+.text-ui { font-size: var(--text-ui); line-height: 1.5; }
+.text-section { font-size: var(--text-section); line-height: 1.5; }
+.font-normal { font-weight: 400; } .font-medium { font-weight: 500; } .font-semibold { font-weight: 600; }
+.leading-none { line-height: 1; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+.text-foreground { color: var(--foreground); } .text-muted-foreground { color: var(--muted-foreground); }
+.text-warning { color: var(--warning); }
+.bg-transparent { background-color: transparent; } .bg-background { background-color: var(--background); }
+.bg-card { background-color: var(--card); }
+.bg-card\/40 { background-color: color-mix(in oklab, var(--card) 40%, transparent); }
+.bg-muted { background-color: var(--muted); } .bg-selection { background-color: var(--selection); }
+.border { border-width: 1px; } .border-b { border-bottom-width: 1px; } .border-t { border-top-width: 1px; }
+.border-r { border-right-width: 1px; }
+.rounded-xs { border-radius: var(--radius-xs); } .rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); } .rounded-full { border-radius: 9999px; }
+.transition-transform { transition-property: transform; transition-timing-function: cubic-bezier(.4, 0, .2, 1); }
+.duration-150 { transition-duration: 150ms; }
+.rotate-90 { transform: rotate(90deg); }
+/* variants come after the base utilities, as in Tailwind's output */
+.sm\:text-meta { font-size: var(--text-meta); line-height: 1.5; }
+.hover\:bg-hover:hover { background-color: var(--hover); }
+.focus-visible\:bg-hover:focus-visible { background-color: var(--hover); }
+/* Tailwind v4 container queries: `@container` on the group, `@md:` = min-width 28rem (448px).
+   Panel 280 / 360 / 500 gives the group 263 / 343 / 483px, so only 500 lays a badge inline. */
+.\@container { container-type: inline-size; }
+@container (min-width: 28rem) {
+  .\@md\:order-none { order: 0; }
+  .\@md\:flex-1 { flex: 1 1 0%; }
+  .\@md\:h-7 { height: 1.75rem; }
+  .\@md\:items-center { align-items: center; }
+  .\@md\:pb-0 { padding-bottom: 0; }
+  .\@md\:pl-0 { padding-left: 0; }
+}
+
+/* ---- 「CJK / Win10 字重」 simulation ----
+   Microsoft YaHei UI has Light / Regular / Bold only, Segoe UI (Win10) has no
+   500: a requested 500 falls to 400 and 600 rounds up to Bold 700. */
+.cjkwin .font-medium, .cjkwin .badge, .cjkwin .btn, .cjkwin .alert-title { font-weight: 400; }
+.cjkwin .font-semibold { font-weight: 700; }
+
+/* ---- prototype shell (not part of the design) ---- */
+.proto-root { position: relative; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
+  background: var(--background); color: var(--foreground); outline: 1px solid var(--border); }
+.titlebar .logo { width: 20px; height: 20px; border-radius: 5px; border: 1px solid var(--border); background: var(--muted); }
+.app { position: relative; display: flex; flex: 1 1 0%; min-height: 0; }
+.dock { position: relative; display: flex; height: 100%; flex-shrink: 0; }
+.rail-mark { position: absolute; top: .375rem; bottom: .375rem; left: -.375rem; width: .125rem;
+  border-radius: 9999px; background: var(--primary); }
+.ph-line { height: .75rem; border-radius: 9999px; background: color-mix(in oklab, var(--muted-foreground) 16%, transparent); }
+.ph-bubble { margin-left: auto; width: 55%; height: 2.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--card); }
+/* 「整列展开」: let the panel grow to its content instead of scrolling inside 900px */
+.proto-root.tall { height: auto !important; }
+.tall .app { flex: none; }
+.tall .dock, .tall [data-panel], .tall [data-rail] { height: auto; }
+.tall [data-mount] { flex: none; }
+.tall [data-layer] { position: static; }
+.tall [data-scroll-root] { height: auto; overflow: visible; }
+#stage { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-start; padding: 16px; }
+.cap { flex-basis: 100%; max-width: 1180px; font-size: 14px; line-height: 1.6; color: var(--muted-foreground); }
+.cap b { color: var(--foreground); font-weight: 600; }
+.copy-preview { width: 460px; max-width: 100%; }
+.copy-preview .t { margin-bottom: 6px; font-size: 14px; font-weight: 600; }
+.copy-preview .t small { margin-left: 6px; font-size: 14px; font-weight: 400; color: var(--muted-foreground); }
+.copy-preview pre { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--card);
+  font: 12px/1.5 var(--font-mono); white-space: pre; overflow-x: auto; user-select: text; }
+#controls { position: sticky; top: 0; z-index: 100; display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 16px;
+  border-bottom: 1px solid var(--border); background: var(--card); font-size: 14px; }
+#controls .grp { display: flex; align-items: center; gap: 6px; }
+#controls .grp > span { color: var(--muted-foreground); }
+#controls .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+#controls .seg button { padding: 2px 10px; border-right: 1px solid var(--border); }
+#controls .seg button:last-child { border-right: 0; }
+#controls .seg button[aria-pressed="true"] { background: var(--selection); font-weight: 600; }
+#controls label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+</style>
+</head>
+<body>
+<!--ICONS:BEGIN-->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="i-message-square" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="i-git-branch" viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+<symbol id="i-file-code" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+<symbol id="i-panel-left-close" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></symbol>
+<symbol id="i-blocks" viewBox="0 0 24 24"><path d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2"/><rect x="14" y="2" width="8" height="8" rx="1"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+</svg>
+<!--ICONS:END-->
+<div id="controls"></div>
+<div id="stage"></div>
+<script>
+(() => {
+  'use strict';
+
+  // ------------------------------------------------------------------ state
+  const params = new URLSearchParams(location.search);
+  const pick = (v, allowed, dflt) => (allowed.includes(v) ? v : dflt);
+  const on = (k) => params.get(k) === '1';
+  const st = {
+    state: pick(params.get('state'), ['healthy', 'local', 'upstream', 'reopened'], 'healthy'),
+    // State 2 only: what explains step 1 (the three causes that can only happen
+    // at a turn's first step, plus the info-only turn-shrink).
+    cause: pick(params.get('cause'), ['idle', 'model', 'resume', 'turn'], 'idle'),
+    theme: pick(params.get('theme'), ['light', 'dark'], 'light'),
+    w: pick(params.get('w'), ['280', '360', '500'], '280'),
+    group: pick(params.get('group'), ['open', 'closed'], 'open'),
+    tall: on('tall'),
+    cjk: on('cjk'),
+  };
+
+  // ---------------------------------------------------------------- helpers
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const ic = (name, cls = '') =>
+    `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+  // chat/countFormat.ts formatTokenTotal: 480 / 21.4k / 1.05M
+  const tok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n)}`);
+  // Rounded figure for badge / alert text that already says 「约」 or 「−」: 133k, 1.21M
+  const about = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`);
+  const exact = (n) => n.toLocaleString('en-US');
+  // runPanelModel.ts formatRunDuration: 48s / 6m 5s
+  const dur = (ms) => {
+    const t = Math.max(0, Math.round(ms / 1000));
+    return t < 60 ? `${t}s` : `${Math.floor(t / 60)}m ${t % 60}s`;
+  };
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  // ------------------------------------------------------------------- data
+  // Synthetic. prompt = input + cache read + cache write; a warm step reads
+  // exactly the previous step's prompt minus 2 (what the issue #9 log shows
+  // for every healthy Anthropic step). `kind` is the verdict the data layer
+  // (src/shared/cacheChain.ts, decision 173 section 4.3) hands the panel.
+  const MODEL = 'claude-opus-5-5';
+  const EFFORT = '最高';
+  const WINDOW = 1_000_000;
+  const GATEWAY_SESSION = '5b3c9e2a-8f41-5d7e-9c3a-2e6f1b4d8a90';
+  const S = (input, read, write, output, extra = {}) => ({ kind: 'warm', input, read, write, output, prompt: input + read + write, ...extra });
+
+  const CAUSES = {
+    idle: {
+      text: '闲置 1 小时 12 分，缓存已过期',
+      tip: '距离上一步过了 1 小时 12 分，超过缓存的保留时间（1 小时），缓存已经过期，这一步要重新写入。',
+    },
+    model: {
+      text: '换了模型',
+      tip: '这一回合换了模型（上一回合用的是 glm-5.3）。缓存不能跨模型复用，提示词要重新写入。',
+    },
+    resume: {
+      text: '恢复会话',
+      tip: '引擎重启或会话重新打开后的第一步，没能沿用之前的缓存，提示词要重新写入。',
+    },
+    compact: {
+      text: '压缩了上下文',
+      tip: '上下文压缩后，较早的对话换成了摘要，提示词变短，后面的内容要重新写入缓存。',
+    },
+    plan: {
+      text: '计划模式切换',
+      tip: '进出计划模式会改系统提示词，之后的内容要重新写入缓存。',
+    },
+  };
+
+  const SCENES = {
+    healthy: () => ({
+      caption:
+        '<b>状态 1 · 健康</b>　本回合 8 步，每一步都读到了上一步的缓存：行上没有徽标，分组底部一句话确认。',
+      headline: '已完成',
+      status: 'completed',
+      elapsedMs: 108_000,
+      tools: 7,
+      prior: { steps: 29, input: 58, output: 14_906, read: 912_377 },
+      steps: [
+        S(2, 45_960, 2_250, 1_121),
+        S(2, 48_210, 893, 233),
+        S(2, 49_103, 2_772, 412),
+        S(2, 51_875, 463, 198),
+        S(2, 52_338, 3_572, 1_804),
+        S(2, 55_910, 568, 227),
+        S(2, 56_478, 1_547, 356),
+        S(2, 58_025, 3_007, 412),
+      ],
+    }),
+    local: () => ({
+      caption:
+        '<b>状态 2 · 本地原因</b>　3 次重建都能在本地找到原因：蓝色信息徽标，不出会话提示。第 1 步的原因可在工具条换成「换了模型」「恢复会话」或「新回合」（新回合是正常变短，不算重建，灰色徽标）。徽标都可悬停或用 Tab 聚焦看说明。',
+      headline: '已完成',
+      status: 'completed',
+      elapsedMs: 365_000,
+      tools: 9,
+      prior: { steps: 134, input: 268, output: 210_377, read: 48_221_904 },
+      steps: [
+        st.cause === 'turn' ? S(2, 742_118, 44_094, 1_530, { kind: 'turn' }) : S(2, 0, 786_212, 1_530, { kind: 'explained', cause: st.cause }),
+        S(2, 786_212, 5_666, 402),
+        S(2, 791_878, 11_537, 2_210),
+        S(2, 36_848, 27_500, 950, { kind: 'explained', cause: 'compact' }),
+        S(2, 64_348, 4_671, 318),
+        S(2, 69_019, 3_883, 4_120),
+        S(2, 36_842, 44_533, 611, { kind: 'explained', cause: 'plan' }),
+        S(2, 81_375, 2_725, 287),
+        S(2, 84_100, 2_848, 905),
+      ],
+    }),
+    // Issue #9's shape: one long plan-mode turn, the session's first. Steps
+    // 15 / 17 / 20 carry the three upstream signatures — a rebuild back to the
+    // 36,848-token system segment (the user's 169,778 -> read 36,848 / write
+    // 138,030 example), a read of exactly an older step's prefix (the request
+    // went back to the other cache), and a prompt 73k shorter than the last
+    // (that upstream dropped old thinking). `at` = seconds after the turn began.
+    upstream: () => ({
+      caption:
+        '<b>状态 3 · 上游不一致</b>　按 issue #9 的形态：第 15 步上一步提示词 169,778，只读到 36,848、写了 138,030；第 17 步读到第 14 步的前缀；第 20 步提示词少了 73k。三处都找不到本地原因，面板顶部出会话提示。「复制诊断信息」复制的内容在右边。',
+      headline: '已完成',
+      status: 'completed',
+      elapsedMs: 888_000,
+      tools: 21,
+      prior: { steps: 0, input: 0, output: 0, read: 0 },
+      startedAt: [14, 5, 12],
+      alert: true,
+      steps: [
+        S(2, 0, 43_973, 1_757, { kind: 'cold', at: 17 }),
+        S(2, 43_973, 14_105, 253, { at: 31 }),
+        S(2, 58_078, 13_124, 206, { at: 43 }),
+        S(2, 71_202, 20_630, 329, { at: 58 }),
+        S(2, 91_832, 11_831, 218, { at: 71 }),
+        S(2, 103_663, 25_180, 148, { at: 86 }),
+        S(2, 128_843, 4_699, 819, { at: 110 }),
+        S(2, 133_542, 13_799, 264, { at: 127 }),
+        S(2, 147_341, 9_021, 1_203, { at: 149 }),
+        S(2, 156_362, 5_129, 381, { at: 166 }),
+        S(2, 161_491, 3_904, 329, { at: 183 }),
+        S(2, 165_395, 2_118, 15_630, { at: 412 }),
+        S(2, 167_513, 1_104, 341, { at: 431 }),
+        S(2, 168_617, 1_159, 465, { at: 449 }),
+        S(2, 36_848, 138_030, 150, { kind: 'rebuild', at: 470 }),
+        S(2, 174_878, 5_389, 1_871, { at: 498 }),
+        S(2, 169_776, 15_514, 260, { kind: 'matched', ref: 14, at: 521 }),
+        S(2, 185_290, 6_710, 950, { at: 539 }),
+        S(2, 192_000, 21_193, 436, { at: 561 }),
+        S(2, 98_410, 41_748, 18_050, { kind: 'shrink', at: 847 }),
+        S(2, 140_158, 5_402, 300, { at: 866 }),
+        S(2, 145_560, 3_377, 1_204, { at: 884 }),
+      ],
+    }),
+    // Just reopened, nothing sent yet: no settled usage (runPanelModel: `usage`
+    // is null for a freshly reopened conversation), and the steps before the
+    // reopen have no per-step detail (decision 173 section 4.5).
+    reopened: () => ({
+      caption:
+        '<b>状态 4 · 重开会话</b>　刚重开、还没发消息：重开之前的步骤没有逐步明细，分组里只有一行说明。用量各行（上一回合、本会话）要等下一步结算后才出现，现在的面板本来就是这样。',
+      headline: '空闲',
+      status: 'idle',
+      elapsedMs: 0,
+      tools: 0,
+      windowOnly: true,
+      steps: [],
+      weak: '重开之前的步骤不显示逐步明细。发出下一条消息后，这里会逐步列出。',
+    }),
+  };
+
+  // Verdict -> badge. One badge per step: the primary cause.
+  const badgeOf = (s, prev) => {
+    switch (s.kind) {
+      case 'cold':
+        return { v: 'secondary', text: '首次写入', tip: '会话的第一步，还没有缓存可用，提示词全部写入缓存。' };
+      case 'turn':
+        return { v: 'secondary', text: '新回合', tip: '新回合的第一步提示词比上一步短，这是正常现象，不算重建。' };
+      case 'explained':
+        return { v: 'info', ...CAUSES[s.cause] };
+      case 'rebuild':
+        return {
+          v: 'warning',
+          text: `无法解释 · 重写约 ${about(s.rewrite)}`,
+          tip: `上一步提示词 ${exact(prev.prompt)}，这一步只读到 ${exact(s.read)}，约 ${about(s.rewrite)} 要重写。本地没有能解释的变化，多半是请求被分到了另一个上游。`,
+        };
+      case 'shrink': {
+        const d = prev.prompt - s.prompt;
+        return {
+          v: 'warning',
+          text: `提示词变短 · −${about(d)}`,
+          tip: `这一步的提示词比上一步少了 ${exact(d)}。客户端只在末尾追加内容（已校验），变短说明上游丢掉了一部分历史，后面的内容要重新写入缓存。`,
+        };
+      }
+      case 'matched':
+        return {
+          v: 'warning',
+          text: `读到第 ${s.ref} 步的前缀`,
+          tip: `这一步读到的缓存（${exact(s.read)}）正好是第 ${s.ref} 步的长度，说明请求在两份缓存之间来回切换，多半是网关把请求分到了不同的上游。`,
+        };
+      default:
+        return null;
+    }
+  };
+
+  const build = () => {
+    const sc = SCENES[st.state]();
+    sc.steps.forEach((s, i) => {
+      s.n = i + 1;
+      const prev = i > 0 ? sc.steps[i - 1] : null;
+      // 「重写」: what had been cached and was written again — the previous
+      // prompt minus this read, capped at what this step actually wrote.
+      s.rewrite = prev ? Math.min(Math.max(0, prev.prompt - s.read), s.write) : 0;
+      s.badge = badgeOf(s, prev);
+    });
+    sc.last = sc.steps[sc.steps.length - 1] ?? null;
+    sc.warnings = sc.steps.filter((s) => s.badge && s.badge.v === 'warning');
+    sc.explained = sc.steps.filter((s) => s.kind === 'explained');
+    sc.rewriteTotal = sc.warnings.reduce((sum, s) => sum + s.rewrite, 0);
+    sc.footnote =
+      st.state === 'healthy'
+        ? `${sc.steps.length} 步都复用了上一步的缓存。`
+        : st.state === 'local'
+          ? `${sc.explained.length} 次重建都有本地原因，不是上游的问题。`
+          : st.state === 'upstream'
+            ? `第 ${sc.warnings.map((s) => s.n).join('、')} 步找不到本地原因，见面板顶部的提示。`
+            : '';
+    if (sc.prior) {
+      const sum = (k) => sc.steps.reduce((a, s) => a + s[k], 0);
+      sc.session = {
+        steps: sc.prior.steps + sc.steps.length,
+        input: sc.prior.input + sum('input'),
+        output: sc.prior.output + sum('output'),
+        read: sc.prior.read + sum('read'),
+      };
+    }
+    return sc;
+  };
+
+  // ---------------------------------------------------- Run panel (existing)
+  // RunMetric
+  const metric = (label, value) =>
+    `<div class="flex h-7 items-center gap-2 px-1"><span class="shrink-0 text-meta text-muted-foreground">${esc(label)}</span>` +
+    `<span class="min-w-0 flex-1 truncate text-right text-ui tabular-nums" title="${esc(value)}">${esc(value)}</span></div>`;
+
+  // Status header: tone bar (idle = transparent), headline + elapsed chip, model line.
+  const runHeader = (sc) =>
+    '<div class="relative shrink-0 border-b p-2" data-run-header>' +
+    '<span aria-hidden="true" class="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-transparent"></span>' +
+    `<div class="flex items-center gap-2"><span class="min-w-0 flex-1 truncate text-ui font-medium">${sc.headline}</span>` +
+    (sc.elapsedMs ? `<span class="badge badge-sm badge-secondary tabular-nums">${dur(sc.elapsedMs)}</span>` : '') +
+    '</div>' +
+    `<div class="mt-0.5 flex items-center gap-1.5 text-meta text-muted-foreground"><span class="min-w-0 truncate" title="${MODEL}">${MODEL}</span><span class="shrink-0">· ${EFFORT}</span></div>` +
+    '</div>';
+
+  // OccupancyRing + its three legend rows.
+  const occupancy = (used) => {
+    const pct = (used / WINDOW) * 100;
+    const row = (swatch, label, value, muted) =>
+      `<div class="flex items-center gap-2 text-meta${muted ? ' text-muted-foreground' : ''}">` +
+      (swatch ? `<span aria-hidden="true" class="h-2 w-2 shrink-0 rounded-xs" style="background:var(${swatch})"></span>` : '') +
+      `<span class="min-w-0 flex-1 truncate${muted ? '' : ' text-muted-foreground'}">${label}</span><span class="shrink-0 tabular-nums">${value}</span></div>`;
+    return (
+      '<div class="flex shrink-0 items-center gap-3 border-b p-2">' +
+      '<div class="relative h-20 w-20 shrink-0"><svg viewBox="0 0 42 42" class="h-20 w-20" role="img" aria-label="上下文占用">' +
+      '<circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--muted)" stroke-width="5" pathLength="100"></circle>' +
+      `<circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--primary)" stroke-width="5" pathLength="100" stroke-dasharray="${pct} ${100 - pct}" transform="rotate(-90 21 21)"></circle></svg>` +
+      '<div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">' +
+      `<span class="text-ui font-semibold tabular-nums leading-none">${Math.round(pct)}%</span>` +
+      `<span class="text-2xs text-muted-foreground tabular-nums">${tok(used)}</span></div></div>` +
+      '<div class="flex min-w-0 flex-1 flex-col gap-1">' +
+      row('--primary', '已占用', tok(used)) +
+      row('--muted', '剩余', tok(WINDOW - used)) +
+      row('', '上下文窗口', tok(WINDOW), true) +
+      '</div></div>'
+    );
+  };
+
+  // The last settled usage.updated = the last STEP (each settled event is one model request).
+  const usageGroup = (last) =>
+    '<div class="mt-1 flex flex-col border-t pt-1" data-group="last">' +
+    metric('输入（上一回合）', tok(last.input)) +
+    metric('输出（上一回合）', tok(last.output)) +
+    (last.read > 0 ? metric('缓存读取', tok(last.read)) : '') +
+    (last.write > 0 ? metric('缓存写入', tok(last.write)) : '') +
+    metric('缓存命中率（上一回合）', `${Math.round((last.read / (last.input + last.read)) * 100)}%`) +
+    '</div>';
+
+  const sessionGroup = (t) =>
+    '<div class="mt-1 flex flex-col border-t pt-1" data-group="session">' +
+    metric('回合数（本会话）', String(t.steps)) +
+    metric('输入（本会话累计）', tok(t.input)) +
+    metric('输出（本会话累计）', tok(t.output)) +
+    (t.read > 0 ? metric('缓存读取（本会话累计）', tok(t.read)) : '') +
+    '<p class="px-1 py-1 text-meta text-muted-foreground">本会话的数字是把每一次模型请求累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。</p>' +
+    '</div>';
+
+  // ----------------------------------------------------------- NEW: 逐步缓存
+  const NUMS = (a, b, c, extra = '', title = '') =>
+    `<span class="ml-auto flex h-7 shrink-0 items-center gap-2 text-meta tabular-nums"${title ? ` title="${esc(title)}"` : ''}>` +
+    `<span class="w-12 text-right">${a}</span><span class="w-12 text-right">${b}</span><span class="w-12 text-right${extra}">${c}</span></span>`;
+
+  const colHeader = () =>
+    '<div class="flex h-6 items-center gap-2 px-1 text-meta text-muted-foreground" data-col-header>' +
+    '<span class="w-8 shrink-0 text-right">步</span>' +
+    '<span class="ml-auto flex shrink-0 gap-2"><span class="w-12 text-right">提示词</span><span class="w-12 text-right">缓存读</span><span class="w-12 text-right">缓存写</span></span></div>';
+
+  // One step. Narrow (group < 28rem): numbers on the h-7 line, the badge wraps
+  // under them (`order-last basis-full`, indented past the step column).
+  // Wide (@md): the badge takes the flexible middle slot on the same line.
+  const stepRow = (s) => {
+    const b = s.badge;
+    const slot = b
+      ? '<div class="order-last flex min-w-0 basis-full pb-1 pl-10 @md:order-none @md:h-7 @md:flex-1 @md:items-center @md:pb-0 @md:pl-0">' +
+        `<span class="badge badge-lg badge-${b.v} min-w-0 max-w-full shrink" tabindex="0" data-tip="${esc(b.tip)}"><span class="truncate">${esc(b.text)}</span></span></div>`
+      : '';
+    const title = `第 ${s.n} 步：提示词 ${exact(s.prompt)} · 缓存读 ${exact(s.read)} · 缓存写 ${exact(s.write)}`;
+    return (
+      `<div class="flex flex-wrap items-center gap-x-2 px-1" data-step="${s.n}" data-verdict="${s.kind}">` +
+      `<span class="flex h-7 w-8 shrink-0 items-center justify-end text-meta text-muted-foreground tabular-nums">${s.n}</span>` +
+      slot +
+      NUMS(tok(s.prompt), tok(s.read), tok(s.write), b && b.v === 'warning' ? ' text-warning' : '', title) +
+      '</div>'
+    );
+  };
+
+  const cacheGroup = (sc) => {
+    const open = st.group === 'open';
+    const summary = sc.steps.length ? `本回合 ${sc.steps.length} 步` : '暂无明细';
+    const head =
+      `<button type="button" class="flex h-7 w-full items-center gap-1 rounded-sm px-1 text-left hover:bg-hover focus-visible:bg-hover" aria-expanded="${open}" data-action="toggle-group">` +
+      ic('chevron-right', `size-3 shrink-0 text-muted-foreground transition-transform duration-150${open ? ' rotate-90' : ''}`) +
+      '<span class="shrink-0 text-ui">逐步缓存</span>' +
+      (sc.warnings.length ? `<span class="badge badge-lg badge-warning">${sc.warnings.length} 处异常</span>` : '') +
+      `<span class="ml-auto min-w-0 truncate pl-2 text-meta text-muted-foreground tabular-nums">${summary}</span>` +
+      '</button>';
+    let body = '';
+    if (open) {
+      body = sc.steps.length
+        ? colHeader() + sc.steps.map(stepRow).join('') + `<p class="px-1 py-1 text-meta text-muted-foreground" data-footnote>${sc.footnote}</p>`
+        : `<p class="px-1 py-1 text-meta text-muted-foreground" data-weak>${sc.weak}</p>`;
+    }
+    return `<div class="mt-1 flex flex-col border-t pt-1 @container" data-cache-group>${head}${body ? `<div data-cache-panel>${body}</div>` : ''}</div>`;
+  };
+
+  // ------------------------------------------------- NEW: session-level alert
+  const sessionAlert = (sc) =>
+    '<div class="shrink-0 border-b p-2" data-session-alert>' +
+    `<div role="alert" class="alert alert-warning">${ic('triangle-alert')}` +
+    '<div class="alert-title">这个会话的缓存多次被重建</div>' +
+    '<div class="alert-desc">' +
+    `<p>有 ${sc.warnings.length} 次重建找不到本地原因，共重写约 ${about(sc.rewriteTotal)} tokens。客户端每次都是在上一个请求的末尾追加（已校验），多半是网关把请求分到了不同的上游。</p>` +
+    `<div><button type="button" class="btn btn-outline btn-xs h-6 sm:text-meta" data-action="copy">${ic('copy', 'size-3.5')}<span>复制诊断信息</span></button></div>` +
+    '</div></div></div>';
+
+  // What 「复制诊断信息」 copies: numbers and the gateway session id only.
+  const diagnosticText = (sc) => {
+    const [h, m, s0] = sc.startedAt;
+    const clock = (sec) => {
+      const t = h * 3600 + m * 60 + s0 + sec;
+      return `${pad2(Math.floor(t / 3600))}:${pad2(Math.floor((t % 3600) / 60))}:${pad2(t % 60)}`;
+    };
+    const verdict = (s) =>
+      s.kind === 'cold'
+        ? '首次写入'
+        : s.kind === 'rebuild'
+          ? `无法解释，重写 ${s.rewrite}`
+          : s.kind === 'matched'
+            ? `读到第 ${s.ref} 步的前缀`
+            : s.kind === 'shrink'
+              ? `提示词变短 −${sc.steps[s.n - 2].prompt - s.prompt}`
+              : s.kind === 'explained'
+                ? CAUSES[s.cause].text
+                : '';
+    const lines = [
+      'AiClient 缓存诊断（只含数字与网关会话 ID）',
+      '版本：1.1.0-dsh.9 · Windows',
+      `网关会话 ID：${GATEWAY_SESSION}`,
+      `模型：${MODEL} · 推理档位 max · anthropic-messages`,
+      `本会话：${sc.steps.length} 步，${sc.warnings.length} 步找不到本地原因，共重写约 ${exact(sc.rewriteTotal)} tokens`,
+      `前缀校验：${sc.steps.length} 步都是在上一步末尾追加`,
+      `回合 1 开始于 2026-10-10 ${clock(0)}`,
+      '',
+      ' 步  时间        提示词    缓存读    缓存写  判定',
+      ...sc.steps.map(
+        (s) =>
+          `${String(s.n).padStart(3)}  ${clock(s.at)}  ${String(s.prompt).padStart(8)}  ${String(s.read).padStart(8)}  ${String(s.write).padStart(8)}  ${verdict(s)}`.trimEnd()
+      ),
+    ];
+    return lines.join('\n');
+  };
+
+  // The surface, in RunSurfaceView's order. NEW: the alert on top, the 逐步缓存
+  // group between the last-request usage group and the session group.
+  const surface = (sc) =>
+    '<div class="select-text flex h-full flex-col overflow-y-auto" data-scroll-root>' +
+    (sc.alert && sc.warnings.length ? sessionAlert(sc) : '') +
+    runHeader(sc) +
+    (sc.last ? occupancy(sc.last.prompt + sc.last.output) : '') +
+    '<div class="flex flex-col p-2">' +
+    metric('状态', sc.status) +
+    (sc.elapsedMs ? metric('上一回合', dur(sc.elapsedMs)) : '') +
+    metric(sc.last ? '模型（实际）' : '模型（配置）', MODEL) +
+    (sc.tools ? metric('工具调用', String(sc.tools)) : '') +
+    (sc.windowOnly ? metric('上下文窗口', tok(WINDOW)) : '') +
+    (sc.last ? usageGroup(sc.last) : '') +
+    cacheGroup(sc) +
+    (sc.session && sc.last ? sessionGroup(sc.session) : '') +
+    '</div></div>';
+
+  // ------------------------------------------------------------ app chrome
+  const titleBar = () =>
+    '<div class="titlebar flex h-8 shrink-0 items-center border-b bg-background">' +
+    '<div class="flex h-8 items-center gap-1.5 px-2"><span class="logo"></span>' +
+    '<span class="text-xs font-medium text-muted-foreground">AI Client</span></div></div>';
+  // LeftDock rail: chat · Git · files · context · run (surfaceRegistry order), run active.
+  const rail = () =>
+    '<nav class="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card pb-2" style="width:44px" data-rail>' +
+    '<div class="h-9 shrink-0"></div>' +
+    [['message-square', '聊天'], ['git-branch', 'Git'], ['file-code', '文件'], ['gauge', '上下文'], ['activity', '运行']]
+      .map(([n, label]) => {
+        const a = n === 'activity';
+        return `<button type="button" title="${label}" aria-label="${label}" class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${a ? 'bg-selection text-foreground' : 'text-muted-foreground'}">${a ? '<span class="rail-mark"></span>' : ''}${ic(n, 'size-4.5')}</button>`;
+      })
+      .join('') +
+    '<div class="flex-1"></div>' +
+    ['panel-left-close', 'blocks', 'settings']
+      .map((n) => `<button type="button" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground">${ic(n, 'size-4.5')}</button>`)
+      .join('') +
+    '</nav>';
+  // DockTitle: h-9, text-section 16px 600 (decision 170).
+  const dockTitle = () =>
+    '<div class="flex h-9 shrink-0 items-center gap-2 border-b px-3"><span class="min-w-0 flex-1 truncate text-section font-semibold">运行</span></div>';
+  // UserFooterPill: border-t + p-2 + an h-6 trigger.
+  const footer = () =>
+    '<div class="flex shrink-0 items-center gap-1 border-t p-2"><button type="button" class="flex h-6 min-w-0 flex-1 items-center gap-2 rounded-sm px-1">' +
+    '<span class="size-4 shrink-0 rounded-full bg-muted border"></span><span class="min-w-0 flex-1 truncate text-left text-meta">demo@example.com</span></button></div>';
+  // Center column stand-in: the session bar and a few placeholder blocks.
+  const CENTER_W = 480;
+  const center = () =>
+    `<div class="flex min-w-0 flex-col" style="width:${CENTER_W}px">` +
+    '<div class="flex h-9 shrink-0 items-center gap-2 border-b px-3"><span class="min-w-0 truncate text-section text-foreground">评估迁移到新版路由库的工作量</span></div>' +
+    '<div class="flex min-h-0 flex-1 flex-col gap-3 px-6 pt-5">' +
+    '<div class="ph-bubble"></div><div class="ph-line" style="width:92%"></div><div class="ph-line" style="width:84%"></div>' +
+    '<div class="ph-line" style="width:70%"></div><div class="ph-line" style="width:88%"></div><div class="ph-line" style="width:46%"></div>' +
+    '</div></div>';
+
+  const appHtml = (sc) => {
+    const W = Number(st.w);
+    return (
+      `<div class="proto-root${st.tall ? ' tall' : ''}" style="height:900px;width:${44 + W + CENTER_W}px" data-proto-root>` +
+      titleBar() +
+      `<div class="app"><div class="dock bg-card/40">${rail()}` +
+      `<div class="relative flex h-full min-w-0 flex-col overflow-hidden border-r" style="width:${W}px" data-panel>` +
+      dockTitle() +
+      '<div class="relative isolate min-h-0 flex-1" data-mount><div class="absolute inset-0 z-10" data-layer>' +
+      surface(sc) +
+      '</div></div>' +
+      footer() +
+      '</div></div>' +
+      center() +
+      '</div></div>'
+    );
+  };
+
+  // --------------------------------------------------------------- tooltips
+  // Stand-in for Base UI's portaled Tooltip: side top, sideOffset 4, flips
+  // below when there is no room, clamped to the window.
+  let tipEl = null;
+  const hideTip = () => {
+    if (tipEl) tipEl.remove();
+    tipEl = null;
+  };
+  const showTip = (el) => {
+    hideTip();
+    tipEl = document.createElement('div');
+    tipEl.className = 'tip-popup';
+    tipEl.setAttribute('role', 'tooltip');
+    tipEl.textContent = el.dataset.tip;
+    document.body.appendChild(tipEl);
+    const r = el.getBoundingClientRect();
+    const t = tipEl.getBoundingClientRect();
+    const left = Math.max(8, Math.min(r.left + r.width / 2 - t.width / 2, window.innerWidth - t.width - 8));
+    const top = r.top - t.height - 4 >= 8 ? r.top - t.height - 4 : r.bottom + 4;
+    tipEl.style.left = `${left}px`;
+    tipEl.style.top = `${top}px`;
+  };
+  document.addEventListener('pointerover', (e) => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    if (el) showTip(el);
+  });
+  document.addEventListener('pointerout', (e) => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    if (el && !el.contains(e.relatedTarget)) hideTip();
+  });
+  document.addEventListener('focusin', (e) => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    if (el && el.matches(':focus-visible')) showTip(el);
+  });
+  document.addEventListener('focusout', hideTip);
+  document.addEventListener('scroll', hideTip, true);
+
+  // --------------------------------------------------------------- controls
+  const CONTROLS = [
+    ['state', '状态', [['healthy', '1 健康'], ['local', '2 本地原因'], ['upstream', '3 上游不一致'], ['reopened', '4 重开会话']]],
+    ['cause', '状态 2 的第 1 步', [['idle', '闲置过期'], ['model', '换了模型'], ['resume', '恢复会话'], ['turn', '新回合（正常变短）']]],
+    ['theme', '主题', [['light', '浅色'], ['dark', '深色']]],
+    ['w', '面板宽度', [['280', '280'], ['360', '360'], ['500', '500']]],
+    ['group', '逐步缓存', [['open', '展开'], ['closed', '收起']]],
+  ];
+  const TOGGLES = [
+    ['tall', '整列展开（不在面板里滚动）'],
+    ['cjk', 'CJK / Win10 字重（500→400，600→700）'],
+  ];
+  const renderControls = () => {
+    document.getElementById('controls').innerHTML =
+      CONTROLS.filter(([key]) => key !== 'cause' || st.state === 'local')
+        .map(
+          ([key, label, opts]) =>
+            `<div class="grp"><span>${label}</span><div class="seg">${opts
+              .map(([v, t]) => `<button type="button" data-key="${key}" data-v="${v}" aria-pressed="${st[key] === v}">${t}</button>`)
+              .join('')}</div></div>`
+        )
+        .join('') +
+      `<div class="grp">${TOGGLES.map(([key, t]) => `<label><input type="checkbox" data-toggle="${key}" ${st[key] ? 'checked' : ''} />${t}</label>`).join('')}</div>`;
+  };
+
+  let sc = null;
+  const apply = (opts = {}) => {
+    const root = document.querySelector('[data-scroll-root]');
+    const keep = opts.keepScroll && root ? root.scrollTop : 0;
+    hideTip();
+    sc = build();
+    document.documentElement.classList.toggle('dark', st.theme === 'dark');
+    document.body.classList.toggle('cjkwin', st.cjk);
+    const preview =
+      st.state === 'upstream'
+        ? `<div class="copy-preview"><div class="t">「复制诊断信息」复制的内容<small>原型示意；按钮也会真的写进剪贴板</small></div><pre>${esc(diagnosticText(sc))}</pre></div>`
+        : '';
+    document.getElementById('stage').innerHTML = `<div class="cap">${sc.caption}</div>${appHtml(sc)}${preview}`;
+    const next = document.querySelector('[data-scroll-root]');
+    if (next && keep) next.scrollTop = keep;
+    renderControls();
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(st)) q.set(k, v === true ? '1' : v === false ? '0' : v);
+    // Firefox may refuse history writes on file:// pages; the page works without them.
+    try {
+      history.replaceState(null, '', `?${q}`);
+    } catch {
+      // ignore
+    }
+  };
+
+  document.getElementById('controls').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-key]');
+    if (!b) return;
+    st[b.dataset.key] = b.dataset.v;
+    apply({ keepScroll: ['theme', 'group', 'cause'].includes(b.dataset.key) });
+  });
+  document.getElementById('controls').addEventListener('change', (e) => {
+    const t = e.target.closest('input[data-toggle]');
+    if (!t) return;
+    st[t.dataset.toggle] = t.checked;
+    apply({ keepScroll: t.dataset.toggle === 'cjk' });
+  });
+
+  // Clicks inside the panel: the group's trigger and the copy button.
+  let copyTimer = 0;
+  document.getElementById('stage').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-action]');
+    if (!a) return;
+    if (a.dataset.action === 'toggle-group') {
+      st.group = st.group === 'open' ? 'closed' : 'open';
+      apply({ keepScroll: true });
+      return;
+    }
+    if (a.dataset.action === 'copy') {
+      // The app writes first and only then says 「已复制」 (ErrorBoundary.tsx);
+      // the prototype shows the feedback even where file:// blocks the clipboard.
+      try {
+        navigator.clipboard?.writeText(diagnosticText(sc)).catch(() => {});
+      } catch {
+        // ignore
+      }
+      a.innerHTML = `${ic('check', 'size-3.5')}<span>已复制</span>`;
+      window.clearTimeout(copyTimer);
+      copyTimer = window.setTimeout(() => {
+        const btn = document.querySelector('[data-action="copy"]');
+        if (btn) btn.innerHTML = `${ic('copy', 'size-3.5')}<span>复制诊断信息</span>`;
+      }, 1500);
+    }
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>
