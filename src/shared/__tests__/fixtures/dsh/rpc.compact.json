@@ -233,11 +233,6 @@
     "truncated": false
   },
   "compact": {
-    "refused": {
-      "ok": false,
-      "code": "WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED",
-      "retryable": false
-    },
     "compacted": {
       "ok": true,
       "result": {

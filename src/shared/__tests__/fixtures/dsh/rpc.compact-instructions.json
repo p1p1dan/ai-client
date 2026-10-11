@@ -1,0 +1,431 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-compact-instructions",
+      "piSessionId": "aiclient-rec-compact-instructions",
+      "cwd": "<workspace>/compact-instructions",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact-instructions.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {
+        "skills": 0
+      }
+    },
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-compact-instructions",
+      "piSessionId": "aiclient-rec-compact-instructions",
+      "cwd": "<workspace>/compact-instructions",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact-instructions.dsh.json",
+      "leaf": {
+        "activeEntryId": "id-15",
+        "fileTailEntryId": "aiclient-rec-compact-instructions#32"
+      },
+      "initialHistory": {
+        "logicalSessionId": "rec-compact-instructions",
+        "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact-instructions.dsh.json",
+        "workspacePath": "<workspace>/compact-instructions",
+        "page": {
+          "messages": [
+            {
+              "id": "h:id-1",
+              "entryId": "id-1",
+              "role": "user",
+              "timestamp": "<ms>",
+              "blocks": [
+                {
+                  "type": "text",
+                  "id": "h:id-1:text:0",
+                  "text": "P0-STREAM: stream a paragraph back to me."
+                }
+              ],
+              "liveMessageId": "dsh-user-5"
+            },
+            {
+              "id": "h:id-5",
+              "entryId": "id-5",
+              "role": "assistant",
+              "timestamp": "<ms>",
+              "model": "aiclient-gateway/fake-1",
+              "blocks": [
+                {
+                  "type": "text",
+                  "id": "h:id-5:text:0",
+                  "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+                }
+              ],
+              "liveMessageId": "dsh-aiclient-rec-compact-instructions-t1-s1"
+            },
+            {
+              "id": "h:id-6",
+              "entryId": "id-6",
+              "role": "user",
+              "timestamp": "<ms>",
+              "blocks": [
+                {
+                  "type": "text",
+                  "id": "h:id-6:text:0",
+                  "text": "P0-TOOL: list the workspace."
+                }
+              ],
+              "liveMessageId": "dsh-user-17"
+            },
+            {
+              "id": "h:id-9",
+              "entryId": "id-9",
+              "role": "assistant",
+              "timestamp": "<ms>",
+              "model": "aiclient-gateway/fake-1",
+              "blocks": [
+                {
+                  "type": "tool_call",
+                  "id": "h:id-9:tool-call:toolu_id-7",
+                  "toolCallId": "toolu_id-7",
+                  "name": "bash",
+                  "input": {
+                    "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+                    "description": "List the workspace"
+                  }
+                },
+                {
+                  "type": "tool_result",
+                  "id": "h:id-10:tool-result:toolu_id-7",
+                  "toolCallId": "toolu_id-7",
+                  "ok": true,
+                  "output": "bridge tool row ok\n<workspace>/compact-instructions\n.\n..\n"
+                }
+              ],
+              "liveMessageId": "dsh-aiclient-rec-compact-instructions-t2-s1"
+            },
+            {
+              "id": "h:id-12",
+              "entryId": "id-12",
+              "role": "assistant",
+              "timestamp": "<ms>",
+              "model": "aiclient-gateway/fake-1",
+              "blocks": [
+                {
+                  "type": "text",
+                  "id": "h:id-12:text:0",
+                  "text": "Tool row finished: the workspace listing is above."
+                }
+              ],
+              "liveMessageId": "dsh-aiclient-rec-compact-instructions-t2-s2"
+            },
+            {
+              "id": "h:id-15",
+              "entryId": "id-15",
+              "role": "system",
+              "timestamp": "<ms>",
+              "blocks": [
+                {
+                  "type": "text",
+                  "id": "h:id-15:summary:0",
+                  "text": "Context summary\n\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n\n## Current Work\n- (none)\n\n## Critical Context\n- The user asked this checkpoint to: 保留未完成的任务和失败经验（P1-COMPACT-NOTE）"
+                },
+                {
+                  "type": "text",
+                  "id": "h:id-15:compact-instructions:0",
+                  "text": "Instructions for this summary: 保留未完成的任务和失败经验（P1-COMPACT-NOTE）",
+                  "notice": {
+                    "key": "Instructions for this summary: {{instructions}}",
+                    "params": {
+                      "instructions": "保留未完成的任务和失败经验（P1-COMPACT-NOTE）"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "offset": 0,
+          "limit": 80,
+          "totalCount": 6,
+          "hasMore": false
+        }
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {
+        "skills": 0
+      }
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-compact-instructions",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact-instructions.dsh.json",
+    "workspacePath": "<workspace>/compact-instructions",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P0-STREAM: stream a paragraph back to me."
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-5",
+          "entryId": "id-5",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-5:text:0",
+              "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-compact-instructions-t1-s1"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-6:text:0",
+              "text": "P0-TOOL: list the workspace."
+            }
+          ],
+          "liveMessageId": "dsh-user-17"
+        },
+        {
+          "id": "h:id-9",
+          "entryId": "id-9",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-9:tool-call:toolu_id-7",
+              "toolCallId": "toolu_id-7",
+              "name": "bash",
+              "input": {
+                "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+                "description": "List the workspace"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-10:tool-result:toolu_id-7",
+              "toolCallId": "toolu_id-7",
+              "ok": true,
+              "output": "bridge tool row ok\n<workspace>/compact-instructions\n.\n..\n"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-compact-instructions-t2-s1"
+        },
+        {
+          "id": "h:id-12",
+          "entryId": "id-12",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-12:text:0",
+              "text": "Tool row finished: the workspace listing is above."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-compact-instructions-t2-s2"
+        },
+        {
+          "id": "h:id-15",
+          "entryId": "id-15",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-15:summary:0",
+              "text": "Context summary\n\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n\n## Current Work\n- (none)\n\n## Critical Context\n- The user asked this checkpoint to: 保留未完成的任务和失败经验（P1-COMPACT-NOTE）"
+            },
+            {
+              "type": "text",
+              "id": "h:id-15:compact-instructions:0",
+              "text": "Instructions for this summary: 保留未完成的任务和失败经验（P1-COMPACT-NOTE）",
+              "notice": {
+                "key": "Instructions for this summary: {{instructions}}",
+                "params": {
+                  "instructions": "保留未完成的任务和失败经验（P1-COMPACT-NOTE）"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 6,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-compact-instructions",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact-instructions.dsh.json",
+      "workspacePath": "<workspace>/compact-instructions",
+      "leaf": {
+        "activeEntryId": "id-15",
+        "fileTailEntryId": "aiclient-rec-compact-instructions#32"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-STREAM: stream a paragraph back to me.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-5",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-5",
+          "depth": 2,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-TOOL: list the workspace.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-9",
+          "parentId": "id-6",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-12",
+          "parentId": "id-9",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "Tool row finished: the workspace listing is above.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-15",
+          "parentId": "id-12",
+          "depth": 5,
+          "entryType": "compaction",
+          "role": "system",
+          "preview": "Context summary ## Primary Request and Intent - P1-COMPACT: stream a paragraph, then list the w…",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 6,
+      "returnedNodes": 6,
+      "truncated": false
+    }
+  },
+  "compact": {
+    "tooLong": {
+      "ok": false,
+      "code": "WORKER_COMPACT_INSTRUCTIONS_TOO_LONG",
+      "retryable": false
+    },
+    "compacted": {
+      "ok": true,
+      "result": {
+        "compacted": true,
+        "summary": {
+          "id": "h:id-15",
+          "entryId": "id-15",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-15:summary:0",
+              "text": "Context summary\n\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n\n## Current Work\n- (none)\n\n## Critical Context\n- The user asked this checkpoint to: 保留未完成的任务和失败经验（P1-COMPACT-NOTE）"
+            },
+            {
+              "type": "text",
+              "id": "h:id-15:compact-instructions:0",
+              "text": "Instructions for this summary: 保留未完成的任务和失败经验（P1-COMPACT-NOTE）",
+              "notice": {
+                "key": "Instructions for this summary: {{instructions}}",
+                "params": {
+                  "instructions": "保留未完成的任务和失败经验（P1-COMPACT-NOTE）"
+                }
+              }
+            }
+          ]
+        },
+        "instructionsApplied": true
+      }
+    },
+    "eventsAfter": 0
+  },
+  "compactInstructions": [
+    {
+      "compactionId": "id-14",
+      "instructions": "保留未完成的任务和失败经验（P1-COMPACT-NOTE）",
+      "at": "<ms>"
+    }
+  ],
+  "summaryRequest": {
+    "verdict": "verdict=append added=1",
+    "sameTools": true,
+    "sameSystem": true,
+    "messages": "verdict=append added=1",
+    "templateFirst": true,
+    "instructionsLast": true,
+    "templateEndsWith": "- If the conversation already contains a <compacted-summary> block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.",
+    "instructions": "Additional instructions from the user for this checkpoint:\n<user-instructions>\n保留未完成的任务和失败经验（P1-COMPACT-NOTE）\n</user-instructions>\nFollow these instructions while keeping the exact structure above: every section, in order. Put what they ask you to keep or stress into the matching sections (for example Pending Jobs, or Errors and Fixes), or into Critical Context when no section fits."
+  }
+}

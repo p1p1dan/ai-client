@@ -56,6 +56,11 @@ interface RpcSample {
     workspacePath: string;
   };
   tree: { snapshot: SessionTreeSnapshot };
+  /**
+   * Decision 179: what the stub kept of each `/compact <instructions>`, which
+   * the bridge's projection reads beside the log (`compact-instructions`).
+   */
+  compactInstructions?: Array<{ compactionId: string; instructions: string }>;
 }
 
 function read<T>(file: string): T {
@@ -113,17 +118,29 @@ const scenarios = readdirSync(FIXTURES)
  * live copy of each row (P1-4d1, `liveMessageId`); a retired session's
  * timeline is read without.
  */
-function projectLog(log: LogSample, live = false): HistoryMessage[] {
+function projectLog(
+  log: LogSample,
+  live = false,
+  compactInstructions?: RpcSample['compactInstructions']
+): HistoryMessage[] {
+  const instructions = new Map(
+    (compactInstructions ?? []).map((entry) => [entry.compactionId, entry.instructions])
+  );
   return projectDshHistory(
     log.events.map((event) => ({ ...event, time: T0 + event.seq }) as DshLogEvent),
-    live ? { liveSessionId: log.header.id } : {}
+    {
+      ...(live ? { liveSessionId: log.header.id } : {}),
+      ...(instructions.size > 0
+        ? { compactInstructions: (compactionId: string) => instructions.get(compactionId) }
+        : {}),
+    }
   );
 }
 
 function project(name: string) {
   const log = read<LogSample>(`log.${name}.json`);
   const rpc = read<RpcSample>(`rpc.${name}.json`);
-  return { log, rpc, messages: projectLog(log, true) };
+  return { log, rpc, messages: projectLog(log, true, rpc.compactInstructions) };
 }
 
 function blocksOf(messages: readonly HistoryMessage[]) {
@@ -136,6 +153,8 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'auto-compact',
     'auto-compact-fail',
     'compact',
+    // Decision 179: `/compact <instructions>`.
+    'compact-instructions',
     'crash-resume',
     'fail',
     'fail-retry',
@@ -276,6 +295,32 @@ describe('what the recordings show a user', () => {
     expect(
       last?.type === 'text' && last.text.startsWith('Context summary\n\n## Primary Request')
     ).toBe(true);
+  });
+
+  it('compact-instructions (decision 179): the summary row carries the instructions, reopened from the stub', () => {
+    const { rpc, messages } = project('compact-instructions');
+    const last = messages.at(-1);
+    expect(last?.role).toBe('system');
+    expect(last?.blocks.map((block) => block.id)).toEqual([
+      `${last?.id}:summary:0`,
+      `${last?.id}:compact-instructions:0`,
+    ]);
+    // The gateway quoted them back: they reached the model, after DSH's template.
+    const summary = last?.blocks[0];
+    expect(summary?.type === 'text' && summary.text).toContain(
+      'The user asked this checkpoint to: 保留未完成的任务和失败经验（P1-COMPACT-NOTE）'
+    );
+    expect(last?.blocks[1]).toMatchObject({
+      notice: {
+        key: 'Instructions for this summary: {{instructions}}',
+        params: { instructions: '保留未完成的任务和失败经验（P1-COMPACT-NOTE）' },
+      },
+    });
+    // Without what the stub kept, the log alone gives the summary only.
+    expect(
+      projectLog(read<LogSample>('log.compact-instructions.json'), true).at(-1)?.blocks
+    ).toHaveLength(1);
+    expect(rpc.compactInstructions).toHaveLength(1);
   });
 
   it('crash-resume: an outcome-unknown tool row and the interrupted-turn note (decision 032)', () => {

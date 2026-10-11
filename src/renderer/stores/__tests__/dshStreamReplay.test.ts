@@ -23,7 +23,11 @@ import {
   groupMessagesIntoTurns,
   type TurnItem,
 } from '@/components/chat/chatTurn';
-import { COMPACT_INSTRUCTIONS_UNSUPPORTED } from '@/components/chat/compactCommand';
+import {
+  COMPACT_INSTRUCTIONS_TOO_LONG,
+  classifyCompactFailure,
+  compactionSummaryOf,
+} from '@/components/chat/compactCommand';
 import {
   autoTurnHeadView,
   dshCompactionRowView,
@@ -639,9 +643,7 @@ scenario('compact', (events, id) => {
     });
   });
 
-  it('refuses /compact with instructions under the code the composer words', () => {
-    expect(rpc.compact.refused.code).toBe(COMPACT_INSTRUCTIONS_UNSUPPORTED);
-    // DSH's `/compact` draws nothing live; the summary is there on the next open.
+  it('draws nothing live: the summary is there on the next open', () => {
     expect(rpc.compact.eventsAfter).toBe(0);
   });
 
@@ -653,6 +655,57 @@ scenario('compact', (events, id) => {
     expect(notice?.kind === 'notice' && textOf(notice.message)).toMatch(/^Context summary\n/);
     // Not one of DSH's light notice lines: a summary is the Alert-style row.
     expect(notice?.kind === 'notice' && dshNoticeRowView(notice.message)).toBeNull();
+  });
+});
+
+/**
+ * dsh-rebase decision 179: `/compact <instructions>`. The answer hands back
+ * the summary row with the line about them, which the reopened session's
+ * history shows again (the recorder closed and reopened it from the stub).
+ */
+scenario('compact-instructions', (events, id) => {
+  const rpc = loadRpc('compact-instructions');
+  const instructions = '保留未完成的任务和失败经验（P1-COMPACT-NOTE）';
+
+  it('refuses ones longer than taken, under the code the composer words', () => {
+    const refusal = `WorkerSlotError: ${rpc.compact.tooLong.code}: too long`;
+    expect(rpc.compact.tooLong.code).toBe(COMPACT_INSTRUCTIONS_TOO_LONG);
+    expect(classifyCompactFailure(new Error(refusal))).toEqual({
+      kind: 'instructions-too-long',
+      max: 2000,
+    });
+  });
+
+  it('answers with the summary row and its line, drawing nothing live', () => {
+    expect(rpc.compact.eventsAfter).toBe(0);
+    expect(rpc.compact.compacted.result.instructionsApplied).toBe(true);
+    const row = compactionSummaryOf(rpc.compact.compacted.result);
+    expect(row?.blocks.map((block) => block.id.split(':').slice(-2).join(':'))).toEqual([
+      'summary:0',
+      'compact-instructions:0',
+    ]);
+  });
+
+  it('shows the line under the summary when the chat is opened again, in the UI language', () => {
+    const turns = turnsOf(reopen(id, rpc.history.page.messages), id);
+    const notice = turns.at(-1)?.notices.at(-1);
+    const message = notice?.kind === 'notice' ? notice.message : undefined;
+    expect(textOf(message)).toMatch(/^Context summary\n/);
+    const line = message?.blocks[1];
+    expect(line?.type === 'text' && line.notice).toEqual({
+      key: 'Instructions for this summary: {{instructions}}',
+      params: { instructions },
+    });
+    expect(
+      line?.type === 'text' && line.notice
+        ? englishTranslate(line.notice.key, line.notice.params)
+        : undefined
+    ).toBe(`Instructions for this summary: ${instructions}`);
+    expect(zhTranslations['Instructions for this summary: {{instructions}}']).toBe(
+      '本次压缩的附加说明：{{instructions}}'
+    );
+    // Two turns streamed live; nothing for the compaction.
+    expect(events.filter((event) => event.type === 'session.compaction')).toEqual([]);
   });
 });
 
@@ -1711,6 +1764,8 @@ scenario('perm-search', (events, id) => {
  */
 const REOPEN_DIFFERS: Readonly<Record<string, string>> = {
   compact: 'the summary row is written by /compact; a command send is not a turn in the log',
+  'compact-instructions':
+    'the summary row (and its instructions line) comes with /compact’s answer, not the stream',
   'crash-resume': 'the restart adds the interrupted note and settles the row (asserted above)',
   fail: 'the failure card is live; the log keeps an empty reply, drawn as interrupted',
   'overflow-compact':

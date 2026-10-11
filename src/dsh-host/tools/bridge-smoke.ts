@@ -1000,7 +1000,10 @@ async function main() {
     });
     if (!bootH.ok) throw new Error(`H bootstrap: ${JSON.stringify(bootH.error)}`);
     // P1-4d2 (decisions 099 rules 9-12, 113): the menu is DSH's commands and
-    // the fixture skill by its bare name; `worker.compact` refuses instructions.
+    // the fixture skill by its bare name. Decision 179: `worker.compact` takes
+    // instructions — on this fresh session DSH's own "nothing to compact yet"
+    // answers, which only a hook that passed its dry run on the shipped DSH
+    // reaches — and refuses ones longer than taken before anything runs.
     report.menu = await h.client.request(chH, 'worker.commands', {
       logicalSessionId: INS_SKL_SESSION,
     });
@@ -1008,9 +1011,14 @@ async function main() {
       logicalSessionId: INS_SKL_SESSION,
       instructions: 'keep it short',
     });
+    const compactTooLong = await h.client.call(chH, 'worker.compact', {
+      logicalSessionId: INS_SKL_SESSION,
+      instructions: 'x'.repeat(2001),
+    });
     report.compactInstructions = {
       ok: compactWithInstructions.ok,
       code: (compactWithInstructions.error as Message | undefined)?.code,
+      tooLong: (compactTooLong.error as Message | undefined)?.code,
     };
     // Turn 1 carries no P0/P1 marker: it only has to be the session's first
     // step (agent-instructions' baseline is folded in then, right after this
@@ -1851,8 +1859,8 @@ async function main() {
       ) === true,
     // P1-4d2 (decisions 099 rules 9-12, 113): DSH's commands minus the hidden
     // and window-owned ones, the skill by its bare name; the inventory counts
-    // skills alone; `/compact` takes no instructions; a command send opens no
-    // model turn and answers with a notice.
+    // skills alone; `/compact` takes instructions (decision 179); a command
+    // send opens no model turn and answers with a notice.
     menuListsDshCommandsAndSkills:
       menuNames.includes('command:goal') &&
       menuNames.includes('skill:ins-skl-smoke') &&
@@ -1861,10 +1869,11 @@ async function main() {
     capabilitiesReportSkillsOnly:
       JSON.stringify(Object.keys(bootHCapabilities ?? {})) === '["skills"]' &&
       Number(bootHCapabilities?.skills) >= 1,
-    compactRefusesInstructions:
+    compactTakesInstructions:
       (report.compactInstructions as Message | undefined)?.ok === false &&
-      (report.compactInstructions as Message | undefined)?.code ===
-        'WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED',
+      (report.compactInstructions as Message | undefined)?.code === 'WORKER_COMPACT_UNAVAILABLE' &&
+      (report.compactInstructions as Message | undefined)?.tooLong ===
+        'WORKER_COMPACT_INSTRUCTIONS_TOO_LONG',
     commandSendOpensNoModelTurn:
       commandGoal?.idle === true &&
       commandGoal.completed === true &&

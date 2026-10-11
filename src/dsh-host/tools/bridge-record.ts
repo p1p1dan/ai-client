@@ -40,10 +40,10 @@
  *   fail          the only request of the turn fails upstream -> turn/end error
  *   stop-stream   Stop after five streamed deltas -> interrupted text, user_stop
  *   stop-tool     Stop while a bash call sleeps -> aborted tool result, user_stop
- *   compact       two turns, the menu (`worker.commands`), `worker.compact` with
- *                 instructions (refused) and without (DSH's `/compact` -> a
- *                 "Context summary" row, nothing live), then a `/goal` send: a
- *                 command with no model turn, echoed with its answer (P1-4d2)
+ *   compact       two turns, the menu (`worker.commands`), `worker.compact`
+ *                 (DSH's `/compact` -> a "Context summary" row, nothing live),
+ *                 then a `/goal` send: a command with no model turn, echoed with
+ *                 its answer (P1-4d2); instructions are `compact-instructions`'s
  *   crash-resume  SIGKILL while a bash call sleeps; a new host resumes the stub and
  *                 its first page carries the interrupted-turn note and the
  *                 outcome-unknown tool row (decision 032)
@@ -139,6 +139,18 @@
  *                 P1-OVERFLOW turn whose compaction is refused, so the turn
  *                 fails as CONTEXT_TOO_LARGE
  *
+ * `/compact <instructions>` (decision 179), on its own host, last; the
+ * gateway captures every request (`--capture`) when it is recorded:
+ *   compact-instructions  two turns; instructions longer than taken (refused
+ *                 before anything runs); `worker.compact` with instructions: the
+ *                 summary request is the last turn's request extended, DSH's
+ *                 template intact and the instructions after it (`rpc.summaryRequest`,
+ *                 read off the capture), the gateway quotes them in the summary,
+ *                 the row carries their line and the stub keeps them
+ *                 (`rpc.compactInstructions`); the session is then closed and
+ *                 reopened from its stub, and `history` / `tree` are the reopened
+ *                 one's: the line again
+ *
  * Permission scenarios (P1-6c; plan P1-6 shard 04 §5, E class). Each opens its
  * session in a workspace of its own (`<workspace>/<scenario>`), so what a turn
  * lists or searches does not depend on which scenarios ran before it; `rpc`
@@ -195,7 +207,9 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { compactInstructionsPrompt } from '../bridge/compactInstructions.ts';
 import { grantsSidecarFor } from '../bridge/stub.ts';
+import { comparePrefix, prefixUnitsOf, verdictLogFields } from '../lib/requestPrefix.ts';
 import {
   BYPASS_PERMISSIONS,
   FAKE_MODEL,
@@ -207,6 +221,12 @@ import {
 } from './lib/hostClient.ts';
 import { baseEnv, captureStderr, exitOf, type Sandbox, sandbox, sleep } from './lib/kit.ts';
 import { solidPng } from './lib/png.ts';
+import {
+  isAnthropicMessagesCapture,
+  lastCapturedSeq,
+  loadCapturedRequests,
+  requestPurposeOf,
+} from './lib/prefixChain.ts';
 import { installProbeBundle } from './lib/probe-bundle.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -660,16 +680,10 @@ const SCENARIOS: Record<string, Scenario> = {
     );
     const second = await context.turn(session, 'TOOL', 'P0-TOOL: list the workspace.');
     // P1-4d2 (decisions 099 rules 9-10, 113): the menu is DSH's commands and
-    // skills; `/compact` is `worker.compact`, which refuses instructions
-    // before anything runs and echoes nothing live.
+    // skills; `/compact` is `worker.compact`, which echoes nothing live.
+    // Decision 179: instructions are `compact-instructions`'s.
     const commands = await client.request(session.ch, 'worker.commands', { logicalSessionId });
     const from = client.events(session.ch).length;
-    const refused = answerOf(
-      await client.call(session.ch, 'worker.compact', {
-        logicalSessionId,
-        instructions: 'keep the API decisions',
-      })
-    );
     const compacted = answerOf(
       await client.call(session.ch, 'worker.compact', { logicalSessionId }, 120_000)
     );
@@ -679,7 +693,7 @@ const SCENARIOS: Record<string, Scenario> = {
     const command = await context.turn(session, 'COMMAND', '/goal');
     return finish(context, session, [boot], [first, second, command], {
       commands,
-      compact: { refused, compacted, eventsAfter },
+      compact: { compacted, eventsAfter },
     });
   },
   async 'crash-resume'(context, host) {
@@ -752,7 +766,137 @@ const SCENARIOS: Record<string, Scenario> = {
   'auto-compact-fail': (context, host) =>
     autoCompactScenario(context, host, 'auto-compact-fail', true),
   'overflow-compact': overflowCompactScenario,
+  // Decision 179: `/compact <instructions>`, on its own host, last.
+  'compact-instructions': compactInstructionsScenario,
 };
+
+// ---- /compact with instructions (decision 179) --------------------------------------
+
+/** Where the gateway writes each request when `compact-instructions` is recorded. */
+function gatewayCaptureDir(box: Sandbox): string {
+  return join(box.root, 'gateway-capture');
+}
+
+/** What the scenario asks the summary to keep: a CJK sentence and a marker. */
+const COMPACT_INSTRUCTIONS_TEXT = '保留未完成的任务和失败经验（P1-COMPACT-NOTE）';
+
+function textOfMessage(message: unknown): string {
+  if (!isRecord(message)) return '';
+  if (typeof message.content === 'string') return message.content;
+  if (!Array.isArray(message.content)) return '';
+  return message.content
+    .map((block) => (isRecord(block) && block.type === 'text' ? String(block.text ?? '') : ''))
+    .join('\n');
+}
+
+/**
+ * The scenario's summary request, read off the gateway's capture (requests
+ * after `from`): how it relates to the agent request before it — by the
+ * host's own prefix rules (`requestPrefix.ts`), whole and messages alone —
+ * and how its last message ends. Throws unless the conversation is that
+ * request's extended, DSH's template comes first and the instructions last.
+ */
+function summaryRequestFacts(dir: string, from: number, instructions: string): Message {
+  const captured = loadCapturedRequests(dir)
+    .requests.filter((request) => request.seq > from && isAnthropicMessagesCapture(request))
+    .map((request) => ({
+      seq: request.seq,
+      beta: request.headers['anthropic-beta'] ?? null,
+      body: JSON.parse(request.body) as Record<string, unknown>,
+    }));
+  const summaryAt = captured.findLastIndex(
+    (request) => requestPurposeOf(request.body) === 'compaction'
+  );
+  const summary = captured[summaryAt];
+  const previous = captured
+    .slice(0, Math.max(summaryAt, 0))
+    .findLast((request) => requestPurposeOf(request.body) === 'agent');
+  if (!summary || !previous) throw new Error('compact-instructions: no summary request captured');
+  const before = prefixUnitsOf(previous.body, previous.beta);
+  const after = prefixUnitsOf(summary.body, summary.beta);
+  if (!before || !after) throw new Error('compact-instructions: a captured request did not hash');
+  const messagesOnly = comparePrefix(
+    { ...before, config: {}, tools: [], system: '' },
+    { ...after, config: {}, tools: [], system: '' }
+  );
+  const messages = summary.body.messages as unknown[];
+  const last = textOfMessage(messages[messages.length - 1]);
+  const prompt = compactInstructionsPrompt(instructions);
+  const facts = {
+    verdict: verdictLogFields(comparePrefix(before, after)),
+    sameTools: JSON.stringify(before.tools) === JSON.stringify(after.tools),
+    sameSystem: before.system === after.system,
+    messages: verdictLogFields(messagesOnly),
+    templateFirst: last.startsWith('You are now acting as a compaction engine'),
+    instructionsLast: last.endsWith(`\n\n${prompt}`),
+    // DSH's text right before the instructions: the template's last line, untouched.
+    templateEndsWith: last
+      .slice(0, last.length - prompt.length)
+      .trimEnd()
+      .split('\n')
+      .at(-1),
+    instructions: prompt,
+  };
+  if (
+    !facts.sameTools ||
+    !facts.sameSystem ||
+    messagesOnly.kind !== 'append' ||
+    !facts.templateFirst ||
+    !facts.instructionsLast
+  ) {
+    throw new Error(
+      `compact-instructions: the summary request is not as expected: ${JSON.stringify(facts)}`
+    );
+  }
+  return facts;
+}
+
+/**
+ * Decision 179: two turns; instructions longer than taken, refused before
+ * anything runs; `/compact` with instructions; then the session closed and
+ * reopened from its stub, whose history and tree are recorded.
+ */
+async function compactInstructionsScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const name = 'compact-instructions';
+  const captureDir = gatewayCaptureDir(context.box);
+  if (!existsSync(captureDir)) throw new Error(`${name}: the gateway is not capturing`);
+  const from = lastCapturedSeq(captureDir);
+  // A workspace of its own: what the tool turn lists does not depend on the scenarios before it.
+  const cwd = scenarioWorkspace(context.box, name);
+  const { session, boot } = await context.openSession(host, name, undefined, { cwd });
+  const { client } = session.host;
+  const logicalSessionId = session.logicalSessionId;
+  const first = await context.turn(session, 'STREAM', 'P0-STREAM: stream a paragraph back to me.');
+  const second = await context.turn(session, 'TOOL', 'P0-TOOL: list the workspace.');
+  const eventsFrom = client.events(session.ch).length;
+  const tooLong = answerOf(
+    await client.call(session.ch, 'worker.compact', {
+      logicalSessionId,
+      instructions: '字'.repeat(2001),
+    })
+  );
+  const compacted = answerOf(
+    await client.call(
+      session.ch,
+      'worker.compact',
+      { logicalSessionId, instructions: `  ${COMPACT_INSTRUCTIONS_TEXT}\r\n` },
+      120_000
+    )
+  );
+  // Nothing live, as for `/compact` alone (decision 113 rule 8).
+  const eventsAfter = client.events(session.ch).length - eventsFrom;
+  if (!compacted.ok) throw new Error(`${name}: not compacted: ${JSON.stringify(compacted)}`);
+  const summaryRequest = summaryRequestFacts(captureDir, from, COMPACT_INSTRUCTIONS_TEXT);
+  const stub = JSON.parse(readFileSync(session.stubFile, 'utf8')) as Message;
+  // Closed and opened again from the stub: the line comes from what it kept.
+  await context.close(session);
+  const reopened = await context.openSession(host, name, session.stubFile, { cwd });
+  return finish(context, reopened.session, [boot, reopened.boot], [first, second], {
+    compact: { tooLong, compacted, eventsAfter },
+    compactInstructions: stub.compactInstructions,
+    summaryRequest,
+  });
+}
 
 // ---- automatic compaction (decision 178) -------------------------------------------
 
@@ -1841,6 +1985,8 @@ const OWN_HOST = new Set([
   'auto-compact',
   'auto-compact-fail',
   'overflow-compact',
+  // Decision 179: the same alone or after the rest, and the gateway's capture is its own.
+  'compact-instructions',
 ]);
 
 // ---- main ------------------------------------------------------------------------
@@ -1877,7 +2023,7 @@ function parseArgs(argv: string[]) {
   };
 }
 
-async function startGateway(root: string, nodeBin: string) {
+async function startGateway(root: string, nodeBin: string, captureDir?: string) {
   const child = spawn(
     nodeBin,
     [gatewayEntry, '--port', '0', '--plan', 'dsh-p0-2', '--reset'].concat([
@@ -1887,6 +2033,8 @@ async function startGateway(root: string, nodeBin: string) {
       join(root, 'gateway.jsonl'),
       '--model-id',
       'fake-1',
+      // Decision 179: only when `compact-instructions` reads the summary request back.
+      ...(captureDir ? ['--capture', captureDir] : []),
     ]),
     { stdio: ['ignore', 'pipe', 'pipe'] }
   );
@@ -1966,7 +2114,11 @@ async function main(): Promise<number> {
   const hostCwd = join(box.root, 'host-cwd');
   mkdirSync(hostCwd, { recursive: true, mode: 0o700 });
   installProbeBundle(box.dshHome);
-  const gateway = await startGateway(box.root, nodeBin);
+  const gateway = await startGateway(
+    box.root,
+    nodeBin,
+    args.only.includes('compact-instructions') ? gatewayCaptureDir(box) : undefined
+  );
   const env = {
     ...baseEnv(box),
     DSH_HOME: box.dshHome,

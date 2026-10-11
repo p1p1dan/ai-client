@@ -269,6 +269,11 @@
  *                       message, then one line. A summary request whose conversation
  *                       carries P1-COMPACT-REFUSE anywhere is answered HTTP 400, so
  *                       the compaction fails.
+ *                       dsh-rebase decision 179 (tools/bridge-record.ts
+ *                       `compact-instructions`): a summary request whose instruction
+ *                       carries a `/compact` user's words (`<user-instructions>…`)
+ *                       is answered with the usual summary plus one Critical Context
+ *                       line quoting them, so the sample shows they reached the model.
  *                       dsh-rebase decision 173 (issue #9) adds P1-CHAIN for the prompt
  *                       prefix probe: `P1-CHAIN {"tag":"x","steps":8,"tool":"bash",
  *                       "think":true,"sleepStep":k,"sleepSeconds":3,"cacheSim":"single"}`
@@ -628,6 +633,8 @@ const COMPACTION_SUMMARY = [
 
 /** Decision 178: a summary request whose conversation carries this is refused. */
 const COMPACT_REFUSE = 'P1-COMPACT-REFUSE';
+/** Decision 179: the fence the bridge puts a `/compact` user's instructions in, after the template. */
+const COMPACT_USER_INSTRUCTIONS = /<user-instructions>\n([\s\S]*?)\n<\/user-instructions>/;
 /** The close of a compaction checkpoint's summary (dsh-compaction-basic `SUMMARY_CLOSE_TAG`). */
 const CHECKPOINT_CLOSE = '</compacted-summary>';
 
@@ -1847,6 +1854,16 @@ function decideDshP02(parsed, seq) {
       return {
         ...invalidRequest(`${COMPACT_REFUSE}: the fake upstream refused this summary request`),
         label: 'compaction-refused',
+      };
+    }
+    // Decision 179: what the user asked this checkpoint to keep, quoted back.
+    const asked = COMPACT_USER_INSTRUCTIONS.exec(lastText)?.[1];
+    if (asked !== undefined) {
+      return {
+        ...say(
+          `${COMPACTION_SUMMARY}\n\n## Critical Context\n- The user asked this checkpoint to: ${asked}`
+        ),
+        label: 'compaction-instructions',
       };
     }
     return { ...say(COMPACTION_SUMMARY), label: 'compaction' };
