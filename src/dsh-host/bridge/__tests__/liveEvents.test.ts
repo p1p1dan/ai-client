@@ -13,6 +13,7 @@ import {
   AICLIENT_TURN_CEILING_REASON,
   DSH_COMPACT_CANCELLED_KEY,
   DSH_COMPACT_NO_SUMMARY_KEY,
+  DSH_COMPACT_REQUEST_FAILED_KEY,
   DSH_COMPACT_TIMEOUT_KEY,
   DSH_COMPACTION_FAILED_KEY,
   DSH_COMPACTION_INTERRUPTED_KEY,
@@ -1487,5 +1488,24 @@ describe('DshLiveEvents — /compact without a summary (decision 180)', () => {
     expect(h.of('custom.message')).toEqual([]);
     const rows = projectDshHistory(h.log, { liveSessionId: SID });
     expect(rows[1]?.blocks[0]).toMatchObject({ notice: { key: DSH_COMPACT_NO_SUMMARY_KEY } });
+  });
+
+  it('[180-DA2-LIVE] the summary request refused upstream: the row says what the service answered; the log has it whole', () => {
+    const h = harness({ turn: null, manual: () => ({}) });
+    started(h);
+    const error =
+      "unsupported_value: Unsupported value: 'none' is not supported with the 'gpt-6.1-sol' model. Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'.";
+    h.durable('compaction/end', { compactionId: CID, sourceCommandId: 'cmd-1', turn: null, error });
+    expect(h.lines.at(-1)).toBe(`[dsh-bridge] /compact ended without a summary: ${error}`);
+    h.durable('command/done', {
+      commandId: 'cmd-1',
+      kind: 'error',
+      text: 'Compaction could not produce a useful summary. The attempt is recorded in the session log.',
+    });
+    const note = { key: DSH_COMPACT_REQUEST_FAILED_KEY, params: { reason: error } };
+    expect(compactions(h)[1]).toMatchObject({ phase: 'failed', note });
+    // Reopened, the same row.
+    const rows = projectDshHistory(h.log, { liveSessionId: SID });
+    expect(rows[1]?.blocks[0]).toMatchObject({ notice: note });
   });
 });

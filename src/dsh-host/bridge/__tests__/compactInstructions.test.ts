@@ -5,6 +5,8 @@ import {
   type CompactInstructionsArm,
   type CompactInstructionsLease,
   compactInstructionsPrompt,
+  installSummaryHook,
+  summaryReasoningEffort,
   summaryRequestProblem,
 } from '../compactInstructions.ts';
 import {
@@ -34,12 +36,15 @@ function text(value: string): Message {
   return { role: 'user', content: [{ type: 'text', text: value }] };
 }
 
-function agentOf(sessionId: string) {
+function agentOf(
+  sessionId: string,
+  config: Record<string, unknown> = { provider: 'p', model: 'm' }
+) {
   return {
     options: {},
     session: {
       id: sessionId,
-      requestHeader: () => ({ config: { provider: 'p', model: 'm' } }),
+      requestHeader: () => ({ config }),
       toolHistory: () => [],
     },
   };
@@ -59,7 +64,13 @@ function fakeEngine(
     | 'two-calls'
     | 'drops-on-long' = 'dsh'
 ) {
-  const requests: { messages: Message[]; purpose?: string }[] = [];
+  const requests: {
+    messages: Message[];
+    purpose?: string;
+    provider?: string;
+    model?: string;
+    reasoningEffort?: string;
+  }[] = [];
   const engine = {
     ctx: {
       llm: {
@@ -72,7 +83,12 @@ function fakeEngine(
     async summarize(
       this: { ctx: { llm: { stream(options: unknown): unknown } } },
       input: { messages: Message[] },
-      agent: { session: { id: string } }
+      agent: {
+        session: {
+          id: string;
+          requestHeader(): { config: { provider?: string; model?: string } } | undefined;
+        };
+      }
     ) {
       if (variant === 'no-model-call') return { summary: [] };
       if (variant === 'throws') throw new Error('engine broke');
@@ -83,7 +99,15 @@ function fakeEngine(
           : variant === 'drops-on-long' && input.messages.length > 2
             ? [...input.messages.slice(1), instruction]
             : [...input.messages, instruction];
-      const options = { messages, purpose: 'compaction', sessionId: agent.session.id };
+      // DSH routes the summary where the conversation's latest request went.
+      const latest = agent.session.requestHeader()?.config;
+      const options = {
+        provider: latest?.provider,
+        model: latest?.model,
+        messages,
+        purpose: 'compaction',
+        sessionId: agent.session.id,
+      };
       if (variant === 'two-calls') {
         try {
           this.ctx.llm.stream(options);
@@ -174,21 +198,27 @@ describe('compact instructions — the wrapped summary hook (decision 179)', () 
       kind: 'unsupported',
       reason: 'the compaction service has no summary hook',
     });
-    const cases: [Parameters<typeof fakeEngine>[0], RegExp][] = [
-      ['no-model-call', /finished without asking the model/],
-      ['throws', /failed before asking the model: engine broke/],
-      ['system-template', /message 0 of the summary request is not the conversation's/],
-      ['two-calls', /asked the model 2 times/],
+    const cases: [Parameters<typeof fakeEngine>[0], RegExp, boolean][] = [
+      ['no-model-call', /finished without asking the model/, false],
+      ['throws', /failed before asking the model: engine broke/, false],
+      // Decision 181: one summary request, of another shape: wrapped for its
+      // reasoning effort, still no instructions.
+      ['system-template', /message 0 of the summary request is not the conversation's/, true],
+      ['two-calls', /asked the model 2 times/, false],
     ];
-    for (const [variant, reason] of cases) {
+    for (const [variant, reason, wrapsForEffort] of cases) {
       const { engine, requests } = fakeEngine(variant);
       const original = engine.summarize;
       const armed = await armCompactInstructions(engine, 's1', 'x');
       expect(armed.kind, variant).toBe('unsupported');
       expect(armed.kind === 'unsupported' ? armed.reason : '', variant).toMatch(reason);
-      // Nothing was sent by the dry run, and the hook was not wrapped.
+      // Nothing was sent by the dry run; only a hook asking once is wrapped.
       expect(requests, variant).toEqual([]);
-      expect(engine.summarize, variant).toBe(original);
+      if (wrapsForEffort) expect(engine.summarize, variant).not.toBe(original);
+      else expect(engine.summarize, variant).toBe(original);
+      expect((await installSummaryHook(engine)).kind, variant).toBe(
+        wrapsForEffort ? 'wrapped' : 'unsupported'
+      );
       // Asked again: the same answer, without a second dry run.
       expect((await armCompactInstructions(engine, 's1', 'x')).kind, variant).toBe('unsupported');
     }
@@ -279,7 +309,14 @@ describe('compact instructions — the wrapped summary hook (decision 179)', () 
  */
 describe("compact instructions — DSH's own summary hook (decision 179 §4)", () => {
   function dshEngine() {
-    const requests: { messages: Message[]; purpose?: string; maxTokens?: number }[] = [];
+    const requests: {
+      messages: Message[];
+      purpose?: string;
+      maxTokens?: number;
+      provider?: string;
+      model?: string;
+      reasoningEffort?: string;
+    }[] = [];
     const stop = new Error('stop after the request');
     const instance = Object.create(BasicCompactionEngine.prototype) as Record<string, unknown>;
     instance.config = {
@@ -336,6 +373,192 @@ describe("compact instructions — DSH's own summary hook (decision 179 §4)", (
     expect(leased?.messages.slice(0, -1)).toEqual(conversation);
     expect(plain?.messages.slice(0, -1)).toEqual(conversation);
     expect(leased?.maxTokens).toBe(plain?.maxTokens);
+  });
+
+  it('[181-H-10] DSH’s own summary request, wrapped: the conversation’s route, model and level', async () => {
+    const { instance, requests, stop } = dshEngine();
+    expect(
+      await installSummaryHook(instance, {
+        efforts: (provider) => (provider === 'gw' ? ['off', 'low', 'medium', 'high'] : undefined),
+      })
+    ).toEqual({ kind: 'wrapped' });
+    const summarize = instance.summarize as (
+      input: unknown,
+      agent: unknown,
+      signal?: AbortSignal
+    ) => Promise<unknown>;
+    const agent = agentOf('s1', { provider: 'gw', model: 'sol', reasoningEffort: 'high' });
+    await expect(summarize.call(instance, { messages: conversation }, agent)).rejects.toBe(stop);
+    // Without the wrapping DSH names no level (pi-ai would send the model's `off`).
+    expect(requests[0]).toMatchObject({
+      provider: 'gw',
+      model: 'sol',
+      purpose: 'compaction',
+      reasoningEffort: 'high',
+    });
+    // A summarizer routed elsewhere by the row's config: that model's lowest level.
+    instance.config = {
+      ...(instance.config as object),
+      summarizationProvider: 'gw',
+      summarizationModel: 'mini',
+    };
+    await expect(
+      summarize.call(
+        instance,
+        { messages: conversation },
+        agentOf('s1', { provider: 'claude', model: 'opus', reasoningEffort: 'max' })
+      )
+    ).rejects.toBe(stop);
+    expect(requests[1]).toMatchObject({ provider: 'gw', model: 'mini', reasoningEffort: 'low' });
+  });
+});
+
+/**
+ * dsh-rebase decision 181 — every summary request names a reasoning effort:
+ * the conversation's latest request's on the same route and model (none
+ * included), else the lowest level the plan offers besides `off`. DSH names
+ * none, and pi-ai then sends the model's `off` (`'none'` on OpenAI
+ * Responses: GPT 6.1 Sol refuses it with a 400).
+ */
+describe('summary requests name the conversation’s reasoning effort (decision 181)', () => {
+  const GPT = ['off', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+  // Decision 141: an adaptive-only Claude row never offers `off`.
+  const CLAUDE = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+  it('[181-E-01] the rule: the request’s own, the conversation’s, else the lowest besides off', () => {
+    const request = { provider: 'gw', model: 'sol' };
+    const pick = (
+      latest: Record<string, unknown> | undefined,
+      offered: readonly string[] | undefined,
+      own: Record<string, unknown> = request
+    ) => summaryReasoningEffort({ request: own, latest, offered });
+    // The conversation's level, as it was sent.
+    expect(pick({ ...request, reasoningEffort: 'high' }, GPT)).toEqual({
+      effort: 'high',
+      source: 'conversation',
+    });
+    // Its `off` too: the same request the turns went out with.
+    expect(pick({ ...request, reasoningEffort: 'off' }, GPT)).toEqual({
+      effort: 'off',
+      source: 'conversation',
+    });
+    // It named none: none, as its turns did.
+    expect(pick({ ...request }, GPT)).toEqual({ effort: undefined, source: 'conversation' });
+    // No plan to check against: taken as it stands.
+    expect(pick({ ...request, reasoningEffort: 'max' }, undefined)).toEqual({
+      effort: 'max',
+      source: 'conversation',
+    });
+    // Never a request on this model (none at all, another model, another
+    // route): the lowest level besides off, never off itself.
+    expect(pick(undefined, GPT)).toEqual({ effort: 'low', source: 'lowest' });
+    expect(pick({ provider: 'gw', model: 'luna', reasoningEffort: 'off' }, GPT)).toEqual({
+      effort: 'low',
+      source: 'lowest',
+    });
+    expect(pick({ provider: 'other', model: 'sol', reasoningEffort: 'high' }, CLAUDE)).toEqual({
+      effort: 'low',
+      source: 'lowest',
+    });
+    expect(pick(undefined, ['off', 'minimal', 'low'])).toEqual({
+      effort: 'minimal',
+      source: 'lowest',
+    });
+    // A level the plan stopped offering (a new plan since that request).
+    expect(pick({ ...request, reasoningEffort: 'xhigh' }, ['off', 'low', 'high'])).toEqual({
+      effort: 'low',
+      source: 'lowest',
+    });
+    // Nothing to name: a model that does not think, or one the plan does not serve.
+    expect(pick(undefined, [])).toEqual({ effort: undefined, source: 'none' });
+    expect(pick(undefined, ['off'])).toEqual({ effort: undefined, source: 'none' });
+    expect(pick(undefined, undefined)).toEqual({ effort: undefined, source: 'none' });
+    // One the request names already stays.
+    expect(pick(undefined, GPT, { ...request, reasoningEffort: 'medium' })).toEqual({
+      effort: 'medium',
+      source: 'request',
+    });
+  });
+
+  it('[181-E-02] every summary of a session goes out at its latest request’s level, instructions or not', async () => {
+    const { engine, requests } = fakeEngine();
+    const logged: string[] = [];
+    expect(
+      await installSummaryHook(engine, {
+        efforts: (provider, model) => (provider === 'gw' && model === 'sol' ? GPT : undefined),
+        log: (...args) => logged.push(args.join(' ')),
+      })
+    ).toEqual({ kind: 'wrapped' });
+    const agent = agentOf('s1', { provider: 'gw', model: 'sol', reasoningEffort: 'xhigh' });
+
+    // An automatic compaction: no lease.
+    await engine.summarize({ messages: conversation }, agent);
+    // A `/compact` with instructions: both.
+    const lease = leaseOf(await armCompactInstructions(engine, 's1', 'keep it'));
+    await engine.summarize({ messages: conversation }, agent);
+    lease.release();
+
+    expect(requests.map((request) => request.reasoningEffort)).toEqual(['xhigh', 'xhigh']);
+    expect(requests[1]?.messages.at(-1)?.content[0]?.text).toContain('keep it');
+    // Nothing else of the request moves: the cached prefix is the same objects.
+    for (const request of requests) {
+      expect(request.provider).toBe('gw');
+      expect(request.model).toBe('sol');
+      for (const [index, message] of request.messages.slice(0, -1).entries()) {
+        expect(message).toBe(conversation[index]);
+      }
+    }
+    expect(logged).toEqual([
+      '[dsh-bridge] summary request of s1 on gw/sol: reasoning effort xhigh (conversation)',
+      '[dsh-bridge] summary request of s1 on gw/sol: reasoning effort xhigh (conversation)',
+    ]);
+  });
+
+  it('[181-E-03] a session with no request on its model: the lowest level besides off', async () => {
+    const { engine, requests } = fakeEngine();
+    await installSummaryHook(engine, {
+      efforts: (provider) => (provider === 'claude' ? CLAUDE : provider === 'gpt' ? GPT : []),
+    });
+    // DSH falls back to the agent's model when no request was routed: here
+    // the header names the route, without an effort of the same model.
+    await engine.summarize(
+      { messages: conversation },
+      agentOf('s1', { provider: 'gpt', model: 'sol' })
+    );
+    await engine.summarize(
+      { messages: conversation },
+      agentOf('s2', { provider: 'claude', model: 'opus', reasoningEffort: 'off' })
+    );
+    // A model that does not think: nothing named, as before.
+    await engine.summarize(
+      { messages: conversation },
+      agentOf('s3', { provider: 'plain', model: 'x' })
+    );
+    // `gpt`: the conversation named none, so none (its turns' own request).
+    // `claude`: `off` is not offered there (decision 141), so the lowest level.
+    expect(requests.map((request) => request.reasoningEffort)).toEqual([
+      undefined,
+      'low',
+      undefined,
+    ]);
+  });
+
+  it('[181-E-04] a hook that is not one summary request is left as DSH ships it, and said so', async () => {
+    const { engine, requests } = fakeEngine('two-calls');
+    const original = engine.summarize;
+    const logged: unknown[][] = [];
+    const state = await installSummaryHook(engine, { log: (...args) => logged.push(args) });
+    expect(state).toEqual({
+      kind: 'unsupported',
+      reason: 'the summary hook asked the model 2 times',
+    });
+    expect(engine.summarize).toBe(original);
+    expect(requests).toEqual([]);
+    expect(String(logged[0]?.[0])).toContain('summary hook left as DSH ships it');
+    expect(await installSummaryHook(undefined)).toEqual({
+      kind: 'unsupported',
+      reason: 'this host has no compaction service',
+    });
   });
 });
 

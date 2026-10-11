@@ -341,6 +341,21 @@ export interface WorkerCompactResult {
 }
 
 /**
+ * dsh-rebase decision 180, after the 2026-10-11 acceptance (DA-4): what
+ * Main's `chat:compactSession` answers for a `/compact` the user cancelled
+ * (the worker's `WORKER_COMPACT_CANCELLED`), instead of rejecting: Electron
+ * logs every rejected handler at error level, and a cancel is the user's
+ * choice, not a failure.
+ */
+export interface ChatCompactCancelled {
+  compacted: false;
+  cancelled: true;
+}
+
+/** `chat:compactSession`'s answer: compacted, or cancelled by the user (DA-4). */
+export type ChatCompactSessionResult = WorkerCompactResult | ChatCompactCancelled;
+
+/**
  * dsh-rebase P1-7a (decisions 072 rule 2, 118): one DSH command run out of
  * band — the goal bar's pause, resume, edit and clear are `/goal …` lines.
  * Unlike a command send (`worker.send`, decision 113) it opens no turn, emits

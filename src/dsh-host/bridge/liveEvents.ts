@@ -428,10 +428,16 @@ interface OpenManualCompaction {
   /** Its `compaction/end` came with an error. */
   failed: boolean;
   doneText?: string;
+  /** DA-2: that error, which names a refused summary request (`dshCompactNote`). */
+  endError?: unknown;
 }
 
-/** How much of a failed compaction's error the bridge's log line keeps. */
-const COMPACTION_ERROR_LOG_CHARS = 500;
+/**
+ * How much of a failed compaction's error the bridge's log line keeps: all
+ * of what pi-ai keeps of a provider's error body (4000 characters) and its
+ * prefix (DA-2: the note says one line of it, the log the whole text).
+ */
+const COMPACTION_ERROR_LOG_CHARS = 4500;
 
 export class DshLiveEvents {
   private readonly host: DshLiveEventsHost;
@@ -987,6 +993,7 @@ export class DshLiveEvents {
       `[dsh-bridge] /compact ended without a summary: ${String(reason).slice(0, COMPACTION_ERROR_LOG_CHARS)}`
     );
     manual.failed = true;
+    manual.endError = data.error;
     const aborted = this.host.manualCompaction?.()?.abortReason;
     if (aborted) {
       manual.doneText =
@@ -1008,7 +1015,7 @@ export class DshLiveEvents {
   }
 
   private failManual(): void {
-    const note = dshCompactNote(this.manual?.doneText);
+    const note = dshCompactNote(this.manual?.doneText, this.manual?.endError);
     this.settleManual('failed', { note });
   }
 

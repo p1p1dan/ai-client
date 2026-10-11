@@ -63,6 +63,20 @@ export class DshModelRouter {
     return plan ? { ...plan.defaultModel } : undefined;
   }
 
+  /**
+   * Decision 181: the levels the plan offers on one DSH route and model, in
+   * escalation order (empty for a non-reasoning model); undefined when the
+   * plan does not serve that pair, or there is no plan.
+   */
+  efforts(provider: string, model: string): readonly DshEffortLevel[] | undefined {
+    const plan = this.plan();
+    if (!plan) return undefined;
+    for (const entry of Object.values(plan.index)) {
+      if (entry.route === provider && entry.model === model) return entry.efforts;
+    }
+    return undefined;
+  }
+
   /** A chat turn: `modelId` is the turn's model, or the session's current one. */
   session(modelId: string | null | undefined, effort: string | null | undefined): DshRoutedModel {
     return this.route(modelId, effort, 'session');

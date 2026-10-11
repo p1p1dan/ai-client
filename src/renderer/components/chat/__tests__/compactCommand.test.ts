@@ -14,7 +14,9 @@ import {
   DSH_COMPACT_CANCELLED_KEY,
   DSH_COMPACT_FAILED_REASON_KEY,
   DSH_COMPACT_NO_SUMMARY_KEY,
+  DSH_COMPACT_REQUEST_FAILED_KEY,
   DSH_COMPACT_TIMEOUT_KEY,
+  dshCompactFailureText,
 } from '@shared/dshHistory/types';
 import { englishTranslate, zhTranslations } from '@shared/i18n';
 import {
@@ -541,5 +543,46 @@ describe('runCompactCommand — cancelled, and said in the timeline (decision 18
     ]) {
       expect(zhTranslations[key], key).toBeTruthy();
     }
+  });
+
+  it('[CC-DA4] Main answers a cancel (not a rejection): still the cancelled outcome', async () => {
+    await expect(
+      runCompactCommand({
+        turnRunning: false,
+        compact: async () => ({ compacted: false, cancelled: true }),
+      })
+    ).resolves.toEqual({ kind: 'cancelled' });
+    // Through the start-first path too.
+    await expect(
+      runCompactCommand({
+        turnRunning: false,
+        compact: async () => ({ compacted: false, cancelled: true }),
+        whenRunning: async (operation) => ({
+          kind: 'done',
+          value: await operation(),
+          started: false,
+        }),
+      })
+    ).resolves.toEqual({ kind: 'cancelled' });
+  });
+
+  it('[CC-DA2] a summary request the model service refused: the row says what it answered', async () => {
+    const sentence =
+      'Compaction could not produce a useful summary. The attempt is recorded in the session log.';
+    const error =
+      "unsupported_value: Unsupported value: 'none' is not supported with the 'gpt-6.1-sol' model.";
+    const outcome = await runCompactCommand({
+      turnRunning: false,
+      compact: async () => {
+        throw new Error(
+          `Error invoking remote method 'chat:compactSession': WorkerSlotError: WORKER_COMPACT_FAILED: ${dshCompactFailureText(sentence, error)}`
+        );
+      },
+    });
+    expect(outcome).toMatchObject({
+      kind: 'failed',
+      note: { key: DSH_COMPACT_REQUEST_FAILED_KEY, params: { reason: error } },
+    });
+    expect(zhTranslations[DSH_COMPACT_REQUEST_FAILED_KEY]).toBeTruthy();
   });
 });

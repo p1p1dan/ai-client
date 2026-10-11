@@ -48,6 +48,7 @@ import {
 } from '@shared/dshHistory/types';
 import type { Translate } from '@shared/i18n';
 import type { HistoryMessage } from '@shared/types/sessionHistory';
+import type { ChatCompactCancelled } from '@shared/types/workerRpc';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import {
   isSessionNotRunningError,
@@ -144,6 +145,20 @@ export const COMPACT_INTERRUPTED_TEXT =
   'The conversation stopped running while it was being compacted (it was ended, or the engine restarted). Reopen it to see whether the summary was written.';
 export const COMPACT_STOPPED_TEXT =
   'The conversation stopped running before compaction began, so nothing was compacted.';
+
+/**
+ * DA-4 (decision 180, 2026-10-11 acceptance): Main's answer to a `/compact`
+ * the user cancelled. Spelled here, as the codes above are: the renderer
+ * imports only types from `workerRpc`.
+ */
+function isCompactCancelledAnswer(value: unknown): value is ChatCompactCancelled {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { cancelled?: unknown }).cancelled === true &&
+    (value as { compacted?: unknown }).compacted === false
+  );
+}
 
 function has(text: string, code: string): boolean {
   return new RegExp(`(?:^|[^A-Za-z0-9_])${code}(?![A-Za-z0-9_])`).test(text);
@@ -251,6 +266,8 @@ export async function runCompactCommand(input: {
         ? { kind: 'cancelled' }
         : { kind: 'stopped-running' };
     }
+    // DA-4: Main answers a cancel rather than rejecting (a rejection is still read below).
+    if (isCompactCancelledAnswer(result.value)) return { kind: 'cancelled' };
     const summary = compactionSummaryOf(result.value);
     return {
       kind: 'compacted',

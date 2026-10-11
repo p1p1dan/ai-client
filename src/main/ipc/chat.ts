@@ -26,10 +26,12 @@ import {
   isSessionPermissionTier,
   type SessionPermissionTier,
 } from '@shared/types/sessionPermissionTier';
-import type {
-  WorkerCapabilityInventory,
-  WorkerCommandsResult,
-  WorkerInterjectWithdrawResult,
+import {
+  type ChatCompactSessionResult,
+  WORKER_COMPACT_CANCELLED,
+  type WorkerCapabilityInventory,
+  type WorkerCommandsResult,
+  type WorkerInterjectWithdrawResult,
 } from '@shared/types/workerRpc';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { currentDshSkillHomes } from '../services/agent-host/DshHostProcess';
@@ -219,6 +221,15 @@ function spawnForceTakeover(value: unknown): { forceTakeover?: true } {
  */
 function withWorkerErrorCode(error: unknown): unknown {
   return error instanceof WorkerManagerError ? new Error(`${error.code}: ${error.message}`) : error;
+}
+
+/** DA-4: the worker's answer to a `/compact` the user cut short (`WorkerSlotError.remoteCode`). */
+function isCompactCancelledByUser(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { remoteCode?: unknown }).remoteCode === WORKER_COMPACT_CANCELLED
+  );
 }
 
 /**
@@ -888,12 +899,18 @@ export function registerChatHandlers(): void {
       )
   );
 
+  /**
+   * dsh-rebase decision 180, after the 2026-10-11 acceptance (DA-4): a
+   * `/compact` the user cancelled (Esc, Stop) is answered `{compacted: false,
+   * cancelled: true}` and logged at info. Rejected, Electron logged it at
+   * error level like a failure.
+   */
   ipcMain.handle(
     IPC_CHANNELS.CHAT_COMPACT_SESSION,
     async (
       e,
       payload: { sessionId: string; instructions?: string }
-    ): Promise<Awaited<ReturnType<typeof workerManager.compactSession>>> => {
+    ): Promise<ChatCompactSessionResult> => {
       await requireLiveSession(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       try {
@@ -903,6 +920,10 @@ export function registerChatHandlers(): void {
           ownerWebContentsId,
         });
       } catch (error) {
+        if (isCompactCancelledByUser(error)) {
+          console.info(`[chat] /compact of ${payload.sessionId} was cancelled by the user`);
+          return { compacted: false, cancelled: true };
+        }
         throw withWorkerErrorCode(error);
       }
     }

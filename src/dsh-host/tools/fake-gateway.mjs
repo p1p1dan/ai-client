@@ -62,6 +62,9 @@
  *                   one plain text answer, `fake gateway ok (<wire>)`, in that wire's own
  *                   stream format. Enough for a turn or a one-shot completion to finish,
  *                   so a probe can read how each protocol identified itself.
+ *                   (decision 181) On …/responses a model whose id ends in `-sol` answers
+ *                   `reasoning.effort: 'none'` with HTTP 400 `unsupported_value`, as GPT
+ *                   6.1 Sol's upstream does.
  *   GET  /health    Returns { ok: true, plan, count } as JSON — count is the number of
  *                   POST requests served so far (persisted via --state).
  *
@@ -492,6 +495,24 @@ function identityOf(req) {
     if (name === 'x-aiclient-user-agent') relayHeader = String(req.rawHeaders[i + 1]);
   }
   return { userAgentLines, relayHeader };
+}
+
+/**
+ * dsh-rebase decision 181: GPT 6.1 Sol thinks always, and its upstream refuses
+ * `reasoning.effort: 'none'` — what pi-ai sends for a request that names no
+ * effort — with a 400. A model whose id ends in `-sol` answers the same here.
+ */
+function reasoningNoneRefusal(parsed) {
+  const model = typeof parsed?.model === 'string' ? parsed.model : '';
+  if (!model.endsWith('-sol') || parsed?.reasoning?.effort !== 'none') return undefined;
+  return JSON.stringify({
+    error: {
+      message: `Unsupported value: 'none' is not supported with the '${model}' model. Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'.`,
+      type: 'invalid_request_error',
+      param: 'reasoning.effort',
+      code: 'unsupported_value',
+    },
+  });
 }
 
 /** Decision 171: one plain text answer in an OpenAI wire's own stream format. */
@@ -3194,9 +3215,11 @@ function main() {
       const session = userIdOf(parsed);
 
       if (wire !== 'anthropic-messages') {
+        // Decision 181: a `-sol` model refuses `reasoning.effort: 'none'` as GPT 6.1 Sol does.
+        const refusal = wire === 'openai-responses' ? reasoningNoneRefusal(parsed) : undefined;
         logRequest({
           seq,
-          status: 200,
+          status: refusal ? 400 : 200,
           wire,
           role: lastMessage?.role ?? null,
           contentSummary: summary,
@@ -3208,9 +3231,15 @@ function main() {
           ...session,
           model: typeof parsed?.model === 'string' ? parsed.model : null,
           path: req.url,
-          decision: 'openai-text',
+          reasoning: reasoningOf(parsed),
+          decision: refusal ? 'openai-reasoning-refused' : 'openai-text',
         });
         saveState(args.state, state);
+        if (refusal) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(refusal);
+          return;
+        }
         sendOpenAiText(res, wire, model, `fake gateway ok (${wire})`);
         return;
       }

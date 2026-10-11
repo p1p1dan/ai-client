@@ -1138,11 +1138,13 @@ const electronAPI = {
     /**
      * R02-c — manual context compaction. dsh-rebase P1-7e (decision 140): with
      * the context-summary row it wrote, when the worker could read it back.
+     * Decision 180 (DA-4): `{compacted: false, cancelled: true}` when the user
+     * cancelled it.
      */
     compactSession: (payload: {
       sessionId: string;
       instructions?: string;
-    }): Promise<import('@shared/types/workerRpc').WorkerCompactResult> =>
+    }): Promise<import('@shared/types/workerRpc').ChatCompactSessionResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_COMPACT_SESSION, payload),
     /**
      * dsh-rebase decision 180 — Esc or Stop on a running `/compact`; that

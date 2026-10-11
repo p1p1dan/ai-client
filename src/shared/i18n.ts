@@ -4464,6 +4464,9 @@ Object.assign(zhTranslations, {
     '压缩没有成功，对话没有改动：{{reason}}',
   'The compaction did not succeed, and nothing was compacted.': '压缩没有成功，对话没有改动。',
   'The compaction did not finish; the context was not compacted.': '压缩没有完成，上下文没有压缩。',
+  // DA-2 (2026-10-11 acceptance): the summary request itself failed at the model service.
+  'The model service did not complete the summary request ({{reason}}), so nothing was compacted. The attempt is recorded in the session log.':
+    '模型服务没有完成生成摘要的请求（{{reason}}），对话没有压缩。这次尝试已记录在会话日志里。',
   'Compacting the context… {{seconds}}s': '正在压缩上下文… {{seconds}} 秒',
   'Compacting the context… {{minutes}}m {{seconds}}s':
     '正在压缩上下文… {{minutes}} 分 {{seconds}} 秒',

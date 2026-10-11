@@ -335,6 +335,40 @@ describe('session operations keep their code (decision 176)', () => {
     compactSession.mockRejectedValueOnce(remote);
     await expect(invoke('chat:compactSession', { sessionId: 's1' })).rejects.toBe(remote);
   });
+
+  it('[180-DA4-IPC] a /compact the user cancelled is answered, logged at info, never rejected', async () => {
+    const { WorkerSlotError } = await import('../../services/agent-host/WorkerSlot');
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      compactSession.mockRejectedValueOnce(
+        new WorkerSlotError(
+          'WORKER_RPC_REMOTE_ERROR',
+          'WORKER_COMPACT_CANCELLED: the compaction was cancelled before its summary was written; nothing was compacted',
+          {
+            code: 'WORKER_COMPACT_CANCELLED',
+            message:
+              'the compaction was cancelled before its summary was written; nothing was compacted',
+            retryable: false,
+          }
+        )
+      );
+      await expect(invoke('chat:compactSession', { sessionId: 's1' })).resolves.toEqual({
+        compacted: false,
+        cancelled: true,
+      });
+      expect(info).toHaveBeenCalledWith('[chat] /compact of s1 was cancelled by the user');
+      // Any other worker refusal is still a rejection.
+      const failed = new WorkerSlotError('WORKER_RPC_REMOTE_ERROR', 'WORKER_COMPACT_FAILED: x', {
+        code: 'WORKER_COMPACT_FAILED',
+        message: 'x',
+        retryable: false,
+      });
+      compactSession.mockRejectedValueOnce(failed);
+      await expect(invoke('chat:compactSession', { sessionId: 's1' })).rejects.toBe(failed);
+    } finally {
+      info.mockRestore();
+    }
+  });
 });
 
 describe('Pi WorkerSlot chat routing', () => {

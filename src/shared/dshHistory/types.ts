@@ -11,6 +11,7 @@
  * to fewer rows instead of a failed read.
  */
 
+import { redactCredentials } from '../stderrRedaction.ts';
 import type { HistoryBlock } from '../types/sessionHistory.ts';
 
 /** One event of a DSH session log, as `sessionQuery.observeSession` and `session/event` carry it. */
@@ -262,6 +263,15 @@ export const DSH_COMPACT_FAILED_KEY = 'The compaction did not succeed, and nothi
 /** Started and never closed: the engine went away under it. */
 export const DSH_COMPACT_INTERRUPTED_KEY =
   'The compaction did not finish; the context was not compacted.';
+/**
+ * Decision 180, after the 2026-10-11 acceptance (DA-2): DSH's "no useful
+ * summary" when the summary request itself failed at the model service.
+ * `{{reason}}` is its status and the service's own sentence
+ * (`dshCompactUpstreamReason`), so the user can tell a refused parameter from
+ * a model that wrote nothing worth keeping.
+ */
+export const DSH_COMPACT_REQUEST_FAILED_KEY =
+  'The model service did not complete the summary request ({{reason}}), so nothing was compacted. The attempt is recorded in the session log.';
 /** Live only, while the conversation is being started for it (decision 176). */
 export const DSH_COMPACT_STARTING_KEY = 'Starting the conversation…';
 
@@ -273,19 +283,139 @@ export interface DshCompactNote {
   params?: Record<string, string>;
 }
 
+/** How much of the model service's sentence a note keeps (DA-2). */
+const UPSTREAM_REASON_CHARS = 240;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The first string among `values`, skipping the bare `error` envelope type. */
+function firstName(...values: unknown[]): string | undefined {
+  return values.find(
+    (value): value is string => typeof value === 'string' && value.length > 0 && value !== 'error'
+  );
+}
+
+/** A JSON error body's code and sentence: Anthropic's, OpenAI's, or a gateway's own. */
+function errorBodyReason(text: string): { code?: string; message?: string } | undefined {
+  if (!text.startsWith('{')) return undefined;
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  if (!isPlainRecord(body)) return undefined;
+  const error = isPlainRecord(body.error) ? body.error : body;
+  const message = firstName(error.message, body.message, body.error);
+  const code = firstName(error.code, error.type, body.code, body.type);
+  return { ...(code ? { code } : {}), ...(message ? { message } : {}) };
+}
+
+/** No URL, no request or session id, no credential: a note is shown, copied, logged. */
+function scrubUpstreamText(text: string): string {
+  return redactCredentials(text)
+    .replace(/\bhttps?:\/\/[^\s"'<>()]+/giu, '[url]')
+    .replace(
+      /\s*\(?\b(?:x-)?(?:request|trace|correlation|cch_session)[_ -]?id\b["']?\s*[:=]\s*["']?[^\s"',;)]+["']?\)?/giu,
+      ''
+    )
+    .replace(/\b(?:req|request|chatcmpl|resp|msg)_[A-Za-z0-9]{8,}\b/gu, '[id]')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+/**
+ * DA-2 (decision 180, 2026-10-11 acceptance): what a failed summary
+ * request's error (`compaction/end`'s `error`, pi-ai's text) says, in one
+ * line — `HTTP 400 · unsupported_value: Unsupported value: …` — or undefined
+ * when it is no answer of the model service (no HTTP status and no error
+ * code: DSH's own "summary is not smaller", a cut-off stream, an abort). No
+ * URL, request id or key survives; the bridge logs the whole text.
+ */
+export function dshCompactUpstreamReason(error: unknown): string | undefined {
+  if (typeof error !== 'string') return undefined;
+  let text = error.trim();
+  let status: string | undefined;
+  // pi-ai's OpenAI form: `OpenAI API error (400): <body or the SDK's message>`.
+  const labelled = /^[A-Za-z][\w .-]{0,40} error \(([1-5]\d\d)\):\s*/u.exec(text);
+  if (labelled) {
+    status = labelled[1];
+    text = text.slice(labelled[0].length);
+  }
+  // The SDKs' own: `400 <body>`, `403 status code (no body)`.
+  const leading = /^([45]\d\d)(?:\s+status code)?(?:\s*\(no body\))?(?=\s|:|$)[:\s]*/u.exec(text);
+  if (leading) {
+    status ??= leading[1];
+    text = text.slice(leading[0].length);
+  }
+  let code: string | undefined;
+  let message: string | undefined = text || undefined;
+  const body = errorBodyReason(text);
+  if (body) {
+    code = body.code;
+    message = body.message;
+  }
+  // An in-stream failure: `unsupported_value: …`, `Error Code server_error: …`.
+  const coded = message
+    ? /^(?:Error Code\s+)?([a-z][a-z0-9]*(?:_[a-z0-9]+)+):\s*([\s\S]+)$/u.exec(message)
+    : null;
+  if (coded) {
+    code ??= coded[1];
+    message = code === coded[1] ? coded[2] : message;
+  }
+  if (status === undefined && code === undefined) return undefined;
+  // Scrubbed apart: `<code>: ` would read to the credential rules as a field
+  // name (`invalid_api_key: …`) and take the sentence with it.
+  const sentence = message ? scrubUpstreamText(message) : '';
+  const said = [code && scrubUpstreamText(code), sentence].filter(Boolean).join(': ');
+  const line = [status ? `HTTP ${status}` : undefined, said || undefined]
+    .filter(Boolean)
+    .join(' · ');
+  if (!line) return undefined;
+  return line.length > UPSTREAM_REASON_CHARS ? `${line.slice(0, UPSTREAM_REASON_CHARS)}…` : line;
+}
+
+/**
+ * DA-2: where the bridge's answer to a failed `/compact` (`WORKER_COMPACT_FAILED`)
+ * puts the model service's reason, after DSH's sentence.
+ */
+export const DSH_COMPACT_REQUEST_FAILED_MARK = ' The summary request failed: ';
+
+/** DA-2: DSH's sentence and, when there is one, the model service's reason. */
+export function dshCompactFailureText(doneText: string, endError: unknown): string {
+  const reason = dshCompactUpstreamReason(endError);
+  return reason ? `${doneText}${DSH_COMPACT_REQUEST_FAILED_MARK}${reason}` : doneText;
+}
+
 /**
  * Decision 180: the note a `/compact` that ended without a summary leaves,
  * from what its `command/done` said (the abort reason the bridge gave, or
  * DSH's sentence). The bridge's live row, the history's row and the
  * composer's settle all read it here, so the three say the same.
+ *
+ * DA-2 (2026-10-11 acceptance): DSH words a failed summary request as "no
+ * useful summary"; with `endError` (its `compaction/end`'s `error`) naming
+ * the model service's answer, the note says that instead. The bridge's
+ * answer to Main carries it after `DSH_COMPACT_REQUEST_FAILED_MARK`
+ * (`dshCompactFailureText`), so the composer reads the same.
  */
-export function dshCompactNote(doneText: string | undefined): DshCompactNote {
-  const text = doneText?.trim();
+export function dshCompactNote(doneText: string | undefined, endError?: unknown): DshCompactNote {
+  let text = doneText?.trim();
+  let upstream = dshCompactUpstreamReason(endError);
+  const marked = text?.indexOf(DSH_COMPACT_REQUEST_FAILED_MARK) ?? -1;
+  if (text && marked >= 0) {
+    upstream ??= text.slice(marked + DSH_COMPACT_REQUEST_FAILED_MARK.length).trim() || undefined;
+    text = text.slice(0, marked).trim();
+  }
   if (!text) return { key: DSH_COMPACT_FAILED_KEY };
   if (text === AICLIENT_COMPACT_CANCELLED_REASON) return { key: DSH_COMPACT_CANCELLED_KEY };
   if (text === AICLIENT_COMPACT_TIMEOUT_REASON) return { key: DSH_COMPACT_TIMEOUT_KEY };
   if (/could not produce a (?:useful|smaller) summary/iu.test(text)) {
-    return { key: DSH_COMPACT_NO_SUMMARY_KEY };
+    return upstream
+      ? { key: DSH_COMPACT_REQUEST_FAILED_KEY, params: { reason: upstream } }
+      : { key: DSH_COMPACT_NO_SUMMARY_KEY };
   }
   // DSH's own cancel (the agent was disposed under it), not the user's.
   if (/^compaction cancelled\.?$/iu.test(text)) return { key: DSH_COMPACT_INTERRUPTED_KEY };

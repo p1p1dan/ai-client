@@ -24,13 +24,16 @@ import {
   DSH_COMPACT_FAILED_REASON_KEY,
   DSH_COMPACT_INTERRUPTED_KEY,
   DSH_COMPACT_NO_SUMMARY_KEY,
+  DSH_COMPACT_REQUEST_FAILED_KEY,
   DSH_COMPACT_TIMEOUT_KEY,
   DSH_COMPACTION_FAILED_KEY,
   DSH_COMPACTION_INTERRUPTED_KEY,
   DSH_COMPACTION_OVERFLOW_FAILED_KEY,
   type DshLogEvent,
+  dshCompactFailureText,
   dshCompactNote,
   dshCompactNoteText,
+  dshCompactUpstreamReason,
   isDshCompactCommandRow,
   isDshCompactionNoteRow,
   isDshSummaryRow,
@@ -1777,5 +1780,111 @@ describe('projectDshHistory — /compact in the timeline (decision 180)', () => 
     expect(
       dshCompactNoteText({ key: DSH_COMPACT_FAILED_REASON_KEY, params: { reason: '$& {{x}}' } })
     ).toBe('The compaction did not succeed, and nothing was compacted: $& {{x}}');
+  });
+
+  /**
+   * DA-2 (2026-10-11 acceptance): GPT 6.1 Sol refused the summary request
+   * and the row only said "no useful summary". The note now says what the
+   * model service answered — status and its sentence, one line, scrubbed.
+   */
+  const NO_SUMMARY =
+    'Compaction could not produce a useful summary. The attempt is recorded in the session log.';
+  // As the acceptance's session log has it (`compaction/end.error`, in-stream failure).
+  const SOL =
+    "unsupported_value: Unsupported value: 'none' is not supported with the 'gpt-6.1-sol' model. Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'.";
+
+  it('[180-DA2-1] the model service’s answer, one line: status, code and sentence', () => {
+    expect(dshCompactUpstreamReason(SOL)).toBe(
+      "unsupported_value: Unsupported value: 'none' is not supported with the 'gpt-6.1-sol' model. Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'."
+    );
+    // Anthropic's SDK: `<status> <body>` (the fake gateway's P1-COMPACT-REFUSE).
+    expect(
+      dshCompactUpstreamReason(
+        '400 {"type":"error","error":{"type":"invalid_request_error","message":"P1-COMPACT-REFUSE: the fake upstream refused this summary request"},"request_id":"req_011CTabcdefghij"}'
+      )
+    ).toBe(
+      'HTTP 400 · invalid_request_error: P1-COMPACT-REFUSE: the fake upstream refused this summary request'
+    );
+    // pi-ai's OpenAI form, a gateway's body with its session id in it.
+    expect(
+      dshCompactUpstreamReason(
+        'OpenAI API error (503): {"message":"Model \\"gpt-6-luna\\" is not available for this group (cch_session_id: aiclient-session-1791727416362-r6dt3a4)","type":"service_unavailable_error","code":"service_unavailable_error"}'
+      )
+    ).toBe(
+      'HTTP 503 · service_unavailable_error: Model "gpt-6-luna" is not available for this group'
+    );
+    expect(
+      dshCompactUpstreamReason(
+        "OpenAI API error (400): 400 Unsupported value: 'none' is not supported with the 'fake-sol' model."
+      )
+    ).toBe("HTTP 400 · Unsupported value: 'none' is not supported with the 'fake-sol' model.");
+    expect(dshCompactUpstreamReason('403 status code (no body)')).toBe('HTTP 403');
+    expect(dshCompactUpstreamReason('Error Code server_error: The server had an error')).toBe(
+      'server_error: The server had an error'
+    );
+    // No URL, no request id, no key.
+    const scrubbed = dshCompactUpstreamReason(
+      '401 {"error":{"message":"Invalid key sk-proj-abcdefghijklmnopqrstuvwx for https://gw.example.invalid/v1/responses?x=1 (request id: req_abcdef123456)","code":"invalid_api_key"}}'
+    );
+    expect(scrubbed).toBe('HTTP 401 · invalid_api_key: Invalid key [redacted] for [url]');
+    // Not the model service's answer: DSH's own reasons, a stream cut short, an abort.
+    for (const own of [
+      'summary is not smaller than the shadowed content (900 estimated framed tokens >= 800)',
+      'summarization produced no text summary content',
+      'summarization truncated at the token cap (incomplete checkpoint)',
+      'pi-ai stream idle timeout after 300000ms',
+      'Request aborted',
+      'aiclient: /compact was cancelled by the user',
+    ]) {
+      expect(dshCompactUpstreamReason(own), own).toBeUndefined();
+    }
+    expect(dshCompactUpstreamReason(undefined)).toBeUndefined();
+    expect(dshCompactUpstreamReason({ message: '400' })).toBeUndefined();
+    // One line, bounded.
+    const long = dshCompactUpstreamReason(`500 ${'x'.repeat(1000)}`) ?? '';
+    expect(long).toHaveLength(241);
+    expect(long.endsWith('…')).toBe(true);
+  });
+
+  it('[180-DA2-2] a refused summary request says so where it ran, live order either way, and in the answer', () => {
+    for (const order of ['after', 'before'] as const) {
+      const l = manual(log(), 'cmd', 'sol');
+      const done = () =>
+        l.add('command/done', { commandId: 'cmd', kind: 'error', text: NO_SUMMARY });
+      if (order === 'before') done();
+      l.add('compaction/end', {
+        compactionId: 'sol',
+        sourceCommandId: 'cmd',
+        turn: null,
+        error: SOL,
+      });
+      if (order === 'after') done();
+      const row = projectDshHistory(l.events, { liveSessionId: 's' })[1];
+      expect(note(row), order).toEqual({
+        key: DSH_COMPACT_REQUEST_FAILED_KEY,
+        params: { reason: dshCompactUpstreamReason(SOL) },
+      });
+      expect(row?.blocks[0], order).toMatchObject({
+        text: `The model service did not complete the summary request (${dshCompactUpstreamReason(SOL)}), so nothing was compacted. The attempt is recorded in the session log.`,
+      });
+    }
+    expect(translate('zh', DSH_COMPACT_REQUEST_FAILED_KEY, { reason: 'HTTP 400' })).toBe(
+      '模型服务没有完成生成摘要的请求（HTTP 400），对话没有压缩。这次尝试已记录在会话日志里。'
+    );
+    // DSH's own "no useful summary" (no answer of the model service in its error) stays as it was.
+    expect(dshCompactNote(NO_SUMMARY, 'summarization produced no text summary content')).toEqual({
+      key: DSH_COMPACT_NO_SUMMARY_KEY,
+    });
+    // The bridge's answer to Main carries the reason; the composer reads the same note from it.
+    const answer = dshCompactFailureText(NO_SUMMARY, SOL);
+    expect(answer).toBe(
+      `${NO_SUMMARY} The summary request failed: ${dshCompactUpstreamReason(SOL)}`
+    );
+    expect(dshCompactNote(answer)).toEqual(dshCompactNote(NO_SUMMARY, SOL));
+    expect(dshCompactFailureText(NO_SUMMARY, 'Request aborted')).toBe(NO_SUMMARY);
+    // A cancel or a time limit keeps its own note, whatever the error said.
+    expect(dshCompactNote(AICLIENT_COMPACT_CANCELLED_REASON, SOL)).toEqual({
+      key: DSH_COMPACT_CANCELLED_KEY,
+    });
   });
 });

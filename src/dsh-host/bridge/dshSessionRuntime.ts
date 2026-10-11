@@ -127,6 +127,7 @@ import {
   DSH_RETRY_CONTINUATION_TEXT,
   DSH_SOURCE_AICLIENT_RETRY,
   type DshLogEvent,
+  dshCompactFailureText,
   isDshSummaryRow,
 } from '../../shared/dshHistory/types.ts';
 import { permissionActivityEvent } from '../../shared/permissions/activity.ts';
@@ -241,10 +242,15 @@ import {
   dshCommandName,
   HIDDEN_DSH_COMMANDS,
   slashCommandRows,
+  WORKER_COMPACT_FAILED,
   WORKER_COMPACT_TIMEOUT,
   WORKER_COMPACT_UNAVAILABLE,
 } from './commands.ts';
-import { armCompactInstructions, type CompactInstructionsLease } from './compactInstructions.ts';
+import {
+  armCompactInstructions,
+  type CompactInstructionsLease,
+  installSummaryHook,
+} from './compactInstructions.ts';
 import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
 import { copyGrantSidecar, readGrantSidecar, writeGrantSidecar } from './grantStore.ts';
 import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
@@ -395,6 +401,8 @@ interface CompactRun {
   abortReason?: 'cancelled' | 'timeout';
   compactionId?: string;
   closed: boolean;
+  /** DA-2: its `compaction/end`'s `error`, which names a refused summary request. */
+  endError?: unknown;
   onClosed?: () => void;
   /** `compactNotes` changed for this run: the stub is written when it ends. */
   notesChanged: boolean;
@@ -441,7 +449,8 @@ export interface DshBridgeOptionalServices {
   planMode: DshPlanModeView;
   /**
    * `ctx.compaction` (decision 179): read opaquely; its summary hook carries a
-   * `/compact`'s instructions (`compactInstructions.ts`).
+   * `/compact`'s instructions, and (decision 181) every summary request names
+   * the conversation's reasoning effort (`compactInstructions.ts`).
    */
   compaction: unknown;
   /**
@@ -1361,10 +1370,30 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.route = routed.modelId;
   }
 
-  /** `setup` for every agent this runtime opens: the model selection, per turn. */
+  /**
+   * `setup` for every agent this runtime opens: the model selection, per
+   * turn. Decision 181: and the compaction service's summary hook, before
+   * any of its compactions can run (once per service instance).
+   */
   private readonly setupAgent: DshAgentSetup = (agentCtx) => {
     this.deps.installModelSelection?.(agentCtx, this.selection);
+    void this.summaryHook();
   };
+
+  /**
+   * Decision 181: every summary request of this host names a reasoning effort
+   * — the conversation's, or the lowest the plan offers besides `off`. A hook
+   * left as DSH ships it is logged where it is found; never thrown.
+   */
+  private summaryHook(): Promise<void> {
+    return installSummaryHook(this.ctx.get?.('compaction'), {
+      efforts: (provider, model) => this.router.efforts(provider, model),
+      ...(this.options.log ? { log: this.options.log } : {}),
+    }).then(
+      () => undefined,
+      (error: unknown) => this.options.log?.('[dsh-bridge] summary hook not installed', error)
+    );
+  }
 
   /** The agent options of the current selection, for an agent opened later (rewind, fork). */
   private currentAgentOptions(): { provider: string; model: string } {
@@ -1716,6 +1745,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.compactRun = run;
     try {
       await this.bootstrap();
+      // Decision 181: its summary request names the conversation's effort.
+      await this.summaryHook();
       this.assertIdle('compact the conversation');
       const agent = this.requireAgent();
       const commands = this.ctx.get?.('commands');
@@ -1820,7 +1851,15 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     }
     if (signal.aborted) return this.afterAbortedCompact(run, summaryBefore, budgetMs);
     const outcome = compactOutcome(execution);
-    if (!('compacted' in outcome)) throw new BridgeSessionError(outcome.code, outcome.message);
+    if (!('compacted' in outcome)) {
+      // DA-2: and what the model service answered the summary request, when it refused it.
+      throw new BridgeSessionError(
+        outcome.code,
+        outcome.code === WORKER_COMPACT_FAILED
+          ? dshCompactFailureText(outcome.message, run.endError)
+          : outcome.message
+      );
+    }
     return this.compactedAnswer(run, summaryBefore);
   }
 
@@ -1957,6 +1996,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     }
     if (event.type === 'compaction/end' && compactionId === run.compactionId) {
       run.closed = true;
+      run.endError = data.error;
       run.onClosed?.();
       run.onClosed = undefined;
     }

@@ -6,6 +6,7 @@ import { COMPACT_INSTRUCTIONS_NOTE_KEY } from '../../../shared/compactInstructio
 import {
   AICLIENT_COMPACT_TIMEOUT_REASON,
   DSH_COMPACT_CANCELLED_KEY,
+  DSH_COMPACT_REQUEST_FAILED_KEY,
   DSH_COMPACT_TIMEOUT_KEY,
 } from '../../../shared/dshHistory/types.ts';
 import {
@@ -20,7 +21,7 @@ import {
 } from '../../../shared/types/workerRpc.ts';
 import type { BridgeSessionRuntimeOptions } from '../bridgeRpcServer.ts';
 import type { DshCommandResult, DshSkillSummary } from '../commands.ts';
-import { compactInstructionsPrompt } from '../compactInstructions.ts';
+import { compactInstructionsPrompt, installSummaryHook } from '../compactInstructions.ts';
 import {
   type DshBridgeContext,
   type DshBridgeDeps,
@@ -1517,5 +1518,179 @@ describe('DshSessionRuntime — /compact cancelled, or past its limit (decision 
       'h:compaction-slow-1:compaction-failed:0',
     ]);
     expect(rows[0]?.blocks[0]).toMatchObject({ text: '/compact 保留未完成的任务' });
+  });
+});
+
+/**
+ * DA-2 (decision 180, 2026-10-11 acceptance): a summary request the model
+ * service refused. The row says what it answered, and so does the answer to
+ * Main, so the composer reads the same note.
+ */
+describe('DshSessionRuntime — a refused summary request says why (DA-2)', () => {
+  it('[180-DA2-B] the answer carries the service’s reason after DSH’s sentence; the row names it', async () => {
+    const host = fakeHost();
+    const emitted: Emitted[] = [];
+    const error =
+      "unsupported_value: Unsupported value: 'none' is not supported with the 'gpt-6.1-sol' model.";
+    fakeCommands(host, {
+      compact: {
+        description: 'compact',
+        handler: (_input, _signal, commandId) => {
+          host.append('compaction/start', {
+            compactionId: 'r1',
+            sourceCommandId: commandId,
+            turn: null,
+          });
+          host.append('compaction/end', {
+            compactionId: 'r1',
+            sourceCommandId: commandId,
+            turn: null,
+            error,
+          });
+          return {
+            kind: 'error',
+            text: 'Compaction could not produce a useful summary. The attempt is recorded in the session log.',
+          };
+        },
+      },
+    });
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+
+    expect(await refusal(bridge.compact({ logicalSessionId: LOGICAL }))).toMatchObject({
+      code: 'WORKER_COMPACT_FAILED',
+      message: `Compaction could not produce a useful summary. The attempt is recorded in the session log. The summary request failed: ${error}`,
+    });
+    const note = { key: DSH_COMPACT_REQUEST_FAILED_KEY, params: { reason: error } };
+    expect(
+      emitted.filter((event) => event.type === 'session.compaction').map((event) => event.payload)
+    ).toMatchObject([{ phase: 'started' }, { phase: 'failed', note }]);
+    expect(
+      (await bridge.history({ logicalSessionId: LOGICAL })).page.messages.at(-1)?.blocks[0]
+    ).toMatchObject({ notice: note });
+  });
+});
+
+/**
+ * dsh-rebase decision 181: the compaction service's summary hook is wrapped
+ * when the runtime opens an agent — before any automatic compaction — and
+ * before a `/compact`, so every summary request names the conversation's
+ * reasoning effort, or the lowest level the plan offers besides `off`.
+ */
+describe('DshSessionRuntime — summary requests name the conversation’s effort (decision 181)', () => {
+  /** dsh-compaction-basic's hook as far as the effort goes: routed where its header says. */
+  function routedCompaction(host: ReturnType<typeof fakeHost>) {
+    const requests: Record<string, unknown>[] = [];
+    const engine = {
+      ctx: {
+        llm: {
+          stream(options: Record<string, unknown>) {
+            requests.push(options);
+          },
+        },
+      },
+      async summarize(
+        this: { ctx: { llm: { stream(options: unknown): void } } },
+        input: { messages: unknown[] },
+        agent: {
+          session: { id: string; requestHeader(): { config: Record<string, unknown> } | undefined };
+          target?: { provider: string; model: string };
+        }
+      ) {
+        const latest = agent.session.requestHeader()?.config;
+        this.ctx.llm.stream({
+          provider: agent.target?.provider ?? latest?.provider,
+          model: agent.target?.model ?? latest?.model,
+          messages: [
+            ...input.messages,
+            { role: 'user', content: [{ type: 'text', text: TEMPLATE }] },
+          ],
+          purpose: 'compaction',
+          sessionId: agent.session.id,
+        });
+        return { summary: [{ type: 'text', text: '## Current Work\n- (none)' }] };
+      },
+    };
+    host.services.compaction = engine;
+    return { engine, requests };
+  }
+  const agentWith = (
+    config: Record<string, unknown> | undefined,
+    target?: { provider: string; model: string }
+  ) => ({
+    session: { id: DSH_ID, requestHeader: () => (config ? { config } : undefined) },
+    ...(target ? { target } : {}),
+  });
+  const conversation = { messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }] };
+
+  it('[181-B-01] wrapped when the agent opens: automatic summaries at the conversation’s level, else the lowest', async () => {
+    const host = fakeHost();
+    const { engine, requests } = routedCompaction(host);
+    const original = engine.summarize;
+    const created = host.ctx.agents.create as unknown as ReturnType<typeof vi.fn>;
+    created.mockImplementation(async (options: { setup?: (scope: unknown) => void }) => {
+      options.setup?.('agent-scope');
+      return { agent: host.agent, dispose: async () => undefined };
+    });
+    const logged: string[] = [];
+    const bridge = runtime(
+      host.ctx,
+      [],
+      {},
+      { log: (...args: unknown[]) => logged.push(args.join(' ')) }
+    );
+    await bridge.bootstrap();
+    // The same installation the runtime started; resolves once it is wrapped.
+    expect(await installSummaryHook(engine)).toEqual({ kind: 'wrapped' });
+    expect(engine.summarize).not.toBe(original);
+
+    // DSH's automatic compaction calls the hook itself, with no `/compact` in sight.
+    const deep = { provider: 'thinker~2', model: 'deep-1' };
+    await engine.summarize(conversation, agentWith({ ...deep, reasoningEffort: 'high' }));
+    // Its turns named none: neither does the summary.
+    await engine.summarize(conversation, agentWith({ ...deep }));
+    // A summarizer routed to a model the conversation never sent to: the plan's lowest.
+    await engine.summarize(
+      conversation,
+      agentWith({ provider: 'aiclient-gateway', model: 'fake-1' }, deep)
+    );
+    // A model that does not think: nothing named.
+    await engine.summarize(
+      conversation,
+      agentWith({ provider: 'aiclient-gateway', model: 'fake-1' })
+    );
+    expect(requests.map((request) => request.reasoningEffort)).toEqual([
+      'high',
+      undefined,
+      'low',
+      undefined,
+    ]);
+    expect(logged.filter((line) => line.includes('summary request of'))).toEqual([
+      `[dsh-bridge] summary request of ${DSH_ID} on thinker~2/deep-1: reasoning effort high (conversation)`,
+      `[dsh-bridge] summary request of ${DSH_ID} on thinker~2/deep-1: reasoning effort none (conversation)`,
+      `[dsh-bridge] summary request of ${DSH_ID} on thinker~2/deep-1: reasoning effort low (lowest)`,
+      `[dsh-bridge] summary request of ${DSH_ID} on aiclient-gateway/fake-1: reasoning effort none (conversation)`,
+    ]);
+  });
+
+  it('[181-B-02] /compact: wrapped before DSH is asked, its summary at the conversation’s level', async () => {
+    const host = fakeHost();
+    const { engine, requests } = routedCompaction(host);
+    fakeCommands(host, {
+      compact: {
+        description: 'compact',
+        handler: async () => {
+          await engine.summarize(
+            conversation,
+            agentWith({ provider: 'thinker~2', model: 'deep-1', reasoningEffort: 'medium' })
+          );
+          return { kind: 'success', text: 'No compactable history yet.' };
+        },
+      },
+    });
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+    await refusal(bridge.compact({ logicalSessionId: LOGICAL }));
+    expect(requests.map((request) => request.reasoningEffort)).toEqual(['medium']);
   });
 });

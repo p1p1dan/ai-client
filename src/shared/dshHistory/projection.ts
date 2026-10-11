@@ -416,6 +416,8 @@ interface ManualCompaction {
   /** `compaction/end` came. */
   ended: boolean;
   doneText?: string;
+  /** DA-2: its `compaction/end`'s `error`, which names a refused summary request. */
+  endError?: unknown;
   /** Entry of the note it left, once it ended without a summary. */
   note?: number;
 }
@@ -761,9 +763,10 @@ export class DshHistoryFold {
   private onManualCompactionEnd(event: DshLogEvent, manual: ManualCompaction, data: Row): void {
     manual.ended = true;
     if (!manual.settled && data.error !== undefined) {
+      manual.endError = data.error;
       manual.note = this.appendCompactionNote(
         manual.compactionId,
-        dshCompactNote(manual.doneText),
+        dshCompactNote(manual.doneText, manual.endError),
         timeOf(event)
       );
     }
@@ -776,7 +779,7 @@ export class DshHistoryFold {
   private wordManualNote(manual: ManualCompaction): void {
     const index = manual.note;
     if (index === undefined) return;
-    const note = dshCompactNote(manual.doneText);
+    const note = dshCompactNote(manual.doneText, manual.endError);
     this.update(index, (message) => compactionNote(message.id, message, note.key, note.params));
   }
 

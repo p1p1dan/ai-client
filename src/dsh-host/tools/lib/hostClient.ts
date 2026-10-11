@@ -62,6 +62,8 @@ export interface FakeRoute {
     input?: Array<'text' | 'image'>;
     reasoning?: boolean;
     thinkingLevelMap?: Record<string, string | null>;
+    /** Decision 181's probe: e.g. `forceAdaptiveThinking` for an adaptive-only Claude row. */
+    compat?: Record<string, unknown>;
   }>;
 }
 
