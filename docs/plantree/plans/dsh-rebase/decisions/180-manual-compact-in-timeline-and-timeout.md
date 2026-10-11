@@ -319,6 +319,10 @@ DSH 侧（0.1.7-rc.2）读到的两个事实，第 4 节依赖它们：
 16. 有完成页脚（「✻ 完成于…」）的回合之后 `/compact`：命令行与运行 / 摘要 / 说明行都在页脚之下、下一个提问之上；关掉再打开对话，顺序相同。
 17. 选一个网关分组里没有的模型发消息（如 GPT 6 Luna）：几秒内出「公司网关没有可用的模型服务」卡，不再等约 90 s 的三次重试。
 
+### 13.8a dsh.11 首次整包构建的门禁失败（2026-10-11，run 38159916729）
+
+`seedCorpus.test.ts` 3 份旧 pi 语料（`legacy-pi-v3`、它的 native-v4 副本、`v4-compaction` 第三次压缩）多出一行 `/compact` 命令行，E4 对比判为无已知原因的差异。根因：`projection.ts` 只要 `compaction/start` 没有数字回合就当手动 `/compact`，比 §5.3「无回合且 `sourceCommandId` 对上」宽；1.0.x 迁移（`legacyPiSession/convert/seed.ts`）把落在回合之间的压缩写成 `turn: null`、不带 `sourceCommandId`，而 pi 的旧记录分不出手动还是阈值触发。修法：无回合的压缩只有带 `sourceCommandId` 才出命令行，迁移写入的只出摘要行（与 1.0.x 一致）；金样本不改。真 DSH 的无回合压缩只来自 `compactNow`，一定带命令 id（录制场景 `compact` / `compact-instructions` / `compact-cancel` 均如此）；自动与溢出压缩带数字回合，不受影响。直播（`liveEvents.ts`）与 `forkSeed.ts` 用的是同一个只看 `turn` 的判据，但种子事件不经过直播、投影也不再给这类压缩出节点，没有改。新增 `[180-PROJ-4b]`，`[180-PROJ-4]` 改钉「带 `sourceCommandId` 但看不到 `command/run` 仍出命令行」。漏测原因：本轮复跑的挑选集合没含 `src/shared/legacyPiSession`。
+
 ### 13.9 用户审批
 
 - [ ] 13.1 DA-2：失败行写「HTTP 状态 · 错误码: 原句」（脱敏、一行、240 字）；只改手动压缩；日志保留整段
