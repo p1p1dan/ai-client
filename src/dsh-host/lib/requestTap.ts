@@ -13,23 +13,33 @@
  *       One that does not merely extend it is logged in one line
  *       (`prefix-watch: ...`, no hash, no content), and the verdict on each
  *       agent-loop request is kept for the bridge (`RequestScope`).
+ *   U   Decision 182 (DA-3): every user message whose content is a string
+ *       goes out as the one text block it stands for (userContentBlocks.ts),
+ *       on every anthropic-messages request, in a session or not, so that a
+ *       message keeps one form from step to step. Only then are D and B1
+ *       applied: B1 compares what is sent.
  *
  * The session is the request scope's (requestScope.ts). A request outside
- * every scope, a one-shot one, and every other `fetch` (an MCP server's, a
- * plugin's, another API's) go through with their very own arguments.
- * Whatever goes wrong, the request goes as it came, and each kind of failure
- * is warned about once, never with the body's text or an error's message (a
- * JSON parse error quotes its input).
+ * every scope and a one-shot one get U alone; every other `fetch` (an MCP
+ * server's, a plugin's, another API's) goes through with its very own
+ * arguments. Whatever goes wrong, the request goes as it came, and each kind
+ * of failure is warned about once, never with the body's text or an error's
+ * message (a JSON parse error quotes its input).
  *
- * On the request's path: one `JSON.parse` of the body, and, for the first
- * request that needs it, DSH's anonymous install id (`deviceId`). The hashing
- * runs after the request is handed on (`schedule`).
+ * On the request's path: one `JSON.parse` of the body, one `JSON.stringify`
+ * of it when U rewrites a message, and, for the first request that needs it,
+ * DSH's anonymous install id (`deviceId`). The hashing runs after the request
+ * is handed on (`schedule`). U writes the body anew with `JSON.stringify`,
+ * which is how the Anthropic SDK wrote it: every byte but the rewritten
+ * contents comes out as it went in.
  *
  * Its switches (src/shared/types/requestScope.ts) are read once, at install:
  * AICLIENT_RUNTIME_SESSION_METADATA=0 turns D off,
- * AICLIENT_RUNTIME_PREFIX_WATCH=0 turns B1 off; with both off, `fetch` is not
- * wrapped at all. host.ts installs it right after the User-Agent relay, so it
- * wraps the relay: the body is settled here, the headers there.
+ * AICLIENT_RUNTIME_PREFIX_WATCH=0 turns B1 off,
+ * AICLIENT_RUNTIME_USER_CONTENT_BLOCKS=0 turns U off; with all three off,
+ * `fetch` is not wrapped at all. host.ts installs it right after the
+ * User-Agent relay, so it wraps the relay: the body is settled here, the
+ * headers there.
  *
  * Loaded by Node type stripping in a source checkout: erasable syntax only.
  */
@@ -40,6 +50,7 @@ import {
   PREFIX_WATCH_ENV,
   type RequestPurpose,
   SESSION_METADATA_ENV,
+  USER_CONTENT_BLOCKS_ENV,
 } from '../../shared/types/requestScope.ts';
 import {
   comparePrefix,
@@ -54,6 +65,7 @@ import {
   gatewaySessionUuid,
   isAnthropicMessagesRequest,
 } from './sessionMetadata.ts';
+import { withUserContentBlocks } from './userContentBlocks.ts';
 
 type Fetch = typeof globalThis.fetch;
 type FetchInput = Parameters<Fetch>[0];
@@ -104,11 +116,16 @@ export interface RequestTapDeps {
 }
 
 export interface RequestTapStatus {
-  /** False with both parts off, or when there is no `fetch`, or it is tapped already. */
+  /** False with every part off, or when there is no `fetch`, or it is tapped already. */
   installed: boolean;
   sessionMetadata: boolean;
   prefixWatch: boolean;
+  /** Decision 182: user messages go out as text blocks. */
+  userContentBlocks: boolean;
 }
+
+/** Which parts of the tap are on. */
+type TapParts = Omit<RequestTapStatus, 'installed'>;
 
 /** What B1 hashes of a request; undefined when there is nothing to compare. */
 type Sample = { body: unknown; betas: string | null } | undefined;
@@ -152,6 +169,7 @@ class RequestTap {
   private readonly deps: RequestTapDeps;
   private readonly sessionMetadata: boolean;
   private readonly prefixWatch: boolean;
+  private readonly userContentBlocks: boolean;
   private readonly schedule: (fn: () => void) => void;
   private readonly now: () => number;
   private readonly limits: Readonly<RequestTapLimits>;
@@ -161,18 +179,20 @@ class RequestTap {
   private deviceFailed = false;
   private devicePending: Promise<void> | undefined;
 
-  constructor(deps: RequestTapDeps, sessionMetadata: boolean, prefixWatch: boolean) {
+  constructor(deps: RequestTapDeps, parts: TapParts) {
     this.deps = deps;
-    this.sessionMetadata = sessionMetadata;
-    this.prefixWatch = prefixWatch;
+    this.sessionMetadata = parts.sessionMetadata;
+    this.prefixWatch = parts.prefixWatch;
+    this.userContentBlocks = parts.userContentBlocks;
     this.schedule = deps.schedule ?? ((fn) => void setImmediate(fn));
     this.now = deps.now ?? Date.now;
     this.limits = { ...REQUEST_TAP_LIMITS, ...deps.limits };
   }
 
   /**
-   * The init to send: the caller's own, or a copy with the metadata (once the
-   * device id is known, for the first requests). Never throws, never rejects.
+   * The init to send: the caller's own, or a copy with its user messages as
+   * blocks and the metadata (once the device id is known, for the first
+   * requests). Never throws, never rejects.
    */
   prepare(input: FetchInput, init: FetchInit): FetchInit | Promise<FetchInit> {
     try {
@@ -191,10 +211,13 @@ class RequestTap {
         'no-scope',
         'request tap: a model request ran outside every request scope; it went without session metadata or prefix watch'
       );
-      return init;
     }
-    const { sessionId, purpose } = store;
-    if (sessionId === undefined || purpose === 'oneshot') return init;
+    // A session's own request: D and B1 apply. Any other gets U alone.
+    const session =
+      store?.sessionId !== undefined && store.purpose !== 'oneshot'
+        ? { sessionId: store.sessionId, purpose: store.purpose }
+        : undefined;
+    if (session === undefined && !this.userContentBlocks) return init;
     const request = init as MessagesInit;
     const raw = request.body;
     if (raw.length > this.limits.maxParsedBody) {
@@ -202,19 +225,36 @@ class RequestTap {
         'parse-size',
         `request tap: a model request body over ${sizeText(this.limits.maxParsedBody)} went as it is, without session metadata or prefix watch`
       );
-      this.watch(sessionId, purpose, undefined);
+      if (session) this.watch(session.sessionId, session.purpose, undefined);
       return init;
     }
-    let body: unknown;
+    let parsed: unknown;
     try {
-      body = JSON.parse(raw);
+      parsed = JSON.parse(raw);
     } catch {
       this.warn('parse', 'request tap: a model request body is not JSON; it went as it is');
-      this.watch(sessionId, purpose, undefined);
+      if (session) this.watch(session.sessionId, session.purpose, undefined);
       return init;
     }
     const headers = new Headers(request.headers);
-    if (raw.length > this.limits.maxWatchedBody && this.prefixWatch) {
+    const blocks = this.userContentBlocks ? withUserContentBlocks(parsed) : undefined;
+    const wantsMetadata =
+      session !== undefined && this.sessionMetadata && lacksMetadata(blocks ?? parsed);
+    // A body of another length would contradict the caller's own Content-Length.
+    const rewrite = (blocks !== undefined || wantsMetadata) && !headers.has('content-length');
+    if (!rewrite && (blocks !== undefined || wantsMetadata)) {
+      this.warn(
+        'content-length',
+        'request tap: a model request with a Content-Length header of its own went as it is, without session metadata or user content blocks'
+      );
+    }
+    // What goes out: B1 compares it, D appends to it.
+    const body = rewrite ? (blocks ?? parsed) : parsed;
+    const sent: MessagesInit =
+      rewrite && blocks !== undefined ? { ...request, body: JSON.stringify(blocks) } : request;
+    if (session === undefined) return sent;
+    const { sessionId, purpose } = session;
+    if (sent.body.length > this.limits.maxWatchedBody && this.prefixWatch) {
       this.warn(
         'watch-size',
         `request tap: the prefix watch skips model request bodies over ${sizeText(this.limits.maxWatchedBody)}`
@@ -224,21 +264,14 @@ class RequestTap {
       this.watch(sessionId, purpose, { body, betas: headers.get('anthropic-beta') });
     }
 
-    if (!this.sessionMetadata || !lacksMetadata(body)) return init;
-    if (headers.has('content-length')) {
-      this.warn(
-        'content-length',
-        'request tap: a model request with a Content-Length header of its own went without session metadata'
-      );
-      return init;
-    }
-    if (this.deviceId !== undefined) return this.withMetadata(request, sessionId, this.deviceId);
-    if (this.deviceFailed) return init;
+    if (!rewrite || !wantsMetadata) return sent;
+    if (this.deviceId !== undefined) return this.withMetadata(sent, sessionId, this.deviceId);
+    if (this.deviceFailed) return sent;
     return this.resolveDevice().then(() => {
       try {
         return this.deviceId === undefined
-          ? init
-          : this.withMetadata(request, sessionId, this.deviceId);
+          ? sent
+          : this.withMetadata(sent, sessionId, this.deviceId);
       } catch (error) {
         this.warn('tap', `request tap: failed (${errorName(error)}); the request went as it came`);
         return init;
@@ -365,22 +398,22 @@ class RequestTap {
 /** Marks a tapped `fetch`, so a second install cannot wrap it twice. */
 const TAP_MARK = Symbol.for('aiclient.dsh.requestTap');
 
-/** Wraps `target.fetch` with the request tap, unless both parts are switched off. */
+/** Wraps `target.fetch` with the request tap, unless every part is switched off. */
 export function installRequestTap(
   target: { fetch: Fetch } = globalThis,
   deps: RequestTapDeps
 ): RequestTapStatus {
-  const sessionMetadata = !isSwitchedOff(deps.env, SESSION_METADATA_ENV);
-  const prefixWatch = !isSwitchedOff(deps.env, PREFIX_WATCH_ENV);
+  const parts: TapParts = {
+    sessionMetadata: !isSwitchedOff(deps.env, SESSION_METADATA_ENV),
+    prefixWatch: !isSwitchedOff(deps.env, PREFIX_WATCH_ENV),
+    userContentBlocks: !isSwitchedOff(deps.env, USER_CONTENT_BLOCKS_ENV),
+  };
+  const anyOn = parts.sessionMetadata || parts.prefixWatch || parts.userContentBlocks;
   const original = target.fetch;
-  if (
-    (!sessionMetadata && !prefixWatch) ||
-    typeof original !== 'function' ||
-    TAP_MARK in original
-  ) {
-    return { installed: false, sessionMetadata, prefixWatch };
+  if (!anyOn || typeof original !== 'function' || TAP_MARK in original) {
+    return { installed: false, ...parts };
   }
-  const tap = new RequestTap(deps, sessionMetadata, prefixWatch);
+  const tap = new RequestTap(deps, parts);
   const tapped = ((input: FetchInput, init?: FetchInit) => {
     const next = tap.prepare(input, init);
     return next instanceof Promise
@@ -389,17 +422,20 @@ export function installRequestTap(
   }) as Fetch;
   Object.defineProperty(tapped, TAP_MARK, { value: true });
   target.fetch = tapped;
-  return { installed: true, sessionMetadata, prefixWatch };
+  return { installed: true, ...parts };
 }
 
 /**
  * The line host.ts logs at start: `request tap: session metadata on, prefix
- * watch on`, each part `on` or `off` by its switch.
+ * watch on, user content blocks on`, each part `on` or `off` by its switch.
  */
 export function describeRequestTap(status: RequestTapStatus): string {
   const state = (on: boolean) => (on ? 'on' : 'off');
-  if (!status.installed && (status.sessionMetadata || status.prefixWatch)) {
+  if (
+    !status.installed &&
+    (status.sessionMetadata || status.prefixWatch || status.userContentBlocks)
+  ) {
     return 'request tap: not installed (no fetch to wrap, or it is wrapped already)';
   }
-  return `request tap: session metadata ${state(status.sessionMetadata)}, prefix watch ${state(status.prefixWatch)}`;
+  return `request tap: session metadata ${state(status.sessionMetadata)}, prefix watch ${state(status.prefixWatch)}, user content blocks ${state(status.userContentBlocks)}`;
 }

@@ -12,7 +12,10 @@ import {
  * previous request of its session. The bodies are shaped the way pi-ai's
  * anthropic-messages provider builds them (`buildParams` / `convertMessages`):
  * the system blocks and the last tool carry the cache mark, and so does the
- * last user message, turned into a text block when it is a string.
+ * last user message, turned into a text block when it is a string. Decision
+ * 182: `blocks` shapes them the way the host's request tap sends them, every
+ * user message a block array; a string turning into a block, or back, is a
+ * divergence of its own.
  */
 
 const MARK = { type: 'ephemeral', ttl: '1h' };
@@ -40,6 +43,15 @@ function markLastUser(messages: readonly Message[]): Message[] {
     }
   }
   return copy;
+}
+
+/** Every user message's string content as the text block it stands for, as the request tap sends it. */
+function blocks(messages: readonly Message[]): Message[] {
+  return messages.map((message) =>
+    message.role === 'user' && typeof message.content === 'string'
+      ? { ...message, content: [{ type: 'text', text: message.content }] }
+      : message
+  );
 }
 
 /** A request body as pi-ai sends it, in its key order. */
@@ -111,6 +123,10 @@ describe('prefixUnitsOf', () => {
     expect(hashes).toHaveLength(4 + 3 + 1 + 5);
     for (const hash of hashes) expect(hash).toMatch(/^[0-9a-f]{16}$/);
     expect(parsed.roles).toEqual(['user', 'assistant', 'user', 'assistant', 'user']);
+    // pi-ai's own body: the first user message a string, the marked last one a block.
+    expect(parsed.forms).toEqual(['string', 'blocks', 'blocks', 'blocks', 'blocks']);
+    expect(parsed.systemForm).toBe('blocks');
+    expect(units(request(TURN_ONE, { system: 'Be brief.' })).systemForm).toBe('string');
   });
 
   it('is undefined unless the body is an object with a messages array', () => {
@@ -121,8 +137,10 @@ describe('prefixUnitsOf', () => {
       config: {},
       tools: [],
       system: expect.stringMatching(/^[0-9a-f]{16}$/),
+      systemForm: 'blocks',
       messages: [],
       roles: [],
+      forms: [],
     });
   });
 
@@ -143,17 +161,57 @@ describe('comparePrefix', () => {
   });
 
   it('sees through the moving mark on the last user message (append)', () => {
+    const before = request(blocks(TURN_ONE));
+    const after = request(blocks([...TURN_ONE, ...STEP_TWO]));
+    // As the request tap sends it: the same block, marked, then without the mark.
+    expect(before.messages[4]?.content).toEqual([
+      { type: 'text', text: 'Now run the tests.', cache_control: MARK },
+    ]);
+    expect(after.messages[4]?.content).toEqual([{ type: 'text', text: 'Now run the tests.' }]);
+    expect(verdict(before, after)).toEqual({ kind: 'append', added: 2 });
+    // A tool result that is no longer last loses its mark the same way.
+    const third = request(
+      blocks([...TURN_ONE, ...STEP_TWO, { role: 'assistant', content: 'Done.' }])
+    );
+    expect(verdict(after, third)).toEqual({ kind: 'append', added: 1 });
+  });
+
+  it('reports a message whose form changed, its text the same, as message-form (decision 182)', () => {
     const before = request(TURN_ONE);
     const after = request([...TURN_ONE, ...STEP_TWO]);
-    // The trap is real: the same message goes out marked, then as a plain string.
+    // pi-ai's own bodies: the same message goes out marked, then as a plain string.
     expect(before.messages[4]?.content).toEqual([
       { type: 'text', text: 'Now run the tests.', cache_control: MARK },
     ]);
     expect(after.messages[4]?.content).toBe('Now run the tests.');
-    expect(verdict(before, after)).toEqual({ kind: 'append', added: 2 });
-    // A tool result that is no longer last loses its mark the same way.
-    const third = request([...TURN_ONE, ...STEP_TWO, { role: 'assistant', content: 'Done.' }]);
-    expect(verdict(after, third)).toEqual({ kind: 'append', added: 1 });
+    const counts = { truncated: false, prevMessages: 5, messages: 7 };
+    expect(verdict(before, after)).toEqual({
+      kind: 'diverged',
+      at: 'message-form',
+      index: 4,
+      role: 'user',
+      form: 'string',
+      ...counts,
+    });
+    // And the other way: the first message pi-ai sent as a string, now a block.
+    expect(verdict(after, request(blocks([...TURN_ONE, ...STEP_TWO])))).toEqual({
+      kind: 'diverged',
+      at: 'message-form',
+      index: 0,
+      role: 'user',
+      form: 'blocks',
+      truncated: false,
+      prevMessages: 7,
+      messages: 7,
+    });
+    // The first in the prefix wins: a form change before a changed message...
+    const edited = structuredClone(blocks([...TURN_ONE, ...STEP_TWO])) as Message[];
+    edited[3] = { role: 'assistant', content: [{ type: 'text', text: 'It says goodbye.' }] };
+    expect(verdict(after, request(edited))).toMatchObject({ at: 'message-form', index: 0 });
+    // ...and a changed message before a form change.
+    const early = structuredClone([...TURN_ONE, ...STEP_TWO]) as Message[];
+    early[0] = { role: 'user', content: [{ type: 'text', text: 'Read the LICENSE.' }] };
+    expect(verdict(after, request(early))).toMatchObject({ at: 'messages', index: 0 });
   });
 
   it('calls the same request again same', () => {
@@ -166,9 +224,16 @@ describe('comparePrefix', () => {
       tools: [tool('read', true), tool('bash', true), tool('edit')],
     });
     expect(verdict(request(TURN_ONE), moved)).toEqual({ kind: 'same' });
-    // A string system prompt is the text block it stands for; none is an empty one.
+    // The same system text as a string is a form change (decision 182); none is an empty one.
     const asString = request(TURN_ONE, { system: 'You are a coding agent.' });
-    expect(verdict(request(TURN_ONE), asString)).toEqual({ kind: 'same' });
+    expect(verdict(request(TURN_ONE), asString)).toEqual({
+      kind: 'diverged',
+      at: 'system-form',
+      form: 'string',
+      truncated: false,
+      prevMessages: 5,
+      messages: 5,
+    });
     const { system: _dropped, ...withoutSystem } = request(TURN_ONE);
     expect(verdict(withoutSystem, request(TURN_ONE, { system: [] }))).toEqual({ kind: 'same' });
   });
@@ -328,11 +393,17 @@ describe('verdictLogFields', () => {
     const lines = [
       verdictLogFields(comparePrefix(undefined, units(before))),
       verdictLogFields(verdict(before, request(TURN_ONE))),
-      verdictLogFields(verdict(before, request([...TURN_ONE, ...STEP_TWO]))),
+      verdictLogFields(
+        verdict(request(blocks(TURN_ONE)), request(blocks([...TURN_ONE, ...STEP_TWO])))
+      ),
       verdictLogFields(verdict(before, request(TURN_ONE, { thinking: { type: 'disabled' } }))),
       verdictLogFields(verdict(before, request(TURN_ONE, { tools: [tool('read')] }))),
       verdictLogFields(verdict(before, request(TURN_ONE, { system: 'Be brief.' }))),
-      verdictLogFields(verdict(request([...TURN_ONE, ...STEP_TWO]), request(TURN_ONE))),
+      verdictLogFields(verdict(before, request(TURN_ONE, { system: 'You are a coding agent.' }))),
+      verdictLogFields(
+        verdict(request(blocks([...TURN_ONE, ...STEP_TWO])), request(blocks(TURN_ONE)))
+      ),
+      verdictLogFields(verdict(before, request([...TURN_ONE, ...STEP_TWO]))),
     ];
     expect(lines).toEqual([
       'verdict=first',
@@ -341,7 +412,9 @@ describe('verdictLogFields', () => {
       'verdict=diverged at=config field=thinking',
       'verdict=diverged at=tools index=1',
       'verdict=diverged at=system',
+      'verdict=diverged at=system-form form=string',
       'verdict=diverged at=messages index=5/5 role=assistant truncated=true',
+      'verdict=diverged at=message-form index=4/7 role=user form=string',
     ]);
     for (const line of lines) {
       expect(line).not.toMatch(/[0-9a-f]{16}/);

@@ -5,6 +5,7 @@ import {
   PREFIX_WATCH_ENV,
   type RequestScopeStore,
   SESSION_METADATA_ENV,
+  USER_CONTENT_BLOCKS_ENV,
 } from '../../../shared/types/requestScope.ts';
 import { RequestScope } from '../requestScope.ts';
 import {
@@ -20,9 +21,13 @@ import { installUserAgentRelay } from '../userAgentRelay.ts';
  * Decision 173 (GitHub issue #9): the request tap appends a chat's gateway
  * session to its anthropic-messages requests (D) and watches whether each
  * request only extends the previous one (B1); every other request, and every
- * request it cannot read, goes out exactly as it came. The bodies are shaped
- * the way pi-ai builds them, and the calls the way the Anthropic SDK makes
- * them: `fetch(url, { signal, method: 'POST', headers: Headers, body })`.
+ * request it cannot read, goes out exactly as it came. Decision 182 (U): first
+ * it sends every user message's string content as a text block. The bodies
+ * are shaped the way pi-ai builds them, and the calls the way the Anthropic
+ * SDK makes them: `fetch(url, { signal, method: 'POST', headers: Headers,
+ * body })`. TURN and STEP have their user text in blocks already, as U sends
+ * it, so that the D and B1 cases see their bodies byte for byte; PI_TURN and
+ * PI_STEP are the same messages as pi-ai gives them.
  */
 
 const DEVICE = deviceIdFrom('0f8fad5b-d9cb-469f-a165-70867728950e');
@@ -50,8 +55,12 @@ function requestBody(messages: readonly Message[], overrides: Record<string, unk
   };
 }
 
+const README_TEXT = 'Read the README: say "}" and \\ then 渠道.';
+const TESTS_TEXT = 'Now run the tests.';
+const text = (value: string) => [{ type: 'text', text: value }];
+
 const TURN: readonly Message[] = [
-  { role: 'user', content: 'Read the README: say "}" and \\ then 渠道.' },
+  { role: 'user', content: text(README_TEXT) },
   {
     role: 'assistant',
     content: [
@@ -63,8 +72,11 @@ const TURN: readonly Message[] = [
 ];
 const STEP: readonly Message[] = [
   { role: 'assistant', content: [{ type: 'text', text: 'It says hello.' }] },
-  { role: 'user', content: 'Now run the tests.' },
+  { role: 'user', content: text(TESTS_TEXT) },
 ];
+/** TURN and STEP as pi-ai gives them: a user message's text a plain string. */
+const PI_TURN: readonly Message[] = [{ role: 'user', content: README_TEXT }, ...TURN.slice(1)];
+const PI_STEP: readonly Message[] = [STEP[0] as Message, { role: 'user', content: TESTS_TEXT }];
 
 /** The init the Anthropic SDK hands fetch. */
 function sdkInit(body: string, headers: Record<string, string> = {}): RequestInit {
@@ -155,9 +167,14 @@ function setup(options: SetupOptions = {}) {
 const keysOf = (warnings: ReadonlyArray<{ key: string }>) => warnings.map(({ key }) => key);
 
 describe('installRequestTap', () => {
-  it('wraps fetch once, and not at all with both parts switched off', () => {
+  it('wraps fetch once, and not at all with every part switched off', () => {
     const h = setup();
-    expect(h.status).toEqual({ installed: true, sessionMetadata: true, prefixWatch: true });
+    expect(h.status).toEqual({
+      installed: true,
+      sessionMetadata: true,
+      prefixWatch: true,
+      userContentBlocks: true,
+    });
     expect(h.target.fetch).not.toBe(h.base);
     const tapped = h.target.fetch;
     const deps: RequestTapDeps = {
@@ -169,9 +186,19 @@ describe('installRequestTap', () => {
     };
     expect(installRequestTap(h.target, deps).installed).toBe(false);
     expect(h.target.fetch).toBe(tapped);
-    const off = setup({ env: { [SESSION_METADATA_ENV]: '0', [PREFIX_WATCH_ENV]: '0' } });
-    expect(off.status).toEqual({ installed: false, sessionMetadata: false, prefixWatch: false });
+    const off = setup({
+      env: { [SESSION_METADATA_ENV]: '0', [PREFIX_WATCH_ENV]: '0', [USER_CONTENT_BLOCKS_ENV]: '0' },
+    });
+    expect(off.status).toEqual({
+      installed: false,
+      sessionMetadata: false,
+      prefixWatch: false,
+      userContentBlocks: false,
+    });
     expect(off.target.fetch).toBe(off.base);
+    // Any one part on is enough to wrap it.
+    const blocksOnly = setup({ env: { [SESSION_METADATA_ENV]: '0', [PREFIX_WATCH_ENV]: '0' } });
+    expect(blocksOnly.status.installed).toBe(true);
     const missing = { fetch: undefined as unknown as typeof globalThis.fetch };
     expect(installRequestTap(missing, deps).installed).toBe(false);
   });
@@ -184,18 +211,23 @@ describe('installRequestTap', () => {
   });
 
   it('says how it started', () => {
-    expect(describeRequestTap({ installed: true, sessionMetadata: true, prefixWatch: true })).toBe(
-      'request tap: session metadata on, prefix watch on'
+    const on = { sessionMetadata: true, prefixWatch: true, userContentBlocks: true };
+    const off = { sessionMetadata: false, prefixWatch: false, userContentBlocks: false };
+    expect(describeRequestTap({ installed: true, ...on })).toBe(
+      'request tap: session metadata on, prefix watch on, user content blocks on'
     );
-    expect(describeRequestTap({ installed: true, sessionMetadata: false, prefixWatch: true })).toBe(
-      'request tap: session metadata off, prefix watch on'
+    expect(describeRequestTap({ installed: true, ...on, sessionMetadata: false })).toBe(
+      'request tap: session metadata off, prefix watch on, user content blocks on'
     );
-    expect(
-      describeRequestTap({ installed: false, sessionMetadata: false, prefixWatch: false })
-    ).toBe('request tap: session metadata off, prefix watch off');
-    expect(
-      describeRequestTap({ installed: false, sessionMetadata: true, prefixWatch: false })
-    ).toBe('request tap: not installed (no fetch to wrap, or it is wrapped already)');
+    expect(describeRequestTap({ installed: true, ...off, userContentBlocks: true })).toBe(
+      'request tap: session metadata off, prefix watch off, user content blocks on'
+    );
+    expect(describeRequestTap({ installed: false, ...off })).toBe(
+      'request tap: session metadata off, prefix watch off, user content blocks off'
+    );
+    expect(describeRequestTap({ installed: false, ...off, userContentBlocks: true })).toBe(
+      'request tap: not installed (no fetch to wrap, or it is wrapped already)'
+    );
   });
 });
 
@@ -358,7 +390,12 @@ describe('D: session metadata', () => {
 
   it(`appends nothing with ${SESSION_METADATA_ENV}=0, and still watches`, async () => {
     const h = setup({ env: { [SESSION_METADATA_ENV]: '0' } });
-    expect(h.status).toEqual({ installed: true, sessionMetadata: false, prefixWatch: true });
+    expect(h.status).toEqual({
+      installed: true,
+      sessionMetadata: false,
+      prefixWatch: true,
+      userContentBlocks: true,
+    });
     const { init, sent } = await h.send(requestBody(TURN));
     expect(sent?.init).toBe(init);
     expect(h.deviceId).not.toHaveBeenCalled();
@@ -423,7 +460,7 @@ describe('a body the tap cannot read', () => {
 
 describe('B1: prefix watch', () => {
   const PREFIX_LINE =
-    /^prefix-watch: session=[\w.:-]+ purpose=[a-z-]+ req=\d+ verdict=diverged at=[a-z]+( [a-z]+=\S+)*$/;
+    /^prefix-watch: session=[\w.:-]+ purpose=[a-z-]+ req=\d+ verdict=diverged at=[a-z-]+( [a-z]+=\S+)*$/;
 
   it('compares after the request is handed on', async () => {
     const h = setup();
@@ -581,13 +618,144 @@ describe('B1: prefix watch', () => {
 
   it(`watches nothing with ${PREFIX_WATCH_ENV}=0, and still appends`, async () => {
     const h = setup({ env: { [PREFIX_WATCH_ENV]: '0' } });
-    expect(h.status).toEqual({ installed: true, sessionMetadata: true, prefixWatch: false });
+    expect(h.status).toEqual({
+      installed: true,
+      sessionMetadata: true,
+      prefixWatch: false,
+      userContentBlocks: true,
+    });
     const { raw, sent } = await h.send(requestBody(TURN));
     await h.send(requestBody(STEP));
     expect(String(sent?.init?.body)).toBe(`${raw.slice(0, -1)}${METADATA_TAIL}`);
     expect(h.queue).toEqual([]);
     expect(h.lines).toEqual([]);
     expect(h.scope.evidenceFor(SESSION)).toBeUndefined();
+  });
+});
+
+describe('U: user content blocks (decision 182)', () => {
+  /** pi-ai's cache mark as it shows in the JSON text. */
+  const MARK_JSON = `,"cache_control":${JSON.stringify(MARK)}`;
+  const CONTEXT_TEXT = '<context>cwd: /work</context>';
+  /** pi-ai's first step of a turn: the context a string, the input a marked block. */
+  const PI_STEP_ONE: readonly Message[] = [
+    { role: 'user', content: CONTEXT_TEXT },
+    { role: 'user', content: [{ type: 'text', text: README_TEXT, cache_control: MARK }] },
+  ];
+  /** Its second step: the input no longer last, so a plain string; the tool result marked. */
+  const PI_STEP_TWO: readonly Message[] = [
+    { role: 'user', content: CONTEXT_TEXT },
+    { role: 'user', content: README_TEXT },
+    TURN[1] as Message,
+    {
+      role: 'user',
+      content: [
+        { type: 'tool_result', tool_use_id: 'toolu_1', content: 'Hello.', cache_control: MARK },
+      ],
+    },
+  ];
+
+  it('sends each user string as a text block, then appends the metadata', async () => {
+    const h = setup();
+    const { init, raw, sent } = await h.send(requestBody([...PI_TURN, ...PI_STEP]));
+    const blocks = JSON.stringify(requestBody([...TURN, ...STEP]));
+    expect(String(sent?.init?.body)).toBe(`${blocks.slice(0, -1)}${METADATA_TAIL}`);
+    // The caller's init is left alone; the rest of the call is its own.
+    expect(init.body).toBe(raw);
+    expect(sent?.init?.headers).toBe(init.headers);
+    expect(sent?.init?.signal).toBe(init.signal);
+    expect(h.warnings).toEqual([]);
+  });
+
+  it('does it on every kind of request, a one-shot one and one outside every scope included', async () => {
+    const h = setup();
+    const blocks = JSON.stringify(requestBody(TURN));
+    const stores: Array<[RequestScopeStore | null, boolean]> = [
+      [{ sessionId: SESSION, purpose: 'compaction' }, true],
+      [{ sessionId: SESSION, purpose: 'session-title' }, true],
+      [{ purpose: 'oneshot' }, false],
+      [{ purpose: 'compaction' }, false],
+      [null, false],
+    ];
+    for (const [store, metadata] of stores) {
+      const { sent } = await h.send(requestBody(PI_TURN), { store });
+      expect(String(sent?.init?.body), JSON.stringify(store)).toBe(
+        metadata ? `${blocks.slice(0, -1)}${METADATA_TAIL}` : blocks
+      );
+    }
+    expect(keysOf(h.warnings)).toEqual(['no-scope']);
+  });
+
+  it("keeps a turn's second step the same bytes as its first, up to the first's end, marks aside", async () => {
+    const h = setup();
+    const first = await h.send(requestBody(PI_STEP_ONE));
+    const second = await h.send(requestBody(PI_STEP_TWO));
+    const one = String(first.sent?.init?.body).replaceAll(MARK_JSON, '');
+    const two = String(second.sent?.init?.body).replaceAll(MARK_JSON, '');
+    // Everything before the first step's closing `]` of its messages, its last message included.
+    const messages = JSON.stringify((JSON.parse(one) as { messages: unknown[] }).messages);
+    const shared = one.slice(0, one.indexOf(messages) + messages.length - 1);
+    expect(shared.length).toBeGreaterThan(messages.length);
+    expect(two.startsWith(`${shared},`)).toBe(true);
+    // The input went out as a block both times: the mark moved, nothing else.
+    expect(JSON.parse(two).messages[1]).toEqual({ role: 'user', content: text(README_TEXT) });
+    expect(h.scope.evidenceFor(SESSION)?.verdict).toEqual({ kind: 'append', added: 2 });
+    expect(h.lines).toEqual([]);
+  });
+
+  it(`sends strings as they are with ${USER_CONTENT_BLOCKS_ENV}=0, and the watch names the form change`, async () => {
+    const h = setup({ env: { [USER_CONTENT_BLOCKS_ENV]: '0' } });
+    expect(h.status).toEqual({
+      installed: true,
+      sessionMetadata: true,
+      prefixWatch: true,
+      userContentBlocks: false,
+    });
+    await h.send(requestBody(PI_STEP_ONE));
+    const { raw, sent } = await h.send(requestBody(PI_STEP_TWO));
+    expect(String(sent?.init?.body)).toBe(`${raw.slice(0, -1)}${METADATA_TAIL}`);
+    // pi-ai's own second step: the input, a block before, is a string now.
+    expect(h.scope.evidenceFor(SESSION)?.verdict).toEqual({
+      kind: 'diverged',
+      at: 'message-form',
+      index: 1,
+      role: 'user',
+      form: 'string',
+      truncated: false,
+      prevMessages: 2,
+      messages: 4,
+    });
+    expect(h.lines).toEqual([
+      `prefix-watch: session=${SESSION} purpose=agent req=2 verdict=diverged at=message-form index=1/4 role=user form=string`,
+    ]);
+    // A one-shot request with U off is not the tap's at all.
+    const { init, sent: oneshot } = await h.send(requestBody(PI_TURN), {
+      store: { purpose: 'oneshot' },
+    });
+    expect(oneshot?.init).toBe(init);
+  });
+
+  it('sends neither blocks nor metadata with a Content-Length header of its own, and watches what went', async () => {
+    const h = setup();
+    const { init, raw, sent } = await h.send(requestBody(PI_TURN), {
+      headers: { 'content-length': '999' },
+    });
+    expect(sent?.init).toBe(init);
+    expect(init.body).toBe(raw);
+    expect(h.warnings).toEqual([
+      {
+        key: 'content-length',
+        line: 'request tap: a model request with a Content-Length header of its own went as it is, without session metadata or user content blocks',
+      },
+    ]);
+    await h.send(requestBody([...PI_TURN, ...PI_STEP]), { headers: { 'content-length': '999' } });
+    expect(h.scope.evidenceFor(SESSION)?.verdict).toEqual({ kind: 'append', added: 2 });
+    // Outside a session too.
+    const { init: other, sent: oneshot } = await h.send(requestBody(PI_TURN), {
+      store: { purpose: 'oneshot' },
+      headers: { 'content-length': '999' },
+    });
+    expect(oneshot?.init).toBe(other);
   });
 });
 
@@ -727,6 +895,16 @@ describe("on the wire, through Node's own fetch", () => {
     );
     await response.text();
     const body = `${raw.slice(0, -1)}${METADATA_TAIL}`;
-    expect(received).toEqual([{ body, length: String(Buffer.byteLength(body)) }]);
+    // Decision 182: pi-ai's strings, sent as blocks, also at their full length.
+    const pi = JSON.stringify(requestBody([...PI_TURN, ...PI_STEP]));
+    const second = await scope.run(agent(), () =>
+      target.fetch(`${base}/v1/messages?beta=true`, sdkInit(pi))
+    );
+    await second.text();
+    const blocks = `${JSON.stringify(requestBody([...TURN, ...STEP])).slice(0, -1)}${METADATA_TAIL}`;
+    expect(received).toEqual([
+      { body, length: String(Buffer.byteLength(body)) },
+      { body: blocks, length: String(Buffer.byteLength(blocks)) },
+    ]);
   });
 });

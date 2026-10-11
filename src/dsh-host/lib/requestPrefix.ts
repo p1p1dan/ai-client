@@ -16,12 +16,20 @@
  *   - every `cache_control` key, at any depth: pi-ai marks the system blocks,
  *     the last tool and the last user message, and the marks move on as the
  *     conversation grows;
- *   - a string `content` or `system` is the text block it stands for: the
- *     last user message goes out as a marked text block, and as a plain
- *     string once it is no longer last;
+ *   - a string `content` or `system` is the text block it stands for, so a
+ *     changed text is told from a changed form;
  *   - an absent `system` is an empty one.
  * Everything else is hashed as given, key order included, since that is what
  * reaches the prompt: thinking blocks and their signatures too.
+ *
+ * Decision 182 (DA-3): the form is kept beside each hash. The same text sent
+ * as a string where the previous request sent a block array, or the other way
+ * round, is a divergence of its own (`system-form`, `message-form`), not the
+ * same unit: pi-ai sends the last user message as a marked text block and as a
+ * plain string once it is no longer last, and some upstreams never read the
+ * cache written on that block again. The host's request tap sends every user
+ * message as blocks (userContentBlocks.ts), so such a change on a session's
+ * chain means something else rewrote a message.
  *
  * Hashes stay in memory; {@link verdictLogFields} writes neither hashes nor
  * content. Loaded by Node type stripping in a source checkout: erasable
@@ -29,7 +37,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import type { ClientPrefixVerdict } from '../../shared/types/requestScope.ts';
+import type { ClientPrefixVerdict, ContentForm } from '../../shared/types/requestScope.ts';
 
 /** One request's prefix, as hashes. */
 export interface PrefixUnits {
@@ -37,9 +45,13 @@ export interface PrefixUnits {
   config: Record<string, string>;
   tools: string[];
   system: string;
+  /** How `system` is written; an absent one is `blocks`. */
+  systemForm: ContentForm;
   messages: string[];
   /** Each message's role, for the log line. */
   roles: string[];
+  /** How each message writes its `content`. */
+  forms: ContentForm[];
 }
 
 /**
@@ -84,6 +96,11 @@ function asBlocks(text: string): Array<{ type: 'text'; text: string }> {
   return [{ type: 'text', text }];
 }
 
+/** `string` for a string, `blocks` for anything else: what a form change is told by. */
+function formOf(value: unknown): ContentForm {
+  return typeof value === 'string' ? 'string' : 'blocks';
+}
+
 /** The beta list as a set: split on commas, trimmed, deduplicated, sorted. */
 function betaList(betas: string | null | undefined): string[] {
   if (typeof betas !== 'string') return [];
@@ -122,6 +139,7 @@ export function prefixUnitsOf(body: unknown, betas?: string | null): PrefixUnits
 
     const messages: string[] = [];
     const roles: string[] = [];
+    const forms: ContentForm[] = [];
     for (const message of body.messages as unknown[]) {
       if (isPlainObject(message)) {
         // Spread keeps `content` where it was: key order is hashed.
@@ -133,12 +151,14 @@ export function prefixUnitsOf(body: unknown, betas?: string | null): PrefixUnits
           )
         );
         roles.push(typeof message.role === 'string' ? message.role : '');
+        forms.push(formOf(message.content));
       } else {
         messages.push(hashOf(message));
         roles.push('');
+        forms.push('blocks');
       }
     }
-    return { config, tools, system, messages, roles };
+    return { config, tools, system, systemForm: formOf(body.system), messages, roles, forms };
   } catch {
     // A value JSON cannot write (a cycle, a BigInt): nothing to compare.
     return undefined;
@@ -184,8 +204,33 @@ export function comparePrefix(
   if (prev.system !== cur.system) {
     return { kind: 'diverged', at: 'system', truncated: false, ...counts };
   }
+  if (prev.systemForm !== cur.systemForm) {
+    return {
+      kind: 'diverged',
+      at: 'system-form',
+      form: cur.systemForm,
+      truncated: false,
+      ...counts,
+    };
+  }
 
   const index = firstDifference(prev.messages, cur.messages);
+  // Before the first changed message every hash matched: a form change there
+  // is the same text in another form, and comes first.
+  const end = index === -1 ? cur.messages.length : index;
+  for (let at = 0; at < end; at += 1) {
+    const form = cur.forms[at] ?? 'blocks';
+    if ((prev.forms[at] ?? 'blocks') === form) continue;
+    return {
+      kind: 'diverged',
+      at: 'message-form',
+      index: at,
+      role: cur.roles[at],
+      form,
+      truncated: false,
+      ...counts,
+    };
+  }
   if (index === -1) return { kind: 'same' };
   if (index === prev.messages.length) return { kind: 'append', added: cur.messages.length - index };
   // Every message `cur` has matched: it is `prev` cut short.
@@ -207,10 +252,11 @@ function logToken(value: string | undefined): string {
 
 /**
  * A verdict as log fields, e.g. `verdict=append added=2`,
- * `verdict=diverged at=config field=thinking` or
+ * `verdict=diverged at=config field=thinking`,
  * `verdict=diverged at=messages index=41/72 role=assistant truncated=false`
- * (the index out of the current request's message count). Never a hash, never
- * content.
+ * (the index out of the current request's message count) or
+ * `verdict=diverged at=message-form index=4/7 role=user form=string`. Never a
+ * hash, never content.
  */
 export function verdictLogFields(v: ClientPrefixVerdict): string {
   switch (v.kind) {
@@ -227,6 +273,10 @@ export function verdictLogFields(v: ClientPrefixVerdict): string {
       if (v.at === 'messages') {
         return `${head} index=${index}/${v.messages} role=${logToken(v.role)} truncated=${v.truncated}`;
       }
+      if (v.at === 'message-form') {
+        return `${head} index=${index}/${v.messages} role=${logToken(v.role)} form=${logToken(v.form)}`;
+      }
+      if (v.at === 'system-form') return `${head} form=${logToken(v.form)}`;
       return head;
     }
   }

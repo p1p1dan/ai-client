@@ -10,6 +10,7 @@ import {
   REQUEST_SCOPE_SERVICE,
   type RequestScopeView,
   SESSION_METADATA_ENV,
+  USER_CONTENT_BLOCKS_ENV,
 } from '../types/requestScope';
 
 /**
@@ -22,6 +23,7 @@ describe('request scope names', () => {
     expect(PREFIX_WATCH_ENV).toBe('AICLIENT_RUNTIME_PREFIX_WATCH');
     expect(SESSION_METADATA_ENV).toBe('AICLIENT_RUNTIME_SESSION_METADATA');
     expect(CACHE_CHAIN_ENV).toBe('AICLIENT_RUNTIME_CACHE_CHAIN');
+    expect(USER_CONTENT_BLOCKS_ENV).toBe('AICLIENT_RUNTIME_USER_CONTENT_BLOCKS');
   });
 
   it('leaves a switch on unless it is set to 0', () => {

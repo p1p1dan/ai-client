@@ -5,6 +5,7 @@ import {
   CACHE_CHAIN_ENV,
   PREFIX_WATCH_ENV,
   SESSION_METADATA_ENV,
+  USER_CONTENT_BLOCKS_ENV,
 } from '../../../../shared/types/requestScope';
 import {
   buildDshHostEnvironment,
@@ -331,12 +332,18 @@ describe('buildDshHostEnvironment (decision 022)', () => {
     expect(isStrippedDshHostEnvName('AICLIENT_RUNTIME_ENCRYPTED_READ')).toBe(true);
   });
 
-  it("forwards decision 173's request tap and cache chain switches, by the host's own names", () => {
-    const names = [SESSION_METADATA_ENV, PREFIX_WATCH_ENV, CACHE_CHAIN_ENV];
+  it("forwards decision 173's request tap and cache chain switches and decision 182's, by the host's own names", () => {
+    const names = [
+      SESSION_METADATA_ENV,
+      PREFIX_WATCH_ENV,
+      CACHE_CHAIN_ENV,
+      USER_CONTENT_BLOCKS_ENV,
+    ];
     expect(names).toEqual([
       'AICLIENT_RUNTIME_SESSION_METADATA',
       'AICLIENT_RUNTIME_PREFIX_WATCH',
       'AICLIENT_RUNTIME_CACHE_CHAIN',
+      'AICLIENT_RUNTIME_USER_CONTENT_BLOCKS',
     ]);
     for (const isPackaged of [true, false]) {
       const env = build({

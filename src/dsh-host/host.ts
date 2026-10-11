@@ -59,7 +59,8 @@
  * Request tap (decision 173, GitHub issue #9): right after, `fetch` is wrapped
  * again (lib/requestTap.ts), so each chat's anthropic-messages requests carry
  * a stable `metadata.user_id` and a request that does not merely extend the
- * previous one is logged. The session comes from the request scope
+ * previous one is logged; every anthropic-messages request sends its user
+ * messages as text blocks (decision 182). The session comes from the request scope
  * (lib/requestScope.ts), whose `llm/stream` listener the boot callback
  * registers before any row loads; the rows read what the tap found through
  * the `aiclientRequestScope` service.

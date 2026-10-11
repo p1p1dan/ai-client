@@ -6,6 +6,7 @@ import {
   CACHE_CHAIN_ENV,
   PREFIX_WATCH_ENV,
   SESSION_METADATA_ENV,
+  USER_CONTENT_BLOCKS_ENV,
 } from '../../shared/types/requestScope.ts';
 
 /**
@@ -288,7 +289,12 @@ describe('host.ts request tap and request scope (decision 173, GitHub issue #9)'
     );
     const forwarded = main.slice(main.indexOf('const FORWARDED_ENV = ['));
     const list = forwarded.slice(0, forwarded.indexOf('];'));
-    for (const name of [SESSION_METADATA_ENV, PREFIX_WATCH_ENV, CACHE_CHAIN_ENV]) {
+    for (const name of [
+      SESSION_METADATA_ENV,
+      PREFIX_WATCH_ENV,
+      CACHE_CHAIN_ENV,
+      USER_CONTENT_BLOCKS_ENV,
+    ]) {
       expect(list, name).toContain(`'${name}'`);
     }
   });

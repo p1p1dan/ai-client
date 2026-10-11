@@ -125,7 +125,7 @@ describe('cacheChainLogLines', () => {
   });
   const warm = rebuild({ kind: 'warm', read: 157_888, write: 16_990, lost: 2 });
   const diverged = (
-    at: 'config' | 'tools' | 'system' | 'messages',
+    at: Extract<ClientPrefixVerdict, { kind: 'diverged' }>['at'],
     extra: Partial<Extract<ClientPrefixVerdict, { kind: 'diverged' }>> = {}
   ): ClientPrefixVerdict => ({
     kind: 'diverged',
@@ -179,6 +179,12 @@ describe('cacheChainLogLines', () => {
     [diverged('config', { field: 'a field with spaces' }), 'at=config field=?'],
     [diverged('tools', { index: 3 }), 'at=tools index=3'],
     [diverged('system'), 'at=system'],
+    // Decision 182: the same text in another form.
+    [
+      diverged('message-form', { index: 4, role: 'user', form: 'string' }),
+      'at=message-form index=4/72 role=user form=string',
+    ],
+    [diverged('system-form', { form: 'blocks' }), 'at=system-form form=blocks'],
   ])('flags a request that diverged with no cause logged: %o', (verdict, fields) => {
     expect(cacheChainLogLines(SESSION, warm, evidence(5_000, 18, verdict))).toEqual([
       `cache-chain: client request diverged without a logged cause session=aiclient-chat-1 step=t1s17 ${fields} request=18`,

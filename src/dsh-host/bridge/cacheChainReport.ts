@@ -122,6 +122,11 @@ function divergenceFields(verdict: Extract<ClientPrefixVerdict, { kind: 'diverge
       return `at=tools index=${index}`;
     case 'messages':
       return `at=messages index=${index}/${verdict.messages} role=${logToken(verdict.role)} truncated=${verdict.truncated}`;
+    // Decision 182: the same text in another form (a string where a block was, or back).
+    case 'message-form':
+      return `at=message-form index=${index}/${verdict.messages} role=${logToken(verdict.role)} form=${logToken(verdict.form)}`;
+    case 'system-form':
+      return `at=system-form form=${logToken(verdict.form)}`;
     default:
       return `at=${logToken(verdict.at)}`;
   }

@@ -123,7 +123,7 @@ type SessionScenario = Exclude<Scenario, 'S4'>;
 /** S1's mid-turn note: no scenario marker, so the gateway's script carries on. */
 const S1_NOTE = 'PROBE-NOTE-S1 noted while a command runs; carry on.';
 const PLAN_PERMISSIONS = Object.freeze({ mode: 'plan', gear: 'auto' } as const);
-const TAP_ON = 'request tap: session metadata on, prefix watch on';
+const TAP_ON = 'request tap: session metadata on, prefix watch on, user content blocks on';
 
 // ---- arguments and the machine ---------------------------------------------------
 

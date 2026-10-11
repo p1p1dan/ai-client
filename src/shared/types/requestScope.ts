@@ -10,7 +10,10 @@
  * (`src/dsh-host/lib/sessionMetadata.ts`), and compares each request's prefix
  * with the previous request of the same session
  * (`src/dsh-host/lib/requestPrefix.ts`), so that a request which does not
- * merely extend the previous one is logged.
+ * merely extend the previous one is logged. Decision 182 (DA-3): it also
+ * sends every user message's content as a text-block array, on every request
+ * (`src/dsh-host/lib/userContentBlocks.ts`), so that a message never changes
+ * form between steps.
  *
  * Every part has an emergency switch: its environment variable set to `0`
  * turns it off ({@link isSwitchedOff}).
@@ -28,6 +31,8 @@ export const PREFIX_WATCH_ENV = 'AICLIENT_RUNTIME_PREFIX_WATCH';
 export const SESSION_METADATA_ENV = 'AICLIENT_RUNTIME_SESSION_METADATA';
 /** `0`: no per-step cache chain check. */
 export const CACHE_CHAIN_ENV = 'AICLIENT_RUNTIME_CACHE_CHAIN';
+/** `0`: user messages go out in the form pi-ai gives them (decision 182). */
+export const USER_CONTENT_BLOCKS_ENV = 'AICLIENT_RUNTIME_USER_CONTENT_BLOCKS';
 
 /** Whether `env` turns the switch `name` off: on unless set to `0`. */
 export function isSwitchedOff(
@@ -50,6 +55,9 @@ export interface RequestScopeStore {
   readonly purpose: RequestPurpose;
 }
 
+/** How a request writes a `content` or `system`: a string, or anything else (a block array). */
+export type ContentForm = 'string' | 'blocks';
+
 /**
  * How a request's prefix relates to the previous request of the same session,
  * cache markers aside:
@@ -65,6 +73,12 @@ export interface RequestScopeStore {
  *             `role`). `truncated`: the messages are the previous ones cut
  *             short and nothing else. `prevMessages` and `messages` count both
  *             requests' messages.
+ *             Decision 182: `system-form` and `message-form` (`index`,
+ *             `role`) are the same text in another form, a string where it
+ *             was a block array or the other way round; `form` is the one the
+ *             request sends now. Some upstreams lose the cache written on a
+ *             block that turns into a string, so a form change is a
+ *             divergence of its own, found where it sits in the prefix.
  */
 export type ClientPrefixVerdict =
   | { kind: 'first' }
@@ -72,10 +86,11 @@ export type ClientPrefixVerdict =
   | { kind: 'append'; added: number }
   | {
       kind: 'diverged';
-      at: 'config' | 'tools' | 'system' | 'messages';
+      at: 'config' | 'tools' | 'system' | 'system-form' | 'messages' | 'message-form';
       field?: string;
       index?: number;
       role?: string;
+      form?: ContentForm;
       truncated: boolean;
       prevMessages: number;
       messages: number;
