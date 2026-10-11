@@ -1,3 +1,4 @@
+import { isDshCompactCommandRow } from '@shared/dshHistory/types';
 import { HISTORY_MESSAGE_ID_PREFIX } from '@shared/types/sessionHistory';
 import type { ChatMessage } from '@/stores/chatSessions';
 import {
@@ -66,6 +67,16 @@ export interface Turn {
   user: ChatMessage | null;
   /** Every message after this turn's user message and before the next one. May be empty while awaiting the first reply. */
   body: ChatMessage[];
+  /**
+   * dsh-rebase decision 180, after the 2026-10-11 acceptance (DA-6):
+   * `compaction` is a `/compact` the user ran — its command line and what
+   * follows it up to the next prompt (its running row, then the summary or a
+   * note). It runs after the turn before it has ended, so it is no part of
+   * that turn: drawn after it, after its 「✻ 完成于…」 line, and as no turn
+   * of its own (no clock, no line, no copy, no prompt-rail anchor). Absent
+   * for every other turn.
+   */
+  kind?: 'compaction';
 }
 
 /**
@@ -73,6 +84,8 @@ export interface Turn {
  *  - `user` opens a new turn (two queued `user` sends in a row therefore open
  *    two turns, the first of which may keep an empty `body` — T-19 queue
  *    semantics need both questions independently anchorable);
+ *  - a `/compact` command line opens a `compaction` turn (DA-6): a manual
+ *    compaction is not about the round before it;
  *  - `assistant` / `system` / `error` join the current turn's body — notices
  *    are *about this round*, so they must travel with it when it collapses or
  *    its bubble pins;
@@ -92,7 +105,10 @@ export function groupMessagesIntoTurns(messages: readonly ChatMessage[]): Turn[]
       turns.push(current);
       continue;
     }
-    if (!current) {
+    if (isDshCompactCommandRow(message)) {
+      current = { id: message.id, user: null, body: [], kind: 'compaction' };
+      turns.push(current);
+    } else if (!current) {
       current = { id: message.id, user: null, body: [] };
       turns.push(current);
     }
@@ -100,6 +116,14 @@ export function groupMessagesIntoTurns(messages: readonly ChatMessage[]): Turn[]
   }
 
   return turns;
+}
+
+/** DA-6: the index of the last turn that is a turn (not a `/compact`'s rows), or -1. */
+export function lastRealTurnIndex(turns: readonly Turn[]): number {
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    if (turns[index]?.kind !== 'compaction') return index;
+  }
+  return -1;
 }
 
 /**
@@ -132,7 +156,7 @@ export function stabilizeTurns(previous: readonly Turn[], next: readonly Turn[])
 }
 
 function sameTurnContent(a: Turn, b: Turn): boolean {
-  if (a.user !== b.user) return false;
+  if (a.user !== b.user || a.kind !== b.kind) return false;
   if (a.body.length !== b.body.length) return false;
   for (let index = 0; index < a.body.length; index += 1) {
     if (a.body[index] !== b.body[index]) return false;

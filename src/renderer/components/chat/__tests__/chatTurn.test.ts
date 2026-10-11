@@ -4,6 +4,7 @@ import {
   countAssistantReplyChars,
   flattenTurnItems,
   groupMessagesIntoTurns,
+  lastRealTurnIndex,
   mergeAdjacentToolGroups,
   segmentTurnBody,
   stabilizeTurns,
@@ -81,6 +82,26 @@ describe('groupMessagesIntoTurns', () => {
     expect(turns).toHaveLength(2);
     expect(turns[0].body).toEqual([a1, sys, err]);
     expect(turns[1].body).toEqual([]);
+  });
+
+  it('[180-DA6] a /compact command line opens its own turn: after the round it follows, not in it', () => {
+    const [u1, a1, u2] = [user(), assistant(), user()];
+    const command = system();
+    command.blocks = [{ id: `${command.id}:compact-command:0`, type: 'text', text: '/compact' }];
+    const row = system([text('Compacting the context…')]);
+    const turns = groupMessagesIntoTurns([u1, a1, command, row, u2]);
+    expect(turns).toEqual([
+      { id: u1.id, user: u1, body: [a1] },
+      { id: command.id, user: null, body: [command, row], kind: 'compaction' },
+      { id: u2.id, user: u2, body: [] },
+    ]);
+    // The turn a send, a failure or a retry belongs to is still the round's.
+    expect(lastRealTurnIndex(turns)).toBe(2);
+    expect(lastRealTurnIndex(turns.slice(0, 2))).toBe(0);
+    expect(lastRealTurnIndex(turns.slice(1, 2))).toBe(-1);
+    // A turn that becomes a compaction (or stops being one) is not reused.
+    const plain = { id: command.id, user: null, body: [command, row] };
+    expect(stabilizeTurns([plain], [turns[1] as Turn])[0]).toBe(turns[1]);
   });
 
   it('F-B1: an empty message list produces no turns', () => {

@@ -96,6 +96,7 @@ import {
   countAssistantReplyChars,
   flattenTurnItems,
   groupMessagesIntoTurns,
+  lastRealTurnIndex,
   segmentTurnBody,
   stabilizeTurns,
   type Turn,
@@ -589,7 +590,10 @@ export function MessageTimeline({
   // Stop-interrupted one and a 45s-abandoned one, so a fresh send's handshake
   // used to be painted onto an old turn's head — and `PendingTurnHead`, the
   // only thing on screen during that window, never rendered at all.
-  const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
+  // DA-6 (decision 180): a `/compact`'s rows after the last turn are no turn;
+  // that turn is still the one a send, a failure or a retry belongs to.
+  const lastTurnIndex = lastRealTurnIndex(turns);
+  const lastTurn = lastTurnIndex >= 0 ? (turns[lastTurnIndex] ?? null) : null;
   const lastTurnBodyMetadata = useMemo(
     () => (lastTurn ? lastTurn.body.map((message) => getMeta(message.id)) : []),
     [lastTurn, getMeta]
@@ -886,12 +890,26 @@ export function MessageTimeline({
                 </p>
               ) : (
                 turns.map((turn, index) => {
+                  // DA-6 (decision 180): a `/compact` the user ran, after the
+                  // turn before it and that turn's line, as no turn of its own.
+                  if (turn.kind === 'compaction') {
+                    return (
+                      <ManualCompactionTurn
+                        key={turn.id}
+                        turn={turn}
+                        sessionId={sessionId}
+                        thinkingEnabled={thinkingEnabled}
+                        repoName={repoName}
+                        getThinkingDurationMs={getThinkingDurationMs}
+                      />
+                    );
+                  }
                   // F7: the two ticking props are handed ONLY to the turn that
                   // can read them. Every other turn keeps byte-identical props
                   // across a tick, which is what lets `React.memo` on `ChatTurn`
                   // hold and returns the per-second derivation cost to
                   // O(in-flight turn) instead of O(whole session).
-                  const isLastTurn = index === turns.length - 1;
+                  const isLastTurn = index === lastTurnIndex;
                   return (
                     <ChatTurn
                       key={turn.id}
@@ -2080,6 +2098,50 @@ function workedHeadText(
     seconds: worked.seconds,
   });
 }
+
+/**
+ * dsh-rebase decision 180, after the 2026-10-11 acceptance (DA-6): the rows
+ * of a `/compact` the user ran — its command line, then its row (running,
+ * the summary, or a note why there is none). `groupMessagesIntoTurns` gives
+ * them a `compaction` turn of their own, so they come after the turn they
+ * follow and after its 「✻ 完成于…」 line, live and reopened alike; they had
+ * joined that turn's body, which the line is drawn after. Drawn as rows
+ * only: no clock, no line, no copy strip, no `data-turn-id` (the prompt
+ * rail jumps to prompts).
+ */
+const ManualCompactionTurn = memo(function ManualCompactionTurn({
+  turn,
+  sessionId,
+  thinkingEnabled,
+  repoName,
+  getThinkingDurationMs,
+}: {
+  turn: Turn;
+  sessionId: string;
+  thinkingEnabled: boolean;
+  repoName?: string | null;
+  getThinkingDurationMs: (blockId: string) => number | null | undefined;
+}) {
+  const items = useMemo(() => flattenTurnItems(turn), [turn]);
+  return (
+    <section className={chatTurnClass()}>
+      <div className={turnBodyClass()}>
+        {items.map((item) => (
+          <TurnItemView
+            key={turnItemKey(item)}
+            item={item}
+            sessionId={sessionId}
+            thinkingEnabled={thinkingEnabled}
+            repoName={repoName}
+            streamingBlockId={null}
+            getThinkingDurationMs={getThinkingDurationMs}
+            getToolStartedAtMs={NO_TOOL_STARTS}
+          />
+        ))}
+      </div>
+    </section>
+  );
+});
 
 const ChatTurn = memo(function ChatTurn({
   turn,

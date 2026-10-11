@@ -179,3 +179,102 @@ describe('/compact in the timeline (decision 180)', () => {
     expect(container.querySelector('[data-testid="dsh-compaction-hint"]')).toBeNull();
   });
 });
+
+/**
+ * DA-6 (2026-10-11 acceptance): a `/compact` ran after the turn before it
+ * ended, so its rows come after that turn — after its 「✻ 完成于…」 line too.
+ * They had joined the turn's body, and the line is drawn after the body.
+ */
+describe('/compact after the turn it follows (decision 180, DA-6)', () => {
+  const T0 = new Date(2026, 9, 11, 9, 59, 0).getTime();
+  const finished: ChatMessage[] = [
+    {
+      id: 'h:u1',
+      sessionId: 's1',
+      role: 'user',
+      timestamp: T0,
+      blocks: [{ id: 'h:u1:t', type: 'text', text: '先读一下 README' }],
+    },
+    {
+      id: 'h:a1',
+      sessionId: 's1',
+      role: 'assistant',
+      timestamp: T0 + 9_000,
+      blocks: [{ id: 'h:a1:t', type: 'text', text: 'README 读完了。' }],
+    },
+  ];
+  const next: ChatMessage = {
+    id: 'h:u2',
+    sessionId: 's1',
+    role: 'user',
+    timestamp: T0 + 60_000,
+    blocks: [{ id: 'h:u2:t', type: 'text', text: '接着做第二步' }],
+  };
+
+  function setMessages(rows: ChatMessage[]) {
+    setTimeline([]);
+    useChatSessionsStore.setState((state) => ({ ...state, messages: { s1: rows } }) as never);
+  }
+
+  /** Where each piece of text first shows in the page, in reading order. */
+  const at = (text: string) => container.textContent?.indexOf(text) ?? -1;
+
+  const cases: [string, ChatMessage[]][] = [
+    [
+      'live, running',
+      [
+        compactCommandRow('s1', 'dsh-compact-command-k1', '/compact 保留未完成的任务'),
+        compactRunningRow('s1', 'dsh-compaction-k1', 'Compacting the context…'),
+      ],
+    ],
+    [
+      'this window’s own, before the engine named it',
+      [
+        compactCommandRow('s1', 'compact-run-z-command', '/compact 保留未完成的任务'),
+        compactRunningRow('s1', 'compact-run-z', 'Compacting the context…'),
+      ],
+    ],
+    [
+      'reopened, without a summary',
+      [
+        compactCommandRow('s1', 'h:compact-command-k1', '/compact 保留未完成的任务'),
+        compactNoteRow('s1', 'h:compaction-k1', {
+          key: DSH_COMPACT_FAILED_REASON_KEY,
+          params: { reason: 'x' },
+        }),
+      ],
+    ],
+  ];
+
+  for (const [name, rows] of cases) {
+    it(`[180-DA6] ${name}: after the turn and its line, before the next prompt; no turn of its own`, async () => {
+      setMessages([...finished, ...rows, next]);
+      await render();
+      const line = at('✻ 完成于');
+      expect(line, name).toBeGreaterThan(at('README 读完了。'));
+      expect(at('/compact 保留未完成的任务'), name).toBeGreaterThan(line);
+      expect(at('接着做第二步'), name).toBeGreaterThan(at('/compact 保留未完成的任务'));
+      expect(row()?.textContent, name).toBeTruthy();
+      expect(at(row()?.textContent ?? '?'), name).toBeGreaterThan(at('/compact 保留未完成的任务'));
+      // Two prompts, two turns; the compaction is neither, and has no clock or line of its own.
+      expect(container.querySelectorAll('[data-turn-id]'), name).toHaveLength(2);
+      expect(container.textContent?.match(/✻/g), name).toHaveLength(1);
+      const own = container
+        .querySelector('[data-testid="compact-command-row"]')
+        ?.closest('section');
+      expect(own?.hasAttribute('data-turn-id'), name).toBe(false);
+      expect(own?.textContent, name).not.toMatch(/已工作|工作中|✻/);
+    });
+  }
+
+  it('[180-DA6] the last thing in the chat: still after the turn’s line', async () => {
+    setMessages([
+      ...finished,
+      compactCommandRow('s1', 'dsh-compact-command-k2', '/compact'),
+      compactRunningRow('s1', 'dsh-compaction-k2', 'Compacting the context…'),
+    ]);
+    await render();
+    expect(at('/compact')).toBeGreaterThan(at('✻ 完成于'));
+    expect(container.querySelectorAll('[data-turn-id]')).toHaveLength(1);
+  });
+});

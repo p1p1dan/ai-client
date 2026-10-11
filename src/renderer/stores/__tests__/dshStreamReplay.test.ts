@@ -279,7 +279,13 @@ function turnsOf(state: ChatSessionsState, sessionId: string): TurnView[] {
   return groupMessagesIntoTurns(bucket(state, sessionId)).map((turn) => {
     const items = flattenTurnItems(turn);
     return {
-      head: turn.user?.origin ? `origin:${turn.user.origin.kind}` : textOf(turn.user),
+      // DA-6 (decision 180): a `/compact`'s rows are a group of their own, after the turn.
+      head:
+        turn.kind === 'compaction'
+          ? 'compaction'
+          : turn.user?.origin
+            ? `origin:${turn.user.origin.kind}`
+            : textOf(turn.user),
       items: items.map((item) => item.kind),
       answer: items
         .filter((item) => item.kind === 'text')
@@ -635,9 +641,12 @@ scenario('compact', (events, id) => {
     expect(turns.map((turn) => turn.head)).toEqual([
       'P0-STREAM: stream a paragraph back to me.',
       'P0-TOOL: list the workspace.',
+      // DA-6: the `/compact` between the two turns, after the second and its line.
+      'compaction',
       '/goal',
     ]);
-    const command = turns[2];
+    expect(turns[2]?.items).toEqual(['notice', 'notice']);
+    const command = turns[3];
     expect(command?.items).toEqual(['notice']);
     const notice = command?.notices[0];
     expect(notice?.kind === 'notice' && dshNoticeRowView(notice.message)).toMatchObject({
