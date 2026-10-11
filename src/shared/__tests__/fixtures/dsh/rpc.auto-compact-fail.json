@@ -1,0 +1,245 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-auto-compact-fail",
+      "piSessionId": "aiclient-rec-auto-compact-fail",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-auto-compact-fail.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {
+        "skills": 0
+      }
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-auto-compact-fail",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-auto-compact-fail.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-AUTOCOMPACT {\"tag\":\"a\"} P1-COMPACT-REFUSE <filler>"
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-5",
+          "entryId": "id-5",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-5:text:0",
+              "text": "P1-AUTOCOMPACT a: answered with the full context."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-auto-compact-fail-t1-s1"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-6:text:0",
+              "text": "P1-AUTOCOMPACT {\"tag\":\"b\",\"claim\":150000} <filler>"
+            }
+          ],
+          "liveMessageId": "dsh-user-17"
+        },
+        {
+          "id": "h:id-8",
+          "entryId": "id-8",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-8:text:0",
+              "text": "P1-AUTOCOMPACT b: answered with the full context."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-auto-compact-fail-t2-s1"
+        },
+        {
+          "id": "h:compaction-id-10",
+          "entryId": "compaction-id-10",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:compaction-id-10:compaction-failed:0",
+              "text": "Automatic compaction did not succeed; this turn goes on with the full context.",
+              "notice": {
+                "key": "Automatic compaction did not succeed; this turn goes on with the full context."
+              }
+            }
+          ],
+          "liveMessageId": "dsh-compaction-id-10"
+        },
+        {
+          "id": "h:id-9",
+          "entryId": "id-9",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-9:text:0",
+              "text": "P1-AUTOCOMPACT {\"tag\":\"c\"} what do you remember?"
+            }
+          ],
+          "liveMessageId": "dsh-user-27"
+        },
+        {
+          "id": "h:id-12",
+          "entryId": "id-12",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-12:text:0",
+              "text": "P1-AUTOCOMPACT c: answered with the full context."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-auto-compact-fail-t3-s1"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 7,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-auto-compact-fail",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-auto-compact-fail.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-12",
+        "fileTailEntryId": "aiclient-rec-auto-compact-fail#30"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-AUTOCOMPACT {\"tag\":\"a\"} P1-COMPACT-REFUSE <filler>…",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-5",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-AUTOCOMPACT a: answered with the full context.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-5",
+          "depth": 2,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-AUTOCOMPACT {\"tag\":\"b\",\"claim\":150000} <filler>…",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-8",
+          "parentId": "id-6",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-AUTOCOMPACT b: answered with the full context.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "compaction-id-10",
+          "parentId": "id-8",
+          "depth": 4,
+          "entryType": "notice",
+          "role": "system",
+          "preview": "Automatic compaction did not succeed; this turn goes on with the full context.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-9",
+          "parentId": "compaction-id-10",
+          "depth": 5,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-AUTOCOMPACT {\"tag\":\"c\"} what do you remember?",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-12",
+          "parentId": "id-9",
+          "depth": 6,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-AUTOCOMPACT c: answered with the full context.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 7,
+      "returnedNodes": 7,
+      "truncated": false
+    }
+  }
+}

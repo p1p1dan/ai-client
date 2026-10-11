@@ -1,0 +1,505 @@
+[
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-STREAM"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P0-STREAM: stream a paragraph back to me."
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t1-s1",
+      "blockId": "dsh-aiclient-rec-overflow-compact-t1-s1-b0",
+      "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-17",
+      "role": "user",
+      "attemptId": "attempt-OVERFLOW-1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-17",
+      "blockId": "dsh-user-17-text",
+      "text": "P1-OVERFLOW {\"tag\":\"one\"} answer once the context fits."
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-17"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-7",
+      "phase": "started",
+      "trigger": "overflow",
+      "beforeMessageId": "dsh-aiclient-rec-overflow-compact-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-7",
+      "phase": "completed",
+      "trigger": "overflow",
+      "beforeMessageId": "dsh-aiclient-rec-overflow-compact-t2-s1",
+      "summary": "Context summary\n\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n\n## Current Work\n- (none)"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t2-s1",
+      "blockId": "dsh-aiclient-rec-overflow-compact-t2-s1-b0",
+      "text": "P1-OVERFLOW one: answered after compaction."
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-1",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-31",
+      "role": "user",
+      "attemptId": "attempt-MARKED"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-31",
+      "blockId": "dsh-user-31-text",
+      "text": "P0-STREAM: stream a paragraph back to me. P1-COMPACT-REFUSE"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-31"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t3-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t3-s1",
+      "blockId": "dsh-aiclient-rec-overflow-compact-t3-s1-b0",
+      "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t3-s1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-MARKED",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-2",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-40",
+      "role": "user",
+      "attemptId": "attempt-OVERFLOW-2"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-2",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-40",
+      "blockId": "dsh-user-40-text",
+      "text": "P1-OVERFLOW {\"tag\":\"two\"} this one cannot be compacted."
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-40"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t4-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-2",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-16",
+      "phase": "started",
+      "trigger": "overflow",
+      "beforeMessageId": "dsh-aiclient-rec-overflow-compact-t4-s1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-2",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-16",
+      "phase": "failed",
+      "trigger": "overflow",
+      "beforeMessageId": "dsh-aiclient-rec-overflow-compact-t4-s1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-overflow-compact-t4-s1"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-2",
+    "type": "session.failed",
+    "payload": {
+      "error": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"prompt is too long: 250000 tokens > 200000 maximum\"}}",
+      "errorCode": "CONTEXT_TOO_LARGE"
+    }
+  },
+  {
+    "sessionId": "rec-overflow-compact",
+    "requestId": "turn-OVERFLOW-2",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

@@ -125,6 +125,20 @@
  *                 model stops; the next turn is still in plan mode — its plan
  *                 is presented again, and that review closed too
  *
+ * Automatic compaction scenarios (decision 178), each on its own host, last:
+ *   auto-compact  two prompts of about 40k tokens of filler each, the second
+ *                 billed at 150k prompt tokens: the third turn's first step
+ *                 compacts the first turn away (pressure) and answers from the
+ *                 summary; live, the row opens and becomes the summary row
+ *   auto-compact-fail  the same, with P1-COMPACT-REFUSE in the first prompt: the
+ *                 summary request is refused, the row says so, and the turn goes
+ *                 on with the full context
+ *   overflow-compact  a turn; a P1-OVERFLOW turn the model refuses as too large
+ *                 until DSH compacts it and retries (the row goes before the
+ *                 step's reply); a turn carrying P1-COMPACT-REFUSE; a second
+ *                 P1-OVERFLOW turn whose compaction is refused, so the turn
+ *                 fails as CONTEXT_TOO_LARGE
+ *
  * Permission scenarios (P1-6c; plan P1-6 shard 04 §5, E class). Each opens its
  * session in a workspace of its own (`<workspace>/<scenario>`), so what a turn
  * lists or searches does not depend on which scenarios ran before it; `rpc`
@@ -211,6 +225,12 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const COMMAND_ID = /\bcmd-[0-9a-f]{8}-\d+\b/g;
 /** Wall-clock milliseconds inside a string. */
 const EPOCH_MS = /\b1\d{12}\b/g;
+/**
+ * Decision 178: the filler the auto-compact prompts carry (`compactFiller`),
+ * whole or cut short (a tree preview); the samples keep its place, not its
+ * 160,000 characters. A word no other text has, so two in a row are filler.
+ */
+const FILLER = /(?:zfill ){2,}(?:z(?:f(?:i(?:l(?:l)?)?)?)?)?/g;
 
 function isEpochMs(value: number): boolean {
   return Number.isInteger(value) && value >= 1_000_000_000_000 && value < 10_000_000_000_000;
@@ -253,6 +273,7 @@ class Normalizer {
     let out = value;
     for (const [path, placeholder] of this.paths) out = out.split(path).join(placeholder);
     return out
+      .replace(FILLER, '<filler>')
       .replace(UUID, (uuid) => this.id(uuid.toLowerCase()))
       .replace(COMMAND_ID, (command) => `cmd-${this.id(command)}`)
       .replace(EPOCH_MS, '<ms>');
@@ -726,7 +747,109 @@ const SCENARIOS: Record<string, Scenario> = {
   // above, so it opens a fresh shared host and every earlier sample keeps the
   // host state it was recorded with.
   'steer-withdraw': steerWithdrawScenario,
+  // Decision 178: automatic compaction, live. Each on its own host, last.
+  'auto-compact': (context, host) => autoCompactScenario(context, host, 'auto-compact', false),
+  'auto-compact-fail': (context, host) =>
+    autoCompactScenario(context, host, 'auto-compact-fail', true),
+  'overflow-compact': overflowCompactScenario,
 };
+
+// ---- automatic compaction (decision 178) -------------------------------------------
+
+/**
+ * About 40k tokens in DSH's estimate (4 characters a token): above the retained
+ * tail DSH keeps for `fake-1` (16% of 200k less its 8192-token output), so a
+ * second such prompt is the tail and the first one is what gets compacted.
+ */
+function compactFiller(): string {
+  return 'zfill '.repeat(26_667).trimEnd();
+}
+
+/** The scenario's `session.compaction` events, by phase. */
+function compactionPhases(events: readonly Message[]): string[] {
+  return events
+    .filter((event) => event.type === 'session.compaction')
+    .map((event) => String(payloadOf(event).phase));
+}
+
+/**
+ * Pressure: the prompt-token count the fake gateway bills the second reply
+ * with (150k) is past DSH's threshold for `fake-1` (about 126k), so the next
+ * turn's first step compacts before it runs — the first prompt goes, the
+ * second (the retained tail) stays. `refuse` puts P1-COMPACT-REFUSE in the
+ * first prompt, which the gateway refuses to summarize.
+ */
+async function autoCompactScenario(
+  context: RecordContext,
+  host: Host,
+  name: string,
+  refuse: boolean
+): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, name);
+  const first = await context.turn(
+    session,
+    'FILL-A',
+    `P1-AUTOCOMPACT {"tag":"a"}${refuse ? ' P1-COMPACT-REFUSE' : ''} ${compactFiller()}`
+  );
+  const second = await context.turn(
+    session,
+    'FILL-B',
+    `P1-AUTOCOMPACT {"tag":"b","claim":150000} ${compactFiller()}`
+  );
+  const third = await context.turn(
+    session,
+    'AFTER',
+    'P1-AUTOCOMPACT {"tag":"c"} what do you remember?'
+  );
+  const phases = compactionPhases(third);
+  const expected = refuse ? ['started', 'failed'] : ['started', 'completed'];
+  if (JSON.stringify(phases) !== JSON.stringify(expected)) {
+    throw new Error(`${name}: compaction phases ${JSON.stringify(phases)}, not ${expected}`);
+  }
+  if (compactionPhases([...first, ...second]).length > 0) {
+    throw new Error(`${name}: compacted before the third turn`);
+  }
+  return finish(context, session, [boot], [first, second, third]);
+}
+
+/**
+ * Overflow: the model refuses the step's request as larger than its window
+ * (HTTP 400, "prompt is too long"); DSH compacts and retries the same step.
+ * The second time the summary request is refused, and the turn fails.
+ */
+async function overflowCompactScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, 'overflow-compact');
+  const first = await context.turn(session, 'STREAM', 'P0-STREAM: stream a paragraph back to me.');
+  const recovered = await context.turn(
+    session,
+    'OVERFLOW-1',
+    'P1-OVERFLOW {"tag":"one"} answer once the context fits.'
+  );
+  const marked = await context.turn(
+    session,
+    'MARKED',
+    'P0-STREAM: stream a paragraph back to me. P1-COMPACT-REFUSE'
+  );
+  const failed = await context.turn(
+    session,
+    'OVERFLOW-2',
+    'P1-OVERFLOW {"tag":"two"} this one cannot be compacted.'
+  );
+  const check = (label: string, events: readonly Message[], expected: string[]) => {
+    const phases = compactionPhases(events);
+    if (JSON.stringify(phases) !== JSON.stringify(expected)) {
+      throw new Error(`overflow-compact ${label}: compaction phases ${JSON.stringify(phases)}`);
+    }
+  };
+  check('STREAM', first, []);
+  check('OVERFLOW-1', recovered, ['started', 'completed']);
+  check('MARKED', marked, []);
+  check('OVERFLOW-2', failed, ['started', 'failed']);
+  if (!failed.some((event) => event.type === 'session.failed')) {
+    throw new Error('overflow-compact OVERFLOW-2: the turn did not fail');
+  }
+  return finish(context, session, [boot], [first, recovered, marked, failed]);
+}
 
 /** The id of the first tree node whose preview contains `text`, and the node after it. */
 function nodeAfter(tree: Message, text: string): { node: string; next?: string } {
@@ -1709,7 +1832,16 @@ async function waitForToolCall(session: Session, from: number): Promise<void> {
  * from one counter per host process (`bash-N`), so on the shared host their
  * samples would depend on which scenarios ran before them.
  */
-const OWN_HOST = new Set(['crash-resume', 'perm-restart', 'jobs-kill', 'sub-cont']);
+const OWN_HOST = new Set([
+  'crash-resume',
+  'perm-restart',
+  'jobs-kill',
+  'sub-cont',
+  // Decision 178: a recording that is the same alone (`--only`) or after the rest.
+  'auto-compact',
+  'auto-compact-fail',
+  'overflow-compact',
+]);
 
 // ---- main ------------------------------------------------------------------------
 

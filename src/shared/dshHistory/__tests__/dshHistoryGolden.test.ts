@@ -132,6 +132,9 @@ function blocksOf(messages: readonly HistoryMessage[]) {
 
 it('finds every recorded scenario (a walker that found none would pass everything)', () => {
   expect(scenarios).toEqual([
+    // Decision 178: automatic compaction, live.
+    'auto-compact',
+    'auto-compact-fail',
     'compact',
     'crash-resume',
     'fail',
@@ -142,6 +145,8 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'job-notice',
     // P1-7b (decisions 069, 119): recorded by the orchestrator at close-out.
     'jobs-kill',
+    // Decision 178: automatic compaction, live.
+    'overflow-compact',
     'perm-card',
     'perm-deny',
     'perm-gear',

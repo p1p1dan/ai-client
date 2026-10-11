@@ -257,6 +257,18 @@
  *                       regression (tools/contention-regression.ts). Every P8 step that
  *                       carries the loop guard's wrap-up instruction is answered with
  *                       text (or, with `wrapTool`, one more tool call, to see it refused).
+ *                       dsh-rebase decision 178 adds two for automatic compaction
+ *                       (tools/bridge-record.ts `auto-compact`, `auto-compact-fail`,
+ *                       `overflow-compact`): P1-AUTOCOMPACT
+ *                       `{"tag":"x","claim":150000}` answers one line saying whether
+ *                       the request carried a compaction checkpoint, billed with
+ *                       `claim` prompt tokens when given (so the next step's pressure
+ *                       crosses DSH's threshold); P1-OVERFLOW `{"tag":"x"}` answers
+ *                       HTTP 400 "prompt is too long" (DSH's CONTEXT_WINDOW_EXCEEDED)
+ *                       until a checkpoint comes after the request's last assistant
+ *                       message, then one line. A summary request whose conversation
+ *                       carries P1-COMPACT-REFUSE anywhere is answered HTTP 400, so
+ *                       the compaction fails.
  *                       dsh-rebase decision 173 (issue #9) adds P1-CHAIN for the prompt
  *                       prefix probe: `P1-CHAIN {"tag":"x","steps":8,"tool":"bash",
  *                       "think":true,"sleepStep":k,"sleepSeconds":3,"cacheSim":"single"}`
@@ -584,7 +596,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN)/;
+  /P1-(FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -613,6 +625,23 @@ const COMPACTION_SUMMARY = [
   '## Current Work',
   '- (none)',
 ].join('\n');
+
+/** Decision 178: a summary request whose conversation carries this is refused. */
+const COMPACT_REFUSE = 'P1-COMPACT-REFUSE';
+/** The close of a compaction checkpoint's summary (dsh-compaction-basic `SUMMARY_CLOSE_TAG`). */
+const CHECKPOINT_CLOSE = '</compacted-summary>';
+
+/** Decision 178: an Anthropic-style HTTP 400 (a request the model refuses as it stands). */
+function invalidRequest(message) {
+  return {
+    kind: 'raw-error',
+    status: 400,
+    body: JSON.stringify({
+      type: 'error',
+      error: { type: 'invalid_request_error', message },
+    }),
+  };
+}
 
 /** Text of a message's own text blocks (tool results excluded). */
 function ownText(message) {
@@ -1274,6 +1303,40 @@ const DSH_P0_2_SCRIPTS = {
     }
     return say('Started a background job; its notice will wake me.');
   },
+  // dsh-rebase decision 178 (`auto-compact`, `auto-compact-fail`): one line
+  // saying whether the request carried a compaction checkpoint; `claim` bills
+  // the reply with that many prompt tokens, so DSH measures the next step's
+  // pressure past its threshold (the token meter takes the provider's count).
+  'P1-AUTOCOMPACT'(_round, _step, _calls, triggerText, _history, _recent, userTexts) {
+    const p = p04Params(triggerText);
+    const seen = (userTexts ?? '').includes(CHECKPOINT_CLOSE)
+      ? 'answered from the summary'
+      : 'answered with the full context';
+    return {
+      ...say(`P1-AUTOCOMPACT ${p.tag}: ${seen}.`),
+      ...(typeof p.claim === 'number' ? { usage: { input_tokens: p.claim } } : {}),
+      tag: p.tag,
+    };
+  },
+  // dsh-rebase decision 178 (`overflow-compact`): the request does not fit
+  // until DSH compacted it — a checkpoint after the request's last assistant
+  // message, which is what its overflow recovery leaves before the retry.
+  'P1-OVERFLOW'(_round, _step, _calls, triggerText, _history, _recent, _userTexts, messages) {
+    const p = p04Params(triggerText);
+    const all = Array.isArray(messages) ? messages : [];
+    const checkpoint = all.findLastIndex(
+      (message) => message?.role === 'user' && ownText(message).includes(CHECKPOINT_CLOSE)
+    );
+    const reply = all.findLastIndex((message) => message?.role === 'assistant');
+    if (checkpoint < 0 || checkpoint < reply) {
+      return {
+        // Anthropic's wording for a prompt larger than the window.
+        ...invalidRequest('prompt is too long: 250000 tokens > 200000 maximum'),
+        tag: p.tag,
+      };
+    }
+    return { ...say(`P1-OVERFLOW ${p.tag}: answered after compaction.`), tag: p.tag };
+  },
   'P1-FAIL'() {
     return {
       kind: 'error',
@@ -1779,6 +1842,13 @@ function decideDshP02(parsed, seq) {
     return { ...say('Wrapping up the goal for the user.'), label: 'wrap-up' };
   }
   if (COMPACTION_INSTRUCTION.test(lastText)) {
+    // Decision 178: the conversation being summarized asks for a failure.
+    if (messages.some((message) => ownText(message).includes(COMPACT_REFUSE))) {
+      return {
+        ...invalidRequest(`${COMPACT_REFUSE}: the fake upstream refused this summary request`),
+        label: 'compaction-refused',
+      };
+    }
     return { ...say(COMPACTION_SUMMARY), label: 'compaction' };
   }
   const p8 = decideP8(messages);

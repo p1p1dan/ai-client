@@ -1,0 +1,324 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-overflow-compact",
+      "piSessionId": "aiclient-rec-overflow-compact",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-overflow-compact.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {
+        "skills": 0
+      }
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-overflow-compact",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-overflow-compact.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P0-STREAM: stream a paragraph back to me."
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-5",
+          "entryId": "id-5",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-5:text:0",
+              "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-overflow-compact-t1-s1"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-6:text:0",
+              "text": "P1-OVERFLOW {\"tag\":\"one\"} answer once the context fits."
+            }
+          ],
+          "liveMessageId": "dsh-user-17"
+        },
+        {
+          "id": "h:id-8",
+          "entryId": "id-8",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-8:summary:0",
+              "text": "Context summary\n\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n\n## Current Work\n- (none)"
+            }
+          ],
+          "liveMessageId": "dsh-compaction-id-7"
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-10:text:0",
+              "text": "P1-OVERFLOW one: answered after compaction."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-overflow-compact-t2-s1"
+        },
+        {
+          "id": "h:id-11",
+          "entryId": "id-11",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-11:text:0",
+              "text": "P0-STREAM: stream a paragraph back to me. P1-COMPACT-REFUSE"
+            }
+          ],
+          "liveMessageId": "dsh-user-31"
+        },
+        {
+          "id": "h:id-14",
+          "entryId": "id-14",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-14:text:0",
+              "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-overflow-compact-t3-s1"
+        },
+        {
+          "id": "h:id-15",
+          "entryId": "id-15",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-15:text:0",
+              "text": "P1-OVERFLOW {\"tag\":\"two\"} this one cannot be compacted."
+            }
+          ],
+          "liveMessageId": "dsh-user-40"
+        },
+        {
+          "id": "h:compaction-id-16",
+          "entryId": "compaction-id-16",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:compaction-id-16:compaction-failed:0",
+              "text": "Automatic compaction did not succeed; the request still exceeds the model’s context window.",
+              "notice": {
+                "key": "Automatic compaction did not succeed; the request still exceeds the model’s context window."
+              }
+            }
+          ],
+          "liveMessageId": "dsh-compaction-id-16"
+        },
+        {
+          "id": "h:id-15:end",
+          "entryId": "id-15:end",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "blocks": [],
+          "incomplete": true,
+          "stopReason": "error",
+          "failure": {
+            "errorCode": "CONTEXT_TOO_LARGE",
+            "error": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"prompt is too long: 250000 tokens > 200000 maximum\"}}"
+          }
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 10,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-overflow-compact",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-overflow-compact.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-15:end",
+        "fileTailEntryId": "aiclient-rec-overflow-compact#45"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-STREAM: stream a paragraph back to me.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-5",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-5",
+          "depth": 2,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-OVERFLOW {\"tag\":\"one\"} answer once the context fits.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-8",
+          "parentId": "id-6",
+          "depth": 3,
+          "entryType": "compaction",
+          "role": "system",
+          "preview": "Context summary ## Primary Request and Intent - P1-COMPACT: stream a paragraph, then list the w…",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-8",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-OVERFLOW one: answered after compaction.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-11",
+          "parentId": "id-10",
+          "depth": 5,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-STREAM: stream a paragraph back to me. P1-COMPACT-REFUSE",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-14",
+          "parentId": "id-11",
+          "depth": 6,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-15",
+          "parentId": "id-14",
+          "depth": 7,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-OVERFLOW {\"tag\":\"two\"} this one cannot be compacted.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "compaction-id-16",
+          "parentId": "id-15",
+          "depth": 8,
+          "entryType": "notice",
+          "role": "system",
+          "preview": "Automatic compaction did not succeed; the request still exceeds the model’s context window.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-15:end",
+          "parentId": "compaction-id-16",
+          "depth": 9,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 10,
+      "returnedNodes": 10,
+      "truncated": false
+    }
+  }
+}

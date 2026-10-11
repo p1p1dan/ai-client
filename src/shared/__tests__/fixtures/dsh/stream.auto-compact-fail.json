@@ -1,0 +1,409 @@
+[
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-FILL-A"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-AUTOCOMPACT {\"tag\":\"a\"} P1-COMPACT-REFUSE <filler>"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-auto-compact-fail-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-auto-compact-fail-t1-s1",
+      "blockId": "dsh-aiclient-rec-auto-compact-fail-t1-s1-b0",
+      "text": "P1-AUTOCOMPACT a: answered with the full context."
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-auto-compact-fail-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-A",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-17",
+      "role": "user",
+      "attemptId": "attempt-FILL-B"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-17",
+      "blockId": "dsh-user-17-text",
+      "text": "P1-AUTOCOMPACT {\"tag\":\"b\",\"claim\":150000} <filler>"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-17"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-auto-compact-fail-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-auto-compact-fail-t2-s1",
+      "blockId": "dsh-aiclient-rec-auto-compact-fail-t2-s1-b0",
+      "text": "P1-AUTOCOMPACT b: answered with the full context."
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-auto-compact-fail-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-FILL-B",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-10",
+      "phase": "started",
+      "trigger": "pressure"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-10",
+      "phase": "failed",
+      "trigger": "pressure"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-27",
+      "role": "user",
+      "attemptId": "attempt-AFTER"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-27",
+      "blockId": "dsh-user-27-text",
+      "text": "P1-AUTOCOMPACT {\"tag\":\"c\"} what do you remember?"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-27"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-auto-compact-fail-t3-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-auto-compact-fail-t3-s1",
+      "blockId": "dsh-aiclient-rec-auto-compact-fail-t3-s1-b0",
+      "text": "P1-AUTOCOMPACT c: answered with the full context."
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-auto-compact-fail-t3-s1"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-auto-compact-fail",
+    "requestId": "turn-AFTER",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

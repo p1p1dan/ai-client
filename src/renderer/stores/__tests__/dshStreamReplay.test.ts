@@ -1,7 +1,14 @@
 // @vitest-environment happy-dom
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { englishTranslate } from '@shared/i18n';
+import {
+  DSH_COMPACTION_FAILED_KEY,
+  DSH_COMPACTION_INTERRUPTED_KEY,
+  DSH_COMPACTION_OVERFLOW_FAILED_KEY,
+  DSH_COMPACTION_RUNNING_KEY,
+  isDshSummaryRow,
+} from '@shared/dshHistory/types';
+import { englishTranslate, zhTranslations } from '@shared/i18n';
 import { deriveContextOccupancy, readPiUsagePayload } from '@shared/piUsage';
 import {
   type DshJobSummary,
@@ -17,7 +24,11 @@ import {
   type TurnItem,
 } from '@/components/chat/chatTurn';
 import { COMPACT_INSTRUCTIONS_UNSUPPORTED } from '@/components/chat/compactCommand';
-import { autoTurnHeadView, dshNoticeRowView } from '@/components/chat/dshTimelineRowModel';
+import {
+  autoTurnHeadView,
+  dshCompactionRowView,
+  dshNoticeRowView,
+} from '@/components/chat/dshTimelineRowModel';
 import { withdrawInterjection } from '@/components/chat/interjectionWithdraw';
 import {
   canRespondToPermission,
@@ -346,7 +357,7 @@ beforeEach(() => {
 /** Scenarios whose recording stops with a turn still open (the host was killed). */
 const ENDS_MID_TURN = new Set(['crash-resume']);
 /** Scenarios whose last turn fails, so the failure card stays up. */
-const ENDS_FAILED = new Set(['fail']);
+const ENDS_FAILED = new Set(['fail', 'overflow-compact']);
 
 describe('every recorded stream', () => {
   /**
@@ -642,6 +653,218 @@ scenario('compact', (events, id) => {
     expect(notice?.kind === 'notice' && textOf(notice.message)).toMatch(/^Context summary\n/);
     // Not one of DSH's light notice lines: a summary is the Alert-style row.
     expect(notice?.kind === 'notice' && dshNoticeRowView(notice.message)).toBeNull();
+  });
+});
+
+// ---- automatic compaction (decision 178) -------------------------------------------
+
+/** The live row of the recording's compaction(s), in order. */
+function compactionEvents(events: readonly RuntimeEvent[]) {
+  return events.filter(
+    (event): event is Extract<RuntimeEvent, { type: 'session.compaction' }> =>
+      event.type === 'session.compaction'
+  );
+}
+
+const idsOf = (messages: readonly ChatMessage[]) => messages.map((message) => message.id);
+
+/** A resume of the live session: Main's triplet with the snapshot a `session.resumed` takes. */
+function resumeOver(
+  state: ChatSessionsState,
+  sessionId: string,
+  messages: readonly HistoryMessage[]
+): ChatSessionsState {
+  return fold(state, historyTriplet(sessionId, messages, 'initial', `resume-${sessionId}`));
+}
+
+scenario('auto-compact', (events, id) => {
+  const rpc = loadRpc('auto-compact');
+  const [started, completed] = compactionEvents(events);
+  const rowId = started?.payload.messageId as string;
+
+  it('runs in the third turn, before its first step: pressure, one row', () => {
+    expect(rowId).toMatch(/^dsh-compaction-/);
+    expect(started?.payload).toEqual({ messageId: rowId, phase: 'started', trigger: 'pressure' });
+    expect(completed?.payload).toMatchObject({ messageId: rowId, phase: 'completed' });
+    expect(started?.requestId).toBe('turn-AFTER');
+  });
+
+  it('shows "Compacting the context…" where it runs, then the summary row in its place', () => {
+    const mid = replayUntil(events, (event) => event === completed);
+    const running = bucket(mid, id).find((message) => message.id === rowId);
+    expect(running && dshCompactionRowView(running)).toEqual({
+      running: true,
+      key: DSH_COMPACTION_RUNNING_KEY,
+    });
+    expect(zhTranslations[DSH_COMPACTION_RUNNING_KEY]).toBe('正在压缩上下文…');
+    // After the second turn's answer; the third prompt is not taken in yet.
+    expect(idsOf(bucket(mid, id)).at(-1)).toBe(rowId);
+
+    const done = replay(events);
+    const ids = idsOf(bucket(done, id));
+    const row = bucket(done, id).find((message) => message.id === rowId);
+    expect(row && isDshSummaryRow(row)).toBe(true);
+    expect(row && dshCompactionRowView(row)).toBeNull();
+    expect(textOf(row)).toMatch(/^Context summary\n\n## Primary Request and Intent/);
+    // Before the prompt it preceded in the log: DSH compacts before the step takes it in.
+    expect(ids.indexOf(rowId)).toBe(ids.indexOf('dsh-user-29') - 1);
+    expect(turnsOf(done, id)[2]?.answer).toBe('P1-AUTOCOMPACT c: answered from the summary.');
+  });
+
+  it('a reopen draws the same row in the same place, under the live id', () => {
+    const history = rpc.history.page.messages as HistoryMessage[];
+    const summary = history.find((message) => message.liveMessageId === rowId);
+    expect(summary && isDshSummaryRow(summary)).toBe(true);
+    const reopened = bucket(reopen(id, history), id);
+    const at = reopened.findIndex((message) => message.id === summary?.id);
+    expect(textOf(reopened[at])).toBe(
+      textOf(bucket(replay(events), id).find((m) => m.id === rowId))
+    );
+    expect(reopened[at + 1]?.liveMessageId).toBe('dsh-user-29');
+  });
+
+  it('a resume folds the live row into the history’s: one summary, where it was', () => {
+    const resumed = bucket(
+      resumeOver(replay(events), id, rpc.history.page.messages as HistoryMessage[]),
+      id
+    );
+    expect(resumed.filter((message) => isDshSummaryRow(message))).toHaveLength(1);
+    expect(resumed.some((message) => message.id === rowId)).toBe(false);
+    const at = resumed.findIndex((message) => message.liveMessageId === rowId);
+    expect(resumed[at + 1]?.liveMessageId).toBe('dsh-user-29');
+  });
+
+  it('a turn that ends while it runs leaves no row spinning', () => {
+    const mid = replayUntil(events, (event) => event === completed);
+    const stopped = fold(mid, [
+      {
+        type: 'session.stopped',
+        sessionId: id,
+        requestId: 'turn-AFTER',
+        seq: 0,
+        timestamp: T0,
+        payload: { stopCause: 'forced' },
+      } as RuntimeEvent,
+    ]);
+    const row = bucket(stopped, id).find((message) => message.id === rowId);
+    expect(row && dshCompactionRowView(row)).toEqual({
+      running: false,
+      key: DSH_COMPACTION_INTERRUPTED_KEY,
+    });
+    expect(zhTranslations[DSH_COMPACTION_INTERRUPTED_KEY]).toBe(
+      '自动压缩没有完成，上下文没有压缩。'
+    );
+  });
+});
+
+scenario('auto-compact-fail', (events, id) => {
+  const rpc = loadRpc('auto-compact-fail');
+  const [started, failed] = compactionEvents(events);
+  const rowId = started?.payload.messageId as string;
+
+  it('says the compaction did not succeed, in one line, and the turn goes on', () => {
+    expect(failed?.payload).toEqual({ messageId: rowId, phase: 'failed', trigger: 'pressure' });
+    const state = replay(events);
+    const row = bucket(state, id).find((message) => message.id === rowId);
+    expect(row && dshCompactionRowView(row)).toEqual({
+      running: false,
+      key: DSH_COMPACTION_FAILED_KEY,
+    });
+    expect(zhTranslations[DSH_COMPACTION_FAILED_KEY]).toBe(
+      '自动压缩没有成功，这一轮继续使用完整的上下文。'
+    );
+    // Not the Alert of other system rows.
+    expect(row && dshNoticeRowView(row)).toBeNull();
+    expect(turnsOf(state, id)[2]?.answer).toBe('P1-AUTOCOMPACT c: answered with the full context.');
+    expect(sessionOf(state, id)?.status).toBe('idle');
+  });
+
+  it('a reopen keeps the note where it was; a resume folds the live one into it', () => {
+    const history = rpc.history.page.messages as HistoryMessage[];
+    const note = history.find((message) => message.liveMessageId === rowId);
+    expect(note?.blocks[0]).toMatchObject({ notice: { key: DSH_COMPACTION_FAILED_KEY } });
+    const reopened = bucket(reopen(id, history), id);
+    const at = reopened.findIndex((message) => message.id === note?.id);
+    expect(reopened[at] && dshCompactionRowView(reopened[at])).toEqual({
+      running: false,
+      key: DSH_COMPACTION_FAILED_KEY,
+    });
+    expect(reopened[at + 1]?.liveMessageId).toBe('dsh-user-27');
+    const resumed = bucket(resumeOver(replay(events), id, history), id);
+    expect(resumed.filter((message) => dshCompactionRowView(message) !== null)).toHaveLength(1);
+    expect(resumed.some((message) => message.id === rowId)).toBe(false);
+  });
+});
+
+scenario('overflow-compact', (events, id) => {
+  const rpc = loadRpc('overflow-compact');
+  const [started, completed, startedAgain, failed] = compactionEvents(events);
+  const recoveredStep = 'dsh-aiclient-rec-overflow-compact-t2-s1';
+  const failedStep = 'dsh-aiclient-rec-overflow-compact-t4-s1';
+
+  it('compacts inside the refused step, and goes before that step’s reply', () => {
+    expect(started?.payload).toMatchObject({
+      phase: 'started',
+      trigger: 'overflow',
+      beforeMessageId: recoveredStep,
+    });
+    expect(completed?.payload).toMatchObject({ phase: 'completed', trigger: 'overflow' });
+    const state = replay(events);
+    const ids = idsOf(bucket(state, id));
+    const rowId = started?.payload.messageId as string;
+    expect(ids.indexOf(rowId)).toBe(ids.indexOf(recoveredStep) - 1);
+    expect(ids.indexOf(rowId)).toBe(ids.indexOf('dsh-user-17') + 1);
+    expect(turnsOf(state, id)[1]).toMatchObject({
+      items: ['notice', 'text'],
+      answer: 'P1-OVERFLOW one: answered after compaction.',
+    });
+    // The reopen draws the summary between the same two rows.
+    const reopened = bucket(reopen(id, rpc.history.page.messages as HistoryMessage[]), id);
+    const at = reopened.findIndex((message) => message.liveMessageId === rowId);
+    expect(reopened[at] && isDshSummaryRow(reopened[at])).toBe(true);
+    expect(reopened[at - 1]?.liveMessageId).toBe('dsh-user-17');
+    expect(reopened[at + 1]?.liveMessageId).toBe(recoveredStep);
+  });
+
+  it('when the compaction is refused the turn fails, and the card says what DSH tried', () => {
+    expect(failed?.payload).toMatchObject({
+      messageId: startedAgain?.payload.messageId,
+      phase: 'failed',
+      trigger: 'overflow',
+      beforeMessageId: failedStep,
+    });
+    const state = replay(events);
+    const row = bucket(state, id).find((message) => message.id === failed?.payload.messageId);
+    expect(row && dshCompactionRowView(row)).toEqual({
+      running: false,
+      key: DSH_COMPACTION_OVERFLOW_FAILED_KEY,
+    });
+    expect(zhTranslations[DSH_COMPACTION_OVERFLOW_FAILED_KEY]).toBe(
+      '自动压缩没有成功，请求仍然超出模型的上下文窗口。'
+    );
+    const ids = idsOf(bucket(state, id));
+    expect(ids.indexOf(row?.id as string)).toBe(ids.indexOf(failedStep) - 1);
+    const current = sessionOf(state, id);
+    expect(current).toMatchObject({ status: 'failed', runtimeErrorCode: 'CONTEXT_TOO_LARGE' });
+    const view = deriveSessionFailure({
+      error: current?.runtimeError,
+      errorCode: current?.runtimeErrorCode,
+    });
+    expect(view.title).toBe('The conversation no longer fits the model’s context window');
+    expect(view.reason).toContain('The request was sent');
+    expect(canContinueSession(view, true)).toBe(false);
+    expect(current?.runtimeError).toContain('prompt is too long');
+  });
+
+  it('a resume folds both live rows into the history’s, in place', () => {
+    const history = rpc.history.page.messages as HistoryMessage[];
+    const resumed = bucket(resumeOver(replay(events), id, history), id);
+    for (const event of [started, startedAgain]) {
+      const liveId = event?.payload.messageId as string;
+      expect(resumed.some((message) => message.id === liveId)).toBe(false);
+      expect(resumed.filter((message) => message.liveMessageId === liveId)).toHaveLength(1);
+    }
+    expect(resumed.filter((message) => isDshSummaryRow(message))).toHaveLength(1);
   });
 });
 
@@ -1490,6 +1713,8 @@ const REOPEN_DIFFERS: Readonly<Record<string, string>> = {
   compact: 'the summary row is written by /compact; a command send is not a turn in the log',
   'crash-resume': 'the restart adds the interrupted note and settles the row (asserted above)',
   fail: 'the failure card is live; the log keeps an empty reply, drawn as interrupted',
+  'overflow-compact':
+    'the last turn’s failure card is live; the log keeps an empty reply, drawn as interrupted',
   fork: 'the source page is the one the fork left behind (asserted above)',
   rewind: 'the page after a rewind drops the retired turn (asserted above)',
   'perm-grants': 'the session-grant activity row is live only (decision 143)',
