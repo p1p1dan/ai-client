@@ -63,6 +63,13 @@
  * (lib/requestScope.ts), whose `llm/stream` listener the boot callback
  * registers before any row loads; the rows read what the tap found through
  * the `aiclientRequestScope` service.
+ *
+ * Automatic compaction (decision 177): once the patches are composed, each
+ * model of the plan whose compaction DSH's defaults do not serve (a window
+ * they leave no useful threshold in, an output limit under the summary's
+ * 65536) gets a `modelPolicies` entry, added to the `compaction-basic` row's
+ * config as the layers left it (lib/hostCompaction.ts); one log line lists
+ * every model's threshold.
  */
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -74,6 +81,14 @@ import { format } from 'node:util';
 import { REQUEST_SCOPE_SERVICE } from '../shared/types/requestScope.ts';
 import { dshHomeFrom, readOrCreateAnonymousId } from './lib/anonymousId.ts';
 import { CredentialRelay } from './lib/credentialRelay.ts';
+import {
+  autoCompactionOverlay,
+  COMPACTION_ROW,
+  compactionModelPolicies,
+  describeAutoCompaction,
+  findComposedRow,
+  planAutoCompaction,
+} from './lib/hostCompaction.ts';
 import {
   CONFIGURE_TIMEOUT_MS,
   emptyHostModelPlan,
@@ -499,7 +514,8 @@ const profileContext = {
   home,
   // The plan's two rows, then <agentDir>'s two rows (P1-16a, decision 101),
   // then the required rows off, then the permission gate on (P1-6b, decision
-  // 042) — all after every user layer.
+  // 042) — all after every user layer. Decision 177's compaction-basic row
+  // joins them once the patches are composed (below).
   overlays: [
     ...modelPlanOverlays(modelPlan),
     ...agentDirOverlays(agentDir),
@@ -528,6 +544,28 @@ if (artifact.form === 'packaged') {
     appBoot.composeEntries([patches]).some((row) => row.id === 'session-telemetry-otel')
   );
   if (telemetryPatch !== undefined) patches.push(telemetryPatch);
+}
+
+// Decision 177: each model's automatic compaction policy, added to the
+// compaction-basic row's config as every layer above left it. The plan is
+// fixed at boot, so this runs (and logs) once per plan revision.
+const plannedCompaction = planAutoCompaction(modelPlan);
+const compactionOverlay = autoCompactionOverlay(
+  findComposedRow(appBoot.composeEntries([patches]), COMPACTION_ROW),
+  compactionModelPolicies(plannedCompaction)
+);
+if (compactionOverlay.kind === 'overlay') {
+  profileContext.overlays.push(compactionOverlay.overlay);
+  patches.push(structuredClone(compactionOverlay.overlay) as (typeof patches)[number]);
+} else if (compactionOverlay.kind === 'skipped') {
+  warn(`per-model compaction policies not applied: ${compactionOverlay.reason}`);
+}
+for (const line of describeAutoCompaction(
+  modelPlan.revision,
+  plannedCompaction,
+  compactionOverlay
+)) {
+  process.stderr.write(`[dsh-host] ${line}\n`);
 }
 
 // Static composition audit, before any plugin imports.

@@ -707,10 +707,12 @@ describe('the host bundle (P1-3a)', () => {
     // Decision 171: the User-Agent relay and the check it shares with Main.
     // Decision 173: the request scope and tap, their libraries and the names
     // they share with the bridge and Main.
+    // Decision 177: the per-model compaction policies and the shared rules.
     expect(verdict.inputs.sort()).toEqual([
       'src/dsh-host/host.ts',
       'src/dsh-host/lib/anonymousId.ts',
       'src/dsh-host/lib/credentialRelay.ts',
+      'src/dsh-host/lib/hostCompaction.ts',
       'src/dsh-host/lib/hostModelPlan.ts',
       'src/dsh-host/lib/hostPlugins.ts',
       'src/dsh-host/lib/hostProfile.ts',
@@ -719,6 +721,7 @@ describe('the host bundle (P1-3a)', () => {
       'src/dsh-host/lib/requestTap.ts',
       'src/dsh-host/lib/sessionMetadata.ts',
       'src/dsh-host/lib/userAgentRelay.ts',
+      'src/shared/dshAutoCompaction.ts',
       'src/shared/dshPluginAllowlist.ts',
       'src/shared/dshPlugins.ts',
       'src/shared/types/requestScope.ts',
@@ -734,6 +737,7 @@ describe('the host bundle (P1-3a)', () => {
     expect(text).toContain('function installUserAgentRelay(');
     expect(text).toContain('function installRequestTap(');
     expect(text).toContain('function installRequestScope(');
+    expect(text).toContain('function autoCompactionPolicy(');
   });
 
   it('flags a host bundle that took in anything else', () => {

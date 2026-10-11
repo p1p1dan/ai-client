@@ -7,6 +7,8 @@
  * this host must carry. host.ts waits for it before it composes the profile,
  * then injects two in-memory overlays, `llm-pi-ai` and `agent-default-model`,
  * after every user layer; nothing is written to disk or to the environment.
+ * Decision 177 adds a third from the same plan once the patches are composed:
+ * `compaction-basic`'s per-model policies (lib/hostCompaction.ts).
  *
  * Bundled into host.js with host.ts, which may take in only its own `lib/`
  * (scripts/build-dsh-host.mjs): the protocol's guard and timeout are restated

@@ -83,12 +83,14 @@ export const HOST_ENTRY = { entry: 'host.ts', out: 'host.js' };
  * the plugin allowlist library and the Main/host plugin contract it applies
  * at every start; decision 171: the User-Agent check and relay header name
  * the fetch wrapper shares with Main; decision 173: the request scope names
- * and types the fetch wrapper shares with the bridge and Main); everything
- * else stays external.
+ * and types the fetch wrapper shares with the bridge and Main; decision 177:
+ * the per-model compaction rules the settings show); everything else stays
+ * external.
  */
 export const HOST_INPUTS = [
   'src/dsh-host/host.ts',
   'src/dsh-host/lib/',
+  'src/shared/dshAutoCompaction.ts',
   'src/shared/dshPluginAllowlist.ts',
   'src/shared/dshPlugins.ts',
   'src/shared/types/requestScope.ts',

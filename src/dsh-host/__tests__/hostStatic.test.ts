@@ -163,6 +163,21 @@ describe('host.ts composition (HS-02, HS-03, decisions 023 and 025)', () => {
     );
   });
 
+  it("adds each model's compaction policy to the row as the layers left it, before the audit, and logs it (decision 177)", () => {
+    const composed = host.indexOf(
+      'findComposedRow(appBoot.composeEntries([patches]), COMPACTION_ROW)'
+    );
+    expect(composed).toBeGreaterThan(host.indexOf('appBoot.readProfilePatches('));
+    expect(composed).toBeLessThan(host.indexOf('// Static composition audit'));
+    expect(host).toContain('compactionModelPolicies(plannedCompaction)');
+    expect(host).toMatch(
+      /profileContext\.overlays\.push\(compactionOverlay\.overlay\);\s*patches\.push\(structuredClone\(compactionOverlay\.overlay\)/
+    );
+    expect(host).toContain('describeAutoCompaction(');
+    // The product bundle never patches the row itself (decision 015's probe switch aside).
+    expect(read('bundle', 'cordis.patch.yml')).not.toContain('compaction-basic');
+  });
+
   it('refuses a composition without the loop guard, the credentials row, the permission gate or the encrypted-read fallback on (P1-8, P1-5b, P1-6b, P1-13c)', () => {
     expect(host).toContain('const notEnabled = REQUIRED_ENABLED.filter(');
     expect(host).toMatch(/if \(notEnabled\.length > 0\) fail\(/);
