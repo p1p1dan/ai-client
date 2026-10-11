@@ -249,3 +249,79 @@ DSH 侧（0.1.7-rc.2）读到的两个事实，第 4 节依赖它们：
 - [ ] 第 7 节假网关 `P1-COMPACT-SLOW` 与新场景 `compact-cancel`；`compact`、`compact-instructions` 两个场景的流里加入压缩事件（待重录）
 - [ ] 第 10 节风险的接受程度
 - [ ] 第 11 节 Windows 现场清单
+
+## 13 验收后的修复（2026-10-11）
+
+来源：dsh.11 出包前的真实网关验收 [dsh11-acceptance-real-gateway-2026-10-11](../evidence/dsh11-acceptance-real-gateway-2026-10-11.md) 的 DA-2、DA-4、DA-5、DA-6（DA-1 另立[决策 181](181-summary-request-reasoning-level.md)，DA-3 是网关侧问题，不在客户端修）。自主决定，待用户审批。代码：尚未提交（工作树，HEAD `acc398fc`）。
+
+### 13.1 DA-2：压缩失败时写明上游拒绝的原因
+
+- 根因：DSH 的 `/compact` 把摘要请求的任何失败都答成固定的一句（`@deepseek-ai/dsh-command-compact/lib/index.js:32-35`，「Compaction could not produce a useful summary…」），真正的原因只在这次压缩的 `compaction/end.error` 里；`dshCompactNote`（`shared/dshHistory/types.ts:282`，改前）只读 `command/done`，所以 bridge 的直播行、投影的重开行、输入框的兜底都只能说「没能生成有用的摘要」。bridge 的日志行还把原文截在 500 字（`bridge/liveEvents.ts:434`，改前）。
+- 修法：
+  - `dshCompactUpstreamReason(error)`（`shared/dshHistory/types.ts`）：从 pi-ai 的错误文字里取出「HTTP 状态 · 错误码: 服务方的原句」一行——认 Anthropic SDK 的 `400 {json}`、pi-ai OpenAI 的 `OpenAI API error (400): …`、流内失败的 `unsupported_value: …` / `Error Code x: …`；既没有 HTTP 状态也没有错误码的（DSH 自己的「摘要不比原文短」、流被截断、中止）不算上游答复，返回空。去掉 URL（`[url]`）、请求 / 会话 id（`request_id`、`x-request-id`、`cch_session_id`、`req_…` 等）、密钥形状（复用 `redactCredentials`），折成一行，截 240 字。
+  - `dshCompactNote(doneText, endError)`：「没有有用的摘要」且 `endError` 是上游答复时，改用新词条 `The model service did not complete the summary request ({{reason}}), so nothing was compacted. The attempt is recorded in the session log.`（「模型服务没有完成生成摘要的请求（{{reason}}），对话没有压缩。这次尝试已记录在会话日志里。」）；取消、超时、DSH 的其他原句不变。
+  - 投影（`projection.ts` `onManualCompactionEnd` / `wordManualNote`）与直播（`liveEvents.ts` `onManualCompactionEnd` / `failManual`）都记下 `compaction/end.error` 传进去，两种先后（`command/done` 在 end 之前或之后）都对。
+  - bridge 对 `/compact` 的失败答复（`WORKER_COMPACT_FAILED`）在 DSH 原句后加 ` The summary request failed: <原因>`（`dshCompactFailureText`；`dshSessionRuntime.ts` 运行时记下本次的 `compaction/end.error`）；渲染层的兜底（`classifyCompactFailure` → `dshCompactNote`）认这个标记，三处说法一致。
+  - 完整原文进日志：bridge 的 `[dsh-bridge] /compact ended without a summary: …` 改为保留 4500 字（pi-ai 自己最多保留 4000 字的错误体再加前缀），经 Main 的宿主 stderr 脱敏后写入 Main 日志。
+- 只改手动压缩的失败行；自动压缩（决策 178）的失败行措辞是「这一轮按完整上下文继续」，没有加原因（改它要重录 `auto-compact-fail`、`overflow-compact`），留作后续。
+- 例：GPT 6.1 Sol 的那次失败重开后显示「模型服务没有完成生成摘要的请求（unsupported_value: Unsupported value: 'none' is not supported with the 'gpt-6.1-sol' model. Supported values are: …），对话没有压缩。…」；假网关的 Anthropic 400 显示「…（HTTP 400 · invalid_request_error: P1-COMPACT-REFUSE: …）…」。
+
+### 13.2 DA-4：用户取消压缩不再按 error 级记日志
+
+- 根因：Electron 的 `ipcMain.handle` 对任何被拒绝的处理器都用 `console.error` 打 `Error occurred in handler for 'chat:compactSession': …`；`chat.ts`（改前 891-908 行）把 worker 的 `WORKER_COMPACT_CANCELLED` 原样抛出。
+- 修法：`chat:compactSession` 认出 worker 的取消（`WorkerSlotError.remoteCode === WORKER_COMPACT_CANCELLED`）时**答复** `{compacted: false, cancelled: true}`（`shared/types/workerRpc.ts` 的 `ChatCompactCancelled` / `ChatCompactSessionResult`），并 `console.info('[chat] /compact of <会话> was cancelled by the user')`；其他拒绝照旧抛出。渲染层 `runCompactCommand` 把这个答复读作「已取消」（仍认被拒绝的老形式）；preload 的返回类型随之改。时间线、toast、输入框行为都不变。
+
+### 13.3 DA-6：手动压缩的行排在上一回合页脚之前
+
+- 核实：不只 GPT，任何模型、直播与重开都一样，决策 140 起手动压缩的摘要行也一样。根因两处：
+  - `chatTurn.ts:85-104`（改前）`groupMessagesIntoTurns` 只在 user 消息处开新回合，命令行、运行 / 摘要 / 说明行（都是 system 行）并进上一回合的 body；
+  - `MessageTimeline.tsx:2736`（改前）回合的「✻ 完成于…」行（`TurnWorkZoneRow`）画在 body 全部内容之后，于是压缩的行排在它前面，看起来像插进了上一回合。验收里 Opus 那次没有核对 DOM 顺序，所以只在 GPT 会话看到。
+- 修法：
+  - `groupMessagesIntoTurns`：`/compact` 的命令行（`isDshCompactCommandRow`，占位行与直播 / 历史行都认）开一个 `kind: 'compaction'` 的组，其后到下一个提问之前的行都归它；
+  - `MessageTimeline`：这种组用 `ManualCompactionTurn` 只画行本身——没有计时、没有「✻」行、没有复制条、没有 `data-turn-id`（提问导航只跳提问）；
+  - 发送绑定、失败归属、重试条、每秒刷新等「最后一个回合」的判断改用最后一个真回合（`lastRealTurnIndex`），与这些行以前并在那个回合里时一致。自动压缩（决策 178）的行属于它所在的回合，不变。
+- 直播与重开一致：两者的行序相同（命令行在前），分组规则只看行本身。
+
+### 13.4 DA-5：网关「该分组没有这个模型」的 503 不再自动重试
+
+- 根因：`shared/dshFailureCodes.ts:138`（改前）的「无上游」规则（决策 146）只认 `no_available_providers` 与「所有供应商不可用」；GPT 6 Luna 的 `OpenAI API error (503): {"message":"Model \"gpt-6-luna\" is not available for this group (…)","type":"service_unavailable_error",…}` 被 DSH 归为 `SERVER`，按路由的重试策略重试 3 次（每次约 30 s 才失败）。
+- 修法：规则加上网关的原句 `is not available for this group`：归为 `GATEWAY_NO_UPSTREAM`（失败卡「公司网关没有可用的模型服务」，带「仍然继续」），宿主的重试否决（决策 146）不再重试。这句话是网关按分组配置给出的答复，同样的请求在管理员改配置之前只会得到同样的答复；只匹配这一整句，`not available`、`not available for this region` 之类不受影响（测试钉住）。
+
+### 13.5 测试
+
+- 投影 `projection.test.ts`：`[180-DA2-1]`（各种错误形状、脱敏、DSH 自己的原因不算、截断）、`[180-DA2-2]`（两种先后、中文词条、答复标记往返、取消不受影响）。
+- bridge：`liveEvents.test.ts` `[180-DA2-LIVE]`（直播行与重开同一句，日志整段）；`commandsAndState.test.ts` `[180-DA2-B]`（失败答复带原因、直播行与历史行）。
+- Main：`chatPiWorkerRouting.test.ts` `[180-DA4-IPC]`（取消被答复、info 级、其他拒绝照旧）。
+- 渲染层：`compactCommand.test.ts` `[CC-DA4]`、`[CC-DA2]`；`chatTurn.test.ts` `[180-DA6]`（分组、最后真回合、不复用旧组）；`compactTimelineMount.test.ts` `[180-DA6]` 四例（挂载真 `MessageTimeline`：直播运行中、本窗口占位行、重开无摘要、对话末尾——命令行与运行 / 说明行都在「✻ 完成于」之后、下一个提问之前，组内没有计时与「✻」，只有两个 `data-turn-id`）。改前这四例失败（命令行的文字位置在「✻ 完成于」之前），改后通过。`dshStreamReplay.test.ts` 的 `compact` 场景随分组改写（压缩成为第二轮之后单独的一组）。
+- 共用：`dshFailureCodes.test.ts` `[180-DA5]`。
+- 真宿主：决策 181 的 `[181-I-2]` 用真实 pi-ai 错误文字核对了 DA-2 的整条链（时间线行与 `WORKER_COMPACT_FAILED` 答复都带 `HTTP 400 · unsupported_value: …`）。
+
+### 13.6 门禁（2026-10-11，与决策 181 同一轮，开发机，一次一个测试进程，每次先看 `free -m`）
+
+- `pnpm typecheck`、`tsc --noEmit -p src/dsh-host/tsconfig.json`：通过。
+- `biome check`：本节与决策 181 改动和新增的 27 个文件无问题。
+- `vitest run src/dsh-host`：52 个文件通过、4 个跳过，1093 项；`vitest run scripts`：13 个文件、230 项；`vitest run src/renderer/components/chat`：170 个文件、3365 项；`vitest run src/renderer/stores`：45 个文件、887 项；`vitest run src/main/services/agent-host src/main/ipc`：53 个文件通过、1 个跳过，863 项；`vitest run Static Scan Wiring`：79 个文件、823 项；`vitest run src/shared/__tests__ src/shared/dshHistory`：44 个文件、862 项。
+- 真宿主 `AICLIENT_DSH_INTEGRATION=1 vitest run src/dsh-host/__tests__/summaryEffort.integration.test.ts`：4 项通过。
+- `bridge-smoke.ts`：exit 0。`bridge-record.ts --check`（全量 36 个场景）：0 差异，**不需要重录**（录制里没有上游拒绝的手动压缩；分组只在渲染层）。
+- 没有起 Electron、没有整包构建；模型请求只走本地假网关。
+
+### 13.7 风险
+
+1. 上游原因是服务方的英文原句，中文界面里夹英文（与回合失败卡的细节一样）；脱敏规则宁多勿少，个别原句里像字段名的词可能被打成 `[redacted]`。
+2. 原因只认「有 HTTP 状态或错误码」的失败；网关把拒绝包装成别的形状时仍是「没能生成有用的摘要」，日志里有原文。
+3. DA-6 之后，压缩的行与上一回合之间隔着那一回合的复制条位置（悬停才显示）；上一回合在压缩进行中仍是「最后一个回合」（发送、失败卡、重试条都归它）。
+4. DA-5 的整句是公司网关（claude-code-hub）的英文原句；网关改措辞或换中文后，又会回到「重试 3 次」，并按普通服务错误显示。
+
+### 13.8 Windows 现场清单（追加）
+
+14. 公司网关 GPT 6.1 Sol 有几轮内容后 `/compact`：应成功（决策 181）；若失败，时间线行写明「模型服务没有完成生成摘要的请求（HTTP …）」而不是「没能生成有用的摘要」。
+15. 压缩中按 Esc 取消：Main 日志里是 `[info] … /compact of … was cancelled by the user`，不再有 `[error] Error occurred in handler for 'chat:compactSession'`。
+16. 有完成页脚（「✻ 完成于…」）的回合之后 `/compact`：命令行与运行 / 摘要 / 说明行都在页脚之下、下一个提问之上；关掉再打开对话，顺序相同。
+17. 选一个网关分组里没有的模型发消息（如 GPT 6 Luna）：几秒内出「公司网关没有可用的模型服务」卡，不再等约 90 s 的三次重试。
+
+### 13.9 用户审批
+
+- [ ] 13.1 DA-2：失败行写「HTTP 状态 · 错误码: 原句」（脱敏、一行、240 字）；只改手动压缩；日志保留整段
+- [ ] 13.2 DA-4：取消由 IPC 答复而不是抛出，info 级日志
+- [ ] 13.3 DA-6：手动压缩的行单独成组，排在上一回合及其页脚之后，不画计时 / 页脚 / 复制条
+- [ ] 13.4 DA-5：「该分组没有这个模型」按「网关无上游」处理，不自动重试
