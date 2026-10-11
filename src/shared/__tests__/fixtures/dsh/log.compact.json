@@ -774,7 +774,7 @@
         "shadowedTokenCount": 0,
         "provider": "aiclient-gateway",
         "model": "fake-1",
-        "maxTokens": 65536,
+        "maxTokens": 8192,
         "usage": {
           "inputTokens": 0,
           "outputTokens": 0,
