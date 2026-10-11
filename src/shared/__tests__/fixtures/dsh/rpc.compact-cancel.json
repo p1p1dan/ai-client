@@ -1,0 +1,333 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-compact-cancel",
+      "piSessionId": "aiclient-rec-compact-cancel",
+      "cwd": "<workspace>/compact-cancel",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact-cancel.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {
+        "skills": 0
+      }
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-compact-cancel",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact-cancel.dsh.json",
+    "workspacePath": "<workspace>/compact-cancel",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P0-STREAM: stream a paragraph back to me. P1-COMPACT-SLOW"
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-5",
+          "entryId": "id-5",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-5:text:0",
+              "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-compact-cancel-t1-s1"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-6:text:0",
+              "text": "P0-TOOL: list the workspace."
+            }
+          ],
+          "liveMessageId": "dsh-user-17"
+        },
+        {
+          "id": "h:id-9",
+          "entryId": "id-9",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-9:tool-call:toolu_id-7",
+              "toolCallId": "toolu_id-7",
+              "name": "bash",
+              "input": {
+                "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+                "description": "List the workspace"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-10:tool-result:toolu_id-7",
+              "toolCallId": "toolu_id-7",
+              "ok": true,
+              "output": "bridge tool row ok\n<workspace>/compact-cancel\n.\n..\n"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-compact-cancel-t2-s1"
+        },
+        {
+          "id": "h:id-12",
+          "entryId": "id-12",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-12:text:0",
+              "text": "Tool row finished: the workspace listing is above."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-compact-cancel-t2-s2"
+        },
+        {
+          "id": "h:compact-command-id-14",
+          "entryId": "compact-command-id-14",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:compact-command-id-14:compact-command:0",
+              "text": "/compact 保留失败经验（P1-COMPACT-CANCEL）"
+            }
+          ],
+          "liveMessageId": "dsh-compact-command-id-14"
+        },
+        {
+          "id": "h:compaction-id-14",
+          "entryId": "compaction-id-14",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:compaction-id-14:compaction-failed:0",
+              "text": "Compaction cancelled. Nothing was compacted.",
+              "notice": {
+                "key": "Compaction cancelled. Nothing was compacted."
+              }
+            }
+          ],
+          "liveMessageId": "dsh-compaction-id-14"
+        },
+        {
+          "id": "h:id-15",
+          "entryId": "id-15",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-15:text:0",
+              "text": "P1-AUTOCOMPACT {\"tag\":\"after\"} what do you remember?"
+            }
+          ],
+          "liveMessageId": "dsh-user-34"
+        },
+        {
+          "id": "h:id-17",
+          "entryId": "id-17",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-17:text:0",
+              "text": "P1-AUTOCOMPACT after: answered with the full context."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-compact-cancel-t3-s1"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 9,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-compact-cancel",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact-cancel.dsh.json",
+      "workspacePath": "<workspace>/compact-cancel",
+      "leaf": {
+        "activeEntryId": "id-17",
+        "fileTailEntryId": "aiclient-rec-compact-cancel#37"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-STREAM: stream a paragraph back to me. P1-COMPACT-SLOW",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-5",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-5",
+          "depth": 2,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-TOOL: list the workspace.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-9",
+          "parentId": "id-6",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-12",
+          "parentId": "id-9",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "Tool row finished: the workspace listing is above.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "compact-command-id-14",
+          "parentId": "id-12",
+          "depth": 5,
+          "entryType": "notice",
+          "role": "system",
+          "preview": "/compact 保留失败经验（P1-COMPACT-CANCEL）",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "compaction-id-14",
+          "parentId": "compact-command-id-14",
+          "depth": 6,
+          "entryType": "notice",
+          "role": "system",
+          "preview": "Compaction cancelled. Nothing was compacted.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-15",
+          "parentId": "compaction-id-14",
+          "depth": 7,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-AUTOCOMPACT {\"tag\":\"after\"} what do you remember?",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-17",
+          "parentId": "id-15",
+          "depth": 8,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-AUTOCOMPACT after: answered with the full context.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 9,
+      "returnedNodes": 9,
+      "truncated": false
+    }
+  },
+  "compact": {
+    "cancel": {
+      "ok": true,
+      "result": {
+        "cancelled": true
+      }
+    },
+    "answer": {
+      "ok": false,
+      "code": "WORKER_COMPACT_CANCELLED",
+      "retryable": false
+    },
+    "eventsAfter": 2
+  },
+  "compactInstructions": [
+    {
+      "compactionId": "id-14",
+      "instructions": "保留失败经验（P1-COMPACT-CANCEL）",
+      "at": "<ms>",
+      "unused": true
+    }
+  ]
+}

@@ -11,7 +11,7 @@ import type {
 import { paginateHistory } from '../page.ts';
 import { INTERRUPTED_TURN_NOTICE_KEY, projectDshHistory } from '../projection.ts';
 import { buildDshSessionTree, dshLeafCheckpoint } from '../tree.ts';
-import type { DshLogEvent } from '../types.ts';
+import { type DshLogEvent, isDshCompactCommandRow } from '../types.ts';
 
 /**
  * dsh-rebase P1-4a / P1-4e — the projection against real DSH logs.
@@ -60,7 +60,7 @@ interface RpcSample {
    * Decision 179: what the stub kept of each `/compact <instructions>`, which
    * the bridge's projection reads beside the log (`compact-instructions`).
    */
-  compactInstructions?: Array<{ compactionId: string; instructions: string }>;
+  compactInstructions?: Array<{ compactionId: string; instructions: string; unused?: true }>;
 }
 
 function read<T>(file: string): T {
@@ -123,15 +123,22 @@ function projectLog(
   live = false,
   compactInstructions?: RpcSample['compactInstructions']
 ): HistoryMessage[] {
-  const instructions = new Map(
-    (compactInstructions ?? []).map((entry) => [entry.compactionId, entry.instructions])
-  );
+  // As the bridge reads the stub: the summary's line only for instructions it
+  // used; the command line for whatever was typed (decision 180).
+  const entries = new Map((compactInstructions ?? []).map((entry) => [entry.compactionId, entry]));
   return projectDshHistory(
     log.events.map((event) => ({ ...event, time: T0 + event.seq }) as DshLogEvent),
     {
       ...(live ? { liveSessionId: log.header.id } : {}),
-      ...(instructions.size > 0
-        ? { compactInstructions: (compactionId: string) => instructions.get(compactionId) }
+      ...(entries.size > 0
+        ? {
+            compactInstructions: (compactionId: string) => {
+              const entry = entries.get(compactionId);
+              return entry && !entry.unused ? entry.instructions : undefined;
+            },
+            compactCommandInstructions: (compactionId: string) =>
+              entries.get(compactionId)?.instructions,
+          }
         : {}),
     }
   );
@@ -153,6 +160,8 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'auto-compact',
     'auto-compact-fail',
     'compact',
+    // Decision 180: `/compact` cancelled while it summarizes.
+    'compact-cancel',
     // Decision 179: `/compact <instructions>`.
     'compact-instructions',
     'crash-resume',
@@ -281,7 +290,7 @@ describe('what the recordings show a user', () => {
     expect(step?.blocks.at(-1)).toMatchObject({ type: 'tool_result', ok: false, stopped: true });
   });
 
-  it('compact: both turns stay, then a Context summary row', () => {
+  it('compact: both turns stay, then the /compact line and a Context summary row (decision 180)', () => {
     const messages = project('compact').messages;
     expect(messages.map((message) => message.role)).toEqual([
       'user',
@@ -290,11 +299,20 @@ describe('what the recordings show a user', () => {
       'assistant',
       'assistant',
       'system',
+      'system',
     ]);
+    const command = messages.at(-2);
+    expect(command && isDshCompactCommandRow(command)).toBe(true);
+    expect(command?.blocks[0]).toMatchObject({ text: '/compact' });
+    expect(command?.liveMessageId).toMatch(/^dsh-compact-command-/);
     const last = messages.at(-1)?.blocks[0];
     expect(
       last?.type === 'text' && last.text.startsWith('Context summary\n\n## Primary Request')
     ).toBe(true);
+    // The summary names the row its live copy became, as an automatic one does.
+    expect(messages.at(-1)?.liveMessageId).toBe(
+      command?.liveMessageId?.replace('dsh-compact-command-', 'dsh-compaction-')
+    );
   });
 
   it('compact-instructions (decision 179): the summary row carries the instructions, reopened from the stub', () => {
@@ -321,6 +339,28 @@ describe('what the recordings show a user', () => {
       projectLog(read<LogSample>('log.compact-instructions.json'), true).at(-1)?.blocks
     ).toHaveLength(1);
     expect(rpc.compactInstructions).toHaveLength(1);
+  });
+
+  it('compact-cancel (decision 180): the /compact line with what was typed, then why there is no summary', () => {
+    const { rpc, messages } = project('compact-cancel');
+    const command = messages.find((message) => isDshCompactCommandRow(message));
+    expect(command?.blocks[0]).toMatchObject({
+      text: '/compact 保留失败经验（P1-COMPACT-CANCEL）',
+    });
+    const note = messages[messages.indexOf(command as HistoryMessage) + 1];
+    expect(note?.blocks[0]).toMatchObject({
+      notice: { key: 'Compaction cancelled. Nothing was compacted.' },
+    });
+    expect(
+      messages.some((message) => message.role === 'system' && message.id.endsWith(':summary'))
+    ).toBe(false);
+    // What was typed is kept beside the stub, marked unused: no summary carries it.
+    expect(rpc.compactInstructions).toEqual([expect.objectContaining({ unused: true })]);
+    // Without what the stub kept, the log alone gives `/compact`.
+    const bare = projectLog(read<LogSample>('log.compact-cancel.json'), true);
+    expect(bare.find((message) => isDshCompactCommandRow(message))?.blocks[0]).toMatchObject({
+      text: '/compact',
+    });
   });
 
   it('crash-resume: an outcome-unknown tool row and the interrupted-turn note (decision 032)', () => {

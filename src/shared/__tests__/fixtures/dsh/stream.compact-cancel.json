@@ -1,0 +1,522 @@
+[
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-STREAM"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P0-STREAM: stream a paragraph back to me. P1-COMPACT-SLOW"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t1-s1",
+      "blockId": "dsh-aiclient-rec-compact-cancel-t1-s1-b0",
+      "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-17",
+      "role": "user",
+      "attemptId": "attempt-TOOL"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-17",
+      "blockId": "dsh-user-17-text",
+      "text": "P0-TOOL: list the workspace."
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-17"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t2-s1",
+      "toolCallId": "toolu_id-7",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 30,
+          "lines": 1
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t2-s1",
+      "toolCallId": "toolu_id-7",
+      "input": {
+        "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+        "description": "List the workspace"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t2-s1",
+      "toolCallId": "toolu_id-7",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t2-s1",
+      "toolCallId": "toolu_id-7",
+      "ok": true,
+      "output": "bridge tool row ok\n<workspace>/compact-cancel\n.\n..\n"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t2-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t2-s2",
+      "blockId": "dsh-aiclient-rec-compact-cancel-t2-s2-b0",
+      "text": "Tool row finished: the workspace listing is above."
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t2-s2"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-TOOL",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-14",
+      "phase": "started",
+      "trigger": "manual",
+      "commandMessageId": "dsh-compact-command-id-14",
+      "command": "/compact 保留失败经验（P1-COMPACT-CANCEL）"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-14",
+      "phase": "failed",
+      "trigger": "manual",
+      "note": {
+        "key": "Compaction cancelled. Nothing was compacted."
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-34",
+      "role": "user",
+      "attemptId": "attempt-AFTER"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-34",
+      "blockId": "dsh-user-34-text",
+      "text": "P1-AUTOCOMPACT {\"tag\":\"after\"} what do you remember?"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-34"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t3-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t3-s1",
+      "blockId": "dsh-aiclient-rec-compact-cancel-t3-s1-b0",
+      "text": "P1-AUTOCOMPACT after: answered with the full context."
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-cancel-t3-s1"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-AFTER",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

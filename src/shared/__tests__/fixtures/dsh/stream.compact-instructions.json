@@ -375,5 +375,27 @@
     "payload": {
       "status": "idle"
     }
+  },
+  {
+    "sessionId": "rec-compact-instructions",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-14",
+      "phase": "started",
+      "trigger": "manual",
+      "commandMessageId": "dsh-compact-command-id-14",
+      "command": "/compact 保留未完成的任务和失败经验（P1-COMPACT-NOTE）"
+    }
+  },
+  {
+    "sessionId": "rec-compact-instructions",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-14",
+      "phase": "completed",
+      "trigger": "manual",
+      "summary": "Context summary\n\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n\n## Current Work\n- (none)\n\n## Critical Context\n- The user asked this checkpoint to: 保留未完成的任务和失败经验（P1-COMPACT-NOTE）",
+      "instructions": "保留未完成的任务和失败经验（P1-COMPACT-NOTE）"
+    }
   }
 ]

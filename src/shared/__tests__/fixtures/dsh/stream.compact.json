@@ -378,6 +378,27 @@
   },
   {
     "sessionId": "rec-compact",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-14",
+      "phase": "started",
+      "trigger": "manual",
+      "commandMessageId": "dsh-compact-command-id-14",
+      "command": "/compact"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "type": "session.compaction",
+    "payload": {
+      "messageId": "dsh-compaction-id-14",
+      "phase": "completed",
+      "trigger": "manual",
+      "summary": "Context summary\n\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n\n## Current Work\n- (none)"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
     "requestId": "turn-COMMAND",
     "type": "session.status",
     "payload": {

@@ -120,6 +120,20 @@
               "liveMessageId": "dsh-aiclient-rec-compact-instructions-t2-s2"
             },
             {
+              "id": "h:compact-command-id-14",
+              "entryId": "compact-command-id-14",
+              "role": "system",
+              "timestamp": "<ms>",
+              "blocks": [
+                {
+                  "type": "text",
+                  "id": "h:compact-command-id-14:compact-command:0",
+                  "text": "/compact 保留未完成的任务和失败经验（P1-COMPACT-NOTE）"
+                }
+              ],
+              "liveMessageId": "dsh-compact-command-id-14"
+            },
+            {
               "id": "h:id-15",
               "entryId": "id-15",
               "role": "system",
@@ -141,12 +155,13 @@
                     }
                   }
                 }
-              ]
+              ],
+              "liveMessageId": "dsh-compaction-id-14"
             }
           ],
           "offset": 0,
           "limit": 80,
-          "totalCount": 6,
+          "totalCount": 7,
           "hasMore": false
         }
       },
@@ -249,6 +264,20 @@
           "liveMessageId": "dsh-aiclient-rec-compact-instructions-t2-s2"
         },
         {
+          "id": "h:compact-command-id-14",
+          "entryId": "compact-command-id-14",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:compact-command-id-14:compact-command:0",
+              "text": "/compact 保留未完成的任务和失败经验（P1-COMPACT-NOTE）"
+            }
+          ],
+          "liveMessageId": "dsh-compact-command-id-14"
+        },
+        {
           "id": "h:id-15",
           "entryId": "id-15",
           "role": "system",
@@ -270,12 +299,13 @@
                 }
               }
             }
-          ]
+          ],
+          "liveMessageId": "dsh-compaction-id-14"
         }
       ],
       "offset": 0,
       "limit": 80,
-      "totalCount": 6,
+      "totalCount": 7,
       "hasMore": false
     }
   },
@@ -354,9 +384,22 @@
           "leaf": false
         },
         {
-          "id": "id-15",
+          "id": "compact-command-id-14",
           "parentId": "id-12",
           "depth": 5,
+          "entryType": "notice",
+          "role": "system",
+          "preview": "/compact 保留未完成的任务和失败经验（P1-COMPACT-NOTE）",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-15",
+          "parentId": "compact-command-id-14",
+          "depth": 6,
           "entryType": "compaction",
           "role": "system",
           "preview": "Context summary ## Primary Request and Intent - P1-COMPACT: stream a paragraph, then list the w…",
@@ -367,8 +410,8 @@
           "leaf": true
         }
       ],
-      "totalNodes": 6,
-      "returnedNodes": 6,
+      "totalNodes": 7,
+      "returnedNodes": 7,
       "truncated": false
     }
   },
@@ -404,12 +447,13 @@
                 }
               }
             }
-          ]
+          ],
+          "liveMessageId": "dsh-compaction-id-14"
         },
         "instructionsApplied": true
       }
     },
-    "eventsAfter": 0
+    "eventsAfter": 2
   },
   "compactInstructions": [
     {

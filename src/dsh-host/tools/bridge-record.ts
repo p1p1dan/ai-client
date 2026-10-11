@@ -41,9 +41,11 @@
  *   stop-stream   Stop after five streamed deltas -> interrupted text, user_stop
  *   stop-tool     Stop while a bash call sleeps -> aborted tool result, user_stop
  *   compact       two turns, the menu (`worker.commands`), `worker.compact`
- *                 (DSH's `/compact` -> a "Context summary" row, nothing live),
- *                 then a `/goal` send: a command with no model turn, echoed with
- *                 its answer (P1-4d2); instructions are `compact-instructions`'s
+ *                 (DSH's `/compact` -> a "Context summary" row; since decision
+ *                 180 live too: its command line and its row, in the stream
+ *                 between the turns), then a `/goal` send: a command with no
+ *                 model turn, echoed with its answer (P1-4d2); instructions are
+ *                 `compact-instructions`'s
  *   crash-resume  SIGKILL while a bash call sleeps; a new host resumes the stub and
  *                 its first page carries the interrupted-turn note and the
  *                 outcome-unknown tool row (decision 032)
@@ -138,6 +140,13 @@
  *                 step's reply); a turn carrying P1-COMPACT-REFUSE; a second
  *                 P1-OVERFLOW turn whose compaction is refused, so the turn
  *                 fails as CONTEXT_TOO_LARGE
+ *
+ * `/compact` cancelled (decision 180), on its own host, last:
+ *   compact-cancel  two turns, the first marked P1-COMPACT-SLOW; `/compact` with
+ *                 instructions, cancelled (`worker.compact.cancel`) while the
+ *                 gateway streams the summary: the row says cancelled, the
+ *                 answer is WORKER_COMPACT_CANCELLED, the stub keeps what was
+ *                 typed (unused), and the next turn sees the whole conversation
  *
  * `/compact <instructions>` (decision 179), on its own host, last; the
  * gateway captures every request (`--capture`) when it is recorded:
@@ -687,13 +696,15 @@ const SCENARIOS: Record<string, Scenario> = {
     const compacted = answerOf(
       await client.call(session.ch, 'worker.compact', { logicalSessionId }, 120_000)
     );
-    const eventsAfter = client.events(session.ch).length - from;
+    // Decision 180: the compaction's live rows, which the stream keeps between the turns.
+    const compaction = client.events(session.ch).slice(from);
     if (!compacted.ok) throw new Error(`compact: not compacted: ${JSON.stringify(compacted)}`);
+    expectCompactionPhases('compact', compaction, ['started', 'completed']);
     // A known command line is DSH's command, with no model turn: `/goal` alone shows its usage.
     const command = await context.turn(session, 'COMMAND', '/goal');
-    return finish(context, session, [boot], [first, second, command], {
+    return finish(context, session, [boot], [first, second, compaction, command], {
       commands,
-      compact: { compacted, eventsAfter },
+      compact: { compacted, eventsAfter: compaction.length },
     });
   },
   async 'crash-resume'(context, host) {
@@ -768,6 +779,8 @@ const SCENARIOS: Record<string, Scenario> = {
   'overflow-compact': overflowCompactScenario,
   // Decision 179: `/compact <instructions>`, on its own host, last.
   'compact-instructions': compactInstructionsScenario,
+  // Decision 180: `/compact` cancelled while it summarizes, on its own host, last.
+  'compact-cancel': compactCancelScenario,
 };
 
 // ---- /compact with instructions (decision 179) --------------------------------------
@@ -883,18 +896,91 @@ async function compactInstructionsScenario(context: RecordContext, host: Host): 
       120_000
     )
   );
-  // Nothing live, as for `/compact` alone (decision 113 rule 8).
-  const eventsAfter = client.events(session.ch).length - eventsFrom;
+  // Decision 180: its command line and its row, live, as for `/compact` alone.
+  const compaction = client.events(session.ch).slice(eventsFrom);
+  const eventsAfter = compaction.length;
   if (!compacted.ok) throw new Error(`${name}: not compacted: ${JSON.stringify(compacted)}`);
+  expectCompactionPhases(name, compaction, ['started', 'completed']);
   const summaryRequest = summaryRequestFacts(captureDir, from, COMPACT_INSTRUCTIONS_TEXT);
   const stub = JSON.parse(readFileSync(session.stubFile, 'utf8')) as Message;
   // Closed and opened again from the stub: the line comes from what it kept.
   await context.close(session);
   const reopened = await context.openSession(host, name, session.stubFile, { cwd });
-  return finish(context, reopened.session, [boot, reopened.boot], [first, second], {
+  return finish(context, reopened.session, [boot, reopened.boot], [first, second, compaction], {
     compact: { tooLong, compacted, eventsAfter },
     compactInstructions: stub.compactInstructions,
     summaryRequest,
+  });
+}
+
+// ---- /compact cancelled (decision 180) --------------------------------------------
+
+/** Typed after the `/compact` that `compact-cancel` cuts short. */
+const COMPACT_CANCEL_INSTRUCTIONS = '保留失败经验（P1-COMPACT-CANCEL）';
+
+/** Throws unless `events` carry exactly these `session.compaction` phases. */
+function expectCompactionPhases(
+  name: string,
+  events: readonly Message[],
+  expected: string[]
+): void {
+  const phases = compactionPhases(events);
+  if (JSON.stringify(phases) !== JSON.stringify(expected)) {
+    throw new Error(`${name}: compaction phases ${JSON.stringify(phases)}, not ${expected}`);
+  }
+}
+
+/**
+ * Decision 180: two turns, the first marked P1-COMPACT-SLOW so the gateway
+ * streams the summary slowly; `/compact` with instructions; once its row is
+ * live, `worker.compact.cancel` — answered while the compaction still holds
+ * the request chain — and the compaction answers WORKER_COMPACT_CANCELLED;
+ * then a turn the gateway answers from the full context: nothing was compacted.
+ */
+async function compactCancelScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const name = 'compact-cancel';
+  const cwd = scenarioWorkspace(context.box, name);
+  const { session, boot } = await context.openSession(host, name, undefined, { cwd });
+  const { client } = session.host;
+  const logicalSessionId = session.logicalSessionId;
+  const first = await context.turn(
+    session,
+    'STREAM',
+    'P0-STREAM: stream a paragraph back to me. P1-COMPACT-SLOW'
+  );
+  const second = await context.turn(session, 'TOOL', 'P0-TOOL: list the workspace.');
+  const from = client.events(session.ch).length;
+  const compacting = client.call(
+    session.ch,
+    'worker.compact',
+    { logicalSessionId, instructions: COMPACT_CANCEL_INSTRUCTIONS },
+    120_000
+  );
+  const running = await client.until(
+    session.ch,
+    (events) => compactionPhases(events.slice(from)).includes('started'),
+    60_000
+  );
+  if (!running) throw new Error(`${name}: the compaction never showed as running`);
+  const cancel = answerOf(
+    await client.call(session.ch, 'worker.compact.cancel', { logicalSessionId }, 10_000)
+  );
+  const answer = answerOf(await compacting);
+  if (!cancel.ok || answer.ok || answer.code !== 'WORKER_COMPACT_CANCELLED') {
+    throw new Error(`${name}: not cancelled: ${JSON.stringify({ cancel, answer })}`);
+  }
+  const compaction = client.events(session.ch).slice(from);
+  expectCompactionPhases(name, compaction, ['started', 'failed']);
+  const stub = JSON.parse(readFileSync(session.stubFile, 'utf8')) as Message;
+  // Nothing was compacted: the next turn's request still carries the whole conversation.
+  const after = await context.turn(
+    session,
+    'AFTER',
+    'P1-AUTOCOMPACT {"tag":"after"} what do you remember?'
+  );
+  return finish(context, session, [boot], [first, second, compaction, after], {
+    compact: { cancel, answer, eventsAfter: compaction.length },
+    compactInstructions: stub.compactInstructions,
   });
 }
 
@@ -1987,6 +2073,8 @@ const OWN_HOST = new Set([
   'overflow-compact',
   // Decision 179: the same alone or after the rest, and the gateway's capture is its own.
   'compact-instructions',
+  // Decision 180: the same alone or after the rest.
+  'compact-cancel',
 ]);
 
 // ---- main ------------------------------------------------------------------------

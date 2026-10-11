@@ -274,6 +274,10 @@
  *                       carries a `/compact` user's words (`<user-instructions>…`)
  *                       is answered with the usual summary plus one Critical Context
  *                       line quoting them, so the sample shows they reached the model.
+ *                       dsh-rebase decision 180 (tools/bridge-record.ts
+ *                       `compact-cancel`): a summary request whose conversation carries
+ *                       P1-COMPACT-SLOW is answered slowly (the usual summary over 60
+ *                       deltas, 250 ms apart), so a driver can cancel it mid-stream.
  *                       dsh-rebase decision 173 (issue #9) adds P1-CHAIN for the prompt
  *                       prefix probe: `P1-CHAIN {"tag":"x","steps":8,"tool":"bash",
  *                       "think":true,"sleepStep":k,"sleepSeconds":3,"cacheSim":"single"}`
@@ -633,6 +637,8 @@ const COMPACTION_SUMMARY = [
 
 /** Decision 178: a summary request whose conversation carries this is refused. */
 const COMPACT_REFUSE = 'P1-COMPACT-REFUSE';
+/** Decision 180: a summary request whose conversation carries this is answered slowly. */
+const COMPACT_SLOW = 'P1-COMPACT-SLOW';
 /** Decision 179: the fence the bridge puts a `/compact` user's instructions in, after the template. */
 const COMPACT_USER_INSTRUCTIONS = /<user-instructions>\n([\s\S]*?)\n<\/user-instructions>/;
 /** The close of a compaction checkpoint's summary (dsh-compaction-basic `SUMMARY_CLOSE_TAG`). */
@@ -1854,6 +1860,17 @@ function decideDshP02(parsed, seq) {
       return {
         ...invalidRequest(`${COMPACT_REFUSE}: the fake upstream refused this summary request`),
         label: 'compaction-refused',
+      };
+    }
+    // Decision 180: slow enough to be cancelled while it streams.
+    if (messages.some((message) => ownText(message).includes(COMPACT_SLOW))) {
+      return {
+        kind: 'paced-text',
+        status: 200,
+        text: COMPACTION_SUMMARY,
+        chunks: 60,
+        chunkMs: 250,
+        label: 'compaction-slow',
       };
     }
     // Decision 179: what the user asked this checkpoint to keep, quoted back.

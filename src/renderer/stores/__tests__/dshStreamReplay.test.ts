@@ -2,10 +2,13 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  DSH_COMPACT_CANCELLED_KEY,
   DSH_COMPACTION_FAILED_KEY,
   DSH_COMPACTION_INTERRUPTED_KEY,
   DSH_COMPACTION_OVERFLOW_FAILED_KEY,
   DSH_COMPACTION_RUNNING_KEY,
+  isDshCompactCommandRow,
+  isDshCompactionNoteRow,
   isDshSummaryRow,
 } from '@shared/dshHistory/types';
 import { englishTranslate, zhTranslations } from '@shared/i18n';
@@ -643,8 +646,40 @@ scenario('compact', (events, id) => {
     });
   });
 
-  it('draws nothing live: the summary is there on the next open', () => {
-    expect(rpc.compact.eventsAfter).toBe(0);
+  it('draws its command line and its row live, which the history names as its own (decision 180)', () => {
+    expect(rpc.compact.eventsAfter).toBe(2);
+    const [started, completed] = compactionEvents(events);
+    const rowId = String(started?.payload.messageId);
+    const commandId = String(started?.payload.commandMessageId);
+    expect(started?.payload).toEqual({
+      messageId: rowId,
+      phase: 'started',
+      trigger: 'manual',
+      commandMessageId: commandId,
+      command: '/compact',
+    });
+    // No turn owns it: no requestId.
+    expect(started?.requestId).toBeUndefined();
+    expect(completed?.payload).toMatchObject({ messageId: rowId, phase: 'completed' });
+    const live = bucket(replay(events), id);
+    const command = live.find((message) => message.id === commandId);
+    expect(command && isDshCompactCommandRow(command)).toBe(true);
+    const row = live.find((message) => message.id === rowId);
+    expect(row && isDshSummaryRow(row)).toBe(true);
+    // The history's rows name these ids, with the same words.
+    const history = rpc.history.page.messages as HistoryMessage[];
+    expect(history.find((message) => message.liveMessageId === commandId)?.blocks[0]).toMatchObject(
+      { text: '/compact' }
+    );
+    const summary = history.find((message) => message.liveMessageId === rowId);
+    expect(textOf(summary as never)).toBe(textOf(row));
+    // The answer's own row names it too, so the composer puts it in the same place.
+    expect(compactionSummaryOf(rpc.compact.compacted.result)?.liveMessageId).toBe(rowId);
+    // A resume folds both live rows into the history's: one of each, where they were.
+    const resumed = bucket(resumeOver(replay(events), id, history), id);
+    expect(resumed.filter((message) => isDshSummaryRow(message))).toHaveLength(1);
+    expect(resumed.filter((message) => isDshCompactCommandRow(message))).toHaveLength(1);
+    expect(resumed.some((message) => message.id === rowId || message.id === commandId)).toBe(false);
   });
 
   it('shows the context summary as a notice when the chat is opened again', () => {
@@ -676,8 +711,15 @@ scenario('compact-instructions', (events, id) => {
     });
   });
 
-  it('answers with the summary row and its line, drawing nothing live', () => {
-    expect(rpc.compact.eventsAfter).toBe(0);
+  it('answers with the summary row and its line; live, its command line and its row (decision 180)', () => {
+    expect(rpc.compact.eventsAfter).toBe(2);
+    const [started, completed] = compactionEvents(events);
+    expect(started?.payload).toMatchObject({
+      phase: 'started',
+      trigger: 'manual',
+      command: `/compact ${instructions}`,
+    });
+    expect(completed?.payload).toMatchObject({ phase: 'completed', instructions });
     expect(rpc.compact.compacted.result.instructionsApplied).toBe(true);
     const row = compactionSummaryOf(rpc.compact.compacted.result);
     expect(row?.blocks.map((block) => block.id.split(':').slice(-2).join(':'))).toEqual([
@@ -704,8 +746,85 @@ scenario('compact-instructions', (events, id) => {
     expect(zhTranslations['Instructions for this summary: {{instructions}}']).toBe(
       '本次压缩的附加说明：{{instructions}}'
     );
-    // Two turns streamed live; nothing for the compaction.
-    expect(events.filter((event) => event.type === 'session.compaction')).toEqual([]);
+    // Decision 180: the live summary carried the same line.
+    const live = bucket(replay(events), id).find(
+      (row) => row.id === compactionEvents(events)[1]?.payload.messageId
+    );
+    expect(live?.blocks[1]?.notice).toEqual(line?.type === 'text' ? line.notice : undefined);
+  });
+});
+
+/**
+ * dsh-rebase decision 180: `/compact` cut short. Its command line and its
+ * row live, the row saying it was cancelled; the answer the composer words as
+ * such; what was typed kept beside the stub (unused); and the next turn still
+ * answered from the whole conversation.
+ */
+scenario('compact-cancel', (events, id) => {
+  const rpc = loadRpc('compact-cancel');
+  const [started, failed] = compactionEvents(events);
+  const rowId = String(started?.payload.messageId);
+  const commandId = String(started?.payload.commandMessageId);
+  const instructions = '保留失败经验（P1-COMPACT-CANCEL）';
+
+  it('the cancel was answered while the compaction ran, and the compaction answered cancelled', () => {
+    expect(rpc.compact.cancel).toEqual({ ok: true, result: { cancelled: true } });
+    expect(rpc.compact.answer).toEqual({
+      ok: false,
+      code: 'WORKER_COMPACT_CANCELLED',
+      retryable: false,
+    });
+    expect(
+      classifyCompactFailure(new Error(`WorkerSlotError: ${rpc.compact.answer.code}: cancelled`))
+    ).toEqual({ kind: 'cancelled' });
+  });
+
+  it('live: the command line, then the row, which says it was cancelled', () => {
+    expect(started?.payload).toEqual({
+      messageId: rowId,
+      phase: 'started',
+      trigger: 'manual',
+      commandMessageId: commandId,
+      command: `/compact ${instructions}`,
+    });
+    expect(failed?.payload).toEqual({
+      messageId: rowId,
+      phase: 'failed',
+      trigger: 'manual',
+      note: { key: DSH_COMPACT_CANCELLED_KEY },
+    });
+    const live = bucket(replay(events), id);
+    const row = live.find((message) => message.id === rowId);
+    expect(row && isDshCompactionNoteRow(row)).toBe(true);
+    expect(row && dshCompactionRowView(row)).toEqual({
+      running: false,
+      key: DSH_COMPACT_CANCELLED_KEY,
+    });
+    expect(zhTranslations[DSH_COMPACT_CANCELLED_KEY]).toBe('已取消压缩，对话没有改动。');
+    expect(textOf(live.find((message) => message.id === commandId))).toBe(
+      `/compact ${instructions}`
+    );
+  });
+
+  it('nothing was compacted: the next turn is answered from the whole conversation', () => {
+    expect(turnsOf(replay(events), id).at(-1)?.answer).toBe(
+      'P1-AUTOCOMPACT after: answered with the full context.'
+    );
+    expect(rpc.compactInstructions).toEqual([
+      expect.objectContaining({ instructions, unused: true }),
+    ]);
+  });
+
+  it('a reopen draws the same rows under the live ids, and a resume folds them in place', () => {
+    const history = rpc.history.page.messages as HistoryMessage[];
+    const command = history.find((message) => message.liveMessageId === commandId);
+    const note = history.find((message) => message.liveMessageId === rowId);
+    expect(command?.blocks[0]).toMatchObject({ text: `/compact ${instructions}` });
+    expect(note?.blocks[0]).toMatchObject({ notice: { key: DSH_COMPACT_CANCELLED_KEY } });
+    const resumed = bucket(resumeOver(replay(events), id, history), id);
+    expect(resumed.filter((message) => isDshCompactCommandRow(message))).toHaveLength(1);
+    expect(resumed.filter((message) => isDshCompactionNoteRow(message))).toHaveLength(1);
+    expect(idsOf(resumed)).not.toContain(rowId);
   });
 });
 
@@ -1763,9 +1882,7 @@ scenario('perm-search', (events, id) => {
  * outlive its reason.
  */
 const REOPEN_DIFFERS: Readonly<Record<string, string>> = {
-  compact: 'the summary row is written by /compact; a command send is not a turn in the log',
-  'compact-instructions':
-    'the summary row (and its instructions line) comes with /compact’s answer, not the stream',
+  compact: 'a command send (/goal) is not a turn in the log',
   'crash-resume': 'the restart adds the interrupted note and settles the row (asserted above)',
   fail: 'the failure card is live; the log keeps an empty reply, drawn as interrupted',
   'overflow-compact':
