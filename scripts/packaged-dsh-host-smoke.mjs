@@ -59,6 +59,9 @@ import {
   dshHostPluginsEnvValue,
 } from '../src/main/services/agent-host/dshHostEnvironment.ts';
 import { isRipgrep, spawnTarget } from './dsh-host-smoke-lib.mjs';
+// Pure process-tree helpers, kept apart so scripts/__tests__ can exercise the
+// Windows pid-reuse guard with a synthetic table instead of spawning anything.
+import { descendantsOf, parseWindowsProcessLine } from './process-tree-lib.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOOKS = path.join(repoRoot, 'src', 'dsh-host', 'tools', 'lib', 'probe-hooks.mjs');
@@ -182,8 +185,11 @@ function mkdirPrivate(dir) {
 }
 
 // ---- process tree ----------------------------------------------------------------
+// descendantsOf() and parseWindowsProcessLine() live in ./process-tree-lib.mjs (imported
+// above) — pure, so scripts/__tests__ can exercise the Windows pid-reuse guard directly.
 
-/** pid -> ppid (and a start token on Linux, so a reused pid is not mistaken for ours). */
+/** pid -> ppid (and a start token on Linux, creation time in ms on Windows — either way, so
+ *  a reused pid is not mistaken for ours; macOS keeps no timestamp, as before). */
 function processTable() {
   const table = new Map();
   if (process.platform === 'linux') {
@@ -200,21 +206,35 @@ function processTable() {
     return table;
   }
   try {
-    const text = isWindows
-      ? execFileSync(
-          'powershell.exe',
-          [
-            '-NoProfile',
-            '-NonInteractive',
-            '-Command',
-            'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.Name)" }',
-          ],
-          { encoding: 'utf8', windowsHide: true, timeout: 30_000 }
-        )
-      : execFileSync('ps', ['-A', '-o', 'pid=,ppid=,comm='], { encoding: 'utf8', timeout: 10_000 });
-    for (const line of text.split(/\r?\n/)) {
-      const match = line.trim().match(/^(\d+)\s+(\d+)\s*(.*)$/);
-      if (match) table.set(Number(match[1]), { ppid: Number(match[2]), start: '', name: match[3] });
+    if (isWindows) {
+      // CreationDate lets descendantsOf()/alive() tell a real child from a stale orphan
+      // whose dead parent's pid Windows reused for the host (or for something else since).
+      const text = execFileSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          'Get-CimInstance Win32_Process | ForEach-Object { ' +
+            '$ct = if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc() } else { 0 }; ' +
+            '"$($_.ProcessId) $($_.ParentProcessId) $ct $($_.Name)" }',
+        ],
+        { encoding: 'utf8', windowsHide: true, timeout: 30_000 }
+      );
+      for (const line of text.split(/\r?\n/)) {
+        const row = parseWindowsProcessLine(line);
+        if (row) table.set(row.pid, { ppid: row.ppid, start: row.start, name: row.name });
+      }
+    } else {
+      const text = execFileSync('ps', ['-A', '-o', 'pid=,ppid=,comm='], {
+        encoding: 'utf8',
+        timeout: 10_000,
+      });
+      for (const line of text.split(/\r?\n/)) {
+        const match = line.trim().match(/^(\d+)\s+(\d+)\s*(.*)$/);
+        if (match)
+          table.set(Number(match[1]), { ppid: Number(match[2]), start: '', name: match[3] });
+      }
     }
   } catch {
     // Sampling is best effort; the post-exit check reports what it can.
@@ -222,26 +242,12 @@ function processTable() {
   return table;
 }
 
-function descendantsOf(rootPid, table) {
-  const out = [];
-  const queue = [rootPid];
-  while (queue.length > 0) {
-    const parent = queue.shift();
-    for (const [pid, row] of table) {
-      if (row.ppid === parent && !out.some((item) => item.pid === pid)) {
-        out.push({ pid, ...row });
-        queue.push(pid);
-      }
-    }
-  }
-  return out;
-}
-
-/** Remembers every descendant of `pid` seen while the host lives. */
-function treeWatcher(pid) {
+/** Remembers every descendant of `pid` seen while the host lives. `floorMs` is the host's own
+ *  spawn time (Date.now()), used on Windows only to filter out pid-reuse false descendants. */
+function treeWatcher(pid, floorMs) {
   const seen = new Map();
   const tick = () => {
-    for (const row of descendantsOf(pid, processTable())) {
+    for (const row of descendantsOf(pid, processTable(), isWindows ? floorMs : undefined)) {
       if (!seen.has(row.pid)) seen.set(row.pid, row);
     }
   };
@@ -257,7 +263,11 @@ function treeWatcher(pid) {
   };
 }
 
-function alive(row) {
+/** Still the same process at `row.pid`, not a different one that has since reused the id.
+ *  `table`, a fresh Windows sample, is optional: when given, a mismatch between the
+ *  creation time recorded when `row` was first seen and the one `table` reports now means
+ *  the pid was reused, mirroring how the Linux branch compares its own start token. */
+function alive(row, table) {
   if (process.platform === 'linux') {
     try {
       const stat = fs.readFileSync(`/proc/${row.pid}/stat`, 'utf8');
@@ -268,18 +278,29 @@ function alive(row) {
   }
   try {
     process.kill(row.pid, 0);
-    return true;
   } catch (error) {
     return error.code === 'EPERM';
   }
+  if (isWindows && table) {
+    const current = table.get(row.pid);
+    const known =
+      typeof row.start === 'number' &&
+      row.start > 0 &&
+      typeof current?.start === 'number' &&
+      current.start > 0;
+    if (known && current.start !== row.start) return false; // Reused: a different process now.
+  }
+  return true;
 }
 
-/** Descendants still running after the host exited (Windows keeps parent ids of orphans). */
-async function leftovers(hostPid, seen) {
+/** Descendants still running after the host exited (Windows keeps parent ids of orphans).
+ *  `floorMs` (the host's own spawn time) is passed through to descendantsOf() on Windows. */
+async function leftovers(hostPid, seen, floorMs) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    const extra = isWindows ? descendantsOf(hostPid, processTable()) : [];
+    const table = isWindows ? processTable() : null;
+    const extra = isWindows ? descendantsOf(hostPid, table, floorMs) : [];
     const rows = [...seen, ...extra.filter((row) => !seen.some((item) => item.pid === row.pid))];
-    const living = rows.filter(alive);
+    const living = rows.filter((row) => alive(row, table));
     if (living.length === 0) return [];
     if (attempt === 9) return living.map((row) => ({ pid: row.pid, name: row.name ?? '' }));
     await sleep(500);
@@ -346,6 +367,8 @@ function startHost(ctx, label, extraEnv, plan, key) {
       windowsHide: true,
     }
   );
+  // One timestamp for both diagnostics and the Windows pid-reuse floor below.
+  const spawnedAt = Date.now();
   // The host composes nothing before its plan; keys are asked for per request.
   const served = serveModelPlan(child, plan, key);
   let stderr = '';
@@ -357,7 +380,7 @@ function startHost(ctx, label, extraEnv, plan, key) {
   const exited = new Promise((done) =>
     child.once('exit', (code, signal) => done({ code, signal }))
   );
-  const watcher = treeWatcher(child.pid);
+  const watcher = treeWatcher(child.pid, spawnedAt);
   return {
     label,
     child,
@@ -365,7 +388,7 @@ function startHost(ctx, label, extraEnv, plan, key) {
     watcher,
     served,
     stderr: () => stderr,
-    started: Date.now(),
+    started: spawnedAt,
   };
 }
 
@@ -597,7 +620,7 @@ async function level0(ctx) {
     result.error = error instanceof Error ? error.message : String(error);
   }
   result.exit = await stopHost(host, 30_000);
-  result.leftovers = await leftovers(host.child.pid, host.watcher.stop());
+  result.leftovers = await leftovers(host.child.pid, host.watcher.stop(), host.started);
   result.stderrTail = host.stderr().slice(-3000);
   return result;
 }
@@ -695,7 +718,7 @@ async function level1(ctx, gateway) {
     outcomes: [...new Set(host.served.requests.map((item) => item.outcome))],
   };
   result.exit = await stopHost(host, 30_000);
-  result.leftovers = await leftovers(host.child.pid, host.watcher.stop());
+  result.leftovers = await leftovers(host.child.pid, host.watcher.stop(), host.started);
   result.stderrTail = host.stderr().slice(-3000);
   return result;
 }
@@ -786,6 +809,7 @@ async function nativeProbe(ctx) {
       windowsHide: true,
     }
   );
+  const spawnedAt = Date.now();
   let stdout = '';
   let stderr = '';
   child.stdout.setEncoding('utf8').on('data', (chunk) => {
@@ -797,7 +821,7 @@ async function nativeProbe(ctx) {
   const exited = new Promise((done) =>
     child.once('exit', (code, signal) => done({ code, signal }))
   );
-  const watcher = treeWatcher(child.pid);
+  const watcher = treeWatcher(child.pid, spawnedAt);
   const exit = await Promise.race([exited, sleep(60_000).then(() => null)]);
   if (exit === null) child.kill('SIGKILL');
   const result = { exit: exit ?? { ...(await exited), forced: true }, hookLog };
@@ -807,7 +831,7 @@ async function nativeProbe(ctx) {
     result.error = `no result: ${stdout.slice(-300)} ${stderr}`;
   }
   if (stderr) result.stderrTail = stderr.slice(-1500);
-  result.leftovers = await leftovers(child.pid, watcher.stop());
+  result.leftovers = await leftovers(child.pid, watcher.stop(), spawnedAt);
   return result;
 }
 
