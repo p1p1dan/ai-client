@@ -229,3 +229,48 @@ bridge 协议、宿主（`src/dsh-host/`）、DSH 行为；金样本不需要重
 ## 用户审批补记（2026-10-11）
 
 - 没启动的对话里目标条也显示「暂停 / 继续 / 编辑 / 清除」，按下先启动再执行（推翻 P1-7a「没有活 worker 不出按钮」）：**用户同意**。
+
+## GUI 点验后的修复（2026-10-11）
+
+### 缺陷
+
+1. 首页选「不选仓库（临时对话）」发一条消息，等这个对话被回收（容量回收或闲置 15 分钟），打开它输入 `/compact` 回车：toast「压缩上下文失败 / 这个对话没有可以运行的文件夹。」。同一对话直接发消息能正常恢复；重启应用后同类对话的 `/compact` 正常。
+2. 启动失败时出的「工作目录已不存在」卡（点验截图 `i4-start-failure.png`），中文正文里有英文词「worker」：「……因此无法启动它的 worker。……」。
+
+### 根因（HEAD `ea8420b9` 上核实）
+
+- 本次运行里新建的临时对话在 store 里**没有 `session.unbound`**：`createUnboundChatSession`（`stores/chatSessionActions.ts` 143–169）有意不写，`unbound` 只在重启后的索引合并（`mergeSessionIndex`）或分叉（`materializeIndexedPiChatSession`）时写入；它的 `workspaceId` 是空串，store 里也找不到工作区。
+- 发送路径不看 `unbound` 有没有：`ChatComposer.tsx` 2129–2131 取「可用的仓库目录 → 记在对话上的临时目录 → 空」，空就在握手里（2998–3008）调 `useScratchWorkspaceStore.ensure(sessionId)` 取或建临时目录（本次运行第一次发送时分配过的，store 里有记录，不再走 IPC；Main 也是幂等的）。
+- 本决策的启动器只读对话本身：`sessionStart.ts` 141–146 调 `shouldResumeSession(session, workspace, …)`，后者（`sessionIndex/resumeIntent.ts` 114–117）在「没有 `unbound` 也没有工作区」时答 `no-workspace`；`sessionStartDeps.ts` 64–72 的 snapshot 也不带临时目录。于是 `/compact`、目标条按钮、会话分支对话框（树、回退、分叉）对这类对话一律答「没有可以运行的文件夹」。重启后的临时对话带 `unbound`，所以正常。
+- 同一判定的另一个入口：时间线上历史卡的「重试」与「重启引擎」（`resumeSessionById`，`sessionIndex/useResumeSession.ts` 55–61）也只读对话本身，本次运行新建的临时对话按下去答「重试未生效」。这张卡在启动失败（例如引擎没起来）或发送的恢复失败时出现，所以本条修法一并处理。
+- 「worker」：`historyError.ts` 375 的 `workspace_missing` 正文英文键里有 worker，中文译文（`shared/i18n.ts` 3003）照搬了这个词。
+
+### 修法
+
+1. **一条规则，三处共用**：新增 `components/chat/runDirectory.ts`，就是从发送路径抽出来的那段——`knownRunDirectory(session, workspace)`（可用的仓库目录，否则记在对话上的临时目录，否则 `null`）与 `ensureScratchRunDirectory(sessionId)`（`useScratchWorkspaceStore.ensure`，首次分配、之后同一个）。
+   - 发送路径（`runSend`）改用这两个函数，行为不变（仍在 `ensureHost` 之后取临时目录，仍和「停止」竞速）。
+   - 启动器（`startSessionAsSendDoes`）：先挡掉「有回合在跑」（`isSessionBusy`，不为它去要目录），再 `knownRunDirectory`，为空就经注入的 `deps.ensureScratchDirectory`（`sessionStartDeps` 接到 `ensureScratchRunDirectory`）取临时目录；取不到才答 `no-workspace`（不写卡）。目录作为 `shouldResumeSession` 的新可选项 `workspacePath` 传入，优先于它自己从对话上读的值。
+   - 历史卡的重试（`resumeSessionById`）：同样先 `knownRunDirectory`；为空且这次恢复确实会打开它（有会话文件、不在回合中）时才 `await` 取临时目录——其他恢复照旧同步发出。
+2. `shouldResumeSession` 不传 `workspacePath` 时行为不变（侧栏点开对话仍按原来的读法）。
+3. 词条：只改这一条的中文，「……因此会话无法启动。……」；英文键不动。
+4. 一个随「与发送一致」带来的变化：仓库已不在本窗口里的老对话（`workspaceId` 非空但找不到），发送路径向来把它当没有文件夹、去取临时目录再恢复，Main 因目录与索引不符拒绝、出「工作目录不匹配」卡；启动器现在也这样（以前直接说「这个对话没有可以运行的文件夹」）。这类对话很少见：索引合并不会为找不到工作区的索引行建对话（放进 `orphaned`），只有本次运行里已经在列表上的对话才可能这样。
+
+### 其他入口的排查
+
+- 走同一个启动器（`sessionStartEffects`）的全部入口都随第 1 条修好：`/compact`（`compactRun.ts`）、目标条的暂停 / 继续 / 编辑 / 清除（`GoalBar.tsx` → `sessionPanels.runGoalCommand`）、会话分支对话框的树、回退、分叉（`SessionTreeDialog.tsx` 的 `afterStart`）。
+- 历史卡的「重试 / 重启引擎」（`MessageTimeline.tsx` → `resumeSessionById`）：同一判定，已修。
+- 侧栏点开对话（`useActivateSession` → `resumeIdentityForActivation`）仍按 `unbound` 判断临时对话；本次运行新建的临时对话时间线就在内存里，按规则 3 本来就不恢复，没有可见缺陷，不改。
+- 任务窗口、子代理窗口的停止与中断（不启动对话）、翻页（`loadOlderHistoryPage` 只看是否绑定）、输入框的 `/goal`（走发送路径）：不涉及工作区判定。
+
+### 验证（2026-10-11，开发机，一次一个测试进程，每次先看 `free -m`）
+
+- 复现：先写的测试在改动前 8 项失败——`sessionStart.test.ts` 的 `[SS-03b]`（本次运行的临时对话答 `no-workspace`）、`[SS-03c]`、`[SS-04]`（回合中的临时对话答 `no-workspace` 而不是 `busy`）；`compactStartMount.test.ts` 的 `[176-C-10]`、`[176-C-11]`（挂载真 `ChatComposer`，回收后的临时对话 `/compact` 不启动）；新文件 `temporaryChatStart.test.ts`（接真 store 与 `sessionStartEffects`）的 `[TC-01]` 目标条、`[TC-02]` 会话分支、`[TC-03]` 历史卡重试。`[176-C-12]`、`[TC-04]`（重启后带 `unbound` 的临时对话）改前即通过，作回归保护。改后全部通过。
+- 新增与改写：`sessionStart.test.ts` 新增 2 项、改写 2 项（`[SS-03]` 的桩原来让对话同时带 `unbound` 和工作区，改成 store 的真实形状；`[SS-04]` 的「没有文件夹」改为「临时目录也取不到」）；`compactStartMount.test.ts` 新增 3 项；`temporaryChatStart.test.ts` 4 项（新）；`unboundChatWiring.test.ts` 改写 2 处钉子（发送路径改调共用函数）、新增 1 项（启动器、启动器接线、历史卡重试都用 `runDirectory.ts`，三处都不再直接调 store 的 `ensure`）；`historyError.test.ts` 新增 1 项（`workspace_missing` 的中文不含 worker）。
+- `pnpm typecheck`：通过。
+- `biome check`（改动的 12 个文件）：无问题。
+- `pnpm exec vitest run src/renderer/components/chat`：168 个文件、3342 项通过。
+- `pnpm exec vitest run src/renderer/stores`：44 个文件、873 项通过。
+- `pnpm exec vitest run src/renderer/components/workspace-shell`（`resumeSessionById` 也服务侧栏点开）：69 个文件、962 项通过。
+- `pnpm exec vitest run Static Scan Wiring`：79 个文件、823 项通过。
+- `pnpm exec vitest run src/shared/__tests__`：39 个文件、628 项通过。
+- 没改 bridge 协议、宿主与 DSH，不跑 `typecheck:dsh-host`、不重录金样本；没有起 Electron、没有整包构建。GUI 复验留给下一次点验：「不选仓库」新建临时对话 → 发一条 → 等回收 → `/compact`、目标条「继续」、会话分支都先显示「正在启动对话…」再执行；改名或删掉一个仓库目录后 `/compact`，「工作目录已不存在」卡的中文里没有 worker。
