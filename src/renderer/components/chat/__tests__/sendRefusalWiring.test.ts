@@ -28,6 +28,8 @@ const read = (relative: string) => {
 };
 const COMPOSER = read('../ChatComposer.tsx');
 const RESUME_HOOK = read('../sessionIndex/useResumeSession.ts');
+const COMPACT_RUN = read('../compactRun.ts');
+const START_DEPS = read('../sessionStartDeps.ts');
 
 function slice(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker);
@@ -114,10 +116,17 @@ describe('D1 — a legacy chat that could not be moved (legacy_migration_failed)
   });
 
   it('/compact on a chat not moved yet moves it first', () => {
-    const compact = slice(COMPOSER, "case 'compact': {", "if (outcome.kind === 'turn-running')");
-    expect(compact).toContain('runAfterLegacyMigration(');
+    // Decision 176: by the start every conversation the engine is not running
+    // gets before it is compacted — the send path's resume, which moves a
+    // chat from the previous version (a legacy chat is never running).
+    const compact = slice(COMPOSER, "case 'compact': {", "if (outcome.kind !== 'compacted')");
     expect(compact).toContain('window.electronAPI.chat.compactSession({');
-    expect(compact).toContain('resumeSessionById(sessionId, {');
+    expect(compact).toContain(
+      'whenRunning: (operation) => runCompactWhenRunning(sessionId, operation)'
+    );
+    expect(COMPACT_RUN).toContain('runWithSessionStarted({');
+    expect(COMPACT_RUN).toContain('...effects,');
+    expect(START_DEPS).toContain('resume: (args) => resumeSessionWithMigration(args),');
   });
 
   it('leaves no trace of the read-only refusal it replaced', () => {

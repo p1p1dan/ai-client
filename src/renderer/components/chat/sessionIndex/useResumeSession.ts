@@ -37,9 +37,9 @@ export interface UseResumeSessionResult {
 
 /**
  * The resume action itself, outside React: it reads the store at call time and
- * holds no component state, so the hook below only hands it out. Exported for
- * callers that re-run an operation after moving a legacy chat
- * (`runAfterLegacyMigration`).
+ * holds no component state, so the hook below only hands it out. (An operation
+ * that needs the chat running starts it through `sessionStart.ts` instead,
+ * with the send path's arguments — decision 176.)
  */
 export async function resumeSessionById(
   sessionId: string,

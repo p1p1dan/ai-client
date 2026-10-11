@@ -43,6 +43,7 @@ import {
   statusForNextTurn,
   useChatSessionsStore,
 } from '@/stores/chatSessions';
+import { selectCompactPhase, useCompactRunsStore } from '@/stores/compactRuns';
 import {
   mergeOfferedText,
   switchComposerDraft,
@@ -96,7 +97,8 @@ import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { ComposerUsageChip } from './ComposerUsageChip';
 import { deriveChatEmptySurface } from './chatEmptyState';
-import { runCompactCommand } from './compactCommand';
+import { COMPACTING_LINE, compactOutcomeToast, runCompactCommand } from './compactCommand';
+import { runCompactWhenRunning } from './compactRun';
 import { buildBranchColumn } from './composerColumns';
 import { onComposerFocusRequest } from './composerFocus';
 import { isTargetableWorkspace, resolveActiveTarget } from './composerTarget';
@@ -189,13 +191,9 @@ import { decideSendPreamble } from './sendPreamble';
 import { onSessionEnded } from './sessionEndSignal';
 import { failureCardOwnsError } from './sessionFailure';
 import { captureSessionGenerationPreferences } from './sessionGenerationPreferences';
-import {
-  resumeSessionWithMigration,
-  runAfterLegacyMigration,
-} from './sessionIndex/legacyMigration';
+import { resumeSessionWithMigration } from './sessionIndex/legacyMigration';
 import { willMigrateOnResume } from './sessionIndex/resumeIntent';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
-import { resumeSessionById } from './sessionIndex/useResumeSession';
 import { archiveSessionIndexEntry } from './sessionIndex/useSessionIndex';
 import { deriveGoalBarView } from './sessionPanelsModel';
 import {
@@ -203,6 +201,7 @@ import {
   readSessionPermissions,
   writeSessionPermissions,
 } from './sessionPreferenceStore';
+import { SESSION_STARTING_LINE } from './sessionStart';
 import {
   buildSlashCatalog,
   extractSlashQuery,
@@ -729,6 +728,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const migratingHere = useLegacyMigrationStore((state) =>
     selectIsMigrating(state, activeSessionId)
   );
+  // Decision 176: this window's `/compact` for the chat on screen, and how far
+  // it got (starting the conversation, compacting). A string selector.
+  const compactPhase = useCompactRunsStore((state) => selectCompactPhase(state, activeSessionId));
   // T-19 decision 4: a pending permission is never auto-answered, only hinted
   // at — this scopes that hint (and the "don't deny for the user" rule) to
   // THIS session, same pattern as pendingQuestionHere above.
@@ -1284,65 +1286,48 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       }
       case 'compact': {
         if (!activeSessionId) return false;
+        const sessionId = activeSessionId;
+        // Decision 176: one `/compact` per conversation at a time. The status
+        // line already says one is on its way; a second Enter is answered
+        // here rather than queuing a second compaction behind the first.
+        if (selectCompactPhase(useCompactRunsStore.getState(), sessionId)) {
+          toastManager.add({
+            type: 'info',
+            title: t('This conversation is already being compacted'),
+          });
+          return true;
+        }
         // N1 (2026-09-24): refused while a turn runs, and every refusal used to
         // be silent. The command stays in the box on any outcome but success,
         // so one Enter after the turn ends runs it — see `compactCommand.ts`.
         const outcome = await runCompactCommand({
           turnRunning: canStop || stoppingRef.current || activeSession?.status === 'stopping',
-          // dsh-rebase P1-9e (decision 122 rule 14): a chat from the previous
-          // version is moved to the current engine (by resuming it) before it
-          // can be compacted; a failed move puts its card in the timeline.
           compact: () =>
-            runAfterLegacyMigration(
-              activeSessionId,
-              () =>
-                window.electronAPI.chat.compactSession({
-                  sessionId: activeSessionId,
-                  ...(action.instructions ? { instructions: action.instructions } : {}),
-                }),
-              (sessionId) =>
-                resumeSessionById(sessionId, {
-                  model: resolveResumeModel(
-                    getSessionModel,
-                    sessionId,
-                    agentDefaultModel(chatAgentDefaults)
-                  ),
-                })
-            ),
+            window.electronAPI.chat.compactSession({
+              sessionId,
+              ...(action.instructions ? { instructions: action.instructions } : {}),
+            }),
+          // Decision 176: a conversation the engine is not running is started
+          // the way a send starts it first — which also moves a chat from the
+          // previous version (decision 122 rule 14) — then compacted. The
+          // status line says 「正在启动对话…」, then 「正在压缩上下文…」.
+          whenRunning: (operation) => runCompactWhenRunning(sessionId, operation),
         });
-        if (outcome.kind === 'turn-running') {
-          toastManager.add({
-            type: 'info',
-            title: t('Wait for this turn to finish before compacting'),
-            description: t(
-              '/compact stays in the input box — press Enter again once the turn ends.'
-            ),
-          });
-          return true;
-        }
-        // dsh-rebase decision 113: DSH's /compact takes no instructions; the
-        // typed text stays so the user can remove it and press Enter again.
-        if (outcome.kind === 'instructions-unsupported') {
-          toastManager.add({
-            type: 'info',
-            title: t('/compact takes no instructions'),
-            description: t('Remove the text after /compact, then press Enter again.'),
-          });
-          return true;
-        }
-        if (outcome.kind === 'failed') {
-          toastManager.add({
-            type: 'error',
-            title: t('Could not compact the conversation'),
-            description: outcome.reason,
-          });
+        // Every refusal is said in words (`compactOutcomeToast`); the engine's
+        // own text and code go to the log.
+        if (outcome.kind !== 'compacted') {
+          if (outcome.kind === 'failed') {
+            console.warn('[compact] the conversation was not compacted:', outcome.detail);
+          }
+          const toast = compactOutcomeToast(outcome, t);
+          if (toast) toastManager.add(toast);
           return true;
         }
         // dsh-rebase P1-7e (problem 10, decision 140): the success is shown
         // where a reopen shows it — the context-summary row at the end of the
         // timeline — the moment it is written. A worker that could not read
         // the row back still gets its success said, as a toast.
-        if (!outcome.summary || !showCompactionSummary(activeSessionId, outcome.summary)) {
+        if (!outcome.summary || !showCompactionSummary(sessionId, outcome.summary)) {
           toastManager.add({
             type: 'success',
             title: t('Conversation compacted'),
@@ -1354,9 +1339,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     }
     // Cleared from the box only while it still holds the chat the command was
     // typed in. If the box moved on meanwhile, the command went with that
-    // chat's parked draft, and that is where it is cleared from.
+    // chat's parked draft, and that is where it is cleared from. Decision 176:
+    // and only while it still holds the command — a message typed during a
+    // slow `/compact` (held back while the conversation started) stays.
     if (draftOwnerRef.current !== typedIn) useComposerDraftsStore.getState().take(typedIn);
-    else updateValue('');
+    else if (valueRef.current.trim() === trimmed) updateValue('');
     setSlashQuery(null);
     return true;
   };
@@ -1395,6 +1382,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     });
 
     if (action === 'blocked') return;
+
+    // Decision 176: this window is starting the conversation for a `/compact`.
+    // A message sent now would race that start to the engine, and the
+    // compaction behind it, so it waits: said in words, kept in the box.
+    if (
+      activeSessionId &&
+      selectCompactPhase(useCompactRunsStore.getState(), activeSessionId) === 'starting'
+    ) {
+      toastManager.add({
+        type: 'info',
+        title: t('Wait for the conversation to start'),
+        description: t('Your message stays in the input box; send it once the conversation runs.'),
+      });
+      return;
+    }
 
     // Decision 174: the home page. The conversation is made by this send, on
     // the work bar's draft target — not before, and not as a temporary chat
@@ -3532,7 +3534,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // + `'release'` arms `shouldPauseQueueOnRejection`). Holding on the global
     // latch is what makes the queue wait for the slot instead of fighting it.
     sending,
-    isInFlight: () => inFlightRef.current || stoppingRef.current,
+    // Decision 176: and while this window starts the conversation for a
+    // `/compact`, for the reason a direct send waits then (`handleSend`).
+    isInFlight: () => inFlightRef.current || stoppingRef.current || compactPhase === 'starting',
     status: nextTurnStatus,
     runEntry: async (entry) => {
       // R3 fix: capture BEFORE runSend, off `entry.sessionId` (not
@@ -3930,11 +3934,22 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // duplicated). What is left here all describes the DRAFT in hand: attachments
   // still being read off disk, an over-large attachment, or a missing
   // session/workspace/cwd.
+  // Decision 176: this window's `/compact` for the conversation on screen —
+  // starting it first when the engine was not running it, then compacting.
+  // It runs for a while with nothing else to show for it, like reading files.
+  const compactLine =
+    compactPhase === 'starting'
+      ? t(SESSION_STARTING_LINE)
+      : compactPhase === 'compacting'
+        ? t(COMPACTING_LINE)
+        : null;
   const statusLine =
-    readingLine ?? resolveIdleStatusText({ mode, hasStatusError, largeHint, statusHint });
+    compactLine ??
+    readingLine ??
+    resolveIdleStatusText({ mode, hasStatusError, largeHint, statusHint });
   // The warning tone went with the copy: `Still waiting · 62s …` is now the
   // turn head's, and so is its colour (`turnStatusToneClass`).
-  const statusTone = hasStatusError ? 'text-destructive' : 'text-muted-foreground';
+  const statusTone = hasStatusError && !compactLine ? 'text-destructive' : 'text-muted-foreground';
 
   // Whether the status line renders at all. T-30b2 F-A11 put BOTH cards on one
   // truth table: neither shows a resting line any more. The empty card used to
@@ -3950,6 +3965,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const showStatusLine = shouldShowStatusLine({
     mode,
     reading: attachments.reading,
+    working: compactLine !== null,
     hasStatusError,
     hasLargeHint: Boolean(largeHint),
   });
@@ -3983,7 +3999,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             send's own spinner moved to the turn head along with its copy
             (T-31 §3.3 — the composer still signals "something is running"
             through the round key's Stop state). */}
-        {attachments.reading > 0 && <Spinner className="size-3.5 shrink-0 text-muted-foreground" />}
+        {(attachments.reading > 0 || compactLine !== null) && (
+          <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
+        )}
         <p
           className={cn('min-w-0 truncate text-meta tabular-nums', statusTone)}
           title={statusLine ?? undefined}

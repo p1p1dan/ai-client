@@ -1577,6 +1577,99 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
   });
 
   /**
+   * dsh-rebase decision 176: `/compact` on a conversation the idle sweep let
+   * go. Main refuses it (`session_not_found`); the renderer then starts it the
+   * way a send does — the resume this test makes, which Main's handler wraps
+   * in the index and migration checks — and asks again, and the compaction
+   * runs on the real host against the fake gateway's checkpoint answer.
+   */
+  describe('a compaction supervisor: /compact after the idle sweep (decision 176)', () => {
+    let supervisor: Supervisor;
+    let manager: Manager;
+
+    beforeAll(() => {
+      supervisor = new DshHostSupervisor({ idleStopMs: 0, modelSource: modelSource() });
+      manager = new WorkerManager({
+        host: supervisor,
+        createSlot: (options) =>
+          createDshChatSlot({
+            ...options,
+            createTransport: () =>
+              supervisor.openChannel({ userInitiated: options.userInitiated === true }),
+          }),
+        onEvent: (event) => events.push(event as Event),
+        capacity: 6,
+        // The idle sweep, run by hand below: anything idle 1 ms is let go.
+        idleTimeoutMs: 1,
+        idleSweepIntervalMs: 0,
+      });
+    });
+
+    afterAll(async () => {
+      await manager?.disposeAll('app-shutdown');
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    it('[176-IT] the idle sweep lets it go; the send path’s start reopens it; it compacts', async () => {
+      await manager.createSession({ ...BYPASS, sessionId: 'cp1', workspacePath: workspace });
+      for (const text of [
+        'P0-STREAM: stream a paragraph back to me.',
+        'P0-TOOL: list the workspace.',
+      ]) {
+        expect(await turn(manager, 'cp1', text, 60)).toMatchObject({
+          settled: true,
+          completed: true,
+        });
+      }
+      const stubFile = String(
+        manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === 'cp1')?.sessionFile
+      );
+
+      // The user switched away; the host's next pong calls the channel idle.
+      manager.releaseSession('cp1');
+      expect(
+        await until(
+          () => (supervisor.status().lastPong?.channels ?? []).every((channel) => !channel.busy),
+          30_000
+        )
+      ).toBe(true);
+      await sleep(10);
+      const from = events.length;
+      await manager.reclaimIdle();
+      expect(manager.getSlotSnapshots().map((slot) => slot.logicalSessionId)).not.toContain('cp1');
+      expect(told('cp1', from)).toContain('status:disconnected/released');
+
+      // What the screen used to show as 「压缩上下文失败：No ready Pi WorkerSlot…」.
+      await expect(
+        manager.compactSession({ sessionId: 'cp1', ownerWebContentsId: 60 })
+      ).rejects.toMatchObject({ code: 'session_not_found' });
+
+      // The renderer's start: the send path's resume, then the same ask.
+      await manager.resumeSession({
+        ...BYPASS,
+        sessionId: 'cp1',
+        sessionFile: stubFile,
+        workspacePath: workspace,
+        ownerWebContentsId: 60,
+      });
+      const started = Date.now();
+      const compacted = await manager.compactSession({ sessionId: 'cp1', ownerWebContentsId: 60 });
+      expect(compacted).toMatchObject({ compacted: true });
+
+      // The conversation goes on from the checkpoint.
+      expect(
+        await turn(manager, 'cp1', 'P0-STREAM: stream a paragraph back to me.', 60)
+      ).toMatchObject({ settled: true, completed: true });
+      console.log(
+        `[176] compacted in ${Date.now() - started} ms after the reopen; summary row ${
+          compacted.summary ? compacted.summary.id : '(not read back)'
+        }`
+      );
+      await manager.closeSession('cp1');
+    }, 300_000);
+  });
+
+  /**
    * P1-5 (decisions 033, 034, 038; plan P1-5 shard 05 §3 IT-01..IT-06): a
    * supervisor whose plan has two routes on the fake gateway, each with its
    * own key, served by a broker over a catalog this test controls.

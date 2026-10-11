@@ -38,12 +38,14 @@ import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { toastManager } from '@/components/ui/toast';
 import { type TFunction, useI18n } from '@/i18n';
+import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import { cn } from '@/lib/utils';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { type SubwindowPosition, useSessionSubwindowsStore } from '@/stores/sessionSubwindows';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { SubwindowEmpty, SubwindowFrame } from './SubwindowFrame';
 import { panelStripActionClass, panelStripIconButtonClass } from './sessionPanelsLayout';
+import { isSessionNotRunningError, SESSION_TASKS_ENDED } from './sessionStart';
 import { deriveSubagentPanelRows, type SubagentLane } from './subagentActivityModel';
 import {
   deriveJobsWindowView,
@@ -137,7 +139,11 @@ export function BackgroundJobsWindow({
       toastManager.add({
         type: 'error',
         title: t('The task was not stopped'),
-        description: error instanceof Error ? error.message : String(error),
+        // Decision 176: in words, not as Main's code — a conversation no longer
+        // running took its tasks with it.
+        description: isSessionNotRunningError(error)
+          ? t(SESSION_TASKS_ENDED)
+          : unwrapIpcErrorMessage(error),
       });
     }
   };

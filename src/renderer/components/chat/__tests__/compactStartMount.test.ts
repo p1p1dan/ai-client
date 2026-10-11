@@ -1,0 +1,409 @@
+// @vitest-environment happy-dom
+import { englishTranslate } from '@shared/i18n';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * dsh-rebase decision 176, mounted in the real `ChatComposer`: `/compact` in a
+ * conversation the engine is not running (reopened after the app restarted,
+ * reclaimed after 15 idle minutes, let go by an engine rebuild).
+ *
+ * It used to go straight to Main, which answered `session_not_found`, and the
+ * toast read 「压缩上下文失败：No ready Pi WorkerSlot exists for …」. Now the
+ * conversation is started the way a send starts it (`ensureHost`, then the
+ * send path's resume with the send path's arguments), the status line says
+ * 「正在启动对话…」 and then 「正在压缩上下文…」, and every refusal is said in
+ * words. A message sent while the conversation starts waits; a second
+ * `/compact` is answered locally; ending the conversation while it starts
+ * cancels the compaction; there is no Stop for it.
+ *
+ * The `electronAPI` stub is hoisted: persisted stores rehydrate at import.
+ */
+
+const mocks = vi.hoisted(() => {
+  const api = {
+    getSlashCommands: vi.fn(async () => ({ commands: [], truncated: false })),
+    ensureHost: vi.fn(async () => ({ state: 'ready' })),
+    resumeSession: vi.fn(),
+    compactSession: vi.fn(),
+    createSession: vi.fn(async () => {
+      throw new Error('createSession refused (test)');
+    }),
+    send: vi.fn(async () => {
+      throw new Error('send refused (test)');
+    }),
+    stop: vi.fn(async () => ({ requestId: 'stop-1' })),
+    ensureScratchWorkspace: vi.fn(async ({ sessionId }: { sessionId: string }) => ({
+      path: `/tmp/scratch/${sessionId}`,
+    })),
+  };
+  window.electronAPI = {
+    env: { platform: 'linux', HOME: '/home/test' },
+    settings: { read: async () => null, write: async () => undefined },
+    app: { setLanguage: () => undefined, setProxy: () => undefined },
+    chat: { onRuntimeEvent: () => () => undefined, ...api },
+    git: { checkout: vi.fn(), createBranch: vi.fn() },
+  } as unknown as typeof window.electronAPI;
+  return { api, toast: vi.fn() };
+});
+
+vi.mock('@/utils/logging', () => ({ updateRendererLogging: vi.fn() }));
+vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate, locale: 'en' }) }));
+vi.mock('@/stores/settings', () => {
+  const state = { chatAgentDefaults: undefined, showToolDiff: false };
+  return {
+    useSettingsStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), {
+      getState: () => state,
+    }),
+  };
+});
+vi.mock('@/components/ui/toast', () => ({ toastManager: { add: mocks.toast } }));
+vi.mock('@/stores/runtimeEventBus', () => ({ subscribeRuntimeEvent: () => () => undefined }));
+vi.mock('../ComposerTargetBar', () => ({ ComposerTargetBar: () => null }));
+vi.mock('../ComposerModelTrigger', () => ({ ComposerModelTrigger: () => null }));
+vi.mock('../ComposerPermissionTrigger', () => ({ ComposerPermissionTrigger: () => null }));
+vi.mock('../ComposerUsageChip', () => ({ ComposerUsageChip: () => null }));
+vi.mock('../ComposerAttachMenu', () => ({ ComposerAttachMenu: () => null }));
+vi.mock('../PiModelSyncNotice', () => ({ PiModelSyncNotice: () => null }));
+vi.mock('../ModelMissingNotice', () => ({ ModelMissingNotice: () => null }));
+vi.mock('../QueuedMessageStrip', () => ({ QueuedMessageStrip: () => null }));
+vi.mock('../useQueueRelease', () => ({ useQueueRelease: () => undefined }));
+vi.mock('../usePiModelCatalog', () => ({ usePiModelCatalog: () => ({ catalog: null }) }));
+vi.mock('../useHostStatus', () => {
+  const snapshot = { status: { state: 'ready' }, retry: async () => undefined };
+  return { useHostStatus: () => snapshot };
+});
+
+import { type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
+import { useCompactRunsStore } from '@/stores/compactRuns';
+import { resetComposerDraftsForTests } from '@/stores/composerDrafts';
+import { resetHomeDraftForTests } from '@/stores/homeDraft';
+import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
+import { ChatComposer } from '../ChatComposer';
+import { COMPACT_INTERRUPTED_TEXT, COMPACT_STOPPED_TEXT, COMPACTING_LINE } from '../compactCommand';
+import { announceSessionEnded } from '../sessionEndSignal';
+import { SESSION_START_FAILED, SESSION_STARTING_LINE } from '../sessionStart';
+
+const STUB = '/dsh-home/aiclient-sessions/aiclient-c1.dsh.json';
+/** Typed with its space, as picking it from the menu leaves it: the menu is closed. */
+const COMMAND = '/compact ';
+
+let root: Root | undefined;
+let container: HTMLDivElement;
+
+function chat(extra: Partial<ChatSession> = {}): ChatSession {
+  return {
+    id: 'c1',
+    projectId: 'p-alpha',
+    workspaceId: 'ws-alpha',
+    title: 'Chat one',
+    status: 'idle',
+    updatedAt: 5,
+    runtimeIdentity: STUB,
+    ...extra,
+  };
+}
+
+function setStore(over: { session?: ChatSession; hostBound?: string[] } = {}) {
+  useChatSessionsStore.setState({
+    activeSessionId: 'c1',
+    sessions: [over.session ?? chat()],
+    projects: [{ id: 'p-alpha', name: 'alpha' }],
+    workspaces: [
+      {
+        id: 'ws-alpha',
+        projectId: 'p-alpha',
+        name: 'Main',
+        kind: 'main',
+        path: '/repo/alpha',
+        branch: 'main',
+        gitEnabled: true,
+      },
+    ],
+    messages: {},
+    // Reopened after a restart, or reclaimed: the engine does not run it.
+    hostBoundSessionIds: over.hostBound ?? [],
+    historyErrors: {},
+    pendingPermissions: [],
+    pendingQuestions: [],
+    lastError: null,
+  } as never);
+}
+
+/** A call the test answers when it chooses to. */
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (error: unknown) => void = () => undefined;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+
+async function mountComposer() {
+  container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => root?.render(createElement(ChatComposer, { mode: 'session' })));
+}
+
+const box = () => container.querySelector('textarea') as HTMLTextAreaElement;
+const text = () => container.textContent ?? '';
+const stopButton = () => container.querySelector('button[aria-label="Stop the running turn"]');
+
+async function settle() {
+  for (let i = 0; i < 8; i += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+}
+
+async function type(value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+  await act(async () => {
+    setter?.call(box(), value);
+    box().setSelectionRange(value.length, value.length);
+    box().dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await settle();
+}
+
+async function press(key: string) {
+  await act(async () => {
+    box().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  });
+  await settle();
+}
+
+const toastTitles = () =>
+  mocks.toast.mock.calls.map(([toast]) => (toast as { title: string }).title);
+
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  resetComposerDraftsForTests();
+  resetHomeDraftForTests();
+  for (const fn of Object.values(mocks.api)) fn.mockClear();
+  mocks.api.resumeSession.mockReset();
+  mocks.api.compactSession.mockReset();
+  mocks.toast.mockClear();
+  localStorage.clear();
+  usePendingUserMessagesStore.setState({ bySession: {} });
+  useCompactRunsStore.setState({ phases: {} });
+  setStore();
+});
+
+afterEach(async () => {
+  if (root) await act(async () => root?.unmount());
+  root = undefined;
+  document.body.innerHTML = '';
+  vi.unstubAllGlobals();
+});
+
+describe('/compact in a conversation the engine is not running (decision 176)', () => {
+  it('[176-C-01] starts it the way a send does, saying so, then compacts it', async () => {
+    const resume = deferred<{ requestId: string }>();
+    const compact = deferred<{ compacted: true }>();
+    mocks.api.resumeSession.mockReturnValue(resume.promise);
+    mocks.api.compactSession.mockReturnValue(compact.promise);
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    // The send path's start: the engine first, then its resume, with the
+    // arguments a send would carry (none pinned here: Automatic, Default).
+    expect(mocks.api.ensureHost).toHaveBeenCalled();
+    expect(mocks.api.resumeSession).toHaveBeenCalledWith({
+      sessionId: 'c1',
+      runtimeIdentity: STUB,
+      workspacePath: '/repo/alpha',
+    });
+    expect(mocks.api.compactSession).not.toHaveBeenCalled();
+    expect(text()).toContain(SESSION_STARTING_LINE);
+    expect(stopButton()).toBeNull();
+
+    await act(async () => resume.resolve({ requestId: 'resume-1' }));
+    await settle();
+    expect(mocks.api.compactSession).toHaveBeenCalledWith({ sessionId: 'c1' });
+    expect(text()).toContain(COMPACTING_LINE);
+    expect(text()).not.toContain(SESSION_STARTING_LINE);
+    expect(stopButton()).toBeNull();
+    expect(useChatSessionsStore.getState().hostBoundSessionIds).toContain('c1');
+
+    await act(async () => compact.resolve({ compacted: true }));
+    await settle();
+    expect(text()).not.toContain(COMPACTING_LINE);
+    expect(toastTitles()).toEqual(['Conversation compacted']);
+    expect(box().value).toBe('');
+  });
+
+  it('[176-C-02] a start Main refuses: the card says why, the toast in words, nothing raw', async () => {
+    mocks.api.resumeSession.mockRejectedValue(
+      new Error(
+        "Error invoking remote method 'chat:resumeSession': Error: pi_session_workspace_mismatch: Indexed workspace does not match the resume request"
+      )
+    );
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    expect(mocks.api.compactSession).not.toHaveBeenCalled();
+    expect(mocks.toast).toHaveBeenCalledWith({
+      type: 'error',
+      title: 'Could not compact the conversation',
+      description: SESSION_START_FAILED,
+    });
+    // The existing non-retryable card carries Main's sentence under Details.
+    expect(useChatSessionsStore.getState().historyErrors.c1).toMatch(/^session_cwd_mismatch: /);
+    // Nothing above the composer quotes Main.
+    expect(useChatSessionsStore.getState().lastError).toBeNull();
+    expect(text()).not.toMatch(/pi_session|WorkerSlot|session_not_found/);
+    expect(text()).not.toContain(SESSION_STARTING_LINE);
+    expect(box().value).toBe(COMMAND);
+  });
+
+  it('[176-C-03] a message sent while it starts waits, in words, and survives the compaction', async () => {
+    const resume = deferred<{ requestId: string }>();
+    mocks.api.resumeSession.mockReturnValue(resume.promise);
+    mocks.api.compactSession.mockResolvedValue({ compacted: true });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+    expect(text()).toContain(SESSION_STARTING_LINE);
+
+    await type('and then run the tests');
+    await press('Enter');
+    expect(mocks.toast).toHaveBeenCalledWith({
+      type: 'info',
+      title: 'Wait for the conversation to start',
+      description: 'Your message stays in the input box; send it once the conversation runs.',
+    });
+    expect(mocks.api.send).not.toHaveBeenCalled();
+    expect(mocks.api.resumeSession).toHaveBeenCalledTimes(1);
+    expect(box().value).toBe('and then run the tests');
+
+    await act(async () => resume.resolve({ requestId: 'resume-1' }));
+    await settle();
+    expect(mocks.api.compactSession).toHaveBeenCalledTimes(1);
+    expect(toastTitles()).toContain('Conversation compacted');
+    // The compaction's success clears the command, not the message.
+    expect(box().value).toBe('and then run the tests');
+  });
+
+  it('[176-C-04] a second /compact while one runs is answered here, not queued', async () => {
+    const compact = deferred<{ compacted: true }>();
+    mocks.api.compactSession.mockReturnValue(compact.promise);
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+    expect(text()).toContain(COMPACTING_LINE);
+
+    await press('Enter');
+    expect(mocks.toast).toHaveBeenCalledWith({
+      type: 'info',
+      title: 'This conversation is already being compacted',
+    });
+    expect(mocks.api.compactSession).toHaveBeenCalledTimes(1);
+    expect(mocks.api.resumeSession).not.toHaveBeenCalled();
+
+    await act(async () => compact.resolve({ compacted: true }));
+    await settle();
+    expect(text()).not.toContain(COMPACTING_LINE);
+  });
+
+  it('[176-C-05] ended while it starts: the compaction is not asked, and it says so', async () => {
+    const resume = deferred<{ requestId: string }>();
+    mocks.api.resumeSession.mockReturnValue(resume.promise);
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    announceSessionEnded('c1');
+    await act(async () => resume.resolve({ requestId: 'resume-1' }));
+    await settle();
+
+    expect(mocks.api.compactSession).not.toHaveBeenCalled();
+    expect(mocks.toast).toHaveBeenCalledWith({
+      type: 'error',
+      title: 'Could not compact the conversation',
+      description: COMPACT_STOPPED_TEXT,
+    });
+    expect(text()).not.toContain(SESSION_STARTING_LINE);
+    expect(box().value).toBe(COMMAND);
+  });
+
+  it('[176-C-06] the window believed it running, Main had no slot: started, then compacted', async () => {
+    setStore({ hostBound: ['c1'] });
+    mocks.api.compactSession
+      .mockRejectedValueOnce(
+        new Error(
+          "Error invoking remote method 'chat:compactSession': Error: session_not_found: Session c1 is not running on the DSH host"
+        )
+      )
+      .mockResolvedValueOnce({ compacted: true });
+    mocks.api.resumeSession.mockResolvedValue({ requestId: 'resume-1' });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    expect(mocks.api.compactSession).toHaveBeenCalledTimes(2);
+    expect(mocks.api.resumeSession).toHaveBeenCalledTimes(1);
+    expect(toastTitles()).toEqual(['Conversation compacted']);
+  });
+
+  it('[176-C-07] cut short by a close or an engine restart while compacting: said in words', async () => {
+    setStore({ hostBound: ['c1'] });
+    mocks.api.compactSession.mockRejectedValue(
+      new Error(
+        "Error invoking remote method 'chat:compactSession': Error: worker_compact_interrupted: The compaction of c1 got no answer: its engine session ended first (WORKER_EXITED)"
+      )
+    );
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    expect(mocks.toast).toHaveBeenCalledWith({
+      type: 'error',
+      title: 'Could not compact the conversation',
+      description: COMPACT_INTERRUPTED_TEXT,
+    });
+    expect(box().value).toBe(COMMAND);
+  });
+
+  it('[176-C-08] a conversation that never ran has nothing to compact: nothing is started', async () => {
+    setStore({ session: chat({ runtimeIdentity: undefined }) });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    expect(mocks.api.resumeSession).not.toHaveBeenCalled();
+    expect(mocks.api.createSession).not.toHaveBeenCalled();
+    expect(mocks.api.compactSession).not.toHaveBeenCalled();
+    expect(mocks.toast).toHaveBeenCalledWith({
+      type: 'info',
+      title: 'Nothing to compact yet',
+      description: 'This conversation has no earlier history that compaction could shorten.',
+    });
+  });
+
+  it('[176-C-09] no Stop while it starts or compacts: Esc stops nothing', async () => {
+    const resume = deferred<{ requestId: string }>();
+    mocks.api.resumeSession.mockReturnValue(resume.promise);
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+    expect(text()).toContain(SESSION_STARTING_LINE);
+
+    await press('Escape');
+    expect(mocks.api.stop).not.toHaveBeenCalled();
+    expect(stopButton()).toBeNull();
+    // It carries on to its end.
+    mocks.api.compactSession.mockResolvedValue({ compacted: true });
+    await act(async () => resume.resolve({ requestId: 'resume-1' }));
+    await settle();
+    expect(mocks.api.compactSession).toHaveBeenCalledTimes(1);
+  });
+});

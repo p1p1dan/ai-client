@@ -61,7 +61,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { resetComposerDraftsForTests } from '@/stores/composerDrafts';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { ChatComposer } from '../ChatComposer';
-import { GOAL_ENTRY_HINT_LIVE, GOAL_ENTRY_HINT_OFFLINE } from '../goalStart';
+import { GOAL_ENTRY_HINT_LIVE } from '../goalStart';
 
 let root: Root | undefined;
 let container: HTMLDivElement;
@@ -169,10 +169,10 @@ describe('「设定目标…」 is off when a goal could not be created', () => 
     expect(trigger.goalEntry).toMatchObject({ disabled: true, hint: GOAL_ENTRY_HINT_LIVE });
   });
 
-  it('[GOAL-ENTRY-OFFLINE] with no live worker, it names the commands instead', async () => {
+  it('[GOAL-ENTRY-OFFLINE] with no live worker too: the bar keeps its buttons (decision 176)', async () => {
     useSessionPanelsStore.setState({ bySession: { a: goalPanels('active', false) } } as never);
     await mountComposer();
-    expect(trigger.goalEntry).toMatchObject({ disabled: true, hint: GOAL_ENTRY_HINT_OFFLINE });
+    expect(trigger.goalEntry).toMatchObject({ disabled: true, hint: GOAL_ENTRY_HINT_LIVE });
   });
 
   it('[GOAL-ENTRY-COMPLETE] but not for a completed goal, or another chat’s', async () => {

@@ -19,7 +19,6 @@ import {
   type ResumeSessionAnswer,
   type ResumeSessionArgs,
   resumeSessionWithMigration,
-  runAfterLegacyMigration,
 } from '../legacyMigration';
 
 /**
@@ -297,11 +296,13 @@ describe('noteForkTitleInStore (decision 131)', () => {
   });
 });
 
-describe('runAfterLegacyMigration', () => {
+describe('the not-moved-yet refusal (decision 122 rule 14)', () => {
   const REQUIRED = new Error(
     "Error invoking remote method 'chat:getSessionTree': Error: legacy_migration_required: Session s1 was written by the previous chat engine; resume it first, which moves it to the current engine"
   );
 
+  // Decision 176: an operation that meets it starts the chat the way a send
+  // does (`runWithSessionStarted`, `sessionStart.test.ts`), which moves it.
   it('recognises the refusal inside Electron’s wrapper, and only it', () => {
     expect(isLegacyMigrationRequiredError(REQUIRED)).toBe(true);
     expect(isLegacyMigrationRequiredError('legacy_migration_required: x')).toBe(true);
@@ -314,36 +315,6 @@ describe('runAfterLegacyMigration', () => {
     ]) {
       expect(isLegacyMigrationRequiredError(other), String(other)).toBe(false);
     }
-  });
-
-  it('runs the operation alone when the chat is already on the current engine', async () => {
-    const resume = vi.fn(async () => true);
-    await expect(runAfterLegacyMigration('s1', async () => 'tree', resume)).resolves.toBe('tree');
-    expect(resume).not.toHaveBeenCalled();
-  });
-
-  it('resumes a chat not moved yet, then asks once more', async () => {
-    const operation = vi.fn().mockRejectedValueOnce(REQUIRED).mockResolvedValueOnce('tree');
-    const resume = vi.fn(async () => true);
-    await expect(runAfterLegacyMigration('s1', operation, resume)).resolves.toBe('tree');
-    expect(resume).toHaveBeenCalledWith('s1');
-    expect(operation).toHaveBeenCalledTimes(2);
-  });
-
-  it('a move that failed rethrows the refusal, and asks nothing again', async () => {
-    const operation = vi.fn().mockRejectedValue(REQUIRED);
-    const resume = vi.fn(async () => false);
-    await expect(runAfterLegacyMigration('s1', operation, resume)).rejects.toBe(REQUIRED);
-    expect(operation).toHaveBeenCalledTimes(1);
-  });
-
-  it('any other failure passes through without a resume', async () => {
-    const other = new Error('WORKER_REWIND_JOBS_RUNNING: a job runs');
-    const resume = vi.fn(async () => true);
-    await expect(runAfterLegacyMigration('s1', () => Promise.reject(other), resume)).rejects.toBe(
-      other
-    );
-    expect(resume).not.toHaveBeenCalled();
   });
 });
 

@@ -1,3 +1,4 @@
+import type { SessionEffortLevel } from '@shared/types/agentHost';
 import { isAgentWireName, PI_AGENT, sessionAgent } from '@shared/types/agentWire';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { RuntimePermissionSettings } from '@shared/types/runtimePermission';
@@ -24,6 +25,11 @@ export interface ResumeIntent {
     runtimeIdentity: string;
     workspacePath: string;
     model?: string;
+    /**
+     * Decision 176: the session's reasoning effort, as a send's resume names
+     * it. Main joins two resumes in flight only when they name the same one.
+     */
+    effort?: SessionEffortLevel;
     /** U12 fix — permission tier the resumed worker must come up on. */
     tier?: SessionPermissionTier;
     permissions?: RuntimePermissionSettings;
@@ -73,6 +79,12 @@ export function shouldResumeSession(
     persistedRuntimeIdentity?: string;
     /** Model id to bind for the resumed turn (optional). */
     model?: string;
+    /**
+     * Decision 176: reasoning effort, sent the way the send path sends it.
+     * Omitted by the sidebar's resume, which has always come up on the
+     * default and keeps doing so.
+     */
+    effort?: SessionEffortLevel;
     /**
      * U12 fix — this session's stored permission tier.
      *
@@ -134,6 +146,7 @@ export function shouldResumeSession(
       // dropped rather than sent with an undefined value — "no model" has to be
       // indistinguishable from "field absent" for the runtime default to apply.
       ...(options.model ? { model: options.model } : {}),
+      ...(options.effort ? { effort: options.effort } : {}),
       ...(options.tier ? { tier: options.tier } : {}),
       ...(options.permissions ? { permissions: options.permissions } : {}),
       // Same omit-rather-than-send rule as `model` above: absent is what every

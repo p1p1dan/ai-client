@@ -193,7 +193,6 @@ describe('sessionPanelsModel — the goal bar (plan P1-7 shard 03 §2)', () => {
       maxRounds: 256,
       action: 'pause',
       actionDisabled: false,
-      controls: true,
     });
     expect(deriveGoalBarView(panels, false)?.state).toBe('waiting');
   });
@@ -203,10 +202,16 @@ describe('sessionPanelsModel — the goal bar (plan P1-7 shard 03 §2)', () => {
       deriveGoalBarView(panelsWith({ key: 'goal', view: goal('active') }, disarmed), true)
     ).toMatchObject({ state: 'suspended', action: 'resume' });
     const gone = { ...panelsWith({ key: 'goal', view: goal('active') }, armed), live: false };
+    // Decision 176: it keeps its Resume — pressing it starts the conversation
+    // the way a send does first (it used to offer no button at all).
     expect(deriveGoalBarView(gone, false)).toMatchObject({
       state: 'suspended',
-      action: null,
-      controls: false,
+      action: 'resume',
+    });
+    const pausedGone = { ...panelsWith({ key: 'goal', view: goal('paused') }), live: false };
+    expect(deriveGoalBarView(pausedGone, false)).toMatchObject({
+      state: 'paused',
+      action: 'resume',
     });
   });
 
@@ -454,7 +459,8 @@ describe('sessionPanelsModel — a resumed goal (P1-7e problem 5)', () => {
     } as RuntimeEvent);
     expect(deriveGoalBarView(state.bySession.s1, false)).toMatchObject({
       state: 'suspended',
-      action: null,
+      // Decision 176: offered still; the press starts the conversation first.
+      action: 'resume',
     });
   });
 });

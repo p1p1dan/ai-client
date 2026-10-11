@@ -6,7 +6,6 @@ import {
   applyGoalStartBeforeSpawn,
   applyGoalStartLive,
   GOAL_ENTRY_HINT_LIVE,
-  GOAL_ENTRY_HINT_OFFLINE,
   GOAL_ENTRY_HINT_SENDING,
   type GoalStartEffects,
   goalEntryState,
@@ -32,7 +31,7 @@ import {
 
 const zh = (key: string, params?: Record<string, string | number>) => translate('zh', key, params);
 
-function goal(state: GoalBarState, controls = true): GoalBarView {
+function goal(state: GoalBarState): GoalBarView {
   return {
     state,
     goalId: 'g1',
@@ -44,7 +43,6 @@ function goal(state: GoalBarState, controls = true): GoalBarView {
     updatedAt: 0,
     action: null,
     actionDisabled: false,
-    controls,
   };
 }
 
@@ -133,13 +131,13 @@ describe('「设定目标…」', () => {
       disabled: true,
       hint: GOAL_ENTRY_HINT_LIVE,
     });
-    // No live worker: the goal bar has no buttons, so the hint names the commands.
-    expect(goalEntryState(goal('suspended', false), false)).toEqual({
+    // Decision 176: with no live worker as well — the goal bar keeps its
+    // buttons (they start the conversation first), so it is the same hint.
+    expect(goalEntryState(goal('suspended'), false)).toEqual({
       disabled: true,
-      hint: GOAL_ENTRY_HINT_OFFLINE,
+      hint: GOAL_ENTRY_HINT_LIVE,
     });
     expect(zh(GOAL_ENTRY_HINT_LIVE)).toContain('目标条');
-    expect(zh(GOAL_ENTRY_HINT_OFFLINE)).toContain('/goal clear');
   });
 
   it('is off while this chat is sending', () => {

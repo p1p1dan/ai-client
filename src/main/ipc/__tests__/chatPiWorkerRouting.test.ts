@@ -58,6 +58,8 @@ const forkSession = vi.fn(async () => ({
   },
 }));
 const compactSession = vi.fn(async () => ({ requestId: 'compact-1' }));
+/** dsh-rebase P1-7a — the goal bar's out-of-band command. */
+const runSessionCommand = vi.fn(async () => ({ ok: true }));
 /** dsh-rebase P1-7b — the jobs and subagents windows. */
 const killSessionJob = vi.fn(async () => ({ outcome: 'requested' }));
 const readSessionJob = vi.fn(async () => null);
@@ -122,6 +124,7 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     rewindSession,
     forkSession,
     compactSession,
+    runSessionCommand,
     killSessionJob,
     readSessionJob,
     interruptSubagent,
@@ -255,6 +258,82 @@ describe('P1-7b background jobs and subagents IPC', () => {
       childId: 'aiclient-kid',
       ownerWebContentsId: 7,
     });
+  });
+});
+
+/**
+ * dsh-rebase decision 176: every handler whose WorkerManager call needs a
+ * running conversation passes the refusal's code on, as `chat:send` does —
+ * `session_not_found` is what the renderer answers by starting the
+ * conversation the way a send does and asking again.
+ */
+describe('session operations keep their code (decision 176)', () => {
+  const NOT_RUNNING = 'Session s1 is not running on the DSH host';
+  const operations: Array<{
+    channel: string;
+    payload: Record<string, unknown>;
+    mock: ReturnType<typeof vi.fn>;
+  }> = [
+    { channel: 'chat:compactSession', payload: { sessionId: 's1' }, mock: compactSession },
+    {
+      channel: 'chat:runSessionCommand',
+      payload: { sessionId: 's1', line: '/goal resume' },
+      mock: runSessionCommand,
+    },
+    {
+      channel: 'chat:getSessionTree',
+      payload: { sessionId: 's1', requestSequence: 1 },
+      mock: getSessionTree,
+    },
+    {
+      channel: 'chat:rewindSession',
+      payload: { sessionId: 's1', entryId: 'a', confirmed: true },
+      mock: rewindSession,
+    },
+    { channel: 'chat:forkSession', payload: { sessionId: 's1', entryId: 'a' }, mock: forkSession },
+    {
+      channel: 'chat:killSessionJob',
+      payload: { sessionId: 's1', jobId: 'bash-2' },
+      mock: killSessionJob,
+    },
+    {
+      channel: 'chat:interruptSubagent',
+      payload: { sessionId: 's1', childId: 'kid' },
+      mock: interruptSubagent,
+    },
+    {
+      channel: 'chat:loadHistoryPage',
+      payload: { sessionId: 's1', offset: 80 },
+      mock: loadHistoryPage,
+    },
+  ];
+
+  it.each(operations)('[176-IPC] $channel rejects as `<code>: <message>`', async (operation) => {
+    const { WorkerManagerError } = await import('../../services/agent-host/WorkerManager');
+    operation.mock.mockRejectedValueOnce(new WorkerManagerError('session_not_found', NOT_RUNNING));
+    await expect(invoke(operation.channel, operation.payload)).rejects.toThrow(
+      `session_not_found: ${NOT_RUNNING}`
+    );
+  });
+
+  it('[176-IPC] a resume, the start those operations get, keeps its code too', async () => {
+    const { WorkerManagerError } = await import('../../services/agent-host/WorkerManager');
+    resumeSession.mockRejectedValueOnce(
+      new WorkerManagerError('session_not_ready', 'Session s1 is restarting')
+    );
+    await expect(
+      invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/session.jsonl',
+        workspacePath: '/repo',
+      })
+    ).rejects.toThrow('session_not_ready: Session s1 is restarting');
+  });
+
+  it('[176-IPC] the worker’s own refusal goes through unchanged', async () => {
+    const remote = new Error('WORKER_COMPACT_FAILED: Compaction cancelled.');
+    compactSession.mockRejectedValueOnce(remote);
+    await expect(invoke('chat:compactSession', { sessionId: 's1' })).rejects.toBe(remote);
   });
 });
 

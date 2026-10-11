@@ -35,18 +35,17 @@ const api = vi.hoisted(() => {
 
 const zh = (key: string, params?: Record<string, string | number>) => translate('zh', key, params);
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: zh }) }));
-// dsh-rebase P1-9e: the dialog moves a legacy chat first (resume, with the
-// model its composer would use). Stubbed with stable functions, as the app's
-// are, so the real settings store never loads here; the path itself is
-// covered by `sessionTreeDialogMigration.test.ts`.
-vi.mock('../useResolvedSessionModel', () => {
-  const resolve = () => undefined;
-  return { useResolvedSessionModel: () => resolve };
-});
-vi.mock('../sessionIndex/useResumeSession', () => {
-  const result = { resume: async () => false };
-  return { useResumeSession: () => result };
-});
+// Decision 176: the dialog starts a conversation the engine is not running
+// first, the way a send does. Stubbed with a stable object (a module constant
+// in the app) for a running conversation, so the real settings store never
+// loads here; the start itself is covered by `sessionTreeDialogMigration.test.ts`.
+vi.mock('../sessionStartDeps', () => ({
+  sessionStartEffects: {
+    start: async () => ({ kind: 'running' }),
+    isRunning: () => true,
+    forgetRunning: () => undefined,
+  },
+}));
 
 import { resetComposerDraftsForTests, useComposerDraftsStore } from '@/stores/composerDrafts';
 import { SessionTreeDialog } from '../SessionTreeDialog';

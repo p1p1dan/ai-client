@@ -29,11 +29,17 @@ import { resetSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import {
   isLegacyMigrationRequiredError,
   LEGACY_MIGRATION_OPERATION_FAILED,
-  runAfterLegacyMigration,
 } from './sessionIndex/legacyMigration';
-import { useResumeSession } from './sessionIndex/useResumeSession';
+import {
+  isSessionNotRunningError,
+  runWithSessionStarted,
+  SESSION_START_KEYS,
+  SESSION_STARTING_LINE,
+  SESSION_STOPPED_BEFORE_RUN,
+  sessionStartFailureKey,
+} from './sessionStart';
+import { sessionStartEffects } from './sessionStartDeps';
 import { capSessionTreeForDisplay, sessionTreeNodeTag, sessionTreeNodeTitle } from './sessionTree';
-import { useResolvedSessionModel } from './useResolvedSessionModel';
 
 interface SessionTreeDialogProps {
   sessionId: string;
@@ -47,14 +53,31 @@ function errorMessage(cause: unknown): string {
 }
 
 /**
- * The dialog's error line. A chat that still could not be moved to the current
- * engine gets the dictionary key (translated where it is shown, so the effect
- * below needs no translator), everything else the sentence it came with.
+ * Decision 176: the conversation an operation needed could not be started,
+ * or stopped running before the operation reached it. Carries the dictionary
+ * key the dialog shows.
+ */
+class SessionStartRefusedError extends Error {
+  constructor(readonly key: string) {
+    super(key);
+    this.name = 'SessionStartRefusedError';
+  }
+}
+
+/** Error lines that are dictionary keys, translated where they are shown. */
+const TRANSLATED_FAILURES: ReadonlySet<string> = new Set(SESSION_START_KEYS);
+
+/**
+ * The dialog's error line. A start that did not happen, a chat that still
+ * could not be moved to the current engine, or one that stopped running gets
+ * a dictionary key (translated where it is shown, so the effect below needs no
+ * translator), everything else the sentence it came with.
  */
 function failureText(cause: unknown): string {
-  return isLegacyMigrationRequiredError(cause)
-    ? LEGACY_MIGRATION_OPERATION_FAILED
-    : errorMessage(cause);
+  if (cause instanceof SessionStartRefusedError) return cause.key;
+  if (isLegacyMigrationRequiredError(cause)) return LEGACY_MIGRATION_OPERATION_FAILED;
+  if (isSessionNotRunningError(cause)) return SESSION_STOPPED_BEFORE_RUN;
+  return errorMessage(cause);
 }
 
 /**
@@ -80,19 +103,33 @@ export function SessionTreeDialog({
     (state) => state.historyBranchRevisions?.[sessionId] ?? 0
   );
   const requestSequence = useRef(0);
-  const { resume } = useResumeSession();
-  const resolveSessionModel = useResolvedSessionModel();
-  // dsh-rebase P1-9e (decision 122 rule 14): the tree, a rewind and a fork
-  // need the chat on the current engine. A chat from the previous version is
-  // moved first — by resuming it, with the model its composer would use — and
-  // asked again; a move that fails puts its card in the conversation. Both
-  // hooks hand out stable functions, so this changes with the session only.
-  const afterMigration = useCallback(
-    <T,>(operation: () => Promise<T>): Promise<T> =>
-      runAfterLegacyMigration(sessionId, operation, (id) =>
-        resume(id, { model: resolveSessionModel(id) })
-      ),
-    [sessionId, resume, resolveSessionModel]
+  const [starting, setStarting] = useState(false);
+  // Decision 176: the tree, a rewind and a fork need the conversation
+  // running. One the engine is not running (reopened after a restart,
+  // reclaimed when idle) is started the way a send starts it first — which
+  // also moves a chat from the previous version (decision 122 rule 14) — and a
+  // start that fails puts its card in the conversation. `sessionStartEffects`
+  // is a module constant, so this changes with the session only.
+  const afterStart = useCallback(
+    async <T,>(operation: () => Promise<T>): Promise<T> => {
+      try {
+        const result = await runWithSessionStarted({
+          sessionId,
+          operation,
+          ...sessionStartEffects,
+          onPhase: (phase) => setStarting(phase === 'starting'),
+        });
+        if (result.kind === 'not-started') {
+          throw new SessionStartRefusedError(sessionStartFailureKey(result.start));
+        }
+        if (result.kind === 'cancelled')
+          throw new SessionStartRefusedError(SESSION_STOPPED_BEFORE_RUN);
+        return result.value;
+      } finally {
+        setStarting(false);
+      }
+    },
+    [sessionId]
   );
 
   useEffect(() => {
@@ -109,7 +146,7 @@ export function SessionTreeDialog({
     setMutationPending(false);
     setLoading(true);
     setError(null);
-    void afterMigration(() =>
+    void afterStart(() =>
       window.electronAPI.chat.getSessionTree({ sessionId, requestSequence: sequence })
     )
       .then((result) => {
@@ -130,7 +167,7 @@ export function SessionTreeDialog({
       .finally(() => {
         if (requestSequence.current === sequence) setLoading(false);
       });
-  }, [afterMigration, branchRevision, open, refreshNonce, sessionId]);
+  }, [afterStart, branchRevision, open, refreshNonce, sessionId]);
 
   const display = useMemo(
     () => (snapshot ? capSessionTreeForDisplay(snapshot) : { nodes: [], hiddenCount: 0 }),
@@ -144,7 +181,7 @@ export function SessionTreeDialog({
     setError(null);
     requestSequence.current += 1;
     try {
-      const result = await afterMigration(() =>
+      const result = await afterStart(() =>
         window.electronAPI.chat.rewindSession({
           sessionId,
           entryId: target.id,
@@ -180,7 +217,7 @@ export function SessionTreeDialog({
     setError(null);
     requestSequence.current += 1;
     try {
-      const result = await afterMigration(() =>
+      const result = await afterStart(() =>
         window.electronAPI.chat.forkSession({
           sessionId,
           entryId: node.id,
@@ -219,12 +256,14 @@ export function SessionTreeDialog({
           <DialogPanel className="min-h-64">
             <div className="mb-2 flex items-center justify-between gap-2 text-meta text-muted-foreground">
               <span>
-                {snapshot
-                  ? t('{{shown}} of {{total}} nodes', {
-                      shown: snapshot.returnedNodes,
-                      total: snapshot.totalNodes,
-                    })
-                  : t('Load the session tree')}
+                {starting
+                  ? t(SESSION_STARTING_LINE)
+                  : snapshot
+                    ? t('{{shown}} of {{total}} nodes', {
+                        shown: snapshot.returnedNodes,
+                        total: snapshot.totalNodes,
+                      })
+                    : t('Load the session tree')}
               </span>
               <Button
                 type="button"
@@ -239,7 +278,7 @@ export function SessionTreeDialog({
             </div>
             {error && (
               <p className="mb-2 rounded-sm border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-meta text-destructive">
-                {error === LEGACY_MIGRATION_OPERATION_FAILED ? t(error) : error}
+                {TRANSLATED_FAILURES.has(error) ? t(error) : error}
               </p>
             )}
             {display.hiddenCount > 0 && (

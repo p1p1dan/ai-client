@@ -42,6 +42,7 @@ describe('useSessionPanelsStore (P1-7a)', () => {
       open: {},
       dismissed: {},
       commandPending: {},
+      commandStarting: {},
     });
   });
 
@@ -84,6 +85,13 @@ describe('useSessionPanelsStore (P1-7a)', () => {
     expect(useSessionPanelsStore.getState().bySession.s2).toBeUndefined();
   });
 
+  /** A conversation the engine runs: nothing to start. */
+  const running = {
+    start: vi.fn(async () => ({ kind: 'running' as const })),
+    isRunning: () => true,
+    forgetRunning: vi.fn(),
+  };
+
   it('[P7A-STORE-CMD] a goal command in flight holds the session’s buttons; the answer comes back', async () => {
     let settle: (value: unknown) => void = () => undefined;
     runSessionCommand.mockImplementation(
@@ -92,16 +100,65 @@ describe('useSessionPanelsStore (P1-7a)', () => {
           settle = resolve;
         })
     );
-    const first = useSessionPanelsStore.getState().runGoalCommand('s1', '/goal pause');
+    const first = useSessionPanelsStore.getState().runGoalCommand('s1', '/goal pause', running);
     expect(useSessionPanelsStore.getState().commandPending.s1).toBe(true);
     await expect(
-      useSessionPanelsStore.getState().runGoalCommand('s1', '/goal resume')
+      useSessionPanelsStore.getState().runGoalCommand('s1', '/goal resume', running)
     ).resolves.toBeUndefined();
+    await vi.waitFor(() => expect(runSessionCommand).toHaveBeenCalledTimes(1));
     settle({ ok: true, output: 'Goal paused' });
-    await expect(first).resolves.toEqual({ ok: true, output: 'Goal paused' });
+    await expect(first).resolves.toEqual({
+      kind: 'done',
+      value: { ok: true, output: 'Goal paused' },
+      started: false,
+    });
     expect(useSessionPanelsStore.getState().commandPending.s1).toBeUndefined();
     expect(runSessionCommand).toHaveBeenCalledTimes(1);
     expect(runSessionCommand).toHaveBeenCalledWith({ sessionId: 's1', line: '/goal pause' });
+    expect(running.start).not.toHaveBeenCalled();
+  });
+
+  it('[176-STORE-CMD] on a conversation not running: started first (the bar says so), then the command', async () => {
+    let finishStart: () => void = () => undefined;
+    const effects = {
+      start: vi.fn(
+        () =>
+          new Promise<{ kind: 'started' }>((resolve) => {
+            finishStart = () => resolve({ kind: 'started' });
+          })
+      ),
+      isRunning: () => false,
+      forgetRunning: vi.fn(),
+    };
+    runSessionCommand.mockResolvedValue({ ok: true });
+    const pending = useSessionPanelsStore.getState().runGoalCommand('s1', '/goal resume', effects);
+    expect(useSessionPanelsStore.getState().commandStarting.s1).toBe(true);
+    expect(runSessionCommand).not.toHaveBeenCalled();
+    finishStart();
+    await expect(pending).resolves.toEqual({ kind: 'done', value: { ok: true }, started: true });
+    expect(effects.start).toHaveBeenCalledWith('s1');
+    expect(runSessionCommand).toHaveBeenCalledWith({ sessionId: 's1', line: '/goal resume' });
+    expect(useSessionPanelsStore.getState().commandStarting.s1).toBeUndefined();
+    expect(useSessionPanelsStore.getState().commandPending.s1).toBeUndefined();
+  });
+
+  it('[176-STORE-CMD-REFUSED] a start that did not happen runs nothing and says why', async () => {
+    const effects = {
+      start: vi.fn(async () => ({
+        kind: 'failed' as const,
+        code: 'session_cwd_mismatch' as const,
+      })),
+      isRunning: () => false,
+      forgetRunning: vi.fn(),
+    };
+    await expect(
+      useSessionPanelsStore.getState().runGoalCommand('s1', '/goal clear', effects)
+    ).resolves.toEqual({
+      kind: 'not-started',
+      start: { kind: 'failed', code: 'session_cwd_mismatch' },
+    });
+    expect(runSessionCommand).not.toHaveBeenCalled();
+    expect(useSessionPanelsStore.getState().commandStarting.s1).toBeUndefined();
   });
 
   it('[P7A-STORE-PRUNE] drops sessions no longer in the tree, strips state included', () => {

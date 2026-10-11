@@ -930,10 +930,16 @@ export function shouldShowStatusLine(input: {
   /** Accepted and ignored — see the note above. */
   sending?: boolean;
   reading: number;
+  /**
+   * dsh-rebase decision 176: a window-local operation runs on this chat with
+   * nothing else to show for it — `/compact` starting the conversation, then
+   * compacting it. Shown like reading attachments: spinner and one line.
+   */
+  working?: boolean;
   hasStatusError: boolean;
   hasLargeHint: boolean;
 }): boolean {
-  return input.reading > 0 || input.hasStatusError || input.hasLargeHint;
+  return input.reading > 0 || input.working === true || input.hasStatusError || input.hasLargeHint;
 }
 
 // ---- Mention popup ----

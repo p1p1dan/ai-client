@@ -2589,6 +2589,183 @@ describe('WorkerManager compaction budget', () => {
   });
 });
 
+/**
+ * dsh-rebase decision 176 — `/compact` (and the goal bar, the session tree) on
+ * a conversation the engine is not running. The renderer starts it the way a
+ * send does (`resumeSession`), then asks again; Main's half is that the
+ * refusal says so in a code the renderer can read, that a second compaction
+ * is refused while one is with the worker, and that one cut short by a close
+ * or an engine restart says so instead of quoting the slot.
+ */
+describe('WorkerManager compaction on a conversation that is not running (decision 176)', () => {
+  /** Hold the record's next `worker.compact` until the test settles it; later ones answer. */
+  function holdCompaction(record: FakeSlotRecord) {
+    const settle: {
+      resolve?: (value: unknown) => void;
+      reject?: (error: unknown) => void;
+    } = {};
+    const original = record.request.getMockImplementation();
+    record.request.mockImplementation(async (type: string, ...rest: unknown[]) => {
+      if (type === 'worker.compact' && settle.resolve === undefined) {
+        return new Promise((resolve, reject) => {
+          settle.resolve = resolve;
+          settle.reject = reject;
+        });
+      }
+      return original?.(type, ...rest);
+    });
+    return {
+      started: () => settle.resolve !== undefined,
+      resolve: (value: unknown) => settle.resolve?.(value),
+      reject: (error: unknown) => settle.reject?.(error),
+    };
+  }
+
+  it('[176-WM-1] no ready slot is session_not_found in words of today; after the send path’s start it compacts', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    // The idle sweep, an engine rebuild, an app restart: the pool holds no
+    // slot for the conversation any more.
+    await h.manager.closeSession('s1');
+
+    const refused = h.manager.compactSession({ sessionId: 's1', ownerWebContentsId: 11 });
+    await expect(refused).rejects.toMatchObject({ code: 'session_not_found' });
+    await expect(refused).rejects.toThrow(/s1/);
+    // The internal vocabulary of the retired engine is gone from the sentence.
+    await expect(refused).rejects.not.toThrow(/Pi WorkerSlot/);
+
+    // What the renderer does next: the send path's start, then the same ask.
+    await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: norm('/sessions/s1.jsonl'),
+      workspacePath: '/repo',
+      ownerWebContentsId: 11,
+    });
+    await expect(
+      h.manager.compactSession({ sessionId: 's1', ownerWebContentsId: 11 })
+    ).resolves.toEqual({ compacted: true });
+    expect(h.records).toHaveLength(2);
+    expect(h.records[1]?.request).toHaveBeenCalledWith(
+      'worker.compact',
+      { logicalSessionId: 's1' },
+      { timeoutMs: WORKER_COMPACT_REQUEST_TIMEOUT_MS }
+    );
+  });
+
+  it('[176-WM-2] a second compaction while one is with the worker is refused as compact_in_progress', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const held = holdCompaction(h.records[0] as FakeSlotRecord);
+    const compacting = h.manager.compactSession({ sessionId: 's1', ownerWebContentsId: 11 });
+    await vi.waitFor(() => expect(held.started()).toBe(true));
+
+    // Refused at once rather than queued behind the first, where its own
+    // request clock would run out and report a failure the worker never had.
+    await expect(h.manager.compactSession({ sessionId: 's1' })).rejects.toMatchObject({
+      code: 'compact_in_progress',
+    });
+    expect(
+      h.records[0]?.request.mock.calls.filter(([type]) => type === 'worker.compact')
+    ).toHaveLength(1);
+
+    held.resolve({ compacted: true });
+    await expect(compacting).resolves.toEqual({ compacted: true });
+    // Over: the next one goes through.
+    await expect(h.manager.compactSession({ sessionId: 's1' })).resolves.toEqual({
+      compacted: true,
+    });
+  });
+
+  it('[176-WM-3] closing the conversation mid-compaction answers worker_compact_interrupted, not the slot’s sentence', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records[0] as FakeSlotRecord;
+    const held = holdCompaction(record);
+    record.dispose.mockImplementation(async () => {
+      // WorkerSlot rejects what is pending the moment it starts to dispose.
+      held.reject(
+        new WorkerSlotError('WORKER_SLOT_DISPOSING', `Worker slot ${record.slotKey} is disposing`)
+      );
+      record.slot.state = 'disposed';
+    });
+    const compacting = h.manager.compactSession({ sessionId: 's1', ownerWebContentsId: 11 });
+    await vi.waitFor(() => expect(held.started()).toBe(true));
+
+    await h.manager.closeSession('s1');
+
+    await expect(compacting).rejects.toMatchObject({ code: 'worker_compact_interrupted' });
+    await expect(compacting).rejects.not.toThrow(/sessions|disposing/);
+  });
+
+  it('[176-WM-4] an engine restart mid-compaction answers worker_compact_interrupted; the reopened session compacts', async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 's1', 11);
+    const held = holdCompaction(h.records[0] as FakeSlotRecord);
+    const compacting = h.manager.compactSession({ sessionId: 's1', ownerWebContentsId: 11 });
+    await vi.waitFor(() => expect(held.started()).toBe(true));
+
+    h.hostCrash('crashed');
+    held.reject(new WorkerSlotError('WORKER_EXITED', 'Worker exited (code=null signal=SIGKILL)'));
+
+    await expect(compacting).rejects.toMatchObject({ code: 'worker_compact_interrupted' });
+    await vi.waitFor(() =>
+      expect(h.manager.getSlotSnapshots()).toEqual([
+        expect.objectContaining({ logicalSessionId: 's1', state: 'ready' }),
+      ])
+    );
+    expect(h.records).toHaveLength(2);
+    await expect(
+      h.manager.compactSession({ sessionId: 's1', ownerWebContentsId: 11 })
+    ).resolves.toEqual({ compacted: true });
+  });
+
+  it('[176-WM-5] Stop meanwhile finds no turn: it settles at once, and the compaction goes on to its answer', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records[0] as FakeSlotRecord;
+    const held = holdCompaction(record);
+    const original = record.request.getMockImplementation();
+    record.request.mockImplementation(async (type: string, ...rest: unknown[]) =>
+      // The bridge's answer with no turn of its own: nothing was stopped.
+      type === 'worker.stop' ? { stopped: false } : original?.(type, ...rest)
+    );
+    const compacting = h.manager.compactSession({ sessionId: 's1', ownerWebContentsId: 11 });
+    await vi.waitFor(() => expect(held.started()).toBe(true));
+    h.events.length = 0;
+
+    await h.manager.stop('s1');
+    expect(h.events).toEqual([
+      expect.objectContaining({
+        type: 'session.stopped',
+        payload: { stopCause: 'no_active_turn' },
+      }),
+      expect.objectContaining({ type: 'session.status', payload: { status: 'idle' } }),
+    ]);
+
+    held.resolve({ compacted: true });
+    await expect(compacting).resolves.toEqual({ compacted: true });
+  });
+
+  it('[176-WM-6] a refusal from the worker itself is passed on as it came', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const held = holdCompaction(h.records[0] as FakeSlotRecord);
+    const compacting = h.manager.compactSession({ sessionId: 's1' });
+    await vi.waitFor(() => expect(held.started()).toBe(true));
+    const remote = new WorkerSlotError(
+      'WORKER_RPC_REMOTE_ERROR',
+      'WORKER_COMPACT_FAILED: Compaction could not produce a useful summary.',
+      { code: 'WORKER_COMPACT_FAILED', message: 'Compaction could not produce a useful summary.' }
+    );
+    held.reject(remote);
+    await expect(compacting).rejects.toBe(remote);
+    // And the in-flight mark went with it: the next one is asked.
+    await expect(h.manager.compactSession({ sessionId: 's1' })).resolves.toEqual({
+      compacted: true,
+    });
+  });
+});
+
 // 2026-09-04 bug: creating a session showed "Pi session service stopped · click
 // Retry" while the very next message answered normally. Workers spawn lazily,
 // so an empty pool is the manager's IDLE state — deriving `stopped` from it

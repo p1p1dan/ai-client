@@ -246,6 +246,13 @@ interface ManagedSlot {
   leafCheckpoint: PiLeafCheckpoint | null;
   branchRevision: number;
   mutationInFlight: 'rewind' | 'fork' | null;
+  /**
+   * Decision 176: a `/compact` is with the worker. A second one is refused
+   * (`compact_in_progress`) instead of queuing behind it, where its own
+   * request clock would run out first and report a failure while the worker
+   * still went on to write the summary.
+   */
+  compacting?: boolean;
   /** Bytes after the last newline of this worker's stderr; see hostStderr.ts. */
   stderrPending: string;
   /**
@@ -519,6 +526,27 @@ function remoteError(error: unknown): { code: string; message: string } | undefi
   return typeof remote?.code === 'string' && typeof remote.message === 'string'
     ? { code: remote.code, message: remote.message }
     : undefined;
+}
+
+/**
+ * `WorkerSlot`'s own failures (`WorkerSlotErrorCode`): the request never got
+ * the worker's answer because the slot went away under it, or stopped waiting.
+ */
+const LOCAL_SLOT_FAILURES: ReadonlySet<string> = new Set([
+  'WORKER_SLOT_NOT_RUNNING',
+  'WORKER_SLOT_DISPOSING',
+  'WORKER_SLOT_DISPOSED',
+  'WORKER_RPC_TIMEOUT',
+  'WORKER_TRANSPORT_ERROR',
+  'WORKER_EXITED',
+  'WORKER_EXIT_TIMEOUT',
+]);
+
+/** The slot's code when `error` is one of its own failures, not the worker's answer. */
+function localSlotFailure(error: unknown): string | undefined {
+  if (remoteError(error)) return undefined;
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && LOCAL_SLOT_FAILURES.has(code) ? code : undefined;
 }
 
 function positiveInteger(value: number, label: string): number {
@@ -1557,6 +1585,14 @@ export class WorkerManager {
    * the session must be ready, idle, and claimed by this window. pi aborts the
    * running turn and never resumes it, so letting this through mid-turn would
    * silently discard work the user is watching.
+   *
+   * dsh-rebase decision 176: a conversation with no ready slot is refused with
+   * `session_not_found`, which the renderer answers by starting it the way a
+   * send does and asking again. A second compaction while one is with the
+   * worker is refused (`compact_in_progress`). A request the slot itself cut
+   * short (a close, an engine restart) is `worker_compact_interrupted`: the
+   * worker never answered, so whether the summary was written is not known
+   * here. A send meanwhile is admitted as before (decision 176 leaves it).
    */
   async compactSession(input: {
     sessionId: string;
@@ -1564,23 +1600,49 @@ export class WorkerManager {
     ownerWebContentsId?: number;
   }): Promise<WorkerCompactResult> {
     const entry = this.requireReadySession(input.sessionId);
+    if (entry.compacting) {
+      throw new WorkerManagerError(
+        'compact_in_progress',
+        `Session ${input.sessionId} is already being compacted`,
+        true
+      );
+    }
     this.assertIdleEntry(entry, 'compact the conversation');
     this.claimEntry(entry, input.ownerWebContentsId);
-    const result = await entry.slot?.request<WorkerCompactResult, WorkerCompactPayload>(
-      'worker.compact',
-      {
-        logicalSessionId: entry.logicalSessionId,
-        ...(input.instructions ? { instructions: input.instructions } : {}),
-      },
-      // A summary is a full provider request, so the warm 10s default is the
-      // wrong clock: it expired while the worker was still summarizing, and
-      // because a timeout only rejects the pending promise, the worker went on
-      // to write the compaction the user had just been told had failed. The
-      // worker now aborts itself first — this budget only has to outlast that.
-      { timeoutMs: WORKER_COMPACT_REQUEST_TIMEOUT_MS }
-    );
+    entry.compacting = true;
+    let result: WorkerCompactResult | undefined;
+    try {
+      result = await entry.slot?.request<WorkerCompactResult, WorkerCompactPayload>(
+        'worker.compact',
+        {
+          logicalSessionId: entry.logicalSessionId,
+          ...(input.instructions ? { instructions: input.instructions } : {}),
+        },
+        // A summary is a full provider request, so the warm 10s default is the
+        // wrong clock: it expired while the worker was still summarizing, and
+        // because a timeout only rejects the pending promise, the worker went on
+        // to write the compaction the user had just been told had failed. The
+        // worker now aborts itself first — this budget only has to outlast that.
+        { timeoutMs: WORKER_COMPACT_REQUEST_TIMEOUT_MS }
+      );
+    } catch (error) {
+      const cutShort = localSlotFailure(error);
+      if (cutShort) {
+        throw new WorkerManagerError(
+          'worker_compact_interrupted',
+          `The compaction of ${input.sessionId} got no answer: its engine session ended first (${cutShort})`,
+          true
+        );
+      }
+      throw error;
+    } finally {
+      entry.compacting = false;
+    }
     if (!result || result.compacted !== true) {
-      throw new WorkerManagerError('worker_compact_failed', 'Pi worker could not compact');
+      throw new WorkerManagerError(
+        'worker_compact_failed',
+        'The engine answered the compaction without one'
+      );
     }
     return result;
   }
@@ -3248,12 +3310,17 @@ export class WorkerManager {
     });
   }
 
+  /**
+   * Decision 176: the code is what the renderer acts on (`session_not_found`
+   * starts the conversation the way a send does, then asks again); the
+   * sentence is for logs and a card's details only.
+   */
   private requireReadySession(sessionId: string): ManagedSlot {
     const entry = this.entriesBySession.get(sessionId);
     if (!entry || entry.state !== 'ready' || !entry.slot) {
       throw new WorkerManagerError(
         'session_not_found',
-        `No ready Pi WorkerSlot exists for ${sessionId}`
+        `Session ${sessionId} is not running on the DSH host`
       );
     }
     return entry;

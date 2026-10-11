@@ -27,8 +27,9 @@ import { willMigrateOnResume } from './resumeIntent';
  *  - a failure is left to the caller, which files it on the history card.
  *
  * Every other engine operation on a chat that is still legacy is refused with
- * `legacy_migration_required` (decision 122 rule 14); {@link
- * runAfterLegacyMigration} resumes the chat (which migrates it) and asks again.
+ * `legacy_migration_required` (decision 122 rule 14). Decision 176: such an
+ * operation starts the chat the way a send does first (`sessionStart.ts`), and
+ * that start is this resume, so the chat is moved before it is asked.
  */
 
 type ChatApi = Window['electronAPI']['chat'];
@@ -141,29 +142,6 @@ const MIGRATION_REQUIRED_PATTERN = new RegExp(`\\b${LEGACY_MIGRATION_REQUIRED}\\
 export function isLegacyMigrationRequiredError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '');
   return MIGRATION_REQUIRED_PATTERN.test(message);
-}
-
-/**
- * Decision 122 rule 14: run an engine operation (the tree, a rewind, a fork,
- * `/compact`) and, when Main answers that the chat is still legacy, resume it
- * — which moves it to the current engine — and ask once more.
- *
- * A resume that fails has already put its reason on the chat's history card,
- * so the operation's own refusal is what rethrows: the caller shows it as
- * "could not be moved" ({@link LEGACY_MIGRATION_OPERATION_FAILED}).
- */
-export async function runAfterLegacyMigration<T>(
-  sessionId: string,
-  operation: () => Promise<T>,
-  resume: (sessionId: string) => Promise<boolean>
-): Promise<T> {
-  try {
-    return await operation();
-  } catch (error) {
-    if (!isLegacyMigrationRequiredError(error)) throw error;
-    if (!(await resume(sessionId))) throw error;
-    return operation();
-  }
 }
 
 /** What a dialog says when the move an operation needed did not happen; a dictionary key. */

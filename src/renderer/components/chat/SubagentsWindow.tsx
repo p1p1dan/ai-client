@@ -16,6 +16,7 @@ import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { toastManager } from '@/components/ui/toast';
 import { type TFunction, useI18n } from '@/i18n';
+import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import { cn } from '@/lib/utils';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import type { SubwindowPosition } from '@/stores/sessionSubwindows';
@@ -23,6 +24,7 @@ import { useSessionLanes } from './BackgroundJobsWindow';
 import { locateToolRow } from './locateToolRow';
 import { SubwindowEmpty, SubwindowFrame } from './SubwindowFrame';
 import { panelStripActionClass } from './sessionPanelsLayout';
+import { isSessionNotRunningError, SESSION_TASKS_ENDED } from './sessionStart';
 import {
   deriveSubagentsWindowView,
   formatElapsed,
@@ -105,7 +107,11 @@ export function SubagentsWindow({
       toastManager.add({
         type: 'error',
         title: t('The subagent was not interrupted'),
-        description: error instanceof Error ? error.message : String(error),
+        // Decision 176: in words, not as Main's code — a conversation no longer
+        // running took its tasks with it.
+        description: isSessionNotRunningError(error)
+          ? t(SESSION_TASKS_ENDED)
+          : unwrapIpcErrorMessage(error),
       });
     }
   };

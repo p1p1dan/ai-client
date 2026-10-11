@@ -210,6 +210,12 @@ function spawnForceTakeover(value: unknown): { forceTakeover?: true } {
  *
  * Re-thrown in the `<code>: <message>` shape this file already uses for its
  * own `pi_session_*` errors, so both sides read the same convention.
+ *
+ * dsh-rebase decision 176: every handler whose call needs a running
+ * conversation (`/compact`, the goal bar, the tree, a rewind or fork, the jobs
+ * and subagents windows, an older history page) re-throws through this too.
+ * The renderer starts a conversation that is not running the way a send does
+ * when it reads `session_not_found`, and says the rest in words.
  */
 function withWorkerErrorCode(error: unknown): unknown {
   return error instanceof WorkerManagerError ? new Error(`${error.code}: ${error.message}`) : error;
@@ -554,20 +560,27 @@ export function registerChatHandlers(): void {
       const prepared = await legacyMigrationService.prepareResume(row, workspacePath);
       row = prepared.row;
       const posture = legacyPosture(prepared.migration, payload);
-      const requestId = await workerManager.resumeSession({
-        sessionId: payload.sessionId,
-        // The row's own identity: after a migration, the stub, whatever the
-        // renderer still held.
-        sessionFile: row.runtimeIdentity,
-        workspacePath,
-        ...(payload.model ? { model: payload.model } : {}),
-        ...(payload.effort ? { effort: payload.effort } : {}),
-        ...spawnTier(payload.tier),
-        ...spawnPermissions(payload.permissions ?? posture),
-        ...spawnForceTakeover(payload.forceTakeover),
-        ownerWebContentsId,
-        ...(unbound ? { unbound: true } : {}),
-      });
+      // Decision 176: with its code, like the operations that follow a start
+      // (`session_not_ready` while Main reopens it after an engine restart,
+      // `dsh_host_unavailable` for the engine card).
+      const requestId = await workerManager
+        .resumeSession({
+          sessionId: payload.sessionId,
+          // The row's own identity: after a migration, the stub, whatever the
+          // renderer still held.
+          sessionFile: row.runtimeIdentity,
+          workspacePath,
+          ...(payload.model ? { model: payload.model } : {}),
+          ...(payload.effort ? { effort: payload.effort } : {}),
+          ...spawnTier(payload.tier),
+          ...spawnPermissions(payload.permissions ?? posture),
+          ...spawnForceTakeover(payload.forceTakeover),
+          ownerWebContentsId,
+          ...(unbound ? { unbound: true } : {}),
+        })
+        .catch((error: unknown) => {
+          throw withWorkerErrorCode(error);
+        });
       return prepared.migration
         ? {
             requestId,
@@ -883,11 +896,15 @@ export function registerChatHandlers(): void {
     ): Promise<Awaited<ReturnType<typeof workerManager.compactSession>>> => {
       await requireLiveSession(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      return workerManager.compactSession({
-        sessionId: payload.sessionId,
-        ...(payload.instructions ? { instructions: payload.instructions } : {}),
-        ownerWebContentsId,
-      });
+      try {
+        return await workerManager.compactSession({
+          sessionId: payload.sessionId,
+          ...(payload.instructions ? { instructions: payload.instructions } : {}),
+          ownerWebContentsId,
+        });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
     }
   );
 
@@ -905,11 +922,15 @@ export function registerChatHandlers(): void {
     ): Promise<Awaited<ReturnType<typeof workerManager.runSessionCommand>>> => {
       await requireLiveSession(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      return workerManager.runSessionCommand({
-        sessionId: payload.sessionId,
-        line: payload.line,
-        ownerWebContentsId,
-      });
+      try {
+        return await workerManager.runSessionCommand({
+          sessionId: payload.sessionId,
+          line: payload.line,
+          ownerWebContentsId,
+        });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
     }
   );
 
@@ -941,11 +962,15 @@ export function registerChatHandlers(): void {
     ): Promise<Awaited<ReturnType<typeof workerManager.killSessionJob>>> => {
       await requireLiveSession(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      return workerManager.killSessionJob({
-        sessionId: payload.sessionId,
-        jobId: payload.jobId,
-        ownerWebContentsId,
-      });
+      try {
+        return await workerManager.killSessionJob({
+          sessionId: payload.sessionId,
+          jobId: payload.jobId,
+          ownerWebContentsId,
+        });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
     }
   );
 
@@ -980,11 +1005,15 @@ export function registerChatHandlers(): void {
     ): Promise<Awaited<ReturnType<typeof workerManager.interruptSubagent>>> => {
       await requireLiveSession(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      return workerManager.interruptSubagent({
-        sessionId: payload.sessionId,
-        childId: payload.childId,
-        ownerWebContentsId,
-      });
+      try {
+        return await workerManager.interruptSubagent({
+          sessionId: payload.sessionId,
+          childId: payload.childId,
+          ownerWebContentsId,
+        });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
     }
   );
 
@@ -996,11 +1025,15 @@ export function registerChatHandlers(): void {
     ): Promise<Awaited<ReturnType<typeof workerManager.getSessionTree>>> => {
       const row = await requireLiveSession(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      const result = await workerManager.getSessionTree({
-        sessionId: payload.sessionId,
-        requestSequence: payload.requestSequence,
-        ownerWebContentsId,
-      });
+      const result = await workerManager
+        .getSessionTree({
+          sessionId: payload.sessionId,
+          requestSequence: payload.requestSequence,
+          ownerWebContentsId,
+        })
+        .catch((error: unknown) => {
+          throw withWorkerErrorCode(error);
+        });
       if (result.snapshot.sessionFile !== row.runtimeIdentity) {
         throw new Error(
           'pi_session_identity_mismatch: Tree slot does not match the indexed session'
@@ -1021,12 +1054,16 @@ export function registerChatHandlers(): void {
         throw new Error('rewind_confirmation_required: Rewind requires explicit confirmation');
       }
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      return workerManager.rewindSession({
-        sessionId: payload.sessionId,
-        entryId: payload.entryId,
-        confirmed: true,
-        ownerWebContentsId,
-      });
+      try {
+        return await workerManager.rewindSession({
+          sessionId: payload.sessionId,
+          entryId: payload.entryId,
+          confirmed: true,
+          ownerWebContentsId,
+        });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
     }
   );
 
@@ -1037,13 +1074,17 @@ export function registerChatHandlers(): void {
       payload: { sessionId: string; entryId: string }
     ): Promise<Awaited<ReturnType<typeof workerManager.forkSession>>> => {
       const row = await requireLiveSession(payload.sessionId);
-      return workerManager.forkSession({
-        sourceSessionId: payload.sessionId,
-        entryId: payload.entryId,
-        sourceTitle: row.title,
-        ...(row.model ? { model: row.model } : {}),
-        ownerWebContentsId: claimSessionForSender(e, payload.sessionId),
-      });
+      try {
+        return await workerManager.forkSession({
+          sourceSessionId: payload.sessionId,
+          entryId: payload.entryId,
+          sourceTitle: row.title,
+          ...(row.model ? { model: row.model } : {}),
+          ownerWebContentsId: claimSessionForSender(e, payload.sessionId),
+        });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
     }
   );
 
@@ -1054,11 +1095,15 @@ export function registerChatHandlers(): void {
       payload: { sessionId: string; offset: number; limit?: number }
     ): Promise<{ requestId: string }> => {
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      const requestId = await workerManager.loadHistoryPage({
-        ...payload,
-        ownerWebContentsId,
-      });
-      return { requestId };
+      try {
+        const requestId = await workerManager.loadHistoryPage({
+          ...payload,
+          ownerWebContentsId,
+        });
+        return { requestId };
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
     }
   );
 

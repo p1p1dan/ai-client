@@ -360,15 +360,17 @@ export interface GoalBarView {
   blockedMessage?: string;
   createdAt: number;
   updatedAt: number;
-  /** The one button beside the menu; none on a goal no live worker holds. */
+  /**
+   * The one button beside the menu. Decision 176: a goal no live worker holds
+   * keeps its button — pressing it starts the conversation the way a send
+   * does, then runs the command (it used to offer none).
+   */
   action: GoalBarAction | null;
   /**
    * Resume is offered but cannot be taken: the round budget is spent (DSH
    * refuses a resume without room). The engine can raise it; a person can clear.
    */
   actionDisabled: boolean;
-  /** A live worker holds the session: the menu's edit and clear can run. */
-  controls: boolean;
 }
 
 /**
@@ -394,7 +396,6 @@ export function deriveGoalBarView(
     maxRounds: goal.maxGoalRounds,
     createdAt: projection.createdAt,
     updatedAt: projection.updatedAt,
-    controls: panels.live,
   };
   const live = panels.live;
   const noRoomLeft = projection.roundsStarted >= goal.maxGoalRounds;
@@ -412,12 +413,7 @@ export function deriveGoalBarView(
       // Unknown activation on a live worker reads as armed: the bridge sends
       // it with every goal it reports, so "unknown" is only ever a moment.
       if (!live || activation === 'disarmed') {
-        return {
-          ...base,
-          state: 'suspended',
-          action: live ? 'resume' : null,
-          actionDisabled: noRoomLeft,
-        };
+        return { ...base, state: 'suspended', action: 'resume', actionDisabled: noRoomLeft };
       }
       return {
         ...base,
@@ -427,19 +423,14 @@ export function deriveGoalBarView(
       };
     }
     case 'paused':
-      return {
-        ...base,
-        state: 'paused',
-        action: live ? 'resume' : null,
-        actionDisabled: noRoomLeft,
-      };
+      return { ...base, state: 'paused', action: 'resume', actionDisabled: noRoomLeft };
     case 'blocked': {
       const roundLimit = goal.blockedReason?.code === 'round-limit';
       return {
         ...base,
         state: roundLimit ? 'roundLimit' : 'blocked',
         ...(goal.blockedReason?.message ? { blockedMessage: goal.blockedReason.message } : {}),
-        action: live ? 'resume' : null,
+        action: 'resume',
         actionDisabled: noRoomLeft,
       };
     }

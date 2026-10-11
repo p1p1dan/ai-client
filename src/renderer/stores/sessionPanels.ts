@@ -9,6 +9,11 @@ import {
   reduceSessionPanels,
   type SessionPanelsState,
 } from '@/components/chat/sessionPanelsModel';
+import {
+  runWithSessionStarted,
+  type SessionStartEffects,
+  type StartedOperationResult,
+} from '@/components/chat/sessionStart';
 import { subscribeRuntimeEvent } from './runtimeEventBus';
 import { isSessionRetired } from './sessionRetirement';
 
@@ -34,6 +39,11 @@ interface SessionPanelsStoreState extends SessionPanelsState {
   dismissed: Record<string, string>;
   /** A goal command is on its way: that session's buttons wait for it. */
   commandPending: Record<string, true>;
+  /**
+   * Decision 176: the conversation is being started for that command (the
+   * engine was not running it); the bar says so meanwhile.
+   */
+  commandStarting: Record<string, true>;
   init: () => () => void;
   hydrate: (sessionId: string) => Promise<void>;
   /** Rehydrate a session this window has heard nothing about yet. */
@@ -43,9 +53,17 @@ interface SessionPanelsStoreState extends SessionPanelsState {
   /**
    * Run one `/goal …` line out of band. Resolves with the engine's answer,
    * `undefined` when one is already on its way; rejects when the request
-   * itself failed (no worker, a timeout).
+   * itself failed (a timeout, the engine refusing it).
+   *
+   * Decision 176: on a conversation the engine is not running, `start`
+   * starts it the way a send does first (`runWithSessionStarted`); a start
+   * that did not happen resolves `not-started`, with the reason.
    */
-  runGoalCommand: (sessionId: string, line: string) => Promise<WorkerCommandResult | undefined>;
+  runGoalCommand: (
+    sessionId: string,
+    line: string,
+    start: SessionStartEffects
+  ) => Promise<StartedOperationResult<WorkerCommandResult> | undefined>;
   pruneSessions: (sessionIds: readonly string[]) => void;
 }
 
@@ -70,6 +88,7 @@ export const useSessionPanelsStore = create<SessionPanelsStoreState>()((set, get
   open: {},
   dismissed: {},
   commandPending: {},
+  commandStarting: {},
 
   init: () => {
     if (get().listening) {
@@ -126,13 +145,27 @@ export const useSessionPanelsStore = create<SessionPanelsStoreState>()((set, get
   dismissGoal: (sessionId, key) =>
     set((state) => ({ dismissed: { ...state.dismissed, [sessionId]: key } })),
 
-  runGoalCommand: async (sessionId, line) => {
+  runGoalCommand: async (sessionId, line, start) => {
     if (get().commandPending[sessionId]) return undefined;
     set((state) => ({ commandPending: { ...state.commandPending, [sessionId]: true } }));
     try {
-      return await window.electronAPI.chat.runSessionCommand({ sessionId, line });
+      return await runWithSessionStarted({
+        sessionId,
+        operation: () => window.electronAPI.chat.runSessionCommand({ sessionId, line }),
+        ...start,
+        onPhase: (phase) =>
+          set((state) => ({
+            commandStarting:
+              phase === 'starting'
+                ? { ...state.commandStarting, [sessionId]: true }
+                : omit(state.commandStarting, sessionId),
+          })),
+      });
     } finally {
-      set((state) => ({ commandPending: omit(state.commandPending, sessionId) }));
+      set((state) => ({
+        commandPending: omit(state.commandPending, sessionId),
+        commandStarting: omit(state.commandStarting, sessionId),
+      }));
     }
   },
 
@@ -143,11 +176,15 @@ export const useSessionPanelsStore = create<SessionPanelsStoreState>()((set, get
       const open = pruneRecord(state.open, live);
       const dismissed = pruneRecord(state.dismissed, live);
       const commandPending = pruneRecord(state.commandPending, live);
+      const commandStarting = pruneRecord(state.commandStarting, live);
       const unchanged =
         panels.bySession === state.bySession &&
         Object.keys(open).length === Object.keys(state.open).length &&
         Object.keys(dismissed).length === Object.keys(state.dismissed).length &&
-        Object.keys(commandPending).length === Object.keys(state.commandPending).length;
-      return unchanged ? state : { bySession: panels.bySession, open, dismissed, commandPending };
+        Object.keys(commandPending).length === Object.keys(state.commandPending).length &&
+        Object.keys(commandStarting).length === Object.keys(state.commandStarting).length;
+      return unchanged
+        ? state
+        : { bySession: panels.bySession, open, dismissed, commandPending, commandStarting };
     }),
 }));

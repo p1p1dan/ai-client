@@ -4352,3 +4352,42 @@ Object.assign(zhTranslations, {
   'To start a goal from here, write it after /goal. Showing, pausing, resuming, editing or clearing a goal works in its conversation.':
     '要从这里开始一个目标，把目标写在 /goal 后面；查看、暂停、继续、修改或清除目标，要在目标所在的对话里进行。',
 });
+
+// Session commands before start (compact)
+/**
+ * dsh-rebase decision 176: `/compact`, the goal bar and the session tree on a
+ * conversation the engine is not running start it the way a send does first
+ * (`sessionStart.ts`); the composer's status line says each phase, and every
+ * refusal is said in words (`compactCommand.ts`).
+ */
+Object.assign(zhTranslations, {
+  'Starting the conversation…': '正在启动对话…',
+  'Compacting the context…': '正在压缩上下文…',
+  'This conversation is already being compacted': '这个对话正在压缩中',
+  'Nothing to compact yet': '还没有可以压缩的内容',
+  'This conversation has no earlier history that compaction could shorten.':
+    '对话里还没有可以压缩的较早内容。',
+  'Summarizing took too long, so the compaction was cancelled. Nothing was compacted.':
+    '生成摘要用时过长，压缩已取消，对话没有改动。',
+  'No useful summary could be written, so nothing was compacted. The attempt is recorded in the session log.':
+    '没能生成有用的摘要，对话没有压缩。这次尝试已记录在会话日志里。',
+  'The conversation stopped running while it was being compacted (it was ended, or the engine restarted). Reopen it to see whether the summary was written.':
+    '压缩途中对话停止了运行（对话被结束，或引擎重启）。重新打开对话，可以看到摘要是否已经写入。',
+  'The conversation stopped running before compaction began, so nothing was compacted.':
+    '对话在压缩开始前停止了运行，没有压缩。',
+  'The conversation could not be started; the notice in the conversation says why.':
+    '对话没能启动，原因见对话里的提示。',
+  'The engine is reopening this conversation. Try again in a moment.':
+    '引擎正在重新打开这个对话，请稍后再试。',
+  'A reply is running in this conversation. Try again when it ends.':
+    '这个对话里有回复正在进行，等它结束后再试。',
+  'This conversation has no messages yet.': '这个对话还没有消息。',
+  'This conversation has no folder to run in.': '这个对话没有可以运行的文件夹。',
+  'The conversation stopped running before this could be done. Nothing was changed.':
+    '对话在操作开始前停止了运行，没有任何改动。',
+  'This conversation is no longer running, and its tasks ended with it.':
+    '这个对话已不在运行，它的任务也随之结束了。',
+  'Wait for the conversation to start': '等对话启动后再发送',
+  'Your message stays in the input box; send it once the conversation runs.':
+    '消息还留在输入框里，对话启动后再发送。',
+});

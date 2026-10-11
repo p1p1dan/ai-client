@@ -70,12 +70,13 @@ export function planGoalStart(
   return next ? { previous: current, next } : null;
 }
 
-/** Hints of a disabled 「设定目标…」, as dictionary keys. */
+/**
+ * Hints of a disabled 「设定目标…」, as dictionary keys. Decision 176: the goal
+ * bar keeps its buttons with no live worker (they start the conversation
+ * first), so there is one hint for an unfinished goal, live or not.
+ */
 export const GOAL_ENTRY_HINT_LIVE =
   'This chat has an unfinished goal. Pause, resume, edit or clear it from the goal bar.';
-/** No live worker: the goal bar has no buttons, but `/goal` lines still run. */
-export const GOAL_ENTRY_HINT_OFFLINE =
-  'This chat has an unfinished goal. Send /goal to see it, or /goal clear to end it.';
 export const GOAL_ENTRY_HINT_SENDING = 'Available once the current message is sent.';
 
 export interface GoalEntryState {
@@ -86,7 +87,7 @@ export interface GoalEntryState {
 
 export function goalEntryState(goal: GoalBarView | null, sendingHere: boolean): GoalEntryState {
   if (goal !== null && hasUnfinishedGoal(goal))
-    return { disabled: true, hint: goal.controls ? GOAL_ENTRY_HINT_LIVE : GOAL_ENTRY_HINT_OFFLINE };
+    return { disabled: true, hint: GOAL_ENTRY_HINT_LIVE };
   if (sendingHere) return { disabled: true, hint: GOAL_ENTRY_HINT_SENDING };
   return { disabled: false, hint: null };
 }

@@ -15,9 +15,13 @@
  *   清除   `/goal clear`   — after a confirmation
  *   收起   (complete)     — this window only; the next change brings it back
  *
- * A goal no live worker holds (a chat that is not running) shows without its
- * buttons. There is no "paused by an interjection" state: a Ctrl+Enter message
- * joins the running round and the goal goes on (decisions 093, 111).
+ * A goal no live worker holds (a chat the engine is not running: reclaimed
+ * when idle, let go by an engine rebuild) keeps its buttons. Decision 176:
+ * pressing one starts the conversation the way a send does first — the bar
+ * says 「正在启动对话…」 meanwhile — then runs the command; a start that did not
+ * happen is said in words, its reason on the conversation's card. There is no
+ * "paused by an interjection" state: a Ctrl+Enter message joins the running
+ * round and the goal goes on (decisions 093, 111).
  */
 
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
@@ -49,6 +53,7 @@ import { Button } from '@/components/ui/button';
 import { Menu, MenuItem, MenuPopup } from '@/components/ui/menu';
 import { toastManager } from '@/components/ui/toast';
 import { type TFunction, useI18n } from '@/i18n';
+import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import { cn } from '@/lib/utils';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { GoalEditDialog } from './GoalEditDialog';
@@ -69,6 +74,13 @@ import {
   goalDismissKey,
   goalObjectiveHeadline,
 } from './sessionPanelsModel';
+import {
+  isSessionNotRunningError,
+  SESSION_STARTING_LINE,
+  SESSION_STOPPED_BEFORE_RUN,
+  sessionStartFailureKey,
+} from './sessionStart';
+import { sessionStartEffects } from './sessionStartDeps';
 
 /** The state word and what follows it, before the objective (prototype `GOAL_STATES`). */
 export function goalBarLead(view: GoalBarView, t: TFunction): { title: string; detail: string } {
@@ -123,39 +135,43 @@ export function GoalBar({ sessionId, view }: { sessionId: string; view: GoalBarV
   const open = useSessionPanelsStore((state) => state.open[sessionId]?.goal === true);
   const setOpen = useSessionPanelsStore((state) => state.setOpen);
   const pending = useSessionPanelsStore((state) => state.commandPending[sessionId] === true);
+  const starting = useSessionPanelsStore((state) => state.commandStarting[sessionId] === true);
   const runGoalCommand = useSessionPanelsStore((state) => state.runGoalCommand);
   const dismissGoal = useSessionPanelsStore((state) => state.dismissGoal);
   const [editing, setEditing] = useState(false);
   const [clearing, setClearing] = useState(false);
   const toggle = () => setOpen(sessionId, 'goal', !open);
 
-  /** One `/goal …`; DSH's refusal (or a failed request) says why in a toast. */
+  /**
+   * One `/goal …`; DSH's refusal (or a failed request) says why in a toast.
+   * Decision 176: a conversation the engine is not running is started first;
+   * a start that did not happen, or a conversation that stopped running, is
+   * said in words rather than as Main's code.
+   */
   const run = async (line: string): Promise<boolean> => {
-    try {
-      const result = await runGoalCommand(sessionId, line);
-      if (result && !result.ok) {
-        toastManager.add({
-          type: 'error',
-          title: t('The goal was not changed'),
-          description: result.error,
-        });
-        return false;
-      }
-      return result !== undefined;
-    } catch (error) {
-      toastManager.add({
-        type: 'error',
-        title: t('The goal was not changed'),
-        description: error instanceof Error ? error.message : String(error),
-      });
+    const refuse = (description: string) => {
+      toastManager.add({ type: 'error', title: t('The goal was not changed'), description });
       return false;
+    };
+    try {
+      const outcome = await runGoalCommand(sessionId, line, sessionStartEffects);
+      if (outcome === undefined || outcome.kind === 'cancelled') return false;
+      if (outcome.kind === 'not-started') return refuse(t(sessionStartFailureKey(outcome.start)));
+      if (!outcome.value.ok) return refuse(outcome.value.error);
+      return true;
+    } catch (error) {
+      if (isSessionNotRunningError(error)) return refuse(t(SESSION_STOPPED_BEFORE_RUN));
+      console.warn('[goal-bar] the command failed:', error);
+      return refuse(unwrapIpcErrorMessage(error));
     }
   };
 
   const lead = goalBarLead(view, t);
   // Prototype: the state in the body colour, the round and state words muted,
   // then the objective — 「目标 · 第 3/256 轮 · 进行中 · 让 CI 全绿……」.
-  const middle = lead.detail ? ` · ${lead.detail} · ` : ' · ';
+  // Decision 176: while a button starts the conversation, the bar says so.
+  const detail = starting ? t(SESSION_STARTING_LINE) : lead.detail;
+  const middle = detail ? ` · ${detail} · ` : ' · ';
 
   const action = (() => {
     if (view.action === 'pause') {
@@ -241,12 +257,10 @@ export function GoalBar({ sessionId, view }: { sessionId: string; view: GoalBarV
               <Ellipsis className="size-3.5" />
             </MenuPrimitive.Trigger>
             <MenuPopup side="top" align="end" className="min-w-40">
-              {view.controls && (
-                <MenuItem disabled={pending} onClick={() => setEditing(true)}>
-                  <Pencil />
-                  {t('Edit goal…')}
-                </MenuItem>
-              )}
+              <MenuItem disabled={pending} onClick={() => setEditing(true)}>
+                <Pencil />
+                {t('Edit goal…')}
+              </MenuItem>
               <MenuItem
                 onClick={() => {
                   void navigator.clipboard
@@ -258,16 +272,10 @@ export function GoalBar({ sessionId, view }: { sessionId: string; view: GoalBarV
                 <Copy />
                 {t('Copy goal text')}
               </MenuItem>
-              {view.controls && (
-                <MenuItem
-                  variant="destructive"
-                  disabled={pending}
-                  onClick={() => setClearing(true)}
-                >
-                  <Trash2 />
-                  {t('Clear goal…')}
-                </MenuItem>
-              )}
+              <MenuItem variant="destructive" disabled={pending} onClick={() => setClearing(true)}>
+                <Trash2 />
+                {t('Clear goal…')}
+              </MenuItem>
             </MenuPopup>
           </Menu>
           <button

@@ -3,8 +3,13 @@
  * dsh-rebase P1-9e (decision 122 rule 14): the session tree over a chat from
  * the previous version. Main answers the tree, a rewind and a fork with
  * `legacy_migration_required` until the chat is on the current engine; the
- * dialog resumes it (which moves it) and asks again. A move that fails says so
- * in words — its card, with the reason, is in the conversation.
+ * dialog starts it (a resume, which moves it) and asks again. A move that
+ * fails says so in words — its card, with the reason, is in the conversation.
+ *
+ * Decision 176: the same for any conversation the engine is not running
+ * (reopened after a restart, reclaimed when idle): it is started the way a
+ * send starts it first — the dialog says so meanwhile — and a window that
+ * believed it running is corrected by Main's `session_not_found`.
  *
  * The `electronAPI` stub is hoisted: persisted stores rehydrate at import.
  */
@@ -27,21 +32,19 @@ const api = vi.hoisted(() => {
     app: { setLanguage: () => undefined },
     chat,
   } as unknown as typeof window.electronAPI;
-  // Both hooks hand out stable functions in the app (a module constant and a
-  // `useCallback`); the stubs must too, or the dialog's tree effect, which
-  // depends on them, re-runs on every render.
-  return { chat, resume: vi.fn(), resolveModel: () => 'glm/glm-5' };
+  // A module constant in the app (`sessionStartEffects`); the stub must be
+  // stable too, or the dialog's tree effect, which depends on it, re-runs.
+  const effects = { start: vi.fn(), isRunning: vi.fn(() => false), forgetRunning: vi.fn() };
+  return { chat, effects };
 });
 
 const zh = (key: string, params?: Record<string, string | number>) => translate('zh', key, params);
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: zh }) }));
-vi.mock('../useResolvedSessionModel', () => ({ useResolvedSessionModel: () => api.resolveModel }));
-vi.mock('../sessionIndex/useResumeSession', () => ({
-  useResumeSession: () => ({ resume: api.resume }),
-}));
+vi.mock('../sessionStartDeps', () => ({ sessionStartEffects: api.effects }));
 
 import { SessionTreeDialog } from '../SessionTreeDialog';
 import { LEGACY_MIGRATION_OPERATION_FAILED } from '../sessionIndex/legacyMigration';
+import { SESSION_START_FAILED, SESSION_STARTING_LINE } from '../sessionStart';
 
 const REQUIRED = new Error(
   "Error invoking remote method 'chat:getSessionTree': Error: legacy_migration_required: Session s1 was written by the previous chat engine; resume it first, which moves it to the current engine"
@@ -92,6 +95,7 @@ const tree = async ({ requestSequence }: { requestSequence: number }) => ({
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  api.effects.isRunning.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -118,21 +122,22 @@ async function openDialog() {
 }
 
 it('moves a chat from the previous version first, then shows its tree', async () => {
-  api.chat.getSessionTree.mockRejectedValueOnce(REQUIRED).mockImplementation(tree);
-  api.resume.mockResolvedValue(true);
+  // Never started on the current engine: not running, so the start (which
+  // moves it) comes first and the tree is asked once.
+  api.effects.start.mockResolvedValue({ kind: 'started' });
+  api.chat.getSessionTree.mockImplementation(tree);
   const root = await openDialog();
   await act(async () => {
     await vi.waitFor(() => expect(document.body.textContent).toContain('preview a1'));
   });
-  expect(api.resume).toHaveBeenCalledTimes(1);
-  expect(api.resume).toHaveBeenCalledWith('s1', { model: 'glm/glm-5' });
-  expect(api.chat.getSessionTree).toHaveBeenCalledTimes(2);
+  expect(api.effects.start).toHaveBeenCalledTimes(1);
+  expect(api.effects.start).toHaveBeenCalledWith('s1');
+  expect(api.chat.getSessionTree).toHaveBeenCalledTimes(1);
   await act(async () => root.unmount());
 });
 
 it('says in words that the move failed, instead of Main’s code', async () => {
-  api.chat.getSessionTree.mockRejectedValue(REQUIRED);
-  api.resume.mockResolvedValue(false);
+  api.effects.start.mockResolvedValue({ kind: 'failed', code: 'legacy_migration_failed' });
   const root = await openDialog();
   await act(async () => {
     await vi.waitFor(() =>
@@ -141,18 +146,20 @@ it('says in words that the move failed, instead of Main’s code', async () => {
   });
   const text = document.body.textContent ?? '';
   expect(zh(LEGACY_MIGRATION_OPERATION_FAILED)).not.toBe(LEGACY_MIGRATION_OPERATION_FAILED);
-  expect(text).not.toContain('legacy_migration_required');
-  // Asked once; the failed move is not retried behind the user's back.
-  expect(api.chat.getSessionTree).toHaveBeenCalledTimes(1);
+  expect(text).not.toContain('legacy_migration');
+  // The move failed: the tree is not asked of what is left.
+  expect(api.chat.getSessionTree).not.toHaveBeenCalled();
   await act(async () => root.unmount());
 });
 
 it('a fork asked of a chat not moved yet moves it and forks', async () => {
+  // The window took it for running; Main says it is still legacy.
+  api.effects.isRunning.mockReturnValue(true);
+  api.effects.start.mockResolvedValue({ kind: 'started' });
   api.chat.getSessionTree.mockImplementation(tree);
   api.chat.forkSession
     .mockRejectedValueOnce(REQUIRED)
     .mockRejectedValueOnce(new Error('WORKER_FORK_FAILED: stop here'));
-  api.resume.mockResolvedValue(true);
   const root = await openDialog();
   await act(async () => {
     await vi.waitFor(() => expect(document.body.textContent).toContain('preview a1'));
@@ -161,10 +168,65 @@ it('a fork asked of a chat not moved yet moves it and forks', async () => {
     (button) => button.getAttribute('aria-label') === zh('Fork from here') && !button.disabled
   );
   await act(async () => fork?.click());
-  expect(api.resume).toHaveBeenCalledWith('s1', { model: 'glm/glm-5' });
+  expect(api.effects.forgetRunning).toHaveBeenCalledWith('s1');
+  expect(api.effects.start).toHaveBeenCalledWith('s1');
   expect(api.chat.forkSession).toHaveBeenCalledTimes(2);
   expect(api.chat.forkSession).toHaveBeenLastCalledWith({ sessionId: 's1', entryId: 'a1' });
   // The second answer is an ordinary failure, shown as it came.
   expect(document.body.textContent).toContain('WORKER_FORK_FAILED: stop here');
+  await act(async () => root.unmount());
+});
+
+it('[176-TREE-START] a conversation the engine is not running is started first, and the dialog says so', async () => {
+  let finishStart: () => void = () => undefined;
+  api.effects.start.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finishStart = () => resolve({ kind: 'started' });
+      })
+  );
+  api.chat.getSessionTree.mockImplementation(tree);
+  const root = await openDialog();
+  expect(document.body.textContent).toContain(zh(SESSION_STARTING_LINE));
+  expect(zh(SESSION_STARTING_LINE)).toBe('正在启动对话…');
+  expect(api.chat.getSessionTree).not.toHaveBeenCalled();
+  await act(async () => finishStart());
+  await act(async () => {
+    await vi.waitFor(() => expect(document.body.textContent).toContain('preview a1'));
+  });
+  expect(document.body.textContent).not.toContain(zh(SESSION_STARTING_LINE));
+  await act(async () => root.unmount());
+});
+
+it('[176-TREE-STALE] the window believed it running and Main had no slot: started, then asked again', async () => {
+  api.effects.isRunning.mockReturnValue(true);
+  api.effects.start.mockResolvedValue({ kind: 'started' });
+  api.chat.getSessionTree
+    .mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'chat:getSessionTree': Error: session_not_found: Session s1 is not running on the DSH host"
+      )
+    )
+    .mockImplementation(tree);
+  const root = await openDialog();
+  await act(async () => {
+    await vi.waitFor(() => expect(document.body.textContent).toContain('preview a1'));
+  });
+  expect(api.effects.forgetRunning).toHaveBeenCalledWith('s1');
+  expect(api.effects.start).toHaveBeenCalledTimes(1);
+  expect(api.chat.getSessionTree).toHaveBeenCalledTimes(2);
+  expect(document.body.textContent).not.toContain('session_not_found');
+  await act(async () => root.unmount());
+});
+
+it('[176-TREE-START-FAILED] a start that failed says so in words; the reason is on the card', async () => {
+  api.effects.start.mockResolvedValue({ kind: 'failed', code: 'session_cwd_mismatch' });
+  const root = await openDialog();
+  await act(async () => {
+    await vi.waitFor(() => expect(document.body.textContent).toContain(zh(SESSION_START_FAILED)));
+  });
+  expect(zh(SESSION_START_FAILED)).toBe('对话没能启动，原因见对话里的提示。');
+  expect(document.body.textContent).not.toContain('No ready Pi WorkerSlot');
+  expect(api.chat.getSessionTree).not.toHaveBeenCalled();
   await act(async () => root.unmount());
 });
