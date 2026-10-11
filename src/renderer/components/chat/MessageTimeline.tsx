@@ -1,4 +1,8 @@
-import { isDshCompactionNoteRow, isDshSummaryRow } from '@shared/dshHistory/types';
+import {
+  isDshCompactCommandRow,
+  isDshCompactionNoteRow,
+  isDshSummaryRow,
+} from '@shared/dshHistory/types';
 import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
   ArrowDown,
@@ -62,6 +66,7 @@ import {
   advanceClosedPrefix,
   chatMarkdownSegmentGapClass,
   deriveStreamingBlockIds,
+  keyedClosedSegments,
   shouldRenderMarkdown,
 } from './chatMarkdownPolicy';
 import {
@@ -97,8 +102,14 @@ import {
   type TurnItem,
   type TurnSegment,
 } from './chatTurn';
-import { AutoTurnHead, DshCompactionRow, DshNoticeRow } from './DshTimelineRows';
 import {
+  AutoTurnHead,
+  DshCompactCommandRow,
+  DshCompactionRow,
+  DshNoticeRow,
+} from './DshTimelineRows';
+import {
+  dshCompactCommandRowView,
   dshCompactionRowView,
   dshNoticeRowView,
   localizeContextSummaryTitle,
@@ -2127,11 +2138,14 @@ const ChatTurn = memo(function ChatTurn({
   // runs after the turn it follows, and its row (dated when the summary was
   // written) would otherwise stretch that turn's 「已工作」 by the compaction.
   // Decision 178: nor is an automatic compaction's note, which can sit
-  // before the next prompt the same way.
+  // before the next prompt the same way. Decision 180: nor a `/compact`'s
+  // command line.
   const bodyMetadata = useMemo(
     () =>
       turn.body.map((message) =>
-        isDshSummaryRow(message) || isDshCompactionNoteRow(message)
+        isDshSummaryRow(message) ||
+        isDshCompactionNoteRow(message) ||
+        isDshCompactCommandRow(message)
           ? undefined
           : (getMetadata(message.id) ?? replayedSpanMetadata(message))
       ),
@@ -3015,7 +3029,8 @@ function PlainProse({ text }: { text: string }) {
  * reads the PREVIOUS mark, which is exactly the input `advanceClosedPrefix`
  * documents, and nothing here mutates during render.
  */
-function TurnTextItem({ text, streaming }: { text: string; streaming: boolean }) {
+/** Exported for its mount test (`turnTextSegmentsMount.test.ts`, CG-4). */
+export function TurnTextItem({ text, streaming }: { text: string; streaming: boolean }) {
   const closedHwmRef = useRef(0);
   const split = useMemo(
     () => (streaming ? advanceClosedPrefix(text, closedHwmRef.current) : null),
@@ -3031,9 +3046,11 @@ function TurnTextItem({ text, streaming }: { text: string; streaming: boolean })
       {/* `key` by content: segments are append-only and their strings are what
           `ChatMarkdown`'s memo compares anyway, so an index key would be no
           weaker — but content keys survive a cut point moving without
-          remounting the segments before it. */}
-      {split.segments.map((segment) => (
-        <ChatMarkdown key={segment} text={segment} />
+          remounting the segments before it. CG-4 (decision 180): with the
+          occurrence counted in, so a paragraph that comes back (`---`, 「示意
+          如下：」) is its own segment, not a second child under the same key. */}
+      {keyedClosedSegments(split.segments).map((segment) => (
+        <ChatMarkdown key={segment.key} text={segment.text} />
       ))}
       {split.openTail.length > 0 && <PlainProse text={split.openTail} />}
       {/* T12-c (user decision, 2026-08-30: 按 pi-app 的来): a code fence that
@@ -3161,10 +3178,14 @@ function TurnItemView({
       if (item.message.turnEnd) {
         return <TurnEndNotice turnEnd={item.message.turnEnd} afterWork={endNoteAfterWork} />;
       }
-      // Decision 178: an automatic compaction running, or ended without a
-      // summary, is one light line (its summary keeps the Alert below).
+      // Decision 180: a `/compact`'s command line, drawn as the user's own.
+      const command = dshCompactCommandRowView(item.message);
+      if (command) return <DshCompactCommandRow view={command} />;
+      // Decision 178: a compaction running, or ended without a summary, is
+      // one light line (its summary keeps the Alert below); decision 180's
+      // `/compact` alike, with its clock while this window runs it.
       const compaction = dshCompactionRowView(item.message);
-      if (compaction) return <DshCompactionRow view={compaction} />;
+      if (compaction) return <DshCompactionRow view={compaction} sessionId={sessionId} />;
       // P1-7a: a DSH notice (a task's or a subagent's account, a command's
       // answer) is one light line; every other notice keeps its Alert.
       const row = dshNoticeRowView(item.message);

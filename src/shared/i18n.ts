@@ -4450,3 +4450,24 @@ Object.assign(zhTranslations, {
   'Compacted without your instructions': '已压缩，但没有用上附加说明',
   'This engine version did not pass them to the summary.': '当前引擎版本没有把说明交给摘要。',
 });
+
+// Manual compaction in the timeline
+/**
+ * dsh-rebase decision 180: `/compact` shows in the timeline as an automatic
+ * compaction does — its command line, then a running row with a clock and
+ * the way to cancel it, then the summary or a note saying why there is none
+ * (`DshTimelineRows.tsx`, `dshCompactNote`).
+ */
+Object.assign(zhTranslations, {
+  'Compaction cancelled. Nothing was compacted.': '已取消压缩，对话没有改动。',
+  'The compaction did not succeed, and nothing was compacted: {{reason}}':
+    '压缩没有成功，对话没有改动：{{reason}}',
+  'The compaction did not succeed, and nothing was compacted.': '压缩没有成功，对话没有改动。',
+  'The compaction did not finish; the context was not compacted.': '压缩没有完成，上下文没有压缩。',
+  'Compacting the context… {{seconds}}s': '正在压缩上下文… {{seconds}} 秒',
+  'Compacting the context… {{minutes}}m {{seconds}}s':
+    '正在压缩上下文… {{minutes}} 分 {{seconds}} 秒',
+  'Esc to cancel': '按 Esc 取消',
+  'Cancelling…': '正在取消…',
+  'Cancel the compaction': '取消压缩',
+});

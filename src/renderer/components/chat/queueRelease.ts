@@ -680,7 +680,15 @@ export interface ActionButtonSpec {
    * turn either way (decision 046 rule 2). Absent on every other spec.
    */
   force?: true;
+  /**
+   * Stop only, dsh-rebase decision 180: what it stops is this window's
+   * `/compact`, not a turn — pressing it cancels the compaction.
+   */
+  compaction?: true;
 }
+
+/** Title (i18n key) of the round Stop while it cancels a `/compact` (decision 180). */
+export const CANCEL_COMPACTION_TITLE = 'Cancel the compaction';
 
 /** Title (i18n key) of the round Stop while a spec carries `force`. */
 export const FORCE_STOP_TITLE =
@@ -755,6 +763,12 @@ export interface DeriveActionButtonsInput {
    * Optional: omitted means "no stop pending".
    */
   stopRequested?: boolean;
+  /**
+   * dsh-rebase decision 180: this window's `/compact` for the session is on
+   * its way (starting the conversation, or compacting). With no turn to stop,
+   * Stop cancels it, and a message joins the queue (decisions 178, 179).
+   */
+  compacting?: boolean;
 }
 
 /**
@@ -774,6 +788,13 @@ export function deriveActionButtons(input: DeriveActionButtonsInput): readonly A
     return [
       { kind: 'stop', disabled: false, ...(force ? { force: true as const } : {}) },
       ...(input.hasDraftContent ? [{ kind: 'send-now' as const, disabled: false }] : []),
+      { kind: 'enqueue', disabled: !input.hasDraftContent },
+    ];
+  }
+  // Decision 180: no turn, but a `/compact` to cancel; what is typed meanwhile is queued.
+  if (input.compacting === true) {
+    return [
+      { kind: 'stop', disabled: false, compaction: true },
       { kind: 'enqueue', disabled: !input.hasDraftContent },
     ];
   }

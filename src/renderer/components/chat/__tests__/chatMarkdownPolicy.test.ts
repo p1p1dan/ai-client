@@ -28,6 +28,7 @@ import {
   codeLanguageFromClassName,
   deriveStreamingBlockIds,
   isFencedCodeBlock,
+  keyedClosedSegments,
   normalizeCodeLanguage,
   type StreamingGateMessage,
   sanitizeMarkdownHref,
@@ -1685,5 +1686,35 @@ describe('FB2: the prose code-block copy button', () => {
     expect(markdown).toContain('<ChatCodeBlock');
     expect(strippedChatSource('ToolRows.tsx')).not.toContain('ChatCodeBlock');
     expect(strippedChatSource('turnCopy.ts')).not.toContain('ChatCodeBlock');
+  });
+});
+
+/**
+ * CG-4 (dsh-rebase decision 180, real-gateway evidence 2026-10-11): a reply
+ * that repeats a paragraph (`---`, 「示意如下：」) gave two settled segments
+ * the same React key — 2,227 warnings in one stream, and React may drop or
+ * repeat such a child.
+ */
+describe('keyedClosedSegments (CG-4)', () => {
+  it('[CG4-1] every segment keeps its text and gets a key of its own, repeats included', () => {
+    const segments = ['---', 'A', '---', 'A', '---'];
+    const keyed = keyedClosedSegments(segments);
+    expect(keyed.map((segment) => segment.text)).toEqual(segments);
+    expect(new Set(keyed.map((segment) => segment.key)).size).toBe(segments.length);
+  });
+
+  it('[CG4-2] a key does not change as the list grows at its end', () => {
+    const before = keyedClosedSegments(['intro', '---', 'body']).map((segment) => segment.key);
+    const after = keyedClosedSegments(['intro', '---', 'body', '---', 'more']).map(
+      (segment) => segment.key
+    );
+    expect(after.slice(0, before.length)).toEqual(before);
+  });
+
+  it('[CG4-3] over a real split: the same paragraph twice is two segments, two keys', () => {
+    const split = splitClosedPrefix('示意如下：\n\n第一段。\n\n示意如下：\n\n第二段。\n\ntail');
+    const keyed = keyedClosedSegments(split.segments);
+    expect(keyed.filter((segment) => segment.text === '示意如下：')).toHaveLength(2);
+    expect(new Set(keyed.map((segment) => segment.key)).size).toBe(keyed.length);
   });
 });

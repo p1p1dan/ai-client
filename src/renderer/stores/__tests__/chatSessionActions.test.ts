@@ -13,7 +13,8 @@ import {
   materializeForkedChatSession,
   materializeIndexedPiChatSession,
   retargetChatSession,
-  showCompactionSummary,
+  settleCompactRun,
+  showCompactRun,
   stopChatSession,
 } from '../chatSessionActions';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '../chatSessions';
@@ -1536,19 +1537,21 @@ describe('applyForkSessionTitle (decision 131)', () => {
  * dsh-rebase P1-7e (problem 10, decision 140): `/compact` succeeded and the
  * worker handed back the context-summary row it wrote; the chat shows it at
  * once, under the history id a reopen gives it, so the reopen replaces it.
+ * Decision 180: in the place of the run's running row, after its command line.
  */
-describe('showCompactionSummary', () => {
+describe('showCompactRun / settleCompactRun', () => {
   const summary: HistoryMessage = {
     id: 'h:c1',
     entryId: 'c1',
     role: 'system',
     timestamp: 5_000,
+    liveMessageId: 'dsh-compaction-k1',
     blocks: [
       { type: 'text' as const, id: 'h:c1:summary:0', text: 'Context summary\n\n## Goal\n- ship' },
     ],
   };
 
-  it('[E2B-10-SHOW] appends the row as the history maps it, once', () => {
+  it('[E2B-10-SHOW] the summary row as the history maps it, where the running row was', () => {
     useChatSessionsStore.setState({
       sessions: [makeSession()],
       messages: {
@@ -1558,10 +1561,16 @@ describe('showCompactionSummary', () => {
         ],
       },
     });
-    expect(showCompactionSummary('session-1', summary)).toBe(true);
+    showCompactRun('session-1', 'r1', '/compact', 'Compacting the context…');
+    expect(settleCompactRun('session-1', 'r1', { kind: 'summary', summary })).toBe(true);
     const bucket = useChatSessionsStore.getState().messages['session-1'] ?? [];
-    expect(bucket.map((message) => message.id)).toEqual(['m1', 'm2', 'h:c1']);
-    expect(bucket[2]).toMatchObject({
+    expect(bucket.map((message) => message.id)).toEqual([
+      'm1',
+      'm2',
+      'dsh-compact-command-k1',
+      'h:c1',
+    ]);
+    expect(bucket[3]).toMatchObject({
       id: 'h:c1',
       sessionId: 'session-1',
       role: 'system',
@@ -1569,15 +1578,17 @@ describe('showCompactionSummary', () => {
       blocks: [{ id: 'h:c1:summary:0', type: 'text', text: 'Context summary\n\n## Goal\n- ship' }],
     });
     // A second answer naming the same row adds nothing.
-    const before = useChatSessionsStore.getState().messages;
-    expect(showCompactionSummary('session-1', summary)).toBe(true);
-    expect(useChatSessionsStore.getState().messages).toBe(before);
+    expect(settleCompactRun('session-1', 'r1', { kind: 'summary', summary })).toBe(true);
+    expect(
+      (useChatSessionsStore.getState().messages['session-1'] ?? []).map((message) => message.id)
+    ).toEqual(['m1', 'm2', 'dsh-compact-command-k1', 'h:c1']);
   });
 
   it('[E2B-10-GONE] a chat that is gone gets nothing, and says so', () => {
     useChatSessionsStore.setState({ sessions: [makeSession()], messages: {} });
     const before = useChatSessionsStore.getState();
-    expect(showCompactionSummary('session-9', summary)).toBe(false);
+    showCompactRun('session-9', 'r1', '/compact', 'Compacting the context…');
+    expect(settleCompactRun('session-9', 'r1', { kind: 'summary', summary })).toBe(false);
     expect(useChatSessionsStore.getState().messages).toBe(before.messages);
   });
 });

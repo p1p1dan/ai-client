@@ -973,8 +973,10 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     // guard: IME first, then the Stop button's own `canStop` gate, and
     // `preventDefault` only on the path that actually stops.
     const escBlock = source.slice(escAt, sendEnterAt).replace(/\s+/g, ' ').trim();
+    // dsh-rebase decision 180: with no turn to stop, Esc cancels this window's
+    // `/compact` instead — the same thing the round Stop does then.
     expect(escBlock).toBe(
-      "if (event.key === 'Escape') { if (composingRef.current) return; if (canStop) { event.preventDefault(); handleStop(); } return; }"
+      "if (event.key === 'Escape') { if (composingRef.current) return; if (canStop) { event.preventDefault(); handleStop(); } else if (compactPhase !== undefined) { event.preventDefault(); handleCancelCompact(); } return; }"
     );
   });
 
@@ -1228,7 +1230,11 @@ describe('decision 046 — Stop always settles the composer', () => {
     const block = source.slice(start, matchingBraceEnd(source, start));
     expect(block).toContain('disabled={disabled || spec.disabled}');
     expect(block).not.toContain('stopping');
-    expect(block).toContain('title={spec.force ? t(FORCE_STOP_TITLE) : undefined}');
+    // Decision 180: a Stop that cancels a `/compact` says so, and does that.
+    expect(block.replace(/\s+/g, ' ')).toContain(
+      'title={ spec.compaction ? t(CANCEL_COMPACTION_TITLE) : spec.force ? t(FORCE_STOP_TITLE) : undefined }'
+    );
+    expect(block).toContain('onClick={spec.compaction ? handleCancelCompact : handleStop}');
     // `busy` is `isStoppable(status)`, which now admits `stopping`, so Esc
     // (gated on `canStop`, pinned by [E-1]) and the Ctrl+Enter interjection
     // stay live in that state too.

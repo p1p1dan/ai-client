@@ -12,12 +12,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * It used to go straight to Main, which answered `session_not_found`, and the
  * toast read 「压缩上下文失败：No ready Pi WorkerSlot exists for …」. Now the
  * conversation is started the way a send starts it (`ensureHost`, then the
- * send path's resume with the send path's arguments), the status line says
- * 「正在启动对话…」 and then 「正在压缩上下文…」, and every refusal is said in
- * words. A message sent while the conversation starts waits in the queue
- * (decision 179, as decision 178 has it while it compacts); a second
+ * send path's resume with the send path's arguments), and every refusal is
+ * said in words. A message sent while the conversation starts waits in the
+ * queue (decision 179, as decision 178 has it while it compacts); a second
  * `/compact` is answered locally; ending the conversation while it starts
- * cancels the compaction; there is no Stop for it.
+ * cancels the compaction.
+ *
+ * Decision 180: it shows in the timeline — its command line, then its
+ * running row, which says 「正在启动对话…」 and then 「正在压缩上下文…」 — the
+ * box is cleared as for a message, and Esc or Stop cancels it. How it ended is
+ * said in its row; one that never ran leaves no row, a toast, and its line
+ * back in the box.
  *
  * The `electronAPI` stub is hoisted: persisted stores rehydrate at import.
  */
@@ -35,6 +40,7 @@ const mocks = vi.hoisted(() => {
       throw new Error('send refused (test)');
     }),
     stop: vi.fn(async () => ({ requestId: 'stop-1' })),
+    cancelCompact: vi.fn(async () => ({ cancelled: true })),
     interject: vi.fn(async () => ({ interjected: false })),
     ensureScratchWorkspace: vi.fn(async ({ sessionId }: { sessionId: string }) => ({
       path: `/tmp/scratch/${sessionId}`,
@@ -77,7 +83,12 @@ vi.mock('../useHostStatus', () => {
   return { useHostStatus: () => snapshot };
 });
 
-import { type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
+import {
+  applyRuntimeEvent,
+  type ChatMessage,
+  type ChatSession,
+  useChatSessionsStore,
+} from '@/stores/chatSessions';
 import { useCompactRunsStore } from '@/stores/compactRuns';
 import { resetComposerDraftsForTests } from '@/stores/composerDrafts';
 import { resetHomeDraftForTests } from '@/stores/homeDraft';
@@ -186,6 +197,33 @@ async function press(key: string) {
 const toastTitles = () =>
   mocks.toast.mock.calls.map(([toast]) => (toast as { title: string }).title);
 
+/**
+ * Decision 180: the chat's timeline as the `/compact` left it, one entry a
+ * row: `command <text>`, `running <key>`, `note <key>`, `summary <id>`.
+ */
+function timeline(sessionId = 'c1'): string[] {
+  return (useChatSessionsStore.getState().messages[sessionId] ?? []).map((row: ChatMessage) => {
+    const first = row.blocks[0];
+    const part = first?.id.slice(row.id.length + 1).split(':')[0];
+    if (part === 'compact-command') return `command ${first?.text}`;
+    if (part === 'compaction-running') return `running ${first?.notice?.key}`;
+    if (part === 'compaction-failed') return `note ${first?.notice?.key}`;
+    if (part === 'summary') return `summary ${row.id}`;
+    return `${row.role} ${row.id}`;
+  });
+}
+
+/** Decision 180: the round Stop while it cancels the `/compact`, named for that. */
+const cancelButton = () => container.querySelector('button[aria-label="Cancel the compaction"]');
+
+async function event(value: Record<string, unknown>) {
+  await act(async () =>
+    useChatSessionsStore.setState((state) =>
+      applyRuntimeEvent(state, { seq: 1, timestamp: 1, sessionId: 'c1', ...value } as never)
+    )
+  );
+}
+
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   resetComposerDraftsForTests();
@@ -196,7 +234,7 @@ beforeEach(() => {
   mocks.toast.mockClear();
   localStorage.clear();
   usePendingUserMessagesStore.setState({ bySession: {} });
-  useCompactRunsStore.setState({ phases: {} });
+  useCompactRunsStore.setState({ phases: {}, compactingSince: {}, cancelling: {} });
   useMessageQueueStore.setState({ state: createEmptyState() });
   useScratchWorkspaceStore.setState({ pathsBySession: {} });
   setStore();
@@ -228,22 +266,27 @@ describe('/compact in a conversation the engine is not running (decision 176)', 
       workspacePath: '/repo/alpha',
     });
     expect(mocks.api.compactSession).not.toHaveBeenCalled();
-    expect(text()).toContain(SESSION_STARTING_LINE);
+    // Decision 180: in the timeline, not on a status line; the box is cleared.
+    expect(timeline()).toEqual(['command /compact', `running ${SESSION_STARTING_LINE}`]);
+    expect(text()).not.toContain(SESSION_STARTING_LINE);
+    expect(box().value).toBe('');
+    // Stop is offered, and cancels the compaction.
+    expect(cancelButton()).not.toBeNull();
     expect(stopButton()).toBeNull();
 
     await act(async () => resume.resolve({ requestId: 'resume-1' }));
     await settle();
     expect(mocks.api.compactSession).toHaveBeenCalledWith({ sessionId: 'c1' });
-    expect(text()).toContain(COMPACTING_LINE);
-    expect(text()).not.toContain(SESSION_STARTING_LINE);
-    expect(stopButton()).toBeNull();
+    expect(timeline()).toEqual(['command /compact', `running ${COMPACTING_LINE}`]);
     expect(useChatSessionsStore.getState().hostBoundSessionIds).toContain('c1');
 
+    // No summary row came back with the answer: the success is said as before.
     await act(async () => compact.resolve({ compacted: true }));
     await settle();
-    expect(text()).not.toContain(COMPACTING_LINE);
+    expect(timeline()).toEqual([]);
     expect(toastTitles()).toEqual(['Conversation compacted']);
     expect(box().value).toBe('');
+    expect(cancelButton()).toBeNull();
   });
 
   it('[176-C-02] a start Main refuses: the card says why, the toast in words, nothing raw', async () => {
@@ -267,8 +310,9 @@ describe('/compact in a conversation the engine is not running (decision 176)', 
     // Nothing above the composer quotes Main.
     expect(useChatSessionsStore.getState().lastError).toBeNull();
     expect(text()).not.toMatch(/pi_session|WorkerSlot|session_not_found/);
-    expect(text()).not.toContain(SESSION_STARTING_LINE);
-    expect(box().value).toBe(COMMAND);
+    // Decision 180: it never ran — no row, and its line is back in the box.
+    expect(timeline()).toEqual([]);
+    expect(box().value).toBe(COMMAND.trim());
   });
 
   it('[176-C-04] a second /compact while one runs is answered here, not queued', async () => {
@@ -278,8 +322,9 @@ describe('/compact in a conversation the engine is not running (decision 176)', 
     await mountComposer();
     await type(COMMAND);
     await press('Enter');
-    expect(text()).toContain(COMPACTING_LINE);
+    expect(timeline()).toEqual(['command /compact', `running ${COMPACTING_LINE}`]);
 
+    await type(COMMAND);
     await press('Enter');
     expect(mocks.toast).toHaveBeenCalledWith({
       type: 'info',
@@ -287,10 +332,13 @@ describe('/compact in a conversation the engine is not running (decision 176)', 
     });
     expect(mocks.api.compactSession).toHaveBeenCalledTimes(1);
     expect(mocks.api.resumeSession).not.toHaveBeenCalled();
+    // The second one stays in the box; the timeline still has the first only.
+    expect(box().value).toBe(COMMAND);
+    expect(timeline()).toHaveLength(2);
 
     await act(async () => compact.resolve({ compacted: true }));
     await settle();
-    expect(text()).not.toContain(COMPACTING_LINE);
+    expect(timeline()).toEqual([]);
   });
 
   it('[176-C-05] ended while it starts: the compaction is not asked, and it says so', async () => {
@@ -310,8 +358,8 @@ describe('/compact in a conversation the engine is not running (decision 176)', 
       title: 'Could not compact the conversation',
       description: COMPACT_STOPPED_TEXT,
     });
-    expect(text()).not.toContain(SESSION_STARTING_LINE);
-    expect(box().value).toBe(COMMAND);
+    expect(timeline()).toEqual([]);
+    expect(box().value).toBe(COMMAND.trim());
   });
 
   it('[176-C-06] the window believed it running, Main had no slot: started, then compacted', async () => {
@@ -344,12 +392,10 @@ describe('/compact in a conversation the engine is not running (decision 176)', 
     await type(COMMAND);
     await press('Enter');
 
-    expect(mocks.toast).toHaveBeenCalledWith({
-      type: 'error',
-      title: 'Could not compact the conversation',
-      description: COMPACT_INTERRUPTED_TEXT,
-    });
-    expect(box().value).toBe(COMMAND);
+    // Decision 180: said where it ran; it did run, so the box stays clear.
+    expect(timeline()).toEqual(['command /compact', `note ${COMPACT_INTERRUPTED_TEXT}`]);
+    expect(mocks.toast).not.toHaveBeenCalled();
+    expect(box().value).toBe('');
   });
 
   it('[176-C-08] a conversation that never ran has nothing to compact: nothing is started', async () => {
@@ -366,24 +412,34 @@ describe('/compact in a conversation the engine is not running (decision 176)', 
       title: 'Nothing to compact yet',
       description: 'This conversation has no earlier history that compaction could shorten.',
     });
+    expect(timeline()).toEqual([]);
+    expect(box().value).toBe(COMMAND.trim());
   });
 
-  it('[176-C-09] no Stop while it starts or compacts: Esc stops nothing', async () => {
+  it('[176-C-09] Esc while it starts (decision 180): no Stop for a turn, the compaction is not asked, its row says cancelled', async () => {
     const resume = deferred<{ requestId: string }>();
     mocks.api.resumeSession.mockReturnValue(resume.promise);
     await mountComposer();
     await type(COMMAND);
     await press('Enter');
-    expect(text()).toContain(SESSION_STARTING_LINE);
+    expect(timeline()).toEqual(['command /compact', `running ${SESSION_STARTING_LINE}`]);
 
     await press('Escape');
     expect(mocks.api.stop).not.toHaveBeenCalled();
-    expect(stopButton()).toBeNull();
-    // It carries on to its end.
+    // Nothing is with Main yet: nothing to ask it.
+    expect(mocks.api.cancelCompact).not.toHaveBeenCalled();
+    expect(useCompactRunsStore.getState().cancelling.c1).toBe(true);
+    // The start carries on to its end (the conversation runs now), then nothing more.
     mocks.api.compactSession.mockResolvedValue({ compacted: true });
     await act(async () => resume.resolve({ requestId: 'resume-1' }));
     await settle();
-    expect(mocks.api.compactSession).toHaveBeenCalledTimes(1);
+    expect(mocks.api.compactSession).not.toHaveBeenCalled();
+    expect(timeline()).toEqual([
+      'command /compact',
+      'note Compaction cancelled. Nothing was compacted.',
+    ]);
+    expect(mocks.toast).not.toHaveBeenCalled();
+    expect(cancelButton()).toBeNull();
   });
 });
 
@@ -477,7 +533,7 @@ describe('a message while /compact summarizes (decision 178)', () => {
     await mountComposer();
     await type(COMMAND);
     await press('Enter');
-    expect(text()).toContain(COMPACTING_LINE);
+    expect(timeline()).toEqual(['command /compact', `running ${COMPACTING_LINE}`]);
 
     await type('and then run the tests');
     await press('Enter');
@@ -491,7 +547,7 @@ describe('a message while /compact summarizes (decision 178)', () => {
 
     await act(async () => compact.resolve({ compacted: true }));
     await settle();
-    expect(text()).not.toContain(COMPACTING_LINE);
+    expect(timeline()).toEqual([]);
     expect(queued()).toEqual(['and then run the tests']);
     expect(mocks.api.send).not.toHaveBeenCalled();
   });
@@ -537,9 +593,13 @@ describe('a message while /compact summarizes (decision 178)', () => {
       )
     );
     await settle();
-    expect(text()).not.toContain(COMPACTING_LINE);
+    // Decision 180: said in its row, not a toast.
+    expect(timeline()).toEqual([
+      'command /compact',
+      'note No useful summary could be written, so nothing was compacted. The attempt is recorded in the session log.',
+    ]);
     expect(queued()).toEqual(['carry on']);
-    expect(toastTitles()).toContain('Could not compact the conversation');
+    expect(toastTitles()).toEqual([]);
   });
 });
 
@@ -563,7 +623,7 @@ describe('a message while /compact starts the conversation (decision 179)', () =
     await mountComposer();
     await type(COMMAND);
     await press('Enter');
-    expect(text()).toContain(SESSION_STARTING_LINE);
+    expect(timeline()).toEqual(['command /compact', `running ${SESSION_STARTING_LINE}`]);
 
     await type('and then run the tests');
     await press('Enter');
@@ -622,7 +682,7 @@ describe('a message while /compact starts the conversation (decision 179)', () =
     );
     await settle();
     expect(mocks.api.compactSession).not.toHaveBeenCalled();
-    expect(text()).not.toContain(SESSION_STARTING_LINE);
+    expect(timeline()).toEqual([]);
     expect(queued()).toEqual(['carry on']);
     expect(mocks.toast).toHaveBeenCalledWith({
       type: 'error',
@@ -678,5 +738,145 @@ describe('/compact with instructions (decision 179)', () => {
       'Conversation compacted',
       'Compacted without your instructions',
     ]);
+  });
+});
+
+/**
+ * dsh-rebase decision 180: `/compact` in the timeline — its command line,
+ * then its running row, renamed by the bridge's live events to the ids the
+ * history gives the same rows — and Esc or Stop to cancel it.
+ */
+describe('/compact in the timeline, and its cancel (decision 180)', () => {
+  const summaryRow = {
+    id: 'h:cp1',
+    entryId: 'cp1',
+    role: 'system',
+    liveMessageId: 'dsh-compaction-k1',
+    blocks: [{ id: 'h:cp1:summary:0', type: 'text', text: 'Context summary\n\n- x' }],
+  };
+  const ids = () => (useChatSessionsStore.getState().messages.c1 ?? []).map((row) => row.id);
+
+  it('[180-C-01] the running row becomes the summary the answer carried, in place; the command line takes its live id', async () => {
+    mocks.api.compactSession.mockResolvedValue({ compacted: true, summary: summaryRow });
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type('/compact keep the tests');
+    await press('Enter');
+
+    expect(timeline()).toEqual(['command /compact keep the tests', 'summary h:cp1']);
+    expect(ids()).toEqual(['dsh-compact-command-k1', 'h:cp1']);
+    expect(toastTitles()).toEqual([]);
+    expect(box().value).toBe('');
+  });
+
+  it('[180-C-02] the bridge’s live rows: renamed in place, then the summary, then the answer’s own row', async () => {
+    const compact = deferred<unknown>();
+    mocks.api.compactSession.mockReturnValue(compact.promise);
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type('/compact keep the tests');
+    await press('Enter');
+    await event({
+      type: 'session.compaction',
+      payload: {
+        messageId: 'dsh-compaction-k1',
+        phase: 'started',
+        trigger: 'manual',
+        commandMessageId: 'dsh-compact-command-k1',
+        command: '/compact keep the tests',
+      },
+    });
+    expect(ids()).toEqual(['dsh-compact-command-k1', 'dsh-compaction-k1']);
+    expect(timeline()).toEqual(['command /compact keep the tests', `running ${COMPACTING_LINE}`]);
+
+    await event({
+      type: 'session.compaction',
+      payload: {
+        messageId: 'dsh-compaction-k1',
+        phase: 'completed',
+        trigger: 'manual',
+        summary: 'Context summary\n\n- x',
+        instructions: 'keep the tests',
+      },
+    });
+    expect(timeline()).toEqual(['command /compact keep the tests', 'summary dsh-compaction-k1']);
+    const live = useChatSessionsStore.getState().messages.c1?.[1];
+    expect(live?.blocks[1]?.notice).toEqual({
+      key: 'Instructions for this summary: {{instructions}}',
+      params: { instructions: 'keep the tests' },
+    });
+
+    await act(async () => compact.resolve({ compacted: true, summary: summaryRow }));
+    await settle();
+    expect(ids()).toEqual(['dsh-compact-command-k1', 'h:cp1']);
+  });
+
+  it('[180-C-03] Esc while it compacts: Main is asked to cancel, and the row says cancelled', async () => {
+    const compact = deferred<unknown>();
+    mocks.api.compactSession.mockReturnValue(compact.promise);
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+    expect(cancelButton()).not.toBeNull();
+    expect(stopButton()).toBeNull();
+
+    await press('Escape');
+    expect(mocks.api.stop).not.toHaveBeenCalled();
+    expect(mocks.api.cancelCompact).toHaveBeenCalledWith({ sessionId: 'c1' });
+    // A second press is no second request.
+    await press('Escape');
+    expect(mocks.api.cancelCompact).toHaveBeenCalledTimes(1);
+
+    await act(async () =>
+      compact.reject(
+        new Error(
+          "Error invoking remote method 'chat:compactSession': WorkerSlotError: WORKER_COMPACT_CANCELLED: the compaction was cancelled before its summary was written; nothing was compacted"
+        )
+      )
+    );
+    await settle();
+    expect(timeline()).toEqual([
+      'command /compact',
+      'note Compaction cancelled. Nothing was compacted.',
+    ]);
+    expect(mocks.toast).not.toHaveBeenCalled();
+    expect(box().value).toBe('');
+    expect(cancelButton()).toBeNull();
+  });
+
+  it('[180-C-04] the Stop button cancels too; a cancel that found nothing yet is asked again', async () => {
+    const compact = deferred<unknown>();
+    mocks.api.compactSession.mockReturnValue(compact.promise);
+    mocks.api.cancelCompact.mockResolvedValueOnce({ cancelled: false });
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    await act(async () => (cancelButton() as HTMLButtonElement).click());
+    await vi.waitFor(() => expect(mocks.api.cancelCompact).toHaveBeenCalledTimes(2), {
+      timeout: 2_000,
+    });
+    expect(mocks.api.stop).not.toHaveBeenCalled();
+    await act(async () => compact.resolve({ compacted: true, summary: summaryRow }));
+    await settle();
+    // Too late: the summary was written, and that is what it shows.
+    expect(timeline()).toEqual(['command /compact', 'summary h:cp1']);
+  });
+
+  it('[180-C-05] refused before anything ran: no rows, the toast, the line back with its instructions', async () => {
+    mocks.api.compactSession.mockRejectedValue(
+      new Error(
+        "Error invoking remote method 'chat:compactSession': WorkerSlotError: WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED: this engine cannot add instructions to /compact (no hook); nothing was compacted"
+      )
+    );
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type('/compact keep the tests');
+    await press('Enter');
+    expect(timeline()).toEqual([]);
+    expect(toastTitles()).toEqual(['This engine version cannot add instructions to /compact']);
+    expect(box().value).toBe('/compact keep the tests');
   });
 });

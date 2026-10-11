@@ -71,6 +71,13 @@ import {
   snapshotResumeCandidates,
   takeResumeSnapshot,
 } from './historyReplayMerge';
+// Leaf module (type imports only from here): a `/compact`'s rows (decision 180).
+import {
+  compactNoteRow,
+  compactSummaryRow,
+  isManualCompactionRow,
+  withManualCompactionStarted,
+} from './manualCompactionRows';
 import { usePendingUserMessagesStore } from './pendingUserMessages';
 // Refcounted fan-out over preload's single `chat:runtimeEvent` IPC listener —
 // see its header for why every renderer subscriber shares one.
@@ -1145,6 +1152,7 @@ function withCompactionEvent(
   payload: SessionCompactionEvent['payload']
 ): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
   if (typeof payload?.messageId !== 'string' || payload.messageId === '') return {};
+  if (payload.trigger === 'manual') return withManualCompactionEvent(state, sessionId, payload);
   const bucket = state.messages[sessionId] ?? [];
   const index = bucket.findIndex((message) => message.id === payload.messageId);
   const existing = index >= 0 ? bucket[index] : undefined;
@@ -1165,19 +1173,64 @@ function withCompactionEvent(
 }
 
 /**
+ * Decision 180: a `/compact` the user ran — its command line and its row,
+ * which the composer may already show under ids of its own (renamed here to
+ * the live ones); then the summary in its place, or the note the bridge
+ * worded. A late `started` never reopens a row that has settled.
+ */
+function withManualCompactionEvent(
+  state: ChatSessionsState,
+  sessionId: string,
+  payload: SessionCompactionEvent['payload']
+): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
+  const bucket = state.messages[sessionId] ?? [];
+  if (payload.phase === 'started') {
+    if (bucket.some((message) => message.id === payload.messageId)) return {};
+    return {
+      messages: withBucket(
+        state,
+        sessionId,
+        withManualCompactionStarted(bucket, sessionId, {
+          messageId: payload.messageId,
+          ...(payload.commandMessageId ? { commandMessageId: payload.commandMessageId } : {}),
+          ...(payload.command !== undefined ? { command: payload.command } : {}),
+          key: DSH_COMPACTION_RUNNING_KEY,
+        })
+      ),
+    };
+  }
+  const row =
+    payload.phase === 'completed'
+      ? compactSummaryRow(sessionId, payload.messageId, payload.summary, payload.instructions)
+      : compactNoteRow(
+          sessionId,
+          payload.messageId,
+          payload.note ?? { key: DSH_COMPACTION_INTERRUPTED_KEY }
+        );
+  const index = bucket.findIndex((message) => message.id === payload.messageId);
+  const next = bucket.slice();
+  if (index >= 0) next[index] = row;
+  else next.push(row);
+  return { messages: withBucket(state, sessionId, next) };
+}
+
+/**
  * Decision 178: the turn ended (completed, failed, stopped — Main's forced
  * stop too) with a compaction row still running: nothing will finish it, so
  * it says the compaction did not finish. Returns `state` itself when there is
- * none, so a caller can tell.
+ * none, so a caller can tell. Decision 180: a `/compact`'s row is no turn's;
+ * its own end settles it.
  */
 function withRunningCompactionsSettled(
   state: ChatSessionsState,
   sessionId: string
 ): ChatSessionsState {
   const bucket = state.messages[sessionId];
-  if (!bucket?.some(isRunningCompactionRow)) return state;
+  const turnOwned = (message: ChatMessage) =>
+    isRunningCompactionRow(message) && !isManualCompactionRow(bucket ?? [], message);
+  if (!bucket?.some(turnOwned)) return state;
   const next = bucket.map((message) =>
-    isRunningCompactionRow(message)
+    turnOwned(message)
       ? compactionRow(sessionId, {
           messageId: message.id,
           phase: 'interrupted',

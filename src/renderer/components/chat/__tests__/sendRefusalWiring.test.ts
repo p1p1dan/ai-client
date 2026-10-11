@@ -119,10 +119,15 @@ describe('D1 — a legacy chat that could not be moved (legacy_migration_failed)
     // Decision 176: by the start every conversation the engine is not running
     // gets before it is compacted — the send path's resume, which moves a
     // chat from the previous version (a legacy chat is never running).
-    const compact = slice(COMPOSER, "case 'compact': {", "if (outcome.kind !== 'compacted')");
+    const compact = slice(
+      COMPOSER,
+      "case 'compact': {",
+      'const settle = compactOutcomeSettle(outcome);'
+    );
     expect(compact).toContain('window.electronAPI.chat.compactSession({');
-    expect(compact).toContain(
-      'whenRunning: (operation) => runCompactWhenRunning(sessionId, operation)'
+    // Decision 180: with its rows in the timeline.
+    expect(compact.replace(/\s+/g, ' ')).toContain(
+      'whenRunning: (operation) => runCompactWhenRunning(sessionId, operation, undefined, {'
     );
     expect(COMPACT_RUN).toContain('runWithSessionStarted({');
     expect(COMPACT_RUN).toContain('...effects,');

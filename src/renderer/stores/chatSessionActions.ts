@@ -29,6 +29,14 @@ import {
   useChatSessionsStore,
 } from './chatSessions';
 import { hasPendingDraftTitle, settleDraftSessionTitle } from './draftSessionTitles';
+import {
+  type CompactRunSettle,
+  compactCommandRow,
+  compactRunningRow,
+  compactRunRowIds,
+  isRunningCompactionRow,
+  withCompactRunSettled,
+} from './manualCompactionRows';
 import { useScratchWorkspaceStore } from './scratchWorkspace';
 import { isFreshEmptySession } from './sessionFreshness';
 import { markSessionsLive } from './sessionRetirement';
@@ -248,26 +256,81 @@ export function materializeIndexedPiChatSession(
 export const materializeForkedChatSession = materializeIndexedPiChatSession;
 
 /**
- * dsh-rebase P1-7e (problem 10, decision 140): `/compact` succeeded, and the
- * worker handed back the context-summary row it wrote. It goes at the end of
- * the chat's timeline under its own history id, exactly as a reopen shows it;
- * a later replay of the history supersedes it by that id (`h:` rows are
- * always replaced by a fresh replay), so it is never shown twice. Returns
- * whether the chat now shows the row (false only when the chat is gone).
+ * dsh-rebase decision 180: a `/compact` shows in the timeline the moment
+ * Enter is pressed — its command line, then its running row saying `key`
+ * (starting the conversation, or compacting) — under the run's own ids
+ * until the bridge's `session.compaction` renames them (`manualCompactionRows.ts`).
  */
-export function showCompactionSummary(sessionId: string, summary: HistoryMessage): boolean {
-  let shown = false;
+export function showCompactRun(
+  sessionId: string,
+  runId: string,
+  command: string,
+  key: string
+): void {
+  const ids = compactRunRowIds(runId);
   useChatSessionsStore.setState((state) => {
     if (!state.sessions.some((session) => session.id === sessionId)) return state;
-    shown = true;
     const bucket = state.messages[sessionId] ?? [];
-    if (bucket.some((message) => message.id === summary.id)) return state;
     return {
       messages: {
         ...state.messages,
-        [sessionId]: [...bucket, mapHistoryMessageToChatMessage(sessionId, summary)],
+        [sessionId]: [
+          ...bucket.filter((message) => message.id !== ids.command && message.id !== ids.status),
+          compactCommandRow(sessionId, ids.command, command),
+          compactRunningRow(sessionId, ids.status, key),
+        ],
       },
     };
+  });
+}
+
+/** Decision 180: the run's running row says `key` now, while it is still the composer's. */
+export function setCompactRunKey(sessionId: string, runId: string, key: string): void {
+  const { status } = compactRunRowIds(runId);
+  useChatSessionsStore.setState((state) => {
+    const bucket = state.messages[sessionId];
+    const index = bucket?.findIndex((message) => message.id === status) ?? -1;
+    const row = index >= 0 ? bucket?.[index] : undefined;
+    if (!bucket || !row || !isRunningCompactionRow(row)) return state;
+    const next = bucket.slice();
+    next[index] = compactRunningRow(sessionId, status, key);
+    return { messages: { ...state.messages, [sessionId]: next } };
+  });
+}
+
+/**
+ * Decision 180: the run is over. `summary` is the row the answer carried (a
+ * history row, shown under its own id where the running row was);
+ * `note` says why there is none; `remove` takes the composer's rows away
+ * (nothing ran). Returns whether the chat now shows a summary row.
+ */
+export function settleCompactRun(
+  sessionId: string,
+  runId: string,
+  settle:
+    | { kind: 'summary'; summary: HistoryMessage }
+    | Exclude<CompactRunSettle, { kind: 'summary' }>
+): boolean {
+  let shown = false;
+  useChatSessionsStore.setState((state) => {
+    if (!state.sessions.some((session) => session.id === sessionId)) return state;
+    const bucket = state.messages[sessionId] ?? [];
+    const next = withCompactRunSettled(
+      bucket,
+      sessionId,
+      runId,
+      settle.kind === 'summary'
+        ? {
+            kind: 'summary',
+            summary: mapHistoryMessageToChatMessage(sessionId, settle.summary),
+            ...(settle.summary.liveMessageId
+              ? { liveMessageId: settle.summary.liveMessageId }
+              : {}),
+          }
+        : settle
+    );
+    shown = settle.kind === 'summary';
+    return { messages: { ...state.messages, [sessionId]: next } };
   });
   return shown;
 }

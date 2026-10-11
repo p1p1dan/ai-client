@@ -1027,10 +1027,13 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    */
   it('[FB1-7] settled segments render one <ChatMarkdown> each, never re-joined', () => {
     const prose = nodeSource(topLevelFunction('TurnTextItem'));
-    expect(prose).toContain('split.segments.map(');
+    // CG-4 (decision 180): keyed by content and occurrence, so a paragraph
+    // that comes back is a child of its own (`keyedClosedSegments`).
+    expect(prose).toContain('keyedClosedSegments(split.segments).map(');
     expect(prose, 'one element per segment, keyed by its own content').toContain(
-      '<ChatMarkdown key={segment} text={segment} />'
+      '<ChatMarkdown key={segment.key} text={segment.text} />'
     );
+    expect(prose).not.toContain('key={segment}');
     expect(prose, 'the joined shape is the whole defect').not.toMatch(/segments\s*\.join\(/);
   });
 

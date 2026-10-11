@@ -2,6 +2,7 @@ import {
   CONTEXT_SUMMARY_TITLE,
   DSH_COMPACTION_RUNNING_PART,
   dshCompactionNoteBlockId,
+  isDshCompactCommandRow,
   isDshCompactionNoteRow,
 } from '@shared/dshHistory/types';
 import type { Translate } from '@shared/i18n';
@@ -94,6 +95,8 @@ export function dshNoticeRowView(message: ChatMessage): DshNoticeRowView | null 
 export interface DshCompactionRowView {
   running: boolean;
   key: string;
+  /** Decision 180: a `/compact`'s note may name DSH's own reason (`{{reason}}`). */
+  params?: Record<string, string>;
 }
 
 /** The compaction note a system message is, or null for any other row. */
@@ -102,10 +105,43 @@ export function dshCompactionRowView(message: ChatMessage): DshCompactionRowView
   const first = message.blocks[0];
   const key = first?.notice?.key ?? first?.text ?? '';
   if (!key) return null;
+  const params = first?.notice?.params;
   return {
     running: first?.id === dshCompactionNoteBlockId(message.id, DSH_COMPACTION_RUNNING_PART),
     key,
+    ...(params && Object.keys(params).length > 0 ? { params } : {}),
   };
+}
+
+/**
+ * dsh-rebase decision 180: a `/compact`'s command line — what the user typed,
+ * drawn as the user's own line — or null for any other row.
+ */
+export interface DshCompactCommandRowView {
+  text: string;
+}
+
+export function dshCompactCommandRowView(message: ChatMessage): DshCompactCommandRowView | null {
+  if (!isDshCompactCommandRow(message)) return null;
+  const first = message.blocks[0];
+  return { text: first?.type === 'text' ? (first.text ?? '/compact') : '/compact' };
+}
+
+/**
+ * Decision 180: the running row's words while this window's `/compact`
+ * compacts — the dictionary key and params, with the clock folded in.
+ */
+export function compactingClockLine(elapsedSeconds: number): {
+  key: string;
+  params: Record<string, number>;
+} {
+  const seconds = Math.max(0, Math.floor(elapsedSeconds));
+  return seconds < 60
+    ? { key: 'Compacting the context… {{seconds}}s', params: { seconds } }
+    : {
+        key: 'Compacting the context… {{minutes}}m {{seconds}}s',
+        params: { minutes: Math.floor(seconds / 60), seconds: seconds % 60 },
+      };
 }
 
 export interface AutoTurnHeadView {

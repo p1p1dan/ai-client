@@ -16,14 +16,18 @@ import {
   Target,
   Users,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Spinner } from '@/components/ui/spinner';
 import { type TFunction, useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
+import { useCompactRunsStore } from '@/stores/compactRuns';
+import { userBubbleClass, userBubbleRowClass, userBubbleTextClass } from './chatTimelineLayout';
 import {
   type AutoTurnHeadView,
   autoTurnHeadView,
+  compactingClockLine,
+  type DshCompactCommandRowView,
   type DshCompactionRowView,
   type DshNoticeRowView,
 } from './dshTimelineRowModel';
@@ -195,13 +199,40 @@ export function DshNoticeRow({ view }: { view: DshNoticeRowView }) {
 
 /**
  * dsh-rebase decision 178: an automatic compaction where it runs — a spinner
- * and "Compacting the context…" while it runs (the composer's `/compact` status line,
- * in the timeline), then the context-summary row in its place; or one line
- * saying it did not succeed, with an info icon like any other notice.
+ * and "Compacting the context…" while it runs, then the context-summary row in
+ * its place; or one line saying it did not succeed, with an info icon like any
+ * other notice.
+ *
+ * Decision 180: a `/compact` the user ran is drawn the same way. While this
+ * window's own runs, the line carries its clock (「正在压缩上下文… 12 秒」) and
+ * how to cut it short (「按 Esc 取消」, then 「正在取消…」).
  */
-export function DshCompactionRow({ view }: { view: DshCompactionRowView }) {
+export function DshCompactionRow({
+  view,
+  sessionId,
+}: {
+  view: DshCompactionRowView;
+  sessionId?: string;
+}) {
   const { t } = useI18n();
-  const words = t(view.key);
+  const run = useCompactRunsStore((state) =>
+    sessionId && view.running && state.phases[sessionId] !== undefined
+      ? `${state.phases[sessionId]}:${state.compactingSince[sessionId] ?? ''}:${
+          state.cancelling[sessionId] ? 'cancelling' : ''
+        }`
+      : null
+  );
+  const [phase, since, cancelling] = run?.split(':') ?? [];
+  const startedAt = since ? Number(since) : undefined;
+  const now = useSecondClock(startedAt !== undefined);
+  const words =
+    phase === 'compacting' && startedAt !== undefined
+      ? (() => {
+          const line = compactingClockLine((now - startedAt) / 1000);
+          return t(line.key, line.params);
+        })()
+      : t(view.key, view.params);
+  const hint = run ? t(cancelling ? 'Cancelling…' : 'Esc to cancel') : null;
   return (
     <div
       className={dshLightRowClass()}
@@ -214,9 +245,45 @@ export function DshCompactionRow({ view }: { view: DshCompactionRowView }) {
       ) : (
         <Info className="size-3.5 shrink-0" aria-hidden />
       )}
-      <span className="min-w-0 flex-1 truncate" title={words}>
+      <span className="min-w-0 flex-1 truncate tabular-nums" title={words}>
         {words}
       </span>
+      {hint && (
+        <span className="shrink-0" data-testid="dsh-compaction-hint">
+          {hint}
+        </span>
+      )}
     </div>
+  );
+}
+
+/** The time, once a second while `on`. */
+function useSecondClock(on: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!on) return undefined;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [on]);
+  return now;
+}
+
+/**
+ * Decision 180: a `/compact`'s command line — what the user typed, as the
+ * user's own line is drawn (the bubble of `MessageTimeline`'s `UserBubble`).
+ * It is no prompt: it opens no turn, and the prompt rail does not list it.
+ */
+export function DshCompactCommandRow({ view }: { view: DshCompactCommandRowView }) {
+  return (
+    <article className={userBubbleRowClass()} data-testid="compact-command-row">
+      <div className={userBubbleClass()}>
+        <div className={userBubbleTextClass()}>
+          <p className="whitespace-pre-wrap break-words text-chat-body leading-relaxed text-foreground">
+            {view.text}
+          </p>
+        </div>
+      </div>
+    </article>
   );
 }

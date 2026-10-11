@@ -29,9 +29,23 @@
  * on; ones longer than the engine takes are refused here, before anything is
  * sent, and the engine's own refusals (too long, or an engine whose
  * compaction cannot carry them) are said in words too.
+ *
+ * dsh-rebase decision 180: a `/compact` that ran shows in the timeline — its
+ * command line, then its row — and its outcome is said there
+ * (`compactOutcomeSettle`): the summary, or a note why there is none
+ * (cancelled, past its time limit, no useful summary, DSH's own reason). Only
+ * a `/compact` that never ran (refused, nothing to compact, the conversation
+ * could not be started) is said in a toast, with its line back in the box.
  */
 
 import { COMPACT_INSTRUCTIONS_MAX_CHARS } from '@shared/compactInstructions';
+import {
+  DSH_COMPACT_CANCELLED_KEY,
+  DSH_COMPACT_NO_SUMMARY_KEY,
+  DSH_COMPACT_TIMEOUT_KEY,
+  type DshCompactNote,
+  dshCompactNote,
+} from '@shared/dshHistory/types';
 import type { Translate } from '@shared/i18n';
 import type { HistoryMessage } from '@shared/types/sessionHistory';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
@@ -61,8 +75,10 @@ export const COMPACT_INSTRUCTIONS_TOO_LONG = 'WORKER_COMPACT_INSTRUCTIONS_TOO_LO
 export const COMPACT_TIMEOUT = 'WORKER_COMPACT_TIMEOUT';
 export const COMPACT_UNAVAILABLE = 'WORKER_COMPACT_UNAVAILABLE';
 export const COMPACT_FAILED = 'WORKER_COMPACT_FAILED';
+/** Decision 180: Esc or Stop cut it short before its summary was written. */
+export const COMPACT_CANCELLED = 'WORKER_COMPACT_CANCELLED';
 
-/** The status line while it runs (decision 176); dictionary keys. */
+/** The running row while it compacts (decisions 176, 180); dictionary keys. */
 export const COMPACTING_LINE = 'Compacting the context…';
 
 export type CompactCommandOutcome =
@@ -109,18 +125,21 @@ export type CompactCommandOutcome =
   | { kind: 'interrupted' }
   /** The engine had nothing to compact (DSH's "No compactable history yet."). */
   | { kind: 'nothing-to-compact' }
+  /** Decision 180: Esc or Stop cut it short; nothing was compacted. */
+  | { kind: 'cancelled' }
   /**
-   * Main or the engine refused for any other reason. `key` is a dictionary key
-   * for the known ones; otherwise `reason` is the engine's sentence with the
-   * code taken off. `detail` is the whole text, for the log.
+   * Main or the engine refused for any other reason. `note` is what the row
+   * says (the history's note for the same outcome, `dshCompactNote`).
+   * `detail` is the whole text, for the log.
    */
-  | { kind: 'failed'; key?: string; reason: string; detail: string };
+  | { kind: 'failed'; note: DshCompactNote; detail: string };
 
-/** Dictionary keys for the failures said in words (decision 176). */
-export const COMPACT_TIMEOUT_TEXT =
-  'Summarizing took too long, so the compaction was cancelled. Nothing was compacted.';
-export const COMPACT_NO_SUMMARY_TEXT =
-  'No useful summary could be written, so nothing was compacted. The attempt is recorded in the session log.';
+/**
+ * Dictionary keys for the failures said in words (decision 176); since
+ * decision 180 the notes the row and the history share.
+ */
+export const COMPACT_TIMEOUT_TEXT = DSH_COMPACT_TIMEOUT_KEY;
+export const COMPACT_NO_SUMMARY_TEXT = DSH_COMPACT_NO_SUMMARY_KEY;
 export const COMPACT_INTERRUPTED_TEXT =
   'The conversation stopped running while it was being compacted (it was ended, or the engine restarted). Reopen it to see whether the summary was written.';
 export const COMPACT_STOPPED_TEXT =
@@ -159,8 +178,9 @@ export function classifyCompactFailure(error: unknown): CompactCommandOutcome {
   }
   if (isSessionNotRunningError(error)) return { kind: 'stopped-running' };
   if (has(reason, 'worker_compact_interrupted')) return { kind: 'interrupted' };
+  if (has(reason, COMPACT_CANCELLED)) return { kind: 'cancelled' };
   if (has(reason, COMPACT_TIMEOUT)) {
-    return { kind: 'failed', key: COMPACT_TIMEOUT_TEXT, reason, detail: reason };
+    return { kind: 'failed', note: { key: COMPACT_TIMEOUT_TEXT }, detail: reason };
   }
   if (
     has(reason, COMPACT_UNAVAILABLE) &&
@@ -168,10 +188,34 @@ export function classifyCompactFailure(error: unknown): CompactCommandOutcome {
   ) {
     return { kind: 'nothing-to-compact' };
   }
-  if (has(reason, COMPACT_FAILED) && /useful summary/iu.test(reason)) {
-    return { kind: 'failed', key: COMPACT_NO_SUMMARY_TEXT, reason, detail: reason };
+  // DSH's sentence, worded as the history words the same `command/done`.
+  return { kind: 'failed', note: dshCompactNote(withoutCode(reason)), detail: reason };
+}
+
+/**
+ * Decision 180: what the timeline does with the run's rows. `summary` and
+ * `note`: it ran, and its row says how it ended (where the bridge has not
+ * said so already). `remove`: it never ran — refused, nothing to compact, the
+ * conversation could not be started — and a toast says why instead.
+ */
+export type CompactOutcomeSettle =
+  | { kind: 'summary'; summary?: HistoryMessage }
+  | { kind: 'note'; note: DshCompactNote }
+  | { kind: 'remove' };
+
+export function compactOutcomeSettle(outcome: CompactCommandOutcome): CompactOutcomeSettle {
+  switch (outcome.kind) {
+    case 'compacted':
+      return { kind: 'summary', ...(outcome.summary ? { summary: outcome.summary } : {}) };
+    case 'cancelled':
+      return { kind: 'note', note: { key: DSH_COMPACT_CANCELLED_KEY } };
+    case 'interrupted':
+      return { kind: 'note', note: { key: COMPACT_INTERRUPTED_TEXT } };
+    case 'failed':
+      return { kind: 'note', note: outcome.note };
+    default:
+      return { kind: 'remove' };
   }
-  return { kind: 'failed', reason: withoutCode(reason), detail: reason };
 }
 
 export async function runCompactCommand(input: {
@@ -183,7 +227,9 @@ export async function runCompactCommand(input: {
    * starting it the way a send does first (`runWithSessionStarted`). Absent:
    * `compact` is asked as it is.
    */
-  whenRunning?: (operation: () => Promise<unknown>) => Promise<StartedOperationResult<unknown>>;
+  whenRunning?: (
+    operation: () => Promise<unknown>
+  ) => Promise<StartedOperationResult<unknown> & { cancelRequested?: true }>;
 }): Promise<CompactCommandOutcome> {
   if (input.turnRunning) return { kind: 'turn-running' };
   try {
@@ -199,7 +245,12 @@ export async function runCompactCommand(input: {
       }
       return { kind: 'not-started', start: result.start };
     }
-    if (result.kind === 'cancelled') return { kind: 'stopped-running' };
+    // Decision 180: not asked for at all, because Esc or Stop came first.
+    if (result.kind === 'cancelled') {
+      return 'cancelRequested' in result && result.cancelRequested
+        ? { kind: 'cancelled' }
+        : { kind: 'stopped-running' };
+    }
     const summary = compactionSummaryOf(result.value);
     return {
       kind: 'compacted',
@@ -218,9 +269,9 @@ export interface CompactToast {
 }
 
 /**
- * The toast for every outcome but success (which shows the summary row, or
- * says so itself). `null` for success. Every text is in words; a failure's
- * full text is logged by the caller (`detail`).
+ * The toast for a `/compact` that never ran. `null` for one that ran: its row
+ * in the timeline says how it ended (decision 180). Every text is in words; a
+ * failure's full text is logged by the caller (`detail`).
  */
 export function compactOutcomeToast(
   outcome: CompactCommandOutcome,
@@ -228,6 +279,9 @@ export function compactOutcomeToast(
 ): CompactToast | null {
   switch (outcome.kind) {
     case 'compacted':
+    case 'cancelled':
+    case 'interrupted':
+    case 'failed':
       return null;
     case 'turn-running':
       return {
@@ -274,18 +328,6 @@ export function compactOutcomeToast(
         type: 'error',
         title: t('Could not compact the conversation'),
         description: t(COMPACT_STOPPED_TEXT),
-      };
-    case 'interrupted':
-      return {
-        type: 'error',
-        title: t('Could not compact the conversation'),
-        description: t(COMPACT_INTERRUPTED_TEXT),
-      };
-    case 'failed':
-      return {
-        type: 'error',
-        title: t('Could not compact the conversation'),
-        description: outcome.key ? t(outcome.key) : outcome.reason,
       };
   }
 }

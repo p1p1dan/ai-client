@@ -10,18 +10,28 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  DSH_COMPACT_CANCELLED_KEY,
+  DSH_COMPACT_FAILED_REASON_KEY,
+  DSH_COMPACT_NO_SUMMARY_KEY,
+  DSH_COMPACT_TIMEOUT_KEY,
+} from '@shared/dshHistory/types';
 import { englishTranslate, zhTranslations } from '@shared/i18n';
 import {
+  WORKER_COMPACT_CANCELLED,
   WORKER_COMPACT_INSTRUCTIONS_TOO_LONG,
   WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
 } from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  COMPACT_CANCELLED,
   COMPACT_INSTRUCTIONS_TOO_LONG,
   COMPACT_INSTRUCTIONS_UNSUPPORTED,
+  COMPACT_INTERRUPTED_TEXT,
   type CompactCommandOutcome,
   compactInstructionsIgnoredToast,
   compactionSummaryOf,
+  compactOutcomeSettle,
   compactOutcomeToast,
   runCompactCommand,
 } from '../compactCommand';
@@ -48,9 +58,16 @@ describe('runCompactCommand', () => {
     const compact = vi.fn(async () => {
       throw new Error(WHILE_ACTIVE);
     });
+    // Decision 180: the row's note, worded as the history words DSH's sentence.
     await expect(runCompactCommand({ turnRunning: false, compact })).resolves.toEqual({
       kind: 'failed',
-      reason: 'Session session-1790255048446-z82ivrc cannot compact the conversation while active',
+      note: {
+        key: DSH_COMPACT_FAILED_REASON_KEY,
+        params: {
+          reason:
+            'Session session-1790255048446-z82ivrc cannot compact the conversation while active',
+        },
+      },
       detail: 'Session session-1790255048446-z82ivrc cannot compact the conversation while active',
     });
   });
@@ -202,17 +219,25 @@ describe('the composer reports every outcome and keeps the command (source scan)
 
   it('[CC-04] goes through runCompactCommand, with the composer’s own running state', () => {
     expect(compactCase).toContain('runCompactCommand({');
-    expect(compactCase).toMatch(/turnRunning: canStop \|\| stoppingRef\.current/);
+    expect(compactCase).toMatch(/const turnRunning = canStop \|\| stoppingRef\.current/);
+    // A running turn is answered before anything shows in the timeline.
+    expect(compactCase.indexOf('if (turnRunning) {')).toBeLessThan(
+      compactCase.indexOf('nextCompactRunId()')
+    );
   });
 
-  it('[CC-05] toasts every refusal and returns before the input box is cleared', () => {
-    // Decision 176: one table says every outcome in words (`compactOutcomeToast`).
-    expect(compactCase).toContain("if (outcome.kind !== 'compacted') {");
+  it('[CC-05] a /compact that never ran: a toast, no rows, its line back in the box (decision 180)', () => {
+    // Decision 180: the box is cleared when it starts, as for a message, and
+    // the timeline shows it; one that never ran leaves no row and a toast.
+    expect(compactCase).toContain("if (valueRef.current.trim() === trimmed) updateValue('');");
+    expect(compactCase).toContain('const settle = compactOutcomeSettle(outcome);');
+    expect(compactCase).toContain("settleCompactRun(sessionId, runId, { kind: 'remove' });");
+    expect(compactCase).toContain('restoreCommand(typedIn, trimmed);');
     expect(compactCase).toContain('const toast = compactOutcomeToast(outcome, t);');
     // A second `/compact` while one runs, instructions too long (decision
-    // 179), and every refusal: consumed, but the draft survives.
+    // 179), a running turn, and the end of the run itself.
     expect(compactCase).toContain("t('This conversation is already being compacted')");
-    expect(compactCase.match(/return true;/g)?.length).toBe(3);
+    expect(compactCase.match(/return true;/g)?.length).toBe(4);
   });
 
   it('[CC-179-04] instructions are read as plain text; too long is said before anything is sent', () => {
@@ -238,7 +263,9 @@ describe('the composer reports every outcome and keeps the command (source scan)
   });
 
   it('[CC-11] success shows the summary row, or says so in a toast when there is none', () => {
-    expect(compactCase).toContain('showCompactionSummary(sessionId, outcome.summary)');
+    expect(compactCase).toContain(
+      "settleCompactRun(sessionId, runId, { kind: 'summary', summary: settle.summary })"
+    );
     expect(compactCase).toContain("t('Conversation compacted')");
   });
 
@@ -305,20 +332,14 @@ describe('runCompactCommand — a conversation the engine is not running (decisi
         'WorkerSlotError: WORKER_COMPACT_TIMEOUT: summarizing the conversation took longer than 45000ms; it was cancelled'
       ),
     });
-    expect(timeout).toMatchObject({
-      kind: 'failed',
-      key: 'Summarizing took too long, so the compaction was cancelled. Nothing was compacted.',
-    });
+    expect(timeout).toMatchObject({ kind: 'failed', note: { key: DSH_COMPACT_TIMEOUT_KEY } });
     const noSummary = await runCompactCommand({
       turnRunning: false,
       compact: failing(
         'WorkerSlotError: WORKER_COMPACT_FAILED: Compaction could not produce a useful summary. The attempt is recorded in the session log.'
       ),
     });
-    expect(noSummary).toMatchObject({
-      kind: 'failed',
-      key: 'No useful summary could be written, so nothing was compacted. The attempt is recorded in the session log.',
-    });
+    expect(noSummary).toMatchObject({ kind: 'failed', note: { key: DSH_COMPACT_NO_SUMMARY_KEY } });
     const other = await runCompactCommand({
       turnRunning: false,
       compact: failing(
@@ -327,7 +348,10 @@ describe('runCompactCommand — a conversation the engine is not running (decisi
     });
     expect(other).toEqual({
       kind: 'failed',
-      reason: 'Compaction finished, but the session could not be saved.',
+      note: {
+        key: DSH_COMPACT_FAILED_REASON_KEY,
+        params: { reason: 'Compaction finished, but the session could not be saved.' },
+      },
       detail: 'WORKER_COMPACT_FAILED: Compaction finished, but the session could not be saved.',
     });
   });
@@ -376,6 +400,14 @@ describe('runCompactCommand — a conversation the engine is not running (decisi
         whenRunning: async () => ({ kind: 'cancelled' }),
       })
     ).resolves.toEqual({ kind: 'stopped-running' });
+    // Decision 180: not asked for at all, because Esc or Stop came first.
+    await expect(
+      runCompactCommand({
+        turnRunning: false,
+        compact,
+        whenRunning: async () => ({ kind: 'cancelled', cancelRequested: true }),
+      })
+    ).resolves.toEqual({ kind: 'cancelled' });
     expect(compact).not.toHaveBeenCalled();
   });
 
@@ -405,15 +437,16 @@ describe('runCompactCommand — a conversation the engine is not running (decisi
       { kind: 'not-started', start: { kind: 'refused', reason: 'restarting' } },
       { kind: 'not-started', start: { kind: 'refused', reason: 'no-workspace' } },
       { kind: 'stopped-running' },
-      { kind: 'interrupted' },
-      {
-        kind: 'failed',
-        key: 'Summarizing took too long, so the compaction was cancelled. Nothing was compacted.',
-        reason: 'x',
-        detail: 'x',
-      },
     ];
     expect(compactOutcomeToast({ kind: 'compacted' }, englishTranslate)).toBeNull();
+    // Decision 180: one that ran says how it ended in its row, not in a toast.
+    for (const ran of [
+      { kind: 'interrupted' },
+      { kind: 'cancelled' },
+      { kind: 'failed', note: { key: DSH_COMPACT_TIMEOUT_KEY }, detail: 'x' },
+    ] as CompactCommandOutcome[]) {
+      expect(compactOutcomeToast(ran, englishTranslate), ran.kind).toBeNull();
+    }
     for (const outcome of outcomes) {
       const toast = compactOutcomeToast(outcome, englishTranslate);
       expect(toast, outcome.kind).not.toBeNull();
@@ -442,5 +475,71 @@ describe('runCompactCommand — a conversation the engine is not running (decisi
     }
     // DSH's sentence for "nothing to compact" (dsh-command-compact).
     expect(bridge).toContain("'There is nothing to compact yet'");
+  });
+});
+
+/**
+ * dsh-rebase decision 180: Esc or Stop cuts a `/compact` short, and how a
+ * `/compact` ended is said in its row in the timeline; only one that never
+ * ran is a toast.
+ */
+describe('runCompactCommand — cancelled, and said in the timeline (decision 180)', () => {
+  it('[CC-180-01] the worker’s cancel is its own outcome, under the code spelled here', async () => {
+    expect(COMPACT_CANCELLED).toBe(WORKER_COMPACT_CANCELLED);
+    await expect(
+      runCompactCommand({
+        turnRunning: false,
+        compact: async () => {
+          throw new Error(
+            "Error invoking remote method 'chat:compactSession': WorkerSlotError: WORKER_COMPACT_CANCELLED: the compaction was cancelled before its summary was written; nothing was compacted"
+          );
+        },
+      })
+    ).resolves.toEqual({ kind: 'cancelled' });
+  });
+
+  it('[CC-180-02] what the row does: the summary, a note, or nothing at all', () => {
+    const row = { id: 'h:c1', role: 'system', blocks: [] } as never;
+    expect(compactOutcomeSettle({ kind: 'compacted', summary: row })).toEqual({
+      kind: 'summary',
+      summary: row,
+    });
+    expect(compactOutcomeSettle({ kind: 'compacted' })).toEqual({ kind: 'summary' });
+    expect(compactOutcomeSettle({ kind: 'cancelled' })).toEqual({
+      kind: 'note',
+      note: { key: DSH_COMPACT_CANCELLED_KEY },
+    });
+    expect(compactOutcomeSettle({ kind: 'interrupted' })).toEqual({
+      kind: 'note',
+      note: { key: COMPACT_INTERRUPTED_TEXT },
+    });
+    expect(
+      compactOutcomeSettle({ kind: 'failed', note: { key: DSH_COMPACT_TIMEOUT_KEY }, detail: 'x' })
+    ).toEqual({ kind: 'note', note: { key: DSH_COMPACT_TIMEOUT_KEY } });
+    for (const never of [
+      { kind: 'turn-running' },
+      { kind: 'instructions-unsupported' },
+      { kind: 'instructions-too-long', max: 2000 },
+      { kind: 'already-compacting' },
+      { kind: 'nothing-to-compact' },
+      { kind: 'stopped-running' },
+      { kind: 'not-started', start: { kind: 'refused', reason: 'restarting' } },
+    ] as CompactCommandOutcome[]) {
+      expect(compactOutcomeSettle(never), never.kind).toEqual({ kind: 'remove' });
+    }
+    for (const key of [
+      DSH_COMPACT_CANCELLED_KEY,
+      DSH_COMPACT_TIMEOUT_KEY,
+      DSH_COMPACT_NO_SUMMARY_KEY,
+      DSH_COMPACT_FAILED_REASON_KEY,
+      COMPACT_INTERRUPTED_TEXT,
+      'Esc to cancel',
+      'Cancelling…',
+      'Cancel the compaction',
+      'Compacting the context… {{seconds}}s',
+      'Compacting the context… {{minutes}}m {{seconds}}s',
+    ]) {
+      expect(zhTranslations[key], key).toBeTruthy();
+    }
   });
 });

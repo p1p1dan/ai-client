@@ -413,6 +413,35 @@ describe('decidePendingResolution', () => {
 });
 
 describe('deriveActionButtons', () => {
+  it('[180-AB] dsh-rebase decision 180: a /compact on its way, no turn -> [stop (cancels it), enqueue]', () => {
+    for (const hasDraftContent of [true, false]) {
+      expect(
+        deriveActionButtons({
+          status: 'idle',
+          sending: false,
+          hasFailed: true,
+          hasDraftContent,
+          hasQueuedEntries: false,
+          compacting: true,
+        })
+      ).toEqual([
+        { kind: 'stop', disabled: false, compaction: true },
+        { kind: 'enqueue', disabled: !hasDraftContent },
+      ]);
+    }
+    // A turn's own Stop comes first (a /compact is refused while one runs anyway).
+    expect(
+      deriveActionButtons({
+        status: 'running',
+        sending: false,
+        hasFailed: false,
+        hasDraftContent: false,
+        hasQueuedEntries: false,
+        compacting: true,
+      })[0]
+    ).toEqual({ kind: 'stop', disabled: false });
+  });
+
   it('idle, no failure -> [send]', () => {
     expect(
       deriveActionButtons({

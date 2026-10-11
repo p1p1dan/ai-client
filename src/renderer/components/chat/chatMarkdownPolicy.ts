@@ -583,6 +583,26 @@ export function advanceClosedPrefix(text: string, previousHwm: number): ClosedPr
   };
 }
 
+/**
+ * CG-4 (dsh-rebase decision 180): the settled segments with a React key each.
+ *
+ * The key used to be the segment's text alone. A paragraph that comes back
+ * in one answer — a `---` rule, 「示意如下：」 — gave two children the same key:
+ * React warned once per flush (2,227 times in one real-gateway reply) and may
+ * drop or repeat such a child. The key is the text plus how many times that
+ * text came before, which keeps what the content key was for — a key that
+ * does not change while the segments before it stay as they are, since the
+ * list only grows at its end — and is unique.
+ */
+export function keyedClosedSegments(segments: readonly string[]): { key: string; text: string }[] {
+  const seen = new Map<string, number>();
+  return segments.map((text) => {
+    const occurrence = seen.get(text) ?? 0;
+    seen.set(text, occurrence + 1);
+    return { key: `${occurrence}:${text}`, text };
+  });
+}
+
 /** One body message, reduced to what the gate needs (see `deriveStreamingBlockIds`). */
 export interface StreamingGateMessage {
   id: string;
