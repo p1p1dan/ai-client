@@ -1748,12 +1748,37 @@ describe('projectDshHistory — /compact in the timeline (decision 180)', () => 
       .add('command/run', { commandId: 'c2', name: 'goal', args: '', source: { kind: 'user' } })
       .add('command/done', { commandId: 'c2', kind: 'success', text: 'No goal is currently set.' });
     expect(projectDshHistory(l.events)).toEqual([]);
-    // A compaction with no command in sight still has its line.
-    const bare = log()
-      .add('compaction/start', { compactionId: 'b', turn: null })
+    // A compaction naming its command still has its line when the `command/run` is out of sight.
+    const unseen = log()
+      .add('compaction/start', { compactionId: 'b', sourceCommandId: 'gone', turn: null })
       .user(...checkpoint('cp-b', 'b'))
-      .add('compaction/end', { compactionId: 'b', turn: null });
-    expect(ids(projectDshHistory(bare.events))).toEqual(['h:compact-command-b', 'h:cp-b']);
+      .add('compaction/end', { compactionId: 'b', sourceCommandId: 'gone', turn: null });
+    expect(ids(projectDshHistory(unseen.events))).toEqual(['h:compact-command-b', 'h:cp-b']);
+  });
+
+  /**
+   * dsh.11 gate: the 1.0.x migration writes a compaction between turns as a
+   * turn-less transaction naming no command (`convert/seed.ts`). pi never
+   * recorded whether the user or its threshold started it, so its reopen
+   * must not grow a `/compact` line 1.0.x never showed.
+   */
+  it('[180-PROJ-4b] a turn-less compaction naming no command (a migrated one): summary only', () => {
+    const migrated = log()
+      .turn(1)
+      .user('u1', 'first')
+      .end(1, { kind: 'completed' })
+      .add('compaction/start', { compactionId: 'legacy', turn: null })
+      .user(...checkpoint('cp-legacy', 'legacy'))
+      .add('compaction/end', { compactionId: 'legacy', turn: null })
+      .turn(2)
+      .user('u2', 'after')
+      .end(2, { kind: 'completed' });
+    const rows = projectDshHistory(migrated.events);
+    expect(ids(rows)).toEqual(['h:u1', 'h:cp-legacy', 'h:u2']);
+    expect(rows.some((row) => isDshCompactCommandRow(row))).toBe(false);
+    // No live copy ever existed for it either.
+    const live = projectDshHistory(migrated.events, { liveSessionId: 'live' });
+    expect(live.find((row) => row.id === 'h:cp-legacy')?.liveMessageId).toBeUndefined();
   });
 
   it('[180-PROJ-5] started and never closed: did not finish, once the log moves on', () => {

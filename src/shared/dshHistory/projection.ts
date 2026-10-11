@@ -36,10 +36,11 @@
  * (`DshHistoryFoldOptions.compactInstructions`).
  *
  * Decision 180: a `/compact` the user ran shows as an automatic compaction
- * does — its command line first (`compaction/start` with no turn, dated by
- * its `command/run`), then its summary, or a note where it ended without one,
- * worded by what its `command/done` said (`dshCompactNote`). Both name the id
- * their live copy carried.
+ * does — its command line first (`compaction/start` with no turn and a
+ * `sourceCommandId`, dated by its `command/run`), then its summary, or a note
+ * where it ended without one, worded by what its `command/done` said
+ * (`dshCompactNote`). Both name the id their live copy carried. A turn-less
+ * compaction naming no command (the 1.0.x migration's) gets no command line.
  */
 
 import {
@@ -410,7 +411,7 @@ function compactionNote(
  */
 interface ManualCompaction {
   readonly compactionId: string;
-  readonly commandId: string | undefined;
+  readonly commandId: string;
   /** Its checkpoint landed: the summary is the outcome. */
   settled: boolean;
   /** `compaction/end` came. */
@@ -734,11 +735,14 @@ export class DshHistoryFold {
   }
 
   /** The command line of a `/compact` whose compaction just started. */
-  private onManualCompactionStart(event: DshLogEvent, compactionId: string, data: Row): void {
+  private onManualCompactionStart(
+    event: DshLogEvent,
+    compactionId: string,
+    commandId: string
+  ): void {
     this.closeOpenManualCompaction(event);
-    const commandId = stringOf(data.sourceCommandId);
-    const ranAt = commandId !== undefined ? this.compactCommands.get(commandId) : undefined;
-    if (commandId !== undefined) this.compactCommands.delete(commandId);
+    const ranAt = this.compactCommands.get(commandId);
+    this.compactCommands.delete(commandId);
     const rawId = `compact-command-${compactionId}`;
     const id = historyId(rawId);
     const time = ranAt ?? timeOf(event);
@@ -771,7 +775,7 @@ export class DshHistoryFold {
       );
     }
     // Its `command/done` is still to come when DSH answered by itself.
-    if (manual.doneText !== undefined || manual.commandId === undefined || manual.settled) {
+    if (manual.doneText !== undefined || manual.settled) {
       this.manual = undefined;
     }
   }
@@ -803,17 +807,22 @@ export class DshHistoryFold {
   // ---- automatic compaction (decision 178) ------------------------------------------
 
   /**
-   * `compaction/start` of a compaction a turn owns (`turn` is its number; a
-   * `/compact` the user ran has none and is not followed here: its summary
-   * row is all the timeline shows of it).
+   * `compaction/start` of a compaction a turn owns (`turn` is its number), or
+   * of a `/compact` the user ran (decision 180: no turn, and the command that
+   * started it in `sourceCommandId`).
    */
   private onCompactionStart(event: DshLogEvent): void {
     const data = recordOf(event.data);
     const compactionId = stringOf(data?.compactionId);
     if (!compactionId || !data) return;
-    // Decision 180: a `/compact` the user ran (no turn owns it).
     if (typeof data.turn !== 'number') {
-      this.onManualCompactionStart(event, compactionId, data);
+      // DSH starts a turn-less compaction only for a `/compact`, and names the
+      // command. One naming none was written by the 1.0.x migration
+      // (`legacyPiSession/convert/seed.ts`): pi did not record whether the
+      // user or its threshold started it, so no command line is made up for
+      // it; its summary row is all the timeline shows, as 1.0.x showed.
+      const commandId = stringOf(data.sourceCommandId);
+      if (commandId !== undefined) this.onManualCompactionStart(event, compactionId, commandId);
       return;
     }
     if (!this.turn) return;
