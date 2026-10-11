@@ -34,6 +34,12 @@
  * the instructions. The log does not record them either; the bridge keeps
  * them beside the stub and passes their lookup
  * (`DshHistoryFoldOptions.compactInstructions`).
+ *
+ * Decision 180: a `/compact` the user ran shows as an automatic compaction
+ * does — its command line first (`compaction/start` with no turn, dated by
+ * its `command/run`), then its summary, or a note where it ended without one,
+ * worded by what its `command/done` said (`dshCompactNote`). Both name the id
+ * their live copy carried.
  */
 
 import {
@@ -59,6 +65,9 @@ import {
   AICLIENT_LOOP_GUARD_DENIAL,
   AICLIENT_PERMISSION_DENIAL,
   CONTEXT_SUMMARY_TITLE,
+  DSH_COMPACT_COMMAND_PART,
+  DSH_COMPACT_INSTRUCTIONS_PART,
+  DSH_COMPACT_INTERRUPTED_KEY,
   DSH_COMPACTION_FAILED_KEY,
   DSH_COMPACTION_FAILED_PART,
   DSH_COMPACTION_INTERRUPTED_KEY,
@@ -72,11 +81,16 @@ import {
   DSH_TOOL_ABORTED_BEFORE_DISPATCH,
   DSH_TOOL_NOT_STARTED,
   DSH_TOOL_OUTCOME_UNKNOWN,
+  type DshCompactNote,
   type DshHistoryEntryType,
   type DshLogEvent,
   type DshToolResultBlock,
+  dshCompactCommandLiveId,
+  dshCompactCommandText,
   dshCompactionLiveId,
   dshCompactionNoteBlockId,
+  dshCompactNote,
+  dshCompactNoteText,
   isDshSummaryRow,
   PI_BRANCH_SUMMARY_PREFIX,
   PI_BRANCH_SUMMARY_SUFFIX,
@@ -348,6 +362,19 @@ function stopCauseOf(reason: Row | null): TurnStopCause | undefined {
   return undefined;
 }
 
+/** A lookup the caller passed; one that throws, or answers nothing usable, costs its line only. */
+function readLookup(
+  lookup: ((compactionId: string) => string | undefined) | undefined,
+  compactionId: string
+): string | undefined {
+  try {
+    const value = lookup?.(compactionId);
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function foldSettledAt(message: HistoryMessage, stamp: number | undefined): HistoryMessage {
   if (stamp === undefined) return message;
   const latest = message.settledAt ?? message.timestamp;
@@ -356,18 +383,41 @@ function foldSettledAt(message: HistoryMessage, stamp: number | undefined): Hist
 }
 
 /** Decision 178: `message` as a compaction's note: one line, the app's own words. */
-function compactionNote(id: string, message: HistoryMessage, key: string): HistoryMessage {
+function compactionNote(
+  id: string,
+  message: HistoryMessage,
+  key: string,
+  params?: Record<string, string>
+): HistoryMessage {
   return {
     ...message,
     blocks: [
       {
         type: 'text',
         id: dshCompactionNoteBlockId(id, DSH_COMPACTION_FAILED_PART),
-        text: key,
-        notice: { key },
+        text: dshCompactNoteText({ key, ...(params ? { params } : {}) }),
+        notice: { key, ...(params ? { params } : {}) },
       },
     ],
   };
+}
+
+/**
+ * Decision 180: a `/compact` the user ran, from its `compaction/start` on.
+ * `doneText` is what its command's `command/done` said, whichever of the two
+ * came first: an abort's reason is logged before the compaction closes, DSH's
+ * own failure after.
+ */
+interface ManualCompaction {
+  readonly compactionId: string;
+  readonly commandId: string | undefined;
+  /** Its checkpoint landed: the summary is the outcome. */
+  settled: boolean;
+  /** `compaction/end` came. */
+  ended: boolean;
+  doneText?: string;
+  /** Entry of the note it left, once it ended without a summary. */
+  note?: number;
 }
 
 interface Entry {
@@ -437,13 +487,24 @@ export interface DshHistoryFoldOptions {
    * `compactionId`. Absent, or answering none: the summary row is as before.
    */
   compactInstructions?: (compactionId: string) => string | undefined;
+  /**
+   * Decision 180: the instructions typed after a `/compact`, by its
+   * `compactionId`, whether or not its summary used them — its command line
+   * shows them. Absent: `compactInstructions` answers for it.
+   */
+  compactCommandInstructions?: (compactionId: string) => string | undefined;
 }
+
+/** Decision 180: `command/run`s of `/compact` kept for their compaction, at most this many. */
+const COMPACT_COMMANDS_KEPT = 8;
 
 /**
  * Part-id kind of a context summary's line about the `/compact` instructions
  * it was written with (decision 179): `<row id>:compact-instructions:0`.
+ * Declared in `types.ts` since decision 180 (the live store builds the same
+ * line); named here too for the callers that took it from here.
  */
-export const DSH_COMPACT_INSTRUCTIONS_PART = 'compact-instructions';
+export { DSH_COMPACT_INSTRUCTIONS_PART };
 
 /**
  * The incremental projection. Push every event of one DSH session in seq
@@ -465,6 +526,13 @@ export class DshHistoryFold {
   private readonly liveSessionId: string | undefined;
   private readonly presentCall: DshToolPresenter | undefined;
   private readonly compactInstructions: ((compactionId: string) => string | undefined) | undefined;
+  private readonly compactCommandInstructions:
+    | ((compactionId: string) => string | undefined)
+    | undefined;
+  /** Decision 180: `/compact`'s `command/run` time, by command id, until its compaction starts. */
+  private readonly compactCommands = new Map<string, number | undefined>();
+  /** Decision 180: the `/compact` compaction still open, or still waiting for its `command/done`. */
+  private manual: ManualCompaction | undefined;
   /** The current goal's round budget, as the last `goal/change` recorded it. */
   private goalRounds: number | undefined;
   /** Model steps the provider reported usage for. */
@@ -482,6 +550,7 @@ export class DshHistoryFold {
     this.liveSessionId = options.liveSessionId;
     this.presentCall = options.presentCall;
     this.compactInstructions = options.compactInstructions;
+    this.compactCommandInstructions = options.compactCommandInstructions;
   }
 
   /** Seq of the last event pushed, -1 before any. */
@@ -526,7 +595,14 @@ export class DshHistoryFold {
     switch (event.type) {
       case 'turn/start':
         this.stepOpen = false;
+        this.closeOpenManualCompaction(event);
         this.openTurn(event);
+        return;
+      case 'command/run':
+        this.onCommandRun(event);
+        return;
+      case 'command/done':
+        this.onCommandDone(event);
         return;
       case 'user/message':
         this.onUserMessage(event);
@@ -617,12 +693,108 @@ export class DshHistoryFold {
 
   /** Decision 179: a lookup that throws costs the line only. */
   private instructionsOf(compactionId: string): string | undefined {
-    try {
-      const instructions = this.compactInstructions?.(compactionId);
-      return typeof instructions === 'string' && instructions.length > 0 ? instructions : undefined;
-    } catch {
-      return undefined;
+    return readLookup(this.compactInstructions, compactionId);
+  }
+
+  /** Decision 180: what was typed after the `/compact` that started `compactionId`. */
+  private commandInstructionsOf(compactionId: string): string | undefined {
+    return this.compactCommandInstructions
+      ? readLookup(this.compactCommandInstructions, compactionId)
+      : this.instructionsOf(compactionId);
+  }
+
+  // ---- /compact (decision 180) --------------------------------------------------------
+
+  /** A `/compact`'s command: dated now, shown once it starts a compaction. */
+  private onCommandRun(event: DshLogEvent): void {
+    const data = recordOf(event.data);
+    const commandId = stringOf(data?.commandId);
+    if (!commandId || data?.name !== 'compact') return;
+    this.compactCommands.set(commandId, timeOf(event));
+    while (this.compactCommands.size > COMPACT_COMMANDS_KEPT) {
+      const oldest = this.compactCommands.keys().next().value;
+      if (oldest === undefined) break;
+      this.compactCommands.delete(oldest);
     }
+  }
+
+  /** What the `/compact` answered, which words its note when it ended without a summary. */
+  private onCommandDone(event: DshLogEvent): void {
+    const data = recordOf(event.data);
+    const commandId = stringOf(data?.commandId);
+    if (!commandId) return;
+    this.compactCommands.delete(commandId);
+    const manual = this.manual;
+    if (!manual || manual.commandId !== commandId) return;
+    if (data?.kind === 'error') manual.doneText = stringOf(data?.text);
+    if (manual.note !== undefined) this.wordManualNote(manual);
+    if (manual.ended || manual.settled) this.manual = undefined;
+  }
+
+  /** The command line of a `/compact` whose compaction just started. */
+  private onManualCompactionStart(event: DshLogEvent, compactionId: string, data: Row): void {
+    this.closeOpenManualCompaction(event);
+    const commandId = stringOf(data.sourceCommandId);
+    const ranAt = commandId !== undefined ? this.compactCommands.get(commandId) : undefined;
+    if (commandId !== undefined) this.compactCommands.delete(commandId);
+    const rawId = `compact-command-${compactionId}`;
+    const id = historyId(rawId);
+    const time = ranAt ?? timeOf(event);
+    this.append({
+      id,
+      entryId: rawId,
+      role: 'system',
+      ...(time !== undefined ? { timestamp: time } : {}),
+      blocks: [
+        {
+          type: 'text',
+          id: partId(id, DSH_COMPACT_COMMAND_PART, 0),
+          text: dshCompactCommandText(this.commandInstructionsOf(compactionId)),
+        },
+      ],
+      ...(this.liveSessionId ? { liveMessageId: dshCompactCommandLiveId(compactionId) } : {}),
+    });
+    this.manual = { compactionId, commandId, settled: false, ended: false };
+  }
+
+  /** It closed: a note where it ran when no checkpoint landed. */
+  private onManualCompactionEnd(event: DshLogEvent, manual: ManualCompaction, data: Row): void {
+    manual.ended = true;
+    if (!manual.settled && data.error !== undefined) {
+      manual.note = this.appendCompactionNote(
+        manual.compactionId,
+        dshCompactNote(manual.doneText),
+        timeOf(event)
+      );
+    }
+    // Its `command/done` is still to come when DSH answered by itself.
+    if (manual.doneText !== undefined || manual.commandId === undefined || manual.settled) {
+      this.manual = undefined;
+    }
+  }
+
+  private wordManualNote(manual: ManualCompaction): void {
+    const index = manual.note;
+    if (index === undefined) return;
+    const note = dshCompactNote(manual.doneText);
+    this.update(index, (message) => compactionNote(message.id, message, note.key, note.params));
+  }
+
+  /**
+   * A `/compact` that started and never closed, now that the log moved on
+   * (another turn, another compaction): the engine went away under it. One
+   * still open at the end of the log may still be running, and says nothing.
+   */
+  private closeOpenManualCompaction(event: DshLogEvent): void {
+    const manual = this.manual;
+    if (!manual) return;
+    this.manual = undefined;
+    if (manual.ended || manual.settled) return;
+    this.appendCompactionNote(
+      manual.compactionId,
+      { key: DSH_COMPACT_INTERRUPTED_KEY },
+      timeOf(event)
+    );
   }
 
   // ---- automatic compaction (decision 178) ------------------------------------------
@@ -635,7 +807,13 @@ export class DshHistoryFold {
   private onCompactionStart(event: DshLogEvent): void {
     const data = recordOf(event.data);
     const compactionId = stringOf(data?.compactionId);
-    if (!compactionId || typeof data?.turn !== 'number' || !this.turn) return;
+    if (!compactionId || !data) return;
+    // Decision 180: a `/compact` the user ran (no turn owns it).
+    if (typeof data.turn !== 'number') {
+      this.onManualCompactionStart(event, compactionId, data);
+      return;
+    }
+    if (!this.turn) return;
     this.turn.compactions.set(compactionId, {
       trigger: this.stepOpen ? 'overflow' : 'pressure',
       settled: false,
@@ -646,6 +824,11 @@ export class DshHistoryFold {
   private onCompactionEnd(event: DshLogEvent): void {
     const data = recordOf(event.data);
     const compactionId = stringOf(data?.compactionId);
+    const manual = this.manual;
+    if (data && manual && compactionId === manual.compactionId) {
+      this.onManualCompactionEnd(event, manual, data);
+      return;
+    }
     const turn = this.turn;
     const open = compactionId ? turn?.compactions.get(compactionId) : undefined;
     if (!turn || !compactionId || !open) return;
@@ -653,7 +836,7 @@ export class DshHistoryFold {
     if (open.settled || data?.error === undefined) return;
     turn.compactionFailure = this.appendCompactionNote(
       compactionId,
-      compactionFailureKey(open.trigger),
+      { key: compactionFailureKey(open.trigger) },
       timeOf(event)
     );
   }
@@ -671,7 +854,7 @@ export class DshHistoryFold {
     }
     for (const [compactionId, open] of turn.compactions) {
       if (!open.settled)
-        this.appendCompactionNote(compactionId, DSH_COMPACTION_INTERRUPTED_KEY, time);
+        this.appendCompactionNote(compactionId, { key: DSH_COMPACTION_INTERRUPTED_KEY }, time);
     }
     turn.compactions.clear();
     turn.compactionFailure = undefined;
@@ -679,7 +862,7 @@ export class DshHistoryFold {
 
   private appendCompactionNote(
     compactionId: string,
-    key: string,
+    note: DshCompactNote,
     time: number | undefined
   ): number {
     const rawId = `compaction-${compactionId}`;
@@ -695,7 +878,8 @@ export class DshHistoryFold {
           blocks: [],
           ...this.liveCompactionId(compactionId),
         },
-        key
+        note.key,
+        note.params
       )
     );
   }
@@ -907,6 +1091,10 @@ export class DshHistoryFold {
       const compactionId = stringOf(source?.compactionId);
       const automatic = compactionId ? turn?.compactions.get(compactionId) : undefined;
       if (automatic) automatic.settled = true;
+      // Decision 180: a `/compact`'s summary is the row its live copy became too.
+      const manual =
+        compactionId && this.manual?.compactionId === compactionId ? this.manual : undefined;
+      if (manual) manual.settled = true;
       // Decision 179: the instructions a `/compact` summarized with, under it.
       const instructions =
         compactionId && !automatic ? this.instructionsOf(compactionId) : undefined;
@@ -932,7 +1120,7 @@ export class DshHistoryFold {
               ]
             : []),
         ],
-        ...(automatic && compactionId ? this.liveCompactionId(compactionId) : {}),
+        ...((automatic || manual) && compactionId ? this.liveCompactionId(compactionId) : {}),
       });
       return;
     }

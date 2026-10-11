@@ -17,6 +17,7 @@ import {
   isWorkerBootstrapPayload,
   isWorkerCommandPayload,
   isWorkerCommandsPayload,
+  isWorkerCompactCancelPayload,
   isWorkerCompactPayload,
   isWorkerDiscardForkPayload,
   isWorkerForkPayload,
@@ -38,6 +39,7 @@ import {
   isWorkerStopPayload,
   isWorkerSubagentInterruptPayload,
   isWorkerTreePayload,
+  WORKER_COMPACT_CANCELLED,
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerAcceptForkPayload,
   type WorkerAcceptForkResult,
@@ -47,6 +49,8 @@ import {
   type WorkerCommandResult,
   type WorkerCommandsPayload,
   type WorkerCommandsResult,
+  type WorkerCompactCancelPayload,
+  type WorkerCompactCancelResult,
   type WorkerCompactPayload,
   type WorkerCompactResult,
   type WorkerDiscardForkPayload,
@@ -110,6 +114,11 @@ export interface BridgeSessionRuntime {
   tree(input: WorkerTreePayload): Promise<WorkerTreeResult>;
   commands(input: WorkerCommandsPayload): Promise<WorkerCommandsResult>;
   compact(input: WorkerCompactPayload): Promise<WorkerCompactResult>;
+  /**
+   * dsh-rebase decision 180 — cut the running `/compact` short. Synchronous:
+   * it is answered off the request chain, which the compaction holds.
+   */
+  cancelCompact(input: WorkerCompactCancelPayload): WorkerCompactCancelResult;
   /**
    * dsh-rebase P1-7a — one engine command run out of band (the goal bar's
    * `/goal …`): no turn, no event, not refused while a turn runs.
@@ -278,6 +287,12 @@ function errorPayload(error: unknown): WorkerRpcErrorPayload {
  * The first bootstrap owns the process for its lifetime; an identical duplicate
  * is idempotent and a different bootstrap is rejected without constructing a
  * second AgentSession.
+ *
+ * One exception (dsh-rebase decision 180): `worker.compact.cancel` is answered
+ * the moment it arrives. The `/compact` it cancels can hold the chain for ten
+ * minutes, and a cancel queued behind it would only arrive once it was over.
+ * A `worker.compact` still waiting on the chain when the cancel comes is
+ * answered `WORKER_COMPACT_CANCELLED` when its turn comes, without running.
  */
 export class BridgeRpcServer {
   private readonly options: BridgeRpcServerOptions;
@@ -287,6 +302,11 @@ export class BridgeRpcServer {
   private runtime: BridgeSessionRuntime | null = null;
   private disposed = false;
   private eventSequence = 0;
+  /**
+   * Decision 180: `worker.compact` requests on the chain that have not run
+   * yet, by request id; `true` once a cancel reached them there.
+   */
+  private readonly queuedCompacts = new Map<string, boolean>();
 
   constructor(options: BridgeRpcServerOptions) {
     if (!Number.isSafeInteger(options.generation) || options.generation <= 0) {
@@ -313,12 +333,21 @@ export class BridgeRpcServer {
       return;
     }
     const request = value;
+    // Decision 180: past the chain, which the compaction it cancels holds.
+    if (request.type === 'worker.compact.cancel') {
+      this.handleCompactCancel(request);
+      return;
+    }
+    if (request.type === 'worker.compact') this.queuedCompacts.set(request.requestId, false);
     this.chain = this.chain
       .then(() => this.dispatch(request))
       .catch((error) => this.log('worker request dispatch failed:', error));
   }
 
   private async dispatch(request: WorkerRpcRequest): Promise<void> {
+    // Decision 180: its turn on the chain came; a cancel can no longer find it queued.
+    const cancelledInQueue = this.queuedCompacts.get(request.requestId) === true;
+    this.queuedCompacts.delete(request.requestId);
     if (request.generation !== this.options.generation) {
       this.respondError(request, {
         code: 'WORKER_STALE_GENERATION',
@@ -354,7 +383,7 @@ export class BridgeRpcServer {
           await this.handleCommands(request);
           break;
         case 'worker.compact':
-          await this.handleCompact(request);
+          await this.handleCompact(request, cancelledInQueue);
           break;
         case 'worker.command':
           await this.handleCommand(request);
@@ -532,7 +561,15 @@ export class BridgeRpcServer {
     this.respondSuccess(request, await this.runtime.commands(request.payload));
   }
 
-  private async handleCompact(request: WorkerRpcRequest): Promise<void> {
+  private async handleCompact(request: WorkerRpcRequest, cancelledInQueue: boolean): Promise<void> {
+    // Decision 180: cancelled while it waited its turn on the chain.
+    if (cancelledInQueue) {
+      throw new BridgeSessionError(
+        WORKER_COMPACT_CANCELLED,
+        'the compaction was cancelled before it ran; nothing was compacted',
+        false
+      );
+    }
     if (!isWorkerCompactPayload(request.payload)) {
       this.respondError(request, {
         code: 'WORKER_INVALID_PAYLOAD',
@@ -545,6 +582,48 @@ export class BridgeRpcServer {
       throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.compact(request.payload));
+  }
+
+  /**
+   * Decision 180 — answered on arrival, not on the chain (`receive`). The
+   * same guards `dispatch` applies first: this generation, not disposed, a
+   * valid payload. Cancels the compaction running now, or else one still
+   * waiting on the chain; `cancelled: false` when there is neither.
+   */
+  private handleCompactCancel(request: WorkerRpcRequest): void {
+    try {
+      if (request.generation !== this.options.generation) {
+        this.respondError(request, {
+          code: 'WORKER_STALE_GENERATION',
+          message: `Expected generation ${this.options.generation}, got ${request.generation}`,
+          retryable: false,
+        });
+        return;
+      }
+      if (!isWorkerCompactCancelPayload(request.payload)) {
+        this.respondError(request, {
+          code: 'WORKER_INVALID_PAYLOAD',
+          message: 'worker.compact.cancel requires logicalSessionId',
+          retryable: false,
+        });
+        return;
+      }
+      if (this.disposed || !this.runtime) {
+        this.respondSuccess(request, { cancelled: false } satisfies WorkerCompactCancelResult);
+        return;
+      }
+      let result = this.runtime.cancelCompact(request.payload);
+      if (!result.cancelled) {
+        for (const [requestId, cancelled] of this.queuedCompacts) {
+          if (cancelled) continue;
+          this.queuedCompacts.set(requestId, true);
+          result = { cancelled: true };
+        }
+      }
+      this.respondSuccess(request, result);
+    } catch (error) {
+      this.respondError(request, errorPayload(error));
+    }
   }
 
   private async handleCommand(request: WorkerRpcRequest): Promise<void> {

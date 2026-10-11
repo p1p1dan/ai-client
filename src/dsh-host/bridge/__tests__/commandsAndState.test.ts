@@ -4,10 +4,19 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { COMPACT_INSTRUCTIONS_NOTE_KEY } from '../../../shared/compactInstructions.ts';
 import {
+  AICLIENT_COMPACT_TIMEOUT_REASON,
+  DSH_COMPACT_CANCELLED_KEY,
+  DSH_COMPACT_TIMEOUT_KEY,
+} from '../../../shared/dshHistory/types.ts';
+import {
   WORKER_COMMAND_TIMEOUT,
   WORKER_COMMAND_UNKNOWN,
+  WORKER_COMPACT_BUDGET_MS,
+  WORKER_COMPACT_CANCELLED,
   WORKER_COMPACT_INSTRUCTIONS_TOO_LONG,
   WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
+  WORKER_COMPACT_REQUEST_TIMEOUT_MS,
+  WORKER_COMPACT_SETTLE_MS,
 } from '../../../shared/types/workerRpc.ts';
 import type { BridgeSessionRuntimeOptions } from '../bridgeRpcServer.ts';
 import type { DshCommandResult, DshSkillSummary } from '../commands.ts';
@@ -50,7 +59,9 @@ interface Emitted {
 
 type Handler = (
   rawInput: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  /** The pairing id DSH minted for this run (`command/run`), which its compaction names. */
+  commandId?: string
 ) => DshCommandResult | Promise<DshCommandResult>;
 
 /** A Cordis context narrowed to what the bridge reads, with the optional services set per test. */
@@ -145,12 +156,18 @@ function fakeCommands(
         try {
           const result = await (command.handler ?? (() => ({ kind: 'success' as const })))(
             args,
-            signal
+            signal,
+            commandId
           );
           host.append('command/done', { commandId, ...result });
           return { commandId, result };
         } catch (error) {
-          host.append('command/done', { commandId, kind: 'error', text: String(error) });
+          // As dsh-commands' `settleThrown`: the error's message.
+          host.append('command/done', {
+            commandId,
+            kind: 'error',
+            text: error instanceof Error ? error.message : String(error),
+          });
           throw error;
         }
       }
@@ -1298,5 +1315,207 @@ describe('DshSessionRuntime — worker.panels and goalActivation (P1-7a, decisio
       'goal',
       'subagentCatalog',
     ]);
+  });
+});
+
+/**
+ * dsh-rebase decision 180: a `/compact` can run for ten minutes, and the user
+ * can cut it short. The abort carries its reason, which DSH logs as the
+ * command's answer; the answer waits (bounded) for DSH to close the
+ * compaction; a summary that landed before the abort reached it is the
+ * outcome; what was typed is kept beside the stub whatever the outcome.
+ */
+describe('DshSessionRuntime — /compact cancelled, or past its limit (decision 180)', () => {
+  /**
+   * DSH's `/compact` as far as these tests need it: `compaction/start` with no
+   * turn, then — on abort — the command rejects at once with the abort's
+   * reason (`withAbort`) while the compaction closes a moment later with an
+   * error; or, given `land`, the summary lands first.
+   */
+  function slowCompact(
+    host: ReturnType<typeof fakeHost>,
+    options: { land?: boolean; close?: boolean } = {}
+  ): Handler {
+    let runs = 0;
+    return (_input, signal, commandId) => {
+      runs += 1;
+      const compactionId = `slow-${runs}`;
+      host.append('compaction/start', { compactionId, sourceCommandId: commandId, turn: null });
+      if (options.land) {
+        host.append('compaction/summary', { compactionId });
+        host.append('user/message', {
+          id: `cp-${runs}`,
+          role: 'user',
+          content: [{ type: 'text', text: '<compacted-summary>landed</compacted-summary>' }],
+          source: { kind: 'compact-checkpoint', compactionId },
+        });
+        host.append('compaction/end', { compactionId, sourceCommandId: commandId, turn: null });
+      }
+      return new Promise<DshCommandResult>((_resolve, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(signal.reason);
+          if (options.close === false || options.land) return;
+          setTimeout(() => {
+            host.append('compaction/end', {
+              compactionId,
+              sourceCommandId: commandId,
+              turn: null,
+              error: { message: String((signal.reason as Error).message) },
+            });
+          }, 5);
+        });
+      });
+    };
+  }
+  const compactionEvents = (emitted: Emitted[]) =>
+    emitted.filter((event) => event.type === 'session.compaction').map((event) => event.payload);
+
+  it('[180-B-01] cancelled: aborted with its reason, answered once DSH let go, nothing compacted', async () => {
+    const host = fakeHost();
+    const emitted: Emitted[] = [];
+    fakeCommands(host, { compact: { description: 'compact', handler: slowCompact(host) } });
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+
+    const compacting = refusal(bridge.compact({ logicalSessionId: LOGICAL }));
+    await vi.waitFor(() => expect(compactionEvents(emitted)).toHaveLength(1));
+    expect(compactionEvents(emitted)[0]).toMatchObject({
+      phase: 'started',
+      trigger: 'manual',
+      command: '/compact',
+    });
+    expect(bridge.cancelCompact({ logicalSessionId: LOGICAL })).toEqual({ cancelled: true });
+    // A second press is no second cancel.
+    expect(bridge.cancelCompact({ logicalSessionId: LOGICAL })).toEqual({ cancelled: false });
+
+    const error = (await compacting) as { code?: string; retryable?: boolean; message: string };
+    expect(error).toMatchObject({ code: WORKER_COMPACT_CANCELLED, retryable: false });
+    expect(error.message).toMatch(/nothing was compacted/);
+    // The answer came after DSH closed it, and the row said so first.
+    expect(compactionEvents(emitted)[1]).toMatchObject({
+      phase: 'failed',
+      note: { key: DSH_COMPACT_CANCELLED_KEY },
+    });
+    // DSH logged the reason as the command's answer.
+    expect(
+      (await bridge.history({ logicalSessionId: LOGICAL })).page.messages.at(-1)
+    ).toMatchObject({
+      blocks: [{ notice: { key: DSH_COMPACT_CANCELLED_KEY } }],
+    });
+    // Nothing is running now: a cancel finds nothing.
+    expect(bridge.cancelCompact({ logicalSessionId: LOGICAL })).toEqual({ cancelled: false });
+  });
+
+  it('[180-B-02] the summary landed before the abort reached it: that is the outcome', async () => {
+    const host = fakeHost();
+    fakeCommands(host, {
+      compact: { description: 'compact', handler: slowCompact(host, { land: true }) },
+    });
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+
+    const compacting = bridge.compact({ logicalSessionId: LOGICAL });
+    await vi.waitFor(async () =>
+      expect((await bridge.history({ logicalSessionId: LOGICAL })).page.messages).toHaveLength(2)
+    );
+    expect(bridge.cancelCompact({ logicalSessionId: LOGICAL })).toEqual({ cancelled: true });
+    const result = await compacting;
+    expect(result.compacted).toBe(true);
+    expect(result.summary?.blocks[0]).toMatchObject({ text: 'Context summary\n\nlanded' });
+  });
+
+  it('[180-B-03] past its limit: the timeout reason, retryable; ten minutes by default', async () => {
+    expect(WORKER_COMPACT_BUDGET_MS).toBe(600_000);
+    // Main waits longer than the worker, by more than the worker's settle.
+    expect(WORKER_COMPACT_REQUEST_TIMEOUT_MS - WORKER_COMPACT_BUDGET_MS).toBeGreaterThan(
+      WORKER_COMPACT_SETTLE_MS
+    );
+    const host = fakeHost();
+    const emitted: Emitted[] = [];
+    const commands = fakeCommands(host, {
+      compact: { description: 'compact', handler: slowCompact(host) },
+    });
+    const bridge = runtime(host.ctx, emitted, { compactTimeoutMs: 20 });
+    await bridge.bootstrap();
+
+    const error = await refusal(bridge.compact({ logicalSessionId: LOGICAL }));
+    expect(error).toMatchObject({ code: 'WORKER_COMPACT_TIMEOUT', retryable: true });
+    const signal = commands.execute.mock.calls[0]?.[3] as AbortSignal;
+    expect((signal.reason as Error).message).toBe(AICLIENT_COMPACT_TIMEOUT_REASON);
+    expect(compactionEvents(emitted)[1]).toMatchObject({ note: { key: DSH_COMPACT_TIMEOUT_KEY } });
+    // A cancel after the limit cut it is no cancel.
+    expect(bridge.cancelCompact({ logicalSessionId: LOGICAL })).toEqual({ cancelled: false });
+  });
+
+  it('[180-B-04] DSH never closes it: answered at the settle bound, not left waiting', async () => {
+    const host = fakeHost();
+    fakeCommands(host, {
+      compact: { description: 'compact', handler: slowCompact(host, { close: false }) },
+    });
+    const lines: unknown[][] = [];
+    const bridge = runtime(
+      host.ctx,
+      [],
+      { compactSettleMs: 30 },
+      { log: (...args) => lines.push(args) }
+    );
+    await bridge.bootstrap();
+    const compacting = refusal(bridge.compact({ logicalSessionId: LOGICAL }));
+    await vi.waitFor(() => expect(host.agent).toBeDefined());
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    bridge.cancelCompact({ logicalSessionId: LOGICAL });
+    expect(await compacting).toMatchObject({ code: WORKER_COMPACT_CANCELLED });
+    expect(lines.some((line) => String(line[0]).includes('did not close within 30ms'))).toBe(true);
+  });
+
+  it('[180-B-05] cancelled before DSH started it: nothing logged, still cancelled', async () => {
+    const host = fakeHost();
+    const { engine } = fakeCompaction(host);
+    const commands = fakeCommands(host, {
+      compact: { description: 'compact', handler: compactHandler(host, engine) },
+    });
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+    // Instructions: the lease's first check runs before DSH is asked.
+    const compacting = refusal(
+      bridge.compact({ logicalSessionId: LOGICAL, instructions: 'keep the tests' })
+    );
+    expect(bridge.cancelCompact({ logicalSessionId: LOGICAL })).toEqual({ cancelled: true });
+    expect(await compacting).toMatchObject({ code: WORKER_COMPACT_CANCELLED });
+    // DSH was never asked.
+    expect(commands.execute).not.toHaveBeenCalled();
+  });
+
+  it('[180-B-06] what was typed is kept for the command line, used or not', async () => {
+    const host = fakeHost();
+    fakeCompaction(host);
+    fakeCommands(host, { compact: { description: 'compact', handler: slowCompact(host) } });
+    const bridge = runtime(host.ctx, []);
+    const boot = await bridge.bootstrap();
+
+    const compacting = refusal(
+      bridge.compact({ logicalSessionId: LOGICAL, instructions: '保留未完成的任务' })
+    );
+    await vi.waitFor(async () =>
+      expect((await bridge.history({ logicalSessionId: LOGICAL })).page.messages).toHaveLength(1)
+    );
+    bridge.cancelCompact({ logicalSessionId: LOGICAL });
+    await compacting;
+
+    const stub = JSON.parse(readFileSync(String(boot.sessionFile), 'utf8'));
+    expect(stub.compactInstructions).toEqual([
+      {
+        compactionId: 'slow-1',
+        instructions: '保留未完成的任务',
+        at: 1_700_000_000_000,
+        unused: true,
+      },
+    ]);
+    const rows = (await bridge.history({ logicalSessionId: LOGICAL })).page.messages;
+    expect(rows.map((row) => row.blocks[0]?.id)).toEqual([
+      'h:compact-command-slow-1:compact-command:0',
+      'h:compaction-slow-1:compaction-failed:0',
+    ]);
+    expect(rows[0]?.blocks[0]).toMatchObject({ text: '/compact 保留未完成的任务' });
   });
 });

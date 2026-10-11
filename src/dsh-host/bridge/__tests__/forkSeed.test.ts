@@ -83,6 +83,27 @@ describe('planDshCut — rewind', () => {
     expect(events[31]?.type).toBe('command/done');
   });
 
+  it('[180-CUT] a /compact’s command line or its note: the whole /compact, through its answer', () => {
+    const events = [
+      at(0, 'turn/start', { turn: 1 }),
+      at(1, 'user/message', { id: 'u1', source: { kind: 'user' }, content: [] }),
+      at(2, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(3, 'command/run', { commandId: 'cmd', name: 'compact', args: '' }),
+      at(4, 'compaction/start', { compactionId: 'm', sourceCommandId: 'cmd', turn: null }),
+      // A cancel: the command answers first, then the compaction closes.
+      at(5, 'command/done', { commandId: 'cmd', kind: 'error', text: 'cancelled' }),
+      at(6, 'compaction/end', {
+        compactionId: 'm',
+        sourceCommandId: 'cmd',
+        turn: null,
+        error: 'x',
+      }),
+      at(7, 'turn/start', { turn: 2 }),
+    ];
+    expect(planDshCut(events, 'compact-command-m', 'rewind')).toEqual({ boundary: 6 });
+    expect(planDshCut(events, 'compaction-m', 'fork')).toEqual({ boundary: 6 });
+  });
+
   it('answers undefined for a node the log does not have', () => {
     expect(planDshCut(log('tool'), 'nowhere', 'rewind')).toBeUndefined();
   });

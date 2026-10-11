@@ -78,6 +78,10 @@ export class DshHistoryCache {
   private readonly chainOptions: CacheChainOptions | undefined;
   /** Decision 179: the instructions each `/compact` summarized with, by compaction. */
   private readonly compactInstructions: ((compactionId: string) => string | undefined) | undefined;
+  /** Decision 180: what was typed after each `/compact`, for its command line. */
+  private readonly compactCommandInstructions:
+    | ((compactionId: string) => string | undefined)
+    | undefined;
   private sessionId = '';
   private fold = new DshHistoryFold();
   /** Decision 173: the session's cache chain, at the fold's cursor; undefined when not kept. */
@@ -95,13 +99,15 @@ export class DshHistoryCache {
     log: (...args: unknown[]) => void = () => undefined,
     presentCall?: DshToolPresenter,
     chainOptions?: CacheChainOptions,
-    compactInstructions?: (compactionId: string) => string | undefined
+    compactInstructions?: (compactionId: string) => string | undefined,
+    compactCommandInstructions?: (compactionId: string) => string | undefined
   ) {
     this.query = query;
     this.log = log;
     this.presentCall = presentCall;
     this.chainOptions = chainOptions;
     this.compactInstructions = compactInstructions;
+    this.compactCommandInstructions = compactCommandInstructions;
   }
 
   /** Starts over for `sessionId`; call `load` once the session is open. */
@@ -118,14 +124,18 @@ export class DshHistoryCache {
 
   /**
    * Rows name the ids this session's live events gave them (P1-4d1), a
-   * plugin call the title its live row carried (decision 131), and a
-   * `/compact` summary the instructions it was written with (decision 179).
+   * plugin call the title its live row carried (decision 131), a `/compact`
+   * summary the instructions it was written with (decision 179), and its
+   * command line what was typed (decision 180).
    */
   private newFold(): DshHistoryFold {
     return new DshHistoryFold({
       liveSessionId: this.sessionId,
       ...(this.presentCall ? { presentCall: this.presentCall } : {}),
       ...(this.compactInstructions ? { compactInstructions: this.compactInstructions } : {}),
+      ...(this.compactCommandInstructions
+        ? { compactCommandInstructions: this.compactCommandInstructions }
+        : {}),
     });
   }
 

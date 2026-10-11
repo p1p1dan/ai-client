@@ -75,6 +75,7 @@ function runtime(overrides: Partial<BridgeSessionRuntime> = {}): BridgeSessionRu
     tree: notCalled('tree') as BridgeSessionRuntime['tree'],
     commands: notCalled('commands') as BridgeSessionRuntime['commands'],
     compact: notCalled('compact') as BridgeSessionRuntime['compact'],
+    cancelCompact: notCalled('cancelCompact') as BridgeSessionRuntime['cancelCompact'],
     command: notCalled('command') as BridgeSessionRuntime['command'],
     panels: notCalled('panels') as BridgeSessionRuntime['panels'],
     killJob: notCalled('killJob') as BridgeSessionRuntime['killJob'],
@@ -971,5 +972,114 @@ describe('BridgeRpcServer — withdrawing an interjection (issue #8, decision 17
     expect(messages.find((message) => message.requestId === 'early')).toMatchObject({
       result: { outcome: 'not_found' },
     });
+  });
+});
+
+/**
+ * dsh-rebase decision 180: Esc or Stop on a `/compact` reaches the worker as
+ * `worker.compact.cancel`, which cannot wait its turn on the request chain —
+ * the compaction it cancels holds that chain for up to ten minutes.
+ */
+describe('BridgeRpcServer — worker.compact.cancel (decision 180)', () => {
+  const PAYLOAD = { logicalSessionId: 'logical-1', cwd: '/repo' };
+
+  function serve(overrides: Partial<BridgeSessionRuntime>) {
+    const messages: Array<Record<string, unknown>> = [];
+    const server = new BridgeRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      createRuntime: () => runtime(overrides),
+    });
+    const answer = (requestId: string) =>
+      messages.find((message) => message.requestId === requestId) as
+        | { ok: boolean; result?: unknown; error?: { code: string } }
+        | undefined;
+    return { server, messages, answer };
+  }
+
+  it('[180-RPC-1] answered on arrival while the compaction holds the chain', async () => {
+    let finish: (value: { compacted: true }) => void = () => undefined;
+    const cancelCompact = vi.fn(() => ({ cancelled: true }));
+    const { server, answer } = serve({
+      compact: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+      cancelCompact,
+    });
+    server.receive(request('boot', 'worker.bootstrap', PAYLOAD, 3));
+    server.receive(request('compact', 'worker.compact', { logicalSessionId: 'logical-1' }, 3));
+    await vi.waitFor(() => expect(answer('boot')).toBeDefined());
+    // Something else queued behind the compaction, as Stop used to be.
+    server.receive(
+      request('stop', 'worker.stop', { logicalSessionId: 'logical-1', reason: 'user' }, 3)
+    );
+    server.receive(
+      request('cancel', 'worker.compact.cancel', { logicalSessionId: 'logical-1' }, 3)
+    );
+    expect(answer('cancel')).toMatchObject({ ok: true, result: { cancelled: true } });
+    expect(cancelCompact).toHaveBeenCalledWith({ logicalSessionId: 'logical-1' });
+    expect(answer('compact')).toBeUndefined();
+    expect(answer('stop')).toBeUndefined();
+    finish({ compacted: true });
+    await vi.waitFor(() => expect(answer('stop')).toBeDefined());
+    expect(answer('compact')).toMatchObject({ ok: true });
+  });
+
+  it('[180-RPC-2] a compaction still waiting on the chain is cancelled before it runs', async () => {
+    let release: () => void = () => undefined;
+    const compact = vi.fn(async () => ({ compacted: true as const }));
+    const { server, answer } = serve({
+      history: () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({
+              logicalSessionId: 'logical-1',
+              sessionFile: '/s',
+              workspacePath: '/repo',
+              page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+            });
+        }),
+      compact,
+      // Nothing is running yet.
+      cancelCompact: () => ({ cancelled: false }),
+    });
+    server.receive(request('boot', 'worker.bootstrap', PAYLOAD, 3));
+    server.receive(request('history', 'worker.history', { logicalSessionId: 'logical-1' }, 3));
+    server.receive(request('compact', 'worker.compact', { logicalSessionId: 'logical-1' }, 3));
+    await vi.waitFor(() => expect(answer('boot')).toBeDefined());
+    server.receive(
+      request('cancel', 'worker.compact.cancel', { logicalSessionId: 'logical-1' }, 3)
+    );
+    expect(answer('cancel')).toMatchObject({ ok: true, result: { cancelled: true } });
+    release();
+    await vi.waitFor(() => expect(answer('compact')).toBeDefined());
+    expect(answer('compact')).toMatchObject({
+      ok: false,
+      error: { code: 'WORKER_COMPACT_CANCELLED' },
+    });
+    expect(compact).not.toHaveBeenCalled();
+    // The next compaction is not touched by that cancel.
+    server.receive(request('again', 'worker.compact', { logicalSessionId: 'logical-1' }, 3));
+    await vi.waitFor(() => expect(answer('again')).toMatchObject({ ok: true }));
+    expect(compact).toHaveBeenCalledTimes(1);
+  });
+
+  it('[180-RPC-3] nothing to cancel, another generation, a bad payload, no runtime', async () => {
+    const { server, answer } = serve({ cancelCompact: () => ({ cancelled: false }) });
+    server.receive(request('early', 'worker.compact.cancel', { logicalSessionId: 'logical-1' }, 3));
+    expect(answer('early')).toMatchObject({ ok: true, result: { cancelled: false } });
+    server.receive(request('boot', 'worker.bootstrap', PAYLOAD, 3));
+    await vi.waitFor(() => expect(answer('boot')).toBeDefined());
+    server.receive(request('idle', 'worker.compact.cancel', { logicalSessionId: 'logical-1' }, 3));
+    expect(answer('idle')).toMatchObject({ ok: true, result: { cancelled: false } });
+    server.receive(request('stale', 'worker.compact.cancel', { logicalSessionId: 'logical-1' }, 2));
+    expect(answer('stale')).toMatchObject({
+      ok: false,
+      error: { code: 'WORKER_STALE_GENERATION' },
+    });
+    server.receive(request('bad', 'worker.compact.cancel', {}, 3));
+    expect(answer('bad')).toMatchObject({ ok: false, error: { code: 'WORKER_INVALID_PAYLOAD' } });
   });
 });

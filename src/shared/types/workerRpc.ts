@@ -277,9 +277,49 @@ export const WORKER_COMPACT_INSTRUCTIONS_TOO_LONG = 'WORKER_COMPACT_INSTRUCTIONS
  * while the worker was still on its way to writing the summary to the session
  * file — a disagreement between the screen and the disk that survives into the
  * next resume.
+ *
+ * dsh-rebase decision 180 (user ruling 2026-10-11): ten minutes, not 45 s. On
+ * the company gateway GPT 6.1 Sol writes about 30 tokens a second, so a
+ * summary of a few thousand tokens outlived 45 s every time; the other models
+ * took 15-29 s. Main waits half a minute longer: after cancelling, the worker
+ * waits up to `WORKER_COMPACT_SETTLE_MS` for the engine to close the
+ * compaction and reads the summary row back before it answers. A wait this
+ * long can be cut short by hand (`worker.compact.cancel`).
  */
-export const WORKER_COMPACT_BUDGET_MS = 45_000;
-export const WORKER_COMPACT_REQUEST_TIMEOUT_MS = 60_000;
+export const WORKER_COMPACT_BUDGET_MS = 600_000;
+export const WORKER_COMPACT_REQUEST_TIMEOUT_MS = 630_000;
+/**
+ * Decision 180: after a cancel or the budget, how long the worker waits for
+ * the engine to close the compaction it cut short (`compaction/end`) before it
+ * answers — so the answer comes after the log says so, and a `/compact` sent
+ * right after does not meet the first one still unwinding.
+ */
+export const WORKER_COMPACT_SETTLE_MS = 5_000;
+
+/**
+ * Decision 180: `worker.compact.cancel` — the user pressed Esc or Stop while
+ * this session's `/compact` ran. Unlike every other request it does not wait
+ * its turn on the worker's one request chain (`bridgeRpcServer.ts`): the
+ * compaction it cancels is what holds that chain. A compaction still waiting
+ * on the chain is cancelled before it runs.
+ */
+export interface WorkerCompactCancelPayload {
+  logicalSessionId: string;
+}
+
+/** `cancelled`: a compaction was running or waiting, and now will not compact. */
+export interface WorkerCompactCancelResult {
+  cancelled: boolean;
+}
+
+/** Main's own wait for `worker.compact.cancel`, which the worker answers at once. */
+export const WORKER_COMPACT_CANCEL_TIMEOUT_MS = 5_000;
+
+/**
+ * Decision 180: `worker.compact` cut short by `worker.compact.cancel` before
+ * its summary was written; nothing was compacted.
+ */
+export const WORKER_COMPACT_CANCELLED = 'WORKER_COMPACT_CANCELLED';
 
 export interface WorkerCompactResult {
   compacted: true;
@@ -774,6 +814,10 @@ export type WorkerHistoryRequest = WorkerRpcRequest<'worker.history', WorkerHist
 export type WorkerTreeRequest = WorkerRpcRequest<'worker.tree', WorkerTreePayload>;
 export type WorkerCommandsRequest = WorkerRpcRequest<'worker.commands', WorkerCommandsPayload>;
 export type WorkerCompactRequest = WorkerRpcRequest<'worker.compact', WorkerCompactPayload>;
+export type WorkerCompactCancelRequest = WorkerRpcRequest<
+  'worker.compact.cancel',
+  WorkerCompactCancelPayload
+>;
 export type WorkerCommandRequest = WorkerRpcRequest<'worker.command', WorkerCommandPayload>;
 export type WorkerPanelsRequest = WorkerRpcRequest<'worker.panels', WorkerPanelsPayload>;
 export type WorkerJobKillRequest = WorkerRpcRequest<'worker.job.kill', WorkerJobKillPayload>;
@@ -1260,6 +1304,14 @@ export function isWorkerCompactPayload(value: unknown): value is WorkerCompactPa
     isLogicalSessionPayload(value) &&
     (value.instructions === undefined || typeof value.instructions === 'string')
   );
+}
+
+export function isWorkerCompactCancelPayload(value: unknown): value is WorkerCompactCancelPayload {
+  return isLogicalSessionPayload(value);
+}
+
+export function isWorkerCompactCancelResult(value: unknown): value is WorkerCompactCancelResult {
+  return isRecord(value) && typeof value.cancelled === 'boolean';
 }
 
 export function isWorkerRewindPayload(value: unknown): value is WorkerRewindPayload {

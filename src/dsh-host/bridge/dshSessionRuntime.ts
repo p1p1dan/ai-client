@@ -116,9 +116,14 @@ import { open } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { readCompactInstructions } from '../../shared/compactInstructions.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
-import { projectDshHistory } from '../../shared/dshHistory/projection.ts';
+import {
+  type DshHistoryFoldOptions,
+  projectDshHistory,
+} from '../../shared/dshHistory/projection.ts';
 import { dshLeafCheckpoint, dshTreeNodeId } from '../../shared/dshHistory/tree.ts';
 import {
+  AICLIENT_COMPACT_CANCELLED_REASON,
+  AICLIENT_COMPACT_TIMEOUT_REASON,
   DSH_RETRY_CONTINUATION_TEXT,
   DSH_SOURCE_AICLIENT_RETRY,
   type DshLogEvent,
@@ -175,8 +180,10 @@ import {
   WORKER_COMMAND_TIMEOUT,
   WORKER_COMMAND_UNKNOWN,
   WORKER_COMPACT_BUDGET_MS,
+  WORKER_COMPACT_CANCELLED,
   WORKER_COMPACT_INSTRUCTIONS_TOO_LONG,
   WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
+  WORKER_COMPACT_SETTLE_MS,
   WORKER_RETRY_UNAVAILABLE,
   WORKER_REWIND_JOBS_RUNNING,
   type WorkerAcceptForkPayload,
@@ -186,6 +193,8 @@ import {
   type WorkerCommandResult,
   type WorkerCommandsPayload,
   type WorkerCommandsResult,
+  type WorkerCompactCancelPayload,
+  type WorkerCompactCancelResult,
   type WorkerCompactPayload,
   type WorkerCompactResult,
   type WorkerDiscardForkPayload,
@@ -369,6 +378,26 @@ interface DshAgent {
    * the agent is not idle.
    */
   runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;
+}
+
+/**
+ * Decision 180: one `/compact`, from `worker.compact` to its answer. The
+ * controller is what a cancel or the time limit aborts; `abortReason` is
+ * which. `compactionId` and `closed` follow DSH's `compaction/start` and
+ * `/end` for it, so a cancelled one can wait for DSH to let go.
+ */
+interface CompactRun {
+  readonly controller: AbortController;
+  /** What was typed after `/compact`, read as decision 179 reads it; none for `/compact` alone. */
+  readonly instructions: string | undefined;
+  /** Decision 179: the summary request's lease, while instructions are being carried. */
+  lease: CompactInstructionsLease | null;
+  abortReason?: 'cancelled' | 'timeout';
+  compactionId?: string;
+  closed: boolean;
+  onClosed?: () => void;
+  /** `compactNotes` changed for this run: the stub is written when it ends. */
+  notesChanged: boolean;
 }
 
 interface DshAgentHandle {
@@ -605,6 +634,11 @@ export interface DshBridgeDeps {
    * (`WORKER_COMPACT_BUDGET_MS`, inside Main's own wait); tests shorten it.
    */
   compactTimeoutMs?: number;
+  /**
+   * Decision 180: how long a cancelled `/compact` waits for DSH to close the
+   * compaction it cut short (`WORKER_COMPACT_SETTLE_MS`); tests shorten it.
+   */
+  compactSettleMs?: number;
   /** The same for `worker.command` (`WORKER_COMMAND_BUDGET_MS`); tests shorten it. */
   commandTimeoutMs?: number;
   /**
@@ -812,8 +846,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
    * with, as the stub keeps them; the history's summary rows read them.
    */
   private compactNotes: StubCompactInstructions[] = [];
-  /** Decision 179: the `/compact` with instructions running now, and its compaction once logged. */
-  private compactRun: { lease: CompactInstructionsLease; compactionId?: string } | null = null;
+  /** Decisions 179, 180: the `/compact` running now, from its call to its answer. */
+  private compactRun: CompactRun | null = null;
   /** Fork stubs written here that Main has not adopted yet -> their DSH session. */
   private readonly stagedForks = new Map<string, string>();
   /**
@@ -885,7 +919,9 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       presentCall,
       deps.cacheChain ? dshCacheChainOptions(() => deps.modelPlan?.()) : undefined,
       // Decision 179: a `/compact` summary with the instructions it was written with.
-      (compactionId) => this.compactInstructionsOf(compactionId)
+      (compactionId) => this.compactInstructionsOf(compactionId),
+      // Decision 180: and its command line with what was typed.
+      (compactionId) => this.compactCommandInstructionsOf(compactionId)
     );
     this.retired = new DshRetiredHistory(this.query, options.log);
     this.router = new DshModelRouter(() => deps.modelPlan?.(), options.log);
@@ -954,6 +990,16 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       },
       now: this.now,
       presentCall,
+      // Decision 180: the `/compact` this runtime runs, shown in the timeline.
+      manualCompaction: () => {
+        const run = this.compactRun;
+        if (!run) return undefined;
+        return {
+          ...(run.instructions !== undefined ? { instructions: run.instructions } : {}),
+          ...(run.abortReason ? { abortReason: run.abortReason } : {}),
+        };
+      },
+      compactInstructions: (compactionId) => this.compactInstructionsOf(compactionId),
       cacheStep: (seq) => this.historyCache.cacheStep(seq),
       prefixEvidence: () => this.prefixEvidence(),
       ...(deps.sessionMetadata
@@ -1633,6 +1679,15 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
    * runtime bounded its summary: the command is cancelled at
    * `compactTimeoutMs`, before Main's own wait ends, so Main's answer is
    * what the log has. Compacted only when DSH names the summary it wrote.
+   *
+   * Decision 180: ten minutes, and the user can cut it short
+   * (`cancelCompact`, `worker.compact.cancel`). Either way the abort carries
+   * its reason, which DSH logs as the command's answer, so the history can
+   * say which it was. The live translation shows it as an automatic
+   * compaction is shown — its command line, then its row (`liveEvents.ts`).
+   * What was typed is kept beside the stub from the moment the compaction
+   * starts, so the command line reads the same after a reopen whatever the
+   * outcome.
    */
   async compact(input: WorkerCompactPayload): Promise<WorkerCompactResult> {
     this.assertLogicalSession(input.logicalSessionId);
@@ -1643,24 +1698,68 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
         `/compact instructions are ${instructions.length} characters, more than the ${instructions.max} taken; nothing was compacted`
       );
     }
-    await this.bootstrap();
-    this.assertIdle('compact the conversation');
-    const agent = this.requireAgent();
-    const commands = this.ctx.get?.('commands');
-    if (!commands || commands.find(agent, 'compact') === undefined) {
-      throw new BridgeSessionError(WORKER_COMPACT_UNAVAILABLE, 'This host has no /compact command');
+    if (this.compactRun) {
+      throw new BridgeSessionError(
+        'WORKER_SESSION_BUSY',
+        'A compaction of this conversation is already running',
+        true
+      );
     }
-    const lease =
-      instructions.kind === 'ok' ? await this.leaseCompactInstructions(instructions.text) : null;
+    // Decision 180: registered before the first wait, so a cancel finds it from here on.
+    const run: CompactRun = {
+      controller: new AbortController(),
+      instructions: instructions.kind === 'ok' ? instructions.text : undefined,
+      lease: null,
+      closed: false,
+      notesChanged: false,
+    };
+    this.compactRun = run;
     try {
-      // The lease may have waited for the hook's first check: still idle?
-      if (lease) this.assertIdle('compact the conversation');
-      this.compactRun = lease ? { lease } : null;
-      return await this.runCompact(agent, commands, lease);
+      await this.bootstrap();
+      this.assertIdle('compact the conversation');
+      const agent = this.requireAgent();
+      const commands = this.ctx.get?.('commands');
+      if (!commands || commands.find(agent, 'compact') === undefined) {
+        throw new BridgeSessionError(
+          WORKER_COMPACT_UNAVAILABLE,
+          'This host has no /compact command'
+        );
+      }
+      if (run.instructions !== undefined) {
+        run.lease = await this.leaseCompactInstructions(run.instructions);
+        // The lease may have waited for the hook's first check: still idle?
+        this.assertIdle('compact the conversation');
+      }
+      return await this.runCompact(agent, commands, run);
     } finally {
       this.compactRun = null;
-      lease?.release();
+      run.lease?.release();
+      if (run.notesChanged) this.keepCompactNotes();
     }
+  }
+
+  /**
+   * Decision 180: Esc or Stop on a running `/compact`. Answered at once, off
+   * the request chain the compaction holds (`bridgeRpcServer.ts`); the
+   * compaction itself answers `WORKER_COMPACT_CANCELLED` once DSH has let go
+   * of it — or `compacted`, when its summary was already written.
+   */
+  cancelCompact(input: WorkerCompactCancelPayload): WorkerCompactCancelResult {
+    this.assertLogicalSession(input.logicalSessionId);
+    const run = this.compactRun;
+    return { cancelled: run ? this.abortCompact(run, 'cancelled') : false };
+  }
+
+  /** Decision 180: abort with the reason DSH will log as the command's answer. */
+  private abortCompact(run: CompactRun, reason: 'cancelled' | 'timeout'): boolean {
+    if (run.controller.signal.aborted) return false;
+    run.abortReason = reason;
+    run.controller.abort(
+      new Error(
+        reason === 'cancelled' ? AICLIENT_COMPACT_CANCELLED_REASON : AICLIENT_COMPACT_TIMEOUT_REASON
+      )
+    );
+    return true;
   }
 
   /** Decision 179: this session's summary request will carry `text`, or the refusal says why not. */
@@ -1690,22 +1789,25 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   private async runCompact(
     agent: DshAgent,
     commands: DshCommandsView,
-    lease: CompactInstructionsLease | null
+    run: CompactRun
   ): Promise<WorkerCompactResult> {
     const budgetMs = this.deps.compactTimeoutMs ?? WORKER_COMPACT_BUDGET_MS;
     // Decision 140: the summary row already on the timeline, so the one this
     // command writes is told apart from it.
     const summaryBefore = (await this.historyCache.ready()) ? this.lastSummaryRow()?.id : undefined;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), budgetMs);
+    const { signal } = run.controller;
+    // Decision 180: cancelled before DSH was asked (while the lease was armed).
+    if (signal.aborted) return this.afterAbortedCompact(run, summaryBefore, budgetMs);
+    const timer = setTimeout(() => this.abortCompact(run, 'timeout'), budgetMs);
     let execution: DshCommandExecution | undefined;
     try {
-      execution = await commands.execute(agent, '/compact', [], controller.signal);
+      execution = await commands.execute(agent, '/compact', [], signal);
     } catch (error) {
-      if (!controller.signal.aborted) throw error;
+      if (!signal.aborted) throw error;
     } finally {
       clearTimeout(timer);
     }
+    const lease = run.lease;
     // Decision 179: the summary request could not carry the instructions, so
     // it was never sent and the compaction failed — say why, not DSH's
     // "could not produce a useful summary".
@@ -1716,32 +1818,87 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
         `this engine cannot add instructions to /compact (${lease.refused}); nothing was compacted`
       );
     }
-    if (controller.signal.aborted) {
-      throw new BridgeSessionError(
-        WORKER_COMPACT_TIMEOUT,
-        `summarizing the conversation took longer than ${budgetMs}ms; it was cancelled`,
-        true
-      );
-    }
+    if (signal.aborted) return this.afterAbortedCompact(run, summaryBefore, budgetMs);
     const outcome = compactOutcome(execution);
     if (!('compacted' in outcome)) throw new BridgeSessionError(outcome.code, outcome.message);
-    const applied = this.settleCompactInstructions(lease);
+    return this.compactedAnswer(run, summaryBefore);
+  }
+
+  /**
+   * Decision 180: cancelled, or past the time limit. DSH's command answers
+   * the abort at once while its compaction unwinds behind it; the answer
+   * waits (bounded) for the compaction to close, so it comes after the log
+   * says so. DSH commits a summary before its last look at the signal: one
+   * that landed is the outcome, however late the abort came.
+   */
+  private async afterAbortedCompact(
+    run: CompactRun,
+    summaryBefore: string | undefined,
+    budgetMs: number
+  ): Promise<WorkerCompactResult> {
+    await this.untilCompactionClosed(run);
+    const landed = (await this.historyCache.ready()) ? this.lastSummaryRow() : undefined;
+    if (landed && landed.id !== summaryBefore) {
+      this.options.log?.('[dsh-bridge] /compact wrote its summary before the abort reached it');
+      return this.compactedAnswer(run, summaryBefore);
+    }
+    if (run.abortReason === 'cancelled') {
+      throw new BridgeSessionError(
+        WORKER_COMPACT_CANCELLED,
+        'the compaction was cancelled before its summary was written; nothing was compacted',
+        false
+      );
+    }
+    throw new BridgeSessionError(
+      WORKER_COMPACT_TIMEOUT,
+      `summarizing the conversation took longer than ${budgetMs}ms; it was cancelled`,
+      true
+    );
+  }
+
+  /** Decision 180: DSH's `compaction/end` for the compaction `run` started, or the settle bound. */
+  private async untilCompactionClosed(run: CompactRun): Promise<void> {
+    if (run.compactionId === undefined || run.closed) return;
+    const settleMs = this.deps.compactSettleMs ?? WORKER_COMPACT_SETTLE_MS;
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        run.onClosed = undefined;
+        this.options.log?.(
+          `[dsh-bridge] /compact did not close within ${settleMs}ms of its abort; answering anyway`
+        );
+        resolve();
+      }, settleMs);
+      run.onClosed = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+    });
+  }
+
+  /**
+   * Compacted: with the summary row the history now shows (decision 140),
+   * and, when instructions were given, whether they were used (decision 179).
+   */
+  private async compactedAnswer(
+    run: CompactRun,
+    summaryBefore: string | undefined
+  ): Promise<WorkerCompactResult> {
+    const applied = this.settleCompactInstructions(run.lease);
     // Decision 140: the row the history will show for it, handed back with the
-    // answer (no live event: decision 113 rule 8 stands). A cache that cannot
-    // read it back costs the row only; the compaction itself succeeded.
+    // answer. A cache that cannot read it back costs the row only; the
+    // compaction itself succeeded.
     const summary = (await this.historyCache.ready()) ? this.lastSummaryRow() : undefined;
     return {
-      ...outcome,
+      compacted: true,
       ...(summary && summary.id !== summaryBefore ? { summary } : {}),
       ...(applied !== undefined ? { instructionsApplied: applied } : {}),
     };
   }
 
   /**
-   * Decision 179, a compaction that wrote its summary: the instructions are
-   * kept beside the stub for its row, or, when the summary went out without
-   * them, the hook is marked unusable and the answer says so. Undefined when
-   * no instructions were given.
+   * Decision 179, a compaction that wrote its summary: whether its request
+   * carried the instructions. When it went out without them, the hook is
+   * marked unusable and the answer says so. Undefined when none were given.
    */
   private settleCompactInstructions(lease: CompactInstructionsLease | null): boolean | undefined {
     if (!lease) return undefined;
@@ -1750,26 +1907,59 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       this.options.log?.('[dsh-bridge] /compact summarized without its instructions');
       return false;
     }
-    const compactionId = this.compactRun?.compactionId;
-    if (!compactionId) return true;
-    this.compactNotes = withCompactInstructionsNote(this.compactNotes, {
-      compactionId,
-      instructions: lease.text,
-      at: this.now(),
-    });
-    try {
-      const stub = readStub(this.stubFile);
-      this.writeStub(this.stubFile, { ...stub, compactInstructions: this.compactNotes });
-    } catch (error) {
-      // The summary stands; only a reopen will not show the instructions under it.
-      this.options.log?.('[dsh-bridge] /compact instructions not kept beside the stub', error);
-    }
     return true;
   }
 
   /** Decision 179: the instructions the `/compact` of `compactionId` summarized with. */
   private compactInstructionsOf(compactionId: string): string | undefined {
+    return this.compactNotes.find((note) => note.compactionId === compactionId && !note.unused)
+      ?.instructions;
+  }
+
+  /** Decision 180: what was typed after the `/compact` of `compactionId`, used or not. */
+  private compactCommandInstructionsOf(compactionId: string): string | undefined {
     return this.compactNotes.find((note) => note.compactionId === compactionId)?.instructions;
+  }
+
+  /** Decisions 179, 180: both lookups, for a fold of this chat's log. */
+  private compactLookups(): Pick<
+    DshHistoryFoldOptions,
+    'compactInstructions' | 'compactCommandInstructions'
+  > {
+    return {
+      compactInstructions: (compactionId) => this.compactInstructionsOf(compactionId),
+      compactCommandInstructions: (compactionId) => this.compactCommandInstructionsOf(compactionId),
+    };
+  }
+
+  /**
+   * Decision 180: the `/compact` this runtime runs started (or closed) its
+   * compaction. Called before the history folds the event, so the command
+   * line it projects reads what was typed.
+   */
+  private noteManualCompaction(event: DshSessionEvent): void {
+    const run = this.compactRun;
+    const data = event.data ?? {};
+    const compactionId = typeof data.compactionId === 'string' ? data.compactionId : undefined;
+    if (!run || !compactionId) return;
+    if (event.type === 'compaction/start') {
+      if (typeof data.turn === 'number' || run.compactionId !== undefined) return;
+      run.compactionId = compactionId;
+      if (run.instructions === undefined) return;
+      this.compactNotes = withCompactInstructionsNote(this.compactNotes, {
+        compactionId,
+        instructions: run.instructions,
+        at: this.now(),
+        unused: true,
+      });
+      run.notesChanged = true;
+      return;
+    }
+    if (event.type === 'compaction/end' && compactionId === run.compactionId) {
+      run.closed = true;
+      run.onClosed?.();
+      run.onClosed = undefined;
+    }
   }
 
   /**
@@ -1779,16 +1969,28 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
    */
   private noteCompactionSummary(event: DshSessionEvent): void {
     const run = this.compactRun;
-    if (!run?.lease.applied) return;
+    if (!run?.lease?.applied || run.instructions === undefined) return;
     const compactionId =
       typeof event.data?.compactionId === 'string' ? event.data.compactionId : undefined;
     if (!compactionId) return;
-    run.compactionId = compactionId;
+    run.compactionId ??= compactionId;
     this.compactNotes = withCompactInstructionsNote(this.compactNotes, {
       compactionId,
-      instructions: run.lease.text,
+      instructions: run.instructions,
       at: this.now(),
     });
+    run.notesChanged = true;
+  }
+
+  /** Decisions 179, 180: what was typed after each `/compact`, beside the stub. */
+  private keepCompactNotes(): void {
+    try {
+      const stub = readStub(this.stubFile);
+      this.writeStub(this.stubFile, { ...stub, compactInstructions: this.compactNotes });
+    } catch (error) {
+      // The compaction's outcome stands; only a reopen will not show the instructions.
+      this.options.log?.('[dsh-bridge] /compact instructions not kept beside the stub', error);
+    }
   }
 
   /** The newest context-summary row of the timeline (`isDshSummaryRow`), if any. */
@@ -2597,9 +2799,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       created = await this.createChild(() => childId, 1, cut);
       await this.ctx.sessions.flush(created.handle.agent.session);
       const events = await readSessionEvents(this.query, childId);
-      const messages = projectDshHistory(events, {
-        compactInstructions: (compactionId) => this.compactInstructionsOf(compactionId),
-      });
+      const messages = projectDshHistory(events, this.compactLookups());
       const at = this.now();
       this.writeStub(childStub, {
         engine: 'dsh',
@@ -3046,6 +3246,10 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
         }
         // Decision 179: before the fold meets the checkpoint this summary precedes.
         if (event.type === 'compaction/summary') this.noteCompactionSummary(event);
+        // Decision 180: before the fold projects the command line it starts.
+        if (event.type === 'compaction/start' || event.type === 'compaction/end') {
+          this.noteManualCompaction(event as DshSessionEvent);
+        }
         // The history first: the live translation reads the fold (usage steps, goal budget).
         try {
           this.historyCache.push(event);

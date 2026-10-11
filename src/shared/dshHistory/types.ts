@@ -157,8 +157,9 @@ export const DSH_COMPACTION_FAILED_PART = 'compaction-failed';
 
 /**
  * Decision 178: the notes, dictionary keys in English like every projected
- * byte (the row's `notice.key`). The running line is the composer's own
- * `/compact` status line (decision 176), so one dictionary entry serves both.
+ * byte (the row's `notice.key`). The running line is the one decision 176
+ * gave the composer's `/compact` status line; since decision 180 a `/compact`
+ * runs in the timeline too, on this same row.
  */
 export const DSH_COMPACTION_RUNNING_KEY = 'Compacting the context…';
 /** A pressure compaction failed; the step goes on with the context it had. */
@@ -195,6 +196,108 @@ export function isDshCompactionNoteRow(message: {
     first === dshCompactionNoteBlockId(message.id, DSH_COMPACTION_RUNNING_PART) ||
     first === dshCompactionNoteBlockId(message.id, DSH_COMPACTION_FAILED_PART)
   );
+}
+
+/**
+ * dsh-rebase decision 180: a `/compact` the user ran shows in the timeline as
+ * an automatic compaction does — its command line, then the compaction's own
+ * row (running, then the summary, or a note saying why there is none). The
+ * command line is a system row whose first block is `<row id>:compact-command:0`;
+ * live it is `dsh-compact-command-<compactionId>`, and the history names that
+ * id on the row it projects from the same `compaction/start`.
+ */
+export const DSH_COMPACT_COMMAND_PART = 'compact-command';
+/**
+ * Part-id kind of a context summary's line about the `/compact` instructions
+ * it was written with (decision 179): `<row id>:compact-instructions:0`.
+ */
+export const DSH_COMPACT_INSTRUCTIONS_PART = 'compact-instructions';
+export const DSH_COMPACT_COMMAND_LIVE_ID_PREFIX = 'dsh-compact-command-';
+
+export function dshCompactCommandLiveId(compactionId: string): string {
+  return `${DSH_COMPACT_COMMAND_LIVE_ID_PREFIX}${compactionId}`;
+}
+
+/** The command line's text: `/compact`, and what was typed after it. */
+export function dshCompactCommandText(instructions: string | undefined): string {
+  return instructions ? `/compact ${instructions}` : '/compact';
+}
+
+/** Whether a timeline row is a `/compact` command line (decision 180), by its first block. */
+export function isDshCompactCommandRow(message: {
+  readonly id: string;
+  readonly role: string;
+  readonly blocks: readonly { readonly id: string }[];
+}): boolean {
+  return (
+    message.role === 'system' &&
+    message.blocks[0]?.id === `${message.id}:${DSH_COMPACT_COMMAND_PART}:0`
+  );
+}
+
+/**
+ * Decision 180: why the bridge aborted a `/compact`. DSH's command logs the
+ * abort reason's message as its `command/done` text (`dsh-commands`
+ * `withAbort`), so the history can tell a cancel from the time limit — the
+ * same way the step ceiling's cut is told apart (`AICLIENT_TURN_CEILING_REASON`).
+ */
+export const AICLIENT_COMPACT_CANCELLED_REASON = 'aiclient: /compact was cancelled by the user';
+export const AICLIENT_COMPACT_TIMEOUT_REASON =
+  'aiclient: /compact ran past its time limit and was cancelled';
+
+/**
+ * Decision 180: the notes a `/compact` that wrote no summary leaves where it
+ * ran, dictionary keys like every projected byte. The first three are the
+ * composer's own words for the same outcomes (decision 176).
+ */
+export const DSH_COMPACT_CANCELLED_KEY = 'Compaction cancelled. Nothing was compacted.';
+export const DSH_COMPACT_TIMEOUT_KEY =
+  'Summarizing took too long, so the compaction was cancelled. Nothing was compacted.';
+export const DSH_COMPACT_NO_SUMMARY_KEY =
+  'No useful summary could be written, so nothing was compacted. The attempt is recorded in the session log.';
+/** DSH's own sentence follows (`{{reason}}`): a history that changed under it, say. */
+export const DSH_COMPACT_FAILED_REASON_KEY =
+  'The compaction did not succeed, and nothing was compacted: {{reason}}';
+export const DSH_COMPACT_FAILED_KEY = 'The compaction did not succeed, and nothing was compacted.';
+/** Started and never closed: the engine went away under it. */
+export const DSH_COMPACT_INTERRUPTED_KEY =
+  'The compaction did not finish; the context was not compacted.';
+/** Live only, while the conversation is being started for it (decision 176). */
+export const DSH_COMPACT_STARTING_KEY = 'Starting the conversation…';
+
+/** How much of DSH's sentence a note keeps. */
+const COMPACT_REASON_CHARS = 500;
+
+export interface DshCompactNote {
+  key: string;
+  params?: Record<string, string>;
+}
+
+/**
+ * Decision 180: the note a `/compact` that ended without a summary leaves,
+ * from what its `command/done` said (the abort reason the bridge gave, or
+ * DSH's sentence). The bridge's live row, the history's row and the
+ * composer's settle all read it here, so the three say the same.
+ */
+export function dshCompactNote(doneText: string | undefined): DshCompactNote {
+  const text = doneText?.trim();
+  if (!text) return { key: DSH_COMPACT_FAILED_KEY };
+  if (text === AICLIENT_COMPACT_CANCELLED_REASON) return { key: DSH_COMPACT_CANCELLED_KEY };
+  if (text === AICLIENT_COMPACT_TIMEOUT_REASON) return { key: DSH_COMPACT_TIMEOUT_KEY };
+  if (/could not produce a (?:useful|smaller) summary/iu.test(text)) {
+    return { key: DSH_COMPACT_NO_SUMMARY_KEY };
+  }
+  // DSH's own cancel (the agent was disposed under it), not the user's.
+  if (/^compaction cancelled\.?$/iu.test(text)) return { key: DSH_COMPACT_INTERRUPTED_KEY };
+  const reason =
+    text.length > COMPACT_REASON_CHARS ? `${text.slice(0, COMPACT_REASON_CHARS)}…` : text;
+  return { key: DSH_COMPACT_FAILED_REASON_KEY, params: { reason } };
+}
+
+/** The English rendering of a note, for a row's `text` (the renderer translates `notice`). */
+export function dshCompactNoteText(note: DshCompactNote): string {
+  const reason = note.params?.reason;
+  return reason === undefined ? note.key : note.key.replace('{{reason}}', () => reason);
 }
 
 /** What a tree node is, beyond its role (`SessionTreeNode.entryType`). */

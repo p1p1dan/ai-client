@@ -202,6 +202,11 @@ type NodeKind =
   | 'step'
   /** A compaction checkpoint: through the compaction's end. */
   | 'checkpoint'
+  /**
+   * Decision 180: a `/compact`'s command line, or the note it left: the whole
+   * `/compact`, through its compaction's end and its command's answer.
+   */
+  | 'compact'
   /** A row a turn end synthesized, or any other single event. */
   | 'event';
 
@@ -259,6 +264,29 @@ function locate(events: readonly DshLogEvent[], nodeId: string): LocatedNode | u
         }
         break;
       }
+      case 'compaction/start': {
+        // Decision 180: a `/compact`'s command line (`projection.ts`).
+        const compactionId = stringOf(data?.compactionId);
+        if (compactionId && nodeId === `compact-command-${compactionId}`) {
+          return { kind: 'compact', seq: event.seq, turnStartSeq };
+        }
+        break;
+      }
+      case 'compaction/end': {
+        // Decisions 178, 180: the note a compaction that wrote no summary left.
+        const compactionId = stringOf(data?.compactionId);
+        if (compactionId && nodeId === `compaction-${compactionId}`) {
+          const start = events.find(
+            (candidate) =>
+              candidate.type === 'compaction/start' &&
+              recordOf(candidate.data)?.compactionId === compactionId
+          );
+          return start && typeof recordOf(start.data)?.turn !== 'number'
+            ? { kind: 'compact', seq: start.seq, turnStartSeq }
+            : { kind: 'event', seq: event.seq, turnStartSeq };
+        }
+        break;
+      }
       case 'turn/end':
         if (
           anchor !== undefined &&
@@ -307,6 +335,35 @@ function checkpointEnd(events: readonly DshLogEvent[], seq: number): number {
     ) {
       return event.seq;
     }
+  }
+  return end;
+}
+
+/**
+ * Decision 180: a `/compact` kept whole, from its `compaction/start` at
+ * `seq`: through its compaction's end and its command's answer, whichever
+ * comes last (an abort's answer comes first). Nothing past the next turn.
+ */
+function manualCompactEnd(events: readonly DshLogEvent[], seq: number): number {
+  const start = events.find((event) => event.seq === seq);
+  const data = recordOf(start?.data);
+  const compactionId = stringOf(data?.compactionId);
+  const commandId = stringOf(data?.sourceCommandId);
+  let end = seq;
+  let ended = false;
+  let answered = commandId === undefined;
+  for (const event of events) {
+    if (event.seq <= seq) continue;
+    if (event.type === 'turn/start') break;
+    const fields = recordOf(event.data);
+    if (event.type === 'compaction/end' && fields?.compactionId === compactionId) {
+      end = Math.max(end, event.seq);
+      ended = true;
+    } else if (event.type === 'command/done' && fields?.commandId === commandId) {
+      end = Math.max(end, event.seq);
+      answered = true;
+    }
+    if (ended && answered) break;
   }
   return end;
 }
@@ -411,6 +468,9 @@ export function planDshCut(
       break;
     case 'checkpoint':
       boundary = checkpointEnd(events, node.seq);
+      break;
+    case 'compact':
+      boundary = manualCompactEnd(events, node.seq);
       break;
     default:
       boundary = node.seq;

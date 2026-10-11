@@ -79,6 +79,32 @@ export interface StubCompactInstructions {
   instructions: string;
   /** Epoch milliseconds. */
   at: number;
+  /**
+   * Decision 180: typed, but the summary was not written with them — the
+   * compaction failed, was cancelled, or the engine did not pass them on. Its
+   * command line still shows them; no line under a summary does.
+   */
+  unused?: true;
+}
+
+/**
+ * Decision 180: the two lookups a history fold takes from these entries —
+ * the line under a summary (the instructions it was written with) and the
+ * command line (whatever was typed).
+ */
+export function compactInstructionsLookups(entries: readonly StubCompactInstructions[]): {
+  compactInstructions?: (compactionId: string) => string | undefined;
+  compactCommandInstructions?: (compactionId: string) => string | undefined;
+} {
+  if (entries.length === 0) return {};
+  const typed = new Map(entries.map((entry) => [entry.compactionId, entry]));
+  return {
+    compactInstructions: (compactionId) => {
+      const entry = typed.get(compactionId);
+      return entry && !entry.unused ? entry.instructions : undefined;
+    },
+    compactCommandInstructions: (compactionId) => typed.get(compactionId)?.instructions,
+  };
 }
 
 /**
@@ -197,6 +223,7 @@ export function stubCompactInstructions(stub: SessionStub): StubCompactInstructi
             compactionId: entry.compactionId,
             instructions: entry.instructions,
             at: typeof entry.at === 'number' && Number.isFinite(entry.at) ? entry.at : 0,
+            ...(entry.unused === true ? { unused: true as const } : {}),
           },
         ]
       : [];

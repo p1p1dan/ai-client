@@ -52,8 +52,11 @@
  *   `compaction/start` / `/end` of a    `session.compaction` (decision 178):
  *   compaction a turn owns              the row opens, becomes the summary row
  *                                       when the checkpoint lands, or a note
- *                                       when it ends without one; a `/compact`
- *                                       the user ran (no turn) shows nothing
+ *                                       when it ends without one
+ *   `compaction/start` / `/end` of a    the same row (`manual`, decision 180),
+ *   `/compact` the user ran (no turn)   after its command line; a note says
+ *                                       why there is no summary: a cancel, the
+ *                                       time limit, or what `command/done` said
  *
  * Message ids are fixed by DSH's own coordinates — `dsh-user-<seq>`,
  * `dsh-notice-<seq>`, `dsh-<session>-t<turn>-s<step>` — and the history
@@ -71,9 +74,14 @@ import {
 } from '../../shared/dshHistory/projection.ts';
 import { parseToolArguments, toolRowInput } from '../../shared/dshHistory/toolInput.ts';
 import {
+  AICLIENT_COMPACT_CANCELLED_REASON,
+  AICLIENT_COMPACT_TIMEOUT_REASON,
   AICLIENT_TURN_CEILING_REASON,
   DSH_SOURCE_COMPACT_CHECKPOINT,
+  dshCompactCommandLiveId,
+  dshCompactCommandText,
   dshCompactionLiveId,
+  dshCompactNote,
 } from '../../shared/dshHistory/types.ts';
 import {
   DSH_NOTICE_CUSTOM_TYPE_PREFIX,
@@ -222,6 +230,20 @@ export interface DshLiveEventsHost {
   gatewaySession?(): string | undefined;
   /** One line for the bridge's log (the app log); absent, nothing is written. */
   log?(line: string): void;
+  /**
+   * Decision 180: the `/compact` the runtime is running (`worker.compact`):
+   * what was typed after it, and why the runtime aborted it, once it did.
+   * Absent, or undefined: a compaction with no turn is shown as `/compact`.
+   */
+  manualCompaction?(): ManualCompactionView | undefined;
+  /** Decisions 179, 180: the instructions a `/compact`'s summary was written with. */
+  compactInstructions?(compactionId: string): string | undefined;
+}
+
+/** What the runtime knows of the `/compact` it runs (decision 180). */
+export interface ManualCompactionView {
+  readonly instructions?: string;
+  readonly abortReason?: 'cancelled' | 'timeout';
 }
 
 /** A send that carried a command line (P1-4d2): its request and the renderer's attempt. */
@@ -394,6 +416,20 @@ interface OpenCompaction {
   beforeMessageId?: string;
 }
 
+/**
+ * Decision 180: a `/compact` whose row is open. A failure is said once the
+ * reason is known: the runtime's own abort, or the `command/done` DSH writes
+ * after the compaction closed.
+ */
+interface OpenManualCompaction {
+  compactionId: string;
+  messageId: string;
+  commandId?: string;
+  /** Its `compaction/end` came with an error. */
+  failed: boolean;
+  doneText?: string;
+}
+
 /** How much of a failed compaction's error the bridge's log line keeps. */
 const COMPACTION_ERROR_LOG_CHARS = 500;
 
@@ -435,6 +471,11 @@ export class DshLiveEvents {
   private readonly compactions = new Map<string, OpenCompaction>();
   /** Decision 178: a Stop reached this turn; a compaction it cut short did not fail. */
   private stopRequested = false;
+  /**
+   * Decision 180: the `/compact` whose row is open. Not per turn: it runs
+   * between turns, so `reset` leaves it alone.
+   */
+  private manual: OpenManualCompaction | undefined;
 
   constructor(host: DshLiveEventsHost) {
     this.host = host;
@@ -842,9 +883,12 @@ export class DshLiveEvents {
    */
   private onCompactionStart(data: Row): void {
     const compactionId = stringOf(data.compactionId);
-    if (!compactionId || typeof data.turn !== 'number' || this.compactions.has(compactionId)) {
+    if (!compactionId) return;
+    if (typeof data.turn !== 'number') {
+      this.onManualCompactionStart(compactionId, data);
       return;
     }
+    if (this.compactions.has(compactionId)) return;
     const step = this.openStep;
     const trigger: SessionCompactionTrigger = step ? 'overflow' : 'pressure';
     const stepMessage = step ? this.steps.get(`${step.turn}:${step.step}`) : undefined;
@@ -859,6 +903,10 @@ export class DshLiveEvents {
 
   /** The checkpoint landed: the row is the context summary the history shows. */
   private onCompactionCheckpoint(compactionId: string, content: unknown): void {
+    if (this.manual?.compactionId === compactionId) {
+      this.settleManual('completed', { summary: dshCheckpointRowText(content) });
+      return;
+    }
     const open = this.compactions.get(compactionId);
     if (!open) return;
     this.compactions.delete(compactionId);
@@ -871,6 +919,10 @@ export class DshLiveEvents {
    */
   private onCompactionEnd(data: Row): void {
     const compactionId = stringOf(data.compactionId);
+    if (compactionId && this.manual?.compactionId === compactionId) {
+      this.onManualCompactionEnd(data);
+      return;
+    }
     const open = compactionId ? this.compactions.get(compactionId) : undefined;
     if (!compactionId || !open) return;
     this.compactions.delete(compactionId);
@@ -886,6 +938,100 @@ export class DshLiveEvents {
       }: ${String(reason).slice(0, COMPACTION_ERROR_LOG_CHARS)}`
     );
     this.emitCompaction(open, this.stopRequested ? 'interrupted' : 'failed');
+  }
+
+  // ---- /compact (decision 180) --------------------------------------------------------
+
+  /**
+   * A `/compact` the user ran opens its command line and its row, as an
+   * automatic compaction opens its row. Both ids are the compaction's, which
+   * the history names on the rows it projects for the same compaction.
+   */
+  private onManualCompactionStart(compactionId: string, data: Row): void {
+    const view = this.host.manualCompaction?.();
+    const messageId = dshCompactionLiveId(compactionId);
+    const commandId = stringOf(data.sourceCommandId);
+    this.manual = {
+      compactionId,
+      messageId,
+      ...(commandId ? { commandId } : {}),
+      failed: false,
+    };
+    this.emit({
+      type: 'session.compaction',
+      payload: {
+        messageId,
+        phase: 'started',
+        trigger: 'manual',
+        commandMessageId: dshCompactCommandLiveId(compactionId),
+        command: dshCompactCommandText(view?.instructions),
+      },
+    });
+  }
+
+  /**
+   * It closed. With an error and no checkpoint: said now when the runtime
+   * aborted it (its reason is the `command/done` text already), otherwise
+   * once `command/done` says why.
+   */
+  private onManualCompactionEnd(data: Row): void {
+    const manual = this.manual;
+    if (!manual) return;
+    if (data.error === undefined) {
+      // Never without its checkpoint in this DSH; the row must not keep spinning.
+      this.settleManual('completed', { summary: dshCheckpointRowText(undefined) });
+      return;
+    }
+    const reason = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+    this.host.log?.(
+      `[dsh-bridge] /compact ended without a summary: ${String(reason).slice(0, COMPACTION_ERROR_LOG_CHARS)}`
+    );
+    manual.failed = true;
+    const aborted = this.host.manualCompaction?.()?.abortReason;
+    if (aborted) {
+      manual.doneText =
+        aborted === 'cancelled'
+          ? AICLIENT_COMPACT_CANCELLED_REASON
+          : AICLIENT_COMPACT_TIMEOUT_REASON;
+    }
+    if (manual.doneText !== undefined || !manual.commandId) this.failManual();
+  }
+
+  /** The `/compact`'s answer: why a failed one wrote no summary. `false` when it was not ours. */
+  private onManualCommandDone(data: Row): boolean {
+    const manual = this.manual;
+    const commandId = stringOf(data.commandId);
+    if (!manual || !commandId || manual.commandId !== commandId) return false;
+    if (data.kind === 'error') manual.doneText ??= stringOf(data.text) ?? '';
+    if (manual.failed) this.failManual();
+    return true;
+  }
+
+  private failManual(): void {
+    const note = dshCompactNote(this.manual?.doneText);
+    this.settleManual('failed', { note });
+  }
+
+  private settleManual(
+    phase: 'completed' | 'failed',
+    extra: { summary?: string; note?: { key: string; params?: Record<string, string> } }
+  ): void {
+    const manual = this.manual;
+    if (!manual) return;
+    this.manual = undefined;
+    const instructions =
+      phase === 'completed' ? this.host.compactInstructions?.(manual.compactionId) : undefined;
+    this.emit({
+      type: 'session.compaction',
+      payload: {
+        messageId: manual.messageId,
+        phase,
+        trigger: 'manual',
+        ...(extra.summary !== undefined ? { summary: extra.summary } : {}),
+        ...(instructions ? { instructions } : {}),
+        ...(extra.note ? { note: extra.note } : {}),
+      },
+    });
   }
 
   private emitCompaction(
@@ -936,6 +1082,7 @@ export class DshLiveEvents {
   /** What the command answered, as a notice; the runtime ends the send once `execute` settles. */
   private onCommandDone(event: DshSessionEvent): void {
     const data = event.data;
+    if (this.onManualCommandDone(data)) return;
     const commandId = stringOf(data.commandId);
     const send = commandId ? this.host.commandSend(commandId) : undefined;
     const text = stringOf(data.text);

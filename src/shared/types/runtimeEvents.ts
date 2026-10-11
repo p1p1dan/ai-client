@@ -1469,8 +1469,9 @@ export interface SessionPermissionsEvent extends RuntimeEventBase {
  * turn is doing. Two triggers: `pressure` — before a step, the request grew
  * past the model's threshold; `overflow` — the model refused the step's
  * request as too large for its window, and the engine compacts and retries.
- * A `/compact` the user ran is not one of these (the composer shows its own
- * status line, decision 176).
+ * Decision 180 adds `manual`: a `/compact` the user ran, which shows the
+ * same way — its command line (`commandMessageId`, `command`), then this
+ * row — instead of the composer's status line decision 176 gave it.
  *
  * One row per compaction, by `messageId` (`dsh-compaction-<compactionId>`):
  * `started` opens it ("Compacting the context…"); `completed` turns it into the
@@ -1485,7 +1486,7 @@ export interface SessionPermissionsEvent extends RuntimeEventBase {
  * A new event type, not a rider: a renderer that predates it drops it in its
  * reducer's `default` branch and shows nothing, as before.
  */
-export type SessionCompactionTrigger = 'pressure' | 'overflow';
+export type SessionCompactionTrigger = 'pressure' | 'overflow' | 'manual';
 
 export type SessionCompactionPhase = 'started' | 'completed' | 'failed' | 'interrupted';
 
@@ -1499,6 +1500,17 @@ export interface SessionCompactionEvent extends RuntimeEventBase {
     beforeMessageId?: string;
     /** `completed` only: the row's text, as the history projects it. */
     summary?: string;
+    /**
+     * Decision 180, `manual` only. `started`: the id of the command line's row
+     * (`dsh-compact-command-<compactionId>`) and its text (`/compact` and the
+     * instructions typed after it). `completed`: the instructions the summary
+     * was written with, for the line under it (decision 179). `failed`: why
+     * there is no summary, a dictionary key and its params (`dshCompactNote`).
+     */
+    commandMessageId?: string;
+    command?: string;
+    instructions?: string;
+    note?: { key: string; params?: Record<string, string> };
   };
 }
 

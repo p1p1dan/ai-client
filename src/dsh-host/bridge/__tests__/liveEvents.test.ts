@@ -8,8 +8,12 @@ import {
 } from '../../../shared/cacheChain.ts';
 import { projectDshHistory } from '../../../shared/dshHistory/projection.ts';
 import {
+  AICLIENT_COMPACT_CANCELLED_REASON,
   AICLIENT_LOOP_GUARD_DENIAL,
   AICLIENT_TURN_CEILING_REASON,
+  DSH_COMPACT_CANCELLED_KEY,
+  DSH_COMPACT_NO_SUMMARY_KEY,
+  DSH_COMPACT_TIMEOUT_KEY,
   DSH_COMPACTION_FAILED_KEY,
   DSH_COMPACTION_INTERRUPTED_KEY,
   DSH_COMPACTION_OVERFLOW_FAILED_KEY,
@@ -28,6 +32,7 @@ import {
   DshLiveEvents,
   type DshUsageView,
   type LiveTurn,
+  type ManualCompactionView,
   type StreamFrame,
   streamingArgsSummary,
   TOOL_ARG_COALESCE_MS,
@@ -71,6 +76,10 @@ function harness(
     evidence?: () => ClientPrefixEvidence | undefined;
     /** Decision 173: the gateway session the host names the session's requests after. */
     gatewaySession?: () => string | undefined;
+    /** Decision 180: the `/compact` the runtime runs. */
+    manual?: () => ManualCompactionView | undefined;
+    /** Decisions 179, 180: the instructions a `/compact`'s summary was written with. */
+    compactInstructions?: (compactionId: string) => string | undefined;
   } = {}
 ) {
   const events: Emitted[] = [];
@@ -129,6 +138,8 @@ function harness(
         : {}),
     ...(options.evidence ? { prefixEvidence: options.evidence } : {}),
     ...(options.gatewaySession ? { gatewaySession: options.gatewaySession } : {}),
+    ...(options.manual ? { manualCompaction: options.manual } : {}),
+    ...(options.compactInstructions ? { compactInstructions: options.compactInstructions } : {}),
     log: (line: string) => lines.push(line),
   });
   const durable = (type: string, data: Record<string, unknown>) => {
@@ -1323,16 +1334,58 @@ describe('DshLiveEvents — automatic compaction (decision 178)', () => {
     expect(compactions(stopped).at(-1)).toMatchObject({ phase: 'failed' });
   });
 
-  it('[178-LIVE-4] a /compact the user ran (no turn) shows nothing live; its row is the history’s', () => {
-    const h = harness({ turn: null });
+  it('[178-LIVE-4] a /compact the user ran (no turn) shows as one too: its command line, then its row (decision 180)', () => {
+    const h = harness({
+      turn: null,
+      manual: () => ({ instructions: '保留未完成的任务' }),
+      compactInstructions: (id) => (id === CID ? '保留未完成的任务' : undefined),
+    });
+    h.durable('command/run', {
+      commandId: 'cmd-1',
+      name: 'compact',
+      args: '',
+      source: { kind: 'user' },
+    });
     h.durable('compaction/start', { compactionId: CID, sourceCommandId: 'cmd-1', turn: null });
+    expect(compactions(h)).toEqual([
+      {
+        messageId: ROW,
+        phase: 'started',
+        trigger: 'manual',
+        commandMessageId: `dsh-compact-command-${CID}`,
+        command: '/compact 保留未完成的任务',
+      },
+    ]);
+    h.durable('compaction/summary', { compactionId: CID, summary: [] });
     h.durable('user/message', checkpoint());
     h.durable('compaction/end', { compactionId: CID, sourceCommandId: 'cmd-1', turn: null });
-    expect(h.events).toEqual([]);
-    const rows = projectDshHistory(h.log, { liveSessionId: SID });
-    expect(rows).toHaveLength(1);
-    expect(isDshSummaryRow(rows[0] as never)).toBe(true);
-    expect(rows[0]?.liveMessageId).toBeUndefined();
+    h.durable('command/done', {
+      commandId: 'cmd-1',
+      kind: 'success',
+      text: 'Compacted 2',
+      sourceEventSeq: 3,
+    });
+    expect(compactions(h)[1]).toEqual({
+      messageId: ROW,
+      phase: 'completed',
+      trigger: 'manual',
+      summary: 'Context summary\n\n## Current Work\n- the parser',
+      instructions: '保留未完成的任务',
+    });
+    // No turn: no requestId, and nothing but the two rows.
+    expect(h.events.map((event) => [event.type, event.requestId])).toEqual([
+      ['session.compaction', undefined],
+      ['session.compaction', undefined],
+    ]);
+    // The history names both live ids on the rows it projects, with the same text.
+    const rows = projectDshHistory(h.log, {
+      liveSessionId: SID,
+      compactInstructions: (id) => (id === CID ? '保留未完成的任务' : undefined),
+    });
+    expect(rows.map((row) => row.liveMessageId)).toEqual([`dsh-compact-command-${CID}`, ROW]);
+    expect(rows[0]?.blocks[0]).toMatchObject({ text: '/compact 保留未完成的任务' });
+    expect(isDshSummaryRow(rows[1] as never)).toBe(true);
+    expect(rows[1]?.blocks[0]).toMatchObject({ text: compactions(h)[1]?.summary });
   });
 
   it('[178-LIVE-5] a checkpoint no open compaction names, and an end it never saw start, are ignored', () => {
@@ -1342,5 +1395,97 @@ describe('DshLiveEvents — automatic compaction (decision 178)', () => {
     h.durable('user/message', checkpoint('someone-else'));
     h.durable('compaction/end', { compactionId: 'unknown', turn: 2, error: 'x' });
     expect(h.events.slice(before)).toEqual([]);
+  });
+});
+
+/**
+ * dsh-rebase decision 180: a `/compact` that ended without a summary. Its
+ * note says why — the runtime's own abort (a cancel, the time limit), whose
+ * reason DSH logs as the command's answer before the compaction closes, or
+ * DSH's own answer, which comes after it.
+ */
+describe('DshLiveEvents — /compact without a summary (decision 180)', () => {
+  const CID = 'c0ffee00-0000-4000-8000-000000000180';
+  const ROW = `dsh-compaction-${CID}`;
+  const compactions = (h: ReturnType<typeof harness>) =>
+    h.of('session.compaction').map((event) => event.payload);
+  const started = (h: ReturnType<typeof harness>) => {
+    h.durable('command/run', {
+      commandId: 'cmd-1',
+      name: 'compact',
+      args: '',
+      source: { kind: 'user' },
+    });
+    h.durable('compaction/start', { compactionId: CID, sourceCommandId: 'cmd-1', turn: null });
+  };
+
+  it('[180-LIVE-1] cancelled: said at its end, as cancelled; the history says the same', () => {
+    let view: ManualCompactionView = {};
+    const h = harness({ turn: null, manual: () => view });
+    started(h);
+    view = { abortReason: 'cancelled' };
+    // DSH answers the abort at once, then the compaction unwinds.
+    h.durable('command/done', {
+      commandId: 'cmd-1',
+      kind: 'error',
+      text: AICLIENT_COMPACT_CANCELLED_REASON,
+    });
+    expect(compactions(h)).toHaveLength(1);
+    h.durable('compaction/end', {
+      compactionId: CID,
+      sourceCommandId: 'cmd-1',
+      turn: null,
+      error: { name: 'AbortError', message: AICLIENT_COMPACT_CANCELLED_REASON },
+    });
+    expect(compactions(h)[1]).toEqual({
+      messageId: ROW,
+      phase: 'failed',
+      trigger: 'manual',
+      note: { key: DSH_COMPACT_CANCELLED_KEY },
+    });
+    expect(h.lines.at(-1)).toMatch(/^\[dsh-bridge\] \/compact ended without a summary: /);
+    const rows = projectDshHistory(h.log, { liveSessionId: SID });
+    expect(rows.map((row) => row.liveMessageId)).toEqual([`dsh-compact-command-${CID}`, ROW]);
+    expect(rows[1]?.blocks[0]).toMatchObject({ notice: { key: DSH_COMPACT_CANCELLED_KEY } });
+  });
+
+  it('[180-LIVE-2] past the time limit: the timeout note', () => {
+    const h = harness({ turn: null, manual: () => ({ abortReason: 'timeout' }) });
+    started(h);
+    h.durable('compaction/end', {
+      compactionId: CID,
+      sourceCommandId: 'cmd-1',
+      turn: null,
+      error: 'x',
+    });
+    expect(compactions(h)[1]).toMatchObject({
+      phase: 'failed',
+      note: { key: DSH_COMPACT_TIMEOUT_KEY },
+    });
+  });
+
+  it('[180-LIVE-3] DSH failed it: waits for the command’s answer, which comes after the end', () => {
+    const h = harness({ turn: null, manual: () => ({}) });
+    started(h);
+    h.durable('compaction/end', {
+      compactionId: CID,
+      sourceCommandId: 'cmd-1',
+      turn: null,
+      error: 'x',
+    });
+    expect(compactions(h)).toHaveLength(1);
+    h.durable('command/done', {
+      commandId: 'cmd-1',
+      kind: 'error',
+      text: 'Compaction could not produce a useful summary. The attempt is recorded in the session log.',
+    });
+    expect(compactions(h)[1]).toMatchObject({
+      phase: 'failed',
+      note: { key: DSH_COMPACT_NO_SUMMARY_KEY },
+    });
+    // The command's answer is the row's: no notice of its own.
+    expect(h.of('custom.message')).toEqual([]);
+    const rows = projectDshHistory(h.log, { liveSessionId: SID });
+    expect(rows[1]?.blocks[0]).toMatchObject({ notice: { key: DSH_COMPACT_NO_SUMMARY_KEY } });
   });
 });
