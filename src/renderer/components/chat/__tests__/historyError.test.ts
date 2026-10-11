@@ -975,6 +975,13 @@ describe('workspace_missing (F2-c)', () => {
     expect(view?.message).toContain('E:\\e\\test');
     expect(view?.continuationHint).toContain('archive this chat');
   });
+
+  it('says it in Chinese without the engine’s word for its process (GUI point-check 2026-10-11)', () => {
+    const view = parseHistoryError('workspace_missing: WORKER_WORKSPACE_MISSING: gone');
+    const zh = zhTranslations[view?.guidance ?? ''];
+    expect(zh).toBeDefined();
+    expect(zh).not.toMatch(/worker/i);
+  });
 });
 
 /**

@@ -3000,7 +3000,7 @@ export const zhTranslations: Record<string, string> = {
   'The service hit an internal error. Please try again later.': '服务内部错误，请稍后再试。',
   'The service is temporarily unavailable. Please try again later.': '服务暂时不可用，请稍后再试。',
   'The working directory this chat is bound to is no longer on disk, so its worker cannot start. The app will not recreate a directory it did not create.':
-    '该会话绑定的工作目录已不在磁盘上，因此无法启动它的 worker。应用不会替你重建自己创建的目录。',
+    '该会话绑定的工作目录已不在磁盘上，因此会话无法启动。应用不会替你重建自己创建的目录。',
   'This chat’s record is larger than this build will load in one piece, so it was not opened. The file itself is intact and untouched on disk.':
     '这个会话的记录超过了本版本一次性加载的上限，因此没有打开。文件本身完好，磁盘上未被改动。',
   'Start a new chat to carry on; the original record stays where it is.':
