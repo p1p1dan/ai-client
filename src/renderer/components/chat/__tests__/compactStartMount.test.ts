@@ -83,6 +83,7 @@ import { resetComposerDraftsForTests } from '@/stores/composerDrafts';
 import { resetHomeDraftForTests } from '@/stores/homeDraft';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
+import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
 import { ChatComposer } from '../ChatComposer';
 import { COMPACT_INTERRUPTED_TEXT, COMPACT_STOPPED_TEXT, COMPACTING_LINE } from '../compactCommand';
 import { createEmptyState, selectSessionQueue } from '../messageQueue';
@@ -197,6 +198,7 @@ beforeEach(() => {
   usePendingUserMessagesStore.setState({ bySession: {} });
   useCompactRunsStore.setState({ phases: {} });
   useMessageQueueStore.setState({ state: createEmptyState() });
+  useScratchWorkspaceStore.setState({ pathsBySession: {} });
   setStore();
 });
 
@@ -382,6 +384,74 @@ describe('/compact in a conversation the engine is not running (decision 176)', 
     await act(async () => resume.resolve({ requestId: 'resume-1' }));
     await settle();
     expect(mocks.api.compactSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * GUI point-check 2026-10-11: `/compact` in a temporary chat (「不选仓库（临时
+ * 对话）」) the engine let go. One made in this run carries no record of its
+ * scratch directory — `session.unbound` is written by a restart's index merge
+ * or by a fork — and the start refused it: 「压缩上下文失败 / 这个对话没有可以
+ * 运行的文件夹。」, while a message sent in the same chat went through. The start
+ * now names the directory the send path names (`runDirectory.ts`).
+ */
+describe('/compact in a temporary chat the engine let go (decision 176, 2026-10-11)', () => {
+  const temporary = (extra: Partial<ChatSession> = {}) =>
+    chat({ projectId: '', workspaceId: '', ...extra });
+
+  it('[176-C-10] made in this run: started in the scratch directory its first send got, then compacted', async () => {
+    setStore({ session: temporary() });
+    // What its first send left behind (`useScratchWorkspaceStore.ensure`).
+    useScratchWorkspaceStore.setState({ pathsBySession: { c1: '/tmp/scratch/c1-first-send' } });
+    mocks.api.resumeSession.mockResolvedValue({ requestId: 'resume-1' });
+    mocks.api.compactSession.mockResolvedValue({ compacted: true });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    expect(mocks.api.ensureScratchWorkspace).not.toHaveBeenCalled();
+    expect(mocks.api.resumeSession).toHaveBeenCalledWith({
+      sessionId: 'c1',
+      runtimeIdentity: STUB,
+      workspacePath: '/tmp/scratch/c1-first-send',
+    });
+    expect(mocks.api.compactSession).toHaveBeenCalledWith({ sessionId: 'c1' });
+    expect(toastTitles()).toEqual(['Conversation compacted']);
+    expect(box().value).toBe('');
+  });
+
+  it('[176-C-11] made in this run, its directory unknown to this window: asked of Main as a send asks', async () => {
+    setStore({ session: temporary() });
+    mocks.api.resumeSession.mockResolvedValue({ requestId: 'resume-1' });
+    mocks.api.compactSession.mockResolvedValue({ compacted: true });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    expect(mocks.api.ensureScratchWorkspace).toHaveBeenCalledWith({ sessionId: 'c1' });
+    expect(mocks.api.resumeSession).toHaveBeenCalledWith({
+      sessionId: 'c1',
+      runtimeIdentity: STUB,
+      workspacePath: '/tmp/scratch/c1',
+    });
+    expect(toastTitles()).toEqual(['Conversation compacted']);
+  });
+
+  it('[176-C-12] reopened after a restart: started in the directory recorded on it', async () => {
+    setStore({ session: temporary({ unbound: { workspacePath: '/tmp/scratch/c1-recorded' } }) });
+    mocks.api.resumeSession.mockResolvedValue({ requestId: 'resume-1' });
+    mocks.api.compactSession.mockResolvedValue({ compacted: true });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    expect(mocks.api.ensureScratchWorkspace).not.toHaveBeenCalled();
+    expect(mocks.api.resumeSession).toHaveBeenCalledWith({
+      sessionId: 'c1',
+      runtimeIdentity: STUB,
+      workspacePath: '/tmp/scratch/c1-recorded',
+    });
+    expect(toastTitles()).toEqual(['Conversation compacted']);
   });
 });
 

@@ -1,8 +1,9 @@
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { encodePiResumeError, isLegacyMigrationRefusal } from '../historyError';
+import { ensureScratchRunDirectory, knownRunDirectory } from '../runDirectory';
 import { readDefaultPermissions, readSessionPermissions } from '../sessionPreferenceStore';
 import { resumeSessionWithMigration } from './legacyMigration';
-import { shouldApplyResumeResult, shouldResumeSession } from './resumeIntent';
+import { isSessionBusy, shouldApplyResumeResult, shouldResumeSession } from './resumeIntent';
 
 /**
  * Hook exposing the user-driven "resume historical session" action (T-03).
@@ -52,11 +53,26 @@ export async function resumeSessionById(
   // Without it a sidebar resume spawns a worker on the default tier while
   // the chip still shows the tier the user chose.
   const storedPermissions = readSessionPermissions(sessionId) ?? readDefaultPermissions();
+  // Decision 176, GUI point-check fix (2026-10-11): the directory a send would
+  // run it in (`runDirectory.ts`). A temporary chat made in this run has no
+  // record of its scratch directory, so the history card's Retry refused it
+  // while a send went through; it is asked for, as a send asks — only for a
+  // chat this resume would open, and only then awaited, so every other resume
+  // still leaves on this tick.
+  let workspacePath = knownRunDirectory(session, workspace) ?? undefined;
+  const opens =
+    session !== undefined &&
+    Boolean(session.runtimeIdentity ?? options.persistedRuntimeIdentity) &&
+    !isSessionBusy(session.status);
+  if (!workspacePath && opens) {
+    workspacePath = await ensureScratchRunDirectory(sessionId).catch(() => undefined);
+  }
   const intent = shouldResumeSession(session, workspace, {
     persistedRuntimeIdentity: options.persistedRuntimeIdentity,
     model: options.model,
     ...(options.forceTakeover ? { forceTakeover: true } : {}),
     ...(storedPermissions ? { permissions: storedPermissions } : {}),
+    ...(workspacePath ? { workspacePath } : {}),
   });
   if (!intent.shouldResume || !intent.args) return false;
 

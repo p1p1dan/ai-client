@@ -47,13 +47,19 @@ const WORKSPACE = {
   gitEnabled: true,
 } as ChatWorkspace;
 
-function deps(over: Partial<SessionStartDeps> & { running?: boolean; chat?: ChatSession } = {}) {
+function deps(
+  over: Partial<SessionStartDeps> & {
+    running?: boolean;
+    chat?: ChatSession;
+    workspace?: ChatWorkspace;
+  } = {}
+) {
   const calls: string[] = [];
   const base: SessionStartDeps = {
     snapshot: () => ({
       running: over.running ?? false,
       session: 'chat' in over ? over.chat : session(),
-      workspace: WORKSPACE,
+      workspace: 'workspace' in over ? over.workspace : WORKSPACE,
     }),
     preferences: () => ({
       model: 'glm/glm-5',
@@ -64,6 +70,10 @@ function deps(over: Partial<SessionStartDeps> & { running?: boolean; chat?: Chat
     resume: vi.fn(async () => void calls.push('resume')),
     markRunning: vi.fn((_id: string, running: boolean) => void calls.push(`running:${running}`)),
     fileFailure: vi.fn((_id: string, encoded: string) => void calls.push(`card:${encoded}`)),
+    ensureScratchDirectory: vi.fn(async (sessionId: string) => {
+      calls.push('scratch');
+      return `/tmp/scratch/${sessionId}`;
+    }),
   };
   return { deps: { ...base, ...over }, calls };
 }
@@ -89,45 +99,92 @@ describe('startSessionAsSendDoes', () => {
     });
   });
 
-  it('[SS-03] a temporary chat resumes into its own scratch directory', async () => {
+  it('[SS-03] a temporary chat reopened after a restart resumes into the scratch directory recorded on it', async () => {
     const { deps: d } = deps({
       chat: session({
-        workspaceId: 'gone',
-        unbound: { workspacePath: '/tmp/scratch/s1' },
-      } as never),
+        projectId: '',
+        workspaceId: '',
+        unbound: { workspacePath: '/tmp/scratch/recorded' },
+      }),
+      // What the store answers for `workspaceId: ''`.
+      workspace: undefined,
     });
     await startSessionAsSendDoes('s1', d);
+    expect(d.resume).toHaveBeenCalledWith(
+      expect.objectContaining({ workspacePath: '/tmp/scratch/recorded' })
+    );
+    // Recorded: nothing to ask Main for.
+    expect(d.ensureScratchDirectory).not.toHaveBeenCalled();
+  });
+
+  it('[SS-03b] a temporary chat made in this run (no record, no folder): the send path’s scratch directory, then its resume', async () => {
+    // GUI point-check 2026-10-11: such a chat carries no `unbound` until a
+    // restart, and the start refused it 「这个对话没有可以运行的文件夹」 while a
+    // send in the same chat went through. It asks what the send asks.
+    const { deps: d, calls } = deps({
+      chat: session({ projectId: '', workspaceId: '' }),
+      workspace: undefined,
+    });
+    await expect(startSessionAsSendDoes('s1', d)).resolves.toEqual({ kind: 'started' });
+    expect(d.ensureScratchDirectory).toHaveBeenCalledWith('s1');
+    expect(calls).toEqual(['scratch', 'ensureHost', 'resume', 'running:true']);
+    expect(d.resume).toHaveBeenCalledWith({
+      sessionId: 's1',
+      runtimeIdentity: STUB,
+      workspacePath: '/tmp/scratch/s1',
+      model: 'glm/glm-5',
+      effort: 'high',
+      permissions: { mode: 'agent', gear: 'auto' },
+    });
+  });
+
+  it('[SS-03c] a folder this window cannot run in is no folder, as the send path reads it', async () => {
+    // The send path's own rule (`cwd`, then the record, then the scratch
+    // directory): an empty path is not a folder to run in.
+    const { deps: d } = deps({ workspace: { ...WORKSPACE, path: '  ' } });
+    await startSessionAsSendDoes('s1', d);
+    expect(d.ensureScratchDirectory).toHaveBeenCalledWith('s1');
     expect(d.resume).toHaveBeenCalledWith(
       expect.objectContaining({ workspacePath: '/tmp/scratch/s1' })
     );
   });
 
-  it('[SS-04] what it does not start: no row, never ran, no folder, a turn already running', async () => {
+  it('[SS-04] what it does not start: no row, never ran, no folder to be had, a turn already running', async () => {
     const refused = async (over: Parameters<typeof deps>[0]) => {
       const { deps: d } = deps(over);
       const outcome = await startSessionAsSendDoes('s1', d);
+      expect(d.ensureHost).not.toHaveBeenCalled();
       expect(d.resume).not.toHaveBeenCalled();
-      return outcome;
+      return { outcome, d };
     };
-    await expect(refused({ chat: undefined })).resolves.toEqual({
+    await expect(refused({ chat: undefined }).then((r) => r.outcome)).resolves.toEqual({
       kind: 'refused',
       reason: 'no-session',
     });
     // A send would create it; an operation has nothing to act on in it.
-    await expect(refused({ chat: session({ runtimeIdentity: undefined }) })).resolves.toEqual({
-      kind: 'refused',
-      reason: 'no-transcript',
-    });
     await expect(
-      refused({
-        chat: session({ workspaceId: 'gone' }),
-        snapshot: () => ({ running: false, session: session(), workspace: undefined }),
-      })
-    ).resolves.toEqual({ kind: 'refused', reason: 'no-workspace' });
-    await expect(refused({ chat: session({ status: 'running' }) })).resolves.toEqual({
-      kind: 'refused',
-      reason: 'busy',
+      refused({ chat: session({ runtimeIdentity: undefined }) }).then((r) => r.outcome)
+    ).resolves.toEqual({ kind: 'refused', reason: 'no-transcript' });
+    // No folder, and Main gave it no scratch directory either.
+    const noFolder = await refused({
+      chat: session({ projectId: '', workspaceId: '' }),
+      workspace: undefined,
+      ensureScratchDirectory: vi.fn(async () => {
+        throw new Error('chat:ensureScratchWorkspace returned no path');
+      }),
     });
+    expect(noFolder.outcome).toEqual({ kind: 'refused', reason: 'no-workspace' });
+    expect(noFolder.d.fileFailure).not.toHaveBeenCalled();
+    await expect(
+      refused({ chat: session({ status: 'running' }) }).then((r) => r.outcome)
+    ).resolves.toEqual({ kind: 'refused', reason: 'busy' });
+    // A temporary chat mid-turn is refused before a directory is asked for.
+    const busyTemporary = await refused({
+      chat: session({ projectId: '', workspaceId: '', status: 'running' }),
+      workspace: undefined,
+    });
+    expect(busyTemporary.outcome).toEqual({ kind: 'refused', reason: 'busy' });
+    expect(busyTemporary.d.ensureScratchDirectory).not.toHaveBeenCalled();
   });
 
   it('[SS-05] a failed start is filed on the card, as a send’s is — and nothing is said raw elsewhere', async () => {

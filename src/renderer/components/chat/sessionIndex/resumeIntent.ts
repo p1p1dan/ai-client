@@ -100,6 +100,13 @@ export function shouldResumeSession(
      * judgement about the lock, it only forwards the decision.
      */
     forceTakeover?: boolean;
+    /**
+     * Decision 176, GUI point-check fix (2026-10-11): the directory the caller
+     * resolved the send path's way (`runDirectory.ts`), a temporary chat made
+     * in this run included — it carries no `unbound` until a restart, and the
+     * reading below refuses it as having nowhere to run. Wins over that reading.
+     */
+    workspacePath?: string;
   } = {}
 ): ResumeIntent {
   const skipBusy = options.skipBusy ?? true;
@@ -111,8 +118,9 @@ export function shouldResumeSession(
   // exact directory (`adopt`) before resuming into it. Without this the only
   // way back into a restarted temporary chat was a resume that never fired,
   // leaving the user staring at an empty timeline.
-  const workspacePath = session.unbound?.workspacePath ?? workspace?.path;
-  if (!session.unbound && !workspace) {
+  const workspacePath =
+    options.workspacePath || (session.unbound?.workspacePath ?? workspace?.path);
+  if (!options.workspacePath && !session.unbound && !workspace) {
     return { shouldResume: false, reason: 'no-workspace' };
   }
   // dsh-rebase P1-1 / P1-9d: a legacy `pi` session is sent to Main like any

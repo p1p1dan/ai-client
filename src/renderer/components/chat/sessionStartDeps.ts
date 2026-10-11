@@ -7,7 +7,9 @@
  * model (`resolveResumeModel`), the effort (`toWireEffort` of the stored or
  * template selection), the permissions (the session's, else the default) —
  * so a start made for an operation and a send's resume name the same thing,
- * and Main joins the two when they overlap.
+ * and Main joins the two when they overlap. The directory is the send path's
+ * too (`runDirectory.ts`): a temporary chat's scratch directory comes from the
+ * store `runSend` asks (GUI point-check fix, 2026-10-11).
  */
 
 import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentDefaults';
@@ -15,6 +17,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useSettingsStore } from '@/stores/settings';
 import { resolveEffortSelection, toWireEffort } from './efforts';
 import { resolveResumeModel } from './models';
+import { ensureScratchRunDirectory } from './runDirectory';
 import { captureSessionGenerationPreferences } from './sessionGenerationPreferences';
 import { resumeSessionWithMigration } from './sessionIndex/legacyMigration';
 import {
@@ -78,6 +81,8 @@ export function sessionStartDeps(): SessionStartDeps {
       useChatSessionsStore.setState((state) => ({
         historyErrors: { ...state.historyErrors, [sessionId]: encoded },
       })),
+    // The send path's own allocation (`runSend` asks the same store).
+    ensureScratchDirectory: ensureScratchRunDirectory,
   };
 }
 

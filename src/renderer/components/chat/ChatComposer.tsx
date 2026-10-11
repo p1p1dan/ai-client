@@ -186,6 +186,7 @@ import {
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
 import { isRetryUnavailableError, retryRunningRequestId } from './retryLastTurn';
+import { ensureScratchRunDirectory, knownRunDirectory } from './runDirectory';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { createSendCancellation, SEND_CANCELLED, type SendCancellation } from './sendCancellation';
 import {
@@ -2126,9 +2127,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // failure lands in the same catch every other handshake failure does and
     // the user's text is preserved by `finalizeOutcome`), never here — this
     // prologue is deliberately synchronous up to the commit point.
+    // Decision 176 (2026-10-11): `runDirectory.ts` is this rule, shared with
+    // the start an operation makes, so the two cannot disagree again.
     let workspacePath = options.home
       ? (options.home.workspacePath ?? '')
-      : (cwd ?? activeSession?.unbound?.workspacePath ?? '');
+      : (knownRunDirectory(activeSession, activeWorkspace) ?? '');
     // R11, D48 S2 form: an explicit per-(session, agent) choice, else this
     // agent's template, else NOTHING — `undefined` means `Automatic`, i.e. the
     // key leaves the payload and the runtime's own default serves the turn
@@ -3001,9 +3004,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // never actually uses leaves nothing on disk. Main is idempotent, so a
         // Retry or a second send reuses the same directory rather than
         // stranding the first one.
-        const scratchPath = await cancellation.race(
-          useScratchWorkspaceStore.getState().ensure(sessionId)
-        );
+        const scratchPath = await cancellation.race(ensureScratchRunDirectory(sessionId));
         if (scratchPath === SEND_CANCELLED) return settleStoppedAttempt();
         workspacePath = scratchPath;
       }

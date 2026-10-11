@@ -90,7 +90,7 @@ describe('[U05-b] the composer can send without a bound folder', () => {
     // `finalizeOutcome` path every other handshake failure uses. Decision 046:
     // both awaits race the send's cancel signal, so Stop is not held by them.
     expect(COMPOSER).toMatch(
-      /cancellation\.race\(window\.electronAPI\.chat\.ensureHost\(\)\)\) === SEND_CANCELLED\) \{\s*return settleStoppedAttempt\(\);\s*\}\s*if \(!workspacePath\) \{[\s\S]{0,600}cancellation\.race\(\s*useScratchWorkspaceStore\.getState\(\)\.ensure\(sessionId\)\s*\)/
+      /cancellation\.race\(window\.electronAPI\.chat\.ensureHost\(\)\)\) === SEND_CANCELLED\) \{\s*return settleStoppedAttempt\(\);\s*\}\s*if \(!workspacePath\) \{[\s\S]{0,600}cancellation\.race\(\s*ensureScratchRunDirectory\(sessionId\)\s*\)/
     );
   });
 
@@ -100,9 +100,32 @@ describe('[U05-b] the composer can send without a bound folder', () => {
     // the conversation on — the render it runs from had no conversation, so
     // its `cwd` was empty and the chat used to land in a scratch directory.
     expect(COMPOSER).toMatch(
-      /let workspacePath = options\.home\s*\?\s*\(options\.home\.workspacePath \?\? ''\)\s*:\s*\(cwd \?\? activeSession\?\.unbound\?\.workspacePath \?\? ''\);/
+      /let workspacePath = options\.home\s*\?\s*\(options\.home\.workspacePath \?\? ''\)\s*:\s*\(knownRunDirectory\(activeSession, activeWorkspace\) \?\? ''\);/
     );
     expect(COMPOSER).toMatch(/createSession\(\{\s*sessionId,\s*workspacePath,/);
+  });
+
+  it('decision 176 (2026-10-11): an operation’s start and the card’s Retry use the send path’s rule', () => {
+    // A temporary chat made in this run carries no `unbound`; reading the
+    // session alone, the start refused it (「这个对话没有可以运行的文件夹」)
+    // while a send in the same chat went through. One rule, `runDirectory.ts`,
+    // for all three — a copy in any of them is how they drift apart again.
+    const read = (...parts: string[]) =>
+      stripComments(readFileSync(path.join(__dirname, '..', ...parts), 'utf8'), parts.join('/'));
+    const RULE = read('runDirectory.ts');
+    expect(RULE).toContain('useScratchWorkspaceStore.getState().ensure(sessionId)');
+    const START = read('sessionStart.ts');
+    expect(START).toContain('knownRunDirectory(session, workspace)');
+    expect(START).toContain('await deps.ensureScratchDirectory(sessionId)');
+    expect(read('sessionStartDeps.ts')).toContain(
+      'ensureScratchDirectory: ensureScratchRunDirectory'
+    );
+    const RETRY = read('sessionIndex', 'useResumeSession.ts');
+    expect(RETRY).toContain('knownRunDirectory(session, workspace)');
+    expect(RETRY).toContain('ensureScratchRunDirectory(sessionId)');
+    for (const source of [COMPOSER, START, RETRY]) {
+      expect(source).not.toContain('useScratchWorkspaceStore.getState().ensure(');
+    }
   });
 
   it('reads the scratch directory for cwd-dependent features', () => {

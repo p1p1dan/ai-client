@@ -16,7 +16,10 @@
  *
  *  - {@link startSessionAsSendDoes} is the send path's start with the send
  *    path's arguments: the same resume IPC through the same migration
- *    wrapper, the same model, effort and permissions. A send pressed
+ *    wrapper, the same directory (`runDirectory.ts`: a temporary chat made in
+ *    this run carries no record of its scratch directory and is asked for it,
+ *    as a send asks — GUI point-check fix, 2026-10-11), the same model,
+ *    effort and permissions. A send pressed
  *    meanwhile therefore joins the very same resume in Main (two resumes are
  *    one only when their fingerprints match). A failure is filed on the
  *    conversation's history card, as a send's is — the card is the friendly
@@ -39,12 +42,13 @@ import {
   type HistoryErrorCode,
   isLegacyMigrationRefusal,
 } from './historyError';
+import { knownRunDirectory } from './runDirectory';
 import {
   isLegacyMigrationRequiredError,
   LEGACY_MIGRATION_OPERATION_FAILED,
   type ResumeSessionArgs,
 } from './sessionIndex/legacyMigration';
-import { shouldResumeSession } from './sessionIndex/resumeIntent';
+import { isSessionBusy, shouldResumeSession } from './sessionIndex/resumeIntent';
 
 /** Why a conversation was not started, with nothing asked of Main or nothing filed. */
 export type SessionStartRefusal =
@@ -52,7 +56,7 @@ export type SessionStartRefusal =
   | 'no-session'
   /** It never ran: nothing on disk to start from. A send would create it; an operation has nothing to act on. */
   | 'no-transcript'
-  /** No folder to run it in. */
+  /** No folder to run it in: none of its own, and Main gave it no scratch directory. */
   | 'no-workspace'
   /** A turn runs in it already. */
   | 'busy'
@@ -93,6 +97,12 @@ export interface SessionStartDeps {
   markRunning: (sessionId: string, running: boolean) => void;
   /** File a failed start on the conversation's history card (`historyErrors`). */
   fileFailure: (sessionId: string, encoded: string) => void;
+  /**
+   * The send path's scratch directory for a temporary chat with no directory
+   * this window knows (`ensureScratchRunDirectory`): allocated on first use,
+   * the same one afterwards.
+   */
+  ensureScratchDirectory: (sessionId: string) => Promise<string>;
 }
 
 /**
@@ -138,7 +148,22 @@ export async function startSessionAsSendDoes(
   if (running) return { kind: 'running' };
   if (!session) return { kind: 'refused', reason: 'no-session' };
   if (!session.runtimeIdentity) return { kind: 'refused', reason: 'no-transcript' };
-  const intent = shouldResumeSession(session, workspace, deps.preferences(sessionId));
+  // Before a directory is asked for: a turn running refuses it either way.
+  if (isSessionBusy(session.status)) return { kind: 'refused', reason: 'busy' };
+  // The directory a send would run it in (`runDirectory.ts`). Read off the
+  // session alone, a temporary chat made in this run had none and was refused.
+  let workspacePath = knownRunDirectory(session, workspace);
+  if (!workspacePath) {
+    try {
+      workspacePath = await deps.ensureScratchDirectory(sessionId);
+    } catch {
+      return { kind: 'refused', reason: 'no-workspace' };
+    }
+  }
+  const intent = shouldResumeSession(session, workspace, {
+    ...deps.preferences(sessionId),
+    workspacePath,
+  });
   if (!intent.shouldResume || !intent.args) {
     return {
       kind: 'refused',
