@@ -17,12 +17,14 @@ import {
   Users,
 } from 'lucide-react';
 import { useState } from 'react';
+import { Spinner } from '@/components/ui/spinner';
 import { type TFunction, useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
 import {
   type AutoTurnHeadView,
   autoTurnHeadView,
+  type DshCompactionRowView,
   type DshNoticeRowView,
 } from './dshTimelineRowModel';
 import { formatAbsoluteTime } from './messageMetadata';
@@ -187,6 +189,34 @@ export function DshNoticeRow({ view }: { view: DshNoticeRowView }) {
           {view.text}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * dsh-rebase decision 178: an automatic compaction where it runs — a spinner
+ * and "Compacting the context…" while it runs (the composer's `/compact` status line,
+ * in the timeline), then the context-summary row in its place; or one line
+ * saying it did not succeed, with an info icon like any other notice.
+ */
+export function DshCompactionRow({ view }: { view: DshCompactionRowView }) {
+  const { t } = useI18n();
+  const words = t(view.key);
+  return (
+    <div
+      className={dshLightRowClass()}
+      data-testid="dsh-compaction-row"
+      data-state={view.running ? 'running' : 'settled'}
+      role={view.running ? 'status' : undefined}
+    >
+      {view.running ? (
+        <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
+      ) : (
+        <Info className="size-3.5 shrink-0" aria-hidden />
+      )}
+      <span className="min-w-0 flex-1 truncate" title={words}>
+        {words}
+      </span>
     </div>
   );
 }

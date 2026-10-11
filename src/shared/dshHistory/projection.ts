@@ -36,6 +36,7 @@ import { dshFileReview } from '../dshFileReview.ts';
 import { dshNoticeText, dshTurnHeadText, dshTurnOrigin } from '../dshNotices.ts';
 import type { DshToolPresenter, ToolCallPresentation } from '../dshToolPresentation.ts';
 import type { SessionFileChange } from '../sessionFileChange.ts';
+import type { SessionCompactionTrigger } from '../types/runtimeEvents.ts';
 import type {
   HistoryAttachment,
   HistoryBlock,
@@ -49,6 +50,10 @@ import {
   AICLIENT_LOOP_GUARD_DENIAL,
   AICLIENT_PERMISSION_DENIAL,
   CONTEXT_SUMMARY_TITLE,
+  DSH_COMPACTION_FAILED_KEY,
+  DSH_COMPACTION_FAILED_PART,
+  DSH_COMPACTION_INTERRUPTED_KEY,
+  DSH_COMPACTION_OVERFLOW_FAILED_KEY,
   DSH_SOURCE_AICLIENT_PI_BRANCH_SUMMARY,
   DSH_SOURCE_AICLIENT_RETRY,
   DSH_SOURCE_COMPACT_CHECKPOINT,
@@ -61,6 +66,8 @@ import {
   type DshHistoryEntryType,
   type DshLogEvent,
   type DshToolResultBlock,
+  dshCompactionLiveId,
+  dshCompactionNoteBlockId,
   isDshSummaryRow,
   PI_BRANCH_SUMMARY_PREFIX,
   PI_BRANCH_SUMMARY_SUFFIX,
@@ -202,6 +209,21 @@ function checkpointSummary(content: unknown): string {
 }
 
 /**
+ * The text of a compaction checkpoint's context-summary row. Decision 178:
+ * the bridge's live `session.compaction` (`completed`) carries this very
+ * text, so the live row reads as the replayed one.
+ */
+export function dshCheckpointRowText(content: unknown): string {
+  const summary = checkpointSummary(content);
+  return summary ? `${CONTEXT_SUMMARY_TITLE}\n\n${summary}` : CONTEXT_SUMMARY_TITLE;
+}
+
+/** Decision 178: the note an automatic compaction that ended without a summary leaves. */
+function compactionFailureKey(trigger: SessionCompactionTrigger): string {
+  return trigger === 'overflow' ? DSH_COMPACTION_OVERFLOW_FAILED_KEY : DSH_COMPACTION_FAILED_KEY;
+}
+
+/**
  * The summary inside a migrated pi branch summary, without pi's framing: the
  * text 1.0.x showed under "Context summary".
  */
@@ -324,6 +346,21 @@ function foldSettledAt(message: HistoryMessage, stamp: number | undefined): Hist
   return { ...message, settledAt: stamp };
 }
 
+/** Decision 178: `message` as a compaction's note: one line, the app's own words. */
+function compactionNote(id: string, message: HistoryMessage, key: string): HistoryMessage {
+  return {
+    ...message,
+    blocks: [
+      {
+        type: 'text',
+        id: dshCompactionNoteBlockId(id, DSH_COMPACTION_FAILED_PART),
+        text: key,
+        notice: { key },
+      },
+    ],
+  };
+}
+
 interface Entry {
   message: HistoryMessage;
   hidden: boolean;
@@ -359,6 +396,18 @@ interface TurnState {
    * before any reply leaves empty.
    */
   lastAttempt?: Row;
+  /**
+   * Decision 178: the automatic compactions this turn opened
+   * (`compaction/start` with its turn), by id, until each ends; `settled`
+   * once its checkpoint landed.
+   */
+  readonly compactions: Map<string, { trigger: SessionCompactionTrigger; settled: boolean }>;
+  /**
+   * Decision 178: the entry of the note a failed compaction of this turn
+   * left, while no step has started since. A Stop that ends the turn there
+   * cut the compaction short: the note says it did not finish.
+   */
+  compactionFailure?: number;
 }
 
 export interface DshHistoryFoldOptions {
@@ -401,6 +450,12 @@ export class DshHistoryFold {
   private reportedSteps = 0;
   /** `reason.kind` of the last `turn/end` pushed. */
   private lastTurnEndKind: string | undefined;
+  /**
+   * Decision 178: a step is open (`step/start` without its `step/end`). An
+   * automatic compaction that starts then is an overflow recovery (the
+   * step's request was refused); one between steps is pressure.
+   */
+  private stepOpen = false;
 
   constructor(options: DshHistoryFoldOptions = {}) {
     this.liveSessionId = options.liveSessionId;
@@ -448,10 +503,21 @@ export class DshHistoryFold {
     this.view = null;
     switch (event.type) {
       case 'turn/start':
+        this.stepOpen = false;
         this.openTurn(event);
         return;
       case 'user/message':
         this.onUserMessage(event);
+        return;
+      case 'step/start':
+        this.stepOpen = true;
+        if (this.turn) this.turn.compactionFailure = undefined;
+        return;
+      case 'compaction/start':
+        this.onCompactionStart(event);
+        return;
+      case 'compaction/end':
+        this.onCompactionEnd(event);
         return;
       case 'assistant/message':
         this.closeFirstBatch();
@@ -466,6 +532,7 @@ export class DshHistoryFold {
         return;
       }
       case 'step/end':
+        this.stepOpen = false;
         this.closeFirstBatch();
         return;
       case 'tool/call':
@@ -521,6 +588,86 @@ export class DshHistoryFold {
     return this.liveSessionId ? { liveMessageId: `dsh-${kind}-${seq}` } : {};
   }
 
+  /** Decision 178: the id the live bridge gave an automatic compaction's row. */
+  private liveCompactionId(compactionId: string): { liveMessageId?: string } {
+    return this.liveSessionId ? { liveMessageId: dshCompactionLiveId(compactionId) } : {};
+  }
+
+  // ---- automatic compaction (decision 178) ------------------------------------------
+
+  /**
+   * `compaction/start` of a compaction a turn owns (`turn` is its number; a
+   * `/compact` the user ran has none and is not followed here: its summary
+   * row is all the timeline shows of it).
+   */
+  private onCompactionStart(event: DshLogEvent): void {
+    const data = recordOf(event.data);
+    const compactionId = stringOf(data?.compactionId);
+    if (!compactionId || typeof data?.turn !== 'number' || !this.turn) return;
+    this.turn.compactions.set(compactionId, {
+      trigger: this.stepOpen ? 'overflow' : 'pressure',
+      settled: false,
+    });
+  }
+
+  /** A compaction that closed without a checkpoint leaves a note where it ran. */
+  private onCompactionEnd(event: DshLogEvent): void {
+    const data = recordOf(event.data);
+    const compactionId = stringOf(data?.compactionId);
+    const turn = this.turn;
+    const open = compactionId ? turn?.compactions.get(compactionId) : undefined;
+    if (!turn || !compactionId || !open) return;
+    turn.compactions.delete(compactionId);
+    if (open.settled || data?.error === undefined) return;
+    turn.compactionFailure = this.appendCompactionNote(
+      compactionId,
+      compactionFailureKey(open.trigger),
+      timeOf(event)
+    );
+  }
+
+  /**
+   * The turn ended. A failed compaction no step followed, in a turn that was
+   * stopped, was cut short by the Stop; one with no end at all was cut short
+   * by the engine going away (DSH closes such a turn as `interrupted`).
+   */
+  private settleCompactions(turn: TurnState, aborted: boolean, time: number | undefined): void {
+    if (aborted && turn.compactionFailure !== undefined) {
+      this.update(turn.compactionFailure, (message) =>
+        compactionNote(message.id, message, DSH_COMPACTION_INTERRUPTED_KEY)
+      );
+    }
+    for (const [compactionId, open] of turn.compactions) {
+      if (!open.settled)
+        this.appendCompactionNote(compactionId, DSH_COMPACTION_INTERRUPTED_KEY, time);
+    }
+    turn.compactions.clear();
+    turn.compactionFailure = undefined;
+  }
+
+  private appendCompactionNote(
+    compactionId: string,
+    key: string,
+    time: number | undefined
+  ): number {
+    const rawId = `compaction-${compactionId}`;
+    const id = historyId(rawId);
+    return this.append(
+      compactionNote(
+        id,
+        {
+          id,
+          entryId: rawId,
+          role: 'system',
+          ...(time !== undefined ? { timestamp: time } : {}),
+          blocks: [],
+          ...this.liveCompactionId(compactionId),
+        },
+        key
+      )
+    );
+  }
+
   // ---- turns ------------------------------------------------------------------
 
   private openTurn(event: DshLogEvent): void {
@@ -534,6 +681,7 @@ export class DshHistoryFold {
       firstBatch: true,
       steps: [],
       open: new Set(),
+      compactions: new Map(),
     };
   }
 
@@ -657,7 +805,9 @@ export class DshHistoryFold {
       this.update(last, (message) => ({ ...message, stopReason: 'length' }));
     }
     // `completed`, `blocked` and `forked` add nothing.
+    this.settleCompactions(turn, kind === 'aborted', time);
     this.retryHideable = hideable;
+    this.stepOpen = false;
     this.turn = null;
   }
 
@@ -720,8 +870,11 @@ export class DshHistoryFold {
     }
     if (kind === DSH_SOURCE_COMPACT_CHECKPOINT) {
       // The earlier messages it shadows stay on the timeline: the timeline is
-      // what was said, not what the model still sees.
-      const summary = checkpointSummary(message.content);
+      // what was said, not what the model still sees. Decision 178: an
+      // automatic compaction's summary is the row its live copy became.
+      const compactionId = stringOf(source?.compactionId);
+      const automatic = compactionId ? turn?.compactions.get(compactionId) : undefined;
+      if (automatic) automatic.settled = true;
       this.append({
         id,
         entryId: rawId,
@@ -731,9 +884,10 @@ export class DshHistoryFold {
           {
             type: 'text',
             id: partId(id, SUMMARY_PART, 0),
-            text: summary ? `${CONTEXT_SUMMARY_TITLE}\n\n${summary}` : CONTEXT_SUMMARY_TITLE,
+            text: dshCheckpointRowText(message.content),
           },
         ],
+        ...(automatic && compactionId ? this.liveCompactionId(compactionId) : {}),
       });
       return;
     }

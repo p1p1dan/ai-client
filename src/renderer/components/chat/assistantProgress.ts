@@ -357,6 +357,9 @@ export function classifyAssistantProgress(
  *  - usage.updated: interim token tick, the model is producing.
  *  - subagent.activity: a subagent is running while the main stream can stay
  *    legitimately quiet for a long time.
+ *  - session.compaction (dsh-rebase decision 178): the engine is summarizing
+ *    the conversation for this turn, which can take a while before the step
+ *    it delays says anything.
  *  - session.created / resumed / updated / settingsEcho / permissionUpdated:
  *    handshake and mid-turn setting frames, proof the Host is responding.
  *
@@ -383,6 +386,7 @@ const TURN_LIVENESS_EVENT_TYPES: ReadonlySet<string> = new Set([
   'session.stderr',
   'usage.updated',
   'subagent.activity',
+  'session.compaction',
   'session.created',
   'session.resumed',
   'session.updated',

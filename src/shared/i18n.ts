@@ -4416,3 +4416,24 @@ Object.assign(zhTranslations, {
   'For an AI service you added yourself, edit it under AI services above and change the context window and output limit in Model settings; for a model your administrator provides, ask them.':
     '自己添加的 AI 服务：在上方「AI 服务」里编辑该服务，在「模型设置」中修改上下文窗口和输出上限；管理员提供的模型请联系管理员。',
 });
+
+// Compaction progress (live)
+/**
+ * dsh-rebase decision 178: an automatic compaction where it runs in the
+ * timeline (`session.compaction`; the running line reuses the `/compact`
+ * status line's key above), its note when it ends without a summary, and the
+ * failure card of DSH's context overflow (`sessionFailure.ts`).
+ */
+Object.assign(zhTranslations, {
+  'Automatic compaction did not succeed; this turn goes on with the full context.':
+    '自动压缩没有成功，这一轮继续使用完整的上下文。',
+  'Automatic compaction did not succeed; the request still exceeds the model’s context window.':
+    '自动压缩没有成功，请求仍然超出模型的上下文窗口。',
+  'Automatic compaction did not finish; the context was not compacted.':
+    '自动压缩没有完成，上下文没有压缩。',
+  'The conversation no longer fits the model’s context window': '对话已经超出模型的上下文窗口',
+  'The request was sent, and the model refused it as larger than its context window. The engine tried to compact the context and retry, and it still did not fit.':
+    '请求已经发给模型，模型以超出上下文窗口为由拒绝了它。引擎已尝试压缩上下文后重试，仍然放不下。',
+  'Switch to a model with a larger context window, start a new chat, or run /compact first and then send a message to carry on.':
+    '换用上下文窗口更大的模型、新开对话，或先输入 /compact 压缩上下文，再发消息接着做。',
+});

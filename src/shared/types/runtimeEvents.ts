@@ -47,6 +47,7 @@ export type RuntimeEventType =
   | 'subagent.activity'
   | 'session.projection'
   | 'session.permissions'
+  | 'session.compaction'
   | 'session.completed'
   | 'session.failed'
   | 'session.stopped';
@@ -1464,6 +1465,44 @@ export interface SessionPermissionsEvent extends RuntimeEventBase {
 }
 
 /**
+ * dsh-rebase decision 178: what an automatic compaction DSH runs inside a
+ * turn is doing. Two triggers: `pressure` — before a step, the request grew
+ * past the model's threshold; `overflow` — the model refused the step's
+ * request as too large for its window, and the engine compacts and retries.
+ * A `/compact` the user ran is not one of these (the composer shows its own
+ * status line, decision 176).
+ *
+ * One row per compaction, by `messageId` (`dsh-compaction-<compactionId>`):
+ * `started` opens it ("Compacting the context…"); `completed` turns it into the
+ * context-summary row the history projects for the same checkpoint (which
+ * names this id as its `liveMessageId`), with `summary` the row's text;
+ * `failed` and `interrupted` (stopped, or the engine went away) turn it into
+ * a one-line note. `beforeMessageId`: the row goes before that message when
+ * the renderer has it — an `overflow` compaction runs inside a step whose
+ * message the refused request already opened, and the history shows the
+ * summary before that step's reply.
+ *
+ * A new event type, not a rider: a renderer that predates it drops it in its
+ * reducer's `default` branch and shows nothing, as before.
+ */
+export type SessionCompactionTrigger = 'pressure' | 'overflow';
+
+export type SessionCompactionPhase = 'started' | 'completed' | 'failed' | 'interrupted';
+
+export interface SessionCompactionEvent extends RuntimeEventBase {
+  type: 'session.compaction';
+  sessionId: string;
+  payload: {
+    messageId: string;
+    phase: SessionCompactionPhase;
+    trigger: SessionCompactionTrigger;
+    beforeMessageId?: string;
+    /** `completed` only: the row's text, as the history projects it. */
+    summary?: string;
+  };
+}
+
+/**
  * T08-b — what the permission plugin BROADCAST, as opposed to what it asked.
  *
  * ## Why this is not `permission.requested`
@@ -1578,6 +1617,7 @@ export type RuntimeEvent =
   | SubagentActivityEvent
   | SessionProjectionEvent
   | SessionPermissionsEvent
+  | SessionCompactionEvent
   | SessionTerminalEvent;
 
 /**

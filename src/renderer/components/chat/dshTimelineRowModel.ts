@@ -1,4 +1,9 @@
-import { CONTEXT_SUMMARY_TITLE } from '@shared/dshHistory/types';
+import {
+  CONTEXT_SUMMARY_TITLE,
+  DSH_COMPACTION_RUNNING_PART,
+  dshCompactionNoteBlockId,
+  isDshCompactionNoteRow,
+} from '@shared/dshHistory/types';
 import type { Translate } from '@shared/i18n';
 import { PLAN_REVIEW_NOTICE_SUMMARIES } from '@shared/planReview';
 import type { TurnOrigin } from '@shared/types/sessionHistory';
@@ -77,6 +82,29 @@ export function dshNoticeRowView(message: ChatMessage): DshNoticeRowView | null 
     ...(kind === 'notice' && PLAN_REVIEW_NOTICE_SUMMARIES.includes(text)
       ? { translatable: true as const }
       : {}),
+  };
+}
+
+/**
+ * dsh-rebase decision 178: an automatic compaction's own note — running
+ * ("Compacting the context…" until the summary row takes its place) or ended without a
+ * summary — drawn as one light line. `key` is the dictionary key the row
+ * carries, live and replayed alike.
+ */
+export interface DshCompactionRowView {
+  running: boolean;
+  key: string;
+}
+
+/** The compaction note a system message is, or null for any other row. */
+export function dshCompactionRowView(message: ChatMessage): DshCompactionRowView | null {
+  if (!isDshCompactionNoteRow(message)) return null;
+  const first = message.blocks[0];
+  const key = first?.notice?.key ?? first?.text ?? '';
+  if (!key) return null;
+  return {
+    running: first?.id === dshCompactionNoteBlockId(message.id, DSH_COMPACTION_RUNNING_PART),
+    key,
   };
 }
 

@@ -17,7 +17,11 @@ import {
   projectDshHistory,
 } from '../projection.ts';
 import {
+  DSH_COMPACTION_FAILED_KEY,
+  DSH_COMPACTION_INTERRUPTED_KEY,
+  DSH_COMPACTION_OVERFLOW_FAILED_KEY,
   type DshLogEvent,
+  isDshCompactionNoteRow,
   isDshSummaryRow,
   PI_BRANCH_SUMMARY_PREFIX,
   PI_BRANCH_SUMMARY_SUFFIX,
@@ -1363,5 +1367,121 @@ describe('DshHistoryFold — what the live bridge reads off it (P1-4d1)', () => 
     expect(fold.lastTurnEnd).toBe('error');
     for (const event of events.slice(firstEnd + 1)) fold.push(event);
     expect(fold.lastTurnEnd).toBe('completed');
+  });
+});
+
+/**
+ * dsh-rebase decision 178: an automatic compaction a turn owns. Its summary
+ * names the row its live copy became; one that ended without a summary
+ * leaves a one-line note where it ran, worded by why.
+ */
+describe('projectDshHistory — automatic compaction (decision 178)', () => {
+  const checkpoint = (
+    id: string,
+    compactionId: string
+  ): [string, string, Record<string, unknown>, unknown[]] => [
+    id,
+    '',
+    { kind: 'compact-checkpoint', compactionId },
+    [
+      text('framing\n\n<compacted-summary>'),
+      text('## Current Work\n- x'),
+      text('</compacted-summary>'),
+    ],
+  ];
+  const noteKey = (row: HistoryMessage | undefined) =>
+    (row?.blocks[0] as { notice?: { key: string } } | undefined)?.notice?.key;
+
+  it('[178-PROJ-1] the summary of an automatic compaction names its live row; a /compact does not', () => {
+    const l = log()
+      .turn(1)
+      .add('step/start', { turn: 1, step: 1 })
+      .user('u1', 'first')
+      .assistant(1, 1, 'a1', [text('ok')])
+      .add('step/end', { turn: 1, step: 1 })
+      .end(1, { kind: 'completed' })
+      .turn(2)
+      .add('compaction/start', { compactionId: 'auto', turn: 2 })
+      .user(...checkpoint('cp-auto', 'auto'))
+      .add('compaction/end', { compactionId: 'auto', turn: 2 })
+      .add('step/start', { turn: 2, step: 1 })
+      .user('u2', 'second')
+      .assistant(2, 1, 'a2', [text('fine')])
+      .add('step/end', { turn: 2, step: 1 })
+      .end(2, { kind: 'completed' })
+      .add('compaction/start', { compactionId: 'manual', sourceCommandId: 'cmd', turn: null })
+      .user(...checkpoint('cp-manual', 'manual'))
+      .add('compaction/end', { compactionId: 'manual', sourceCommandId: 'cmd', turn: null });
+    const rows = projectDshHistory(l.events, { liveSessionId: 's' });
+    expect(ids(rows)).toEqual(['h:u1', 'h:a1', 'h:cp-auto', 'h:u2', 'h:a2', 'h:cp-manual']);
+    expect(rows[2]?.liveMessageId).toBe('dsh-compaction-auto');
+    expect(isDshSummaryRow(rows[2] as HistoryMessage)).toBe(true);
+    expect(rows[5]?.liveMessageId).toBeUndefined();
+    // Without a live session there is no live id to name.
+    expect(projectDshHistory(l.events)[2]?.liveMessageId).toBeUndefined();
+  });
+
+  it('[178-PROJ-2] one that failed leaves a note by its trigger: between steps, or in a refused step', () => {
+    const l = log()
+      .turn(1)
+      .add('compaction/start', { compactionId: 'p', turn: 1 })
+      .add('compaction/end', { compactionId: 'p', turn: 1, error: 'refused' })
+      .add('step/start', { turn: 1, step: 1 })
+      .user('u1', 'go')
+      .add('assistant/attempt', { turn: 1, step: 1 })
+      .add('compaction/start', { compactionId: 'o', turn: 1 })
+      .add('compaction/end', { compactionId: 'o', turn: 1, error: 'refused' })
+      .add('step/end', { turn: 1, step: 1 })
+      .end(1, { kind: 'error', error: { code: 'CONTEXT_WINDOW_EXCEEDED', message: 'too long' } });
+    const rows = projectDshHistory(l.events, { liveSessionId: 's' });
+    expect(ids(rows)).toEqual(['h:compaction-p', 'h:u1', 'h:compaction-o', 'h:u1:end']);
+    expect(rows[0] && isDshCompactionNoteRow(rows[0])).toBe(true);
+    expect(noteKey(rows[0])).toBe(DSH_COMPACTION_FAILED_KEY);
+    expect(rows[0]?.liveMessageId).toBe('dsh-compaction-p');
+    expect(noteKey(rows[2])).toBe(DSH_COMPACTION_OVERFLOW_FAILED_KEY);
+    expect(rows[3]?.failure).toEqual({ errorCode: 'CONTEXT_TOO_LARGE', error: 'too long' });
+    expect(translate('zh', DSH_COMPACTION_OVERFLOW_FAILED_KEY)).not.toBe(
+      DSH_COMPACTION_OVERFLOW_FAILED_KEY
+    );
+  });
+
+  it('[178-PROJ-3] cut short: by a Stop before any step, or by the engine going away', () => {
+    const stopped = log()
+      .turn(1)
+      .add('compaction/start', { compactionId: 'x', turn: 1 })
+      .add('compaction/end', { compactionId: 'x', turn: 1, error: 'aborted' })
+      .end(1, { kind: 'aborted', reason: { kind: 'user' } });
+    expect(noteKey(projectDshHistory(stopped.events)[0])).toBe(DSH_COMPACTION_INTERRUPTED_KEY);
+
+    // A step ran after the failure: the turn went on, so the failure stands.
+    const later = log()
+      .turn(1)
+      .add('compaction/start', { compactionId: 'y', turn: 1 })
+      .add('compaction/end', { compactionId: 'y', turn: 1, error: 'refused' })
+      .add('step/start', { turn: 1, step: 1 })
+      .user('u1', 'go')
+      .add('step/end', { turn: 1, step: 1 })
+      .end(1, { kind: 'aborted', reason: { kind: 'user' } });
+    expect(noteKey(projectDshHistory(later.events)[0])).toBe(DSH_COMPACTION_FAILED_KEY);
+
+    // No end at all (the engine died; DSH closes the turn on resume).
+    const died = log()
+      .turn(1)
+      .add('compaction/start', { compactionId: 'z', turn: 1 })
+      .end(1, { kind: 'interrupted' });
+    const rows = projectDshHistory(died.events);
+    expect(ids(rows)).toEqual(['h:compaction-z']);
+    expect(noteKey(rows[0])).toBe(DSH_COMPACTION_INTERRUPTED_KEY);
+
+    // Its checkpoint landed before the engine died: the summary is the outcome.
+    const landed = log()
+      .turn(1)
+      .add('compaction/start', { compactionId: 'w', turn: 1 })
+      .user(...checkpoint('cp-w', 'w'))
+      .end(1, { kind: 'interrupted' });
+    expect(projectDshHistory(landed.events).map((row) => isDshSummaryRow(row))).toEqual([
+      true,
+      false,
+    ]);
   });
 });

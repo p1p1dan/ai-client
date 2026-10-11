@@ -1832,6 +1832,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     // waking the session after the Stop (it may still wake it; decision 119).
     this.children.interruptAll();
     this.jobs.stopSubagentJobs('the user pressed Stop');
+    // Decision 178: an automatic compaction the Stop cuts short did not fail.
+    this.live.noteStopRequested();
     this.handle.agent.cancel({ kind: 'user' }, { keepInbox: true });
     return { stopped: true };
   }

@@ -179,6 +179,19 @@ describe('session branches dialog (problem 9: user / assistant / assistant messa
     ).toBe('上下文摘要 all of it');
     expect(sessionTreeNodeTitle(node({ entryType: 'model_change' }), zh)).toBe('model change');
   });
+
+  it('[178-TREE] words an automatic compaction’s note in the UI language', () => {
+    expect(
+      sessionTreeNodeTitle(
+        node({
+          role: 'system',
+          entryType: 'notice',
+          preview: 'Automatic compaction did not succeed; this turn goes on with the full context.',
+        }),
+        zh
+      )
+    ).toBe('自动压缩没有成功，这一轮继续使用完整的上下文。');
+  });
 });
 
 describe('context summary title (decision 140 rule 16)', () => {

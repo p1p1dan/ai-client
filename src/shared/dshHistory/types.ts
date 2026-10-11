@@ -135,5 +135,67 @@ export function isDshSummaryRow(message: {
   );
 }
 
+/**
+ * dsh-rebase decision 178: the live id of an automatic compaction's row
+ * (`dsh-compaction-<compactionId>`, `session.compaction`). The history names
+ * it as `liveMessageId` on the same compaction's summary row, or on its note
+ * when it failed, so the live row and the replayed one are one row.
+ */
+export const DSH_COMPACTION_LIVE_ID_PREFIX = 'dsh-compaction-';
+
+export function dshCompactionLiveId(compactionId: string): string {
+  return `${DSH_COMPACTION_LIVE_ID_PREFIX}${compactionId}`;
+}
+
+/**
+ * Decision 178: part-id kinds of the first block of a compaction's own note
+ * (`<row id>:<kind>:0`), the way `DSH_SUMMARY_PART` marks a summary: one still
+ * running (live only), and one that ended without a summary.
+ */
+export const DSH_COMPACTION_RUNNING_PART = 'compaction-running';
+export const DSH_COMPACTION_FAILED_PART = 'compaction-failed';
+
+/**
+ * Decision 178: the notes, dictionary keys in English like every projected
+ * byte (the row's `notice.key`). The running line is the composer's own
+ * `/compact` status line (decision 176), so one dictionary entry serves both.
+ */
+export const DSH_COMPACTION_RUNNING_KEY = 'Compacting the context…';
+/** A pressure compaction failed; the step goes on with the context it had. */
+export const DSH_COMPACTION_FAILED_KEY =
+  'Automatic compaction did not succeed; this turn goes on with the full context.';
+/** An overflow compaction failed; the refused request still does not fit. */
+export const DSH_COMPACTION_OVERFLOW_FAILED_KEY =
+  'Automatic compaction did not succeed; the request still exceeds the model’s context window.';
+/** Stopped while it ran, or the engine went away under it. */
+export const DSH_COMPACTION_INTERRUPTED_KEY =
+  'Automatic compaction did not finish; the context was not compacted.';
+
+/** The first-block id of a compaction note row. */
+export function dshCompactionNoteBlockId(
+  rowId: string,
+  kind: typeof DSH_COMPACTION_RUNNING_PART | typeof DSH_COMPACTION_FAILED_PART
+): string {
+  return `${rowId}:${kind}:0`;
+}
+
+/**
+ * Whether a timeline row is a compaction's own note — running, failed or
+ * interrupted (decision 178) — by the id of its first block, as
+ * `isDshSummaryRow` reads a summary. Like a summary, it is not a turn's work.
+ */
+export function isDshCompactionNoteRow(message: {
+  readonly id: string;
+  readonly role: string;
+  readonly blocks: readonly { readonly id: string }[];
+}): boolean {
+  if (message.role !== 'system') return false;
+  const first = message.blocks[0]?.id;
+  return (
+    first === dshCompactionNoteBlockId(message.id, DSH_COMPACTION_RUNNING_PART) ||
+    first === dshCompactionNoteBlockId(message.id, DSH_COMPACTION_FAILED_PART)
+  );
+}
+
 /** What a tree node is, beyond its role (`SessionTreeNode.entryType`). */
 export type DshHistoryEntryType = 'message' | 'compaction' | 'notice';

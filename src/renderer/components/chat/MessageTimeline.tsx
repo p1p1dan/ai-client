@@ -1,4 +1,4 @@
-import { isDshSummaryRow } from '@shared/dshHistory/types';
+import { isDshCompactionNoteRow, isDshSummaryRow } from '@shared/dshHistory/types';
 import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
   ArrowDown,
@@ -97,8 +97,12 @@ import {
   type TurnItem,
   type TurnSegment,
 } from './chatTurn';
-import { AutoTurnHead, DshNoticeRow } from './DshTimelineRows';
-import { dshNoticeRowView, localizeContextSummaryTitle } from './dshTimelineRowModel';
+import { AutoTurnHead, DshCompactionRow, DshNoticeRow } from './DshTimelineRows';
+import {
+  dshCompactionRowView,
+  dshNoticeRowView,
+  localizeContextSummaryTitle,
+} from './dshTimelineRowModel';
 import { FailureContinueButton } from './FailureContinueButton';
 import {
   deriveHistoryNotice,
@@ -2122,10 +2126,12 @@ const ChatTurn = memo(function ChatTurn({
   // P1-7e (problem 10): a context summary is not the turn's work. `/compact`
   // runs after the turn it follows, and its row (dated when the summary was
   // written) would otherwise stretch that turn's 「已工作」 by the compaction.
+  // Decision 178: nor is an automatic compaction's note, which can sit
+  // before the next prompt the same way.
   const bodyMetadata = useMemo(
     () =>
       turn.body.map((message) =>
-        isDshSummaryRow(message)
+        isDshSummaryRow(message) || isDshCompactionNoteRow(message)
           ? undefined
           : (getMetadata(message.id) ?? replayedSpanMetadata(message))
       ),
@@ -3155,6 +3161,10 @@ function TurnItemView({
       if (item.message.turnEnd) {
         return <TurnEndNotice turnEnd={item.message.turnEnd} afterWork={endNoteAfterWork} />;
       }
+      // Decision 178: an automatic compaction running, or ended without a
+      // summary, is one light line (its summary keeps the Alert below).
+      const compaction = dshCompactionRowView(item.message);
+      if (compaction) return <DshCompactionRow view={compaction} />;
       // P1-7a: a DSH notice (a task's or a subagent's account, a command's
       // answer) is one light line; every other notice keeps its Alert.
       const row = dshNoticeRowView(item.message);

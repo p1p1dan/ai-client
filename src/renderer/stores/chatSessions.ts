@@ -1,3 +1,16 @@
+// Leaf module (type imports only): the compaction rows' ids and words, the
+// same the history projection writes (decision 178).
+import {
+  CONTEXT_SUMMARY_TITLE,
+  DSH_COMPACTION_FAILED_KEY,
+  DSH_COMPACTION_FAILED_PART,
+  DSH_COMPACTION_INTERRUPTED_KEY,
+  DSH_COMPACTION_OVERFLOW_FAILED_KEY,
+  DSH_COMPACTION_RUNNING_KEY,
+  DSH_COMPACTION_RUNNING_PART,
+  DSH_SUMMARY_PART,
+  dshCompactionNoteBlockId,
+} from '@shared/dshHistory/types';
 // Leaf module (no value imports of its own, decision 106 rule 2): the DSH
 // notice table the bridge and the history projection read too.
 import { dshNoticeKindOf } from '@shared/dshNotices';
@@ -17,6 +30,7 @@ import type {
   PlanReviewCard,
   QuestionItem,
   RuntimeEvent,
+  SessionCompactionEvent,
   SessionRecoveryNote,
   SessionRetryInfo,
   SessionRuntimeStatus,
@@ -1064,6 +1078,116 @@ function withFailedRequest(
   return {};
 }
 
+/**
+ * dsh-rebase decision 178: an automatic compaction's row as `session.compaction`
+ * leaves it — running, the context summary, or a note when it ended without
+ * one. The summary is the row the history projects for the same checkpoint
+ * (`<id>:summary:0`, `isDshSummaryRow`); the notes carry the projection's
+ * block ids and keys too, so a replay that names this id folds it in place.
+ */
+function compactionRow(sessionId: string, payload: SessionCompactionEvent['payload']): ChatMessage {
+  const { messageId: id, phase } = payload;
+  if (phase === 'completed') {
+    return {
+      id,
+      sessionId,
+      role: 'system',
+      blocks: [
+        {
+          id: `${id}:${DSH_SUMMARY_PART}:0`,
+          type: 'text',
+          text: payload.summary || CONTEXT_SUMMARY_TITLE,
+        },
+      ],
+    };
+  }
+  const running = phase === 'started';
+  const key = running
+    ? DSH_COMPACTION_RUNNING_KEY
+    : phase === 'interrupted'
+      ? DSH_COMPACTION_INTERRUPTED_KEY
+      : payload.trigger === 'overflow'
+        ? DSH_COMPACTION_OVERFLOW_FAILED_KEY
+        : DSH_COMPACTION_FAILED_KEY;
+  return {
+    id,
+    sessionId,
+    role: 'system',
+    blocks: [
+      {
+        id: dshCompactionNoteBlockId(
+          id,
+          running ? DSH_COMPACTION_RUNNING_PART : DSH_COMPACTION_FAILED_PART
+        ),
+        type: 'text',
+        text: key,
+        notice: { key },
+      },
+    ],
+  };
+}
+
+function isRunningCompactionRow(message: ChatMessage): boolean {
+  return (
+    message.role === 'system' &&
+    message.blocks[0]?.id === dshCompactionNoteBlockId(message.id, DSH_COMPACTION_RUNNING_PART)
+  );
+}
+
+/**
+ * Decision 178: the row goes where its id already is; a new one before
+ * `beforeMessageId` when the bucket has it (an overflow recovery's step), at
+ * the end otherwise. A late `started` never reopens a row that has settled.
+ */
+function withCompactionEvent(
+  state: ChatSessionsState,
+  sessionId: string,
+  payload: SessionCompactionEvent['payload']
+): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
+  if (typeof payload?.messageId !== 'string' || payload.messageId === '') return {};
+  const bucket = state.messages[sessionId] ?? [];
+  const index = bucket.findIndex((message) => message.id === payload.messageId);
+  const existing = index >= 0 ? bucket[index] : undefined;
+  if (payload.phase === 'started' && existing && !isRunningCompactionRow(existing)) return {};
+  const row = compactionRow(sessionId, payload);
+  let next: ChatMessage[];
+  if (existing) {
+    next = bucket.slice();
+    next[index] = row;
+  } else {
+    const before = payload.beforeMessageId
+      ? bucket.findIndex((message) => message.id === payload.beforeMessageId)
+      : -1;
+    next =
+      before >= 0 ? [...bucket.slice(0, before), row, ...bucket.slice(before)] : [...bucket, row];
+  }
+  return { messages: withBucket(state, sessionId, next) };
+}
+
+/**
+ * Decision 178: the turn ended (completed, failed, stopped — Main's forced
+ * stop too) with a compaction row still running: nothing will finish it, so
+ * it says the compaction did not finish. Returns `state` itself when there is
+ * none, so a caller can tell.
+ */
+function withRunningCompactionsSettled(
+  state: ChatSessionsState,
+  sessionId: string
+): ChatSessionsState {
+  const bucket = state.messages[sessionId];
+  if (!bucket?.some(isRunningCompactionRow)) return state;
+  const next = bucket.map((message) =>
+    isRunningCompactionRow(message)
+      ? compactionRow(sessionId, {
+          messageId: message.id,
+          phase: 'interrupted',
+          trigger: 'pressure',
+        })
+      : message
+  );
+  return { ...state, messages: withBucket(state, sessionId, next) };
+}
+
 /** History row id of a turn's end placeholder: `<turn head row id>:end` (`projection.ts`). */
 const TURN_END_ROW_SUFFIX = ':end';
 
@@ -1665,6 +1789,9 @@ function applyRuntimeEventCore(
       };
     }
 
+    case 'session.compaction':
+      return withCompactionEvent(state, sessionId, event.payload);
+
     case 'session.completed': {
       // Terminal event bailout: a turn can never complete while canUseTool
       // still has this session parked, so any leftover entries here are
@@ -1681,21 +1808,28 @@ function applyRuntimeEventCore(
         upsertSessionStatus(state.sessions, sessionId, 'idle'),
         sessionId
       );
+      // Decision 178: a compaction row nothing will finish now.
+      const settled = withRunningCompactionsSettled(state, sessionId);
+      const compactions = settled === state ? {} : { messages: settled.messages };
       if (event.payload?.stopCause === 'interjected') {
         return {
           sessions,
           unreadSessionIds: markSessionUnread(state, sessionId),
-          ...withRunStopCause(state, sessionId, 'interjected'),
+          ...compactions,
+          ...withRunStopCause(settled, sessionId, 'interjected'),
         };
       }
       return {
         sessions,
         unreadSessionIds: markSessionUnread(state, sessionId),
+        ...compactions,
         ...withoutSessionPermissions(state, sessionId),
       };
     }
 
     case 'session.failed': {
+      // Decision 178: a compaction row nothing will finish now.
+      const settled = withRunningCompactionsSettled(state, sessionId);
       return {
         sessions: touchSessionActivity(
           upsertSessionStatus(state.sessions, sessionId, 'failed'),
@@ -1704,8 +1838,9 @@ function applyRuntimeEventCore(
         lastError: event.payload?.error ?? 'Session failed',
         unreadSessionIds: markSessionUnread(state, sessionId),
         ...withoutSessionPermissions(state, sessionId),
+        ...(settled === state ? {} : { messages: settled.messages }),
         // Decision 156: the request that failed before any reply is marked so.
-        ...withFailedRequest(state, sessionId),
+        ...withFailedRequest(settled, sessionId),
       };
     }
 
@@ -1716,6 +1851,8 @@ function applyRuntimeEventCore(
       if (event.payload?.stopCause === 'no_active_turn') {
         return settleNoActiveTurn(state, sessionId);
       }
+      // Decision 178: a compaction row the Stop cut short.
+      const settled = withRunningCompactionsSettled(state, sessionId);
       return {
         // Decision 138: a turn cut off is a turn ended — activity.
         sessions: touchSessionActivity(
@@ -1723,8 +1860,9 @@ function applyRuntimeEventCore(
           sessionId
         ),
         ...withoutSessionPermissions(state, sessionId),
+        ...(settled === state ? {} : { messages: settled.messages }),
         // Decision 146: a turn stopped before any reply ends on the history's note.
-        ...withStoppedRun(state, sessionId),
+        ...withStoppedRun(settled, sessionId),
       };
     }
 

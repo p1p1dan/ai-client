@@ -1,3 +1,8 @@
+import {
+  DSH_COMPACTION_FAILED_KEY,
+  DSH_COMPACTION_INTERRUPTED_KEY,
+  DSH_COMPACTION_OVERFLOW_FAILED_KEY,
+} from '@shared/dshHistory/types';
 import { englishTranslate, type Translate } from '@shared/i18n';
 import {
   PI_SESSION_TREE_UI_LIMIT,
@@ -51,6 +56,13 @@ const MESSAGE_TITLE_KEYS: Readonly<Record<string, string>> = {
   system: 'system message',
 };
 
+/** Decision 178: the notes an automatic compaction leaves, whole (none is long enough to clip). */
+const DSH_COMPACTION_NOTE_KEYS: ReadonlySet<string> = new Set([
+  DSH_COMPACTION_FAILED_KEY,
+  DSH_COMPACTION_OVERFLOW_FAILED_KEY,
+  DSH_COMPACTION_INTERRUPTED_KEY,
+]);
+
 const ENTRY_TYPE_KEYS: Readonly<Record<string, string>> = {
   message: 'message',
   compaction: 'context summary',
@@ -76,6 +88,8 @@ export function sessionTreeNodeTitle(
   t: Translate = englishTranslate
 ): string {
   if (node.label) return node.label;
+  // Decision 178: an automatic compaction's note is the app's own sentence.
+  if (node.preview && DSH_COMPACTION_NOTE_KEYS.has(node.preview)) return t(node.preview);
   // A compaction's preview opens with the projection's English title.
   if (node.preview) return localizeContextSummaryTitle(node.preview, t);
   const messageKey =

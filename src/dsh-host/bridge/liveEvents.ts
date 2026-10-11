@@ -49,6 +49,11 @@
  *                                       the title the tool declares for it
  *                                       (`presentCall`, decision 131); the
  *                                       history fold asks the same presenter
+ *   `compaction/start` / `/end` of a    `session.compaction` (decision 178):
+ *   compaction a turn owns              the row opens, becomes the summary row
+ *                                       when the checkpoint lands, or a note
+ *                                       when it ends without one; a `/compact`
+ *                                       the user ran (no turn) shows nothing
  *
  * Message ids are fixed by DSH's own coordinates — `dsh-user-<seq>`,
  * `dsh-notice-<seq>`, `dsh-<session>-t<turn>-s<step>` — and the history
@@ -59,9 +64,17 @@
 
 import { dshFailureErrorCode } from '../../shared/dshFailureCodes.ts';
 import { dshFileReview } from '../../shared/dshFileReview.ts';
-import { dshMessageAttachments, dshToolOutcomeFlags } from '../../shared/dshHistory/projection.ts';
+import {
+  dshCheckpointRowText,
+  dshMessageAttachments,
+  dshToolOutcomeFlags,
+} from '../../shared/dshHistory/projection.ts';
 import { parseToolArguments, toolRowInput } from '../../shared/dshHistory/toolInput.ts';
-import { AICLIENT_TURN_CEILING_REASON } from '../../shared/dshHistory/types.ts';
+import {
+  AICLIENT_TURN_CEILING_REASON,
+  DSH_SOURCE_COMPACT_CHECKPOINT,
+  dshCompactionLiveId,
+} from '../../shared/dshHistory/types.ts';
 import {
   DSH_NOTICE_CUSTOM_TYPE_PREFIX,
   dshNoticeText,
@@ -84,7 +97,10 @@ import {
   type StreamingToolArgs,
 } from '../../shared/streamingToolArgs.ts';
 import type { ClientPrefixEvidence } from '../../shared/types/requestScope.ts';
-import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import type {
+  RuntimeEventDraft,
+  SessionCompactionTrigger,
+} from '../../shared/types/runtimeEvents.ts';
 import type { TurnOrigin } from '../../shared/types/sessionHistory.ts';
 import { cacheChainLogLines, stepPrefixEvidence } from './cacheChainReport.ts';
 import {
@@ -371,6 +387,16 @@ interface ArgsStream {
   settled: boolean;
 }
 
+/** Decision 178: an automatic compaction whose row is open. */
+interface OpenCompaction {
+  messageId: string;
+  trigger: SessionCompactionTrigger;
+  beforeMessageId?: string;
+}
+
+/** How much of a failed compaction's error the bridge's log line keeps. */
+const COMPACTION_ERROR_LOG_CHARS = 500;
+
 export class DshLiveEvents {
   private readonly host: DshLiveEventsHost;
   private readonly steps = new Map<string, StepMessage>();
@@ -398,6 +424,17 @@ export class DshLiveEvents {
    * goes to two. Kept across turns, as the host keeps it.
    */
   private given: { sessionId: string; evidence: ClientPrefixEvidence } | undefined;
+  /**
+   * Decision 178: the step that is open (`step/start` without its
+   * `step/end`). An automatic compaction that starts inside one is the
+   * overflow recovery of that step's refused request; between steps, it is
+   * the pressure check.
+   */
+  private openStep: { turn: number; step: number } | undefined;
+  /** Decision 178: automatic compactions whose row is open, by compaction id. */
+  private readonly compactions = new Map<string, OpenCompaction>();
+  /** Decision 178: a Stop reached this turn; a compaction it cut short did not fail. */
+  private stopRequested = false;
 
   constructor(host: DshLiveEventsHost) {
     this.host = host;
@@ -416,6 +453,18 @@ export class DshLiveEvents {
     this.backgroundJobs.clear();
     this.batch = { first: false, headed: false };
     this.stepStart = undefined;
+    this.openStep = undefined;
+    this.compactions.clear();
+    this.stopRequested = false;
+  }
+
+  /**
+   * Decision 178: the user pressed Stop on this turn. An automatic
+   * compaction that ends without a summary from here on was cut short
+   * (`interrupted`), not refused.
+   */
+  noteStopRequested(): void {
+    this.stopRequested = true;
   }
 
   // ---- P1-7b: execution start and live output ----------------------------------------
@@ -732,8 +781,15 @@ export class DshLiveEvents {
           turn !== undefined && step !== undefined && at !== undefined
             ? { turn, step, at }
             : undefined;
+        this.openStep = turn !== undefined && step !== undefined ? { turn, step } : undefined;
         return;
       }
+      case 'compaction/start':
+        this.onCompactionStart(data);
+        return;
+      case 'compaction/end':
+        this.onCompactionEnd(data);
+        return;
       case 'assistant/message':
         this.batch.first = false;
         this.onAssistantMessage(data, event);
@@ -756,6 +812,7 @@ export class DshLiveEvents {
         return;
       case 'step/end': {
         this.batch.first = false;
+        this.openStep = undefined;
         const message = this.steps.get(`${String(data.turn)}:${String(data.step)}`);
         if (message) this.closeMessage(message);
         return;
@@ -772,6 +829,80 @@ export class DshLiveEvents {
       default:
         return;
     }
+  }
+
+  // ---- automatic compaction (decision 178) ------------------------------------------
+
+  /**
+   * A compaction a turn owns opens its row. A `/compact` the user ran
+   * (`turn: null`) is the composer's to show (decision 176), and its summary
+   * row is the history's. Inside an open step it is the overflow recovery:
+   * the refused request already opened the step's message, and the summary
+   * goes before it, where the history puts it.
+   */
+  private onCompactionStart(data: Row): void {
+    const compactionId = stringOf(data.compactionId);
+    if (!compactionId || typeof data.turn !== 'number' || this.compactions.has(compactionId)) {
+      return;
+    }
+    const step = this.openStep;
+    const trigger: SessionCompactionTrigger = step ? 'overflow' : 'pressure';
+    const stepMessage = step ? this.steps.get(`${step.turn}:${step.step}`) : undefined;
+    const open: OpenCompaction = {
+      messageId: dshCompactionLiveId(compactionId),
+      trigger,
+      ...(stepMessage && !stepMessage.closed ? { beforeMessageId: stepMessage.messageId } : {}),
+    };
+    this.compactions.set(compactionId, open);
+    this.emitCompaction(open, 'started');
+  }
+
+  /** The checkpoint landed: the row is the context summary the history shows. */
+  private onCompactionCheckpoint(compactionId: string, content: unknown): void {
+    const open = this.compactions.get(compactionId);
+    if (!open) return;
+    this.compactions.delete(compactionId);
+    this.emitCompaction(open, 'completed', dshCheckpointRowText(content));
+  }
+
+  /**
+   * It closed without a checkpoint: refused, or cut short by a Stop. DSH's
+   * own reason goes to the log only; the row says what it means for the turn.
+   */
+  private onCompactionEnd(data: Row): void {
+    const compactionId = stringOf(data.compactionId);
+    const open = compactionId ? this.compactions.get(compactionId) : undefined;
+    if (!compactionId || !open) return;
+    this.compactions.delete(compactionId);
+    if (data.error === undefined) {
+      // Never without its checkpoint in this DSH; the row must not keep spinning.
+      this.emitCompaction(open, 'completed', dshCheckpointRowText(undefined));
+      return;
+    }
+    const reason = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+    this.host.log?.(
+      `[dsh-bridge] automatic compaction (${open.trigger}) ended without a summary${
+        this.stopRequested ? ' after a Stop' : ''
+      }: ${String(reason).slice(0, COMPACTION_ERROR_LOG_CHARS)}`
+    );
+    this.emitCompaction(open, this.stopRequested ? 'interrupted' : 'failed');
+  }
+
+  private emitCompaction(
+    open: OpenCompaction,
+    phase: 'started' | 'completed' | 'failed' | 'interrupted',
+    summary?: string
+  ): void {
+    this.emit({
+      type: 'session.compaction',
+      payload: {
+        messageId: open.messageId,
+        phase,
+        trigger: open.trigger,
+        ...(open.beforeMessageId ? { beforeMessageId: open.beforeMessageId } : {}),
+        ...(summary !== undefined ? { summary } : {}),
+      },
+    });
   }
 
   /**
@@ -821,11 +952,16 @@ export class DshLiveEvents {
   }
 
   private onUserMessage(event: DshSessionEvent): void {
-    const turn = this.host.turn();
-    if (!turn) return;
     const data = event.data;
     const source = data.source;
     const kind = dshSourceKind(source);
+    if (kind === DSH_SOURCE_COMPACT_CHECKPOINT) {
+      const compactionId = stringOf(recordOf(source)?.compactionId);
+      if (compactionId) this.onCompactionCheckpoint(compactionId, data.content);
+      return;
+    }
+    const turn = this.host.turn();
+    if (!turn) return;
     if (kind === 'user') {
       // What the user typed, wherever the turn took it in: its own prompt, or
       // a Ctrl+Enter message at a step boundary — the history shows both as

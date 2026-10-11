@@ -10,7 +10,12 @@ import { projectDshHistory } from '../../../shared/dshHistory/projection.ts';
 import {
   AICLIENT_LOOP_GUARD_DENIAL,
   AICLIENT_TURN_CEILING_REASON,
+  DSH_COMPACTION_FAILED_KEY,
+  DSH_COMPACTION_INTERRUPTED_KEY,
+  DSH_COMPACTION_OVERFLOW_FAILED_KEY,
   type DshLogEvent,
+  isDshCompactionNoteRow,
+  isDshSummaryRow,
 } from '../../../shared/dshHistory/types.ts';
 import type { ToolCallPresentation } from '../../../shared/dshToolPresentation.ts';
 import { readPiUsagePayload } from '../../../shared/piUsage.ts';
@@ -1181,5 +1186,161 @@ describe('DshLiveEvents — the prompt cache of each step (decision 173 B2)', ()
       kind: 'rebuild',
       session: { unexplained: 1, unexplainedRebuilds: 1 },
     });
+  });
+});
+
+/**
+ * dsh-rebase decision 178: a compaction DSH runs inside a turn, live. The
+ * events are `compaction-basic`'s own (`compactSurfaceRegion`): start, the
+ * summary record, the checkpoint that replaces the span, end — or start and
+ * an end with its error.
+ */
+describe('DshLiveEvents — automatic compaction (decision 178)', () => {
+  const CID = 'c0ffee00-0000-4000-8000-000000000001';
+  const ROW = `dsh-compaction-${CID}`;
+  const checkpoint = (compactionId = CID) => ({
+    id: 'cp-1',
+    role: 'user',
+    source: { kind: 'compact-checkpoint', compactionId },
+    content: [
+      {
+        type: 'text',
+        text: 'This is an automatically generated checkpoint.\n\n<compacted-summary>',
+      },
+      { type: 'text', text: '## Current Work\n- the parser' },
+      { type: 'text', text: '</compacted-summary>' },
+    ],
+  });
+  const compactions = (h: ReturnType<typeof harness>) =>
+    h.of('session.compaction').map((event) => event.payload);
+
+  /** A finished first turn, then the second turn's start: DSH's pressure check runs next. */
+  function secondTurn(h: ReturnType<typeof harness>) {
+    h.durable('turn/start', { turn: 1 });
+    h.durable('step/start', { turn: 1, step: 1 });
+    h.durable('user/message', {
+      id: 'u1',
+      role: 'user',
+      source: { kind: 'user' },
+      content: [{ type: 'text', text: 'first' }],
+    });
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+    });
+    h.durable('step/end', { turn: 1, step: 1 });
+    h.durable('turn/end', { turn: 1, reason: { kind: 'completed' } });
+    h.setTurn({ requestId: 'turn-2', synthetic: false });
+    h.durable('turn/start', { turn: 2 });
+  }
+
+  it('[178-LIVE-1] pressure: the row opens, then becomes the summary the history projects', () => {
+    const h = harness();
+    secondTurn(h);
+    h.durable('compaction/start', { compactionId: CID, turn: 2 });
+    expect(compactions(h)).toEqual([{ messageId: ROW, phase: 'started', trigger: 'pressure' }]);
+    h.durable('compaction/summary', { compactionId: CID, summary: [] });
+    h.durable('user/message', checkpoint());
+    h.durable('compaction/end', { compactionId: CID, turn: 2 });
+    const done = compactions(h)[1];
+    expect(done).toEqual({
+      messageId: ROW,
+      phase: 'completed',
+      trigger: 'pressure',
+      summary: 'Context summary\n\n## Current Work\n- the parser',
+    });
+    // Nothing else came of the checkpoint: no notice, no echo.
+    expect(h.of('custom.message')).toEqual([]);
+    expect(h.of('session.compaction').every((event) => event.requestId === 'turn-2')).toBe(true);
+    // The history names the live id on the same row, with the same text.
+    const rows = projectDshHistory(h.log, { liveSessionId: SID });
+    const summary = rows.find((row) => row.liveMessageId === ROW);
+    expect(summary && isDshSummaryRow(summary)).toBe(true);
+    expect(summary?.blocks[0]).toMatchObject({ text: done?.summary });
+  });
+
+  it('[178-LIVE-2] overflow: it runs inside the refused step and goes before that step’s message', () => {
+    const h = harness();
+    h.durable('turn/start', { turn: 1 });
+    h.durable('step/start', { turn: 1, step: 1 });
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    h.durable('assistant/attempt', { turn: 1, step: 1 });
+    h.durable('compaction/start', { compactionId: CID, turn: 1 });
+    h.durable('compaction/end', {
+      compactionId: CID,
+      turn: 1,
+      error: 'summary request refused: 400 invalid_request_error',
+    });
+    expect(compactions(h)).toEqual([
+      { messageId: ROW, phase: 'started', trigger: 'overflow', beforeMessageId: STEP_1 },
+      { messageId: ROW, phase: 'failed', trigger: 'overflow', beforeMessageId: STEP_1 },
+    ]);
+    // DSH's reason goes to the log, never on screen.
+    expect(h.lines).toEqual([
+      '[dsh-bridge] automatic compaction (overflow) ended without a summary: summary request refused: 400 invalid_request_error',
+    ]);
+    const note = projectDshHistory(h.log, { liveSessionId: SID }).find(
+      (row) => row.liveMessageId === ROW
+    );
+    expect(note && isDshCompactionNoteRow(note)).toBe(true);
+    expect(note?.blocks[0]).toMatchObject({ notice: { key: DSH_COMPACTION_OVERFLOW_FAILED_KEY } });
+  });
+
+  it('[178-LIVE-3] a pressure compaction that fails says so; a Stop that cut it short says it did not finish', () => {
+    const failed = harness();
+    secondTurn(failed);
+    failed.durable('compaction/start', { compactionId: CID, turn: 2 });
+    failed.durable('compaction/end', { compactionId: CID, turn: 2, error: 'no summary' });
+    expect(compactions(failed).at(-1)).toMatchObject({ phase: 'failed', trigger: 'pressure' });
+    expect(
+      projectDshHistory(failed.log, { liveSessionId: SID }).find((row) => row.liveMessageId === ROW)
+        ?.blocks[0]
+    ).toMatchObject({ notice: { key: DSH_COMPACTION_FAILED_KEY } });
+
+    const stopped = harness();
+    secondTurn(stopped);
+    stopped.durable('compaction/start', { compactionId: CID, turn: 2 });
+    stopped.live.noteStopRequested();
+    stopped.durable('compaction/end', { compactionId: CID, turn: 2, error: 'aborted' });
+    stopped.durable('turn/end', { turn: 2, reason: { kind: 'aborted', reason: { kind: 'user' } } });
+    expect(compactions(stopped).at(-1)).toMatchObject({
+      phase: 'interrupted',
+      trigger: 'pressure',
+    });
+    // The history reads the same Stop off the turn it ended.
+    expect(
+      projectDshHistory(stopped.log, { liveSessionId: SID }).find(
+        (row) => row.liveMessageId === ROW
+      )?.blocks[0]
+    ).toMatchObject({ notice: { key: DSH_COMPACTION_INTERRUPTED_KEY } });
+    // The next turn starts clean: a Stop belongs to the turn it reached.
+    stopped.setTurn({ requestId: 'turn-3', synthetic: false });
+    stopped.durable('turn/start', { turn: 3 });
+    stopped.durable('compaction/start', { compactionId: 'second', turn: 3 });
+    stopped.durable('compaction/end', { compactionId: 'second', turn: 3, error: 'no summary' });
+    expect(compactions(stopped).at(-1)).toMatchObject({ phase: 'failed' });
+  });
+
+  it('[178-LIVE-4] a /compact the user ran (no turn) shows nothing live; its row is the history’s', () => {
+    const h = harness({ turn: null });
+    h.durable('compaction/start', { compactionId: CID, sourceCommandId: 'cmd-1', turn: null });
+    h.durable('user/message', checkpoint());
+    h.durable('compaction/end', { compactionId: CID, sourceCommandId: 'cmd-1', turn: null });
+    expect(h.events).toEqual([]);
+    const rows = projectDshHistory(h.log, { liveSessionId: SID });
+    expect(rows).toHaveLength(1);
+    expect(isDshSummaryRow(rows[0] as never)).toBe(true);
+    expect(rows[0]?.liveMessageId).toBeUndefined();
+  });
+
+  it('[178-LIVE-5] a checkpoint no open compaction names, and an end it never saw start, are ignored', () => {
+    const h = harness();
+    secondTurn(h);
+    const before = h.events.length;
+    h.durable('user/message', checkpoint('someone-else'));
+    h.durable('compaction/end', { compactionId: 'unknown', turn: 2, error: 'x' });
+    expect(h.events.slice(before)).toEqual([]);
   });
 });
