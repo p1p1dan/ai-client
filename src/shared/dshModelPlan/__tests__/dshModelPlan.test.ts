@@ -9,6 +9,7 @@ import {
   type DshModelPlanInput,
   dshRouteSettings,
   keyRefFor,
+  plannedMaxTokens,
   resolveRoute,
   translateReasoningEfforts,
 } from '../index.ts';
@@ -436,6 +437,14 @@ describe('MP-05 protocols and defaults (R2, R7, decision 036)', () => {
       ['unsized', 500000],
     ]);
     expect(p.dropped.filter((drop) => drop.reason === 'max_tokens_clamped')).toEqual([]);
+  });
+
+  it('[GW4-CLAMP-3] states the rule once, for the plan and the model settings panel (decision 177)', () => {
+    expect(plannedMaxTokens(500000, 500000)).toBe(125000);
+    expect(plannedMaxTokens(204800, 131072)).toBe(51200);
+    expect(plannedMaxTokens(200000, 100000)).toBe(100000);
+    expect(plannedMaxTokens(undefined, 500000)).toBe(500000);
+    expect(plannedMaxTokens(200000, undefined)).toBeUndefined();
   });
 
   it('drops rows without an address or a key (R3, R4)', () => {
@@ -1013,11 +1022,64 @@ describe('MN-01 the menu keeps what the plan routes (decision 033 rule 3)', () =
 
   it('keeps routed models in menu order, with the efforts the host accepts', () => {
     const menu = applyDshPlanToCatalog(catalog, p);
-    expect(menu.models).toEqual([
+    expect(menu.models.map(({ autoCompaction: _policy, ...option }) => option)).toEqual([
       { id: 'a/r', label: 'R', reasoning: true, efforts: ['low', 'medium', 'high'] },
       { id: 'a/plain', label: 'Plain', reasoning: false, efforts: [] },
     ]);
     expect(menu).toMatchObject({ source: 'managed', stale: false, fetchedAt: 1 });
+  });
+
+  /**
+   * Decision 177: each offered model carries its automatic compaction, the
+   * row sized as the host sizes it for llm-pi-ai (the route's 128000 / 8192
+   * for what the row leaves out), for the settings to show.
+   */
+  it('puts each routed model’s automatic compaction on it, sized as the host sizes it', () => {
+    const sized = plan(
+      {
+        s: provider('anthropic-messages', [
+          { id: 'w64k', contextWindow: 65536, maxTokens: 8192 },
+          { id: 'unsized' },
+          { id: 'grok', contextWindow: 500000, maxTokens: 500000 },
+        ]),
+      },
+      { keyed: { s: true } }
+    );
+    const menu = applyDshPlanToCatalog(
+      {
+        models: [
+          { id: 's/w64k', label: 'W64k' },
+          { id: 's/unsized', label: 'Unsized' },
+          { id: 's/grok', label: 'Grok' },
+        ],
+        source: 'local',
+        stale: false,
+        fetchedAt: null,
+      },
+      sized
+    );
+    const byId = new Map(menu.models.map((model) => [model.id, model.autoCompaction]));
+    expect(byId.get('s/w64k')).toMatchObject({
+      auto: true,
+      contextWindow: 65536,
+      maxTokens: 8192,
+      thresholdTokens: 33751,
+      headroomLowered: true,
+      contextWindowDefaulted: false,
+    });
+    expect(byId.get('s/unsized')).toMatchObject({
+      auto: true,
+      contextWindow: DEFAULT_CONTEXT_WINDOW,
+      maxTokens: DEFAULT_MAX_TOKENS,
+      thresholdTokens: 54272,
+      contextWindowDefaulted: true,
+    });
+    // Decision 146's planned output (a quarter of the window), not the declared one.
+    expect(byId.get('s/grok')).toMatchObject({
+      auto: true,
+      maxTokens: 125000,
+      thresholdTokens: 309464,
+    });
   });
 
   it('counts the rest in unavailable, with the plan reason', () => {

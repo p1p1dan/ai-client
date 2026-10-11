@@ -54,6 +54,9 @@ export function SettingsContent({
   const { t } = useI18n();
   const [internalCategory, setInternalCategory] = useState<SettingsCategory>('general');
   const activeCategory = controlledCategory ?? internalCategory;
+  // Decision 177: bumped when an AI service changes, so the models page's
+  // automatic compaction list reads the menu again.
+  const [providersVersion, setProvidersVersion] = useState(0);
   /**
    * The Pi page used to stack eight sections — models, providers, permission
    * policy, plugins, resources, subagents, agent-directory migration and
@@ -129,8 +132,10 @@ export function SettingsContent({
           )}
           {activeCategory === 'pi' && (
             <>
-              <UserProvidersSettings />
-              <PiModelManagementSettings />
+              <UserProvidersSettings
+                onChanged={() => setProvidersVersion((version) => version + 1)}
+              />
+              <PiModelManagementSettings providersVersion={providersVersion} />
             </>
           )}
           {/* dsh-rebase P1-16e (decision 104): skills, then the allowlisted

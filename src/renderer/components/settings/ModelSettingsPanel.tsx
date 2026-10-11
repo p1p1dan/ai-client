@@ -19,8 +19,8 @@ import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_TOKENS,
   IMPLIED_EFFORT_LEVELS,
-  MAX_TOKENS_WINDOW_SHARE_FALLBACK,
   MAX_TOKENS_WINDOW_SHARE_LIMIT,
+  plannedMaxTokens,
 } from '@shared/dshModelPlan/tables';
 import {
   availableModelEfforts,
@@ -57,6 +57,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
+import { autoCompactionNote, draftAutoCompaction } from './autoCompactionText';
 
 /** The two number fields, whose raw text the dialog keeps per model. */
 export type TokenField = 'contextWindow' | 'maxTokens';
@@ -343,6 +344,7 @@ function ModelFields({
           }
           onChange={(raw) => onTokenDraft('maxTokens', raw)}
         />
+        {!invalid('contextWindow') && !invalid('maxTokens') && <AutoCompactionLine meta={meta} />}
       </PanelSection>
 
       <PanelSection legend={t('Input')}>
@@ -360,7 +362,8 @@ function ModelFields({
 /**
  * Decision 146: a reply reservation over half the window is planned as a
  * quarter of it — but only when the row declares both numbers. With the
- * window left at its default nothing is clamped, so the advice differs.
+ * window left at its default nothing is clamped, so the advice differs. The
+ * plan's own rule (`plannedMaxTokens`) gives the planned value.
  */
 function outputLimitWarning(
   meta: UserModelMeta,
@@ -369,9 +372,8 @@ function outputLimitWarning(
   const maxTokens = meta.maxTokens;
   if (maxTokens === undefined) return undefined;
   if (meta.contextWindow !== undefined) {
-    if (maxTokens <= Math.floor(meta.contextWindow * MAX_TOKENS_WINDOW_SHARE_LIMIT))
-      return undefined;
-    const planned = Math.max(1, Math.floor(meta.contextWindow * MAX_TOKENS_WINDOW_SHARE_FALLBACK));
+    const planned = plannedMaxTokens(meta.contextWindow, maxTokens);
+    if (planned === undefined || planned === maxTokens) return undefined;
     return t(
       'Over half of the context window: the reply reservation is planned as {{value}} tokens (a quarter of the window) so that automatic compaction keeps working.',
       { value: planned }
@@ -383,6 +385,30 @@ function outputLimitWarning(
   return t(
     'Over half of the default context window ({{window}}): fill in the context window as well, or automatic compaction may have no room to run.',
     { window: DEFAULT_CONTEXT_WINDOW }
+  );
+}
+
+/**
+ * Decision 177: whether the engine compacts this model's conversations by
+ * itself, and from about where, worked out from the draft as the plan will
+ * size it. Hidden while either number is not valid (its error says why).
+ */
+function AutoCompactionLine({ meta }: { meta: UserModelMeta }) {
+  const { t } = useI18n();
+  const policy = draftAutoCompaction(meta);
+  if (!policy) return null;
+  const note = autoCompactionNote(policy, meta.contextWindow === undefined, t);
+  return (
+    <p
+      data-slot="auto-compaction"
+      data-auto={policy.auto ? 'on' : 'off'}
+      className={cn(
+        'text-meta',
+        note.tone === 'warning' ? 'text-warning' : 'text-muted-foreground'
+      )}
+    >
+      {note.text}
+    </p>
   );
 }
 

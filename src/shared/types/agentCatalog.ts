@@ -17,8 +17,16 @@
  * ids, labels and provenance (§0.1-2). Every field below is safe to log.
  */
 
+import type { AutoCompactionPolicy } from '../dshAutoCompaction';
 import type { DshModelDropReason } from '../dshModelPlan/types';
 import type { SessionEffortLevel } from './agentHost';
+
+/**
+ * Decision 177: a model's automatic compaction under the DSH engine, worked
+ * out from the plan's sizes; `contextWindowDefaulted` when the configuration
+ * left the window out and the route's default stood in for it.
+ */
+export type AgentModelAutoCompaction = AutoCompactionPolicy & { contextWindowDefaulted: boolean };
 
 /** One selectable model. `label` is UI copy only and is never compared against. */
 export interface AgentModelOption {
@@ -55,6 +63,12 @@ export interface AgentModelOption {
    * it is the whole answer for the effort selector, `[]` included.
    */
   efforts?: SessionEffortLevel[];
+  /**
+   * Decision 177: when the DSH engine compacts this model's conversations by
+   * itself, or why it does not, from the same plan the host is configured
+   * with. Shown in the settings; absent outside the DSH plan.
+   */
+  autoCompaction?: AgentModelAutoCompaction;
 }
 
 /** Why a catalog model is left out of the menu under the DSH engine. */

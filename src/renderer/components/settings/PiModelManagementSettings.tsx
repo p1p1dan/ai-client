@@ -27,6 +27,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useI18n } from '@/i18n';
 import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
+import { AutoCompactionSection } from './AutoCompactionSection';
 import { ExperimentalCacheControlSection } from './ExperimentalCacheControlSection';
 import { RequestUserAgentSection } from './RequestUserAgentSection';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
@@ -53,13 +54,20 @@ function sourceLabel(source: PiModelManagementSnapshot['state']['source']): stri
   }
 }
 
-export function PiModelManagementSettings() {
+export function PiModelManagementSettings({
+  providersVersion = 0,
+}: {
+  /** Decision 177: bumped when an AI service changed (`SettingsContent`). */
+  providersVersion?: number;
+}) {
   const { t } = useI18n();
 
   const [snapshot, setSnapshot] = useState<PiModelManagementSnapshot | null>(null);
   const [endpointUrl, setEndpointUrl] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  // Decision 177: bumped by every sync, so the compaction list reads the new menu.
+  const [syncVersion, setSyncVersion] = useState(0);
 
   const load = useCallback(async () => {
     const next = await window.electronAPI.piModels.getStatus();
@@ -90,6 +98,7 @@ export function PiModelManagementSettings() {
       setMessage({ text: error instanceof Error ? error.message : String(error), error: true });
     } finally {
       setSyncing(false);
+      setSyncVersion((version) => version + 1);
     }
   };
 
@@ -208,6 +217,7 @@ export function PiModelManagementSettings() {
         </p>
       </div>
 
+      <AutoCompactionSection reloadKey={`${providersVersion}:${syncVersion}`} />
       <PromptCacheTtlSection />
       <ProviderIdleTimeoutSection />
       <RequestUserAgentSection />

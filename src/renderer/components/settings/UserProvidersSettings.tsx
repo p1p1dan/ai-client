@@ -29,7 +29,12 @@ import { cn } from '@/lib/utils';
 import { apiLabel, ProviderSetupDialog } from './ProviderSetupDialog';
 import { SettingsSectionBlock } from './SettingsPrimitives';
 
-export function UserProvidersSettings() {
+export function UserProvidersSettings({
+  onChanged,
+}: {
+  /** Decision 177: a service was added, edited, switched or removed. */
+  onChanged?: () => void;
+}) {
   const { t } = useI18n();
   const [state, setState] = useState<UserProviderState | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -48,17 +53,23 @@ export function UserProvidersSettings() {
     void load();
   }, [load]);
 
+  /** After a change: this list, then whoever follows the services. */
+  const reload = useCallback(async () => {
+    await load();
+    onChanged?.();
+  }, [load, onChanged]);
+
   const act = useCallback(
     async (run: () => Promise<unknown>) => {
       setError(null);
       try {
         await run();
-        await load();
+        await reload();
       } catch (actionError) {
         setError(actionError instanceof Error ? actionError.message : String(actionError));
       }
     },
-    [load]
+    [reload]
   );
 
   const providers = state?.providers ?? [];
@@ -204,7 +215,7 @@ export function UserProvidersSettings() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         editing={editing}
-        onSaved={load}
+        onSaved={reload}
       />
     </div>
   );

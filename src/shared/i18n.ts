@@ -4391,3 +4391,28 @@ Object.assign(zhTranslations, {
   'Your message stays in the input box; send it once the conversation runs.':
     '消息还留在输入框里，对话启动后再发送。',
 });
+
+// Auto compaction policy
+/**
+ * dsh-rebase decision 177: whether the engine compacts a model's
+ * conversations by itself and from about where, or why it does not
+ * (`autoCompactionText.ts`): the custom service's model settings panel and
+ * the models page's list (`AutoCompactionSection.tsx`).
+ */
+Object.assign(zhTranslations, {
+  'Automatic compaction': '自动压缩',
+  'Automatic compaction: starts at about {{tokens}} tokens.':
+    '自动压缩：约在 {{tokens}} token 时触发。',
+  'Automatic compaction: starts at about {{tokens}} tokens (worked out on the default context window, {{window}}).':
+    '自动压缩：约在 {{tokens}} token 时触发（按默认上下文窗口 {{window}} 计算）。',
+  'No automatic compaction for this model: its context window ({{window}}) is too small to leave room for it. A conversation that outgrows the window is still compacted and retried; for long tasks, pick a model with a larger window.':
+    '此模型不会自动压缩：上下文窗口（{{window}}）太小，留不出压缩所需的余量。对话超出窗口时仍会先压缩再重试；长任务建议换用窗口更大的模型。',
+  'No automatic compaction for this model: the output limit ({{output}}) takes up too much of the context window ({{window}}). Set the output limit to {{max}} or less to turn it on.':
+    '此模型不会自动压缩：输出上限（{{output}}）占去了上下文窗口（{{window}}）的大部分。把输出上限改为 {{max}} 或更小，就会自动压缩。',
+  'No automatic compaction for this model: the output limit ({{output}}) takes up too much of the default context window ({{window}}). Fill in the real context window, or set the output limit to {{max}} or less.':
+    '此模型不会自动压缩：输出上限（{{output}}）占去了默认上下文窗口（{{window}}）的大部分。请填写实际的上下文窗口，或把输出上限改为 {{max}} 或更小。',
+  'When a conversation nears the context window, the engine summarizes its earlier part by itself. Where that starts, model by model:':
+    '对话快要占满上下文窗口时，引擎会自动把较早的内容压缩成摘要。各模型开始压缩的位置如下：',
+  'For an AI service you added yourself, edit it under AI services above and change the context window and output limit in Model settings; for a model your administrator provides, ask them.':
+    '自己添加的 AI 服务：在上方「AI 服务」里编辑该服务，在「模型设置」中修改上下文窗口和输出上限；管理员提供的模型请联系管理员。',
+});

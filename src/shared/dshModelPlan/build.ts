@@ -22,8 +22,7 @@ import {
   EMPTY_PLAN_DEFAULT_MODEL,
   IMPLIED_EFFORT_LEVELS,
   KEY_REF_PREFIX,
-  MAX_TOKENS_WINDOW_SHARE_FALLBACK,
-  MAX_TOKENS_WINDOW_SHARE_LIMIT,
+  plannedMaxTokens,
 } from './tables.ts';
 import type {
   DshEffortLevel,
@@ -321,17 +320,17 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
    * (DeepSeek: 256k of 1M). Only rows that declare both numbers are judged;
    * the user's models.json is not touched.
    */
-  const plannedMaxTokens = (
+  const planRowMaxTokens = (
     providerId: string,
     id: string,
     contextWindow: number | undefined,
     maxTokens: number | undefined
   ): number | undefined => {
-    if (maxTokens === undefined || contextWindow === undefined) return maxTokens;
-    if (maxTokens <= Math.floor(contextWindow * MAX_TOKENS_WINDOW_SHARE_LIMIT)) return maxTokens;
-    const clamped = Math.max(1, Math.floor(contextWindow * MAX_TOKENS_WINDOW_SHARE_FALLBACK));
-    dropField(providerId, id, 'maxTokens', 'max_tokens_clamped', `${maxTokens} -> ${clamped}`);
-    return clamped;
+    const planned = plannedMaxTokens(contextWindow, maxTokens);
+    if (planned !== maxTokens) {
+      dropField(providerId, id, 'maxTokens', 'max_tokens_clamped', `${maxTokens} -> ${planned}`);
+    }
+    return planned;
   };
 
   /** R7 / R8 for one row. */
@@ -344,7 +343,7 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     const { raw, id } = model;
     const name = nonEmptyString(raw.name);
     const contextWindow = positiveInteger(raw.contextWindow);
-    const maxTokens = plannedMaxTokens(
+    const maxTokens = planRowMaxTokens(
       providerId,
       id,
       contextWindow,

@@ -93,6 +93,21 @@ export const MAX_TOKENS_WINDOW_SHARE_LIMIT = 0.5;
 /** DSH's own reference route reserves 256k of a 1M window (`dsh-llm-deepseek`). */
 export const MAX_TOKENS_WINDOW_SHARE_FALLBACK = 0.25;
 
+/**
+ * Decision 146: the `maxTokens` the plan hands DSH for a row. Only a row that
+ * declares both numbers is judged; over half its window is planned as a
+ * quarter of it. The plan (`build.ts`) and the model settings panel share it,
+ * so the panel works from what the plan will send (decision 177).
+ */
+export function plannedMaxTokens(
+  contextWindow: number | undefined,
+  maxTokens: number | undefined
+): number | undefined {
+  if (maxTokens === undefined || contextWindow === undefined) return maxTokens;
+  if (maxTokens <= Math.floor(contextWindow * MAX_TOKENS_WINDOW_SHARE_LIMIT)) return maxTokens;
+  return Math.max(1, Math.floor(contextWindow * MAX_TOKENS_WINDOW_SHARE_FALLBACK));
+}
+
 /** Retry budget of the native loop: 3 retries, 3 s rising to 30 s (`providerRetry.ts`). */
 export const NATIVE_RETRY_MAX = 3;
 export const NATIVE_RETRY_INITIAL_DELAY_MS = 3_000;

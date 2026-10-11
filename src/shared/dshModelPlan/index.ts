@@ -34,5 +34,6 @@ export {
   DSH_PROTOCOLS,
   EMPTY_PLAN_DEFAULT_MODEL,
   KEY_REF_PREFIX,
+  plannedMaxTokens,
 } from './tables.ts';
 export type * from './types.ts';
