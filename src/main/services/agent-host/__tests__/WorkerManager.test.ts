@@ -2746,6 +2746,30 @@ describe('WorkerManager compaction on a conversation that is not running (decisi
     await expect(compacting).resolves.toEqual({ compacted: true });
   });
 
+  it('[178-WM-1] a send while the compaction is with the worker is refused as busy, before the worker sees it', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records[0] as FakeSlotRecord;
+    const held = holdCompaction(record);
+    const compacting = h.manager.compactSession({ sessionId: 's1', ownerWebContentsId: 11 });
+    await vi.waitFor(() => expect(held.started()).toBe(true));
+
+    // Queued behind the compaction it used to run out its 10 s clock, report
+    // a failed send, and then start its turn anyway once the summary landed.
+    const refused = h.manager.send({ sessionId: 's1', attemptId: 'during-compact', text: 'hi' });
+    await expect(refused).rejects.toMatchObject({ code: 'session_busy', retryable: true });
+    await expect(refused).rejects.toThrow(/being compacted/);
+    expect(record.request.mock.calls.filter(([type]) => type === 'worker.send')).toHaveLength(0);
+
+    held.resolve({ compacted: true });
+    await expect(compacting).resolves.toEqual({ compacted: true });
+    // Over: the same message goes through.
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: 'after-compact', text: 'hi' })
+    ).resolves.toEqual(expect.any(String));
+    expect(record.request.mock.calls.filter(([type]) => type === 'worker.send')).toHaveLength(1);
+  });
+
   it('[176-WM-6] a refusal from the worker itself is passed on as it came', async () => {
     const h = createHarness();
     await create(h.manager, 's1', 11);

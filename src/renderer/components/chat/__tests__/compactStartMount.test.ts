@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => {
       throw new Error('send refused (test)');
     }),
     stop: vi.fn(async () => ({ requestId: 'stop-1' })),
+    interject: vi.fn(async () => ({ interjected: false })),
     ensureScratchWorkspace: vi.fn(async ({ sessionId }: { sessionId: string }) => ({
       path: `/tmp/scratch/${sessionId}`,
     })),
@@ -79,9 +80,11 @@ import { type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
 import { useCompactRunsStore } from '@/stores/compactRuns';
 import { resetComposerDraftsForTests } from '@/stores/composerDrafts';
 import { resetHomeDraftForTests } from '@/stores/homeDraft';
+import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { ChatComposer } from '../ChatComposer';
 import { COMPACT_INTERRUPTED_TEXT, COMPACT_STOPPED_TEXT, COMPACTING_LINE } from '../compactCommand';
+import { createEmptyState, selectSessionQueue } from '../messageQueue';
 import { announceSessionEnded } from '../sessionEndSignal';
 import { SESSION_START_FAILED, SESSION_STARTING_LINE } from '../sessionStart';
 
@@ -192,6 +195,7 @@ beforeEach(() => {
   localStorage.clear();
   usePendingUserMessagesStore.setState({ bySession: {} });
   useCompactRunsStore.setState({ phases: {} });
+  useMessageQueueStore.setState({ state: createEmptyState() });
   setStore();
 });
 
@@ -405,5 +409,93 @@ describe('/compact in a conversation the engine is not running (decision 176)', 
     await act(async () => resume.resolve({ requestId: 'resume-1' }));
     await settle();
     expect(mocks.api.compactSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * dsh-rebase decision 178: a message sent while this window's `/compact`
+ * summarizes. It used to go to Main, wait behind the compaction in the
+ * worker's one request queue, be reported failed after 10 s, and then start
+ * its turn anyway. It waits in the composer's queue now, as a message sent
+ * while a turn runs does; the queue holds while the compaction runs
+ * (`isInFlight`, `useQueueRelease` — mocked here, its hold is
+ * `compactQueueRelease.test.ts`'s).
+ */
+describe('a message while /compact summarizes (decision 178)', () => {
+  const queued = () =>
+    selectSessionQueue(useMessageQueueStore.getState().state, 'c1').entries.map(
+      (entry) => entry.text
+    );
+
+  it('[178-C-01] Enter queues it instead of sending; the compaction clears only its command', async () => {
+    const compact = deferred<{ compacted: true }>();
+    mocks.api.compactSession.mockReturnValue(compact.promise);
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+    expect(text()).toContain(COMPACTING_LINE);
+
+    await type('and then run the tests');
+    await press('Enter');
+    expect(mocks.api.send).not.toHaveBeenCalled();
+    expect(mocks.api.interject).not.toHaveBeenCalled();
+    expect(queued()).toEqual(['and then run the tests']);
+    // Owned by its queue entry now, like a message queued behind a turn.
+    expect(box().value).toBe('');
+    // Not the starting phase's refusal: nothing is said, the strip shows it.
+    expect(toastTitles()).not.toContain('Wait for the conversation to start');
+
+    await act(async () => compact.resolve({ compacted: true }));
+    await settle();
+    expect(text()).not.toContain(COMPACTING_LINE);
+    expect(queued()).toEqual(['and then run the tests']);
+    expect(mocks.api.send).not.toHaveBeenCalled();
+  });
+
+  it('[178-C-02] Ctrl+Enter queues it too: a compaction is no turn to steer into', async () => {
+    const compact = deferred<{ compacted: true }>();
+    mocks.api.compactSession.mockReturnValue(compact.promise);
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    await type('one more thing');
+    await act(async () => {
+      box().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })
+      );
+    });
+    await settle();
+    expect(mocks.api.interject).not.toHaveBeenCalled();
+    expect(mocks.api.send).not.toHaveBeenCalled();
+    expect(queued()).toEqual(['one more thing']);
+
+    await act(async () => compact.resolve({ compacted: true }));
+    await settle();
+  });
+
+  it('[178-C-03] a failed compaction leaves what was queued queued, to go out next', async () => {
+    const compact = deferred<{ compacted: true }>();
+    mocks.api.compactSession.mockReturnValue(compact.promise);
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+    await type('carry on');
+    await press('Enter');
+
+    await act(async () =>
+      compact.reject(
+        new Error(
+          "Error invoking remote method 'chat:compactSession': Error: WORKER_COMPACT_FAILED: Compaction could not produce a useful summary. The attempt is recorded in the session log."
+        )
+      )
+    );
+    await settle();
+    expect(text()).not.toContain(COMPACTING_LINE);
+    expect(queued()).toEqual(['carry on']);
+    expect(toastTitles()).toContain('Could not compact the conversation');
   });
 });

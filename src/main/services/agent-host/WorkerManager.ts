@@ -1592,7 +1592,7 @@ export class WorkerManager {
    * worker is refused (`compact_in_progress`). A request the slot itself cut
    * short (a close, an engine restart) is `worker_compact_interrupted`: the
    * worker never answered, so whether the summary was written is not known
-   * here. A send meanwhile is admitted as before (decision 176 leaves it).
+   * here. Decision 178: a send meanwhile is refused as busy (`startTurn`).
    */
   async compactSession(input: {
     sessionId: string;
@@ -2184,6 +2184,18 @@ export class WorkerManager {
         entry.activeRequestId
           ? `Session ${input.sessionId} already has active turn ${entry.activeRequestId}`
           : `Session ${input.sessionId} is applying ${entry.mutationInFlight}`,
+        true
+      );
+    }
+    // Decision 178: a `/compact` holds the worker's one request queue for up
+    // to a minute. A send queued behind it ran out its 10 s clock first — the
+    // window reported a failed send — and then started its turn anyway once
+    // the summary was written. It is refused here instead, before the worker
+    // sees it; the composer holds its own messages until the compaction ends.
+    if (entry.compacting) {
+      throw new WorkerManagerError(
+        'session_busy',
+        `Session ${input.sessionId} is being compacted`,
         true
       );
     }

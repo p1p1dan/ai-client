@@ -1370,10 +1370,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // Ctrl+Enter `/compact` must not interrupt the turn to reach the model.
     if (await runBuiltinSlash(trimmed)) return;
     if (useChatSessionsStore.getState().activeSessionId !== activeSessionId) return;
+    // Decision 178: while this window's `/compact` summarizes, a message waits
+    // in the queue like one sent while a turn runs, and goes out once the
+    // compaction ends — compacted or not. Sent now, it would wait behind the
+    // compaction in the worker and be reported failed before its turn began.
+    const compactingNow =
+      activeSessionId !== null &&
+      selectCompactPhase(useCompactRunsStore.getState(), activeSessionId) === 'compacting';
     const action = decideSendAction({
       hasTarget: hasSendTarget,
       disabled: Boolean(disabled),
-      busy: busy || stoppingRef.current || activeSession?.status === 'stopping',
+      busy: busy || stoppingRef.current || activeSession?.status === 'stopping' || compactingNow,
       sending,
       inFlight: inFlightRef.current,
       hasContent: Boolean(trimmed) || attachments.drafts.length > 0,
@@ -1441,7 +1448,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (mode === 'interject') {
       // Decision 093: straight into the running turn. Only a worker with no
       // turn at all sends the message on to the queue, as Enter would.
-      if ((await interjectIntoTurn(activeSessionId, trimmed)) !== 'no-turn') return;
+      // Decision 178: a compaction is no turn to steer into; it queues.
+      if (!compactingNow && (await interjectIntoTurn(activeSessionId, trimmed)) !== 'no-turn') {
+        return;
+      }
     }
     const queued: QueuedMessage = {
       id: nextQueuedMessageId(),
@@ -3536,7 +3546,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     sending,
     // Decision 176: and while this window starts the conversation for a
     // `/compact`, for the reason a direct send waits then (`handleSend`).
-    isInFlight: () => inFlightRef.current || stoppingRef.current || compactPhase === 'starting',
+    // Decision 178: and while it compacts — what was queued meanwhile goes
+    // out once the compaction ends, compacted or not.
+    isInFlight: () => inFlightRef.current || stoppingRef.current || compactPhase !== undefined,
     status: nextTurnStatus,
     runEntry: async (entry) => {
       // R3 fix: capture BEFORE runSend, off `entry.sessionId` (not
