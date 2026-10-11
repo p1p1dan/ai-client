@@ -270,6 +270,22 @@ describe('a gateway with no upstream left (decision 146)', () => {
     );
   });
 
+  it('[180-DA5] a model not in the key’s group: the gateway’s configuration, not retried', () => {
+    // As the 2026-10-11 acceptance logged it (GPT 6 Luna; the session id made up).
+    const LUNA =
+      'OpenAI API error (503): {"message":"Model \\"gpt-6-luna\\" is not available for this group (cch_session_id: aiclient-session-1)","type":"service_unavailable_error","code":"service_unavailable_error"}';
+    expect(classifyDshFailureText(LUNA)).toBe(GATEWAY_NO_UPSTREAM);
+    expect(dshFailureErrorCode({ message: LUNA, code: 'SERVER' })).toBe(GATEWAY_NO_UPSTREAM);
+    expect(isUnretryableDshFailure({ message: LUNA, code: 'SERVER' })).toBe(true);
+    for (const text of [
+      'The model is not available right now',
+      'Model "x" is not available',
+      'not available for this region',
+    ]) {
+      expect(classifyDshFailureText(text), text).toBeUndefined();
+    }
+  });
+
   it('[GW2-CLASS-4] the stream gate still wins over it', () => {
     expect(classifyDshFailureText(`stream_gate_precommit ${NO_PROVIDERS}`)).toBe(
       GATEWAY_STREAM_GATE

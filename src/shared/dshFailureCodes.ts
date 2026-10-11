@@ -131,12 +131,18 @@ const MODEL_SETTING_PATTERN =
  * `service_unavailable_error` says none of these and stays an ordinary,
  * retried server error.
  *
+ * Decision 180, after the 2026-10-11 acceptance (DA-5): and its answer that
+ * the requested model is not in the key's group (`Model "gpt-6-luna" is not
+ * available for this group`, a 503 `service_unavailable_error`). That is the
+ * gateway's configuration: the same request gets the same answer until an
+ * administrator changes it, so it is not retried either.
+ *
  * The sentence is the gateway's own text, matched, never shown: it is spelled
  * in escapes, 「所有供应商(暂时)不可用」, so no user-facing Chinese lives in
  * source (`noHardcodedChinese.test.ts`).
  */
 const NO_UPSTREAM_PATTERN =
-  /\bno_available_providers\b|\bno available providers\b|\u6240\u6709\u4f9b\u5e94\u5546(?:\u6682\u65f6)?\u4e0d\u53ef\u7528/i;
+  /\bno_available_providers\b|\bno available providers\b|\bis not available for this group\b|\u6240\u6709\u4f9b\u5e94\u5546(?:\u6682\u65f6)?\u4e0d\u53ef\u7528/i;
 
 /** The codes only a provider failure's text tells apart (decisions 140, 146). */
 export type DshTextFailureCode =
