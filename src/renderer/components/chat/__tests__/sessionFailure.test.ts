@@ -151,10 +151,31 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
   it('[P1-4d1] a DSH code that means an existing card reads that card', () => {
     // src/shared/dshFailureCodes.ts names DSH failures in the native provider vocabulary.
     expect(toSessionFailureCode('TIMEOUT')).toBe('timeout');
-    expect(toSessionFailureCode('CONTEXT_TOO_LARGE')).toBe('context_too_large');
     expect(toSessionFailureCode('MODEL_NOT_CONFIGURED')).toBe('model_missing');
-    expect(deriveSessionFailure({ errorCode: 'CONTEXT_TOO_LARGE' }).action).toBe('configure');
     expect(toSessionFailureCode('tool_call_repetition')).toBe('tool_call_repetition');
+  });
+
+  it('[178-F1] DSH’s context overflow says the request went out and compaction was tried', () => {
+    // 1.0.x's preflight card said the turn was never sent; under DSH the
+    // model refused the request, and the engine compacted and retried first.
+    expect(toSessionFailureCode('CONTEXT_TOO_LARGE')).toBe('CONTEXT_TOO_LARGE');
+    const view = deriveSessionFailure({
+      errorCode: 'CONTEXT_TOO_LARGE',
+      error: 'prompt is too long: 250000 tokens > 200000 maximum',
+    });
+    expect(view.action).toBe('configure');
+    expect(view.showsDetail).toBe(true);
+    expect(view.reason).toContain('The request was sent');
+    expect(view.reason).toContain('compact the context and retry');
+    expect(view.reason).not.toContain('never sent');
+    expect(view.hint).toContain('larger context window');
+    expect(view.hint).toContain('/compact');
+    expect(zhTranslations[view.title]).toBe('对话已经超出模型的上下文窗口');
+    expect(zhTranslations[view.reason]).toContain('请求已经发给模型');
+    expect(zhTranslations[view.reason]).toContain('仍然放不下');
+    expect(zhTranslations[view.hint]).toContain('/compact');
+    // 1.0.x's own preflight card keeps its words for the sessions it recorded.
+    expect(deriveSessionFailure({ errorCode: 'context_too_large' }).reason).toContain('never sent');
   });
 
   // dsh-rebase P1-7c (decision 106 rule 42): the four provider classes that
@@ -210,6 +231,7 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       'PROVIDER_RATE_LIMITED',
       'NETWORK_ERROR',
       'PROVIDER_ERROR',
+      'CONTEXT_TOO_LARGE',
       'GATEWAY_STREAM_GATE',
       'GATEWAY_NO_UPSTREAM',
       'MODEL_SETTING_UNSUPPORTED',
@@ -345,6 +367,7 @@ describe('every failure sentence has a Chinese entry', () => {
       'PROVIDER_RATE_LIMITED',
       'NETWORK_ERROR',
       'PROVIDER_ERROR',
+      'CONTEXT_TOO_LARGE',
       'GATEWAY_STREAM_GATE',
       'GATEWAY_NO_UPSTREAM',
       'MODEL_SETTING_UNSUPPORTED',

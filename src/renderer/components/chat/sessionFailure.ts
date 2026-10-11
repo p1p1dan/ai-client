@@ -19,7 +19,8 @@
  * `turn_limit` by the loop's old 64-turn ceiling (legacy — see the entry
  * below), `stop_error` by `resolveError`
  * when a provider stream died, `context_too_large` by the preflight budget
- * check, `loop_threw` by an exception inside the loop. Main writes two of its
+ * check (1.0.x; DSH's own overflow is `CONTEXT_TOO_LARGE`, decision 178),
+ * `loop_threw` by an exception inside the loop. Main writes two of its
  * own (dsh-rebase P1-3c): `dsh_host_crashed` and `dsh_engine_restarted`, for a
  * turn the shared DSH engine process took with it.
  *
@@ -234,6 +235,18 @@ const FAILURE_VIEWS = {
     hint: 'Check the network or proxy, then continue.',
     action: 'continue',
   },
+  // dsh-rebase decision 178: DSH's `CONTEXT_WINDOW_EXCEEDED`. Unlike 1.0.x's
+  // preflight (`context_too_large` above, kept for its recorded sessions),
+  // the request did go out: the model refused it, and DSH compacted the
+  // context and retried once by itself before the turn failed. Nothing changes
+  // on a plain retry, so no Continue; the hint names the ways out.
+  CONTEXT_TOO_LARGE: {
+    title: 'The conversation no longer fits the model’s context window',
+    reason:
+      'The request was sent, and the model refused it as larger than its context window. The engine tried to compact the context and retry, and it still did not fit.',
+    hint: 'Switch to a model with a larger context window, start a new chat, or run /compact first and then send a message to carry on.',
+    action: 'configure',
+  },
   PROVIDER_ERROR: {
     title: 'The model service returned an error',
     reason:
@@ -291,15 +304,15 @@ export type KnownSessionFailureCode = keyof typeof FAILURE_VIEWS;
 
 /**
  * dsh-rebase P1-4d1: a DSH session names a failed request in the native
- * runtime's provider vocabulary (`src/shared/dshFailureCodes.ts`). Three of
+ * runtime's provider vocabulary (`src/shared/dshFailureCodes.ts`). Two of
  * those codes mean exactly what a card above already says, so they read it.
  * The rest (`PROVIDER_UNAUTHORIZED`, `PROVIDER_RATE_LIMITED`, `NETWORK_ERROR`,
  * `PROVIDER_ERROR`) have cards of their own since P1-7c (plan P1-7 shard 04
- * §7), with DSH's own sentence as the detail.
+ * §7), with DSH's own sentence as the detail; so does `CONTEXT_TOO_LARGE`
+ * since decision 178 (the request was sent, and compaction was tried).
  */
 const FAILURE_CODE_ALIASES: Readonly<Record<string, KnownSessionFailureCode>> = {
   TIMEOUT: 'timeout',
-  CONTEXT_TOO_LARGE: 'context_too_large',
   MODEL_NOT_CONFIGURED: 'model_missing',
 };
 
