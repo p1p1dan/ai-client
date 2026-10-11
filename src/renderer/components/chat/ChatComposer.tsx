@@ -1,3 +1,4 @@
+import { readCompactInstructions } from '@shared/compactInstructions';
 import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentDefaults';
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { DEFAULT_RUNTIME_PERMISSION } from '@shared/types/runtimePermission';
@@ -97,7 +98,12 @@ import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { ComposerUsageChip } from './ComposerUsageChip';
 import { deriveChatEmptySurface } from './chatEmptyState';
-import { COMPACTING_LINE, compactOutcomeToast, runCompactCommand } from './compactCommand';
+import {
+  COMPACTING_LINE,
+  compactInstructionsIgnoredToast,
+  compactOutcomeToast,
+  runCompactCommand,
+} from './compactCommand';
 import { runCompactWhenRunning } from './compactRun';
 import { buildBranchColumn } from './composerColumns';
 import { onComposerFocusRequest } from './composerFocus';
@@ -1287,6 +1293,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       case 'compact': {
         if (!activeSessionId) return false;
         const sessionId = activeSessionId;
+        // Decision 179: instructions after `/compact` go with it; longer than
+        // the engine takes is said here, and nothing is sent.
+        const instructions = readCompactInstructions(action.instructions);
+        if (instructions.kind === 'too-long') {
+          const toast = compactOutcomeToast(
+            { kind: 'instructions-too-long', max: instructions.max, length: instructions.length },
+            t
+          );
+          if (toast) toastManager.add(toast);
+          return true;
+        }
         // Decision 176: one `/compact` per conversation at a time. The status
         // line already says one is on its way; a second Enter is answered
         // here rather than queuing a second compaction behind the first.
@@ -1305,7 +1322,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           compact: () =>
             window.electronAPI.chat.compactSession({
               sessionId,
-              ...(action.instructions ? { instructions: action.instructions } : {}),
+              ...(instructions.kind === 'ok' ? { instructions: instructions.text } : {}),
             }),
           // Decision 176: a conversation the engine is not running is started
           // the way a send starts it first — which also moves a chat from the
@@ -1334,6 +1351,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             description: t('The summary shows as "Context summary" when this chat is reopened.'),
           });
         }
+        // Decision 179: compacted, but the summary went out without them.
+        const ignored = compactInstructionsIgnoredToast(outcome, t);
+        if (ignored) toastManager.add(ignored);
         break;
       }
     }
@@ -1370,13 +1390,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // Ctrl+Enter `/compact` must not interrupt the turn to reach the model.
     if (await runBuiltinSlash(trimmed)) return;
     if (useChatSessionsStore.getState().activeSessionId !== activeSessionId) return;
-    // Decision 178: while this window's `/compact` summarizes, a message waits
-    // in the queue like one sent while a turn runs, and goes out once the
-    // compaction ends — compacted or not. Sent now, it would wait behind the
-    // compaction in the worker and be reported failed before its turn began.
+    // Decisions 178 and 179: while this window's `/compact` starts the
+    // conversation or summarizes, a message waits in the queue like one sent
+    // while a turn runs, and goes out once the `/compact` ends — compacted or
+    // not, started or not (a start that failed is then the send's own to
+    // report). Sent now, it would race the start to the engine, or wait behind
+    // the compaction in the worker and be reported failed before its turn began.
     const compactingNow =
       activeSessionId !== null &&
-      selectCompactPhase(useCompactRunsStore.getState(), activeSessionId) === 'compacting';
+      selectCompactPhase(useCompactRunsStore.getState(), activeSessionId) !== undefined;
     const action = decideSendAction({
       hasTarget: hasSendTarget,
       disabled: Boolean(disabled),
@@ -1389,21 +1411,6 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     });
 
     if (action === 'blocked') return;
-
-    // Decision 176: this window is starting the conversation for a `/compact`.
-    // A message sent now would race that start to the engine, and the
-    // compaction behind it, so it waits: said in words, kept in the box.
-    if (
-      activeSessionId &&
-      selectCompactPhase(useCompactRunsStore.getState(), activeSessionId) === 'starting'
-    ) {
-      toastManager.add({
-        type: 'info',
-        title: t('Wait for the conversation to start'),
-        description: t('Your message stays in the input box; send it once the conversation runs.'),
-      });
-      return;
-    }
 
     // Decision 174: the home page. The conversation is made by this send, on
     // the work bar's draft target — not before, and not as a temporary chat
@@ -1448,7 +1455,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (mode === 'interject') {
       // Decision 093: straight into the running turn. Only a worker with no
       // turn at all sends the message on to the queue, as Enter would.
-      // Decision 178: a compaction is no turn to steer into; it queues.
+      // Decisions 178, 179: a `/compact` — starting or compacting — is no
+      // turn to steer into; it queues.
       if (!compactingNow && (await interjectIntoTurn(activeSessionId, trimmed)) !== 'no-turn') {
         return;
       }

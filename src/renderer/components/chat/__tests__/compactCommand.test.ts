@@ -11,11 +11,16 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { englishTranslate, zhTranslations } from '@shared/i18n';
-import { WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED } from '@shared/types/workerRpc';
+import {
+  WORKER_COMPACT_INSTRUCTIONS_TOO_LONG,
+  WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
+} from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  COMPACT_INSTRUCTIONS_TOO_LONG,
   COMPACT_INSTRUCTIONS_UNSUPPORTED,
   type CompactCommandOutcome,
+  compactInstructionsIgnoredToast,
   compactionSummaryOf,
   compactOutcomeToast,
   runCompactCommand,
@@ -61,19 +66,88 @@ describe('runCompactCommand', () => {
     });
   });
 
-  it('[CC-08] the DSH engine refusing instructions is its own outcome, not a failure sentence', async () => {
-    // dsh-rebase decision 113: `/compact keep X` reaches the worker as
-    // instructions, which DSH's /compact does not take.
+  it('[CC-08] an engine that cannot add instructions is its own outcome, not a failure sentence', async () => {
+    // dsh-rebase decision 179: the fail-safe of `/compact keep X` — the
+    // engine's compaction hook is not what the bridge extends.
     const compact = vi.fn(async () => {
       throw new Error(
-        "Error invoking remote method 'chat:compactSession': WorkerSlotError: WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED: /compact takes no instructions on the DSH engine; nothing was compacted"
+        "Error invoking remote method 'chat:compactSession': WorkerSlotError: WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED: this engine cannot add instructions to /compact (the compaction service has no summary hook); nothing was compacted"
       );
     });
     await expect(runCompactCommand({ turnRunning: false, compact })).resolves.toEqual({
       kind: 'instructions-unsupported',
     });
-    // The renderer spells the code itself; it must stay the worker's.
+    // The renderer spells the codes itself; they must stay the worker's.
     expect(COMPACT_INSTRUCTIONS_UNSUPPORTED).toBe(WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED);
+    expect(COMPACT_INSTRUCTIONS_TOO_LONG).toBe(WORKER_COMPACT_INSTRUCTIONS_TOO_LONG);
+  });
+
+  it('[CC-179-01] too long, as the engine says it: its own outcome, with the limit', async () => {
+    const compact = vi.fn(async () => {
+      throw new Error(
+        "Error invoking remote method 'chat:compactSession': WorkerSlotError: WORKER_COMPACT_INSTRUCTIONS_TOO_LONG: /compact instructions are 2001 characters, more than the 2000 taken; nothing was compacted"
+      );
+    });
+    await expect(runCompactCommand({ turnRunning: false, compact })).resolves.toEqual({
+      kind: 'instructions-too-long',
+      max: 2000,
+    });
+  });
+
+  it('[CC-179-02] compacted without the instructions given: said, on top of the success', async () => {
+    const ignored = await runCompactCommand({
+      turnRunning: false,
+      compact: async () => ({ compacted: true, instructionsApplied: false }),
+    });
+    expect(ignored).toEqual({ kind: 'compacted', instructionsIgnored: true });
+    expect(compactInstructionsIgnoredToast(ignored, englishTranslate)).toEqual({
+      type: 'info',
+      title: 'Compacted without your instructions',
+      description: 'This engine version did not pass them to the summary.',
+    });
+    // Applied, or none given: nothing more to say.
+    for (const value of [{ compacted: true, instructionsApplied: true }, { compacted: true }]) {
+      const outcome = await runCompactCommand({ turnRunning: false, compact: async () => value });
+      expect(outcome).toEqual({ kind: 'compacted' });
+      expect(compactInstructionsIgnoredToast(outcome, englishTranslate)).toBeNull();
+    }
+  });
+
+  it('[CC-179-03] the instruction toasts, in words and translated', () => {
+    expect(compactOutcomeToast({ kind: 'instructions-unsupported' }, englishTranslate)).toEqual({
+      type: 'info',
+      title: 'This engine version cannot add instructions to /compact',
+      description: 'Remove the text after /compact, then press Enter again.',
+    });
+    expect(
+      compactOutcomeToast(
+        { kind: 'instructions-too-long', max: 2000, length: 2105 },
+        englishTranslate
+      )
+    ).toEqual({
+      type: 'info',
+      title: 'The instructions after /compact are too long',
+      description: 'Keep them to 2000 characters (now 2105).',
+    });
+    expect(
+      compactOutcomeToast({ kind: 'instructions-too-long', max: 2000 }, englishTranslate)
+        ?.description
+    ).toBe('Keep them to 2000 characters.');
+    for (const key of [
+      'This engine version cannot add instructions to /compact',
+      'The instructions after /compact are too long',
+      'Keep them to {{max}} characters (now {{length}}).',
+      'Keep them to {{max}} characters.',
+      'Compacted without your instructions',
+      'This engine version did not pass them to the summary.',
+      'Compact the context of this conversation; instructions may follow',
+      'Instructions for this summary: {{instructions}}',
+    ]) {
+      expect(zhTranslations[key], key).toBeTruthy();
+    }
+    // Decision 176's starting-phase refusal is gone with the queue (decision 179).
+    expect(zhTranslations['Wait for the conversation to start']).toBeUndefined();
+    expect(zhTranslations['/compact takes no instructions']).toBeUndefined();
   });
 
   it('[CC-03] success is success', async () => {
@@ -135,10 +209,23 @@ describe('the composer reports every outcome and keeps the command (source scan)
     // Decision 176: one table says every outcome in words (`compactOutcomeToast`).
     expect(compactCase).toContain("if (outcome.kind !== 'compacted') {");
     expect(compactCase).toContain('const toast = compactOutcomeToast(outcome, t);');
-    // A second `/compact` while one runs, and every refusal: consumed, but the
-    // draft survives.
+    // A second `/compact` while one runs, instructions too long (decision
+    // 179), and every refusal: consumed, but the draft survives.
     expect(compactCase).toContain("t('This conversation is already being compacted')");
-    expect(compactCase.match(/return true;/g)?.length).toBe(2);
+    expect(compactCase.match(/return true;/g)?.length).toBe(3);
+  });
+
+  it('[CC-179-04] instructions are read as plain text; too long is said before anything is sent', () => {
+    const tooLong = compactCase.indexOf("if (instructions.kind === 'too-long') {");
+    expect(compactCase).toContain(
+      'const instructions = readCompactInstructions(action.instructions);'
+    );
+    expect(tooLong).toBeGreaterThan(-1);
+    expect(tooLong).toBeLessThan(compactCase.indexOf('runCompactCommand({'));
+    expect(compactCase).toContain(
+      "...(instructions.kind === 'ok' ? { instructions: instructions.text } : {}),"
+    );
+    expect(compactCase).toContain('compactInstructionsIgnoredToast(outcome, t)');
   });
 
   it('[CC-06] /archive no longer clears the command when the archive was refused', () => {
@@ -161,7 +248,6 @@ describe('the composer reports every outcome and keeps the command (source scan)
       '/compact stays in the input box — press Enter again once the turn ends.',
       'Could not compact the conversation',
       'Could not archive this conversation',
-      '/compact takes no instructions',
       'Remove the text after /compact, then press Enter again.',
       'Conversation compacted',
       'The summary shows as "Context summary" when this chat is reopened.',

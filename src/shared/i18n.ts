@@ -513,14 +513,12 @@ export const zhTranslations: Record<string, string> = {
   // R02-c slash command menu.
   'Start a new conversation': '开始一个新对话',
   'Archive this conversation': '归档当前对话',
-  'Compact the context of this conversation': '压缩当前对话的上下文',
   // 2026-09-24 N1: a local slash command that could not run says so.
   'Wait for this turn to finish before compacting': '等这一轮结束后再压缩上下文',
   '/compact stays in the input box — press Enter again once the turn ends.':
     '/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。',
   'Could not compact the conversation': '压缩上下文失败',
-  // dsh-rebase decision 113: DSH's /compact takes no instructions.
-  '/compact takes no instructions': '/compact 不接受附加说明',
+  // dsh-rebase decision 179: an engine whose /compact cannot add instructions.
   'Remove the text after /compact, then press Enter again.':
     '删掉 /compact 后面的文字，再按一次 Enter。',
   'Could not archive this conversation': '归档对话失败',
@@ -4387,9 +4385,6 @@ Object.assign(zhTranslations, {
     '对话在操作开始前停止了运行，没有任何改动。',
   'This conversation is no longer running, and its tasks ended with it.':
     '这个对话已不在运行，它的任务也随之结束了。',
-  'Wait for the conversation to start': '等对话启动后再发送',
-  'Your message stays in the input box; send it once the conversation runs.':
-    '消息还留在输入框里，对话启动后再发送。',
 });
 
 // Auto compaction policy
@@ -4436,4 +4431,22 @@ Object.assign(zhTranslations, {
     '请求已经发给模型，模型以超出上下文窗口为由拒绝了它。引擎已尝试压缩上下文后重试，仍然放不下。',
   'Switch to a model with a larger context window, start a new chat, or run /compact first and then send a message to carry on.':
     '换用上下文窗口更大的模型、新开对话，或先输入 /compact 压缩上下文，再发消息接着做。',
+});
+
+// Compact instructions
+/**
+ * dsh-rebase decision 179: `/compact <instructions>` — the menu row, the line
+ * under the summary it wrote, and its refusals (`compactCommand.ts`).
+ */
+Object.assign(zhTranslations, {
+  'Compact the context of this conversation; instructions may follow':
+    '压缩当前对话的上下文（可在后面附加说明）',
+  'Instructions for this summary: {{instructions}}': '本次压缩的附加说明：{{instructions}}',
+  'This engine version cannot add instructions to /compact': '当前引擎版本的 /compact 不能附加说明',
+  'The instructions after /compact are too long': '/compact 后面的说明太长了',
+  'Keep them to {{max}} characters (now {{length}}).':
+    '最多 {{max}} 个字符（现在是 {{length}} 个）。',
+  'Keep them to {{max}} characters.': '最多 {{max}} 个字符。',
+  'Compacted without your instructions': '已压缩，但没有用上附加说明',
+  'This engine version did not pass them to the summary.': '当前引擎版本没有把说明交给摘要。',
 });

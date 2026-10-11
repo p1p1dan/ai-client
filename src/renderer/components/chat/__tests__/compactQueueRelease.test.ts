@@ -80,4 +80,41 @@ describe('the queue while /compact runs (decision 178)', () => {
     await act(async () => runs.end('c1'));
     expect(sent).toEqual(['after the summary']);
   });
+
+  it('[179-Q-01] a start that fails ends the /compact too: what was queued while it started goes out', async () => {
+    const sent: string[] = [];
+    const runEntry = vi.fn(async (entry: QueuedMessage) => {
+      sent.push(entry.text);
+      return 'committed' as const;
+    });
+    function Harness() {
+      const phase = useCompactRunsStore((state) => selectCompactPhase(state, 'c1'));
+      useQueueRelease({
+        sessionId: 'c1',
+        hasTarget: true,
+        disabled: false,
+        sending: false,
+        isInFlight: () => phase !== undefined,
+        status: 'idle',
+        runEntry,
+      });
+      return null;
+    }
+    const runs = useCompactRunsStore.getState();
+    expect(runs.begin('c1')).toBe(true);
+    await act(async () => runs.setPhase('c1', 'starting'));
+    // Decision 179: queued while the conversation was being started.
+    useMessageQueueStore.getState().enqueue({
+      id: 'q1',
+      sessionId: 'c1',
+      text: 'sent while it started',
+      attachments: [],
+      queuedAt: 1,
+    });
+    await act(async () => root.render(createElement(Harness)));
+    expect(sent).toEqual([]);
+    // The start failed: the compaction never began, and the `/compact` ended.
+    await act(async () => runs.end('c1'));
+    expect(sent).toEqual(['sent while it started']);
+  });
 });

@@ -24,8 +24,14 @@
  * line says 「正在启动对话…」 for that, then 「正在压缩上下文…」. Every outcome
  * is said in words (`compactOutcomeToast`): Main's and the engine's codes go to
  * the log, not on screen.
+ *
+ * dsh-rebase decision 179: `/compact <instructions>` passes the instructions
+ * on; ones longer than the engine takes are refused here, before anything is
+ * sent, and the engine's own refusals (too long, or an engine whose
+ * compaction cannot carry them) are said in words too.
  */
 
+import { COMPACT_INSTRUCTIONS_MAX_CHARS } from '@shared/compactInstructions';
 import type { Translate } from '@shared/i18n';
 import type { HistoryMessage } from '@shared/types/sessionHistory';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
@@ -37,12 +43,15 @@ import {
 } from './sessionStart';
 
 /**
- * dsh-rebase P1-4d2 (decision 113): the worker's refusal of `/compact <text>`
- * — DSH's `/compact` takes no instructions. Spelled here rather than imported,
- * as `SessionTreeDialog` spells its own worker code: the renderer imports only
- * types from `workerRpc`. `compactCommand.test.ts` pins it to the worker's.
+ * dsh-rebase decision 179: the worker's refusals of `/compact <text>` — an
+ * engine whose compaction cannot carry instructions (a DSH upgrade changed
+ * what the bridge extends), and instructions longer than taken. Spelled here
+ * rather than imported, as `SessionTreeDialog` spells its own worker code: the
+ * renderer imports only types from `workerRpc`. `compactCommand.test.ts` pins
+ * them to the worker's.
  */
 export const COMPACT_INSTRUCTIONS_UNSUPPORTED = 'WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED';
+export const COMPACT_INSTRUCTIONS_TOO_LONG = 'WORKER_COMPACT_INSTRUCTIONS_TOO_LONG';
 
 /**
  * Decision 176: the bridge's other `worker.compact` codes (`commands.ts`) and
@@ -61,11 +70,27 @@ export type CompactCommandOutcome =
    * dsh-rebase P1-7e (problem 10, decision 140): with the summary row the
    * worker read back, when it could — the caller shows it right away.
    */
-  | { kind: 'compacted'; summary?: HistoryMessage }
+  | {
+      kind: 'compacted';
+      summary?: HistoryMessage;
+      /**
+       * Decision 179: instructions were given and the summary was written
+       * without them (`WorkerCompactResult.instructionsApplied: false`).
+       */
+      instructionsIgnored?: true;
+    }
   /** A turn is running; nothing was sent to Main (or Main and the engine said so). */
   | { kind: 'turn-running' }
-  /** The engine takes `/compact` alone; nothing ran, and the typed text is still there. */
+  /**
+   * Decision 179: this engine's compaction cannot carry instructions; nothing
+   * ran, and the typed text is still there.
+   */
   | { kind: 'instructions-unsupported' }
+  /**
+   * Decision 179: longer than taken — found here before anything was sent
+   * (`length` known), or by the engine.
+   */
+  | { kind: 'instructions-too-long'; max: number; length?: number }
   /** Decision 176: one is with the worker already (this window's, or another's). */
   | { kind: 'already-compacting' }
   /** Decision 176: the conversation could not be started for it. */
@@ -123,6 +148,9 @@ export function classifyCompactFailure(error: unknown): CompactCommandOutcome {
   if (reason.includes(COMPACT_INSTRUCTIONS_UNSUPPORTED)) {
     return { kind: 'instructions-unsupported' };
   }
+  if (has(reason, COMPACT_INSTRUCTIONS_TOO_LONG)) {
+    return { kind: 'instructions-too-long', max: COMPACT_INSTRUCTIONS_MAX_CHARS };
+  }
   if (has(reason, 'compact_in_progress')) return { kind: 'already-compacting' };
   // Main's guard (`assertIdleEntry`) and the bridge's (`assertIdle`): a turn,
   // or a goal round the engine started by itself.
@@ -173,7 +201,11 @@ export async function runCompactCommand(input: {
     }
     if (result.kind === 'cancelled') return { kind: 'stopped-running' };
     const summary = compactionSummaryOf(result.value);
-    return summary ? { kind: 'compacted', summary } : { kind: 'compacted' };
+    return {
+      kind: 'compacted',
+      ...(summary ? { summary } : {}),
+      ...(instructionsIgnored(result.value) ? { instructionsIgnored: true as const } : {}),
+    };
   } catch (error) {
     return classifyCompactFailure(error);
   }
@@ -203,13 +235,25 @@ export function compactOutcomeToast(
         title: t('Wait for this turn to finish before compacting'),
         description: t('/compact stays in the input box — press Enter again once the turn ends.'),
       };
-    // dsh-rebase decision 113: DSH's /compact takes no instructions; the typed
-    // text stays so the user can remove it and press Enter again.
+    // Decision 179: an engine whose compaction cannot carry instructions; the
+    // typed text stays so the user can remove it and press Enter again.
     case 'instructions-unsupported':
       return {
         type: 'info',
-        title: t('/compact takes no instructions'),
+        title: t('This engine version cannot add instructions to /compact'),
         description: t('Remove the text after /compact, then press Enter again.'),
+      };
+    case 'instructions-too-long':
+      return {
+        type: 'info',
+        title: t('The instructions after /compact are too long'),
+        description:
+          outcome.length !== undefined
+            ? t('Keep them to {{max}} characters (now {{length}}).', {
+                max: outcome.max,
+                length: outcome.length,
+              })
+            : t('Keep them to {{max}} characters.', { max: outcome.max }),
       };
     case 'already-compacting':
       return { type: 'info', title: t('This conversation is already being compacted') };
@@ -244,6 +288,31 @@ export function compactOutcomeToast(
         description: outcome.key ? t(outcome.key) : outcome.reason,
       };
   }
+}
+
+/**
+ * Decision 179: the toast of a compaction whose summary was written without
+ * the instructions given (`instructionsIgnored`); `null` otherwise.
+ */
+export function compactInstructionsIgnoredToast(
+  outcome: CompactCommandOutcome,
+  t: Translate
+): CompactToast | null {
+  if (outcome.kind !== 'compacted' || !outcome.instructionsIgnored) return null;
+  return {
+    type: 'info',
+    title: t('Compacted without your instructions'),
+    description: t('This engine version did not pass them to the summary.'),
+  };
+}
+
+/** Decision 179: `WorkerCompactResult.instructionsApplied` is `false`. */
+function instructionsIgnored(result: unknown): boolean {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    (result as { instructionsApplied?: unknown }).instructionsApplied === false
+  );
 }
 
 /**

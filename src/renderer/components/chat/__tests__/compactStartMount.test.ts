@@ -14,7 +14,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * conversation is started the way a send starts it (`ensureHost`, then the
  * send path's resume with the send path's arguments), the status line says
  * 「正在启动对话…」 and then 「正在压缩上下文…」, and every refusal is said in
- * words. A message sent while the conversation starts waits; a second
+ * words. A message sent while the conversation starts waits in the queue
+ * (decision 179, as decision 178 has it while it compacts); a second
  * `/compact` is answered locally; ending the conversation while it starts
  * cancels the compaction; there is no Stop for it.
  *
@@ -268,34 +269,6 @@ describe('/compact in a conversation the engine is not running (decision 176)', 
     expect(box().value).toBe(COMMAND);
   });
 
-  it('[176-C-03] a message sent while it starts waits, in words, and survives the compaction', async () => {
-    const resume = deferred<{ requestId: string }>();
-    mocks.api.resumeSession.mockReturnValue(resume.promise);
-    mocks.api.compactSession.mockResolvedValue({ compacted: true });
-    await mountComposer();
-    await type(COMMAND);
-    await press('Enter');
-    expect(text()).toContain(SESSION_STARTING_LINE);
-
-    await type('and then run the tests');
-    await press('Enter');
-    expect(mocks.toast).toHaveBeenCalledWith({
-      type: 'info',
-      title: 'Wait for the conversation to start',
-      description: 'Your message stays in the input box; send it once the conversation runs.',
-    });
-    expect(mocks.api.send).not.toHaveBeenCalled();
-    expect(mocks.api.resumeSession).toHaveBeenCalledTimes(1);
-    expect(box().value).toBe('and then run the tests');
-
-    await act(async () => resume.resolve({ requestId: 'resume-1' }));
-    await settle();
-    expect(mocks.api.compactSession).toHaveBeenCalledTimes(1);
-    expect(toastTitles()).toContain('Conversation compacted');
-    // The compaction's success clears the command, not the message.
-    expect(box().value).toBe('and then run the tests');
-  });
-
   it('[176-C-04] a second /compact while one runs is answered here, not queued', async () => {
     const compact = deferred<{ compacted: true }>();
     mocks.api.compactSession.mockReturnValue(compact.promise);
@@ -443,8 +416,8 @@ describe('a message while /compact summarizes (decision 178)', () => {
     expect(queued()).toEqual(['and then run the tests']);
     // Owned by its queue entry now, like a message queued behind a turn.
     expect(box().value).toBe('');
-    // Not the starting phase's refusal: nothing is said, the strip shows it.
-    expect(toastTitles()).not.toContain('Wait for the conversation to start');
+    // Nothing is said: the strip shows it.
+    expect(toastTitles()).toEqual([]);
 
     await act(async () => compact.resolve({ compacted: true }));
     await settle();
@@ -497,5 +470,143 @@ describe('a message while /compact summarizes (decision 178)', () => {
     expect(text()).not.toContain(COMPACTING_LINE);
     expect(queued()).toEqual(['carry on']);
     expect(toastTitles()).toContain('Could not compact the conversation');
+  });
+});
+
+/**
+ * dsh-rebase decision 179 (revising 176 §5): a message sent while this
+ * window's `/compact` starts the conversation waits in the queue too, as it
+ * does while it compacts (decision 178): the box is cleared, nothing is said,
+ * and it goes out once the `/compact` ends — compacted or not, started or not
+ * (`useQueueRelease` is mocked here; its hold is `compactQueueRelease.test.ts`'s).
+ */
+describe('a message while /compact starts the conversation (decision 179)', () => {
+  const queued = () =>
+    selectSessionQueue(useMessageQueueStore.getState().state, 'c1').entries.map(
+      (entry) => entry.text
+    );
+
+  it('[179-C-01] Enter queues it, clears the box, says nothing; the compaction clears only its command', async () => {
+    const resume = deferred<{ requestId: string }>();
+    mocks.api.resumeSession.mockReturnValue(resume.promise);
+    mocks.api.compactSession.mockResolvedValue({ compacted: true });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+    expect(text()).toContain(SESSION_STARTING_LINE);
+
+    await type('and then run the tests');
+    await press('Enter');
+    expect(queued()).toEqual(['and then run the tests']);
+    expect(box().value).toBe('');
+    expect(mocks.toast).not.toHaveBeenCalled();
+    expect(mocks.api.send).not.toHaveBeenCalled();
+    expect(mocks.api.resumeSession).toHaveBeenCalledTimes(1);
+
+    await act(async () => resume.resolve({ requestId: 'resume-1' }));
+    await settle();
+    expect(mocks.api.compactSession).toHaveBeenCalledTimes(1);
+    expect(toastTitles()).toEqual(['Conversation compacted']);
+    expect(queued()).toEqual(['and then run the tests']);
+    expect(mocks.api.send).not.toHaveBeenCalled();
+  });
+
+  it('[179-C-02] Ctrl+Enter queues it too: a conversation being started has no turn to steer', async () => {
+    const resume = deferred<{ requestId: string }>();
+    mocks.api.resumeSession.mockReturnValue(resume.promise);
+    mocks.api.compactSession.mockResolvedValue({ compacted: true });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+
+    await type('one more thing');
+    await act(async () => {
+      box().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })
+      );
+    });
+    await settle();
+    expect(mocks.api.interject).not.toHaveBeenCalled();
+    expect(mocks.api.send).not.toHaveBeenCalled();
+    expect(queued()).toEqual(['one more thing']);
+
+    await act(async () => resume.resolve({ requestId: 'resume-1' }));
+    await settle();
+  });
+
+  it('[179-C-03] a start that fails leaves what was queued queued; the card says why, as before', async () => {
+    const resume = deferred<{ requestId: string }>();
+    mocks.api.resumeSession.mockReturnValue(resume.promise);
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+    await type('carry on');
+    await press('Enter');
+
+    await act(async () =>
+      resume.reject(
+        new Error(
+          "Error invoking remote method 'chat:resumeSession': Error: pi_session_workspace_mismatch: Indexed workspace does not match the resume request"
+        )
+      )
+    );
+    await settle();
+    expect(mocks.api.compactSession).not.toHaveBeenCalled();
+    expect(text()).not.toContain(SESSION_STARTING_LINE);
+    expect(queued()).toEqual(['carry on']);
+    expect(mocks.toast).toHaveBeenCalledWith({
+      type: 'error',
+      title: 'Could not compact the conversation',
+      description: SESSION_START_FAILED,
+    });
+    expect(useChatSessionsStore.getState().historyErrors.c1).toMatch(/^session_cwd_mismatch: /);
+  });
+});
+
+/** dsh-rebase decision 179: the text after `/compact` goes with it. */
+describe('/compact with instructions (decision 179)', () => {
+  it('[179-C-04] passes the instructions on, as plain text', async () => {
+    mocks.api.compactSession.mockResolvedValue({ compacted: true, instructionsApplied: true });
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type('/compact   保留未完成的任务和失败经验  ');
+    await press('Enter');
+
+    expect(mocks.api.compactSession).toHaveBeenCalledWith({
+      sessionId: 'c1',
+      instructions: '保留未完成的任务和失败经验',
+    });
+    expect(toastTitles()).toEqual(['Conversation compacted']);
+    expect(box().value).toBe('');
+  });
+
+  it('[179-C-05] longer than the engine takes: said here, nothing sent, the text kept', async () => {
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    const command = `/compact ${'字'.repeat(2001)}`;
+    await type(command);
+    await press('Enter');
+
+    expect(mocks.api.compactSession).not.toHaveBeenCalled();
+    expect(mocks.api.resumeSession).not.toHaveBeenCalled();
+    expect(mocks.toast).toHaveBeenCalledWith({
+      type: 'info',
+      title: 'The instructions after /compact are too long',
+      description: 'Keep them to 2000 characters (now 2001).',
+    });
+    expect(box().value).toBe(command);
+  });
+
+  it('[179-C-06] compacted without them: the success, then the word that they were not used', async () => {
+    mocks.api.compactSession.mockResolvedValue({ compacted: true, instructionsApplied: false });
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type('/compact keep the API decisions');
+    await press('Enter');
+
+    expect(toastTitles()).toEqual([
+      'Conversation compacted',
+      'Compacted without your instructions',
+    ]);
   });
 });

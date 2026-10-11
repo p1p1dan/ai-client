@@ -50,7 +50,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<{ name: string; descriptionKe
   { name: 'new', descriptionKey: 'Start a new conversation' },
   { name: 'settings', descriptionKey: 'Open settings' },
   { name: 'archive', descriptionKey: 'Archive this conversation' },
-  { name: 'compact', descriptionKey: 'Compact the context of this conversation' },
+  // Decision 179: instructions may follow (`/compact keep the open tasks`).
+  {
+    name: 'compact',
+    descriptionKey: 'Compact the context of this conversation; instructions may follow',
+  },
 ];
 
 /**
