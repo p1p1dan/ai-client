@@ -418,6 +418,8 @@ export const IPC_CHANNELS = {
   CHAT_GET_SLASH_COMMANDS: 'chat:getSlashCommands',
   /** R02-c — manual context compaction. */
   CHAT_COMPACT_SESSION: 'chat:compactSession',
+  /** dsh-rebase decision 180 — Esc or Stop on a running `/compact`. */
+  CHAT_CANCEL_COMPACT: 'chat:cancelCompact',
   /**
    * dsh-rebase P1-7a — one engine command run out of band (the goal bar's
    * `/goal pause|resume|edit|clear`): no turn, not refused while one runs.

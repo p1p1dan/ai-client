@@ -1144,6 +1144,13 @@ const electronAPI = {
       instructions?: string;
     }): Promise<import('@shared/types/workerRpc').WorkerCompactResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_COMPACT_SESSION, payload),
+    /**
+     * dsh-rebase decision 180 — Esc or Stop on a running `/compact`; that
+     * compaction then answers `WORKER_COMPACT_CANCELLED` (or `compacted`, when
+     * its summary was already written).
+     */
+    cancelCompact: (payload: { sessionId: string }): Promise<{ cancelled: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_CANCEL_COMPACT, payload),
     /** dsh-rebase P1-7a — one engine command out of band (the goal bar's `/goal …`). */
     runSessionCommand: (payload: {
       sessionId: string;

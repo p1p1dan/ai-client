@@ -54,6 +54,7 @@ import {
   sanitizeWorkerCommandRows,
   sanitizeWorkerJobRead,
   sanitizeWorkerPanels,
+  WORKER_COMPACT_CANCEL_TIMEOUT_MS,
   WORKER_COMPACT_REQUEST_TIMEOUT_MS,
   WORKER_RETRY_UNAVAILABLE,
   type WorkerAcceptForkPayload,
@@ -63,6 +64,8 @@ import {
   type WorkerCommandResult,
   type WorkerCommandsPayload,
   type WorkerCommandsResult,
+  type WorkerCompactCancelPayload,
+  type WorkerCompactCancelResult,
   type WorkerCompactPayload,
   type WorkerCompactResult,
   type WorkerDiscardForkPayload,
@@ -251,6 +254,10 @@ interface ManagedSlot {
    * (`compact_in_progress`) instead of queuing behind it, where its own
    * request clock would run out first and report a failure while the worker
    * still went on to write the summary.
+   *
+   * Decision 180: a compaction can run for ten minutes now, so while it is
+   * with the worker the entry is neither reclaimed when idle nor evicted for
+   * capacity (`isSafeToEvict`), and its idle clock starts again when it ends.
    */
   compacting?: boolean;
   /** Bytes after the last newline of this worker's stderr; see hostStderr.ts. */
@@ -1637,6 +1644,8 @@ export class WorkerManager {
       throw error;
     } finally {
       entry.compacting = false;
+      // Decision 180: idle from now, not from before a compaction of up to ten minutes.
+      entry.lastIdleAt = this.now();
     }
     if (!result || result.compacted !== true) {
       throw new WorkerManagerError(
@@ -1645,6 +1654,34 @@ export class WorkerManager {
       );
     }
     return result;
+  }
+
+  /**
+   * dsh-rebase decision 180 — Esc or Stop on a `/compact`. Not `stop`: a
+   * compaction is no turn, and `stop` answers `no_active_turn` without asking
+   * the worker (decision 046). The worker answers `worker.compact.cancel` off
+   * its request chain, which the compaction holds; the compaction itself then
+   * answers `WORKER_COMPACT_CANCELLED` through `compactSession`. `cancelled:
+   * false` when no compaction of this conversation is with the worker (the
+   * renderer asks again while its own is still on its way).
+   */
+  async cancelCompact(sessionId: string): Promise<WorkerCompactCancelResult> {
+    const entry = this.entriesBySession.get(sessionId);
+    if (!entry?.compacting || !entry.slot) return { cancelled: false };
+    try {
+      const result = await entry.slot.request<
+        WorkerCompactCancelResult,
+        WorkerCompactCancelPayload
+      >(
+        'worker.compact.cancel',
+        { logicalSessionId: entry.logicalSessionId },
+        { timeoutMs: WORKER_COMPACT_CANCEL_TIMEOUT_MS }
+      );
+      return { cancelled: result?.cancelled === true };
+    } catch (error) {
+      this.log('[worker-manager] /compact cancel was not delivered', sessionId, error);
+      return { cancelled: false };
+    }
   }
 
   /**
@@ -3390,6 +3427,8 @@ export class WorkerManager {
       entry.ownerWebContentsId === null &&
       entry.activeRequestId === null &&
       entry.mutationInFlight === null &&
+      // Decision 180: a `/compact` of up to ten minutes is not idle.
+      entry.compacting !== true &&
       !(channel !== undefined && busy.has(channel))
     );
   }

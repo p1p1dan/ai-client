@@ -2,6 +2,7 @@ import { STDERR_FORWARD_MAX_LINES_PER_TURN } from '@shared/stderrRedaction';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import {
   WORKER_COMPACT_BUDGET_MS,
+  WORKER_COMPACT_CANCEL_TIMEOUT_MS,
   WORKER_COMPACT_REQUEST_TIMEOUT_MS,
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerRpcEvent,
@@ -2787,6 +2788,112 @@ describe('WorkerManager compaction on a conversation that is not running (decisi
     await expect(h.manager.compactSession({ sessionId: 's1' })).resolves.toEqual({
       compacted: true,
     });
+  });
+});
+
+/**
+ * dsh-rebase decision 180 — a `/compact` can run for ten minutes, and Esc or
+ * Stop cancels it: Main forwards `worker.compact.cancel` while one is with the
+ * worker (the worker answers it off its request chain), and a compaction that
+ * long is neither reclaimed when idle nor evicted, and starts the idle clock
+ * again when it ends.
+ */
+describe('WorkerManager compaction cancel and lifetime (decision 180)', () => {
+  function holdCompaction(record: FakeSlotRecord) {
+    const settle: { resolve?: (value: unknown) => void; reject?: (error: unknown) => void } = {};
+    const cancels: unknown[] = [];
+    const original = record.request.getMockImplementation();
+    record.request.mockImplementation(async (type: string, ...rest: unknown[]) => {
+      if (type === 'worker.compact' && settle.resolve === undefined) {
+        return new Promise((resolve, reject) => {
+          settle.resolve = resolve;
+          settle.reject = reject;
+        });
+      }
+      if (type === 'worker.compact.cancel') {
+        cancels.push(rest);
+        return { cancelled: true };
+      }
+      return original?.(type, ...rest);
+    });
+    return {
+      started: () => settle.resolve !== undefined,
+      resolve: (value: unknown) => settle.resolve?.(value),
+      reject: (error: unknown) => settle.reject?.(error),
+      cancels,
+    };
+  }
+
+  it('[180-WM-1] forwards the cancel while a compaction is with the worker; nothing otherwise', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records[0] as FakeSlotRecord;
+    await expect(h.manager.cancelCompact('s1')).resolves.toEqual({ cancelled: false });
+    await expect(h.manager.cancelCompact('nobody')).resolves.toEqual({ cancelled: false });
+
+    const held = holdCompaction(record);
+    const compacting = h.manager.compactSession({ sessionId: 's1', ownerWebContentsId: 11 });
+    await vi.waitFor(() => expect(held.started()).toBe(true));
+    await expect(h.manager.cancelCompact('s1')).resolves.toEqual({ cancelled: true });
+    expect(held.cancels).toEqual([
+      [{ logicalSessionId: 's1' }, { timeoutMs: WORKER_COMPACT_CANCEL_TIMEOUT_MS }],
+    ]);
+    // The worker's answer to the compaction passes through as it came.
+    const remote = new WorkerSlotError(
+      'WORKER_RPC_REMOTE_ERROR',
+      'WORKER_COMPACT_CANCELLED: the compaction was cancelled before its summary was written; nothing was compacted',
+      { code: 'WORKER_COMPACT_CANCELLED', message: 'the compaction was cancelled' }
+    );
+    held.reject(remote);
+    await expect(compacting).rejects.toBe(remote);
+    await expect(h.manager.cancelCompact('s1')).resolves.toEqual({ cancelled: false });
+  });
+
+  it('[180-WM-2] a cancel the worker could not take answers not cancelled, never throws', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records[0] as FakeSlotRecord;
+    const held = holdCompaction(record);
+    const compacting = h.manager.compactSession({ sessionId: 's1', ownerWebContentsId: 11 });
+    await vi.waitFor(() => expect(held.started()).toBe(true));
+    const original = record.request.getMockImplementation();
+    record.request.mockImplementation(async (type: string, ...rest: unknown[]) => {
+      if (type === 'worker.compact.cancel') throw new Error('Worker exited');
+      return original?.(type, ...rest);
+    });
+    await expect(h.manager.cancelCompact('s1')).resolves.toEqual({ cancelled: false });
+    held.resolve({ compacted: true });
+    await expect(compacting).resolves.toEqual({ compacted: true });
+  });
+
+  it('[180-WM-3] not reclaimed nor evicted while it compacts; idle again from its end', async () => {
+    let clock = 0;
+    const base = createHarness({ capacity: 3, now: () => clock });
+    const manager = new WorkerManager({
+      createSlot: base.createSlot as never,
+      bindRuntimeIdentity: async () => undefined,
+      capacity: 3,
+      idleTimeoutMs: 100,
+      idleSweepIntervalMs: 0,
+      now: () => clock,
+    });
+    await create(manager, 'long');
+    const record = base.records[0] as FakeSlotRecord;
+    const held = holdCompaction(record);
+    const compacting = manager.compactSession({ sessionId: 'long' });
+    await vi.waitFor(() => expect(held.started()).toBe(true));
+    clock = 10_000;
+    await manager.reclaimIdle();
+    expect(manager.getSlotSnapshots().map((slot) => slot.logicalSessionId)).toEqual(['long']);
+
+    held.resolve({ compacted: true });
+    await compacting;
+    clock = 10_050;
+    await manager.reclaimIdle();
+    expect(manager.getSlotSnapshots().map((slot) => slot.logicalSessionId)).toEqual(['long']);
+    clock = 10_200;
+    await manager.reclaimIdle();
+    expect(manager.getSlotSnapshots()).toEqual([]);
   });
 });
 

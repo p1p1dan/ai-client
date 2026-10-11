@@ -909,6 +909,20 @@ export function registerChatHandlers(): void {
   );
 
   /**
+   * dsh-rebase decision 180 — Esc or Stop on a running `/compact`. Claimed
+   * like Stop (it routes nothing, the session's events already go to the
+   * window that asked); answered `cancelled: false` when no compaction of it
+   * is with the worker.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_CANCEL_COMPACT,
+    async (e, payload: { sessionId: string }): Promise<{ cancelled: boolean }> => {
+      claimSessionForSender(e, payload.sessionId);
+      return workerManager.cancelCompact(payload.sessionId);
+    }
+  );
+
+  /**
    * dsh-rebase P1-7a — the goal bar's buttons. A mutation of a live session,
    * so it is claimed for the sender like `/compact`; unlike `/compact` it is
    * not refused mid-turn (the worker and `WorkerManager.runSessionCommand`
