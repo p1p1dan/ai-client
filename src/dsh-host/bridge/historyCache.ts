@@ -76,6 +76,8 @@ export class DshHistoryCache {
   private readonly presentCall: DshToolPresenter | undefined;
   /** Decision 173: what the plan says of each route's cache; absent, no chain is kept. */
   private readonly chainOptions: CacheChainOptions | undefined;
+  /** Decision 179: the instructions each `/compact` summarized with, by compaction. */
+  private readonly compactInstructions: ((compactionId: string) => string | undefined) | undefined;
   private sessionId = '';
   private fold = new DshHistoryFold();
   /** Decision 173: the session's cache chain, at the fold's cursor; undefined when not kept. */
@@ -92,12 +94,14 @@ export class DshHistoryCache {
     query: DshSessionQuery,
     log: (...args: unknown[]) => void = () => undefined,
     presentCall?: DshToolPresenter,
-    chainOptions?: CacheChainOptions
+    chainOptions?: CacheChainOptions,
+    compactInstructions?: (compactionId: string) => string | undefined
   ) {
     this.query = query;
     this.log = log;
     this.presentCall = presentCall;
     this.chainOptions = chainOptions;
+    this.compactInstructions = compactInstructions;
   }
 
   /** Starts over for `sessionId`; call `load` once the session is open. */
@@ -113,13 +117,15 @@ export class DshHistoryCache {
   }
 
   /**
-   * Rows name the ids this session's live events gave them (P1-4d1), and a
-   * plugin call the title its live row carried (decision 131).
+   * Rows name the ids this session's live events gave them (P1-4d1), a
+   * plugin call the title its live row carried (decision 131), and a
+   * `/compact` summary the instructions it was written with (decision 179).
    */
   private newFold(): DshHistoryFold {
     return new DshHistoryFold({
       liveSessionId: this.sessionId,
       ...(this.presentCall ? { presentCall: this.presentCall } : {}),
+      ...(this.compactInstructions ? { compactInstructions: this.compactInstructions } : {}),
     });
   }
 

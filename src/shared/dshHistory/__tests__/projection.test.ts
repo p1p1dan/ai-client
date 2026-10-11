@@ -1485,3 +1485,79 @@ describe('projectDshHistory — automatic compaction (decision 178)', () => {
     ]);
   });
 });
+
+/**
+ * dsh-rebase decision 179: the summary of a `/compact <instructions>` carries
+ * a line with them, from the lookup the bridge passes; an automatic
+ * compaction's summary never does.
+ */
+describe('projectDshHistory — /compact instructions (decision 179)', () => {
+  const checkpoint = (
+    id: string,
+    compactionId: string
+  ): [string, string, Record<string, unknown>, unknown[]] => [
+    id,
+    '',
+    { kind: 'compact-checkpoint', compactionId },
+    [
+      text('framing\n\n<compacted-summary>'),
+      text('## Current Work\n- x'),
+      text('</compacted-summary>'),
+    ],
+  ];
+
+  it('[179-PROJ-1] a /compact summary with instructions has its line; others have none', () => {
+    const l = log()
+      .add('compaction/start', { compactionId: 'm1', sourceCommandId: 'cmd', turn: null })
+      .user(...checkpoint('cp-m1', 'm1'))
+      .add('compaction/end', { compactionId: 'm1', sourceCommandId: 'cmd', turn: null })
+      .add('compaction/start', { compactionId: 'm2', sourceCommandId: 'cmd', turn: null })
+      .user(...checkpoint('cp-m2', 'm2'))
+      .turn(1)
+      .add('compaction/start', { compactionId: 'auto', turn: 1 })
+      .user(...checkpoint('cp-auto', 'auto'))
+      .add('compaction/end', { compactionId: 'auto', turn: 1 })
+      .end(1, { kind: 'completed' });
+    const instructions = new Map([
+      ['m1', 'keep $& the {{failing}} tests'],
+      ['auto', 'never shown'],
+    ]);
+    const rows = projectDshHistory(l.events, {
+      compactInstructions: (compactionId) => instructions.get(compactionId),
+    });
+
+    expect(rows[0]?.blocks).toEqual([
+      { type: 'text', id: 'h:cp-m1:summary:0', text: 'Context summary\n\n## Current Work\n- x' },
+      {
+        type: 'text',
+        id: 'h:cp-m1:compact-instructions:0',
+        // Printed as typed: no replacement pattern, no placeholder.
+        text: 'Instructions for this summary: keep $& the {{failing}} tests',
+        notice: {
+          key: 'Instructions for this summary: {{instructions}}',
+          params: { instructions: 'keep $& the {{failing}} tests' },
+        },
+      },
+    ]);
+    expect(rows[0] && isDshSummaryRow(rows[0])).toBe(true);
+    expect(
+      translate('zh', 'Instructions for this summary: {{instructions}}', {
+        instructions: 'keep $& the {{failing}} tests',
+      })
+    ).toBe('本次压缩的附加说明：keep $& the {{failing}} tests');
+    expect(rows[1]?.blocks).toHaveLength(1);
+    expect(rows[2]?.blocks).toHaveLength(1);
+    // Without the lookup (a fold of someone else's log), nothing is added.
+    expect(projectDshHistory(l.events)[0]?.blocks).toHaveLength(1);
+  });
+
+  it('[179-PROJ-2] a lookup that throws costs the line only', () => {
+    const l = log().user(...checkpoint('cp', 'm'));
+    const rows = projectDshHistory(l.events, {
+      compactInstructions: () => {
+        throw new Error('unreadable');
+      },
+    });
+    expect(rows.map((row) => row.blocks.length)).toEqual([1]);
+  });
+});

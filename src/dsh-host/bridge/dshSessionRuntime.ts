@@ -42,7 +42,9 @@
  * Commands and state (P1-4d2, decisions 099 rules 9-12 and 113): the menu
  * lists DSH's commands and the user-invocable skills (`commands.ts`); a send
  * that is a known command line runs through `ctx.commands.execute` with no
- * model turn; `worker.compact` is DSH's `/compact`, without instructions; the
+ * model turn; `worker.compact` is DSH's `/compact`, the instructions typed
+ * after it leased to that one summary request (decision 179,
+ * `compactInstructions.ts`) and kept beside the stub for the summary row; the
  * `todos`, `goal` and `subagentCatalog` projections go out as
  * `session.projection`; the capability inventory reports the skill count.
  *
@@ -112,6 +114,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { readCompactInstructions } from '../../shared/compactInstructions.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { projectDshHistory } from '../../shared/dshHistory/projection.ts';
 import { dshLeafCheckpoint, dshTreeNodeId } from '../../shared/dshHistory/tree.ts';
@@ -172,6 +175,7 @@ import {
   WORKER_COMMAND_TIMEOUT,
   WORKER_COMMAND_UNKNOWN,
   WORKER_COMPACT_BUDGET_MS,
+  WORKER_COMPACT_INSTRUCTIONS_TOO_LONG,
   WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
   WORKER_RETRY_UNAVAILABLE,
   WORKER_REWIND_JOBS_RUNNING,
@@ -231,6 +235,7 @@ import {
   WORKER_COMPACT_TIMEOUT,
   WORKER_COMPACT_UNAVAILABLE,
 } from './commands.ts';
+import { armCompactInstructions, type CompactInstructionsLease } from './compactInstructions.ts';
 import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
 import { copyGrantSidecar, readGrantSidecar, writeGrantSidecar } from './grantStore.ts';
 import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
@@ -298,8 +303,11 @@ import {
   SESSION_STUB_VERSION,
   type SessionLineageEntry,
   type SessionStub,
+  type StubCompactInstructions,
+  stubCompactInstructions,
   stubLineage,
   stubPathFor,
+  withCompactInstructionsNote,
   writeStubAtomically,
 } from './stub.ts';
 import {
@@ -402,6 +410,11 @@ export interface DshBridgeOptionalServices {
   tools: DshToolRegistryView;
   /** `ctx.planMode` (decision 169): DSH's plan mode, following our gate's. */
   planMode: DshPlanModeView;
+  /**
+   * `ctx.compaction` (decision 179): read opaquely; its summary hook carries a
+   * `/compact`'s instructions (`compactInstructions.ts`).
+   */
+  compaction: unknown;
   /**
    * Decision 173 B1: the host's request scope, provided by host.ts; its prefix
    * evidence goes beside a step's cache verdict (`liveEvents.ts`).
@@ -794,6 +807,13 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   private stubFile = '';
   /** Every DSH session of this chat, oldest first, the current one last. */
   private lineage: SessionLineageEntry[] = [];
+  /**
+   * Decision 179: the instructions each `/compact` of this chat summarized
+   * with, as the stub keeps them; the history's summary rows read them.
+   */
+  private compactNotes: StubCompactInstructions[] = [];
+  /** Decision 179: the `/compact` with instructions running now, and its compaction once logged. */
+  private compactRun: { lease: CompactInstructionsLease; compactionId?: string } | null = null;
   /** Fork stubs written here that Main has not adopted yet -> their DSH session. */
   private readonly stagedForks = new Map<string, string>();
   /**
@@ -863,7 +883,9 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       this.query,
       options.log,
       presentCall,
-      deps.cacheChain ? dshCacheChainOptions(() => deps.modelPlan?.()) : undefined
+      deps.cacheChain ? dshCacheChainOptions(() => deps.modelPlan?.()) : undefined,
+      // Decision 179: a `/compact` summary with the instructions it was written with.
+      (compactionId) => this.compactInstructionsOf(compactionId)
     );
     this.retired = new DshRetiredHistory(this.query, options.log);
     this.router = new DshModelRouter(() => deps.modelPlan?.(), options.log);
@@ -1379,6 +1401,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     }
     this.dshSessionId = stub.dshSessionId;
     this.lineage = stubLineage(stub);
+    this.compactNotes = stubCompactInstructions(stub);
     this.attachGate(stub.dshSessionId);
     await this.openDshSession(stub.dshSessionId, selection);
   }
@@ -1600,18 +1623,24 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   }
 
   /**
-   * `/compact` (decisions 099 rule 10, 113): DSH's command, which takes no
-   * arguments, so instructions are refused before anything runs. Bounded as
-   * the native runtime bounded its summary: the command is cancelled at
+   * `/compact` (decisions 099 rule 10, 113, 179): DSH's command, which takes
+   * no arguments. Instructions are no argument either (decision 179): read as
+   * plain text (`readCompactInstructions`; too long is refused), they are
+   * leased to this session's summary request for the length of the command
+   * (`compactInstructions.ts`) — a host whose compaction cannot carry them
+   * refuses them before anything runs — and kept beside the stub once the
+   * summary they shaped is written, for its row. Bounded as the native
+   * runtime bounded its summary: the command is cancelled at
    * `compactTimeoutMs`, before Main's own wait ends, so Main's answer is
    * what the log has. Compacted only when DSH names the summary it wrote.
    */
   async compact(input: WorkerCompactPayload): Promise<WorkerCompactResult> {
     this.assertLogicalSession(input.logicalSessionId);
-    if (input.instructions !== undefined && input.instructions.trim().length > 0) {
+    const instructions = readCompactInstructions(input.instructions);
+    if (instructions.kind === 'too-long') {
       throw new BridgeSessionError(
-        WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
-        '/compact takes no instructions on the DSH engine; nothing was compacted'
+        WORKER_COMPACT_INSTRUCTIONS_TOO_LONG,
+        `/compact instructions are ${instructions.length} characters, more than the ${instructions.max} taken; nothing was compacted`
       );
     }
     await this.bootstrap();
@@ -1621,6 +1650,48 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     if (!commands || commands.find(agent, 'compact') === undefined) {
       throw new BridgeSessionError(WORKER_COMPACT_UNAVAILABLE, 'This host has no /compact command');
     }
+    const lease =
+      instructions.kind === 'ok' ? await this.leaseCompactInstructions(instructions.text) : null;
+    try {
+      // The lease may have waited for the hook's first check: still idle?
+      if (lease) this.assertIdle('compact the conversation');
+      this.compactRun = lease ? { lease } : null;
+      return await this.runCompact(agent, commands, lease);
+    } finally {
+      this.compactRun = null;
+      lease?.release();
+    }
+  }
+
+  /** Decision 179: this session's summary request will carry `text`, or the refusal says why not. */
+  private async leaseCompactInstructions(text: string): Promise<CompactInstructionsLease> {
+    const armed = await armCompactInstructions(
+      this.ctx.get?.('compaction'),
+      this.dshSessionId,
+      text
+    );
+    if (armed.kind === 'busy') {
+      throw new BridgeSessionError(
+        'WORKER_SESSION_BUSY',
+        'A compaction of this conversation is already running',
+        true
+      );
+    }
+    if (armed.kind === 'unsupported') {
+      this.options.log?.('[dsh-bridge] /compact instructions refused:', armed.reason);
+      throw new BridgeSessionError(
+        WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
+        `this engine cannot add instructions to /compact (${armed.reason}); nothing was compacted`
+      );
+    }
+    return armed.lease;
+  }
+
+  private async runCompact(
+    agent: DshAgent,
+    commands: DshCommandsView,
+    lease: CompactInstructionsLease | null
+  ): Promise<WorkerCompactResult> {
     const budgetMs = this.deps.compactTimeoutMs ?? WORKER_COMPACT_BUDGET_MS;
     // Decision 140: the summary row already on the timeline, so the one this
     // command writes is told apart from it.
@@ -1635,6 +1706,16 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     } finally {
       clearTimeout(timer);
     }
+    // Decision 179: the summary request could not carry the instructions, so
+    // it was never sent and the compaction failed — say why, not DSH's
+    // "could not produce a useful summary".
+    if (lease?.refused) {
+      this.options.log?.('[dsh-bridge] /compact instructions refused:', lease.refused);
+      throw new BridgeSessionError(
+        WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
+        `this engine cannot add instructions to /compact (${lease.refused}); nothing was compacted`
+      );
+    }
     if (controller.signal.aborted) {
       throw new BridgeSessionError(
         WORKER_COMPACT_TIMEOUT,
@@ -1644,11 +1725,70 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     }
     const outcome = compactOutcome(execution);
     if (!('compacted' in outcome)) throw new BridgeSessionError(outcome.code, outcome.message);
+    const applied = this.settleCompactInstructions(lease);
     // Decision 140: the row the history will show for it, handed back with the
     // answer (no live event: decision 113 rule 8 stands). A cache that cannot
     // read it back costs the row only; the compaction itself succeeded.
     const summary = (await this.historyCache.ready()) ? this.lastSummaryRow() : undefined;
-    return summary && summary.id !== summaryBefore ? { ...outcome, summary } : outcome;
+    return {
+      ...outcome,
+      ...(summary && summary.id !== summaryBefore ? { summary } : {}),
+      ...(applied !== undefined ? { instructionsApplied: applied } : {}),
+    };
+  }
+
+  /**
+   * Decision 179, a compaction that wrote its summary: the instructions are
+   * kept beside the stub for its row, or, when the summary went out without
+   * them, the hook is marked unusable and the answer says so. Undefined when
+   * no instructions were given.
+   */
+  private settleCompactInstructions(lease: CompactInstructionsLease | null): boolean | undefined {
+    if (!lease) return undefined;
+    if (!lease.applied) {
+      lease.markUnused();
+      this.options.log?.('[dsh-bridge] /compact summarized without its instructions');
+      return false;
+    }
+    const compactionId = this.compactRun?.compactionId;
+    if (!compactionId) return true;
+    this.compactNotes = withCompactInstructionsNote(this.compactNotes, {
+      compactionId,
+      instructions: lease.text,
+      at: this.now(),
+    });
+    try {
+      const stub = readStub(this.stubFile);
+      this.writeStub(this.stubFile, { ...stub, compactInstructions: this.compactNotes });
+    } catch (error) {
+      // The summary stands; only a reopen will not show the instructions under it.
+      this.options.log?.('[dsh-bridge] /compact instructions not kept beside the stub', error);
+    }
+    return true;
+  }
+
+  /** Decision 179: the instructions the `/compact` of `compactionId` summarized with. */
+  private compactInstructionsOf(compactionId: string): string | undefined {
+    return this.compactNotes.find((note) => note.compactionId === compactionId)?.instructions;
+  }
+
+  /**
+   * Decision 179: the summary of a `/compact` with instructions, as DSH logs
+   * it — before the checkpoint the history folds next — names its
+   * compaction, and the row is read with the instructions from then on.
+   */
+  private noteCompactionSummary(event: DshSessionEvent): void {
+    const run = this.compactRun;
+    if (!run?.lease.applied) return;
+    const compactionId =
+      typeof event.data?.compactionId === 'string' ? event.data.compactionId : undefined;
+    if (!compactionId) return;
+    run.compactionId = compactionId;
+    this.compactNotes = withCompactInstructionsNote(this.compactNotes, {
+      compactionId,
+      instructions: run.lease.text,
+      at: this.now(),
+    });
   }
 
   /** The newest context-summary row of the timeline (`isDshSummaryRow`), if any. */
@@ -2457,7 +2597,9 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       created = await this.createChild(() => childId, 1, cut);
       await this.ctx.sessions.flush(created.handle.agent.session);
       const events = await readSessionEvents(this.query, childId);
-      const messages = projectDshHistory(events);
+      const messages = projectDshHistory(events, {
+        compactInstructions: (compactionId) => this.compactInstructionsOf(compactionId),
+      });
       const at = this.now();
       this.writeStub(childStub, {
         engine: 'dsh',
@@ -2475,6 +2617,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
             at,
           },
         ],
+        // Decision 179: the summaries the fork inherits keep their instructions.
+        ...(this.compactNotes.length > 0 ? { compactInstructions: this.compactNotes } : {}),
       });
       // Best effort: a fork that could not take its grants starts with none (fail closed).
       copyGrantSidecar(
@@ -2900,6 +3044,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
           this.planHold = false;
           if (event.type === 'turn/end') this.planNotices.clear();
         }
+        // Decision 179: before the fold meets the checkpoint this summary precedes.
+        if (event.type === 'compaction/summary') this.noteCompactionSummary(event);
         // The history first: the live translation reads the fold (usage steps, goal budget).
         try {
           this.historyCache.push(event);

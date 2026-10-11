@@ -185,3 +185,44 @@ describe('readSessionPage', () => {
     expect(bare.messages[0]?.blocks[0]).not.toHaveProperty('presentation');
   });
 });
+
+describe('readSessionPage — /compact instructions (decision 179)', () => {
+  it('[179-PREVIEW] a summary carries the instructions the stub kept for it, as a resume shows it', async () => {
+    const events: DshLogEvent[] = [
+      {
+        type: 'user/message',
+        seq: 0,
+        time: 1_790_000_000_000,
+        data: {
+          id: 'c1',
+          role: 'user',
+          content: [
+            { type: 'text', text: '<compacted-summary>## Current Work\n- x</compacted-summary>' },
+          ],
+          source: { kind: 'compact-checkpoint', compactionId: 'k1' },
+        },
+      },
+    ];
+    const stubFile = writeStub({
+      compactInstructions: [{ compactionId: 'k1', instructions: 'keep the open tasks', at: 2 }],
+    });
+    const page = await readSessionPage(fakeQuery(events).query, {
+      stubFile,
+      logicalSessionId: LOGICAL,
+    });
+    expect(page.messages[0]?.blocks.map((block) => block.id)).toEqual([
+      'h:c1:summary:0',
+      'h:c1:compact-instructions:0',
+    ]);
+    const cache = new DshHistoryCache(
+      fakeQuery(events).query,
+      () => undefined,
+      undefined,
+      undefined,
+      (compactionId) => (compactionId === 'k1' ? 'keep the open tasks' : undefined)
+    );
+    cache.reset(DSH_ID);
+    await cache.load();
+    expect(page).toEqual(cache.page());
+  });
+});

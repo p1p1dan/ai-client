@@ -22,7 +22,7 @@ import type { SessionHistoryPage } from '../../shared/types/sessionHistory.ts';
 import { BridgeSessionError } from './bridgeErrors.ts';
 import { mapOpenError } from './dshSessionRuntime.ts';
 import type { DshSessionObservation, DshSessionQuery } from './historyCache.ts';
-import { readStub, SESSION_INVALID } from './stub.ts';
+import { readStub, SESSION_INVALID, stubCompactInstructions } from './stub.ts';
 
 export interface ReadPageRequest {
   stubFile: string;
@@ -50,10 +50,17 @@ export async function readSessionPage(
     throw mapOpenError(error, stub.dshSessionId);
   }
   try {
-    // Named like the cache's rows (P1-4d1), so a preview page equals a resumed one.
+    // Named like the cache's rows (P1-4d1), so a preview page equals a resumed one;
+    // a `/compact` summary with its instructions, from the stub (decision 179).
+    const instructions = new Map(
+      stubCompactInstructions(stub).map((entry) => [entry.compactionId, entry.instructions])
+    );
     const fold = new DshHistoryFold({
       liveSessionId: stub.dshSessionId,
       ...(presentCall ? { presentCall } : {}),
+      ...(instructions.size > 0
+        ? { compactInstructions: (compactionId: string) => instructions.get(compactionId) }
+        : {}),
     });
     for (const event of observation.events) fold.push(event);
     return paginateHistory(fold.messages(), request.offset, request.limit);

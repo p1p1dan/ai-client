@@ -29,8 +29,17 @@
  * presenter its live rows use (`DshHistoryFoldOptions.presentCall`), so a
  * reopened row reads as the live one did. Without one (a fold of someone
  * else's log, the tree, a golden test) no row carries it.
+ *
+ * Decision 179: the summary of a `/compact <instructions>` carries a line with
+ * the instructions. The log does not record them either; the bridge keeps
+ * them beside the stub and passes their lookup
+ * (`DshHistoryFoldOptions.compactInstructions`).
  */
 
+import {
+  COMPACT_INSTRUCTIONS_NOTE_KEY,
+  compactInstructionsNoteText,
+} from '../compactInstructions.ts';
 import { dshFailureErrorCode } from '../dshFailureCodes.ts';
 import { dshFileReview } from '../dshFileReview.ts';
 import { dshNoticeText, dshTurnHeadText, dshTurnOrigin } from '../dshNotices.ts';
@@ -423,7 +432,18 @@ export interface DshHistoryFoldOptions {
    * `presentCall` lookup, pure per DSH's contract). Absent: no row carries one.
    */
   presentCall?: DshToolPresenter;
+  /**
+   * Decision 179: the instructions a `/compact` summarized with, by its
+   * `compactionId`. Absent, or answering none: the summary row is as before.
+   */
+  compactInstructions?: (compactionId: string) => string | undefined;
 }
+
+/**
+ * Part-id kind of a context summary's line about the `/compact` instructions
+ * it was written with (decision 179): `<row id>:compact-instructions:0`.
+ */
+export const DSH_COMPACT_INSTRUCTIONS_PART = 'compact-instructions';
 
 /**
  * The incremental projection. Push every event of one DSH session in seq
@@ -444,6 +464,7 @@ export class DshHistoryFold {
   private view: HistoryMessage[] | null = null;
   private readonly liveSessionId: string | undefined;
   private readonly presentCall: DshToolPresenter | undefined;
+  private readonly compactInstructions: ((compactionId: string) => string | undefined) | undefined;
   /** The current goal's round budget, as the last `goal/change` recorded it. */
   private goalRounds: number | undefined;
   /** Model steps the provider reported usage for. */
@@ -460,6 +481,7 @@ export class DshHistoryFold {
   constructor(options: DshHistoryFoldOptions = {}) {
     this.liveSessionId = options.liveSessionId;
     this.presentCall = options.presentCall;
+    this.compactInstructions = options.compactInstructions;
   }
 
   /** Seq of the last event pushed, -1 before any. */
@@ -591,6 +613,16 @@ export class DshHistoryFold {
   /** Decision 178: the id the live bridge gave an automatic compaction's row. */
   private liveCompactionId(compactionId: string): { liveMessageId?: string } {
     return this.liveSessionId ? { liveMessageId: dshCompactionLiveId(compactionId) } : {};
+  }
+
+  /** Decision 179: a lookup that throws costs the line only. */
+  private instructionsOf(compactionId: string): string | undefined {
+    try {
+      const instructions = this.compactInstructions?.(compactionId);
+      return typeof instructions === 'string' && instructions.length > 0 ? instructions : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   // ---- automatic compaction (decision 178) ------------------------------------------
@@ -875,6 +907,9 @@ export class DshHistoryFold {
       const compactionId = stringOf(source?.compactionId);
       const automatic = compactionId ? turn?.compactions.get(compactionId) : undefined;
       if (automatic) automatic.settled = true;
+      // Decision 179: the instructions a `/compact` summarized with, under it.
+      const instructions =
+        compactionId && !automatic ? this.instructionsOf(compactionId) : undefined;
       this.append({
         id,
         entryId: rawId,
@@ -886,6 +921,16 @@ export class DshHistoryFold {
             id: partId(id, SUMMARY_PART, 0),
             text: dshCheckpointRowText(message.content),
           },
+          ...(instructions
+            ? [
+                {
+                  type: 'text' as const,
+                  id: partId(id, DSH_COMPACT_INSTRUCTIONS_PART, 0),
+                  text: compactInstructionsNoteText(instructions),
+                  notice: { key: COMPACT_INSTRUCTIONS_NOTE_KEY, params: { instructions } },
+                },
+              ]
+            : []),
         ],
         ...(automatic && compactionId ? this.liveCompactionId(compactionId) : {}),
       });

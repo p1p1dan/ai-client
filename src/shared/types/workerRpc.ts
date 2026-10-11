@@ -247,17 +247,24 @@ export interface WorkerCommandsPayload {
  */
 export interface WorkerCompactPayload {
   logicalSessionId: string;
-  /** The DSH engine takes none: see {@link WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED}. */
+  /**
+   * dsh-rebase decision 179: what the summary must also follow, as typed
+   * after `/compact` — plain text, at most `COMPACT_INSTRUCTIONS_MAX_CHARS`
+   * characters (`shared/compactInstructions.ts`); blank is none.
+   */
   instructions?: string;
 }
 
 /**
- * dsh-rebase decisions 099 rule 10 and 113: DSH's `/compact` takes no
- * arguments, so a `worker.compact` carrying non-empty `instructions` is
- * refused before anything runs. Nothing was compacted; the same request is
- * refused the same way every time.
+ * dsh-rebase decision 179 (revising 099 rule 10 and 113): the engine's
+ * compaction cannot carry instructions — its summary hook is missing or not
+ * of the shape the bridge extends (a DSH upgrade). Nothing was compacted;
+ * `/compact` alone still works.
  */
 export const WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED = 'WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED';
+
+/** Decision 179: the instructions are longer than taken; nothing was compacted. */
+export const WORKER_COMPACT_INSTRUCTIONS_TOO_LONG = 'WORKER_COMPACT_INSTRUCTIONS_TOO_LONG';
 
 /**
  * The two halves of `/compact`'s clock, kept together so they cannot drift.
@@ -284,6 +291,13 @@ export interface WorkerCompactResult {
    * worker could not read it back. Optional-field addition.
    */
   summary?: HistoryMessage;
+  /**
+   * dsh-rebase decision 179: present only when instructions were given —
+   * whether the summary request carried them. `false` is a summary written
+   * without them (the engine's hook was not on its path); later requests
+   * with instructions are refused (`WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED`).
+   */
+  instructionsApplied?: boolean;
 }
 
 /**

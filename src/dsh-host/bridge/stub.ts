@@ -61,7 +61,34 @@ export interface SessionStub {
    * for a fork (its own chat, even when cut from a seeded one); a rewind keeps it.
    */
   origin?: SessionStubOrigin;
+  /**
+   * Decision 179: the instructions each `/compact <instructions>` of this chat
+   * summarized with, by DSH's `compactionId` (which the summary's checkpoint
+   * names), so a reopen shows them under the summary as the live answer did.
+   * Kept for every session of the lineage (a rewind keeps the stub), copied
+   * to a fork; bounded by {@link withCompactInstructionsNote}. Read
+   * opaquely (`stubCompactInstructions`): a malformed list never makes a chat
+   * unopenable, it only costs the lines.
+   */
+  compactInstructions?: StubCompactInstructions[];
 }
+
+/** One `/compact <instructions>` of the chat (decision 179). */
+export interface StubCompactInstructions {
+  compactionId: string;
+  instructions: string;
+  /** Epoch milliseconds. */
+  at: number;
+}
+
+/**
+ * Decision 179: what the stub keeps of `compactInstructions`, newest kept.
+ * Main reads a stub of more than 64 KiB as no stub at all (`dshSessionGc.ts`),
+ * which would cost its lineage the orphan collection's protection; these
+ * bounds keep the list a small part of that.
+ */
+export const STUB_COMPACT_INSTRUCTIONS_MAX_ENTRIES = 20;
+export const STUB_COMPACT_INSTRUCTIONS_MAX_CHARS = 12_000;
 
 /**
  * A seeded chat's source (`seedSession.ts`): for a migration, what was
@@ -151,6 +178,49 @@ export function isSessionStub(value: unknown): value is SessionStub {
 export function stubLineage(stub: SessionStub): SessionLineageEntry[] {
   if (stub.lineage && stub.lineage.length > 0) return stub.lineage.map((entry) => ({ ...entry }));
   return [{ dshSessionId: stub.dshSessionId, reason: 'create', at: stub.createdAt }];
+}
+
+/** Decision 179: the stub's `/compact` instructions, the malformed entries left out. */
+export function stubCompactInstructions(stub: SessionStub): StubCompactInstructions[] {
+  const list = (stub as { compactInstructions?: unknown }).compactInstructions;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((item): StubCompactInstructions[] => {
+    const entry = item as Partial<StubCompactInstructions> | null;
+    return typeof entry === 'object' &&
+      entry !== null &&
+      typeof entry.compactionId === 'string' &&
+      entry.compactionId.length > 0 &&
+      typeof entry.instructions === 'string' &&
+      entry.instructions.length > 0
+      ? [
+          {
+            compactionId: entry.compactionId,
+            instructions: entry.instructions,
+            at: typeof entry.at === 'number' && Number.isFinite(entry.at) ? entry.at : 0,
+          },
+        ]
+      : [];
+  });
+}
+
+/**
+ * Decision 179: `list` with `entry` last (replacing one of the same
+ * compaction), then the oldest dropped until both bounds hold.
+ */
+export function withCompactInstructionsNote(
+  list: readonly StubCompactInstructions[],
+  entry: StubCompactInstructions
+): StubCompactInstructions[] {
+  const next = [...list.filter((item) => item.compactionId !== entry.compactionId), entry];
+  let chars = next.reduce((total, item) => total + item.instructions.length, 0);
+  while (
+    next.length > 1 &&
+    (next.length > STUB_COMPACT_INSTRUCTIONS_MAX_ENTRIES ||
+      chars > STUB_COMPACT_INSTRUCTIONS_MAX_CHARS)
+  ) {
+    chars -= next.shift()?.instructions.length ?? 0;
+  }
+  return next;
 }
 
 /**

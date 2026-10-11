@@ -1,14 +1,17 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { COMPACT_INSTRUCTIONS_NOTE_KEY } from '../../../shared/compactInstructions.ts';
 import {
   WORKER_COMMAND_TIMEOUT,
   WORKER_COMMAND_UNKNOWN,
+  WORKER_COMPACT_INSTRUCTIONS_TOO_LONG,
   WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
 } from '../../../shared/types/workerRpc.ts';
 import type { BridgeSessionRuntimeOptions } from '../bridgeRpcServer.ts';
 import type { DshCommandResult, DshSkillSummary } from '../commands.ts';
+import { compactInstructionsPrompt } from '../compactInstructions.ts';
 import {
   type DshBridgeContext,
   type DshBridgeDeps,
@@ -540,20 +543,6 @@ describe('DshSessionRuntime — worker.compact (P1-4d2, decisions 099 rule 10, 1
     expect(emitted).toEqual([]);
   });
 
-  it('[D2-COMPACT-INSTRUCTIONS] refuses instructions with its own code before anything runs', async () => {
-    const host = fakeHost();
-    const commands = fakeCommands(host, { compact: { description: 'compact' } });
-    const bridge = runtime(host.ctx, []);
-    await bridge.bootstrap();
-
-    const error = await refusal(
-      bridge.compact({ logicalSessionId: LOGICAL, instructions: 'keep the API decisions' })
-    );
-
-    expect(error.code).toBe(WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED);
-    expect(commands.execute).not.toHaveBeenCalled();
-  });
-
   it("[D2-COMPACT-REFUSALS] DSH's answers in our codes: nothing to compact, a failure, no command", async () => {
     const host = fakeHost();
     const outcomes: DshCommandResult[] = [
@@ -615,6 +604,353 @@ describe('DshSessionRuntime — worker.compact (P1-4d2, decisions 099 rule 10, 1
     expect((await refusal(bridge.compact({ logicalSessionId: LOGICAL }))).code).toBe(
       'WORKER_SESSION_BUSY'
     );
+  });
+});
+
+/** DSH's checkpoint template, as far as these tests need it. */
+const TEMPLATE = 'You are now acting as a compaction engine for this AI coding assistant.';
+
+/**
+ * `ctx.compaction` with the shape of dsh-compaction-basic's summary hook: the
+ * conversation, then the template, streamed through `this.ctx.llm`. Every
+ * request it streamed is kept.
+ */
+function fakeCompaction(host: ReturnType<typeof fakeHost>) {
+  const requests: { messages: { role: string; content: { text?: string }[] }[] }[] = [];
+  const engine = {
+    ctx: {
+      llm: {
+        stream(options: (typeof requests)[number]) {
+          requests.push(options);
+        },
+      },
+    },
+    async summarize(
+      this: { ctx: { llm: { stream(options: unknown): void } } },
+      input: { messages: unknown[] },
+      agent: { session: { id: string } }
+    ) {
+      this.ctx.llm.stream({
+        messages: [
+          ...input.messages,
+          { role: 'user', content: [{ type: 'text', text: TEMPLATE }] },
+        ],
+        purpose: 'compaction',
+        sessionId: agent.session.id,
+      });
+      return { summary: [{ type: 'text', text: '## Current Work\n- (none)' }] };
+    },
+  };
+  host.services.compaction = engine;
+  return { engine, requests };
+}
+
+/**
+ * DSH's `/compact` as far as the bridge sees it: the summary hook called for
+ * this session (unless `hook: false`), then `compaction/summary` and the
+ * checkpoint it precedes, answered with the summary's seq.
+ */
+function compactHandler(
+  host: ReturnType<typeof fakeHost>,
+  engine: ReturnType<typeof fakeCompaction>['engine'],
+  options: { hook?: boolean; result?: () => DshCommandResult } = {}
+): Handler {
+  let runs = 0;
+  return async () => {
+    runs += 1;
+    if (options.hook !== false) {
+      await engine.summarize(
+        { messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }] },
+        { session: { id: DSH_ID } }
+      );
+    }
+    if (options.result) return options.result();
+    const summary = host.append('compaction/summary', { compactionId: `k${runs}` });
+    host.append('user/message', {
+      id: `c${runs}`,
+      role: 'user',
+      content: [
+        { type: 'text', text: 'checkpoint ...\n\n<compacted-summary>' },
+        { type: 'text', text: `## Current Work\n- round ${runs}` },
+        { type: 'text', text: '</compacted-summary>' },
+      ],
+      source: { kind: 'compact-checkpoint', compactionId: `k${runs}`, sourceCommandId: 'cmd' },
+    });
+    return { kind: 'success', text: 'Compacted 2 history items', sourceEventSeq: summary.seq };
+  };
+}
+
+/** The text DSH's last summary request ended with. */
+const lastInstruction = (requests: ReturnType<typeof fakeCompaction>['requests']) =>
+  requests.at(-1)?.messages.at(-1)?.content[0]?.text;
+
+describe('DshSessionRuntime — /compact with instructions (decision 179)', () => {
+  it('[179-B-01] leased to this summary request, under the summary row, beside the stub', async () => {
+    const host = fakeHost();
+    const { engine, requests } = fakeCompaction(host);
+    const commands = fakeCommands(host, {
+      compact: { description: 'compact', handler: compactHandler(host, engine) },
+    });
+    const bridge = runtime(host.ctx, []);
+    const boot = await bridge.bootstrap();
+
+    const result = await bridge.compact({
+      logicalSessionId: LOGICAL,
+      instructions: '  保留未完成的任务\r\n和失败经验  ',
+    });
+
+    // Still DSH's /compact, with no argument.
+    expect(commands.execute).toHaveBeenCalledWith(
+      host.agent,
+      '/compact',
+      [],
+      expect.any(AbortSignal)
+    );
+    expect(lastInstruction(requests)).toBe(
+      `${TEMPLATE}\n\n${compactInstructionsPrompt('保留未完成的任务\n和失败经验')}`
+    );
+    expect(result.instructionsApplied).toBe(true);
+    expect(result.summary?.blocks).toEqual([
+      { type: 'text', id: 'h:c1:summary:0', text: 'Context summary\n\n## Current Work\n- round 1' },
+      {
+        type: 'text',
+        id: 'h:c1:compact-instructions:0',
+        text: 'Instructions for this summary: 保留未完成的任务\n和失败经验',
+        notice: {
+          key: COMPACT_INSTRUCTIONS_NOTE_KEY,
+          params: { instructions: '保留未完成的任务\n和失败经验' },
+        },
+      },
+    ]);
+    const stub = JSON.parse(readFileSync(String(boot.sessionFile), 'utf8'));
+    expect(stub.compactInstructions).toEqual([
+      { compactionId: 'k1', instructions: '保留未完成的任务\n和失败经验', at: 1_700_000_000_000 },
+    ]);
+
+    // Over: `/compact` alone is DSH's own request again, and its row has no line.
+    const plain = await bridge.compact({ logicalSessionId: LOGICAL });
+    expect(lastInstruction(requests)).toBe(TEMPLATE);
+    expect(plain.instructionsApplied).toBeUndefined();
+    expect(plain.summary?.blocks).toHaveLength(1);
+  });
+
+  it('[179-B-02] released however it ends: DSH refused, timed out', async () => {
+    const host = fakeHost();
+    const { engine, requests } = fakeCompaction(host);
+    let mode: 'error' | 'hang' | 'ok' = 'error';
+    const handler = compactHandler(host, engine, {
+      result: () => ({ kind: 'error', text: 'Compaction could not produce a useful summary.' }),
+    });
+    const succeeds = compactHandler(host, engine);
+    fakeCommands(host, {
+      compact: {
+        description: 'compact',
+        handler: async (input, signal) => {
+          if (mode === 'error') return handler(input, signal);
+          if (mode === 'ok') return succeeds(input, signal);
+          return new Promise<DshCommandResult>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('aborted')));
+          });
+        },
+      },
+    });
+    const bridge = runtime(host.ctx, [], { compactTimeoutMs: 20 });
+    await bridge.bootstrap();
+
+    expect(
+      await refusal(bridge.compact({ logicalSessionId: LOGICAL, instructions: 'keep it' }))
+    ).toMatchObject({ code: 'WORKER_COMPACT_FAILED' });
+    mode = 'hang';
+    expect(
+      (await refusal(bridge.compact({ logicalSessionId: LOGICAL, instructions: 'keep it' }))).code
+    ).toBe('WORKER_COMPACT_TIMEOUT');
+    // Neither left a lease behind: the next summary is DSH's own, and kept no line.
+    mode = 'ok';
+    const plain = await bridge.compact({ logicalSessionId: LOGICAL });
+    expect(lastInstruction(requests)).toBe(TEMPLATE);
+    expect(plain.summary?.blocks).toHaveLength(1);
+  });
+
+  it('[179-B-03] too long, or an engine that cannot carry them: refused before anything runs', async () => {
+    const host = fakeHost();
+    const commands = fakeCommands(host, {
+      compact: {
+        description: 'compact',
+        handler: () => ({ kind: 'success', text: 'Compacted 4 history items', sourceEventSeq: 9 }),
+      },
+    });
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+
+    const long = await refusal(
+      bridge.compact({ logicalSessionId: LOGICAL, instructions: '字'.repeat(2001) })
+    );
+    expect(long).toMatchObject({ code: WORKER_COMPACT_INSTRUCTIONS_TOO_LONG });
+    expect(long.message).toMatch(
+      /2001 characters, more than the 2000 taken; nothing was compacted/
+    );
+    // No compaction service on this host.
+    const unsupported = await refusal(
+      bridge.compact({ logicalSessionId: LOGICAL, instructions: 'keep it' })
+    );
+    expect(unsupported).toMatchObject({ code: WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED });
+    expect(unsupported.message).toMatch(
+      /this host has no compaction service.*nothing was compacted/
+    );
+    expect(commands.execute).not.toHaveBeenCalled();
+    // Blank is no instructions: `/compact` alone.
+    expect(
+      (await bridge.compact({ logicalSessionId: LOGICAL, instructions: ' \n\t ' })).compacted
+    ).toBe(true);
+    expect(commands.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('[179-B-04] a summary request the hook cannot extend: not sent, said as unsupported', async () => {
+    const host = fakeHost();
+    const { engine, requests } = fakeCompaction(host);
+    // The hook a later DSH might have: right on its dry run, then a request
+    // with no `purpose` and an empty instruction.
+    const original = engine.summarize;
+    let calls = 0;
+    engine.summarize = async function (this: typeof engine, input, agent) {
+      calls += 1;
+      if (calls === 1) return original.call(this, input, agent);
+      (this.ctx.llm.stream as (options: unknown) => void)({
+        messages: [...input.messages, { role: 'user', content: [] }],
+      });
+      return { summary: [] };
+    };
+    fakeCommands(host, {
+      compact: {
+        description: 'compact',
+        // DSH's transaction: a hook that throws is a summary that failed.
+        handler: async () => {
+          try {
+            await engine.summarize({ messages: [] }, { session: { id: DSH_ID } });
+          } catch {
+            return { kind: 'error', text: 'Compaction could not produce a useful summary.' };
+          }
+          return { kind: 'success', sourceEventSeq: 1 };
+        },
+      },
+    });
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+
+    const error = await refusal(
+      bridge.compact({ logicalSessionId: LOGICAL, instructions: 'keep it' })
+    );
+    expect(error).toMatchObject({ code: WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED });
+    expect(error.message).toMatch(/not the summary request.*nothing was compacted/);
+    expect(requests).toEqual([]);
+    // Known now: the next request is refused up front.
+    expect(
+      (await refusal(bridge.compact({ logicalSessionId: LOGICAL, instructions: 'again' }))).code
+    ).toBe(WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED);
+    expect(calls).toBe(2);
+  });
+
+  it('[179-B-05] a summary written without the hook is said (instructionsApplied: false)', async () => {
+    const host = fakeHost();
+    const { engine } = fakeCompaction(host);
+    fakeCommands(host, {
+      compact: { description: 'compact', handler: compactHandler(host, engine, { hook: false }) },
+    });
+    const bridge = runtime(host.ctx, []);
+    const boot = await bridge.bootstrap();
+
+    const result = await bridge.compact({ logicalSessionId: LOGICAL, instructions: 'keep it' });
+
+    expect(result).toMatchObject({ compacted: true, instructionsApplied: false });
+    expect(result.summary?.blocks).toHaveLength(1);
+    expect(JSON.parse(readFileSync(String(boot.sessionFile), 'utf8')).compactInstructions).toBe(
+      undefined
+    );
+    expect(
+      (await refusal(bridge.compact({ logicalSessionId: LOGICAL, instructions: 'again' }))).code
+    ).toBe(WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED);
+  });
+
+  it('[179-B-06] two at once: the second is busy, the first keeps its lease', async () => {
+    const host = fakeHost();
+    const { engine, requests } = fakeCompaction(host);
+    const succeed = compactHandler(host, engine);
+    let entered = false;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    fakeCommands(host, {
+      compact: {
+        description: 'compact',
+        handler: async (input, signal) => {
+          entered = true;
+          await gate;
+          return succeed(input, signal);
+        },
+      },
+    });
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+
+    const first = bridge.compact({ logicalSessionId: LOGICAL, instructions: 'first' });
+    await vi.waitFor(() => expect(entered).toBe(true));
+    const second = await refusal(
+      bridge.compact({ logicalSessionId: LOGICAL, instructions: 'second' })
+    );
+    expect(second).toMatchObject({ code: 'WORKER_SESSION_BUSY' });
+    release();
+    expect((await first).instructionsApplied).toBe(true);
+    expect(lastInstruction(requests)).toContain('first');
+    expect(lastInstruction(requests)).not.toContain('second');
+  });
+
+  it('[179-B-07] reopened: the summary row carries its instructions from the stub', async () => {
+    const host = fakeHost();
+    const stubFile = join(home, 'aiclient-sessions', `${DSH_ID}.dsh.json`);
+    mkdirSync(join(home, 'aiclient-sessions'), { recursive: true });
+    writeFileSync(
+      stubFile,
+      JSON.stringify({
+        engine: 'dsh',
+        version: 2,
+        dshSessionId: DSH_ID,
+        logicalSessionId: LOGICAL,
+        cwd: CWD,
+        createdAt: 1,
+        lineage: [{ dshSessionId: DSH_ID, reason: 'create', at: 1 }],
+        compactInstructions: [
+          { compactionId: 'k7', instructions: 'keep the failing tests', at: 2 },
+          { compactionId: 42, instructions: 'malformed, skipped' },
+        ],
+      })
+    );
+    const checkpoint = (id: string, compactionId: string, seq: number) => ({
+      type: 'user/message',
+      seq,
+      time: 1_790_000_000_000 + seq,
+      data: {
+        id,
+        role: 'user',
+        content: [
+          { type: 'text', text: '<compacted-summary>## Current Work\n- x</compacted-summary>' },
+        ],
+        source: { kind: 'compact-checkpoint', compactionId },
+      },
+    });
+    (host.ctx.sessionQuery.observeSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+      events: [checkpoint('c7', 'k7', 0), checkpoint('c8', 'k8', 1)],
+      cursor: 1,
+      [Symbol.dispose]: () => undefined,
+    });
+    const bridge = runtime(host.ctx, [], {}, { sessionFile: stubFile });
+    await bridge.bootstrap();
+
+    const { page } = await bridge.history({ logicalSessionId: LOGICAL, offset: 0, limit: 50 });
+    expect(page.messages.map((message) => message.blocks.map((block) => block.id))).toEqual([
+      ['h:c7:summary:0', 'h:c7:compact-instructions:0'],
+      ['h:c8:summary:0'],
+    ]);
   });
 });
 
