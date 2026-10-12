@@ -736,6 +736,8 @@ D25 的四档 + 一个例外：
 - **五个面板（聊天、Git、文件、终端、运行）都没有标题栏了**：`DockTitle` 删除，面板内容从顶部开始；在哪个面板看导轨高亮，读屏靠面板 `<section aria-label={面板名}>`。导轨顶部的 `h-9` 占位（U27）随之删除，导轨改为 `py-2`，首个图标与面板第一行（「新建对话」）基本齐平（差 2px，照原型）。
 - **「正在活动」区删除**；运行状态只看每行行首的状态槽；折叠的分组在名字后显示汇总标记。
 - **三个分区合成一个滚动列表**：没有 L1 板块标题、没有区间分隔线、没有区底渐隐与百分比上限；临时对话成为置顶的固定分组。
+- **三个区域之间各一条通栏细线**（2026-10-12 用户裁决，原型 v6「分隔线 = 通栏细线」`.sep-line`）：顶部（导航 + 搜索行）与列表之间一条，列表与账户栏之间一条，都是 1px `border`、贯穿面板全宽、不内缩。用户反馈三个区域糊在一起、账户栏像又一行对话。**面板里除这两条外不加任何线**（分组之间仍只靠留白）。
+- **账户栏改成原型的 32px 一行，并去掉今日花费**（同日裁决，原型 v6「账户栏 = 原型（32px）」`.foot.proto`）：常驻的花费数字「容易给人压力」；点开的账户卡片（`UserProfileCard`）仍显示用量，不变。
 - **四级**取代决策 167 的五级（L0 面板标题、L1 板块标题删除）：顶部（导航 + 搜索行）/ 分组标签 / 对话 / 辅助。决策 170 的「16 / 15 / 14 逐级变小」被推翻，侧栏里只有 14px 与 15px。
 
 **四级**。只用 400 字重（按钮、徽标原语自带的除外）；相邻两级至少两个互相独立的区分载体。500 不作任何一级的载体（Win10 的 Segoe UI 没有 500，中文回退的 Microsoft YaHei UI 只有 Light / Regular / Bold，**中文在 Win10 和 Win11 上 500 都显示成 400**）。
@@ -752,10 +754,10 @@ D25 的四档 + 一个例外：
 
 **新 token `--muted-foreground-faint`**（未启动的淡空心圈）：`color-mix(in oklab, var(--muted-foreground) 45%, color-mix(in oklab, var(--card) 40%, var(--background)))`——`muted-foreground` 向侧栏实际底色（`LeftDock` 的 `bg-card/40` 叠在 `bg-background` 上）混合；只在 `:root` 声明一次，`@theme` 桥接 `--color-muted-foreground-faint`，工具类 `border-muted-foreground-faint`。派生式跟着亮 / 暗 / 同步终端主题走。不带 alpha，**不许加 `/N`**；它是颜色，不注册进 tailwind-merge 的 `font-size` 组。值与对比度见 Color System 表。对话标题的 `--foreground-soft` 不变（决策 170，见 Color System）。
 
-**顶部**（列表上方，不随列表滚动，没有下边线）：
+**顶部**（列表上方，不随列表滚动；以一条通栏细线收尾）：
 
 - 导航：`flex shrink-0 flex-col gap-px px-2 pt-2.5 pb-0.5`，两项共用 `NAV_ITEM_CLASS`（`flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-ui hover:bg-hover focus-visible:bg-hover`）。「新建对话」= 回首页并预选仓库（决策 174 的 `resolveHomePreselect`，`title` 是「新建对话（回到首页）」）；「添加仓库」打开共用的添加仓库对话框。
-- 搜索行：`mt-1.5 flex h-7 shrink-0 items-center gap-0.5 px-2`。
+- 搜索行：外层 `TOP_ZONE_END_CLASS` = `shrink-0 border-b px-2 pt-1.5 pb-2`，里面一行 `flex h-7 items-center gap-0.5`。**搜索行下方 8px 是顶部区域的通栏细线**（`border-b` 在全宽的外层上，`px-2` 在线内侧，所以线贯穿面板全宽）；多选栏在同一个外层里，线的位置不变。
   - **搜索框常显**（决策 183 §2.1，「筛选会话」开关与 `searchVisible` 已删除），**外观照原型 `.search`**（2026-10-11 用户裁决，不用 coss `InputGroup` 的默认外观）。仍是 coss 的 `InputGroup` / `InputGroupInput size="sm"` / `InputGroupAddon align="inline-start"`，只在 `LeftNav` 这一处用 `SIDEBAR_SEARCH_CLASS` 覆写，`input-group.tsx` 不动：平时 `h-7 rounded-sm`、透明底（亮 / 暗都是：`bg-transparent dark:bg-transparent`）、1px `--border` 线（`border-border`）、无阴影（`shadow-none`）、无内阴影（`before:hidden` 去掉承载它的 `::before`）；获得焦点（`has-[input:focus-visible,textarea:focus-visible]:`）时底色 `bg-background`、线 `border-muted-foreground`、无焦点环（`ring-0`，也没有品牌橙 `border-ring`）。放大镜 `Search size-3.5 text-muted-foreground opacity-100`（`opacity-100` 让它不吃 addon 的 80% 图标淡化），占位文字 `[&_input]:placeholder:text-muted-foreground`（原语是 `/72`）。**覆写要写成与被替换的基类完全相同的变体链**，tailwind-merge 才会去掉基类（`border-input`、`bg-background`、`dark:bg-input/32`、`shadow-xs`、`has-[…]:border-ring`、`has-[…]:ring-2`）；只写一个 `border-border` 之类并不保证生效。不用 `!important`。最终合并结果由 `sidebarActiveAndFolders.test.ts` 读渲染出的 className 断言。input 在前、addon 在后（`order-first` 把它排到左边，`[data-size=sm]+&` 的内距只在这个顺序下生效）。**禁止「绝对定位的图标 + 后面跟一个 `Input`」**：`Input` 外层是 `relative` 且有底色，按文档顺序画在图标上面，亮色主题下图标完全看不见。模型菜单与分支切换的搜索框同样按此写（它们保留 coss 默认外观）。
   - **全部折叠 / 全部展开是一个开关**（决策 183 §1.8）：按不搜索时列表里的分组（含临时对话）的折叠状态判断：只要有一个展开，按钮是「全部折叠」（`ChevronsDownUp`），点击把全部分组写成折叠；全部折叠时变成「全部展开」（`ChevronsUpDown`），点击全部展开。`aria-label` 与 `title` 跟着变。**搜索框有内容时按钮禁用、文案不变**（`disabled={queryActive || …}`，文案按存储的折叠状态算）；没有分组时也禁用。清空搜索后按新的折叠状态重新算（命中的分组已展开，所以通常是「全部折叠」）。
   - 批量归档（`ListChecks`）。两个图标按钮 `Button variant="ghost" size="icon-xs"` + `size-7 shrink-0 text-muted-foreground sm:size-7`（28px，图标 `size-4`；只写 `size-7` 会输给 `icon-xs` 的 `sm:size-6`）。
@@ -791,11 +793,11 @@ D25 的四档 + 一个例外：
 
 **辅助行**（查看更多 / 收起；`SidebarAuxRow`）：`flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover`，行首留空的 `w-4` 槽，文字与对话标题对齐。
 
-**账户栏**（`UserFooterPill`，五个面板共用）：`flex shrink-0 items-center gap-1 p-2`，**没有上边线**；触发器行尾加 `ChevronsUpDown`（`size-3.5 text-muted-foreground`），表示能展开账户菜单。
+**账户栏**（`UserFooterPill`，五个面板共用；原型 v6 `.foot.proto`）：外层 `flex shrink-0 items-center gap-1 border-t p-2`——**顶上一条通栏细线**，与列表分开。触发器 `flex h-8 min-w-0 flex-1 items-center gap-2 rounded-sm px-2 text-left text-muted-foreground hover:bg-hover`（登录失效时 `text-destructive`），已登录、登录失效、未登录三种状态都是这一行 32px。已登录：头像 `Avatar size-5.5`（22px 圆）+ `AvatarFallback bg-selection font-semibold text-foreground text-meta`——首字母可能是中文，按 CJK 规则不小于 14px，所以用 `text-meta`（14px，行高 21px，放得进 22px 圆）而不是原型的 12px；邮箱 `min-w-0 flex-1 truncate text-meta text-foreground-soft`。行尾 `ChevronsUpDown`（`size-3.5 text-muted-foreground`），表示能展开账户卡片。**不显示今日花费**（`todayCostText`、`useUsageStats` 已从这里删除；用量在账户卡片里）。右侧公告铃不变。整栏高 49px（1 + 8 + 32 + 8）。
 
 **横向坐标**（面板左边框起，任何宽度都一样）：导航图标槽 16、导航文字 48；搜索框左缘 8；分组标签文字 16（与行首状态槽左缘对齐）；对话的状态槽 16、标题与辅助行文字 38。右侧：分组标题右侧格右缘、对话行内容右缘距右边框 16；浮出的操作按钮右缘距右边框 14。
 
-**纵向**（面板顶起）：导航第一项 10–42、第二项 43–75；搜索行 83–111；列表从 111 开始，第一个分组标题 121–149；标题 → 第一行 2px，对话行之间 2px，分组之间 14px；列表底部留 12px。导轨首个图标 8–40（`py-2`），与「新建对话」差 2px，照原型。
+**纵向**（面板顶起）：导航第一项 10–42、第二项 43–75；搜索行 83–111；顶部细线 119（搜索行下 8px）；列表从 120 开始，第一个分组标题 130–158；标题 → 第一行 2px，对话行之间 2px，分组之间 14px；列表底部留 12px。导轨首个图标 8–40（`py-2`），与「新建对话」差 2px，照原型。
 
 **宽度预算**（280px 面板，含 1px 右边框）：行内容宽 247px（280 − 1 − 列表 `px-2` 16 − 行 `px-2` 16），减状态槽和一个间距后，**标题 225px**（原 167px）。带告警徽标的行约 180px；worktree 行带分支文字（最长 96px）时标题约 123px，再挤才轮到分支让位。14px 下 280 宽能放下的中文：16 字；360 宽 21 字，500 宽 31 字。分组标签在 280 时约 185px（13 字），右侧要给两枚悬停按钮留 40px。
 
@@ -809,7 +811,7 @@ D25 的四档 + 一个例外：
 
 **悬停提示**：对话行 `title` 三行——标题 / 「文件夹 · 分支」（分支取该对话所在工作区；临时对话写「临时对话」；远程加「（远程）」）/ 「更新于 YYYY-MM-DD HH:MM」（`formatAbsoluteDateTime`，一律带日期；行上没有时间后，这是侧栏里唯一的时间）。读 `title` 的测试取第一行。
 
-**已删除，不要加回来**：`DockTitle`、`SidebarSectionHeader`、「正在活动」（`renderActiveRegion`、`deriveActiveRows`、`limitActiveRows`、5 条上限与收起开关）、「筛选会话」开关与 `searchVisible`、时间 / 操作共用的 `w-10` 定宽盒、空仓库的「新建对话」辅助行、分组标题上的分支文字（`folderBranchLabel`）、文件夹图标、行的 `pl-3` 缩进、区间 `border-t` 与区底渐隐、`text-section` 在侧栏里的全部用法。
+**已删除，不要加回来**：`DockTitle`、`SidebarSectionHeader`、「正在活动」（`renderActiveRegion`、`deriveActiveRows`、`limitActiveRows`、5 条上限与收起开关）、「筛选会话」开关与 `searchVisible`、时间 / 操作共用的 `w-10` 定宽盒、空仓库的「新建对话」辅助行、分组标题上的分支文字（`folderBranchLabel`）、文件夹图标、行的 `pl-3` 缩进、旧三区之间的 `border-t` 与区底渐隐（顶部区域与账户栏的两条通栏细线不在此列，见上）、账户栏里的今日花费、`text-section` 在侧栏里的全部用法。
 
 **红线（可静态断言，见上述测试文件）**：
 
@@ -818,10 +820,11 @@ D25 的四档 + 一个例外：
 3. `h-6` / `h-7` / `h-8` 的行与输入框只用 `rounded-sm` / `rounded-xs`。
 4. 对话行的 `w-4` 状态槽永远渲染，且永远有标记（未启动是淡空心圈，不是空）。
 5. 渲染层任何地方不得出现「绝对定位图标紧跟 `<Input`」。
-6. 列表只有一个 `ScrollArea`；没有 `border-t` / `border-b` 分隔线、没有板块标题、没有 `sticky`；`grid-cols-1` 不能省。
+6. 列表只有一个 `ScrollArea`；没有板块标题、没有 `sticky`；`grid-cols-1` 不能省。**分隔线只有两条**：`LeftNav` 里唯一的 `border-b` 在 `TOP_ZONE_END_CLASS`（顶部区域收尾），`UserFooterPill` 外层的 `border-t`（账户栏顶）；`LeftNav` 不出现 `border-t`，分组之间、行之间都没有线。
 7. `text-foreground-soft`、`border-muted-foreground-faint` 不加 `/N`。
 8. 对话行的操作按钮绝对定位、不占宽；行上没有时间盒。
 9. 只在悬停时出现的东西（行的操作按钮、分组标题的「···」「＋」与让位的改动合计、展开时的 ▾）另外只认**键盘焦点**（`group-focus-visible` / `group-has-focus-visible`），`LeftNav` 不出现 `focus-within`。
+10. 账户栏不显示花费（`UserFooterPill` 不出现 `useUsageStats` / `todayCost`）；触发器 `h-8`，三种登录状态同高。
 
 ### 首页（中栏没有打开对话时）（issue #6 第二波，2026-10，决策 174）
 
