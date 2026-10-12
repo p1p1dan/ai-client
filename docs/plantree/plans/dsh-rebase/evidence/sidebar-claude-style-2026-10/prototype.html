@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>侧栏改版预览 v5（定稿）· 参考 Claude 桌面版</title>
+<style>
+/* Tokens copied from globals.css (Flexoki light / dark), same as the #6 prototype. */
+:root {
+  --background: oklch(0.9931 0.012 96.42);
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.97 0.0106 100.82);
+  --muted: oklch(0.965 0.0093 99.98);
+  --muted-foreground: oklch(0.4531 0.005 91.5);
+  --accent: oklch(0.935 0.0122 96.43);
+  --selection: oklch(0.91 0.0109 95.17);
+  --hover: oklch(0.935 0.0122 96.43);
+  --status-running: oklch(0.4818 0.1315 254.79);
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --success: oklch(0.5593 0.1335 122.92);
+  --warning: oklch(0.5665 0.1523 45.02);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --folder: oklch(0.6333 0.1295 85.81);
+  --border: oklch(0.875 0.0137 97.46);
+}
+.dark {
+  --background: oklch(0.1981 0.0032 17.43);
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --card: oklch(0.262 0.0037 48.55);
+  --muted: oklch(0.268 0.0025 67.7);
+  --muted-foreground: oklch(0.6956 0.0103 93.62);
+  --accent: oklch(0.305 0.0029 17.32);
+  --selection: oklch(0.325 0.0029 17.31);
+  --hover: oklch(0.305 0.0029 17.32);
+  --status-running: oklch(0.5988 0.1104 247);
+  --destructive: oklch(0.597 0.1692 28.38);
+  --success: oklch(0.7227 0.1178 117.2);
+  --warning: oklch(0.6576 0.1539 49.3);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --folder: oklch(0.7346 0.1462 87.46);
+  --border: oklch(0.34 0.0038 84.58);
+}
+:root {
+  --foreground-soft: color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground));
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --text-meta: 0.875rem;
+  --text-ui: 0.9375rem;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+    "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-sans); font-size: 15px; color: var(--foreground);
+  background: var(--background); -webkit-font-smoothing: antialiased; overflow: hidden;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+[data-ic] { display: inline-flex; align-items: center; justify-content: center; }
+svg.i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- preview toolbar (not part of the design) ---- */
+.toolbar {
+  height: 44px; display: flex; align-items: center; gap: 18px; padding: 0 14px;
+  border-bottom: 1px solid var(--border); background: var(--muted);
+  font-size: 14px; color: var(--muted-foreground); white-space: nowrap; overflow-x: auto;
+}
+.toolbar b { color: var(--foreground); font-weight: 600; }
+.seg { display: inline-flex; align-items: center; gap: 6px; }
+.seg span.lab { margin-right: 2px; }
+.seg .opts { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { padding: 2px 10px; font-size: 14px; color: var(--muted-foreground); }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.on { background: var(--selection); color: var(--foreground); }
+
+/* ---- app frame ---- */
+.frame { display: flex; height: calc(100vh - 44px); }
+.rail {
+  width: 44px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+  gap: 4px; padding: 8px 0; background: var(--card); border-right: 1px solid var(--border);
+}
+.rail button { width: 32px; height: 32px; display: grid; place-items: center;
+  border-radius: var(--radius-sm); color: var(--muted-foreground); }
+.rail button svg { width: 18px; height: 18px; }
+.rail button:hover { background: var(--hover); color: var(--foreground); }
+.rail button.on { background: var(--selection); color: var(--foreground); }
+.rail .grow { flex: 1; }
+
+.side {
+  width: 280px; flex-shrink: 0; display: flex; flex-direction: column;
+  background: var(--card); border-right: 1px solid var(--border); position: relative;
+}
+
+/* top nav — vertical, icon + label, like the reference */
+/* LeftDock's DockTitle, shared by the five panels: h-9, border-b, px-3, 16px 600 */
+.docktitle { height: 36px; flex-shrink: 0; display: flex; align-items: center; padding: 0 12px;
+  border-bottom: 1px solid var(--border); font-size: 16px; font-weight: 600; }
+.side.nodock .docktitle { display: none; }
+.topnav { padding: 10px 8px 2px; display: flex; flex-direction: column; gap: 1px; }
+.nav {
+  height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; width: 100%;
+  border-radius: var(--radius-sm); font-size: var(--text-ui); text-align: left;
+}
+.nav:hover { background: var(--hover); }
+.nav .ico { width: 22px; height: 22px; display: grid; place-items: center; color: var(--muted-foreground); flex-shrink: 0; }
+.nav .ico.round { border-radius: 999px; background: var(--selection); color: var(--foreground); }
+.nav .ico.round svg { width: 14px; height: 14px; }
+
+.tools { display: flex; align-items: center; gap: 2px; padding: 6px 8px 0; }
+.search {
+  flex: 1; min-width: 0; height: 28px; display: flex; align-items: center; gap: 6px;
+  padding: 0 8px; border-radius: var(--radius-sm); color: var(--muted-foreground);
+  background: transparent; box-shadow: inset 0 0 0 1px var(--border);
+}
+.search:focus-within { background: var(--background); box-shadow: inset 0 0 0 1px var(--muted-foreground); }
+/* coss InputGroup defaults, as the implementation renders them: border-input, bg-background,
+   shadow-xs + 1px inner bottom shade; focus = border-ring + ring-2 ring-ring/24. Dark: bg-input/32. */
+:root { --input: oklch(0.8463 0.0137 102.05); --ring: oklch(0.5665 0.1523 45.02); }
+.dark { --input: oklch(0.3651 0.0044 67.69); --ring: oklch(0.6576 0.1539 49.3); }
+.side.coss .search { background: var(--background);
+  box-shadow: 0 0 0 1px var(--input), 0 1px 2px rgb(0 0 0 / 0.05), inset 0 -1px 0 rgb(0 0 0 / 0.04); }
+.dark .side.coss .search { background: color-mix(in oklab, var(--input) 32%, var(--card));
+  box-shadow: 0 0 0 1px var(--input), inset 0 1px 0 rgb(255 255 255 / 0.08); }
+.side.coss .search:focus-within { box-shadow: 0 0 0 1px var(--ring), 0 0 0 3px color-mix(in oklab, var(--ring) 24%, transparent); }
+.side.coss .search svg { width: 16px; height: 16px; }
+.search svg { width: 14px; height: 14px; }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+  font: inherit; font-size: var(--text-meta); color: var(--foreground); }
+.search input::placeholder { color: var(--muted-foreground); }
+.tb { width: 28px; height: 28px; display: grid; place-items: center; flex-shrink: 0;
+  border-radius: var(--radius-sm); color: var(--muted-foreground); }
+.tb:hover, .tb.on { background: var(--hover); color: var(--foreground); }
+
+.batchbar { display: none; align-items: center; gap: 6px; padding: 6px 8px 0 16px; font-size: var(--text-meta); }
+.batchbar .cnt { flex: 1; }
+.batchbar button { height: 24px; padding: 0 8px; border-radius: var(--radius-xs); font-size: var(--text-meta); }
+.batchbar .primary { box-shadow: inset 0 0 0 1px var(--border); }
+.batchbar button:hover { background: var(--hover); }
+.side.selecting .batchbar { display: flex; }
+.side.selecting .tools { display: none; }
+
+/* list */
+.list { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 8px 12px; scrollbar-width: thin; }
+.group { margin-top: 14px; }
+.group:first-child { margin-top: 8px; }
+.gh {
+  height: 28px; display: flex; align-items: center; gap: 4px; padding: 0 8px;
+  border-radius: var(--radius-sm); cursor: pointer; user-select: none;
+}
+.gh .fic { display: none; color: var(--folder); }
+.gh .name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.gh .chev { display: grid; place-items: center; color: var(--muted-foreground); opacity: 0; }
+.gh:hover .chev, .group.collapsed .gh .chev { opacity: 1; }
+.gh .chev svg { width: 14px; height: 14px; }
+.gh .agg { display: inline-flex; align-items: center; gap: 4px; margin-left: 2px;
+  font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.gh .tail { margin-left: auto; display: grid; justify-items: end; flex-shrink: 0; }
+.gh .tail > * { grid-area: 1 / 1; }
+.gh .diff { display: flex; gap: 4px; font-size: var(--text-meta); font-variant-numeric: tabular-nums; }
+.gh .diff .add { color: var(--success); }
+.gh .diff .del { color: var(--destructive); }
+.gh .acts { display: flex; align-items: center; opacity: 0; }
+.gh:hover .acts { opacity: 1; }
+.gh:hover .diff { visibility: hidden; }
+.ib { width: 20px; height: 20px; display: grid; place-items: center; border-radius: var(--radius-xs); color: var(--muted-foreground); }
+.ib:hover { background: var(--selection); color: var(--foreground); }
+.ib svg { width: 14px; height: 14px; }
+
+/* variant A: reference-style group label */
+.vA .gh .name { font-size: var(--text-meta); color: var(--muted-foreground); font-weight: 400; }
+.vA .gh:hover .name { color: var(--foreground-soft); }
+/* variant B: #6 hierarchy — folder icon, 15px semibold, rows indented */
+.vB .group { margin-top: 4px; }
+.vB .group:first-child { margin-top: 6px; }
+.vB .gh { gap: 6px; }
+.vB .gh:hover { background: var(--hover); }
+.vB .gh .fic { display: grid; }
+.vB .gh .fic.tmp { color: var(--muted-foreground); }
+.vB .gh .chev { display: none; }
+.vB .gh .name { font-size: var(--text-ui); font-weight: 600; color: var(--foreground); }
+.vB .rows { padding-left: 12px; }
+
+.group.collapsed .rows { display: none; }
+.rows { margin-top: 1px; display: flex; flex-direction: column; gap: 2px; }
+
+.row {
+  position: relative; height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px;
+  border-radius: var(--radius-sm); font-size: var(--text-meta); color: var(--foreground-soft);
+  overflow: hidden; cursor: default;
+}
+.row:hover { background: var(--hover); }
+.row.sel { background: var(--selection); color: var(--foreground); }
+.slot { width: 16px; flex-shrink: 0; display: grid; place-items: center; }
+.dot { width: 6px; height: 6px; border-radius: 999px; }
+.dot.ok { background: var(--success); }
+.dot.fail { background: var(--destructive); }
+.dot.wait { background: var(--warning); }
+.ring { width: 6px; height: 6px; border-radius: 999px; border: 1px solid var(--muted-foreground); }
+.ring.idle { border-color: color-mix(in oklab, var(--muted-foreground) 45%, var(--card)); }
+svg.spin { width: 12px; height: 12px; color: var(--status-running); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.cb { width: 14px; height: 14px; border-radius: var(--radius-xs); border: 1px solid var(--border);
+  display: grid; place-items: center; color: var(--background); }
+.cb.on { background: var(--primary); border-color: var(--primary); }
+.cb svg { width: 10px; height: 10px; stroke-width: 3; }
+.title { min-width: 80px; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.badge { display: inline-flex; align-items: center; gap: 2px; height: 20px; padding: 0 6px; flex-shrink: 0;
+  border-radius: var(--radius-xs); font-size: var(--text-meta); line-height: 1; font-variant-numeric: tabular-nums; }
+.badge svg { width: 13px; height: 13px; }
+.badge.warn { background: color-mix(in oklab, var(--warning) 14%, transparent); color: var(--warning); }
+.badge.bad { background: color-mix(in oklab, var(--destructive) 14%, transparent); color: var(--destructive); }
+.branch { min-width: 0; max-width: 96px; flex-shrink: 1; overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; color: var(--muted-foreground); }
+.age { width: 40px; flex-shrink: 0; text-align: right; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.racts { width: 40px; flex-shrink: 0; display: none; justify-content: flex-end; }
+.row.tmp .age, .row.tmp .racts { width: 60px; }
+.row:hover .age { display: none; }
+.row:hover .racts { display: flex; }
+/* age hidden: actions float over the row's right edge, so the title never reflows */
+.noage .age { display: none; }
+.noage .racts { position: absolute; right: 6px; top: 4px; width: auto; background: var(--hover);
+  box-shadow: -10px 0 8px var(--hover); }
+.noage .row.sel .racts { background: var(--selection); box-shadow: -10px 0 8px var(--selection); }
+.selecting .row:hover .racts { display: none; }
+.selecting .row:hover .age { display: block; }
+.noage.selecting .row .age { display: none; }
+
+.aux { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 30px; width: 100%;
+  border-radius: var(--radius-sm); font-size: var(--text-meta); color: var(--muted-foreground); text-align: left; }
+.aux:hover { background: var(--hover); color: var(--foreground); }
+.aux svg { width: 14px; height: 14px; margin-left: -20px; }
+.empty-q { padding: 10px 8px; font-size: var(--text-meta); color: var(--muted-foreground); }
+
+.foot { display: flex; align-items: center; padding: 8px; }
+.me { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px;
+  border-radius: var(--radius-sm); text-align: left; }
+.me:hover { background: var(--hover); }
+.av { width: 22px; height: 22px; border-radius: 999px; background: var(--selection); display: grid; place-items: center;
+  font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.me .mail { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: var(--text-meta); color: var(--foreground-soft); }
+.me svg { width: 14px; height: 14px; color: var(--muted-foreground); }
+
+/* center — design notes in place of the chat */
+.center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sbar { height: 36px; flex-shrink: 0; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid var(--border);
+  font-size: var(--text-ui); font-weight: 600; }
+.notes { flex: 1; overflow-y: auto; padding: 28px 32px; }
+.notes .card { max-width: 45rem; margin: 0 auto; font-size: 15px; line-height: 1.7; color: var(--foreground-soft); }
+.notes h1 { font-size: 18px; color: var(--foreground); margin-bottom: 4px; }
+.notes .sub { font-size: 14px; color: var(--muted-foreground); margin-bottom: 18px; }
+.notes h2 { font-size: 15px; color: var(--foreground); margin: 18px 0 6px; }
+.notes ul, .notes ol { padding-left: 1.3em; }
+.notes li { margin: 3px 0; }
+.legend { display: grid; grid-template-columns: 24px 1fr; gap: 6px 8px; align-items: center; font-size: 14px; }
+.legend .slot { width: 24px; }
+
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(8px); opacity: 0;
+  padding: 6px 12px; border-radius: var(--radius-sm); background: var(--foreground); color: var(--background);
+  font-size: 14px; pointer-events: none; transition: opacity .15s, transform .15s; }
+.toast.on { opacity: 1; transform: translateX(-50%); }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <b>侧栏改版预览 v5（定稿）</b>
+  <span class="seg"><span class="lab">主题</span><span class="opts" data-k="theme"><button data-v="light" class="on">浅色</button><button data-v="dark">深色</button></span></span>
+  <span class="seg"><span class="lab">「聊天」面板标题</span><span class="opts" data-k="dock"><button data-v="keep">保留</button><button data-v="none" class="on">去掉（已定）</button></span></span>
+  <span class="seg"><span class="lab">搜索框</span><span class="opts" data-k="search"><button data-v="proto" class="on">原型（已定）</button><button data-v="coss">coss 默认（已否决）</button></span></span>
+</div>
+
+<div class="frame">
+  <nav class="rail" id="rail"></nav>
+
+  <aside class="side vA noage" id="side">
+    <div class="docktitle">聊天</div>
+    <div class="topnav">
+      <button class="nav" data-toast="回到首页，在首页选仓库后发送即建对话（示意）"><span class="ico round" data-ic="plus"></span>新建对话</button>
+      <button class="nav" data-toast="打开「添加仓库」（示意）"><span class="ico" data-ic="folderPlus"></span>添加仓库</button>
+    </div>
+    <div class="tools">
+      <label class="search"><span data-ic="search"></span><input id="q" placeholder="搜索对话" autocomplete="off"></label>
+      <button class="tb" id="collapseAll" title="全部折叠"><span data-ic="collapse"></span></button>
+      <button class="tb" id="batch" title="批量归档"><span data-ic="listChecks"></span></button>
+    </div>
+    <div class="batchbar">
+      <span class="cnt">已选 <span id="cnt">0</span> 项</span>
+      <button class="primary" id="doArchive">归档</button>
+      <button id="cancelBatch">取消</button>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="foot">
+      <button class="me" data-toast="账户菜单（与现在相同）"><span class="av">U</span><span class="mail">user@example.com</span><span data-ic="updown"></span></button>
+    </div>
+  </aside>
+
+  <main class="center">
+    <div class="sbar" id="sbarTitle">暗色主题切换闪烁问题</div>
+    <div class="notes"><div class="card">
+      <h1>左侧「聊天」栏改版 · 效果稿</h1>
+      <div class="sub">参考 Claude 桌面版的排布；功能按钮沿用我们自己的。数据全部虚构。侧栏里可以点：折叠仓库、选对话、悬停看按钮、搜索、批量归档。</div>
+
+      <h2>和现在比，改了什么</h2>
+      <ul>
+        <li><b>去掉「正在活动」区。</b>谁在跑直接看仓库列表每行开头的标记（沿用现有标记，见下方图例）。仓库仍按最近活动排序，在跑的仓库自然排在前面；仓库<b>折叠</b>时，名字后面显示一个汇总标记（如 pixel-studio），收起来也看得到有对话在跑或在等你。</li>
+        <li><b>「临时对话」改成列表里的一个固定文件夹</b>，不参与按活动排序，固定在最上面。悬停它的标题有「＋」新建临时对话。</li>
+        <li><b>顶部按钮改成竖排导航</b>：新建对话、添加仓库。下面一行是搜索框 + 全部折叠 + 批量归档（原来分散在顶部按钮行和「仓库列表」标题栏上）。</li>
+        <li><b>空仓库只留标题</b>，不再显示「＋ 新建对话」行（悬停标题的「＋」即可新建）。</li>
+        <li><b>去掉分隔线和「仓库列表」板块标题</b>，仓库之间只靠留白分组；底部账户栏去掉上边线。</li>
+        <li><b>仓库标题</b>默认只显示名字和改动行数，悬停才出「···」与「＋」；仓库主分支名先不显示（悬停提示里有）。</li>
+        <li><b>行尾时间默认隐藏</b>（参考图没有时间），悬停时右侧浮出「归档 / 从列表移除」，标题不跳动。</li>
+      </ul>
+
+      <h2>行首标记（与现在一致，不改）</h2>
+      <div class="legend" id="legend"></div>
+
+      <h2>已定（2026-10-11 用户裁决）</h2>
+      <ol>
+        <li>仓库名用参考图的灰色小字标签（不用 #6 的文件夹层级）。</li>
+        <li>临时对话固定在最上面。</li>
+        <li>行尾时间默认隐藏，悬停浮出操作按钮。</li>
+        <li>去掉左栏五个面板（聊天、Git、文件、终端、运行）共用的标题栏，面板内容直接从顶部开始；当前在哪个面板看左侧导轨的高亮。</li>
+        <li>「全部折叠」按钮是开关：有任一分组展开时点它全部折叠；全部已折叠时变成「全部展开」，再点全部展开。</li>
+        <li>空仓库不显示「新建对话」行。</li>
+        <li>仓库标题的小三角：折叠时常显 ▸，展开时只在悬停时显示 ▾（10-11 试过展开也常显，太乱，已撤回）。</li>
+        <li>未启动的对话也显示空心圈，颜色比「后台已挂上」更淡，每行开头都有标记、对齐统一。</li>
+      </ol>
+    </div></div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ICONS = {
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  folderPlus: '<path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  folderOpen: '<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
+  msgDashed: '<path d="M10 17H7l-4 4v-7"/><path d="M14 17h1"/><path d="M14 3h1"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 14v1a2 2 0 0 1-2 2"/><path d="M21 9v1"/><path d="M3 9v1"/><path d="M5 3a2 2 0 0 0-2 2"/><path d="M9 3h1"/>',
+  chevR: '<path d="m9 18 6-6-6-6"/>',
+  chevD: '<path d="m6 9 6 6 6-6"/>',
+  collapse: '<path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/>',
+  expand: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+  listChecks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+  archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  shieldQ: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  updown: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+  house: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  msg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  git: '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+  file: '<path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/>',
+  gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  activity: '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
+  panel: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>',
+  blocks: '<rect width="7" height="7" x="14" y="3" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+};
+const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24">${ICONS[n]}</svg>`;
+document.querySelectorAll('[data-ic]').forEach((el) => { el.innerHTML = ic(el.dataset.ic); });
+
+// Rail: same items as LeftDock today.
+document.getElementById('rail').innerHTML = [
+  ['house', '首页'], ['msg', '聊天', 'on'], ['git', 'Git'], ['file', '文件'], ['gauge', '上下文'], ['activity', '运行'],
+].map(([n, t, on]) => `<button class="${on || ''}" title="${t}">${ic(n)}</button>`).join('')
+  + '<span class="grow"></span>'
+  + [['panel', '收起侧栏 (Ctrl+B)'], ['blocks', '能力'], ['settings', '设置 (Ctrl+,)']]
+    .map(([n, t]) => `<button title="${t}">${ic(n)}</button>`).join('');
+
+// s: run = spinner, wait = waiting on approval / question, ok / fail = unread result,
+// bg = attached in the background, '' = not started.
+const TEMP = { id: 'temp', name: '临时对话', temp: true, rows: [
+  { id: 't1', t: '帮我润色一段周报', s: 'ok', age: '5m' },
+  { id: 't2', t: '正则表达式校验邮箱格式', s: '', age: '2h' },
+  { id: 't3', t: '解释一下 Rust 生命周期', s: 'bg', age: '1d' },
+]};
+const REPOS = [
+  { id: 'aurora', name: 'aurora-web', diff: [128, 42], rows: [
+    { id: 'a1', t: '首页加载性能排查与优化', s: 'run', age: '1m' },
+    { id: 'a2', t: '登录页表单校验重构', s: 'wait', age: '3m', appr: 2 },
+    { id: 'a3', t: '暗色主题切换闪烁问题', s: 'bg', age: '20m' },
+    { id: 'a4', t: '路由懒加载拆包方案', s: '', age: '3d' },
+    { id: 'a5', t: '接入埋点 SDK 并补齐事件字典', s: '', age: '1w' },
+  ]},
+  { id: 'pixel', name: 'pixel-studio', rows: [
+    { id: 'p1', t: '图层混合模式实现', s: 'run', age: '2m' },
+    { id: 'p2', t: '导出 PNG 透明通道丢失', s: '', age: '4d' },
+  ]},
+  { id: 'ledger', name: 'ledger-core', diff: [36, 8], rows: [
+    { id: 'l1', t: '月结批处理任务超时', s: 'fail', age: '12m', failed: true },
+    { id: 'l2', t: '对账差异报表导出', s: 'ok', age: '40m' },
+    { id: 'l3', t: '重复入账的幂等校验', s: '', age: '2d' },
+    { id: 'l4', t: '账期配置迁移脚本', s: '', age: '5d', branch: 'period-migrate' },
+  ]},
+  { id: 'notes', name: 'notes-sync', diff: [7, 0], rows: [
+    { id: 'n1', t: '冲突合并策略设计', s: '', age: '6h' },
+    { id: 'n2', t: '离线队列重放', s: '', age: '1d' },
+    { id: 'n3', t: '附件分片上传', s: '', age: '1d' },
+    { id: 'n4', t: 'WebSocket 心跳与重连', s: '', age: '2d' },
+    { id: 'n5', t: '同步日志脱敏', s: '', age: '3d' },
+    { id: 'n6', t: '移动端增量同步', s: '', age: '4d' },
+    { id: 'n7', t: '版本向量比较的边界情况', s: '', age: '5d' },
+    { id: 'n8', t: '删除墓碑清理', s: '', age: '1w' },
+    { id: 'n9', t: '端到端加密密钥轮换', s: '', age: '2w' },
+    { id: 'n10', t: '大文件断点续传', s: '', age: '3w' },
+    { id: 'n11', t: '同步状态指示器', s: '', age: '1mo' },
+  ]},
+  { id: 'docs', name: 'docs-site', rows: [
+    { id: 'd1', t: '文档站搜索索引重建', s: '', age: '2d' },
+    { id: 'd2', t: '版本切换下拉菜单', s: '', age: '1w' },
+  ]},
+  { id: 'pipe', name: 'data-pipeline', rows: [
+    { id: 'x1', t: '每日增量任务补数', s: '', age: '2w' },
+    { id: 'x2', t: '字段血缘梳理', s: '', age: '3w' },
+  ]},
+  { id: 'infra', name: 'infra-scripts', rows: [
+    { id: 'i1', t: '备份脚本改成增量', s: '', age: '1mo' },
+  ]},
+  { id: 'mobile', name: 'mobile-app', rows: [
+    { id: 'm1', t: '推送通知权限引导', s: '', age: '1mo' },
+    { id: 'm2', t: '启动页白屏', s: '', age: '2mo' },
+  ]},
+  { id: 'play', name: 'playground', rows: [] },
+];
+
+const state = {
+  label: 'A', temp: 'top', age: 'hide', dock: 'none', search: 'proto', q: '', selecting: false, picked: new Set(), sel: 'a3',
+  collapsed: { pixel: true, pipe: true, infra: true, mobile: true },
+  showAll: {},
+};
+const LIMIT = 8;
+
+function slotHtml(r) {
+  if (state.selecting) {
+    const on = state.picked.has(r.id);
+    return `<span class="cb ${on ? 'on' : ''}">${on ? ic('check') : ''}</span>`;
+  }
+  switch (r.s) {
+    case 'run': return ic('loader', 'spin');
+    case 'wait': return '<span class="dot wait" title="等待审批"></span>';
+    case 'ok': return '<span class="dot ok" title="有新结果未看"></span>';
+    case 'fail': return '<span class="dot fail" title="失败，未看"></span>';
+    case 'bg': return '<span class="ring" title="后台已挂上"></span>';
+    default: return '<span class="ring idle" title="未启动"></span>';
+  }
+}
+
+function rowHtml(r, g) {
+  return `<div class="row ${state.sel === r.id ? 'sel' : ''} ${g.temp ? 'tmp' : ''}" data-r="${r.id}" title="${r.t}">
+    <span class="slot">${slotHtml(r)}</span>
+    <span class="title">${r.t}</span>
+    ${r.appr ? `<span class="badge warn" title="${r.appr} 个待审批">${ic('shieldQ')}${r.appr}</span>` : ''}
+    ${r.failed ? '<span class="badge bad">失败</span>' : ''}
+    ${r.branch ? `<span class="branch" title="feat/${r.branch}">${r.branch}</span>` : ''}
+    <span class="age">${r.age}</span>
+    <span class="racts">
+      <button class="ib" data-act="归档" title="归档">${ic('archive')}</button>
+      <button class="ib" data-act="从列表移除" title="从列表移除（重启后回来）">${ic('x')}</button>
+      ${g.temp ? `<button class="ib" data-act="删除" title="删除">${ic('trash')}</button>` : ''}
+    </span>
+  </div>`;
+}
+
+// Most urgent state inside a folded group, so a run is never hidden by folding.
+function aggHtml(rows) {
+  const n = (s) => rows.filter((r) => r.s === s).length;
+  const parts = [];
+  if (n('run')) parts.push(`<span title="${n('run')} 个对话在运行" style="display:inline-flex;align-items:center;gap:3px">${ic('loader', 'spin')}${n('run') > 1 ? n('run') : ''}</span>`);
+  if (n('wait')) parts.push('<span class="dot wait" title="有对话在等你"></span>');
+  if (n('fail')) parts.push('<span class="dot fail" title="有失败未看"></span>');
+  else if (n('ok')) parts.push('<span class="dot ok" title="有新结果未看"></span>');
+  return parts.length ? `<span class="agg">${parts.join('')}</span>` : '';
+}
+
+function groupHtml(g) {
+  const q = state.q.trim();
+  let rows = q ? g.rows.filter((r) => r.t.toLowerCase().includes(q.toLowerCase())) : g.rows;
+  if (q && rows.length === 0) return '';
+  const collapsed = !q && !!state.collapsed[g.id];
+  const hidden = !q && !state.showAll[g.id] && rows.length > LIMIT ? rows.length - LIMIT : 0;
+  const shown = hidden ? rows.slice(0, LIMIT) : rows;
+  const fic = g.temp ? `<span class="fic tmp">${ic('msgDashed')}</span>`
+    : `<span class="fic">${ic(collapsed ? 'folder' : 'folderOpen')}</span>`;
+  const acts = g.temp
+    ? `<button class="ib" data-act="新建临时对话（回首页、不选仓库）" title="新建临时对话">${ic('plus')}</button>`
+    : `<button class="ib" data-act="仓库菜单：仓库设置 / 在资源管理器中显示 / 移除仓库" title="仓库操作">${ic('more')}</button>
+       <button class="ib" data-act="在 ${g.name} 新建对话（回首页并预选此仓库）" title="在 ${g.name} 新建对话">${ic('plus')}</button>`;
+  let body = shown.map((r) => rowHtml(r, g)).join('');
+  if (hidden) body += `<button class="aux" data-more="${g.id}">查看更多（${hidden}）</button>`;
+  else if (!q && state.showAll[g.id] && rows.length > LIMIT) body += `<button class="aux" data-more="${g.id}">收起</button>`;
+  return `<section class="group ${collapsed ? 'collapsed' : ''}" data-g="${g.id}">
+    <div class="gh" title="${g.temp ? '不属于任何仓库的对话' : g.name + ' · main'}">
+      ${fic}<span class="name">${g.name}</span>
+      <span class="chev">${ic(collapsed ? 'chevR' : 'chevD')}</span>
+      ${collapsed ? aggHtml(g.rows) : ''}
+      <span class="tail">
+        ${g.diff ? `<span class="diff">${g.diff[0] ? `<span class="add">+${g.diff[0]}</span>` : ''}${g.diff[1] ? `<span class="del">-${g.diff[1]}</span>` : ''}</span>` : ''}
+        <span class="acts">${acts}</span>
+      </span>
+    </div>
+    <div class="rows">${body}</div>
+  </section>`;
+}
+
+function render() {
+  const side = document.getElementById('side');
+  side.className = `side v${state.label} ${state.age === 'hide' ? 'noage' : ''} ${state.selecting ? 'selecting' : ''} ${state.dock === 'none' ? 'nodock' : ''} ${state.search === 'coss' ? 'coss' : ''}`;
+  const groups = state.temp === 'top' ? [TEMP, ...REPOS] : [...REPOS, TEMP];
+  const html = groups.map(groupHtml).join('');
+  document.getElementById('list').innerHTML = html || '<p class="empty-q">没有匹配的对话</p>';
+  document.getElementById('cnt').textContent = state.picked.size;
+  document.getElementById('batch').classList.toggle('on', state.selecting);
+  const ca = document.getElementById('collapseAll');
+  const folded = allFolded();
+  ca.title = folded ? '全部展开' : '全部折叠';
+  ca.innerHTML = ic(folded ? 'expand' : 'collapse');
+}
+function allFolded() { return [TEMP, ...REPOS].every((g) => state.collapsed[g.id]); }
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1800);
+}
+
+const allRows = () => [TEMP, ...REPOS].flatMap((g) => g.rows);
+
+document.getElementById('list').addEventListener('click', (e) => {
+  const act = e.target.closest('[data-act]');
+  if (act) { e.stopPropagation(); toast(act.dataset.act + '（示意）'); return; }
+  const more = e.target.closest('[data-more]');
+  if (more) { state.showAll[more.dataset.more] = !state.showAll[more.dataset.more]; render(); return; }
+  const gh = e.target.closest('.gh');
+  if (gh) { const id = gh.parentElement.dataset.g; state.collapsed[id] = !state.collapsed[id]; render(); return; }
+  const row = e.target.closest('.row');
+  if (row) {
+    const id = row.dataset.r;
+    if (state.selecting) { state.picked.has(id) ? state.picked.delete(id) : state.picked.add(id); }
+    else {
+      state.sel = id;
+      const r = allRows().find((x) => x.id === id);
+      if (r && (r.s === 'ok' || r.s === 'fail')) r.s = 'bg';
+      document.getElementById('sbarTitle').textContent = r ? r.t : '';
+    }
+    render();
+  }
+});
+document.getElementById('q').addEventListener('input', (e) => { state.q = e.target.value; render(); });
+// Toggle: collapse all while any group is open; once every group is folded, expand all.
+document.getElementById('collapseAll').addEventListener('click', () => {
+  const fold = !allFolded();
+  [TEMP, ...REPOS].forEach((g) => { state.collapsed[g.id] = fold; }); render();
+});
+document.getElementById('batch').addEventListener('click', () => {
+  state.selecting = !state.selecting; state.picked.clear(); render();
+});
+document.getElementById('cancelBatch').addEventListener('click', () => {
+  state.selecting = false; state.picked.clear(); render();
+});
+document.getElementById('doArchive').addEventListener('click', () => {
+  toast(`归档 ${state.picked.size} 个对话（示意）`); state.selecting = false; state.picked.clear(); render();
+});
+document.querySelectorAll('[data-toast]').forEach((el) => el.addEventListener('click', () => toast(el.dataset.toast)));
+
+document.querySelectorAll('.opts').forEach((grp) => grp.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  grp.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  const k = grp.dataset.k, v = b.dataset.v;
+  if (k === 'theme') document.documentElement.classList.toggle('dark', v === 'dark');
+  else { state[k] = v; render(); }
+}));
+
+document.getElementById('legend').innerHTML = [
+  [ic('loader', 'spin'), '运行中'],
+  ['<span class="dot wait"></span>', '在等你审批 / 回答（行尾带待审批数徽标）'],
+  ['<span class="dot ok"></span>', '跑完了、结果还没看'],
+  ['<span class="dot fail"></span>', '失败了、还没看（行尾带「失败」徽标）'],
+  ['<span class="ring"></span>', '没在跑，但后台已挂上（随时能接着聊）'],
+  ['<span class="ring idle"></span>', '未启动（更淡的空心圈）'],
+].map(([m, t]) => `<span class="slot">${m}</span><span>${t}</span>`).join('');
+
+render();
+</script>
+</body>
+</html>
