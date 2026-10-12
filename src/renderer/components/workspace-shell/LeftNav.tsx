@@ -796,81 +796,86 @@ export function LeftNav({
           under the pointer. Decision 167: `sm:text-meta` on every xs button
           here; the variant's desktop size is 12px (`sm:text-xs`), and these
           labels are CJK in Chinese, which the design system keeps at 14px or
-          more. */}
-      <div className="mt-1.5 flex h-7 shrink-0 items-center gap-0.5 px-2">
-        {selecting ? (
-          <>
-            <span className="min-w-0 flex-1 truncate pl-2 text-meta">
-              {t('{{count}} selected', { count: selection.size })}
-            </span>
-            <Button
-              variant="outline"
-              size="xs"
-              className="h-6 shrink-0 sm:text-meta"
-              disabled={selection.size === 0}
-              title={t('Archive selected')}
-              onClick={() => setBulkArchiveOpen(true)}
-            >
-              <Archive className="h-3.5 w-3.5" />
-              {t('Archive')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-6 shrink-0 sm:text-meta"
-              onClick={() => setSelection(null)}
-            >
-              {t('Cancel')}
-            </Button>
-          </>
-        ) : (
-          <>
-            {/* Decision 183 §2.1: always shown, no filter toggle, drawn like the
+          more. Decision 183 (user ruling 2026-10-12, prototype v6
+          `.sep-line`): the top zone ends 8px below this row in a full-width
+          hairline, the same in both modes, so the list starts at the same
+          place either way. */}
+      <div className={TOP_ZONE_END_CLASS}>
+        <div className="flex h-7 items-center gap-0.5">
+          {selecting ? (
+            <>
+              <span className="min-w-0 flex-1 truncate pl-2 text-meta">
+                {t('{{count}} selected', { count: selection.size })}
+              </span>
+              <Button
+                variant="outline"
+                size="xs"
+                className="h-6 shrink-0 sm:text-meta"
+                disabled={selection.size === 0}
+                title={t('Archive selected')}
+                onClick={() => setBulkArchiveOpen(true)}
+              >
+                <Archive className="h-3.5 w-3.5" />
+                {t('Archive')}
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="h-6 shrink-0 sm:text-meta"
+                onClick={() => setSelection(null)}
+              >
+                {t('Cancel')}
+              </Button>
+            </>
+          ) : (
+            <>
+              {/* Decision 183 §2.1: always shown, no filter toggle, drawn like the
                 prototype's `.search` (see `SIDEBAR_SEARCH_CLASS`). Decision 167
                 (issue #3 item 5): coss's InputGroup, input FIRST and the icon
                 addon after it — `order-first` draws the addon on the left, and
                 its `[data-size=sm]+&` padding only matches in this order.
                 `opacity-100` on the icon opts it out of the addon's 80% icon
                 fade (`svg:not([class*='opacity-'])`). */}
-            <InputGroup className={SIDEBAR_SEARCH_CLASS}>
-              <InputGroupInput
-                size="sm"
-                value={query}
-                onChange={(event) => handleQueryChange(event.target.value)}
-                placeholder={t('Search sessions')}
-                aria-label={t('Search sessions')}
-              />
-              <InputGroupAddon align="inline-start">
-                <Search className="size-3.5 text-muted-foreground opacity-100" />
-              </InputGroupAddon>
-            </InputGroup>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={TOOL_BUTTON_CLASS}
-              aria-label={toggleAllLabel}
-              title={toggleAllLabel}
-              disabled={queryActive || toggleGroupIds.length === 0}
-              onClick={toggleAllGroups}
-            >
-              {allGroupsCollapsed ? (
-                <ChevronsUpDown className="size-4" />
-              ) : (
-                <ChevronsDownUp className="size-4" />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={TOOL_BUTTON_CLASS}
-              title={t('Select sessions to archive')}
-              aria-label={t('Select sessions to archive')}
-              onClick={() => setSelection(new Set())}
-            >
-              <ListChecks className="size-4" />
-            </Button>
-          </>
-        )}
+              <InputGroup className={SIDEBAR_SEARCH_CLASS}>
+                <InputGroupInput
+                  size="sm"
+                  value={query}
+                  onChange={(event) => handleQueryChange(event.target.value)}
+                  placeholder={t('Search sessions')}
+                  aria-label={t('Search sessions')}
+                />
+                <InputGroupAddon align="inline-start">
+                  <Search className="size-3.5 text-muted-foreground opacity-100" />
+                </InputGroupAddon>
+              </InputGroup>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={TOOL_BUTTON_CLASS}
+                aria-label={toggleAllLabel}
+                title={toggleAllLabel}
+                disabled={queryActive || toggleGroupIds.length === 0}
+                onClick={toggleAllGroups}
+              >
+                {allGroupsCollapsed ? (
+                  <ChevronsUpDown className="size-4" />
+                ) : (
+                  <ChevronsDownUp className="size-4" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={TOOL_BUTTON_CLASS}
+                title={t('Select sessions to archive')}
+                aria-label={t('Select sessions to archive')}
+                onClick={() => setSelection(new Set())}
+              >
+                <ListChecks className="size-4" />
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Decision 183 §1.10: ONE scrolling list — Temporary chats first, then
@@ -1032,6 +1037,15 @@ export function LeftNav({
  * min-content width (nowrap titles) and pushes every row past the panel edge.
  */
 const LIST_AREA_CLASS = 'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)]';
+
+/**
+ * Decision 183 (user ruling 2026-10-12, prototype v6 `.sep-line`): the top zone
+ * (nav + search row) ends 6px + h-7 + 8px down in ONE full-width hairline —
+ * the border sits on this full-width box, outside its `px-2`. The other zone
+ * line is the account footer's top border (`UserFooterPill`); nothing else in
+ * the panel has one.
+ */
+const TOP_ZONE_END_CLASS = 'shrink-0 border-b px-2 pt-1.5 pb-2';
 
 /**
  * Decision 183 (prototype `.group`): groups are separated by spacing alone —

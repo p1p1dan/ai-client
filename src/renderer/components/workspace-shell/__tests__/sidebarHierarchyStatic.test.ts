@@ -31,6 +31,7 @@ function code(file: string): string {
 const NAV = code(join(SHELL, 'LeftNav.tsx'));
 const DOCK = code(join(SHELL, 'LeftDock.tsx'));
 const BAR = code(join(SHELL, 'SessionBar.tsx'));
+const FOOTER = code(join(SHELL, 'UserFooterPill.tsx'));
 
 function slice(source: string, from: string, to: string): string {
   const start = source.indexOf(from);
@@ -254,9 +255,24 @@ describe('one list (decision 183 §1.10)', () => {
     ]) {
       expect(NAV, gone).not.toContain(gone);
     }
-    // No dividers anywhere in the panel body (the prototype separates by
-    // spacing alone).
-    expect(NAV).not.toMatch(/\bborder-[tb]\b/);
+    // Groups and rows are separated by spacing alone: the only line in the
+    // panel body is the top zone's (below).
+    expect(NAV).not.toMatch(/\bborder-t\b/);
+    expect(NAV.match(/\bborder-b\b/g)).toHaveLength(1);
+  });
+
+  it('two full-width zone lines: under the top zone and on the account footer (user ruling 2026-10-12)', () => {
+    // Prototype v6 `.sep-line`: 8px under the search row, one hairline on the
+    // full-width box (its px-2 sits inside the line), shared by the selection
+    // bar so nothing moves when multi-select starts.
+    expect(constant('TOP_ZONE_END_CLASS')).toBe('shrink-0 border-b px-2 pt-1.5 pb-2');
+    expect(NAV.split('className={TOP_ZONE_END_CLASS}').length - 1).toBe(1);
+    const zone = slice(NAV, '<div className={TOP_ZONE_END_CLASS}>', '<ContextMenuPrimitive.Root>');
+    expect(zone).toContain('<div className="flex h-7 items-center gap-0.5">');
+    expect(zone).toContain('{selecting ? (');
+    expect(zone).toContain('<InputGroup className={SIDEBAR_SEARCH_CLASS}>');
+    // The footer's line is its own top border, across the panel.
+    expect(FOOTER).toContain('<div className="flex shrink-0 items-center gap-1 border-t p-2">');
   });
 
   it('spacing: list px-2 pt-0.5 pb-3; groups 8px then 14px apart; rows 2px; no indent', () => {
@@ -358,8 +374,44 @@ describe('the tool row (decision 183 §1.8, §2.1)', () => {
 
   it('28px icon buttons, and selection mode swaps the row in place', () => {
     expect(constant('TOOL_BUTTON_CLASS')).toBe('size-7 shrink-0 text-muted-foreground sm:size-7');
-    expect(NAV).toContain('<div className="mt-1.5 flex h-7 shrink-0 items-center gap-0.5 px-2">');
+    expect(NAV).toContain('<div className={TOP_ZONE_END_CLASS}>');
+    expect(NAV).toContain('<div className="flex h-7 items-center gap-0.5">');
     expect(NAV).toContain("{t('{{count}} selected', { count: selection.size })}");
+  });
+});
+
+describe('the account footer (decision 183, user ruling 2026-10-12, prototype v6 `.foot.proto`)', () => {
+  it('is the prototype s 32px row in every sign-in state', () => {
+    expect(FOOTER).toContain(
+      "'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-sm px-2 text-left',"
+    );
+    expect(FOOTER).toContain("'text-muted-foreground hover:bg-hover',");
+    // One trigger, its content switching by state: the height is the trigger's.
+    expect(FOOTER.split('<PopoverTrigger').length - 1).toBe(1);
+    expect(FOOTER).not.toMatch(/\bh-6\b/);
+    expect(FOOTER).not.toMatch(/\brounded-(md|lg)\b/);
+  });
+
+  it('a 22px avatar on --selection with a semibold 14px initial, the e-mail in the soft ink', () => {
+    expect(FOOTER).toContain('<Avatar className="size-5.5 shrink-0 bg-transparent">');
+    // text-meta, not the prototype's 12px: the initial can be CJK (≥14px).
+    expect(FOOTER).toContain(
+      '<AvatarFallback className="bg-selection font-semibold text-foreground text-meta">'
+    );
+    expect(FOOTER).not.toContain('className="size-4 shrink-0');
+    expect(FOOTER).toContain('className="min-w-0 flex-1 truncate text-meta text-foreground-soft"');
+    expect(FOOTER).toContain(
+      '<ChevronsUpDown aria-hidden className="ml-auto size-3.5 shrink-0 text-muted-foreground" />'
+    );
+  });
+
+  it('shows no spend: today s cost is gone from the footer (the account card keeps usage)', () => {
+    for (const gone of ['useUsageStats', 'todayCost', 'formatCostUsd', 'tabular-nums', '$']) {
+      expect(FOOTER, gone).not.toContain(gone);
+    }
+    expect(FOOTER).toContain('<UserProfileCard');
+    const card = code(join(COMPONENTS, 'user/UserProfileCard.tsx'));
+    expect(card).toContain('useUsageStats(');
   });
 });
 

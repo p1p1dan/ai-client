@@ -1,5 +1,5 @@
 /**
- * D07: the account/usage pill, moved down from `WindowTitleBar` into the left
+ * D07: the account pill, moved down from `WindowTitleBar` into the left
  * column's footer. D08 moved it once more — out of `LeftNav` (which is now just
  * the `chat` surface's body) and into `LeftDock`, so it stays visible no matter
  * which of the five surfaces is showing.
@@ -7,8 +7,14 @@
  * D47 S5 semantics are unchanged: a three-state chip driven by
  * `deriveUserProfilePresentation`, which always renders — `invalid` /
  * `signed_out` need a clickable affordance (re-login / login) just as much as
- * the authenticated usage summary does, which is why this is not gated on
- * "is registered".
+ * the signed-in account does, which is why this is not gated on "is
+ * registered".
+ *
+ * Decision 183 (user ruling 2026-10-12, prototype v6 `.foot.proto`): the
+ * prototype's 32px account row under a full-width hairline, so the footer no
+ * longer reads like another chat row. Today's spend is no longer on it — the
+ * user found a permanent cost figure stressful; the account card the pill
+ * opens (`UserProfileCard`) still shows usage.
  *
  * F09 added the announcement bell to the right of the pill. It is NOT gated on
  * sign-in either, and for a stronger version of the same reason: the endpoint
@@ -24,15 +30,8 @@ import { AnnouncementBell } from '@/components/announcements/AnnouncementBell';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 import { UserProfileCard } from '@/components/user/UserProfileCard';
-import { useUsageStats } from '@/hooks/useUsageStats';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-
-function formatCostUsd(usd: number): string {
-  // Sub-dollar spend is where the interesting resolution is; 4 decimals below
-  // $1 and 2 above, carried over verbatim from `WindowTitleBar`.
-  return usd < 1 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
-}
 
 export function UserFooterPill() {
   const { t } = useI18n();
@@ -60,12 +59,6 @@ export function UserFooterPill() {
   const isAuthenticated = presentation.tone === 'signed-in';
   const email = presentation.email;
   const initial = (email?.trim()?.[0] ?? '?').toUpperCase();
-  const usage = useUsageStats({ enabled: isAuthenticated });
-
-  const todayCostUsd =
-    usage.data && 'error' in usage.data ? null : (usage.data?.todayCostUsd ?? null);
-  const todayCostText =
-    usage.isLoading || todayCostUsd === null ? '--' : formatCostUsd(todayCostUsd);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -75,47 +68,43 @@ export function UserFooterPill() {
   }, [isAuthenticated]);
 
   return (
-    // Decision 183 §2.8: no top rule (the prototype separates nothing in the
-    // sidebar with lines), and a trailing ChevronsUpDown that says the pill
-    // opens the account card.
-    <div className="flex shrink-0 items-center gap-1 p-2">
+    // Decision 183 (prototype v6): a full-width hairline on top separates the
+    // account zone from the list above it.
+    <div className="flex shrink-0 items-center gap-1 border-t p-2">
       <Popover open={profileOpen} onOpenChange={setProfileOpen}>
         <PopoverTrigger
           className={cn(
-            'flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5',
-            'text-muted-foreground hover:bg-hover hover:text-foreground',
-            presentation.tone === 'attention' && 'text-destructive hover:text-destructive'
+            // Prototype `.me`: one 32px row in every state, so signing out or
+            // an expired login does not change the footer's height.
+            'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-sm px-2 text-left',
+            'text-muted-foreground hover:bg-hover',
+            presentation.tone === 'attention' && 'text-destructive'
           )}
           aria-label={t('User profile')}
           title={isAuthenticated ? (email ?? t('User profile')) : t('User profile')}
         >
           {isAuthenticated ? (
             <>
-              {/* `text-meta`, not the `text-xs` this used in `WindowTitleBar`:
-                  D25 §6.3 bans raw size utilities under `workspace-shell/`, and
-                  the token is what the rest of this footer already uses. */}
-              <Avatar className="size-4 shrink-0 bg-transparent">
-                <AvatarFallback className="bg-muted text-foreground text-meta">
+              {/* Prototype `.av`: a 22px circle (`size-5.5`) on --selection
+                  with a semibold initial. `text-meta` (14px, line height 21px)
+                  rather than the prototype's 12px: the initial can be CJK, and
+                  CJK never goes below 14px (design system, CJK cascade). */}
+              <Avatar className="size-5.5 shrink-0 bg-transparent">
+                <AvatarFallback className="bg-selection font-semibold text-foreground text-meta">
                   {initial}
                 </AvatarFallback>
               </Avatar>
-              <span className="min-w-0 flex-1 truncate text-left text-meta">{email}</span>
-              <span
-                className={cn(
-                  'shrink-0 text-meta tabular-nums',
-                  (usage.isLoading || todayCostUsd === null) && 'text-muted-foreground/70'
-                )}
-              >
-                {todayCostText}
+              <span className="min-w-0 flex-1 truncate text-meta text-foreground-soft">
+                {email}
               </span>
             </>
           ) : presentation.tone === 'attention' ? (
             <>
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate text-meta">{t('Login expired')}</span>
+              <AlertTriangle className="size-3.5 shrink-0" />
+              <span className="min-w-0 truncate text-meta">{t('Login expired')}</span>
             </>
           ) : (
-            <span className="truncate text-meta">{t('Not signed in')}</span>
+            <span className="min-w-0 truncate text-meta">{t('Not signed in')}</span>
           )}
           <ChevronsUpDown aria-hidden className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
         </PopoverTrigger>
