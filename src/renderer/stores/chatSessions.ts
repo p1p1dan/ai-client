@@ -1801,7 +1801,7 @@ function applyRuntimeEventCore(
       //
       // P1-7e e6 (problem 37, decision 145): `released` too — Main let the
       // session go (a login, model or plugin change rebuilt the engine, or the
-      // idle sweep) and does not reopen it, so it leaves "Active now".
+      // idle sweep) and does not reopen it, so its row loses the background ring.
       const reason = event.payload.disconnectReason;
       const hostBoundSessionIds =
         reason === 'capacity_reclaimed' || reason === 'engine_restarted' || reason === 'released'

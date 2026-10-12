@@ -103,7 +103,7 @@ describe('status writes are not activity', () => {
     ]);
     expect(updatedAt(after, 'a')).toBe(T0);
     expect(updatedAt(after, 'b')).toBe(T0);
-    // The binding is back — the "Active now" section reads that, not the time.
+    // The binding is back — the row's background ring reads that, not the time.
     expect(after.hostBoundSessionIds).toEqual(expect.arrayContaining(['a', 'b']));
   });
 

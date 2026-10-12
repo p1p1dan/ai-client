@@ -16,13 +16,15 @@ const nav = stripComments(readFileSync(navPath, 'utf8'), navPath);
 const rowSource = nav.slice(nav.indexOf('function SessionRow('));
 
 describe('S3 unread marker on the session row', () => {
-  it('every list the sidebar renders passes it — Active now, folders and temporary chats', () => {
-    // Three call sites, three lists: the Active now region (decision 137;
-    // decision 170 retired Recent's 48-hour segment beside it), the folders and
-    // the temporary-chat region. Missing one would leave a whole list silently
-    // unable to report a finished run.
-    expect(nav.split('unread={unreadSessionIds.includes(row.sessionId)}')).toHaveLength(4);
-    expect(nav.split('<SessionRow\n').length - 1).toBe(3);
+  it('every list the sidebar renders passes it — the repository groups and Temporary chats', () => {
+    // Decision 183 retired 「正在活动」 (decision 170 had retired Recent): two
+    // lists are left, and both render their rows through ONE renderer, so
+    // neither can silently lose the marker the way a third copy of the props
+    // once could.
+    expect(nav.split('unread={unreadSessionIds.includes(row.sessionId)}')).toHaveLength(2);
+    expect(nav.split('<SessionRow\n').length - 1).toBe(1);
+    expect(nav).toContain('{limited.rows.map((row) => renderSessionRow(row))}');
+    expect(nav).toContain('return renderSessionRow(');
     expect(nav).toContain(
       'const unreadSessionIds = useChatSessionsStore((state) => state.unreadSessionIds);'
     );

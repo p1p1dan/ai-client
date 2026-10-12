@@ -7,9 +7,10 @@ import { resetHomeDraftForTests, useHomeDraftStore } from '@/stores/homeDraft';
 
 /**
  * Decision 174 (GitHub issue #6, second wave; user ruling 2026-10-10, ruling
- * 7): the sidebar's 「＋新建」, a folder's 「＋」 and an empty folder's
- * 「新建对话」 open the home page with the corresponding repository picked,
- * and make no conversation — the first send on the home page does.
+ * 7): the sidebar's 「新建对话」 and a group's 「＋」 open the home page with
+ * the corresponding repository picked, and make no conversation — the first
+ * send on the home page does. Decision 183 moved 「新建对话」 into the top
+ * nav and dropped an empty group's 「新建对话」 row.
  *
  * Stubbed like the other LeftNav mount tests: the persisted index (IPC),
  * session activation and the diff-stats poller.
@@ -109,8 +110,8 @@ const button = (predicate: (node: HTMLButtonElement) => boolean) => {
 };
 
 describe('「新建」 opens the home page (decision 174)', () => {
-  it('「＋新建」: the home page, with the open conversation’s repository picked; the running chat keeps running', async () => {
-    const newButton = button((node) => node.textContent?.trim() === 'New');
+  it('「新建对话」: the home page, with the open conversation’s repository picked; the running chat keeps running', async () => {
+    const newButton = button((node) => node.textContent?.trim() === 'New chat');
     expect(newButton.title).toBe('New chat (opens the home page)');
     await act(async () => newButton.click());
 
@@ -121,10 +122,10 @@ describe('「新建」 opens the home page (decision 174)', () => {
     expect(useHomeDraftStore.getState().pick).toEqual({ kind: 'path', path: '/repo/alpha' });
   });
 
-  it('「＋新建」 on the home page leaves the user’s own pick alone', async () => {
+  it('「新建对话」 on the home page leaves the user’s own pick alone', async () => {
     await act(async () => useChatSessionsStore.getState().selectSession(null));
     useHomeDraftStore.getState().setPick({ kind: 'unbound' });
-    await act(async () => button((node) => node.textContent?.trim() === 'New').click());
+    await act(async () => button((node) => node.textContent?.trim() === 'New chat').click());
     expect(useHomeDraftStore.getState().pick).toEqual({ kind: 'unbound' });
     expect(sessionIds()).toEqual(['a']);
   });
@@ -137,11 +138,14 @@ describe('「新建」 opens the home page (decision 174)', () => {
     expect(sessionIds()).toEqual(['a']);
   });
 
-  it('an empty folder’s 「新建对话」 row does the same', async () => {
-    const row = button((node) => node.textContent?.trim() === 'New chat');
-    await act(async () => row.click());
-    expect(useChatSessionsStore.getState().activeSessionId).toBeNull();
-    expect(useHomeDraftStore.getState().pick).toEqual({ kind: 'path', path: '/repo/beta' });
-    expect(sessionIds()).toEqual(['a']);
+  it('an empty folder has no 「新建对话」 row (decision 183 §1.5): its 「＋」 is the way in', async () => {
+    // beta has no chats: the only 「新建对话」 with text is the top nav entry.
+    const labelled = [...container.querySelectorAll<HTMLButtonElement>('button')].filter(
+      (node) => node.textContent?.trim() === 'New chat'
+    );
+    expect(labelled).toHaveLength(1);
+    expect(labelled[0]?.title).toBe('New chat (opens the home page)');
+    const plus = button((node) => node.title === 'New session in beta');
+    expect(plus.getAttribute('aria-label')).toBe('New chat');
   });
 });

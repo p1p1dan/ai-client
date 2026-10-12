@@ -18,7 +18,7 @@
  */
 import { AUTH_GATE_SNAPSHOT_QUERY_KEY, deriveUserProfilePresentation } from '@shared/authGate';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ChevronsUpDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AnnouncementBell } from '@/components/announcements/AnnouncementBell';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -75,7 +75,10 @@ export function UserFooterPill() {
   }, [isAuthenticated]);
 
   return (
-    <div className="flex shrink-0 items-center gap-1 border-t p-2">
+    // Decision 183 §2.8: no top rule (the prototype separates nothing in the
+    // sidebar with lines), and a trailing ChevronsUpDown that says the pill
+    // opens the account card.
+    <div className="flex shrink-0 items-center gap-1 p-2">
       <Popover open={profileOpen} onOpenChange={setProfileOpen}>
         <PopoverTrigger
           className={cn(
@@ -114,6 +117,7 @@ export function UserFooterPill() {
           ) : (
             <span className="truncate text-meta">{t('Not signed in')}</span>
           )}
+          <ChevronsUpDown aria-hidden className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
         </PopoverTrigger>
         <PopoverPopup align="start" side="top" sideOffset={8} className="w-[280px]">
           <UserProfileCard

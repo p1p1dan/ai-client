@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { stripComments } from '@/components/chat/__tests__/stripComments';
 
 /**
- * H/18 S1 + S2 — the sidebar's two PARTITION menus and the project-row menu.
+ * H/18 S1 + S2 — the sidebar's list and group menus and the repository menu.
  *
  * Static, for the same reason `unboundChatEntryStatic` is: what has to be
  * proven here is which element OWNS the right-click and which actions it
@@ -15,67 +15,65 @@ import { stripComments } from '@/components/chat/__tests__/stripComments';
  * The nesting rule these menus depend on is Base UI's own: its context-menu
  * trigger calls `stopEvent` (preventDefault + stopPropagation) on the event, so
  * an inner trigger always wins over an outer one. That is why a row right-click
- * opens the row's menu and not the partition's, and why a trigger with NO menu
+ * opens the row's menu and not the group's, and why a trigger with NO menu
  * behind it would be a trap — it would swallow the event and leave the user
  * with nothing.
+ *
+ * Decision 183 replaced the three regions with one list: the list carries
+ * 「添加仓库」 (§2.10), the Temporary chats group 「新建临时对话」 (§2.9), and a
+ * repository header its own menu, as before.
  */
 const navPath = path.join(process.cwd(), 'src/renderer/components/workspace-shell/LeftNav.tsx');
 const nav = stripComments(readFileSync(navPath, 'utf8'), navPath);
 
-/** Source of the temporary-chat partition, which is one self-contained helper. */
-const unboundSection = (() => {
-  const start = nav.indexOf('const renderUnboundSection');
+/** Source of the temporary-chat group, which is one self-contained helper. */
+const temporaryGroup = (() => {
+  const start = nav.indexOf('const renderTemporaryGroup');
   return nav.slice(start, nav.indexOf('\n  };', start));
 })();
 
-describe('S1 partition context menus', () => {
-  it('the temporary-chat partition offers a new temporary chat', () => {
-    expect(unboundSection).toContain('<ContextMenuPrimitive.Root>');
-    // Rendered AS the <section>, so the menu covers the header and the gaps
-    // between rows rather than adding a wrapper element with its own box.
-    // Decision 167 §5 made it an L1 section of its own; decision 170 (issue
-    // #6) a region of its own at the bottom of the list area.
-    expect(unboundSection).toContain('render={<section className={TEMPORARY_REGION_CLASS} />}');
-    expect(unboundSection).toContain('<SidebarSectionHeader title={unboundFolder.name}>');
-    // The duplicated folder-header markup is gone: no folder icon, no h-7
-    // header row of its own.
-    expect(unboundSection).not.toContain('FolderOpen');
-    expect(unboundSection).not.toContain('group flex h-7');
-    expect(unboundSection).toContain("{t('New temporary chat')}");
+describe('S1 list and group context menus', () => {
+  it('the temporary-chat group offers a new temporary chat, from its header 「＋」 too', () => {
+    expect(temporaryGroup).toContain('<ContextMenuPrimitive.Root>');
+    // Rendered AS the group's <section>, so the menu covers the header and the
+    // gaps between rows rather than adding a wrapper element with its own box.
+    expect(temporaryGroup).toMatch(
+      /render=\{\s*<section className=\{SIDEBAR_GROUP_CLASS\} data-sidebar-group=\{UNBOUND_FOLDER_ID\} \/>\s*\}/
+    );
+    // The same header as a repository (decision 183 §1.3), no folder icon.
+    expect(temporaryGroup).toContain('renderGroupHeader({');
+    expect(temporaryGroup).not.toContain('FolderOpen');
+    expect(temporaryGroup).toContain("{t('New temporary chat')}");
     // Decision 174 (issue #6, second wave): like every 「新建」 it opens the
     // home page — here with 「不选仓库（临时对话）」 picked — and the
     // temporary chat is made by its first send, so no empty shell is made.
-    expect(unboundSection).toContain("openHome({ kind: 'unbound' })");
-    expect(unboundSection).not.toContain('createOrReuseUnboundChatSession');
+    // Twice: the menu item and the header's hover 「＋」 (§2.9).
+    expect(temporaryGroup.split("openHome({ kind: 'unbound' })").length - 1).toBe(2);
+    expect(temporaryGroup).toContain("aria-label={t('New temporary chat')}");
+    expect(temporaryGroup).not.toContain('createOrReuseUnboundChatSession');
   });
 
-  it('the projects partition offers Add Repository', () => {
-    // From the Root that opens before the "Repositories" title down to where
-    // the temporary-chat partition begins — i.e. the whole projects region,
-    // title row and folder list included.
-    const titleAt = nav.indexOf("{t('Repositories')}");
-    const partition = nav.slice(
-      nav.lastIndexOf('<ContextMenuPrimitive.Root>', titleAt),
-      nav.indexOf('{renderUnboundSection(', titleAt)
+  it('the list offers Add Repository on its blank space', () => {
+    // From the Root around the list area down to its menu.
+    const listAt = nav.indexOf('render={<div className={LIST_AREA_CLASS} />}');
+    expect(listAt).toBeGreaterThan(-1);
+    const list = nav.slice(
+      nav.lastIndexOf('<ContextMenuPrimitive.Root>', listAt),
+      nav.indexOf('</ContextMenuPrimitive.Root>', nav.indexOf('</ScrollArea>', listAt))
     );
-    expect(partition.length).toBeLessThan(nav.length / 2);
-    // Rendered AS the partition's region (decision 170): the menu covers the
-    // title row and the gaps between folders, and the region is the grid that
-    // holds the title and its own scroll area. No wrapper restating a
-    // `space-y-*` between regions — they meet at a divider.
-    expect(partition).toContain('<section');
-    expect(partition).toContain(
-      "className={cn(REPOSITORIES_REGION_CLASS, activeRows.length > 0 && 'border-t')}"
-    );
-    expect(partition).not.toContain('space-y-3');
-    expect(partition).toContain('onClick={() => onAddRepository?.()}');
-    expect(partition).toContain("{t('Add Repository')}");
+    // It holds every group, so the menu covers the gaps between them.
+    expect(list).toContain('{renderTemporaryGroup()}');
+    expect(list).toContain('visibleFolders.map(renderRepositoryGroup)');
+    expect(list).toContain('onClick={() => onAddRepository?.()}');
+    expect(list).toContain("{t('Add Repository')}");
   });
 
-  it('keeps the header buttons — the menu is a second way in, not a replacement', () => {
-    // Right-click alone is undiscoverable; the "Add Repository" button and the
-    // repository row's "more" button both stay.
-    expect(nav).toContain("title={t('Add Repository')}");
+  it('keeps the visible buttons — the menu is a second way in, not a replacement', () => {
+    // Right-click alone is undiscoverable; the top nav's 「添加仓库」 and the
+    // repository header's "more" button both stay.
+    expect(nav).toContain(
+      '<button type="button" className={NAV_ITEM_CLASS} onClick={onAddRepository}>'
+    );
     expect(nav).toContain("aria-label={t('Repository actions')}");
   });
 });
@@ -98,10 +96,16 @@ describe('S2 project row context menu', () => {
   it('leaves a folder with no repository un-wrapped, so its right-click falls through', () => {
     // The synthetic Temp project has no repository behind it. Wrapping it
     // anyway would give it a trigger with an empty menu, and Base UI's trigger
-    // stops the event — the projects-partition menu would never be reached from
-    // that row.
+    // stops the event — the list menu would never be reached from that row.
     expect(nav).toContain('{repoMenuItems ? (');
     // The else branch is the bare header, with no trigger around it.
     expect(nav).toMatch(/\) : \(\s*header\s*\)}/);
+  });
+
+  it('the header is a DOM element the trigger can put its props on', () => {
+    // `render={header}` needs an element, so the shared header is a function
+    // returning one, not a component.
+    expect(nav).toContain('function renderGroupHeader({');
+    expect(nav).toContain('const header = renderGroupHeader({');
   });
 });

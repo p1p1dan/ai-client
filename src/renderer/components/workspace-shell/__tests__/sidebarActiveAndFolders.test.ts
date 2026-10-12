@@ -3,22 +3,26 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyRuntimeEvents, type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
+import { useHomeDraftStore } from '@/stores/homeDraft';
 import { TEMP_PROJECT_ID } from '../deriveChatWorkspaceTree';
 import {
   ESCAPE_OWNING_POPUP_SELECTOR,
   SURFACE_ESCAPE_HOLD_ATTR,
   shouldCloseOnEscape,
 } from '../shellLayoutModel';
+import { UNBOUND_FOLDER_ID } from '../sidebarTree';
 
 /**
  * Decision 137 (user ruling, sidebar) and decision 138 (P1-7e e1), rendered
- * for real: "Active now", a folder header that only folds, folders capped at 8
- * rows, the rename editor keeping its focus (point-check issue 26) and the
- * 1.0.x branch suffix kept whole (issue 32). Decision 167 (GitHub issue #3):
- * the branch on the folder row and the three-line row tooltip. Decision 170
- * (GitHub issue #6): the three regions — Active now capped at 5 and gone while
- * empty, Recent retired — Collapse all, and folders ordered by activity, held
- * while the pointer or keyboard focus is in the list.
+ * for real: a group header that only folds, groups capped at 8 rows, the
+ * rename editor keeping its focus (point-check issue 26) and the 1.0.x branch
+ * suffix kept whole (issue 32). Decision 167 (GitHub issue #3): the three-line
+ * row tooltip. Decision 170 (GitHub issue #6): groups ordered by activity,
+ * held while the pointer or keyboard focus is in the list. Decision 183: one
+ * list with no 「正在活动」 region and no region titles, Temporary chats
+ * pinned first, the grey group label with its chevron and folded summary, the
+ * faint ring of a chat not started, hover actions floating over the row, no
+ * 「新建对话」 row in an empty group, and the collapse / expand all toggle.
  *
  * Stubbed like the other LeftNav mount tests: the persisted index (IPC),
  * session activation (starts a worker) and the diff-stats poller.
@@ -84,6 +88,20 @@ function chat(id: string, extra: Partial<ChatSession> = {}): ChatSession {
   };
 }
 
+/** A temporary (unbound) chat. */
+function scratch(id: string, extra: Partial<ChatSession> = {}): ChatSession {
+  return {
+    id,
+    projectId: '',
+    workspaceId: '',
+    title: `Scratch ${id}`,
+    status: 'idle',
+    updatedAt: NOW,
+    unbound: { workspacePath: `/tmp/${id}` },
+    ...extra,
+  };
+}
+
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 
@@ -134,13 +152,19 @@ function allRows(scope: ParentNode = container): HTMLElement[] {
   return [...scope.querySelectorAll<HTMLElement>('[role="button"]')];
 }
 
-/** A region, by its L1 title (a `<p>` in the region's first grid row). */
-function sectionTitled(label: string): HTMLElement | null {
-  const heading = [...container.querySelectorAll('p')].find((node) => node.textContent === label);
-  return heading?.closest('section') ?? null;
+/** A group's `<section>`, by its id (a project id, or `UNBOUND_FOLDER_ID`). */
+function group(id: string): HTMLElement | null {
+  return container.querySelector<HTMLElement>(`[data-sidebar-group="${id}"]`);
 }
 
-/** The folder names in Repositories, top to bottom. */
+/** Every group on screen, top to bottom, by id. */
+function groupOrder(): string[] {
+  return [...container.querySelectorAll<HTMLElement>('[data-sidebar-group]')].map(
+    (node) => node.dataset.sidebarGroup ?? ''
+  );
+}
+
+/** The repository group names, top to bottom. */
 function folderOrder(): string[] {
   return [...container.querySelectorAll('[data-slot="sidebar-folder-name"]')].map(
     (node) => node.textContent ?? ''
@@ -161,16 +185,20 @@ async function pointer(type: 'pointerover' | 'pointerout', target: Element): Pro
   });
 }
 
-/**
- * The folder header's toggle, found by the name's own slot: since decision
- * 167 the button also holds the main branch, so its text is not the name.
- */
+/** A repository group header's toggle, found by the name's own slot. */
 function folderHeader(name: string): HTMLButtonElement {
   const slot = [...container.querySelectorAll('[data-slot="sidebar-folder-name"]')].find(
     (node) => node.textContent === name
   );
   const button = slot?.closest('button');
   if (!button) throw new Error(`folder header ${name} not rendered`);
+  return button;
+}
+
+/** The Temporary chats header's toggle. */
+function temporaryHeader(): HTMLButtonElement {
+  const button = container.querySelector('[data-slot="sidebar-temporary-name"]')?.closest('button');
+  if (!button) throw new Error('temporary chats header not rendered');
   return button;
 }
 
@@ -185,6 +213,10 @@ function buttonText(text: string): HTMLButtonElement | undefined {
   );
 }
 
+function buttonLabelled(label: string): HTMLButtonElement | null {
+  return container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+}
+
 async function flush(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -192,68 +224,69 @@ async function flush(): Promise<void> {
   });
 }
 
-describe('Active now (decision 137 §1; the top region since decision 170)', () => {
-  it('is not rendered at all while nothing is started, so Repositories comes first', async () => {
-    await render();
-    expect(sectionTitled('Active now')).toBeNull();
-    expect(container.textContent).not.toContain('Active now');
-    // Decision 170 retired Recent: no other cross-folder list takes its place.
-    expect(container.textContent).not.toContain('Recent');
-    expect(rows('Chat a')).toHaveLength(1);
-    // The first region opens right under the toolbar, with no divider of its own.
-    expect(sectionTitled('Repositories')?.className).not.toContain('border-t');
-  });
-
-  it('lists started chats with running turns first, and marks running vs waiting', async () => {
+describe('one list, no 「正在活动」 (decision 183 §1.1, §1.10)', () => {
+  it('has no region titles and no Active now; a started chat is listed once, in its folder', async () => {
     useChatSessionsStore.setState({
-      sessions: [
-        chat('idle-bound', { updatedAt: NOW }),
-        chat('running', { status: 'running', updatedAt: NOW - 50_000 }),
-        chat('waiting', { status: 'waiting_question', updatedAt: NOW - 90_000 }),
-        chat('previewed', { runtimeIdentity: '/p.dsh.json', updatedAt: NOW }),
-      ],
-      hostBoundSessionIds: ['idle-bound', 'running', 'waiting'],
+      sessions: [chat('bound'), chat('fresh', { updatedAt: NOW - 1000 })],
+      hostBoundSessionIds: ['bound'],
+      activeSessionId: 'bound',
     });
     await render();
+    for (const gone of ['Active now', 'Repositories', 'Recent']) {
+      expect(container.textContent).not.toContain(gone);
+    }
+    // No L1 title paragraphs, no divider between groups.
+    expect(container.querySelector('section p')).toBeNull();
+    expect(container.querySelector('section.border-t')).toBeNull();
+    expect(rows('Chat bound')).toHaveLength(1);
+    expect(rows('Chat bound')[0]?.className).toContain('bg-selection');
+    expect(rows('Chat fresh')).toHaveLength(1);
+  });
 
-    const region = sectionTitled('Active now');
-    expect(region, 'the region renders').toBeTruthy();
-    expect(region?.className).toContain('max-h-[33%]');
-    // Above Repositories, which then opens with the divider between them.
-    expect(sectionTitled('Repositories')?.className).toContain('border-t');
-    // The row's tooltip starts with its title.
-    const listed = allRows(region as HTMLElement).map((node) => tooltipTitle(node));
-    // Running turns first (by last activity among them), then the rest.
-    expect(listed).toEqual(['Chat running', 'Chat waiting', 'Chat idle-bound']);
-
-    const [running, waiting, idle] = allRows(region as HTMLElement);
+  it('marks running vs waiting in the row s own slot', async () => {
+    useChatSessionsStore.setState({
+      sessions: [
+        chat('running', { status: 'running' }),
+        chat('waiting', { status: 'waiting_question' }),
+        chat('idle-bound'),
+      ],
+      hostBoundSessionIds: ['running', 'waiting', 'idle-bound'],
+    });
+    await render();
+    const [running] = rows('Chat running');
+    const [waiting] = rows('Chat waiting');
+    const [idle] = rows('Chat idle-bound');
     expect(running?.querySelector('[role="status"][aria-label="Running"]')).toBeTruthy();
     expect(waiting?.querySelector('[role="img"][aria-label="Waiting for an answer"]')).toBeTruthy();
     expect(waiting?.querySelector('[role="status"]')).toBeNull();
-    expect(idle?.querySelector('[role="status"]')).toBeNull();
+    expect(idle?.querySelector('[title="Running in the background"]')).toBeTruthy();
   });
 
-  it('drops a chat when the pool reclaims it, and disappears when the last one goes', async () => {
+  it('gives a chat not started the faint ring, one step quieter than the background ring', async () => {
     useChatSessionsStore.setState({
-      sessions: [chat('a')],
-      hostBoundSessionIds: ['a'],
+      sessions: [chat('bound'), chat('cold', { updatedAt: NOW - 1000 })],
+      hostBoundSessionIds: ['bound'],
     });
     await render();
-    expect(sectionTitled('Active now')).toBeTruthy();
-
-    await act(async () => {
-      useChatSessionsStore.setState({ hostBoundSessionIds: [] });
-    });
-    expect(sectionTitled('Active now')).toBeNull();
+    const bound = rows('Chat bound')[0]?.querySelector('[title="Running in the background"]');
+    const cold = rows('Chat cold')[0]?.querySelector('[title="Not started"]');
+    expect(bound?.className).toContain('border-muted-foreground');
+    expect(bound?.className).not.toContain('border-muted-foreground-faint');
+    expect(cold?.className).toContain('border-muted-foreground-faint');
+    expect(cold?.className).toContain('rounded-full');
+    // Every row has a mark in its slot (decision 183 §1.7).
+    for (const row of allRows()) {
+      expect(row.firstElementChild?.childElementCount).toBe(1);
+    }
   });
 
-  it('E6-37: chats the engine let go of (a plugin switch, the idle sweep) leave the region', async () => {
+  it('E6-37: a chat the engine let go of (a plugin switch, the idle sweep) drops to the faint ring', async () => {
     useChatSessionsStore.setState({
       sessions: [chat('a'), chat('b')],
       hostBoundSessionIds: ['a', 'b'],
     });
     await render();
-    expect(allRows(sectionTitled('Active now') as HTMLElement)).toHaveLength(2);
+    expect(container.querySelectorAll('[title="Running in the background"]')).toHaveLength(2);
 
     // What Main sends for each session `invalidateAll` retires (decision 145).
     await act(async () => {
@@ -270,83 +303,70 @@ describe('Active now (decision 137 §1; the top region since decision 170)', () 
         )
       );
     });
-    expect(sectionTitled('Active now')).toBeNull();
     // Still in their folder, only no longer marked as running in the background.
     expect(rows('Chat a')).toHaveLength(1);
     expect(rows('Chat a')[0]?.querySelector('[title="Running in the background"]')).toBeNull();
-  });
-
-  it('lists a chat once, and again in its folder — both rows carry the selection', async () => {
-    useChatSessionsStore.setState({
-      sessions: [chat('bound', { updatedAt: NOW }), chat('fresh', { updatedAt: NOW - 1000 })],
-      hostBoundSessionIds: ['bound'],
-      activeSessionId: 'bound',
-    });
-    await render();
-
-    const region = sectionTitled('Active now') as HTMLElement;
-    expect(allRows(region).map((node) => tooltipTitle(node))).toEqual(['Chat bound']);
-    expect(rows('Chat bound')).toHaveLength(2);
-    for (const row of rows('Chat bound')) expect(row.className).toContain('bg-selection');
-    // A chat that is merely recent is listed in its folder only (decision 170).
-    expect(rows('Chat fresh')).toHaveLength(1);
-  });
-
-  it('lists 5 rows, the rest behind "View more (N)", and "Show less" folds them back', async () => {
-    const seven = Array.from({ length: 7 }, (_, i) =>
-      chat(`n${String(i).padStart(2, '0')}`, { updatedAt: NOW - i * 1000 })
-    );
-    useChatSessionsStore.setState({
-      sessions: seven,
-      hostBoundSessionIds: seven.map((session) => session.id),
-    });
-    await render();
-    const region = () => sectionTitled('Active now') as HTMLElement;
-    expect(allRows(region())).toHaveLength(5);
-    expect(rows('Chat n05', region())).toHaveLength(0);
-    const more = [...region().querySelectorAll('button')].find(
-      (node) => node.textContent?.trim() === 'View more (2)'
-    );
-    expect(more, 'the region ends in View more (2)').toBeTruthy();
-
-    await act(async () => more?.click());
-    expect(allRows(region())).toHaveLength(7);
-    const less = [...region().querySelectorAll('button')].find(
-      (node) => node.textContent?.trim() === 'Show less'
-    );
-    expect(less).toBeTruthy();
-
-    await act(async () => less?.click());
-    expect(allRows(region())).toHaveLength(5);
-  });
-
-  it('its chevron folds the whole list, in memory only, open by default', async () => {
-    useChatSessionsStore.setState({ sessions: [chat('a')], hostBoundSessionIds: ['a'] });
-    const storedBefore = localStorage.length;
-    await render();
-    const region = () => sectionTitled('Active now') as HTMLElement;
-    expect(allRows(region())).toHaveLength(1);
-
-    await act(async () =>
-      region().querySelector<HTMLButtonElement>('[aria-label="Collapse active chats"]')?.click()
-    );
-    // The title stays; the whole list folds.
-    expect(region()).toBeTruthy();
-    expect(allRows(region())).toHaveLength(0);
-    expect(region().querySelector('[aria-label="Expand active chats"]')).toBeTruthy();
-    // The folder still lists it.
-    expect(rows('Chat a')).toHaveLength(1);
-    // Nothing is written: a restart opens it again.
-    expect(localStorage.length).toBe(storedBefore);
-
-    await act(async () => root.unmount());
-    root = createRoot(container);
-    await render();
-    expect(allRows(region())).toHaveLength(1);
+    expect(rows('Chat a')[0]?.querySelector('[title="Not started"]')).toBeTruthy();
   });
 });
 
-describe('the branch lives on the folder row (decision 167 §2)', () => {
+describe('rows (decision 183 §1.4, §1.5)', () => {
+  it('shows no time, and floats the actions over the row in its own fill', async () => {
+    useChatSessionsStore.setState({
+      sessions: [chat('open'), chat('other', { updatedAt: NOW - 1000 })],
+      activeSessionId: 'open',
+    });
+    await render();
+    const [open] = rows('Chat open');
+    const [other] = rows('Chat other');
+    // No relative-age box: the row's text is its title alone.
+    expect(open?.textContent).toBe('Chat open');
+    // The absolute time stays in the tooltip.
+    expect(open?.getAttribute('title')?.split('\n')[2]).toMatch(/^Updated \d{4}-\d{2}-\d{2}/);
+    for (const [row, fill] of [
+      [open, 'bg-selection'],
+      [other, 'bg-hover'],
+    ] as const) {
+      expect(row?.className).toContain('relative');
+      const actions = row?.querySelector<HTMLElement>('[data-slot="sidebar-row-actions"]');
+      expect(actions?.className).toContain('absolute');
+      expect(actions?.className).toContain('hidden');
+      expect(actions?.className).toContain('group-hover:flex');
+      // Keyboard focus reveals them (Tab reaches them); a click's focus does not.
+      expect(actions?.className).toContain('group-focus-visible:flex');
+      expect(actions?.className).toContain('group-has-focus-visible:flex');
+      expect(actions?.className).not.toContain('focus-within');
+      expect(actions?.className).toContain(fill);
+      expect(actions?.querySelector('[aria-label="Archive session"]')).toBeTruthy();
+      expect(actions?.querySelector('[aria-label="Remove from the list"]')).toBeTruthy();
+    }
+  });
+
+  it('does not float the actions in selection mode', async () => {
+    await render();
+    await act(async () => buttonLabelled('Select sessions to archive')?.click());
+    expect(container.querySelector('[data-slot="sidebar-row-actions"]')).toBeNull();
+    expect(buttonText('Cancel')).toBeTruthy();
+  });
+
+  it('an empty repository shows its header only — no 「新建对话」 row', async () => {
+    await render();
+    // beta has no chats.
+    const beta = group(BETA) as HTMLElement;
+    expect(beta.querySelectorAll('button')).toHaveLength(3); // toggle, more, 「＋」
+    expect(beta.textContent).not.toContain('New chat');
+    expect(allRows(beta)).toHaveLength(0);
+    expect(beta.querySelector('[aria-label="New chat"]')).toBeTruthy();
+  });
+
+  it('rows are not indented: no pl-3 wrapper under a header', async () => {
+    await render();
+    const [row] = rows('Chat a');
+    expect(row?.parentElement?.className).not.toContain('pl-3');
+  });
+});
+
+describe('the group header (decision 183 §1.3, §1.6)', () => {
   beforeEach(() => {
     useChatSessionsStore.setState({
       workspaces: [
@@ -372,34 +392,45 @@ describe('the branch lives on the folder row (decision 167 §2)', () => {
         chat('main-row', { updatedAt: NOW }),
         chat('worktree-row', { workspaceId: 'ws-alpha-wt', updatedAt: NOW - 1000 }),
       ],
-      hostBoundSessionIds: ['worktree-row'],
     });
   });
 
-  it('names the main branch once on the folder row, with the name in its own slot', async () => {
+  it('names the repository only — the main branch is in its tooltip', async () => {
     await render();
     const header = folderHeader('alpha');
-    expect(header.textContent).toBe('alphamain');
+    expect(header.textContent).toBe('alpha');
     expect(header.getAttribute('title')).toBe('alpha\nMain branch: main');
-    // No row repeats it.
-    const repos = sectionTitled('Repositories') as HTMLElement;
-    const [mainRow] = rows('Chat main-row', repos);
-    expect(mainRow?.textContent).not.toContain('main ');
-    expect(mainRow?.querySelector('[title="main"]')).toBeNull();
+    expect(header.getAttribute('aria-expanded')).toBe('true');
+    // The reference's grey label: 14px / 400 / muted, the soft ink on hover,
+    // no folder icon.
+    expect(header.className).toContain('text-meta');
+    expect(header.className).toContain('text-muted-foreground');
+    expect(header.className).toContain('group-hover:text-foreground-soft');
+    expect(header.className).not.toContain('font-semibold');
+    expect(header.querySelector('.text-folder')).toBeNull();
+    // No hover fill on the header row.
+    expect(header.parentElement?.className).not.toContain('hover:bg-hover');
   });
 
-  it('shows a worktree row s branch as its last segment, in the folder only', async () => {
+  it('shows ▾ only on hover while open, and ▸ always while folded', async () => {
     await render();
-    const repos = sectionTitled('Repositories') as HTMLElement;
-    const [inFolder] = rows('Chat worktree-row', repos);
+    const chevron = () =>
+      folderHeader('alpha').querySelector<HTMLElement>('[data-slot="sidebar-group-chevron"]');
+    expect(chevron()?.className).toContain('opacity-0');
+    expect(chevron()?.className).toContain('group-hover:opacity-100');
+    await act(async () => folderHeader('alpha').click());
+    expect(folderHeader('alpha').getAttribute('aria-expanded')).toBe('false');
+    expect(chevron()?.className).not.toContain('opacity-0');
+  });
+
+  it('shows a worktree row s branch as its last segment, in the folder', async () => {
+    await render();
+    const [inFolder] = rows('Chat worktree-row');
     const branch = inFolder?.querySelector('[title="feature/sidebar-redesign"]');
     expect(branch?.textContent).toBe('sidebar-redesign');
     expect(branch?.className).toContain('max-w-24');
-
-    const active = sectionTitled('Active now') as HTMLElement;
-    const [inActive] = rows('Chat worktree-row', active);
-    expect(inActive, 'the row is in Active now too').toBeTruthy();
-    expect(inActive?.textContent).not.toContain('sidebar-redesign');
+    const [mainRow] = rows('Chat main-row');
+    expect(mainRow?.querySelector('[title="main"]')).toBeNull();
   });
 
   it('gives every row the three-line tooltip: title / folder · branch / updated', async () => {
@@ -413,49 +444,113 @@ describe('the branch lives on the folder row (decision 167 §2)', () => {
   });
 });
 
-describe('Temporary chats is a section of its own (decision 167 §5)', () => {
-  it('lists its rows directly under an L1 title, without the 「临时」 chip, and folds from the title', async () => {
+describe('a folded group summarises its rows (decision 183 §2.2)', () => {
+  it('spinner with a count, the waiting dot, red over green — and nothing while open', async () => {
     useChatSessionsStore.setState({
       sessions: [
-        chat('a'),
-        {
-          id: 'scratch',
-          projectId: '',
-          workspaceId: '',
-          title: 'Scratch chat',
-          status: 'idle',
-          updatedAt: NOW,
-          unbound: { workspacePath: '/tmp/scratch' },
-        },
+        chat('r1', { status: 'running' }),
+        chat('r2', { status: 'running' }),
+        chat('w', { status: 'waiting_permission' }),
+        chat('done'),
+        chat('bad', { status: 'failed' }),
+      ],
+      unreadSessionIds: ['done', 'bad'],
+    });
+    await render();
+    const summary = () =>
+      group(ALPHA)?.querySelector<HTMLElement>('[data-slot="sidebar-group-summary"]');
+    // Open: the rows carry their own marks.
+    expect(summary()).toBeNull();
+
+    await act(async () => folderHeader('alpha').click());
+    const marks = summary() as HTMLElement;
+    expect(marks, 'the folded header summarises').toBeTruthy();
+    expect(marks.querySelector('[role="status"][aria-label="2 chats running"]')).toBeTruthy();
+    expect(marks.textContent).toBe('2');
+    expect(marks.querySelector('[aria-label="A chat is waiting for you"]')?.className).toContain(
+      'bg-warning'
+    );
+    expect(
+      marks.querySelector('[aria-label="A chat failed while you were away"]')?.className
+    ).toContain('bg-destructive');
+    expect(marks.querySelector('[aria-label="A chat finished while you were away"]')).toBeNull();
+  });
+
+  it('one running chat spins without a number; a folded idle group shows nothing', async () => {
+    useChatSessionsStore.setState({
+      sessions: [
+        chat('r', { status: 'running' }),
+        chat('b', { projectId: BETA, workspaceId: 'ws-beta' }),
       ],
     });
     await render();
-    const section = sectionTitled('Temporary chats') as HTMLElement;
-    expect(section, 'an L1 section titled Temporary chats').toBeTruthy();
-    // Decision 170: a region of its own, capped at 25%, under Repositories.
-    expect(section.className).toContain('max-h-[25%]');
-    expect(
-      (sectionTitled('Repositories') as HTMLElement).compareDocumentPosition(section) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
-    // Not a folder inside Repositories, and no folder-style header of its own.
-    expect(section.closest('section')).toBe(section);
-    expect(sectionTitled('Repositories')?.contains(section)).toBe(false);
-    expect(section.querySelector('[data-slot="sidebar-folder-name"]')).toBeNull();
-
-    const [row] = rows('Scratch chat', section);
-    expect(row?.textContent).not.toContain('Temporary');
-    expect(row?.getAttribute('title')?.split('\n')[1]).toBe('Temporary chats');
-
-    await act(async () =>
-      section.querySelector<HTMLButtonElement>('[aria-label="Collapse temporary chats"]')?.click()
-    );
-    expect(rows('Scratch chat')).toHaveLength(0);
-    expect(section.querySelector('[aria-label="Expand temporary chats"]')).toBeTruthy();
+    await act(async () => folderHeader('alpha').click());
+    await act(async () => folderHeader('beta').click());
+    const alpha = group(ALPHA)?.querySelector('[data-slot="sidebar-group-summary"]');
+    expect(alpha?.querySelector('[aria-label="1 chats running"]')).toBeTruthy();
+    expect(alpha?.textContent).toBe('');
+    expect(group(BETA)?.querySelector('[data-slot="sidebar-group-summary"]')).toBeNull();
   });
 });
 
-describe('a folder header only folds (decision 137 §3)', () => {
+describe('Temporary chats is a pinned group (decision 183 §1.2, §2.9)', () => {
+  beforeEach(() => {
+    useChatSessionsStore.setState({
+      sessions: [
+        chat('a', { updatedAt: NOW + 60_000 }),
+        chat('b', { projectId: BETA, workspaceId: 'ws-beta', updatedAt: NOW + 120_000 }),
+        scratch('old', { updatedAt: NOW - 3_600_000 }),
+      ],
+    });
+  });
+
+  it('sits above every repository, however old its chats are', async () => {
+    await render();
+    expect(groupOrder()).toEqual([UNBOUND_FOLDER_ID, BETA, ALPHA]);
+    // And stays there when it gets the newest activity.
+    await act(async () => {
+      useChatSessionsStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'b' ? { ...session, updatedAt: NOW - 7_200_000 } : session
+        ),
+      }));
+    });
+    expect(groupOrder()).toEqual([UNBOUND_FOLDER_ID, ALPHA, BETA]);
+  });
+
+  it('uses the same grey header as a repository, folds from it, and its 「＋」 opens the home page unbound', async () => {
+    await render();
+    const header = temporaryHeader();
+    expect(header.textContent).toBe('Temporary chats');
+    expect(header.className).toBe(folderHeader('alpha').className);
+    expect(header.getAttribute('title')).toBe('Chats that belong to no repository');
+    const [row] = rows('Scratch old', group(UNBOUND_FOLDER_ID) as HTMLElement);
+    expect(row?.textContent).not.toContain('Temporary');
+    expect(row?.getAttribute('title')?.split('\n')[1]).toBe('Temporary chats');
+
+    await act(async () => header.click());
+    expect(rows('Scratch old')).toHaveLength(0);
+    expect(temporaryHeader().getAttribute('aria-expanded')).toBe('false');
+
+    await act(async () => useChatSessionsStore.setState({ activeSessionId: 'a' }));
+    await act(async () =>
+      group(UNBOUND_FOLDER_ID)
+        ?.querySelector<HTMLButtonElement>('[aria-label="New temporary chat"]')
+        ?.click()
+    );
+    expect(useChatSessionsStore.getState().activeSessionId).toBeNull();
+    expect(useHomeDraftStore.getState().pick).toEqual({ kind: 'unbound' });
+  });
+
+  it('is not rendered when there are no temporary chats', async () => {
+    useChatSessionsStore.setState({ sessions: [chat('a')] });
+    await render();
+    expect(group(UNBOUND_FOLDER_ID)).toBeNull();
+    expect(container.textContent).not.toContain('Temporary chats');
+  });
+});
+
+describe('a group header only folds (decision 137 §3)', () => {
   it('folds and unfolds without opening a chat or moving the selection', async () => {
     useChatSessionsStore.setState({
       sessions: [chat('a'), chat('b', { projectId: BETA, workspaceId: 'ws-beta' })],
@@ -477,7 +572,7 @@ describe('a folder header only folds (decision 137 §3)', () => {
   });
 });
 
-describe('folders list 8 rows (decision 137 §4)', () => {
+describe('groups list 8 rows (decision 137 §4)', () => {
   const eleven = Array.from({ length: 11 }, (_, i) =>
     chat(`n${String(i).padStart(2, '0')}`, { updatedAt: NOW - i * 1000 })
   );
@@ -486,7 +581,7 @@ describe('folders list 8 rows (decision 137 §4)', () => {
     useChatSessionsStore.setState({ sessions: eleven, activeSessionId: 'n10' });
     await render();
 
-    // 8 newest + the selected one (the oldest); nothing active.
+    // 8 newest + the selected one (the oldest).
     expect(allRows()).toHaveLength(9);
     expect(rows('Chat n10')).toHaveLength(1);
     expect(rows('Chat n08')).toHaveLength(0);
@@ -515,17 +610,23 @@ describe('folders list 8 rows (decision 137 §4)', () => {
     expect(allRows()).toHaveLength(9);
   });
 
-  it('E6-40: Active now says "View more (N)" like a folder, not "Show more (N)"', async () => {
-    const ten = eleven.slice(0, 10);
-    useChatSessionsStore.setState({
-      sessions: ten,
-      hostBoundSessionIds: ten.map((session) => session.id),
-    });
+  it('E6-40: Temporary chats says "View more (N)" like a folder, h-7 with the title column', async () => {
+    const tenScratch = Array.from({ length: 10 }, (_, i) =>
+      scratch(`s${i}`, { updatedAt: NOW - i * 1000 })
+    );
+    useChatSessionsStore.setState({ sessions: [...eleven.slice(0, 10), ...tenScratch] });
     await render();
-    // Active now lists 5 (5 hidden), the folder lists 8 (2 hidden).
-    expect(buttonText('View more (5)')).toBeTruthy();
-    expect(buttonText('View more (2)')).toBeTruthy();
+    const more = [...container.querySelectorAll<HTMLButtonElement>('button')].filter(
+      (node) => node.textContent?.trim() === 'View more (2)'
+    );
+    expect(more).toHaveLength(2);
+    expect(group(UNBOUND_FOLDER_ID)?.contains(more[0] as Node)).toBe(true);
     expect(container.textContent).not.toContain('Show more');
+    for (const button of more) {
+      expect(button.className).toContain('h-7');
+      // The empty w-4 slot puts the text in the title column.
+      expect(button.firstElementChild?.className).toContain('w-4');
+    }
   });
 
   it('lists every match while searching', async () => {
@@ -544,7 +645,78 @@ describe('folders list 8 rows (decision 137 §4)', () => {
   });
 });
 
-describe('Collapse all (decision 170, issue #6 ruling 7)', () => {
+describe('the top of the panel (decision 183 §1.10, §2.1)', () => {
+  it('a vertical nav, then the search box always shown beside the toggle and bulk archive', async () => {
+    await render();
+    const newChat = buttonText('New chat');
+    const addRepository = buttonText('Add Repository');
+    expect(newChat?.title).toBe('New chat (opens the home page)');
+    expect(newChat?.className).toContain('h-8');
+    expect(addRepository?.className).toBe(newChat?.className);
+    const search = container.querySelector('input[placeholder="Search sessions"]');
+    expect(search).toBeTruthy();
+    // No filter toggle: the search box cannot be hidden.
+    expect(buttonLabelled('Filter sessions')).toBeNull();
+    expect(buttonLabelled('Collapse all groups')).toBeTruthy();
+    expect(buttonLabelled('Select sessions to archive')).toBeTruthy();
+    // Nav above the tool row, the tool row above the list.
+    expect(
+      (newChat as Node).compareDocumentPosition(search as Node) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      (search as Node).compareDocumentPosition(group(ALPHA) as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('the search box drops coss InputGroup s default chrome for the prototype s (user ruling)', async () => {
+    // Asserted on the RENDERED className — what `cn()` actually merged the
+    // primitive's base classes and LeftNav's overrides into — because an
+    // override only wins if tailwind-merge drops the base class (same variant
+    // stack) or the CSS outranks it; a class merely present proves neither.
+    await render();
+    const groupNode = container.querySelector<HTMLElement>('[data-slot="input-group"]');
+    const classes = new Set(groupNode?.className.split(/\s+/));
+    const FOCUS = 'has-[input:focus-visible,textarea:focus-visible]';
+    // Resting: transparent in light and dark, a --border line, no shadow, no
+    // inner shade (the ::before carrying it is removed), rounded-sm, h-7.
+    for (const present of [
+      'h-7',
+      'rounded-sm',
+      'border',
+      'border-border',
+      'bg-transparent',
+      'dark:bg-transparent',
+      'shadow-none',
+      'before:hidden',
+      // Focused: the page fill, a muted line, no ring.
+      `${FOCUS}:bg-background`,
+      `${FOCUS}:border-muted-foreground`,
+      `${FOCUS}:ring-0`,
+      '[&_input]:placeholder:text-muted-foreground',
+    ]) {
+      expect(classes.has(present), present).toBe(true);
+    }
+    for (const dropped of [
+      'rounded-lg',
+      'border-input',
+      'bg-background',
+      'dark:bg-input/32',
+      'shadow-xs',
+      `${FOCUS}:border-ring`,
+      `${FOCUS}:ring-2`,
+    ]) {
+      expect(classes.has(dropped), dropped).toBe(false);
+    }
+    // The magnifier: 14px, full muted ink (opted out of the addon's 80% fade).
+    const icon = groupNode?.querySelector('[data-slot="input-group-addon"] svg');
+    expect(icon?.getAttribute('class')).toContain('size-3.5');
+    expect(icon?.getAttribute('class')).toContain('text-muted-foreground');
+    expect(icon?.getAttribute('class')).toContain('opacity-100');
+  });
+});
+
+describe('Collapse all is a toggle (decision 183 §1.8)', () => {
   beforeEach(() => {
     useChatSessionsStore.setState({
       projects: [
@@ -567,66 +739,134 @@ describe('Collapse all (decision 170, issue #6 ruling 7)', () => {
         chat('a'),
         chat('b', { projectId: BETA, workspaceId: 'ws-beta' }),
         chat('t', { projectId: TEMP_PROJECT_ID, workspaceId: 'ws-temp' }),
-        {
-          id: 'scratch',
-          projectId: '',
-          workspaceId: '',
-          title: 'Scratch chat',
-          status: 'idle',
-          updatedAt: NOW,
-          unbound: { workspacePath: '/tmp/scratch' },
-        },
+        scratch('x'),
       ],
     });
   });
 
-  function collapseAll(): HTMLButtonElement | null {
-    return (sectionTitled('Repositories') as HTMLElement).querySelector<HTMLButtonElement>(
-      '[aria-label="Collapse all repositories"]'
-    );
-  }
+  const toggle = () => buttonLabelled('Collapse all groups') ?? buttonLabelled('Expand all groups');
 
-  it('folds every folder, the temporary workspaces included, and leaves Temporary chats open', async () => {
+  it('folds every group, Temporary chats included, then turns into Expand all', async () => {
     await render();
-    const repos = () => sectionTitled('Repositories') as HTMLElement;
-    expect(allRows(repos())).toHaveLength(3);
-    expect(collapseAll()?.getAttribute('title')).toBe('Collapse all repositories');
+    expect(allRows()).toHaveLength(4);
+    expect(toggle()?.getAttribute('aria-label')).toBe('Collapse all groups');
+    expect(toggle()?.title).toBe('Collapse all groups');
 
-    await act(async () => collapseAll()?.click());
-    expect(allRows(repos())).toHaveLength(0);
-    // The folder rows stay, closed.
+    await act(async () => toggle()?.click());
+    expect(allRows()).toHaveLength(0);
+    // The headers stay, closed.
     expect(folderOrder()).toEqual(['alpha', 'beta', 'Temporary workspaces']);
-    // The Temporary chats region keeps its own flag in the same map.
-    expect(rows('Scratch chat', sectionTitled('Temporary chats') as HTMLElement)).toHaveLength(1);
+    expect(temporaryHeader().getAttribute('aria-expanded')).toBe('false');
+    expect(toggle()?.getAttribute('aria-label')).toBe('Expand all groups');
+    expect(toggle()?.title).toBe('Expand all groups');
 
-    // A folder still opens on its own; pressing again only folds (no "expand all").
-    await act(async () => folderHeader('alpha').click());
-    expect(rows('Chat a')).toHaveLength(1);
-    await act(async () => collapseAll()?.click());
-    expect(allRows(repos())).toHaveLength(0);
+    await act(async () => toggle()?.click());
+    expect(allRows()).toHaveLength(4);
+    expect(toggle()?.getAttribute('aria-label')).toBe('Collapse all groups');
   });
 
-  it('folds the folders a search is hiding as well', async () => {
+  it('any open group makes it fold: one opened by hand turns it back into Collapse all', async () => {
     await render();
-    const input = [...container.querySelectorAll('input')].find(
-      (node) => node.getAttribute('placeholder') === 'Search sessions'
+    await act(async () => toggle()?.click());
+    await act(async () => folderHeader('alpha').click());
+    expect(rows('Chat a')).toHaveLength(1);
+    expect(toggle()?.getAttribute('aria-label')).toBe('Collapse all groups');
+    await act(async () => toggle()?.click());
+    expect(allRows()).toHaveLength(0);
+  });
+
+  const search = (text: string) => {
+    const input = container.querySelector<HTMLInputElement>(
+      'input[placeholder="Search sessions"]'
     ) as HTMLInputElement;
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-    const search = (text: string) =>
-      act(async () => {
-        setValue?.call(input, text);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      });
+    return act(async () => {
+      setValue?.call(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
 
-    await search('Chat a');
-    expect(folderOrder()).toEqual(['alpha']);
-    await act(async () => collapseAll()?.click());
+  /**
+   * alpha and Temporary chats hold a `Draft …` chat — the only matches for
+   * 「draft」; beta's `Draw diagram` also matches the prefix 「dra」; the
+   * temporary workspaces match neither.
+   */
+  const withDrafts = () =>
+    useChatSessionsStore.setState({
+      sessions: [
+        chat('a', { title: 'Draft notes' }),
+        chat('b', { projectId: BETA, workspaceId: 'ws-beta', title: 'Draw diagram' }),
+        chat('t', { projectId: TEMP_PROJECT_ID, workspaceId: 'ws-temp' }),
+        scratch('x', { title: 'Draft idea' }),
+      ],
+    });
+
+  it('a search opens every group with matches, and the last query s groups stay open after clearing', async () => {
+    withDrafts();
+    await render();
+    // Fold every group by hand.
+    for (const name of ['alpha', 'beta', 'Temporary workspaces']) {
+      await act(async () => folderHeader(name).click());
+    }
+    await act(async () => temporaryHeader().click());
+    expect(allRows()).toHaveLength(0);
+
+    // Typing passes through a prefix that also matches beta.
+    await search('dra');
+    expect(groupOrder()).toEqual([UNBOUND_FOLDER_ID, ALPHA, BETA]);
+    expect(rows('Draw diagram')).toHaveLength(1);
+
+    await search('draft');
+    // Only the groups with matches are listed — and they are open.
+    expect(groupOrder()).toEqual([UNBOUND_FOLDER_ID, ALPHA]);
+    expect(rows('Draft notes')).toHaveLength(1);
+    expect(rows('Draft idea')).toHaveLength(1);
+    expect(folderHeader('alpha').getAttribute('aria-expanded')).toBe('true');
+    expect(temporaryHeader().getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('[data-slot="sidebar-group-summary"]')).toBeNull();
+    // A header click folds nothing while a search is typed.
+    await act(async () => folderHeader('alpha').click());
+    expect(rows('Draft notes')).toHaveLength(1);
+
     await search('');
-    expect(allRows(sectionTitled('Repositories') as HTMLElement)).toHaveLength(0);
+    // The final query's groups stay open...
+    expect(rows('Draft notes')).toHaveLength(1);
+    expect(rows('Draft idea')).toHaveLength(1);
+    expect(folderHeader('alpha').getAttribute('aria-expanded')).toBe('true');
+    expect(temporaryHeader().getAttribute('aria-expanded')).toBe('true');
+    // ...a group matched only by the intermediate 「dra」 keeps its fold...
+    expect(rows('Draw diagram')).toHaveLength(0);
+    expect(folderHeader('beta').getAttribute('aria-expanded')).toBe('false');
+    // ...and so does one the search never matched.
+    expect(rows('Chat t')).toHaveLength(0);
+    expect(folderHeader('Temporary workspaces').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('is disabled while a search is typed, and keeps its label', async () => {
+    withDrafts();
+    await render();
+    await act(async () => toggle()?.click());
+    expect(allRows()).toHaveLength(0);
+    expect(toggle()?.getAttribute('aria-label')).toBe('Expand all groups');
+    expect(toggle()?.disabled).toBe(false);
+
+    await search('draft');
+    // Every group with matches is open, but the toggle neither flips its
+    // label (it speaks for the stored folds) nor can be pressed.
+    expect(allRows()).toHaveLength(2);
+    expect(toggle()?.getAttribute('aria-label')).toBe('Expand all groups');
+    expect(toggle()?.title).toBe('Expand all groups');
+    expect(toggle()?.disabled).toBe(true);
+
+    // Cleared: the matched groups stay open, so it is Collapse all again.
+    await search('');
+    expect(allRows()).toHaveLength(2);
+    expect(toggle()?.disabled).toBe(false);
+    expect(toggle()?.getAttribute('aria-label')).toBe('Collapse all groups');
   });
 });
 
-describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
+describe('repositories by last activity (decision 170, issue #6 ruling 6)', () => {
   const GAMMA = 'project:/repo/gamma';
 
   beforeEach(() => {
@@ -674,7 +914,7 @@ describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
     expect(folderOrder()).toEqual(['beta', 'alpha', 'gamma', 'Temporary workspaces']);
   });
 
-  it('holds the order while the pointer is in Repositories, and reorders once it leaves', async () => {
+  it('holds the order while the pointer is in the list, and reorders once it leaves', async () => {
     await render();
     const inside = folderHeader('alpha');
     await pointer('pointerover', inside);
@@ -685,7 +925,7 @@ describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
     expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
   });
 
-  it('holds the order while keyboard focus is in Repositories', async () => {
+  it('holds the order while keyboard focus is in the list', async () => {
     await render();
     await act(async () => folderHeader('gamma').focus());
     await touch('a', NOW + 120_000);
@@ -732,11 +972,9 @@ describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
     expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
   });
 
-  it('nothing outside Repositories holds it', async () => {
-    useChatSessionsStore.setState({ hostBoundSessionIds: ['b'] });
+  it('nothing outside the list holds it — the nav and the tool row do not', async () => {
     await render();
-    const [activeRow] = rows('Chat b', sectionTitled('Active now') as HTMLElement);
-    await pointer('pointerover', activeRow as HTMLElement);
+    await pointer('pointerover', buttonText('New chat') as HTMLElement);
     await touch('a', NOW + 120_000);
     expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
   });

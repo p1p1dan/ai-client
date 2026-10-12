@@ -5,17 +5,18 @@ import { stripComments } from '../../chat/__tests__/stripComments';
 import { DOCK_RAIL_WIDTH, SIDEBAR_DEFAULT_WIDTH } from '../shellLayoutModel';
 
 /**
- * The session row's width budget, as decision 167 (GitHub issue #3) laid it
- * out and the prototype measured it
- * (`docs/plantree/plans/dsh-rebase/evidence/sidebar-hierarchy-2026-10/`).
- * Decision 170 (issue #6) kept the numbers: the list's `p-2` became each
- * region's `px-2`, the same 16px across.
+ * The session row's width budget. Decision 167 (GitHub issue #3) laid it out;
+ * decision 183 (prototype in
+ * `docs/plantree/plans/dsh-rebase/evidence/sidebar-claude-style-2026-10/`)
+ * widened it: rows are no longer indented under their group (`pl-3` gone) and
+ * the trailing time box is gone — the hover actions float over the row's right
+ * edge instead of taking width.
  *
- * At the 280px default (which includes the panel's 1px right border) a row
- * inside a folder has 280 - 1 - 16 (the region list's px-2) - 12 (pl-3) - 16
- * (px-2) = 235px of content. Minus the 16px status slot, two 6px gaps and the
- * 40px time box the title gets 167px. Pi is the sole chat runtime and is not
- * repeated as a per-row badge; the branch is shown only on a worktree row.
+ * At the 280px default (which includes the panel's 1px right border) a row has
+ * 280 - 1 - 16 (the list's px-2) - 16 (the row's px-2) = 247px of content.
+ * Minus the 16px status slot and one 6px gap the title gets 225px. Pi is the
+ * sole chat runtime and is not repeated as a per-row badge; the branch is
+ * shown only on a worktree row.
  */
 
 const NAV_FILE = join(process.cwd(), 'src/renderer/components/workspace-shell/LeftNav.tsx');
@@ -25,11 +26,10 @@ const ROW = CODE.slice(CODE.indexOf('function SessionRow('));
 
 /**
  * The session row's own className, isolated so sibling rows cannot satisfy a
- * scan. Decision 170 (issue #6 ruling 3): 14px (`text-meta`); the title still
- * fits 11 CJK characters in a folder at 280px (12 when not nested).
+ * scan. 14px (`text-meta`); `relative` anchors the floating actions.
  */
 const SESSION_ROW_CLASS =
-  /'group flex h-7 w-full items-center gap-1\.5 overflow-hidden rounded-sm px-2 text-left text-meta'/;
+  /'group relative flex h-7 w-full items-center gap-1\.5 overflow-hidden rounded-sm px-2 text-left text-meta'/;
 
 describe('sidebar session row width budget', () => {
   it('keeps the row a single h-7 line with a clipping box', () => {
@@ -75,36 +75,40 @@ describe('sidebar session row width budget', () => {
     expect(text).not.toContain('shrink-0');
   });
 
-  it('passes a branch only inside a folder, and only off the main workspace', () => {
-    // Exactly one call site hands a branch down — the folder rows — and it
-    // asks `chipShownInFolder`; Active now and Temporary chats never do.
+  it('passes a branch only inside a repository group, and only off the main workspace', () => {
+    // One row renderer hands `branch` down; only the repository groups give it
+    // one, by asking `chipShownInFolder`. Temporary chats never do.
     expect(CODE.split('branch={').length - 1).toBe(1);
+    expect(CODE).toContain('branch={branch}');
     expect(CODE).toContain('chipShownInFolder(row, primary) ? row.chip?.label : undefined');
+    expect(CODE).toContain('{limited.rows.map((row) => renderSessionRow(row))}');
   });
 
-  it('sizes the age/actions swap to one fixed box so hovering cannot re-flow the row', () => {
-    // ~21px of relative age vs 40px of icon buttons (60px on temp rows, which
-    // carry a third delete button): without a shared width the swap moves every
-    // other item on the row on every hover. Both boxes must widen together, so
-    // the width is one conditional expression pinned to appear exactly twice —
-    // once on the age span, once on the actions box.
+  it('has no time box any more: the actions float over the row and take no width', () => {
+    // Decision 183 §1.4. The old age / actions swap needed a shared w-10 box
+    // (w-[60px] on temp rows) so hovering could not re-flow the row; an
+    // absolutely positioned overlay cannot re-flow anything.
+    expect(CODE).not.toContain('formatRelativeAge');
+    expect(ROW).not.toContain("'w-[60px]'");
+    expect(ROW).not.toContain("'w-10'");
     expect(ROW).toContain(
-      "'shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden',"
+      "'absolute inset-y-1 right-1.5 hidden items-center group-hover:flex group-focus-visible:flex group-has-focus-visible:flex',"
     );
-    expect(ROW).toContain(
-      "'hidden shrink-0 items-center justify-end group-hover:flex group-focus-within:flex',"
-    );
-    const sharedWidthExpr = "onDeleteTemp ? 'w-[60px]' : 'w-10'";
-    expect(ROW.split(sharedWidthExpr).length - 1).toBe(2);
+    // Painted in the row's own fill, fading to the left over the title.
+    expect(ROW).toContain("? 'bg-selection shadow-[-10px_0_8px_var(--selection)]'");
+    expect(ROW).toContain(": 'bg-hover shadow-[-10px_0_8px_var(--hover)]'");
+    // Not in selection mode: there a click picks the row.
+    const actionsAt = ROW.indexOf('data-slot="sidebar-row-actions"');
+    expect(ROW.lastIndexOf('{!onToggleSelect && (', actionsAt)).toBeGreaterThan(-1);
   });
 
-  it('makes the hover buttons fit that box: 20px each, desktop included', () => {
+  it('makes the hover buttons 20px, desktop included', () => {
     // `icon-xs` is `size-7 sm:size-6`; a bare `size-5` (or `h-5 w-5`) loses to
-    // the variant's `sm:size-6` on desktop, and two 24px buttons are 48px in a
-    // 40px box. Every hover button in the row says `sm:size-5` too.
+    // the variant's `sm:size-6` on desktop. Every hover button in the row says
+    // `sm:size-5` too.
     expect(ROW).not.toContain('className="h-5 w-5');
     const actions = ROW.slice(
-      ROW.indexOf("'hidden shrink-0 items-center justify-end"),
+      ROW.indexOf('data-slot="sidebar-row-actions"'),
       ROW.indexOf('</ContextMenuPrimitive.Trigger>')
     );
     expect(actions.split('className="size-5 sm:size-5"').length - 1).toBe(2);
@@ -136,14 +140,18 @@ describe('sidebar session row width budget', () => {
     for (const badge of badges) expect(badge).toContain('size="lg"');
   });
 
+  it('rows are not indented under their group header', () => {
+    expect(CODE).not.toContain('pl-3');
+  });
+
   it('keeps the derivation of the numbers in the source', () => {
     // Asserted on RAW: this one is about the reasoning surviving the next edit.
     expect(RAW).toContain('SIDEBAR_DEFAULT_WIDTH');
-    expect(RAW).toContain('the title gets 167px');
+    expect(RAW).toContain('the title gets 225px');
   });
 
   it('is written against the width the app actually ships with', () => {
-    // If the default ever moves, the 235px / 167px budget above stops
+    // If the default ever moves, the 247px / 225px budget above stops
     // describing reality and this file needs re-deriving rather than silently
     // drifting.
     //

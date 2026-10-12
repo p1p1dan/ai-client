@@ -69,7 +69,8 @@ export const useHomeDraftStore = create<HomeDraftState>()((set, get) => ({
 
 /**
  * Open the home page: no conversation on screen. Running conversations are
- * not touched — they stay in 「正在活动」 and one click brings them back.
+ * not touched — they keep their marks in the sidebar and one click brings
+ * them back.
  *
  * `preselect` is what the entry asks for: a folder's 「＋」 its repository, a
  * conversation's 「＋」 the conversation's own, 「新建临时对话」 no repository.

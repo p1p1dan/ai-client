@@ -32,8 +32,12 @@ describe('the home entry on the rail (entry (a))', () => {
     const rule = dock.indexOf('data-rail-separator=""');
     expect(rule).toBeGreaterThan(entry);
     expect(rule).toBeLessThan(dock.indexOf('{tabs.map((tab) => ('));
-    // After the title-row spacer, so it lines up with the panel's first row.
-    expect(dock.indexOf('<div aria-hidden className="h-9 shrink-0" />')).toBeLessThan(entry);
+    // First on the rail, which opens with 8px of padding (decision 183: no
+    // title-row spacer), so it sits level with the panel's first row.
+    expect(dock).not.toContain('<div aria-hidden className="h-9 shrink-0" />');
+    const rail = dock.slice(dock.indexOf('<nav'), entry);
+    expect(rail).toContain('bg-card py-2');
+    expect(rail).not.toContain('<RailButton');
   });
 
   it('is a 32px icon button with no pressed state', () => {
@@ -60,9 +64,11 @@ describe('the session bar', () => {
   });
 });
 
-describe('the temporary chats region', () => {
+describe('the temporary chats group', () => {
   it('「新建临时对话」 opens the home page with no repository picked', () => {
     expect(nav).toContain("<MenuItem onClick={() => openHome({ kind: 'unbound' })}>");
+    // Decision 183 §2.9: the header's hover 「＋」 does the same.
+    expect(nav).toContain("onClick={() => openHome({ kind: 'unbound' })}\n");
   });
 });
 

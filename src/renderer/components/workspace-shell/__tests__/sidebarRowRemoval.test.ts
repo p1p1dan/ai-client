@@ -7,14 +7,14 @@ import {
 import { createChatSessionOnWorkspace } from '@/stores/chatSessionActions';
 import type { ChatProject, ChatWorkspace } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { buildSidebarFolders, deriveActiveRows } from '../sidebarTree';
+import { buildSidebarFolders } from '../sidebarTree';
 
 /**
  * R5 D2 regression: a freshly created chat (never sent a message, so no
- * `session-index.json` entry) must disappear from BOTH sidebar derivations
- * after Archive and after Close. Before D2 the click was a silent no-op and
- * the row stayed put. Decision 170 retired Recent; the second derivation is
- * the "Active now" region's.
+ * `session-index.json` entry) must disappear from the sidebar after Archive
+ * and after Close. Before D2 the click was a silent no-op and the row stayed
+ * put. Decision 170 retired Recent and decision 183 retired 「正在活动」, so
+ * the chat's folder is the one list it is in.
  */
 
 const projects: ChatProject[] = [{ id: 'p-ai', name: 'ai-client' }];
@@ -36,7 +36,7 @@ function stubChat(archiveResult: boolean) {
   return api;
 }
 
-function rowIds(): { folder: string[]; active: string[] } {
+function rowIds(): { folder: string[] } {
   const state = useChatSessionsStore.getState();
   return {
     folder:
@@ -45,11 +45,6 @@ function rowIds(): { folder: string[]; active: string[] } {
         workspaces,
         sessions: state.sessions,
       })[0]?.rows.map((row) => row.sessionId) ?? [],
-    active: deriveActiveRows({
-      sessions: state.sessions,
-      workspaces,
-      hostBoundSessionIds: state.hostBoundSessionIds,
-    }).map((row) => row.sessionId),
   };
 }
 
@@ -106,7 +101,7 @@ describe('freshly created session — sidebar row lifecycle', () => {
       workspacePath: '/repo',
     });
     expect(api.archiveSession).toHaveBeenCalledTimes(2);
-    expect(rowIds()).toEqual({ folder: [], active: [] });
+    expect(rowIds()).toEqual({ folder: [] });
     // Nothing landed in the index, so there is no index truth to re-read.
     expect(refresh).not.toHaveBeenCalled();
   });
@@ -121,21 +116,22 @@ describe('freshly created session — sidebar row lifecycle', () => {
     // A1: the success path drops the row itself, before the refresh. This
     // suite stubs `refresh`, so a hand-rolled filter here (what this case used
     // to do) would have hidden a success path that never removed anything.
-    expect(rowIds()).toEqual({ folder: [], active: [] });
+    expect(rowIds()).toEqual({ folder: [] });
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('Close removes the row from folder + Active now', async () => {
+  it('Close removes a started row from its folder', async () => {
     const api = stubChat(true);
     const sessionId = createChatSessionOnWorkspace('ws-main');
-    // Started on the engine, so the Active now region lists it too.
+    // Started on the engine: since decision 183 it is still listed once, in
+    // its folder, with the background ring in its slot.
     useChatSessionsStore.setState({ hostBoundSessionIds: [sessionId as string] });
-    expect(rowIds()).toEqual({ folder: [sessionId], active: [sessionId] });
+    expect(rowIds()).toEqual({ folder: [sessionId] });
 
     await closeSessionAndRemoveRow(sessionId as string, refresh);
 
     expect(api.closeSession).toHaveBeenCalledWith({ sessionId });
-    expect(rowIds()).toEqual({ folder: [], active: [] });
+    expect(rowIds()).toEqual({ folder: [] });
   });
 
   it('removing one of two sessions leaves the other row intact', async () => {

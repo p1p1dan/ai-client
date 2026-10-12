@@ -4,23 +4,20 @@ import { describe, expect, it } from 'vitest';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { TEMP_PROJECT_ID } from '../deriveChatWorkspaceTree';
 import {
-  ACTIVE_DEFAULT_LIMIT,
   applyHeldFolderOrder,
   buildSidebarFolders,
   buildUnboundFolder,
   chipForWorkspace,
   chipShownInFolder,
-  deriveActiveRows,
   deriveFolderLastActivity,
+  deriveGroupSummary,
   FOLDER_DEFAULT_LIMIT,
-  folderBranchLabel,
   folderPrimaryChip,
   folderTooltip,
   formatRelativeAge,
   isWaitingSessionStatus,
   LEGACY_DIVERGED_HINT,
   lastBranchSegment,
-  limitActiveRows,
   limitFolderRows,
   orderFoldersByActivity,
   resolveHomePreselect,
@@ -268,18 +265,11 @@ describe('the folder row carries the branch, rows only off the main workspace (d
     expect(lastBranchSegment('/')).toBe('/');
   });
 
-  it('folderBranchLabel and folderTooltip say the main branch once, and remote', () => {
+  it('folderTooltip says the main branch and remote (decision 183: the header text no longer does)', () => {
     const zh = (key: string, params?: Record<string, string | number>) =>
       translate('zh', key, params);
     const main = folderPrimaryChip('p-ai', workspaces);
-    expect(folderBranchLabel(main)).toBe('main');
-    expect(folderBranchLabel(folderPrimaryChip('p-empty', workspaces))).toBeNull();
-    expect(folderBranchLabel(null)).toBeNull();
     const remotePrimary = folderPrimaryChip('p-r', [remote]);
-    expect(folderBranchLabel(remotePrimary, zh)).toBe('远程');
-    expect(folderBranchLabel({ workspaceId: 'w', branch: 'main', remote: true }, zh)).toBe(
-      'main · 远程'
-    );
     expect(folderTooltip('ai-client', main, zh)).toBe('ai-client\n主工作区分支：main');
     expect(folderTooltip('srv', remotePrimary, zh)).toBe('srv\n远程仓库');
     expect(folderTooltip('newhp', folderPrimaryChip('p-empty', workspaces))).toBe('newhp');
@@ -478,6 +468,23 @@ describe('decision 170: Recent and its 48-hour window are gone from the sidebar'
   });
 });
 
+describe('decision 183: 「正在活动」 is gone from the sidebar', () => {
+  it('its derivations and its cap are gone from the module, and so is the header branch text', async () => {
+    // Running state is read off each row's own slot, and a folded group's
+    // summary (`deriveGroupSummary`). Pinned so a second cross-group list
+    // cannot quietly come back.
+    const mod = (await import('../sidebarTree')) as Record<string, unknown>;
+    for (const name of [
+      'deriveActiveRows',
+      'limitActiveRows',
+      'ACTIVE_DEFAULT_LIMIT',
+      'folderBranchLabel',
+    ]) {
+      expect(mod[name], name).toBeUndefined();
+    }
+  });
+});
+
 describe('limitFolderRows (decision 137 §4)', () => {
   const rows = (count: number) =>
     folderOf(
@@ -537,88 +544,48 @@ describe('limitFolderRows (decision 137 §4)', () => {
   });
 });
 
-describe('deriveActiveRows (decision 137 §1)', () => {
-  it('lists conversations started on the engine in this run, and nothing merely previewed', () => {
-    const rows = deriveActiveRows({
-      sessions: [
-        session({ id: 's-bound', updatedAt: NOW - 5000 }),
-        // Previewed: has a transcript identity but no binding, no turn.
-        session({ id: 's-previewed', runtimeIdentity: '/x.dsh.json', updatedAt: NOW }),
-      ],
-      workspaces,
-      hostBoundSessionIds: ['s-bound'],
-    });
-    expect(rows.map((row) => row.sessionId)).toEqual(['s-bound']);
+/**
+ * Decision 183 §2.2: a folded group says what its hidden rows' slots would —
+ * the 「正在活动」 region that used to say it is gone.
+ */
+describe('deriveGroupSummary (decision 183 §2.2)', () => {
+  const rowsOf = (sessions: ChatSession[]) => folderOf('p-ai', sessions).rows;
+
+  it('is null when no row carries a mark worth surfacing', () => {
+    expect(deriveGroupSummary([], [])).toBeNull();
+    expect(deriveGroupSummary(rowsOf([session({ id: 'a' }), session({ id: 'b' })]), [])).toBeNull();
   });
 
-  it('adds any conversation running a turn, bound or not', () => {
-    const rows = deriveActiveRows({
-      sessions: [session({ id: 's-running', status: 'running' })],
-      workspaces,
-      hostBoundSessionIds: [],
-    });
-    expect(rows.map((row) => row.sessionId)).toEqual(['s-running']);
-  });
-
-  it('puts running turns first, then the rest by last activity', () => {
-    const rows = deriveActiveRows({
-      sessions: [
-        session({ id: 's-idle-new', updatedAt: NOW }),
-        session({ id: 's-running-old', status: 'running', updatedAt: NOW - 9000 }),
-        session({ id: 's-waiting', status: 'waiting_permission', updatedAt: NOW - 5000 }),
-        session({ id: 's-idle-old', updatedAt: NOW - 1000 }),
-      ],
-      workspaces,
-      hostBoundSessionIds: ['s-idle-new', 's-running-old', 's-waiting', 's-idle-old'],
-    });
-    expect(rows.map((row) => row.sessionId)).toEqual([
-      's-waiting',
-      's-running-old',
-      's-idle-new',
-      's-idle-old',
+  it('counts running turns, and says waiting apart from running', () => {
+    const rows = rowsOf([
+      session({ id: 'r1', status: 'running' }),
+      session({ id: 'r2', status: 'starting' }),
+      session({ id: 'w', status: 'waiting_permission' }),
+      session({ id: 'idle' }),
     ]);
-  });
-
-  it('is empty when nothing is started, so the section can disappear', () => {
+    expect(deriveGroupSummary(rows, [])).toEqual({ running: 2, waiting: true, unread: null });
     expect(
-      deriveActiveRows({ sessions: [session({ id: 's-a' })], workspaces, hostBoundSessionIds: [] })
-    ).toEqual([]);
+      deriveGroupSummary(rowsOf([session({ id: 'q', status: 'waiting_question' })]), [])
+    ).toEqual({ running: 0, waiting: true, unread: null });
   });
 
-  it('a conversation the pool reclaimed leaves with its binding', () => {
-    const sessions = [session({ id: 's-a', status: 'disconnected' })];
-    expect(deriveActiveRows({ sessions, workspaces, hostBoundSessionIds: ['s-a'] })).toHaveLength(
-      1
-    );
-    expect(deriveActiveRows({ sessions, workspaces, hostBoundSessionIds: [] })).toEqual([]);
-  });
-
-  it('keeps a bound temporary chat and drops an orphan, like the folders', () => {
-    const rows = deriveActiveRows({
-      sessions: [
-        session({ id: 's-temp', projectId: '', workspaceId: '' }),
-        session({ id: 's-orphan', workspaceId: 'ws-gone' }),
-      ],
-      workspaces,
-      hostBoundSessionIds: ['s-temp', 's-orphan'],
+  it('shows red for an unseen failure, which outranks green', () => {
+    const finished = session({ id: 'done' });
+    const failed = session({ id: 'bad', status: 'failed' });
+    expect(deriveGroupSummary(rowsOf([finished]), ['done'])).toEqual({
+      running: 0,
+      waiting: false,
+      unread: 'finished',
     });
-    expect(rows.map((row) => row.sessionId)).toEqual(['s-temp']);
+    expect(deriveGroupSummary(rowsOf([finished, failed]), ['done', 'bad'])?.unread).toBe('failed');
+    // Read already: nothing to say.
+    expect(deriveGroupSummary(rowsOf([finished, failed]), [])).toBeNull();
   });
 
-  it('applies the title query, exempting the open conversation', () => {
-    const sessions = [
-      session({ id: 's-open', title: 'Untitled' }),
-      session({ id: 's-hit', title: 'Parser rewrite' }),
-      session({ id: 's-miss', title: 'Docs' }),
-    ];
-    const rows = deriveActiveRows({
-      sessions,
-      workspaces,
-      hostBoundSessionIds: ['s-open', 's-hit', 's-miss'],
-      query: 'parser',
-      activeSessionId: 's-open',
-    });
-    expect(rows.map((row) => row.sessionId).sort()).toEqual(['s-hit', 's-open']);
+  it('counts a row the way its own slot shows it: busy hides an unread mark', () => {
+    // The row slot shows the spinner, not the dot, while a turn runs.
+    const rows = rowsOf([session({ id: 'r', status: 'running' })]);
+    expect(deriveGroupSummary(rows, ['r'])).toEqual({ running: 1, waiting: false, unread: null });
   });
 });
 
@@ -663,55 +630,6 @@ describe('splitBranchSuffix (point-check issue 32, decision 138)', () => {
     expect(splitBranchSuffix('（1.0.x 分支）').suffix).toBeNull();
     // Only at the end.
     expect(splitBranchSuffix('（1.0.x 分支）之后的笔记').suffix).toBeNull();
-  });
-});
-
-describe('limitActiveRows (decision 170, issue #6 ruling 2)', () => {
-  /** `count` started chats, newest first — the region's input. */
-  const activeOf = (count: number) => {
-    const ids = Array.from({ length: count }, (_, i) => `s-${i}`);
-    return deriveActiveRows({
-      sessions: ids.map((id, i) => session({ id, updatedAt: NOW - i * 1000 })),
-      workspaces,
-      hostBoundSessionIds: ids,
-    });
-  };
-
-  it('caps at 5', () => {
-    expect(ACTIVE_DEFAULT_LIMIT).toBe(5);
-  });
-
-  it('lists 5 or fewer rows whole, with nothing to toggle', () => {
-    const limited = limitActiveRows({ rows: activeOf(5), showAll: false, queryActive: false });
-    expect(limited.rows).toHaveLength(5);
-    expect(limited).toMatchObject({ hiddenCount: 0, collapsible: false });
-  });
-
-  it('shows the first 5 and counts the rest behind "View more" (7 active: 5 + 2)', () => {
-    const limited = limitActiveRows({ rows: activeOf(7), showAll: false, queryActive: false });
-    expect(limited.rows.map((row) => row.sessionId)).toEqual(['s-0', 's-1', 's-2', 's-3', 's-4']);
-    expect(limited).toMatchObject({ hiddenCount: 2, collapsible: false });
-  });
-
-  it('lists everything once expanded, ending in "Show less"', () => {
-    const limited = limitActiveRows({ rows: activeOf(7), showAll: true, queryActive: false });
-    expect(limited.rows).toHaveLength(7);
-    expect(limited).toMatchObject({ hiddenCount: 0, collapsible: true });
-  });
-
-  it('pins nothing past the cap, unlike a folder: the open chat stays behind "View more"', () => {
-    // The open chat is still listed — and highlighted — in its own folder,
-    // whose cap does pin it (decision 137 §4). The README's question 6 left
-    // this region unpinned, and the user did not ask for it.
-    const limited = limitActiveRows({ rows: activeOf(7), showAll: false, queryActive: false });
-    expect(limited.rows.map((row) => row.sessionId)).not.toContain('s-6');
-    expect(limited.hiddenCount).toBe(2);
-  });
-
-  it('lists every match while a search is active', () => {
-    const limited = limitActiveRows({ rows: activeOf(9), showAll: false, queryActive: true });
-    expect(limited.rows).toHaveLength(9);
-    expect(limited).toMatchObject({ hiddenCount: 0, collapsible: false });
   });
 });
 
@@ -976,19 +894,6 @@ describe('buildUnboundFolder (U13)', () => {
     expect(folders.flatMap((folder) => folder.rows)).toEqual([]);
     expect(buildUnboundFolder({ sessions: [seeded], name: 'Temporary' })?.rows).toHaveLength(1);
   });
-
-  it('keeps unbound chats in Active now, where a real orphan is still excluded', () => {
-    const rows = deriveActiveRows({
-      sessions: [
-        session({ id: 'u1', workspaceId: '', unbound }),
-        session({ id: 'gone', workspaceId: 'ws-removed' }),
-      ],
-      workspaces,
-      hostBoundSessionIds: ['u1', 'gone'],
-    });
-    expect(rows.map((row) => row.sessionId)).toEqual(['u1']);
-    expect(rows[0]?.unbound).toBe(true);
-  });
 });
 
 /**
@@ -1016,16 +921,6 @@ describe('a live-only temporary chat is visible before its first send (T091)', (
     expect(folder?.rows[0]?.unbound).toBe(true);
   });
 
-  it('appears in Active now once started', () => {
-    const rows = deriveActiveRows({
-      sessions: [liveOnly],
-      workspaces,
-      hostBoundSessionIds: ['live-temp'],
-    });
-    expect(rows.map((row) => row.sessionId)).toEqual(['live-temp']);
-    expect(rows[0]?.unbound).toBe(true);
-  });
-
   it('is never duplicated into a repository folder', () => {
     const folders = buildSidebarFolders({ projects, workspaces, sessions: [liveOnly] });
     expect(folders.flatMap((folder) => folder.rows)).toEqual([]);
@@ -1034,9 +929,6 @@ describe('a live-only temporary chat is visible before its first send (T091)', (
   it('a genuine orphan — an unknown, NON-EMPTY workspaceId — is still dropped everywhere', () => {
     const orphan = session({ id: 'orphan', workspaceId: 'ws-removed' });
     expect(buildUnboundFolder({ sessions: [orphan], name: 'Temporary' })).toBeNull();
-    expect(
-      deriveActiveRows({ sessions: [orphan], workspaces, hostBoundSessionIds: ['orphan'] })
-    ).toEqual([]);
     expect(
       buildSidebarFolders({ projects, workspaces, sessions: [orphan] }).flatMap(
         (folder) => folder.rows
@@ -1119,30 +1011,6 @@ describe('the active session is never filtered out by a title query (T091)', () 
     ).toHaveLength(1);
   });
 
-  it('survives a non-matching query in Active now', () => {
-    const sessions = [
-      session({ id: 'new', title: 'New chat' }),
-      session({ id: 'match', title: 'Draft plan' }),
-    ];
-    const hostBoundSessionIds = ['new', 'match'];
-    expect(
-      deriveActiveRows({ sessions, workspaces, hostBoundSessionIds, query: 'draft' }).map(
-        (row) => row.sessionId
-      )
-    ).toEqual(['match']);
-    expect(
-      deriveActiveRows({
-        sessions,
-        workspaces,
-        hostBoundSessionIds,
-        query: 'draft',
-        activeSessionId: 'new',
-      })
-        .map((row) => row.sessionId)
-        .sort()
-    ).toEqual(['match', 'new']);
-  });
-
   it('exempts only the query — an orphan active session is still dropped', () => {
     // The exemption is about SEARCH, not about validity. A session whose
     // workspace no longer exists has nowhere to render, active or not.
@@ -1171,16 +1039,6 @@ describe('the active session is never filtered out by a title query (T091)', () 
       expect(
         buildUnboundFolder({ sessions, name: 'Temporary', query: 'draft', activeSessionId })
       ).toEqual(buildUnboundFolder({ sessions, name: 'Temporary', query: 'draft' }));
-      const hostBoundSessionIds = ['a', 'b', 'c'];
-      expect(
-        deriveActiveRows({
-          sessions,
-          workspaces,
-          hostBoundSessionIds,
-          query: 'draft',
-          activeSessionId,
-        })
-      ).toEqual(deriveActiveRows({ sessions, workspaces, hostBoundSessionIds, query: 'draft' }));
     }
   });
 });
@@ -1197,17 +1055,6 @@ describe('a search matches a title as the sidebar shows it (P1-7e e6, decision 1
   it('finds a `New chat` row by 「新建」 in Chinese, in every section', () => {
     const [folder] = buildSidebarFolders({ projects, workspaces, sessions, query: '新建', t: zh });
     expect(ids(folder?.rows ?? [])).toEqual(['named', 'placeholder']);
-    expect(
-      ids(
-        deriveActiveRows({
-          sessions,
-          workspaces,
-          hostBoundSessionIds: ['placeholder', 'other'],
-          query: '新建',
-          t: zh,
-        })
-      )
-    ).toEqual(['placeholder']);
     const unbound = buildUnboundFolder({
       sessions: [{ ...placeholder, workspaceId: '' }],
       name: 'Temporary chats',

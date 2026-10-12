@@ -6,13 +6,11 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsDownUp,
-  Folder,
+  ChevronsUpDown,
   FolderGit2,
   FolderMinus,
-  FolderOpen,
   FolderPlus,
   ListChecks,
-  ListFilter,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -25,11 +23,11 @@ import {
 } from 'lucide-react';
 import {
   type FocusEvent,
+  type ReactElement,
   type ReactNode,
   useCallback,
   useEffect,
   useMemo,
-  useReducer,
   useRef,
   useState,
 } from 'react';
@@ -74,19 +72,18 @@ import {
   buildSidebarFolders,
   buildUnboundFolder,
   chipShownInFolder,
-  deriveActiveRows,
   deriveFolderLastActivity,
-  folderBranchLabel,
+  deriveGroupSummary,
   folderPrimaryChip,
   folderTooltip,
-  formatRelativeAge,
+  isUnboundSessionRow,
   isWaitingSessionStatus,
   LEGACY_DIVERGED_HINT,
   lastBranchSegment,
-  limitActiveRows,
   limitFolderRows,
   orderFoldersByActivity,
   resolveHomePreselect,
+  type SidebarGroupSummary,
   type SidebarRowPlace,
   type SidebarSessionRow,
   sidebarFolderNameForDisplay,
@@ -102,22 +99,19 @@ import { useFolderDiffStatsPolling } from './useFolderDiffStats';
 /**
  * D08 (U15-a): this is the `chat` SURFACE's body now, not a column.
  *
- * The chrome it used to own moved to `LeftDock`, which hosts it: the h-9 bar
- * (now the dock's title row), the collapse button (on the rail since H/18 S4),
- * the account pill (`UserFooterPill`, so it survives a surface switch)
- * and the plugin entry + dialog (now the rail's bottom group). What stays is
- * exactly the session list — search, New / Add repository, the active chats,
- * the folder tree and the temporary chats.
+ * The chrome it used to own moved to `LeftDock`, which hosts it: the collapse
+ * button (on the rail since H/18 S4), the account pill (`UserFooterPill`, so
+ * it survives a surface switch) and the plugin entry + dialog (now the rail's
+ * bottom group). What stays is exactly the session list.
  *
- * Decision 167 (GitHub issue #3) set the five levels; decision 170 (GitHub
- * issue #6, prototype in
- * `docs/plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/`) split the
- * list into three regions, each with its own h-8 title and its own scroll
- * area: Active now (content-sized, at most 33% of the list area, gone while
- * nothing is active), Repositories (the rest) and Temporary chats
- * (content-sized, at most 25%, at the bottom). Sizes 16 / 15 / 14 for region /
- * folder / chat, weights 400 / 600 only; see `docs/design-system.md`,
- * 「侧栏层级（聊天面板）」.
+ * Decision 183 (prototype in
+ * `docs/plantree/plans/dsh-rebase/evidence/sidebar-claude-style-2026-10/`)
+ * replaced decision 170's three regions with one scrolling list, top to
+ * bottom: a vertical nav (New chat, Add repository), a tool row (search,
+ * collapse / expand all, bulk archive), then the groups — Temporary chats
+ * pinned first, the repositories by activity after it. No panel title, no
+ * region titles, no dividers; groups are told apart by spacing alone. See
+ * `docs/design-system.md`, 「侧栏层级（聊天面板）」.
  */
 interface LeftNavProps {
   /** T-24: opens the shared AddRepositoryDialog mounted in App. */
@@ -145,23 +139,15 @@ export function LeftNav({
   // D1 (round-5): sidebar-local "which folder is the user targeting" state.
   // T-26 deliberately removed the cross-cutting store `selectedWorkspaceId`
   // (folder click is UI-only, e.g. expandedProjects above) — this stays local
-  // to LeftNav and only feeds the header "New" button's preselection on the
-  // home page (decision 174), it never becomes the source of truth for "where
-  // to run" (that's the Composer target bar, T-27). Decision 137 §3: only
-  // picking a conversation writes it now; a folder header click no longer does.
+  // to LeftNav and only feeds the New chat entry's preselection on the home
+  // page (decision 174), it never becomes the source of truth for "where to
+  // run" (that's the Composer target bar, T-27). Decision 137 §3: only picking
+  // a conversation writes it now; a group header click no longer does.
   const [focusedProjectId, setFocusedProjectId] = useState<string | null>(null);
-  // Decision 170 (issue #6 ruling 2): the Active now region's chevron folds
-  // its whole list. Memory only and open by default, like Temporary chats: the
-  // region is the one meant to be read at a glance. Decision 137 §2's stored
-  // "Recent collapsed" flag went away with Recent and is not migrated.
-  const [activeCollapsed, setActiveCollapsed] = useState(false);
-  // "View more" pressed on Active now — this run only, like a folder's.
-  const [activeShowAll, setActiveShowAll] = useState(false);
-  // Decision 137 §4: folders whose "View more" was pressed. Memory only, so it
-  // holds across conversation switches and a folder collapse, and a restart
-  // brings every folder back to its first rows.
+  // Decision 137 §4: groups whose "View more" was pressed. Memory only, so it
+  // holds across conversation switches and a group collapse, and a restart
+  // brings every group back to its first rows.
   const [folderShowAll, setFolderShowAll] = useState<Record<string, boolean>>({});
-  const [searchVisible, setSearchVisible] = useState(true);
   const [repoToRemove, setRepoToRemove] = useState<Repository | null>(null);
   const [repoToConfigure, setRepoToConfigure] = useState<Repository | null>(null);
   /**
@@ -325,28 +311,6 @@ export function LeftNav({
 
   const isProjectExpanded = (projectId: string) => expandedProjects[projectId] !== false;
 
-  const toggleSearchVisible = () => {
-    setSearchVisible((prev) => {
-      const next = !prev;
-      if (!next) {
-        // A hidden filter must not silently prune the tree via a stale query.
-        setQuery('');
-      }
-      return next;
-    });
-  };
-
-  // Coarse minute tick: nothing else re-renders an idle sidebar, so without
-  // it the age column freezes.
-  const [, bumpClock] = useReducer((tick: number) => tick + 1, 0);
-  useEffect(() => {
-    const timer = setInterval(bumpClock, 60_000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Cheap at sidebar scale; a useMemo would be defeated by the per-render
-  // `now` anyway (the age column needs a fresh clock every render).
-  const now = Date.now();
   // T091: `activeSessionId` is passed to every list derivation so a title query
   // never hides the conversation that is currently open — see `matchesQuery`.
   // Decision 145: `t` so a search also matches the titles as shown.
@@ -358,29 +322,18 @@ export function LeftNav({
     activeSessionId,
     t,
   });
-  // U13: rendered next to the repository folders but deliberately NOT part of
-  // `folders` — it has no workspace to create a chat in, so letting the "New"
-  // target resolver see it would only produce a disabled button pointing at a
-  // folder that cannot host anything. `null` when there are no such chats.
-  // Uncommitted-change totals for the folder rows. Polls only the directories
-  // that have a session running (see `useFolderDiffStats.ts`), so an idle
-  // sidebar costs nothing.
+  // Uncommitted-change totals for the group headers. Polls only the
+  // directories that have a session running (see `useFolderDiffStats.ts`), so
+  // an idle sidebar costs nothing.
   useFolderDiffStatsPolling(folders, workspaces);
   const diffStatsByPath = useWorktreeActivityStore((state) => state.diffStats);
+  // U13: rendered beside the repository groups but deliberately NOT part of
+  // `folders` — it has no workspace to create a chat in, so letting the "New"
+  // target resolver see it would only produce a target that cannot host
+  // anything. `null` when there are no such chats.
   const unboundFolder = buildUnboundFolder({
     sessions,
     name: t('Temporary chats'),
-    query,
-    activeSessionId,
-    t,
-  });
-  // Decision 137 §1: started on the engine in this run, or running a turn.
-  // Decision 170 (issue #6 ruling 2): the whole top region — Recent and its
-  // 48-hour list are gone (they move to the home page).
-  const activeRows = deriveActiveRows({
-    sessions,
-    workspaces,
-    hostBoundSessionIds,
     query,
     activeSessionId,
     t,
@@ -404,36 +357,61 @@ export function LeftNav({
   const placeOf = (row: SidebarSessionRow): SidebarRowPlace =>
     sidebarRowPlace(row, workspaceById, folderNameByProjectId);
   const queryActive = query.trim().length > 0;
-  const limitedActive = limitActiveRows({
-    rows: activeRows,
-    showAll: activeShowAll,
-    queryActive,
-  });
-  // Decision 170 (issue #6 ruling 6): folders by last activity, the empty ones
-  // after them, the Temp Session project last. Display order only — the
-  // repository store keeps the order they were added in. Held while the
-  // pointer or keyboard focus is in the region, so nothing moves under a click.
+  /**
+   * Whether a group shows its rows. A search opens every group that has
+   * matches, whatever its stored fold — the hits are what the user is looking
+   * for — without writing the fold; its header folds nothing meanwhile.
+   * Clearing the search then leaves the last query's groups open
+   * (`handleQueryChange`).
+   */
+  const groupExpanded = (groupId: string) => queryActive || isProjectExpanded(groupId);
+  // Decision 170 (issue #6 ruling 6), kept by decision 183 §2.11: repository
+  // groups by last activity, the empty ones after them, the Temp Session
+  // project last. Display order only — the repository store keeps the order
+  // they were added in. Held while the pointer or keyboard focus is in the
+  // list, so nothing moves under a click. Temporary chats is pinned above all
+  // of them and takes no part in the ordering.
   const liveFolderOrder = orderFoldersByActivity(
     folders,
     deriveFolderLastActivity({ workspaces, sessions })
   );
-  const reposHold = useRegionHold(!showAddRepositoryEmptyState);
+  const listHold = useRegionHold(!showAddRepositoryEmptyState);
   const heldFolderOrder = useHeldOrder(
     liveFolderOrder.map((folder) => folder.projectId),
-    reposHold.held
+    listHold.held
   );
   const orderedFolders = applyHeldFolderOrder(liveFolderOrder, heldFolderOrder);
-  // While searching, folders with zero hits collapse away instead of leaving
-  // a wall of empty headers; without a query every folder stays visible so
-  // its "+ new chat" row remains reachable.
+  // While searching, groups with zero hits collapse away instead of leaving
+  // a wall of empty headers; without a query every group stays visible so
+  // its header's 「＋」 remains reachable.
   const visibleFolders = queryActive
     ? orderedFolders.filter((folder) => folder.rows.length > 0)
     : orderedFolders;
-  const noMatches =
-    queryActive && activeRows.length === 0 && visibleFolders.length === 0 && !unboundFolder;
+  const noMatches = queryActive && visibleFolders.length === 0 && !unboundFolder;
 
   /**
-   * Decision 174 (issue #6, second wave; user ruling 2026-10-10): 「＋新建」
+   * User ruling 2026-10-11: clearing a search leaves open the groups its LAST
+   * query matched — the ones on screen right before the clear, which this
+   * render derived from that query — and writes nothing else. A group that
+   * matched only an earlier prefix while typing, or none at all, keeps the
+   * fold it had.
+   */
+  const handleQueryChange = (next: string) => {
+    if (queryActive && next.trim().length === 0) {
+      const matched = [
+        ...(unboundFolder ? [UNBOUND_FOLDER_ID] : []),
+        ...(showAddRepositoryEmptyState ? [] : visibleFolders.map((folder) => folder.projectId)),
+      ];
+      setExpandedProjects((prev) => ({
+        ...prev,
+        ...Object.fromEntries(matched.map((id) => [id, true])),
+      }));
+    }
+    setQuery(next);
+  };
+
+  /**
+   * Decision 174 (issue #6, second wave; user ruling 2026-10-10): 「新建对话」
    * opens the home page instead of making a blank conversation, with the
    * corresponding repository picked — the folder of the conversation last
    * opened from here, else the open conversation's (`resolveHomePreselect`).
@@ -455,17 +433,69 @@ export function LeftNav({
     openHome(preselect ? { kind: 'path', path: preselect.path } : undefined);
   };
 
-  /** Decision 174: a folder's 「＋」 and its empty 「新建对话」 row — the home page, this repository picked. */
+  /** Decision 174: a repository group's 「＋」 — the home page, this repository picked. */
   const openHomeInFolder = (workspaceId: string) => {
     const workspace = workspaceById.get(workspaceId);
     openHome(workspace ? { kind: 'path', path: workspace.path } : undefined);
   };
 
   /**
-   * Decision 137 §4: the row that ends a capped folder — "View more (N)" while
+   * Decision 183 §1.8: one toggle for every group, Temporary chats included.
+   * While any group is open it folds them all; once every group is folded it
+   * opens them all. It reads and writes the groups the list shows WITHOUT a
+   * search: a search opens every group with matches regardless of their fold
+   * (see `groupExpanded`), so while one is typed the toggle is disabled and
+   * keeps its label (the stored folds); clearing the search opens the last
+   * query's groups for good (`handleQueryChange`) and it reads those.
+   */
+  const toggleGroupIds = [
+    ...(sessions.some(isUnboundSessionRow) ? [UNBOUND_FOLDER_ID] : []),
+    ...(showAddRepositoryEmptyState ? [] : folders.map((folder) => folder.projectId)),
+  ];
+  const allGroupsCollapsed =
+    toggleGroupIds.length > 0 && toggleGroupIds.every((id) => !isProjectExpanded(id));
+  const toggleAllGroups = () => {
+    const expand = allGroupsCollapsed;
+    setExpandedProjects((prev) => ({
+      ...prev,
+      ...Object.fromEntries(
+        [UNBOUND_FOLDER_ID, ...folders.map((folder) => folder.projectId)].map((id) => [id, expand])
+      ),
+    }));
+  };
+  const toggleAllLabel = allGroupsCollapsed ? t('Expand all groups') : t('Collapse all groups');
+
+  /**
+   * Every list renders its rows through here, so the row's wiring (markers,
+   * selection mode, menus) cannot drift between Temporary chats and the
+   * repository groups. `branch` and `onDeleteTemp` are repository-only.
+   */
+  const renderSessionRow = (row: SidebarSessionRow, branch?: string, onDeleteTemp?: () => void) => (
+    <SessionRow
+      key={row.sessionId}
+      row={row}
+      place={placeOf(row)}
+      branch={branch}
+      active={activeSessionId === row.sessionId}
+      started={hostBoundSessionIds.includes(row.sessionId)}
+      unread={unreadSessionIds.includes(row.sessionId)}
+      {...(selecting
+        ? { selected: selection.has(row.sessionId), onToggleSelect: toggleSelected }
+        : {})}
+      pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
+      onSelect={() => handleSelectSession(row.sessionId)}
+      onClose={() => void close(row.sessionId)}
+      onRename={(title) => void renameRow(row.sessionId, title)}
+      onArchive={() => void archive(row.sessionId, true)}
+      onDeleteTemp={onDeleteTemp}
+    />
+  );
+
+  /**
+   * Decision 137 §4: the row that ends a capped group — "View more (N)" while
    * rows are hidden, "Show less" once they are all listed. Nothing when the
-   * folder fits. Shared by the repository folders and the temporary-chat group
-   * so the two read the same.
+   * group fits. Shared by the repository groups and Temporary chats so the two
+   * read the same.
    */
   const renderFolderLimitToggle = (
     projectId: string,
@@ -491,110 +521,22 @@ export function LeftNav({
   };
 
   /**
-   * Decision 170 (issue #6 ruling 7): fold every folder in Repositories, the
-   * Temp Session project included. Over `folders` (all of them), not
-   * `visibleFolders`, which a search narrows. One entry per folder rather than
-   * a reset: the Temporary chats region keeps its own flag in the same map
-   * (`UNBOUND_FOLDER_ID`) and is not part of this. Fold only — there is no
-   * "expand all".
-   */
-  const collapseAllFolders = () =>
-    setExpandedProjects((prev) => ({
-      ...prev,
-      ...Object.fromEntries(folders.map((folder) => [folder.projectId, false])),
-    }));
-
-  /**
-   * Decision 170 (issue #6 ruling 2): the top region, 「正在活动」 only —
-   * decision 137 §1's list, 5 rows behind "View more (N)". Not rendered at all
-   * (title included) while nothing is active, so Repositories is then the
-   * first region. The chevron folds the whole list (memory only).
-   */
-  const renderActiveRegion = () => {
-    if (activeRows.length === 0) return null;
-    return (
-      <section className={ACTIVE_REGION_CLASS}>
-        <SidebarSectionHeader title={t('Active now')}>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="size-6 text-muted-foreground"
-            aria-label={activeCollapsed ? t('Expand active chats') : t('Collapse active chats')}
-            title={activeCollapsed ? t('Expand active chats') : t('Collapse active chats')}
-            onClick={() => setActiveCollapsed((prev) => !prev)}
-          >
-            {activeCollapsed ? (
-              <ChevronRight className="size-3.5" />
-            ) : (
-              <ChevronDown className="size-3.5" />
-            )}
-          </Button>
-        </SidebarSectionHeader>
-        {!activeCollapsed && (
-          // Ruling 5: the bottom fade says the region holds more than it shows.
-          <ScrollArea scrollFade="bottom">
-            <div className="px-2 pt-0.5 pb-2">
-              <div className="space-y-0.5">
-                {limitedActive.rows.map((row) => (
-                  <SessionRow
-                    key={`active-${row.sessionId}`}
-                    row={row}
-                    place={placeOf(row)}
-                    now={now}
-                    active={activeSessionId === row.sessionId}
-                    started={hostBoundSessionIds.includes(row.sessionId)}
-                    unread={unreadSessionIds.includes(row.sessionId)}
-                    {...(selecting
-                      ? { selected: selection.has(row.sessionId), onToggleSelect: toggleSelected }
-                      : {})}
-                    pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
-                    onSelect={() => handleSelectSession(row.sessionId)}
-                    onClose={() => void close(row.sessionId)}
-                    onRename={(title) => void renameRow(row.sessionId, title)}
-                    onArchive={() => void archive(row.sessionId, true)}
-                  />
-                ))}
-                {limitedActive.hiddenCount > 0 ? (
-                  // Decision 145 §13's words, as on a folder.
-                  <SidebarAuxRow onClick={() => setActiveShowAll(true)}>
-                    {t('View more ({{count}})', { count: limitedActive.hiddenCount })}
-                  </SidebarAuxRow>
-                ) : (
-                  limitedActive.collapsible && (
-                    <SidebarAuxRow onClick={() => setActiveShowAll(false)}>
-                      {t('Show less')}
-                    </SidebarAuxRow>
-                  )
-                )}
-              </div>
-            </div>
-          </ScrollArea>
-        )}
-      </section>
-    );
-  };
-
-  /**
    * U13 — the temporary-chat group.
    *
-   * Rendered from a helper rather than folded into the `visibleFolders` map
-   * because it is shown in BOTH branches below: a machine with no repository
-   * yet still shows the add-repository call to action, and that is exactly the
-   * machine where every chat is unbound — hiding them there would leave the
-   * user with a sidebar that admits to no sessions at all while their history
-   * sits on disk.
+   * Shown whether or not a repository exists: a machine with no repository
+   * yet still shows the add-repository call to action, and that is exactly
+   * the machine where every chat is unbound — hiding them there would leave
+   * the user with a sidebar that admits to no sessions at all.
    *
-   * Decision 167 §5 (variant X): an L1 section of its own, not a folder in
-   * Repositories — these chats belong to no repository. Its rows sit directly
-   * under the title; the title's chevron folds them (the same memory-only state
-   * the old folder header kept), and the section lists its first rows behind
-   * the same "View more" as a repository folder (decision 137 §4, decision
-   * 138 §5). Decision 170 (issue #6 ruling 1): a region of its own at the
-   * bottom, content-sized up to 25% of the list area, scrolling inside itself.
+   * Decision 183 §1.2: a group like any repository's, pinned above them and
+   * outside the activity order. Its header folds it (memory only, the same
+   * state table under `UNBOUND_FOLDER_ID`), its 「＋」 and its right-click both
+   * open the home page with no repository picked (decision 174), and it lists
+   * its first rows behind the same "View more" as a repository group.
    */
-  const renderUnboundSection = () => {
+  const renderTemporaryGroup = () => {
     if (!unboundFolder) return null;
-    const expanded = isProjectExpanded(UNBOUND_FOLDER_ID);
+    const expanded = groupExpanded(UNBOUND_FOLDER_ID);
     const limited = limitFolderRows({
       rows: unboundFolder.rows,
       showAll: folderShowAll[UNBOUND_FOLDER_ID] === true,
@@ -602,63 +544,52 @@ export function LeftNav({
       activeSessionId,
     });
     return (
-      // S1 (H/18): the partition's own right-click. It covers the header and
-      // the gaps between rows; a right-click that lands ON a row opens that
-      // row's menu instead, because Base UI's context-menu trigger stops the
-      // event before it reaches this one.
+      // S1 (H/18): the group's own right-click. It covers the header and the
+      // gaps between rows; a right-click that lands ON a row opens that row's
+      // menu instead, because Base UI's context-menu trigger stops the event
+      // before it reaches this one.
       <ContextMenuPrimitive.Root>
-        <ContextMenuPrimitive.Trigger render={<section className={TEMPORARY_REGION_CLASS} />}>
-          <SidebarSectionHeader title={unboundFolder.name}>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="size-6 text-muted-foreground"
-              aria-label={expanded ? t('Collapse temporary chats') : t('Expand temporary chats')}
-              title={expanded ? t('Collapse temporary chats') : t('Expand temporary chats')}
-              onClick={() =>
-                setExpandedProjects((prev) => ({ ...prev, [UNBOUND_FOLDER_ID]: !expanded }))
-              }
-            >
-              {expanded ? (
-                <ChevronDown className="size-3.5" />
-              ) : (
-                <ChevronRight className="size-3.5" />
-              )}
-            </Button>
-          </SidebarSectionHeader>
-          {expanded && (
-            // Ruling 5: the bottom fade, as on Active now.
-            <ScrollArea scrollFade="bottom">
-              <div className="px-2 pt-0.5 pb-2">
-                <div className="space-y-0.5">
-                  {limited.rows.map((row) => (
-                    <SessionRow
-                      key={row.sessionId}
-                      row={row}
-                      place={placeOf(row)}
-                      now={now}
-                      active={activeSessionId === row.sessionId}
-                      started={hostBoundSessionIds.includes(row.sessionId)}
-                      unread={unreadSessionIds.includes(row.sessionId)}
-                      {...(selecting
-                        ? { selected: selection.has(row.sessionId), onToggleSelect: toggleSelected }
-                        : {})}
-                      pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
-                      onSelect={() => handleSelectSession(row.sessionId)}
-                      onClose={() => void close(row.sessionId)}
-                      onRename={(title) => void renameRow(row.sessionId, title)}
-                      onArchive={() => void archive(row.sessionId, true)}
-                    />
-                  ))}
-                  {renderFolderLimitToggle(UNBOUND_FOLDER_ID, limited)}
-                </div>
-              </div>
-            </ScrollArea>
+        <ContextMenuPrimitive.Trigger
+          render={
+            <section className={SIDEBAR_GROUP_CLASS} data-sidebar-group={UNBOUND_FOLDER_ID} />
+          }
+        >
+          {renderGroupHeader({
+            name: unboundFolder.name,
+            nameSlot: 'sidebar-temporary-name',
+            tooltip: t('Chats that belong to no repository'),
+            expanded,
+            onToggle: queryActive
+              ? undefined
+              : () =>
+                  setExpandedProjects((prev) => ({
+                    ...prev,
+                    [UNBOUND_FOLDER_ID]: !expanded,
+                  })),
+            summary: deriveGroupSummary(unboundFolder.rows, unreadSessionIds),
+            actions: (
+              // Decision 174: the home page with 「不选仓库（临时对话）」
+              // picked; the temporary chat is made by its first send.
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={GROUP_ACTION_CLASS}
+                aria-label={t('New temporary chat')}
+                title={t('New temporary chat')}
+                onClick={() => openHome({ kind: 'unbound' })}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            ),
+          })}
+          {expanded && limited.rows.length > 0 && (
+            <div className={GROUP_ROWS_CLASS}>
+              {limited.rows.map((row) => renderSessionRow(row))}
+              {renderFolderLimitToggle(UNBOUND_FOLDER_ID, limited)}
+            </div>
           )}
         </ContextMenuPrimitive.Trigger>
         <MenuPopup align="start" side="bottom" className="min-w-40">
-          {/* Decision 174: the home page with 「不选仓库（临时对话）」 picked;
-              the temporary chat is made by its first send. */}
           <MenuItem onClick={() => openHome({ kind: 'unbound' })}>
             <Plus className="size-4" />
             {t('New temporary chat')}
@@ -668,23 +599,208 @@ export function LeftNav({
     );
   };
 
+  /** One repository group: its header, then its rows. */
+  const renderRepositoryGroup = (folder: (typeof visibleFolders)[number]) => {
+    const expanded = groupExpanded(folder.projectId);
+    const limited = limitFolderRows({
+      rows: folder.rows,
+      showAll: folderShowAll[folder.projectId] === true,
+      queryActive,
+      activeSessionId,
+    });
+    const newSessionWorkspaceId = folder.newSessionWorkspaceId;
+    const folderRepo = repoByProjectId.get(folder.projectId);
+    const diffTotals = sumFolderDiffTotals(folder, workspaces, diffStatsByPath);
+    // Decision 167 §2: a row below names its own branch only off the main
+    // workspace. Decision 183 §2.3: the header no longer names the main
+    // branch; its tooltip still does.
+    const primary = folderPrimaryChip(folder.projectId, workspaces);
+    const folderName = sidebarFolderNameForDisplay(folder.projectId, folder.name, t);
+    // S2 (H/18): ONE definition of the repository actions, rendered from both
+    // entry points — the hover "more" button and the header's context menu.
+    // Two copies would drift apart the first time either gains an action, and
+    // "the two give the same menu" is the whole acceptance criterion.
+    const repoMenuItems = folderRepo ? (
+      <>
+        <MenuItem onClick={() => setRepoToConfigure(folderRepo)}>
+          <Settings />
+          {t('Repository Settings')}
+        </MenuItem>
+        {/* Remote repositories have no local directory to open — same
+            unsupported case `files.ts` throws on for
+            `file:revealInFileManager`, handled here by hiding the action
+            instead of exposing a click that always fails. */}
+        {folderRepo.kind !== 'remote' && (
+          <MenuItem onClick={() => void handleOpenRepositoryFolder(folderRepo.path)}>
+            <Search />
+            {navigator.platform.toUpperCase().indexOf('MAC') >= 0
+              ? t('Reveal in Finder')
+              : t('Reveal in Explorer')}
+          </MenuItem>
+        )}
+        {onRemoveRepository && (
+          <MenuItem variant="destructive" onClick={() => setRepoToRemove(folderRepo)}>
+            <FolderMinus />
+            {t('Remove repository')}
+          </MenuItem>
+        )}
+      </>
+    ) : null;
+    const header = renderGroupHeader({
+      name: folderName,
+      nameSlot: 'sidebar-folder-name',
+      tooltip: folderTooltip(folderName, primary, t),
+      expanded,
+      // Decision 137 §3 (user ruling, replaces D29): the header folds and
+      // unfolds this group and does nothing else — no conversation is opened
+      // and the "New" target is left to the selected conversation. While a
+      // search is typed it does nothing: the group is open for its matches.
+      onToggle: queryActive
+        ? undefined
+        : () =>
+            setExpandedProjects((prev) => ({
+              ...prev,
+              [folder.projectId]: !expanded,
+            })),
+      summary: deriveGroupSummary(folder.rows, unreadSessionIds),
+      trailing: diffTotals && (
+        <span
+          className="flex items-center gap-1 text-meta tabular-nums"
+          title={t('Folder diff totals', {
+            insertions: diffTotals.insertions,
+            deletions: diffTotals.deletions,
+          })}
+        >
+          {diffTotals.insertions > 0 && (
+            <span className="text-success">+{diffTotals.insertions}</span>
+          )}
+          {diffTotals.deletions > 0 && (
+            <span className="text-destructive">-{diffTotals.deletions}</span>
+          )}
+        </span>
+      ),
+      actions: (
+        <>
+          {folderRepo && (
+            <Menu>
+              <MenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className={cn(GROUP_ACTION_CLASS, 'data-popup-open:opacity-100')}
+                    aria-label={t('Repository actions')}
+                    title={t('Repository actions')}
+                  />
+                }
+              >
+                <MoreHorizontal className="size-3.5" />
+              </MenuTrigger>
+              <MenuPopup align="end">{repoMenuItems}</MenuPopup>
+            </Menu>
+          )}
+          {newSessionWorkspaceId && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={GROUP_ACTION_CLASS}
+              aria-label={t('New chat')}
+              title={t('New session in {{folder}}', { folder: folderName })}
+              // Decision 174: the home page, this repository picked.
+              onClick={() => openHomeInFolder(newSessionWorkspaceId)}
+            >
+              <Plus className="size-3.5" />
+            </Button>
+          )}
+        </>
+      ),
+    });
+    return (
+      <section
+        key={folder.projectId}
+        className={SIDEBAR_GROUP_CLASS}
+        data-sidebar-group={folder.projectId}
+      >
+        {/* S2: right-click gives the same actions as the "more" button. Only
+            wrapped when there ARE actions — the synthetic Temp folder has no
+            repository behind it, and a trigger with an empty menu would
+            swallow the right-click (Base UI's trigger stops the event) instead
+            of letting it reach the list's menu below. */}
+        {repoMenuItems ? (
+          <ContextMenuPrimitive.Root>
+            <ContextMenuPrimitive.Trigger render={header} />
+            <MenuPopup align="start" side="bottom" className="min-w-40">
+              {repoMenuItems}
+            </MenuPopup>
+          </ContextMenuPrimitive.Root>
+        ) : (
+          header
+        )}
+        {/* Decision 183 §1.5: an empty group shows its header only — its 「＋」
+            is the way to start a chat there. */}
+        {expanded && limited.rows.length > 0 && (
+          <div className={GROUP_ROWS_CLASS}>
+            {limited.rows.map((row) => {
+              const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
+              return renderSessionRow(
+                row,
+                chipShownInFolder(row, primary) ? row.chip?.label : undefined,
+                tempItemId && onRequestTempDelete
+                  ? () => onRequestTempDelete(tempItemId)
+                  : undefined
+              );
+            })}
+            {renderFolderLimitToggle(folder.projectId, limited)}
+          </div>
+        )}
+      </section>
+    );
+  };
+
   return (
     // D08: no width, no border, no bars. `LeftDock` owns the column (and the
     // drag handle on its right edge); this is one surface inside it, laid out
     // over the dock's absolutely-positioned mount stack.
     <aside className="flex h-full w-full min-w-0 flex-col">
-      <div className="space-y-2 border-b p-2">
-        {/* U31: both modes share this one row. A second row appearing only
-            while selecting would push the list down on entry and pull it back
-            on exit — the list is the thing being worked on, so it must not move
-            under the pointer. */}
-        {/* Decision 167: `sm:text-meta` on every xs button here. The variant's
-            desktop size is 12px (`sm:text-xs`), and these labels are CJK in
-            Chinese, which the design system keeps at 14px or more; a plain
-            `text-meta` would lose to the variant's media-query class. */}
+      {/* Decision 183 §1.10: the vertical nav, as in the reference. 「新建对话」
+          opens the home page (decision 174); 「添加仓库」 the shared dialog. */}
+      <div className="flex shrink-0 flex-col gap-px px-2 pt-2.5 pb-0.5">
+        <button
+          type="button"
+          className={NAV_ITEM_CLASS}
+          title={t('New chat (opens the home page)')}
+          onClick={handleNewSession}
+        >
+          <span
+            aria-hidden
+            className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-selection text-foreground"
+          >
+            <Plus className="size-3.5" />
+          </span>
+          <span className="min-w-0 truncate">{t('New chat')}</span>
+        </button>
+        <button type="button" className={NAV_ITEM_CLASS} onClick={onAddRepository}>
+          <span
+            aria-hidden
+            className="flex size-5.5 shrink-0 items-center justify-center text-muted-foreground"
+          >
+            <FolderPlus className="size-4" />
+          </span>
+          <span className="min-w-0 truncate">{t('Add Repository')}</span>
+        </button>
+      </div>
+
+      {/* U31: both modes share this one h-7 row. A second row appearing only
+          while selecting would push the list down on entry and pull it back on
+          exit — the list is the thing being worked on, so it must not move
+          under the pointer. Decision 167: `sm:text-meta` on every xs button
+          here; the variant's desktop size is 12px (`sm:text-xs`), and these
+          labels are CJK in Chinese, which the design system keeps at 14px or
+          more. */}
+      <div className="mt-1.5 flex h-7 shrink-0 items-center gap-0.5 px-2">
         {selecting ? (
-          <div className="flex items-center gap-1">
-            <span className="min-w-0 flex-1 truncate text-ui">
+          <>
+            <span className="min-w-0 flex-1 truncate pl-2 text-meta">
               {t('{{count}} selected', { count: selection.size })}
             </span>
             <Button
@@ -706,99 +822,93 @@ export function LeftNav({
             >
               {t('Cancel')}
             </Button>
-          </div>
+          </>
         ) : (
-          <div className="flex items-center gap-1">
+          <>
+            {/* Decision 183 §2.1: always shown, no filter toggle, drawn like the
+                prototype's `.search` (see `SIDEBAR_SEARCH_CLASS`). Decision 167
+                (issue #3 item 5): coss's InputGroup, input FIRST and the icon
+                addon after it — `order-first` draws the addon on the left, and
+                its `[data-size=sm]+&` padding only matches in this order.
+                `opacity-100` on the icon opts it out of the addon's 80% icon
+                fade (`svg:not([class*='opacity-'])`). */}
+            <InputGroup className={SIDEBAR_SEARCH_CLASS}>
+              <InputGroupInput
+                size="sm"
+                value={query}
+                onChange={(event) => handleQueryChange(event.target.value)}
+                placeholder={t('Search sessions')}
+                aria-label={t('Search sessions')}
+              />
+              <InputGroupAddon align="inline-start">
+                <Search className="size-3.5 text-muted-foreground opacity-100" />
+              </InputGroupAddon>
+            </InputGroup>
             <Button
-              variant="outline"
-              size="xs"
-              className="h-6 sm:text-meta"
-              title={t('New chat (opens the home page)')}
-              onClick={handleNewSession}
+              variant="ghost"
+              size="icon-xs"
+              className={TOOL_BUTTON_CLASS}
+              aria-label={toggleAllLabel}
+              title={toggleAllLabel}
+              disabled={queryActive || toggleGroupIds.length === 0}
+              onClick={toggleAllGroups}
             >
-              <Plus className="h-3.5 w-3.5" />
-              {t('New')}
-            </Button>
-            {/* Replaces a permanently disabled "Workspace" placeholder: the
-                    new shell had no reachable way to register a repository. */}
-            <Button
-              variant="outline"
-              size="xs"
-              className="h-6 min-w-0 sm:text-meta"
-              title={t('Add Repository')}
-              onClick={onAddRepository}
-            >
-              <FolderPlus className="h-3.5 w-3.5 shrink-0" />
-              <span className="min-w-0 truncate">{t('Add Repository')}</span>
+              {allGroupsCollapsed ? (
+                <ChevronsUpDown className="size-4" />
+              ) : (
+                <ChevronsDownUp className="size-4" />
+              )}
             </Button>
             <Button
               variant="ghost"
               size="icon-xs"
-              className="ml-auto h-6 w-6 shrink-0"
+              className={TOOL_BUTTON_CLASS}
               title={t('Select sessions to archive')}
               aria-label={t('Select sessions to archive')}
               onClick={() => setSelection(new Set())}
             >
-              <ListChecks className="h-3.5 w-3.5" />
+              <ListChecks className="size-4" />
             </Button>
-          </div>
-        )}
-        {searchVisible && (
-          // Decision 167 (issue #3 item 5): coss's InputGroup, input FIRST and
-          // the icon addon after it — `order-first` draws the addon on the
-          // left, and its `[data-size=sm]+&` padding only matches in this
-          // order. The old absolutely positioned icon sat BEFORE an `Input`
-          // whose wrapper is `relative` and opaque, so the wrapper painted
-          // over it and the magnifier never showed in the light theme.
-          // `rounded-sm` (and the hairline's matching radius) because the
-          // group's `rounded-lg` on an h-7 control breaks the radius clamp
-          // rule (design system, Border Radius).
-          <InputGroup className="h-7 rounded-sm before:rounded-[calc(var(--radius-sm)-1px)]">
-            <InputGroupInput
-              size="sm"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('Search sessions')}
-              aria-label={t('Search sessions')}
-            />
-            <InputGroupAddon align="inline-start">
-              <Search className="size-4 text-muted-foreground" />
-            </InputGroupAddon>
-          </InputGroup>
+          </>
         )}
       </div>
 
-      {/* Decision 170 (issue #6 ruling 1): the list area is three regions in
-          a column — Active now, Repositories, Temporary chats — each a
-          two-row grid of its title and its own ScrollArea, so a long folder
-          list never pushes the other two out of view. The `max-h-*` caps
-          resolve against this column, whose height the dock's `absolute
-          inset-0` layer makes definite; no wrapper that sizes itself to its
-          content may go between the two. */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        {renderActiveRegion()}
-        {showAddRepositoryEmptyState ? (
-          // Seed sessions point at empty-path workspaces and cannot send, so
-          // surface the entry point instead of a misleading tree. U13:
-          // temporary chats are the exception — they run without a
-          // repository, so their region stays below the call to action.
-          <section
-            className={cn(
-              'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)]',
-              activeRows.length > 0 && 'border-t'
-            )}
-          >
-            <ScrollArea>
-              <div className="p-2">
-                <Empty className="gap-3 border-0 p-2 md:p-2">
+      {/* Decision 183 §1.10: ONE scrolling list — Temporary chats first, then
+          the repositories (or, with none usable yet, the add-repository call
+          to action). The list's own right-click offers Add repository
+          (decision 183 §2.10); a group header or a row answers its own
+          right-click first. A grid row, not a flex box, so the ScrollArea
+          root's `height: 100%` resolves and the viewport scrolls; `grid-cols-1`
+          keeps nowrap titles from widening the column past the panel. */}
+      <ContextMenuPrimitive.Root>
+        <ContextMenuPrimitive.Trigger
+          render={<div className={LIST_AREA_CLASS} />}
+          // Decision 170 ruling 6: hold the group order while the pointer or
+          // keyboard focus is in the list (`useRegionHold`).
+          {...listHold.regionProps}
+        >
+          <ScrollArea>
+            <div className="px-2 pt-0.5 pb-3">
+              {noMatches && (
+                <p className="px-2 py-1 text-meta text-muted-foreground">
+                  {t('No matching sessions')}
+                </p>
+              )}
+              {renderTemporaryGroup()}
+              {showAddRepositoryEmptyState ? (
+                // Seed sessions point at empty-path workspaces and cannot send,
+                // so surface the entry point instead of a misleading tree. U13:
+                // temporary chats run without a repository, so their group
+                // stays above the call to action.
+                <Empty className="mt-2 gap-3 border-0 p-2 md:p-2">
                   <EmptyMedia variant="icon">
                     <FolderGit2 className="h-4.5 w-4.5" />
                   </EmptyMedia>
                   <EmptyHeader>
                     {/* D25 §3.3: EmptyTitle's shared base now carries a
                         negative tracking meant for its 18px default — this
-                        compact sidebar usage shrinks to 15px (text-ui) and
-                        may render CJK, so tracking must be cancelled back to
+                        compact sidebar usage shrinks to 15px (text-ui) and may
+                        render CJK, so tracking must be cancelled back to
                         normal (negative tracking + CJK is the banned
                         combination). */}
                     <EmptyTitle className="text-ui tracking-normal">
@@ -818,317 +928,19 @@ export function LeftNav({
                     {t('Add Repository')}
                   </Button>
                 </Empty>
-              </div>
-            </ScrollArea>
-          </section>
-        ) : (
-          // S1 (H/18): the projects partition's own right-click, covering its
-          // title row, the gaps between folders and any folder header with no
-          // repository behind it. Rendered AS the region.
-          <ContextMenuPrimitive.Root>
-            <ContextMenuPrimitive.Trigger
-              render={
-                <section
-                  className={cn(REPOSITORIES_REGION_CLASS, activeRows.length > 0 && 'border-t')}
-                />
-              }
-              // Ruling 6: hold the folder order while the pointer or keyboard
-              // focus is here (`useRegionHold`).
-              {...reposHold.regionProps}
-            >
-              {/* D21's filter / add slot, with Collapse all in front (ruling 7). */}
-              <SidebarSectionHeader title={t('Repositories')}>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="size-6 text-muted-foreground"
-                  aria-label={t('Collapse all repositories')}
-                  title={t('Collapse all repositories')}
-                  onClick={collapseAllFolders}
-                >
-                  <ChevronsDownUp className="size-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="size-6 text-muted-foreground"
-                  aria-label={t('Filter sessions')}
-                  title={t('Filter sessions')}
-                  aria-pressed={searchVisible}
-                  onClick={toggleSearchVisible}
-                >
-                  <ListFilter className="size-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="size-6 text-muted-foreground"
-                  aria-label={t('Add Repository')}
-                  title={t('Add Repository')}
-                  onClick={onAddRepository}
-                >
-                  <FolderPlus className="size-3.5" />
-                </Button>
-              </SidebarSectionHeader>
-
-              <ScrollArea>
-                <div className="px-2 pt-0.5 pb-2">
-                  <div className="space-y-1">
-                    {noMatches && (
-                      <p className="px-2 py-1 text-meta text-muted-foreground">
-                        {t('No matching sessions')}
-                      </p>
-                    )}
-
-                    {visibleFolders.map((folder) => {
-                      const expanded = isProjectExpanded(folder.projectId);
-                      const limited = limitFolderRows({
-                        rows: folder.rows,
-                        showAll: folderShowAll[folder.projectId] === true,
-                        queryActive,
-                        activeSessionId,
-                      });
-                      const newSessionWorkspaceId = folder.newSessionWorkspaceId;
-                      const folderRepo = repoByProjectId.get(folder.projectId);
-                      const diffTotals = sumFolderDiffTotals(folder, workspaces, diffStatsByPath);
-                      // Decision 167 §2: the folder row names its main
-                      // workspace's branch once (and says remote); a row
-                      // below shows its own branch only off that workspace.
-                      const primary = folderPrimaryChip(folder.projectId, workspaces);
-                      const folderName = sidebarFolderNameForDisplay(
-                        folder.projectId,
-                        folder.name,
-                        t
-                      );
-                      const branchLabel = folderBranchLabel(primary, t);
-                      // S2 (H/18): ONE definition of the repository actions, rendered
-                      // from both entry points — the hover "more" button and the
-                      // row's new context menu. Two copies would drift apart the
-                      // first time either gains an action, and "the two give the same
-                      // menu" is the whole acceptance criterion.
-                      const repoMenuItems = folderRepo ? (
-                        <>
-                          <MenuItem onClick={() => setRepoToConfigure(folderRepo)}>
-                            <Settings />
-                            {t('Repository Settings')}
-                          </MenuItem>
-                          {/* Remote repositories have no local directory to open —
-                            same unsupported case `files.ts` throws on for
-                            `file:revealInFileManager`, handled here by hiding the
-                            action instead of exposing a click that always fails. */}
-                          {folderRepo.kind !== 'remote' && (
-                            <MenuItem
-                              onClick={() => void handleOpenRepositoryFolder(folderRepo.path)}
-                            >
-                              <Search />
-                              {navigator.platform.toUpperCase().indexOf('MAC') >= 0
-                                ? t('Reveal in Finder')
-                                : t('Reveal in Explorer')}
-                            </MenuItem>
-                          )}
-                          {onRemoveRepository && (
-                            <MenuItem
-                              variant="destructive"
-                              onClick={() => setRepoToRemove(folderRepo)}
-                            >
-                              <FolderMinus />
-                              {t('Remove repository')}
-                            </MenuItem>
-                          )}
-                        </>
-                      ) : null;
-                      // Toggle and "+ new chat" are sibling buttons in a flex row — a
-                      // nested button would be invalid HTML (same trap as the
-                      // McpSection fix in d68d3c6).
-                      const header = (
-                        <div
-                          // Project headers have no selected state, so the plain
-                          // hover step is enough; --hover is the semantic alias.
-                          // Keyboard focus on either button lights the same step.
-                          className="group flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-ui hover:bg-hover has-focus-visible:bg-hover"
-                        >
-                          <button
-                            type="button"
-                            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-                            title={folderTooltip(folderName, primary, t)}
-                            // Decision 137 §3 (user ruling, replaces D29): the
-                            // header folds and unfolds this folder and does
-                            // nothing else — no conversation is opened and the
-                            // "New" target is left to the selected conversation.
-                            onClick={() =>
-                              setExpandedProjects((prev) => ({
-                                ...prev,
-                                [folder.projectId]: !expanded,
-                              }))
-                            }
-                          >
-                            {expanded ? (
-                              <FolderOpen className="size-4 shrink-0 text-folder" />
-                            ) : (
-                              <Folder className="size-4 shrink-0 text-folder" />
-                            )}
-                            <span
-                              data-slot="sidebar-folder-name"
-                              className="min-w-0 truncate font-semibold"
-                            >
-                              {folderName}
-                            </span>
-                            {branchLabel && (
-                              // The branch gives way first (`shrink-[1000]`
-                              // takes almost all of the deficit); the name is
-                              // the last thing cut.
-                              <span className="min-w-0 shrink-[1000] truncate text-meta text-muted-foreground">
-                                {branchLabel}
-                              </span>
-                            )}
-                          </button>
-                          {/* Trailing slot. The totals and the row's two hover
-                          buttons share ONE grid cell, so the cell is as wide as
-                          whichever is wider and the row cannot reflow when the
-                          numbers give way on hover — the same reason the session
-                          row below boxes its age and actions together. */}
-                          <span className="grid shrink-0 justify-items-end">
-                            {diffTotals && (
-                              <span
-                                className="col-start-1 row-start-1 flex items-center gap-1 text-meta tabular-nums group-hover:invisible group-focus-within:invisible"
-                                title={t('Folder diff totals', {
-                                  insertions: diffTotals.insertions,
-                                  deletions: diffTotals.deletions,
-                                })}
-                              >
-                                {diffTotals.insertions > 0 && (
-                                  <span className="text-success">+{diffTotals.insertions}</span>
-                                )}
-                                {diffTotals.deletions > 0 && (
-                                  <span className="text-destructive">-{diffTotals.deletions}</span>
-                                )}
-                              </span>
-                            )}
-                            <span className="col-start-1 row-start-1 flex items-center">
-                              {folderRepo && (
-                                <Menu>
-                                  <MenuTrigger
-                                    render={
-                                      <Button
-                                        variant="ghost"
-                                        size="icon-xs"
-                                        className="size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-popup-open:opacity-100 sm:size-5"
-                                        aria-label={t('Repository actions')}
-                                        title={t('Repository actions')}
-                                      />
-                                    }
-                                  >
-                                    <MoreHorizontal className="size-3.5" />
-                                  </MenuTrigger>
-                                  <MenuPopup align="end">{repoMenuItems}</MenuPopup>
-                                </Menu>
-                              )}
-                              {newSessionWorkspaceId && (
-                                // The header New button targets the active session's
-                                // workspace only, so a repo that already has sessions
-                                // needs its own entry point (T-26 review should-fix).
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  className="size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 sm:size-5"
-                                  aria-label={t('New chat')}
-                                  title={t('New session in {{folder}}', { folder: folderName })}
-                                  // Decision 174: the home page, this repository picked.
-                                  onClick={() => openHomeInFolder(newSessionWorkspaceId)}
-                                >
-                                  <Plus className="size-3.5" />
-                                </Button>
-                              )}
-                            </span>
-                          </span>
-                        </div>
-                      );
-                      return (
-                        <section key={folder.projectId}>
-                          {/* S2: right-click gives the same actions as the "more"
-                        button. Only wrapped when there ARE actions — the
-                        synthetic Temp folder has no repository behind it, and a
-                        trigger with an empty menu would swallow the right-click
-                        (Base UI's trigger stops the event) instead of letting it
-                        reach the section menu below. */}
-                          {repoMenuItems ? (
-                            <ContextMenuPrimitive.Root>
-                              <ContextMenuPrimitive.Trigger render={header} />
-                              <MenuPopup align="start" side="bottom" className="min-w-40">
-                                {repoMenuItems}
-                              </MenuPopup>
-                            </ContextMenuPrimitive.Root>
-                          ) : (
-                            header
-                          )}
-
-                          {expanded && (
-                            <div className="mt-0.5 space-y-0.5 pl-3">
-                              {limited.rows.map((row) => {
-                                const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
-                                return (
-                                  <SessionRow
-                                    key={row.sessionId}
-                                    row={row}
-                                    place={placeOf(row)}
-                                    branch={
-                                      chipShownInFolder(row, primary) ? row.chip?.label : undefined
-                                    }
-                                    now={now}
-                                    active={activeSessionId === row.sessionId}
-                                    started={hostBoundSessionIds.includes(row.sessionId)}
-                                    unread={unreadSessionIds.includes(row.sessionId)}
-                                    {...(selecting
-                                      ? {
-                                          selected: selection.has(row.sessionId),
-                                          onToggleSelect: toggleSelected,
-                                        }
-                                      : {})}
-                                    pendingApprovalCount={
-                                      pendingApprovalCountBySession.get(row.sessionId) ?? 0
-                                    }
-                                    onSelect={() => handleSelectSession(row.sessionId)}
-                                    onClose={() => void close(row.sessionId)}
-                                    onRename={(title) => void renameRow(row.sessionId, title)}
-                                    onArchive={() => void archive(row.sessionId, true)}
-                                    onDeleteTemp={
-                                      tempItemId && onRequestTempDelete
-                                        ? () => onRequestTempDelete(tempItemId)
-                                        : undefined
-                                    }
-                                  />
-                                );
-                              })}
-                              {renderFolderLimitToggle(folder.projectId, limited)}
-                              {folder.rows.length === 0 &&
-                                !query.trim() &&
-                                newSessionWorkspaceId && (
-                                  <SidebarAuxRow
-                                    icon={<Plus className="size-3.5" />}
-                                    onClick={() => openHomeInFolder(newSessionWorkspaceId)}
-                                  >
-                                    {t('New chat')}
-                                  </SidebarAuxRow>
-                                )}
-                            </div>
-                          )}
-                        </section>
-                      );
-                    })}
-                  </div>
-                </div>
-              </ScrollArea>
-            </ContextMenuPrimitive.Trigger>
-            <MenuPopup align="start" side="bottom" className="min-w-40">
-              <MenuItem onClick={() => onAddRepository?.()}>
-                <FolderPlus className="size-4" />
-                {t('Add Repository')}
-              </MenuItem>
-            </MenuPopup>
-          </ContextMenuPrimitive.Root>
-        )}
-        {renderUnboundSection()}
-      </div>
+              ) : (
+                visibleFolders.map(renderRepositoryGroup)
+              )}
+            </div>
+          </ScrollArea>
+        </ContextMenuPrimitive.Trigger>
+        <MenuPopup align="start" side="bottom" className="min-w-40">
+          <MenuItem onClick={() => onAddRepository?.()}>
+            <FolderPlus className="size-4" />
+            {t('Add Repository')}
+          </MenuItem>
+        </MenuPopup>
+      </ContextMenuPrimitive.Root>
 
       {repoToConfigure && (
         <RepositorySettingsDialog
@@ -1213,41 +1025,188 @@ export function LeftNav({
 }
 
 /**
- * Decision 170 (issue #6 ruling 1): the list area's three regions. Each is a
- * two-row grid — the h-8 title (`auto`), then the region's own `ScrollArea`
- * (`minmax(0,1fr)`) — so no title is inside a scroll viewport and nothing has
- * to stick (decision 167's sticky titles, their two-layer background, the
- * background-image fallback, `isolate` and `scroll-pt-8` are gone with it).
- * Active now and Temporary chats are content-sized up to 33% / 25% of the list
- * area; Repositories takes the rest. Regions meet at a full-width `border-t`.
- *
- * Two parts are load-bearing, both found on the prototype
- * (`docs/plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/`):
- * - `grid-cols-1`: the implicit `auto` column grows to the rows' min-content
- *   width (nowrap titles) and pushes every row past the panel's right edge.
- * - grid, not flex: a flex region's height is indefinite, so the ScrollArea
- *   root's `height: 100%` never resolves and its viewport grows with the
- *   content instead of scrolling. In the grid the capped region's second row
- *   is definite and the viewport scrolls inside it.
+ * Decision 183: the list area — the one scroll region below the tool row. A
+ * single-row grid, so the ScrollArea root's `height: 100%` resolves against a
+ * definite track (a flex item sized by its content never gives it one), and
+ * `grid-cols-1` because the implicit `auto` column grows to the rows'
+ * min-content width (nowrap titles) and pushes every row past the panel edge.
  */
-const ACTIVE_REGION_CLASS =
-  'grid max-h-[33%] min-h-0 shrink-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]';
-const REPOSITORIES_REGION_CLASS = 'grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]';
-const TEMPORARY_REGION_CLASS =
-  'grid max-h-[25%] min-h-0 shrink-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] border-t';
+const LIST_AREA_CLASS = 'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)]';
 
 /**
- * Decision 167 / 170: a region title (L1) — 16px / 600 / foreground, +0.04em,
- * h-8. It is the region grid's first row, outside the region's scroll area.
+ * Decision 183 (prototype `.group`): groups are separated by spacing alone —
+ * 8px above the first, 14px between the rest. No divider, no region title.
  */
-function SidebarSectionHeader({ title, children }: { title: string; children?: ReactNode }) {
+const SIDEBAR_GROUP_CLASS = 'mt-3.5 first:mt-2';
+
+/** Header → first row 2px, rows 2px apart (prototype `.rows`). Not indented. */
+const GROUP_ROWS_CLASS = 'mt-0.5 space-y-0.5';
+
+/**
+ * The top nav's two entries (prototype `.nav`): h-8, 15px, a 22px icon slot
+ * (`size-5.5`), the hover step on hover and keyboard focus.
+ */
+const NAV_ITEM_CLASS =
+  'flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-ui hover:bg-hover focus-visible:bg-hover';
+
+/**
+ * The search box (prototype `.search`; user ruling 2026-10-11): coss's
+ * InputGroup with its default chrome taken off on this one instance — resting,
+ * a transparent fill (light and dark) inside a 1px `--border` line, no drop
+ * shadow and no inner shade; focused, the `--background` fill and a
+ * `--muted-foreground` line, no ring. `rounded-sm` because the group's
+ * `rounded-lg` on an h-7 control breaks the radius clamp rule.
+ *
+ * Each override names the SAME variant stack as the base class it replaces,
+ * so tailwind-merge drops the base one instead of leaving both to a
+ * specificity contest (`border-border` / `border-input`, `bg-transparent` /
+ * `bg-background`, `dark:bg-transparent` / `dark:bg-input/32`, `shadow-none` /
+ * `shadow-xs`, and the `has-[input:focus-visible,…]` trio replacing
+ * `border-ring` and `ring-2`). The focused fill is a `has-[…]` variant, whose
+ * `:has()` argument outranks `bg-transparent` and `dark:bg-transparent` in
+ * specificity. The inner shade lives on the group's `::before` behind two long
+ * `not-has-[…]` stacks (light and dark); `before:hidden` removes the pseudo
+ * element instead, since nothing else sets its `display`. The placeholder is
+ * the full muted ink (the input's own is `/72`): the descendant selector
+ * outranks the input's single class. Asserted on the rendered className in
+ * `sidebarActiveAndFolders.test.ts`.
+ */
+const SIDEBAR_SEARCH_CLASS =
+  'h-7 min-w-0 flex-1 rounded-sm border-border bg-transparent shadow-none before:hidden dark:bg-transparent has-[input:focus-visible,textarea:focus-visible]:border-muted-foreground has-[input:focus-visible,textarea:focus-visible]:bg-background has-[input:focus-visible,textarea:focus-visible]:ring-0 [&_input]:placeholder:text-muted-foreground';
+
+/**
+ * The tool row's icon buttons (prototype `.tb`): 28px, a 16px icon. `sm:size-7`
+ * because the `icon-xs` variant's desktop `sm:size-6` would otherwise win.
+ */
+const TOOL_BUTTON_CLASS = 'size-7 shrink-0 text-muted-foreground sm:size-7';
+
+/**
+ * A group header's hover buttons (prototype `.ib`): 20px, shown while the
+ * pointer or KEYBOARD focus is in the header — `group-has-focus-visible`, not
+ * `group-focus-within`, so the focus a click leaves on the header does not
+ * keep them up after the pointer has gone, while Tab still reaches them.
+ * `sm:size-5` for the same reason as above.
+ */
+const GROUP_ACTION_CLASS =
+  'size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 sm:size-5';
+
+/**
+ * Decision 183 §1.3 (prototype `.vA .gh`): the group header shared by every
+ * repository and Temporary chats — the reference's grey label, 14px / 400 /
+ * muted, the soft ink on hover, no folder icon and no hover fill. The chevron
+ * follows the name: ▸ always while folded, ▾ only on hover or keyboard focus
+ * while open (§1.6). Folded, a summary of the rows' markers follows it
+ * (§2.2), since the rows that carry them are hidden.
+ *
+ * The header is a `div` holding sibling buttons — a nested button would be
+ * invalid HTML (the McpSection trap of d68d3c6). The trailing totals and the
+ * hover buttons share ONE grid cell, so the cell is as wide as whichever is
+ * wider and the header cannot reflow when the numbers give way on hover.
+ *
+ * A plain function returning the element, not a component: a repository
+ * header is handed to `ContextMenuPrimitive.Trigger render={…}`, which needs a
+ * DOM element to put its props on.
+ */
+function renderGroupHeader({
+  name,
+  nameSlot,
+  tooltip,
+  expanded,
+  onToggle,
+  summary,
+  trailing,
+  actions,
+}: {
+  name: string;
+  nameSlot: 'sidebar-folder-name' | 'sidebar-temporary-name';
+  tooltip: string;
+  expanded: boolean;
+  /** Undefined while a search is typed: the group is held open for its matches. */
+  onToggle?: () => void;
+  summary: SidebarGroupSummary | null;
+  trailing?: ReactNode;
+  actions: ReactNode;
+}): ReactElement {
   return (
-    <div className="flex h-8 items-center px-4">
-      <p className="min-w-0 truncate text-section font-semibold tracking-[0.04em] text-foreground">
-        {title}
-      </p>
-      {children && <div className="ml-auto flex shrink-0 items-center gap-0.5">{children}</div>}
+    <div className="group flex h-7 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-1 text-left text-meta text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"
+        title={tooltip}
+        aria-expanded={expanded}
+        onClick={onToggle}
+      >
+        <span data-slot={nameSlot} className="min-w-0 truncate">
+          {name}
+        </span>
+        <span
+          aria-hidden
+          data-slot="sidebar-group-chevron"
+          className={cn(
+            'flex shrink-0 items-center text-muted-foreground',
+            expanded && 'opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100'
+          )}
+        >
+          {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+        </span>
+        {!expanded && summary && <GroupSummaryMarks summary={summary} />}
+      </button>
+      <span className="grid shrink-0 justify-items-end">
+        {trailing && (
+          <span className="col-start-1 row-start-1 flex items-center group-hover:invisible group-has-focus-visible:invisible">
+            {trailing}
+          </span>
+        )}
+        <span className="col-start-1 row-start-1 flex items-center">{actions}</span>
+      </span>
     </div>
+  );
+}
+
+/**
+ * Decision 183 §2.2: what a folded group is hiding, in the rows' own marks —
+ * a spinner for turns running (with the count past one), the orange dot for a
+ * chat waiting on the user, then red for an unseen failure or else green for
+ * an unseen result. Each says itself in words for screen readers.
+ */
+function GroupSummaryMarks({ summary }: { summary: SidebarGroupSummary }) {
+  const { t } = useI18n();
+  const runningLabel = t('{{count}} chats running', { count: summary.running });
+  const unreadLabel =
+    summary.unread === 'failed'
+      ? t('A chat failed while you were away')
+      : t('A chat finished while you were away');
+  return (
+    <span
+      data-slot="sidebar-group-summary"
+      className="ml-0.5 flex shrink-0 items-center gap-1 text-meta text-muted-foreground tabular-nums"
+    >
+      {summary.running > 0 && (
+        <span className="flex items-center gap-0.5" title={runningLabel}>
+          <Spinner aria-label={runningLabel} className="size-3 shrink-0 text-status-running" />
+          {summary.running > 1 && summary.running}
+        </span>
+      )}
+      {summary.waiting && (
+        <span
+          role="img"
+          aria-label={t('A chat is waiting for you')}
+          title={t('A chat is waiting for you')}
+          className="size-1.5 shrink-0 rounded-full bg-warning"
+        />
+      )}
+      {summary.unread && (
+        <span
+          role="img"
+          aria-label={unreadLabel}
+          title={unreadLabel}
+          className={cn(
+            'size-1.5 shrink-0 rounded-full',
+            summary.unread === 'failed' ? 'bg-destructive' : 'bg-success'
+          )}
+        />
+      )}
+    </span>
   );
 }
 
@@ -1285,17 +1244,18 @@ function hasKeyboardFocus(target: EventTarget | null): boolean {
 
 /**
  * Decision 170 (issue #6 ruling 6): is the pointer, or keyboard focus, in a
- * region? Spread `regionProps` on the region; `held` says whether it is.
+ * region? Spread `regionProps` on the region (since decision 183, the whole
+ * list); `held` says whether it is.
  *
  * - Pointer: React computes enter / leave over its own tree, so a popup
  *   portaled out of the region's DOM (a row's menu) still counts as inside.
  * - Keyboard focus only: the focus a click leaves on a row must not keep the
  *   region held after the pointer has gone. Focus moving into a portaled popup
  *   arrives here as a fresh focus event, because React bubbles through portals.
- * - A focused element that is removed (a row's ✕, 「新建对话」 in an empty
- *   folder) takes focus with it and no blur event follows, and the region
- *   itself goes away with the last repository. The check after every commit
- *   lets go in both cases instead of holding for good.
+ * - A focused element that is removed (a row's ✕) takes focus with it and no
+ *   blur event follows, and the repositories go away with the last one. The
+ *   check after every commit lets go in both cases instead of holding for
+ *   good.
  */
 function useRegionHold(mounted: boolean) {
   const [pointerInside, setPointerInside] = useState(false);
@@ -1332,28 +1292,18 @@ function useRegionHold(mounted: boolean) {
 }
 
 /**
- * Decision 167: the list's own L4 rows — "View more (N)", "Show less", "New
- * chat". h-6, 14px, muted; the leading `w-4` slot (empty, or the plus of
- * "New chat") puts the text in the same column as the titles at that depth.
+ * Decision 167 / 183: the list's own L4 rows — "View more (N)" and "Show
+ * less". h-7 like a row (prototype `.aux`), 14px, muted; the empty leading
+ * `w-4` slot puts the text in the same column as the chat titles.
  */
-function SidebarAuxRow({
-  icon,
-  onClick,
-  children,
-}: {
-  icon?: ReactNode;
-  onClick: () => void;
-  children: ReactNode;
-}) {
+function SidebarAuxRow({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
-      className="flex h-6 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"
+      className="flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"
       onClick={onClick}
     >
-      <span aria-hidden className="flex w-4 shrink-0 items-center justify-center">
-        {icon}
-      </span>
+      <span aria-hidden className="flex w-4 shrink-0 items-center justify-center" />
       <span className="min-w-0 truncate">{children}</span>
     </button>
   );
@@ -1381,10 +1331,9 @@ interface SessionRowProps {
   /**
    * Decision 167 §2: the full branch of a chat on a non-main workspace (a
    * linked worktree), passed only inside its folder (`chipShownInFolder`).
-   * The row shows its last segment; Active now never passes it.
+   * The row shows its last segment; Temporary chats never passes it.
    */
   branch?: string;
-  now: number;
   active: boolean;
   pendingApprovalCount: number;
   /**
@@ -1420,7 +1369,6 @@ function SessionRow({
   row: sourceRow,
   place,
   branch,
-  now,
   active,
   pendingApprovalCount,
   started,
@@ -1617,9 +1565,10 @@ function SessionRow({
             // sidebar width, and without it the trailing items would spill past the
             // rounded edge instead of the branch text absorbing the deficit.
             // Decision 170 (issue #6 rulings 3–4): 14px, and the title one step
-            // below the folder name's ink — `--foreground-soft`, never with /N
-            // — except on the open chat, which keeps the body colour.
-            'group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',
+            // below the body ink — `--foreground-soft`, never with /N — except
+            // on the open chat, which keeps the body colour. `relative`
+            // anchors the floating actions (decision 183 §1.4).
+            'group relative flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',
             active
               ? 'bg-selection text-accent-foreground'
               : 'text-foreground-soft hover:bg-hover focus-visible:bg-hover'
@@ -1659,7 +1608,8 @@ function SessionRow({
             )}
             {/* The marker, in one slot so rows never jump: spinner = running,
               filled green/red = an unread result (S3), ring = started (a
-              worker is attached in the background), nothing = not started.
+              worker is attached in the background), faint ring = not started
+              (decision 183 §1.7: every row carries a mark, so they line up).
               One slot, not several — a second dot would widen the row and push
               the title, and only ever one of these is the fact worth acting on.
 
@@ -1706,18 +1656,27 @@ function SessionRow({
                 className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground"
                 title={t('Running in the background')}
               />
-            ) : null}
+            ) : (
+              // `--muted-foreground-faint`: the muted ink mixed toward the
+              // sidebar's surface, so "not started" reads a step quieter than
+              // "attached in the background". A colour token; never add /N.
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground-faint"
+                title={t('Not started')}
+              />
+            )}
           </span>
           {/* `min-w-20` is the whole point of this row's sizing (S2 b). The title is
           the row's identity and the only user-authored text on it, so it gets a
           floor and everything else yields to it. Without the floor `flex-1
-          min-w-0` shrinks to whatever is left. Budget for an indented row at the
-          280px default (decision 167, measured on the prototype; decision 170
-          kept it): the panel's 280 includes its 1px right border, so 280 - 1 -
-          16 (the region list's px-2) - 12 (pl-3) - 16 (px-2) = 235px of
-          content; minus the 16px status slot, two 6px gaps and the 40px time
-          box, the title gets 167px (SIDEBAR_DEFAULT_WIDTH - DOCK_RAIL_WIDTH =
-          280). */}
+          min-w-0` shrinks to whatever is left. Budget at the 280px default
+          (decision 183: rows are not indented and the time box is gone; the
+          hover actions float over the row instead of taking width): the
+          panel's 280 includes its 1px right border, so 280 - 1 - 16 (the
+          list's px-2) - 16 (the row's px-2) = 247px of content; minus the
+          16px status slot and one 6px gap, the title gets 225px
+          (SIDEBAR_DEFAULT_WIDTH - DOCK_RAIL_WIDTH = 280). */}
           {titleParts.suffix === null ? (
             <span className="min-w-20 flex-1 truncate">{row.title}</span>
           ) : (
@@ -1735,8 +1694,8 @@ function SessionRow({
               <span className="shrink-0 text-muted-foreground">{titleParts.suffix}</span>
             </span>
           )}
-          {/* Alert badges are state, not context, so they stay on every row —
-              Active now's included. Decision 167 unified them at Badge `lg` (14px
+          {/* Alert badges are state, not context, so they stay on every row.
+              Decision 167 unified them at Badge `lg` (14px
               on desktop; revises decisions 144 §2 and 123 §13, which kept the
               Latin-only marks at `sm`'s 10px). */}
           {/* dsh-rebase P1-9e (decision 051): the legacy copy of a migrated
@@ -1796,65 +1755,62 @@ function SessionRow({
               {lastBranchSegment(branch)}
             </span>
           )}
-          {/* Age and actions swap on hover; the shared width box is what actually
-          keeps the row from jumping — the two are different natural widths (a
-          relative age is ~21px, two icon buttons are 40px), so before the
-          fixed box the swap silently re-flowed every other item. The row has
-          tabIndex=0, so focus-within also reveals the actions and keeps
-          Archive/Close reachable by keyboard (display:none alone would drop
-          them from the tab order). Temp rows get a third (delete) button, so
-          both this span and the actions box below widen to `w-[60px]`
-          together — otherwise only the temp rows would jump on hover.
-          Decision 167: the buttons are `size-5 sm:size-5` (20px, two fill the
-          40px box exactly); a bare `size-5` loses to the variant's
-          `sm:size-6`, and 48px of buttons overflowed the box. */}
-          <span
-            className={cn(
-              'shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden',
-              onDeleteTemp ? 'w-[60px]' : 'w-10'
-            )}
-          >
-            {formatRelativeAge(row.updatedAt, now)}
-          </span>
-          <div
-            className={cn(
-              'hidden shrink-0 items-center justify-end group-hover:flex group-focus-within:flex',
-              onDeleteTemp ? 'w-[60px]' : 'w-10'
-            )}
-          >
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="size-5 sm:size-5"
-              // Decision 149 §12 / 156: in the UI language, like the menu's 「归档」.
-              aria-label={t('Archive session')}
-              title={t('Archive')}
-              onClick={(event) => {
-                event.stopPropagation();
-                requestArchive();
-              }}
+          {/* Decision 183 §1.4: no time on the row (the absolute time is the
+          tooltip's third line). The actions float over the row's right edge on
+          hover, painted in the row's own fill with a fade to the left, so the
+          title never reflows. KEYBOARD focus also reveals them — on the row
+          itself (`group-focus-visible`, the row has tabIndex=0) or on one of
+          its buttons (`group-has-focus-visible`) — which keeps Archive /
+          Remove reachable by Tab (display:none alone would drop them from the
+          tab order). Not `group-focus-within`: the focus a click leaves on the
+          row would keep them up after the pointer has gone. Not in selection
+          mode: there a click picks the row. Decision 167: the buttons are
+          `size-5 sm:size-5` (20px); a bare `size-5` loses to the variant's
+          `sm:size-6`. */}
+          {!onToggleSelect && (
+            <div
+              data-slot="sidebar-row-actions"
+              className={cn(
+                'absolute inset-y-1 right-1.5 hidden items-center group-hover:flex group-focus-visible:flex group-has-focus-visible:flex',
+                active
+                  ? 'bg-selection shadow-[-10px_0_8px_var(--selection)]'
+                  : 'bg-hover shadow-[-10px_0_8px_var(--hover)]'
+              )}
             >
-              <Archive className="size-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="size-5 sm:size-5"
-              // Not "Close": this is the list's remove, not the run's end (the
-              // context menu's "End conversation" is that one). The title says
-              // which of the two it is, because the difference — the row comes
-              // back on the next launch — is not visible from an ✕.
-              aria-label={t('Remove from the list')}
-              title={t('Remove from the list (it comes back after a restart)')}
-              onClick={(event) => {
-                event.stopPropagation();
-                onClose();
-              }}
-            >
-              <X className="size-3.5" />
-            </Button>
-            {onDeleteTemp && <DeleteTempButton onDelete={onDeleteTemp} />}
-          </div>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="size-5 sm:size-5"
+                // Decision 149 §12 / 156: in the UI language, like the menu's 「归档」.
+                aria-label={t('Archive session')}
+                title={t('Archive')}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  requestArchive();
+                }}
+              >
+                <Archive className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="size-5 sm:size-5"
+                // Not "Close": this is the list's remove, not the run's end (the
+                // context menu's "End conversation" is that one). The title says
+                // which of the two it is, because the difference — the row comes
+                // back on the next launch — is not visible from an ✕.
+                aria-label={t('Remove from the list')}
+                title={t('Remove from the list (it comes back after a restart)')}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onClose();
+                }}
+              >
+                <X className="size-3.5" />
+              </Button>
+              {onDeleteTemp && <DeleteTempButton onDelete={onDeleteTemp} />}
+            </div>
+          )}
         </ContextMenuPrimitive.Trigger>
 
         <MenuPopup

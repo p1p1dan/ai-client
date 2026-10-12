@@ -177,16 +177,15 @@ it('renders a popup the dock recognizes as the owner of Escape', async () => {
   // mismatch here would restore the bug silently.
   await act(async () => root.render(createElement(LeftNav, { repositories: [REPO] as never })));
 
-  const title = [...container.querySelectorAll('p')].find(
-    (element) => element.textContent === 'Repositories'
-  );
-  await rightClick(title as Element);
+  // Decision 183: no 「仓库列表」 title any more — the list's own space.
+  const groupSection = container.querySelector(`[data-sidebar-group="${PROJECT_ID}"]`);
+  await rightClick(groupSection as Element);
 
   expect(openMenuItems()).not.toEqual([]);
   expect(document.querySelectorAll(ESCAPE_OWNING_POPUP_SELECTOR).length).toBeGreaterThan(0);
 });
 
-it('gives the temporary-chat partition its own menu', async () => {
+it('gives the temporary-chat group its own menu', async () => {
   useChatSessionsStore.setState({
     sessions: [
       {
@@ -204,29 +203,28 @@ it('gives the temporary-chat partition its own menu', async () => {
 
   // Decision 167 §5: an L1 section title (a `<p>`), no longer a folder-style
   // header span.
-  const header = [...container.querySelectorAll('p')].find(
-    (element) => element.textContent === 'Temporary chats'
-  );
-  expect(header, 'temporary-chat partition is rendered').toBeTruthy();
+  // Decision 183: a group header like a repository's, not an L1 title.
+  const header = container
+    .querySelector('[data-slot="sidebar-temporary-name"]')
+    ?.closest('div.group');
+  expect(header, 'temporary-chat group is rendered').toBeTruthy();
 
   await rightClick(header as Element);
   expect(openMenuItems()).toEqual(['New temporary chat']);
 });
 
 it('shows the unread marker until the conversation is opened', async () => {
-  // Started on the engine, so the Active now region lists it as well as its
-  // folder (decision 170).
+  // Started on the engine. Since decision 183 it is listed once, in its
+  // folder — no 「正在活动」 copy of the row.
   useChatSessionsStore.setState({
     unreadSessionIds: ['session-a'],
     hostBoundSessionIds: ['session-a'],
   });
   await act(async () => root.render(createElement(LeftNav, { repositories: [REPO] as never })));
 
-  // Active now and the folder tree both list this session, so the marker is on
-  // both rows — the count is what proves neither list was missed.
   const markers = () =>
     container.querySelectorAll('[aria-label="Finished while you were away"]').length;
-  expect(markers()).toBe(2);
+  expect(markers()).toBe(1);
 
   const row = [...container.querySelectorAll('[role="button"]')].find((element) =>
     element.textContent?.includes('Session A')
@@ -237,7 +235,7 @@ it('shows the unread marker until the conversation is opened', async () => {
   expect(markers()).toBe(0);
 });
 
-it('gives the projects partition menu on its title row', async () => {
+it('gives the list its Add Repository menu on the space around the groups', async () => {
   const onAddRepository = vi.fn();
   await act(async () =>
     root.render(
@@ -248,12 +246,13 @@ it('gives the projects partition menu on its title row', async () => {
     )
   );
 
-  const title = [...container.querySelectorAll('p')].find(
-    (element) => element.textContent === 'Repositories'
-  );
-  expect(title, 'partition title row is rendered').toBeTruthy();
+  // Decision 183 §2.10: the whole list carries it, now that the 「仓库列表」
+  // title row is gone. A group's own section (outside its header and rows)
+  // is list space.
+  const groupSection = container.querySelector(`[data-sidebar-group="${PROJECT_ID}"]`);
+  expect(groupSection, 'the repository group is rendered').toBeTruthy();
 
-  await rightClick(title as Element);
+  await rightClick(groupSection as Element);
   expect(openMenuItems()).toEqual(['Add Repository']);
 
   await act(async () => {

@@ -4,20 +4,21 @@ import { describe, expect, it } from 'vitest';
 import { stripComments } from '@/components/chat/__tests__/stripComments';
 
 /**
- * Decision 167 (GitHub issue #3) and decision 170 (GitHub issue #6): the
- * 「聊天」 panel's five-level hierarchy and its three regions, as the approved
- * prototypes measured them
- * (`docs/plantree/plans/dsh-rebase/evidence/sidebar-hierarchy-2026-10/`,
- * `.../sidebar-regions-2026-10/`) and `docs/design-system.md`
- * 「侧栏层级（聊天面板）」 states them. Static, like this directory's other
- * LeftNav pins: what can regress is a class string, and jsdom computes no
- * layout to measure.
+ * Decision 183 (prototype
+ * `docs/plantree/plans/dsh-rebase/evidence/sidebar-claude-style-2026-10/`,
+ * default view) and `docs/design-system.md` 「侧栏层级（聊天面板）」: the
+ * 「聊天」 panel after the redesign that replaced decision 170's three regions.
+ * Static, like this directory's other LeftNav pins: what can regress is a
+ * class string, and jsdom computes no layout to measure.
  *
- *   L0 panel title   16px 600 foreground       h-9   (`DockTitle`, every panel)
- *   L1 region title  16px 600 foreground       h-8   outside its region's scroll area
- *   L2 folder        15px 600 foreground       h-7   folder icon size-4
- *   L3 chat          14px 400 foreground-soft  h-7   fixed w-4 status slot; open: foreground
- *   L4 auxiliary     14px 400 muted            h-6   when on a line of its own
+ *   top nav       15px 400 foreground       h-8   22px icon slot; hover bg-hover
+ *   tool row      search (h-7) + collapse / expand all + bulk archive (28px)
+ *   group label   14px 400 muted            h-7   no icon, no hover fill; soft ink on hover
+ *   chat          14px 400 foreground-soft  h-7   fixed w-4 status slot; open: foreground
+ *   auxiliary     14px 400 muted            h-7   text in the title column
+ *
+ * Gone: the panel title (`DockTitle`, all five panels), the region titles
+ * (`SidebarSectionHeader`), 「正在活动」, the dividers and the 16px tier.
  */
 
 const SHELL = join(process.cwd(), 'src/renderer/components/workspace-shell');
@@ -37,19 +38,13 @@ function slice(source: string, from: string, to: string): string {
   return source.slice(start, source.indexOf(to, start));
 }
 
-const DOCK_TITLE = slice(DOCK, 'function DockTitle(', '\n}\n');
-const SECTION_HEADER = slice(NAV, 'function SidebarSectionHeader(', '\n}\n');
+const GROUP_HEADER = slice(NAV, 'function renderGroupHeader(', '\n}\n');
+const GROUP_SUMMARY = slice(NAV, 'function GroupSummaryMarks(', '\n}\n');
 const AUX_ROW = slice(NAV, 'function SidebarAuxRow(', '\n}\n');
 const ROW = NAV.slice(NAV.indexOf('function SessionRow('));
-/** The three region helpers / blocks, each from its opening to the next. */
-const ACTIVE_REGION = slice(NAV, 'const renderActiveRegion = () => {', '\n  };\n');
-const TEMPORARY_REGION = slice(NAV, 'const renderUnboundSection = () => {', '\n  };\n');
-const LIST_AREA = slice(
-  NAV,
-  '<div className="flex min-h-0 flex-1 flex-col">',
-  '{renderUnboundSection()}'
-);
-const REPOSITORIES_REGION = LIST_AREA.slice(LIST_AREA.indexOf('<ContextMenuPrimitive.Root>'));
+const TEMPORARY_GROUP = slice(NAV, 'const renderTemporaryGroup = () => {', '\n  };\n');
+const REPOSITORY_GROUP = slice(NAV, 'const renderRepositoryGroup = (', '\n  };\n');
+const LIST_AREA = slice(NAV, 'render={<div className={LIST_AREA_CLASS} />}', '</ScrollArea>');
 
 /** The literal value of a `const NAME = '…';` in LeftNav (one string, maybe wrapped). */
 function constant(name: string): string {
@@ -59,188 +54,223 @@ function constant(name: string): string {
 }
 
 describe('weights: 400 and 600 only (design system, Font Weight)', () => {
-  it('no hierarchy carrier in the sidebar, the dock title or the session bar title uses 500', () => {
+  it('no hierarchy carrier in the sidebar, the dock or the session bar title uses 500', () => {
     // Microsoft YaHei UI has no 500: CJK renders it as 400 on Windows 10 and
     // 11 alike, so a 500 level is invisible there. Button / Badge primitives
     // carry their own `font-medium`; these files must not add one.
     expect(NAV).not.toContain('font-medium');
-    expect(DOCK_TITLE).not.toContain('font-medium');
+    expect(DOCK).not.toContain('font-semibold');
     expect(BAR).not.toContain('font-medium');
   });
 
-  it('L0: the dock title is 16px / 600, no tracking, on the h-9 bar', () => {
-    expect(DOCK_TITLE).toContain(
-      '<div className="flex h-9 shrink-0 items-center gap-2 border-b px-3">'
-    );
-    expect(DOCK_TITLE).toContain('className="min-w-0 flex-1 truncate text-section font-semibold"');
-    expect(DOCK_TITLE).not.toContain('tracking-');
-    expect(DOCK_TITLE).not.toContain('text-ui');
-  });
-
-  it('the session bar title on the same h-9 line is 16px / 400 — weight tells them apart', () => {
+  it('the session bar title stays 16px / 400', () => {
     expect(BAR).toContain('<span className="min-w-0 truncate text-section text-foreground">');
   });
 
-  it('L1: region titles are 16px / 600 / foreground, +0.04em, h-8', () => {
-    expect(SECTION_HEADER).toContain('<div className="flex h-8 items-center px-4">');
-    expect(SECTION_HEADER).toContain(
-      'className="min-w-0 truncate text-section font-semibold tracking-[0.04em] text-foreground"'
+  it('no level of the chat sidebar is bold any more: group labels are the grey 400 label', () => {
+    expect(NAV).not.toContain('font-semibold');
+  });
+});
+
+describe('the panel title is gone from all five panels (decision 183 §1.9)', () => {
+  it('LeftDock renders no DockTitle, and names the panel through its region', () => {
+    expect(DOCK).not.toContain('DockTitle');
+    expect(DOCK).not.toContain('text-section');
+    expect(DOCK).not.toContain('border-b px-3');
+    // §2.7: the region keeps the panel name for screen readers.
+    expect(DOCK).toContain('aria-label={t(descriptor.labelKey)}');
+  });
+});
+
+describe('levels (decision 183, prototype `.vA`)', () => {
+  it('top nav: two h-8 rows, 15px, a 22px icon slot; New chat on a round bg-selection disc', () => {
+    expect(constant('NAV_ITEM_CLASS')).toBe(
+      'flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-ui hover:bg-hover focus-visible:bg-hover'
     );
-    expect(SECTION_HEADER).not.toContain('text-muted-foreground">');
-    // All three regions use it; none hand-rolls a title row.
-    for (const title of ["{t('Active now')}", "{t('Repositories')}", '{unboundFolder.name}']) {
-      expect(NAV).toContain(`<SidebarSectionHeader title=${title}>`);
-    }
-    expect(NAV).not.toContain("{t('Recent')}");
-    expect(NAV).not.toContain('tracking-[0.04em] text-muted-foreground');
+    expect(NAV.split('className={NAV_ITEM_CLASS}').length - 1).toBe(2);
+    expect(NAV).toContain(
+      'className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-selection text-foreground"'
+    );
+    expect(NAV).toContain('<FolderPlus className="size-4" />');
+    // New chat opens the home page (decision 174); Add repository the dialog.
+    expect(NAV).toContain('onClick={handleNewSession}');
+    expect(NAV).toContain('onClick={onAddRepository}');
   });
 
-  it('L2: the folder name is 15px / 600 with a size-4 folder icon; the branch after it is L4', () => {
-    expect(NAV).toContain(
-      'className="group flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-ui hover:bg-hover has-focus-visible:bg-hover"'
+  it('group label: 14px / 400 / muted, soft ink on hover, no icon, no hover fill', () => {
+    expect(GROUP_HEADER).toContain(
+      '<div className="group flex h-7 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">'
     );
-    expect(NAV).toContain('data-slot="sidebar-folder-name"');
-    expect(NAV).toContain('className="min-w-0 truncate font-semibold"');
-    expect(NAV).toContain('<FolderOpen className="size-4 shrink-0 text-folder" />');
-    expect(NAV).toContain('<Folder className="size-4 shrink-0 text-folder" />');
-    expect(NAV).toContain(
-      'className="min-w-0 shrink-[1000] truncate text-meta text-muted-foreground"'
+    expect(GROUP_HEADER).toContain(
+      'className="flex min-w-0 flex-1 items-center gap-1 text-left text-meta text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"'
+    );
+    expect(GROUP_HEADER).toContain('aria-expanded={expanded}');
+    expect(GROUP_HEADER).not.toContain('hover:bg-hover');
+    expect(NAV).not.toContain('text-folder');
+    expect(NAV).not.toMatch(/<Folder(Open)?\b/);
+  });
+
+  it('group chevron: ▸ always while folded, ▾ only on hover or keyboard focus while open', () => {
+    expect(GROUP_HEADER).toContain(
+      "expanded && 'opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100'"
+    );
+    expect(GROUP_HEADER).toContain(
+      '{expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}'
+    );
+    // The summary shows only while folded.
+    expect(GROUP_HEADER).toContain(
+      '{!expanded && summary && <GroupSummaryMarks summary={summary} />}'
     );
   });
 
-  it('L3: a chat row is 14px / 400 in --foreground-soft; the open one keeps the body colour', () => {
+  it('group header right side: totals and hover buttons share one grid cell', () => {
+    expect(GROUP_HEADER).toContain('<span className="grid shrink-0 justify-items-end">');
+    expect(GROUP_HEADER).toContain(
+      'className="col-start-1 row-start-1 flex items-center group-hover:invisible group-has-focus-visible:invisible"'
+    );
+    expect(constant('GROUP_ACTION_CLASS')).toBe(
+      'size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 sm:size-5'
+    );
+    // The ··· stays up while its menu is open.
+    expect(REPOSITORY_GROUP).toContain(
+      "className={cn(GROUP_ACTION_CLASS, 'data-popup-open:opacity-100')}"
+    );
+  });
+
+  it('hover-only reveals answer keyboard focus, never the focus a click leaves behind', () => {
+    // `focus-within` also matches a mouse click's focus, which kept the
+    // actions, totals swap and ▾ up after the pointer had left the row or
+    // header. Keyboard focus only: `group-focus-visible` on a focusable
+    // group, `group-has-focus-visible` for a focusable descendant.
+    expect(NAV).not.toContain('focus-within');
+    expect(GROUP_HEADER).toContain('group-has-focus-visible:opacity-100');
+    expect(ROW).toContain('group-focus-visible:flex group-has-focus-visible:flex');
+  });
+
+  it('Temporary chats and every repository use the one header', () => {
+    expect(TEMPORARY_GROUP).toContain('renderGroupHeader({');
+    expect(REPOSITORY_GROUP).toContain('renderGroupHeader({');
+    expect(NAV).not.toContain('SidebarSectionHeader');
+    // A repository header no longer names the main branch (§2.3).
+    expect(NAV).not.toContain('folderBranchLabel');
+    expect(REPOSITORY_GROUP).toContain('tooltip: folderTooltip(folderName, primary, t)');
+  });
+
+  it('folded summary: spinner with count, waiting dot, red or green dot (§2.2)', () => {
+    expect(GROUP_SUMMARY).toContain('className="size-3 shrink-0 text-status-running"');
+    expect(GROUP_SUMMARY).toContain('{summary.running > 1 && summary.running}');
+    expect(GROUP_SUMMARY).toContain('className="size-1.5 shrink-0 rounded-full bg-warning"');
+    expect(GROUP_SUMMARY).toContain(
+      "summary.unread === 'failed' ? 'bg-destructive' : 'bg-success'"
+    );
+    expect(NAV).toContain('summary: deriveGroupSummary(folder.rows, unreadSessionIds)');
+    expect(NAV).toContain('summary: deriveGroupSummary(unboundFolder.rows, unreadSessionIds)');
+  });
+
+  it('chat: 14px / 400 in --foreground-soft; the open one keeps the body colour', () => {
     expect(ROW).toContain(
-      "'group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',"
+      "'group relative flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',"
     );
     expect(ROW).toContain("? 'bg-selection text-accent-foreground'");
     expect(ROW).toContain(": 'text-foreground-soft hover:bg-hover focus-visible:bg-hover'");
     // The token is alpha-free and takes no /N (design system, Alpha discipline).
     expect(NAV).not.toMatch(/text-foreground-soft\/\d/);
+    expect(NAV).not.toMatch(/muted-foreground-faint\/\d/);
     // The rename editor that replaces the row keeps its size.
     expect(ROW).toContain(
       'className="h-6 flex-1 rounded-sm text-meta before:rounded-[calc(var(--radius-sm)-1px)]"'
     );
   });
 
-  it('L4: auxiliary rows are 14px muted, h-6, and the segment labels are gone', () => {
-    expect(AUX_ROW).toContain(
-      'className="flex h-6 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"'
+  it('a chat not started shows the faint ring; started, the muted one (§1.7)', () => {
+    expect(ROW).toContain(
+      'className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground-faint"'
     );
-    // The same w-4 slot as a chat row, so the text lines up with the titles.
-    expect(AUX_ROW).toContain('className="flex w-4 shrink-0 items-center justify-center"');
-    // Decision 170: no 「正在活动」 / 「48 小时内」 segment labels any more.
-    expect(NAV).not.toContain('SidebarSegmentLabel');
-    expect(NAV).not.toContain("t('Last 48 hours')");
-    // The old h-7, 15px, `pl-5` "View more" is gone.
-    expect(NAV).not.toContain('pl-5');
+    expect(ROW).toContain("title={t('Not started')}");
+    expect(ROW).toContain(
+      'className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground"'
+    );
+    // Every branch of the slot renders a mark: no `: null}` at its end.
+    const slot = slice(ROW, '{onToggleSelect ? null : row.busy ? (', '{titleParts.suffix === null');
+    expect(slot).toContain('border-muted-foreground-faint');
+    expect(slot).not.toContain(') : null}');
   });
 
-  it('only the 14 / 15 / 16 tiers, nothing smaller than 14px (CJK cascade rule 3)', () => {
-    expect(NAV).not.toMatch(/\btext-(xs|2xs|sm|base|lg|title)\b/);
+  it('auxiliary: h-7, 14px muted, the empty w-4 slot puts the text in the title column', () => {
+    expect(AUX_ROW).toContain(
+      'className="flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"'
+    );
+    expect(AUX_ROW).toContain('className="flex w-4 shrink-0 items-center justify-center"');
+    // §1.5: no 「新建对话」 row in an empty group, so no icon slot content.
+    expect(AUX_ROW).not.toContain('icon');
+    expect(NAV).not.toContain('icon={<Plus');
+  });
+
+  it('only the 14 / 15 tiers, nothing smaller than 14px (CJK cascade rule 3)', () => {
+    expect(NAV).not.toMatch(/\btext-(xs|2xs|sm|base|lg|title|section)\b/);
     // `Button size="xs"` is 12px on desktop (`sm:text-xs`): every one here
     // overrides it with `sm:text-meta`.
     const xsButtons = [...NAV.matchAll(/<Button[^>]*size="xs"[^>]*>/g)].map((match) => match[0]);
-    expect(xsButtons.length).toBeGreaterThanOrEqual(5);
+    expect(xsButtons.length).toBeGreaterThanOrEqual(3);
     for (const button of xsButtons) expect(button).toContain('sm:text-meta');
   });
 });
 
-describe('three regions (decision 170, issue #6 ruling 1)', () => {
-  it('each region is a two-row grid: its title, then its own scroll area', () => {
-    const grid = 'grid-cols-1 grid-rows-[auto_minmax(0,1fr)]';
-    expect(constant('ACTIVE_REGION_CLASS')).toBe(`grid max-h-[33%] min-h-0 shrink-0 ${grid}`);
-    expect(constant('REPOSITORIES_REGION_CLASS')).toBe(`grid min-h-0 flex-1 ${grid}`);
-    expect(constant('TEMPORARY_REGION_CLASS')).toBe(
-      `grid max-h-[25%] min-h-0 shrink-0 ${grid} border-t`
+describe('one list (decision 183 §1.10)', () => {
+  it('is a single-row grid holding one ScrollArea', () => {
+    expect(constant('LIST_AREA_CLASS')).toBe(
+      'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)]'
     );
+    expect(NAV.split('<ScrollArea').length - 1).toBe(1);
+    expect(LIST_AREA).toContain('<ScrollArea>');
+    expect(NAV).not.toContain('scrollFade');
   });
 
-  it('the regions sit in one flex column, in order: Active now, Repositories, Temporary chats', () => {
-    // The `max-h-*` caps resolve against this column; it must stay the list
-    // area itself (flex-1 min-h-0), with no content-sized wrapper around it.
-    expect(NAV).toContain('<div className="flex min-h-0 flex-1 flex-col">');
-    const active = LIST_AREA.indexOf('{renderActiveRegion()}');
-    const repositories = LIST_AREA.indexOf('REPOSITORIES_REGION_CLASS');
-    expect(active).toBeGreaterThan(-1);
-    expect(repositories).toBeGreaterThan(active);
-    expect(NAV.indexOf('{renderUnboundSection()}')).toBeGreaterThan(
-      NAV.indexOf('REPOSITORIES_REGION_CLASS, activeRows.length > 0')
-    );
-    expect(ACTIVE_REGION).toContain('<section className={ACTIVE_REGION_CLASS}>');
-    expect(TEMPORARY_REGION).toContain('render={<section className={TEMPORARY_REGION_CLASS} />}');
-    // Repositories opens with a divider only when Active now is above it.
-    expect(REPOSITORIES_REGION).toContain(
-      "className={cn(REPOSITORIES_REGION_CLASS, activeRows.length > 0 && 'border-t')}"
-    );
+  it('Temporary chats first, then the repositories (or the add-repository card)', () => {
+    const temporary = LIST_AREA.indexOf('{renderTemporaryGroup()}');
+    const repositories = LIST_AREA.indexOf('visibleFolders.map(renderRepositoryGroup)');
+    const card = LIST_AREA.indexOf('<Empty ');
+    expect(temporary).toBeGreaterThan(-1);
+    expect(repositories).toBeGreaterThan(temporary);
+    expect(card).toBeGreaterThan(temporary);
   });
 
-  it('every title is outside its region s scroll area', () => {
-    for (const region of [ACTIVE_REGION, TEMPORARY_REGION, REPOSITORIES_REGION]) {
-      const header = region.indexOf('<SidebarSectionHeader');
-      const scroll = region.indexOf('<ScrollArea');
-      expect(header).toBeGreaterThan(-1);
-      expect(scroll).toBeGreaterThan(header);
-      expect(region.indexOf('</SidebarSectionHeader>')).toBeLessThan(scroll);
+  it('the regions, their titles, dividers, caps and fades are gone', () => {
+    for (const gone of [
+      'renderActiveRegion',
+      'renderUnboundSection',
+      'ACTIVE_REGION_CLASS',
+      'REPOSITORIES_REGION_CLASS',
+      'TEMPORARY_REGION_CLASS',
+      'activeCollapsed',
+      'activeShowAll',
+      'deriveActiveRows',
+      'limitActiveRows',
+      "t('Active now')",
+      "t('Repositories')",
+      'max-h-[',
+      'sticky',
+      'isolate',
+    ]) {
+      expect(NAV, gone).not.toContain(gone);
     }
+    // No dividers anywhere in the panel body (the prototype separates by
+    // spacing alone).
+    expect(NAV).not.toMatch(/\bborder-[tb]\b/);
   });
 
-  it('Active now and Temporary chats fade at the bottom; Repositories does not', () => {
-    expect(ACTIVE_REGION).toContain('<ScrollArea scrollFade="bottom">');
-    expect(TEMPORARY_REGION).toContain('<ScrollArea scrollFade="bottom">');
-    expect(REPOSITORIES_REGION).toContain('<ScrollArea>');
-    expect(REPOSITORIES_REGION).not.toContain('scrollFade');
+  it('spacing: list px-2 pt-0.5 pb-3; groups 8px then 14px apart; rows 2px; no indent', () => {
+    expect(LIST_AREA).toContain('<div className="px-2 pt-0.5 pb-3">');
+    expect(constant('SIDEBAR_GROUP_CLASS')).toBe('mt-3.5 first:mt-2');
+    expect(constant('GROUP_ROWS_CLASS')).toBe('mt-0.5 space-y-0.5');
+    expect(NAV).not.toContain('pl-3');
+    expect(TEMPORARY_GROUP).toContain('className={GROUP_ROWS_CLASS}');
+    expect(REPOSITORY_GROUP).toContain('className={GROUP_ROWS_CLASS}');
   });
 
-  it('decision 167 s sticky machinery is gone with the shared scroll area', () => {
-    expect(NAV).not.toContain('sticky');
-    expect(NAV).not.toContain('bg-image-enabled');
-    expect(NAV).not.toContain('bg-card/40');
-    expect(NAV).not.toContain('isolate');
-    expect(NAV).not.toContain('scroll-pt-8');
-    expect(NAV).not.toContain('sidebarSectionClass');
-  });
-
-  it('spacing inside a region: px-2 pt-0.5 pb-2, folder groups space-y-1, rows space-y-0.5', () => {
-    expect(NAV.split('<div className="px-2 pt-0.5 pb-2">').length - 1).toBe(3);
-    expect(REPOSITORIES_REGION).toContain('<div className="space-y-1">');
-    expect(ACTIVE_REGION).toContain('<div className="space-y-0.5">');
-    expect(TEMPORARY_REGION).toContain('<div className="space-y-0.5">');
-    expect(NAV).toContain('<div className="mt-0.5 space-y-0.5 pl-3">');
-    expect(NAV).not.toContain('space-y-3');
-  });
-
-  it('Active now is not rendered while nothing is active, and folds from its title', () => {
-    expect(ACTIVE_REGION).toContain('if (activeRows.length === 0) return null;');
-    expect(ACTIVE_REGION).toContain("t('Expand active chats') : t('Collapse active chats')");
-    expect(ACTIVE_REGION).toContain('{!activeCollapsed && (');
-    // Memory only: nothing about it is stored.
-    expect(NAV).not.toContain('localStorage');
-  });
-
-  it('Repositories title bar: Collapse all, Filter, Add — size-6 buttons, size-3.5 icons', () => {
-    const header = slice(REPOSITORIES_REGION, '<SidebarSectionHeader', '</SidebarSectionHeader>');
-    const order = [
-      "t('Collapse all repositories')",
-      "t('Filter sessions')",
-      "t('Add Repository')",
-    ].map((label) => header.indexOf(label));
-    expect(order.every((at) => at > -1)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(header).toContain('<ChevronsDownUp className="size-3.5" />');
-    expect(header.split('className="size-6 text-muted-foreground"').length - 1).toBe(3);
-  });
-
-  it('Collapse all folds every folder by key and leaves the Temporary chats flag alone', () => {
-    const handler = slice(NAV, 'const collapseAllFolders = () =>', '));\n');
-    expect(handler).toContain('...prev,');
-    expect(handler).toContain('folders.map((folder) => [folder.projectId, false])');
-    expect(handler).not.toContain('visibleFolders');
-    expect(handler).not.toContain('UNBOUND_FOLDER_ID');
-  });
-
-  it('the folder order is held while the pointer or keyboard focus is in Repositories', () => {
-    expect(REPOSITORIES_REGION).toContain('{...reposHold.regionProps}');
-    expect(NAV).toContain('const reposHold = useRegionHold(!showAddRepositoryEmptyState);');
+  it('the group order is held while the pointer or keyboard focus is in the list', () => {
+    expect(NAV).toContain('{...listHold.regionProps}');
+    expect(NAV).toContain('const listHold = useRegionHold(!showAddRepositoryEmptyState);');
     expect(NAV).toContain('applyHeldFolderOrder(liveFolderOrder, heldFolderOrder)');
     const hook = slice(NAV, 'function useRegionHold(', '\n}\n');
     expect(hook).toContain('onPointerEnter: () => setPointerInside(true)');
@@ -250,6 +280,86 @@ describe('three regions (decision 170, issue #6 ruling 1)', () => {
     expect(hook).toContain('document.activeElement !== focusTargetRef.current');
     // Keyboard focus only — not the focus a click leaves behind.
     expect(slice(NAV, 'function hasKeyboardFocus(', '\n}\n')).toContain("':focus-visible'");
+  });
+
+  it('an empty repository group shows its header only (§1.5)', () => {
+    expect(REPOSITORY_GROUP).toContain('{expanded && limited.rows.length > 0 && (');
+    expect(NAV).not.toContain('folder.rows.length === 0 &&');
+  });
+});
+
+describe('the tool row (decision 183 §1.8, §2.1)', () => {
+  it('the search box is always there: no filter toggle, no visibility state', () => {
+    expect(NAV).not.toContain('searchVisible');
+    expect(NAV).not.toContain("t('Filter sessions')");
+    expect(NAV).not.toContain('ListFilter');
+    expect(NAV).toContain('<InputGroup className={SIDEBAR_SEARCH_CLASS}>');
+  });
+
+  it('the search box is drawn like the prototype, overriding the primitive by matching stacks', () => {
+    // User ruling 2026-10-11: prototype `.search`, not InputGroup's default.
+    // Each override repeats the variant stack of the base class it replaces,
+    // so tailwind-merge drops the base one (the rendered result is asserted in
+    // sidebarActiveAndFolders.test.ts). No `!important`.
+    const focus = 'has-[input:focus-visible,textarea:focus-visible]';
+    expect(constant('SIDEBAR_SEARCH_CLASS')).toBe(
+      [
+        'h-7 min-w-0 flex-1 rounded-sm border-border bg-transparent shadow-none before:hidden dark:bg-transparent',
+        `${focus}:border-muted-foreground ${focus}:bg-background ${focus}:ring-0`,
+        '[&_input]:placeholder:text-muted-foreground',
+      ].join(' ')
+    );
+    expect(NAV).not.toMatch(/SIDEBAR_SEARCH_CLASS[\s\S]{0,40}!/);
+    expect(NAV).toContain('<Search className="size-3.5 text-muted-foreground opacity-100" />');
+  });
+
+  it('collapse / expand all is one toggle over every group, Temporary chats included', () => {
+    const toggle = slice(NAV, 'const toggleAllGroups = () => {', '\n  };\n');
+    expect(toggle).toContain('const expand = allGroupsCollapsed;');
+    expect(toggle).toContain('[UNBOUND_FOLDER_ID, ...folders.map((folder) => folder.projectId)]');
+    expect(toggle).not.toContain('visibleFolders');
+    expect(NAV).toContain("allGroupsCollapsed ? t('Expand all groups') : t('Collapse all groups')");
+    expect(NAV).toContain('aria-label={toggleAllLabel}');
+    expect(NAV).toContain('title={toggleAllLabel}');
+    expect(NAV).toContain('<ChevronsUpDown className="size-4" />');
+    expect(NAV).toContain('<ChevronsDownUp className="size-4" />');
+    // Its state reads the stored folds of the groups the list shows without a
+    // search, so typing one cannot change its label.
+    expect(NAV).toContain(
+      'toggleGroupIds.length > 0 && toggleGroupIds.every((id) => !isProjectExpanded(id))'
+    );
+    expect(NAV).not.toContain('visibleGroupIds');
+  });
+
+  it('a search opens every group with matches, leaves the folds stored, and disables the toggle', () => {
+    expect(NAV).toContain(
+      'const groupExpanded = (groupId: string) => queryActive || isProjectExpanded(groupId);'
+    );
+    expect(TEMPORARY_GROUP).toContain('const expanded = groupExpanded(UNBOUND_FOLDER_ID);');
+    expect(REPOSITORY_GROUP).toContain('const expanded = groupExpanded(folder.projectId);');
+    // The header writes nothing while a search is typed.
+    expect(TEMPORARY_GROUP).toContain('onToggle: queryActive');
+    expect(REPOSITORY_GROUP).toContain('onToggle: queryActive');
+    expect(NAV).toContain('disabled={queryActive || toggleGroupIds.length === 0}');
+  });
+
+  it('clearing a search leaves exactly the last query s groups open (user ruling)', () => {
+    const handler = slice(NAV, 'const handleQueryChange = (next: string) => {', '\n  };\n');
+    // Only on the step from a non-empty query to an empty one...
+    expect(handler).toContain('if (queryActive && next.trim().length === 0) {');
+    // ...and only the groups the current (last non-empty) query shows.
+    expect(handler).toContain('...(unboundFolder ? [UNBOUND_FOLDER_ID] : []),');
+    expect(handler).toContain('visibleFolders.map((folder) => folder.projectId)');
+    expect(handler).toContain('matched.map((id) => [id, true])');
+    expect(handler).toContain('...prev,');
+    expect(NAV).toContain('onChange={(event) => handleQueryChange(event.target.value)}');
+    expect(NAV.split('setQuery(').length - 1).toBe(1);
+  });
+
+  it('28px icon buttons, and selection mode swaps the row in place', () => {
+    expect(constant('TOOL_BUTTON_CLASS')).toBe('size-7 shrink-0 text-muted-foreground sm:size-7');
+    expect(NAV).toContain('<div className="mt-1.5 flex h-7 shrink-0 items-center gap-0.5 px-2">');
+    expect(NAV).toContain("{t('{{count}} selected', { count: selection.size })}");
   });
 });
 
@@ -267,8 +377,8 @@ describe('rows', () => {
   it('every chat row says where it is and when, in its tooltip', () => {
     expect(ROW).toContain('title={tooltip}');
     expect(ROW).toContain('sidebarRowTooltip({');
-    // Three lists: Active now, the folders, Temporary chats.
-    expect(NAV.split('place={placeOf(row)}').length - 1).toBe(3);
+    // One row renderer for every list.
+    expect(NAV.split('place={placeOf(row)}').length - 1).toBe(1);
   });
 });
 
@@ -292,8 +402,14 @@ describe('search fields: InputGroup, input first (decision 167)', () => {
     const addon = source.indexOf('<InputGroupAddon align="inline-start">');
     expect(input).toBeGreaterThan(-1);
     expect(addon).toBeGreaterThan(input);
-    const group = slice(source, '<InputGroup ', '>');
-    expect(group).toContain('h-7 rounded-sm before:rounded-[calc(var(--radius-sm)-1px)]');
+    // LeftNav names its classes in a constant (decision 183's prototype look,
+    // which hides the group's `::before` hairline altogether).
+    const group = file.endsWith('LeftNav.tsx')
+      ? constant('SIDEBAR_SEARCH_CLASS')
+      : slice(source, '<InputGroup ', '>');
+    expect(group).toContain('h-7');
+    expect(group).toContain('rounded-sm');
+    expect(group).toMatch(/before:(hidden|rounded-\[calc\(var\(--radius-sm\)-1px\)\])/);
     expect(source.slice(input, source.indexOf('/>', input))).toContain('size="sm"');
   });
 

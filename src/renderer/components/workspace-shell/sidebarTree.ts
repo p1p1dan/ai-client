@@ -3,9 +3,10 @@
  *
  * Workspace is no longer a tree level: sessions from every worktree of a
  * project merge under one folder node. Decision 167 (GitHub issue #3) moved
- * the branch off the rows: the folder row names its main workspace's branch
- * once (`folderPrimaryChip`), and only a chat on another workspace (a linked
- * worktree) shows its own (`chipShownInFolder`). Selection of "where to run"
+ * the branch off the rows: only a chat on another workspace than the folder's
+ * main one (a linked worktree) shows its own (`chipShownInFolder`); decision
+ * 183 left the main branch to the group header's tooltip
+ * (`folderPrimaryChip`, `folderTooltip`). Selection of "where to run"
  * is the Composer target bar's job (T-27); nothing here is selectable or
  * expandable per workspace.
  *
@@ -37,16 +38,10 @@ export const LEGACY_DIVERGED_HINT =
 export const FOLDER_DEFAULT_LIMIT = 8;
 
 /**
- * Decision 170 (issue #6 ruling 2): the "Active now" region lists this many
- * rows until "View more" is pressed. Search lifts it (`limitActiveRows`).
- */
-export const ACTIVE_DEFAULT_LIMIT = 5;
-
-/**
  * The git branch of the workspace a chat runs in. Decision 167 retired the
  * `kind` chips (「临时」「远程」 on every row, decision 144 §2–3): a temporary
- * chat is told by its own section (`SidebarSessionRow.unbound`), a remote
- * repository by its folder row.
+ * chat is told by its own group (`SidebarSessionRow.unbound`), a remote
+ * repository by its group header's tooltip.
  */
 export interface SidebarChip {
   variant: 'branch';
@@ -197,13 +192,14 @@ export function chipForWorkspace(workspace: ChatWorkspace | undefined): SidebarC
 }
 
 /**
- * Decision 167 §2: what a folder row says about where its chats run — the
- * main workspace's branch, shown once after the folder name, and whether the
- * repository is remote. null for a folder with no main workspace (the
+ * Decision 167 §2: where a folder's chats run by default — the main
+ * workspace and its branch, and whether the repository is remote. Decision
+ * 183 §2.3 dropped the branch from the group header; its tooltip
+ * (`folderTooltip`) still names it. null for a folder with no main workspace (the
  * synthetic Temp project holds one temp workspace per directory).
  */
 export interface FolderPrimaryChip {
-  /** The main (or remote) workspace the folder row speaks for. */
+  /** The main (or remote) workspace the group header speaks for. */
   workspaceId: string;
   /** Its branch; null when unknown, and always for a remote repository. */
   branch: string | null;
@@ -228,8 +224,8 @@ export function folderPrimaryChip(
 /**
  * Decision 167 §2 (replaces D21-A): inside its folder a row shows its branch
  * only when the chat runs on another workspace than the folder's main one —
- * a linked worktree. The folder row already names the main branch, and eight
- * rows repeating it was the issue. Rows in 「正在活动」 never show it (the
+ * a linked worktree. Eight rows repeating the main branch was the issue
+ * (the group header's tooltip names it). Temporary chats never show one (the
  * caller simply does not ask).
  */
 export function chipShownInFolder(
@@ -249,21 +245,7 @@ export function lastBranchSegment(name: string): string {
   return segments[segments.length - 1] ?? name;
 }
 
-/**
- * Decision 167 §2: the folder row's branch text — the main branch, with
- * 「· 远程」 after it for a remote repository (just 「远程」 when a remote
- * repository has no branch to name, which is always today). null hides it.
- */
-export function folderBranchLabel(
-  primary: FolderPrimaryChip | null,
-  t: Translate = englishTranslate
-): string | null {
-  if (!primary) return null;
-  if (primary.remote) return primary.branch ? `${primary.branch} · ${t('Remote')}` : t('Remote');
-  return primary.branch;
-}
-
-/** Decision 167 §2: the folder row's tooltip — name / main branch / remote. */
+/** Decision 167 §2: the group header's tooltip — name / main branch / remote. */
 export function folderTooltip(
   name: string,
   primary: FolderPrimaryChip | null,
@@ -665,35 +647,6 @@ export function limitFolderRows(input: FolderRowsLimitInput): FolderRowsLimitRes
 }
 
 /**
- * Decision 170 (issue #6 ruling 2): the "Active now" region lists its first
- * {@link ACTIVE_DEFAULT_LIMIT} rows and hides the rest behind "View more (N)",
- * ending in "Show less" once expanded — the folder cap's words and shape.
- *
- * Unlike a folder it pins nothing: the selected chat past the cap stays behind
- * "View more" (it is still listed, and highlighted, in its own folder). A
- * search lists every match, as in a folder.
- */
-export function limitActiveRows(input: {
-  /** `deriveActiveRows`' result: running turns first, then last activity. */
-  rows: readonly SidebarSessionRow[];
-  showAll: boolean;
-  queryActive: boolean;
-}): FolderRowsLimitResult {
-  const total = input.rows.length;
-  if (input.queryActive || total <= ACTIVE_DEFAULT_LIMIT) {
-    return { rows: [...input.rows], hiddenCount: 0, collapsible: false };
-  }
-  if (input.showAll) {
-    return { rows: [...input.rows], hiddenCount: 0, collapsible: true };
-  }
-  return {
-    rows: input.rows.slice(0, ACTIVE_DEFAULT_LIMIT),
-    hiddenCount: total - ACTIVE_DEFAULT_LIMIT,
-    collapsible: false,
-  };
-}
-
-/**
  * Decision 170 (issue #6 ruling 6): when each repository folder last saw
  * activity — the newest `updatedAt` among its chats, grouped the way
  * `buildSidebarFolders` groups them (by the workspace's project; unbound and
@@ -775,56 +728,49 @@ export function applyHeldFolderOrder<T extends Pick<SidebarFolder, 'projectId'>>
   ];
 }
 
-export interface ActiveRowsInput {
-  sessions: readonly ChatSession[];
-  workspaces: readonly ChatWorkspace[];
-  /** The store's `hostBoundSessionIds`: started on the engine in this run. */
-  hostBoundSessionIds: readonly string[];
-  query?: string;
-  /** T091: exempt from the title query — see `matchesQuery`. */
-  activeSessionId?: string | null;
-  /** Decision 145: see `SidebarTreeInput.t`. */
-  t?: Translate;
+/**
+ * Decision 183 §2.2: what a folded group says about the rows it hides. With
+ * 「正在活动」 gone, folding a group would otherwise hide that a chat in it is
+ * running or waiting.
+ */
+export interface SidebarGroupSummary {
+  /** Rows running a turn (the row's spinner); the waiting ones not counted. */
+  running: number;
+  /** A row is parked on an approval or a question (the row's orange dot). */
+  waiting: boolean;
+  /**
+   * An unseen result (the row's red / green dot): `failed` outranks
+   * `finished`; null when there is none.
+   */
+  unread: 'failed' | 'finished' | null;
 }
 
 /**
- * Decision 137 §1 — "Active now". Decision 167 §1 made it the upper segment of
- * a two-part Recent; decision 170 (issue #6 ruling 2, user 2026-10-10) made it
- * the sidebar's whole top region again: Recent and its 48-hour list are gone,
- * the region shows 5 rows behind "View more" (`limitActiveRows`) and is not
- * rendered at all while this returns nothing.
- *
- * A conversation is listed while its session is started on the engine in this
- * run (`hostBoundSessionIds`: a send created or resumed it; a preview never
- * does) or while a turn of it is running. The binding is dropped when the pool
- * reclaims the session, the engine restarts, or the user ends the
- * conversation, so such a row leaves this region by itself.
- *
- * Running turns come first, the rest by last activity. The same orphan and
- * search rules as the folders apply, so a search narrows this region too, and
- * an unbound (temporary) chat is not mistaken for an orphan.
+ * Decision 183 §2.2: the group's rows' slot marks, folded into one summary.
+ * Each row counts the way its own slot shows it — a busy row spins or waits,
+ * and only a row that is not busy can carry an unread dot — so the summary
+ * never says something no row would. null when there is nothing to show.
  */
-export function deriveActiveRows(input: ActiveRowsInput): SidebarSessionRow[] {
-  const normalized = normalizeQuery(input.query);
-  const workspaceById = new Map(input.workspaces.map((ws) => [ws.id, ws] as const));
-  const bound = new Set(input.hostBoundSessionIds);
-  return input.sessions
-    .filter((session) => {
-      if (!isUnboundSessionRow(session) && !workspaceById.has(session.workspaceId)) {
-        return false;
-      }
-      if (!matchesQuery(session, normalized, input.activeSessionId, input.t)) {
-        return false;
-      }
-      return bound.has(session.id) || isBusySessionStatus(session.status);
-    })
-    .map((session) =>
-      toRow(
-        session,
-        isUnboundSessionRow(session) ? undefined : workspaceById.get(session.workspaceId)
-      )
-    )
-    .sort((a, b) => Number(b.busy) - Number(a.busy) || byUpdatedAtDesc(a, b));
+export function deriveGroupSummary(
+  rows: readonly Pick<SidebarSessionRow, 'sessionId' | 'busy' | 'status' | 'failed'>[],
+  unreadSessionIds: readonly string[]
+): SidebarGroupSummary | null {
+  const unread = new Set(unreadSessionIds);
+  let running = 0;
+  let waiting = false;
+  let failed = false;
+  let finished = false;
+  for (const row of rows) {
+    if (row.busy) {
+      if (isWaitingSessionStatus(row.status)) waiting = true;
+      else running += 1;
+    } else if (unread.has(row.sessionId)) {
+      if (row.failed) failed = true;
+      else finished = true;
+    }
+  }
+  if (running === 0 && !waiting && !failed && !finished) return null;
+  return { running, waiting, unread: failed ? 'failed' : finished ? 'finished' : null };
 }
 
 /**

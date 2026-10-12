@@ -10,8 +10,8 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
  *
  * `sidebarTree.test.ts` pins the rule inside `matchesQuery`. This file pins the
  * half that rule cannot see — that LeftNav actually HANDS it `activeSessionId`
- * at every derivation (folders, temporary chats, and the "Active now" region —
- * decision 170 retired Recent's 48-hour list). The defect it
+ * at every derivation (the repository groups and Temporary chats — decision
+ * 170 retired Recent and decision 183 「正在活动」). The defect it
  * guards was reported as "New did nothing": with a search active, the new chat
  * is titled `New chat`, the query does not match it, and the row the click was
  * supposed to produce never appeared.
@@ -109,7 +109,7 @@ async function typeSearch(text: string): Promise<void> {
   });
 }
 
-/** How many sidebar rows carry this title (Active now and the tree may both list it). */
+/** How many sidebar rows carry this title (since decision 183 a chat is listed once). */
 function rowsTitled(title: string): number {
   return [...container.querySelectorAll('[role="button"]')].filter((node) =>
     node.textContent?.includes(title)
@@ -178,25 +178,20 @@ it('keeps an active temporary chat in its own partition too', async () => {
   expect(rowsTitled('Untitled chat')).toBe(0);
 });
 
-it('keeps an active, started chat in Active now and in its folder', async () => {
-  // The fourth derivation (`deriveActiveRows`, the top region since decision
-  // 170). The chat is started on the engine, so it is listed there and in its
-  // folder: two rows — and still two once a query that does not match its
-  // title is typed, which is what proves the region was given
-  // `activeSessionId` too.
+it('lists an active, started chat once — in its folder — and keeps it there under a query', async () => {
+  // Decision 183 retired 「正在活动」 (the fourth derivation): a started chat
+  // is no longer listed twice. It stays in its folder, marked by the
+  // background ring, and the folder still exempts it from the query.
   useChatSessionsStore.setState({ hostBoundSessionIds: ['session-open'] });
   await act(async () => root.render(createElement(LeftNav, { repositories: [REPO] as never })));
-  expect(rowsTitled('Untitled chat')).toBe(2);
-  // The region, by its title.
-  const region = () =>
-    [...container.querySelectorAll('p')]
-      .find((node) => node.textContent === 'Active now')
-      ?.closest('section');
-  expect(region()?.textContent).toContain('Untitled chat');
+  expect(rowsTitled('Untitled chat')).toBe(1);
+  expect(container.textContent).not.toContain('Active now');
+  const folder = () => container.querySelector(`[data-sidebar-group="${PROJECT_ID}"]`);
+  expect(folder()?.textContent).toContain('Untitled chat');
 
   await typeSearch('parser');
-  expect(rowsTitled('Untitled chat')).toBe(2);
-  expect(region()?.textContent).toContain('Untitled chat');
+  expect(rowsTitled('Untitled chat')).toBe(1);
+  expect(folder()?.textContent).toContain('Untitled chat');
 
   await act(async () => {
     useChatSessionsStore.setState({ activeSessionId: null });

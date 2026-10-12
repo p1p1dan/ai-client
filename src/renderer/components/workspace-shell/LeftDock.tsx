@@ -14,10 +14,14 @@
  *   - the drag handle moved to the panel's right edge.
  *
  * What is NEW: the rail is permanent. `sidebarCollapsed` now hides the PANEL,
- * not the column, so the five entries are always one click away — which is the
- * whole reason the prototype's rail is icon-only and the panel carries a title
- * row (see `DockTitle`), and why H/18 S4 moved the collapse toggle onto the
- * rail: it is the half of the dock that is always there to click.
+ * not the column, so the five entries are always one click away — which is why
+ * H/18 S4 moved the collapse toggle onto the rail: it is the half of the dock
+ * that is always there to click.
+ *
+ * Decision 183 (user ruling 2026-10-11) removed the panel's title row
+ * (`DockTitle`) from all five panels: the content starts at the top, the
+ * rail's highlight says which panel is showing, and the panel names itself to
+ * screen readers through its region's `aria-label`.
  */
 
 import type { TempWorkspaceItem } from '@shared/types';
@@ -175,23 +179,16 @@ export function LeftDock({
       )}
       style={{ width: dockWidthVar }}
     >
+      {/* Decision 183: with the panel's title row gone, the rail no longer
+          starts below an `h-9` spacer (U27). It opens with 8px of padding, as
+          in the prototype, so its first icon sits level with the panel's
+          first row (the chat panel's 「新建对话」) instead of a row that is no
+          longer there. */}
       <nav
         aria-label={t('Primary navigation')}
-        className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card pb-2"
+        className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card py-2"
         style={{ width: DOCK_RAIL_WIDTH }}
       >
-        {/* U27: the rail starts BELOW the title row, not at the window's top
-            edge. Every other column in this shell opens with an `h-9` bar (the
-            panel's own `DockTitle`, the center's `SessionBar`, the editor's tab
-            strip), so a rail running the full height put its first icon on a
-            line of its own and nothing else lined up with it.
-
-            A spacer of the same `h-9` rather than a padding value: it is the
-            title row's height that this has to track, and reading it from the
-            same token is what keeps the two in step if that row ever changes.
-            The rail's old `pt-1` is dropped — with the spacer it would push the
-            icons 4px below the content they are meant to align with. */}
-        <div aria-hidden className="h-9 shrink-0" />
         {/* Decision 174 (issue #6, user ruling 2026-10-10, entry (a)): the home
             page, above the five panels and set off from them by a short rule —
             it changes the center column, not the left panel. Reachable from
@@ -262,8 +259,11 @@ export function LeftDock({
       >
         {descriptor && (
           <>
-            <DockTitle labelKey={descriptor.labelKey} />
-            <div className="relative isolate min-h-0 flex-1">
+            {/* Decision 183 §2.7: no visible title; the region names the panel. */}
+            <section
+              aria-label={t(descriptor.labelKey)}
+              className="relative isolate min-h-0 flex-1"
+            >
               {/*
                 Multi-mount stack, carried over from `ContextPanel` unchanged.
                 Hidden layers use `invisible pointer-events-none` + `inert`,
@@ -311,7 +311,7 @@ export function LeftDock({
                   <SurfacePlaceholder surface={descriptor} />
                 </div>
               )}
-            </div>
+            </section>
             <UserFooterPill />
           </>
         )}
@@ -334,32 +334,6 @@ export function LeftDock({
       </div>
 
       <CapabilitiesDialog open={capabilitiesOpen} onOpenChange={setCapabilitiesOpen} />
-    </div>
-  );
-}
-
-/**
- * The panel's h-9 title row.
- *
- * Not decoration: the rail is icon-only (the user rejected labelled icons —
- * 「不行好丑」), so this row is the only place the current section names itself.
- * It is also what keeps the three columns' bars on one horizontal rule, which
- * D07 decision two established and D08 keeps.
- *
- * S4 (H/18) took the collapse button off this row and put it on the rail. The
- * row is gone the moment the panel closes, so the button that closed it went
- * with it and only Ctrl+B could bring it back.
- *
- * Decision 167 (issue #3): the L0 of the sidebar hierarchy — 600, no
- * tracking. Decision 170 (issue #6 ruling 3): 16px (`text-section`), the same
- * tier as the region titles below it. Shared by every panel, so all five
- * titles take this size.
- */
-function DockTitle({ labelKey }: { labelKey: string }) {
-  const { t } = useI18n();
-  return (
-    <div className="flex h-9 shrink-0 items-center gap-2 border-b px-3">
-      <span className="min-w-0 flex-1 truncate text-section font-semibold">{t(labelKey)}</span>
     </div>
   );
 }

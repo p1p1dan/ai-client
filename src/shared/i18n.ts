@@ -555,7 +555,6 @@ export const zhTranslations: Record<string, string> = {
   'Remove repository description': '此操作只会从应用中移除，不会删除本地文件。',
   'Repository Settings': '仓库设置',
   'Repository actions': '仓库操作',
-  Repositories: '仓库列表',
   'Auto-initialize new worktrees': '自动初始化新 Worktree',
   'Automatically run init script when creating new worktrees':
     '创建新 Worktree 时自动运行初始化脚本',
@@ -907,13 +906,10 @@ export const zhTranslations: Record<string, string> = {
   'Temporary chats': '临时对话',
   Result: '结果',
   'Show less': '收起',
-  // dsh-rebase decision 137: the sidebar section of conversations started on
-  // the engine in this run, and the row that ends a folder capped at 8.
-  'Active now': '正在活动',
+  // dsh-rebase decision 137: the row that ends a sidebar group capped at 8.
   'View more ({{count}})': '查看更多（{{count}}）',
   // Decision 138 (point-check issue 34): a sidebar rename that did not land.
   'Could not rename the chat': '重命名失败',
-  'Filter sessions': '筛选会话',
   'No matching sessions': '无匹配会话',
   'Settings Display Mode': '设置视图',
   'Switch to floating mode': '切换为浮动模式',
@@ -3962,18 +3958,16 @@ Object.assign(zhTranslations, {
 // Sidebar hierarchy (issue #3)
 /**
  * dsh-rebase decision 167 (GitHub issue #3): the 「聊天」 sidebar's section
- * hierarchy — the three-line row tooltip, the folder row's tooltip, the
- * Temporary chats section toggle and the Temp Session project's display name
- * (`LeftNav`, `sidebarTree`). Recent's 「48 小时内」 label went with Recent
- * (decision 170).
+ * hierarchy — the three-line row tooltip, the group header's tooltip and the
+ * Temp Session project's display name (`LeftNav`, `sidebarTree`). Recent's
+ * 「48 小时内」 label went with Recent (decision 170); the Temporary chats
+ * section toggle went with the section (decision 183).
  */
 Object.assign(zhTranslations, {
   'Updated {{time}}': '更新于 {{time}}',
   'Main branch: {{branch}}': '主工作区分支：{{branch}}',
   'Remote repository': '远程仓库',
   '{{place}} (remote)': '{{place}}（远程）',
-  'Expand temporary chats': '展开临时对话',
-  'Collapse temporary chats': '收起临时对话',
   'Temporary workspaces': '临时工作区',
 });
 
@@ -4150,17 +4144,24 @@ Object.assign(zhTranslations, {
   'Could not withdraw the message': '撤回失败',
 });
 
-// Sidebar regions (issue #6)
+// Sidebar groups (decision 183)
 /**
- * dsh-rebase decision 170 (GitHub issue #6): the 「正在活动」 region's chevron
- * and the 「仓库列表」 region's Collapse all button (`LeftNav`). 「全部折叠」 is
- * a key of its own: 「折叠所有」 (`Collapse all`) and 「折叠所有文件夹」
- * (`Collapse all folders`) belong to the changes tree and the file tree.
+ * dsh-rebase decision 183: the 「聊天」 sidebar after 「正在活动」 and the
+ * region titles went (`LeftNav`). The collapse / expand all toggle beside the
+ * search box — keys of their own, since 「折叠所有」 (`Collapse all`) and
+ * 「折叠所有文件夹」 (`Collapse all folders`) belong to the changes tree and the
+ * file tree; the 「未启动」 ring; the marks a folded group shows in place of
+ * its rows; and the Temporary chats header's tooltip.
  */
 Object.assign(zhTranslations, {
-  'Expand active chats': '展开正在活动',
-  'Collapse active chats': '收起正在活动',
-  'Collapse all repositories': '全部折叠',
+  'Collapse all groups': '全部折叠',
+  'Expand all groups': '全部展开',
+  'Not started': '未启动',
+  '{{count}} chats running': '{{count}} 个对话在运行',
+  'A chat is waiting for you': '有对话在等你',
+  'A chat failed while you were away': '有对话失败了，还没看过',
+  'A chat finished while you were away': '有对话跑完了，还没看过',
+  'Chats that belong to no repository': '不属于任何仓库的对话',
 });
 
 // Home page (issue #6)

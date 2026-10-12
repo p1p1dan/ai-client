@@ -106,20 +106,23 @@ describe('P1-11 the terminal shares the right column with the files', () => {
   });
 });
 
-describe('U27 the rail starts below the title row', () => {
-  it('opens with a title-row-height spacer instead of running to the top edge', () => {
+/**
+ * U27 put an `h-9` spacer at the top of the rail so its first icon lined up
+ * with the panel's first row below the panel's `h-9` title row. Decision 183
+ * removed that title row from all five panels, so the spacer went with it.
+ */
+describe('the rail opens level with the panel content (decision 183, was U27)', () => {
+  it('starts with 8px of padding, not a spacer for a title row that is gone', () => {
     const dock = code(join(SHELL_DIR, 'LeftDock.tsx'));
-    expect(dock).toContain('<div aria-hidden className="h-9 shrink-0" />');
-    // The spacer replaces the old top padding rather than adding to it: 4px of
-    // `pt-1` under a 36px spacer is 4px of misalignment, which is the whole
-    // thing this was meant to fix.
-    expect(dock).not.toContain('bg-card pt-1 pb-2');
+    expect(dock).toContain(
+      'className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card py-2"'
+    );
+    expect(dock).not.toContain('<div aria-hidden className="h-9 shrink-0" />');
   });
 
-  it('tracks the same h-9 the panel title row uses', () => {
-    // If `DockTitle` ever stops being h-9 these two must move together, and
-    // reading them from one token is what makes that visible.
+  it('the panel has no h-9 title row to track', () => {
     const dock = code(join(SHELL_DIR, 'LeftDock.tsx'));
-    expect(dock).toContain('<div className="flex h-9 shrink-0 items-center gap-2 border-b px-3">');
+    expect(dock).not.toContain('DockTitle');
+    expect(dock).not.toContain('flex h-9 shrink-0 items-center gap-2 border-b px-3');
   });
 });

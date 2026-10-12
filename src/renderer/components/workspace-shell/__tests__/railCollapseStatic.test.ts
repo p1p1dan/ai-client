@@ -15,10 +15,6 @@ const dockPath = path.join(process.cwd(), 'src/renderer/components/workspace-she
 const dock = stripComments(readFileSync(dockPath, 'utf8'), dockPath);
 
 const railSource = dock.slice(dock.indexOf('<nav'), dock.indexOf('</nav>'));
-const titleSource = (() => {
-  const start = dock.indexOf('function DockTitle(');
-  return dock.slice(start, dock.indexOf('\n}', start));
-})();
 
 describe('S4 collapse control on the rail', () => {
   it('the rail carries it, and it toggles rather than only closing', () => {
@@ -39,11 +35,14 @@ describe('S4 collapse control on the rail', () => {
     expect(railSource).toContain('icon={isOpen ? PanelLeftClose : PanelLeftOpen}');
   });
 
-  it('the panel title row no longer holds a duplicate', () => {
-    expect(titleSource).not.toContain('Collapse sidebar');
-    expect(titleSource).not.toContain('PanelLeftClose');
-    // The row still names the surface — that is the reason it exists at all.
-    expect(titleSource).toContain('{t(labelKey)}');
+  it('the panel has no title row any more (decision 183), so the rail holds the only one', () => {
+    expect(dock).not.toContain('DockTitle');
+    // The collapse control appears once, on the rail.
+    expect(dock.split("t('Collapse sidebar')").length - 1).toBe(1);
+    expect(railSource).toContain("t('Collapse sidebar')");
+    expect(dock.split('PanelLeftClose').length - 1).toBe(2); // import + the rail
+    // The panel still names the surface — to screen readers, on its region.
+    expect(dock).toContain('aria-label={t(descriptor.labelKey)}');
   });
 
   it('Escape still closes the panel — that path was not part of the move', () => {

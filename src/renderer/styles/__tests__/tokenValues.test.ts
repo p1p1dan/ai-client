@@ -128,6 +128,39 @@ describe('decision 170: --foreground-soft and --text-section', () => {
 });
 
 /**
+ * Decision 183: the sidebar's "not started" ring, one step quieter than the
+ * `--muted-foreground` ring of a chat attached in the background. A
+ * derivation, like `--foreground-soft`: `--muted-foreground` mixed 45% toward
+ * the sidebar's actual surface (`--card` at 40% over `--background`, which is
+ * what LeftDock paints), so it follows light, dark and sync-terminal.
+ */
+describe('decision 183: --muted-foreground-faint', () => {
+  const themeBlock = extractBlock('@theme');
+  const declaration = (/--muted-foreground-faint:\s*([^;]+);/.exec(source)?.[1] ?? '').replace(
+    /\s+/g,
+    ' '
+  );
+
+  it('is --muted-foreground mixed 45% toward the sidebar surface, in oklab', () => {
+    expect(declaration).toBe(
+      'color-mix( in oklab, var(--muted-foreground) 45%, color-mix(in oklab, var(--card) 40%, var(--background)) )'
+    );
+  });
+
+  it('is declared once, in :root only, and carries no alpha of its own', () => {
+    expect(source.split('--muted-foreground-faint:').length - 1).toBe(1);
+    expect(rootBlock).toContain('--muted-foreground-faint:');
+    expect(darkBlock).not.toContain('--muted-foreground-faint');
+    expect(declaration).not.toContain('transparent');
+    expect(declaration).not.toMatch(/\/\s*[\d.]+\s*\)/);
+  });
+
+  it('@theme bridges it, so Tailwind emits border-muted-foreground-faint', () => {
+    expect(themeBlock).toContain('--color-muted-foreground-faint: var(--muted-foreground-faint);');
+  });
+});
+
+/**
  * Decision 174 (issue #6, second wave): the home title's tier. 26px with a 1.3
  * line height (the prototype's v4 value, down from v3's proposed 28px); it is a
  * `--text-*` theme key so `text-display` exists as a utility, and it is

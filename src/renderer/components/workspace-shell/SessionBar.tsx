@@ -136,7 +136,8 @@ export function SessionBar({
           h-9 line, told apart by weight (panel name 600, chat name 400). The
           old `font-medium` rendered as 400 on Windows anyway. Decision 170
           (issue #6 ruling 3): both are 16px (`text-section`) now. Decision
-          174: no conversation open is the home page, and the bar says so. */}
+          183 removed the panel title; this stays 16px / 400. Decision 174: no
+          conversation open is the home page, and the bar says so. */}
       <span className="min-w-0 truncate text-section text-foreground">
         {activeSession ? displaySessionTitle(activeSession.title, t) : t('Home')}
       </span>

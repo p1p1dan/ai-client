@@ -55,6 +55,15 @@ describe('cn with the sidebar region tokens (decision 170)', () => {
     expect(cn('text-foreground', 'text-foreground-soft')).toBe('text-foreground-soft');
     expect(cn('text-foreground-soft', 'text-accent-foreground')).toBe('text-accent-foreground');
   });
+
+  it('treats border-muted-foreground-faint (decision 183) as a border colour', () => {
+    expect(cn('border-muted-foreground', 'border-muted-foreground-faint')).toBe(
+      'border-muted-foreground-faint'
+    );
+    expect(cn('border', 'border-muted-foreground-faint')).toBe(
+      'border border-muted-foreground-faint'
+    );
+  });
 });
 
 /**
