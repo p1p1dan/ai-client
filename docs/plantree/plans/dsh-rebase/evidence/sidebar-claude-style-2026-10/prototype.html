@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>侧栏改版预览 v5（定稿）· 参考 Claude 桌面版</title>
+<title>侧栏改版预览 v6（定稿）· 参考 Claude 桌面版</title>
 <style>
 /* Tokens copied from globals.css (Flexoki light / dark), same as the #6 prototype. */
 :root {
@@ -243,6 +243,25 @@ svg.spin { width: 12px; height: 12px; color: var(--status-running); animation: s
 .me .mail { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   font-size: var(--text-meta); color: var(--foreground-soft); }
 .me svg { width: 14px; height: 14px; color: var(--muted-foreground); }
+.me .cost { flex-shrink: 0; font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.me .two { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.me .two .mail { flex: none; color: var(--foreground); }
+.me .two .sub { font-size: var(--text-meta); color: var(--muted-foreground); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* v6 footer variants */
+.foot.now .me { height: 24px; gap: 6px; padding: 0 6px; }
+.foot.now .av { width: 16px; height: 16px; font-size: 11px; background: var(--muted); }
+.foot.now .mail { color: var(--muted-foreground); }
+.foot.card { padding: 8px; }
+.foot.card .me { height: 44px; gap: 10px; }
+.foot.card .av { width: 28px; height: 28px; font-size: 13px; background: var(--primary); color: var(--background); }
+
+/* v6 zone separation */
+.list { border-top: 1px solid transparent; border-bottom: 1px solid transparent; }
+.side.sep-line .tools, .side.sep-line .batchbar,
+.side.sep-scroll .tools, .side.sep-scroll .batchbar { padding-bottom: 8px; }
+.side.sep-line .list { border-top-color: var(--border); border-bottom-color: var(--border); }
+.side.sep-scroll .list:not(.at-top) { border-top-color: var(--border); }
+.side.sep-scroll .list:not(.at-bottom) { border-bottom-color: var(--border); }
 
 /* center — design notes in place of the chat */
 .center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -267,10 +286,11 @@ svg.spin { width: 12px; height: 12px; color: var(--status-running); animation: s
 <body>
 
 <div class="toolbar">
-  <b>侧栏改版预览 v5（定稿）</b>
+  <b>侧栏改版预览 v6（定稿）</b>
   <span class="seg"><span class="lab">主题</span><span class="opts" data-k="theme"><button data-v="light" class="on">浅色</button><button data-v="dark">深色</button></span></span>
   <span class="seg"><span class="lab">「聊天」面板标题</span><span class="opts" data-k="dock"><button data-v="keep">保留</button><button data-v="none" class="on">去掉（已定）</button></span></span>
-  <span class="seg"><span class="lab">搜索框</span><span class="opts" data-k="search"><button data-v="proto" class="on">原型（已定）</button><button data-v="coss">coss 默认（已否决）</button></span></span>
+  <span class="seg"><span class="lab">分隔线</span><span class="opts" data-k="sep"><button data-v="none">无</button><button data-v="line" class="on">通栏细线（已定）</button><button data-v="scroll">滚动时出现</button></span></span>
+  <span class="seg"><span class="lab">账户栏</span><span class="opts" data-k="foot"><button data-v="now">v5 实现（24px）</button><button data-v="proto" class="on">32px、不显示用量（已定）</button><button data-v="card">两行卡片</button></span></span>
 </div>
 
 <div class="frame">
@@ -293,9 +313,7 @@ svg.spin { width: 12px; height: 12px; color: var(--status-running); animation: s
       <button id="cancelBatch">取消</button>
     </div>
     <div class="list" id="list"></div>
-    <div class="foot">
-      <button class="me" data-toast="账户菜单（与现在相同）"><span class="av">U</span><span class="mail">user@example.com</span><span data-ic="updown"></span></button>
-    </div>
+    <div class="foot" id="foot"></div>
   </aside>
 
   <main class="center">
@@ -434,7 +452,7 @@ const REPOS = [
 ];
 
 const state = {
-  label: 'A', temp: 'top', age: 'hide', dock: 'none', search: 'proto', q: '', selecting: false, picked: new Set(), sel: 'a3',
+  label: 'A', temp: 'top', age: 'hide', dock: 'none', search: 'proto', sep: 'line', foot: 'proto', q: '', selecting: false, picked: new Set(), sel: 'a3',
   collapsed: { pixel: true, pipe: true, infra: true, mobile: true },
   showAll: {},
 };
@@ -514,7 +532,8 @@ function groupHtml(g) {
 
 function render() {
   const side = document.getElementById('side');
-  side.className = `side v${state.label} ${state.age === 'hide' ? 'noage' : ''} ${state.selecting ? 'selecting' : ''} ${state.dock === 'none' ? 'nodock' : ''} ${state.search === 'coss' ? 'coss' : ''}`;
+  side.className = `side v${state.label} ${state.age === 'hide' ? 'noage' : ''} ${state.selecting ? 'selecting' : ''} ${state.dock === 'none' ? 'nodock' : ''} ${state.search === 'coss' ? 'coss' : ''} ${state.sep === 'none' ? '' : 'sep-' + state.sep}`;
+  renderFoot();
   const groups = state.temp === 'top' ? [TEMP, ...REPOS] : [...REPOS, TEMP];
   const html = groups.map(groupHtml).join('');
   document.getElementById('list').innerHTML = html || '<p class="empty-q">没有匹配的对话</p>';
@@ -525,6 +544,25 @@ function render() {
   ca.title = folded ? '全部展开' : '全部折叠';
   ca.innerHTML = ic(folded ? 'expand' : 'collapse');
 }
+function renderFoot() {
+  const foot = document.getElementById('foot');
+  foot.className = `foot ${state.foot}`;
+  const chev = ic('updown');
+  foot.innerHTML = state.foot === 'card'
+    ? `<button class="me" data-toast="账户菜单（与现在相同）"><span class="av">U</span>
+         <span class="two"><span class="mail">user@example.com</span><span class="sub">今日 $1.23</span></span>${chev}</button>`
+    : `<button class="me" data-toast="账户菜单（与现在相同）"><span class="av">U</span>
+         <span class="mail">user@example.com</span>${state.foot === 'now' ? '<span class="cost">$1.23</span>' : ''}${chev}</button>`;
+  foot.querySelector('[data-toast]').addEventListener('click', (e) => toast(e.currentTarget.dataset.toast));
+  syncScrollEdges();
+}
+function syncScrollEdges() {
+  const l = document.getElementById('list');
+  l.classList.toggle('at-top', l.scrollTop <= 0);
+  l.classList.toggle('at-bottom', l.scrollTop + l.clientHeight >= l.scrollHeight - 1);
+}
+document.getElementById('list').addEventListener('scroll', syncScrollEdges);
+window.addEventListener('resize', syncScrollEdges);
 function allFolded() { return [TEMP, ...REPOS].every((g) => state.collapsed[g.id]); }
 
 function toast(msg) {
