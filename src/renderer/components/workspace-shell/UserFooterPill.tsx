@@ -69,8 +69,9 @@ export function UserFooterPill() {
 
   return (
     // Decision 183 (prototype v6): a full-width hairline on top separates the
-    // account zone from the list above it.
-    <div className="flex shrink-0 items-center gap-1 border-t p-2">
+    // account zone from the list above it. Decision 188 (2026-10-13): 12px
+    // from that hairline to the row, 10px from the row to the window bottom.
+    <div className="flex shrink-0 items-center gap-1 border-t px-2 pt-3 pb-2.5">
       <Popover open={profileOpen} onOpenChange={setProfileOpen}>
         <PopoverTrigger
           className={cn(

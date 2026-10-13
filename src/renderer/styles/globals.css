@@ -80,8 +80,15 @@
    * floor for this one tier: a group label is short, its rows are the text
    * being read, and the drop is what actually makes it recede. The rows
    * themselves stay at 14px.
+   *
+   * 2026-10-13 (screenshot-style spacing, decision 188): 13 -> 12, together
+   * with the rows growing to 32px. The reference the user picked reads as
+   * "one type size for the whole panel" with a single lighter step for the
+   * labels; at a 32px row the 13px label stopped reading as a step down. The
+   * exception above still covers it -- same tier, same reason, one notch
+   * further.
    */
-  --text-group-label: 0.8125rem; /* 13px sans -- sidebar group labels only */
+  --text-group-label: 0.75rem; /* 12px sans -- sidebar group labels only */
   --text-group-label--line-height: 1.5;
   --text-ui: 0.9375rem;          /* 15px sans -- sidebar rows, buttons, labels, tabs, dropdown triggers */
   --text-ui--line-height: 1.5;

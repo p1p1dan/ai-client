@@ -613,7 +613,7 @@ describe('groups list 8 rows (decision 137 §4)', () => {
     expect(allRows()).toHaveLength(9);
   });
 
-  it('E6-40: Temporary chats says "View more (N)" like a folder, h-7 with the title column', async () => {
+  it('E6-40: Temporary chats says "View more (N)" like a folder, h-8 with the title column', async () => {
     const tenScratch = Array.from({ length: 10 }, (_, i) =>
       scratch(`s${i}`, { updatedAt: NOW - i * 1000 })
     );
@@ -628,7 +628,7 @@ describe('groups list 8 rows (decision 137 §4)', () => {
     expect(group(UNBOUND_FOLDER_ID)?.contains(more[1] as Node)).toBe(true);
     expect(container.textContent).not.toContain('Show more');
     for (const button of more) {
-      expect(button.className).toContain('h-7');
+      expect(button.className).toContain('h-8');
       // The empty w-4 slot puts the text in the title column.
       expect(button.firstElementChild?.className).toContain('w-4');
     }
@@ -684,9 +684,9 @@ describe('the top of the panel (decision 183 §1.10, §2.1)', () => {
     const classes = new Set(groupNode?.className.split(/\s+/));
     const FOCUS = 'has-[input:focus-visible,textarea:focus-visible]';
     // Resting: transparent in light and dark, a --border line, no shadow, no
-    // inner shade (the ::before carrying it is removed), rounded-sm, h-7.
+    // inner shade (the ::before carrying it is removed), rounded-sm, h-8 (decision 188).
     for (const present of [
-      'h-7',
+      'h-8',
       'rounded-sm',
       'border',
       'border-border',

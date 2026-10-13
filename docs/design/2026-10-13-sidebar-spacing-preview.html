@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>侧栏三区留白 · 改前 / 改后（2026-10-13）</title>
+<style>
+/* Flexoki tokens copied from globals.css — same as the sidebar-groups prototype */
+:root {
+  --background: oklch(0.9931 0.012 96.42);
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.97 0.0106 100.82);
+  --muted: oklch(0.965 0.0093 99.98);
+  --muted-foreground: oklch(0.4531 0.005 91.5);
+  --accent: oklch(0.935 0.0122 96.43);
+  --selection: oklch(0.91 0.0109 95.17);
+  --hover: oklch(0.935 0.0122 96.43);
+  --status-running: oklch(0.4818 0.1315 254.79);
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --success: oklch(0.5593 0.1335 122.92);
+  --warning: oklch(0.5665 0.1523 45.02);
+  --folder: oklch(0.6333 0.1295 85.81);
+  --border: oklch(0.875 0.0137 97.46);
+  --popover: oklch(0.9931 0.012 96.42);
+  --foreground-soft: color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground));
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --text-meta: 0.875rem;
+  --text-group-label: 0.8125rem;
+  --text-ui: 0.9375rem;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+    "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans); font-size: 14px; color: var(--foreground);
+  background: #f2f1ee; -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+svg.i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- preview toolbar (not part of the design) ---- */
+.toolbar {
+  position: sticky; top: 0; z-index: 40;
+  min-height: 44px; display: flex; align-items: center; gap: 18px; padding: 6px 16px;
+  border-bottom: 1px solid var(--border); background: #fff;
+  font-size: 13px; color: var(--muted-foreground); white-space: nowrap; overflow-x: auto;
+}
+.toolbar b { color: var(--foreground); font-weight: 600; font-size: 14px; }
+.segs { display: inline-flex; align-items: center; gap: 6px; }
+.segs .lab { margin-right: 2px; }
+.segs .opts { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.segs .opts button { padding: 3px 9px; font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
+.segs .opts button + button { border-left: 1px solid var(--border); }
+.segs .opts button.on { background: #e8e7e4; color: var(--foreground); font-weight: 600; }
+.toolbar .hint { margin-left: auto; font-size: 12px; color: #9b9a95; }
+
+/* ---- stage: two app frames side by side ---- */
+.stage { display: flex; flex-wrap: wrap; gap: 30px; justify-content: center; align-items: flex-start; padding: 22px 28px 10px; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.colhead { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #6f6e69; }
+.colhead .tag { padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.colhead .tag.before { background: #e7e5e2; color: #57534e; }
+.colhead .tag.after { background: #dbeafe; color: #1d4ed8; }
+body.view-before .col-after { display: none; }
+body.view-after .col-before { display: none; }
+
+/* ---- app frame ---- */
+.frame { position: relative; display: flex; overflow: hidden; width: 408px;
+  border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.09); }
+.rail {
+  width: 44px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+  gap: 4px; padding: 8px 0; background: var(--card); border-right: 1px solid var(--border);
+}
+.rail button { width: 32px; height: 32px; display: grid; place-items: center;
+  border-radius: var(--radius-sm); color: var(--muted-foreground); }
+.rail button svg { width: 18px; height: 18px; }
+.rail button.on { background: var(--selection); color: var(--foreground); }
+.rail .grow { flex: 1; }
+
+/* ---- side: verbatim from the sidebar-groups prototype ---- */
+.side {
+  width: 280px; flex-shrink: 0; display: flex; flex-direction: column;
+  background: var(--card); position: relative;
+}
+.topnav { padding: 10px 8px 2px; display: flex; flex-direction: column; gap: 1px; }
+.nav {
+  height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; width: 100%;
+  border-radius: var(--radius-sm); font-size: var(--text-ui); text-align: left;
+}
+.nav .ico { width: 22px; height: 22px; display: grid; place-items: center; color: var(--muted-foreground); flex-shrink: 0; }
+.nav .ico.round { border-radius: 999px; background: var(--selection); color: var(--foreground); }
+.nav .ico.round svg { width: 14px; height: 14px; }
+
+.tools { display: flex; align-items: center; gap: 2px; padding: 8px 8px 2px; }
+.search {
+  flex: 1; min-width: 0; height: 28px; display: flex; align-items: center; gap: 6px;
+  padding: 0 8px; border-radius: var(--radius-sm); color: var(--muted-foreground);
+  background: transparent; box-shadow: inset 0 0 0 1px var(--border);
+}
+.search svg { width: 14px; height: 14px; }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+  font-size: var(--text-meta); color: var(--foreground); cursor: default; }
+.search input::placeholder { color: var(--muted-foreground); }
+.tb { width: 28px; height: 28px; display: grid; place-items: center; flex-shrink: 0;
+  border-radius: var(--radius-sm); color: var(--muted-foreground); }
+
+.list { flex: 1; min-height: 0; overflow-y: hidden; padding: 2px 8px 12px;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: 8px; }
+.group { margin-top: 14px; }
+.group:first-child { margin-top: 8px; }
+.gh {
+  height: 28px; display: flex; align-items: center; gap: 4px; padding: 0 8px;
+  border-radius: var(--radius-sm);
+}
+.gh .name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: var(--text-group-label); color: var(--muted-foreground); font-weight: 400; }
+.gh .chev { display: grid; place-items: center; color: var(--muted-foreground); opacity: 0; }
+.group.collapsed .gh .chev { opacity: 1; }
+.gh .chev svg { width: 14px; height: 14px; }
+.gh .agg { display: inline-flex; align-items: center; gap: 4px; margin-left: 2px;
+  font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.gh .count { margin-left: 4px; font-size: var(--text-meta); color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums; }
+.gh .tail { margin-left: auto; display: grid; justify-items: end; flex-shrink: 0; }
+.gh .tail > * { grid-area: 1 / 1; }
+.gh .acts { display: flex; align-items: center; opacity: 0; }
+.ib { width: 20px; height: 20px; display: grid; place-items: center; border-radius: var(--radius-xs); color: var(--muted-foreground); }
+.ib svg { width: 14px; height: 14px; }
+.gh .fic { display: grid; place-items: center; color: var(--folder); font-size: var(--text-group-label); }
+.gh .fic svg { width: 14px; height: 14px; }
+.gline { width: 2px; height: 11px; border-radius: 1px; background: var(--border); }
+
+.group.collapsed .rows { display: none; }
+.rows { margin-top: 1px; display: flex; flex-direction: column; gap: 2px; }
+
+.row {
+  position: relative; height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px;
+  border-radius: var(--radius-sm); font-size: var(--text-meta); color: var(--foreground-soft);
+  overflow: hidden; cursor: default; user-select: none;
+}
+.row.sel { background: var(--selection); color: var(--foreground); }
+.slot { width: 16px; flex-shrink: 0; display: grid; place-items: center; }
+.dot { width: 6px; height: 6px; border-radius: 999px; }
+.dot.ok { background: var(--success); }
+.dot.fail { background: var(--destructive); }
+.dot.wait { background: var(--warning); }
+.ring { width: 6px; height: 6px; border-radius: 999px; border: 1px solid var(--muted-foreground); }
+.ring.idle { border-color: color-mix(in oklab, var(--muted-foreground) 45%, var(--card)); }
+svg.spin { width: 12px; height: 12px; color: var(--status-running); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.title { min-width: 80px; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.badge { display: inline-flex; align-items: center; gap: 2px; height: 20px; padding: 0 6px; flex-shrink: 0;
+  border-radius: var(--radius-xs); font-size: var(--text-meta); line-height: 1; font-variant-numeric: tabular-nums; }
+.badge svg { width: 13px; height: 13px; }
+.badge.warn { background: color-mix(in oklab, var(--warning) 14%, transparent); color: var(--warning); }
+.badge.bad { background: color-mix(in oklab, var(--destructive) 14%, transparent); color: var(--destructive); }
+.ctx { min-width: 0; max-width: 96px; flex-shrink: 1; overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; color: var(--muted-foreground); }
+.racts { display: none; }
+.aux { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 30px; width: 100%;
+  border-radius: var(--radius-sm); font-size: var(--text-meta); color: var(--muted-foreground); text-align: left; }
+.empty-group { padding: 6px 8px 6px 30px; font-size: var(--text-meta); color: var(--muted-foreground); }
+
+.foot { display: flex; align-items: center; padding: 8px; }
+.me { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px;
+  border-radius: var(--radius-sm); text-align: left; }
+.av { width: 22px; height: 22px; border-radius: 999px; background: var(--selection); display: grid; place-items: center;
+  font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.me .mail { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: var(--text-meta); color: var(--foreground-soft); }
+.me svg { width: 14px; height: 14px; color: var(--muted-foreground); }
+
+/* ---- a sliver of the center so the frame reads as the real window ---- */
+.strip { flex: 1; min-width: 0; background: var(--background); }
+.strip .sbar { height: 36px; display: flex; align-items: center; padding: 0 14px; overflow: hidden;
+  border-bottom: 1px solid var(--border); font-size: var(--text-ui); font-weight: 600; white-space: nowrap;
+  color: color-mix(in oklab, var(--foreground) 72%, transparent); }
+
+/* ================= 改后：只在「三区之间」动留白 =================
+   推荐（rec）与宽松（wide）两档；只作用于 .frame.after */
+.frame.before { height: 648px; } /* 内容刚好填满：底部不留空档，贴近真实使用 */
+.frame.after {
+  --tn-pt: 14px; --tn-pb: 4px; --tn-gap: 3px;   /* 顶部导航 */
+  --tl-pt: 12px; --tl-pb: 6px;                   /* 搜索行 */
+  --ls-mt: 10px; --ls-pt: 4px; --ls-pb: 16px;    /* 列表（上/下细线间距） */
+  --fst-mt: 12px;                                /* 第一个分组标题 */
+  --ft-pt: 12px; --ft-pb: 10px;                  /* 账户栏 */
+  height: 682px;
+}
+body.sp-wide .frame.after {
+  --tn-pt: 16px; --tn-pb: 8px; --tn-gap: 4px;
+  --tl-pt: 14px; --tl-pb: 8px;
+  --ls-mt: 14px; --ls-pt: 6px; --ls-pb: 20px;
+  --fst-mt: 14px;
+  --ft-pt: 14px; --ft-pb: 14px;
+  height: 711px;
+}
+.frame.after .topnav { padding: var(--tn-pt) 8px var(--tn-pb); gap: var(--tn-gap); }
+.frame.after .tools { padding: var(--tl-pt) 8px var(--tl-pb); }
+.frame.after .list { margin-top: var(--ls-mt); padding: var(--ls-pt) 8px var(--ls-pb); }
+.frame.after .group:first-child { margin-top: var(--fst-mt); }
+.frame.after .foot { padding: var(--ft-pt) 8px var(--ft-pb); }
+/* 「截图样式」预设（默认）：行高与字号按截图的比例放大，只作用于改后一栏 */
+body.mod-shot .frame.after .gh,
+body.mod-shot .frame.after .row { height: 32px; }
+body.mod-shot .frame.after .search { height: 32px; }
+body.mod-shot .frame.after .tb { width: 32px; height: 32px; }
+body.mod-shot .frame.after .nav { font-size: var(--text-meta); }
+body.mod-shot .frame.after .gh .name { font-size: 12px; }
+body.mod-shot .frame.after { height: 742px; }
+body.mod-shot.sp-wide .frame.after { height: 771px; }
+
+/* ---- ruler chips: gap between neighbouring elements ---- */
+.rchip { position: absolute; transform: translateX(-50%); z-index: 9; pointer-events: none;
+  height: 14px; min-width: 20px; padding: 0 5px; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9.5px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18); }
+.rchip.before { background: rgb(87 96 106 / 0.88); }
+.rchip.after { background: rgb(37 99 235 / 0.92); }
+body:not(.rulers-on) .rchip { display: none; }
+
+/* ---- notes ---- */
+.notes { max-width: 900px; margin: 0 auto; padding: 20px 32px 56px;
+  font-size: 14px; line-height: 1.75; color: var(--foreground-soft); }
+.notes .card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px 26px; }
+.notes h1 { font-size: 18px; color: var(--foreground); margin-bottom: 4px; }
+.notes .sub { font-size: 13px; color: var(--muted-foreground); margin-bottom: 16px; }
+.notes h2 { font-size: 15px; color: var(--foreground); margin: 20px 0 6px; }
+.notes ul { padding-left: 1.3em; }
+.notes li { margin: 3px 0; }
+.notes code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+  padding: 1px 4px; border-radius: 4px; background: var(--muted); color: var(--foreground); }
+.notes table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+.notes th, .notes td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.notes th { color: var(--foreground); font-weight: 600; }
+.notes td.n { font-variant-numeric: tabular-nums; }
+.notes .q { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--muted); border-left: 3px solid #2563eb; }
+.notes .q b { color: var(--foreground); }
+</style>
+</head>
+<body class="rulers-on mod-shot">
+
+<div class="toolbar">
+  <b>侧栏三区留白 · 改前 / 改后</b>
+  <span class="segs"><span class="lab">视图</span><span class="opts" data-k="view"><button data-v="both" class="on">并排</button><button data-v="before">仅改前</button><button data-v="after">仅改后</button></span></span>
+  <span class="segs"><span class="lab">改后方案</span><span class="opts" data-k="mod"><button data-v="shot" class="on">截图样式（行高 32 · 字 14）</button><button data-v="gap">仅留白</button></span></span>
+  <span class="segs"><span class="lab">改后留白</span><span class="opts" data-k="sp"><button data-v="rec" class="on">推荐</button><button data-v="wide">宽松</button></span></span>
+  <span class="segs"><span class="lab">标尺</span><span class="opts" data-k="rul"><button data-v="on" class="on">开</button><button data-v="off">关</button></span></span>
+  <span class="hint">改前一栏固定为现状 1:1；「截图样式 / 仅留白」与「宽松」只作用于改后。标尺＝相邻元素边缘间距（px）。</span>
+</div>
+
+<div class="stage">
+  <div class="col col-before">
+    <div class="colhead"><span class="tag before">改前 · 现状 1:1</span><span class="desc">三区之间 8–12px；按钮间距 1px；顶部贴着 10px</span></div>
+    <div class="frame before"><nav class="rail"><button class="" title="首页"><svg class="i " viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button><button class="on" title="聊天"><svg class="i " viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button><button class="" title="Git"><svg class="i " viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></button><button class="" title="文件"><svg class="i " viewBox="0 0 24 24"><path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/></svg></button><button class="" title="上下文"><svg class="i " viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></button><button class="" title="运行"><svg class="i " viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg></button><span class="grow"></span><button title="收起侧栏 (Ctrl+B)"><svg class="i " viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg></button><button title="能力"><svg class="i " viewBox="0 0 24 24"><rect width="7" height="7" x="14" y="3" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/></svg></button><button title="设置 (Ctrl+,)"><svg class="i " viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button></nav>
+    <aside class="side">
+      <div class="topnav">
+        <button class="nav"><span class="ico round"><svg class="i " viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>新建对话</button>
+        <button class="nav"><span class="ico"><svg class="i " viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>添加仓库</button>
+      </div>
+      <div class="tools">
+        <label class="search"><span><svg class="i " viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><input placeholder="搜索对话" readonly title="预览稿：输入不可用"></label>
+        <button class="tb" title="全部折叠"><span><svg class="i " viewBox="0 0 24 24"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></svg></span></button>
+        <button class="tb" title="归档方式：按分组"><span><svg class="i " viewBox="0 0 24 24"><path d="M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5Z"/><path d="M6 9.01V9"/></svg></span></button>
+      </div>
+      <div class="list"><section class="group " data-g="g1">
+    <div class="gh" title="前端重构">
+      <span class="fic"><span class="gline"></span></span>
+      <span class="name">前端重构</span>
+      <span class="chev"><svg class="i " viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+      
+      
+      <span class="tail"><span class="acts"><button class="ib" title="分组操作"><svg class="i " viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+       <button class="ib" title="在「前端重构」里新建对话（回首页、不预选仓库）"><svg class="i " viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button></span></span>
+    </div>
+    <div class="rows"><div class="row sel" data-c="c1" title="暗色主题切换闪烁问题">
+    <span class="slot"><span class="ring" title="后台已挂上"></span></span>
+    <span class="title">暗色主题切换闪烁问题</span>
+    
+    
+    <span class="ctx" title="aurora-web">aurora-web</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c2" title="登录页表单校验重构">
+    <span class="slot"><span class="dot wait" title="等待审批"></span></span>
+    <span class="title">登录页表单校验重构</span>
+    <span class="badge warn" title="2 个待审批"><svg class="i " viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>2</span>
+    
+    <span class="ctx" title="aurora-web">aurora-web</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c3" title="路由懒加载拆包方案">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">路由懒加载拆包方案</span>
+    
+    
+    <span class="ctx" title="aurora-web">aurora-web</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div></div>
+  </section><section class="group " data-g="g2">
+    <div class="gh" title="这个月要交">
+      <span class="fic"><span class="gline"></span></span>
+      <span class="name">这个月要交</span>
+      <span class="chev"><svg class="i " viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+      
+      
+      <span class="tail"><span class="acts"><button class="ib" title="分组操作"><svg class="i " viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+       <button class="ib" title="在「这个月要交」里新建对话（回首页、不预选仓库）"><svg class="i " viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button></span></span>
+    </div>
+    <div class="rows"><div class="row " data-c="c5" title="月结批处理任务超时">
+    <span class="slot"><span class="dot fail" title="失败，未看"></span></span>
+    <span class="title">月结批处理任务超时</span>
+    
+    <span class="badge bad">失败</span>
+    <span class="ctx" title="ledger-core">ledger-core</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c6" title="对账差异报表导出">
+    <span class="slot"><span class="dot ok" title="有新结果未看"></span></span>
+    <span class="title">对账差异报表导出</span>
+    
+    
+    <span class="ctx" title="ledger-core">ledger-core</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div></div>
+  </section><section class="group collapsed" data-g="g3">
+    <div class="gh" title="留给下周">
+      <span class="fic"><span class="gline"></span></span>
+      <span class="name">留给下周</span>
+      <span class="chev"><svg class="i " viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+      
+      <span class="count">2</span>
+      <span class="tail"><span class="acts"><button class="ib" title="分组操作"><svg class="i " viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+       <button class="ib" title="在「留给下周」里新建对话（回首页、不预选仓库）"><svg class="i " viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button></span></span>
+    </div>
+    <div class="rows"><div class="row " data-c="c10" title="备份脚本改成增量">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">备份脚本改成增量</span>
+    
+    
+    <span class="ctx" title="infra-scripts">infra-scripts</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c11" title="推送通知权限引导">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">推送通知权限引导</span>
+    
+    
+    <span class="ctx" title="mobile-app">mobile-app</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div></div>
+  </section><section class="group " data-g="__unassigned__">
+    <div class="gh" title="还没有归类的对话">
+      <span class="fic"><span class="gline"></span></span>
+      <span class="name">未分组</span>
+      <span class="chev"><svg class="i " viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+      
+      
+      <span class="tail"><span class="acts"><button class="ib" title="分组操作"><svg class="i " viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button></span></span>
+    </div>
+    <div class="rows"><div class="row " data-c="c4" title="图层混合模式实现">
+    <span class="slot"><svg class="i spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span>
+    <span class="title">图层混合模式实现</span>
+    
+    
+    <span class="ctx" title="pixel-studio">pixel-studio</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c7" title="冲突合并策略设计">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">冲突合并策略设计</span>
+    
+    
+    <span class="ctx" title="notes-sync">notes-sync</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c8" title="附件分片上传">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">附件分片上传</span>
+    
+    
+    <span class="ctx" title="notes-sync">notes-sync</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c9" title="文档站搜索索引重建">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">文档站搜索索引重建</span>
+    
+    
+    <span class="ctx" title="docs-site">docs-site</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c12" title="帮我润色一段周报">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">帮我润色一段周报</span>
+    
+    
+    
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div></div>
+  </section></div>
+      <div class="foot">
+        <button class="me"><span class="av">U</span><span class="mail">user@example.com</span><span><svg class="i " viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg></span></button>
+      </div>
+    </aside>
+    <main class="strip"><div class="sbar">暗色主题切换闪烁问题</div></main></div>
+  </div>
+  <div class="col col-after">
+    <div class="colhead"><span class="tag after" id="afterTag">改后 · 截图样式</span><span class="desc" id="afterDesc">截图样式：行高 32 · 文字统一 14 · 三区上下 16px</span></div>
+    <div class="frame after"><nav class="rail"><button class="" title="首页"><svg class="i " viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button><button class="on" title="聊天"><svg class="i " viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button><button class="" title="Git"><svg class="i " viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></button><button class="" title="文件"><svg class="i " viewBox="0 0 24 24"><path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/></svg></button><button class="" title="上下文"><svg class="i " viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></button><button class="" title="运行"><svg class="i " viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg></button><span class="grow"></span><button title="收起侧栏 (Ctrl+B)"><svg class="i " viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg></button><button title="能力"><svg class="i " viewBox="0 0 24 24"><rect width="7" height="7" x="14" y="3" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/></svg></button><button title="设置 (Ctrl+,)"><svg class="i " viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button></nav>
+    <aside class="side">
+      <div class="topnav">
+        <button class="nav"><span class="ico round"><svg class="i " viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>新建对话</button>
+        <button class="nav"><span class="ico"><svg class="i " viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>添加仓库</button>
+      </div>
+      <div class="tools">
+        <label class="search"><span><svg class="i " viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><input placeholder="搜索对话" readonly title="预览稿：输入不可用"></label>
+        <button class="tb" title="全部折叠"><span><svg class="i " viewBox="0 0 24 24"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></svg></span></button>
+        <button class="tb" title="归档方式：按分组"><span><svg class="i " viewBox="0 0 24 24"><path d="M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5Z"/><path d="M6 9.01V9"/></svg></span></button>
+      </div>
+      <div class="list"><section class="group " data-g="g1">
+    <div class="gh" title="前端重构">
+      <span class="fic"><span class="gline"></span></span>
+      <span class="name">前端重构</span>
+      <span class="chev"><svg class="i " viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+      
+      
+      <span class="tail"><span class="acts"><button class="ib" title="分组操作"><svg class="i " viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+       <button class="ib" title="在「前端重构」里新建对话（回首页、不预选仓库）"><svg class="i " viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button></span></span>
+    </div>
+    <div class="rows"><div class="row sel" data-c="c1" title="暗色主题切换闪烁问题">
+    <span class="slot"><span class="ring" title="后台已挂上"></span></span>
+    <span class="title">暗色主题切换闪烁问题</span>
+    
+    
+    <span class="ctx" title="aurora-web">aurora-web</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c2" title="登录页表单校验重构">
+    <span class="slot"><span class="dot wait" title="等待审批"></span></span>
+    <span class="title">登录页表单校验重构</span>
+    <span class="badge warn" title="2 个待审批"><svg class="i " viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>2</span>
+    
+    <span class="ctx" title="aurora-web">aurora-web</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c3" title="路由懒加载拆包方案">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">路由懒加载拆包方案</span>
+    
+    
+    <span class="ctx" title="aurora-web">aurora-web</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div></div>
+  </section><section class="group " data-g="g2">
+    <div class="gh" title="这个月要交">
+      <span class="fic"><span class="gline"></span></span>
+      <span class="name">这个月要交</span>
+      <span class="chev"><svg class="i " viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+      
+      
+      <span class="tail"><span class="acts"><button class="ib" title="分组操作"><svg class="i " viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+       <button class="ib" title="在「这个月要交」里新建对话（回首页、不预选仓库）"><svg class="i " viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button></span></span>
+    </div>
+    <div class="rows"><div class="row " data-c="c5" title="月结批处理任务超时">
+    <span class="slot"><span class="dot fail" title="失败，未看"></span></span>
+    <span class="title">月结批处理任务超时</span>
+    
+    <span class="badge bad">失败</span>
+    <span class="ctx" title="ledger-core">ledger-core</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c6" title="对账差异报表导出">
+    <span class="slot"><span class="dot ok" title="有新结果未看"></span></span>
+    <span class="title">对账差异报表导出</span>
+    
+    
+    <span class="ctx" title="ledger-core">ledger-core</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div></div>
+  </section><section class="group collapsed" data-g="g3">
+    <div class="gh" title="留给下周">
+      <span class="fic"><span class="gline"></span></span>
+      <span class="name">留给下周</span>
+      <span class="chev"><svg class="i " viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+      
+      <span class="count">2</span>
+      <span class="tail"><span class="acts"><button class="ib" title="分组操作"><svg class="i " viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+       <button class="ib" title="在「留给下周」里新建对话（回首页、不预选仓库）"><svg class="i " viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button></span></span>
+    </div>
+    <div class="rows"><div class="row " data-c="c10" title="备份脚本改成增量">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">备份脚本改成增量</span>
+    
+    
+    <span class="ctx" title="infra-scripts">infra-scripts</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c11" title="推送通知权限引导">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">推送通知权限引导</span>
+    
+    
+    <span class="ctx" title="mobile-app">mobile-app</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div></div>
+  </section><section class="group " data-g="__unassigned__">
+    <div class="gh" title="还没有归类的对话">
+      <span class="fic"><span class="gline"></span></span>
+      <span class="name">未分组</span>
+      <span class="chev"><svg class="i " viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+      
+      
+      <span class="tail"><span class="acts"><button class="ib" title="分组操作"><svg class="i " viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button></span></span>
+    </div>
+    <div class="rows"><div class="row " data-c="c4" title="图层混合模式实现">
+    <span class="slot"><svg class="i spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span>
+    <span class="title">图层混合模式实现</span>
+    
+    
+    <span class="ctx" title="pixel-studio">pixel-studio</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c7" title="冲突合并策略设计">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">冲突合并策略设计</span>
+    
+    
+    <span class="ctx" title="notes-sync">notes-sync</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c8" title="附件分片上传">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">附件分片上传</span>
+    
+    
+    <span class="ctx" title="notes-sync">notes-sync</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c9" title="文档站搜索索引重建">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">文档站搜索索引重建</span>
+    
+    
+    <span class="ctx" title="docs-site">docs-site</span>
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div><div class="row " data-c="c12" title="帮我润色一段周报">
+    <span class="slot"><span class="ring idle" title="未启动"></span></span>
+    <span class="title">帮我润色一段周报</span>
+    
+    
+    
+    <span class="racts">
+      <button class="ib" title="归档"><svg class="i " viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>
+      <button class="ib" title="从列表移除（重启后回来）"><svg class="i " viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </span>
+  </div></div>
+  </section></div>
+      <div class="foot">
+        <button class="me"><span class="av">U</span><span class="mail">user@example.com</span><span><svg class="i " viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg></span></button>
+      </div>
+    </aside>
+    <main class="strip"><div class="sbar">暗色主题切换闪烁问题</div></main></div>
+  </div>
+</div>
+
+<div class="notes"><div class="card">
+  <h1>左侧「聊天」栏 · 截图样式（比例对齐 + 三区留白）</h1>
+  <div class="sub">2026-10-13 · 改前＝当前侧栏 1:1（样式与数据即 sidebar-groups-2026-10 原型定稿，决策 187）· 改后＝照参考截图的比例调整：行更高、整栏文字一个号、三区留白更长。只借比例，不搬截图的元素与结构。</div>
+
+  <h2>改后 · 截图样式（行高与字号）</h2>
+  <table>
+    <tr><th>元素</th><th>改前</th><th>改后 · 截图样式</th></tr>
+    <tr><td>对话行 / 分组标题行高</td><td class="n">28</td><td class="n">32</td></tr>
+    <tr><td>搜索框 / 两个工具按钮</td><td class="n">28</td><td class="n">32</td></tr>
+    <tr><td>文字字号</td><td class="n">导航 15 · 行 14 混用</td><td class="n">14 统一</td></tr>
+    <tr><td>分组标题字号</td><td class="n">13</td><td class="n">12</td></tr>
+  </table>
+  <p>行高 32 与顶部导航取齐后，全栏节奏变成同一个：每行等高、区块等距，不再「上大下小」。切「仅留白」可对照只动间距、不动行高字号的旧方案。</p>
+
+  <h2>三区之间的 8 处留白（单位 px）</h2>
+  <table>
+    <tr><th>位置</th><th>改前</th><th>改后 · 推荐</th><th>改后 · 宽松</th></tr>
+    <tr><td>侧栏顶 →「新建对话」</td><td class="n">10</td><td class="n">14</td><td class="n">16</td></tr>
+    <tr><td>「新建对话」↔「添加仓库」</td><td class="n">1</td><td class="n">3</td><td class="n">4</td></tr>
+    <tr><td>「添加仓库」→ 搜索框</td><td class="n">10</td><td class="n">16</td><td class="n">22</td></tr>
+    <tr><td>搜索框 → 第一道通栏细线</td><td class="n">10</td><td class="n">16</td><td class="n">22</td></tr>
+    <tr><td>第一道细线 → 第一个分组标题</td><td class="n">10</td><td class="n">16</td><td class="n">20</td></tr>
+    <tr><td>最后一行 → 第二道通栏细线</td><td class="n">12</td><td class="n">16</td><td class="n">20</td></tr>
+    <tr><td>第二道细线 → 账户行</td><td class="n">8</td><td class="n">12</td><td class="n">14</td></tr>
+    <tr><td>账户行 → 窗口底</td><td class="n">8</td><td class="n">10</td><td class="n">14</td></tr>
+  </table>
+
+  <h2>没有动的（受决策与规范约束）</h2>
+  <ul>
+    <li>账户栏（决策 183 v6）：高 <code>32</code>、头像 <code>22</code> 圆形、不显示今日用量。截图里的账户区更高（约 44）、头像是圆角方形——要不要跟随由你定，定了我另出一版。</li>
+    <li>两条通栏细线、行内 <code>gap 2px</code>、内容左右 <code>8px</code> 内边距、顶部两个导航按钮的内部布局。</li>
+    <li>结构、颜色、图标、交互一律不动——这只是照截图的比例给现有元素松土。</li>
+  </ul>
+
+  <div class="q">
+    <b>为什么这么改：</b>截图的疏朗感来自三件事——行更高（≈32px）、全栏一个字号（不再上大下小）、区块之间大留白。改后把这三件事都拿过来，同时保留本项目的三区通栏细线与账户栏规格。<br>
+    <b>看哪里：</b>标尺数字是自动量的，悬停顺序自上而下对应表格；切「仅留白」看旧方案对照，切「宽松」看再松一档；「仅改前 / 仅改后」可单独看一栏的完整观感。<br>
+    <b>下一步：</b>行高 <code>28→32</code>、字号 <code>15/13→14/12</code> 会动到 design-system 已锁定的规范，所以这一稿先不动实现。你拍板后，我把数值写进规范，再落到侧栏实现，并按需要提 type scale 的改动单。
+  </div>
+</div></div>
+
+<script>
+(function () {
+  var state = { view: 'both', mod: 'shot', sp: 'rec', rul: 'on' };
+  function chip(frame, frTop, a, b, cls, i) {
+    var el = document.createElement('span');
+    el.className = 'rchip ' + cls;
+    el.style.top = ((a + b) / 2 - frTop - 7) + 'px';
+    el.style.left = (i % 2 ? 222 : 148) + 'px';
+    el.textContent = String(Math.max(0, Math.round(b - a)));
+    frame.appendChild(el);
+  }
+  function rulers() {
+    document.querySelectorAll('.rchip').forEach(function (c) { c.remove(); });
+    if (state.rul !== 'on') return;
+    document.querySelectorAll('.frame').forEach(function (frame) {
+      if (frame.offsetParent === null) return;
+      var fr = frame.getBoundingClientRect();
+      var navs = frame.querySelectorAll('.topnav .nav');
+      var n0 = navs[0].getBoundingClientRect();
+      var n1 = navs[1].getBoundingClientRect();
+      var search = frame.querySelector('.tools .search').getBoundingClientRect();
+      var list = frame.querySelector('.list').getBoundingClientRect();
+      var gh1 = frame.querySelector('.list .gh').getBoundingClientRect();
+      var rows = frame.querySelectorAll('.list .row');
+      var last = rows[rows.length - 1].getBoundingClientRect();
+      var me = frame.querySelector('.foot .me').getBoundingClientRect();
+      var cls = frame.classList.contains('before') ? 'before' : 'after';
+      chip(frame, fr.top, fr.top + 1, n0.top, cls, 0);
+      chip(frame, fr.top, n0.bottom, n1.top, cls, 1);
+      chip(frame, fr.top, n1.bottom, search.top, cls, 2);
+      chip(frame, fr.top, search.bottom, list.top, cls, 3);
+      chip(frame, fr.top, list.top + 1, gh1.top, cls, 4);
+      chip(frame, fr.top, last.bottom, list.bottom - 1, cls, 5);
+      chip(frame, fr.top, list.bottom, me.top, cls, 6);
+      chip(frame, fr.top, me.bottom, fr.bottom - 1, cls, 7);
+    });
+  }
+  function sync() {
+    var b = document.body;
+    b.classList.toggle('view-before', state.view === 'before');
+    b.classList.toggle('view-after', state.view === 'after');
+    b.classList.toggle('sp-wide', state.sp === 'wide');
+    b.classList.toggle('mod-shot', state.mod === 'shot');
+    b.classList.toggle('rulers-on', state.rul === 'on');
+    document.getElementById('afterTag').textContent =
+      state.mod === 'shot' ? '改后 · 截图样式' : '改后 · 仅留白';
+    var modTxt = state.mod === 'shot' ? '截图样式：行高 32 · 文字统一 14' : '仅留白：行高字号不动';
+    var spTxt = state.sp === 'wide' ? '宽松留白' : '三区上下 16px';
+    document.getElementById('afterDesc').textContent = modTxt + ' · ' + spTxt;
+    document.querySelectorAll('.segs .opts').forEach(function (grp) {
+      grp.querySelectorAll('button').forEach(function (btn) {
+        btn.classList.toggle('on', btn.dataset.v === state[grp.dataset.k]);
+      });
+    });
+    rulers();
+  }
+  document.querySelectorAll('.segs .opts').forEach(function (grp) {
+    grp.addEventListener('click', function (e) {
+      var btn = e.target.closest('button');
+      if (!btn) return;
+      state[grp.dataset.k] = btn.dataset.v;
+      sync();
+    });
+  });
+  window.addEventListener('resize', rulers);
+  sync();
+})();
+</script>
+</body>
+</html>

@@ -850,7 +850,7 @@ export function LeftNav({
    */
   const renderGroupRename = (folder: SidebarFolder) => (
     <section key={folder.projectId} className={SIDEBAR_GROUP_CLASS}>
-      <div className="flex h-7 w-full items-center gap-1 rounded-sm bg-hover px-2">
+      <div className="flex h-8 w-full items-center gap-1 rounded-sm bg-hover px-2">
         <GroupMark />
         <input
           // biome-ignore lint/a11y/noAutofocus: the menu item that opened this asked for a name; typing must not need a second click.
@@ -910,7 +910,7 @@ export function LeftNav({
    */
   const renderNewGroup = () => (
     <section className={SIDEBAR_GROUP_CLASS}>
-      <div className="flex h-7 w-full items-center gap-1 rounded-sm bg-hover px-2">
+      <div className="flex h-8 w-full items-center gap-1 rounded-sm bg-hover px-2">
         <GroupMark />
         <input
           // biome-ignore lint/a11y/noAutofocus: the menu item that opened this asked for a name; typing must not need a second click.
@@ -1113,8 +1113,10 @@ export function LeftNav({
     // over the dock's absolutely-positioned mount stack.
     <aside className="flex h-full w-full min-w-0 flex-col">
       {/* Decision 183 §1.10: the vertical nav, as in the reference. 「新建对话」
-          opens the home page (decision 174); 「添加仓库」 the shared dialog. */}
-      <div className="flex shrink-0 flex-col gap-px px-2 pt-2.5 pb-0.5">
+          opens the home page (decision 174); 「添加仓库」 the shared dialog.
+          Decision 188 (2026-10-13): pt 10 -> 14, the two entries 1px -> 3px
+          apart, pb 2 -> 4, per the screenshot-style preview the user picked. */}
+      <div className="flex shrink-0 flex-col gap-0.75 px-2 pt-3.5 pb-1">
         <button
           type="button"
           className={NAV_ITEM_CLASS}
@@ -1140,7 +1142,7 @@ export function LeftNav({
         </button>
       </div>
 
-      {/* U31: both modes share this one h-7 row. A second row appearing only
+      {/* U31: both modes share this one h-8 row. A second row appearing only
           while selecting would push the list down on entry and pull it back on
           exit — the list is the thing being worked on, so it must not move
           under the pointer. Decision 167: `sm:text-meta` on every xs button
@@ -1151,7 +1153,7 @@ export function LeftNav({
           hairline, the same in both modes, so the list starts at the same
           place either way. */}
       <div className={TOP_ZONE_END_CLASS}>
-        <div className="flex h-7 items-center gap-0.5">
+        <div className="flex h-8 items-center gap-0.5">
           {selecting ? (
             <>
               <span className="min-w-0 flex-1 truncate pl-2 text-meta">
@@ -1259,7 +1261,9 @@ export function LeftNav({
           {...listHold.regionProps}
         >
           <ScrollArea>
-            <div className="px-2 pt-0.5 pb-3">
+            {/* Decision 188: pt 2 -> 4 (+ the first group's 12 = 16 below the
+                hairline), pb 12 -> 16 above the footer's hairline. */}
+            <div className="px-2 pt-1 pb-4">
               {noMatches && (
                 <p className="px-2 py-1 text-meta text-muted-foreground">
                   {t('No matching sessions')}
@@ -1476,28 +1480,33 @@ const LIST_AREA_CLASS = 'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr
 
 /**
  * Decision 183 (user ruling 2026-10-12, prototype v6 `.sep-line`): the top zone
- * (nav + search row) ends 6px + h-7 + 8px down in ONE full-width hairline —
+ * (nav + search row) ends 12px + h-8 + 16px down in ONE full-width hairline —
  * the border sits on this full-width box, outside its `px-2`. The other zone
  * line is the account footer's top border (`UserFooterPill`); nothing else in
  * the panel has one.
+ *
+ * Decision 188 (2026-10-13, screenshot-style preview): pt 6 -> 12, pb 8 -> 16.
+ * With the nav's own pb of 4 that puts 16px between 「添加仓库」 bottom and the
+ * search box top, and 16px between the search box bottom and the hairline.
  */
-const TOP_ZONE_END_CLASS = 'shrink-0 border-b px-2 pt-1.5 pb-2';
+const TOP_ZONE_END_CLASS = 'shrink-0 border-b px-2 pt-3 pb-4';
 
 /**
  * Decision 183 (prototype `.group`): groups are separated by spacing alone —
- * 8px above the first, 14px between the rest. No divider, no region title.
+ * 12px above the first, 14px between the rest. No divider, no region title.
+ * Decision 188: the first gap 8 -> 12, matching the eight gaps in the preview.
  */
-const SIDEBAR_GROUP_CLASS = 'mt-3.5 first:mt-2';
+const SIDEBAR_GROUP_CLASS = 'mt-3.5 first:mt-3';
 
 /** Header → first row 2px, rows 2px apart (prototype `.rows`). Not indented. */
 const GROUP_ROWS_CLASS = 'mt-0.5 space-y-0.5';
 
 /**
- * The top nav's two entries (prototype `.nav`): h-8, 15px, a 22px icon slot
+ * The top nav's two entries (prototype `.nav`): h-8, 14px (decision 188; was 15px), a 22px icon slot
  * (`size-5.5`), the hover step on hover and keyboard focus.
  */
 const NAV_ITEM_CLASS =
-  'flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-ui hover:bg-hover focus-visible:bg-hover';
+  'flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-meta hover:bg-hover focus-visible:bg-hover';
 
 /**
  * The search box (prototype `.search`; user ruling 2026-10-11): coss's
@@ -1505,7 +1514,7 @@ const NAV_ITEM_CLASS =
  * a transparent fill (light and dark) inside a 1px `--border` line, no drop
  * shadow and no inner shade; focused, the `--background` fill and a
  * `--muted-foreground` line, no ring. `rounded-sm` because the group's
- * `rounded-lg` on an h-7 control breaks the radius clamp rule.
+ * `rounded-lg` on an h-8 control breaks the radius clamp rule.
  *
  * Each override names the SAME variant stack as the base class it replaces,
  * so tailwind-merge drops the base one instead of leaving both to a
@@ -1522,13 +1531,13 @@ const NAV_ITEM_CLASS =
  * `sidebarActiveAndFolders.test.ts`.
  */
 const SIDEBAR_SEARCH_CLASS =
-  'h-7 min-w-0 flex-1 rounded-sm border-border bg-transparent shadow-none before:hidden dark:bg-transparent has-[input:focus-visible,textarea:focus-visible]:border-muted-foreground has-[input:focus-visible,textarea:focus-visible]:bg-background has-[input:focus-visible,textarea:focus-visible]:ring-0 [&_input]:placeholder:text-muted-foreground';
+  'h-8 min-w-0 flex-1 rounded-sm border-border bg-transparent shadow-none before:hidden dark:bg-transparent has-[input:focus-visible,textarea:focus-visible]:border-muted-foreground has-[input:focus-visible,textarea:focus-visible]:bg-background has-[input:focus-visible,textarea:focus-visible]:ring-0 [&_input]:placeholder:text-muted-foreground';
 
 /**
- * The tool row's icon buttons (prototype `.tb`): 28px, a 16px icon. `sm:size-7`
+ * The tool row's icon buttons (prototype `.tb`): 32px (decision 188), a 16px icon. `sm:size-8`
  * because the `icon-xs` variant's desktop `sm:size-6` would otherwise win.
  */
-const TOOL_BUTTON_CLASS = 'size-7 shrink-0 text-muted-foreground sm:size-7';
+const TOOL_BUTTON_CLASS = 'size-8 shrink-0 text-muted-foreground sm:size-8';
 
 /**
  * A group header's hover buttons (prototype `.ib`): 20px, shown while the
@@ -1581,7 +1590,7 @@ function renderGroupHeader({
   actions: ReactNode;
 }): ReactElement {
   return (
-    <div className="group flex h-7 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">
+    <div className="group flex h-8 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">
       <button
         type="button"
         className="flex min-w-0 flex-1 items-center gap-1 text-left text-group-label text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"
@@ -1764,14 +1773,14 @@ function useRegionHold(mounted: boolean) {
 
 /**
  * Decision 167 / 183: the list's own L4 rows — "View more (N)" and "Show
- * less". h-7 like a row (prototype `.aux`), 14px, muted; the empty leading
+ * less". h-8 like a row (prototype `.aux`), 14px, muted; the empty leading
  * `w-4` slot puts the text in the same column as the chat titles.
  */
 function SidebarAuxRow({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
-      className="flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"
+      className="flex h-8 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"
       onClick={onClick}
     >
       <span aria-hidden className="flex w-4 shrink-0 items-center justify-center" />
@@ -2011,7 +2020,7 @@ function SessionRow({
       // the whole sidebar away with the edit still open behind it; marked like
       // any other surface that answers Escape itself (`SURFACE_ESCAPE_HOLD_ATTR`).
       <div
-        className="flex h-7 w-full items-center gap-1 rounded-sm px-1"
+        className="flex h-8 w-full items-center gap-1 rounded-sm px-1"
         {...RENAME_EDITOR_HOLDS_ESCAPE}
       >
         <Input
@@ -2062,7 +2071,7 @@ function SessionRow({
             // below the body ink — `--foreground-soft`, never with /N — except
             // on the open chat, which keeps the body colour. `relative`
             // anchors the floating actions (decision 183 §1.4).
-            'group relative flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',
+            'group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',
             active
               ? 'bg-selection text-accent-foreground'
               : 'text-foreground-soft hover:bg-hover focus-visible:bg-hover'

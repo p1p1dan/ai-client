@@ -29,13 +29,14 @@ const ROW = CODE.slice(CODE.indexOf('function SessionRow('));
  * scan. 14px (`text-meta`); `relative` anchors the floating actions.
  */
 const SESSION_ROW_CLASS =
-  /'group relative flex h-7 w-full items-center gap-1\.5 overflow-hidden rounded-sm px-2 text-left text-meta'/;
+  /'group relative flex h-8 w-full items-center gap-1\.5 overflow-hidden rounded-sm px-2 text-left text-meta'/;
 
 describe('sidebar session row width budget', () => {
-  it('keeps the row a single h-7 line with a clipping box', () => {
-    // h-7 is the design-system tree-node token; a second line would silently
-    // change sidebar density instead of solving the overflow. rounded-sm: the
-    // radius clamp rule (h-7 takes rounded-xs / rounded-sm only).
+  it('keeps the row a single h-8 line with a clipping box', () => {
+    // h-8 is the sidebar row height since decision 188 (was the h-7 tree-node
+    // token); a second line would silently change sidebar density instead of
+    // solving the overflow. rounded-sm: the radius clamp rule keeps small
+    // controls off rounded-md and up.
     expect(ROW).toMatch(SESSION_ROW_CLASS);
   });
 

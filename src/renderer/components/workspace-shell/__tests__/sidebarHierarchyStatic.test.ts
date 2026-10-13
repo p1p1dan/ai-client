@@ -11,11 +11,15 @@ import { stripComments } from '@/components/chat/__tests__/stripComments';
  * Static, like this directory's other LeftNav pins: what can regress is a
  * class string, and jsdom computes no layout to measure.
  *
- *   top nav       15px 400 foreground       h-8   22px icon slot; hover bg-hover
- *   tool row      search (h-7) + collapse / expand all + bulk archive (28px)
- *   group label   13px 400 muted            h-7   no icon, no hover fill; soft ink on hover
- *   chat          14px 400 foreground-soft  h-7   fixed w-4 status slot; open: foreground
- *   auxiliary     14px 400 muted            h-7   text in the title column
+ *   top nav       14px 400 foreground       h-8   22px icon slot; hover bg-hover
+ *   tool row      search (h-8) + collapse / expand all + bulk archive (32px)
+ *   group label   12px 400 muted            h-8   no icon, no hover fill; soft ink on hover
+ *   chat          14px 400 foreground-soft  h-8   fixed w-4 status slot; open: foreground
+ *   auxiliary     14px 400 muted            h-8   text in the title column
+ *
+ * Decision 188 (2026-10-13, screenshot-style spacing preview): every row 32px,
+ * the nav down to 14px, the group label down to 12px, and wider gaps between
+ * the three zones.
  *
  * Gone: the panel title (`DockTitle`, all five panels), the region titles
  * (`SidebarSectionHeader`), 「正在活动」, the dividers and the 16px tier.
@@ -84,9 +88,9 @@ describe('the panel title is gone from all five panels (decision 183 §1.9)', ()
 });
 
 describe('levels (decision 183, prototype `.vA`)', () => {
-  it('top nav: two h-8 rows, 15px, a 22px icon slot; New chat on a round bg-selection disc', () => {
+  it('top nav: two h-8 rows, 14px, a 22px icon slot; New chat on a round bg-selection disc', () => {
     expect(constant('NAV_ITEM_CLASS')).toBe(
-      'flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-ui hover:bg-hover focus-visible:bg-hover'
+      'flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-meta hover:bg-hover focus-visible:bg-hover'
     );
     expect(NAV.split('className={NAV_ITEM_CLASS}').length - 1).toBe(2);
     expect(NAV).toContain(
@@ -98,9 +102,9 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     expect(NAV).toContain('onClick={onAddRepository}');
   });
 
-  it('group label: 13px / 400 / muted, soft ink on hover, no icon, no hover fill', () => {
+  it('group label: 12px / 400 / muted, soft ink on hover, no icon, no hover fill', () => {
     expect(GROUP_HEADER).toContain(
-      '<div className="group flex h-7 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">'
+      '<div className="group flex h-8 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">'
     );
     expect(GROUP_HEADER).toContain(
       'className="flex min-w-0 flex-1 items-center gap-1 text-left text-group-label text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"'
@@ -170,7 +174,7 @@ describe('levels (decision 183, prototype `.vA`)', () => {
 
   it('chat: 14px / 400 in --foreground-soft; the open one keeps the body colour', () => {
     expect(ROW).toContain(
-      "'group relative flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',"
+      "'group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',"
     );
     expect(ROW).toContain("? 'bg-selection text-accent-foreground'");
     expect(ROW).toContain(": 'text-foreground-soft hover:bg-hover focus-visible:bg-hover'");
@@ -197,9 +201,9 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     expect(slot).not.toContain(') : null}');
   });
 
-  it('auxiliary: h-7, 14px muted, the empty w-4 slot puts the text in the title column', () => {
+  it('auxiliary: h-8, 14px muted, the empty w-4 slot puts the text in the title column', () => {
     expect(AUX_ROW).toContain(
-      'className="flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"'
+      'className="flex h-8 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"'
     );
     expect(AUX_ROW).toContain('className="flex w-4 shrink-0 items-center justify-center"');
     // §1.5: no 「新建对话」 row in an empty group, so no icon slot content.
@@ -207,11 +211,12 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     expect(NAV).not.toContain('icon={<Plus');
   });
 
-  it('the 13px group label and the 15px top nav shelf the tiers in between (issue #14)', () => {
+  it('the 12px group label is the one tier below the 14px rows (issue #14, decision 188)', () => {
     expect(NAV).not.toMatch(/\btext-(xs|2xs|sm|base|lg|title|section)\b/);
     // Decision 186 (issue #14): the group label dropped one step to 13px so a
-    // group reads lighter than the chats it heads. It is the ONLY smaller
-    // tier here -- rows and auxiliary lines stay at 14px. Decision 187 added
+    // group reads lighter than the chats it heads; decision 188 took it to
+    // 12px. It is the ONLY smaller tier here -- rows, auxiliary lines and
+    // (since decision 188) the top nav are all 14px. Decision 187 added
     // two more uses, both group labels: the inline name editor (new group and
     // rename), which must not change size when the label becomes an input.
     expect(NAV.match(/text-group-label/g)).toHaveLength(3);
@@ -271,22 +276,28 @@ describe('one list (decision 183 §1.10)', () => {
   });
 
   it('two full-width zone lines: under the top zone and on the account footer (user ruling 2026-10-12)', () => {
-    // Prototype v6 `.sep-line`: 8px under the search row, one hairline on the
-    // full-width box (its px-2 sits inside the line), shared by the selection
-    // bar so nothing moves when multi-select starts.
-    expect(constant('TOP_ZONE_END_CLASS')).toBe('shrink-0 border-b px-2 pt-1.5 pb-2');
+    // Prototype v6 `.sep-line`: 16px under the search row (decision 188; was
+    // 8px), one hairline on the full-width box (its px-2 sits inside the
+    // line), shared by the selection bar so nothing moves when multi-select
+    // starts.
+    expect(constant('TOP_ZONE_END_CLASS')).toBe('shrink-0 border-b px-2 pt-3 pb-4');
     expect(NAV.split('className={TOP_ZONE_END_CLASS}').length - 1).toBe(1);
     const zone = slice(NAV, '<div className={TOP_ZONE_END_CLASS}>', '<ContextMenuPrimitive.Root>');
-    expect(zone).toContain('<div className="flex h-7 items-center gap-0.5">');
+    expect(zone).toContain('<div className="flex h-8 items-center gap-0.5">');
     expect(zone).toContain('{selecting ? (');
     expect(zone).toContain('<InputGroup className={SIDEBAR_SEARCH_CLASS}>');
     // The footer's line is its own top border, across the panel.
-    expect(FOOTER).toContain('<div className="flex shrink-0 items-center gap-1 border-t p-2">');
+    // Decision 188: 12px from the line to the account row, 10px below it.
+    expect(FOOTER).toContain(
+      '<div className="flex shrink-0 items-center gap-1 border-t px-2 pt-3 pb-2.5">'
+    );
   });
 
-  it('spacing: list px-2 pt-0.5 pb-3; groups 8px then 14px apart; rows 2px; no indent', () => {
-    expect(LIST_AREA).toContain('<div className="px-2 pt-0.5 pb-3">');
-    expect(constant('SIDEBAR_GROUP_CLASS')).toBe('mt-3.5 first:mt-2');
+  it('spacing: list px-2 pt-1 pb-4; groups 12px then 14px apart; rows 2px; no indent', () => {
+    // Decision 188: hairline -> first group header 4 + 12 = 16px; last row ->
+    // footer hairline 16px.
+    expect(LIST_AREA).toContain('<div className="px-2 pt-1 pb-4">');
+    expect(constant('SIDEBAR_GROUP_CLASS')).toBe('mt-3.5 first:mt-3');
     expect(constant('GROUP_ROWS_CLASS')).toBe('mt-0.5 space-y-0.5');
     expect(NAV).not.toContain('pl-3');
     expect(TEMPORARY_GROUP).toContain('className={GROUP_ROWS_CLASS}');
@@ -329,7 +340,7 @@ describe('the tool row (decision 183 §1.8, §2.1)', () => {
     const focus = 'has-[input:focus-visible,textarea:focus-visible]';
     expect(constant('SIDEBAR_SEARCH_CLASS')).toBe(
       [
-        'h-7 min-w-0 flex-1 rounded-sm border-border bg-transparent shadow-none before:hidden dark:bg-transparent',
+        'h-8 min-w-0 flex-1 rounded-sm border-border bg-transparent shadow-none before:hidden dark:bg-transparent',
         `${focus}:border-muted-foreground ${focus}:bg-background ${focus}:ring-0`,
         '[&_input]:placeholder:text-muted-foreground',
       ].join(' ')
@@ -387,10 +398,10 @@ describe('the tool row (decision 183 §1.8, §2.1)', () => {
     expect(NAV.split('setQuery(').length - 1).toBe(1);
   });
 
-  it('28px icon buttons, and selection mode swaps the row in place', () => {
-    expect(constant('TOOL_BUTTON_CLASS')).toBe('size-7 shrink-0 text-muted-foreground sm:size-7');
+  it('32px icon buttons, and selection mode swaps the row in place', () => {
+    expect(constant('TOOL_BUTTON_CLASS')).toBe('size-8 shrink-0 text-muted-foreground sm:size-8');
     expect(NAV).toContain('<div className={TOP_ZONE_END_CLASS}>');
-    expect(NAV).toContain('<div className="flex h-7 items-center gap-0.5">');
+    expect(NAV).toContain('<div className="flex h-8 items-center gap-0.5">');
     expect(NAV).toContain("{t('{{count}} selected', { count: selection.size })}");
   });
 });
@@ -470,11 +481,11 @@ describe('search fields: InputGroup, input first (decision 167)', () => {
     expect(input).toBeGreaterThan(-1);
     expect(addon).toBeGreaterThan(input);
     // LeftNav names its classes in a constant (decision 183's prototype look,
-    // which hides the group's `::before` hairline altogether).
-    const group = file.endsWith('LeftNav.tsx')
-      ? constant('SIDEBAR_SEARCH_CLASS')
-      : slice(source, '<InputGroup ', '>');
-    expect(group).toContain('h-7');
+    // which hides the group's `::before` hairline altogether), and since
+    // decision 188 is 32px tall like the sidebar's rows; the other two stay h-7.
+    const isLeftNav = file.endsWith('LeftNav.tsx');
+    const group = isLeftNav ? constant('SIDEBAR_SEARCH_CLASS') : slice(source, '<InputGroup ', '>');
+    expect(group).toContain(isLeftNav ? 'h-8' : 'h-7');
     expect(group).toContain('rounded-sm');
     expect(group).toMatch(/before:(hidden|rounded-\[calc\(var\(--radius-sm\)-1px\)\])/);
     expect(source.slice(input, source.indexOf('/>', input))).toContain('size="sm"');
