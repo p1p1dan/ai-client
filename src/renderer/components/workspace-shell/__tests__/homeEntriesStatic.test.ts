@@ -32,11 +32,11 @@ describe('the home entry on the rail (entry (a))', () => {
     const rule = dock.indexOf('data-rail-separator=""');
     expect(rule).toBeGreaterThan(entry);
     expect(rule).toBeLessThan(dock.indexOf('{tabs.map((tab) => ('));
-    // First on the rail, which opens with 8px of padding (decision 183: no
-    // title-row spacer), so it sits level with the panel's first row.
+    // First on the rail, which opens 14px down (decision 183: no title-row
+    // spacer; decision 188: 8 -> 14), so it sits level with the panel's first row.
     expect(dock).not.toContain('<div aria-hidden className="h-9 shrink-0" />');
     const rail = dock.slice(dock.indexOf('<nav'), entry);
-    expect(rail).toContain('bg-card py-2');
+    expect(rail).toContain('bg-card pt-3.5 pb-2');
     expect(rail).not.toContain('<RailButton');
   });
 

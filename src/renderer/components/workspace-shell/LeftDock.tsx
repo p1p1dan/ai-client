@@ -180,13 +180,14 @@ export function LeftDock({
       style={{ width: dockWidthVar }}
     >
       {/* Decision 183: with the panel's title row gone, the rail no longer
-          starts below an `h-9` spacer (U27). It opens with 8px of padding, as
-          in the prototype, so its first icon sits level with the panel's
-          first row (the chat panel's 「新建对话」) instead of a row that is no
-          longer there. */}
+          starts below an `h-9` spacer (U27). Its first icon sits level with
+          the panel's first row (the chat panel's 「新建对话」) instead of a row
+          that is no longer there. Decision 188: 14px on top (was 8), matching
+          the chat panel's new top padding, so both start at y=14; the bottom
+          keeps 8px. */}
       <nav
         aria-label={t('Primary navigation')}
-        className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card py-2"
+        className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card pt-3.5 pb-2"
         style={{ width: DOCK_RAIL_WIDTH }}
       >
         {/* Decision 174 (issue #6, user ruling 2026-10-10, entry (a)): the home

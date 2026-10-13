@@ -112,10 +112,10 @@ describe('P1-11 the terminal shares the right column with the files', () => {
  * removed that title row from all five panels, so the spacer went with it.
  */
 describe('the rail opens level with the panel content (decision 183, was U27)', () => {
-  it('starts with 8px of padding, not a spacer for a title row that is gone', () => {
+  it('starts 14px down, level with 「新建对话」 (decision 188), not below a title-row spacer', () => {
     const dock = code(join(SHELL_DIR, 'LeftDock.tsx'));
     expect(dock).toContain(
-      'className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card py-2"'
+      'className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card pt-3.5 pb-2"'
     );
     expect(dock).not.toContain('<div aria-hidden className="h-9 shrink-0" />');
   });
