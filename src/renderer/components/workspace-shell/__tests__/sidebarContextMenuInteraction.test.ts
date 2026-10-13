@@ -248,15 +248,20 @@ it('gives the list its Add Repository menu on the space around the groups', asyn
 
   // Decision 183 §2.10: the whole list carries it, now that the 「仓库列表」
   // title row is gone. A group's own section (outside its header and rows)
-  // is list space.
+  // is list space. Decision 187 added New chat beside it — the two things the
+  // list can start — and New group… only in 「按分组」 mode, which this render
+  // is not in (the default is 按工作目录).
   const groupSection = container.querySelector(`[data-sidebar-group="${PROJECT_ID}"]`);
   expect(groupSection, 'the repository group is rendered').toBeTruthy();
 
   await rightClick(groupSection as Element);
-  expect(openMenuItems()).toEqual(['Add Repository']);
+  expect(openMenuItems()).toEqual(['New chat', 'Add Repository']);
 
   await act(async () => {
-    document.querySelector<HTMLElement>('[data-slot="menu-item"]')?.click();
+    const addRepository = [
+      ...document.querySelectorAll<HTMLElement>('[data-slot="menu-item"]'),
+    ].find((item) => item.textContent?.includes('Add Repository'));
+    addRepository?.click();
   });
   expect(onAddRepository).toHaveBeenCalled();
 });

@@ -1,6 +1,6 @@
 # DSH 二开迁移：进度看板
 
-Role: implementation-status。更新日期：2026-10-10。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
+Role: implementation-status。更新日期：2026-10-13。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
 
 ## 工作方式（2026-09-26 用户授权）
 
@@ -51,6 +51,16 @@ P1 分支内 DSH 替换，**在 P1-14（收口、推送、Windows 测试版、�
 
 ## Last Landed
 
+- 2026-10-13 issue #15 第二期：侧栏「按分组」的自定义分组与归类（[决策 187](decisions/187-sidebar-groups-phase-2.md)，第 1 节用户裁决，其余待审批；**未推送**）：**不做拖动**，归类走会话行右键「移到分组 ▸」（子菜单里当前分组带勾，末尾「新建分组…」建完即移入）。分组与归属存进 `sidebarArchive`（v2，`groups` + `assignments`；**缺席即「未分组」**，删组时删掉那个键就是退回未分组）；`buildUnassignedFolder` / `UNASSIGNED_FOLDER_ID` 换成 `buildGroupFolder`，用户分组与「未分组」同一条派生与渲染路径（空组也保留，其标题行是重命名、删除与「＋」的落点）；分组标题行右键与悬停「···」共用一份 `groupMenuItems`（新建 / 重命名 / 删除，行内输入，删除有确认并写明对话回未分组）；「未分组」固定最后、不可改名删除；搜索时空分组隐藏；分组标记为 2px 竖线（「未分组」同），模式切换图标改 `Tag`；列表空白处右键在分组模式下多一项「新建分组…」。原型见 [evidence/sidebar-groups-2026-10](../evidence/sidebar-groups-2026-10/README.md)（用户两轮看过定稿）。验证：根 tsc 退出 0；`workspace-shell` + `stores` + `chat` 280 个文件 5217 项全过；新增 store 测试 9 项。
+- 2026-10-13 GitHub issue #10～#16 第一批修复（[决策 186](decisions/186-github-issues-10-16-first-batch.md)，第 1 节用户裁决，其余待审批；**未推送**）：执行顺序 #16 → #14 → #13 → #10/#12 → #11 → #15 第一期。
+  - **#10** 检查更新遇代理类错误（`ERR_PROXY_CONNECTION_FAILED` / `ERR_SOCKS_CONNECTION_FAILED` / `ERR_TUNNEL_CONNECTION_FAILED`）改直连重试一次：新增 `useDirectForUpdater()` 与 `isProxyConnectionError()`（`ProxyConfig.ts`），`AutoUpdater` 的 `error` 事件与 `checkForUpdates()` 的 rejection 走同一个 `handleFailure`；只对检查重试，下载 / 安装不动。
+  - **#11** 模型目录新增定时同步：`piModelConfig/syncScheduler.ts`（`CatalogSyncScheduler`，每小时 + 窗口聚焦且距上次超过 15 分钟，非 forced），`main/index.ts` 启动时挂主窗口。
+  - **#12** 同步失败不再静默：`PiModelSyncFailure` 新增 `withCatalog`（回退到 stale-cache / bundled 的瞬时失败也记下来），恢复卡片加了守卫（有目录时不弹，账号类失败照旧弹），记忆下来的失败在模型菜单状态行（含「上次成功同步：<时间>」）、设置 → 模型管理（黄色告警 + 原始诊断）与模型按钮的小黄点三处露出。**不采纳 issue 里「代理失败时直连重试」的建议**：模型同步在应用内代理开关关闭时本来就是直连。
+  - **#13** 「临时对话」从置顶改为列表最底（推翻决策 183 §1.2）；设置里的「临时会话」区块全部文案改名「临时工作区」（该开关实际只管临时工作区，代码标识符不改）。
+  - **#14** 侧栏分组标签降到 13px：新增 `--text-group-label` token（注册进 tailwind-merge），放宽 D25 的 CJK 下限只对这一级生效。
+  - **#16** 「后台已挂上」的状态标记由空心圈改实心灰点，与「未启动」的淡空心圈按形状区分。
+  - **#15 第一期**：`Repository` 新增 `addedAt`（旧安装按数组位置补戳），仓库分组改为按添加时间降序（取代决策 170 的活动排序）；工具行最右新增归档方式图标开关（按工作目录 / 按分组，存 `aiclient-sidebar-archive`）；「按分组」只有一个「未分组」组（`buildUnassignedFolder`，所有对话在内、组内按运行时间降序、行尾上下文文字改为仓库名）；会话行右键新增「跳转到工作目录」（`shell.openPath` 打开系统文件管理器，无本地目录的行不显示）。孤儿 `deriveFolderLastActivity` / `orderFoldersByActivity` 一并删除。第二期（自定义分组与拖动）待开工，拖动难点已列在决策第 3 节。
+  - 验证：`tsc --noEmit` 退出 0；被触及的 277 个测试文件 4750 项全过（含侧栏 69 文件 975 项）。全量另有 90 项失败全在 `src/dsh-host/` 与 `scripts/`（本机未 `npm ci`，缺 `web-tree-sitter`、`@deepseek-ai/dsh-anonymous-user-id` 等包）与 `runtimeRetiredStatic`（`src/agent-host` 只剩 node_modules），已用 stash 对照确认均为既有环境问题，与本轮无关。
 - 2026-10-11 供应商 A 缓存实测（dsh.12 代码 `3cacf3b0`，用户把公司网关切回供应商 A 后本人启动并登录，[证据](evidence/supplier-a-cache-real-gateway-2026-10-11.md)，74 / 90 次请求）：修复后应用 6 轮 27 步每步只丢 2、无写法变化、缓存链 0 次重建，**dsh.11 验收时的「每轮第 2 步回退到约 32k」不再出现**（多出提示的会话上续跑 3 轮也只丢 2）。**供应商侧两个问题，客户端改不了，待转网关管理员**：① 部分新会话首步多出约 2.72 万 token 提示（同样 23,931 字符的请求，6 个新会话里 4 个多出），官方 SDK + Claude Code 写法 + 默认 UA 同样多出，与客户端无关；约 2.43 万落在跨会话共享的前缀里；② 用量把缓存写入记为 1 小时 TTL（只请求 5 分钟的也一样），但闲置超过 5 分钟后消息部分的缓存读不回来（5.7 / 6.9 分钟后分别丢 4,081 / 5,480）。dsh.12 安装包 run 38190761278 全绿。
 - 2026-10-11 决策 182 真实网关复测（HEAD `eb1a427d`，用户本人启动带抓包的开发版并登录，[证据](evidence/da3-fix-real-gateway-2026-10-11.md)，72 / 90 次请求）：**修复确认**——修复后应用每步只丢 2～4 token、请求体无字符串形式的用户消息、监视无写法变化行、缓存链 0 次重建；在会丢缓存的上游上同会话对照，修复前写法回合第 2 步丢 334 / 10,107 token，修复后只丢 2。本轮未见 Z 类（约 32k 回退）。已登出、凭据库清空、应用已关。另：Windows 打包自检 `l1NoLeftovers` 假失败（进程号复用把系统进程树当成宿主遗留，dsh.11 首跑 Windows 任务，重跑通过）由 `eb1a427d` 按进程创建时间判断后代，待 CI 实测。下一步出 dsh.12。
 - 2026-10-11 DA-3 修复：用户消息一律以文本块发出（[决策 182](decisions/182-anthropic-user-content-block-form.md)，第 1 节用户要求，其余待审批；**未推送，待真实网关复测后进 dsh.12**）：宿主 fetch 钩子 `requestTap.ts` 在加 `metadata.user_id` 之前，把所有 anthropic-messages 请求里字符串形式的用户内容改成同文的单个文本块（新文件 `userContentBlocks.ts`，纯函数、幂等，空串 / 全空白不动，其余字节不变），同一条消息各步写法一致；不给 pi-ai 打补丁（`onPayload` 未被 DSH 转发，且每次升级要重打）。前缀监视新增 `message-form` / `system-form` 两类分叉，不再把写法变化当纯追加。应急开关 `AICLIENT_RUNTIME_USER_CONTENT_BLOCKS=0`。已有会话升级后第一次请求最坏重写一次缓存。验证（实现代理）：相关单测 9 个文件 242 项、`scripts` 宿主包清单 56 项、真宿主集成 `[182-I-1]` `[182-I-2]`、Static / Scan / Wiring 823 项、两套 tsc、`bridge-record --check` 36 个场景 0 差异；编排者复跑 8 个文件 226 项。待办：真实网关 Opus 多轮工具复测（每轮第 2 步应只丢 2～4 token，Main 日志无 `at=message-form`）。

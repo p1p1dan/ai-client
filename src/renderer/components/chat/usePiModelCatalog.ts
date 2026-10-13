@@ -2,7 +2,9 @@ import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { useCallback, useEffect, useState } from 'react';
 import { type HostStatus, isHostUsable } from './hostStatus';
 import {
+  type CatalogStaleness,
   type CatalogStatusRow,
+  catalogStaleness,
   catalogStatusRow,
   hostNotReadyCatalog,
   isCatalogAuthoritative,
@@ -29,6 +31,8 @@ export interface UsePiModelCatalogResult {
   authoritative: boolean;
   loading: boolean;
   status: CatalogStatusRow;
+  /** Issue #12: set when the list is a fallback; the model trigger's own mark. */
+  staleness: CatalogStaleness | null;
   refresh: () => void;
   retry: () => void;
 }
@@ -116,6 +120,7 @@ export function usePiModelCatalog(hostState: HostStatus['state']): UsePiModelCat
     authoritative: isCatalogAuthoritative(catalog),
     loading: inFlight,
     status: catalogStatusRow({ catalog, loading: inFlight }),
+    staleness: catalogStaleness(catalog),
     refresh: useCallback(() => request(false), [request]),
     retry: useCallback(() => request(true), [request]),
   };

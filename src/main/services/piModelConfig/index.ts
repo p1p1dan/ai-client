@@ -254,11 +254,6 @@ export function getManagedPiSyncFailure(): PiModelSyncFailure | null {
  * the user gets a full model menu in which every turn fails at request time.
  * A populated menu is not a rescue when the account cannot use it, and staying
  * quiet there would reproduce the silence this whole notice exists to end.
- *
- * A transient wire failure is the opposite case and is deliberately NOT here:
- * the baseline is a real catalog the account CAN use, the model menu already
- * says the list is the shipped one, and a red card over a working app is the
- * permanently-lit box `chatEmptyState.ts` was written to get rid of.
  */
 const ACCOUNT_SYNC_FAILURES: ReadonlySet<PiModelSyncFailureKind> = new Set([
   'unauthorized',
@@ -266,11 +261,26 @@ const ACCOUNT_SYNC_FAILURES: ReadonlySet<PiModelSyncFailureKind> = new Set([
   'credentials-disabled',
 ]);
 
+/**
+ * Issue #12: wire failures that fell back to a catalog the install already
+ * had. The user has models to work with, so these must NOT raise the recovery
+ * card (a red card over a working app is the failure mode that comment above
+ * is guarding) — but they must not vanish either, which is what they used to
+ * do. Recorded so Settings · Models and the model menu can say the list is old
+ * WITHOUT claiming the sync found nothing.
+ */
+const STALE_SYNC_FAILURES: ReadonlySet<PiModelSyncFailureKind> = new Set(['network', 'server']);
+
 function rememberSyncOutcome(result: PiModelSyncResult): PiModelSyncResult {
   const kind = result.failureKind;
-  const worthReporting = kind !== undefined && (!result.ok || ACCOUNT_SYNC_FAILURES.has(kind));
+  const catalogKept = result.source === 'stale-cache' || result.source === 'bundled';
+  const worthReporting =
+    kind !== undefined &&
+    (!result.ok ||
+      ACCOUNT_SYNC_FAILURES.has(kind) ||
+      (catalogKept && STALE_SYNC_FAILURES.has(kind)));
   lastManagedSyncFailure = worthReporting
-    ? { kind, error: result.error ?? '', at: Date.now() }
+    ? { kind, error: result.error ?? '', at: Date.now(), withCatalog: catalogKept }
     : null;
   return result;
 }

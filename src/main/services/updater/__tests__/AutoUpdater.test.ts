@@ -2,11 +2,23 @@ import { EventEmitter } from 'node:events';
 import type { BrowserWindow } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ check: vi.fn(), download: vi.fn(), install: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  check: vi.fn(),
+  download: vi.fn(),
+  install: vi.fn(),
+  applyDirectUpdaterProxy: vi.fn(),
+  isProxyConnectionError: vi.fn((error: unknown) =>
+    /ERR_(PROXY|SOCKS)_CONNECTION_FAILED|ERR_TUNNEL_CONNECTION_FAILED/i.test(
+      error instanceof Error ? error.message : String(error ?? '')
+    )
+  ),
+}));
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }));
 vi.mock('../../proxy/ProxyConfig', () => ({
   applyProxy: vi.fn(),
   registerUpdaterSession: vi.fn(),
+  applyDirectUpdaterProxy: mocks.applyDirectUpdaterProxy,
+  isProxyConnectionError: mocks.isProxyConnectionError,
 }));
 vi.mock('electron-updater', async () => {
   const { EventEmitter } = await import('node:events');
@@ -38,6 +50,7 @@ beforeEach(() => {
   mocks.check.mockReset().mockResolvedValue(null);
   mocks.download.mockReset().mockResolvedValue([]);
   mocks.install.mockReset();
+  mocks.applyDirectUpdaterProxy.mockReset().mockResolvedValue(undefined);
   window = Object.assign(new EventEmitter(), {
     webContents: { send: vi.fn() },
     isDestroyed: () => false,
@@ -216,5 +229,47 @@ describe('install waits for the chat engine to stop', () => {
     expect(failing.isQuittingForUpdate()).toBe(false);
     failing.cleanup();
     warn.mockRestore();
+  });
+});
+
+/**
+ * Issue #10: 「检查失败 net::ERR_PROXY_CONNECTION_FAILED」. The check follows the
+ * system proxy unless 「更新也走代理」 is on, so a proxy that the OS still names
+ * but which is no longer running turns every automatic check into a dead end.
+ */
+describe('a check that failed on the proxy takes one direct retry (issue #10)', () => {
+  it('retries direct, and reports the result instead of the proxy error', async () => {
+    service.init(window as unknown as BrowserWindow, false);
+    mocks.check
+      .mockRejectedValueOnce(new Error('net::ERR_PROXY_CONNECTION_FAILED'))
+      .mockResolvedValueOnce(null);
+    await service.checkForUpdates();
+    expect(mocks.applyDirectUpdaterProxy).toHaveBeenCalledOnce();
+    expect(mocks.check).toHaveBeenCalledTimes(2);
+    expect(service.getStatus().status).toBe('idle');
+  });
+
+  it('reports the failure when the direct retry fails too, and does not retry again', async () => {
+    service.init(window as unknown as BrowserWindow, false);
+    mocks.check.mockRejectedValue(new Error('net::ERR_PROXY_CONNECTION_FAILED'));
+    await service.checkForUpdates();
+    expect(mocks.applyDirectUpdaterProxy).toHaveBeenCalledOnce();
+    expect(service.getStatus().status).toBe('error');
+    // The second check starts from the failure again; the retry already
+    // happened once for it, so this is the retry's own error coming through.
+    await service.checkForUpdates();
+    expect(service.getStatus().status).toBe('error');
+  });
+
+  it('does not touch the session for an ordinary network failure', async () => {
+    service.init(window as unknown as BrowserWindow, false);
+    mocks.check.mockRejectedValueOnce(new Error('net::ERR_NAME_NOT_RESOLVED'));
+    await service.checkForUpdates();
+    expect(mocks.applyDirectUpdaterProxy).not.toHaveBeenCalled();
+    expect(mocks.check).toHaveBeenCalledOnce();
+    expect(service.getStatus()).toMatchObject({
+      status: 'error',
+      error: 'net::ERR_NAME_NOT_RESOLVED',
+    });
   });
 });

@@ -220,6 +220,19 @@ export interface PiModelSyncFailure {
   error: string;
   /** `Date.now()` of the attempt. */
   at: number;
+  /**
+   * Issue #12: the sync fell back to a catalog it already had (`stale-cache`
+   * or the shipped `bundled` snapshot) instead of coming away with nothing.
+   *
+   * The distinction is what stops the recovery CARD from appearing over a
+   * working app: a user reading an old-but-real model list is not in the state
+   * that card describes, and a card that cannot be cleared by the action it
+   * offers is the permanently-lit box `chatEmptyState.ts` exists to avoid. The
+   * install still has to be able to SAY the list is old, which is why the fact
+   * is recorded rather than dropped — it is shown in the model menu and on
+   * Settings · Models, where a user goes when they suspect the list.
+   */
+  withCatalog: boolean;
 }
 
 export interface PiModelSyncResult extends PiModelSyncState {

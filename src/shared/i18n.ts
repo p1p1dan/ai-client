@@ -47,6 +47,26 @@ export const zhTranslations: Record<string, string> = {
   Providers: '渠道',
   Models: '模型',
   'Last successful sync': '上次成功',
+  'Last successful sync: {{time}}': '上次成功同步：{{time}}',
+  // Issue #15: the sidebar's archive-mode switch and its 「未分组」 group
+  // (`Ungrouped` already exists further down, for the repository filter).
+  'Chats you have not put in a group yet': '还没有归到任何分组的对话',
+  'Jump to working directory': '跳转到工作目录',
+  'Grouped by: working directory — switch to group': '按工作目录归档——点击切换到分组',
+  'Grouped by: group — switch to working directory': '按分组归档——点击切换到工作目录',
+  // Issue #15 phase 2 (decision 187): the user's own groups.
+  'Group actions': '分组操作',
+  'Group name': '分组名称',
+  'New group…': '新建分组…',
+  'Delete group': '删除分组',
+  'Delete “{{name}}”?': '删除「{{name}}」？',
+  'Its chats stay and go back to Ungrouped.': '里面的对话会保留，回到「未分组」。',
+  'Group: {{name}}': '分组：{{name}}',
+  'New chat in {{group}}': '在「{{group}}」里新建对话',
+  'No chats yet': '暂无对话',
+  'Move to group': '移到分组',
+  'The last sync could not reach the model service, so the list is the last one that worked. Models added since then are missing.':
+    '上次同步没能连上模型服务，列表停留在上一次成功的结果，之后新增的模型不会出现在这里。',
   'Last attempt': '上次尝试',
   'Managed directory:': '隔离目录：',
   'The default URL points to /api/v1/models-config on the onboarding service.':
@@ -186,25 +206,30 @@ export const zhTranslations: Record<string, string> = {
   'Select Image': '选择图片',
   'Beta Features': 'Beta 功能',
   'Binary file not supported for diff preview': '二进制文件不支持差异预览',
-  'Temp Session': '临时会话',
+  // Issue #13: this block drives the TEMPORARY WORKSPACE feature (the temp
+  // directory with an agent/terminal session beside it), not 「临时对话」 — the
+  // chat that belongs to no repository. The two read as one thing while both
+  // were called 「临时会话」, so every string here now names the workspace.
+  'Temp Session': '临时工作区',
   'Session History': '会话历史',
-  'Temp Session settings': '临时会话设置',
-  'Show Temp Session entry for quick scratch sessions': '显示临时会话入口，用于快速临时会话',
+  'Temp Session settings': '临时工作区设置',
+  'Show Temp Session entry for quick scratch sessions':
+    '显示临时工作区入口，用于快速起一个临时目录',
   'Default directory for new temp sessions. Leave empty to use ~/JYWAI/temporary':
-    '新建临时会话的默认目录。留空则使用 ~/JYWAI/temporary',
+    '新建临时工作区的默认目录。留空则使用 ~/JYWAI/temporary',
   'Automatically create Agent/Terminal Session when activating a temp session':
-    '激活临时会话时自动创建 Agent / 终端会话',
-  'No temp sessions': '暂无临时会话',
-  'Create a temp session to get started': '点击“新建临时会话”开始一次临时会话',
-  'New Temp Session': '新建临时会话',
-  'Rename temp session': '重命名临时会话',
-  'Delete temp session?': '删除临时会话？',
+    '激活临时工作区时自动创建 Agent / 终端会话',
+  'No temp sessions': '暂无临时工作区',
+  'Create a temp session to get started': '点击“新建临时工作区”开始',
+  'New Temp Session': '新建临时工作区',
+  'Rename temp session': '重命名临时工作区',
+  'Delete temp session?': '删除临时工作区？',
   'This will delete the temp session directory and its contents.':
-    '此操作将删除该临时会话目录及其内容。',
-  'Temp Session created': '临时会话已创建',
-  'Temp Session deleted': '临时会话已删除',
-  'Failed to create temp session': '创建临时会话失败',
-  'Failed to delete temp session': '删除临时会话失败',
+    '此操作将删除该临时工作区目录及其内容。',
+  'Temp Session created': '临时工作区已创建',
+  'Temp Session deleted': '临时工作区已删除',
+  'Failed to create temp session': '创建临时工作区失败',
+  'Failed to delete temp session': '删除临时工作区失败',
   Branch: '分支',
   'Branch already exists. Choose a different name.': '该分支已存在，请使用其他分支名',
   'Branch name': '新分支名',

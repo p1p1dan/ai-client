@@ -18,6 +18,7 @@ import {
   MenuSubTrigger,
 } from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
+import { formatAbsoluteDateTime } from '@/lib/relativeTime';
 import { useSettingsHydrated, useSettingsStore } from '@/stores/settings';
 import {
   type ComposerMenuItem,
@@ -230,7 +231,8 @@ function SessionModelTrigger({
   const setChatAgentDefaults = useSettingsStore((state) => state.setChatAgentDefaults);
   const settingsHydrated = useSettingsHydrated();
 
-  const { catalog, authoritative, loading, status, refresh, retry } = usePiModelCatalog(hostState);
+  const { catalog, authoritative, loading, status, staleness, refresh, retry } =
+    usePiModelCatalog(hostState);
   const catalogOptions = catalogModels(catalog);
   const unavailableNotice = unavailableModelsNotice(catalog, t);
 
@@ -405,6 +407,10 @@ function SessionModelTrigger({
     selection,
     scope: scopeHint,
   });
+  // Issue #12: the trigger's own mark that the list is a fallback. Only when
+  // there is a sentence to read about it — an `unavailable` catalog says so in
+  // the menu AND here, while a fresh one says nothing in either place.
+  const staleList = status.message !== null && staleness !== null;
 
   return (
     <Menu
@@ -432,6 +438,19 @@ function SessionModelTrigger({
       >
         <span className={composerModelBaseClass()}>{base}</span>
         {suffix && <span className={composerModelSuffixClass()}>{suffix}</span>}
+        {/* Issue #12: the list behind this menu may be a fallback, and the user
+            has to be able to see that WITHOUT opening it. The menu's own status
+            row carries the full sentence and the Retry; this is the sign that
+            there is one to read, next to the control it is about. `aria-hidden`
+            because the trigger's accessible name already carries the sentence
+            through `spokenLabel` below. */}
+        {staleList && (
+          <span
+            aria-hidden
+            className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
+            title={t(status.message ?? '')}
+          />
+        )}
         <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
       </MenuPrimitive.Trigger>
       {/* The shared popup's hairline `::before` derives its radius from the
@@ -495,6 +514,18 @@ function SessionModelTrigger({
               <span className="min-w-0 flex-1 truncate" title={status.reason ?? undefined}>
                 {/* A catalog key (`piModelCatalog.ts`'s notices). */}
                 {t(status.message)}
+                {/* Issue #12: "out of date" is only actionable once the user can
+                    judge HOW out of date, so the fallback's own timestamp goes
+                    beside the sentence. Absent for the shipped baseline, which
+                    was never fetched by this machine and so has no such time. */}
+                {staleness?.since ? (
+                  <>
+                    {' '}
+                    {t('Last successful sync: {{time}}', {
+                      time: formatAbsoluteDateTime(staleness.since),
+                    })}
+                  </>
+                ) : null}
               </span>
               {status.retryable && (
                 <button

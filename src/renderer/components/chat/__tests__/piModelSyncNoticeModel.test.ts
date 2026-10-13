@@ -17,8 +17,13 @@ import {
  * work is worse than no button.
  */
 
-function failure(kind: PiModelSyncFailureKind): PiModelSyncFailure {
-  return { kind, error: 'management endpoint returned HTTP 500', at: 1_700_000_000_000 };
+function failure(kind: PiModelSyncFailureKind, withCatalog = false): PiModelSyncFailure {
+  return {
+    kind,
+    error: 'management endpoint returned HTTP 500',
+    at: 1_700_000_000_000,
+    withCatalog,
+  };
 }
 
 describe('piModelSyncNoticeView', () => {

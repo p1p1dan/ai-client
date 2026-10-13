@@ -13,7 +13,7 @@ import { stripComments } from '@/components/chat/__tests__/stripComments';
  *
  *   top nav       15px 400 foreground       h-8   22px icon slot; hover bg-hover
  *   tool row      search (h-7) + collapse / expand all + bulk archive (28px)
- *   group label   14px 400 muted            h-7   no icon, no hover fill; soft ink on hover
+ *   group label   13px 400 muted            h-7   no icon, no hover fill; soft ink on hover
  *   chat          14px 400 foreground-soft  h-7   fixed w-4 status slot; open: foreground
  *   auxiliary     14px 400 muted            h-7   text in the title column
  *
@@ -98,12 +98,12 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     expect(NAV).toContain('onClick={onAddRepository}');
   });
 
-  it('group label: 14px / 400 / muted, soft ink on hover, no icon, no hover fill', () => {
+  it('group label: 13px / 400 / muted, soft ink on hover, no icon, no hover fill', () => {
     expect(GROUP_HEADER).toContain(
       '<div className="group flex h-7 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">'
     );
     expect(GROUP_HEADER).toContain(
-      'className="flex min-w-0 flex-1 items-center gap-1 text-left text-meta text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"'
+      'className="flex min-w-0 flex-1 items-center gap-1 text-left text-group-label text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"'
     );
     expect(GROUP_HEADER).toContain('aria-expanded={expanded}');
     expect(GROUP_HEADER).not.toContain('hover:bg-hover');
@@ -183,14 +183,14 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     );
   });
 
-  it('a chat not started shows the faint ring; started, the muted one (§1.7)', () => {
+  it('a chat not started shows the faint ring; started, the filled dot (§1.7, issue #16)', () => {
     expect(ROW).toContain(
       'className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground-faint"'
     );
     expect(ROW).toContain("title={t('Not started')}");
-    expect(ROW).toContain(
-      'className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground"'
-    );
+    // Issue #16: filled, not a second outline -- an outline beside the faint
+    // outline was the pair the user could not tell apart.
+    expect(ROW).toContain('className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground"');
     // Every branch of the slot renders a mark: no `: null}` at its end.
     const slot = slice(ROW, '{onToggleSelect ? null : row.busy ? (', '{titleParts.suffix === null');
     expect(slot).toContain('border-muted-foreground-faint');
@@ -207,8 +207,15 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     expect(NAV).not.toContain('icon={<Plus');
   });
 
-  it('only the 14 / 15 tiers, nothing smaller than 14px (CJK cascade rule 3)', () => {
+  it('the 13px group label and the 15px top nav shelf the tiers in between (issue #14)', () => {
     expect(NAV).not.toMatch(/\btext-(xs|2xs|sm|base|lg|title|section)\b/);
+    // Decision 186 (issue #14): the group label dropped one step to 13px so a
+    // group reads lighter than the chats it heads. It is the ONLY smaller
+    // tier here -- rows and auxiliary lines stay at 14px. Decision 187 added
+    // two more uses, both group labels: the inline name editor (new group and
+    // rename), which must not change size when the label becomes an input.
+    expect(NAV.match(/text-group-label/g)).toHaveLength(3);
+    expect(GROUP_HEADER).toContain('text-group-label');
     // `Button size="xs"` is 12px on desktop (`sm:text-xs`): every one here
     // overrides it with `sm:text-meta`.
     const xsButtons = [...NAV.matchAll(/<Button[^>]*size="xs"[^>]*>/g)].map((match) => match[0]);
@@ -227,13 +234,15 @@ describe('one list (decision 183 §1.10)', () => {
     expect(NAV).not.toContain('scrollFade');
   });
 
-  it('Temporary chats first, then the repositories (or the add-repository card)', () => {
+  it('the repositories (or the add-repository card) first, Temporary chats last', () => {
     const temporary = LIST_AREA.indexOf('{renderTemporaryGroup()}');
     const repositories = LIST_AREA.indexOf('visibleFolders.map(renderRepositoryGroup)');
     const card = LIST_AREA.indexOf('<Empty ');
     expect(temporary).toBeGreaterThan(-1);
-    expect(repositories).toBeGreaterThan(temporary);
-    expect(card).toBeGreaterThan(temporary);
+    // Issue #13 (decision 186): reversed from decision 183 §1.2, which pinned
+    // it above the repositories.
+    expect(repositories).toBeLessThan(temporary);
+    expect(card).toBeLessThan(temporary);
   });
 
   it('the regions, their titles, dividers, caps and fades are gone', () => {
@@ -332,7 +341,13 @@ describe('the tool row (decision 183 §1.8, §2.1)', () => {
   it('collapse / expand all is one toggle over every group, Temporary chats included', () => {
     const toggle = slice(NAV, 'const toggleAllGroups = () => {', '\n  };\n');
     expect(toggle).toContain('const expand = allGroupsCollapsed;');
-    expect(toggle).toContain('[UNBOUND_FOLDER_ID, ...folders.map((folder) => folder.projectId)]');
+    // Issue #15: the ids are the same set, computed once into `toggleGroupIds`
+    // so 「按分组」 mode (the user's groups plus 「未分组」) does not need a second
+    // copy of this logic.
+    expect(toggle).toContain('Object.fromEntries(toggleGroupIds.map((id) => [id, expand]))');
+    expect(NAV).toContain(`  const toggleGroupIds = groupingByGroup
+    ? groupFolderIds
+    : [`);
     expect(toggle).not.toContain('visibleFolders');
     expect(NAV).toContain("allGroupsCollapsed ? t('Expand all groups') : t('Collapse all groups')");
     expect(NAV).toContain('aria-label={toggleAllLabel}');

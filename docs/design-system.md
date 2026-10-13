@@ -75,7 +75,7 @@ sRGB hex → OKLCH(D65) 转换后写入 `src/renderer/styles/globals.css` 的 `:
 | `muted` | `#f6f5ee` | `#1C1B1A` | 次要面板底（参与 `--panel-bg-opacity`） |
 | `muted-foreground` | `#575653` | `#9F9D96` | 次要文字（亮 7.20:1；暗 6.70:1，2026-08-18 D2-b 提档） |
 | `foreground-soft` | 派生 ≈ `#31302F` | 派生 ≈ `#B6B5AC` | **侧栏对话标题**，比正文低一级（决策 170，issue #6）；决策 183 起也是侧栏分组标签的悬停色。派生式 `color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground))`，只在 `:root` 声明一次，跟随亮 / 暗 / 同步终端主题；≈ Flexoki base-850 / base-300（ΔE 0.012 / 0.001）。对底 12.93:1 / 8.83:1，选中行改回正文色 |
-| `muted-foreground-faint` | 派生 ≈ `#AEACA6` | 派生 ≈ `#53514E` | **侧栏「未启动」的淡空心圈**（决策 183），比「后台已挂上」的 `muted-foreground` 空心圈淡一级。派生式 `color-mix(in oklab, var(--muted-foreground) 45%, color-mix(in oklab, var(--card) 40%, var(--background)))`——`muted-foreground` 向侧栏实际底色（`LeftDock` 的 `bg-card/40` 叠在 `bg-background` 上）混 55%；只在 `:root` 声明一次，跟随亮 / 暗 / 同步终端主题。对侧栏底约 2.2:1（`muted-foreground` 约 6.3–7.0:1）：刻意低于 3:1 的非文本对比线，因为它是装饰性标记（`aria-hidden`，含义在悬停提示「未启动」里）。只做描边色 `border-muted-foreground-faint`，不承载文字 |
+| `muted-foreground-faint` | 派生 ≈ `#AEACA6` | 派生 ≈ `#53514E` | **侧栏「未启动」的淡空心圈**（决策 183），比「后台已挂上」的 `muted-foreground` 实心点淡一级（决策 186，issue #16：对侧从描边改为实心）。派生式 `color-mix(in oklab, var(--muted-foreground) 45%, color-mix(in oklab, var(--card) 40%, var(--background)))`——`muted-foreground` 向侧栏实际底色（`LeftDock` 的 `bg-card/40` 叠在 `bg-background` 上）混 55%；只在 `:root` 声明一次，跟随亮 / 暗 / 同步终端主题。对侧栏底约 2.2:1（`muted-foreground` 约 6.3–7.0:1）：刻意低于 3:1 的非文本对比线，因为它是装饰性标记（`aria-hidden`，含义在悬停提示「未启动」里）。只做描边色 `border-muted-foreground-faint`，不承载文字 |
 | `accent` | `#eeece3` | `#2d2b2b` | **交互覆盖底**（hover / 选中行）。`interactive.hover` 预乘实色 |
 | `accent-foreground` | `#100F0F` | `#CECDC3` | — |
 | `accent-primary` | `#F9AE77` | `#F9AE77` | 品牌强调（`primary.emphasis`）。**亮色有可读性红线，见下** |
@@ -588,7 +588,7 @@ D25 的四档 + 一个例外：
 
 | 档 | 值 | 域 |
 |----|----|----|
-| 段头 | `+0.04em` | 大写拉丁分组段头（A07 明文裁定值，D25 后**数值不变**，只换了理由）。~~侧栏 L1 板块标题「正在活动」「仓库列表」「临时对话」~~ 已随决策 183 删除；侧栏分组标签（14px 灰字）**字距 0**，不用本档 |
+| 段头 | `+0.04em` | 大写拉丁分组段头（A07 明文裁定值，D25 后**数值不变**，只换了理由）。~~侧栏 L1 板块标题「正在活动」「仓库列表」「临时对话」~~ 已随决策 183 删除；侧栏分组标签（13px 灰字，决策 186）**字距 0**，不用本档 |
 | 微标签 | `+0.02em` | ≤11px 的 badge / 角标 / `kbd` 内文——小号比例字需要开距 |
 | 按钮 | `+0.01em` | `ui/button.tsx` 基类已全局带 `tracking-[0.01em]`（比例字体下这条才开始真的起作用） |
 | 正文 / UI | `0` | 正文、侧栏行、Composer、工具行、meta —— **默认** |
@@ -746,11 +746,11 @@ D25 的四档 + 一个例外：
 |---|---|---|---|---|---|---|
 | 顶部导航 | 「新建对话」「添加仓库」 | `text-ui` 15px | 400 | `foreground`；图标 `muted-foreground` | `h-8` | 22px 图标槽（`size-5.5`），「新建对话」的槽是 `rounded-full bg-selection` 圆底 + `Plus size-3.5`，「添加仓库」是 `FolderPlus size-4`；`gap-2.5 px-2 rounded-sm`，悬停与键盘焦点 `bg-hover` |
 | 搜索行 | 搜索框 + 全部折叠 / 全部展开 + 批量归档 | 输入 14px | 400 | 占位 `muted-foreground` | `h-7` | 见下「顶部」 |
-| 分组标签 | 仓库名、「临时对话」 | `text-meta` 14px | 400 | `muted-foreground`，悬停 / 键盘焦点 `foreground-soft` | `h-7` | 无文件夹图标、无悬停底色；名字后跟小三角；字距 0 |
+| 分组标签 | 仓库名、「临时对话」 | `text-group-label` 13px | 400 | `muted-foreground`，悬停 / 键盘焦点 `foreground-soft` | `h-7` | 无文件夹图标、无悬停底色；名字后跟小三角；字距 0 |
 | 对话 | 对话标题 | `text-meta` 14px | 400 | `foreground-soft`；**选中行恢复正文色**（`text-accent-foreground`） | `h-7` | 行首 `w-4` 状态槽永远占位且永远有标记；选中 `bg-selection`；**不缩进** |
 | 辅助 | 查看更多（N）/ 收起、分支文字、改动合计、汇总标记里的数字、空状态 | `text-meta` 14px | 400 | `muted-foreground`（改动合计 `success` / `destructive`） | 独立成行 `h-7` | 数字 `tabular-nums` |
 
-**相邻层级的区分载体**：分组标签–对话：颜色（`muted-foreground` 对 `foreground-soft`）、留白（组间 14px）、小三角、对话行首的状态标记、悬停底色（分组标签没有）；对话–辅助：颜色、行首状态标记（辅助行的槽是空的）。分组标签与对话同为 14px：这是用户在预览里把「灰色小字标签」与 #6 的「文件夹 15px 600 正文色 + 黄色图标」并排看过之后选的（决策 183 §1.3）。
+**相邻层级的区分载体**：分组标签–对话：字号（13px 对 14px，决策 186，issue #14）、颜色（`muted-foreground` 对 `foreground-soft`）、留白（组间 14px）、小三角、对话行首的状态标记、悬停底色（分组标签没有）；对话–辅助：颜色、行首状态标记（辅助行的槽是空的）。分组标签与对话曾同为 14px——那是决策 183 §1.3 的裁决；**决策 186（2026-10-12，issue #14）把分组标签降到 13px**：用户实测后认为「灰色小字标签」与它管着的对话标题同号时偏重，折叠区的字要再轻一档，因此放宽 D25「凡可能承载 CJK 的位置不小于 14px」这条下限，**只对这一级生效**（对话行、辅助行、按钮仍是 14px）。
 
 **新 token `--muted-foreground-faint`**（未启动的淡空心圈）：`color-mix(in oklab, var(--muted-foreground) 45%, color-mix(in oklab, var(--card) 40%, var(--background)))`——`muted-foreground` 向侧栏实际底色（`LeftDock` 的 `bg-card/40` 叠在 `bg-background` 上）混合；只在 `:root` 声明一次，`@theme` 桥接 `--color-muted-foreground-faint`，工具类 `border-muted-foreground-faint`。派生式跟着亮 / 暗 / 同步终端主题走。不带 alpha，**不许加 `/N`**；它是颜色，不注册进 tailwind-merge 的 `font-size` 组。值与对比度见 Color System 表。对话标题的 `--foreground-soft` 不变（决策 170，见 Color System）。
 
@@ -766,7 +766,7 @@ D25 的四档 + 一个例外：
 **列表**（`LIST_AREA_CLASS` = `grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)]`，里面一个 `ScrollArea`，内容 `px-2 pt-0.5 pb-3`）：
 
 - 单行 grid 而不是 flex：`ScrollArea` 根的 `height: 100%` 要解析到一个确定的轨道；`grid-cols-1` 是承重的，不写的话隐式 `auto` 列会被不换行的标题撑到 min-content 宽度，整行冲出面板右边。这条链（`aside` 的 `flex h-full flex-col` → 列表 → `ScrollArea`）上不能插入按内容定高的容器。
-- 从上到下：「无匹配会话」提示（搜索无结果时）→ **临时对话分组**（有临时对话时才渲染）→ 各仓库分组；没有可用仓库时仓库分组换成添加仓库的引导卡片（`Empty`），临时对话分组仍在它上方。
+- 从上到下：「无匹配会话」提示（搜索无结果时）→ 各仓库分组 → **临时对话分组**（有临时对话时才渲染，决策 186 起在最底，issue #13）；没有可用仓库时仓库分组换成添加仓库的引导卡片（`Empty`）。
 - **列表空白处右键**是「添加仓库」（整个列表是 `ContextMenuPrimitive.Trigger`）；分组标题、对话行先答自己的右键（Base UI 的 trigger 会 `stopEvent`，内层优先）。
 - 溢出时视口可以聚焦（base-ui 给 `tabIndex=0`），焦点环沿用原语的 `focus-visible:ring-2`。没有吸顶、没有区底渐隐。
 
@@ -774,7 +774,7 @@ D25 的四档 + 一个例外：
 
 - 标题由 `renderGroupHeader()` 统一生成（仓库与临时对话共用；它是返回元素的普通函数而不是组件，因为仓库标题要交给 `ContextMenuPrimitive.Trigger render={…}`，需要一个 DOM 元素来挂 props）：
   - 外层 `group flex h-7 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover`——**没有 `hover:bg-hover`**；只有键盘焦点给底色。
-  - 折叠按钮 `flex min-w-0 flex-1 items-center gap-1 text-left text-meta text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft`，`aria-expanded`，`title` 是悬停提示。里面依次是：名字 `min-w-0 truncate`（仓库 `data-slot="sidebar-folder-name"`，临时对话 `data-slot="sidebar-temporary-name"`）→ 小三角（`size-3.5 text-muted-foreground`；折叠时 `ChevronRight` 常显；展开时 `ChevronDown` 带 `opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100`）→ 折叠时的汇总标记。
+  - 折叠按钮 `flex min-w-0 flex-1 items-center gap-1 text-left text-group-label text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft`，`aria-expanded`，`title` 是悬停提示。里面依次是：名字 `min-w-0 truncate`（仓库 `data-slot="sidebar-folder-name"`，临时对话 `data-slot="sidebar-temporary-name"`）→ 小三角（`size-3.5 text-muted-foreground`；折叠时 `ChevronRight` 常显；展开时 `ChevronDown` 带 `opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100`）→ 折叠时的汇总标记。
   - 右侧改动合计与悬停按钮共用一个 grid 格（`grid shrink-0 justify-items-end`，两者都 `col-start-1 row-start-1`），格宽取两者较宽者，悬停时数字 `group-hover:invisible group-has-focus-visible:invisible` 让位，标题不重排。悬停按钮 `GROUP_ACTION_CLASS` = `size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 sm:size-5`，图标 `size-3.5`；「···」菜单打开时 `data-popup-open:opacity-100`。**只认键盘焦点**：标题外层 div 不可聚焦，用 `group-has-focus-visible`；不用 `group-focus-within`，否则鼠标点过标题后焦点留在按钮上，指针离开了按钮和改动合计还停在悬停态。
   - **仓库**：「···」仓库菜单（仓库设置 / 在资源管理器中显示 / 移除仓库）+「＋」在此仓库新建（回首页并预选此仓库，决策 174）。标题右键与「···」是同一份菜单（`repoMenuItems`）。悬停提示三行：名称 / 主工作区分支：x / 远程仓库。**标题上不再显示主工作区分支**（决策 183 §2.3）。
   - **临时对话**：「＋」= 新建临时对话（回首页、「不选仓库」，决策 174）；整组（标题和行间空白）右键「新建临时对话」。悬停提示「不属于任何仓库的对话」。
@@ -785,7 +785,7 @@ D25 的四档 + 一个例外：
 
 **对话行**（`SessionRow`，所有列表经 `renderSessionRow()` 一个入口渲染）：`group relative flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta`，选中 `bg-selection text-accent-foreground`，否则 `text-foreground-soft hover:bg-hover focus-visible:bg-hover`。重命名编辑框同为 `text-meta`。从左到右：
 
-1. 状态槽 `flex w-4 shrink-0 items-center justify-center`，**永远有一个标记**，按紧迫度取一个：转圈 `size-3`（运行中）→ 橙点（等审批 / 回答）→ 实心绿 / 红点（有结果 / 失败未看，`role="img"` 带文字）→ 空心圈 `border-muted-foreground`（后台已挂上，「正在后台运行」）→ **淡空心圈 `border-muted-foreground-faint`**（未启动，「未启动」，决策 183 §1.7）。圆点与空心圈都是 `h-1.5 w-1.5 rounded-full`。多选模式下槽里是复选框 `size-3.5`。
+1. 状态槽 `flex w-4 shrink-0 items-center justify-center`，**永远有一个标记**，按紧迫度取一个：转圈 `size-3`（运行中）→ 橙点（等审批 / 回答）→ 实心绿 / 红点（有结果 / 失败未看，`role="img"` 带文字）→ **实心灰点 `bg-muted-foreground`**（后台已挂上，「正在后台运行」）→ **淡空心圈 `border-muted-foreground-faint`**（未启动，「未启动」，决策 183 §1.7）。圆点与空心圈都是 `h-1.5 w-1.5 rounded-full`。多选模式下槽里是复选框 `size-3.5`。**「已挂上」用实心而不是第二圈描边**（决策 186，issue #16）：它与下面那个淡空心圈原本只差一档颜色、同为一圈描边，用户在真机上看不出区别；实心对描边是按形状区分，换任何配色都成立。
 2. 标题 `min-w-20 flex-1 truncate`（`1.0.x 分支` 后缀整段保留，只截前面）。
 3. 告警徽标：失败、待审批 N、`1.0.x`，统一 `Badge size="lg"`（桌面 14px），`shrink-0`。
 4. 上下文文字：只给非主工作区（`ChatWorkspace.kind === 'worktree'`）上的对话，内容是该工作区分支的**最后一段**，`min-w-0 max-w-24 shrink truncate text-meta text-muted-foreground`，是本行唯一让位者；全名在它的悬停提示里。
@@ -803,7 +803,14 @@ D25 的四档 + 一个例外：
 
 **仓库的顺序**（决策 170 裁决 6，决策 183 §2.11 不变）：
 
-- 仓库按其内最近一个对话的最后活动时间（`updatedAt`）降序；没有对话的仓库排在后面，保持原有相对顺序；「临时工作区」固定最后。排序是稳定的，只改显示顺序，不写回 `aiclient-repositories`。**临时对话分组固定在最前，不参与排序。**
+- 仓库**按添加时间（`Repository.addedAt`）降序**——后添加的在最上（决策 186，issue #15；取代决策 170 的按活动时间排序）；没有时间戳的仓库（旧安装、或手改过的存储）按它在数组里的位置排，而数组里靠后就是添加得晚。排序稳定，只改显示顺序，不写回 `aiclient-repositories`。「临时工作区」固定最后，**临时对话分组也固定最后**（决策 186，issue #13），两者都不参与排序。
+- **归档方式开关**（决策 186 第一期，决策 187 第二期；issue #15）：工具行最右一个图标按钮，在「按工作目录」（`FolderTree`，上面这一套）与「按分组」（**`Tag`**）之间切换，状态存 `aiclient-sidebar-archive`，重启后保留。按分组时仓库树整体不渲染，只有用户自己建的分组加一个固定的「未分组」（`UNGROUPED_GROUP_ID`，`buildGroupFolder`）：所有对话（含临时对话与临时工作区里的）都在某一个分组里，**一个对话只在一个分组**（移动即转移，不是多归属标签），组内按最近运行时间降序，行尾的上下文文字从「分支」换成**该对话所属仓库名**（这正是原来由分组标题回答的问题）。标题、折叠、8 条上限、搜索行为与仓库分组完全相同，两边共用 `buildGroupFolder` 与 `renderGroupSection`；没有仓库的对话没有这段上下文文字。
+  - **顺序**：用户分组按创建时间降序（新的在上，与仓库的 `addedAt` 同向），「未分组」**固定最后**——它是最没有指向性的一组，占首位会把用户自己的组往下推。组顺序只在建组 / 删组时变化。
+  - **分组的标记是 2px 竖线**（`bg-border`，`h-3 w-0.5 rounded-full`），「未分组」同一条。它取代了文件夹图标：文件夹说的是「磁盘上的目录」，那正是仓库分组，用户分组不是。竖线不带颜色，层级由标签的 13px 灰字承担。
+  - **重命名与新建都在行内**（决策 187 裁决 2）：菜单项把标题原地换成一个输入框，回车提交、Esc 与失焦取消；输入框用 `text-group-label`，所以标签变输入框时字号不跳。
+  - **空组保留**，标题下显示「暂无对话」——它的重命名、删除与「＋」都挂在标题行上，一个「最后一个对话离开就消失」的组会被读成已被删除。
+  - **搜索时空组隐藏**，与仓库树的 `visibleFolders` 同一规则。
+  - 工具行已有搜索框与两个按钮，所以这里是图标而不是两个中文标签。
 - 活动时间看全部对话（`deriveFolderLastActivity`），不看搜索结果，打字不会重排。
 - **指针或键盘焦点在列表内时冻结顺序，离开后再重排**（`useRegionHold` + `applyHeldFolderOrder`，挂在整个列表上；导航与搜索行不算）：进入时记下当时的顺序；冻结期间新出现的仓库排在已记下的之后，消失的直接去掉。键盘焦点只算 `:focus-visible`；从列表内打开的菜单是 portal，但在 React 树里属于列表，指针移到菜单上不算离开。
 

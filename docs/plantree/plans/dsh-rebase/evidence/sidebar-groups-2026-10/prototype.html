@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>对话归类（#15 第二期）效果预览 v1</title>
+<style>
+/* Tokens copied from globals.css (Flexoki light / dark), same as the v6 sidebar prototype. */
+:root {
+  --background: oklch(0.9931 0.012 96.42);
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.97 0.0106 100.82);
+  --muted: oklch(0.965 0.0093 99.98);
+  --muted-foreground: oklch(0.4531 0.005 91.5);
+  --accent: oklch(0.935 0.0122 96.43);
+  --selection: oklch(0.91 0.0109 95.17);
+  --hover: oklch(0.935 0.0122 96.43);
+  --status-running: oklch(0.4818 0.1315 254.79);
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --success: oklch(0.5593 0.1335 122.92);
+  --warning: oklch(0.5665 0.1523 45.02);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --folder: oklch(0.6333 0.1295 85.81);
+  --border: oklch(0.875 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);
+  --ring: oklch(0.5665 0.1523 45.02);
+  --popover: oklch(0.9931 0.012 96.42);
+}
+.dark {
+  --background: oklch(0.1981 0.0032 17.43);
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --card: oklch(0.262 0.0037 48.55);
+  --muted: oklch(0.268 0.0025 67.7);
+  --muted-foreground: oklch(0.6956 0.0103 93.62);
+  --accent: oklch(0.305 0.0029 17.32);
+  --selection: oklch(0.325 0.0029 17.31);
+  --hover: oklch(0.305 0.0029 17.32);
+  --status-running: oklch(0.5988 0.1104 247);
+  --destructive: oklch(0.597 0.1692 28.38);
+  --success: oklch(0.7227 0.1178 117.2);
+  --warning: oklch(0.6576 0.1539 49.3);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --folder: oklch(0.7346 0.1462 87.46);
+  --border: oklch(0.34 0.0038 84.58);
+  --input: oklch(0.3651 0.0044 67.69);
+  --ring: oklch(0.6576 0.1539 49.3);
+  --popover: oklch(0.262 0.0037 48.55);
+}
+:root {
+  --foreground-soft: color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground));
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --text-meta: 0.875rem;
+  --text-group-label: 0.8125rem;
+  --text-ui: 0.9375rem;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+    "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-sans); font-size: 15px; color: var(--foreground);
+  background: var(--background); -webkit-font-smoothing: antialiased; overflow: hidden;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+[data-ic] { display: inline-flex; align-items: center; justify-content: center; }
+svg.i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- preview toolbar (not part of the design) ---- */
+.toolbar {
+  min-height: 44px; display: flex; align-items: center; gap: 16px; padding: 6px 14px;
+  border-bottom: 1px solid var(--border); background: var(--muted);
+  font-size: 13px; color: var(--muted-foreground); white-space: nowrap; overflow-x: auto;
+}
+.toolbar b { color: var(--foreground); font-weight: 600; font-size: 14px; }
+.seg { display: inline-flex; align-items: center; gap: 6px; }
+.seg span.lab { margin-right: 2px; }
+.seg .opts { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { padding: 2px 9px; font-size: 13px; color: var(--muted-foreground); }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.on { background: var(--selection); color: var(--foreground); }
+
+/* ---- app frame ---- */
+.frame { display: flex; height: calc(100vh - 44px); }
+.rail {
+  width: 44px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+  gap: 4px; padding: 8px 0; background: var(--card); border-right: 1px solid var(--border);
+}
+.rail button { width: 32px; height: 32px; display: grid; place-items: center;
+  border-radius: var(--radius-sm); color: var(--muted-foreground); }
+.rail button svg { width: 18px; height: 18px; }
+.rail button:hover { background: var(--hover); color: var(--foreground); }
+.rail button.on { background: var(--selection); color: var(--foreground); }
+.rail .grow { flex: 1; }
+
+.side {
+  width: 280px; flex-shrink: 0; display: flex; flex-direction: column;
+  background: var(--card); border-right: 1px solid var(--border); position: relative;
+}
+.topnav { padding: 10px 8px 2px; display: flex; flex-direction: column; gap: 1px; }
+.nav {
+  height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; width: 100%;
+  border-radius: var(--radius-sm); font-size: var(--text-ui); text-align: left;
+}
+.nav:hover { background: var(--hover); }
+.nav .ico { width: 22px; height: 22px; display: grid; place-items: center; color: var(--muted-foreground); flex-shrink: 0; }
+.nav .ico.round { border-radius: 999px; background: var(--selection); color: var(--foreground); }
+.nav .ico.round svg { width: 14px; height: 14px; }
+
+.tools { display: flex; align-items: center; gap: 2px; padding: 8px 8px 2px; }
+.search {
+  flex: 1; min-width: 0; height: 28px; display: flex; align-items: center; gap: 6px;
+  padding: 0 8px; border-radius: var(--radius-sm); color: var(--muted-foreground);
+  background: transparent; box-shadow: inset 0 0 0 1px var(--border);
+}
+.search:focus-within { background: var(--background); box-shadow: inset 0 0 0 1px var(--muted-foreground); }
+.search svg { width: 14px; height: 14px; }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+  font-size: var(--text-meta); color: var(--foreground); }
+.search input::placeholder { color: var(--muted-foreground); }
+.tb { width: 28px; height: 28px; display: grid; place-items: center; flex-shrink: 0;
+  border-radius: var(--radius-sm); color: var(--muted-foreground); }
+.tb:hover, .tb.on { background: var(--hover); color: var(--foreground); }
+
+/* ---- list ---- */
+.list { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 8px 12px;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: 8px; scrollbar-width: thin; }
+.list.slim { border-bottom-color: transparent; }
+.group { margin-top: 14px; }
+.group:first-child { margin-top: 8px; }
+.gh {
+  height: 28px; display: flex; align-items: center; gap: 4px; padding: 0 8px;
+  border-radius: var(--radius-sm); cursor: pointer; user-select: none;
+}
+.gh:hover { background: var(--hover); }
+.gh .name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: var(--text-group-label); color: var(--muted-foreground); font-weight: 400; }
+.gh:hover .name { color: var(--foreground-soft); }
+.gh .chev { display: grid; place-items: center; color: var(--muted-foreground); opacity: 0; }
+.gh:hover .chev, .group.collapsed .gh .chev { opacity: 1; }
+.gh .chev svg { width: 14px; height: 14px; }
+.gh .agg { display: inline-flex; align-items: center; gap: 4px; margin-left: 2px;
+  font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.gh .count { margin-left: 4px; font-size: var(--text-meta); color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums; }
+.gh .tail { margin-left: auto; display: grid; justify-items: end; flex-shrink: 0; }
+.gh .tail > * { grid-area: 1 / 1; }
+.gh .diff { display: flex; gap: 4px; font-size: var(--text-meta); font-variant-numeric: tabular-nums; }
+.gh .diff .add { color: var(--success); }
+.gh .diff .del { color: var(--destructive); }
+.gh .acts { display: flex; align-items: center; opacity: 0; }
+.gh:hover .acts { opacity: 1; }
+.gh:hover .diff { visibility: hidden; }
+.ib { width: 20px; height: 20px; display: grid; place-items: center; border-radius: var(--radius-xs); color: var(--muted-foreground); }
+.ib:hover { background: var(--selection); color: var(--foreground); }
+.ib svg { width: 14px; height: 14px; }
+.gh .fic { display: grid; place-items: center; color: var(--folder); font-size: var(--text-group-label); }
+.gh .fic svg { width: 14px; height: 14px; }
+.gh .fic.tmp { color: var(--muted-foreground); }
+.gh .fic.grp { color: var(--muted-foreground); }
+/* Group marks with no "directory on disk" meaning — see groupMarkHtml. */
+.gdot { width: 5px; height: 5px; border-radius: 999px; background: var(--muted-foreground); }
+.gline { width: 2px; height: 11px; border-radius: 1px; background: var(--border); }
+
+.group.collapsed .rows { display: none; }
+.rows { margin-top: 1px; display: flex; flex-direction: column; gap: 2px; }
+
+.row {
+  position: relative; height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px;
+  border-radius: var(--radius-sm); font-size: var(--text-meta); color: var(--foreground-soft);
+  overflow: hidden; cursor: default; user-select: none;
+}
+.row:hover { background: var(--hover); }
+.row.sel { background: var(--selection); color: var(--foreground); }
+.row.drop-over { box-shadow: inset 0 0 0 1px var(--ring); }
+.slot { width: 16px; flex-shrink: 0; display: grid; place-items: center; }
+.dot { width: 6px; height: 6px; border-radius: 999px; }
+.dot.ok { background: var(--success); }
+.dot.fail { background: var(--destructive); }
+.dot.wait { background: var(--warning); }
+.ring { width: 6px; height: 6px; border-radius: 999px; border: 1px solid var(--muted-foreground); }
+.ring.idle { border-color: color-mix(in oklab, var(--muted-foreground) 45%, var(--card)); }
+svg.spin { width: 12px; height: 12px; color: var(--status-running); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.title { min-width: 80px; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.badge { display: inline-flex; align-items: center; gap: 2px; height: 20px; padding: 0 6px; flex-shrink: 0;
+  border-radius: var(--radius-xs); font-size: var(--text-meta); line-height: 1; font-variant-numeric: tabular-nums; }
+.badge svg { width: 13px; height: 13px; }
+.badge.warn { background: color-mix(in oklab, var(--warning) 14%, transparent); color: var(--warning); }
+.badge.bad { background: color-mix(in oklab, var(--destructive) 14%, transparent); color: var(--destructive); }
+.ctx { min-width: 0; max-width: 96px; flex-shrink: 1; overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; color: var(--muted-foreground); }
+.age { width: 40px; flex-shrink: 0; text-align: right; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.racts { width: 40px; flex-shrink: 0; display: none; justify-content: flex-end; }
+.row:hover .age { display: none; }
+.row:hover .racts { display: flex; }
+.racts { position: absolute; right: 6px; top: 4px; width: auto; background: var(--hover);
+  box-shadow: -10px 0 8px var(--hover); }
+.age { display: none; }
+.row.sel .racts { background: var(--selection); box-shadow: -10px 0 8px var(--selection); }
+
+.aux { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 30px; width: 100%;
+  border-radius: var(--radius-sm); font-size: var(--text-meta); color: var(--muted-foreground); text-align: left; }
+.aux:hover { background: var(--hover); color: var(--foreground); }
+.aux svg { width: 14px; height: 14px; margin-left: -20px; }
+.empty-q { padding: 10px 8px; font-size: var(--text-meta); color: var(--muted-foreground); }
+.empty-group { padding: 6px 8px 6px 30px; font-size: var(--text-meta); color: var(--muted-foreground); }
+
+/* inline name editor: a group header that has become an input */
+.ninput { flex: 1; min-width: 0; height: 22px; padding: 0 6px; border-radius: var(--radius-xs);
+  border: 0; outline: 0; background: var(--background);
+  box-shadow: 0 0 0 1px var(--ring), 0 0 0 3px color-mix(in oklab, var(--ring) 24%, transparent);
+  font-size: var(--text-group-label); color: var(--foreground); }
+.gh.editing { background: var(--hover); }
+
+/* v6 zone separation: one 通栏细线 between the three zones */
+.foot { display: flex; align-items: center; padding: 8px; }
+.me { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px;
+  border-radius: var(--radius-sm); text-align: left; }
+.me:hover { background: var(--hover); }
+.av { width: 22px; height: 22px; border-radius: 999px; background: var(--selection); display: grid; place-items: center;
+  font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.me .mail { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: var(--text-meta); color: var(--foreground-soft); }
+.me svg { width: 14px; height: 14px; color: var(--muted-foreground); }
+
+/* ---- floating context menu ---- */
+.menu {
+  position: fixed; z-index: 60; min-width: 176px; padding: 4px;
+  border-radius: var(--radius-sm); background: var(--popover); border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14); font-size: var(--text-meta);
+}
+.menu[hidden] { display: none; }
+.mi { display: flex; align-items: center; gap: 8px; width: 100%; height: 28px; padding: 0 8px;
+  border-radius: var(--radius-xs); text-align: left; color: var(--foreground); }
+.mi:hover, .mi.open { background: var(--hover); }
+.mi svg { width: 14px; height: 14px; color: var(--muted-foreground); flex-shrink: 0; }
+.mi .grow { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mi .kbd { font-size: 12px; color: var(--muted-foreground); }
+.mi.danger { color: var(--destructive); }
+.mi.danger svg { color: var(--destructive); }
+.mi.on::after { content: "✓"; margin-left: auto; color: var(--muted-foreground); }
+.msep { height: 1px; margin: 4px 0; background: var(--border); }
+.mlabel { padding: 6px 8px 2px; font-size: 12px; color: var(--muted-foreground); }
+
+/* ---- modal (the dialog variant of 新建分组) ---- */
+.backdrop { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center;
+  background: rgb(0 0 0 / 0.32); }
+.backdrop[hidden] { display: none; }
+.dlg { width: 360px; padding: 18px; border-radius: var(--radius-sm); background: var(--popover);
+  border: 1px solid var(--border); box-shadow: 0 16px 48px rgb(0 0 0 / 0.22); font-size: var(--text-meta); }
+.dlg h3 { font-size: var(--text-ui); font-weight: 600; margin-bottom: 4px; }
+.dlg p { color: var(--muted-foreground); margin-bottom: 12px; }
+.dlg input { width: 100%; height: 30px; padding: 0 8px; border-radius: var(--radius-xs);
+  background: var(--background); border: 1px solid var(--input); outline: 0; color: var(--foreground);
+  font-size: var(--text-meta); }
+.dlg input:focus { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 24%, transparent); }
+.dlg .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.dlg .btn { height: 28px; padding: 0 12px; border-radius: var(--radius-xs); font-size: var(--text-meta);
+  box-shadow: inset 0 0 0 1px var(--border); }
+.dlg .btn.primary { background: var(--primary); color: var(--background); box-shadow: none; }
+.dlg .btn:hover { background: var(--hover); }
+.dlg .btn.primary:hover { background: var(--primary); opacity: 0.9; }
+
+/* ---- center ---- */
+.center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sbar { height: 36px; flex-shrink: 0; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid var(--border);
+  font-size: var(--text-ui); font-weight: 600; }
+.notes { flex: 1; overflow-y: auto; padding: 24px 32px 48px; }
+.notes .card { max-width: 48rem; margin: 0 auto; font-size: 14px; line-height: 1.75; color: var(--foreground-soft); }
+.notes h1 { font-size: 18px; color: var(--foreground); margin-bottom: 4px; }
+.notes .sub { font-size: 13px; color: var(--muted-foreground); margin-bottom: 18px; }
+.notes h2 { font-size: 15px; color: var(--foreground); margin: 22px 0 6px; }
+.notes h3 { font-size: 14px; color: var(--foreground); margin: 14px 0 2px; }
+.notes ul, .notes ol { padding-left: 1.3em; }
+.notes li { margin: 3px 0; }
+.notes code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+  padding: 1px 4px; border-radius: 4px; background: var(--muted); color: var(--foreground); }
+.notes .q { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--muted); border-left: 3px solid var(--primary); }
+.notes .q b { color: var(--foreground); }
+.notes .neg { border-left-color: var(--destructive); }
+.notes table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+.notes th, .notes td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.notes th { color: var(--foreground); font-weight: 600; }
+
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(8px); opacity: 0;
+  padding: 6px 12px; border-radius: var(--radius-sm); background: var(--foreground); color: var(--background);
+  font-size: 13px; pointer-events: none; transition: opacity .15s, transform .15s; z-index: 90; }
+.toast.on { opacity: 1; transform: translateX(-50%); }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <b>对话归类（#15 第二期）v1</b>
+  <span class="seg"><span class="lab">主题</span><span class="opts" data-k="theme"><button data-v="light" class="on">浅色</button><button data-v="dark">深色</button></span></span>
+  <span class="seg"><span class="lab">归档方式</span><span class="opts" data-k="mode"><button data-v="workspace">按工作目录</button><button data-v="group" class="on">按分组</button></span></span>
+  <span class="seg"><span class="lab">新建分组</span><span class="opts" data-k="create"><button data-v="inline" class="on">行内输入（已定）</button><button data-v="dialog">弹对话框</button></span></span>
+  <span class="seg"><span class="lab">用户分组标题</span><span class="opts" data-k="newbtn"><button data-v="with" class="on">带「＋」（已定）</button><button data-v="without">不带</button></span></span>
+  <span class="seg"><span class="lab">分组图形</span><span class="opts" data-k="gicon"><button data-v="none">无</button><button data-v="dot">圆点</button><button data-v="line" class="on">竖线</button><button data-v="hash">#</button><button data-v="tag">标签</button><button data-v="folder">文件夹（旧）</button></span></span>
+  <span class="seg"><span class="lab">切换按钮图标</span><span class="opts" data-k="micon"><button data-v="layers" class="on">层叠</button><button data-v="tags">标签</button><button data-v="columns">两栏</button><button data-v="tree">树</button><button data-v="boxes">方块</button><button data-v="blocks">旧（blocks）</button></span></span>
+</div>
+
+<div class="frame">
+  <nav class="rail" id="rail"></nav>
+
+  <aside class="side" id="side">
+    <div class="topnav">
+      <button class="nav" data-toast="回到首页，在首页选仓库后发送即建对话（示意）"><span class="ico round" data-ic="plus"></span>新建对话</button>
+      <button class="nav" data-toast="打开「添加仓库」（示意）"><span class="ico" data-ic="folderPlus"></span>添加仓库</button>
+    </div>
+    <div class="tools">
+      <label class="search"><span data-ic="search"></span><input id="q" placeholder="搜索对话" autocomplete="off"></label>
+      <button class="tb" id="collapseAll" title="全部折叠"><span data-ic="collapse"></span></button>
+      <button class="tb" id="modeBtn" title="归档方式：按分组（点击切到按工作目录）"><span id="modeIco"></span></button>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="foot">
+      <button class="me" data-toast="账户菜单（与现在相同）"><span class="av">U</span><span class="mail">user@example.com</span><span data-ic="updown"></span></button>
+    </div>
+  </aside>
+
+  <main class="center">
+    <div class="sbar" id="sbarTitle">暗色主题切换闪烁问题</div>
+    <div class="notes"><div class="card">
+      <h1>对话归类 · #15 第二期效果稿</h1>
+      <div class="sub">第一期（归档方式开关 / 按添加时间排序 / 跳转到工作目录）已实现，这里只画第二期要新增的东西。数据虚构，侧栏里可以真的操作。</div>
+
+      <h2>这份稿子要定的东西</h2>
+      <h3>1. 归类用右键「移到分组 ▸」，不做拖动</h3>
+      <p>这是本次方案的核心。右键任意对话行 →「移到分组 ▸」→ 列出「未分组 + 你自己的组 + 新建分组…」，选中即归类完成。工具条的「拖动」开关只能看个示意（本期不实现），你可以对比一下两者。</p>
+      <div class="q">
+        <b>为什么推荐右键而不是拖动：</b>归类需求的全部动作——放进某个组、移出组、建组改名删组——右键菜单能 100% 覆盖，拖动只是它的快捷方式。它不用新建拖拽层、不用跨 <code>ScrollArea</code> 自动滚动、不用判定落点，最要紧的是<b>不需要把「拖动」和「单击打开对话」区分开</b>——那个区分一旦做错，误拖就被读成误点，是拖动方案里最容易伤到日常操作的地方。<br>
+        <b>代价，说清楚：</b>一次归类是「右键 → 移到分组 → 选组」三次点击，拖动是一次。如果你归档得很频繁，这个差价是真实的。另外拖动可以顺手做组内排序，右键不行（见第 4 条）。<br>
+        <b>还有一层：</b>右键菜单天生键盘可达，拖动不是；第二期先做右键，以后想加拖动是叠加而不是重做——分组的数据形状不因入口而变。
+      </div>
+
+      <h3>2. 组的形状：与仓库分组一模一样</h3>
+      <p>同一个标题行（13px 灰字）、同一套折叠、同一个 8 条上限与「查看更多」、同一种搜索行为（搜索时命中组自动展开）。一组的行尾不再显示时间，改显示<b>仓库名</b>（第一期已定），因为柜台上没有仓库标题行替它说了。</p>
+
+      <h3>3.「未分组」不是普通组</h3>
+      <p>它是所有对话的默认去处，固定在列表最下面（也可以最上面，见第 6 条），不能改名、不能删除、右键菜单里没有这两项。删除一个用户分组时，组里的对话回到这里——不会跟着一起消失。</p>
+
+      <h3>4. 组内顺序：最近运行在前，本期不做手动排序</h3>
+      <p>第一期的「未分组」已经这样排了。手动排序（拖动调序）依赖拖动层，本次一并推后。</p>
+
+      <h3>5. 空组保留</h3>
+      <p>刚建好还没放东西的组留在列表里（显示「暂无对话」），否则它建出来就消失，用户会以为没建成。</p>
+
+      <h2>可以在侧栏里试</h2>
+      <ul>
+        <li>右键任意对话行 →「移到分组 ▸」，真的会移动。</li>
+        <li>右键分组标题 →「新建分组…」/「重命名」/「删除分组」。</li>
+        <li>顶上的「新建分组」开关切换行内输入与弹对话框两种做法，都试一下（见下方取舍）。</li>
+        <li>「归档方式」切回「按工作目录」看第一期已实现的样子，两边的行是一样的。</li>
+      </ul>
+
+      <h2>还需你拍板的几处</h2>
+      <table>
+        <tr><th>问题</th><th>本稿的做法与理由</th><th>另一条路</th></tr>
+        <tr>
+          <td><b>新建分组怎么输入名字</b></td>
+          <td><b>行内输入</b>：菜单里选「新建分组…」后，列表顶部直接出现一个可编辑的标题，敲名字回车即可，Esc 取消。离手指最近，不用离开列表。</td>
+          <td>弹对话框：更重，但和「重命名仓库」等现有弹窗一致，且能容纳更多字段（以后要加颜色、图标的话）。</td>
+        </tr>
+        <tr>
+          <td><b>删除一个有对话的组</b></td>
+          <td><b>对话回到「未分组」</b>，不删对话。删组是整理柜子，不是删东西；对话本身另有「归档」和「从列表移除」两个入口。</td>
+          <td>连对话一起归档。危险且无法从「删组」的字面看出来，不推荐。</td>
+        </tr>
+        <tr>
+          <td><b>「未分组」的位置</b></td>
+          <td><b>固定在列表最下面</b>：它是最没有指向性的一组，不该占着第一位把用户自己的组往下推。</td>
+          <td>固定在最上面（#15 第一期与决策 183 对「临时对话」曾那样处理，后来推翻）。</td>
+        </tr>
+        <tr>
+          <td><b>用户分组标题上的「＋」</b></td>
+          <td><b>带</b>：与仓库分组一致，在组里新建对话。但分组没有仓库，所以它其实是「回首页、不预选仓库」，语义上等于「新建临时对话」——这一条我不确定，需要你定。</td>
+          <td>不带：分组只管归类，新建对话走顶部那个按钮。仓库分组的「＋」有明确目标（在此仓库新建），分组的没有。</td>
+        </tr>
+        <tr>
+          <td><b>对话能否同时在多个组</b></td>
+          <td><b>不能</b>，一个对话只在一个组里（或未分组）。移动即转移。</td>
+          <td>多归属（像标签），自由度更高但「归档方式」会变成标签筛选，改动面大很多。</td>
+        </tr>
+      </table>
+
+      <h2>本期不做</h2>
+      <ul>
+        <li><b>拖动归类</b>、拖动调序（理由见第 1、4 条）。</li>
+        <li><b>批量归类</b>：现在的「批量归档」只归档，没有「批量移到分组」。要不要加，等你先用一轮再定。</li>
+        <li><b>组的颜色、图标、嵌套</b>。</li>
+      </ul>
+    </div></div>
+  </main>
+</div>
+
+<div class="menu" id="menu" hidden></div>
+<div class="backdrop" id="backdrop" hidden>
+  <div class="dlg">
+    <h3 id="dlgTitle">新建分组</h3>
+    <p id="dlgDesc">给这一组对话起个名字。</p>
+    <input id="dlgInput" placeholder="例如：这个月要交" autocomplete="off">
+    <div class="btns">
+      <button class="btn" id="dlgCancel">取消</button>
+      <button class="btn primary" id="dlgOk">确定</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const ICONS = {
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  folderPlus: '<path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  folderOpen: '<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
+  msgDashed: '<path d="M10 17H7l-4 4v-7"/><path d="M14 17h1"/><path d="M14 3h1"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 14v1a2 2 0 0 1-2 2"/><path d="M21 9v1"/><path d="M3 9v1"/><path d="M5 3a2 2 0 0 0-2 2"/><path d="M9 3h1"/>',
+  chevR: '<path d="m9 18 6-6-6-6"/>',
+  chevD: '<path d="m6 9 6 6 6-6"/>',
+  collapse: '<path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/>',
+  expand: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+  archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  shieldQ: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  updown: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+  house: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  msg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  git: '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+  file: '<path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/>',
+  gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  activity: '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
+  panel: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>',
+  blocks: '<rect width="7" height="7" x="14" y="3" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+  folderTree: '<path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.81a1 1 0 0 1-.82-.45l-.54-.8h-3.66a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1z"/><path d="m6 15-2 2 2 2"/><path d="M3.81 17H17a1 1 0 0 0 1-1v-3"/><path d="M3 4v11"/>',
+  square: '<rect width="18" height="18" x="3" y="3" rx="2"/>',
+  cornerR: '<path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>',
+  minus: '<path d="M5 12h14"/>',
+  inbox: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  grip: '<circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>',
+  layers: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 12.08-9.17 4.18a2 2 0 0 1-1.66 0L2 12.08"/><path d="m22 17.08-9.17 4.18a2 2 0 0 1-1.66 0L2 17.08"/>',
+  tags: '<path d="M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5Z"/><path d="M6 9.01V9"/>',
+  columns: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>',
+  tree: '<path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.81a1 1 0 0 1-.82-.45l-.54-.8h-3.66a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1z"/><path d="M6 15v-4a1 1 0 0 1 1-1h5"/><path d="M6 15h9a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/>',
+  boxes: '<path d="M3 6a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M14 6a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1z"/><path d="M3 16a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M14 16a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1z"/>',
+  hash: '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>',
+};
+const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24">${ICONS[n]}</svg>`;
+document.querySelectorAll('[data-ic]').forEach((el) => { el.innerHTML = ic(el.dataset.ic); });
+
+document.getElementById('rail').innerHTML = [
+  ['house', '首页'], ['msg', '聊天', 'on'], ['git', 'Git'], ['file', '文件'], ['gauge', '上下文'], ['activity', '运行'],
+].map(([n, t, on]) => `<button class="${on || ''}" title="${t}">${ic(n)}</button>`).join('')
+  + '<span class="grow"></span>'
+  + [['panel', '收起侧栏 (Ctrl+B)'], ['blocks', '能力'], ['settings', '设置 (Ctrl+,)']]
+    .map(([n, t]) => `<button title="${t}">${ic(n)}</button>`).join('');
+
+/* ------------------------------------------------------------------ data */
+
+/* The user's own groups. `unassigned` is not one of these — it is the fixed
+   bucket every chat falls into until it is put somewhere. */
+let GROUPS = [
+  { id: 'g1', name: '前端重构', collapsed: false },
+  { id: 'g2', name: '这个月要交', collapsed: false },
+  { id: 'g3', name: '留给下周', collapsed: true },
+];
+const UNASSIGNED = '__unassigned__';
+
+/* `gid` is the group a chat is filed under. Everything starts somewhere. */
+let CHATS = [
+  { id: 'c1', t: '暗色主题切换闪烁问题', repo: 'aurora-web', gid: 'g1', s: 'bg' },
+  { id: 'c2', t: '登录页表单校验重构', repo: 'aurora-web', gid: 'g1', s: 'wait', appr: 2 },
+  { id: 'c3', t: '路由懒加载拆包方案', repo: 'aurora-web', gid: 'g1', s: '' },
+  { id: 'c4', t: '图层混合模式实现', repo: 'pixel-studio', gid: UNASSIGNED, s: 'run' },
+  { id: 'c5', t: '月结批处理任务超时', repo: 'ledger-core', gid: 'g2', s: 'fail', failed: true },
+  { id: 'c6', t: '对账差异报表导出', repo: 'ledger-core', gid: 'g2', s: 'ok' },
+  { id: 'c7', t: '冲突合并策略设计', repo: 'notes-sync', gid: UNASSIGNED, s: '' },
+  { id: 'c8', t: '附件分片上传', repo: 'notes-sync', gid: UNASSIGNED, s: '' },
+  { id: 'c9', t: '文档站搜索索引重建', repo: 'docs-site', gid: UNASSIGNED, s: '' },
+  { id: 'c10', t: '备份脚本改成增量', repo: 'infra-scripts', gid: 'g3', s: '' },
+  { id: 'c11', t: '推送通知权限引导', repo: 'mobile-app', gid: 'g3', s: '' },
+  { id: 'c12', t: '帮我润色一段周报', repo: null, gid: UNASSIGNED, s: '' },
+];
+
+/* 「按工作目录」 mode — what phase 1 already ships, kept here so the two modes
+   can be compared on the same rows. */
+const REPOS = [
+  { id: 'r1', name: 'aurora-web', diff: [128, 42] },
+  { id: 'r2', name: 'pixel-studio' },
+  { id: 'r3', name: 'ledger-core', diff: [36, 8] },
+  { id: 'r4', name: 'notes-sync', diff: [7, 0] },
+  { id: 'r5', name: 'docs-site' },
+  { id: 'r6', name: 'infra-scripts' },
+  { id: 'r7', name: 'mobile-app' },
+];
+
+const state = {
+  mode: 'group',
+  create: 'inline',
+  newbtn: 'with',
+  gicon: 'line',
+  micon: 'tags',
+  q: '',
+  sel: 'c1',
+  collapsed: { r2: true, r6: true, r7: true, g3: true },
+  showAll: {},
+  renaming: null,     // group id being renamed inline
+  creating: false,    // an inline "new group" header is open
+  draft: '',
+};
+const LIMIT = 8;
+
+/* --------------------------------------------------------------- helpers */
+
+const groupById = (id) => GROUPS.find((g) => g.id === id);
+const chatById = (id) => CHATS.find((c) => c.id === id);
+const chatsOf = (gid) => CHATS.filter((c) => c.gid === gid);
+const groupName = (gid) => (gid === UNASSIGNED ? '未分组' : (groupById(gid) || {}).name || '');
+
+/* The mark in front of a group label. A user group is not a folder — a folder
+   says "a directory on disk", which is what the repository groups are — so the
+   one mark serves every group, 「未分组」 included (user ruling 2026-10-13). */
+function groupMarkHtml() {
+  switch (state.gicon) {
+    case 'none': return '';
+    case 'dot': return '<span class="fic"><span class="gdot"></span></span>';
+    case 'line': return '<span class="fic"><span class="gline"></span></span>';
+    case 'hash': return '<span class="fic">#</span>';
+    case 'tag': return `<span class="fic">${ic('tags')}</span>`;
+    case 'folder': return `<span class="fic">${ic('folderOpen')}</span>`;
+    default: return '';
+  }
+}
+
+function slotHtml(c) {
+  switch (c.s) {
+    case 'run': return ic('loader', 'spin');
+    case 'wait': return '<span class="dot wait" title="等待审批"></span>';
+    case 'ok': return '<span class="dot ok" title="有新结果未看"></span>';
+    case 'fail': return '<span class="dot fail" title="失败，未看"></span>';
+    case 'bg': return '<span class="ring" title="后台已挂上"></span>';
+    default: return '<span class="ring idle" title="未启动"></span>';
+  }
+}
+function aggHtml(chats) {
+  const n = (s) => chats.filter((c) => c.s === s).length;
+  const parts = [];
+  if (n('run')) parts.push(`<span title="${n('run')} 个对话在运行" style="display:inline-flex;align-items:center;gap:3px">${ic('loader', 'spin')}${n('run') > 1 ? n('run') : ''}</span>`);
+  if (n('wait')) parts.push('<span class="dot wait" title="有对话在等你"></span>');
+  if (n('fail')) parts.push('<span class="dot fail" title="有失败未看"></span>');
+  else if (n('ok')) parts.push('<span class="dot ok" title="有新结果未看"></span>');
+  return parts.length ? `<span class="agg">${parts.join('')}</span>` : '';
+}
+
+function rowHtml(c) {
+  return `<div class="row ${state.sel === c.id ? 'sel' : ''}" data-c="${c.id}" title="${c.t}">
+    <span class="slot">${slotHtml(c)}</span>
+    <span class="title">${c.t}</span>
+    ${c.appr ? `<span class="badge warn" title="${c.appr} 个待审批">${ic('shieldQ')}${c.appr}</span>` : ''}
+    ${c.failed ? '<span class="badge bad">失败</span>' : ''}
+    ${c.repo ? `<span class="ctx" title="${c.repo}">${c.repo}</span>` : ''}
+    <span class="racts">
+      <button class="ib" data-act="归档" title="归档">${ic('archive')}</button>
+      <button class="ib" data-act="从列表移除" title="从列表移除（重启后回来）">${ic('x')}</button>
+    </span>
+  </div>`;
+}
+
+/* ------------------------------------------------- 按分组：one section per group */
+
+function groupSectionHtml(gid) {
+  const q = state.q.trim().toLowerCase();
+  const name = groupName(gid);
+  const isUnassigned = gid === UNASSIGNED;
+  let chats = chatsOf(gid);
+  if (q) chats = chats.filter((c) => c.t.toLowerCase().includes(q) || (c.repo || '').toLowerCase().includes(q));
+  if (q && chats.length === 0) return '';
+  const collapsed = !q && !!state.collapsed[gid];
+  const hidden = !q && !state.showAll[gid] && chats.length > LIMIT ? chats.length - LIMIT : 0;
+  const shown = hidden ? chats.slice(0, LIMIT) : chats;
+
+  if (state.renaming === gid) {
+    return `<section class="group" data-g="${gid}">
+      <div class="gh editing">${groupMarkHtml()}
+        <input class="ninput" id="nameInput" value="${name}" autocomplete="off"></div>
+    </section>`;
+  }
+
+  // A user group has no repository, so no diff badge; the count is what tells
+  // a folded group how much is inside it.
+  const acts = (isUnassigned || state.newbtn === 'without')
+    ? `<button class="ib" data-act="分组菜单：新建分组 / 重命名 / 删除" title="分组操作">${ic('more')}</button>`
+    : `<button class="ib" data-act="分组菜单：新建分组 / 重命名 / 删除" title="分组操作">${ic('more')}</button>
+       <button class="ib" data-gnew="${gid}" title="在「${name}」里新建对话（回首页、不预选仓库）">${ic('plus')}</button>`;
+
+  let body = shown.map(rowHtml).join('');
+  if (chats.length === 0) body = '<p class="empty-group">暂无对话</p>';
+  else if (hidden) body += `<button class="aux" data-more="${gid}">查看更多（${hidden}）</button>`;
+  else if (!q && state.showAll[gid] && chats.length > LIMIT) body += `<button class="aux" data-more="${gid}">收起</button>`;
+
+  return `<section class="group ${collapsed ? 'collapsed' : ''}" data-g="${gid}">
+    <div class="gh" title="${isUnassigned ? '还没有归类的对话' : name}">
+      ${groupMarkHtml()}
+      <span class="name">${name}</span>
+      <span class="chev">${ic(collapsed ? 'chevR' : 'chevD')}</span>
+      ${collapsed ? aggHtml(chatsOf(gid)) : ''}
+      ${collapsed && chatsOf(gid).length ? `<span class="count">${chatsOf(gid).length}</span>` : ''}
+      <span class="tail"><span class="acts">${acts}</span></span>
+    </div>
+    <div class="rows">${body}</div>
+  </section>`;
+}
+
+function inlineCreateHtml() {
+  return `<section class="group"><div class="gh editing">
+    <span class="fic grp">${ic('folderOpen')}</span>
+    <input class="ninput" id="nameInput" placeholder="新分组名称" autocomplete="off">
+  </div></section>`;
+}
+
+/* ------------------------------------- 按工作目录：the phase-1 tree, unchanged */
+
+function repoSectionHtml(r) {
+  const q = state.q.trim().toLowerCase();
+  let chats = CHATS.filter((c) => c.repo === r.name);
+  if (q) chats = chats.filter((c) => c.t.toLowerCase().includes(q));
+  if (q && chats.length === 0) return '';
+  const collapsed = !q && !!state.collapsed[r.id];
+  const hidden = !q && !state.showAll[r.id] && chats.length > LIMIT ? chats.length - LIMIT : 0;
+  const shown = hidden ? chats.slice(0, LIMIT) : chats;
+  let body = shown.map(rowHtml).join('');
+  if (hidden) body += `<button class="aux" data-more="${r.id}">查看更多（${hidden}）</button>`;
+  else if (!q && state.showAll[r.id] && chats.length > LIMIT) body += `<button class="aux" data-more="${r.id}">收起</button>`;
+  return `<section class="group ${collapsed ? 'collapsed' : ''}" data-g="${r.id}">
+    <div class="gh" title="${r.name} · main">
+      <span class="fic">${ic(collapsed ? 'folder' : 'folderOpen')}</span>
+      <span class="name">${r.name}</span>
+      <span class="chev">${ic(collapsed ? 'chevR' : 'chevD')}</span>
+      ${collapsed ? aggHtml(CHATS.filter((c) => c.repo === r.name)) : ''}
+      <span class="tail">
+        ${r.diff ? `<span class="diff">${r.diff[0] ? `<span class="add">+${r.diff[0]}</span>` : ''}${r.diff[1] ? `<span class="del">-${r.diff[1]}</span>` : ''}</span>` : ''}
+        <span class="acts"><button class="ib" data-act="仓库菜单：仓库设置 / 在资源管理器中显示 / 移除仓库" title="仓库操作">${ic('more')}</button>
+        <button class="ib" data-act="在 ${r.name} 新建对话" title="在 ${r.name} 新建对话">${ic('plus')}</button></span>
+      </span>
+    </div>
+    <div class="rows">${body || ''}</div>
+  </section>`;
+}
+
+/* ----------------------------------------------------------------- render */
+
+function render() {
+  const list = document.getElementById('list');
+  let html = '';
+  if (state.mode === 'group') {
+    if (state.creating && state.create === 'inline') html += inlineCreateHtml();
+    html += GROUPS.map((g) => groupSectionHtml(g.id)).join('');
+    html += groupSectionHtml(UNASSIGNED);
+  } else {
+    html += REPOS.map(repoSectionHtml).join('');
+  }
+  list.innerHTML = html || '<p class="empty-q">没有匹配的对话</p>';
+  const ca = document.getElementById('collapseAll');
+  const allIds = state.mode === 'group' ? [...GROUPS.map((g) => g.id), UNASSIGNED] : REPOS.map((r) => r.id);
+  const folded = allIds.every((id) => state.collapsed[id]);
+  ca.title = folded ? '全部展开' : '全部折叠';
+  ca.innerHTML = ic(folded ? 'expand' : 'collapse');
+  document.getElementById('modeBtn').title =
+    state.mode === 'group' ? '归档方式：按分组（点击切到按工作目录）' : '归档方式：按工作目录（点击切到按分组）';
+  document.getElementById('modeIco').innerHTML = ic(state.micon);
+  if (state.creating && state.create === 'inline') {
+    const inp = document.getElementById('nameInput');
+    if (inp) { inp.focus(); inp.addEventListener('keydown', onNameKey); inp.addEventListener('blur', () => { state.creating = false; render(); }); }
+  } else if (state.renaming) {
+    const inp = document.getElementById('nameInput');
+    if (inp) { inp.focus(); inp.select(); inp.addEventListener('keydown', onNameKey); inp.addEventListener('blur', () => { state.renaming = null; render(); }); }
+  }
+}
+function onNameKey(e) {
+  if (e.key === 'Enter') {
+    const v = e.target.value.trim();
+    if (state.creating) {
+      state.creating = false;
+      if (v) {
+        const g = { id: 'g' + Date.now(), name: v, collapsed: false };
+        GROUPS.unshift(g);
+        // 新建分组的入口有两处：分组标题菜单（无待移动对象）与对话行的
+        // 「移到分组 ▸ 新建分组…」（建完要把那个对话放进去）。
+        if (pendingMoveChatId) { const id = pendingMoveChatId; pendingMoveChatId = null; move(id, g.id); return; }
+      }
+      pendingMoveChatId = null;
+      render();
+    } else if (state.renaming) {
+      const g = groupById(state.renaming);
+      if (g && v) g.name = v;
+      state.renaming = null;
+      render();
+    }
+  } else if (e.key === 'Escape') {
+    state.creating = false; state.renaming = null; pendingMoveChatId = null; render();
+  }
+}
+
+/* ------------------------------------------------------------- context menu */
+
+const menuEl = document.getElementById('menu');
+let submenuEl = null;
+
+function closeMenu() {
+  menuEl.hidden = true;
+  menuEl.innerHTML = '';
+  if (submenuEl) { submenuEl.remove(); submenuEl = null; }
+}
+function openMenu(x, y, items) {
+  closeMenu();
+  menuEl.innerHTML = items.map((it, i) => it.sep
+    ? '<div class="msep"></div>'
+    : it.label
+      ? `<div class="mlabel">${it.label}</div>`
+      : `<button class="mi ${it.danger ? 'danger' : ''} ${it.sub ? 'sub' : ''}" data-i="${i}">
+           ${ic(it.icon)}<span class="grow">${it.text}</span>${it.sub ? ic('chevR') : ''}${it.kbd ? `<span class="kbd">${it.kbd}</span>` : ''}
+         </button>`).join('');
+  menuEl.hidden = false;
+  const r = menuEl.getBoundingClientRect();
+  menuEl.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
+  menuEl.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+  menuEl.querySelectorAll('.mi').forEach((btn) => {
+    const it = items[Number(btn.dataset.i)];
+    if (it.sub) {
+      btn.addEventListener('mouseenter', () => openSubmenu(btn, it.sub));
+      return;
+    }
+    btn.addEventListener('click', () => { closeMenu(); it.onClick && it.onClick(); });
+  });
+}
+function openSubmenu(anchor, items) {
+  if (submenuEl) submenuEl.remove();
+  const el = document.createElement('div');
+  el.className = 'menu';
+  el.innerHTML = items.map((it, i) => it.sep
+    ? '<div class="msep"></div>'
+    : it.label
+      ? `<div class="mlabel">${it.label}</div>`
+      : `<button class="mi ${it.danger ? 'danger' : ''} ${it.on ? 'on' : ''}" data-i="${i}">
+           ${ic(it.icon)}<span class="grow">${it.text}</span></button>`).join('');
+  document.body.appendChild(el);
+  const a = anchor.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  el.style.left = Math.min(a.right + 4, innerWidth - r.width - 8) + 'px';
+  el.style.top = Math.min(a.top - 4, innerHeight - r.height - 8) + 'px';
+  el.querySelectorAll('.mi').forEach((btn) => {
+    const it = items[Number(btn.dataset.i)];
+    btn.addEventListener('click', () => { closeMenu(); it.onClick && it.onClick(); });
+  });
+  submenuEl = el;
+}
+document.addEventListener('click', (e) => { if (!e.target.closest('.menu')) closeMenu(); });
+document.addEventListener('contextmenu', (e) => { if (!e.target.closest('.row, .gh')) { e.preventDefault(); closeMenu(); } });
+
+/* The move submenu: 未分组 + every user group + 新建分组… The current group is
+   ticked so the menu doubles as "where am I". */
+function moveSubmenu(chat) {
+  return [
+    { icon: 'inbox', text: '未分组', on: chat.gid === UNASSIGNED, onClick: () => move(chat.id, UNASSIGNED) },
+    { sep: true },
+    ...GROUPS.map((g) => ({
+      icon: 'folder', text: g.name, on: chat.gid === g.id, onClick: () => move(chat.id, g.id),
+    })),
+    { sep: true },
+    { icon: 'plus', text: '新建分组…', onClick: () => createGroupAndMove(chat.id) },
+  ];
+}
+function move(chatId, gid) {
+  const c = chatById(chatId);
+  if (!c) return;
+  c.gid = gid;
+  toast(`已移到「${groupName(gid)}」`);
+  render();
+}
+function createGroupAndMove(chatId) {
+  if (state.create === 'dialog') {
+    openDialog('新建分组', '给这一组对话起个名字。', '例如：这个月要交', (v) => {
+      const g = { id: 'g' + Date.now(), name: v, collapsed: false };
+      GROUPS.unshift(g);
+      if (chatId) move(chatId, g.id); else render();
+    });
+    return;
+  }
+  // Inline: the header appears at the top of the list and takes the name. The
+  // chat that asked for it is remembered so the move lands when the name does.
+  pendingMoveChatId = chatId;
+  state.creating = true;
+  render();
+  const inp = document.getElementById('nameInput');
+  if (inp) {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const v = inp.value.trim();
+        if (v) {
+          const g = { id: 'g' + Date.now(), name: v, collapsed: false };
+          GROUPS.unshift(g);
+          state.creating = false;
+          if (pendingMoveChatId) { move(pendingMoveChatId, g.id); } else { render(); }
+          pendingMoveChatId = null;
+        } else { state.creating = false; render(); }
+        e.stopPropagation();
+      } else if (e.key === 'Escape') { state.creating = false; pendingMoveChatId = null; render(); e.stopPropagation(); }
+    }, true);
+  }
+}
+let pendingMoveChatId = null;
+
+function rowMenu(chat) {
+  return [
+    { icon: 'pencil', text: '重命名', onClick: () => toast('重命名（与现在相同，示意）') },
+    { icon: 'cornerR', text: '移到分组', sub: moveSubmenu(chat) },
+    { icon: 'folderTree', text: '跳转到工作目录', onClick: () => toast('在系统文件管理器中打开（第一期已实现）') },
+    { sep: true },
+    { icon: 'square', text: '结束对话', onClick: () => toast('结束对话（与现在相同，示意）') },
+    { icon: 'archive', text: '归档', danger: true, onClick: () => toast('归档（与现在相同，示意）') },
+  ];
+}
+function groupMenu(gid) {
+  const isUnassigned = gid === UNASSIGNED;
+  return [
+    { icon: 'plus', text: '新建分组…', onClick: () => startCreate() },
+    ...(isUnassigned ? [] : [
+      { icon: 'pencil', text: '重命名', onClick: () => { state.renaming = gid; render(); } },
+      { sep: true },
+      { icon: 'trash', text: '删除分组', danger: true, onClick: () => deleteGroup(gid) },
+    ]),
+  ];
+}
+function startCreate() {
+  if (state.create === 'dialog') {
+    openDialog('新建分组', '给这一组对话起个名字。', '例如：这个月要交', (v) => {
+      GROUPS.unshift({ id: 'g' + Date.now(), name: v, collapsed: false });
+      render();
+    });
+    return;
+  }
+  state.creating = true;
+  render();
+}
+function deleteGroup(gid) {
+  const n = chatsOf(gid).length;
+  GROUPS = GROUPS.filter((g) => g.id !== gid);
+  // The chats come back to 未分组 — deleting a group files them away, it does
+  // not delete them.
+  CHATS.forEach((c) => { if (c.gid === gid) c.gid = UNASSIGNED; });
+  toast(n ? `已删除分组，${n} 个对话回到「未分组」` : '已删除空分组');
+  render();
+}
+
+/* ------------------------------------------------------------------ dialog */
+
+const backdrop = document.getElementById('backdrop');
+let dlgOk = null;
+function openDialog(title, desc, placeholder, onOk) {
+  document.getElementById('dlgTitle').textContent = title;
+  document.getElementById('dlgDesc').textContent = desc;
+  const inp = document.getElementById('dlgInput');
+  inp.value = ''; inp.placeholder = placeholder;
+  backdrop.hidden = false;
+  inp.focus();
+  dlgOk = () => { const v = inp.value.trim(); if (v) { backdrop.hidden = true; onOk(v); } };
+}
+document.getElementById('dlgOk').addEventListener('click', () => dlgOk && dlgOk());
+document.getElementById('dlgCancel').addEventListener('click', () => { backdrop.hidden = true; });
+document.getElementById('dlgInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') dlgOk && dlgOk();
+  if (e.key === 'Escape') backdrop.hidden = true;
+});
+backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.hidden = true; });
+
+/* ------------------------------------------------------------------ events */
+
+const list = document.getElementById('list');
+list.addEventListener('contextmenu', (e) => {
+  const row = e.target.closest('.row');
+  const gh = e.target.closest('.gh');
+  if (row) { e.preventDefault(); const c = chatById(row.dataset.c); openMenu(e.clientX, e.clientY, rowMenu(c)); return; }
+  if (gh && state.mode === 'group') { e.preventDefault(); openMenu(e.clientX, e.clientY, groupMenu(gh.parentElement.dataset.g)); return; }
+  if (gh) { e.preventDefault(); openMenu(e.clientX, e.clientY, [
+    { icon: 'plus', text: '在此仓库新建对话', onClick: () => toast('回首页并预选此仓库（已实现）') },
+    { sep: true },
+    { icon: 'settings', text: '仓库设置', onClick: () => toast('仓库设置（与现在相同）') },
+    { icon: 'folderTree', text: '在资源管理器中显示', onClick: () => toast('打开系统文件管理器（已实现）') },
+    { icon: 'trash', text: '移除仓库', danger: true, onClick: () => toast('移除仓库（与现在相同）') },
+  ]); return; }
+  // 列表的空白处：这里离「新建分组」最近，用户不必先找到某个标题行。
+  // 「按工作目录」模式下没有分组，所以这一项只在分组模式出现，其余位置
+  // 放的是与侧栏工具行相同的两件事。
+  e.preventDefault();
+  openMenu(e.clientX, e.clientY, state.mode === 'group' ? [
+    { icon: 'plus', text: '新建分组…', onClick: () => startCreate() },
+    { icon: 'house', text: '新建对话', onClick: () => toast('回首页，在首页选仓库后发送即建对话（示意）') },
+  ] : [
+    { icon: 'house', text: '新建对话', onClick: () => toast('回首页，在首页选仓库后发送即建对话（示意）') },
+    { icon: 'folderPlus', text: '添加仓库', onClick: () => toast('打开「添加仓库」（示意）') },
+  ]);
+});
+list.addEventListener('click', (e) => {
+  const act = e.target.closest('[data-act]');
+  if (act) { e.stopPropagation(); toast(act.dataset.act + '（示意）'); return; }
+  const gnew = e.target.closest('[data-gnew]');
+  if (gnew) { e.stopPropagation(); toast('回首页、不预选仓库（在本分组里新建对话的语义待定）'); return; }
+  const more = e.target.closest('[data-more]');
+  if (more) { state.showAll[more.dataset.more] = !state.showAll[more.dataset.more]; render(); return; }
+  const gh = e.target.closest('.gh');
+  if (gh) { const id = gh.parentElement.dataset.g; state.collapsed[id] = !state.collapsed[id]; render(); return; }
+  const row = e.target.closest('.row');
+  if (row) {
+    state.sel = row.dataset.c;
+    const c = chatById(state.sel);
+    if (c && (c.s === 'ok' || c.s === 'fail')) c.s = 'bg';
+    document.getElementById('sbarTitle').textContent = c ? c.t : '';
+    render();
+  }
+});
+document.getElementById('q').addEventListener('input', (e) => { state.q = e.target.value; render(); });
+document.getElementById('collapseAll').addEventListener('click', () => {
+  const allIds = state.mode === 'group' ? [...GROUPS.map((g) => g.id), UNASSIGNED] : REPOS.map((r) => r.id);
+  const fold = !allIds.every((id) => state.collapsed[id]);
+  allIds.forEach((id) => { state.collapsed[id] = fold; });
+  render();
+});
+document.getElementById('modeBtn').addEventListener('click', () => {
+  state.mode = state.mode === 'group' ? 'workspace' : 'group';
+  syncToolbar();
+  render();
+});
+
+function syncToolbar() {
+  document.querySelectorAll('.opts').forEach((grp) => {
+    grp.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === state[grp.dataset.k]));
+  });
+}
+document.querySelectorAll('.opts').forEach((grp) => grp.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const k = grp.dataset.k, v = b.dataset.v;
+  if (k === 'theme') { document.documentElement.classList.toggle('dark', v === 'dark'); b.parentElement.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); return; }
+  state[k] = v;
+  if (k === 'create' && state.creating) { state.creating = false; }
+  syncToolbar();
+  render();
+}));
+document.querySelectorAll('[data-toast]').forEach((el) => el.addEventListener('click', () => toast(el.dataset.toast)));
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2000);
+}
+
+render();
+</script>
+</body>
+</html>

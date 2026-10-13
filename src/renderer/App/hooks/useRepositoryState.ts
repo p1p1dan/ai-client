@@ -42,10 +42,19 @@ export function useRepositoryState() {
       try {
         let parsed = JSON.parse(savedRepos) as Repository[];
         let needsMigration = false;
-        parsed = parsed.map((repo) => {
+        parsed = parsed.map((repo, index) => {
           const withId = ensureRepositoryId(repo);
           if (withId.id !== repo.id) {
             needsMigration = true;
+          }
+          // Issue #15: repositories saved before the field existed get a
+          // stamp that preserves the order they are already in, so the list
+          // does not reshuffle the moment the sidebar starts sorting by it.
+          // Spaced by index from a single "now" — the relative order is the
+          // only thing the stored array actually knows.
+          if (typeof withId.addedAt !== 'number') {
+            needsMigration = true;
+            return { ...withId, addedAt: Date.now() - (parsed.length - index) };
           }
           if (repo.name.includes('/') || repo.name.includes('\\')) {
             needsMigration = true;
@@ -196,6 +205,8 @@ export function useRepositoryState() {
         kind: options?.kind ?? 'local',
         connectionId: options?.connectionId,
         groupId: groupId || undefined,
+        // Issue #15: what 「按工作目录」 sorts by.
+        addedAt: Date.now(),
       };
 
       const updated = [...repositories, newRepo];

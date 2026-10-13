@@ -258,6 +258,43 @@ export function isCatalogAuthoritative(catalog: AgentModelCatalog | null): boole
 }
 
 /**
+ * Issue #12: whether the list behind the model menu is a fallback rather than a
+ * fresh answer, and how old the answer it fell back to is.
+ *
+ * The menu already says so in words (`catalogStatusRow`), but that sentence is
+ * only readable by someone who already opened the menu — and the user who
+ * never opens it is exactly the one who told us "the list is silently old".
+ * This is the same judgement, packaged for the trigger: `stale-cache` and
+ * `bundled` fall back to a list that IS real, `unavailable` to no list at all,
+ * and `host-not-ready`/`refreshing` are states that resolve themselves, so
+ * neither belongs in a mark that only means "what you are looking at is old".
+ *
+ * `since` is the fallback's own timestamp and is deliberately absent when
+ * there is none to report: `bundled` was never fetched by this machine, so
+ * claiming a sync time for it would be inventing one.
+ */
+export interface CatalogStaleness {
+  reason: 'stale-cache' | 'bundled' | 'unavailable';
+  /** When the list on screen was last confirmed by a fetch, if it ever was. */
+  since: number | null;
+}
+
+export function catalogStaleness(catalog: AgentModelCatalog | null): CatalogStaleness | null {
+  if (!catalog) return null;
+  if (
+    catalog.source !== 'stale-cache' &&
+    catalog.source !== 'bundled' &&
+    catalog.source !== 'unavailable'
+  ) {
+    return null;
+  }
+  return {
+    reason: catalog.source,
+    since: catalog.source === 'bundled' ? null : catalog.fetchedAt,
+  };
+}
+
+/**
  * dsh-rebase P1-5a (decision 036): the menu footer for catalog models the DSH
  * engine cannot serve — a wire protocol it does not speak, a provider without
  * a key. `null` when every catalog model is offered. `title` names them, so

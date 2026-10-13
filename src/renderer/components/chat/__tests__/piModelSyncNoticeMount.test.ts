@@ -58,7 +58,12 @@ function failedStatus(kind: string, managed = true) {
       lastAttemptAt: 1,
       syncedAt: null,
     },
-    lastFailure: { kind, error: 'fetch failed: ECONNREFUSED', at: 1_700_000_000_000 },
+    lastFailure: {
+      kind,
+      error: 'fetch failed: ECONNREFUSED',
+      at: 1_700_000_000_000,
+      withCatalog: false,
+    },
   };
 }
 

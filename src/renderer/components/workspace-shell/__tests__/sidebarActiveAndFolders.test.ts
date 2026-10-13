@@ -70,9 +70,14 @@ const { LeftNav } = await import('../LeftNav');
 
 const ALPHA = 'project:/repo/alpha';
 const BETA = 'project:/repo/beta';
+/**
+ * Issue #15: `addedAt` is what 「按工作目录」 orders repositories by, newest
+ * first. Beta was added SECOND, so beta heads the list — the opposite of what
+ * decision 170's activity order produced here.
+ */
 const REPOS = [
-  { id: ALPHA, path: '/repo/alpha', name: 'alpha' },
-  { id: BETA, path: '/repo/beta', name: 'beta' },
+  { id: ALPHA, path: '/repo/alpha', name: 'alpha', addedAt: 1_800_000_000_000 },
+  { id: BETA, path: '/repo/beta', name: 'beta', addedAt: 1_800_000_060_000 },
 ];
 const NOW = Date.now();
 
@@ -137,8 +142,13 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function render(): Promise<void> {
-  await act(async () => root.render(createElement(LeftNav, { repositories: REPOS as never })));
+/**
+ * Issue #15: a test may bring its own repository list — `addedAt` is what
+ * 「按工作目录」 orders by, and a fixture that cannot state it cannot state the
+ * order under test.
+ */
+async function render(repos: unknown = REPOS): Promise<void> {
+  await act(async () => root.render(createElement(LeftNav, { repositories: repos as never })));
 }
 
 /** Session rows (the row trigger is `role="button"`) whose text includes `title`. */
@@ -169,20 +179,6 @@ function folderOrder(): string[] {
   return [...container.querySelectorAll('[data-slot="sidebar-folder-name"]')].map(
     (node) => node.textContent ?? ''
   );
-}
-
-/**
- * React derives enter / leave from `pointerover` / `pointerout` and their
- * `relatedTarget`; `document.body` is outside the React root, so it reads as
- * coming from (or going to) nowhere in the tree.
- */
-async function pointer(type: 'pointerover' | 'pointerout', target: Element): Promise<void> {
-  const Pointer = (globalThis.PointerEvent ?? MouseEvent) as typeof MouseEvent;
-  await act(async () => {
-    target.dispatchEvent(
-      new Pointer(type, { bubbles: true, cancelable: true, relatedTarget: document.body })
-    );
-  });
 }
 
 /** A repository group header's toggle, found by the name's own slot. */
@@ -270,8 +266,11 @@ describe('one list, no 「正在活动」 (decision 183 §1.1, §1.10)', () => {
     await render();
     const bound = rows('Chat bound')[0]?.querySelector('[title="Running in the background"]');
     const cold = rows('Chat cold')[0]?.querySelector('[title="Not started"]');
-    expect(bound?.className).toContain('border-muted-foreground');
+    // Issue #16: filled vs. outline, not outline vs. outline. The two used to
+    // be rings one colour step apart, which read as the same mark.
+    expect(bound?.className).toContain('bg-muted-foreground');
     expect(bound?.className).not.toContain('border-muted-foreground-faint');
+    expect(bound?.className).not.toContain('border-muted-foreground');
     expect(cold?.className).toContain('border-muted-foreground-faint');
     expect(cold?.className).toContain('rounded-full');
     // Every row has a mark in its slot (decision 183 §1.7).
@@ -401,9 +400,10 @@ describe('the group header (decision 183 §1.3, §1.6)', () => {
     expect(header.textContent).toBe('alpha');
     expect(header.getAttribute('title')).toBe('alpha\nMain branch: main');
     expect(header.getAttribute('aria-expanded')).toBe('true');
-    // The reference's grey label: 14px / 400 / muted, the soft ink on hover,
-    // no folder icon.
-    expect(header.className).toContain('text-meta');
+    // The reference's grey label: 400 / muted, the soft ink on hover, no
+    // folder icon. Issue #14 (decision 186) dropped it a step below the rows
+    // to 13px.
+    expect(header.className).toContain('text-group-label');
     expect(header.className).toContain('text-muted-foreground');
     expect(header.className).toContain('group-hover:text-foreground-soft');
     expect(header.className).not.toContain('font-semibold');
@@ -493,7 +493,7 @@ describe('a folded group summarises its rows (decision 183 §2.2)', () => {
   });
 });
 
-describe('Temporary chats is a pinned group (decision 183 §1.2, §2.9)', () => {
+describe('Temporary chats is its own group, last on the list (decision 183 §2.9, issue #13)', () => {
   beforeEach(() => {
     useChatSessionsStore.setState({
       sessions: [
@@ -504,10 +504,13 @@ describe('Temporary chats is a pinned group (decision 183 §1.2, §2.9)', () => 
     });
   });
 
-  it('sits above every repository, however old its chats are', async () => {
+  it('sits below every repository, however new its chats are', async () => {
     await render();
-    expect(groupOrder()).toEqual([UNBOUND_FOLDER_ID, BETA, ALPHA]);
-    // And stays there when it gets the newest activity.
+    // Issue #13 (decision 186): decision 183 §1.2 pinned it above them; the
+    // user reversed that ruling on 2026-10-12.
+    expect(groupOrder()).toEqual([BETA, ALPHA, UNBOUND_FOLDER_ID]);
+    // And stays there when its chats get the newest activity — order is by add
+    // time now, so nothing a chat does can move a folder.
     await act(async () => {
       useChatSessionsStore.setState((state) => ({
         sessions: state.sessions.map((session) =>
@@ -515,7 +518,7 @@ describe('Temporary chats is a pinned group (decision 183 §1.2, §2.9)', () => 
         ),
       }));
     });
-    expect(groupOrder()).toEqual([UNBOUND_FOLDER_ID, ALPHA, BETA]);
+    expect(groupOrder()).toEqual([BETA, ALPHA, UNBOUND_FOLDER_ID]);
   });
 
   it('uses the same grey header as a repository, folds from it, and its 「＋」 opens the home page unbound', async () => {
@@ -620,7 +623,9 @@ describe('groups list 8 rows (decision 137 §4)', () => {
       (node) => node.textContent?.trim() === 'View more (2)'
     );
     expect(more).toHaveLength(2);
-    expect(group(UNBOUND_FOLDER_ID)?.contains(more[0] as Node)).toBe(true);
+    // Issue #13: the temporary group is the last one on the list, so its
+    // "View more" is the second of the two.
+    expect(group(UNBOUND_FOLDER_ID)?.contains(more[1] as Node)).toBe(true);
     expect(container.textContent).not.toContain('Show more');
     for (const button of more) {
       expect(button.className).toContain('h-7');
@@ -755,7 +760,7 @@ describe('Collapse all is a toggle (decision 183 §1.8)', () => {
     await act(async () => toggle()?.click());
     expect(allRows()).toHaveLength(0);
     // The headers stay, closed.
-    expect(folderOrder()).toEqual(['alpha', 'beta', 'Temporary workspaces']);
+    expect(folderOrder()).toEqual(['beta', 'alpha', 'Temporary workspaces']);
     expect(temporaryHeader().getAttribute('aria-expanded')).toBe('false');
     expect(toggle()?.getAttribute('aria-label')).toBe('Expand all groups');
     expect(toggle()?.title).toBe('Expand all groups');
@@ -813,12 +818,12 @@ describe('Collapse all is a toggle (decision 183 §1.8)', () => {
 
     // Typing passes through a prefix that also matches beta.
     await search('dra');
-    expect(groupOrder()).toEqual([UNBOUND_FOLDER_ID, ALPHA, BETA]);
+    expect(groupOrder()).toEqual([BETA, ALPHA, UNBOUND_FOLDER_ID]);
     expect(rows('Draw diagram')).toHaveLength(1);
 
     await search('draft');
     // Only the groups with matches are listed — and they are open.
-    expect(groupOrder()).toEqual([UNBOUND_FOLDER_ID, ALPHA]);
+    expect(groupOrder()).toEqual([ALPHA, UNBOUND_FOLDER_ID]);
     expect(rows('Draft notes')).toHaveLength(1);
     expect(rows('Draft idea')).toHaveLength(1);
     expect(folderHeader('alpha').getAttribute('aria-expanded')).toBe('true');
@@ -866,8 +871,11 @@ describe('Collapse all is a toggle (decision 183 §1.8)', () => {
   });
 });
 
-describe('repositories by last activity (decision 170, issue #6 ruling 6)', () => {
+describe('repositories by add time (issue #15, decision 186)', () => {
   const GAMMA = 'project:/repo/gamma';
+  const ALPHA_ADDED = 1_800_000_000_000;
+  const GAMMA_ADDED = 1_800_000_060_000;
+  const BETA_ADDED = 1_800_000_120_000;
 
   beforeEach(() => {
     useChatSessionsStore.setState({
@@ -899,6 +907,17 @@ describe('repositories by last activity (decision 170, issue #6 ruling 6)', () =
     });
   });
 
+  /**
+   * The three repositories with their stamps. Beta was added LAST, so it heads
+   * the list — while its chats are also the newest, which is what makes the
+   * point: under decision 170 the two facts could not be told apart.
+   */
+  const repos = [
+    { id: ALPHA, path: '/repo/alpha', name: 'alpha', addedAt: ALPHA_ADDED },
+    { id: GAMMA, path: '/repo/gamma', name: 'gamma', addedAt: GAMMA_ADDED },
+    { id: BETA, path: '/repo/beta', name: 'beta', addedAt: BETA_ADDED },
+  ];
+
   /** A turn in chat `id` ends: its folder's activity moves to `updatedAt`. */
   const touch = (id: string, updatedAt: number) =>
     act(async () => {
@@ -909,74 +928,26 @@ describe('repositories by last activity (decision 170, issue #6 ruling 6)', () =
       }));
     });
 
-  it('newest activity first, folders without chats after them, temporary workspaces last', async () => {
-    await render();
-    expect(folderOrder()).toEqual(['beta', 'alpha', 'gamma', 'Temporary workspaces']);
+  it('newest-added first, temporary workspaces last — BETA added last, so it leads', async () => {
+    await render(repos);
+    expect(folderOrder()).toEqual(['beta', 'gamma', 'alpha', 'Temporary workspaces']);
   });
 
-  it('holds the order while the pointer is in the list, and reorders once it leaves', async () => {
-    await render();
-    const inside = folderHeader('alpha');
-    await pointer('pointerover', inside);
+  it('a chat finishing a turn does NOT move its folder', async () => {
+    await render(repos);
+    // Alpha's chat becomes the most recently active thing in the app.
     await touch('a', NOW + 120_000);
-    expect(folderOrder()).toEqual(['beta', 'alpha', 'gamma', 'Temporary workspaces']);
-
-    await pointer('pointerout', inside);
-    expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
+    expect(folderOrder()).toEqual(['beta', 'gamma', 'alpha', 'Temporary workspaces']);
   });
 
-  it('holds the order while keyboard focus is in the list', async () => {
-    await render();
-    await act(async () => folderHeader('gamma').focus());
-    await touch('a', NOW + 120_000);
-    expect(folderOrder()).toEqual(['beta', 'alpha', 'gamma', 'Temporary workspaces']);
-
-    await act(async () => (document.activeElement as HTMLElement | null)?.blur());
-    expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
-  });
-
-  it('a chat started in an empty folder during the hold moves it up only after the hold', async () => {
-    await render();
-    const inside = folderHeader('gamma');
-    await pointer('pointerover', inside);
-    await act(async () => {
-      useChatSessionsStore.setState((state) => ({
-        sessions: [
-          ...state.sessions,
-          chat('g', { projectId: GAMMA, workspaceId: 'ws-gamma', updatedAt: NOW + 120_000 }),
-        ],
-      }));
-    });
-    expect(folderOrder()).toEqual(['beta', 'alpha', 'gamma', 'Temporary workspaces']);
-    expect(rows('Chat g')).toHaveLength(1);
-
-    await pointer('pointerout', inside);
+  it('repositories with no stamp fall back to their stored position, which IS the add order', async () => {
+    // A build without `addedAt` (or a hand-edited store). Only gamma carries a
+    // stamp; alpha and beta fall back to where they sit in the list, and a
+    // repository is appended when it is added — so a later position means added
+    // later, which is exactly the fact this order wants. That puts beta
+    // (position 2) ahead of alpha (position 0).
+    await render([{ id: GAMMA, path: '/repo/gamma', name: 'gamma', addedAt: GAMMA_ADDED }]);
     expect(folderOrder()).toEqual(['gamma', 'beta', 'alpha', 'Temporary workspaces']);
-  });
-
-  it('lets go when the focused row is removed, which sends no blur event', async () => {
-    useChatSessionsStore.setState((state) => ({
-      sessions: [...state.sessions, chat('a-old', { updatedAt: NOW - 120_000 })],
-    }));
-    await render();
-    await act(async () => rows('Chat a-old')[0]?.focus());
-    expect(document.activeElement?.textContent).toContain('Chat a-old');
-
-    // The row goes (its ✕, an archive): focus falls back to <body> silently.
-    await act(async () => {
-      useChatSessionsStore.setState((state) => ({
-        sessions: state.sessions.filter((session) => session.id !== 'a-old'),
-      }));
-    });
-    await touch('a', NOW + 120_000);
-    expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
-  });
-
-  it('nothing outside the list holds it — the nav and the tool row do not', async () => {
-    await render();
-    await pointer('pointerover', buttonText('New chat') as HTMLElement);
-    await touch('a', NOW + 120_000);
-    expect(folderOrder()).toEqual(['alpha', 'beta', 'gamma', 'Temporary workspaces']);
   });
 });
 

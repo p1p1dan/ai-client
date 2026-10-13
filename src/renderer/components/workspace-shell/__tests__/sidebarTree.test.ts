@@ -2,14 +2,15 @@ import { translate, zhTranslations } from '@shared/i18n';
 import { LEGACY_FORK_TITLE_KEY } from '@shared/types/legacyMigration';
 import { describe, expect, it } from 'vitest';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
+import { UNGROUPED_GROUP_ID } from '@/stores/sidebarArchive';
 import { TEMP_PROJECT_ID } from '../deriveChatWorkspaceTree';
 import {
   applyHeldFolderOrder,
+  buildGroupFolder,
   buildSidebarFolders,
   buildUnboundFolder,
   chipForWorkspace,
   chipShownInFolder,
-  deriveFolderLastActivity,
   deriveGroupSummary,
   FOLDER_DEFAULT_LIMIT,
   folderPrimaryChip,
@@ -19,7 +20,7 @@ import {
   LEGACY_DIVERGED_HINT,
   lastBranchSegment,
   limitFolderRows,
-  orderFoldersByActivity,
+  orderFoldersByAddedAt,
   resolveHomePreselect,
   resolveNewSessionWorkspaceId,
   sidebarFolderNameForDisplay,
@@ -638,9 +639,10 @@ describe('splitBranchSuffix (point-check issue 32, decision 138)', () => {
  * folders with chats newest first, folders without chats after them in their
  * old order, the Temp Session project last — and held while the user is in it.
  */
-describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
+describe('folders by add time (issue #15, decision 186)', () => {
   const MIN = 60_000;
-  // In the order the repositories were added (`aiclient-repositories`).
+  // In the order the repositories were added (`aiclient-repositories`), and the
+  // order their `addedAt` stamps ascend in.
   const orderProjects: ChatProject[] = [
     { id: 'p-atlas', name: 'atlas-web' },
     { id: 'p-zephyr', name: 'zephyr-tools' },
@@ -664,14 +666,10 @@ describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
     { id: 'w-nimbus', projectId: 'p-nimbus', name: 'Main', kind: 'main', path: '/nimbus' },
     { id: 'w-temp', projectId: TEMP_PROJECT_ID, name: 'Scratch', kind: 'temp', path: '/tmp/s' },
   ];
+  // Chat times are deliberately at odds with the add order: under decision 170
+  // they decided the list; under issue #15 they must not.
   const orderSessions: ChatSession[] = [
-    session({
-      id: 'atlas-1',
-      projectId: 'p-atlas',
-      workspaceId: 'w-atlas',
-      updatedAt: NOW - 25 * MIN,
-    }),
-    // A folder's activity is its newest chat, on any of its workspaces.
+    session({ id: 'atlas-1', projectId: 'p-atlas', workspaceId: 'w-atlas', updatedAt: NOW }),
     session({
       id: 'beacon-main',
       projectId: 'p-beacon',
@@ -684,8 +682,13 @@ describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
       workspaceId: 'w-beacon-wt',
       updatedAt: NOW - 6 * MIN,
     }),
-    session({ id: 'nimbus-1', projectId: 'p-nimbus', workspaceId: 'w-nimbus', updatedAt: NOW }),
-    // Newer than everything, and still last: the Temp Session project.
+    session({
+      id: 'nimbus-1',
+      projectId: 'p-nimbus',
+      workspaceId: 'w-nimbus',
+      updatedAt: NOW - 200 * MIN,
+    }),
+    // Still last whatever its chats do: the Temp Session project.
     session({
       id: 'temp-1',
       projectId: TEMP_PROJECT_ID,
@@ -701,6 +704,13 @@ describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
       updatedAt: NOW + 3 * MIN,
     }),
   ];
+  /** Ascending add times, one minute apart, in the order above. */
+  const addedAt = new Map(
+    ['p-atlas', 'p-zephyr', 'p-beacon', 'p-yarrow', 'p-nimbus'].map((id, index) => [
+      id,
+      NOW - (5 - index) * MIN,
+    ])
+  );
   const ids = (folders: readonly { projectId: string }[]) => folders.map((f) => f.projectId);
   const built = () =>
     buildSidebarFolders({
@@ -709,57 +719,44 @@ describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
       sessions: orderSessions,
     });
 
-  it('takes each folder s newest chat, grouped by the workspace s project', () => {
-    const activity = deriveFolderLastActivity({
-      workspaces: orderWorkspaces,
-      sessions: orderSessions,
-    });
-    expect(Object.fromEntries(activity)).toEqual({
-      'p-atlas': NOW - 25 * MIN,
-      'p-beacon': NOW - 6 * MIN,
-      'p-nimbus': NOW,
-      [TEMP_PROJECT_ID]: NOW + MIN,
-    });
-  });
-
-  it('orders folders with chats newest first, then the empty ones in their old order, Temp last', () => {
-    const activity = deriveFolderLastActivity({
-      workspaces: orderWorkspaces,
-      sessions: orderSessions,
-    });
-    expect(ids(orderFoldersByActivity(built(), activity))).toEqual([
+  it('orders repositories newest-added first, whatever their chats are doing, Temp last', () => {
+    expect(ids(orderFoldersByAddedAt(built(), addedAt))).toEqual([
       'p-nimbus',
-      'p-beacon',
-      'p-atlas',
-      'p-zephyr',
       'p-yarrow',
+      'p-beacon',
+      'p-zephyr',
+      'p-atlas',
       TEMP_PROJECT_ID,
     ]);
   });
 
-  it('keeps the old order between folders with the same activity (stable)', () => {
+  it('gives a repository with no stamp its stored position, which IS the add order', () => {
     const folders = [{ projectId: 'a' }, { projectId: 'b' }, { projectId: 'c' }];
-    const activity = new Map([
-      ['a', NOW],
-      ['b', NOW + 1],
-      ['c', NOW],
-    ]);
-    expect(ids(orderFoldersByActivity(folders, activity))).toEqual(['b', 'a', 'c']);
+    // `c` is stamped (added most recently); `a` and `b` were saved by a build
+    // without the field. A repository is APPENDED when it is added, so a later
+    // position means added later — b before a.
+    expect(ids(orderFoldersByAddedAt(folders, new Map([['c', NOW]])))).toEqual(['c', 'b', 'a']);
   });
 
-  it('a search does not reorder: the activity ignores which rows the query keeps', () => {
-    const activity = deriveFolderLastActivity({
-      workspaces: orderWorkspaces,
-      sessions: orderSessions,
-    });
+  it('keeps the stored order between repositories with the same stamp (stable)', () => {
+    const folders = [{ projectId: 'a' }, { projectId: 'b' }, { projectId: 'c' }];
+    const same = new Map([
+      ['a', NOW],
+      ['b', NOW],
+      ['c', NOW],
+    ]);
+    expect(ids(orderFoldersByAddedAt(folders, same))).toEqual(['a', 'b', 'c']);
+  });
+
+  it('a search does not reorder: the stamps ignore which rows the query keeps', () => {
     const searched = buildSidebarFolders({
       projects: orderProjects,
       workspaces: orderWorkspaces,
       sessions: orderSessions,
       query: 'atlas',
     });
-    expect(ids(orderFoldersByActivity(searched, activity))).toEqual(
-      ids(orderFoldersByActivity(built(), activity))
+    expect(ids(orderFoldersByAddedAt(searched, addedAt))).toEqual(
+      ids(orderFoldersByAddedAt(built(), addedAt))
     );
   });
 
@@ -790,6 +787,50 @@ describe('folders by last activity (decision 170, issue #6 ruling 6)', () => {
       'p-other-new',
       TEMP_PROJECT_ID,
     ]);
+  });
+
+  describe('「按分组」 groups (issue #15, decisions 186 / 187)', () => {
+    it("lists the group's conversations, newest first, and survives being empty", () => {
+      const folder = buildGroupFolder({
+        sessions: orderSessions,
+        groupId: 'group-1',
+        name: 'Ungrouped',
+      });
+      expect(folder.projectId).toBe('group-1');
+      expect(folder.synthetic).toBe('group');
+      // Temporary chats and orphaned ones belong here too: the mode is about
+      // conversations, and a group is the only place they can be.
+      expect(folder.rows).toHaveLength(orderSessions.length);
+      const times = folder.rows.map((row) => row.updatedAt);
+      expect(times).toEqual([...times].sort((a, b) => b - a));
+      // An empty group is a group, not nothing: its header is where its rename,
+      // its delete and its 「＋」 live (decision 187), so it must not vanish.
+      const empty = buildGroupFolder({
+        sessions: [],
+        groupId: UNGROUPED_GROUP_ID,
+        name: 'Ungrouped',
+      });
+      expect(empty.projectId).toBe(UNGROUPED_GROUP_ID);
+      expect(empty.rows).toEqual([]);
+    });
+
+    it('honours the title query and exempts the open chat, like every list', () => {
+      const folder = buildGroupFolder({
+        sessions: orderSessions,
+        groupId: 'group-1',
+        name: 'Ungrouped',
+        query: 'nimbus',
+      });
+      expect(folder.rows.map((row) => row.sessionId)).toEqual(['nimbus-1']);
+      const exempt = buildGroupFolder({
+        sessions: orderSessions,
+        groupId: 'group-1',
+        name: 'Ungrouped',
+        query: 'nothing-matches-this',
+        activeSessionId: 'atlas-1',
+      });
+      expect(exempt.rows.map((row) => row.sessionId)).toEqual(['atlas-1']);
+    });
   });
 });
 

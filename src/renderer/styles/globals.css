@@ -72,6 +72,17 @@
    */
   --text-meta: 0.875rem;         /* 14px sans -- timestamps / statusline / meta rows */
   --text-meta--line-height: 1.5;
+  /*
+   * GitHub issue #14: the sidebar's GROUP LABEL tier (folder names and
+   * 「临时对话」). It was --text-meta (14px), level with the chat titles it
+   * heads, separated only by ink colour -- the user read the label as too
+   * heavy next to its own rows. Decision 186 relaxes the "no CJK below 14px"
+   * floor for this one tier: a group label is short, its rows are the text
+   * being read, and the drop is what actually makes it recede. The rows
+   * themselves stay at 14px.
+   */
+  --text-group-label: 0.8125rem; /* 13px sans -- sidebar group labels only */
+  --text-group-label--line-height: 1.5;
   --text-ui: 0.9375rem;          /* 15px sans -- sidebar rows, buttons, labels, tabs, dropdown triggers */
   --text-ui--line-height: 1.5;
   /*

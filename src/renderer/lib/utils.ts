@@ -35,6 +35,8 @@ const twMerge = extendTailwindMerge({
         'text-title',
         // Decision 174 (issue #6, second wave): the home title's 26px tier.
         'text-display',
+        // Decision 186 (issue #14): the sidebar group label's 13px tier.
+        'text-group-label',
         // T104: the chat area's runtime-configurable pair -- same classifier
         // hazard as the tokens above, see this block's note.
         'text-chat-body',

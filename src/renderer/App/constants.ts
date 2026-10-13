@@ -69,6 +69,17 @@ export interface Repository {
   connectionId?: string;
   /** 所属分组 ID，undefined = 仅在「全部」中显示 */
   groupId?: string;
+  /**
+   * Issue #15: when this repository entered the list, epoch ms.
+   *
+   * Added because the sidebar's archive mode 「按工作目录」 orders folders by
+   * ADD order (newest first) instead of by activity. The saved array order
+   * already carries that fact, but only accidentally — `handleReorderRepositories`
+   * can rewrite it, and a JSON array is not a place to keep a timestamp that
+   * the sort depends on. Optional, and backfilled on load for repositories
+   * saved before this field existed.
+   */
+  addedAt?: number;
 }
 
 // Virtual repository for Temp Session

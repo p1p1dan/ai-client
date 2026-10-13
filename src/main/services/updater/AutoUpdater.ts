@@ -3,7 +3,12 @@ import type { ProxySettings } from '@shared/types';
 import type { UpdateStatus } from '@shared/types/updater';
 import type { BrowserWindow } from 'electron';
 import electronUpdater, { type UpdateInfo } from 'electron-updater';
-import { applyProxy, registerUpdaterSession } from '../proxy/ProxyConfig';
+import {
+  applyDirectUpdaterProxy,
+  applyProxy,
+  isProxyConnectionError,
+  registerUpdaterSession,
+} from '../proxy/ProxyConfig';
 
 export type { UpdateStatus } from '@shared/types/updater';
 
@@ -59,6 +64,8 @@ export class AutoUpdaterService {
   private checkIntervalId: NodeJS.Timeout | null = null;
   private initialCheckId: NodeJS.Timeout | null = null;
   private lastCheckTime = 0;
+  /** Set while a direct retry after a proxy failure is in flight (issue #10). */
+  private proxyRetryAt: string | null = null;
   private checkPromise: Promise<void> | null = null;
   private downloadPromise: Promise<void> | null = null;
   private installPromise: Promise<void> | null = null;
@@ -135,8 +142,7 @@ export class AutoUpdaterService {
       this.stopChecks();
       this.sendStatus({ status: 'downloaded', info: updateInfo(info) });
     };
-    const failed = (error: Error) =>
-      this.sendStatus({ status: 'error', info: this.status.info, error: error.message });
+    const failed = (error: Error) => this.handleFailure(error);
     const focus = () => {
       if (Date.now() - this.lastCheckTime >= MIN_FOCUS_CHECK_INTERVAL_MS)
         void this.checkForUpdates();
@@ -198,17 +204,54 @@ export class AutoUpdaterService {
     this.lastCheckTime = Date.now();
     this.checkPromise = autoUpdater
       .checkForUpdates()
-      .then(() => {})
+      .then(() => {
+        // A check that came back at all means the proxy question is settled.
+        this.proxyRetryAt = null;
+      })
       .catch((error: unknown) => {
-        this.sendStatus({
-          status: 'error',
-          error: error instanceof Error ? error.message : String(error),
-        });
+        // Same path as the `error` event (issue #10): `checkForUpdates`
+        // rejects as well as emitting, and only one of the two may decide to
+        // retry.
+        this.handleFailure(error instanceof Error ? error : new Error(String(error)));
       })
       .finally(() => {
         this.checkPromise = null;
       });
     return this.checkPromise;
+  }
+
+  /**
+   * Issue #10: one direct retry when the failure says the configured proxy is
+   * unreachable, then the real error.
+   *
+   * The updater check runs either through the system proxy (the in-app switch
+   * off, or 「更新也走代理」 unchecked) or through ours. In both cases a proxy that
+   * the setting still names but that is no longer running produces
+   * `ERR_PROXY_CONNECTION_FAILED` and no request at all — a dead end for the
+   * user, whose only visible symptom is a red 「检查失败」 and no way to know a
+   * direct attempt would have worked.
+   *
+   * Only the check takes this path. Download and install are started by an
+   * explicit button press on a version the check already proved reachable, so
+   * re-plumbing the session under them would be a surprise, not a rescue.
+   * `proxyRetryAt` is cleared before the retry and set only on failure, so a
+   * proxy that stays broken costs one retry per check, not one per check plus
+   * one per error event.
+   */
+  private async handleFailure(error: Error): Promise<void> {
+    if (this.proxyRetryAt === null && isProxyConnectionError(error)) {
+      this.proxyRetryAt = error.message;
+      try {
+        await applyDirectUpdaterProxy();
+        await autoUpdater.checkForUpdates();
+        return;
+      } catch (retryError) {
+        console.warn('[updater] the direct retry after a proxy failure also failed:', retryError);
+      }
+    }
+    const message = this.proxyRetryAt === null ? error.message : `${error.message} (proxy)`;
+    this.proxyRetryAt = null;
+    this.sendStatus({ status: 'error', info: this.status.info, error: message });
   }
 
   async downloadUpdate(): Promise<void> {

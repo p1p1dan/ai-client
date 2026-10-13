@@ -187,6 +187,23 @@ export function PiModelManagementSettings({
             <Ident>{state.agentDir}</Ident>
           </p>
         )}
+        {/* Issue #12: the list on screen is a fallback, not a fresh answer. The
+            menu says so too, but this is where a user comes once they suspect
+            it — and the state file's `error` alone does not say WHICH failure,
+            which is the part they can act on. */}
+        {snapshot?.lastFailure?.withCatalog && (
+          <div className="flex gap-2 rounded-sm border border-warning/30 bg-warning/8 p-3 text-ui text-warning dark:bg-warning/16">
+            <TriangleAlert className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 flex-1">
+              {t(
+                'The last sync could not reach the model service, so the list is the last one that worked. Models added since then are missing.'
+              )}{' '}
+              <span className="select-text">
+                <Ident>{snapshot.lastFailure.error}</Ident>
+              </span>
+            </span>
+          </div>
+        )}
         {(message || state?.error) && (
           <div
             className={`flex gap-2 rounded-sm border p-3 text-ui ${

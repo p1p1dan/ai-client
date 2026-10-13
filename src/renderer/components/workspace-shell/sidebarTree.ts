@@ -120,11 +120,21 @@ export interface SidebarFolder {
   /** Target for the "+ new chat" row; null hides the row (no usable workspace). */
   newSessionWorkspaceId: string | null;
   /**
-   * U13: set on the one folder that is not a repository — the group holding
-   * unbound (scratch) chats. Callers render its label from i18n instead of
-   * `name`, and must not offer repository actions on it.
+   * U13: set on a folder that is not a repository — callers must not offer
+   * repository actions on it, and render its label from i18n rather than
+   * `name` where the label is not the folder's own.
+   *
+   * `'unbound'`: the chats with no repository (decision 183 §2.9).
+   * `'group'`: issue #15's 「按分组」 mode, one of the user's groups or the
+   * fixed 「未分组」 bucket (decision 187). A distinct value rather than a reuse
+   * of `'unbound'`, because the two groups can be on screen together in that
+   * mode — repositories and temporary chats both land in 「未分组」 — so one
+   * flag for both would make them indistinguishable to every reader.
+   *
+   * (Phase 1 used `'unassigned'` for the single bucket; it is now `'group'`,
+   * the same value a user-created group carries, since the two render alike.)
    */
-  synthetic?: 'unbound';
+  synthetic?: 'unbound' | 'group';
 }
 
 /**
@@ -536,6 +546,58 @@ export function buildUnboundFolder(input: {
   };
 }
 
+/**
+ * Issue #15 (decision 186 phase 1, decision 187 phase 2) — one group of
+ * 「按分组」 mode.
+ *
+ * Phase 1 had exactly one group and every conversation was in it, which is also
+ * what the issue asks for as the starting state ("有一个默认分组，所有新对话默认
+ * 丢在里面"). Phase 2 keeps this derivation for 「未分组」 and adds
+ * {@link buildGroupFolder} beside it, so a group the user made and the bucket
+ * every chat starts in are the SAME kind of thing — same header, same fold,
+ * same 8-row budget, same search behaviour. Anything else would have the user's
+ * own groups be a different species from the one they see first.
+ *
+ * `rows` may be empty. Phase 1 returned null instead, because an empty group
+ * had nothing to say; a user group does — an empty one is where its
+ * 「暂无对话」, its rename and its delete live, and one that vanished the
+ * moment its last chat left would look like it had been deleted.
+ *
+ * Rows are plain rows: naming the repository a flat row belongs to is the
+ * caller's job, because the caller already holds the two maps it takes
+ * (`workspaceById` for the row's workspace, then that project's display name)
+ * and it needs the same answer for the row's tooltip anyway.
+ *
+ * Built from the SAME inputs as the repository tree (rather than from its
+ * output), so a chat whose workspace no longer resolves is listed here like
+ * it is there: the group is about conversations, not about repositories.
+ */
+export function buildGroupFolder(input: {
+  sessions: readonly ChatSession[];
+  /** The group's own id — the folder's `projectId`, and its expansion key. */
+  groupId: string;
+  /** Display label; the caller passes a translated string or the group's name. */
+  name: string;
+  query?: string;
+  /** T091: exempt from the title query — see `matchesQuery`. */
+  activeSessionId?: string | null;
+  /** Decision 145: see `SidebarTreeInput.t`. */
+  t?: Translate;
+}): SidebarFolder {
+  const normalized = normalizeQuery(input.query);
+  const rows = input.sessions
+    .filter((session) => matchesQuery(session, normalized, input.activeSessionId, input.t))
+    .map((session) => toRow(session, undefined))
+    .sort(byUpdatedAtDesc);
+  return {
+    projectId: input.groupId,
+    name: input.name,
+    rows,
+    newSessionWorkspaceId: null,
+    synthetic: 'group',
+  };
+}
+
 /** Where the home page opened by the sidebar's 「＋新建」 puts its draft target. */
 export interface HomePreselect {
   workspaceId: string;
@@ -647,58 +709,47 @@ export function limitFolderRows(input: FolderRowsLimitInput): FolderRowsLimitRes
 }
 
 /**
- * Decision 170 (issue #6 ruling 6): when each repository folder last saw
- * activity — the newest `updatedAt` among its chats, grouped the way
- * `buildSidebarFolders` groups them (by the workspace's project; unbound and
- * orphaned chats belong to no folder). A folder with no chat has no entry.
+ * Issue #15 (decision 186): the repository list in 「按工作目录」 order — by
+ * when each repository was ADDED, newest first.
  *
- * Deliberately blind to the search query: typing must not reorder the list.
- */
-export function deriveFolderLastActivity(input: {
-  workspaces: readonly ChatWorkspace[];
-  sessions: readonly ChatSession[];
-}): Map<string, number> {
-  const workspaceById = new Map(input.workspaces.map((ws) => [ws.id, ws] as const));
-  const latest = new Map<string, number>();
-  for (const session of input.sessions) {
-    const workspace = workspaceById.get(session.workspaceId);
-    if (!workspace || isUnboundSessionRow(session)) continue;
-    const previous = latest.get(workspace.projectId);
-    if (previous === undefined || session.updatedAt > previous) {
-      latest.set(workspace.projectId, session.updatedAt);
-    }
-  }
-  return latest;
-}
-
-/**
- * Decision 170 (issue #6 ruling 6): the repository list by activity.
+ * This replaces decision 170's activity order, which re-sorted the list every
+ * time a chat anywhere finished a turn: a folder could move out from under the
+ * pointer, and a repository the user had not touched in weeks sank to the
+ * bottom regardless of how they think about it. The user's own arrangement is
+ * the more useful order, and the add time is the one part of it the install
+ * already knows.
  *
- * - Folders with chats come first, newest activity first.
- * - Folders without a chat follow, in their old relative order (the order the
- *   repositories were added in).
+ * - Repositories sort by `addedAt` descending; a repository with no stamp
+ *   (saved before the field existed and not yet migrated) sorts by its
+ *   position in the list, which is exactly the order it was added in.
  * - The Temp Session project (「临时工作区」) is always last.
  *
- * The sort is stable, so folders with the same activity keep their old order
- * too. Only the display order changes; `aiclient-repositories` is not
- * rewritten.
+ * `folders` arrives in the stored array order, and the sort is stable, so
+ * repositories sharing an `addedAt` (or lacking one) keep their add order.
  */
-export function orderFoldersByActivity<T extends Pick<SidebarFolder, 'projectId'>>(
+export function orderFoldersByAddedAt<T extends Pick<SidebarFolder, 'projectId'>>(
   folders: readonly T[],
-  lastActivity: ReadonlyMap<string, number>
+  addedAtByProjectId: ReadonlyMap<string, number>
 ): T[] {
-  const withChats: T[] = [];
-  const withoutChats: T[] = [];
   const temp: T[] = [];
-  for (const folder of folders) {
-    if (folder.projectId === TEMP_PROJECT_ID) temp.push(folder);
-    else if (lastActivity.has(folder.projectId)) withChats.push(folder);
-    else withoutChats.push(folder);
-  }
-  withChats.sort(
-    (a, b) => (lastActivity.get(b.projectId) ?? 0) - (lastActivity.get(a.projectId) ?? 0)
-  );
-  return [...withChats, ...withoutChats, ...temp];
+  // Decorate before sorting: the fallback stamp needs the folder's position in
+  // the ORIGINAL array, which a comparator can no longer see once `sort` has
+  // started moving elements. Position is a negative stamp (index 0 smallest),
+  // so an unstamped repository sorts below every stamped one and above its own
+  // later neighbours — which is the add order it was saved in.
+  const rest: { folder: T; stamp: number }[] = [];
+  folders.forEach((folder, index) => {
+    if (folder.projectId === TEMP_PROJECT_ID) {
+      temp.push(folder);
+      return;
+    }
+    rest.push({
+      folder,
+      stamp: addedAtByProjectId.get(folder.projectId) ?? index - folders.length,
+    });
+  });
+  rest.sort((a, b) => b.stamp - a.stamp);
+  return [...rest.map((entry) => entry.folder), ...temp];
 }
 
 /**

@@ -85,6 +85,7 @@ describe('Pi model status and manual sync IPC', () => {
       kind: 'credentials-missing',
       error: 'Managed credentials are unavailable',
       at: 1_700_000_000_000,
+      withCatalog: false,
     };
 
     const status = await handler(IPC_CHANNELS.PI_MODELS_GET_STATUS)({});

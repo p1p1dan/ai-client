@@ -849,6 +849,12 @@ app
     // Initialize auto-updater
     await initAutoUpdater(mainWindow);
 
+    // Issue #11: the managed model catalog used to be synced once, at boot,
+    // and never again for the life of the process. Hourly, plus a rate-limited
+    // catch-up when the window regains focus.
+    const { catalogSyncScheduler } = await import('./services/piModelConfig/syncScheduler');
+    catalogSyncScheduler.start(mainWindow);
+
     // Initialize git auto-fetch service
     gitAutoFetchService.init(mainWindow);
 

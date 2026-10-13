@@ -7,9 +7,11 @@ import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
+  CornerDownRight,
   FolderGit2,
   FolderMinus,
   FolderPlus,
+  FolderTree,
   ListChecks,
   MoreHorizontal,
   Pencil,
@@ -18,6 +20,7 @@ import {
   Settings,
   ShieldQuestion,
   Square,
+  Tag,
   Trash2,
   X,
 } from 'lucide-react';
@@ -52,7 +55,16 @@ import {
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from '@/components/ui/menu';
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
 import { toastManager } from '@/components/ui/toast';
@@ -60,6 +72,7 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { openHome } from '@/stores/homeDraft';
+import { orderGroups, UNGROUPED_GROUP_ID, useSidebarArchiveStore } from '@/stores/sidebarArchive';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
 import { shouldShowAddRepositoryEmptyState } from './addRepositoryEntry';
@@ -69,10 +82,10 @@ import { sumFolderDiffTotals } from './folderDiffStats';
 import { SURFACE_ESCAPE_HOLD_ATTR } from './shellLayoutModel';
 import {
   applyHeldFolderOrder,
+  buildGroupFolder,
   buildSidebarFolders,
   buildUnboundFolder,
   chipShownInFolder,
-  deriveFolderLastActivity,
   deriveGroupSummary,
   folderPrimaryChip,
   folderTooltip,
@@ -81,8 +94,9 @@ import {
   LEGACY_DIVERGED_HINT,
   lastBranchSegment,
   limitFolderRows,
-  orderFoldersByActivity,
+  orderFoldersByAddedAt,
   resolveHomePreselect,
+  type SidebarFolder,
   type SidebarGroupSummary,
   type SidebarRowPlace,
   type SidebarSessionRow,
@@ -151,6 +165,21 @@ export function LeftNav({
   const [repoToRemove, setRepoToRemove] = useState<Repository | null>(null);
   const [repoToConfigure, setRepoToConfigure] = useState<Repository | null>(null);
   /**
+   * Issue #15 phase 2 (decision 187): the group whose name is being edited in
+   * place, and the group whose delete is being confirmed. `creatingGroup` is
+   * the 「新建分组」 header that appears at the top of the list and takes the
+   * name directly — a boolean rather than an id, because the group does not
+   * exist until the name does.
+   */
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [groupToDelete, setGroupToDelete] = useState<string | null>(null);
+  /**
+   * The chat that asked for 「移到分组 ▸ 新建分组…」, so the move lands when the
+   * new group's name does. A ref, not state: nothing renders from it.
+   */
+  const pendingMoveSessionId = useRef<string | null>(null);
+  /**
    * U31: bulk archive. `null` = not selecting; a Set = selection mode holding
    * the chosen session ids.
    *
@@ -178,14 +207,15 @@ export function LeftNav({
     setRepoToRemove(null);
   }, [repoToRemove, onRemoveRepository]);
 
-  // "Reveal in Finder/Explorer" on the repository row — unlike the file tree's
-  // same-named action (`file.revealInFileManager`, which highlights an item
-  // inside its parent), this opens the repository directory itself, so it goes
-  // through `shell.openPath` instead. `openPath` resolves to an error string
-  // (never throws) on a normal failure, but the preload rejects outright for a
-  // remote virtual path — both are reported the same way here since the menu
-  // item is already hidden for remote repositories (see `repoMenuItems`).
-  const handleOpenRepositoryFolder = useCallback(
+  // "Reveal in Finder/Explorer" on the repository row, and issue #15's 「跳转到
+  // 工作目录」 on a chat row — unlike the file tree's same-named action
+  // (`file.revealInFileManager`, which highlights an item inside its parent),
+  // these open the directory itself, so they go through `shell.openPath`
+  // instead. `openPath` resolves to an error string (never throws) on a normal
+  // failure, but the preload rejects outright for a remote virtual path — both
+  // are reported the same way here since every menu item that calls this is
+  // already hidden for remote repositories and for chats with no directory.
+  const handleOpenFolder = useCallback(
     async (repoPath: string) => {
       try {
         const error = await window.electronAPI.shell.openPath(repoPath);
@@ -356,6 +386,63 @@ export function LeftNav({
   );
   const placeOf = (row: SidebarSessionRow): SidebarRowPlace =>
     sidebarRowPlace(row, workspaceById, folderNameByProjectId);
+  // Issue #15: 「按工作目录」 orders groups by when each repository was added
+  // (`Repository.addedAt`, backfilled on load for older installs). Keyed by
+  // the same project id the tree was built with — `projectIdForRepo` — so a
+  // folder always finds its own repository and never a same-named other one.
+  const addedAtByProjectId = useMemo(
+    () => new Map(repositories.map((repo) => [projectIdForRepo(repo), repo.addedAt ?? 0] as const)),
+    [repositories]
+  );
+  const archiveMode = useSidebarArchiveStore((state) => state.archiveMode);
+  const setArchiveMode = useSidebarArchiveStore((state) => state.setArchiveMode);
+  const groups = useSidebarArchiveStore((state) => state.groups);
+  const groupAssignments = useSidebarArchiveStore((state) => state.assignments);
+  const createGroup = useSidebarArchiveStore((state) => state.createGroup);
+  const renameGroup = useSidebarArchiveStore((state) => state.renameGroup);
+  const deleteGroup = useSidebarArchiveStore((state) => state.deleteGroup);
+  const assignSession = useSidebarArchiveStore((state) => state.assignSession);
+  const groupingByGroup = archiveMode === 'group';
+  // Issue #15 phase 2 (decision 187): the user's groups, newest first like the
+  // repositories, then the fixed 「未分组」 bucket LAST — it is the least
+  // specific group on the list and a permanently-first slot would push the
+  // user's own groups down every time a chat is started.
+  const orderedGroups = useMemo(() => orderGroups(groups), [groups]);
+  const groupFolders = useMemo(() => {
+    if (!groupingByGroup) return [];
+    const folders = orderedGroups.map((group) =>
+      buildGroupFolder({
+        // A group holds the conversations filed under it and nothing else —
+        // the bucketing is the caller's (the store keeps the map), so this
+        // derivation stays pure.
+        sessions: sessions.filter((session) => groupAssignments[session.id] === group.id),
+        groupId: group.id,
+        name: group.name,
+        query,
+        activeSessionId,
+        t,
+      })
+    );
+    folders.push(
+      buildGroupFolder({
+        // No entry in the assignment map IS membership of 「未分组」 (see the
+        // store's `SessionAssignments`), so this is the complement of the map
+        // rather than a second list to keep in step.
+        sessions: sessions.filter((session) => {
+          const assigned = groupAssignments[session.id];
+          return !assigned || !orderedGroups.some((group) => group.id === assigned);
+        }),
+        groupId: UNGROUPED_GROUP_ID,
+        name: t('Ungrouped'),
+        query,
+        activeSessionId,
+        t,
+      })
+    );
+    return folders;
+  }, [groupingByGroup, orderedGroups, groupAssignments, sessions, query, activeSessionId, t]);
+  /** The ids the list shows in 「按分组」 — the mode's groups, bucket included. */
+  const groupFolderIds = groupFolders.map((folder) => folder.projectId);
   const queryActive = query.trim().length > 0;
   /**
    * Whether a group shows its rows. A search opens every group that has
@@ -365,16 +452,31 @@ export function LeftNav({
    * (`handleQueryChange`).
    */
   const groupExpanded = (groupId: string) => queryActive || isProjectExpanded(groupId);
-  // Decision 170 (issue #6 ruling 6), kept by decision 183 §2.11: repository
-  // groups by last activity, the empty ones after them, the Temp Session
-  // project last. Display order only — the repository store keeps the order
-  // they were added in. Held while the pointer or keyboard focus is in the
-  // list, so nothing moves under a click. Temporary chats is pinned above all
-  // of them and takes no part in the ordering.
-  const liveFolderOrder = orderFoldersByActivity(
-    folders,
-    deriveFolderLastActivity({ workspaces, sessions })
-  );
+  /**
+   * What 「按分组」 renders. A search narrows it the way it narrows the
+   * repository tree below: a group with no hits collapses away instead of
+   * leaving a wall of empty headers. Without a query every group stays,
+   * because that is where its rename, its delete and its 「＋」 live.
+   */
+  const visibleGroupFolders = queryActive
+    ? groupFolders.filter((folder) => folder.rows.length > 0)
+    : groupFolders;
+  // Issue #15: which repository a row belongs to, by display name — null for a
+  // chat that has none (a temporary chat, an orphan). Only 「按分组」 asks:
+  // there the row has no folder header above it to say so.
+  const repositoryNameForRow = (row: SidebarSessionRow): string | null => {
+    const workspace = workspaceById.get(row.workspaceId);
+    if (!workspace) return null;
+    return folderNameByProjectId.get(workspace.projectId) ?? null;
+  };
+  // Issue #15 (decision 186): repository groups are ordered by when the
+  // repository was ADDED, newest first, instead of by each group's last
+  // activity. Decision 170's activity order moved a folder as soon as a chat
+  // anywhere finished a turn; the user asked for the arrangement they made.
+  // The hold stays (it also keeps Temporary chats and the Temp Session project
+  // in place while the pointer is in the list) but is now nearly inert: this
+  // order only changes when a repository is added or removed.
+  const liveFolderOrder = orderFoldersByAddedAt(folders, addedAtByProjectId);
   const listHold = useRegionHold(!showAddRepositoryEmptyState);
   const heldFolderOrder = useHeldOrder(
     liveFolderOrder.map((folder) => folder.projectId),
@@ -448,22 +550,28 @@ export function LeftNav({
    * keeps its label (the stored folds); clearing the search opens the last
    * query's groups for good (`handleQueryChange`) and it reads those.
    */
-  const toggleGroupIds = [
-    ...(sessions.some(isUnboundSessionRow) ? [UNBOUND_FOLDER_ID] : []),
-    ...(showAddRepositoryEmptyState ? [] : folders.map((folder) => folder.projectId)),
-  ];
+  const toggleGroupIds = groupingByGroup
+    ? groupFolderIds
+    : [
+        ...(sessions.some(isUnboundSessionRow) ? [UNBOUND_FOLDER_ID] : []),
+        ...(showAddRepositoryEmptyState ? [] : folders.map((folder) => folder.projectId)),
+      ];
   const allGroupsCollapsed =
     toggleGroupIds.length > 0 && toggleGroupIds.every((id) => !isProjectExpanded(id));
   const toggleAllGroups = () => {
     const expand = allGroupsCollapsed;
     setExpandedProjects((prev) => ({
       ...prev,
-      ...Object.fromEntries(
-        [UNBOUND_FOLDER_ID, ...folders.map((folder) => folder.projectId)].map((id) => [id, expand])
-      ),
+      ...Object.fromEntries(toggleGroupIds.map((id) => [id, expand])),
     }));
   };
   const toggleAllLabel = allGroupsCollapsed ? t('Expand all groups') : t('Collapse all groups');
+  // Issue #15: the tool row's one mode button. Its label states the mode the
+  // list is IN, not the one a click would switch to — a control that reads
+  // 「按分组」 while showing repositories would describe the wrong screen.
+  const archiveModeToggleLabel = groupingByGroup
+    ? t('Grouped by: group — switch to working directory')
+    : t('Grouped by: working directory — switch to group');
 
   /**
    * Every list renders its rows through here, so the row's wiring (markers,
@@ -488,6 +596,32 @@ export function LeftNav({
       onRename={(title) => void renameRow(row.sessionId, title)}
       onArchive={() => void archive(row.sessionId, true)}
       onDeleteTemp={onDeleteTemp}
+      // Issue #15: this row's own directory in the system file manager. Hidden
+      // for rows with no local directory (temporary chats, remote repos) — see
+      // the prop's note.
+      {...(() => {
+        const workspace = workspaceById.get(row.workspaceId);
+        return workspace && workspace.kind !== 'remote'
+          ? { onJumpToWorkspace: () => void handleOpenFolder(workspace.path) }
+          : {};
+      })()}
+      // Issue #15 phase 2: filing, offered only in the mode that has groups.
+      // Every conversation is listed in exactly one of them, so the tick can
+      // always say which — `null` is 「未分组」, which is the absence of an
+      // assignment rather than a group id.
+      {...(groupingByGroup
+        ? {
+            groupMove: {
+              groups: orderedGroups.map((group) => ({ id: group.id, name: group.name })),
+              currentGroupId: groupAssignments[row.sessionId] ?? null,
+              onMove: (groupId: string) => assignSession(row.sessionId, groupId),
+              onCreateGroup: () => {
+                pendingMoveSessionId.current = row.sessionId;
+                setCreatingGroup(true);
+              },
+            },
+          }
+        : {})}
     />
   );
 
@@ -599,6 +733,222 @@ export function LeftNav({
     );
   };
 
+  /**
+   * Issue #15 (phase 1 decision 186, phase 2 decision 187) — one group of
+   * 「按分组」 mode: the user's own groups and the fixed 「未分组」 bucket alike.
+   *
+   * Same header, same fold, same 8-row budget and same search behaviour as a
+   * repository group, because these are the list's other face and must not be
+   * a different kind of thing. What they do not have is a repository: no diff
+   * totals, no repository menu, no 「＋」 that could pick a target (the group's
+   * 「＋」 starts a chat with no repository, which is what a group without one
+   * can offer). Rows name their repository in the context slot instead, which
+   * is the job the missing folder headers used to do.
+   *
+   * Group actions come from `groupMenuItems` — one definition, rendered from
+   * both the header's hover 「···」 and its context menu, the same rule the
+   * repository header follows.
+   */
+  const renderGroupSection = (folder: SidebarFolder) => {
+    const groupId = folder.projectId;
+    const isUngrouped = groupId === UNGROUPED_GROUP_ID;
+    const expanded = groupExpanded(groupId);
+    const limited = limitFolderRows({
+      rows: folder.rows,
+      showAll: folderShowAll[groupId] === true,
+      queryActive,
+      activeSessionId,
+    });
+    if (renamingGroupId === groupId) return renderGroupRename(folder);
+    const actions = (
+      <>
+        <Menu>
+          <MenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={cn(GROUP_ACTION_CLASS, 'data-popup-open:opacity-100')}
+                aria-label={t('Group actions')}
+                title={t('Group actions')}
+              />
+            }
+          >
+            <MoreHorizontal className="size-3.5" />
+          </MenuTrigger>
+          <MenuPopup align="end">{groupMenuItems(groupId)}</MenuPopup>
+        </Menu>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className={GROUP_ACTION_CLASS}
+          aria-label={t('New chat')}
+          // Decision 174 + 187: a group has no repository to preselect, so its
+          // 「＋」 is the home page with nothing picked — the same target the
+          // Temporary chats group's 「＋」 has, and the only one a group without
+          // a repository could honestly offer.
+          title={t('New chat in {{group}}', { group: folder.name })}
+          onClick={() => openHome()}
+        >
+          <Plus className="size-3.5" />
+        </Button>
+      </>
+    );
+    const header = renderGroupHeader({
+      name: folder.name,
+      nameSlot: 'sidebar-group-name',
+      mark: true,
+      tooltip: isUngrouped
+        ? t('Chats you have not put in a group yet')
+        : t('Group: {{name}}', { name: folder.name }),
+      expanded,
+      onToggle: queryActive
+        ? undefined
+        : () =>
+            setExpandedProjects((prev) => ({
+              ...prev,
+              [groupId]: !expanded,
+            })),
+      summary: deriveGroupSummary(folder.rows, unreadSessionIds),
+      actions,
+    });
+    return (
+      <section key={groupId} className={SIDEBAR_GROUP_CLASS} data-sidebar-group={groupId}>
+        <ContextMenuPrimitive.Root>
+          <ContextMenuPrimitive.Trigger render={header} />
+          {!isUngrouped && (
+            <MenuPopup align="start" side="bottom" className="min-w-40">
+              {groupMenuItems(groupId)}
+            </MenuPopup>
+          )}
+        </ContextMenuPrimitive.Root>
+        {/* Decision 187: an empty group keeps its header — that is where its
+            rename, its delete and its 「＋」 live, and a group that vanished
+            the moment its last chat left would read as deleted. The
+            placeholder quotes 「暂无对话」 rather than the row's own title. */}
+        {expanded &&
+          (limited.rows.length > 0 ? (
+            <div className={GROUP_ROWS_CLASS}>
+              {limited.rows.map((row) =>
+                renderSessionRow(row, repositoryNameForRow(row) ?? undefined)
+              )}
+              {renderFolderLimitToggle(groupId, limited)}
+            </div>
+          ) : (
+            <p className="px-2 py-0.5 pl-5 text-meta text-muted-foreground">{t('No chats yet')}</p>
+          ))}
+      </section>
+    );
+  };
+
+  /**
+   * Decision 187: naming a group happens IN the header, not in a dialog — the
+   * menu item turns the label into an input in place, which is one keystroke
+   * away from where the user already is. Enter commits, Escape and blur
+   * cancel; a name that is empty after trimming cancels, because an unnamed
+   * group would be unreadable.
+   */
+  const renderGroupRename = (folder: SidebarFolder) => (
+    <section key={folder.projectId} className={SIDEBAR_GROUP_CLASS}>
+      <div className="flex h-7 w-full items-center gap-1 rounded-sm bg-hover px-2">
+        <GroupMark />
+        <input
+          // biome-ignore lint/a11y/noAutofocus: the menu item that opened this asked for a name; typing must not need a second click.
+          autoFocus
+          defaultValue={folder.projectId === UNGROUPED_GROUP_ID ? '' : folder.name}
+          aria-label={t('Group name')}
+          className="h-5.5 min-w-0 flex-1 rounded-xs border-0 bg-background px-1 text-group-label text-foreground outline-none ring-2 ring-ring/24"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              renameGroup(folder.projectId, event.currentTarget.value);
+              setRenamingGroupId(null);
+            } else if (event.key === 'Escape') {
+              setRenamingGroupId(null);
+            }
+          }}
+          onBlur={() => setRenamingGroupId(null)}
+        />
+      </div>
+    </section>
+  );
+
+  /**
+   * Decision 187: the group actions, in one place. 「未分组」 has neither a
+   * rename nor a delete — it is the bucket every chat falls back to, so
+   * removing it would leave those chats nowhere to be, and a name the user
+   * could change would make the fallback's identity a per-install accident.
+   */
+  const groupMenuItems = (groupId: string) => (
+    <>
+      <MenuItem onClick={() => setCreatingGroup(true)}>
+        <Plus />
+        {t('New group…')}
+      </MenuItem>
+      {groupId !== UNGROUPED_GROUP_ID && (
+        <>
+          <MenuItem onClick={() => setRenamingGroupId(groupId)}>
+            <Pencil />
+            {t('Rename')}
+          </MenuItem>
+          <MenuItem variant="destructive" onClick={() => setGroupToDelete(groupId)}>
+            <Trash2 />
+            {t('Delete group')}
+          </MenuItem>
+        </>
+      )}
+    </>
+  );
+
+  /**
+   * Decision 187: 「新建分组」 is a header that appears at the top of the list
+   * and takes the name directly (the inline option the user chose). Creating
+   * puts it in the store at once and leaves the name to the same editor the
+   * rename uses, so Enter / Escape / blur behave identically in both.
+   *
+   * The chat that asked for it through 「移到分组 ▸ 新建分组…」 is moved into it
+   * by {@link commitGroupName}.
+   */
+  const renderNewGroup = () => (
+    <section className={SIDEBAR_GROUP_CLASS}>
+      <div className="flex h-7 w-full items-center gap-1 rounded-sm bg-hover px-2">
+        <GroupMark />
+        <input
+          // biome-ignore lint/a11y/noAutofocus: the menu item that opened this asked for a name; typing must not need a second click.
+          autoFocus
+          placeholder={t('Group name')}
+          aria-label={t('Group name')}
+          className="h-5.5 min-w-0 flex-1 rounded-xs border-0 bg-background px-1 text-group-label text-foreground outline-none ring-2 ring-ring/24 placeholder:text-muted-foreground"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') commitGroupName(event.currentTarget.value);
+            else if (event.key === 'Escape') cancelGroupName();
+          }}
+          onBlur={cancelGroupName}
+        />
+      </div>
+    </section>
+  );
+
+  /**
+   * Decision 187: the name is what creates the group. An empty name cancels —
+   * a group with no name would be unreadable, and one that appeared and then
+   * could not be found again would be worse than not appearing.
+   */
+  const commitGroupName = (rawName: string) => {
+    const name = rawName.trim();
+    setCreatingGroup(false);
+    if (name) {
+      const group = createGroup(name);
+      const moving = pendingMoveSessionId.current;
+      if (moving) assignSession(moving, group.id);
+    }
+    pendingMoveSessionId.current = null;
+  };
+
+  const cancelGroupName = () => {
+    setCreatingGroup(false);
+    pendingMoveSessionId.current = null;
+  };
+
   /** One repository group: its header, then its rows. */
   const renderRepositoryGroup = (folder: (typeof visibleFolders)[number]) => {
     const expanded = groupExpanded(folder.projectId);
@@ -631,7 +981,7 @@ export function LeftNav({
             `file:revealInFileManager`, handled here by hiding the action
             instead of exposing a click that always fails. */}
         {folderRepo.kind !== 'remote' && (
-          <MenuItem onClick={() => void handleOpenRepositoryFolder(folderRepo.path)}>
+          <MenuItem onClick={() => void handleOpenFolder(folderRepo.path)}>
             <Search />
             {navigator.platform.toUpperCase().indexOf('MAC') >= 0
               ? t('Reveal in Finder')
@@ -873,6 +1223,22 @@ export function LeftNav({
               >
                 <ListChecks className="size-4" />
               </Button>
+              {/* Issue #15: one button, two modes. An icon toggle rather than a
+                  two-label segmented control: the row already holds a search
+                  box and two buttons inside a 280px panel, and CJK labels for
+                  「按工作目录」/「按分组」 would take most of it — the current mode
+                  is the tooltip and the accessible name, and the icon says
+                  which list the user is about to get. */}
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={cn(TOOL_BUTTON_CLASS, groupingByGroup && 'bg-selection text-foreground')}
+                title={archiveModeToggleLabel}
+                aria-label={archiveModeToggleLabel}
+                onClick={() => setArchiveMode(groupingByGroup ? 'workspace' : 'group')}
+              >
+                {groupingByGroup ? <Tag className="size-4" /> : <FolderTree className="size-4" />}
+              </Button>
             </>
           )}
         </div>
@@ -899,12 +1265,14 @@ export function LeftNav({
                   {t('No matching sessions')}
                 </p>
               )}
-              {renderTemporaryGroup()}
               {showAddRepositoryEmptyState ? (
                 // Seed sessions point at empty-path workspaces and cannot send,
                 // so surface the entry point instead of a misleading tree. U13:
                 // temporary chats run without a repository, so their group
                 // stays above the call to action.
+                // Issue #15: 「按分组」 mode does not replace this — with no
+                // repository added there is nothing to group BY, and the way
+                // out of that state is still this button.
                 <Empty className="mt-2 gap-3 border-0 p-2 md:p-2">
                   <EmptyMedia variant="icon">
                     <FolderGit2 className="h-4.5 w-4.5" />
@@ -933,13 +1301,42 @@ export function LeftNav({
                     {t('Add Repository')}
                   </Button>
                 </Empty>
+              ) : groupingByGroup ? (
+                // Issue #15 phase 2: the user's groups, then 「未分组」 last.
+                // Temporary chats and the Temp Session project are INSIDE a
+                // group rather than beside one — the mode is about
+                // conversations, and a group that hid half of them would not
+                // be one.
+                <>
+                  {creatingGroup && renderNewGroup()}
+                  {visibleGroupFolders.map(renderGroupSection)}
+                </>
               ) : (
-                visibleFolders.map(renderRepositoryGroup)
+                <>
+                  {visibleFolders.map(renderRepositoryGroup)}
+                  {/* Issue #13: Temporary chats is LAST, below every repository.
+                      Decision 183 §1.2 pinned it above them; the user's ruling
+                      on 2026-10-12 (decision 186) reverses that — a chat with
+                      no repository is the least specific group on the list, and
+                      a permanently-first slot made the repositories move under
+                      it every time a temporary chat was started. */}
+                  {renderTemporaryGroup()}
+                </>
               )}
             </div>
           </ScrollArea>
         </ContextMenuPrimitive.Trigger>
         <MenuPopup align="start" side="bottom" className="min-w-40">
+          {groupingByGroup && (
+            <MenuItem onClick={() => setCreatingGroup(true)}>
+              <Plus className="size-4" />
+              {t('New group…')}
+            </MenuItem>
+          )}
+          <MenuItem onClick={() => openHome()}>
+            <Plus className="size-4" />
+            {t('New chat')}
+          </MenuItem>
           <MenuItem onClick={() => onAddRepository?.()}>
             <FolderPlus className="size-4" />
             {t('Add Repository')}
@@ -957,6 +1354,45 @@ export function LeftNav({
           }}
         />
       )}
+
+      {/* Issue #15 phase 2 (decision 187): deleting a group asks first, and
+          says where its conversations go. The alternative — archiving them
+          with the group — is not what 「删除分组」 says, and the dialog is the
+          only place that can make that plain before it happens. */}
+      <AlertDialog
+        open={!!groupToDelete}
+        onOpenChange={(open) => {
+          if (!open) setGroupToDelete(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Delete group')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('Delete “{{name}}”?', {
+                name: orderedGroups.find((group) => group.id === groupToDelete)?.name ?? '',
+              })}
+              <span className="mt-2 block text-muted-foreground">
+                {t('Its chats stay and go back to Ungrouped.')}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant="outline" onClick={() => setGroupToDelete(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (groupToDelete) deleteGroup(groupToDelete);
+                setGroupToDelete(null);
+              }}
+            >
+              {t('Delete')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
 
       <AlertDialog
         open={!!repoToRemove}
@@ -1124,6 +1560,7 @@ const GROUP_ACTION_CLASS =
 function renderGroupHeader({
   name,
   nameSlot,
+  mark,
   tooltip,
   expanded,
   onToggle,
@@ -1132,7 +1569,9 @@ function renderGroupHeader({
   actions,
 }: {
   name: string;
-  nameSlot: 'sidebar-folder-name' | 'sidebar-temporary-name';
+  nameSlot: 'sidebar-folder-name' | 'sidebar-temporary-name' | 'sidebar-group-name';
+  /** Decision 187: draw the 2px group mark before the label (groups only). */
+  mark?: boolean;
   tooltip: string;
   expanded: boolean;
   /** Undefined while a search is typed: the group is held open for its matches. */
@@ -1145,11 +1584,12 @@ function renderGroupHeader({
     <div className="group flex h-7 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-center gap-1 text-left text-meta text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"
+        className="flex min-w-0 flex-1 items-center gap-1 text-left text-group-label text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"
         title={tooltip}
         aria-expanded={expanded}
         onClick={onToggle}
       >
+        {mark && <GroupMark />}
         <span data-slot={nameSlot} className="min-w-0 truncate">
           {name}
         </span>
@@ -1175,6 +1615,23 @@ function renderGroupHeader({
       </span>
     </div>
   );
+}
+
+/**
+ * Decision 187 (user ruling 2026-10-13): the mark in front of a group label in
+ * 「按分组」 mode — a 2px vertical rule, user-created group and 「未分组」 alike.
+ *
+ * It replaced the folder glyph. A folder says "a directory on disk", which is
+ * exactly what a repository group is; a group of conversations is not one, and
+ * reusing the glyph would leave the two kinds of header telling the same lie.
+ * A rule is the smallest mark that still reads as "a section starts here", and
+ * it takes no colour of its own (the label's grey already carries the tier).
+ *
+ * Hidden from the accessibility tree: the header's button already announces
+ * the group by name and fold state, so the mark is decoration.
+ */
+function GroupMark() {
+  return <span aria-hidden className="h-3 w-0.5 shrink-0 rounded-full bg-border" />;
 }
 
 /**
@@ -1377,6 +1834,27 @@ interface SessionRowProps {
   /** Set only for rows whose workspace is a Temp session (see `tempItemIdByWorkspaceId`
    * in LeftNav) — renders a third hover action that deletes the whole Temp directory. */
   onDeleteTemp?: () => void;
+  /**
+   * Issue #15: the row's own directory, opened in the system file manager.
+   * Absent for a chat with no local directory: an unbound one has none, and a
+   * remote repository's virtual path cannot be opened (`shell.openPath`
+   * rejects it — see `handleOpenFolder`), so the item is hidden rather than
+   * offered and then failed.
+   */
+  onJumpToWorkspace?: () => void;
+  /**
+   * Issue #15 phase 2 (decision 187): 「移到分组 ▸」 — the groups this chat can
+   * be filed under, and which one holds it now. Passed only in 「按分组」 mode:
+   * in 「按工作目录」 the list has no groups to move between, and an item that
+   * led nowhere would be worse than no item.
+   */
+  groupMove?: {
+    groups: readonly { id: string; name: string }[];
+    currentGroupId: string | null;
+    onMove: (groupId: string) => void;
+    /** 「新建分组…」: the new group is made with the name and this chat goes in. */
+    onCreateGroup: () => void;
+  };
 }
 
 function SessionRow({
@@ -1394,6 +1872,8 @@ function SessionRow({
   onRename,
   onArchive,
   onDeleteTemp,
+  onJumpToWorkspace,
+  groupMove,
 }: SessionRowProps) {
   const { t, locale } = useI18n();
   // Decision 144: the row as shown. A placeholder title (`New chat`) is an
@@ -1665,9 +2145,14 @@ function SessionRow({
                 )}
               />
             ) : started ? (
+              // Issue #16: an attached session is a FILLED dot. It used to be a
+              // hollow ring, and the only other ring was the faint one below —
+              // two outlines differing by one colour step, which the user could
+              // not tell apart at this size. Filled vs. outline separates them
+              // by shape, so the distinction survives any palette.
               <span
                 aria-hidden
-                className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground"
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground"
                 title={t('Running in the background')}
               />
             ) : (
@@ -1840,6 +2325,51 @@ function SessionRow({
             <Pencil className="size-4" />
             {t('Rename')}
           </MenuItem>
+          {/* Issue #15: the way back to where this chat lives. Sits right below
+              Rename because both are "about the chat's identity and place",
+              and above the destructive entries below. */}
+          {onJumpToWorkspace && (
+            <MenuItem onClick={onJumpToWorkspace}>
+              <FolderTree className="size-4" />
+              {t('Jump to working directory')}
+            </MenuItem>
+          )}
+          {/* Issue #15 phase 2 (decision 187): the way a chat is filed. Right
+              here rather than behind a drag: a menu covers every filing action
+              — put it in a group, take it out, make a group for it — without a
+              drag layer, without auto-scroll across the scroll area, and
+              without having to tell a drag apart from the click that opens the
+              conversation. The current group is ticked, so the submenu also
+              answers "where is this chat filed now". */}
+          {groupMove && (
+            <MenuSub>
+              <MenuSubTrigger>
+                <CornerDownRight className="size-4" />
+                {t('Move to group')}
+              </MenuSubTrigger>
+              <MenuSubPopup className="min-w-40">
+                <MenuItem onClick={() => groupMove.onMove(UNGROUPED_GROUP_ID)}>
+                  <Check
+                    className={cn('size-4', groupMove.currentGroupId !== null && 'invisible')}
+                  />
+                  {t('Ungrouped')}
+                </MenuItem>
+                {groupMove.groups.map((group) => (
+                  <MenuItem key={group.id} onClick={() => groupMove.onMove(group.id)}>
+                    <Check
+                      className={cn('size-4', groupMove.currentGroupId !== group.id && 'invisible')}
+                    />
+                    {group.name}
+                  </MenuItem>
+                ))}
+                <MenuSeparator />
+                <MenuItem onClick={groupMove.onCreateGroup}>
+                  <Plus className="size-4" />
+                  {t('New group…')}
+                </MenuItem>
+              </MenuSubPopup>
+            </MenuSub>
+          )}
           {/* D12: the home D09's action found after the tab strip was deleted.
               Placed above Archive so the repo's three closes read in order of
               severity — end the run, then remove from the list. Only offered

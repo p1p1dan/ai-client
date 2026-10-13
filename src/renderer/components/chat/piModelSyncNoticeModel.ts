@@ -122,6 +122,9 @@ export interface PiModelSyncNoticeInput {
  *    has models to work with, and the model menu's own status row already says
  *    the list may be out of date. Raising a card there would leave it lit on a
  *    working install, which is the `chatEmptyState.ts` complaint repeated.
+ *    Since issue #12 Main DOES record the transient wire failures that fell
+ *    back to such a catalog (so Settings can report them); `withCatalog` is how
+ *    that record says "there is a list" and keeps this card off the screen.
  *  - **`managed === false`.** This install runs on the user's OWN
  *    configuration, by choice or by dev override, and it never promised
  *    company models. That is also the only route on which
@@ -134,5 +137,16 @@ export function piModelSyncNoticeView(input: PiModelSyncNoticeInput): PiModelSyn
   const failure = input.failure;
   if (!failure) return null;
   if (failure.kind === 'credentials-disabled') return null;
+  // Issue #12: a wire failure that fell back to a real list is reported where
+  // that list is read (the menu, Settings · Models), never here. The account
+  // failures keep their card even though they too end on a populated list —
+  // that list cannot serve the account at all, which is a different claim.
+  if (failure.withCatalog && !ACCOUNT_FAILURES.has(failure.kind)) return null;
   return PI_MODEL_SYNC_NOTICE_VIEWS[failure.kind] ?? PI_MODEL_SYNC_NOTICE_VIEWS.network;
 }
+
+/** The failures whose card must show even when a catalog came through. */
+const ACCOUNT_FAILURES: ReadonlySet<PiModelSyncFailureKind> = new Set([
+  'unauthorized',
+  'credentials-missing',
+]);
