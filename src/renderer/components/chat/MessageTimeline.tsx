@@ -44,6 +44,7 @@ import { stopChatSession } from '@/stores/chatSessionActions';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
 import { useContinueIntentStore } from '@/stores/continueIntent';
+import { useHistoryLoadingStore } from '@/stores/historyLoading';
 import { selectIsMigrating, useLegacyMigrationStore } from '@/stores/legacyMigration';
 import {
   awaitingDeliveryAttemptId,
@@ -395,6 +396,19 @@ export function MessageTimeline({
   // dsh-rebase P1-9e: this window's resume is moving the legacy chat to the
   // current engine. A boolean selector, so only a change re-renders.
   const migrating = useLegacyMigrationStore((state) => selectIsMigrating(state, sessionId));
+  // Clicking a stored chat switches the active id before its transcript
+  // arrives, so an empty timeline has a third cause besides "brand new" and
+  // "failed to read": the load is still on its way (`historyLoading.ts`, the
+  // store that makes that fact knowable at all).
+  //
+  // Subscribed as the raw deadline rather than through `selectIsHistoryLoading`
+  // so the value stays referentially stable: a selector returning a boolean
+  // from `Date.now()` would flip true -> false -> true over a loading timeline
+  // as the clock passed the deadline, and each flip would re-render every turn
+  // below. The deadline is read against the clock once, in the memo under it.
+  const historyLoadDeadline = useHistoryLoadingStore((state) =>
+    sessionId ? state.loading[sessionId] : undefined
+  );
   const historyPagination = useChatSessionsStore((state) =>
     sessionId ? state.historyPagination?.[sessionId] : undefined
   );
@@ -519,6 +533,7 @@ export function MessageTimeline({
 
   // A bubble awaiting delivery is a row on screen, whatever turn it joins.
   const messageCount = sessionMessages.length + awaitingDelivery.length;
+  const historyLoading = historyLoadDeadline !== undefined && historyLoadDeadline > Date.now();
   const historyNotice = useMemo(
     () =>
       deriveHistoryNotice({
@@ -526,9 +541,35 @@ export function MessageTimeline({
         messageCount,
         error: historyError,
         migrating,
+        loading: historyLoading,
       }),
-    [sessionId, messageCount, historyError, migrating]
+    [sessionId, messageCount, historyError, migrating, historyLoading]
   );
+
+  // The load is over once its ANSWER is here, whether that answer was history
+  // or a failure — and the answer is exactly what wrote this session's
+  // `historyPagination` entry, since the reducer writes one on every
+  // `session.history` ingest including the ones that carry an error. Retiring
+  // the marker on `messageCount > 0` instead would leave a genuinely new chat
+  // (whose answer is legitimately zero messages) spinning until the deadline.
+  const historyLoadSettled =
+    messageCount > 0 || historyError !== undefined || historyPagination !== undefined;
+  useEffect(() => {
+    // A no-op when nothing was loading, which is the common case.
+    if (sessionId && historyLoadSettled) useHistoryLoadingStore.getState().clear(sessionId);
+  }, [sessionId, historyLoadSettled]);
+  // The deadline is read against the clock during render, and nothing else
+  // re-renders this timeline when it passes — so a load that never answers
+  // gets its own wake-up, which drops the entry and lets the empty-chat copy
+  // (now the true answer) take its place.
+  useEffect(() => {
+    if (historyLoadDeadline === undefined) return undefined;
+    const timer = setTimeout(
+      () => useHistoryLoadingStore.getState().reap(),
+      Math.max(0, historyLoadDeadline - Date.now())
+    );
+    return () => clearTimeout(timer);
+  }, [historyLoadDeadline]);
 
   // F12 used to fan a second predicate (`thinkingCard.isTurnActive`, which
   // excludes the `waiting_*` states) down to every turn as well. Its last
@@ -883,7 +924,15 @@ export function MessageTimeline({
                   </Button>
                 </div>
               )}
-              {historyNotice.kind === 'empty' && pendingSendStatus == null ? (
+              {historyNotice.kind === 'loading' ? (
+                // The transcript is on its way. Reads as the timeline warming
+                // up rather than as a statement about this chat — the 「还没有
+                // 消息」 copy below is reserved for a chat that really is empty.
+                <p className="flex items-center gap-2 text-ui text-muted-foreground" role="status">
+                  <Spinner className="h-3.5 w-3.5" />
+                  {t('Loading this conversation…')}
+                </p>
+              ) : historyNotice.kind === 'empty' && pendingSendStatus == null ? (
                 // Decision 144: says what to do, not which process answers it.
                 <p className="text-ui text-muted-foreground">
                   {t('No messages yet. Send a message to start.')}

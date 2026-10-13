@@ -138,3 +138,77 @@ describe('runSessionActivation', () => {
     expect(run.resume).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The marker the timeline reads instead of saying 「还没有消息」 (`historyLoading.ts`).
+ *
+ * It has to be set from inside the branches that actually load, not once at the
+ * top of the call: an activation that starts nothing loads no transcript, and a
+ * spinner on a chat whose history is already on screen would be a new lie in
+ * place of the old one.
+ */
+describe('runSessionActivation onLoad', () => {
+  const ACTIVATION = { ...RESTORED, sessionId: 's1', hostBound: false };
+
+  function effects(overrides: Partial<SessionActivationEffects> = {}) {
+    return {
+      preview: vi.fn(async () => undefined),
+      resume: vi.fn(async () => true),
+      onLoad: vi.fn(),
+      ...overrides,
+    } satisfies SessionActivationEffects;
+  }
+
+  it('[ASO-01] announces the load before asking for the preview', async () => {
+    const order: string[] = [];
+    const run = effects({
+      preview: vi.fn(async () => {
+        order.push('preview');
+      }),
+      onLoad: vi.fn(() => {
+        order.push('onLoad');
+      }),
+    });
+    // The preview is the path most sidebar clicks take, so it is the one the
+    // reported 「还没有消息」 came from. Announced first, so the timeline never
+    // renders a frame of the empty-chat copy while the request is in flight.
+    await runSessionActivation(ACTIVATION, run);
+    expect(order).toEqual(['onLoad', 'preview']);
+    expect(run.onLoad).toHaveBeenCalledWith({ sessionId: 's1' });
+  });
+
+  it('[ASO-02] announces it once for a preview that falls back to a resume', async () => {
+    // Both branches load the same transcript, so the marker is set once and
+    // its clock belongs to the call the user actually triggered.
+    const run = effects({
+      preview: vi.fn(async () => Promise.reject(new Error('session_replay_unavailable'))),
+    });
+    await expect(runSessionActivation(ACTIVATION, run)).resolves.toBe('resumed');
+    expect(run.onLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it('[ASO-03] announces it for a host-bound session, which resumes directly', async () => {
+    const run = effects();
+    await runSessionActivation({ ...ACTIVATION, hostBound: true }, run);
+    expect(run.onLoad).toHaveBeenCalledWith({ sessionId: 's1' });
+  });
+
+  it('[ASO-04] stays silent when the click starts nothing', async () => {
+    // The T092 case: ended or reclaimed, with its transcript still on screen.
+    // Nothing is loading, so nothing may claim to be.
+    for (const activation of [
+      { ...ACTIVATION, hasTimeline: true },
+      { ...ACTIVATION, runtimeIdentity: undefined },
+      { ...ACTIVATION, hasWorkspace: false, unbound: false },
+    ]) {
+      const run = effects();
+      await expect(runSessionActivation(activation, run)).resolves.toBe('idle');
+      expect(run.onLoad).not.toHaveBeenCalled();
+    }
+  });
+
+  it('[ASO-05] tolerates a caller with no timeline to paint', async () => {
+    const run = effects({ onLoad: undefined });
+    await expect(runSessionActivation(ACTIVATION, run)).resolves.toBe('previewed');
+  });
+});

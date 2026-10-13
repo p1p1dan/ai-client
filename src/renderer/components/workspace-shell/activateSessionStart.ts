@@ -70,6 +70,17 @@ export interface SessionActivationEffects {
   preview: (input: { sessionId: string; runtimeIdentity: string }) => Promise<unknown>;
   /** The existing resume path: index check, worker spawn, `session.resumed`. */
   resume: (input: { sessionId: string; runtimeIdentity: string }) => Promise<unknown>;
+  /**
+   * This click is about to load a transcript that is not in memory, so the
+   * timeline should say "loading" instead of "no messages yet" until it
+   * arrives (`historyLoading.ts` — the bug that store exists for).
+   *
+   * Called from inside the two branches, once the decision to load has been
+   * made, and never on the `idle` path: a session whose transcript is already
+   * on screen loads nothing, so nothing about it should change appearance.
+   * Optional so a caller that does not paint a timeline can omit it.
+   */
+  onLoad?: (input: { sessionId: string }) => void;
 }
 
 export interface SessionActivationInput extends SessionActivation {
@@ -114,6 +125,10 @@ export async function runSessionActivation(
 ): Promise<SessionActivationOutcome> {
   const runtimeIdentity = resumeIdentityForActivation(input);
   if (!runtimeIdentity) return 'idle';
+  // Every path past this point loads a transcript the timeline does not have,
+  // so the load is announced once, here — a preview that falls back to a resume
+  // is still one load, and announcing it again would restart its deadline.
+  effects.onLoad?.({ sessionId: input.sessionId });
   const resume = async (): Promise<SessionActivationOutcome> => {
     await effects.resume({ sessionId: input.sessionId, runtimeIdentity });
     return 'resumed';

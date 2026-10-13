@@ -3798,6 +3798,7 @@ Object.assign(zhTranslations, {
   // Timeline and composer.
   'Select a chat to start.': '选择一个对话开始。',
   'No messages yet. Send a message to start.': '还没有消息，发一条消息开始对话。',
+  'Loading this conversation…': '正在加载这个对话…',
   'Load earlier messages': '加载更早的消息',
   'Copy reply': '复制回复',
   'Context summary': '上下文摘要',

@@ -19,6 +19,7 @@
  */
 import { useCallback } from 'react';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useHistoryLoadingStore } from '@/stores/historyLoading';
 import { useResumeSession } from '../chat/sessionIndex/useResumeSession';
 import { useResolvedSessionModel } from '../chat/useResolvedSessionModel';
 import { runSessionActivation } from './activateSessionStart';
@@ -59,11 +60,22 @@ export function useActivateSession(): ActivateSession {
               sessionId: input.sessionId,
               limit: 80,
             }),
-          resume: (input) =>
-            resume(input.sessionId, {
+          resume: async (input) => {
+            const resumed = await resume(input.sessionId, {
               persistedRuntimeIdentity: input.runtimeIdentity,
               model: resolveSessionModel(input.sessionId),
-            }),
+            });
+            // A resume that declined to start writes nothing the timeline could
+            // read as an answer, so it would otherwise keep saying "loading"
+            // until the deadline. (A failed one wrote its card; clearing again
+            // is harmless.)
+            if (!resumed) useHistoryLoadingStore.getState().clear(input.sessionId);
+            return resumed;
+          },
+          // The timeline reads this to say "loading" instead of "no messages
+          // yet". Called only once an activation has decided to load, so a
+          // click that loads nothing changes nothing.
+          onLoad: ({ sessionId: loadingId }) => useHistoryLoadingStore.getState().begin(loadingId),
         }
       );
     },

@@ -469,6 +469,62 @@ describe('deriveHistoryNotice (T-03)', () => {
     const input = { sessionId: 's1', messageCount: 0, error: 'read_failed: boom' };
     expect(deriveHistoryNotice(input)).toEqual(deriveHistoryNotice(input));
   });
+
+  it('[DHN-10] says loading rather than empty while a transcript is on its way', () => {
+    // The reported symptom: clicking a stored chat shows 「还没有消息，发一条消息
+    // 开始对话。」for as long as its history takes to arrive. On a slow resume
+    // that is long enough to start typing a message the user does not need.
+    const notice = deriveHistoryNotice({
+      sessionId: 's1',
+      messageCount: 0,
+      error: undefined,
+      loading: true,
+    });
+    expect(notice).toEqual({ kind: 'loading', error: null });
+    expect(notice.kind).not.toBe(
+      deriveHistoryNotice({ sessionId: 's1', messageCount: 0, error: undefined }).kind
+    );
+  });
+
+  it('[DHN-11] stops saying loading the moment messages arrive', () => {
+    // The marker is cleared by the answer, so a live timeline never keeps the
+    // spinner above real turns even if the store still has a deadline left.
+    expect(
+      deriveHistoryNotice({ sessionId: 's1', messageCount: 2, error: undefined, loading: true })
+    ).toEqual({ kind: 'none', error: null });
+  });
+
+  it('[DHN-12] keeps a failure that already landed ahead of the loading state', () => {
+    // A failed resume writes `historyErrors` and clears the marker; if a Retry
+    // overlaps the write, the card is the more specific fact and wins.
+    const notice = deriveHistoryNotice({
+      sessionId: 's1',
+      messageCount: 0,
+      error: 'read_failed: boom',
+      loading: true,
+    });
+    expect(notice.kind).toBe('error');
+  });
+
+  it('[DHN-13] keeps the migration notice ahead of the loading state', () => {
+    const notice = deriveHistoryNotice({
+      sessionId: 's1',
+      messageCount: 0,
+      error: undefined,
+      migrating: true,
+      loading: true,
+    });
+    expect(notice.kind).toBe('migrating');
+  });
+
+  it('[DHN-14] defaults to empty when nothing says a load is in flight', () => {
+    // Every caller that has not been taught about the marker keeps its old
+    // behaviour — `loading` is opt-in at the input, not a new assumption.
+    expect(deriveHistoryNotice({ sessionId: 's1', messageCount: 0, error: undefined })).toEqual({
+      kind: 'empty',
+      error: null,
+    });
+  });
 });
 
 describe('deriveRetryControl (T-03)', () => {

@@ -605,6 +605,8 @@ export function legacyMigrationFailureReason(failure: LegacyMigrationFailure): s
 export type TimelineHistoryNotice =
   | { kind: 'none'; error: null }
   | { kind: 'empty'; error: null }
+  /** This session's transcript was asked for and has not arrived (`historyLoading.ts`). */
+  | { kind: 'loading'; error: null }
   /** dsh-rebase P1-9e: this window is moving the legacy chat to the current engine. */
   | { kind: 'migrating'; error: null }
   | { kind: 'error'; error: HistoryErrorView };
@@ -616,6 +618,8 @@ export interface TimelineHistoryNoticeInput {
   error: string | undefined;
   /** dsh-rebase P1-9e: a resume that moves this chat is in flight (`selectIsMigrating`). */
   migrating?: boolean;
+  /** A transcript for this session is on its way (`selectIsHistoryLoading`). */
+  loading?: boolean;
 }
 
 /**
@@ -640,6 +644,13 @@ export function selectHistoryError(
  * "no messages yet" whether the history was absent or unreadable. `error`
  * outranks `empty` and survives new messages — once history failed to load,
  * that stays true for the session.
+ *
+ * `loading` is the third answer, and the one an empty timeline now usually
+ * deserves: clicking a stored chat switches `activeSessionId` before its
+ * transcript arrives, so the bucket is briefly empty on a session that is
+ * demonstrably not new. It outranks `empty` for exactly that reason, and sits
+ * below `error` because a failure that already landed is the more specific
+ * fact (a failed resume clears the marker, so the two rarely coexist).
  */
 export function deriveHistoryNotice(input: TimelineHistoryNoticeInput): TimelineHistoryNotice {
   const { sessionId, messageCount } = input;
@@ -651,6 +662,8 @@ export function deriveHistoryNotice(input: TimelineHistoryNoticeInput): Timeline
 
   const error = parseHistoryError(input.error);
   if (error) return { kind: 'error', error };
+
+  if (messageCount === 0 && input.loading) return { kind: 'loading', error: null };
 
   return messageCount === 0 ? { kind: 'empty', error: null } : { kind: 'none', error: null };
 }
