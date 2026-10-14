@@ -312,9 +312,13 @@ describe('A2 two-button welcome screen (static)', () => {
     const switchFile = code('lib/aRoundTesting.ts');
     expect(switchFile).toContain('export const LOCAL_SETUP_ENTRY_DISABLED = ');
     const view = code('components/onboarding/WelcomeView.tsx').replace(/\s+/g, ' ');
-    expect(view).toContain("import { LOCAL_SETUP_ENTRY_DISABLED } from '@/lib/aRoundTesting'");
+    expect(view).toContain(
+      "import { LOCAL_SETUP_BUTTON_HIDDEN, LOCAL_SETUP_ENTRY_DISABLED } from '@/lib/aRoundTesting'"
+    );
     expect(view).toContain('disabled={LOCAL_SETUP_ENTRY_DISABLED ||');
-    // Still rendered — closed, not deleted.
+    // Hidden by a named switch, not deleted — flipping it back restores the route.
+    expect(switchFile).toContain('export const LOCAL_SETUP_BUTTON_HIDDEN = ');
+    expect(view).toContain('{LOCAL_SETUP_BUTTON_HIDDEN ? null : (');
     expect(view).toContain("t('Use my own setup')");
   });
 

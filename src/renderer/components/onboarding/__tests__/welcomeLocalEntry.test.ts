@@ -3,6 +3,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LOCAL_SETUP_BUTTON_HIDDEN } from '@/lib/aRoundTesting';
 
 /**
  * A-round testing closes the `Use my own setup` route.
@@ -63,17 +64,24 @@ function render() {
   const buttons = [...container.querySelectorAll('button')];
   const local = buttons.find((button) => button.textContent?.includes('Use my own setup'));
   const primary = buttons.find((button) => button.textContent?.includes('Log in with work email'));
-  if (!local || !primary) throw new Error('welcome screen did not render both buttons');
+  if (!primary) throw new Error('welcome screen did not render the sign-in button');
   return { local, primary };
 }
 
-describe('A-round: the local-setup entry is closed but still on screen', () => {
+describe('the local-setup button is hidden while its route is not open', () => {
+  it('renders the button only when the hide switch is off', () => {
+    const { local } = render();
+    expect(local === undefined).toBe(LOCAL_SETUP_BUTTON_HIDDEN);
+  });
+});
+
+describe.skipIf(LOCAL_SETUP_BUTTON_HIDDEN)('A-round: the local-setup entry when shown', () => {
   it('keeps the button rendered', () => {
-    expect(render().local.textContent).toContain('Use my own setup');
+    expect(render().local?.textContent).toContain('Use my own setup');
   });
 
   it('disables it — unclickable AND unfocusable — while the switch is on', () => {
-    const { local } = render();
+    const local = render().local!;
     expect(local.disabled).toBe(LOCAL_SETUP_ENTRY_DISABLED);
     act(() => {
       local.click();
@@ -84,7 +92,9 @@ describe('A-round: the local-setup entry is closed but still on screen', () => {
       expect(document.activeElement).not.toBe(local);
     }
   });
+});
 
+describe('the sign-in route is unaffected', () => {
   it('closes only that route — the sign-in button still works', () => {
     const { primary } = render();
     expect(primary.disabled).toBe(false);

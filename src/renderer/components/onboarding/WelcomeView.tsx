@@ -3,7 +3,7 @@ import { Loader2Icon } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
-import { LOCAL_SETUP_ENTRY_DISABLED } from '@/lib/aRoundTesting';
+import { LOCAL_SETUP_BUTTON_HIDDEN, LOCAL_SETUP_ENTRY_DISABLED } from '@/lib/aRoundTesting';
 import { AiClientMark } from './AiClientMark';
 
 /**
@@ -64,10 +64,10 @@ const PRODUCT_NAME = 'PILAB';
  * now also gates the migration dialog and its Settings-pane twin, not just
  * this button.
  *
- * This button's OWN treatment: kept ON SCREEN while disabled — removing it
- * would make the second route look like it never existed, and A-round
- * testers have to be able to see that it is coming back. Disabling it is
- * enough to close the whole route because this button is the ONLY entrance to
+ * This button's OWN treatment: originally kept ON SCREEN while disabled;
+ * since 2026-10-14 it is hidden outright by `LOCAL_SETUP_BUTTON_HIDDEN`
+ * (user ruling: a visible button invites misclicks). Closing it is enough
+ * to close the whole route because this button is the ONLY entrance to
  * `credentialMode: 'local'`: `auth.enterApp` is the sole writer of the
  * credential mode from the renderer, Root is its only caller, and the
  * settings IPC explicitly refuses to write `credentialMode` (Main-owned-key
@@ -90,7 +90,7 @@ const PRODUCT_NAME = 'PILAB';
  * runs, so there is nothing here that can be wrong about the user's computer —
  * which is the entire thing D68 was protecting.
  */
-export { LOCAL_SETUP_ENTRY_DISABLED };
+export { LOCAL_SETUP_BUTTON_HIDDEN, LOCAL_SETUP_ENTRY_DISABLED };
 
 export interface WelcomeViewProps {
   entry: AuthGateWelcomeEntry;
@@ -140,7 +140,7 @@ export function WelcomeView({ entry, onSignIn, onContinue, onUseOwnSetup }: Welc
         <p className="text-sm text-warning">{t('Your session expired. Sign in again.')}</p>
       ) : null}
 
-      {/* Just the two buttons. The one-line blurbs that used to sit under each
+      {/* Just the buttons. The one-line blurbs that used to sit under each
           one were dropped on the user's call (2026-09-11): they restated what
           the labels already say, and two paragraphs of grey text on the first
           screen cost more than they explain. */}
@@ -150,19 +150,20 @@ export function WelcomeView({ entry, onSignIn, onContinue, onUseOwnSetup }: Welc
           {primaryLabel}
         </Button>
 
-        {/* Kept on screen while closed, deliberately: removing it would make
-            the second route look like it never existed, and A-round testers
-            have to be able to see that it is coming back. */}
-        <Button
-          className="w-full"
-          disabled={LOCAL_SETUP_ENTRY_DISABLED || pending !== null}
-          onClick={handleLocal}
-          size="lg"
-          variant="outline"
-        >
-          {pending === 'local' ? <Loader2Icon className="animate-spin" /> : null}
-          {t('Use my own setup')}
-        </Button>
+        {/* Hidden while the route is not open (user ruling 2026-10-14):
+            see `LOCAL_SETUP_BUTTON_HIDDEN`. */}
+        {LOCAL_SETUP_BUTTON_HIDDEN ? null : (
+          <Button
+            className="w-full"
+            disabled={LOCAL_SETUP_ENTRY_DISABLED || pending !== null}
+            onClick={handleLocal}
+            size="lg"
+            variant="outline"
+          >
+            {pending === 'local' ? <Loader2Icon className="animate-spin" /> : null}
+            {t('Use my own setup')}
+          </Button>
+        )}
       </div>
     </div>
   );

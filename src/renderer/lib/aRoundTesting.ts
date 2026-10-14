@@ -56,3 +56,14 @@ export const LOCAL_SETUP_ENTRY_DISABLED = false;
  * migration back.
  */
 export const PI_MIGRATION_DISABLED = true;
+
+/**
+ * Hides `WelcomeView`'s "Use my own setup" button outright (user ruling
+ * 2026-10-14: the route is not open, and a visible button invites misclicks
+ * that leave a tester on a setup that cannot run). Separate from
+ * `LOCAL_SETUP_ENTRY_DISABLED` because that one also suppresses the startup
+ * Claude Code / Codex history guide, which stays open. The button is the only
+ * entrance to `credentialMode: 'local'`, so hiding it closes the route. Flip
+ * to `false` to bring the button back.
+ */
+export const LOCAL_SETUP_BUTTON_HIDDEN = true;
