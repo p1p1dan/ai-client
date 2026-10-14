@@ -114,6 +114,10 @@ export class AutoUpdaterService {
     // installs (0.3.4, 1.0.1) already resolve this way; this makes the test
     // builds agree with them instead of diverging.
     autoUpdater.allowPrerelease = false;
+    // A failed differential rebuild (cached installer from a test build, or one
+    // the encrypted-machine driver rewrote) falls back to a full download after
+    // its progress already hit 100%, so users saw the download run twice.
+    autoUpdater.disableDifferentialDownload = true;
     registerUpdaterSession(autoUpdater.netSession);
     if (proxySettings) {
       void applyProxy(proxySettings).catch((error) =>
