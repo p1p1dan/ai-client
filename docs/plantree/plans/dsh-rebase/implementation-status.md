@@ -1,15 +1,18 @@
 # DSH 二开迁移：进度看板
 
-Role: implementation-status。更新日期：2026-10-13。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
+Role: implementation-status。更新日期：2026-10-14。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
 
 ## 工作方式（2026-09-26 用户授权）
 
-- 只在分支 `feat/dsh-p0-probe`（worktree `.claude/worktrees/agent-a84b7bf3214a2affd`）上活动，不动 main 与 v1.0.3；不推送，推送与发版前先确认。
+- **2026-10-14 起**：`feat/dsh-p0-probe` 已快进合入 `main`，`main` 即 DSH 主线，已发布 `v1.1.0`；此后在 `main` 上工作。推送与发版前仍先经用户确认。
+- （2026-09-26～10-14 原规则，已过期：只在分支 `feat/dsh-p0-probe` 上活动，不动 main 与 v1.0.3。）
 - 按 roadmap 顺序推进 P1。一般问题调研后自行决定，每条决定单独写一份决策文件，标「自主决定，待用户审批」；难以解决的问题停下来与用户商讨。
 
 ## Current Phase
 
-P1 分支内 DSH 替换，**在 P1-14（收口、推送、Windows 测试版、合入 main 发版）中**。2026-10-07 做完了 P1-14 之前本机能做的全部 (a) 类工作（[盘点](topics/pre-p1-14-remaining-2026-10-07.md)）；10-08 起推送并出 CI 测试包（`1.1.0-dsh.5`～`dsh.8`），用户在 Windows 与加密机上实测，经 GitHub issue 反馈，本分支修复后再出下一个测试包。
+**2026-10-14：已合入 main 并发布 `v1.1.0`**（Build run 38506100417 全部通过，release 标为 latest，1.0.x 用户经自动更新收到）。P1-14 的「合入 main 发版」已完成，其余收尾项（GUI 复点验、Windows 实测、P1-13 第二轮上机、ARD 回写等）照 Next Target 第 4 项继续，改在 main 上做。
+
+以下为合入前的状态：P1 分支内 DSH 替换，在 P1-14（收口、推送、Windows 测试版、合入 main 发版）中。2026-10-07 做完了 P1-14 之前本机能做的全部 (a) 类工作（[盘点](topics/pre-p1-14-remaining-2026-10-07.md)）；10-08 起推送并出 CI 测试包（`1.1.0-dsh.5`～`dsh.8`），用户在 Windows 与加密机上实测，经 GitHub issue 反馈，本分支修复后再出下一个测试包。
 
 - **roadmap 状态**（2026-10-07）：
   - ✅ P1-0、P1-1、P1-2、P1-4、P1-6、P1-9、P1-10、P1-11、P1-12、P1-15、P1-16；
@@ -22,9 +25,11 @@ P1 分支内 DSH 替换，**在 P1-14（收口、推送、Windows 测试版、�
   - 旧 pi 会话第一次继续时迁移成 DSH 格式，CC / Codex 导入直接产出 DSH 格式；
   - 白名单插件可以在设置里开关（试点 `dsh-office-tools` 默认关），插件审查有必拒三条和静态守卫；
   - 右列普通 shell 终端取代了内嵌 pi TUI。
-- **推送**：仓库是公开的。最后一次推送是 2026-10-09 的 `1.1.0-dsh.8`（远端头 `6ca5bf42`），每次推送都先经用户同意。2026-09-28 按用户要求改写过分支历史，删掉加密机的原始现场报告，只留脱敏摘要。
+- **推送**：仓库是公开的。最后一次推送是 2026-10-14 的 `main`（`16c79a0c`）与 tag `v1.1.0`（指向 `7824e1da`）；远端 `feat/dsh-p0-probe` 停在 `dsh.14`（`44898268`），未再推。每次推送都先经用户同意。2026-09-28 按用户要求改写过分支历史，删掉加密机的原始现场报告，只留脱敏摘要。
 
 ## Next Target
+
+**2026-10-14**：1.1.0 已发布，下文第 0～3 项的测试包流程结束；第 4 项「P1-14 其余」除最后一条的「合入 main 发版」外仍有效，在 main 上继续。决策审批（第 3 项）照旧待用户。
 
 2026-10-10 更新。2026-10-07 的旧 Next Target 已过期（推送与 CI 首跑都已做完），原文移到文末「历史」一节。
 
@@ -51,6 +56,10 @@ P1 分支内 DSH 替换，**在 P1-14（收口、推送、Windows 测试版、�
 
 ## Last Landed
 
+- 2026-10-14 **合入 main 并发布 1.1.0**（用户在 dsh.14 实测后裁决：这一项不再单独出测试包，直接合入发版）：
+  - 欢迎页隐藏「使用本机已有配置」按钮（`39530fe7`，新开关 `LOCAL_SETUP_BUTTON_HIDDEN`，不复用 `LOCAL_SETUP_ENTRY_DISABLED`，以免关掉启动时的 CC / Codex 历史引导）；欢迎页加 JYW 水印（`c5afcc83`，稀疏斜向「JYW · SECURE CLIENT」5%、中心径向淡出，右下角两行署名；只在欢迎页，预览 [`docs/design/2026-10-14-welcome-watermark-preview.html`](../../../design/2026-10-14-welcome-watermark-preview.html)）。用户试过中心内容收窄、黄金分割、只移 logo 三种调位，都还原为原版。
+  - `feat/dsh-p0-probe` 快进合入 `main`（main 自分叉后无新提交）；版本升 `1.1.0`、release notes 重写（`7824e1da`）；tag `v1.1.0`；Build run 38506100417 全部通过（macOS 按计划跳过）。
+  - 用户裁决：更新说明只写新功能与问题修复，不写引擎更换等内部说明（`16c79a0c`）；已发布的 release 页面与 `latest.yml` / `latest-linux.yml` 的 `releaseNotes` 同步替换，安装包与校验值不变。
 - 2026-10-13 侧栏「聊天」面板截图样式与三区留白（[决策 188](decisions/188-sidebar-screenshot-style-spacing.md)，第 1 节用户裁决，第 2 节 10-13 全部批准；**未推送**）：按预览 [`docs/design/2026-10-13-sidebar-spacing-preview.html`](../../../design/2026-10-13-sidebar-spacing-preview.html) 的「截图样式 + 推荐」——分组标签、对话行、辅助行、搜索框、工具按钮 28 → 32px，顶部导航 15 → 14px，分组标签 13 → 12px（`--text-group-label`），三区之间 8 处留白改为 14 / 3 / 16 / 16 / 16 / 16 / 12 / 10；`design-system.md` 高度表与「侧栏层级」同步。验证：根 tsc 退出 0；biome 通过；`workspace-shell` 57 个文件 780 项全过（全量 vitest 另有 2 项与本次无关的失败：`src/agent-host` 残留被忽略的 `node_modules`、`priorLocalStorageImport` 全量并发下超时，单跑通过）。用户在应用里看过实物后加了一条：导轨图标整体下移 6px（`pt-3.5 pb-2`），与「新建对话」顶部对齐（`ac36338e`）。
 - 2026-10-13 issue #15 第二期：侧栏「按分组」的自定义分组与归类（[决策 187](decisions/187-sidebar-groups-phase-2.md)，第 1 节用户裁决，其余待审批；**未推送**）：**不做拖动**，归类走会话行右键「移到分组 ▸」（子菜单里当前分组带勾，末尾「新建分组…」建完即移入）。分组与归属存进 `sidebarArchive`（v2，`groups` + `assignments`；**缺席即「未分组」**，删组时删掉那个键就是退回未分组）；`buildUnassignedFolder` / `UNASSIGNED_FOLDER_ID` 换成 `buildGroupFolder`，用户分组与「未分组」同一条派生与渲染路径（空组也保留，其标题行是重命名、删除与「＋」的落点）；分组标题行右键与悬停「···」共用一份 `groupMenuItems`（新建 / 重命名 / 删除，行内输入，删除有确认并写明对话回未分组）；「未分组」固定最后、不可改名删除；搜索时空分组隐藏；分组标记为 2px 竖线（「未分组」同），模式切换图标改 `Tag`；列表空白处右键在分组模式下多一项「新建分组…」。原型见 [evidence/sidebar-groups-2026-10](../evidence/sidebar-groups-2026-10/README.md)（用户两轮看过定稿）。验证：根 tsc 退出 0；`workspace-shell` + `stores` + `chat` 280 个文件 5217 项全过；新增 store 测试 9 项。
 - 2026-10-13 GitHub issue #10～#16 第一批修复（[决策 186](decisions/186-github-issues-10-16-first-batch.md)，第 1 节用户裁决，其余待审批；**未推送**）：执行顺序 #16 → #14 → #13 → #10/#12 → #11 → #15 第一期。
@@ -381,7 +390,7 @@ P1 分支内 DSH 替换，**在 P1-14（收口、推送、Windows 测试版、�
 
 ## Blocked By
 
-- **推送**：每个测试包推送前都要用户同意（10-08～10-09 已推 dsh.5～dsh.8）。
+- **推送**：每次推送与发版前都要用户同意（10-08～10-14 已推 dsh.5～dsh.14 与 `v1.1.0`）。
 - **审批**：131～156 中 23 份决策待审批，157 待拍板（[decision-review-4.md](decision-review-4.md)）。
 - **GUI 复点验**：本机 2 核 / 3.3 GB，起 Electron 不能与全量测试同时跑；本机不跑整包构建。
 - **Windows**：W1～W12、Windows 杀宿主、覆盖安装，都要测试包和 Windows 机器。
@@ -391,6 +400,7 @@ P1 分支内 DSH 替换，**在 P1-14（收口、推送、Windows 测试版、�
 
 ## Last Verified
 
+- 2026-10-14：合入前在 `c5afcc83` 上本机跑全量单测 652 个文件全过（11344 例，跳过 64 例），两套 tsc 退出 0，`verify:release` 通过；`v1.1.0` 的 Build run 38506100417 全部 job 通过。
 - 2026-10-09：`6ca5bf42`（dsh.8）的整包 CI gate（两套 tsc、lint、全量单测、录制 `--check`）通过（build run 37919930739，只有 macOS 打 DMG 因 runner 失败）；`dsh-bridge-gate` run 37919922385 通过。本机只跑了各组的定向验证，结果写在 Last Landed 各条里。
 - 2026-10-07：各项都只跑了定向验证，结果写在 Last Landed 各条里。最近一次全量单测是 P1-12 第 4 步之后，编排者按目录分批跑，9624 例全过（跳过 46 例）。P1-5d 到界面小修这批改动的收口全量单测：编排者在 `0b3eb7d6`（之后只有文档提交）上按目录分批跑，渲染层 322 个文件 5336 例、Main / preload / shared 203 个文件 3389 例（跳过 35）、dsh-host 与 scripts 54 个文件 992 例（跳过 11）、`src/__tests__` 2 例，共 9719 例全过；Static / Scan / Wiring 75 个文件 764 例全过；两套 tsc 通过。
 - 2026-10-04 的整包 CI：`1.1.0-dsh.4` 的 run 37170324111（`f847f66d`），全部 job 通过。P1-12 第 4 步及之后的改动从 dsh.5（10-08）起经过整包 CI。

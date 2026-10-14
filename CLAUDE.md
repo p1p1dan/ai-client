@@ -2,9 +2,9 @@
 
 ## 当前任务
 
-**本分支 `feat/dsh-p0-probe`：DSH 二开（B 路线）P1「分支内整体替换为 DSH」**。聊天引擎已换成 DeepSeek Harness 宿主（`src/dsh-host/`），所有会话共用一个宿主进程；不做双引擎，测试完毕合入 main 即切换（决策 004）。main 只做 1.0.x 缺陷修复，本分支不推送、不发版，推送前需用户确认。
+**`main` 已是 DSH 主线（2026-10-14 合入并发布 `v1.1.0`）**。聊天引擎是 DeepSeek Harness 宿主（`src/dsh-host/`），所有会话共用一个宿主进程；1.0.x 线不再维护（决策 160）。原开发分支 `feat/dsh-p0-probe` 已快进合入 main，此后直接在 main 上工作。推送与发版前需用户确认。
 
-- **新会话先读** `docs/plantree/plans/dsh-rebase/implementation-status.md` 的 Current Phase 与 Next Target（当前状态与下一步：P1-14），再看 `topics/pre-p1-14-remaining-2026-10-07.md`（P1-14 之前的盘点）与 `decision-review-4.md`（待审批决策）。`handoff-2026-09-28.md` 已过期，只有其中的工作规则仍可参考。
+- **新会话先读** `docs/plantree/plans/dsh-rebase/implementation-status.md` 的 Current Phase 与 Next Target（当前状态与下一步：P1-14 发版后的收尾项），再看 `decision-review-4.md`（待审批决策）。`handoff-2026-09-28.md` 已过期，只有其中的工作规则仍可参考。
 - **进度与计划**：`docs/plantree/plans/dsh-rebase/`，看 `implementation-status.md`（进度看板）、`roadmap.md`（任务 P1-0～P1-16）、`topics/`（各任务方案）、`decisions/`（005 起是自主决定、待用户审批）。
 - **代码入口**：
   - `src/dsh-host/`：宿主 `host.ts`、bridge（`bridge/`，含 RPC 服务端 `bridgeRpcServer.ts` 与错误类型 `bridgeErrors.ts`），以及几个宿主行：`credentials/`、`permissions/`、`loopGuard/`、`encryptedRead/`；工具脚本在 `tools/`，加密机上机包在 `tools/p0-4/`、`tools/p1-13b/`。
