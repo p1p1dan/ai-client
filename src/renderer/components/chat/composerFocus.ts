@@ -27,3 +27,27 @@ export function onComposerFocusRequest(
   window.addEventListener(COMPOSER_FOCUS_EVENT, listener);
   return () => window.removeEventListener(COMPOSER_FOCUS_EVENT, listener);
 }
+
+const COMPOSER_STOP_EVENT = 'aiclient:composer-stop';
+
+/**
+ * Esc on a card that has taken the composer's place: interrupt the turn the way
+ * the composer's own Stop does. The composer owns Stop's latches and watches,
+ * so it runs the stop rather than the card calling the store directly.
+ */
+export function requestComposerStop(sessionId: string | null): void {
+  window.dispatchEvent(new CustomEvent(COMPOSER_STOP_EVENT, { detail: { sessionId } }));
+}
+
+/** The composer's side of {@link requestComposerStop}. */
+export function onComposerStopRequest(
+  sessionId: () => string | null,
+  stop: () => void
+): () => void {
+  const listener = (event: Event) => {
+    const detail = (event as CustomEvent<{ sessionId?: unknown }>).detail;
+    if (detail?.sessionId === sessionId()) stop();
+  };
+  window.addEventListener(COMPOSER_STOP_EVENT, listener);
+  return () => window.removeEventListener(COMPOSER_STOP_EVENT, listener);
+}

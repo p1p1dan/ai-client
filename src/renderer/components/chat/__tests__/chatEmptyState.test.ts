@@ -120,7 +120,7 @@ describe('[T12-e′ wiring] the workspace owns the no-repository surface', () =>
     // now be able to be on screen at once, card first.
     expect(WORKSPACE_SOURCE).not.toMatch(/hasWorkingDirectory \?[\s\S]{0,800}<ChatComposer/);
     expect(WORKSPACE_SOURCE).toMatch(
-      /renderedMode === 'empty' &&[\s\S]{0,600}<ChatWelcomeCard[\s\S]{0,600}<ChatComposer/
+      /renderedMode === 'empty' &&[\s\S]{0,600}<ChatWelcomeCard[\s\S]{0,900}<ChatComposer/
     );
   });
 

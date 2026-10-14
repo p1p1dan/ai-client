@@ -13,6 +13,7 @@ import {
   buildPermissionOptionRows,
   buildRespondPayload,
   buildSkipPayload,
+  CHAT_ABOUT_RESPONSE,
   canContinue,
   canRespondToPermission,
   clampPage,
@@ -32,6 +33,7 @@ import {
   derivePermissionSessionScopeNote,
   derivePermissionVerb,
   deriveQuestionCardState,
+  deriveQuestionPrimary,
   deriveQuestionTabStrip,
   emptySelection,
   isMaskedAnswer,
@@ -118,6 +120,60 @@ describe('deriveQuestionCardState / deriveCardTitle', () => {
     expect(deriveCardTitle('stopped')).toBe(STOPPED_TITLE);
     expect(translate('zh', deriveCardTitle('stopped'))).toBe('提问已停止');
     expect(translate('zh', STOPPED_MARK)).toBe('已停止');
+  });
+});
+
+describe('Chat about this', () => {
+  it('freezes as one "discussed" row, not as the sentence under every question', () => {
+    const block = questionBlock({
+      resolved: true,
+      questionOutcome: 'answered',
+      questionResponse: CHAT_ABOUT_RESPONSE,
+      questions: [questionItem(['A']), questionItem(['B'], { question: 'Second' })],
+    });
+    expect(deriveQuestionCardState(block)).toBe('discussed');
+    expect(translate('zh', deriveCardTitle('discussed'))).toBe('改为讨论');
+    expect(deriveFrozenPairs(block)).toEqual([
+      { key: 'discussed', question: '', answer: null, skipped: true, discussed: true },
+    ]);
+  });
+
+  it('is only "discussed" when no question carries a picked answer', () => {
+    const block = questionBlock({
+      resolved: true,
+      questionOutcome: 'answered',
+      questionResponse: CHAT_ABOUT_RESPONSE,
+      questionAnswers: { 'Pick one': 'A' },
+      questions: [questionItem(['A'])],
+    });
+    expect(deriveQuestionCardState(block)).toBe('answered');
+  });
+});
+
+describe('deriveQuestionPrimary', () => {
+  const items = [questionItem(['A']), questionItem(['B']), questionItem(['C'])];
+
+  it('walks next → review → submit, gated on the page being answered', () => {
+    expect(deriveQuestionPrimary(emptySelection, items, 0)).toEqual({
+      action: 'next',
+      enabled: false,
+    });
+    const first = toggleOption(emptySelection, 0, 'A', false);
+    expect(deriveQuestionPrimary(first, items, 0)).toEqual({ action: 'next', enabled: true });
+    const third = toggleOption(first, 2, 'C', false);
+    expect(deriveQuestionPrimary(third, items, 2)).toEqual({ action: 'review', enabled: true });
+    // The confirmation page submits only once every question is answered.
+    expect(deriveQuestionPrimary(third, items, 3)).toEqual({ action: 'submit', enabled: false });
+    const all = toggleOption(third, 1, 'B', false);
+    expect(deriveQuestionPrimary(all, items, 3)).toEqual({ action: 'submit', enabled: true });
+  });
+
+  it('a single question has no confirmation page', () => {
+    const one = [questionItem(['A'])];
+    expect(deriveQuestionPrimary(toggleOption(emptySelection, 0, 'A', false), one, 0)).toEqual({
+      action: 'submit',
+      enabled: true,
+    });
   });
 });
 

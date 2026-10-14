@@ -22,8 +22,7 @@ import {
   rememberSendAttempt,
   START_SCREEN_HOST_CLASS,
 } from './middleColumnLayout';
-import { PendingPermissionDock } from './PendingPermissionDock';
-import { PendingQuestionDock } from './PendingQuestionDock';
+import { PendingInteractionSlot, usePendingInteraction } from './PendingInteractionSlot';
 import type { RunSendOrigin } from './queueRelease';
 import { SessionPanelStrips } from './SessionPanelStrips';
 import { SubwindowRegion } from './SessionSubwindows';
@@ -256,6 +255,7 @@ export function ChatWorkspace({ className, onAddRepository, home }: ChatWorkspac
 
   // Decision 174: no conversation open is the home page.
   const onHome = activeSessionId === null;
+  const waitingOnUser = usePendingInteraction(activeSessionId);
 
   return (
     <section className={cn('relative flex min-h-0 flex-col', className)} style={chatSurfaceStyle}>
@@ -289,15 +289,6 @@ export function ChatWorkspace({ className, onAddRepository, home }: ChatWorkspac
           goal bar, above the answerable cards, which stay nearest the
           composer. Session mode only: an empty chat has neither. */}
       {!onHome && renderedMode === 'session' && <SessionPanelStrips sessionId={activeSessionId} />}
-      {/* F5: the only answerable copy of a live question. Above the
-          composer rather than in the timeline so it cannot scroll away
-          while the session waits on it. */}
-      <PendingQuestionDock sessionId={activeSessionId} />
-      {/* 2026-09-18: the same arrangement for permissions, and the only
-          answerable copy of one. Questions and permissions are two separate
-          gates that can be open at the same time, so neither dock hides the
-          other — stacked, they are still both above the composer. */}
-      <PendingPermissionDock sessionId={activeSessionId} />
       {/* U05-b ②: the start screen does not REPLACE the composer, it sits
           above it — a user who wants to bind a folder still has the
           composer's own target bar, and a user who just wants to talk can
@@ -319,11 +310,17 @@ export function ChatWorkspace({ className, onAddRepository, home }: ChatWorkspac
       )}
       {/* P1-7e (problem 11, decision 142): toasts stay above the composer. */}
       <div className={middleColumnHostClass(renderedMode)} data-toast-avoid="">
-        <ChatComposer
-          mode={renderedMode}
-          onAddRepository={onAddRepository}
-          onSendStart={markSendAttempt}
-        />
+        {/* 2026-10-14: a live question / permission / plan review takes the
+            composer's place; the composer stays mounted, hidden, so its draft
+            survives the card. */}
+        {waitingOnUser && <PendingInteractionSlot sessionId={activeSessionId} />}
+        <div hidden={waitingOnUser} className={waitingOnUser ? 'hidden' : 'contents'}>
+          <ChatComposer
+            mode={renderedMode}
+            onAddRepository={onAddRepository}
+            onSendStart={markSendAttempt}
+          />
+        </div>
       </div>
     </section>
   );

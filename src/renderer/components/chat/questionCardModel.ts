@@ -23,7 +23,15 @@ import type { ToolRowView } from './toolCard';
 
 // ---- State ----
 
-export type QuestionCardState = 'pending' | 'answered' | 'skipped' | 'stopped';
+export type QuestionCardState = 'pending' | 'answered' | 'discussed' | 'skipped' | 'stopped';
+
+/** The card was answered with "Chat about this" rather than with answers. */
+function isChatAboutReply(block: ChatBlock): boolean {
+  return (
+    block.questionResponse === CHAT_ABOUT_RESPONSE &&
+    Object.keys(block.questionAnswers ?? {}).length === 0
+  );
+}
 
 /**
  * `resolved !== true` -> 'pending'; outcome 'answered' -> 'answered'; a
@@ -33,6 +41,7 @@ export type QuestionCardState = 'pending' | 'answered' | 'skipped' | 'stopped';
  */
 export function deriveQuestionCardState(block: ChatBlock): QuestionCardState {
   if (block.resolved !== true) return 'pending';
+  if (block.questionOutcome === 'answered' && isChatAboutReply(block)) return 'discussed';
   if (block.questionOutcome === 'answered') return 'answered';
   return block.questionStopped ? 'stopped' : 'skipped';
 }
@@ -52,12 +61,15 @@ export const ANSWERS_TITLE = 'Answers';
 export const SKIPPED_TITLE = 'Questions skipped';
 /** Decision 144: the turn stopped (or the session closed) before an answer. */
 export const STOPPED_TITLE = 'Questions stopped';
+export const DISCUSSED_TITLE = 'Discussed instead';
+export const DISCUSSED_MARK = 'Chose to discuss these questions first';
 
 /** Header copy KEY: Questions / Answers / Questions skipped / stopped (A07 :2654/:2679). */
 export function deriveCardTitle(state: QuestionCardState): string {
   if (state === 'answered') return ANSWERS_TITLE;
   if (state === 'skipped') return SKIPPED_TITLE;
   if (state === 'stopped') return STOPPED_TITLE;
+  if (state === 'discussed') return DISCUSSED_TITLE;
   return QUESTION_TITLE;
 }
 
@@ -233,8 +245,20 @@ export function buildSkipPayload(): { cancel: true } {
   return { cancel: true };
 }
 
+/**
+ * "Chat about this" — what the card sends instead of answers. The bridge hands
+ * a free-text `response` to every question as its custom answer, so the model
+ * reads this sentence where an answer would be. English on purpose: it is
+ * addressed to the model, not shown to the user.
+ */
+export const CHAT_ABOUT_RESPONSE = 'Further discuss these issues';
+
+export function buildChatAboutPayload(): { response: string } {
+  return { response: CHAT_ABOUT_RESPONSE };
+}
+
 /** Footer copy KEYS (T067) — `QuestionCard.tsx` renders them through `t()`. */
-export const SKIP_LABEL = 'Skip';
+export const SKIP_LABEL = 'Skip all';
 export const CONTINUE_LABEL = 'Continue';
 export const CONTINUE_KBD = '⏎';
 export const SKIPPED_MARK = 'Skipped';
@@ -334,6 +358,29 @@ export function isQuestionAnswered(sel: QuestionSelection, index: number): boole
   return (sel.otherText[index] ?? '').trim().length > 0;
 }
 
+/** What the card's one primary button does on the page that is showing. */
+export type QuestionPrimaryAction = 'next' | 'review' | 'submit';
+
+/**
+ * The primary button: `next` walks the questions, `review` leaves the last one
+ * for the confirmation page, `submit` sends. A single question has no
+ * confirmation page — there is nothing to look over — so it submits directly.
+ * `page === items.length` is the confirmation page.
+ */
+export function deriveQuestionPrimary(
+  sel: QuestionSelection,
+  items: readonly QuestionItem[],
+  page: number
+): { action: QuestionPrimaryAction; enabled: boolean } {
+  if (items.length <= 1 || page >= items.length) {
+    return { action: 'submit', enabled: canContinue(sel, items) };
+  }
+  return {
+    action: page === items.length - 1 ? 'review' : 'next',
+    enabled: isQuestionAnswered(sel, page),
+  };
+}
+
 export function deriveQuestionTabStrip(
   sel: QuestionSelection,
   items: readonly QuestionItem[]
@@ -363,6 +410,8 @@ export interface FrozenPair {
   skipped: boolean;
   /** Decision 144: skipped because the turn stopped, not by the user's Skip. */
   stopped?: true;
+  /** "Chat about this": one row for the whole card, no question text. */
+  discussed?: true;
   /**
    * Decision 144 (problem 8): a multi-select answer, split back into what was
    * picked — one entry per option label, then the Other text (`other`). The
@@ -429,6 +478,9 @@ export function deriveFrozenPairs(block: ChatBlock): FrozenPair[] {
   if (items.length === 0) return [];
 
   const state = deriveQuestionCardState(block);
+  if (state === 'discussed') {
+    return [{ key: 'discussed', question: '', answer: null, skipped: true, discussed: true }];
+  }
   if (state === 'skipped' || state === 'stopped') {
     return items.map((item, index) => ({
       key: questionReactKey(item, index),

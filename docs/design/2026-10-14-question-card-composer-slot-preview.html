@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>预览 — 答题卡取代输入框</title>
+<style>
+  /* 取色 / 字号 / 圆角 = src/renderer/styles/globals.css 的 :root + @theme（Flexoki 亮色） */
+  :root {
+    --background: #fffdf4;
+    --foreground: #100f0f;
+    --card: #fbfaf2;
+    --muted: #f6f5ee;
+    --muted-foreground: #575650;
+    --accent: #eeece3;
+    --selection: #e5e3db;
+    --border: #dad8ce;
+    --input: #cecdc3;
+    --primary: #bc5215;
+    --primary-foreground: #fffdf4;
+    --destructive: #af3029;
+    --success: #66800b;
+    --info: #205ea6;
+    --running: #ad8301;
+
+    --text-meta: 13px;
+    --text-ui: 14px;
+    --text-code: 12px;
+    --text-chat-body: 16px;
+
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+      "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+      "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Cascadia Mono",
+      "Consolas", "Liberation Mono", "DejaVu Sans Mono", "PingFang SC", "Noto Sans CJK SC", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--muted); color: var(--foreground);
+    font-family: var(--font-sans); font-size: var(--text-ui); line-height: 1.45;
+  }
+  .page { max-width: 900px; margin: 0 auto; padding: 20px; }
+  .docbar {
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--card); padding: 12px 16px; margin-bottom: 12px;
+  }
+  .docbar h1 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+  .docbar li { font-size: var(--text-meta); color: var(--muted-foreground); }
+  .docbar ul { margin: 0; padding-left: 18px; }
+  .docbar b { color: var(--foreground); }
+
+  .switches {
+    display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; align-items: center;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--card); padding: 10px 16px; margin-bottom: 12px; font-size: var(--text-meta);
+  }
+  .switches .k { color: var(--muted-foreground); }
+  .switches label { margin-right: 14px; cursor: pointer; white-space: nowrap; }
+  .switches input { accent-color: var(--primary); }
+
+  /* ============ 窗口：聊天区 + 底部插槽 ============ */
+  .win {
+    height: 680px; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  }
+  .scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px 24px 8px; }
+  .col { max-width: 45rem; margin: 0 auto; }
+  .slot { flex: 0 0 auto; padding: 0 24px 16px; display: flex; flex-direction: column; min-height: 0; }
+  .prose { font-size: var(--text-chat-body); line-height: 1.625; margin: 0 0 14px; }
+  .user-msg {
+    margin: 0 0 14px auto; max-width: 70%; width: fit-content;
+    background: var(--accent); border-radius: var(--radius-lg); padding: 8px 12px;
+    font-size: var(--text-chat-body);
+  }
+  .work {
+    display: flex; align-items: center; gap: 8px; margin: 4px 0 6px;
+    color: var(--muted-foreground); font-size: var(--text-meta);
+  }
+  .work .star { color: var(--running); }
+  .work.waiting .star { color: var(--primary); }
+  .note { color: var(--muted-foreground); font-size: var(--text-meta); margin: 0 0 14px; font-style: italic; }
+
+  /* ---------- 冻结（已答）卡片：聊天记录里的样子，与现在一致 ---------- */
+  .frozen {
+    border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card);
+    margin: 0 0 14px; overflow: hidden;
+  }
+  .frozen .h { padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 600; color: var(--muted-foreground); }
+  .frozen .b { padding: 8px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
+  .frozen .q { color: var(--foreground); }
+  .frozen .a { color: var(--foreground); padding-left: 14px; white-space: pre-wrap; }
+  .frozen .a.dim { color: var(--muted-foreground); font-style: italic; }
+
+  /* ---------- 输入框 ---------- */
+  .composer {
+    border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--background);
+    padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .composer:focus-within { border-color: var(--primary); }
+  .composer textarea {
+    border: 0; outline: 0; resize: none; background: transparent; font: inherit;
+    font-size: var(--text-chat-body); color: var(--foreground); min-height: 26px; field-sizing: content;
+  }
+  .composer .bar { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: var(--text-meta); }
+
+  /* ---------- 答题卡（占输入框的位置） ---------- */
+  .qa {
+    border: 1px solid var(--primary); border-radius: var(--radius-lg); background: var(--card);
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+    box-shadow: 0 -2px 10px rgb(0 0 0 / 4%);
+  }
+  .qa.risk { border-color: color-mix(in srgb, var(--destructive) 50%, var(--border)); }
+  .qa-head {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-height: 36px;
+    padding: 6px 12px; border-bottom: 1px solid var(--border);
+  }
+  .qa-head .title { font-weight: 600; color: var(--muted-foreground); }
+  .qa-head .meta { color: var(--muted-foreground); font-size: var(--text-meta); }
+  /* 顶部一行 = 标签 + 已答计数（原来的标题行和标签行合并） */
+  .qa-top { flex: 0 0 auto; display: flex; align-items: stretch; height: 30px; border-bottom: 1px solid var(--border); }
+  .qa-tabs { display: flex; overflow-x: auto; min-width: 0; }
+  .qa-tab {
+    appearance: none; background: transparent; border: 0;
+    border-bottom: 2px solid transparent; border-right: 1px solid var(--border);
+    display: flex; align-items: center; gap: 4px; padding: 0 10px;
+    font: inherit; font-size: var(--text-meta); color: var(--muted-foreground); cursor: pointer; white-space: nowrap;
+  }
+  .qa-tab:hover { background: var(--accent); }
+  .qa-tab[aria-selected="true"] { color: var(--foreground); font-weight: 500; border-bottom-color: var(--primary); background: var(--background); }
+  .qa-tab .ok { color: var(--success); font-size: 11px; }
+  .qa-top .meta { margin-left: auto; display: flex; align-items: center; padding: 0 10px; color: var(--muted-foreground); font-size: var(--text-meta); white-space: nowrap; }
+  .qa-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 6px 4px; }
+  /* 标签芯片和问题同一行 */
+  .qa-question { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px 6px; font-weight: 600; line-height: 1.5; }
+  .chip {
+    flex: 0 0 auto; padding: 0 5px; border-radius: var(--radius-xs); background: var(--muted);
+    color: var(--muted-foreground); font-size: 12px; font-weight: 400; line-height: 18px;
+  }
+  .multi-hint { font-weight: 400; color: var(--muted-foreground); font-size: var(--text-meta); }
+  /* 选项：去掉每行的边框，28px 一行，描述跟在选项后面而不是另起一行 */
+  .opts { display: flex; flex-direction: column; gap: 1px; }
+  .opt {
+    display: flex; flex-direction: column; gap: 4px; border-radius: var(--radius-sm);
+    padding: 4px 6px; cursor: pointer; min-height: 28px;
+  }
+  .opt:hover { background: var(--accent); }
+  .opt.sel { background: var(--selection); }
+  .opt .row { display: flex; align-items: flex-start; gap: 8px; }
+  .letter {
+    width: 18px; height: 18px; margin-top: 1px; flex: 0 0 auto; display: grid; place-items: center;
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    background: var(--muted); color: var(--muted-foreground); font-size: 11px; line-height: 1;
+  }
+  .opt.sel .letter { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }
+  .opt .label { flex: 1 1 auto; min-width: 0; line-height: 20px; }
+  .opt .desc { margin-left: 8px; color: var(--muted-foreground); font-size: var(--text-meta); }
+  .opt.other:not(.sel) .label, .opt.chat .label { color: var(--muted-foreground); }
+  .opt .row .other-inline {
+    flex: 1 1 auto; min-width: 0; margin: -3px 0; min-height: 26px; max-height: 120px;
+    resize: none; overflow-y: auto; field-sizing: content;
+    border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--background);
+    color: var(--foreground); font: inherit; line-height: 20px; padding: 2px 8px;
+  }
+  .opt .row .other-inline:focus { outline: 0; border-color: var(--primary); }
+  .opt .label.shrink { flex: 0 0 auto; }
+  .opt-sep { height: 1px; background: var(--border); margin: 3px 6px; }
+  textarea.other-box {
+    margin-left: 26px; width: calc(100% - 26px); min-height: 44px; max-height: 120px; resize: none; overflow-y: auto;
+    border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--background);
+    color: var(--foreground); font: inherit; line-height: 1.5; padding: 4px 8px; field-sizing: content;
+  }
+  textarea.other-box:focus { outline: 0; border-color: var(--primary); }
+  /* 确认页：一题一行 */
+  .review-row {
+    display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1fr); align-items: baseline; gap: 8px;
+    border-radius: var(--radius-sm); padding: 4px 6px; cursor: pointer; line-height: 20px;
+  }
+  .review-row:hover { background: var(--accent); }
+  .review-row .n { color: var(--muted-foreground); font-size: var(--text-meta); }
+  .review-row .q { color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .review-row .a { white-space: pre-wrap; word-break: break-word; }
+  .review-row .a.missing { color: var(--destructive); }
+  .qa-foot {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 8px; height: 34px;
+    padding: 0 6px 0 4px; border-top: 1px solid var(--border);
+  }
+  .fit { font-size: var(--text-meta); }
+  .fit b { font-variant-numeric: tabular-nums; }
+  .fit .ok { color: var(--success); }
+  .fit .bad { color: var(--destructive); }
+  .spacer { flex: 1 1 auto; }
+  .keys { color: var(--muted-foreground); font-size: var(--text-meta); }
+  .keys kbd {
+    font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--border);
+    border-radius: var(--radius-xs); padding: 0 4px; background: var(--muted);
+  }
+  .btn {
+    appearance: none; height: 24px; padding: 0 8px; border-radius: var(--radius-sm); font: inherit;
+    cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .btn-ghost { background: transparent; color: var(--muted-foreground); }
+  .btn-ghost:hover { background: var(--accent); color: var(--foreground); }
+  .btn-secondary { background: var(--card); border-color: var(--border); color: var(--foreground); }
+  .btn-secondary:hover { background: var(--accent); }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); padding: 0 10px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn .k { opacity: 0.7; font-size: var(--text-meta); }
+  [data-tip] { position: relative; }
+  [data-tip]:hover::after {
+    content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 0; width: max-content;
+    max-width: 260px; white-space: normal; background: var(--foreground); color: var(--background);
+    font-size: var(--text-meta); padding: 6px 8px; border-radius: var(--radius-sm); z-index: 5;
+  }
+  .perm-cmd {
+    margin: 10px 4px 6px; padding: 6px 10px; border-radius: var(--radius-sm); background: var(--muted);
+    font-family: var(--font-mono); font-size: var(--text-code); white-space: pre-wrap; word-break: break-all;
+  }
+  .perm-title { padding: 8px 4px 0; font-weight: 600; }
+  .risk-chip { font-size: var(--text-meta); padding: 1px 6px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--destructive) 10%, transparent); color: var(--destructive); }
+  .timer { color: var(--muted-foreground); font-size: var(--text-meta); font-variant-numeric: tabular-nums; }
+  .plan { margin: 8px 4px; padding: 8px 12px; border-left: 3px solid var(--border); color: var(--foreground); line-height: 1.6; }
+  .plan li { margin: 2px 0; }
+  .log {
+    margin-top: 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 8px 12px;
+    font-family: var(--font-mono); font-size: var(--text-code); color: var(--muted-foreground); white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="docbar">
+    <h1>答题卡取代输入框（可交互）</h1>
+    <ul>
+      <li><b>有问题要答时，输入框的位置换成答题卡</b>，这时不能发消息。答完、审批完、或按 <b>Esc 中断</b>后才换回输入框。输入框里没发的草稿保留（试试先在输入框里打几个字，再点「让 AI 提问」）。</li>
+      <li>卡片<b>最高占窗口 40%</b>，超出部分在卡片里面滚动。<b>排版收紧</b>：标题行和标签行合成一行；标签芯片和问题同一行；选项去掉边框、一行 28px、描述跟在选项后面；底栏变矮。常见情况（3 个选项 + 其他 + 聊聊这个）不用滚动。右上「窗口高度」旁边实时显示卡片内容高度和上限。</li>
+      <li><b>「聊聊这个」</b>在每道题的选项末尾（确认页也有），和具体哪道题无关：点了就把 <code>Further discuss these issues</code> 发给 AI，卡片收起，AI 接着和你讨论。</li>
+      <li><b>「全部跳过」</b>：整组问题都不答，AI 自己拿主意继续。<b>Esc</b>：中断这一回合，AI 停下，输入框回来。</li>
+      <li>点选项只选中不跳转。一个主按钮往前走：下一题 → 检查答案 → 提交，回车等于按它。字母键直接选。</li>
+      <li>排队中的消息等答完再发（不在预览里演示）。权限卡、计划审阅卡同样占输入框的位置。</li>
+    </ul>
+  </div>
+
+  <div class="switches">
+    <span class="k">场景</span>
+    <span>
+      <label><input type="radio" name="scene" value="q3" checked /> 3 道问题</label>
+      <label><input type="radio" name="scene" value="q1" /> 1 道问题</label>
+      <label><input type="radio" name="scene" value="perm" /> 权限请求</label>
+      <label><input type="radio" name="scene" value="plan" /> 计划审阅</label>
+    </span>
+    <span class="k">选项内容</span>
+    <span>
+      <label><input type="radio" name="density" value="desc" checked /> 3 个选项，带一句描述（最常见）</label>
+      <label><input type="radio" name="density" value="plain" /> 3 个选项，无描述</label>
+      <label><input type="radio" name="density" value="long" /> 4 个选项，长描述</label>
+    </span>
+    <span class="k">窗口高度</span>
+    <span>
+      <label><input type="radio" name="winh" value="680" checked /> 680px（笔记本小窗）</label>
+      <label><input type="radio" name="winh" value="873" /> 873px（你这台机器的窗口）</label>
+      <span class="fit" id="fit"></span>
+    </span>
+    <span class="k">操作</span>
+    <span>
+      <button class="btn btn-secondary" id="ask">让 AI 提问</button>
+      <button class="btn btn-ghost" id="restart">清空重来</button>
+    </span>
+  </div>
+
+  <div class="win" id="win">
+    <div class="scroll" id="scroll"><div class="col" id="timeline"></div></div>
+    <div class="slot" id="slot"><div class="col" id="slot-col" style="width:100%;display:flex;flex-direction:column;min-height:0"></div></div>
+  </div>
+  <div class="log" id="log">（AI 收到的内容会显示在这里）</div>
+</div>
+
+<script>
+  const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const CHAT_ABOUT = 'Further discuss these issues';
+  const DENSITY = {
+    desc: [
+      { header: '存储', question: '缓存放在哪里？', options: [
+        { label: 'SQLite', description: '单文件，跟着工作区走，重启后还在' },
+        { label: '内存', description: '最简单，重启就没了' },
+        { label: '不加缓存', description: '先优化 listSessions() 本身' },
+      ] },
+      { header: '范围', question: '这次先改哪些模块？', multi: true, options: [
+        { label: '会话列表', description: '卡顿主要在这里' },
+        { label: '聊天时间线', description: '读取和渲染耦合紧，改动大' },
+        { label: '设置页', description: '读取次数少，收益小' },
+      ] },
+      { header: '命名', question: '新的配置项叫什么？', options: [
+        { label: 'cache.mode', description: '和现有 cache.* 放一起' },
+        { label: 'storage.cache', description: '和现有 storage.* 放一起' },
+        { label: 'sessions.cache', description: '按功能归类' },
+      ] },
+    ],
+    plain: [
+      { header: '存储', question: '缓存放在哪里？', options: [{ label: 'SQLite' }, { label: '内存' }, { label: '不加缓存' }] },
+      { header: '范围', question: '这次先改哪些模块？', multi: true, options: [{ label: '会话列表' }, { label: '聊天时间线' }, { label: '设置页' }] },
+      { header: '命名', question: '新的配置项叫什么？', options: [{ label: 'cache.mode' }, { label: 'storage.cache' }, { label: 'sessions.cache' }] },
+    ],
+    long: [
+      { header: '存储', question: '缓存放在哪里？会话多的工作区（几百个会话）也要考虑进去。', options: [
+        { label: 'SQLite', description: '单文件，跟着工作区走，重启后还在；需要监听文件变更来失效，外部工具改了会话文件也能感知到' },
+        { label: '内存', description: '最简单，重启就没了；每次启动后的第一次切换仍然要完整读盘一遍' },
+        { label: '不加缓存', description: '先优化 listSessions() 本身：只读文件头，不解析整个文件' },
+        { label: '两层都要', description: '内存做热缓存，SQLite 做持久层，复杂度最高' },
+      ] },
+      { header: '范围', question: '这次先改哪些模块？', multi: true, options: [
+        { label: '会话列表', description: '卡顿主要在这里，改动最小' },
+        { label: '聊天时间线', description: '读取和渲染耦合紧，要先调整数据流，改动大' },
+        { label: '设置页', description: '读取次数少，收益小，但顺手' },
+        { label: '全局搜索', description: '同样遍历全部会话，可以共用缓存' },
+      ] },
+      { header: '命名', question: '新的配置项叫什么？', options: [
+        { label: 'cache.mode', description: '和现有 cache.* 放一起，用户在设置里找缓存相关项时更直观' },
+        { label: 'storage.cache', description: '和现有 storage.* 放一起，强调它是存储的一部分' },
+        { label: 'sessions.cache', description: '按功能归类，以后会话相关配置都放这里' },
+        { label: '不暴露配置', description: '内部决定，用户不需要关心' },
+      ] },
+    ],
+  };
+  const HISTORY = [
+    ['user', '帮我给会话列表加一层缓存，现在每次切换都要重新读盘，有点卡。'],
+    ['ai', '我先看了现在的读取路径：每次切换会话都会调用 listSessions()，它会遍历工作区下所有会话文件并逐个解析头部。会话多的时候（几百个），这一步要几百毫秒。'],
+    ['ai', '缓存可以放 SQLite，也可以放内存。两者的失效策略不同：SQLite 需要监听文件变更来更新，内存缓存可以在每次写会话时顺手更新。'],
+    ['ai', '聊天时间线和设置页也有类似的重复读取，可以一并处理，但改动范围会大不少。时间线那边的读取和渲染耦合得比较紧，拆开需要先调整数据流。'],
+    ['ai', '命名方面，现有配置里已经有 storage.* 和 cache.* 两套前缀，新项放哪边都说得通。'],
+  ];
+
+  let timeline = [];
+  let mode = 'composer'; // 'composer' | 'card'
+  let scene, items, sel, active, timer, secondsLeft, planChoice, planFeedback;
+  let draft = '';
+  const $ = (id) => document.getElementById(id);
+  const opt = (name) => document.querySelector(`input[name="${name}"]:checked`).value;
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+  // ---------- timeline ----------
+  function renderTimeline() {
+    let h = '';
+    for (const e of timeline) {
+      if (e.kind === 'user') h += `<div class="user-msg">${esc(e.text)}</div>`;
+      else if (e.kind === 'ai') h += `<p class="prose">${esc(e.text)}</p>`;
+      else if (e.kind === 'note') h += `<p class="note">${esc(e.text)}</p>`;
+      else if (e.kind === 'frozen') {
+        h += `<div class="frozen"><div class="h">${esc(e.title)}</div><div class="b">`;
+        for (const [q, a, dim] of e.pairs) h += `<span class="q">${esc(q)}</span><span class="a${dim ? ' dim' : ''}">${esc(a)}</span>`;
+        h += '</div></div>';
+      }
+    }
+    if (mode === 'card') h += '<div class="work waiting"><span class="star">✻</span>等你回答…</div>';
+    $('timeline').innerHTML = h;
+  }
+  function scrollBottom() { $('scroll').scrollTop = $('scroll').scrollHeight; }
+
+  // ---------- composer ----------
+  function renderComposer(focus) {
+    $('slot-col').innerHTML =
+      '<div class="composer"><textarea id="draft" rows="1" placeholder="输入消息…"></textarea>' +
+      '<div class="bar"><span>模型 · 权限</span><span class="spacer"></span><button class="btn btn-primary" id="send">发送 <span class="k">↵</span></button></div></div>';
+    const t = $('draft');
+    t.value = draft;
+    t.oninput = () => (draft = t.value);
+    t.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } };
+    $('send').onclick = send;
+    if (focus) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+  }
+  function send() {
+    if (!draft.trim()) return;
+    timeline.push({ kind: 'user', text: draft.trim() });
+    draft = '';
+    timeline.push({ kind: 'ai', text: '（AI 的回复）' });
+    renderTimeline(); renderComposer(true); scrollBottom();
+  }
+
+  // ---------- card ----------
+  function ask() {
+    if (mode === 'card') return;
+    scene = opt('scene');
+    mode = 'card';
+    if (scene === 'q3' || scene === 'q1') {
+      const set = DENSITY[opt('density')];
+      items = scene === 'q1' ? [set[0]] : set;
+      sel = items.map(() => ({ picked: [], other: false, text: '' }));
+      active = 0;
+      timeline.push({ kind: 'ai', text: '在动手之前我需要确认几件事：' });
+    } else if (scene === 'perm') {
+      timeline.push({ kind: 'ai', text: '我先跑一遍现有测试，确认改动前的基线。' });
+      secondsLeft = 30;
+      timer = setInterval(() => {
+        secondsLeft -= 1;
+        if (secondsLeft <= 0) return permit('deny', true);
+        const t = $('timer');
+        if (t) t.textContent = `${secondsLeft} 秒内不回答将自动拒绝`;
+      }, 1000);
+    } else {
+      planChoice = 'approve';
+      planFeedback = '';
+      timeline.push({ kind: 'ai', text: '计划写好了，请审阅：' });
+    }
+    renderTimeline(); renderCard(true); scrollBottom();
+  }
+
+  function closeCard() {
+    clearInterval(timer);
+    mode = 'composer';
+    renderTimeline(); renderComposer(true); scrollBottom();
+    $('fit').innerHTML = '';
+  }
+  const log = (s) => ($('log').textContent = 'AI 收到：\n' + s);
+
+  const isQ = () => scene === 'q3' || scene === 'q1';
+  const answered = (i) => sel[i].picked.length > 0 || (sel[i].other && sel[i].text.trim().length > 0);
+  const allAnswered = () => items.every((_, i) => answered(i));
+  const multi = () => items.length > 1;
+  const REVIEW = () => items.length;
+  function answerText(i) {
+    const parts = [...sel[i].picked];
+    if (sel[i].other && sel[i].text.trim()) parts.push('其他：' + sel[i].text.trim());
+    return parts.join('、');
+  }
+  function primary() {
+    if (!multi() || active === REVIEW()) return { label: '提交', enabled: allAnswered(), run: submit };
+    return { label: active === items.length - 1 ? '检查答案' : '下一题', enabled: answered(active), run: () => go(active + 1) };
+  }
+  function go(i) { active = i; renderCard(true); }
+
+  function submit() {
+    timeline.push({ kind: 'frozen', title: '问题 · 已回答', pairs: items.map((q, i) => [q.question, answerText(i)]) });
+    timeline.push({ kind: 'ai', text: '好，按这个来，我开始改。' });
+    log(JSON.stringify({ answers: items.map((q, i) => ({ question: q.question, answer: answerText(i) })) }, null, 2));
+    closeCard();
+  }
+  function skipAll() {
+    timeline.push({ kind: 'frozen', title: '问题 · 已全部跳过', pairs: items.map((q) => [q.question, '跳过', true]) });
+    timeline.push({ kind: 'ai', text: '那我按自己的判断来：缓存放 SQLite，先只改会话列表。' });
+    log('{ "answers": [每题都是空] }  → AI 自己拿主意继续');
+    closeCard();
+  }
+  function chatAbout() {
+    timeline.push({ kind: 'frozen', title: '问题 · 进一步讨论', pairs: [['', '你选择了先讨论这些问题', true]] });
+    timeline.push({ kind: 'ai', text: '好，我们先聊聊。这几个问题里你最拿不准的是哪个？我可以把每个选项的代价展开讲。' });
+    log(`"${CHAT_ABOUT}"  → AI 不再等答案，接着和你讨论`);
+    closeCard();
+  }
+  function interrupt() {
+    const title = isQ() ? '问题 · 已中断' : scene === 'perm' ? '权限请求 · 已中断' : '计划审阅 · 已中断';
+    timeline.push({ kind: 'frozen', title, pairs: [['', '你按了 Esc', true]] });
+    timeline.push({ kind: 'note', text: '回合已中断' });
+    log('（没有答复，回合中断 —— 和按停止按钮一样）');
+    closeCard();
+  }
+  function permit(decision, auto) {
+    const word = { allow: '已允许', session: '本次会话都允许', deny: auto ? '已自动拒绝（超时）' : '已拒绝' }[decision];
+    timeline.push({ kind: 'frozen', title: '权限 · ' + word, pairs: [['运行命令', 'pnpm test']] });
+    timeline.push({ kind: 'ai', text: decision === 'deny' ? '好，我不跑测试，直接看代码。' : '测试全部通过，开始改。' });
+    log(`permission: ${decision}`);
+    closeCard();
+  }
+  function planDecide() {
+    if (planChoice === 'keep' && !planFeedback.trim()) return;
+    const word = planChoice === 'approve' ? '已批准' : '继续规划';
+    timeline.push({ kind: 'frozen', title: '计划审阅 · ' + word, pairs: planChoice === 'keep' ? [['反馈', planFeedback.trim()]] : [] });
+    timeline.push({ kind: 'ai', text: planChoice === 'approve' ? '开始执行计划。' : '收到，我改一下计划。' });
+    log(`plan review: ${planChoice}${planChoice === 'keep' ? ' / ' + planFeedback.trim() : ''}`);
+    closeCard();
+  }
+
+  function cap() { return 0.4 * $('win').clientHeight; }
+  // Natural height = what the card would take with no cap.
+  function measure() {
+    const card = $('card'), body = card && card.querySelector('.qa-body'), fit = $('fit');
+    if (!body) { fit.innerHTML = ''; return; }
+    const natural = card.offsetHeight - body.clientHeight + body.scrollHeight;
+    const limit = Math.round(cap());
+    const ok = natural <= limit + 1;
+    fit.innerHTML = `· 卡片内容 <b>${natural}</b>px / 上限 <b>${limit}</b>px ` +
+      (ok ? '<span class="ok">无需滚动</span>' : '<span class="bad">需要滚动</span>');
+  }
+  function shell(inner, cls = '') {
+    return `<div class="qa ${cls}" id="card" tabindex="-1" style="max-height:${cap()}px">${inner}</div>`;
+  }
+  const footKeys = '<span class="keys"><kbd>Esc</kbd> 中断</span>';
+
+  function renderCard(focus) {
+    if (scene === 'perm') return renderPerm(focus);
+    if (scene === 'plan') return renderPlan(focus);
+    let h = '';
+    if (multi()) {
+      h += '<div class="qa-top"><div class="qa-tabs" role="tablist">';
+      items.forEach((_, i) => {
+        h += `<button class="qa-tab" data-tab="${i}" aria-selected="${i === active}">Q${i + 1}${answered(i) ? ' <span class="ok">✓</span>' : ''}</button>`;
+      });
+      h += `<button class="qa-tab" data-tab="${REVIEW()}" aria-selected="${active === REVIEW()}">确认</button></div>`;
+      h += `<span class="meta">已答 ${items.filter((_, i) => answered(i)).length} / ${items.length}</span></div>`;
+    }
+    h += '<div class="qa-body">';
+    let chatLetter;
+    if (multi() && active === REVIEW()) {
+      h += '<div class="qa-question">检查一下你的回答<span class="multi-hint">点一行回去修改</span></div>';
+      items.forEach((q, i) => {
+        const a = answerText(i);
+        h += `<div class="review-row" data-jump="${i}" title="${esc(q.question)}"><span class="n">Q${i + 1}</span><span class="q">${q.question}</span>` +
+          (a ? `<span class="a">${esc(a)}</span>` : '<span class="a missing">还没回答</span>') + '</div>';
+      });
+      h += '<div class="opts">';
+      chatLetter = 0;
+    } else {
+      const q = items[active];
+      h += `<div class="qa-question">${q.header ? `<span class="chip">${q.header}</span>` : ''}<span>${q.question}${q.multi ? ' <span class="multi-hint">可多选</span>' : ''}</span></div><div class="opts">`;
+      [...q.options, { label: sel[active].other ? '其他：' : '其他…', other: true }].forEach((o, j) => {
+        const isSel = o.other ? sel[active].other : sel[active].picked.includes(o.label);
+        h += `<div class="opt${isSel ? ' sel' : ''}${o.other ? ' other' : ''}" data-opt="${j}" tabindex="0">` +
+          `<div class="row"><span class="letter">${LETTERS[j]}</span><span class="label${o.other && isSel ? ' shrink' : ''}">${o.label}${o.description ? `<span class="desc">${o.description}</span>` : ''}</span>` +
+          (o.other && isSel ? `<textarea class="other-inline" id="otherbox" rows="1" placeholder="输入你的回答（回车下一步，Shift+回车换行）">${esc(sel[active].text)}</textarea>` : '') +
+          '</div></div>';
+      });
+      chatLetter = q.options.length + 1;
+    }
+    h += '<div class="opt-sep"></div>' +
+      `<div class="opt chat" data-chat tabindex="0"><div class="row"><span class="letter">${LETTERS[chatLetter]}</span>` +
+      '<span class="label">聊聊这个<span class="desc">先不回答，和 AI 进一步讨论</span></span></div></div>';
+    h += '</div></div>';
+    const p = primary();
+    h += '<div class="qa-foot">' +
+      '<button class="btn btn-ghost" id="skip" data-tip="这组问题一个都不回答，AI 自己拿主意继续。">全部跳过</button>' +
+      '<span class="spacer"></span>' + footKeys +
+      `<button class="btn btn-primary" id="primary" ${p.enabled ? '' : 'disabled'}>${p.label} <span class="k">↵</span></button></div>`;
+    $('slot-col').innerHTML = shell(h);
+    measure();
+
+    document.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => go(+b.dataset.tab)));
+    document.querySelectorAll('[data-jump]').forEach((b) => (b.onclick = () => go(+b.dataset.jump)));
+    document.querySelectorAll('[data-opt]').forEach((b) => (b.onclick = (e) => { if (e.target.tagName !== 'TEXTAREA') pick(+b.dataset.opt); }));
+    document.querySelector('[data-chat]').onclick = chatAbout;
+    $('skip').onclick = skipAll;
+    $('primary').onclick = () => p.enabled && p.run();
+    const box = $('otherbox');
+    if (box) {
+      box.oninput = () => { sel[active].text = box.value; refreshChrome(); measure(); };
+      box.onkeydown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+          e.preventDefault(); e.stopPropagation();
+          const q = primary(); if (q.enabled) q.run();
+        }
+      };
+      if (focus) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+    } else if (focus) {
+      (document.querySelector('.opt.sel') || $('card')).focus({ preventScroll: true });
+    }
+  }
+  function refreshChrome() {
+    document.querySelectorAll('.qa-tab[data-tab]').forEach((t) => {
+      const i = +t.dataset.tab;
+      if (i < items.length) t.innerHTML = `Q${i + 1}${answered(i) ? ' <span class="ok">✓</span>' : ''}`;
+    });
+    const m = document.querySelector('.qa-head .meta');
+    if (m) m.textContent = `已答 ${items.filter((_, i) => answered(i)).length} / ${items.length}`;
+    const p = primary();
+    $('primary').disabled = !p.enabled;
+    $('primary').onclick = () => p.enabled && p.run();
+  }
+  function pick(j) {
+    const q = items[active], s = sel[active];
+    if (j === q.options.length) {
+      if (q.multi) s.other = !s.other; else { s.other = true; s.picked = []; }
+    } else {
+      const l = q.options[j].label;
+      if (q.multi) s.picked = s.picked.includes(l) ? s.picked.filter((x) => x !== l) : [...s.picked, l];
+      else { s.picked = [l]; s.other = false; }
+    }
+    renderCard(j === q.options.length && s.other);
+  }
+
+  function renderPerm(focus) {
+    const h =
+      '<div class="qa-head"><span class="title">权限</span><span class="risk-chip">高风险</span><span class="spacer"></span>' +
+      `<span class="timer" id="timer">${secondsLeft} 秒内不回答将自动拒绝</span></div>` +
+      '<div class="qa-body"><div class="perm-title">运行命令</div><div class="perm-cmd">pnpm test</div></div>' +
+      '<div class="qa-foot"><span class="spacer"></span>' + footKeys +
+      '<button class="btn btn-ghost" id="deny">拒绝</button>' +
+      '<button class="btn btn-secondary" id="session">本次会话都允许</button>' +
+      '<button class="btn btn-primary" id="allow">允许 <span class="k">↵</span></button></div>';
+    $('slot-col').innerHTML = shell(h, 'risk');
+    measure();
+    $('deny').onclick = () => permit('deny');
+    $('session').onclick = () => permit('session');
+    $('allow').onclick = () => permit('allow');
+    if (focus) $('allow').focus({ preventScroll: true });
+  }
+
+  function renderPlan(focus) {
+    let h =
+      '<div class="qa-head"><span class="title">计划审阅</span></div><div class="qa-body">' +
+      '<ol class="plan"><li>给 listSessions() 加一层 SQLite 缓存</li><li>写会话时同步更新缓存</li><li>监听工作区文件变更，失效对应条目</li><li>补测试：冷启动、增量更新、外部改文件</li></ol>' +
+      '<div class="opts">';
+    [['approve', '批准，开始执行'], ['keep', '继续规划', '告诉 AI 要改什么']].forEach(([v, l, d], j) => {
+      h += `<div class="opt${planChoice === v ? ' sel' : ''}" data-plan="${v}" tabindex="0"><div class="row"><span class="letter">${LETTERS[j]}</span><span class="label">${l}${d ? `<span class="desc">${d}</span>` : ''}</span></div>`;
+      if (v === 'keep' && planChoice === 'keep') h += `<textarea class="other-box" id="planbox" rows="2" placeholder="哪里需要改…（回车提交，Shift+回车换行）">${esc(planFeedback)}</textarea>`;
+      h += '</div>';
+    });
+    h += '</div></div>';
+    const ok = planChoice === 'approve' || planFeedback.trim();
+    h += '<div class="qa-foot"><span class="spacer"></span>' + footKeys +
+      `<button class="btn btn-primary" id="plango" ${ok ? '' : 'disabled'}>提交 <span class="k">↵</span></button></div>`;
+    $('slot-col').innerHTML = shell(h);
+    measure();
+    document.querySelectorAll('[data-plan]').forEach((b) => (b.onclick = (e) => {
+      if (e.target.tagName === 'TEXTAREA') return;
+      planChoice = b.dataset.plan; renderPlan(planChoice === 'keep');
+    }));
+    $('plango').onclick = planDecide;
+    const box = $('planbox');
+    if (box) {
+      box.oninput = () => { planFeedback = box.value; $('plango').disabled = !planFeedback.trim(); };
+      box.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); e.stopPropagation(); planDecide(); } };
+      if (focus) box.focus();
+    } else if (focus) $('card').focus({ preventScroll: true });
+  }
+
+  // ---------- keys ----------
+  document.addEventListener('keydown', (e) => {
+    if (mode !== 'card' || e.isComposing) return;
+    if (e.key === 'Escape') { e.preventDefault(); interrupt(); return; }
+    if (['TEXTAREA', 'INPUT'].includes(e.target.tagName)) return;
+    if (e.key === 'Enter') {
+      if (e.target.tagName === 'BUTTON') return;
+      e.preventDefault();
+      if (scene === 'perm') return permit('allow');
+      if (scene === 'plan') return planDecide();
+      const p = primary(); if (p.enabled) p.run();
+      return;
+    }
+    if (!isQ() || e.key.length !== 1) return;
+    const j = LETTERS.indexOf(e.key.toUpperCase());
+    if (j < 0) return;
+    const onReview = multi() && active === REVIEW();
+    const count = onReview ? 0 : items[active].options.length + 1;
+    if (j < count) { e.preventDefault(); pick(j); }
+    else if (j === count) { e.preventDefault(); chatAbout(); }
+  });
+
+  function restart() {
+    clearInterval(timer);
+    mode = 'composer';
+    timeline = HISTORY.map(([who, text]) => ({ kind: who, text }));
+    draft = '';
+    $('log').textContent = '（AI 收到的内容会显示在这里）';
+    renderTimeline(); renderComposer(false); scrollBottom();
+  }
+  $('ask').onclick = ask;
+  $('restart').onclick = restart;
+  function applyWinH() { $('win').style.height = opt('winh') + 'px'; if (mode === 'card') renderCard(false); else $('fit').innerHTML = ''; }
+  document.querySelectorAll('input[name="winh"]').forEach((r) => r.addEventListener('change', applyWinH));
+  document.querySelectorAll('input[name="density"]').forEach((r) => r.addEventListener('change', () => {
+    if (mode === 'card' && isQ()) { clearInterval(timer); mode = 'composer'; timeline.pop(); ask(); }
+  }));
+  window.addEventListener('resize', () => mode === 'card' && renderCard(false));
+  restart();
+</script>
+</body>
+</html>

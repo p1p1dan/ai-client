@@ -104,9 +104,9 @@ describe('QuestionCard.tsx — the permission row sends its own decision (S3 sli
       'Same await-and-unlock pattern as Continue/Skip above'
     );
     // …and the negative must be about the COMPARISON, not about the field: the
-    // question rows are still keyed by label, so `option.label` itself has to
-    // survive or the assertion below is forbidding something already absent.
-    expect(syntax, 'question rows are still label-keyed').toContain('{option.label}');
+    // permission buttons still print their label, so `option.label` itself has
+    // to survive or the assertion below is forbidding something already absent.
+    expect(syntax, 'permission buttons still print their label').toContain('option.label');
   });
 
   it('the pressed row hands its decision straight to onRespond', () => {

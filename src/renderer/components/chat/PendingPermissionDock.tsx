@@ -32,15 +32,28 @@
  *
  * ## Why not a modal
  *
- * A dialog would cover the conversation the decision is about, and would take
- * the composer with it. Docked above the composer the card is unmissable and
- * everything behind it stays readable and usable.
+ * A dialog would cover the conversation the decision is about. In the
+ * composer's place (`PendingInteractionSlot`, 2026-10-14) the card is
+ * unmissable and the conversation above it stays readable and scrollable.
  */
 
 import { useChatSessionsStore } from '../../stores/chatSessions';
 import { QuestionCard } from './QuestionCard';
 import { derivePermissionQueueProgress, permissionDecisionAllows } from './questionCardModel';
 import { useRespondPermission } from './useRespondPermission';
+
+/** Whether this session has a live permission card to show in the composer's place. */
+export function useHasPendingPermissionCard(sessionId: string | null): boolean {
+  return useChatSessionsStore((state) => {
+    const pending = state.pendingPermissions.find((item) => item.sessionId === sessionId);
+    if (!pending || !sessionId) return false;
+    const message = state.messages[sessionId]?.find((item) => item.id === pending.messageId);
+    const block = message?.blocks.find(
+      (item) => item.type === 'permission_request' && item.permissionId === pending.permissionId
+    );
+    return block !== undefined && block.resolved !== true;
+  });
+}
 
 export function PendingPermissionDock({ sessionId }: { sessionId: string | null }) {
   // The OLDEST entry still parked on this session. Returning the parked entry
@@ -68,25 +81,21 @@ export function PendingPermissionDock({ sessionId }: { sessionId: string | null 
   if (block.resolved === true) return null;
 
   return (
-    <div className="min-w-0 shrink-0 px-2 pb-2 sm:px-6">
-      <div className="mx-auto w-full max-w-reading">
-        <QuestionCard
-          variant="permission"
-          block={block}
-          // True by construction: this dock renders the HEAD of the session's
-          // queue and nothing else, which is precisely the entry
-          // `canRespondToPermission` admits. Re-deriving it here would subscribe
-          // to the whole array to recompute a constant.
-          canRespond
-          progress={derivePermissionQueueProgress(pending)}
-          // The one place `allow` is derived from the decision (spec §3.2):
-          // downstream the two travel together, so a card that says Allowed
-          // cannot sit on top of a wire reply that declined.
-          onRespondPermission={(decision) =>
-            respondPermission(pending.permissionId, permissionDecisionAllows(decision), decision)
-          }
-        />
-      </div>
-    </div>
+    <QuestionCard
+      variant="permission"
+      block={block}
+      // True by construction: this dock renders the HEAD of the session's
+      // queue and nothing else, which is precisely the entry
+      // `canRespondToPermission` admits. Re-deriving it here would subscribe
+      // to the whole array to recompute a constant.
+      canRespond
+      progress={derivePermissionQueueProgress(pending)}
+      // The one place `allow` is derived from the decision (spec §3.2):
+      // downstream the two travel together, so a card that says Allowed
+      // cannot sit on top of a wire reply that declined.
+      onRespondPermission={(decision) =>
+        respondPermission(pending.permissionId, permissionDecisionAllows(decision), decision)
+      }
+    />
   );
 }

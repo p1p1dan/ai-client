@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>预览 — 问题卡片：选中不跳转 · 下一题/提交 · 确认页 · 聊聊这个</title>
+<style>
+  /* 取色 / 字号 / 圆角 = src/renderer/styles/globals.css 的 :root + @theme（Flexoki 亮色） */
+  :root {
+    --background: #fffdf4;
+    --foreground: #100f0f;
+    --card: #fbfaf2;
+    --muted: #f6f5ee;
+    --muted-foreground: #575650;
+    --accent: #eeece3;
+    --selection: #e5e3db;
+    --border: #dad8ce;
+    --input: #cecdc3;
+    --primary: #bc5215;
+    --primary-foreground: #fffdf4;
+    --destructive: #af3029;
+    --success: #66800b;
+    --info: #205ea6;
+
+    --text-2xs: 10px;
+    --text-meta: 13px;
+    --text-ui: 14px;
+    --text-code: 12px;
+    --text-chat-body: 16px;
+
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+      "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+      "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Cascadia Mono",
+      "Consolas", "Liberation Mono", "DejaVu Sans Mono", "PingFang SC", "Noto Sans CJK SC", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--muted); color: var(--foreground);
+    font-family: var(--font-sans); font-size: var(--text-ui); line-height: 1.45;
+  }
+  .page { max-width: 880px; margin: 0 auto; padding: 20px; }
+  .docbar {
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--card); padding: 12px 16px; margin-bottom: 14px;
+  }
+  .docbar h1 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+  .docbar p, .docbar li { margin: 0; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .docbar ul { margin: 6px 0 0; padding-left: 18px; }
+  .docbar b { color: var(--foreground); }
+
+  .switches {
+    display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; align-items: center;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--card); padding: 10px 16px; margin-bottom: 14px;
+    font-size: var(--text-meta);
+  }
+  .switches .k { color: var(--muted-foreground); }
+  .switches label { margin-right: 14px; cursor: pointer; white-space: nowrap; }
+  .switches input { accent-color: var(--primary); }
+
+  .chat {
+    background: var(--background); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); height: 640px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px 24px 8px; }
+  .dock { flex: 0 0 auto; padding: 0 24px; position: relative; }
+  .reading-column { max-width: 45rem; margin: 0 auto; }
+  .user-msg {
+    margin: 0 0 16px auto; max-width: 70%; width: fit-content;
+    background: var(--accent); border-radius: var(--radius-lg); padding: 8px 12px;
+  }
+  .strip {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    border: 1px solid var(--primary); border-radius: var(--radius-md);
+    background: var(--card); padding: 6px 12px; cursor: pointer;
+    font: inherit; color: var(--foreground); text-align: left;
+  }
+  .strip:hover { background: var(--accent); }
+  .strip .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--primary); flex: 0 0 auto; }
+  .strip .meta { color: var(--muted-foreground); font-size: var(--text-meta); }
+  .pill {
+    position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+    border: 1px solid var(--primary); border-radius: 999px; background: var(--card);
+    color: var(--foreground); font: inherit; padding: 4px 12px; cursor: pointer;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 8%); white-space: nowrap;
+  }
+  .pill-host { position: relative; height: 0; }
+  .prose { font-size: var(--text-chat-body); line-height: 1.625; margin: 0 0 16px; }
+
+  .qa {
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--card); overflow: hidden;
+  }
+  .qa-head {
+    display: flex; align-items: center; gap: 8px; min-height: 36px;
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+  }
+  .qa-head .title { flex: 1 1 auto; font-weight: 600; letter-spacing: 0.01em; color: var(--muted-foreground); }
+
+  .qa-tabs { display: flex; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .qa-tab {
+    appearance: none; background: transparent; border: 0;
+    border-bottom: 2px solid transparent; border-right: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    font: inherit; color: var(--muted-foreground); cursor: pointer; white-space: nowrap;
+  }
+  .qa-tab:hover { background: var(--accent); }
+  .qa-tab[aria-selected="true"] { color: var(--foreground); font-weight: 500; border-bottom-color: var(--primary); background: var(--background); }
+  .qa-tab .ok { color: var(--success); font-size: 12px; }
+  .qa-tab.review { margin-left: auto; border-left: 1px solid var(--border); border-right: 0; }
+
+  .qa-body { padding: 4px 10px 10px; max-height: 60vh; overflow: auto; }
+  .chip {
+    display: inline-block; margin: 8px 4px 0; padding: 1px 6px;
+    border-radius: var(--radius-xs); background: var(--muted);
+    color: var(--muted-foreground); font-size: var(--text-meta);
+  }
+  .qa-question { padding: 4px 4px 8px; font-weight: 600; line-height: 1.6; }
+  .qa-question.nochip { padding-top: 8px; }
+  .multi-hint { font-weight: 400; color: var(--muted-foreground); font-size: var(--text-meta); margin-left: 6px; }
+  .opts { display: flex; flex-direction: column; gap: 8px; }
+  .opt {
+    display: flex; flex-direction: column; gap: 8px;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 8px; cursor: pointer;
+  }
+  .opt:hover { background: var(--accent); }
+  .opt.sel { background: var(--selection); }
+  .opt .row { display: flex; align-items: flex-start; gap: 10px; }
+  .letter {
+    width: 20px; height: 20px; flex: 0 0 auto; display: grid; place-items: center;
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    background: var(--muted); color: var(--muted-foreground); font-size: var(--text-meta); line-height: 1;
+  }
+  .opt.sel .letter { border-color: var(--primary); color: var(--primary); }
+  .opt .label { flex: 1 1 auto; min-width: 0; line-height: 1.6; }
+  .opt .desc { display: block; margin-top: 2px; color: var(--muted-foreground); font-size: var(--text-meta); }
+  .opt.other:not(.sel) .label { color: var(--muted-foreground); }
+  .opt.chat { border-style: dashed; }
+  .opt.chat .label { color: var(--muted-foreground); }
+  .opt-sep { height: 1px; background: var(--border); margin: 2px 4px; }
+  textarea.other-box {
+    width: 100%; min-height: 56px; max-height: 192px; resize: none; overflow-y: auto;
+    border: 1px solid var(--input); border-radius: var(--radius-md);
+    background: var(--background); color: var(--foreground);
+    font: inherit; line-height: 1.6; padding: 6px 10px; field-sizing: content;
+  }
+  textarea.other-box:focus { outline: 2px solid color-mix(in srgb, var(--primary) 30%, transparent); border-color: var(--primary); }
+
+  .review-title { padding: 10px 4px 8px; font-weight: 600; }
+  .review-row {
+    display: grid; grid-template-columns: 36px 1fr; gap: 4px 10px;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 8px 10px; margin-bottom: 8px; cursor: pointer;
+  }
+  .review-row:hover { background: var(--accent); }
+  .review-row .n { color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .review-row .q { color: var(--muted-foreground); font-size: var(--text-meta); }
+  .review-row .a { grid-column: 2; white-space: pre-wrap; word-break: break-word; }
+  .review-row .a.missing { color: var(--destructive); }
+  .review-row .edit { grid-column: 2; font-size: var(--text-meta); color: var(--muted-foreground); }
+
+  .qa-foot {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px 10px; border-top: 1px solid var(--border);
+  }
+  .spacer { flex: 1 1 auto; }
+  .keys { font-size: var(--text-meta); color: var(--muted-foreground); }
+  .btn {
+    appearance: none; height: 24px; padding: 0 8px; border-radius: var(--radius-sm);
+    font: inherit; cursor: pointer; border: 1px solid transparent;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .btn-ghost { background: transparent; color: var(--muted-foreground); }
+  .btn-ghost:hover { background: var(--accent); color: var(--foreground); }
+  .btn-secondary { background: var(--card); border-color: var(--border); color: var(--foreground); }
+  .btn-secondary:hover { background: var(--accent); }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); padding: 0 10px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .kbd { font-size: var(--text-meta); opacity: 0.7; }
+  [data-tip] { position: relative; }
+  [data-tip]:hover::after {
+    content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 0;
+    width: max-content; max-width: 280px; white-space: normal;
+    background: var(--foreground); color: var(--background);
+    font-size: var(--text-meta); padding: 6px 8px; border-radius: var(--radius-sm); z-index: 5;
+  }
+
+  .composer {
+    margin: 8px 24px 16px; border: 1px solid var(--border); border-radius: var(--radius-lg);
+    background: var(--background); padding: 10px 12px; color: var(--muted-foreground);
+  }
+  .composer.focus { outline: 2px solid var(--primary); }
+  .log {
+    margin-top: 14px; border: 1px dashed var(--border); border-radius: var(--radius-sm);
+    padding: 8px 12px; font-family: var(--font-mono); font-size: var(--text-code);
+    color: var(--muted-foreground); white-space: pre-wrap;
+  }
+  .done { padding: 14px; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="docbar">
+    <h1>问题卡片：新的走法（可交互）</h1>
+    <ul>
+      <li><b>点选项只选中，不跳转。</b>往前走由右下角一个按钮负责：中间是「下一题」，最后一题之后是「检查答案」，到确认页变「提交」。回车 = 按这个按钮。</li>
+      <li><b>确认页</b>：标签条末尾的「确认」。列出每题的答案，点哪一行回到那题改；有没答的题标红，「提交」置灰。</li>
+      <li><b>聊聊这个</b>：不回答，告诉 AI「先别继续，我想就这些问题跟你聊」。卡片收起，焦点到输入框，你打字发给 AI。</li>
+      <li><b>跳过</b>说清楚范围：它跳过的是<b>整组问题</b>，AI 会自己拿主意接着做。下面可以切换几种写法。</li>
+      <li>删掉了「下一个未回答」按钮和「还有 N 个未回答」：标签上的 ✓ 已经说明了哪些答了。</li>
+      <li><b>遮挡问题</b>：A 是停靠在输入框上方，一往上翻就自己收成一行「AI 在等你回答」，翻回底部或点它再展开，不用手动折叠。B 是让卡片像普通消息一样跟在聊天末尾，不再停靠；翻走以后输入框上方出一个「↓ AI 在等你回答」提醒，点一下滚回去。</li>
+    </ul>
+  </div>
+
+  <div class="switches">
+    <span class="k">卡片放哪（往上翻试试）</span>
+    <span>
+      <label><input type="radio" name="place" value="dock" checked /> A. 停靠在输入框上方，往上翻自动收成一行</label>
+      <label><input type="radio" name="place" value="inline" /> B. 跟在聊天内容末尾，翻走后输入框上方出提醒</label>
+    </span>
+    <span class="k">「聊聊这个」放哪</span>
+    <span>
+      <label><input type="radio" name="chatpos" value="option" checked /> A. 选项列表末尾一行（Claude Code 的做法）</label>
+      <label><input type="radio" name="chatpos" value="footer" /> B. 底部左侧按钮</label>
+    </span>
+    <span class="k">「跳过」怎么写</span>
+    <span>
+      <label><input type="radio" name="skipword" value="a" checked /> 全部跳过</label>
+      <label><input type="radio" name="skipword" value="b" /> 跳过这组问题</label>
+      <label><input type="radio" name="skipword" value="c" /> 不回答，让 AI 自己定</label>
+    </span>
+    <span class="k">问题数</span>
+    <span>
+      <label><input type="radio" name="count" value="3" checked /> 3 题</label>
+      <label><input type="radio" name="count" value="1" /> 1 题（没有标签和确认页）</label>
+    </span>
+  </div>
+
+  <div class="chat">
+    <div class="scroll" id="scroll">
+      <div class="reading-column" id="history"></div>
+      <div class="reading-column"><div id="inline-host"></div></div>
+    </div>
+    <div class="pill-host" id="pill-host"></div>
+    <div class="dock"><div class="reading-column" id="dock-host"></div></div>
+    <div class="composer" id="composer">输入消息…（模拟聊天输入框）</div>
+  </div>
+  <div class="log" id="log">（点「提交 / 聊聊这个 / 跳过」后，这里显示 AI 收到的内容）</div>
+</div>
+
+<script>
+  const ALL = [
+    {
+      header: '存储',
+      question: '缓存放在哪里？',
+      options: [
+        { label: 'SQLite', description: '单文件，跟着工作区走' },
+        { label: '内存', description: '重启就没了，最简单' },
+      ],
+    },
+    {
+      header: '范围',
+      question: '这次先改哪些模块？',
+      multi: true,
+      options: [{ label: '会话列表' }, { label: '聊天时间线' }, { label: '设置页' }],
+    },
+    {
+      header: '命名',
+      question: '新的配置项叫什么？',
+      options: [{ label: 'cache.mode' }, { label: 'storage.cache' }],
+    },
+  ];
+  const SKIP = {
+    a: { text: '全部跳过', tip: '这组问题一个都不回答，AI 会自己拿主意继续。' },
+    b: { text: '跳过这组问题', tip: '这组问题一个都不回答，AI 会自己拿主意继续。' },
+    c: { text: '不回答，让 AI 自己定', tip: '这组问题一个都不回答，AI 会自己拿主意继续。' },
+  };
+  const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+  let items, sel, active, finished;
+  let collapsed = false;
+  let lastTop = 0;
+  const opt = (name) => document.querySelector(`input[name="${name}"]:checked`).value;
+
+  function reset() {
+    items = opt('count') === '1' ? [ALL[0]] : ALL;
+    sel = items.map(() => ({ picked: [], other: false, text: '' }));
+    active = 0;
+    finished = null;
+    collapsed = false;
+    document.getElementById('composer').classList.remove('focus');
+    render();
+    toBottom();
+  }
+  const scroller = () => document.getElementById('scroll');
+  function toBottom() {
+    const el = scroller();
+    el.scrollTop = el.scrollHeight;
+    lastTop = el.scrollTop;
+  }
+
+  const answered = (i) =>
+    sel[i].picked.length > 0 || (sel[i].other && sel[i].text.trim().length > 0);
+  const allAnswered = () => items.every((_, i) => answered(i));
+  const multi = items => items.length > 1;
+  const REVIEW = () => items.length; // tab index of the confirmation page
+
+  function answerText(i) {
+    const parts = [...sel[i].picked];
+    if (sel[i].other && sel[i].text.trim()) parts.push('其他：' + sel[i].text.trim());
+    return parts.join('\n');
+  }
+
+  function primary() {
+    if (!multi(items)) return { label: '提交', enabled: allAnswered(), run: submit };
+    if (active === REVIEW()) return { label: '提交', enabled: allAnswered(), run: submit };
+    const last = active === items.length - 1;
+    return {
+      label: last ? '检查答案' : '下一题',
+      enabled: answered(active),
+      run: () => go(active + 1),
+    };
+  }
+
+  function go(i) {
+    active = i;
+    render(true);
+  }
+
+  function submit() {
+    finished = 'submitted';
+    log(
+      'AI 收到（工具结果）：\n' +
+        JSON.stringify(
+          { answers: items.map((q, i) => ({ question: q.question, answer: answerText(i) })) },
+          null,
+          2
+        )
+    );
+    render();
+  }
+  function skip() {
+    finished = 'skipped';
+    log('AI 收到（工具结果）：\n{ "answers": [每题都是空] }\n→ AI 按自己的判断继续往下做。');
+    render();
+  }
+  function chat() {
+    finished = 'chat';
+    log(
+      'AI 收到（工具结果）：\n"用户没有选择，想先就这些问题和你讨论。请停在这里，等用户的下一条消息，不要自己猜答案继续。"\n→ 回合结束，焦点到输入框；你发的下一条消息正常开启新回合。'
+    );
+    document.getElementById('composer').classList.add('focus');
+    render();
+  }
+  const log = (s) => (document.getElementById('log').textContent = s);
+
+  function pick(i, j) {
+    const q = items[i];
+    const s = sel[i];
+    if (j === q.options.length) {
+      if (q.multi) s.other = !s.other;
+      else { s.other = true; s.picked = []; }
+    } else {
+      const label = q.options[j].label;
+      if (q.multi) {
+        s.picked = s.picked.includes(label) ? s.picked.filter((x) => x !== label) : [...s.picked, label];
+      } else {
+        s.picked = [label];
+        s.other = false;
+      }
+    }
+    render(j === q.options.length && s.other);
+  }
+
+  function render(focusPanel) {
+    const place = opt('place');
+    const inlineHost = document.getElementById('inline-host');
+    const dockHost = document.getElementById('dock-host');
+    const host = place === 'inline' ? inlineHost : dockHost;
+    (place === 'inline' ? dockHost : inlineHost).innerHTML = '';
+    if (place === 'dock' && collapsed && !finished) {
+      const done = items.filter((_, i) => answered(i)).length;
+      host.innerHTML =
+        `<button class="strip" id="strip"><span class="dot"></span>` +
+        `<span>AI 在等你回答</span>` +
+        `<span class="meta">${items.length} 个问题 · 已答 ${done}</span>` +
+        `<span class="spacer"></span><span class="meta">展开 ↓</span></button>`;
+      document.getElementById('strip').onclick = () => {
+        collapsed = false;
+        render(true);
+        toBottom();
+      };
+      updatePill();
+      return;
+    }
+    if (finished) {
+      const word = { submitted: '已回答', skipped: '已跳过（AI 自己决定）', chat: '你想先聊聊 — 在下面输入' }[finished];
+      host.innerHTML =
+        `<div class="qa"><div class="qa-head"><span class="title">问题 · ${word}</span>` +
+        `<button class="btn btn-ghost" id="again">重来</button></div></div>`;
+      document.getElementById('again').onclick = reset;
+      updatePill();
+      return;
+    }
+    const chatPos = opt('chatpos');
+    const skipW = SKIP[opt('skipword')];
+    let h = '<div class="qa"><div class="qa-head"><span class="title">问题</span></div>';
+
+    if (multi(items)) {
+      h += '<div class="qa-tabs" role="tablist">';
+      items.forEach((_, i) => {
+        h += `<button class="qa-tab" role="tab" data-tab="${i}" aria-selected="${i === active}">Q${i + 1}${answered(i) ? ' <span class="ok">✓</span>' : ''}</button>`;
+      });
+      h += `<button class="qa-tab review" role="tab" data-tab="${REVIEW()}" aria-selected="${active === REVIEW()}">确认</button>`;
+      h += '</div>';
+    }
+
+    h += '<div class="qa-body" id="body">';
+    if (multi(items) && active === REVIEW()) {
+      h += '<div class="review-title">检查一下你的回答</div>';
+      items.forEach((q, i) => {
+        const a = answerText(i);
+        h +=
+          `<div class="review-row" data-jump="${i}"><span class="n">Q${i + 1}</span>` +
+          `<span class="q">${q.question}</span>` +
+          (a ? `<span class="a">${escapeHtml(a)}</span>` : '<span class="a missing">还没回答</span>') +
+          '<span class="edit">点击修改</span></div>';
+      });
+    } else {
+      const i = active;
+      const q = items[i];
+      if (q.header) h += `<span class="chip">${q.header}</span>`;
+      h += `<div class="qa-question${q.header ? '' : ' nochip'}">${q.question}${q.multi ? '<span class="multi-hint">可多选</span>' : ''}</div>`;
+      h += '<div class="opts">';
+      const rows = [...q.options, { label: '其他…', other: true }];
+      rows.forEach((o, j) => {
+        const isSel = o.other ? sel[i].other : sel[i].picked.includes(o.label);
+        h += `<div class="opt${isSel ? ' sel' : ''}${o.other ? ' other' : ''}" data-opt="${j}" tabindex="0">`;
+        h += `<div class="row"><span class="letter">${LETTERS[j]}</span><span class="label">${o.label}${o.description ? `<span class="desc">${o.description}</span>` : ''}</span></div>`;
+        if (o.other && isSel) {
+          h += `<textarea class="other-box" id="otherbox" rows="2" placeholder="输入你的回答…（回车进入下一步，Shift+回车换行）">${escapeHtml(sel[i].text)}</textarea>`;
+        }
+        h += '</div>';
+      });
+      if (chatPos === 'option') {
+        h += '<div class="opt-sep"></div>';
+        h += `<div class="opt chat" data-chat tabindex="0"><div class="row"><span class="letter">💬</span><span class="label">聊聊这个<span class="desc">先不选，直接和 AI 讨论这些问题</span></span></div></div>`;
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+
+    const p = primary();
+    h += '<div class="qa-foot">';
+    if (chatPos === 'footer') h += `<button class="btn btn-ghost" id="chat" data-tip="先不选，直接和 AI 讨论这些问题。卡片收起，你在输入框里打字。">聊聊这个</button>`;
+    h += `<button class="btn btn-ghost" id="skip" data-tip="${skipW.tip}">${skipW.text}</button>`;
+    h += '<span class="spacer"></span>';
+    h += `<button class="btn btn-primary" id="primary" ${p.enabled ? '' : 'disabled'}>${p.label} <span class="kbd">↵</span></button>`;
+    h += '</div></div>';
+    host.innerHTML = h;
+
+    host.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => go(+b.dataset.tab)));
+    host.querySelectorAll('[data-jump]').forEach((b) => (b.onclick = () => go(+b.dataset.jump)));
+    host.querySelectorAll('[data-opt]').forEach((b) => {
+      b.onclick = (e) => {
+        if (e.target.tagName === 'TEXTAREA') return;
+        pick(active, +b.dataset.opt);
+      };
+    });
+    const chatRow = host.querySelector('[data-chat]');
+    if (chatRow) chatRow.onclick = chat;
+    const chatBtn = document.getElementById('chat');
+    if (chatBtn) chatBtn.onclick = chat;
+    document.getElementById('skip').onclick = skip;
+    document.getElementById('primary').onclick = () => p.enabled && p.run();
+
+    const box = document.getElementById('otherbox');
+    if (box) {
+      box.oninput = () => {
+        sel[active].text = box.value;
+        refreshChrome();
+      };
+      box.onkeydown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+          e.preventDefault();
+          e.stopPropagation();
+          const q = primary();
+          if (q.enabled) q.run();
+        }
+      };
+      if (focusPanel) {
+        box.focus();
+        box.setSelectionRange(box.value.length, box.value.length);
+      }
+    } else if (focusPanel) {
+      (host.querySelector('.opt.sel') || host.querySelector('.opt') || document.getElementById('primary'))?.focus({ preventScroll: true });
+    }
+    updatePill();
+  }
+
+  // B: the card scrolls with the chat; when it is out of view a pill points back to it.
+  function updatePill() {
+    const pillHost = document.getElementById('pill-host');
+    const card = document.querySelector('#inline-host .qa');
+    if (opt('place') !== 'inline' || finished || !card) {
+      pillHost.innerHTML = '';
+      return;
+    }
+    const box = scroller().getBoundingClientRect();
+    const r = card.getBoundingClientRect();
+    const visible = r.top < box.bottom - 40 && r.bottom > box.top;
+    if (visible) {
+      pillHost.innerHTML = '';
+      return;
+    }
+    if (!pillHost.firstChild) {
+      pillHost.innerHTML = `<button class="pill" id="pill">↓ AI 在等你回答（${items.length} 个问题）</button>`;
+      document.getElementById('pill').onclick = () => {
+        scroller().scrollTo({ top: scroller().scrollHeight, behavior: 'smooth' });
+      };
+    }
+  }
+
+  // A: scrolling up folds the card to one line; scrolling back to the bottom unfolds it.
+  function onScroll() {
+    const el = scroller();
+    const top = el.scrollTop;
+    const up = top < lastTop - 2;
+    const down = top > lastTop + 2;
+    lastTop = top;
+    if (opt('place') === 'dock' && !finished) {
+      const atBottom = el.scrollHeight - el.clientHeight - top < 4;
+      if (up && !collapsed) {
+        collapsed = true;
+        render();
+      } else if (down && atBottom && collapsed) {
+        collapsed = false;
+        render();
+        toBottom();
+      }
+    }
+    updatePill();
+  }
+
+  // Only the tabs' ticks and the primary button depend on typing in Other.
+  function refreshChrome() {
+    document.querySelectorAll('.qa-tab[data-tab]').forEach((t) => {
+      const i = +t.dataset.tab;
+      if (i >= items.length) return;
+      t.innerHTML = `Q${i + 1}${answered(i) ? ' <span class="ok">✓</span>' : ''}`;
+    });
+    const p = primary();
+    const b = document.getElementById('primary');
+    b.disabled = !p.enabled;
+    b.onclick = () => p.enabled && p.run();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (finished || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+    if (e.key === 'Enter') {
+      const p = primary();
+      if (p.enabled) { e.preventDefault(); p.run(); }
+      return;
+    }
+    if (active >= items.length) return;
+    const k = e.key.toUpperCase();
+    const j = LETTERS.indexOf(k);
+    if (k.length === 1 && j >= 0 && j <= items[active].options.length) {
+      e.preventDefault();
+      pick(active, j);
+    }
+  });
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  }
+
+  const HISTORY = [
+    ['user', '帮我给会话列表加一层缓存，现在每次切换都要重新读盘，有点卡。'],
+    ['ai', '好的。我先看了一下现在的读取路径：会话列表每次切换都会调用 listSessions()，它会遍历工作区下的所有会话文件并逐个解析头部信息。会话多的时候（几百个）这一步要几百毫秒。'],
+    ['ai', '缓存可以放在两个地方：一是 SQLite，跟着工作区走，重启后还在；二是纯内存，最简单，但每次启动第一次切换仍然要读盘。两者的失效策略也不同：SQLite 需要监听文件变更来更新，内存缓存可以在每次写会话时顺手更新。'],
+    ['ai', '另外，聊天时间线和设置页也有类似的重复读取，可以一并处理，但改动范围会大不少。时间线那边的读取和渲染耦合得比较紧，拆开需要先调整一下数据流。'],
+    ['ai', '命名方面，现有配置里已经有 storage.* 和 cache.* 两套前缀，新项放哪边都说得通，我倾向跟随你的习惯。'],
+    ['ai', '在动手之前我需要确认几件事：'],
+  ];
+  document.getElementById('history').innerHTML = HISTORY.map(([who, text]) =>
+    who === 'user' ? `<div class="user-msg">${text}</div>` : `<p class="prose">${text}</p>`
+  ).join('');
+  document.getElementById('scroll').addEventListener('scroll', onScroll);
+  document.querySelectorAll('.switches input').forEach((r) =>
+    r.addEventListener('change', () => {
+      if (r.name === 'count') return reset();
+      collapsed = false;
+      render();
+      if (r.name === 'place') toBottom();
+    })
+  );
+  reset();
+</script>
+</body>
+</html>

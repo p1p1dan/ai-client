@@ -3229,6 +3229,7 @@ export const zhTranslations: Record<string, string> = {
   'Questions skipped': '已跳过提问',
   'Other…': '其他…',
   Skip: '跳过',
+  'Skip all': '全部跳过',
   Skipped: '已跳过',
   // Identity on purpose: a key chord is not a sentence. The entry exists so a
   // locale that words it differently has a place to say so.
@@ -3817,7 +3818,24 @@ Object.assign(zhTranslations, {
   'Dismiss queue notice': '关闭排队提示',
   // Question card.
   'Your answer': '你的回答',
-  'Type your answer…': '输入你的回答…',
+  'Type your answer (Enter to continue, Shift+Enter for a new line)':
+    '输入你的回答（回车下一步，Shift+回车换行）',
+  'Chat about this': '聊聊这个',
+  'Answer later and discuss these questions with the AI first': '先不回答，和 AI 进一步讨论',
+  'Leave every question unanswered; the AI decides on its own and carries on.':
+    '这组问题一个都不回答，AI 自己拿主意继续。',
+  'Next question': '下一题',
+  'Review answers': '检查答案',
+  'Check your answers': '检查一下你的回答',
+  'Click a row to change it': '点一行回去修改',
+  'Not answered yet': '还没回答',
+  'Multiple choice': '可多选',
+  'Confirm answers': '确认',
+  'Esc interrupts': 'Esc 中断',
+  'Answered {{answered}} / {{total}}': '已答 {{answered}} / {{total}}',
+  'Discussed instead': '改为讨论',
+  'Other:': '其他：',
+  'Chose to discuss these questions first': '选择了先讨论这些问题',
   'Value is hidden while you type': '输入内容不会显示',
   'Questions stopped': '提问已停止',
   'Other: {{text}}': '其他：{{text}}',

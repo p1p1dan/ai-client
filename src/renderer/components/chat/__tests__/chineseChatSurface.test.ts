@@ -10,6 +10,7 @@ import { ModelMissingNotice } from '../ModelMissingNotice';
 import { isModelMissingError } from '../modelMissingError';
 import { PermissionActivityRows } from '../PermissionActivityRows';
 import { QuestionCard } from '../QuestionCard';
+import { QuestionPrompt } from '../QuestionPrompt';
 import { ToolRow } from '../ToolRows';
 import { deriveToolGroupRows, type ToolGroupEntry } from '../toolCard';
 
@@ -319,7 +320,7 @@ it('renders the runtime permission action from an id, in Chinese', async () => {
  * plausible catalog entry, so asserting only the Chinese would pass on a card
  * that still printed the English next to it.
  */
-it('renders the interactive question card in Chinese — title, Other row and both buttons', async () => {
+it('renders the interactive question card in Chinese — Other row, Chat about this and both buttons', async () => {
   const block = {
     id: 'q1',
     type: 'question',
@@ -329,16 +330,24 @@ it('renders the interactive question card in Chinese — title, Other row and bo
   const { container, root } = mount();
   try {
     await act(async () =>
-      root.render(createElement(QuestionCard, { variant: 'interactive', block }))
+      root.render(
+        createElement(QuestionPrompt, {
+          block,
+          onSubmit: async () => true,
+          onChatAbout: async () => true,
+          onSkip: async () => true,
+        })
+      )
     );
     const text = container.textContent ?? '';
-    expect(text).toContain('提问');
     expect(text).toContain('其他…');
-    expect(text).toContain('跳过');
-    expect(text).toContain('继续');
+    expect(text).toContain('聊聊这个');
+    expect(text).toContain('全部跳过');
+    expect(text).toContain('提交');
+    expect(text).toContain('Esc 中断');
     // The agent's own option label is never translated — it is its words.
     expect(text).toContain('单元测试');
-    expect(text).not.toMatch(/Questions|Other…|Skip|Continue/);
+    expect(text).not.toMatch(/Other…|Skip|Submit|Chat about this/);
   } finally {
     await act(async () => root.unmount());
     container.remove();

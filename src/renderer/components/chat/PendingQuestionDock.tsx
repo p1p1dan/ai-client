@@ -1,18 +1,13 @@
 /**
  * F5 — where a live question is answered.
  *
- * `MessageTimeline` has said for a long time that "the live, answerable card
- * lives in `PendingQuestionDock` (outside ScrollArea, docked above the
- * Composer)" and then rendered only the frozen copy, because no such component
- * existed and nothing ever produced a `question.requested` to put in it. The
- * runtime's `ask` tool is that producer; this is that dock.
- *
- * ## Why outside the scroll area
+ * ## Why in the composer's place
  *
  * The card is the only thing standing between the user and a turn that cannot
- * continue. In the timeline it scrolls away as the assistant keeps streaming,
- * and the session sits in `waiting_question` with the reason off screen. Docked
- * above the composer it stays where the composer's own hint already points.
+ * continue, so while it waits it IS the input: `PendingInteractionSlot` shows
+ * it where the composer was (2026-10-14 user decision). Docked above the
+ * composer it covered the timeline the user scrolled back through, and had to
+ * be folded by hand to read past it.
  *
  * ## Why the block comes from the store rather than props
  *
@@ -22,14 +17,26 @@
  * private copy of that state.
  */
 
-import { useState } from 'react';
 import { useChatSessionsStore } from '../../stores/chatSessions';
 import { useSessionPanelsStore } from '../../stores/sessionPanels';
 import { requestComposerFocus } from './composerFocus';
 import { PlanReviewCard } from './PlanReviewCard';
-import { QuestionCard } from './QuestionCard';
+import { QuestionPrompt } from './QuestionPrompt';
 import { deriveQuestionCardState } from './questionCardModel';
 import { deriveGoalBarView } from './sessionPanelsModel';
+
+/** Whether this session has a live question card to show in the composer's place. */
+export function useHasPendingQuestionCard(sessionId: string | null): boolean {
+  return useChatSessionsStore((state) => {
+    const pending = state.pendingQuestions.find((item) => item.sessionId === sessionId);
+    if (!pending || !sessionId) return false;
+    const message = state.messages[sessionId]?.find((item) => item.id === pending.messageId);
+    const block = message?.blocks.find(
+      (item) => item.type === 'question' && item.questionId === pending.questionId
+    );
+    return block !== undefined && deriveQuestionCardState(block) === 'pending';
+  });
+}
 
 export function PendingQuestionDock({ sessionId }: { sessionId: string | null }) {
   // chat-event-01: a turn can park several questions at once, so this takes the
@@ -47,7 +54,6 @@ export function PendingQuestionDock({ sessionId }: { sessionId: string | null })
     );
   });
   const respondQuestion = useChatSessionsStore((state) => state.respondQuestion);
-  const [collapsed, setCollapsed] = useState(false);
   // Decision 169: whether a plan review may still set a goal is the goal bar's call.
   const goalPanels = useSessionPanelsStore((state) =>
     sessionId ? state.bySession[sessionId] : undefined
@@ -65,36 +71,28 @@ export function PendingQuestionDock({ sessionId }: { sessionId: string | null })
     // Decision 169: a plan review is its own card. Keyed by the question, so
     // the next review (a revised plan) starts from the defaults again.
     return (
-      <div className="min-w-0 shrink-0 px-2 pb-2 sm:px-6">
-        <div className="mx-auto w-full max-w-reading">
-          <PlanReviewCard
-            key={pending.questionId}
-            block={block}
-            goal={deriveGoalBarView(goalPanels, false)}
-            onRespond={(payload) => respondQuestion({ ...payload, questionId: pending.questionId })}
-            onClosed={() => {
-              if (sessionId) requestComposerFocus(sessionId);
-            }}
-          />
-        </div>
-      </div>
+      <PlanReviewCard
+        key={pending.questionId}
+        block={block}
+        goal={deriveGoalBarView(goalPanels, false)}
+        onRespond={(payload) => respondQuestion({ ...payload, questionId: pending.questionId })}
+        onClosed={() => {
+          if (sessionId) requestComposerFocus(sessionId);
+        }}
+      />
     );
   }
 
   return (
-    <div className="min-w-0 shrink-0 px-2 pb-2 sm:px-6">
-      <div className="mx-auto w-full max-w-reading">
-        <QuestionCard
-          variant="interactive"
-          block={block}
-          collapsed={collapsed}
-          onToggleCollapsed={() => setCollapsed((value) => !value)}
-          // Answer the card that is actually on screen, by id: with more than
-          // one question parked, "the first one" is not a stable address.
-          onSubmit={(payload) => respondQuestion({ ...payload, questionId: pending.questionId })}
-          onSkip={() => respondQuestion({ questionId: pending.questionId, cancel: true })}
-        />
-      </div>
-    </div>
+    <QuestionPrompt
+      // Keyed by the question, so the next parked one starts from a clean card.
+      key={pending.questionId}
+      block={block}
+      // Answer the card that is actually on screen, by id: with more than
+      // one question parked, "the first one" is not a stable address.
+      onSubmit={(payload) => respondQuestion({ ...payload, questionId: pending.questionId })}
+      onChatAbout={(payload) => respondQuestion({ ...payload, questionId: pending.questionId })}
+      onSkip={() => respondQuestion({ questionId: pending.questionId, cancel: true })}
+    />
   );
 }

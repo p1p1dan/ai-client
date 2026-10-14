@@ -107,7 +107,7 @@ import {
 } from './compactCommand';
 import { cancelCompactRun, nextCompactRunId, runCompactWhenRunning } from './compactRun';
 import { buildBranchColumn } from './composerColumns';
-import { onComposerFocusRequest } from './composerFocus';
+import { onComposerFocusRequest, onComposerStopRequest } from './composerFocus';
 import { isTargetableWorkspace, resolveActiveTarget } from './composerTarget';
 import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
@@ -3928,6 +3928,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         }
       }),
     [releaseStopLatch]
+  );
+
+  // Esc on a question / permission / plan-review card in this composer's place.
+  // A ref keeps the listener stable while `handleStop` is rebuilt every render.
+  const handleStopRef = useRef(handleStop);
+  handleStopRef.current = handleStop;
+  useEffect(
+    () =>
+      onComposerStopRequest(
+        () => activeSessionId,
+        () => handleStopRef.current()
+      ),
+    [activeSessionId]
   );
 
   // Decision 046 rule 3: ending a conversation (sidebar) releases everything

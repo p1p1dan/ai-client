@@ -127,7 +127,7 @@ it('sends the answer to the worker keyed by the question id', async () => {
   expect(option).toBeDefined();
   await act(async () => option?.click());
   const submit = [...container.querySelectorAll('button')].find((button) =>
-    /continue/i.test(button.textContent ?? '')
+    /submit/i.test(button.textContent ?? '')
   );
   expect(submit).toBeDefined();
   await act(async () => submit?.click());
@@ -216,13 +216,34 @@ it('chat-event-01: a second question parks behind the first instead of replacing
  * site anywhere in the repo. Comments are stripped first so the scan cannot be
  * satisfied by the prose that explains it.
  */
-it('is mounted in the chat column, above the composer', () => {
+it("takes the composer's place while it waits, and the composer stays mounted", () => {
   const source = stripComments(
     readFileSync(path.join(__dirname, '..', 'ChatWorkspace.tsx'), 'utf8'),
     'ChatWorkspace.tsx'
   );
-  expect(source).toContain('<PendingQuestionDock sessionId={activeSessionId} />');
-  // Above the composer, not below it: a card under the input box is a card the
-  // user scrolls past.
-  expect(source.indexOf('<PendingQuestionDock')).toBeLessThan(source.indexOf('<ChatComposer'));
+  // The card replaces the message box rather than docking above it…
+  expect(source).toContain(
+    '{waitingOnUser && <PendingInteractionSlot sessionId={activeSessionId} />}'
+  );
+  // …and the composer is hidden, not unmounted, so its draft survives the card.
+  expect(source).toMatch(/<div hidden=\{waitingOnUser\}[^>]*>\s*<ChatComposer/);
+  // `display: contents` would override the `hidden` attribute, so the class
+  // must switch too.
+  expect(source).toContain("className={waitingOnUser ? 'hidden' : 'contents'}");
+});
+
+it('sends Chat about this as a free-text response to every question', async () => {
+  askInStore('s1');
+  const { container, root } = dock();
+  await act(async () => root.render(createElement(PendingQuestionDock, { sessionId: 's1' })));
+  const chat = [...container.querySelectorAll('button')].find((button) =>
+    button.textContent?.includes('Chat about this')
+  );
+  await act(async () => chat?.click());
+  expect(respondQuestion).toHaveBeenCalledWith({
+    sessionId: 's1',
+    questionId: 'call-1',
+    response: 'Further discuss these issues',
+  });
+  await act(async () => root.unmount());
 });

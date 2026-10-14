@@ -449,16 +449,16 @@ it('freezes into the timeline once resolved, and leaves the dock', async () => {
  * before F5 built one. Comments are stripped first so the scan cannot be
  * satisfied by the prose explaining it.
  */
-it('is mounted in the chat column, above the composer', () => {
-  const source = stripComments(
-    readFileSync(path.join(__dirname, '..', 'ChatWorkspace.tsx'), 'utf8'),
-    'ChatWorkspace.tsx'
+it("takes the composer's place, permission first, question behind it", () => {
+  const slot = stripComments(
+    readFileSync(path.join(__dirname, '..', 'PendingInteractionSlot.tsx'), 'utf8'),
+    'PendingInteractionSlot.tsx'
   );
-  expect(source).toContain('<PendingPermissionDock sessionId={activeSessionId} />');
-  expect(source.indexOf('<PendingPermissionDock')).toBeLessThan(source.indexOf('<ChatComposer'));
-  // Questions and permissions are separate gates that can both be open; neither
-  // dock may be made conditional on the other.
-  expect(source).toContain('<PendingQuestionDock sessionId={activeSessionId} />');
+  // The engine is blocked on the permission call, so it shows first; the
+  // question card comes up once that gate is answered.
+  expect(slot).toMatch(
+    /permission \?[\s\S]{0,80}<PendingPermissionDock sessionId=\{sessionId\} \/>[\s\S]{0,40}<PendingQuestionDock sessionId=\{sessionId\} \/>/
+  );
 });
 
 /**
