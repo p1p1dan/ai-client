@@ -370,6 +370,78 @@ describe('UserProviderService — remove / setEnabled', () => {
 });
 
 describe('UserProviderService — fetchModels', () => {
+  it('preserves gateway display names separately from request ids', async () => {
+    fetchFn.mockResolvedValue(
+      jsonResponse({
+        data: [
+          { id: 'claude-fable-5-dd-los-1.6-tpg', display_name: 'GPT 6.1 Sol', owned_by: 'openai' },
+          { id: 'claude-fable-5-dd-los-1.6-tpg', display_name: 'Duplicate' },
+          { id: 'gpt-5.4', name: 'GPT 5.4' },
+          { name: 'models/gemini-test', displayName: 'Gemini Test' },
+          { id: 'unnamed', display_name: '  ' },
+          { id: 'invalid-label', display_name: 42 },
+          { id: 'same', display_name: 'same' },
+        ],
+      })
+    );
+    await expect(
+      service().fetchModels({
+        baseUrl: 'https://proxy.example/v1',
+        api: 'openai-responses',
+        apiKey: 'K',
+      })
+    ).resolves.toEqual({
+      ok: true,
+      models: [
+        'claude-fable-5-dd-los-1.6-tpg',
+        'gpt-5.4',
+        'gemini-test',
+        'unnamed',
+        'invalid-label',
+        'same',
+      ],
+      modelNames: {
+        'claude-fable-5-dd-los-1.6-tpg': 'GPT 6.1 Sol',
+        'gpt-5.4': 'GPT 5.4',
+        'gemini-test': 'Gemini Test',
+      },
+    });
+  });
+
+  it("never takes a Google row's own name for its display name", async () => {
+    // `{name: 'models/x'}` with no `id`: the name IS the id, already used as
+    // one. Only a name beside an `id` is a label.
+    fetchFn.mockResolvedValue(jsonResponse({ models: [{ name: 'models/gemini-2.0-flash' }] }));
+    await expect(
+      service().fetchModels({
+        baseUrl: 'https://proxy.example/v1',
+        api: 'openai-completions',
+        apiKey: 'K',
+      })
+    ).resolves.toEqual({ ok: true, models: ['gemini-2.0-flash'] });
+  });
+
+  it('caps the listing at 2000 ids and drops ids no model can have', async () => {
+    // The cap moved from the return site into the listing reader; this is what
+    // keeps it from silently going away with a later refactor.
+    fetchFn.mockResolvedValue(
+      jsonResponse({
+        data: [
+          { id: 'bad\nid' },
+          { id: 'x'.repeat(257) },
+          ...Array.from({ length: 2100 }, (_, index) => ({ id: `m${index}` })),
+        ],
+      })
+    );
+    const result = await service().fetchModels({
+      baseUrl: 'https://proxy.example/v1',
+      api: 'openai-completions',
+      apiKey: 'K',
+    });
+    expect(result.ok && result.models.length).toBe(2000);
+    expect(result.ok && result.models[0]).toBe('m0');
+  });
+
   it('lists OpenAI-shaped models and dedupes', async () => {
     fetchFn.mockResolvedValue(
       jsonResponse({ data: [{ id: 'gpt-4o' }, { id: 'gpt-4o' }, { id: 'o3' }] })
@@ -518,6 +590,7 @@ describe('UserProviderService — fetchModels for anthropic-messages', () => {
     await expect(fetchAnthropic()).resolves.toEqual({
       ok: true,
       models: ['claude-opus-5-5', 'claude-haiku-4-5'],
+      modelNames: { 'claude-opus-5-5': 'Claude Opus 5.5' },
     });
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(fetchFn).toHaveBeenCalledWith(V1, { headers: ANTHROPIC });

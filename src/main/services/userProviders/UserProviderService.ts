@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 import {
   checkProviderBaseUrl,
   type FetchProviderModelsResult,
+  isUsableModelId,
   isUserProviderApi,
   normalizeProviderBaseUrl,
   type ProviderModelListAuth,
@@ -220,7 +221,7 @@ export class UserProviderService {
         return { ok: false, error: error instanceof Error ? error.message : String(error) };
       }
       const outcome = await readModelList(response);
-      if (outcome.ok) return { ok: true, models: outcome.models.slice(0, MAX_MODEL_IDS) };
+      if (outcome.ok) return outcome;
       failures.push({ ...outcome, path: attempt.path });
       previousRefused = isRefusal(outcome.status);
     }
@@ -295,7 +296,9 @@ function isRefusal(status: number | undefined): boolean {
 /** One answer read as a model list, or as the reason it is not one. */
 async function readModelList(
   response: ModelListResponse
-): Promise<{ ok: true; models: string[] } | { ok: false; status?: number; detail: string }> {
+): Promise<
+  Extract<FetchProviderModelsResult, { ok: true }> | { ok: false; status?: number; detail: string }
+> {
   if (!response.ok) {
     discardBody(response);
     return {
@@ -310,9 +313,9 @@ async function readModelList(
   } catch {
     return { ok: false, detail: 'the service did not answer with JSON' };
   }
-  const models = extractModelIds(body);
-  if (models.length === 0) return { ok: false, detail: 'the service listed no models' };
-  return { ok: true, models };
+  const listing = extractModels(body);
+  if (listing.models.length === 0) return { ok: false, detail: 'the service listed no models' };
+  return { ok: true, ...listing };
 }
 
 /**
@@ -357,23 +360,27 @@ function authHeaders(auth: ProviderModelListAuth, apiKey: string): Record<string
 }
 
 /**
- * Pull model ids out of a listing response.
+ * Keep request ids separate from display names; gateways can alias a GPT id
+ * to a Claude-looking one while still reporting its GPT display name.
  *
  * Three shapes in the wild: OpenAI's `{data:[{id}]}`, Anthropic's
  * `{data:[{id}]}` (same), and Google's `{models:[{name}]}`. A bare array is
  * accepted too. Anything else yields nothing rather than a guess.
  */
-function extractModelIds(body: unknown): string[] {
+function extractModels(
+  body: unknown
+): Omit<Extract<FetchProviderModelsResult, { ok: true }>, 'ok'> {
   const rows = Array.isArray(body)
     ? body
     : body && typeof body === 'object'
       ? ((body as Record<string, unknown>).data ?? (body as Record<string, unknown>).models)
       : undefined;
-  if (!Array.isArray(rows)) return [];
-  const ids: string[] = [];
+  if (!Array.isArray(rows)) return { models: [] };
+  const entries = new Map<string, string | undefined>();
   for (const row of rows) {
+    if (entries.size >= MAX_MODEL_IDS) break;
     if (typeof row === 'string') {
-      ids.push(row);
+      if (isUsableModelId(row) && !entries.has(row)) entries.set(row, undefined);
       continue;
     }
     if (!row || typeof row !== 'object') continue;
@@ -381,7 +388,18 @@ function extractModelIds(body: unknown): string[] {
     const id = typeof record.id === 'string' ? record.id : record.name;
     if (typeof id !== 'string' || !id) continue;
     // Google returns `models/gemini-2.0-flash`; the id pi needs is the tail.
-    ids.push(id.startsWith('models/') ? id.slice('models/'.length) : id);
+    const modelId = id.startsWith('models/') ? id.slice('models/'.length) : id;
+    if (!isUsableModelId(modelId) || entries.has(modelId)) continue;
+    // `name` is a display name only beside an `id`; on its own it IS the id
+    // (Google's shape, already used above).
+    const label =
+      record.display_name ?? record.displayName ?? (record.id ? record.name : undefined);
+    const name = typeof label === 'string' ? label.trim().slice(0, 200) : undefined;
+    entries.set(modelId, name && name !== modelId ? name : undefined);
   }
-  return [...new Set(ids)];
+  const names = [...entries].filter((entry): entry is [string, string] => entry[1] !== undefined);
+  return {
+    models: [...entries.keys()],
+    ...(names.length > 0 ? { modelNames: Object.fromEntries(names) } : {}),
+  };
 }

@@ -310,8 +310,25 @@ export interface FetchProviderModelsRequest {
 }
 
 export type FetchProviderModelsResult =
-  | { ok: true; models: string[] }
+  | { ok: true; models: string[]; modelNames?: Record<string, string> }
   | { ok: false; error: string };
+
+/** The longest model id kept from a listing, typed into the form, or stored. */
+export const MAX_MODEL_ID_LENGTH = 256;
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
+
+/**
+ * Whether `id` can be stored as a model id: not blank, not over
+ * {@link MAX_MODEL_ID_LENGTH}, no control characters. One rule for the three
+ * ways an id arrives — a service's listing, the form's manual field, and the
+ * IPC boundary that writes `models.json` — so a typed id is held to what a
+ * listed one is.
+ */
+export function isUsableModelId(id: string): boolean {
+  return id.trim() !== '' && id.length <= MAX_MODEL_ID_LENGTH && !CONTROL_CHARACTER.test(id);
+}
 
 const OPERATION_SUFFIXES = [
   '/chat/completions',

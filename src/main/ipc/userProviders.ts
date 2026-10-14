@@ -15,6 +15,7 @@ import { isSessionEffortLevel } from '@shared/types/agentHost';
 import {
   type FetchProviderModelsRequest,
   type FetchProviderModelsResult,
+  isUsableModelId,
   isUserCompatPreset,
   isUserProviderApi,
   USER_MODEL_EFFORTS,
@@ -49,7 +50,13 @@ function readDraft(payload: unknown): UserProviderDraft {
   if (raw.apiKey !== undefined) draft.apiKey = readString(raw.apiKey, 'apiKey');
   if (raw.models !== undefined) {
     if (!Array.isArray(raw.models)) throw new Error('Invalid AI service request: models');
-    draft.models = raw.models.map((model, index) => readString(model, `models[${index}]`));
+    draft.models = raw.models.map((model, index) => {
+      // What the form refuses to add, refused here too: these ids are written
+      // into models.json as they are.
+      const id = readString(model, `models[${index}]`);
+      if (!isUsableModelId(id)) throw new Error(`Invalid AI service request: models[${index}]`);
+      return id;
+    });
   }
   if (raw.enabled !== undefined) {
     if (typeof raw.enabled !== 'boolean') throw new Error('Invalid AI service request: enabled');

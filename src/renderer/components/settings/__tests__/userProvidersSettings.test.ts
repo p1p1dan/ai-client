@@ -511,6 +511,163 @@ describe('ProviderSetupDialog — model settings (decision 168)', () => {
   }
 
   describe('layout and selection', () => {
+    it('creates a new service with a manual model without fetching the catalog', async () => {
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog();
+      await type(
+        document.querySelector('input[placeholder="Shown in the model picker"]'),
+        'My GPT'
+      );
+      await type(
+        document.querySelector('input[placeholder="https://api.example.com/v1"]'),
+        'https://proxy.example/v1'
+      );
+      await type(document.querySelector('input[type="password"]'), 'test-key');
+      await type(byLabel('Model ID'), 'gpt-custom');
+      await click(button('Add model'));
+      await save();
+      expect(api.fetchModels).not.toHaveBeenCalled();
+      expect(api.upsert.mock.calls[0][0]).toMatchObject({
+        name: 'My GPT',
+        baseUrl: 'https://proxy.example/v1',
+        models: ['gpt-custom'],
+      });
+    });
+
+    it.each([false, true])('adds and saves a manual id (fetch failed: %s)', async (failed) => {
+      api.upsert.mockResolvedValue(provider());
+      api.fetchModels.mockResolvedValue({ ok: false, error: 'the service answered 404' });
+      await mountDialog(provider({ models: [] }));
+      if (failed) await fetchModels();
+
+      expect(button('Add model')?.disabled).toBe(true);
+      await type(byLabel('Model ID'), '  my-gateway/gpt-custom  ');
+      await click(button('Add model'));
+      expect(panelModel()).toBe('my-gateway/gpt-custom');
+      expect((byLabel('Model ID') as HTMLInputElement).value).toBe('');
+
+      await type(byLabel('Model ID'), 'my-gateway/gpt-custom');
+      await act(async () => {
+        byLabel('Model ID')?.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+        );
+      });
+      expect(tabs()).toHaveLength(1);
+      await save();
+      expect(api.upsert.mock.calls[0][0].models).toEqual(['my-gateway/gpt-custom']);
+      expect(api.fetchModels).toHaveBeenCalledTimes(failed ? 1 : 0);
+    });
+
+    it('keeps a manually added model and its settings when refreshing the catalog', async () => {
+      api.upsert.mockResolvedValue(provider());
+      api.fetchModels.mockResolvedValue({ ok: true, models: ['listed'] });
+      await mountDialog(provider({ models: [] }));
+      await type(byLabel('Model ID'), 'unlisted');
+      await click(button('Add model'));
+      await type(displayName(), 'My custom model');
+      await type(contextWindow(), '65536');
+      await fetchModels();
+      expect(panelModel()).toBe('unlisted');
+      await save();
+      expect(api.upsert.mock.calls[0][0]).toMatchObject({
+        models: ['unlisted'],
+        modelMeta: { unlisted: { name: 'My custom model', contextWindow: 65536 } },
+      });
+    });
+
+    it('searches gateway names and ids, persisting the name while calling the original id', async () => {
+      const alias = 'claude-fable-5-dd-los-1.6-tpg';
+      api.upsert.mockResolvedValue(provider());
+      api.fetchModels.mockResolvedValue({
+        ok: true,
+        models: [alias, 'other'],
+        modelNames: { [alias]: 'GPT 6.1 Sol' },
+      });
+      await mountDialog(provider({ models: [], api: 'openai-responses' }));
+      await fetchModels();
+      await type(byLabel('Search models by name or ID'), 'gPt 6.1');
+      expect(chips()).toHaveLength(1);
+      expect(chips()[0].textContent).toContain(alias);
+      await click(chips()[0]);
+      expect(displayName()?.value).toBe('GPT 6.1 Sol');
+      expect(panelModel()).toBe(alias);
+      await type(byLabel('Search models by name or ID'), 'dd-los');
+      expect(chips()).toHaveLength(1);
+      await type(byLabel('Search models by name or ID'), 'no-such-model');
+      expect(chips()).toHaveLength(0);
+      expect(text()).toContain('No matching models');
+      await save();
+      expect(api.upsert.mock.calls[0][0]).toMatchObject({
+        models: [alias],
+        modelMeta: { [alias]: { name: 'GPT 6.1 Sol' } },
+      });
+    });
+
+    it('fills a missing selected name on fetch without overwriting a custom name', async () => {
+      api.upsert.mockResolvedValue(provider());
+      api.fetchModels.mockResolvedValue({
+        ok: true,
+        models: ['named', 'unnamed'],
+        modelNames: { named: 'Server name', unnamed: 'New name' },
+      });
+      await mountDialog(
+        provider({
+          models: ['named', 'unnamed'],
+          modelMeta: { named: { name: 'My name' }, unnamed: { contextWindow: 65536 } },
+        })
+      );
+      await fetchModels();
+      await save();
+      expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({
+        named: { name: 'My name' },
+        unnamed: { name: 'New name', contextWindow: 65536 },
+      });
+    });
+
+    it('names a model added while the fetch was in flight from that fetch', async () => {
+      // The answer lands after an await; it must see the selection as it is
+      // then, not as it was when the button was pressed.
+      api.upsert.mockResolvedValue(provider());
+      let resolve: (value: unknown) => void = () => undefined;
+      api.fetchModels.mockReturnValue(
+        new Promise((done) => {
+          resolve = done;
+        })
+      );
+      await mountDialog(provider({ models: [] }));
+      const fetch = [...document.body.querySelectorAll('button')].find((candidate) =>
+        candidate.textContent?.includes('Fetch models')
+      );
+      await click(fetch);
+      await type(byLabel('Model ID'), 'alias-id');
+      await click(button('Add model'));
+      await act(async () =>
+        resolve({ ok: true, models: ['alias-id'], modelNames: { 'alias-id': 'GPT 6.1 Sol' } })
+      );
+      await settle();
+      expect(displayName()?.value).toBe('GPT 6.1 Sol');
+      await save();
+      expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({
+        'alias-id': { name: 'GPT 6.1 Sol' },
+      });
+    });
+
+    it.each([
+      ['a control character', 'gpt\u0007x'],
+      ['an id over 256 characters', 'm'.repeat(257)],
+    ])('refuses a manual id with %s, saying why', async (_case, id) => {
+      await mountDialog(provider({ models: [] }));
+      await type(byLabel('Model ID'), id);
+      expect(button('Add model')?.disabled).toBe(true);
+      expect(text()).toContain('A model ID cannot contain control characters');
+      await act(async () => {
+        byLabel('Model ID')?.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+        );
+      });
+      expect(tabs()).toHaveLength(0);
+    });
+
     it('opens an edit on the stored models and metadata, first model shown, without a fetch', async () => {
       api.upsert.mockResolvedValue(provider());
       await mountDialog(

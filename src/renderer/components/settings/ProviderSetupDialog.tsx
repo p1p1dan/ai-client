@@ -15,6 +15,7 @@
  */
 
 import type {
+  FetchProviderModelsResult,
   UserModelMeta,
   UserProviderApi,
   UserProviderDraft,
@@ -24,6 +25,8 @@ import {
   applyModelMetaPatch,
   checkProviderBaseUrl,
   isSupportedUserProviderApi,
+  isUsableModelId,
+  MAX_MODEL_ID_LENGTH,
   modelMetaDraft,
   normalizeProviderBaseUrl,
   PROVIDER_PRESETS,
@@ -31,8 +34,8 @@ import {
   prefillModelMeta,
   SUPPORTED_USER_PROVIDER_APIS,
 } from '@shared/userProviders';
-import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Check, CheckCircle2, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -102,7 +105,7 @@ interface ProviderSetupDialogProps {
 type Probe =
   | { state: 'idle' }
   | { state: 'running' }
-  | { state: 'ok'; models: string[] }
+  | ({ state: 'ok' } & Omit<Extract<FetchProviderModelsResult, { ok: true }>, 'ok'>)
   | { state: 'failed'; error: string };
 
 export function ProviderSetupDialog({
@@ -118,6 +121,15 @@ export function ProviderSetupDialog({
   const [api, setApi] = useState<UserProviderApi>('openai-completions');
   const [apiKey, setApiKey] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
+  // The selection as of the last commit, for the fetch's answer: it lands
+  // after an await, and a model added while it was in flight (the manual field
+  // stays usable) must get its listed name too.
+  const selectedRef = useRef(selected);
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
+  const [manualModel, setManualModel] = useState('');
+  const [modelSearch, setModelSearch] = useState('');
   const [modelMeta, setModelMeta] = useState<Record<string, UserModelMeta>>({});
   // Decision 168: the raw text of the number fields, per model, so a value
   // that is not a number yet stays on screen (and blocks the save) instead of
@@ -136,6 +148,8 @@ export function ProviderSetupDialog({
     setSaveError(null);
     setApiKey('');
     setTokenDrafts({});
+    setManualModel('');
+    setModelSearch('');
     if (editing) {
       const matched = PROVIDER_PRESETS.find(
         (candidate) =>
@@ -198,6 +212,14 @@ export function ProviderSetupDialog({
   // Unticking or removing the shown model falls back to the first selected one.
   const activeModel =
     activeId !== null && selected.includes(activeId) ? activeId : (selected[0] ?? null);
+  const visibleModels = useMemo(() => {
+    if (probe.state !== 'ok') return [];
+    const query = modelSearch.trim().toLowerCase();
+    return probe.models.filter(
+      (id) =>
+        id.toLowerCase().includes(query) || probe.modelNames?.[id]?.toLowerCase().includes(query)
+    );
+  }, [probe, modelSearch]);
 
   const runProbe = useCallback(async () => {
     setProbe({ state: 'running' });
@@ -208,7 +230,15 @@ export function ProviderSetupDialog({
       ...(editing ? { id: editing.id } : {}),
     });
     if (result.ok) {
-      setProbe({ state: 'ok', models: result.models });
+      setProbe({ state: 'ok', models: result.models, modelNames: result.modelNames });
+      setModelMeta((current) => {
+        const next = { ...current };
+        for (const id of selectedRef.current) {
+          const name = result.modelNames?.[id];
+          if (name && current[id]?.name === undefined) next[id] = { ...current[id], name };
+        }
+        return next;
+      });
       // A fetch must not drop what the user already chose. It used to filter
       // `selected` down to the service's answer, which silently deleted a
       // hand-typed model together with the metadata just filled in for it —
@@ -266,11 +296,23 @@ export function ProviderSetupDialog({
       setSelected((current) => (current.includes(model) ? current : [...current, model]));
       setActiveId(model);
       const prefill = prefillModelMeta(model, api, modelMeta[model]);
-      if (!prefill) return;
-      setModelMeta((current) => ({ ...current, [model]: prefill }));
+      const name = probe.state === 'ok' ? probe.modelNames?.[model] : undefined;
+      if (!prefill && !name) return;
+      setModelMeta((current) => ({
+        ...current,
+        [model]: { ...prefill, ...(name ? { name } : {}), ...current[model] },
+      }));
     },
-    [api, modelMeta]
+    [api, modelMeta, probe]
   );
+
+  const manualId = manualModel.trim();
+  const manualInvalid = manualId !== '' && !isUsableModelId(manualId);
+  const addManualModel = () => {
+    if (!manualId || manualInvalid) return;
+    toggleModel(manualId, false);
+    setManualModel('');
+  };
 
   /**
    * Back to what a fresh selection would get: the prefill for an adaptive-only
@@ -452,7 +494,7 @@ export function ProviderSetupDialog({
           </Field>
 
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" onClick={runProbe} disabled={!canProbe}>
                 {probe.state === 'running' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {t('Fetch models')}
@@ -475,33 +517,58 @@ export function ProviderSetupDialog({
             )}
 
             {probe.state === 'ok' && (
-              <ScrollArea className="max-h-48 rounded-md border">
-                <div
-                  role="group"
-                  aria-label={t('Available models')}
-                  className="flex flex-wrap gap-1.5 p-2"
-                >
-                  {probe.models.map((model) => {
-                    const on = selected.includes(model);
-                    return (
-                      <button
-                        key={model}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => toggleModel(model, on)}
-                        className={cn(
-                          'rounded-sm border px-2 py-0.5 text-meta transition-colors',
-                          on
-                            ? 'border-accent bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent/50'
-                        )}
-                      >
-                        {model}
-                      </button>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
+              <div className="min-w-0 space-y-2">
+                <Input
+                  aria-label={t('Search models by name or ID')}
+                  placeholder={t('Search models by name or ID')}
+                  value={modelSearch}
+                  onChange={(event) => setModelSearch(event.target.value)}
+                />
+                <ScrollArea className="h-48 min-w-0 rounded-md border" scrollbarGutter>
+                  <div
+                    role="group"
+                    aria-label={t('Available models')}
+                    className="min-w-0 space-y-1 p-2"
+                  >
+                    {visibleModels.map((model) => {
+                      const on = selected.includes(model);
+                      const name = probe.modelNames?.[model];
+                      return (
+                        <Button
+                          key={model}
+                          variant="ghost"
+                          size="none"
+                          aria-pressed={on}
+                          title={name ? `${name}\n${model}` : model}
+                          onClick={() => toggleModel(model, on)}
+                          className={cn(
+                            'h-auto w-full min-w-0 justify-start gap-2 px-2 py-1.5 text-left font-normal normal-case',
+                            on && 'bg-selection'
+                          )}
+                        >
+                          <Check
+                            aria-hidden
+                            className={cn('h-4 w-4 shrink-0', !on && 'invisible')}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-ui">{name ?? model}</span>
+                            {name && (
+                              <span className="block truncate text-meta text-muted-foreground">
+                                {model}
+                              </span>
+                            )}
+                          </span>
+                        </Button>
+                      );
+                    })}
+                    {visibleModels.length === 0 && (
+                      <p className="p-2 text-meta text-muted-foreground">
+                        {t('No matching models')}
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
             )}
 
             {selected.length > 0 && (
@@ -516,6 +583,46 @@ export function ProviderSetupDialog({
               </p>
             )}
           </div>
+
+          <Field
+            label={t('Add model manually')}
+            hint={
+              manualInvalid
+                ? t(
+                    'A model ID cannot contain control characters or be longer than {{max}} characters.',
+                    { max: MAX_MODEL_ID_LENGTH }
+                  )
+                : t(
+                    'Enter the exact model ID accepted by this service. Fetching models is optional.'
+                  )
+            }
+            invalid={manualInvalid}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <Input
+                aria-label={t('Model ID')}
+                value={manualModel}
+                onChange={(event) => setManualModel(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    addManualModel();
+                  }
+                }}
+                placeholder={t('Enter model id (e.g. gpt-5.4)')}
+                className="min-w-0 flex-1"
+                spellCheck={false}
+              />
+              <Button
+                variant="outline"
+                className="shrink-0"
+                onClick={addManualModel}
+                disabled={!manualId || manualInvalid}
+              >
+                {t('Add model')}
+              </Button>
+            </div>
+          </Field>
 
           {activeModel !== null && (
             <ModelSettingsPanel

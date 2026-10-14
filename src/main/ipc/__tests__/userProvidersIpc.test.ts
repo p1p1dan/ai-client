@@ -56,6 +56,19 @@ const validPayload = {
   models: ['m1'],
 };
 
+describe('userProviders:upsert — model ids', () => {
+  it.each([
+    ['blank', '  '],
+    ['a control character', 'm\u0000'],
+    ['an id over 256 characters', 'm'.repeat(257)],
+  ])('refuses %s, which would be written into models.json as it is', async (_case, id) => {
+    await expect(
+      invoke(IPC_CHANNELS.USER_PROVIDERS_UPSERT, { ...validPayload, models: ['m1', id] })
+    ).rejects.toThrow('Invalid AI service request: models[1]');
+    expect(upsert).not.toHaveBeenCalled();
+  });
+});
+
 describe('userProviders:upsert — modelMeta IPC boundary (P1)', () => {
   it('passes per-model metadata through the IPC boundary', async () => {
     await invoke(IPC_CHANNELS.USER_PROVIDERS_UPSERT, {

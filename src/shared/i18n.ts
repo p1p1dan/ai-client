@@ -899,6 +899,15 @@ export const zhTranslations: Record<string, string> = {
   Worktree: '工作树',
   'You have unsaved changes. Discard them?': '有未保存的改动，要放弃吗？',
   '{{count}} models available': '有 {{count}} 个模型可用',
+  'Search models by name or ID': '搜索模型名称或 ID',
+  'No matching models': '没有匹配的模型',
+  'Add model manually': '手工添加模型',
+  'Model ID': '模型 ID',
+  'Add model': '添加模型',
+  'Enter the exact model ID accepted by this service. Fetching models is optional.':
+    '输入该服务接受的准确模型 ID，无需先获取模型列表。',
+  'A model ID cannot contain control characters or be longer than {{max}} characters.':
+    '模型 ID 不能包含控制字符，也不能超过 {{max}} 个字符。',
 
   // H/17 L3/L5 的「AI 服务」面板 —— 整片没有词条，中文界面里从标题到按钮
   // 全是英文（H/21 点验 D4）。`Edit` / `Enabled` / `Remove` 在别处也用，含义
