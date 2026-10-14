@@ -2,6 +2,7 @@ import { DevToolsOverlay } from '@/components/DevToolsOverlay';
 import { BackgroundLayer } from '@/components/layout/BackgroundLayer';
 import { WindowTitleBar } from '@/components/layout/WindowTitleBar';
 import { WelcomeView, type WelcomeViewProps } from './WelcomeView';
+import { WelcomeWatermark } from './WelcomeWatermark';
 
 /**
  * A2 — full-window chrome for the welcome screen.
@@ -17,6 +18,7 @@ export function WelcomeShell(props: WelcomeViewProps) {
       <BackgroundLayer />
       <WindowTitleBar />
       <DevToolsOverlay />
+      <WelcomeWatermark />
       <div className="relative flex flex-1 items-center justify-center overflow-auto p-4">
         <WelcomeView {...props} />
       </div>

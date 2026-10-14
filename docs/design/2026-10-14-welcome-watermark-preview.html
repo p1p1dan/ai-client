@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>登录首页水印 · 方案预览（2026-10-14）</title>
+<style>
+/* Flexoki tokens copied from src/renderer/styles/globals.css */
+.theme-light {
+  --background: oklch(0.9931 0.012 96.42);
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.97 0.0106 100.82);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --primary-foreground: oklch(0.9931 0.012 96.42);
+  --muted-foreground: oklch(0.4531 0.005 91.5);
+  --border: oklch(0.875 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);
+  --wm-ink: 23 22 21;
+}
+.theme-dark {
+  --background: oklch(0.1981 0.0032 17.43);
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --card: oklch(0.262 0.0037 48.55);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --primary-foreground: oklch(0.1981 0.0032 17.43);
+  --muted-foreground: oklch(0.6956 0.0103 93.62);
+  --border: oklch(0.34 0.0038 84.58);
+  --input: oklch(0.3651 0.0044 67.69);
+  --wm-ink: 206 205 195;
+}
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+    "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans); font-size: 14px; color: #1c1b1a;
+  background: #e9e8e4; -webkit-font-smoothing: antialiased;
+  display: flex; gap: 20px; padding: 20px; min-height: 100vh;
+}
+
+/* ---------- control panel ---------- */
+.panel {
+  width: 340px; flex-shrink: 0; background: #fffdf8; border: 1px solid #d8d6cf;
+  border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 16px;
+  align-self: flex-start; position: sticky; top: 20px;
+}
+.panel h1 { font-size: 15px; font-weight: 600; }
+.panel h2 { font-size: 12px; font-weight: 600; color: #6f6e69; letter-spacing: .04em; margin-bottom: 6px; }
+.panel label { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; padding: 3px 0; cursor: pointer; line-height: 1.45; }
+.panel label input { margin-top: 3px; }
+.panel .hint { font-size: 12px; color: #6f6e69; line-height: 1.5; }
+.panel .rec { color: #bc5215; font-size: 11px; font-weight: 600; margin-left: 4px; }
+.panel input[type=range] { width: 100%; }
+.panel code { font-size: 11.5px; background: #f2f0e5; padding: 1px 4px; border-radius: 4px; }
+.seg { display: flex; gap: 4px; }
+.seg button {
+  flex: 1; height: 28px; border-radius: 6px; border: 1px solid #d8d6cf; background: #fff;
+  font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.seg button.on { background: #1c1b1a; color: #fffcf0; border-color: #1c1b1a; }
+
+/* ---------- mock window ---------- */
+.stage { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.window {
+  position: relative; width: 100%; aspect-ratio: 1400 / 900; max-width: 1100px;
+  border-radius: 10px; overflow: hidden; box-shadow: 0 10px 40px rgb(0 0 0 / .18);
+  background: var(--background); color: var(--foreground); display: flex; flex-direction: column;
+}
+.titlebar {
+  height: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end;
+  padding: 0 10px; gap: 14px; color: var(--muted-foreground); font-size: 12px; position: relative; z-index: 2;
+}
+.titlebar span { width: 10px; height: 10px; border: 1.5px solid currentColor; border-radius: 2px; opacity: .6; }
+.content { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; }
+
+/* login card — mirrors WelcomeView */
+.welcome { position: relative; z-index: 2; width: 100%; max-width: 384px; display: flex; flex-direction: column; align-items: center; gap: 32px; text-align: center; padding: 16px; }
+.brand { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.brand h3 { font-size: 24px; font-weight: 600; letter-spacing: .2em; }
+.brand p { font-size: 14px; color: var(--muted-foreground); }
+.btn {
+  width: 100%; height: 40px; border-radius: 10px; border: 0; font: inherit; font-weight: 500; font-size: 15px;
+  background: var(--primary); color: var(--primary-foreground); cursor: pointer;
+}
+
+/* ---------- watermark layers ---------- */
+.wm-tile { position: absolute; inset: 0; z-index: 1; pointer-events: none; user-select: none; }
+.wm-corner {
+  position: absolute; z-index: 2; pointer-events: none; user-select: none;
+  color: var(--muted-foreground); font-size: 11px; line-height: 1.5; letter-spacing: .06em;
+}
+.wm-corner.pos-br { right: 20px; bottom: 16px; text-align: right; }
+.wm-corner.pos-bc { left: 0; right: 0; bottom: 16px; text-align: center; }
+.wm-corner .l1 { font-weight: 500; }
+.wm-corner .l2 { opacity: .7; font-size: 10.5px; }
+.wm-corner .rule { display: inline-block; width: 18px; height: 1px; background: currentColor; opacity: .45; vertical-align: middle; margin: 0 8px; }
+.wm-corner .seal {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.wm-corner svg { width: 12px; height: 12px; opacity: .8; }
+
+.note { font-size: 12.5px; color: #55544f; line-height: 1.6; max-width: 1100px; }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <h1>登录首页水印</h1>
+
+  <div>
+    <h2>主题</h2>
+    <div class="seg" id="theme">
+      <button data-v="light" class="on">浅色</button>
+      <button data-v="dark">深色</button>
+    </div>
+  </div>
+
+  <div>
+    <h2>角落署名（文案）</h2>
+    <label><input type="radio" name="corner" value="a" checked>
+      <span>© 2026 JYW · Exclusive Edition<br><small>Authorized use only</small><span class="rec">推荐</span></span></label>
+    <label><input type="radio" name="corner" value="b">
+      <span>JYW Secure Client<br><small>© 2026 JYW. All rights reserved.</small></span></label>
+    <label><input type="radio" name="corner" value="c">
+      <span>© JYW Exclusive Client<br><small>（你原来的写法，单行）</small></span></label>
+    <label><input type="radio" name="corner" value="d">
+      <span>JYW 专属客户端 · 仅限授权使用<br><small>© 2026 JYW</small></span></label>
+    <label><input type="radio" name="corner" value="none">
+      <span>不要角落署名</span></label>
+  </div>
+
+  <div>
+    <h2>角落位置与样式</h2>
+    <label><input type="radio" name="pos" value="br" checked><span>右下角，右对齐</span></label>
+    <label><input type="radio" name="pos" value="bc"><span>底部居中，前后加细线</span></label>
+    <label><input type="checkbox" id="seal" checked><span>行首加一个小盾牌图标</span></label>
+  </div>
+
+  <div>
+    <h2>斜向水印（文案）</h2>
+    <label><input type="radio" name="tile" value="JYW · SECURE CLIENT" checked><span>JYW · SECURE CLIENT<span class="rec">推荐</span></span></label>
+    <label><input type="radio" name="tile" value="JYW CONFIDENTIAL"><span>JYW CONFIDENTIAL</span></label>
+    <label><input type="radio" name="tile" value="JYW · INTERNAL USE ONLY"><span>JYW · INTERNAL USE ONLY</span></label>
+    <label><input type="radio" name="tile" value="JYW SECURE CLIENT"><span>JYW SECURE CLIENT（原写法）</span></label>
+    <label><input type="radio" name="tile" value=""><span>不要斜向水印</span></label>
+  </div>
+
+  <div>
+    <h2>斜向水印密度</h2>
+    <div class="seg" id="density">
+      <button data-v="sparse" class="on">少量</button>
+      <button data-v="medium">适中</button>
+      <button data-v="dense">较密</button>
+    </div>
+  </div>
+
+  <div>
+    <h2>斜向水印浓度 <span id="opv"></span></h2>
+    <input type="range" id="opacity" min="2" max="14" value="5">
+    <p class="hint">建议 4–6%：凑近看得到，远看只是一层质感，不和登录按钮抢注意力。</p>
+  </div>
+
+  <div>
+    <h2>中心留白</h2>
+    <label><input type="checkbox" id="mask" checked><span>中间登录区淡出水印（径向渐隐）<span class="rec">推荐</span></span></label>
+    <p class="hint">让水印只出现在四周，Logo 和按钮背后保持干净，观感更"高级"。</p>
+  </div>
+
+  <p class="hint">落地时：水印层 <code>pointer-events-none</code> + <code>select-none</code> + <code>aria-hidden</code>，点不到、选不中、不影响读屏；斜向图案用内联 SVG，不引入外部资源。只加在登录首页，不进入工作区。</p>
+</div>
+
+<div class="stage">
+  <div class="window theme-light" id="win">
+    <div class="titlebar"><span></span><span></span><span></span></div>
+    <div class="content">
+      <div class="wm-tile" id="tile"></div>
+      <div class="welcome">
+        <svg width="72" height="72" viewBox="0 0 120 124" fill="none" aria-hidden="true">
+          <path d="M60 14 L104 39 L60 64 L16 39 Z" fill="var(--primary)" opacity=".95"/>
+          <path d="M104 39 L104 85 L60 110 L60 64 Z" fill="var(--primary)" opacity=".75"/>
+          <path d="M16 39 L60 64 L60 110 L16 85 Z" fill="var(--primary)" opacity=".55"/>
+          <path d="M60 14 L104 39 L104 85 L60 110 L16 85 L16 39 Z" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+        <div class="brand">
+          <h3>PILAB</h3>
+          <p>Just a really good one to code with ai.</p>
+        </div>
+        <button class="btn">使用工作邮箱登录</button>
+      </div>
+    </div>
+    <div class="wm-corner pos-br" id="corner"></div>
+  </div>
+  <p class="note">
+    文案建议：英文里 "Exclusive Client" 不太地道，正式说法一般是 <b>Exclusive Edition</b>（专属版）或 <b>Licensed to JYW</b>（授权给 JYW）；
+    "仅限授权使用" 对应 <b>Authorized use only</b>。斜向水印用全大写 + 较宽字距 + 中点分隔（JYW · SECURE CLIENT），比纯空格更规整。
+    角落署名用 11px、字距略宽、次要文字色，第二行再降一档透明度——两层层级，比一整行更有设计感。
+  </p>
+</div>
+
+<script>
+const win = document.getElementById('win');
+const tile = document.getElementById('tile');
+const corner = document.getElementById('corner');
+const state = { theme: 'light', corner: 'a', pos: 'br', seal: true, tile: 'JYW · SECURE CLIENT', density: 'sparse', opacity: 5, mask: true };
+
+const CORNERS = {
+  a: ['© 2026 JYW · Exclusive Edition', 'Authorized use only'],
+  b: ['JYW Secure Client', '© 2026 JYW. All rights reserved.'],
+  c: ['© JYW Exclusive Client', null],
+  d: ['JYW 专属客户端 · 仅限授权使用', '© 2026 JYW'],
+};
+const DENSITY = { sparse: [520, 300], medium: [380, 220], dense: [280, 160] };
+const SHIELD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>';
+
+function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+
+function render() {
+  win.className = 'window theme-' + state.theme;
+
+  // Diagonal tiles: one SVG pattern tile, two staggered labels per tile.
+  if (state.tile) {
+    const [w, h] = DENSITY[state.density];
+    const ink = getComputedStyle(win).getPropertyValue('--wm-ink').trim().split(' ').join(',');
+    const a = state.opacity / 100;
+    const text = esc(state.tile);
+    const label = (x, y) =>
+      `<text x="${x}" y="${y}" transform="rotate(-24 ${x} ${y})" text-anchor="middle" ` +
+      `font-family="Segoe UI, Ubuntu, Noto Sans, Arial, sans-serif" font-size="13" font-weight="600" ` +
+      `letter-spacing="4" fill="rgba(${ink},${a})">${text}</text>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${label(w * 0.25, h * 0.3)}${label(w * 0.75, h * 0.8)}</svg>`;
+    tile.style.backgroundImage = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+    tile.style.display = '';
+  } else {
+    tile.style.display = 'none';
+  }
+  const m = state.mask ? 'radial-gradient(ellipse 34% 40% at 50% 50%, transparent 0%, transparent 55%, #000 100%)' : 'none';
+  tile.style.maskImage = m;
+  tile.style.webkitMaskImage = m;
+
+  // Corner signature.
+  const c = CORNERS[state.corner];
+  if (!c) { corner.style.display = 'none'; } else {
+    corner.style.display = '';
+    corner.className = 'wm-corner pos-' + state.pos;
+    const rule = state.pos === 'bc' ? '<span class="rule"></span>' : '';
+    const l1 = `<span class="seal">${state.seal ? SHIELD : ''}${esc(c[0])}</span>`;
+    corner.innerHTML =
+      `<div class="l1">${rule}${l1}${rule}</div>` + (c[1] ? `<div class="l2">${esc(c[1])}</div>` : '');
+  }
+  document.getElementById('opv').textContent = state.opacity + '%';
+}
+
+document.querySelectorAll('.seg').forEach((seg) => seg.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  state[seg.id] = b.dataset.v; render();
+}));
+document.querySelectorAll('input[type=radio]').forEach((r) => r.addEventListener('change', () => { state[r.name] = r.value; render(); }));
+document.getElementById('seal').addEventListener('change', (e) => { state.seal = e.target.checked; render(); });
+document.getElementById('mask').addEventListener('change', (e) => { state.mask = e.target.checked; render(); });
+document.getElementById('opacity').addEventListener('input', (e) => { state.opacity = +e.target.value; render(); });
+render();
+</script>
+</body>
+</html>
