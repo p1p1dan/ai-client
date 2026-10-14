@@ -1,6 +1,7 @@
 import type { SubagentActivityState } from '@/components/chat/subagentActivityModel';
 import type { SessionRuntimeFactsState } from '@/components/workspace-shell/surfaces/contextSurfaceModel';
 import { useComposerDraftsStore } from './composerDrafts';
+import { useHistoryLoadingStore } from './historyLoading';
 import { useMessageMetadataStore } from './messageMetadataRegistry';
 import { useMessageQueueStore } from './messageQueue';
 import { usePendingUserMessagesStore } from './pendingUserMessages';
@@ -116,4 +117,6 @@ export function pruneSessionScopedRendererState(sessionIds: readonly string[]): 
   useComposerDraftsStore.getState().pruneSessions(sessionIds);
   // P1-7e (decision 140): the thought and tool stamps of chats that are gone.
   useTurnTimingStore.getState().pruneSessions(sessionIds);
+  // A transcript still on its way to a chat that is gone, with its deadline.
+  useHistoryLoadingStore.getState().pruneSessions(sessionIds);
 }

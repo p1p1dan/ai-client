@@ -75,9 +75,9 @@ export interface SessionActivationEffects {
    * timeline should say "loading" instead of "no messages yet" until it
    * arrives (`historyLoading.ts` — the bug that store exists for).
    *
-   * Called from inside the two branches, once the decision to load has been
-   * made, and never on the `idle` path: a session whose transcript is already
-   * on screen loads nothing, so nothing about it should change appearance.
+   * Called once the decision to load has been made, before either branch, and
+   * never on the `idle` path: a session whose transcript is already on screen
+   * loads nothing, so nothing about it should change appearance.
    * Optional so a caller that does not paint a timeline can omit it.
    */
   onLoad?: (input: { sessionId: string }) => void;
