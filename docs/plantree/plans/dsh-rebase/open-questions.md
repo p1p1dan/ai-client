@@ -13,13 +13,14 @@ Q001（进程拓扑）已于 2026-09-26 定为共享宿主，见[决策 002](dec
 
 Q003（内嵌终端）已于 2026-09-28 裁决：去掉 pi TUI 与 GUI / TUI 开关，原位置加一个普通终端按钮，见[决策 090](decisions/090-user-rulings-2026-09-28.md)。
 
-Q004（版本通道）已于 2026-09-26 定为钉 `next` 的精确版本 `0.1.7-rc.2`，见[决策 003](decisions/003-p0-closeout-enter-p1.md)。
+Q004（版本通道）已于 2026-09-26 定为钉 `next` 的精确版本 `0.1.7-rc.2`，见[决策 003](decisions/003-p0-closeout-enter-p1.md)；2026-10-14 按同一流程升到 `0.2.0-rc.2`，见[决策 189](decisions/189-dsh-0-2-0-rc-2-upgrade.md)（待审批）。
 
 ## Q005 Windows 上 ACL 沙箱默认开不开、工作区权限不够时怎么办
 
 - 依据：[P0-4 普通 Windows CI 证据](evidence/p0-4-windows-ci-2026-09-26.md)。`sandbox-windows-acl` 授权时要同时改 DACL 并写 Low 完整性标签，后者需要 WRITE_OWNER。标准用户在 `C:\` 根下自建的目录、IT 只给 Modify 的共享目录都不满足，沙箱下的 pwsh 每次都失败，并且不会退回无沙箱运行。用户目录和管理员不受影响。
 - 另一个代价：沙箱会永久改工作区权限（常驻 ACE、Low 标签、Everyone 拒绝删除子项，沿目录树继承），大目录首次授权可能要几分钟。
 - **2026-09-27 建议已落为[决策 045](decisions/045-windows-acl-sandbox-default-off.md)（待用户审批）**：Windows 默认不开，也不预检；以后打开时预检 WRITE_OWNER，不满足就退回并提示。用户批准后，本问题只剩加密机上的 F-on-acl，归 P1-13。
+- 2026-10-14：DSH 0.2.0 自带一个诊断并修复工作区权限的技能 `diagnose-windows-sandbox-acl`（补完全控制、删 AppContainer 权限项，带备份与恢复命令），正是本问题「权限不够时怎么办」的一种答案。沙箱关着时[决策 189](decisions/189-dsh-0-2-0-rc-2-upgrade.md) 第 6 节把它隐藏；以后打开 Windows 沙箱时连同它一起重评。
 - 原待定项：P1 默认开不开沙箱；是否预检 WRITE_OWNER；不满足时是提示用户、改用 danger-full-access 加我方审批，还是拒绝。与 [Q002](#q002-dsh-沙箱能否作为兜底层叠加)（加密机上能否叠加）一起在 P1 设计权限移植时定，加密机上的 F-on-acl 在 P2 前上机时补看。
 
 Q006（是否另加 Claude SDK 引擎）已于 2026-09-26 定为暂不加，见[决策 003](decisions/003-p0-closeout-enter-p1.md)；调研留在 [Claude SDK 引擎调研](../../../plans/2026-09-26-claude-sdk-engine-study.md)。

@@ -31,6 +31,12 @@ Role: implementation-status。更新日期：2026-10-14。只放当前阶段、�
 
 **2026-10-14**：1.1.0 已发布，下文第 0～3 项的测试包流程结束；第 4 项「P1-14 其余」除最后一条的「合入 main 发版」外仍有效，在 main 上继续。决策审批（第 3 项）照旧待用户。
 
+**DSH 升到 0.2.0-rc.2（2026-10-14，[决策 189](decisions/189-dsh-0-2-0-rc-2-upgrade.md)，待审批；未推送）**：在 worktree 分支 `claude/upbeat-darwin-fbd177` 上，`c379fe25`、`f8aadf0a` 加文档提交，见 Last Landed。
+
+- 等用户审批，要审的两件是试点插件升到 1.0.6 与 Windows 隐藏沙箱 ACL 技能。
+- 用户同意后推送一个 `feat/dsh-*` 分支，跑 `dsh-bridge-gate` 与整包 CI：Linux 上对金样本的 `bridge-record --check` 本机跑不了。通过后再合入 main。
+- 后续项：探针工具在 Windows 上起不来（`--import` 盘符路径、`/proc`）；Office 打开 1.0.6 生成文件的现场核对。
+
 2026-10-10 更新。2026-10-07 的旧 Next Target 已过期（推送与 CI 首跑都已做完），原文移到文末「历史」一节。
 
 **工作方式（2026-10-08 起）**：用户在 Windows 与加密机上实测 CI 测试包（`1.1.0-dsh.N`），缺陷与改进经 GitHub issue（`p1p1dan/ai-client`）反馈；本分支修复，每组一份决策，升版本推送出下一个测试包（每次推送先经用户同意）。用户裁决（决策 160）：1.0.x 的缺陷只修在本分支，不发 1.0.5，本分支测试完毕后直接推为主线。
@@ -55,6 +61,29 @@ Role: implementation-status。更新日期：2026-10-14。只放当前阶段、�
    - ARD 完整回写（提纲在 ARD 末尾「DSH 偏离」一节）；发版说明补「内嵌 pi 终端移除」（决策 127）等；最后合入 main 发版。
 
 ## Last Landed
+
+- 2026-10-14 **DSH 0.1.7-rc.2 → 0.2.0-rc.2**（[决策 189](decisions/189-dsh-0-2-0-rc-2-upgrade.md)，自主决定，待审批；[证据](evidence/dsh-0.2.0-rc.2-upgrade-2026-10-14.md)；**未推送**）：
+  - **上游对照**：
+    - 两篇升级指南都只涉及 Web 组合与 DSH 客户端设置；
+    - cordis 仍是 4.0.4，补丁用到的 19 个行 id 都在，dsh-base 只多了不联网的 `otel` 行；
+    - 宿主用到的钩子与接口所在的包源码零改动。
+  - **`c379fe25`**：
+    - 版本钉与锁文件（pi-ai 0.85.1 → 0.87.1、koffi 3.3.1 → 3.1.1，`npm dedupe` 后只留一份）；
+    - `@aiclient/dsh-app` 等三个 bundle 的 peer 跟随，否则 app-boot 跳过整个 bundle；
+    - 试点插件 1.0.4 的 dsh peer 止于 `<0.2.0`，DSH 判不兼容，升到 1.0.6，附增量审查；
+    - `forkSeed.ts` 跟随 dsh-session 0.2.0 的 `ToolCallRecovery`。
+  - **`f8aadf0a`**：
+    - Windows 上 DSH 沙箱会注册一个改文件夹权限的技能 `diagnose-windows-sandbox-acl`（实测每个请求都带）；
+    - `aiclient-permissions` 行用同名的、不可调用的运行期技能把它压住；
+    - 侧栏技能数只数可调用的。
+  - **思考回放修复（上游 `6ed596f7`）用假网关 A/B 证实**：响应模型名与请求不同时，0.1.7-rc.2 把签名思考变成普通文本、丢掉空签名与 redacted 思考；0.2.0-rc.2 全部原样（122/122）。
+  - **本机验证（Windows，升级前后同法对照）**：
+    - 两套 tsc 退出 0；
+    - `src/dsh-host` + `src/shared` 3028 项，挂的 15 项与升级前逐项相同（Windows 环境）；
+    - `bridge-record` 逐场景 34/36 逐字相同，余下 2 个是 Windows 噪声，金样本未重录；
+    - 探针结果与升级前相同；`request-prefix-probe` 的 `s1Evidence` 是 Windows 上 `bash` 不存在造成的竞态，S1 改用 `pwsh` 后 21/21；
+    - 整包构建 86.4 MiB / 9,275 个文件，Windows 打包 L1 冒烟 44/44。
+  - **没跑**：Linux 上的 `dsh-bridge-gate` 与整包 CI（要推送）、真实网关。
 
 - 2026-10-14 **合入 main 并发布 1.1.0**（用户在 dsh.14 实测后裁决：这一项不再单独出测试包，直接合入发版）：
   - 欢迎页隐藏「使用本机已有配置」按钮（`39530fe7`，新开关 `LOCAL_SETUP_BUTTON_HIDDEN`，不复用 `LOCAL_SETUP_ENTRY_DISABLED`，以免关掉启动时的 CC / Codex 历史引导）；欢迎页加 JYW 水印（`c5afcc83`，稀疏斜向「JYW · SECURE CLIENT」5%、中心径向淡出，右下角两行署名；只在欢迎页，预览 [`docs/design/2026-10-14-welcome-watermark-preview.html`](../../../design/2026-10-14-welcome-watermark-preview.html)）。用户试过中心内容收窄、黄金分割、只移 logo 三种调位，都还原为原版。
