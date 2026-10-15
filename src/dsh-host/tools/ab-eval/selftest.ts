@@ -1,6 +1,6 @@
 /**
  * End-to-end self-test of the harness on the local fake gateway (no model, no
- * network beyond 127.0.0.1). PiLab, Claude Code and a PiLab variant each run
+ * network beyond 127.0.0.1). PiLab, PiLab+SDK, Claude Code and a PiLab variant each run
  * every bundled case plus the self-test cases (the fake model gives up; the
  * step and time budgets run out; a git source pinned to an older commit; a
  * case with setup and a prompt file; a model that asks a question), once,
@@ -13,10 +13,12 @@
  *   the records count; for symmetric scripts both clients report identical,
  *   non-zero token totals (the fake gateway bills per step); the judge scored
  *   every judged case;
- * - each client ran with what the harness asked for (Claude Code on the
- *   environment's key in bypass mode, with no MCP server or plugin a user
- *   configuration would add; PiLab on the requested model and effort), and a
- *   question PiLab's model asked was answered at once, not waited out;
+ * - each client ran with what the harness asked for (Claude Code and the SDK
+ *   host's CLI on the environment's key in bypass mode, with no MCP server or
+ *   plugin a user configuration would add; PiLab on the requested model and
+ *   effort, the SDK host's CLI on the requested model), the SDK host's events
+ *   and the SDK's own messages count the same steps and tool calls, and a
+ *   question either PiLab engine's model asked was answered at once, not waited out;
  * - the variant reached the host: its system prompt carries the marker its
  *   home patch adds, the baseline's does not;
  * - isolation: no captured request mentions the real ~/.claude or ~/.dsh, and
@@ -51,7 +53,7 @@ const abDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(abDir, '..', '..', '..', '..');
 const MODEL = 'claude-opus-5-5';
 const EFFORT = 'high';
-const ARMS = ['pilab', 'claude-code', 'pilab+selftest-persona'];
+const ARMS = ['pilab', 'pilab-sdk', 'claude-code', 'pilab+selftest-persona'];
 const VARIANT_ARM = 'pilab+selftest-persona';
 const VARIANT_MARKER = 'AB-EVAL-VARIANT-MARKER';
 const QUESTION_CASE = 'selftest-question';
@@ -237,7 +239,7 @@ for (const record of result.records) {
       `${name}: judge score ${record.judge?.score} (${record.judge?.error ?? 'no error'})`
     );
   }
-  if (record.arm.client === 'claude-code') {
+  if (record.arm.client === 'claude-code' || record.arm.client === 'pilab-sdk') {
     expectThat(
       record.client.apiKeySource === 'ANTHROPIC_API_KEY',
       `${name}: apiKeySource ${String(record.client.apiKeySource)}`
@@ -256,6 +258,28 @@ for (const record of result.records) {
       plugins.every((plugin) => plugin.endsWith('@builtin')),
       `${name}: non-builtin plugins ${plugins.join(', ')}`
     );
+  }
+  if (record.arm.client === 'claude-code') continue;
+  const cards = (record.client.cardsAnswered ?? {}) as Record<string, number>;
+  const wantQuestions = record.case.id === QUESTION_CASE ? 1 : 0;
+  expectThat(
+    cards.questions === wantQuestions,
+    `${name}: ${cards.questions} question(s) answered, expected ${wantQuestions}`
+  );
+  expectThat(record.client.hostStopped === true, `${name}: the host did not stop cleanly`);
+  if (record.arm.client === 'pilab-sdk') {
+    expectThat(
+      record.client.model === MODEL,
+      `${name}: the CLI ran model ${String(record.client.model)}`
+    );
+    // The host's events (what PiLab's window shows) and the SDK's messages agree
+    // (a cut run's last call may have started in the stream and never completed).
+    const cross = (record.client.crossCheck ?? {}) as Record<string, number>;
+    expectThat(
+      record.status !== 'completed' ||
+        (cross.hostSteps === cross.sdkSteps && cross.hostTools === cross.sdkTools),
+      `${name}: host events and SDK messages disagree ${JSON.stringify(cross)}`
+    );
     continue;
   }
   const config = (record.client.requestConfig ?? {}) as {
@@ -266,13 +290,6 @@ for (const record of result.records) {
   expectThat(
     config.reasoningEffort === EFFORT,
     `${name}: the request used effort ${String(config.reasoningEffort)}`
-  );
-  expectThat(record.client.hostStopped === true, `${name}: the host did not stop cleanly`);
-  const cards = (record.client.cardsAnswered ?? {}) as Record<string, number>;
-  const wantQuestions = record.case.id === QUESTION_CASE ? 1 : 0;
-  expectThat(
-    cards.questions === wantQuestions,
-    `${name}: ${cards.questions} question(s) answered, expected ${wantQuestions}`
   );
   const prompts = systemPrompts(record);
   expectThat(prompts.length > 0, `${name}: no system prompt in the session log`);

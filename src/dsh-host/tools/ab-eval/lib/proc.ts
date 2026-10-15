@@ -4,7 +4,7 @@
  * `killTree` refuses any pid that is not a real child of ours.
  */
 
-import { type ChildProcess, execFileSync, spawn, spawnSync } from 'node:child_process';
+import { type ChildProcess, execFileSync, fork, spawn, spawnSync } from 'node:child_process';
 
 export interface RunResult {
   code: number | null;
@@ -34,6 +34,27 @@ export function spawnTracked(
     detached,
     windowsHide: true,
     stdio: [options.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+  });
+  if (detached) detachedChildren.add(child);
+  liveChildren.add(child);
+  child.once('exit', () => liveChildren.delete(child));
+  child.once('error', () => liveChildren.delete(child));
+  return child;
+}
+
+/** Forks a Node module with an IPC channel, tracked like `spawnTracked`. */
+export function forkTracked(
+  modulePath: string,
+  options: { cwd: string; env: Record<string, string> }
+): ChildProcess {
+  const detached = process.platform !== 'win32';
+  const child = fork(modulePath, [], {
+    cwd: options.cwd,
+    env: options.env,
+    execPath: process.execPath,
+    detached,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
   if (detached) detachedChildren.add(child);
   liveChildren.add(child);

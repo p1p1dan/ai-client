@@ -1,6 +1,6 @@
 /**
  * Arms and variants (docs/agent-project-engineering.md §6). An arm is a client,
- * optionally under a variant: `pilab`, `claude-code`, `pilab+prompt-pack`.
+ * optionally under a variant: `pilab`, `pilab-sdk`, `claude-code`, `pilab+prompt-pack`.
  * A variant names its client and what it overrides; `variants/<name>.json`
  * resolves by name, anything else as a path.
  */
@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { Arm, ClientName, FileSource, LoadedVariant, VariantFile } from './types.ts';
 
-const CLIENTS: readonly ClientName[] = ['pilab', 'claude-code'];
+export const CLIENTS: readonly ClientName[] = ['pilab', 'pilab-sdk', 'claude-code'];
 
 function isClient(value: unknown): value is ClientName {
   return CLIENTS.includes(value as ClientName);
@@ -52,7 +52,8 @@ export function loadVariant(spec: string, variantsDir: string): LoadedVariant {
   if (typeof raw.name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(raw.name)) {
     throw new Error(`${file}: name must match [A-Za-z0-9][A-Za-z0-9._-]*`);
   }
-  if (!isClient(raw.client)) throw new Error(`${file}: client must be pilab or claude-code`);
+  if (!isClient(raw.client))
+    throw new Error(`${file}: client must be one of ${CLIENTS.join(', ')}`);
   if (raw.env !== undefined && !isStringRecord(raw.env))
     throw new Error(`${file}: env values must be strings`);
   if (
@@ -84,7 +85,8 @@ export function parseArms(spec: string, variantsDir: string): Arm[] {
     .filter(Boolean)) {
     const plus = part.indexOf('+');
     const client = plus < 0 ? part : part.slice(0, plus);
-    if (!isClient(client)) throw new Error(`arm ${part}: client must be pilab or claude-code`);
+    if (!isClient(client))
+      throw new Error(`arm ${part}: client must be one of ${CLIENTS.join(', ')}`);
     if (plus < 0) {
       arms.push({ id: client, client });
       continue;

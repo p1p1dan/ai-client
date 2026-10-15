@@ -22,6 +22,7 @@ import { runClaudeCode } from './claudeCode.ts';
 import { type Gateway, gatewayId, realGateway, startFakeGateway } from './gateway.ts';
 import { JUDGE_VERSION, type JudgeEndpoint, runJudge } from './judge.ts';
 import { runPilab } from './pilab.ts';
+import { runPilabSdk, sdkVersions } from './pilabSdk.ts';
 import { git } from './proc.ts';
 import { makeRedactor, type Redactor, scanForSecrets } from './redact.ts';
 import {
@@ -143,9 +144,15 @@ export function planSuite(options: SuiteOptions): SuitePlan {
   const claudeBin = needsClaude ? findClaude(options.claudeBin) : undefined;
   if (needsClaude && !claudeBin)
     problems.push('Claude Code not found: pass --claude-bin, or set AB_CLAUDE_BIN');
-  const gitBash = needsClaude ? findGitBash(options.gitBash) : undefined;
-  if (needsClaude && process.platform === 'win32' && !gitBash) {
+  const needsSdk = arms.some((arm) => arm.client === 'pilab-sdk');
+  const gitBash = needsClaude || needsSdk ? findGitBash(options.gitBash) : undefined;
+  if ((needsClaude || needsSdk) && process.platform === 'win32' && !gitBash) {
     problems.push('Git Bash not found (Claude Code needs it on Windows): pass --git-bash');
+  }
+  if (needsSdk && !sdkVersions(options.repoRoot).sdk) {
+    problems.push(
+      'the Claude SDK host is not installed: run `npm ci` in src/claude-sdk-host (pilab-sdk arm)'
+    );
   }
   if (
     arms.some((arm) => arm.client === 'pilab') &&
@@ -295,11 +302,19 @@ async function runOne(
               appVersion: ctx.appVersion,
               label: `${order}`,
             })
-          : await runClaudeCode({
-              ...common,
-              claudeBin: ctx.claudeBin as string,
-              ...(ctx.gitBash ? { gitBash: ctx.gitBash } : {}),
-            });
+          : arm.client === 'pilab-sdk'
+            ? await runPilabSdk({
+                ...common,
+                repoRoot: options.repoRoot,
+                appVersion: ctx.appVersion,
+                ...(ctx.gitBash ? { gitBash: ctx.gitBash } : {}),
+                label: `${order}`,
+              })
+            : await runClaudeCode({
+                ...common,
+                claudeBin: ctx.claudeBin as string,
+                ...(ctx.gitBash ? { gitBash: ctx.gitBash } : {}),
+              });
     } catch (error) {
       client = errorRun('client_error', String(error instanceof Error ? error.message : error));
     }

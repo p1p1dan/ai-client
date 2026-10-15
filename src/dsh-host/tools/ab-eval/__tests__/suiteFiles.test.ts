@@ -47,9 +47,17 @@ describe('bundled cases and variants', () => {
       expect(c.fakeModel?.steps.at(-1)?.op).toBe('answer');
       expect(c.repoSha256).toMatch(/^[0-9a-f]{64}$/);
     }
-    const arms = parseArms('pilab,claude-code,pilab+selftest-persona', join(AB_DIR, 'variants'));
-    expect(arms.map((arm) => arm.id)).toEqual(['pilab', 'claude-code', 'pilab+selftest-persona']);
-    expect(arms[2].variant?.resolvedFiles.dshHome['cordis.patch.yml']).toContain(
+    const arms = parseArms(
+      'pilab,pilab-sdk,claude-code,pilab+selftest-persona',
+      join(AB_DIR, 'variants')
+    );
+    expect(arms.map((arm) => [arm.id, arm.client])).toEqual([
+      ['pilab', 'pilab'],
+      ['pilab-sdk', 'pilab-sdk'],
+      ['claude-code', 'claude-code'],
+      ['pilab+selftest-persona', 'pilab'],
+    ]);
+    expect(arms[3].variant?.resolvedFiles.dshHome['cordis.patch.yml']).toContain(
       'AB-EVAL-VARIANT-MARKER'
     );
   });
@@ -57,6 +65,12 @@ describe('bundled cases and variants', () => {
   it('refuses a variant used with the other client', () => {
     expect(() => parseArms('claude-code+selftest-persona', join(AB_DIR, 'variants'))).toThrow(
       /is for pilab/
+    );
+    expect(() => parseArms('pilab-sdk+selftest-persona', join(AB_DIR, 'variants'))).toThrow(
+      /is for pilab/
+    );
+    expect(() => parseArms('codex', join(AB_DIR, 'variants'))).toThrow(
+      /pilab, pilab-sdk, claude-code/
     );
   });
 });

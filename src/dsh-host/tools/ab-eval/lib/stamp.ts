@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
+import { sdkVersions } from './pilabSdk.ts';
 import { git, runCommand } from './proc.ts';
 
 export interface VersionStamp {
@@ -21,6 +22,8 @@ export interface VersionStamp {
   catalog: { version?: unknown; updatedAt?: unknown };
   fakeGatewaySha256: string;
   claudeCode?: string;
+  /** The Claude Agent SDK of the pilab-sdk arm and the CLI it bundles. */
+  claudeSdk?: { sdk?: string; cli?: string };
 }
 
 function readJson(path: string): Record<string, unknown> | undefined {
@@ -62,6 +65,7 @@ export async function versionStamp(options: {
     );
     if (pkg) dsh[name] = String(pkg.version);
   }
+  const claudeSdk = sdkVersions(repoRoot);
   const catalog = readJson(join(repoRoot, 'resources', 'model-catalog', 'snapshot.json'));
   let claudeCode: string | undefined;
   if (options.claudeBin) {
@@ -90,5 +94,6 @@ export async function versionStamp(options: {
     catalog: { version: catalog?.version, updatedAt: catalog?.updatedAt },
     fakeGatewaySha256: sha256File(join(repoRoot, 'src', 'dsh-host', 'tools', 'fake-gateway.mjs')),
     ...(claudeCode ? { claudeCode } : {}),
+    ...(Object.keys(claudeSdk).length > 0 ? { claudeSdk } : {}),
   };
 }

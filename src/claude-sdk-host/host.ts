@@ -16,6 +16,9 @@
  *   AICLIENT_CLAUDE_SDK_CLI          optional pathToClaudeCodeExecutable (e.g. a .js build run by node)
  *   AICLIENT_CLAUDE_SDK_CLIENT_APP   User-Agent suffix
  *   AICLIENT_CLAUDE_SDK_RG_DIR       optional directory with an `rg` used instead of the CLI's built-in one
+ *   AICLIENT_CLAUDE_SDK_MESSAGE_LOG  optional JSONL file every SDK message is appended to
+ *   AICLIENT_CLAUDE_SDK_MAX_TURNS    optional per-turn cap on model calls (the SDK's maxTurns)
+ *                                    (both evaluation only: tools/ab-eval; Main never sets them)
  */
 
 import { existsSync } from 'node:fs';
@@ -60,6 +63,8 @@ const config: SdkHostConfig = {
   settingSources,
   cliPath: process.env.AICLIENT_CLAUDE_SDK_CLI?.trim() || undefined,
   trustRepoPolicy: process.env.AICLIENT_CLAUDE_SDK_REPO_POLICY === 'trust',
+  messageLog: process.env.AICLIENT_CLAUDE_SDK_MESSAGE_LOG?.trim() || undefined,
+  maxTurns: Number(process.env.AICLIENT_CLAUDE_SDK_MAX_TURNS) || undefined,
   gitBashPath,
   cliEnv: buildCliEnvironment({
     inherited: process.env,

@@ -16,6 +16,11 @@
       { "op": "shell", "command": "node --version", "description": "Print the Node version" },
       { "op": "answer", "text": "看了六次。" }
     ],
-    "expect": { "status": "step_budget", "passed": false, "failureTags": ["step_budget"] }
+    "expect": {
+      "status": "step_budget",
+      "passed": false,
+      "steps": 3,
+      "failureTags": ["step_budget"]
+    }
   }
 }

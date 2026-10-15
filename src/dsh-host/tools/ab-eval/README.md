@@ -1,26 +1,30 @@
 # ab-eval：PiLab 与 Claude Code 的无头 A/B 评测
 
-同一批编码任务，用 PiLab（本仓库的 DSH 宿主）和 Claude Code 各跑 N 次，输出可对比的结构化记录和 Markdown 报告。它用来量化三件事：
+同一批编码任务，用 PiLab（本仓库的 DSH 宿主）、PiLab+SDK（路线 B 的 Claude Agent SDK 宿主）和 Claude Code 各跑 N 次，输出可对比的结构化记录和 Markdown 报告。它用来量化三件事：
 
-- **PiLab（DSH）与 Claude Code 在同一网关上的差距**。Claude Code 这一侧跑的运行时，就是路线 B（Claude 模型改走官方 Claude Agent SDK 引擎）将来要嵌进 PiLab 的那一套，所以这组对比是路线 B 预期收益的主要依据；
+- **PiLab（DSH）、PiLab+SDK 与 Claude Code 在同一网关上的差距**。路线 B 是让 Claude 模型改走官方 Claude Agent SDK 引擎，PiLab+SDK 就是这条路线的原型宿主（`src/claude-sdk-host/`），所以三方对比是路线 B 是否立项的主要依据（T2）；
 - **网关透传修好前后的差距**：同一套用例在不同网关上各跑一遍，再用 `report.ts` 合并对比；
 - **客户端各项改进（提示词包、工具补齐等）开与关的效果**：用变体开关，同一轮里并排对比。
 
 背景见 [2026-10-14 差距调研](../../../../docs/plans/2026-10-14-pilab-vs-claude-code-gap-study.md) §6 T2（文档在 `docs/quality-gap-study` 分支）。工程规范见 [docs/agent-project-engineering.md](../../../../docs/agent-project-engineering.md)。
 
-## 公平性：两边保持一致的东西
+## 公平性：各臂保持一致的东西
 
 | 项 | 做法 |
 |---|---|
-| 网关、key、模型、档位 | 两边用同一个网关、同一个 key，`--model`、`--effort` 同时传给两边 |
-| 审批 | 全自动：PiLab 用 `bypass` 档位；Claude Code 用 `--dangerously-skip-permissions` |
-| 无人值守 | Claude Code 在 `-p` 模式下没有提问工具。PiLab 的模型如果提问或发起计划审阅，评测框架当场用固定的一句话应答，不会干等到超时，次数记在报告的「自动应答」一栏（见「无人值守」） |
+| 网关、key、模型、档位 | 各臂用同一个网关、同一个 key，`--model`、`--effort` 同时传给各臂 |
+| 审批 | 全自动：PiLab 与 PiLab+SDK 用 `bypass` 档位；Claude Code 用 `--dangerously-skip-permissions` |
+| 无人值守 | Claude Code 在 `-p` 模式下没有提问工具。PiLab 与 PiLab+SDK 的模型如果提问或发起计划审阅，评测框架当场用固定的一句话应答，不会干等到超时，次数记在报告的「自动应答」一栏（见「无人值守」） |
 | 仓库 | 每次运行一份干净副本（同一个基准提交），互不影响 |
-| 环境 | 每次运行一个临时沙箱：独立的工作区、HOME、临时目录；PiLab 的 `DSH_HOME` 与 agent 目录、Claude Code 的 `CLAUDE_CONFIG_DIR` 都是新建的。环境变量从空白开始，只放 PATH 和系统基本变量（真实网关时再加代理） |
-| 预算 | 时间上限与步数上限对两边相同（见「用例格式」的 `budget`） |
+| 环境 | 每次运行一个临时沙箱：独立的工作区、HOME、临时目录；PiLab 的 `DSH_HOME` 与 agent 目录、PiLab+SDK 与 Claude Code 的 `CLAUDE_CONFIG_DIR` 都是新建的。环境变量从空白开始，只放 PATH 和系统基本变量（真实网关时再加代理） |
+| 预算 | 时间上限与步数上限对各臂相同（见「用例格式」的 `budget`） |
 | 顺序 | 臂的先后按用例和重复次数轮换，避免谁总是先跑 |
 
 PiLab 侧是真实宿主：`src/dsh-host/host.ts` 经 worker RPC 驱动，和 Main 一样。环境变量用 Main 自己的规则（`buildDshHostEnvironment`），模型计划用产品自己的转换（`buildDshModelPlan`），模型配置取自内置目录里的 Claude 服务。目录里没有的模型（如 `claude-opus-5-5`）按 `claude-opus-5` 那一行复制，记录里的 `client.modelTemplate` 会写明。
+
+PiLab+SDK 侧（`pilab-sdk`）也是真实宿主：`src/claude-sdk-host/host.ts` 用当前 Node 起进程、经 IPC 的 worker RPC 驱动，和 Main 的 WorkerSlot 一样（开会话、设 `bypass` 档位、send、等会话回到空闲）。启动变量照 Main 的 `claudeSdkEngine.ts`：临时的 `CLAUDE_CONFIG_DIR`，网关与 key 经 `AICLIENT_CLAUDE_SDK_BASE_URL`、`AICLIENT_CLAUDE_SDK_API_KEY` 注入，setting sources 为 `project`。它的 CLI 是 SDK 随包的那一份，工具名和 Claude Code 相同。主代理的步数与工具调用取宿主发出的事件（也就是 PiLab 窗口会显示的内容）；宿主不转发子代理，也不转发 SDK 的 `result`，所以评测时让宿主把 SDK 消息另写一份日志（`AICLIENT_CLAUDE_SDK_MESSAGE_LOG`，只在评测里设），计费 token、提供的工具和子代理调用从这份日志取。两边数出的主代理步数和工具调用记在 `client.crossCheck`，自测要求二者相等。
+
+想让 `pilab-sdk` 与 `claude-code` 只差「谁来驱动 CLI」这一项，就用 `--claude-bin` 把 Claude Code 臂指向 SDK 随包的 CLI（`src/claude-sdk-host/node_modules/@anthropic-ai/claude-agent-sdk-<平台>/claude.exe`），两臂的 CLI 版本就相同。报告的「版本」一行同时写出 Claude Code 与 SDK（含其随包 CLI）的版本。
 
 ## 快速开始
 
@@ -28,6 +32,7 @@ PiLab 侧是真实宿主：`src/dsh-host/host.ts` 经 worker RPC 驱动，和 Ma
 
 - Node 24（要用 `zlib` 的 zstd 解压，并且直接运行 `.ts`）；
 - 在 `src/dsh-host` 里执行过 `npm ci --ignore-scripts`；
+- `pilab-sdk` 臂：在 `src/claude-sdk-host` 里执行过 `npm ci`（要装上平台对应的 `claude-agent-sdk-<平台>` 原生包）；
 - Claude Code：默认依次查 `--claude-bin`、`AB_CLAUDE_BIN`、`CLAUDE_CODE_EXECPATH`，最后找 PATH 上的 `claude`；
 - git。Windows 上 Claude Code 还需要 Git Bash：默认在 PATH 里的 `git.exe` 旁边找，也可以用 `--git-bash` 指定。
 
@@ -35,7 +40,7 @@ PiLab 侧是真实宿主：`src/dsh-host/host.ts` 经 worker RPC 驱动，和 Ma
 node src/dsh-host/tools/ab-eval/selftest.ts
 ```
 
-自测只连本机假网关，大约三四分钟。它跑的是 PiLab、Claude Code、PiLab+自测变体三个臂，用例是 3 个随附用例加 7 个自测用例，然后逐项断言，见「自测验证了什么」。
+自测只连本机假网关，大约五分钟。它跑的是 PiLab、PiLab+SDK、Claude Code、PiLab+自测变体四个臂，用例是 3 个随附用例加 7 个自测用例，然后逐项断言，见「自测验证了什么」。
 
 ```bash
 node src/dsh-host/tools/ab-eval/run.ts --runs 1
@@ -97,9 +102,9 @@ node src/dsh-host/tools/ab-eval/run.ts --runs 1
 |---|---|---|
 | `--gateway fake\|real` | `fake` | `real` 读 `AB_BASE_URL`、`AB_API_KEY` |
 | `--runs N` | 3 | 每个「用例 × 臂」重复几次 |
-| `--arms a,b,...` | `pilab,claude-code` | 臂：`pilab`、`claude-code`，或 `<客户端>+<变体名>` |
-| `--model id` | `claude-opus-5-5` | 两边相同 |
-| `--effort level` | `high` | `low` / `medium` / `high` / `xhigh` / `max`，两边相同 |
+| `--arms a,b,...` | `pilab,claude-code` | 臂：`pilab`、`pilab-sdk`、`claude-code`，或 `<客户端>+<变体名>` |
+| `--model id` | `claude-opus-5-5` | 各臂相同 |
+| `--effort level` | `high` | `low` / `medium` / `high` / `xhigh` / `max`，各臂相同 |
 | `--cases 路径` | `cases/` | 用例文件或目录，可以重复写 |
 | `--case id,...` | 全部 | 只跑这几个用例 |
 | `--judge` | 关 | 对有 `judge` 的用例做 LLM 评分 |
@@ -174,7 +179,7 @@ node src/dsh-host/tools/ab-eval/run.ts --runs 1
 `budget.timeMs` 默认 15 分钟，`budget.maxSteps`（主代理的模型调用次数）默认 60。
 
 - Claude Code 的步数上限就是 `--max-turns`。
-- PiLab 在第 maxSteps+1 次模型调用开始时用 `worker.stop` 截停。这次调用已经发出，但它的结果不会被执行。
+- PiLab 与 PiLab+SDK 在第 maxSteps+1 次模型调用开始时用 `worker.stop` 截停。这次调用已经发出，但它的结果不会被执行。
 
 `judge` 是 LLM 评分（规范 §5），只打分、列问题，不判通过与否。评分模型看到任务、rubric、最终回复和 diff，看不到是哪个客户端做的。提示词固定，版本记在 `ab-eval-judge/1`。
 
@@ -258,6 +263,7 @@ node src/dsh-host/tools/ab-eval/run.ts --runs 1
 - 文件内容可以直接写字符串，也可以写 `{"file": "相对变体文件的路径"}`。变体的 sha256 连同引用的文件一起算，记在每条记录里。
 - `dshHomeFiles` 里的 `cordis.patch.yml` 是宿主的 home patch 层。从源码运行的宿主会应用它（打包后的宿主忽略它），可以用来开关或配置 cordis 行，比如 `system-prompt` 的 `personaPrefix`，或者打开 `tool-web`。隐私与端点相关的行由宿主强制关闭，变体改不回来。
 - Claude Code 也能有变体：`"client": "claude-code"`，用 `args`（追加的 CLI 参数）、`env`、`configFiles`（写进临时 `CLAUDE_CONFIG_DIR`，比如 `settings.json`）。
+- PiLab+SDK 的变体：`"client": "pilab-sdk"`，用 `env`（宿主的启动变量，在 Main 的那些之后叠加）和 `configFiles`。
 - [variants/selftest-persona.json](variants/selftest-persona.json) 是自测用的示例：用 home patch 在系统提示词里加一个标记。
 
 对比改进开与关：
@@ -278,14 +284,14 @@ node src/dsh-host/tools/ab-eval/run.ts --runs 1
 
 ## 无人值守
 
-- **提问与卡片**：PiLab 的模型发起的卡片都由评测框架当场应答，并按种类计数（`record.client.cardsAnswered`）：
-  - 提问（`ask_user_question`）统一回答「没有人可以回答：这是无人值守的运行，请按你的判断继续，并在最终回复里写明你的假设」；
+- **提问与卡片**：PiLab 与 PiLab+SDK 的模型发起的卡片都由评测框架当场应答，并按种类计数（`record.client.cardsAnswered`）：
+  - 提问（`ask_user_question`，PiLab+SDK 是 `AskUserQuestion`）统一回答「没有人可以回答：这是无人值守的运行，请按你的判断继续，并在最终回复里写明你的假设」。PiLab+SDK 把这句话填进每个问题的答案，因为 CLI 的提问工具只读 `answers`；
   - 计划审阅选「批准，自动执行（不设目标）」；
   - 预览回答「没有预览窗口」；
   - 权限卡片回答允许。`bypass` 档位下本不该出现权限卡片，出现了也会计数。
 
-  Claude Code 在 `-p` 模式下根本不提供提问工具，所以这一栏只对 PiLab 有意义。数字明显不为零时，说明 PiLab 的模型倾向于停下来问人，这本身就是一项差异。
-- **自己启动的后续轮次**：PiLab 的会话在本轮结束后，可能自己开始新的一轮（目标轮次、后台任务完成的唤醒）。评测会跟到会话持续空闲 2 秒为止，次数记在 `record.client.extraTurns`。
+  Claude Code 在 `-p` 模式下根本不提供提问工具，所以这一栏只对 PiLab 与 PiLab+SDK 有意义。数字明显不为零时，说明模型在这个客户端里倾向于停下来问人，这本身就是一项差异。
+- **自己启动的后续轮次**：PiLab 与 PiLab+SDK 的会话在本轮结束后，可能自己开始新的一轮（目标轮次、后台任务完成的唤醒）。评测会跟到会话持续空闲 2 秒为止，次数记在 `record.client.extraTurns`。
 
 ## 输出与报告
 
@@ -300,6 +306,7 @@ out/<运行 id>/
     diff.patch         代理的全部改动
     client/            客户端原始产物
                          PiLab：解码后的 DSH 会话日志、bridge 事件、宿主 stderr
+                         PiLab+SDK：宿主事件（host-events.jsonl）、SDK 消息日志（sdk-messages.jsonl）、宿主 stderr
                          Claude Code：stream-json、stderr
 ```
 
@@ -313,7 +320,7 @@ out/<运行 id>/
 | `checks[]` | 每项检查的结果和细节，包括命令输出尾部和命中位置 |
 | `failureTags` | 失败分类（规范 §14）：状态、`check:<id>`、`empty_answer`、`unknown_tool` |
 | `metrics` | `steps`、`toolCalls`、`toolErrors`、`unknownToolCalls`、`nonZeroExits`、`pendingToolCalls`、按工具名与按类别的统计、`tokens`（`input` / `cacheRead` / `cacheWrite` / `output` / `total`）、`durationMs`、`wallMs`、`changes`（文件数、增删行数） |
-| `client` | PiLab：请求实际用的模型和档位、系统提示词哈希、轮次结束原因、重试次数、`cardsAnswered`、`extraTurns`；Claude Code：版本、`apiKeySource`、权限模式、MCP 服务器与插件、`num_turns`、它自估的费用 |
+| `client` | PiLab：请求实际用的模型和档位、系统提示词哈希、轮次结束原因、重试次数、`cardsAnswered`、`extraTurns`；Claude Code：版本、`apiKeySource`、权限模式、MCP 服务器与插件、`num_turns`、它自估的费用；PiLab+SDK：两者的并集（CLI 的这些字段取自 SDK 的 `init` 与 `result`），另有 SDK 版本 `sdk`、轮次结束事件 `turnEnd` 和 `crossCheck` |
 | `judge` | 分数、各维度、问题清单；或者 `error` |
 
 另一个代理接手时（规范 §11），读失败用例的 `record.json`、`trace.jsonl` 和 `diff.patch` 就能复盘。
@@ -337,14 +344,16 @@ out/<运行 id>/
 - **计费 token**：
   - PiLab 取 DSH 会话日志里每一步 usage 之和，含子代理会话；
   - Claude Code 取 `result.modelUsage` 各模型之和，含它的辅助模型；
+  - PiLab+SDK 取 SDK 消息日志里最后一条 `result` 的 `modelUsage`，口径同 Claude Code（`metrics.tokensSource` 为 `sdk-modelUsage`）；
   - 被截停的运行，Claude Code 只能用逐条消息的近似值，`metrics.tokensSource` 会写明来源。
-- **耗时**：PiLab 从 `worker.send` 算到会话回到空闲，不含宿主启动（产品里宿主常驻）；Claude Code 取它自报的 `duration_ms`。`wallMs` 包含启动时间。
+- **耗时**：PiLab 与 PiLab+SDK 从 `worker.send` 算到会话回到空闲，不含宿主启动（产品里宿主常驻；PiLab+SDK 的宿主在开会话时就启动 CLI）；Claude Code 取它自报的 `duration_ms`。`wallMs` 包含启动时间。
   - Claude Code 在一个会话里第一次调用 Bash 时要建 shell 快照，Windows 上要几秒，偶尔更久（本机见过 23 秒），所以要多跑几次看离散度。
 
 ## 凭据与隔离
 
 - **不碰本机任何账户**：
   - PiLab 宿主拿到的 key 只经 IPC 按请求下发，宿主的凭据库没有参与；
+  - PiLab+SDK 宿主的 key 经启动变量传入，宿主读到后从自己的环境里删掉，只放进 CLI 子进程的环境；CLI 用临时 `CLAUDE_CONFIG_DIR`，记录里的 `apiKeySource` 可以核对；
   - Claude Code 用临时的 `CLAUDE_CONFIG_DIR` 和 HOME，key 只经 `ANTHROPIC_API_KEY` 传入，记录里的 `apiKeySource` 可以核对；
   - 两边的环境都设了 `GIT_CONFIG_NOSYSTEM=1` 和 `GIT_TERMINAL_PROMPT=0`，git 的凭据管理器不会参与；
   - setup 读不到本机的 `~/.npmrc` 等包管理器凭据。
@@ -366,14 +375,15 @@ out/<运行 id>/
    - 假模型放弃（检查必须判失败）、步数截停、超时截停；
    - git 来源检出到指定的旧提交；
    - setup 的产物进入基准、不算改动，`promptFile` 正确读入；
-   - PiLab 的模型提问时当场被应答，不会等到超时。
+   - PiLab 与 PiLab+SDK 的模型提问时当场被应答，不会等到超时。
 2. 同一用例三个臂都正常结束时：
    - 假网关收到的模型请求数等于记录里的步数，没有多出来的请求；
    - 剧本对称时，两边报告的计费 token 完全相同且大于 0（假网关按步计费）；
    - 评分请求数等于被评分的记录数。
 3. 每个客户端确实按要求运行：
    - Claude Code 用的是环境变量里的 key，权限模式是 bypass，没有加载任何 MCP 服务器，插件也只有内置的；
-   - PiLab 的请求用的是指定的模型和档位，宿主正常停止，只有提问用例才出现自动应答。
+   - PiLab 的请求用的是指定的模型和档位，宿主正常停止，只有提问用例才出现自动应答；
+   - PiLab+SDK 的 CLI 同样用环境变量里的 key、bypass 权限模式、没有 MCP 服务器和非内置插件，跑的是指定的模型；宿主正常停止，只有提问用例才出现自动应答；正常结束的运行里，宿主事件与 SDK 消息数出的主代理步数和工具调用相同。
 4. 变体确实生效：变体臂的系统提示词里有 home patch 加的标记，基线臂的没有。
 5. 隔离：
    - 抓到的请求里没有真实的 `~/.claude`、`~/.dsh` 路径；
@@ -391,7 +401,8 @@ pnpm exec vitest run src/dsh-host/tools/ab-eval
 ## 已知限制
 
 - 一次只跑一个运行，不并发，以免互相影响耗时和限流。
-- PiLab 的步数截停比 Claude Code 晚一步发生：多发出的那次调用会被中止（见「用例格式」）。
+- PiLab 与 PiLab+SDK 的步数截停比 Claude Code 晚一步发生：多发出的那次调用会被中止（见「用例格式」）。
+- PiLab+SDK 宿主给 CLI 的环境按它自己的白名单过滤，沙箱里的 `GIT_CONFIG_NOSYSTEM`、`GIT_TERMINAL_PROMPT` 到不了 CLI。HOME 仍是沙箱的，git 读不到本机的用户配置；评测任务也不推送，所以不影响结果，但隔离比另两臂少这两项。
 - `dshHomeFiles` 只对从源码运行的宿主有效。改进项确定以后，要落到 `bundle/cordis.patch.yml` 或正式开关里，再用 `env` 变体做对比。
 - 评分默认和被测请求走同一个网关。如果网关会改写请求（调研 §4），评分请求也可能被改写，可以用 `AB_JUDGE_BASE_URL`、`AB_JUDGE_API_KEY` 指定一个干净的端点。
 - 评分和 `--probe` 的请求由本进程用 `fetch` 发出，Node 默认不读代理变量。需要代理时，运行前设置 `NODE_USE_ENV_PROXY=1`，或者用 `node --use-env-proxy` 启动。两个客户端本身会照常使用传给它们的代理变量。
@@ -411,6 +422,8 @@ pnpm exec vitest run src/dsh-host/tools/ab-eval
 | `variants/` | 变体 |
 | `lib/suite.ts` | 编排：预检、沙箱、仓库副本、setup、客户端、检查、记录、续跑 |
 | `lib/pilab.ts` | PiLab 侧运行器（含卡片应答） |
+| `lib/pilabSdk.ts` | PiLab+SDK 侧运行器（起 SDK 宿主、卡片应答） |
+| `lib/sdkEvents.ts` | 把 SDK 宿主的事件和 SDK 消息日志折成统一轨迹 |
 | `lib/claudeCode.ts` | Claude Code 侧运行器 |
 | `lib/dshLog.ts` | 解析 DSH 会话日志 |
 | `lib/claudeStream.ts` | 解析 Claude Code 的 stream-json |

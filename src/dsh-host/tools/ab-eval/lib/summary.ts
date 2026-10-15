@@ -230,7 +230,7 @@ export function renderReport(
       `- 模型 / 档位：\`${m.model}\` / \`${m.effort}\`；每组重复 ${m.runs} 次（已记录 ${suite.records.length} 次运行）`,
       `- 网关：${m.gateway.kind === 'fake' ? '本机假网关（plan ab-eval）' : '真实网关'}（${m.gateway.id}）`,
       `- 用例集：${m.cases.length} 个用例，版本 \`${m.suiteVersion}\``,
-      `- 版本：harness \`${s.harness.commit.slice(0, 12)}\`${s.harness.dirty ? `（有未提交改动，diff ${s.harness.dirtyDiffSha256 ?? '?'}）` : ''}，应用 ${s.appVersion}，DSH ${s.dsh['dsh-base'] ?? '?'}，Claude Code ${s.claudeCode ?? '未用'}，Node ${s.node}，${s.platform}`,
+      `- 版本：harness \`${s.harness.commit.slice(0, 12)}\`${s.harness.dirty ? `（有未提交改动，diff ${s.harness.dirtyDiffSha256 ?? '?'}）` : ''}，应用 ${s.appVersion}，DSH ${s.dsh['dsh-base'] ?? '?'}，Claude Code ${s.claudeCode ?? '未用'}，Claude Agent SDK ${s.claudeSdk?.sdk ? `${s.claudeSdk.sdk}（内带 CLI ${s.claudeSdk.cli ?? '?'}）` : '未装'}，Node ${s.node}，${s.platform}`,
       `- 臂：${m.arms.map((arm) => (arm.variant ? `\`${arm.id}\`（变体 sha256 ${arm.variant.sha256.slice(0, 12)}）` : `\`${arm.id}\``)).join('；')}`,
       ...(m.resumes && m.resumes.length > 0
         ? [

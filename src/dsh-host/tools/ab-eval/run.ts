@@ -1,11 +1,11 @@
 /**
- * PiLab (DSH host) vs Claude Code, headless, on the same coding tasks
- * (tools/ab-eval/README.md). Every case × arm × repetition runs in a fresh
- * sandbox on a clean repository copy, against one gateway, one model and one
- * effort, with every approval automatic.
+ * PiLab (DSH host), PiLab+SDK (route B's Claude Agent SDK host) and Claude
+ * Code, headless, on the same coding tasks (tools/ab-eval/README.md). Every
+ * case × arm × repetition runs in a fresh sandbox on a clean repository copy,
+ * against one gateway, one model and one effort, with every approval automatic.
  *
  *   node src/dsh-host/tools/ab-eval/run.ts [--gateway fake|real] [--runs 3]
- *     [--arms pilab,claude-code] [--model claude-opus-5-5] [--effort high]
+ *     [--arms pilab,pilab-sdk,claude-code] [--model claude-opus-5-5] [--effort high]
  *     [--cases <file|dir>]... [--case <id,...>] [--judge] [--judge-model <id>]
  *     [--label <name>] [--out <dir>] [--scratch <dir>] [--keep-workspaces]
  *     [--claude-bin <path>] [--git-bash <path>] [--allow-ancestor-instructions]

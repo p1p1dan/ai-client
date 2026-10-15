@@ -138,7 +138,11 @@ export interface LoadedCase extends CaseFile {
 
 // ---- variants (variants/*.json) and arms -----------------------------------
 
-export type ClientName = 'pilab' | 'claude-code';
+/**
+ * `pilab`: the DSH host; `pilab-sdk`: route B, the Claude Agent SDK host
+ * (src/claude-sdk-host); `claude-code`: the Claude Code CLI under `-p`.
+ */
+export type ClientName = 'pilab' | 'pilab-sdk' | 'claude-code';
 
 /** File contents: inline text, or a file relative to the variant file. */
 export type FileSource = string | { file: string };
@@ -147,7 +151,7 @@ export interface VariantFile {
   name: string;
   client: ClientName;
   description?: string;
-  /** Environment overrides for the host (pilab) or the CLI (claude-code). */
+  /** Environment overrides for the host (pilab, pilab-sdk) or the CLI (claude-code). */
   env?: Record<string, string>;
   // pilab
   /** Package name -> on/off, as Main sends it (`AICLIENT_DSH_PLUGINS`). */
@@ -165,7 +169,7 @@ export interface VariantFile {
   // claude-code
   /** Extra CLI arguments. */
   args?: string[];
-  /** Written into the throwaway CLAUDE_CONFIG_DIR, e.g. `settings.json`. */
+  /** Written into the throwaway CLAUDE_CONFIG_DIR (claude-code, pilab-sdk), e.g. `settings.json`. */
   configFiles?: Record<string, FileSource>;
 }
 
@@ -182,7 +186,7 @@ export interface LoadedVariant extends VariantFile {
 
 /** One column of the comparison: a client, optionally under a variant. */
 export interface Arm {
-  /** `pilab`, `claude-code`, or `<client>+<variant>`. */
+  /** `pilab`, `pilab-sdk`, `claude-code`, or `<client>+<variant>`. */
   id: string;
   client: ClientName;
   variant?: LoadedVariant;

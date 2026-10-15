@@ -1,6 +1,6 @@
 {
   "id": "selftest-question",
-  "title": "自测：PiLab 的模型提问时，评测框架当场应答，不会干等到超时",
+  "title": "自测：PiLab（DSH 与 SDK 两种引擎）的模型提问时，评测框架当场应答，不会干等到超时",
   "tier": "selftest",
   "tags": ["selftest", "unattended"],
   "repo": { "fixture": "../../fixtures/retry-policy" },
@@ -20,6 +20,7 @@
       "passed": true,
       "byClient": {
         "pilab": { "steps": 2, "toolCalls": 1, "toolErrors": 0 },
+        "pilab-sdk": { "steps": 2, "toolCalls": 1, "toolErrors": 0 },
         "claude-code": { "steps": 1, "toolCalls": 0 }
       }
     }

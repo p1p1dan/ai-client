@@ -17,6 +17,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { appendFileSync } from 'node:fs';
 import {
   type CanUseTool,
   getSessionMessages,
@@ -95,6 +96,17 @@ export interface SdkHostConfig {
   cliEnv: Record<string, string>;
   /** Experiment switch: let the repository's allow rules and hooks apply (the CLI's default). */
   trustRepoPolicy?: boolean;
+  /**
+   * Evaluation tap (tools/ab-eval): every SDK message but the partial stream
+   * frames is appended here as one JSON line, the `claude -p --output-format
+   * stream-json` shape. Off unless the launcher sets it.
+   */
+  messageLog?: string;
+  /**
+   * Evaluation cap (tools/ab-eval): the SDK's `maxTurns`, as `claude -p --max-turns`.
+   * A turn that reaches it ends failed with `error_max_turns`. Off unless set.
+   */
+  maxTurns?: number;
 }
 
 /**
@@ -421,6 +433,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       env: this.config.cliEnv,
       ...(model ? { model } : {}),
       ...effortOptions(this.effort),
+      ...(this.config.maxTurns ? { maxTurns: this.config.maxTurns } : {}),
       systemPrompt: { type: 'preset', preset: 'claude_code', append: PILAB_PROMPT_APPEND },
       tools: { type: 'preset', preset: 'claude_code' },
       disallowedTools: HOST_ONLY_TOOLS,
@@ -689,6 +702,13 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   }
 
   private ingest(message: SDKMessage): void {
+    if (this.config.messageLog && message.type !== 'stream_event') {
+      try {
+        appendFileSync(this.config.messageLog, `${JSON.stringify(message)}\n`);
+      } catch (error) {
+        this.log('message log write failed', error);
+      }
+    }
     if (process.env.AICLIENT_CLAUDE_SDK_TRACE) {
       const m = message as unknown as Record<string, unknown>;
       const event = m.type === 'stream_event' ? (record(m.event)?.type as string) : '';

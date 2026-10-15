@@ -10,12 +10,14 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type {
   CaseFile,
+  ClientName,
   CommandCheck,
   FakeStep,
   LoadedCase,
   PatternCheck,
   RepoSource,
 } from './types.ts';
+import { CLIENTS } from './variants.ts';
 import { treeHash } from './workspace.ts';
 
 export const DEFAULT_TIME_MS = 15 * 60_000;
@@ -153,7 +155,7 @@ export function validateCase(raw: unknown, dir: string): string[] {
       if (!FAKE_OPS.has(step?.op)) problems.push(`fakeModel.steps[${index}].op is not a known op`);
     }
     for (const client of Object.keys(c.fakeModel.expect?.byClient ?? {})) {
-      if (client !== 'pilab' && client !== 'claude-code') {
+      if (!CLIENTS.includes(client as ClientName)) {
         problems.push(`fakeModel.expect.byClient.${client} is not a client`);
       }
     }
