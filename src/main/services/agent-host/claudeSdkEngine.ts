@@ -145,6 +145,10 @@ export function openClaudeSdkTransport(input: {
     ...(process.env.AICLIENT_CLAUDE_SDK_CLI?.trim()
       ? { AICLIENT_CLAUDE_SDK_CLI: process.env.AICLIENT_CLAUDE_SDK_CLI.trim() }
       : {}),
+    // Optional: PiLab's bundled `rg` (@vscode/ripgrep) instead of the CLI's built-in one.
+    ...(process.env.AICLIENT_CLAUDE_SDK_RG_DIR?.trim()
+      ? { AICLIENT_CLAUDE_SDK_RG_DIR: process.env.AICLIENT_CLAUDE_SDK_RG_DIR.trim() }
+      : {}),
   });
   return new ClaudeSdkProcessTransport({ command: node, args: [entry], cwd: configDir, env });
 }

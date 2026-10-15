@@ -5,14 +5,30 @@
  *
  *   node tools/host-probe.ts <gatewayUrl> <workspace> [scenario ...]
  *
- * Scenarios: text tools ask stop plan steer compact resume. Default: all but resume.
- * The key is a fake one; nothing here reads a real credential.
+ * Scenarios: text tools ask stop plan steer agent search enc compact history.
+ * Default: text tools ask stop plan steer. Resume: run again with PROBE_CONFIG_DIR and
+ * PROBE_SESSION_FILE pointing at the first run's config dir and stub.
+ *
+ * `enc` is the encrypted-machine matrix (docs/plans/2026-10-14-claude-agent-sdk-prototype.md
+ * §5.2). Samples: PROBE_ENC_FILES (absolute paths, `;`-separated) and/or every file of
+ * PROBE_ENC_DIR, each holding PROBE_ENC_MARKER (default `P113B-MARKER-`, the P1-13b kit's).
+ * One turn per sample, in bypass gear: Read, Grep, Bash cat, Bash sed, Edit (the marker
+ * gets a `CCSDK-EDITED-` prefix), Read again, Write a new file of the same name into a
+ * fresh `ccsdk-written-<ms>` sibling directory, and Read that back. Prints one line per
+ * tool call and one ENC-MATRIX row per sample (what the CLI saw), then the first bytes of
+ * every edited sample, written file and the session transcript as this node and Windows
+ * PowerShell 5.1 read them; PROBE_ENC_RECHECK_S=<s> repeats that after a delay. The samples
+ * are edited in place: give it a fresh copy each run. Without PROBE_ENC_FILES / _DIR it
+ * writes four plain samples into the workspace (a dry run).
+ *
+ * The key is a fake one unless PROBE_API_KEY is set in the shell; nothing here reads a
+ * stored credential.
  */
 
 import { type ChildProcess, execFileSync, fork } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const [gatewayUrl, workspace, ...wanted] = process.argv.slice(2);
@@ -51,6 +67,9 @@ function startHost(): void {
       // A real gateway key comes from PROBE_API_KEY in this shell only; never a file.
       AICLIENT_CLAUDE_SDK_API_KEY: process.env.PROBE_API_KEY ?? 'sk-fake-probe-key',
       AICLIENT_CLAUDE_SDK_SETTING_SOURCES: 'project',
+      ...(process.env.AICLIENT_CLAUDE_SDK_RG_DIR
+        ? { AICLIENT_CLAUDE_SDK_RG_DIR: process.env.AICLIENT_CLAUDE_SDK_RG_DIR }
+        : {}),
       ...(process.env.AICLIENT_CLAUDE_SDK_TRACE ? { AICLIENT_CLAUDE_SDK_TRACE: '1' } : {}),
       ...(process.env.AICLIENT_CLAUDE_SDK_REPO_POLICY
         ? { AICLIENT_CLAUDE_SDK_REPO_POLICY: process.env.AICLIENT_CLAUDE_SDK_REPO_POLICY }
@@ -162,6 +181,114 @@ function processesNamed(name: string): number {
     );
   const out = execFileSync('tasklist', ['/FI', `IMAGENAME eq ${name}.exe`, '/NH']).toString();
   return out.split('\n').filter((line) => line.toLowerCase().startsWith(name)).length;
+}
+
+/**
+ * `enc` samples: PROBE_ENC_FILES (`;`-separated absolute paths), then the regular files of
+ * PROBE_ENC_DIR (not recursive). Neither set: a dry run on plain samples written into the
+ * workspace under a few of P1-13b's names, a binary extension and an extensionless one included.
+ */
+function encSamples(marker: string): string[] {
+  const listed = (process.env.PROBE_ENC_FILES ?? '')
+    .split(';')
+    .map((file) => file.trim())
+    .filter(Boolean);
+  const dir = process.env.PROBE_ENC_DIR?.trim();
+  const inDir = dir
+    ? readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => join(dir, entry.name))
+        .sort()
+    : [];
+  if (listed.length + inDir.length > 0) return [...listed, ...inDir];
+  return ['enc-sample.md', 'enc-sample.yml', 'enc-sample.docx', 'Makefile'].map((name) => {
+    const file = join(workspace, name);
+    writeFileSync(file, `${marker}dryrun ${name}\nline two\n`);
+    return file;
+  });
+}
+
+function toolText(output: unknown): string {
+  if (typeof output === 'string') return output;
+  const content = (output as { content?: unknown } | undefined)?.content;
+  if (Array.isArray(content)) {
+    return content.map((block) => String((block as { text?: unknown })?.text ?? '')).join('\n');
+  }
+  return JSON.stringify(output ?? '');
+}
+
+const HEAD_BYTES = 256;
+
+/** What a file's first bytes are; a string head is a read status ('missing', 'error'). */
+function classifyHead(head: Buffer | string, marker: string): string {
+  if (typeof head === 'string') return head;
+  const text = head.toString('latin1');
+  if (text.startsWith('%TSD-Header')) return 'TSD';
+  if (text.includes('CCSDK-EDITED-')) return 'edited';
+  if (text.includes('CCSDK-WRITTEN')) return 'written';
+  if (text.includes(marker)) return 'marker';
+  if (text.startsWith('{')) return 'json';
+  return head.length === 0 ? 'empty' : 'other';
+}
+
+/** First bytes as this process reads them: on the encrypted machine, the shipped node.exe. */
+function nodeHead(file: string): Buffer | string {
+  if (!existsSync(file)) return 'missing';
+  try {
+    return readFileSync(file).subarray(0, HEAD_BYTES);
+  } catch {
+    return 'error';
+  }
+}
+
+/**
+ * The same, as Windows PowerShell 5.1 reads them ([IO.File]): P1-13b's other reader, which
+ * sees TSD where node does not for some types (md, java, …) and the reverse for others.
+ */
+function powershellHeads(files: string[]): Array<Buffer | string> {
+  const heads: Array<Buffer | string> = files.map(() => 'error');
+  const script = [
+    '$i = 0',
+    'foreach ($p in (ConvertFrom-Json -InputObject $env:PROBE_ENC_PATHS)) {',
+    '  try {',
+    '    if (-not [IO.File]::Exists($p)) { "$i missing" } else {',
+    '      $s = [IO.File]::OpenRead($p)',
+    `      try { $b = New-Object byte[] ${HEAD_BYTES}; $n = $s.Read($b, 0, ${HEAD_BYTES}); "$i hex:" + [BitConverter]::ToString($b, 0, $n) } finally { $s.Close() }`,
+    '    }',
+    '  } catch { "$i error" }',
+    '  $i++',
+    '}',
+  ].join('\n');
+  try {
+    const out = execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      env: { ...process.env, PROBE_ENC_PATHS: JSON.stringify(files) },
+    }).toString();
+    for (const line of out.split(/\r?\n/)) {
+      const match = /^(\d+) (?:hex:([0-9A-F-]*)|(\w+))$/.exec(line.trim());
+      if (!match) continue;
+      heads[Number(match[1])] =
+        match[2] !== undefined ? Buffer.from(match[2].replaceAll('-', ''), 'hex') : match[3];
+    }
+  } catch (error) {
+    console.log(`  (PowerShell 5.1 reader failed: ${String(error).slice(0, 200)})`);
+  }
+  return heads;
+}
+
+function printDiskViews(
+  items: Array<{ label: string; file: string }>,
+  marker: string,
+  when: string
+) {
+  console.log(
+    `\n=== on disk ${when}: first ${HEAD_BYTES} bytes as read by this node / PowerShell 5.1`
+  );
+  const ps = process.platform === 'win32' ? powershellHeads(items.map((x) => x.file)) : undefined;
+  for (const [i, item] of items.entries()) {
+    const node = classifyHead(nodeHead(item.file), marker);
+    const viaPs = ps ? ` ps51=${classifyHead(ps[i] ?? 'error', marker)}` : '';
+    console.log(`  ${item.label.padEnd(36)} node=${node.padEnd(8)}${viaPs}`);
+  }
 }
 
 async function main(): Promise<void> {
@@ -277,6 +404,72 @@ async function main(): Promise<void> {
         console.log(`  interject → ${JSON.stringify(r)}`);
         await waitFor(terminal, 'steer turn end', 90_000);
         show('steer');
+        break;
+      }
+      case 'enc': {
+        const marker = process.env.PROBE_ENC_MARKER?.trim() || 'P113B-MARKER-';
+        const files = encSamples(marker);
+        // New files go to a fresh sibling directory under the sample's own name, so the
+        // policy sees the same extension in the same place and Write never meets an old file.
+        const writeDir = `ccsdk-written-${Date.now()}`;
+        const writes = files.map((file) => join(dirname(file), writeDir, basename(file)));
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'bypass' });
+        const rows: string[] = [];
+        for (const [i, file] of files.entries()) {
+          // One turn per sample: a file the CLI chokes on does not cost the rest.
+          await send(`CC-ENC ${JSON.stringify({ files: [file], writes: [writes[i]], marker })}`);
+          const end = await waitFor(terminal, `enc turn end (${basename(file)})`, 120_000);
+          console.log(`\n=== enc ${i + 1}/${files.length} ${basename(file)}: ${end.type}`);
+          const names = new Map<string, string>();
+          for (const event of events) {
+            const p = event.payload ?? {};
+            if (event.type === 'tool.started') names.set(String(p.toolCallId), String(p.name));
+            if (event.type !== 'tool.completed') continue;
+            const text = toolText(p.output);
+            const seen = text.includes('%TSD-Header')
+              ? 'TSD'
+              : /CCSDK-(EDITED|WRITTEN)/.test(text) || text.includes(marker)
+                ? 'plain'
+                : '-';
+            console.log(
+              `  ${(names.get(String(p.toolCallId)) ?? '?').padEnd(5)} ok=${String(p.ok).padEnd(5)} ${seen.padEnd(5)} ${text.replace(/\s+/g, ' ').slice(0, 100)}`
+            );
+          }
+          const reply = events
+            .filter((e) => e.type === 'message.delta')
+            .map((e) => String(e.payload?.text ?? ''))
+            .join('');
+          const at = reply.indexOf('ENC-MATRIX\n');
+          rows.push(
+            at >= 0 ? reply.slice(at + 11).trim() : `${basename(file)}: (no row, ${end.type})`
+          );
+        }
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
+        console.log('\n=== ENC-MATRIX: what the CLI saw, one row per sample');
+        for (const row of rows) console.log(`  ${row}`);
+        // The transcript the CLI wrote for this session.
+        const stub = JSON.parse(readFileSync(String(sessionFile), 'utf8')) as {
+          ccSessionId: string;
+        };
+        const projects = join(configDir, 'projects');
+        const transcripts = (existsSync(projects) ? readdirSync(projects) : [])
+          .map((dir) => join(projects, dir, `${stub.ccSessionId}.jsonl`))
+          .filter((file) => existsSync(file));
+        const onDisk = [
+          ...files.flatMap((file, i) => [
+            { label: `${basename(file)} (edited)`, file },
+            { label: `${basename(file)} (written)`, file: writes[i] },
+          ]),
+          ...transcripts.map((file) => ({ label: 'transcript', file })),
+        ];
+        printDiskViews(onDisk, marker, 'right after the turns');
+        const recheck = Number(process.env.PROBE_ENC_RECHECK_S ?? 0);
+        if (recheck > 0) {
+          console.log(`\n  waiting ${recheck} s for the recheck…`);
+          await new Promise((r) => setTimeout(r, recheck * 1_000));
+          printDiskViews(onDisk, marker, `${recheck} s later`);
+        }
+        console.log(`\n  written files: ${[...new Set(writes.map(dirname))].join(' ; ')}`);
         break;
       }
       case 'search': {

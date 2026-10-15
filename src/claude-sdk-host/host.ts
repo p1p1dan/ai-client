@@ -15,8 +15,11 @@
  *   AICLIENT_CLAUDE_SDK_SETTING_SOURCES  comma list of 'project' / 'local' / 'user', or empty
  *   AICLIENT_CLAUDE_SDK_CLI          optional pathToClaudeCodeExecutable (e.g. a .js build run by node)
  *   AICLIENT_CLAUDE_SDK_CLIENT_APP   User-Agent suffix
+ *   AICLIENT_CLAUDE_SDK_RG_DIR       optional directory with an `rg` used instead of the CLI's built-in one
  */
 
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import process from 'node:process';
 import { BridgeRpcServer } from '../dsh-host/bridge/bridgeRpcServer.ts';
 import { buildCliEnvironment, findGitBash } from './cliEnvironment.ts';
@@ -50,6 +53,8 @@ const settingSources = (process.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES ?? '')
     (s): s is 'project' | 'local' | 'user' => s === 'project' || s === 'local' || s === 'user'
   );
 const gitBashPath = process.platform === 'win32' ? findGitBash(process.env) : undefined;
+// Optional: PiLab's own `rg` instead of the CLI's built-in one (see cliEnvironment.ts).
+const ripgrepDir = process.env.AICLIENT_CLAUDE_SDK_RG_DIR?.trim() || undefined;
 const config: SdkHostConfig = {
   configDir,
   settingSources,
@@ -63,13 +68,20 @@ const config: SdkHostConfig = {
     apiKey: required('AICLIENT_CLAUDE_SDK_API_KEY'),
     clientApp: process.env.AICLIENT_CLAUDE_SDK_CLIENT_APP?.trim() || 'pilab-claude-sdk-proto/0',
     gitBashPath,
+    ripgrepDir,
   }),
 };
 // The key now lives only in `config.cliEnv`; drop it from this process's own environment.
 delete process.env.AICLIENT_CLAUDE_SDK_API_KEY;
 
+if (
+  ripgrepDir &&
+  !existsSync(path.join(ripgrepDir, process.platform === 'win32' ? 'rg.exe' : 'rg'))
+) {
+  log(`warning: no rg in ${ripgrepDir}; the CLI falls back to its built-in one`);
+}
 log(
-  `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'}`
+  `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} rg=${ripgrepDir ?? '(built-in)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'}`
 );
 
 let runtime: ClaudeSdkSessionRuntime | null = null;

@@ -300,7 +300,8 @@
  *   claude-sdk         (route-B prototype, docs/plans/2026-10-14-claude-agent-sdk-prototype.md)
  *                       CONTENT-KEYED plan for the Claude Agent SDK engine: replies use Claude
  *                       Code's tool names. The latest user message carrying CC-TEXT, CC-TOOLS,
- *                       CC-ASK, CC-SLOW, CC-PLAN, CC-AGENT, CC-CHILD, CC-STEER or CC-SEARCH is the trigger;
+ *                       CC-ASK, CC-SLOW, CC-PLAN, CC-AGENT, CC-CHILD, CC-STEER, CC-SEARCH or CC-ENC
+ *                       (the encrypted-machine matrix) is the trigger;
  *                       the step is the number of tool calls since it. Frames are paced, so the
  *                       window shows the stream as it arrives. See `decideClaudeSdk`.
  *
@@ -3175,7 +3176,7 @@ function sendBurst(res, model, decision, seq) {
 // script, and the number of tool calls since it is the step. Every reply is
 // paced (`sendPaced`), so a window shows the stream as it arrives.
 
-const CC_MARKER = /\bCC-(TEXT|TOOLS|ASK|SLOW|PLAN|AGENT|CHILD|STEER|SEARCH)\b/;
+const CC_MARKER = /\bCC-(TEXT|TOOLS|ASK|SLOW|PLAN|AGENT|CHILD|STEER|SEARCH|ENC)\b/;
 const CC_CWD = /Primary working directory: ([^\n]+)/;
 
 /** All text a request carries (system blocks and messages), for the cwd line. */
@@ -3311,7 +3312,8 @@ function decideClaudeSdk(parsed) {
     if (match) {
       at = i;
       scenario = match[1];
-      trigger = own;
+      // From the marker on: a reminder block before it (e.g. CLAUDE.md) may carry braces too.
+      trigger = own.slice(match.index);
       break;
     }
   }
@@ -3480,6 +3482,72 @@ function decideClaudeSdk(parsed) {
       if (step === 1)
         return reply({ tool: { name: 'Glob', input: { pattern: '**/*.md', path: cwd } } }, label);
       return reply({ text: `搜索结果：${results.map((r) => r.slice(0, 120)).join(' / ')}` }, label);
+    case 'ENC': {
+      // Encrypted-machine matrix (host-probe.ts `enc`, one sample file per turn). Per file:
+      // Read, Grep, Bash cat, Bash sed, Edit (marker -> CCSDK-EDITED-marker), Read again,
+      // Write a new file of the same name (`writes[i]`) and Read that back; then one
+      // verdict row per file, in the order of the calls.
+      const files = Array.isArray(params.files) ? params.files.map(String) : [];
+      const writes = Array.isArray(params.writes) ? params.writes.map(String) : [];
+      const marker = typeof params.marker === 'string' ? params.marker : 'P113B-MARKER-';
+      const plan = files.flatMap((file, i) => {
+        const quoted = `'${file.replaceAll('\\', '/').replaceAll("'", "'\\''")}'`;
+        const calls = [
+          ['Read', { name: 'Read', input: { file_path: file } }],
+          [
+            'Grep',
+            { name: 'Grep', input: { pattern: marker, path: file, output_mode: 'content' } },
+          ],
+          [
+            'cat',
+            { name: 'Bash', input: { command: `cat ${quoted} | head -c 400`, description: 'cat' } },
+          ],
+          [
+            'sed',
+            { name: 'Bash', input: { command: `sed -n '1,5p' ${quoted}`, description: 'sed' } },
+          ],
+          [
+            'Edit',
+            {
+              name: 'Edit',
+              input: { file_path: file, old_string: marker, new_string: `CCSDK-EDITED-${marker}` },
+            },
+          ],
+          ['Read2', { name: 'Read', input: { file_path: file } }],
+        ];
+        if (writes[i]) {
+          calls.push(
+            [
+              'Write',
+              {
+                name: 'Write',
+                input: { file_path: writes[i], content: `CCSDK-WRITTEN ${marker}\nline two\n` },
+              },
+            ],
+            ['Read3', { name: 'Read', input: { file_path: writes[i] } }]
+          );
+        }
+        return calls.map(([cell, tool]) => ({ file: i, cell, tool }));
+      });
+      if (step < plan.length) return reply({ tool: plan[step].tool }, label);
+      const verdict = (cell, text) => {
+        if (text.includes('%TSD-Header')) return 'cipher';
+        if (cell === 'Edit' || cell === 'Write') return /success/i.test(text) ? 'ok' : 'failed';
+        // The CLI refused the call itself (e.g. Read on any .docx: "cannot read binary files").
+        if (text.includes('<tool_use_error>')) return 'error';
+        if (cell === 'Read2' && text.includes('CCSDK-EDITED-')) return 'plain-edited';
+        if (cell === 'Read3') return text.includes('CCSDK-WRITTEN') ? 'plain-written' : 'other';
+        return text.includes(marker) ? 'plain' : 'other';
+      };
+      const rows = files.map((file, i) => {
+        const cells = plan
+          .map((entry, k) => ({ ...entry, text: results[k] ?? '' }))
+          .filter((entry) => entry.file === i)
+          .map((entry) => `${entry.cell}=${verdict(entry.cell, entry.text)}`);
+        return `${file.split(/[\\/]/).pop()}: ${cells.join(' ')}`;
+      });
+      return reply({ text: `ENC-MATRIX\n${rows.join('\n')}` }, label);
+    }
     case 'STEER': {
       if (step < 2) {
         return reply(

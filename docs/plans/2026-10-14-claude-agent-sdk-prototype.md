@@ -20,7 +20,7 @@ Role: study（原型结论，非决策）。分支 `proto/claude-agent-sdk-engin
    - Windows 安装包约 +90 MB：LZMA 实测 89.2 MB，现在的安装包约 182～198 MB。安装后 +271 MB。Linux 相当。
    - 每个活动会话常驻约 250 MB：宿主 node 约 80 MB，claude.exe 约 170 MB（工作集）。
 4. **加密机未测，是最大的未知项（§5.2）。**
-   - 已写好验证步骤。
+   - 读写矩阵工具已写好，开发机上空跑通过；上机约半天到一天。
    - 原生二进制读不出明文时，有一条实测可行的备选：用 `toolAliases` 让模型照用原生 `Read`，执行落到随包 node.exe 里。
 5. **工作量修订（§8）。**
    - 最小可用版 3.5～4.5 人周，不含加密机；加密机另加 1～3 人周。
@@ -43,8 +43,8 @@ Role: study（原型结论，非决策）。分支 `proto/claude-agent-sdk-engin
 | Main 传输 | [ClaudeSdkProcessTransport.ts](../../src/main/services/agent-host/ClaudeSdkProcessTransport.ts) | `WorkerTransport` 的子进程实现；kill 在 Windows 上用 `taskkill /T` 整树 |
 | 引擎开关 | [claudeSdkEngine.ts](../../src/main/services/agent-host/claudeSdkEngine.ts) | 见下 |
 | 接缝 | [WorkerManager.ts](../../src/main/services/agent-host/WorkerManager.ts) | `ManagedSlot.engine`（338），新建时按模型定（1089），重开时按桩文件后缀定（1357），`spawnForEntry` 换 transport（3069），SDK 槽不当成 DSH 宿主故障（3926、4250） |
-| 假网关 | [fake-gateway.mjs](../../src/dsh-host/tools/fake-gateway.mjs) | 新增 `--plan claude-sdk`，单独一段：按 `CC-TEXT/TOOLS/ASK/SLOW/PLAN/AGENT/STEER/SEARCH` 标记回 Claude Code 工具名的分步脚本 |
-| 探针 | [tools/](../../src/claude-sdk-host/tools/) | `host-probe.ts`：像 WorkerSlot 一样经 IPC 驱动宿主。`gui-probe.mjs`：隔离 profile 的开发版 GUI 点验。`sdk-spike.ts`、`alias-spike.ts`：单点实验 |
+| 假网关 | [fake-gateway.mjs](../../src/dsh-host/tools/fake-gateway.mjs) | 新增 `--plan claude-sdk`，单独一段：按 `CC-TEXT/TOOLS/ASK/SLOW/PLAN/AGENT/STEER/SEARCH/ENC` 标记回 Claude Code 工具名的分步脚本 |
+| 探针 | [tools/](../../src/claude-sdk-host/tools/) | `host-probe.ts`：像 WorkerSlot 一样经 IPC 驱动宿主，含加密机读写矩阵场景 `enc`（§5.2）。`gui-probe.mjs`：隔离 profile 的开发版 GUI 点验。`sdk-spike.ts`、`alias-spike.ts`：单点实验 |
 
 **引擎开关（只在原型分支）**：
 - 未打包构建里设 `AICLIENT_CLAUDE_SDK_ENGINE=1` 后，模型 id 是 `claude-*` 的**新**对话走 SDK。正式版应按路由协议 `anthropic-messages` 判断。
@@ -85,6 +85,8 @@ Role: study（原型结论，非决策）。分支 `proto/claude-agent-sdk-engin
 | `/compact` | 发 `/compact` 文本，1.4 s 完成（compact_boundary + 摘要） |
 | 重开续聊 | 新进程读同一个桩文件，`initialHistory` 由 `getSessionMessages` 投影，`resume` 续写 |
 
+另有加密机读写矩阵场景 `enc`，开发机上只能空跑，见 §5.2。
+
 **GUI 点验**：`gui-probe.mjs` 用开发版应用和隔离 profile（HOME/USERPROFILE 指向临时目录，`AICLIENT_PROFILE`）。在设置里加一个指向假网关的自定义服务（假 key），选 `claude-opus-5-5`。依次确认：
 - 流式正文与「思考 1 秒」；
 - 终端 / 编辑 / 读取三类工具行，「已允许」并入行内；
@@ -101,7 +103,7 @@ Role: study（原型结论，非决策）。分支 `proto/claude-agent-sdk-engin
 **单测与门禁**：
 - 根 tsc、宿主 tsc（`pnpm exec tsc -p src/claude-sdk-host/tsconfig.json`）、biome 全过；
 - `WorkerManager`、`chatEngineDshOnly`、`t31PiOnlyAbsence`、`chatPiWorkerRouting` 等 7 个文件共 308 个测试照旧通过；
-- 新增 `cliEnvironment` 6 个测试。
+- `cliEnvironment` 共 10 个测试，含随包 rg 目录与 PATH 拼接。
 
 **复现**：
 
@@ -109,7 +111,10 @@ Role: study（原型结论，非决策）。分支 `proto/claude-agent-sdk-engin
 node src/dsh-host/tools/fake-gateway.mjs --port 18932 --plan claude-sdk --reset --model-id claude-opus-5-5
 cd src/claude-sdk-host && npm ci
 node tools/host-probe.ts http://127.0.0.1:18932 <空工作区> text tools ask stop plan steer agent search compact history
+node tools/host-probe.ts http://127.0.0.1:18932 <空工作区> enc
 ```
+
+最后一行是加密机矩阵的空跑；要用随包 rg，先设 `AICLIENT_CLAUDE_SDK_RG_DIR`（§5.2）。
 
 ## 3 功能映射
 
@@ -143,6 +148,8 @@ node tools/host-probe.ts http://127.0.0.1:18932 <空工作区> text tools ask st
 
 - **`CLAUDE_CONFIG_DIR`**：指向 `~/.pilab/<profile>/claude-sdk-home`。CLI 的 transcript、`.claude.json`、桩文件都在这里，不读用户的 `~/.claude`，包括登录凭据和设置。
 - **环境**：白名单只放 PATH、系统目录、代理等，再注入网关、key、`CLAUDE_CONFIG_DIR`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`、`CLAUDE_AGENT_SDK_CLIENT_APP`、`CLAUDE_CODE_GIT_BASH_PATH`。
+  - 另外单独设 `DISABLE_AUTOUPDATER=1`：加密机的白名单若按哈希放行，随包二进制不能自己更新。
+  - 可选 `AICLIENT_CLAUDE_SDK_RG_DIR`：把该目录放到 PATH 最前，并设 `USE_BUILTIN_RIPGREP=0`，让 CLI 改用 PiLab 随包的 rg（§5.2）。
   - 本机 Claude Code 会话带着几十个 `CLAUDE_*` 变量和一个 `ANTHROPIC_BASE_URL`，全部挡在外面，单测覆盖。
   - 关掉非必要流量后，整个会话只有 `/v1/messages` 一种请求：没有遥测、更新检查、标题生成。
 - **`settingSources: ['project']`**（推荐）：
@@ -164,7 +171,7 @@ node tools/host-probe.ts http://127.0.0.1:18932 <空工作区> text tools ask st
   - CLI 自己只在默认位置找 Git。Git 装在 G 盘时，工具表里是 `PowerShell` 而不是 `Bash`。
   - 宿主从 PATH 推导出 `bash.exe`，经 `CLAUDE_CODE_GIT_BASH_PATH` 传给 CLI 后恢复成 `Bash`（`uname` 为 MINGW64）。
   - 没装 Git 时就是 PowerShell 工具，`CLAUDE_CODE_USE_POWERSHELL_TOOL` 默认开。
-- **ripgrep**：内置在原生二进制里（`USE_BUILTIN_RIPGREP`），Grep / Glob 实测可用，不需要随包 rg。
+- **ripgrep**：内置在原生二进制里（CLI 以 argv0 `rg` 运行自身），Grep / Glob 实测可用，不需要随包 rg。可选的 `AICLIENT_CLAUDE_SDK_RG_DIR` 能改用 PiLab 随包的 `@vscode/ripgrep`，已验证生效，留给加密机做对照（§5.2）。
 - **停止与子进程树**：
   - `interrupt()` 后 0.5～1 s 收尾。CLI 杀掉了 `bash.exe`，但 `sleep 97 & sleep 97; wait` 起的两个 `sleep.exe` 继续运行；CLI 进程退出后它们仍在，12 s 后还在。
   - 原因：MSYS 用新的 Windows 进程模拟 fork/exec，运行中的 `sleep.exe` 的 Windows 父进程号早已失效，按 Windows 进程树找不到它们。
@@ -175,26 +182,94 @@ node tools/host-probe.ts http://127.0.0.1:18932 <空工作区> text tools ask st
   - CLI 在 `%TEMP%\claude\<项目>` 写 shell 快照等临时文件，可以用 `CLAUDE_CODE_TMPDIR` 收到应用目录。
   - 冷启动：首次约 4 s 到 `system/init`，之后约 0.6 s。原型对新对话在 bootstrap 时就预启动 CLI，发送不等冷启动。
 
-### 5.2 加密机（TSD，只放行随包 node.exe）：待测
+### 5.2 加密机（TSD，只放行随包 node.exe）：待测，矩阵工具已备好
 
 **已知**：
-- P1-13b：能否解密与读文件的进程名无关。随包 node.exe 读 9 类加密文件拿到的是密文，其中 6 类可以用 PowerShell 5.1 读回明文（P1-13c 的回退）。
+- P1-13b 读：能否解密与读文件的进程名无关。随包 node.exe 读 51 类样本，42 类拿到明文、9 类拿到密文；9 类里有 6 类可以用 PowerShell 5.1 读回明文（P1-13c 的回退）。
+- P1-13b 写：新建的文件会不会被加密，取决于写法和可执行文件名。node.exe 直接新建 22/51 被加密，先写临时文件再硬链接（DSH write）0/51；node.exe 改个名字，新建的 `.js` 就被加密了。
+- 决策 090 推翻了决策 089：新建文件不加密对产品是好事，加密了反而读不出来。决策 135：编辑后文件变成明文，是可接受的既有语义。
 - 2026-04：官方 2.1.113+ 的 Bun 二进制读不出加密的 JSONL。
-- 所以 claude.exe 的读写行为必须实测。
+- 所以 claude.exe 的读写必须实测，包括它以 `rg` 身份运行自身时的读。
 
-**验证步骤**（用户配合，约 0.2 人周）：
+**矩阵工具**（本分支已写好，开发机空跑通过）：`host-probe.ts` 的场景 `enc`，配合假网关 `--plan claude-sdk` 的 `CC-ENC` 脚本。每个样本一个回合，档位为完全放行，依次 8 次工具调用：
 
-1. 用本分支打一个 Windows 测试包，随包放 SDK 宿主与 `claude.exe`；或者在加密机上直接用开发目录：随包 node、`npm ci` 后的 `src/claude-sdk-host`。
-2. 先跑本机能跑的部分：假网关加 `host-probe.ts`，场景 `text tools stop`，确认流程在加密机上能起来，CLI 写得出、读得回自己的 transcript（重开续聊）。
-3. 读矩阵：沿用 P1-13b 的 51 类样本文件，各放一个已加密的到工作区。用假网关脚本让模型依次调用：
-   - `Read`：claude.exe 自己读；
-   - Bash 下的 `cat`：Git Bash 工具链；
-   - `Grep`：内置 ripgrep。
+| 格子 | 调用 | 测什么 |
+|---|---|---|
+| Read | `Read` 样本 | claude.exe 自己读 |
+| Grep | `Grep` 标记串 | rg 读。默认 rg 是 claude.exe 自身（argv0 `rg`）；设了 `AICLIENT_CLAUDE_SDK_RG_DIR`，就是该目录里的 `rg.exe` |
+| cat / sed | `Bash`：`cat … \| head -c 400`、`sed -n '1,5p' …` | Git Bash 工具链读 |
+| Edit | `Edit`：标记串前加 `CCSDK-EDITED-` | claude.exe 改已加密的文件 |
+| Read2 | 再 `Read` 样本 | 改完读得回来吗 |
+| Write | `Write` 一个新文件：与样本同名，放在样本旁边新建的 `ccsdk-written-<毫秒>\` 里 | claude.exe 新建的文件会不会被加密 |
+| Read3 | `Read` 这个新文件 | 自己写的读得回来吗 |
 
-   逐类记录结果是明文还是 `%TSD-Header-###%` 密文。需要给假网关加一个按文件列表循环的脚本，约 0.5 天。
-4. 写矩阵：用 `Write` / `Edit` 新建和修改各类文件，记录写出的文件是否被加密，并与 node.exe、1.0.x 的结果对照。
-5. 停止清理：在加密机上重复 §5.1 的 `sleep` 停止实验。
-6. 结果按决策 090 的口径脱敏后入库，原始报告不入库。
+- 新文件放在样本旁边、文件名不变，是为了让加密策略看到同一个目录、同一个扩展名。用新目录，是为了 Write 不会碰上旧文件（CLI 要求先读后写）。
+- 全部回合结束后，探针自己的 node 与 Windows PowerShell 5.1 各读一遍以下文件的前 256 字节：每个被改的样本、每个新文件、本会话的 transcript。这是 P1-13b 用过的两个读者，两者能看到密文的类型不同，可以互补。设了 `PROBE_ENC_RECHECK_S`，隔这么多秒再读一遍。
+
+| 变量 | 作用 |
+|---|---|
+| `PROBE_ENC_DIR` | 样本目录，取其中所有文件（不递归） |
+| `PROBE_ENC_FILES` | 另加的样本，绝对路径，`;` 分隔 |
+| `PROBE_ENC_MARKER` | 样本里的标记串，默认 `P113B-MARKER-`（P1-13b 上机包生成的样本都带它） |
+| `PROBE_ENC_RECHECK_S` | 延迟复读的秒数，建议 300。P1-13b 实测读者视图约 260 秒后才沉淀 |
+| `AICLIENT_CLAUDE_SDK_RG_DIR` | 放 `rg.exe` 的目录。宿主把它放到 CLI 的 PATH 最前，并设 `USE_BUILTIN_RIPGREP=0`。目录里没有 `rg.exe` 时，CLI 不报错，静默改用内置 rg，宿主日志会打一行 warning |
+| `PROBE_VERBOSE=1` | 显示宿主的 stderr，含 `rg=` 与 `gitBash=` |
+
+两个样本变量都不给时是空跑：在工作区写 4 个明文样本（md、yml、docx、Makefile）。
+
+**开发机空跑**（2026-10-15，假网关）：
+- 内置 rg、随包 rg 各跑一遍：4 个样本、32 次调用，约 21 s。全部是 `plain` / `ok` / `plain-edited` / `plain-written`；落盘两个读者都看到 `edited` / `written`，transcript 是 `json`。
+- `.docx` 的三次 Read 都是 `error`：CLI 按扩展名拒读二进制（"This tool cannot read binary files"），与内容无关。Grep、cat、sed、Edit、Write 照常。P1-13b 里 docx、xlsx、pptx、pdf 这类样本的 Read 格子要按这一点读。
+- 随包 rg 确实生效：在该目录放一个替身 `rg.exe`，Grep 就返回 "No matches found"。换成空目录，宿主打 warning，Grep 回落到内置 rg，照常命中。
+- 按这个速度，P1-13b 的 51 个样本一轮约 4～5 分钟，加上延迟复读再 5 分钟。
+
+**上机步骤**（用户配合，约半天到一天，多数时间花在用加密客户端确认新文件）：
+
+1. **准备**：在加密机上检出本分支，依赖照 [P1-13d 证据](../plantree/plans/dsh-rebase/evidence/p1-13d-encrypted-edit-2026-09-30.md) §0 装好，再在 `src/claude-sdk-host` 里 `npm ci`。这一步会装 SDK 与 `claude.exe` 原生包；访问不了 npm 源，就从开发机整份复制该目录的 `node_modules`。下面的 `node` 都用随包 node（PiLab 安装目录的 `resources\node-runtime\node.exe`），这样落盘检查里的 `node=` 就是产品自己的视角。
+2. **起假网关**（PowerShell，仓库根）：
+   ```
+   node src/dsh-host/tools/fake-gateway.mjs --port 18932 --plan claude-sdk --reset --model-id claude-opus-5-5 --capture $env:TEMP\ccsdk-cap
+   ```
+3. **流程、停止与 transcript**（在 `src/claude-sdk-host` 里跑，工作区用一个空目录）：
+   ```
+   node tools/host-probe.ts http://127.0.0.1:18932 D:\ccsdk-ws text tools stop
+   ```
+   - 通过标准：`text`、`tools` 以 `session.completed` 结束，`tools` 出审批卡；`stop` 以 `session.stopped` 结束，`sleep processes` 一行在停止后几秒内降到 0（即 §5.1 的停止实验）。
+   - 输出最后一行是 `sessionFile=…; configDir=…`，用这两个值续聊：
+   ```
+   $env:PROBE_CONFIG_DIR='<configDir>'; $env:PROBE_SESSION_FILE='<sessionFile>'
+   node tools/host-probe.ts http://127.0.0.1:18932 D:\ccsdk-ws history text history
+   ```
+   - 通过标准：`text` 以 `session.completed` 结束，第二次 `history` 比第一次多 3 条（开发机是 9 → 12）；`--capture` 目录里编号最大的那份请求，`messages` 从第一轮的 `CC-TEXT hello` 开始（开发机共 5 条）。做不到，就是 claude.exe 读不回自己的 transcript（2026-04 现象），对应下面备选表的第 3 行。做完清掉这两个变量。
+4. **读写矩阵**：
+   - 样本：用资源管理器把 P1-13b 上机包的 `in` 目录复制一份到加密目录下，例如 `D:\Encrypted\ccsdk-enc-1`，再用加密客户端确认原来加密的仍是加密的。**矩阵会改动样本**（Edit），每一轮都要用新副本。
+   - 内置 rg 跑一轮，随包 rg 跑一轮（第二轮换新副本 `ccsdk-enc-2`）：
+   ```
+   $env:PROBE_ENC_DIR='D:\Encrypted\ccsdk-enc-1'; $env:PROBE_ENC_RECHECK_S='300'
+   node tools/host-probe.ts http://127.0.0.1:18932 D:\ccsdk-ws enc > enc-builtin-rg.txt
+   $env:PROBE_ENC_DIR='D:\Encrypted\ccsdk-enc-2'
+   $env:AICLIENT_CLAUDE_SDK_RG_DIR='<仓库根>\node_modules\@vscode\ripgrep\bin'
+   node tools/host-probe.ts http://127.0.0.1:18932 D:\ccsdk-ws enc > enc-bundled-rg.txt
+   ```
+   - 安装版的 rg 在 `resources\app.asar.unpacked\node_modules\@vscode\ripgrep\bin`。
+   - 新文件在每个副本的 `ccsdk-written-<毫秒>\` 里，留给加密客户端逐个确认，做法同 P1-13b 的写者目录。
+5. **读输出**：
+   - `=== ENC-MATRIX` 每个样本一行，记的是 CLI 看到了什么：
+     - `plain`：看到了标记串，即明文；
+     - `cipher`：看到了 `%TSD-Header`，即密文；
+     - `error`：CLI 自己拒绝了这次调用；
+     - `other`：两样都没看到。Grep 的 `other` 一般是 "No matches found"，说明 rg 读到的不是明文；
+     - `Edit`、`Write` 记 `ok` / `failed`；`Read2=plain-edited`、`Read3=plain-written` 表示改的、写的都读得回来。
+   - 两段 `=== on disk` 记落盘状态：`node=` / `ps51=` 的值是 `TSD`、`edited`、`written`、`json`、`other`、`missing` 之一。
+     - **任一读者看到 `TSD`，就是已加密。**
+     - 两个读者都没看到 `TSD` 时，以下类型可以判为未加密（以延迟复读那一段为准）：md、java、hpp、xlsx、pdf（加密后 PowerShell 读到密文）；yml、rb、php、ps1、cmd、sql、scss、docx、pptx（加密后 node 读到密文）。
+     - 其余类型加密后两个读者都读到明文，要用加密客户端确认，同 P1-13b。
+   - 对照 P1-13b 的 node.exe 两张表：读是 42 明文 / 9 密文，写是直接新建 22/51 加密。
+6. **判读**（对应下面的备选表）：
+   - **读**：在 node 读得出明文的类型上，claude.exe 的 Read、Grep、cat 也是 `plain`，就不比现状差。node 读得出、claude.exe 却是 `cipher` 或 `other`，走 `toolAliases`。
+   - **改**：`Edit=ok` 且落盘不再是 `TSD`，与决策 135 的 DSH 语义一致（编辑后变明文，接受）。已加密的文件 `Edit=failed`，`toolAliases` 就要把 Edit 也接到 P1-13d 的回退上。
+   - **新建**：claude.exe 新建的文件不加密，与 DSH 一致，按决策 090 是好事。**被加密反而是风险**：在 node 读成密文的 9 类上，宿主侧（历史预览、DSH 引擎）会读不出 claude.exe 写的文件，要记下是哪几类。
+7. **入库**：原始输出（`enc-*.txt`、`--capture` 目录、截图）含机器路径和完整请求，只留在本地，`--capture` 目录用完就删。仓库里只放脱敏摘要：每类扩展名每个格子的结果与计数、两种 rg 的差别、transcript 与停止的结论，不写机器名、账号、路径。写法同 P1-13b、P1-13d 证据；仓库是公开的，见 `evidence/history-rewrite-2026-09-28.md`。
 
 **备选方案**（按实测结果选）：
 
@@ -252,7 +327,7 @@ node tools/host-probe.ts http://127.0.0.1:18932 <空工作区> text tools ask st
 | 真实网关与 T2 对照（3～5 个用例） | 0.5 |
 | **合计** | **3.5～4.5** |
 
-**加密机**：实测 0.2 人周（要用户配合）。之后按 §5.2：直接可用为 0；需要 `toolAliases` 承载约 1.5～2.5 人周。
+**加密机**：读写矩阵工具已在本分支写好（原估的 0.5 天已花掉）。上机实测约半天到一天，约 0.1～0.2 人周，要用户配合。之后按 §5.2：直接可用为 0；需要 `toolAliases` 承载约 1.5～2.5 人周。
 
 **功能对等版**：在最小可用版之外再加 6～8 人周：
 - 子代理泳道 1；
@@ -307,3 +382,5 @@ node tools/host-probe.ts http://127.0.0.1:18932 <空工作区> text tools ask st
    - 挑 2～3 个用例，对比 PiLab+SDK 与 `claude -p` 的通过率、步数、工具调用分布、计费 token。
    - 两边差别只应来自 PiLab 追加的四行说明、禁用的 10 个宿主工具、关掉的提交署名和审批档位。
 4. 测完确认临时目录里没有任何文件含该 key，然后删除临时目录。
+
+加密机的读写矩阵（§5.2）不需要真实网关，全程用本机假网关。

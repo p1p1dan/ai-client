@@ -1,5 +1,6 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildCliEnvironment, findGitBash } from '../cliEnvironment.ts';
+import { buildCliEnvironment, findGitBash, withPathPrefix } from '../cliEnvironment.ts';
 
 describe('buildCliEnvironment', () => {
   const inherited = {
@@ -45,6 +46,50 @@ describe('buildCliEnvironment', () => {
       gitBashPath: 'G:\\Program Files\\Git\\bin\\bash.exe',
     });
     expect(env.CLAUDE_CODE_GIT_BASH_PATH).toBe('G:\\Program Files\\Git\\bin\\bash.exe');
+  });
+
+  it('never lets the shipped binary update itself', () => {
+    const env = buildCliEnvironment({
+      inherited: {},
+      configDir: 'x',
+      baseUrl: 'http://gw',
+      apiKey: 'k',
+      clientApp: 'a',
+    });
+    expect(env.DISABLE_AUTOUPDATER).toBe('1');
+    expect(env.USE_BUILTIN_RIPGREP).toBeUndefined();
+  });
+
+  it('puts a given rg directory first on PATH and turns the built-in rg off', () => {
+    const env = buildCliEnvironment({
+      inherited: { Path: 'C:\\Windows', USE_BUILTIN_RIPGREP: '1' },
+      configDir: 'x',
+      baseUrl: 'http://gw',
+      apiKey: 'k',
+      clientApp: 'a',
+      ripgrepDir: 'D:\\PiLab\\rg',
+    });
+    expect(env.Path).toBe(`D:\\PiLab\\rg${path.delimiter}C:\\Windows`);
+    expect(env.PATH).toBeUndefined();
+    expect(env.USE_BUILTIN_RIPGREP).toBe('0');
+  });
+});
+
+describe('withPathPrefix', () => {
+  it('prepends to the PATH entry whatever case its name has', () => {
+    expect(withPathPrefix({ Path: 'C:\\Windows', TEMP: 't' }, 'D:\\rg', ';')).toEqual({
+      Path: 'D:\\rg;C:\\Windows',
+      TEMP: 't',
+    });
+    expect(withPathPrefix({ PATH: '/usr/bin:/bin' }, '/opt/pilab/rg', ':')).toEqual({
+      PATH: '/opt/pilab/rg:/usr/bin:/bin',
+    });
+  });
+
+  it('starts a PATH when there is none, and leaves its input alone', () => {
+    const env = { TEMP: 't' };
+    expect(withPathPrefix(env, 'D:\\rg', ';')).toEqual({ TEMP: 't', PATH: 'D:\\rg' });
+    expect(env).toEqual({ TEMP: 't' });
   });
 });
 
