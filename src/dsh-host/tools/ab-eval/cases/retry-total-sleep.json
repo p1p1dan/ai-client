@@ -1,0 +1,48 @@
+{
+  "id": "retry-total-sleep",
+  "title": "读代码回答问题：默认重试策略一共等多久",
+  "tier": "smoke",
+  "tags": ["qa", "read-only", "javascript"],
+  "repo": { "fixture": "../fixtures/retry-policy" },
+  "prompt": "阅读这个仓库的代码后回答：使用默认重试策略时，如果每次调用 `task` 都抛出 `HttpError(503)`，`withRetry` 最终放弃之前，`task` 一共被调用几次？一共 sleep 了多少毫秒？请写出计算过程，并注明依据的代码位置（文件:行号）。只回答问题，不要修改任何文件。",
+  "checks": {
+    "mustNotChange": ["**"],
+    "required": [
+      { "id": "total-sleep-4600", "pattern": "(?<![0-9])4[,，]?600(?![0-9])", "in": "answer" },
+      {
+        "id": "file-line-reference",
+        "pattern": "(?:retry|policy|errors)\\.js:\\d+",
+        "in": "answer"
+      }
+    ]
+  },
+  "budget": { "timeMs": 600000, "maxSteps": 30 },
+  "judge": {
+    "rubric": "正确答案：task 被调用 5 次；sleep 4 次，共 200 + 600 + 1800 + 2000 = 4600 毫秒（第 4 次的 5400 被 maxDelayMs 截为 2000；第 5 次失败后直接抛出，不再 sleep）。评分看：结论是否正确；推理是否用到 maxAttempts、factor、maxDelayMs 与循环里的退出条件；代码位置是否准确；表述是否简洁。",
+    "dimensions": ["correctness", "reasoning", "citations", "concision"]
+  },
+  "fakeModel": {
+    "steps": [
+      { "op": "cwd" },
+      { "op": "glob", "pattern": "src/**/*.js" },
+      { "op": "read", "path": "src/retry_policy.js" },
+      { "op": "call", "tool": "LookupSymbol", "input": { "symbol": "withRetry" } },
+      { "op": "read", "path": "src/retry.js" },
+      { "op": "read", "path": "src/policy.js" },
+      { "op": "read", "path": "src/errors.js" },
+      {
+        "op": "answer",
+        "text": "`task` 一共被调用 5 次；`withRetry` 一共 sleep 4 次，合计 4600 毫秒。\n\n计算过程：\n- 默认策略是 `maxAttempts: 5, baseDelayMs: 200, factor: 3, maxDelayMs: 2000`（src/policy.js:2）。\n- 每次失败后，若 `attempt >= maxAttempts` 就直接抛出（src/retry.js:18），所以第 5 次失败后不再 sleep，只有前 4 次失败后各 sleep 一次。\n- 每次等待 `min(200 × 3^(attempt − 1), 2000)`（src/retry.js:6-7）：200、600、1800、min(5400, 2000) = 2000。\n- 合计 200 + 600 + 1800 + 2000 = 4600 毫秒。503 属于可重试错误（src/errors.js:12）。"
+      }
+    ],
+    "expect": {
+      "passed": true,
+      "steps": 8,
+      "toolCalls": 7,
+      "toolErrors": 1,
+      "unknownToolCalls": 1,
+      "nonZeroExits": 0,
+      "changedFiles": 0
+    }
+  }
+}

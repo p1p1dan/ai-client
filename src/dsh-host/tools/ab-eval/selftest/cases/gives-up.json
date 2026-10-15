@@ -1,0 +1,33 @@
+{
+  "id": "selftest-gives-up",
+  "title": "自测：假模型不修就收工，检查必须判失败",
+  "tier": "selftest",
+  "tags": ["selftest", "negative"],
+  "repo": { "fixture": "../../fixtures/stats-median" },
+  "prompt": "（自测，假模型会放弃）请把 `node --test` 里失败的测试修好。",
+  "checks": {
+    "commands": [
+      { "id": "tests", "argv": ["node", "--test"], "expectExit": 0, "timeoutMs": 120000 }
+    ],
+    "mustChange": ["src/stats.js"],
+    "mustNotChange": ["test/**"],
+    "overlay": "../../fixtures/stats-median-hidden"
+  },
+  "budget": { "timeMs": 300000, "maxSteps": 10 },
+  "fakeModel": {
+    "steps": [
+      { "op": "shell", "command": "node --test", "description": "Run the test suite" },
+      { "op": "answer", "text": "我看过了，没找到问题。" }
+    ],
+    "expect": {
+      "passed": false,
+      "steps": 2,
+      "toolCalls": 1,
+      "toolErrors": 0,
+      "unknownToolCalls": 0,
+      "nonZeroExits": 1,
+      "changedFiles": 0,
+      "failureTags": ["check:command:tests", "check:mustChange:src/stats.js"]
+    }
+  }
+}

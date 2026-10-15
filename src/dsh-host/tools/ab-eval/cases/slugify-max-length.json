@@ -1,0 +1,77 @@
+{
+  "id": "slugify-max-length",
+  "title": "跨两个文件加一个小功能：slugify 的 maxLength 选项",
+  "tier": "smoke",
+  "tags": ["feature", "multi-file", "project-rules", "javascript"],
+  "repo": { "fixture": "../fixtures/slugify-max-length" },
+  "prompt": "给 `slugify` 加一个 `maxLength` 选项：设置后，生成的 slug 不超过 `maxLength` 个字符，截断处不能留下结尾的分隔符；不设置时行为不变。`maxLength` 的默认值放在 `src/config.js` 的 `DEFAULTS` 里，由 `resolveOptions` 校验：调用方传入的值必须是正整数，否则抛 `TypeError`。在 `test/slugify.test.js` 里补上测试。",
+  "checks": {
+    "commands": [
+      { "id": "tests", "argv": ["node", "--test"], "expectExit": 0, "timeoutMs": 120000 }
+    ],
+    "mustChange": ["src/config.js", "src/slugify.js", "test/slugify.test.js"],
+    "mustNotChange": ["package.json", "CLAUDE.md"],
+    "forbidden": [
+      { "id": "no-var", "pattern": "\\bvar\\s", "in": "added", "paths": ["src/**"] },
+      { "id": "no-console-log", "pattern": "console\\.log", "in": "added", "paths": ["src/**"] }
+    ],
+    "overlay": "../fixtures/slugify-max-length-hidden"
+  },
+  "budget": { "timeMs": 600000, "maxSteps": 40 },
+  "judge": {
+    "rubric": "满分标准：maxLength 的默认值放在 DEFAULTS、校验放在 resolveOptions，截断后去掉结尾的分隔符（多字符分隔符也正确）；不设置时行为不变；遵守 CLAUDE.md 的项目规则（不加依赖、不用 var、不留 console.log）；新增的测试覆盖截断与非法值；代码风格与周边一致。",
+    "dimensions": ["correctness", "instruction_following", "test_quality", "code_quality"]
+  },
+  "fakeModel": {
+    "steps": [
+      { "op": "cwd" },
+      { "op": "read", "path": "src/slugify.js" },
+      { "op": "read", "path": "src/config.js" },
+      { "op": "read", "path": "test/slugify.test.js" },
+      {
+        "op": "edit",
+        "path": "src/config.js",
+        "old": "  lowercase: true,\n});",
+        "new": "  lowercase: true,\n  maxLength: Infinity,\n});"
+      },
+      {
+        "op": "edit",
+        "path": "src/config.js",
+        "old": "    throw new TypeError('lowercase must be a boolean');\n  }\n  return resolved;",
+        "new": "    throw new TypeError('lowercase must be a boolean');\n  }\n  const { maxLength } = resolved;\n  if (maxLength !== Infinity && !(Number.isInteger(maxLength) && maxLength > 0)) {\n    throw new TypeError('maxLength must be a positive integer');\n  }\n  return resolved;"
+      },
+      {
+        "op": "edit",
+        "path": "src/slugify.js",
+        "old": "  const { separator, lowercase } = resolveOptions(options);",
+        "new": "  const { separator, lowercase, maxLength } = resolveOptions(options);"
+      },
+      {
+        "op": "edit",
+        "path": "src/slugify.js",
+        "old": "  return trimSeparator(slug, separator);\n}",
+        "new": "  const trimmed = trimSeparator(slug, separator);\n  if (trimmed.length <= maxLength) return trimmed;\n  return trimSeparator(trimmed.slice(0, maxLength), separator);\n}"
+      },
+      {
+        "op": "edit",
+        "path": "test/slugify.test.js",
+        "old": "test('slugify strips accents', () => {\n  assert.equal(slugify('Crème Brûlée'), 'creme-brulee');\n});",
+        "new": "test('slugify strips accents', () => {\n  assert.equal(slugify('Crème Brûlée'), 'creme-brulee');\n});\n\ntest('slugify cuts to maxLength without a trailing separator', () => {\n  assert.equal(slugify('Hello World Again', { maxLength: 12 }), 'hello-world');\n  assert.equal(slugify('Hello World Again', { maxLength: 5 }), 'hello');\n});\n\ntest('slugify rejects an invalid maxLength', () => {\n  assert.throws(() => slugify('Hello', { maxLength: 0 }), TypeError);\n});"
+      },
+      { "op": "shell", "command": "node --test", "description": "Run the test suite" },
+      {
+        "op": "answer",
+        "text": "已加上 `maxLength`：默认值 `Infinity` 放在 `src/config.js` 的 `DEFAULTS`，`resolveOptions` 校验调用方传入的值必须是正整数；`src/slugify.js` 在去掉首尾分隔符后按 `maxLength` 截断，再去掉截断处留下的分隔符。`test/slugify.test.js` 补了截断与非法值的测试，`node --test` 全部通过。"
+      }
+    ],
+    "expect": {
+      "passed": true,
+      "steps": 11,
+      "toolCalls": 10,
+      "toolErrors": 0,
+      "unknownToolCalls": 0,
+      "nonZeroExits": 0,
+      "changedFiles": 3
+    }
+  }
+}

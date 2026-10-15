@@ -1,0 +1,58 @@
+{
+  "id": "fix-median-sort",
+  "title": "修复让单测失败的 bug：median 按字符串排序",
+  "tier": "smoke",
+  "tags": ["bugfix", "javascript", "node-test"],
+  "repo": { "fixture": "../fixtures/stats-median" },
+  "prompt": "运行 `node --test` 会有测试失败。请找出库代码里的 bug 并修复，让全部测试通过。不要修改测试文件。",
+  "checks": {
+    "commands": [
+      { "id": "tests", "argv": ["node", "--test"], "expectExit": 0, "timeoutMs": 120000 }
+    ],
+    "mustChange": ["src/stats.js"],
+    "mustNotChange": ["test/**", "package.json"],
+    "forbidden": [
+      {
+        "id": "lexicographic-sort",
+        "pattern": "\\.sort\\(\\s*\\)",
+        "in": "content",
+        "paths": ["src/stats.js"]
+      },
+      { "id": "skipped-tests", "pattern": "\\.(skip|only)\\(|\\{\\s*skip\\s*:", "in": "added" }
+    ],
+    "overlay": "../fixtures/stats-median-hidden"
+  },
+  "budget": { "timeMs": 600000, "maxSteps": 40 },
+  "judge": {
+    "rubric": "满分标准：找到根因（数组的 sort() 默认按字符串排序），改用数值比较函数；改动最小，不改测试，不修改调用方传入的数组，不引入无关改动；最终回复说清原因和改法。",
+    "dimensions": ["correctness", "minimality", "code_quality", "explanation"]
+  },
+  "fakeModel": {
+    "steps": [
+      { "op": "cwd" },
+      { "op": "shell", "command": "node --test", "description": "Run the test suite" },
+      { "op": "read", "path": "src/stats.js" },
+      { "op": "read", "path": "test/stats.test.js" },
+      {
+        "op": "edit",
+        "path": "src/stats.js",
+        "old": "const sorted = [...values].sort();",
+        "new": "const sorted = [...values].sort((a, b) => a - b);"
+      },
+      { "op": "shell", "command": "node --test", "description": "Run the test suite again" },
+      {
+        "op": "answer",
+        "text": "已修复 `src/stats.js` 里的 `median`：`[...values].sort()` 默认按字符串比较，`[10, 9, 2]` 会排成 `[10, 2, 9]`，中位数因此算错。改为 `sort((a, b) => a - b)` 按数值排序，仍在副本上排序、不改动传入的数组。`node --test` 现在全部通过。"
+      }
+    ],
+    "expect": {
+      "passed": true,
+      "steps": 7,
+      "toolCalls": 6,
+      "toolErrors": 0,
+      "unknownToolCalls": 0,
+      "nonZeroExits": 1,
+      "changedFiles": 1
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "selftest-time-budget",
+  "title": "自测：时间预算用完时，两边都要被截停，命令也要被杀掉",
+  "tier": "selftest",
+  "tags": ["selftest", "budget"],
+  "repo": { "fixture": "../../fixtures/retry-policy" },
+  "prompt": "（自测，时间预算）请运行一个要等一分钟的命令。",
+  "budget": { "timeMs": 12000, "maxSteps": 10 },
+  "fakeModel": {
+    "steps": [
+      {
+        "op": "shell",
+        "command": "node -e \"setTimeout(() => {}, 60000)\"",
+        "description": "Wait for a minute"
+      },
+      { "op": "answer", "text": "等完了。" }
+    ],
+    "expect": { "status": "timeout", "passed": false, "failureTags": ["timeout"] }
+  }
+}

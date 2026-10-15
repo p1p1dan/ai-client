@@ -1,0 +1,21 @@
+{
+  "id": "selftest-step-budget",
+  "title": "自测：步数预算用完时，两边都要被截停",
+  "tier": "selftest",
+  "tags": ["selftest", "budget"],
+  "repo": { "fixture": "../../fixtures/retry-policy" },
+  "prompt": "（自测，步数预算）请连续六次查看 node 的版本号。",
+  "budget": { "timeMs": 120000, "maxSteps": 3 },
+  "fakeModel": {
+    "steps": [
+      { "op": "shell", "command": "node --version", "description": "Print the Node version" },
+      { "op": "shell", "command": "node --version", "description": "Print the Node version" },
+      { "op": "shell", "command": "node --version", "description": "Print the Node version" },
+      { "op": "shell", "command": "node --version", "description": "Print the Node version" },
+      { "op": "shell", "command": "node --version", "description": "Print the Node version" },
+      { "op": "shell", "command": "node --version", "description": "Print the Node version" },
+      { "op": "answer", "text": "看了六次。" }
+    ],
+    "expect": { "status": "step_budget", "passed": false, "failureTags": ["step_budget"] }
+  }
+}

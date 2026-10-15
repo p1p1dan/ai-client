@@ -22,7 +22,7 @@
  *   --port <n>       Required. TCP port to listen on (127.0.0.1 only).
  *   --plan <name>    Required. One of: text | long-turn | retry-503 | retry-503-forever |
  *                    write-approval | archive-probe | ask-question | slow-write |
- *                    long-thinking | slow-fail | echo-key-error | dsh-p0-2
+ *                    long-thinking | slow-fail | echo-key-error | dsh-p0-2 | ab-eval
  *   --sleep <n>      Seconds used in the long-turn plan's `sleep <n> && echo done` bash
  *                    command, and in the archive-probe plan's 1st-request bash command.
  *                    Default: 90 (long-turn) — archive-probe callers should pass their own
@@ -52,6 +52,8 @@
  *                    The prefix probe compares consecutive bodies of a session. Unlike the
  *                    log these hold full request content: use a fresh scratch directory
  *                    per run (files are named by the request counter, which --reset zeroes).
+ *   --ab-scripts <f> Only for ab-eval, and required there: the JSON file of scripts the
+ *                    plan plays (see the plan below; tools/ab-eval writes it from its cases).
  *
  * Endpoints:
  *   POST *          Treated as POST /v1/messages regardless of actual path (path is ignored).
@@ -297,6 +299,23 @@
  *                       cache (`simulateCache`): `single` one cache, `split` a second
  *                       backend B that takes every 4th request of the session, counts
  *                       0.55x and caches apart, `off` the static usage other scripts get.
+ *   ab-eval            (added for tools/ab-eval, the PiLab vs Claude Code A/B harness)
+ *                       CONTENT-KEYED plan that plays a scripted model for both clients.
+ *                       `--ab-scripts <file>` (required) is JSON `{ scripts: [{ id, match,
+ *                       steps }], judge? }`. The latest user message whose text contains a
+ *                       script's `match` (whitespace collapsed) is the trigger; the number
+ *                       of tool calls since it is the step. Steps are abstract and mapped
+ *                       onto whatever the request offers, so one script drives Claude Code
+ *                       (`Read`, `Edit`, `Bash`) and DSH (`read`, `edit`, `pwsh`/`bash`):
+ *                       `cwd` (a shell call printing `AB-CWD<cwd>AB-CWD`, after which
+ *                       relative paths are made absolute), `shell {command}`, `read
+ *                       {path}`, `edit {path, old, new}`, `write {path, content}`, `grep
+ *                       {pattern, path?}`, `glob {pattern, path?}`, `call {tool, input}`
+ *                       (a literal tool name, e.g. one nobody offers) and `answer {text}`.
+ *                       Replies are billed with cache reads and writes that grow per step.
+ *                       A request whose system prompt carries AB-EVAL-JUDGE (the harness's
+ *                       LLM judge) is answered with the scripts' `judge` JSON; a request
+ *                       that offers no tools, or matches no script, gets plain text.
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
@@ -355,6 +374,7 @@ const VALID_PLANS = [
   'slow-fail',
   'echo-key-error',
   'dsh-p0-2',
+  'ab-eval',
 ];
 
 /** Per-plan pacing defaults, applied only when the caller did not say. */
@@ -392,9 +412,13 @@ function parseArgs(argv) {
     else if (a === '--write-lines') args.writeLines = Number(argv[++i]);
     else if (a === '--log') args.log = argv[++i];
     else if (a === '--capture') args.capture = argv[++i] ?? '';
+    else if (a === '--ab-scripts') args.abScripts = argv[++i] ?? '';
     else throw new Error(`Unknown arg: ${a}`);
   }
   if (args.capture !== undefined && !args.capture) throw new Error('--capture requires a value');
+  if (args.plan === 'ab-eval' && !args.abScripts) {
+    throw new Error('--plan ab-eval requires --ab-scripts <file>');
+  }
   if (args.port === null || Number.isNaN(args.port)) throw new Error('--port <n> is required');
   if (!args.plan) throw new Error('--plan <name> is required');
   if (!VALID_PLANS.includes(args.plan)) {
@@ -3159,10 +3183,145 @@ function sendBurst(res, model, decision, seq) {
   step();
 }
 
+// ---- ab-eval: one scripted model for both clients of tools/ab-eval ------------
+
+const AB_JUDGE_MARKER = 'AB-EVAL-JUDGE';
+const AB_DEFAULT_JUDGE = {
+  score: 7,
+  dimensions: { correctness: 7, quality: 7 },
+  issues: ['fake gateway judge'],
+};
+/** The marker the `cwd` step prints; works the same under bash, Git Bash and pwsh. */
+const AB_CWD = /AB-CWD<(.+?)>AB-CWD/;
+const AB_CWD_COMMAND = `node -e "process.stdout.write('AB-CWD<'+process.cwd()+'>AB-CWD')"`;
+/** Abstract step -> the tool names each client offers for it, Claude Code's first. */
+const AB_TOOLS = {
+  read: ['Read', 'read'],
+  edit: ['Edit', 'edit'],
+  write: ['Write', 'write'],
+  grep: ['Grep', 'grep'],
+  glob: ['Glob', 'glob'],
+  shell: ['Bash', 'bash', 'pwsh', 'PowerShell'],
+};
+
+/** `--ab-scripts`, read once at startup. */
+function loadAbScripts(file) {
+  const book = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!Array.isArray(book?.scripts)) throw new Error(`${file}: scripts must be an array`);
+  for (const script of book.scripts) {
+    if (typeof script?.id !== 'string' || typeof script.match !== 'string' || !script.match) {
+      throw new Error(`${file}: every script needs a string id and a non-empty match`);
+    }
+    if (!Array.isArray(script.steps)) throw new Error(`${file}: ${script.id} has no steps`);
+  }
+  return book;
+}
+
+function abSystemText(parsed) {
+  const system = parsed?.system;
+  if (typeof system === 'string') return system;
+  if (Array.isArray(system)) return system.map((block) => block?.text ?? '').join('\n');
+  return '';
+}
+
+/** `rel` (always written with `/`) under `dir`, in `dir`'s own separator style. */
+function abJoin(dir, rel) {
+  const windows = dir.includes('\\');
+  const tail = windows ? rel.replace(/\//g, '\\') : rel;
+  return `${dir.replace(/[\\/]+$/, '')}${windows ? '\\' : '/'}${tail}`;
+}
+
+function decideAbEval(parsed, book) {
+  if (abSystemText(parsed).includes(AB_JUDGE_MARKER)) {
+    return { ...say(JSON.stringify(book.judge ?? AB_DEFAULT_JUDGE)), label: 'ab-eval:judge' };
+  }
+  const offered = Array.isArray(parsed?.tools)
+    ? parsed.tools.map((item) => item?.name).filter((name) => typeof name === 'string')
+    : [];
+  if (offered.length === 0) return { ...say('fake gateway ok'), label: 'ab-eval:no-tools' };
+  const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
+  const squash = (text) => text.replace(/\s+/g, ' ').trim();
+  let trigger = -1;
+  let script;
+  for (let i = messages.length - 1; i >= 0 && !script; i -= 1) {
+    if (messages[i]?.role !== 'user') continue;
+    const text = squash(ownText(messages[i]));
+    script = book.scripts.find((item) => text.includes(squash(item.match)));
+    if (script) trigger = i;
+  }
+  if (!script) return { ...say('fake gateway ok'), label: 'ab-eval:unmatched' };
+  const calls = [];
+  for (const message of messages.slice(trigger + 1)) {
+    if (!Array.isArray(message?.content)) continue;
+    for (const block of message.content) {
+      if (message.role === 'assistant' && block?.type === 'tool_use') {
+        calls.push({ id: block.id, name: block.name });
+      }
+      if (message.role === 'user' && block?.type === 'tool_result') {
+        const call = calls.find((c) => c.id === block.tool_use_id);
+        if (call) call.result = toolResultText(block);
+      }
+    }
+  }
+  const step = calls.length;
+  const label = `ab-eval:${script.id} s${step}`;
+  // Billed like a cached conversation: one write up front, then growing reads.
+  const usage = {
+    input_tokens: 100 + 10 * step,
+    cache_creation_input_tokens: step === 0 ? 2000 : 150,
+    cache_read_input_tokens: step === 0 ? 0 : 2000 + 150 * (step - 1),
+  };
+  const s = script.steps[step];
+  if (!s) return { ...say(`ab-eval ${script.id}: script finished`), usage, label };
+  const cwd = calls
+    .map((call) => (call.result === undefined ? undefined : AB_CWD.exec(call.result)?.[1]))
+    .findLast((found) => found !== undefined);
+  const at = (rel) => (cwd ? abJoin(cwd, rel) : rel);
+  const pick = (op) =>
+    AB_TOOLS[op].find((name) => offered.includes(name)) ??
+    offered.find((name) =>
+      AB_TOOLS[op].some((known) => known.toLowerCase() === name.toLowerCase())
+    );
+  const use = (op, input) => {
+    const name = pick(op);
+    if (!name) return say(`ab-eval: the request offers no tool for ${op}`);
+    return tool(name, input);
+  };
+  const decision = (() => {
+    switch (s.op) {
+      case 'cwd':
+        return use('shell', {
+          command: AB_CWD_COMMAND,
+          description: 'Print the working directory',
+        });
+      case 'shell':
+        return use('shell', { command: s.command, description: s.description ?? 'Run a command' });
+      case 'read':
+        return use('read', { file_path: at(s.path) });
+      case 'edit':
+        return use('edit', { file_path: at(s.path), old_string: s.old, new_string: s.new });
+      case 'write':
+        return use('write', { file_path: at(s.path), content: s.content });
+      case 'grep':
+        return use('grep', { pattern: s.pattern, ...(s.path ? { path: at(s.path) } : {}) });
+      case 'glob':
+        return use('glob', { pattern: s.pattern, ...(s.path ? { path: at(s.path) } : {}) });
+      case 'call':
+        return tool(String(s.tool), s.input ?? {});
+      case 'answer':
+        return say(String(s.text));
+      default:
+        return say(`ab-eval: unknown step op ${JSON.stringify(s.op)}`);
+    }
+  })();
+  return { ...decision, usage, label: `${label} ${s.op}` };
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.log) LOG_PATH = args.log;
   if (args.capture) fs.mkdirSync(args.capture, { recursive: true });
+  const abBook = args.plan === 'ab-eval' ? loadAbScripts(args.abScripts) : undefined;
   const state = loadState(args.state, args.reset);
   saveState(args.state, state); // materialize the state file even on first run / --reset
 
@@ -3247,9 +3406,11 @@ function main() {
       const decision =
         args.plan === 'dsh-p0-2'
           ? decideDshP02(parsed, seq)
-          : args.plan === 'echo-key-error'
-            ? { kind: 'echo-key', status: 401 }
-            : decide(args.plan, seq, toolResultPresent, args.sleep, { hold: args.hold });
+          : args.plan === 'ab-eval'
+            ? decideAbEval(parsed, abBook)
+            : args.plan === 'echo-key-error'
+              ? { kind: 'echo-key', status: 401 }
+              : decide(args.plan, seq, toolResultPresent, args.sleep, { hold: args.hold });
       const key = receivedKey(req);
       // Decision 173: P1-CHAIN replies are billed by the simulated upstream cache.
       const simulated =
@@ -3305,6 +3466,15 @@ function main() {
               // Decision 173: P1-CHAIN's thinking form and simulated cache (absent otherwise).
               thinkingForm: thinkingFormOf(decision.thinking),
               cacheSim: simulated?.log,
+            }
+          : {}),
+        ...(args.plan === 'ab-eval'
+          ? {
+              decision: decision.label,
+              tool: decision.kind === 'tool_use' ? decision.name : undefined,
+              toolNames: Array.isArray(parsed?.tools)
+                ? parsed.tools.map((item) => item?.name)
+                : undefined,
             }
           : {}),
       });
