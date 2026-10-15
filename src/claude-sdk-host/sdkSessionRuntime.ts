@@ -1,0 +1,1739 @@
+/**
+ * Route-B prototype: one chat on the official Claude Agent SDK, behind the
+ * DSH bridge's worker RPC server (`BridgeSessionRuntime`).
+ *
+ * One long-lived `query()` per chat in streaming-input mode: sends and Ctrl+Enter
+ * interjections are pushed into its input queue, Stop is `interrupt()`, and
+ * approvals park in `canUseTool`. The SDK's messages are mapped onto the same
+ * runtime events the DSH bridge emits (recorded in
+ * `src/shared/__tests__/fixtures/dsh/stream.*.json`), so the renderer needs no
+ * change: one assistant message per model step, `permissionId` equal to the
+ * tool call id, a tool's result filed under the step that called it, and every
+ * turn closed by a terminal event followed by `session.status idle`.
+ *
+ * Deliberately not implemented (the prototype's conclusion lists them):
+ * rewind / fork / tree, background job windows, goals, withdrawing a
+ * Ctrl+Enter message, `/compact` instructions, subagent lanes.
+ */
+
+import { randomUUID } from 'node:crypto';
+import {
+  type CanUseTool,
+  getSessionMessages,
+  type Options,
+  type PermissionMode,
+  type PermissionResult,
+  type PermissionUpdate,
+  type Query,
+  query,
+  type SDKMessage,
+  type SDKUserMessage,
+} from '@anthropic-ai/claude-agent-sdk';
+import { BridgeSessionError } from '../dsh-host/bridge/bridgeErrors.ts';
+import type {
+  BridgeSessionRuntime,
+  BridgeSessionRuntimeOptions,
+} from '../dsh-host/bridge/bridgeRpcServer.ts';
+import { buildPiInterimUsagePayload, buildPiUsagePayload } from '../shared/piUsage.ts';
+import { decodePlanReviewResponse, PLAN_REVIEW_QUESTION_ID } from '../shared/planReview.ts';
+import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
+import type {
+  PermissionDecisionId,
+  PermissionDetail,
+  PermissionRequestAction,
+  PermissionRequestKind,
+  QuestionItem,
+  RuntimeEventDraft,
+} from '../shared/types/runtimeEvents.ts';
+import {
+  migratePermissionTier,
+  type PermissionGear,
+  type RuntimePermissionSettings,
+} from '../shared/types/runtimePermission.ts';
+import type { HistoryBlock, HistoryMessage } from '../shared/types/sessionHistory.ts';
+import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
+import type {
+  WorkerAcceptForkResult,
+  WorkerBootstrapResult,
+  WorkerCommandResult,
+  WorkerCommandsResult,
+  WorkerCompactCancelResult,
+  WorkerCompactResult,
+  WorkerDiscardForkResult,
+  WorkerForkResult,
+  WorkerHistoryPayload,
+  WorkerHistoryResult,
+  WorkerInterjectPayload,
+  WorkerInterjectResult,
+  WorkerInterjectWithdrawResult,
+  WorkerJobKillResult,
+  WorkerJobReadResult,
+  WorkerPanelsResult,
+  WorkerRewindResult,
+  WorkerSendPayload,
+  WorkerSendResult,
+  WorkerStopPayload,
+  WorkerStopResult,
+  WorkerSubagentInterruptResult,
+  WorkerTreeResult,
+} from '../shared/types/workerRpc.ts';
+import {
+  descendantsOf,
+  msysToolProcesses,
+  type ProcessRow,
+  reap,
+  sampleProcesses,
+} from './processTree.ts';
+import { type ClaudeSdkSessionStub, createStub, readStub, writeStub } from './sessionStub.ts';
+
+export interface SdkHostConfig {
+  configDir: string;
+  settingSources: Array<'project' | 'local' | 'user'>;
+  /** A `.js` Claude Code build to run on Node instead of the bundled native binary. */
+  cliPath?: string;
+  gitBashPath?: string;
+  cliEnv: Record<string, string>;
+  /** Experiment switch: let the repository's allow rules and hooks apply (the CLI's default). */
+  trustRepoPolicy?: boolean;
+}
+
+/**
+ * The PiLab note appended to the `claude_code` preset. Our own words, kept
+ * short and static so it never disturbs the cached prefix.
+ */
+export const PILAB_PROMPT_APPEND = [
+  '# PiLab',
+  'You are running inside PiLab, a desktop app. The user reads this conversation in a chat window:',
+  'tool calls appear as rows, approvals and your questions appear as cards, and markdown is rendered.',
+  'Reply in the language the user writes in.',
+].join('\n');
+
+/**
+ * Preset tools that need a host surface PiLab does not have (schedulers,
+ * cross-session messaging, worktree switching, review panes, workflows).
+ */
+export const HOST_ONLY_TOOLS = [
+  'CronCreate',
+  'CronDelete',
+  'CronList',
+  'ScheduleWakeup',
+  'RemoteTrigger',
+  'EnterWorktree',
+  'ExitWorktree',
+  'ListAgents',
+  'SendMessage',
+  'ReportFindings',
+  'Workflow',
+];
+
+/** User rows of the CLI transcript that are bookkeeping, not something typed. */
+const CLI_MARKER_TEXT =
+  /^(\[Request interrupted by user|<local-command-stdout>|<command-name>|<local-command-caveat>)/;
+const COMPACT_SUMMARY_PREFIX = 'This session is being continued from a previous conversation';
+const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
+const FILE_CHANGE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+/** How long Stop waits for the CLI to close the turn itself before closing it here. */
+const STOP_SETTLE_MS = 5_000;
+
+type Log = (...args: unknown[]) => void;
+
+/** A runtime event without the two fields `emit` adds, kept per member so payloads stay checked. */
+type EventBody = RuntimeEventDraft extends infer T
+  ? T extends unknown
+    ? Omit<T, 'sessionId' | 'requestId'>
+    : never
+  : never;
+
+interface StepBlock {
+  kind: 'text' | 'thinking' | 'tool';
+  blockId: string;
+  toolCallId?: string;
+  name?: string;
+  json?: string;
+}
+
+interface Step {
+  messageId: string;
+  apiMessageId: string;
+  blocks: Map<number, StepBlock>;
+  promptTokens: { input: number; cacheRead: number; cacheWrite: number };
+  output: number;
+}
+
+interface Interjection {
+  attemptId: string;
+  text: string;
+  attachments?: SessionAttachment[];
+}
+
+interface Turn {
+  requestId: string;
+  stopRequested: boolean;
+  step: Step | null;
+  /** toolCallId → the step message that called it. */
+  toolMessage: Map<string, string>;
+  /** toolCallId → why the call did not run (our card said no, or Stop took it). */
+  toolOutcome: Map<string, 'refused' | 'stopped' | 'notStarted'>;
+  interjections: Map<string, Interjection>;
+  stopTimer?: ReturnType<typeof setTimeout>;
+}
+
+interface PendingPermission {
+  toolName: string;
+  input: Record<string, unknown>;
+  suggestions?: PermissionUpdate[];
+  resolve: (result: PermissionResult) => void;
+}
+
+interface PendingQuestion {
+  kind: 'question' | 'plan-review';
+  toolUseId: string;
+  input: Record<string, unknown>;
+  resolve: (result: PermissionResult) => void;
+}
+
+/** Async input of the long-lived query: pushed by send / interject, closed by dispose. */
+class InputQueue implements AsyncIterable<SDKUserMessage> {
+  private readonly items: SDKUserMessage[] = [];
+  private wake: (() => void) | null = null;
+  private closed = false;
+
+  push(message: SDKUserMessage): void {
+    this.items.push(message);
+    this.wake?.();
+  }
+
+  close(): void {
+    this.closed = true;
+    this.wake?.();
+  }
+
+  async *[Symbol.asyncIterator](): AsyncIterator<SDKUserMessage> {
+    for (;;) {
+      while (this.items.length > 0) yield this.items.shift() as SDKUserMessage;
+      if (this.closed) return;
+      await new Promise<void>((resolve) => {
+        this.wake = resolve;
+      });
+      this.wake = null;
+    }
+  }
+}
+
+/** `provider/modelId` → the bare id the gateway serves. */
+export function bareModelId(ref: string | undefined): string | undefined {
+  if (!ref) return undefined;
+  const slash = ref.indexOf('/');
+  return slash >= 0 ? ref.slice(slash + 1) : ref;
+}
+
+/** PiLab's mode and gear → Claude Code's permission mode. */
+export function cliPermissionMode(settings: RuntimePermissionSettings): PermissionMode {
+  if (settings.mode === 'plan') return 'plan';
+  switch (settings.gear) {
+    case 'bypass':
+      return 'bypassPermissions';
+    case 'accept-edits':
+    case 'auto':
+      return 'acceptEdits';
+    default:
+      return 'default';
+  }
+}
+
+function effortOptions(
+  effort: SessionEffortLevel | undefined
+): Pick<Options, 'effort' | 'thinking'> {
+  if (effort === 'off') return { thinking: { type: 'disabled' } };
+  const level = effort === 'minimal' ? 'low' : effort;
+  return {
+    thinking: { type: 'adaptive', display: 'summarized' },
+    ...(level ? { effort: level } : {}),
+  };
+}
+
+function userContent(
+  text: string,
+  attachments?: SessionAttachment[]
+): SDKUserMessage['message']['content'] {
+  if (!attachments?.length) return text;
+  const blocks: Array<Record<string, unknown>> = [];
+  for (const attachment of attachments) {
+    if (attachment.kind === 'image') {
+      blocks.push({
+        type: 'image',
+        source: { type: 'base64', media_type: attachment.mediaType, data: attachment.data },
+      });
+    } else {
+      blocks.push({
+        type: 'text',
+        text: `<attachment name="${attachment.name ?? 'pasted.txt'}">\n${attachment.data}\n</attachment>`,
+      });
+    }
+  }
+  if (text) blocks.push({ type: 'text', text });
+  return blocks as unknown as SDKUserMessage['message']['content'];
+}
+
+function textOf(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block) =>
+      block && typeof block === 'object' && typeof (block as { text?: unknown }).text === 'string'
+        ? (block as { text: string }).text
+        : ''
+    )
+    .filter(Boolean)
+    .join('\n');
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function num(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
+  private readonly options: BridgeSessionRuntimeOptions;
+  private readonly config: SdkHostConfig;
+  private readonly log: Log;
+  private stubFile = '';
+  private stub: ClaudeSdkSessionStub | null = null;
+  private bootstrapResult: WorkerBootstrapResult | null = null;
+  private query: Query | null = null;
+  private input: InputQueue | null = null;
+  private pumpDone: Promise<void> = Promise.resolve();
+  private modelRef: string | undefined;
+  private effort: SessionEffortLevel | undefined;
+  private permissions: RuntimePermissionSettings;
+  private turn: Turn | null = null;
+  private turnCount = 0;
+  private userMessageCount = 0;
+  private readonly pendingPermissions = new Map<string, PendingPermission>();
+  private readonly pendingQuestions = new Map<string, PendingQuestion>();
+  private slashCommands: string[] = [];
+  /** The last task notification was a subagent's (an engine turn it wakes is the subagent's). */
+  private lastTaskWasAgent = false;
+  /** Tool inputs as streamed, for a card raised before the stream finished (ExitPlanMode's plan). */
+  private readonly streamedInputs = new Map<string, unknown>();
+  private readonly streamedWaiters = new Map<string, (input: unknown) => void>();
+  private contextWindow = 0;
+  private lastCostUsd = 0;
+  private readonly session = {
+    turns: 0,
+    toolResults: 0,
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  };
+  private compacting: {
+    resolve: (value: WorkerCompactResult) => void;
+    reject: (error: Error) => void;
+  } | null = null;
+  private disposed = false;
+
+  constructor(options: BridgeSessionRuntimeOptions, config: SdkHostConfig, log: Log) {
+    this.options = options;
+    this.config = config;
+    this.log = log;
+    this.modelRef = options.model;
+    this.effort = options.effort;
+    this.permissions =
+      options.permissions ??
+      (options.tier ? migratePermissionTier(options.tier) : { mode: 'agent', gear: 'ask' });
+  }
+
+  // ---- lifecycle ------------------------------------------------------------------
+
+  async bootstrap(): Promise<WorkerBootstrapResult> {
+    if (this.bootstrapResult) return this.bootstrapResult;
+    const resumed = Boolean(this.options.sessionFile);
+    if (this.options.sessionFile) {
+      this.stubFile = this.options.sessionFile;
+      this.stub = readStub(this.stubFile);
+    } else {
+      const created = createStub(
+        this.config.configDir,
+        this.options.logicalSessionId,
+        this.options.cwd
+      );
+      this.stubFile = created.file;
+      this.stub = created.stub;
+    }
+    this.bootstrapResult = {
+      bootstrapped: true,
+      logicalSessionId: this.options.logicalSessionId,
+      piSessionId: this.stub.ccSessionId,
+      cwd: this.options.cwd,
+      agentDir: this.config.configDir,
+      sessionFile: this.stubFile,
+      leaf: { activeEntryId: null, fileTailEntryId: null },
+      ...(this.modelRef ? { model: this.modelRef } : {}),
+      ...(this.effort ? { effort: this.effort } : {}),
+      projectTrusted: this.options.projectTrusted,
+      permissionGate: 'bundled',
+      ...(resumed
+        ? {
+            initialHistory: await this.history({
+              logicalSessionId: this.options.logicalSessionId,
+              offset: 0,
+              limit: 80,
+            }),
+          }
+        : {}),
+    };
+    // A new chat is created on its first send: start the CLI now so the send
+    // does not pay for the cold start. A reopened chat starts it on demand.
+    if (!resumed) this.ensureQuery();
+    return this.bootstrapResult;
+  }
+
+  async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.drainPending('session_closed');
+    const toolProcesses = this.turn ? await this.toolProcesses() : [];
+    this.input?.close();
+    try {
+      this.query?.close();
+    } catch (error) {
+      this.log('query close failed', error);
+    }
+    await Promise.race([this.pumpDone, new Promise((resolve) => setTimeout(resolve, 3_000))]);
+    if (toolProcesses.length > 0) await this.reapOrphans(toolProcesses, true);
+  }
+
+  private ensureQuery(): Query {
+    if (this.query) return this.query;
+    const stub = this.requireStub();
+    const input = new InputQueue();
+    const model = bareModelId(this.modelRef);
+    const options: Options = {
+      cwd: this.options.cwd,
+      env: this.config.cliEnv,
+      ...(model ? { model } : {}),
+      ...effortOptions(this.effort),
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: PILAB_PROMPT_APPEND },
+      tools: { type: 'preset', preset: 'claude_code' },
+      disallowedTools: HOST_ONLY_TOOLS,
+      // No "Co-Authored-By" / "Generated with Claude Code" lines in the user's commits and PRs.
+      settings: { attribution: false },
+      settingSources: this.config.settingSources,
+      // A repository's own `.claude/settings*.json` may add allow rules (which skip
+      // `canUseTool`, i.e. PiLab's card) and hooks (commands run with no tool call).
+      // Pinned as the parent's policy tier, so a cloned repo can do neither; its
+      // CLAUDE.md still loads. Dropped if an IT-managed tier exists on the machine
+      // and does not opt in (`parentSettingsBehavior`), see the conclusion doc.
+      ...(this.config.trustRepoPolicy
+        ? {}
+        : {
+            managedSettings: { allowManagedPermissionRulesOnly: true, allowManagedHooksOnly: true },
+          }),
+      // Only servers PiLab passes; never a repository's `.mcp.json`.
+      strictMcpConfig: true,
+      permissionMode: cliPermissionMode(this.permissions),
+      // Set once at launch so a later switch to "bypass" is accepted; the mode itself stays ours.
+      allowDangerouslySkipPermissions: true,
+      canUseTool: this.canUseTool,
+      includePartialMessages: true,
+      ...(stub.started ? { resume: stub.ccSessionId } : { sessionId: stub.ccSessionId }),
+      ...(this.config.cliPath
+        ? { pathToClaudeCodeExecutable: this.config.cliPath, executable: 'node' as const }
+        : {}),
+      stderr: (line: string) => this.log('[cli]', line.trimEnd()),
+    };
+    const q = query({ prompt: input, options });
+    this.query = q;
+    this.input = input;
+    this.pumpDone = this.pump(q);
+    return q;
+  }
+
+  private async pump(q: Query): Promise<void> {
+    try {
+      for await (const message of q) {
+        try {
+          this.ingest(message);
+        } catch (error) {
+          this.log('ingest failed', error);
+        }
+      }
+    } catch (error) {
+      this.log('query ended with an error', error);
+      if (this.turn)
+        this.endTurn('failed', { error: errorText(error), errorCode: 'CLAUDE_SDK_QUERY_FAILED' });
+      this.compacting?.reject(error instanceof Error ? error : new Error(String(error)));
+      this.compacting = null;
+    } finally {
+      if (this.query === q) {
+        this.query = null;
+        this.input = null;
+      }
+      if (this.turn && !this.disposed) {
+        this.endTurn('failed', { error: 'Claude Code exited', errorCode: 'CLAUDE_SDK_CLI_EXITED' });
+      }
+    }
+  }
+
+  // ---- sends ----------------------------------------------------------------------
+
+  async startSend(input: WorkerSendPayload): Promise<WorkerSendResult> {
+    if (this.turn || this.compacting) {
+      throw new BridgeSessionError('WORKER_SESSION_BUSY', 'A turn is already running', true);
+    }
+    if (input.mode === 'retry') {
+      throw new BridgeSessionError(
+        'WORKER_RETRY_UNAVAILABLE',
+        'Retry is not available on the Claude SDK engine'
+      );
+    }
+    const q = this.ensureQuery();
+    await this.applySelection(q, input.model, input.effort);
+    this.turnCount += 1;
+    this.turn = {
+      requestId: input.requestId,
+      stopRequested: false,
+      step: null,
+      toolMessage: new Map(),
+      toolOutcome: new Map(),
+      interjections: new Map(),
+    };
+    if (this.turnCount === 1) {
+      this.emit({ type: 'session.projection', payload: { key: 'todos', view: null } });
+      this.emit({ type: 'session.projection', payload: { key: 'goal', view: null } });
+      this.emit({ type: 'session.projection', payload: { key: 'subagentCatalog', view: [] } });
+    }
+    this.emit({ type: 'session.status', payload: { status: 'running' } });
+    this.echoUser(input.attemptId, input.text, input.attachments);
+    this.input?.push({
+      type: 'user',
+      message: { role: 'user', content: userContent(input.text, input.attachments) },
+      parent_tool_use_id: null,
+      uuid: randomUUID(),
+    });
+    return { accepted: true, requestId: input.requestId };
+  }
+
+  private async applySelection(
+    q: Query,
+    model: string | undefined,
+    effort: SessionEffortLevel | undefined
+  ): Promise<void> {
+    if (model && model !== this.modelRef) {
+      this.modelRef = model;
+      await q.setModel(bareModelId(model)).catch((error) => this.log('setModel failed', error));
+    }
+    if (effort && effort !== this.effort) {
+      this.effort = effort;
+      const level = effort === 'off' || effort === 'minimal' ? 'low' : effort;
+      await q
+        .applyFlagSettings({ effortLevel: level })
+        .catch((error) => this.log('effort change failed', error));
+    }
+  }
+
+  async stop(input: WorkerStopPayload): Promise<WorkerStopResult> {
+    void input;
+    const turn = this.turn;
+    if (!turn) return { stopped: false };
+    if (turn.stopRequested) return { stopped: true };
+    turn.stopRequested = true;
+    this.emit({ type: 'session.status', payload: { status: 'stopping' } });
+    this.drainPending('aborted');
+    // Windows: the CLI's interrupt leaves a Bash call's children running (see processTree.ts).
+    const toolProcesses = await this.toolProcesses();
+    const q = this.query;
+    if (q) {
+      await Promise.race([
+        q.interrupt().catch((error) => this.log('interrupt failed', error)),
+        new Promise((resolve) => setTimeout(resolve, STOP_SETTLE_MS)),
+      ]);
+    }
+    // The CLI closes an interrupted turn with a result; if it never does, close it here.
+    turn.stopTimer = setTimeout(() => {
+      if (this.turn === turn) this.endTurn('stopped', {});
+    }, STOP_SETTLE_MS);
+    if (toolProcesses.length > 0) {
+      setTimeout(() => void this.reapOrphans(toolProcesses, false), 1_500);
+    }
+    return { stopped: true };
+  }
+
+  /** Processes under the CLI (its own children's descendants): what a tool call started. */
+  private async toolProcesses(): Promise<ProcessRow[]> {
+    const table = await sampleProcesses();
+    const all = descendantsOf(process.pid, table);
+    this.log(
+      `process snapshot: ${table.size} rows, host ${process.pid} (${table.get(process.pid)?.name ?? 'missing'}), descendants ${all.map((row) => `${row.name}#${row.pid}<${row.ppid}`).join(' ')}`
+    );
+    const tools = all.filter((row) => row.ppid !== process.pid);
+    if (process.platform === 'win32' && this.config.gitBashPath) {
+      const shells = all.filter((row) => /^bash\.exe$/i.test(row.name));
+      const msys = await msysToolProcesses(this.config.gitBashPath, shells);
+      this.log(
+        `msys tool processes: ${msys.map((row) => `${row.name}#${row.pid}`).join(' ') || '(none)'}`
+      );
+      tools.push(...msys.filter((row) => !tools.some((t) => t.pid === row.pid)));
+    }
+    return tools;
+  }
+
+  private async reapOrphans(before: ProcessRow[], all: boolean): Promise<void> {
+    const killed = reap(before, await sampleProcesses(), all);
+    if (killed.length > 0) {
+      this.log(
+        `reaped ${killed.length} process(es) left by the CLI: ${killed.map((row) => `${row.name}#${row.pid}`).join(', ')}`
+      );
+    }
+  }
+
+  interject(input: WorkerInterjectPayload): WorkerInterjectResult {
+    const turn = this.turn;
+    if (!turn || !this.input || turn.stopRequested) {
+      return { interjected: false, turnActive: Boolean(turn) };
+    }
+    const uuid = randomUUID();
+    turn.interjections.set(uuid, {
+      attemptId: input.attemptId,
+      text: input.text,
+      ...(input.attachments ? { attachments: input.attachments } : {}),
+    });
+    // `next`: folded into the running turn at its next step boundary.
+    this.input.push({
+      type: 'user',
+      message: { role: 'user', content: userContent(input.text, input.attachments) },
+      parent_tool_use_id: null,
+      uuid,
+      priority: 'next',
+    });
+    return { interjected: true, turnActive: true };
+  }
+
+  /**
+   * Take a Ctrl+Enter message back before the turn folds it in, through the
+   * CLI's own `cancel_async_message` (`Query.cancelAsyncMessage`, present in
+   * sdk.mjs but not in the published types). The bridge's interface is
+   * synchronous, so a cancel racing the fold is answered `withdrawn` before the
+   * CLI says whether it won; a product build would make this asynchronous.
+   */
+  withdrawInterjection(input: { attemptId: string }): WorkerInterjectWithdrawResult {
+    const turn = this.turn;
+    const entry = turn
+      ? [...turn.interjections].find(([, value]) => value.attemptId === input.attemptId)
+      : undefined;
+    if (!turn || !entry) return { outcome: 'not_found' };
+    const [uuid] = entry;
+    turn.interjections.delete(uuid);
+    const cancel = (
+      this.query as unknown as { cancelAsyncMessage?: (uuid: string) => Promise<boolean> } | null
+    )?.cancelAsyncMessage;
+    void cancel
+      ?.call(this.query, uuid)
+      .then((cancelled) =>
+        this.log(`withdraw ${uuid}: ${cancelled ? 'cancelled' : 'already taken in'}`)
+      )
+      .catch((error) => this.log('withdraw failed', error));
+    return { outcome: 'withdrawn' };
+  }
+
+  // ---- event mapping --------------------------------------------------------------
+
+  private emit(event: EventBody): void {
+    if (this.disposed && event.type !== 'permission.resolved' && event.type !== 'question.resolved')
+      return;
+    this.options.emit({
+      ...event,
+      sessionId: this.options.logicalSessionId,
+      ...(this.turn ? { requestId: this.turn.requestId } : {}),
+    } as RuntimeEventDraft);
+  }
+
+  private echoUser(
+    attemptId: string | undefined,
+    text: string,
+    attachments?: SessionAttachment[]
+  ): void {
+    this.userMessageCount += 1;
+    const messageId = `cc-user-${this.userMessageCount}`;
+    this.emit({
+      type: 'message.started',
+      payload: {
+        messageId,
+        role: 'user',
+        ...(attemptId ? { attemptId } : {}),
+        ...(attachments?.length
+          ? {
+              attachments: attachments.map((a) => ({
+                kind: a.kind,
+                mediaType: a.mediaType,
+                ...(a.name ? { name: a.name } : {}),
+              })),
+            }
+          : {}),
+      },
+    });
+    if (text)
+      this.emit({
+        type: 'message.delta',
+        payload: { messageId, blockId: `${messageId}-text`, text },
+      });
+    this.emit({ type: 'message.completed', payload: { messageId } });
+  }
+
+  private ingest(message: SDKMessage): void {
+    if (process.env.AICLIENT_CLAUDE_SDK_TRACE) {
+      const m = message as unknown as Record<string, unknown>;
+      const event = m.type === 'stream_event' ? (record(m.event)?.type as string) : '';
+      if (event !== 'content_block_delta') {
+        this.log(
+          `[trace] ${m.type}${m.subtype ? `/${m.subtype}` : ''}${event ? `/${event}` : ''} uuid=${String(m.uuid ?? '')} umu=${JSON.stringify(m.user_message_uuids ?? m.user_message_uuid ?? null)} ${m.type === 'user' ? JSON.stringify(m).slice(0, 300) : ''}`
+        );
+      }
+    }
+    const consumed = (message as { user_message_uuids?: unknown }).user_message_uuids;
+    if (Array.isArray(consumed))
+      this.echoTakenInterjections(consumed.filter((u): u is string => typeof u === 'string'));
+    switch (message.type) {
+      case 'system':
+        this.ingestSystem(message as unknown as Record<string, unknown>);
+        return;
+      case 'stream_event':
+        if (message.parent_tool_use_id === null) this.ingestStream(message);
+        return;
+      case 'assistant':
+        if (message.parent_tool_use_id === null) this.ingestAssistant(message);
+        return;
+      case 'user':
+        if (message.parent_tool_use_id === null)
+          this.ingestUser(message as unknown as Record<string, unknown>);
+        return;
+      case 'result':
+        this.ingestResult(message as unknown as Record<string, unknown>);
+        return;
+      default:
+        return;
+    }
+  }
+
+  private ingestSystem(message: Record<string, unknown>): void {
+    switch (message.subtype) {
+      case 'init': {
+        if (Array.isArray(message.slash_commands)) {
+          this.slashCommands = message.slash_commands.filter(
+            (c): c is string => typeof c === 'string'
+          );
+        }
+        const stub = this.stub;
+        if (stub && !stub.started) {
+          stub.started = true;
+          writeStub(this.stubFile, stub);
+        }
+        return;
+      }
+      case 'task_notification':
+      case 'task_started': {
+        const kind = String(message.task_type ?? message.type_name ?? '');
+        this.lastTaskWasAgent = /agent/i.test(kind) || typeof message.agent_id === 'string';
+        return;
+      }
+      case 'api_retry': {
+        const attempt = num(message.attempt);
+        const delayMs = num(message.retry_delay_ms);
+        this.emit({
+          type: 'session.status',
+          payload: {
+            status: 'running',
+            retry: {
+              attempt,
+              maxRetries: num(message.max_retries),
+              delayMs,
+              errorStatus: message.error_status == null ? null : String(message.error_status),
+              error: typeof message.error === 'string' ? message.error : 'unknown',
+              retryAt: Date.now() + delayMs,
+            },
+          },
+        });
+        return;
+      }
+      default:
+        return;
+    }
+  }
+
+  private ingestStream(message: Extract<SDKMessage, { type: 'stream_event' }>): void {
+    const event = message.event as unknown as Record<string, unknown>;
+    // A turn the CLI started by itself (a background agent or command finished): open it here.
+    if (!this.turn && event.type === 'message_start' && !this.compacting && !this.disposed)
+      this.openEngineTurn();
+    const turn = this.turn;
+    if (!turn) return;
+    switch (event.type) {
+      case 'message_start': {
+        this.closeStep();
+        const apiMessage = record(event.message) ?? {};
+        const usage = record(apiMessage.usage) ?? {};
+        const stepNo = this.nextStepNo();
+        const messageId = `cc-${this.requireStub().ccSessionId.slice(0, 8)}-t${this.turnCount}-s${stepNo}`;
+        turn.step = {
+          messageId,
+          apiMessageId: String(apiMessage.id ?? messageId),
+          blocks: new Map(),
+          promptTokens: {
+            input: num(usage.input_tokens),
+            cacheRead: num(usage.cache_read_input_tokens),
+            cacheWrite: num(usage.cache_creation_input_tokens),
+          },
+          output: 0,
+        };
+        this.emit({
+          type: 'message.started',
+          payload: {
+            messageId,
+            role: 'assistant',
+            ...(this.modelRef ? { model: this.modelRef } : {}),
+          },
+        });
+        const interim = buildPiInterimUsagePayload({
+          input: turn.step.promptTokens.input,
+          cacheRead: turn.step.promptTokens.cacheRead,
+          cacheWrite: turn.step.promptTokens.cacheWrite,
+        });
+        if (interim) this.emit({ type: 'usage.updated', payload: interim });
+        return;
+      }
+      case 'content_block_start': {
+        const step = turn.step;
+        if (!step) return;
+        const index = num(event.index);
+        const block = record(event.content_block) ?? {};
+        if (block.type === 'text') {
+          step.blocks.set(index, { kind: 'text', blockId: `${step.messageId}-b${index}` });
+        } else if (block.type === 'thinking' || block.type === 'redacted_thinking') {
+          const blockId = `${step.messageId}-r${index}`;
+          step.blocks.set(index, { kind: 'thinking', blockId });
+          this.emit({ type: 'thinking.started', payload: { messageId: step.messageId, blockId } });
+        } else if (block.type === 'tool_use' || block.type === 'server_tool_use') {
+          const toolCallId = String(block.id);
+          const name = String(block.name);
+          step.blocks.set(index, { kind: 'tool', blockId: toolCallId, toolCallId, name, json: '' });
+          turn.toolMessage.set(toolCallId, step.messageId);
+          this.emit({
+            type: 'tool.started',
+            payload: {
+              messageId: step.messageId,
+              toolCallId,
+              name,
+              input: { __streaming: { bytes: 0, lines: 0 } },
+            },
+          });
+        }
+        return;
+      }
+      case 'content_block_delta': {
+        const step = turn.step;
+        const block = step?.blocks.get(num(event.index));
+        const delta = record(event.delta) ?? {};
+        if (!step || !block) return;
+        if (delta.type === 'text_delta' && typeof delta.text === 'string') {
+          this.emit({
+            type: 'message.delta',
+            payload: { messageId: step.messageId, blockId: block.blockId, text: delta.text },
+          });
+        } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+          this.emit({
+            type: 'thinking.delta',
+            payload: { messageId: step.messageId, blockId: block.blockId, text: delta.thinking },
+          });
+        } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+          block.json = (block.json ?? '') + delta.partial_json;
+        }
+        return;
+      }
+      case 'content_block_stop': {
+        const step = turn.step;
+        const block = step?.blocks.get(num(event.index));
+        if (!step || !block) return;
+        if (block.kind === 'thinking') {
+          this.emit({
+            type: 'thinking.completed',
+            payload: { messageId: step.messageId, blockId: block.blockId },
+          });
+        } else if (block.kind === 'tool' && block.toolCallId) {
+          let input: unknown = {};
+          try {
+            input = block.json ? JSON.parse(block.json) : {};
+          } catch {
+            input = { __unparsed: block.json };
+          }
+          this.emit({
+            type: 'tool.updated',
+            payload: { messageId: step.messageId, toolCallId: block.toolCallId, input },
+          });
+          this.streamedInputs.set(block.toolCallId, input);
+          this.streamedWaiters.get(block.toolCallId)?.(input);
+          this.streamedWaiters.delete(block.toolCallId);
+        }
+        return;
+      }
+      case 'message_delta': {
+        const step = turn.step;
+        const usage = record(event.usage);
+        if (step && usage) {
+          step.output = num(usage.output_tokens) || step.output;
+          if (usage.input_tokens !== undefined) step.promptTokens.input = num(usage.input_tokens);
+          if (usage.cache_read_input_tokens !== undefined) {
+            step.promptTokens.cacheRead = num(usage.cache_read_input_tokens);
+          }
+          if (usage.cache_creation_input_tokens !== undefined) {
+            step.promptTokens.cacheWrite = num(usage.cache_creation_input_tokens);
+          }
+        }
+        return;
+      }
+      case 'message_stop': {
+        const step = turn.step;
+        if (step) this.settleStepUsage(step);
+        return;
+      }
+      default:
+        return;
+    }
+  }
+
+  /** The SDK's complete assistant frame: only used to recover a tool input the stream could not parse. */
+  private ingestAssistant(message: Extract<SDKMessage, { type: 'assistant' }>): void {
+    const turn = this.turn;
+    const step = turn?.step;
+    if (!turn || !step) return;
+    const content = (message.message as { content?: unknown }).content;
+    if (!Array.isArray(content)) return;
+    for (const block of content) {
+      const b = record(block);
+      if (!b || b.type !== 'tool_use' || typeof b.id !== 'string') continue;
+      if (!turn.toolMessage.has(b.id)) {
+        // No stream frames for this call (a gateway that does not stream): open the row now.
+        turn.toolMessage.set(b.id, step.messageId);
+        this.emit({
+          type: 'tool.started',
+          payload: {
+            messageId: step.messageId,
+            toolCallId: b.id,
+            name: String(b.name),
+            input: b.input ?? {},
+          },
+        });
+      }
+    }
+  }
+
+  private ingestUser(message: Record<string, unknown>): void {
+    const turn = this.turn;
+    if (!turn) return;
+    const content = record(message.message)?.content;
+    if (!Array.isArray(content)) return;
+    for (const block of content) {
+      const b = record(block);
+      if (!b || b.type !== 'tool_result' || typeof b.tool_use_id !== 'string') continue;
+      const toolCallId = b.tool_use_id;
+      const messageId = turn.toolMessage.get(toolCallId) ?? turn.step?.messageId;
+      if (!messageId) continue;
+      const text = textOf(b.content);
+      const failed = b.is_error === true;
+      const outcome =
+        turn.toolOutcome.get(toolCallId) ??
+        (failed && (turn.stopRequested || /interrupted by user/i.test(text))
+          ? ('stopped' as const)
+          : undefined);
+      this.session.toolResults += 1;
+      if (outcome) {
+        this.emit({
+          type: 'tool.completed',
+          payload: {
+            messageId,
+            toolCallId,
+            ok: false,
+            output: { content: [{ type: 'text', text }], details: { [outcome]: true } },
+            error:
+              text ||
+              (outcome === 'refused'
+                ? 'Refused'
+                : outcome === 'stopped'
+                  ? 'Stopped'
+                  : 'Not started'),
+          },
+        });
+      } else {
+        this.emit({
+          type: 'tool.completed',
+          payload: {
+            messageId,
+            toolCallId,
+            ok: !failed,
+            output: text,
+            ...(failed ? { error: text || 'Tool call failed' } : {}),
+          },
+        });
+      }
+    }
+  }
+
+  private ingestResult(message: Record<string, unknown>): void {
+    const cost = num(message.total_cost_usd);
+    const costDelta = Math.max(0, cost - this.lastCostUsd);
+    this.lastCostUsd = cost;
+    const modelUsage = record(message.modelUsage);
+    if (modelUsage) {
+      for (const entry of Object.values(modelUsage)) {
+        const window = num(record(entry)?.contextWindow);
+        if (window > this.contextWindow) this.contextWindow = window;
+      }
+    }
+    this.session.costUsd += costDelta;
+    if (this.compacting) {
+      const done = this.compacting;
+      this.compacting = null;
+      if (message.is_error === true)
+        done.reject(new Error(String(message.result ?? 'compaction failed')));
+      else done.resolve({ compacted: true });
+      return;
+    }
+    const turn = this.turn;
+    if (!turn) return;
+    // A Ctrl+Enter message the turn never took in runs as the CLI's next turn:
+    // keep this product turn open so it lands under the same request.
+    if (turn.interjections.size > 0 && num(message.queued_turn_count) > 0 && !turn.stopRequested)
+      return;
+    this.session.turns += 1;
+    if (turn.stopRequested) {
+      this.endTurn('stopped', {});
+    } else if (message.is_error === true || message.subtype !== 'success') {
+      const errors = Array.isArray(message.errors) ? message.errors.join('; ') : '';
+      this.endTurn('failed', {
+        error:
+          errors || String(message.result ?? message.subtype ?? 'Claude Code reported an error'),
+        errorCode: String(message.subtype ?? 'error'),
+      });
+    } else {
+      this.endTurn('completed', {});
+    }
+  }
+
+  /**
+   * A turn nobody sent: the CLI woke itself for a task notification. Shaped
+   * like the DSH bridge's own engine turns: its own request id and a user head
+   * with an `origin` instead of typed text.
+   */
+  private openEngineTurn(): void {
+    this.turnCount += 1;
+    this.turn = {
+      requestId: `cc-turn-${this.requireStub().ccSessionId.slice(0, 8)}-${this.turnCount}`,
+      stopRequested: false,
+      step: null,
+      toolMessage: new Map(),
+      toolOutcome: new Map(),
+      interjections: new Map(),
+    };
+    this.emit({ type: 'session.status', payload: { status: 'running' } });
+    this.userMessageCount += 1;
+    const messageId = `cc-user-${this.userMessageCount}`;
+    this.emit({
+      type: 'message.started',
+      payload: {
+        messageId,
+        role: 'user',
+        origin: this.lastTaskWasAgent ? { kind: 'subagent' } : { kind: 'job' },
+      },
+    });
+    this.emit({ type: 'message.completed', payload: { messageId } });
+  }
+
+  private nextStepNo(): number {
+    const turn = this.turn;
+    if (!turn) return 0;
+    const current = turn.step?.messageId.match(/-s(\d+)$/)?.[1];
+    return current ? Number(current) + 1 : 1;
+  }
+
+  private closeStep(): void {
+    const turn = this.turn;
+    if (!turn?.step) return;
+    this.emit({ type: 'message.completed', payload: { messageId: turn.step.messageId } });
+  }
+
+  private settleStepUsage(step: Step): void {
+    const { input, cacheRead, cacheWrite } = step.promptTokens;
+    const output = step.output;
+    const totalTokens = input + cacheRead + cacheWrite + output;
+    this.session.input += input;
+    this.session.output += output;
+    this.session.cacheRead += cacheRead;
+    this.session.cacheWrite += cacheWrite;
+    this.session.totalTokens += totalTokens;
+    const contextTokens = input + cacheRead + cacheWrite + output;
+    const payload = buildPiUsagePayload(
+      { input, output, cacheRead, cacheWrite, totalTokens, cost: { total: 0 } },
+      this.contextWindow > 0
+        ? {
+            tokens: contextTokens,
+            contextWindow: this.contextWindow,
+            percent: Math.min(100, (contextTokens / this.contextWindow) * 100),
+          }
+        : undefined,
+      { ...this.session }
+    );
+    if (payload) this.emit({ type: 'usage.updated', payload });
+  }
+
+  private echoTakenInterjections(uuids: string[]): void {
+    const turn = this.turn;
+    if (!turn || turn.interjections.size === 0) return;
+    for (const uuid of uuids) {
+      const pending = turn.interjections.get(uuid);
+      if (!pending) continue;
+      turn.interjections.delete(uuid);
+      this.echoUser(pending.attemptId, pending.text, pending.attachments);
+    }
+  }
+
+  private endTurn(
+    outcome: 'completed' | 'failed' | 'stopped',
+    payload: { error?: string; errorCode?: string }
+  ): void {
+    const turn = this.turn;
+    if (!turn) return;
+    if (turn.stopTimer) clearTimeout(turn.stopTimer);
+    this.closeStep();
+    this.drainPending(outcome === 'stopped' ? 'aborted' : 'session_closed');
+    const type =
+      outcome === 'completed'
+        ? 'session.completed'
+        : outcome === 'stopped'
+          ? 'session.stopped'
+          : 'session.failed';
+    this.emit({ type, payload });
+    this.emit({ type: 'session.status', payload: { status: 'idle' } });
+    this.turn = null;
+  }
+
+  // ---- approvals and questions ----------------------------------------------------
+
+  private readonly canUseTool: CanUseTool = (toolName, input, opts) => {
+    if (toolName === 'AskUserQuestion') return this.askQuestion(input, opts.toolUseID, opts.signal);
+    if (toolName === 'ExitPlanMode') return this.reviewPlan(input, opts.toolUseID, opts.signal);
+    const gear: PermissionGear = this.permissions.gear;
+    // `auto` and `bypass`: the CLI only reaches us for what its own mode did not settle.
+    if (gear === 'auto' || gear === 'bypass') {
+      return Promise.resolve({ behavior: 'allow', updatedInput: input });
+    }
+    return this.askPermission(toolName, input, opts);
+  };
+
+  private askPermission(
+    toolName: string,
+    input: Record<string, unknown>,
+    opts: Parameters<CanUseTool>[2]
+  ): Promise<PermissionResult> {
+    const permissionId = opts.toolUseID;
+    const described = describeCall(toolName, input, this.options.cwd);
+    this.emit({
+      type: 'permission.requested',
+      payload: {
+        permissionId,
+        toolName,
+        ...described,
+        decisions: ['allow', 'allow_session', 'deny'],
+        ...(opts.decisionReason ? { reason: opts.decisionReason } : {}),
+        ...(opts.agentID ? { agentId: opts.agentID } : {}),
+      },
+    });
+    return new Promise<PermissionResult>((resolve) => {
+      this.pendingPermissions.set(permissionId, {
+        toolName,
+        input,
+        ...(opts.suggestions ? { suggestions: opts.suggestions } : {}),
+        resolve,
+      });
+      opts.signal.addEventListener(
+        'abort',
+        () => this.autoSettlePermission(permissionId, 'aborted'),
+        {
+          once: true,
+        }
+      );
+    });
+  }
+
+  respondPermission(input: { permissionId: string; decision: PermissionDecisionId }): boolean {
+    const pending = this.pendingPermissions.get(input.permissionId);
+    if (!pending) return false;
+    this.pendingPermissions.delete(input.permissionId);
+    const allow = input.decision === 'allow' || input.decision === 'allow_session';
+    this.emit({
+      type: 'permission.resolved',
+      payload: { permissionId: input.permissionId, allow, decision: input.decision },
+    });
+    if (allow) {
+      // "Allow for session" keeps the CLI's own suggestions, pinned to this session only:
+      // nothing is written to the project's or the user's settings files.
+      const sessionRules =
+        input.decision === 'allow_session'
+          ? (pending.suggestions ?? []).map((update) => ({
+              ...update,
+              destination: 'session' as const,
+            }))
+          : [];
+      pending.resolve({
+        behavior: 'allow',
+        updatedInput: pending.input,
+        ...(sessionRules.length > 0 ? { updatedPermissions: sessionRules } : {}),
+      });
+    } else {
+      this.turn?.toolOutcome.set(input.permissionId, 'refused');
+      pending.resolve({
+        behavior: 'deny',
+        message: 'The user declined this tool call.',
+        ...(input.decision === 'cancel' ? { interrupt: true } : {}),
+      });
+    }
+    return true;
+  }
+
+  private autoSettlePermission(permissionId: string, reason: 'aborted' | 'session_closed'): void {
+    const pending = this.pendingPermissions.get(permissionId);
+    if (!pending) return;
+    this.pendingPermissions.delete(permissionId);
+    this.turn?.toolOutcome.set(permissionId, 'notStarted');
+    this.emit({
+      type: 'permission.resolved',
+      payload: { permissionId, allow: false, decision: 'deny', autoReason: reason },
+    });
+    pending.resolve({ behavior: 'deny', message: 'The turn was stopped.', interrupt: true });
+  }
+
+  private askQuestion(
+    input: Record<string, unknown>,
+    toolUseId: string,
+    signal: AbortSignal
+  ): Promise<PermissionResult> {
+    const questionId = `cc-question-${toolUseId}`;
+    const raw = Array.isArray(input.questions) ? input.questions : [];
+    const questions: QuestionItem[] = raw.map((item) => {
+      const q = record(item) ?? {};
+      const options = Array.isArray(q.options) ? q.options : [];
+      return {
+        question: String(q.question ?? ''),
+        ...(typeof q.header === 'string' ? { header: q.header } : {}),
+        options: options.map((option) => {
+          const o = record(option) ?? {};
+          return {
+            label: String(o.label ?? ''),
+            ...(typeof o.description === 'string' ? { description: o.description } : {}),
+            ...(typeof o.preview === 'string' ? { preview: o.preview } : {}),
+          };
+        }),
+        ...(q.multiSelect === true ? { multiSelect: true } : {}),
+      };
+    });
+    this.emit({ type: 'question.requested', payload: { questionId, questions } });
+    return this.parkQuestion(questionId, { kind: 'question', toolUseId, input }, signal);
+  }
+
+  /** The streamed input of one call, waiting up to `ms` for its stream to finish. */
+  private streamedInput(toolCallId: string, ms: number): Promise<unknown> {
+    if (this.streamedInputs.has(toolCallId))
+      return Promise.resolve(this.streamedInputs.get(toolCallId));
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.streamedWaiters.delete(toolCallId);
+        resolve(undefined);
+      }, ms);
+      this.streamedWaiters.set(toolCallId, (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      });
+    });
+  }
+
+  private async reviewPlan(
+    input: Record<string, unknown>,
+    toolUseId: string,
+    signal: AbortSignal
+  ): Promise<PermissionResult> {
+    const questionId = `cc-question-${toolUseId}`;
+    // The CLI's permission input for ExitPlanMode does not carry the plan; the model's call does.
+    const streamed = record(await this.streamedInput(toolUseId, 2_000));
+    const plan =
+      typeof input.plan === 'string'
+        ? input.plan
+        : typeof streamed?.plan === 'string'
+          ? streamed.plan
+          : '';
+    const title =
+      plan
+        .split('\n')
+        .map((line) => line.replace(/^#+\s*/, '').trim())
+        .find(Boolean)
+        ?.slice(0, 200) ?? 'Plan review';
+    this.emit({
+      type: 'question.requested',
+      payload: {
+        questionId,
+        questions: [
+          { id: PLAN_REVIEW_QUESTION_ID, header: 'Plan review', question: title, options: [] },
+        ],
+        review: {
+          kind: 'plan',
+          source: 'exit_plan_mode',
+          title,
+          ...(plan ? { plan } : {}),
+          callId: toolUseId,
+          goalObjective: plan || title,
+        },
+      },
+    });
+    return this.parkQuestion(questionId, { kind: 'plan-review', toolUseId, input }, signal);
+  }
+
+  private parkQuestion(
+    questionId: string,
+    entry: Omit<PendingQuestion, 'resolve'>,
+    signal: AbortSignal
+  ): Promise<PermissionResult> {
+    return new Promise<PermissionResult>((resolve) => {
+      this.pendingQuestions.set(questionId, { ...entry, resolve });
+      signal.addEventListener('abort', () => this.autoSettleQuestion(questionId), { once: true });
+    });
+  }
+
+  respondQuestion(input: {
+    questionId: string;
+    answers?: Record<string, string>;
+    response?: string;
+    cancel?: boolean;
+  }): boolean {
+    const pending = this.pendingQuestions.get(input.questionId);
+    if (!pending) return false;
+    if (pending.kind === 'plan-review') return this.respondPlanReview(input, pending);
+    const answers =
+      input.answers && Object.keys(input.answers).length > 0 ? input.answers : undefined;
+    const response = input.response?.trim() ? input.response : undefined;
+    if (!input.cancel && !answers && !response) return false;
+    this.pendingQuestions.delete(input.questionId);
+    if (input.cancel) {
+      this.emit({
+        type: 'question.resolved',
+        payload: { questionId: input.questionId, outcome: 'cancelled' },
+      });
+      // Skip is "decide yourself", not a refusal: answer with nothing chosen.
+      pending.resolve({ behavior: 'allow', updatedInput: { ...pending.input, answers: {} } });
+      return true;
+    }
+    this.emit({
+      type: 'question.resolved',
+      payload: {
+        questionId: input.questionId,
+        outcome: 'answered',
+        ...(answers ? { answers } : {}),
+        ...(response ? { response } : {}),
+      },
+    });
+    pending.resolve({
+      behavior: 'allow',
+      updatedInput: {
+        ...pending.input,
+        ...(answers ? { answers } : {}),
+        ...(response ? { response } : {}),
+      },
+    });
+    return true;
+  }
+
+  private respondPlanReview(
+    input: {
+      questionId: string;
+      answers?: Record<string, string>;
+      response?: string;
+      cancel?: boolean;
+    },
+    pending: PendingQuestion
+  ): boolean {
+    this.pendingQuestions.delete(input.questionId);
+    const decision = decodePlanReviewResponse(input);
+    if (decision.kind === 'approve') {
+      const goal = decision.goal
+        ? { set: false as const, reason: 'Goals are not available on the Claude SDK engine' }
+        : undefined;
+      this.permissions = decision.permissions;
+      void this.query
+        ?.setPermissionMode(cliPermissionMode(decision.permissions))
+        .catch((error) => this.log('setPermissionMode failed', error));
+      this.emit({
+        type: 'session.permissions',
+        payload: {
+          permissions: decision.permissions,
+          cause: 'plan-approved',
+          questionId: input.questionId,
+          ...(goal ? { goal } : {}),
+        },
+      });
+      this.emit({
+        type: 'question.resolved',
+        payload: {
+          questionId: input.questionId,
+          outcome: 'answered',
+          answers: { [PLAN_REVIEW_QUESTION_ID]: decision.choice },
+          review: { choice: decision.choice, ...(goal ? { goal } : {}) },
+        },
+      });
+      pending.resolve({ behavior: 'allow', updatedInput: pending.input });
+    } else if (decision.kind === 'keep-planning') {
+      this.emit({
+        type: 'question.resolved',
+        payload: {
+          questionId: input.questionId,
+          outcome: 'answered',
+          answers: { [PLAN_REVIEW_QUESTION_ID]: 'keep-planning' },
+          response: decision.feedback,
+          review: { choice: 'keep-planning' },
+        },
+      });
+      pending.resolve({
+        behavior: 'deny',
+        message: `The user chose to keep planning; their feedback: ${decision.feedback}`,
+      });
+    } else {
+      this.emit({
+        type: 'question.resolved',
+        payload: { questionId: input.questionId, outcome: 'cancelled' },
+      });
+      pending.resolve({
+        behavior: 'deny',
+        message: 'The user closed the plan review. Stop and wait for their next message.',
+        interrupt: true,
+      });
+    }
+    return true;
+  }
+
+  private autoSettleQuestion(questionId: string): void {
+    const pending = this.pendingQuestions.get(questionId);
+    if (!pending) return;
+    this.pendingQuestions.delete(questionId);
+    this.emit({
+      type: 'question.resolved',
+      payload: { questionId, outcome: 'cancelled', stopped: true },
+    });
+    pending.resolve({ behavior: 'deny', message: 'The turn was stopped.', interrupt: true });
+  }
+
+  private drainPending(reason: 'aborted' | 'session_closed'): void {
+    for (const permissionId of [...this.pendingPermissions.keys()])
+      this.autoSettlePermission(permissionId, reason);
+    for (const questionId of [...this.pendingQuestions.keys()]) this.autoSettleQuestion(questionId);
+  }
+
+  respondPreview(): boolean {
+    return false;
+  }
+
+  setPermissions(permissions: RuntimePermissionSettings): void {
+    this.permissions = permissions;
+    this.applyPermissionMode();
+  }
+
+  setPermissionGear(gear: PermissionGear): void {
+    this.permissions = { ...this.permissions, gear };
+    this.applyPermissionMode();
+    // A wider gear answers the cards it now covers (the DSH gate does the same).
+    if (gear === 'auto' || gear === 'bypass') {
+      for (const permissionId of [...this.pendingPermissions.keys()]) {
+        this.respondPermission({ permissionId, decision: 'allow' });
+      }
+    }
+  }
+
+  setPermissionTier(tier: SessionPermissionTier): void {
+    this.setPermissions(migratePermissionTier(tier));
+  }
+
+  private applyPermissionMode(): void {
+    void this.query
+      ?.setPermissionMode(cliPermissionMode(this.permissions))
+      .catch((error) => this.log('setPermissionMode failed', error));
+  }
+
+  // ---- reads ----------------------------------------------------------------------
+
+  async history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult> {
+    const stub = this.requireStub();
+    const all = stub.started ? await this.readTranscript(stub.ccSessionId) : [];
+    const limit = Math.min(500, Math.max(1, input.limit ?? 80));
+    const offset = Math.max(0, input.offset ?? 0);
+    const end = Math.max(0, all.length - offset);
+    const start = Math.max(0, end - limit);
+    return {
+      logicalSessionId: this.options.logicalSessionId,
+      sessionFile: this.stubFile,
+      workspacePath: this.options.cwd,
+      page: {
+        messages: all.slice(start, end),
+        offset,
+        limit,
+        totalCount: all.length,
+        hasMore: start > 0,
+      },
+    };
+  }
+
+  /** The CLI's own transcript, projected onto history messages (tool results folded into their call's message). */
+  private async readTranscript(ccSessionId: string): Promise<HistoryMessage[]> {
+    let entries: Awaited<ReturnType<typeof getSessionMessages>> = [];
+    try {
+      entries = await getSessionMessages(ccSessionId, { dir: this.options.cwd });
+    } catch (error) {
+      this.log('transcript read failed', error);
+      return [];
+    }
+    const out: HistoryMessage[] = [];
+    const byApiId = new Map<string, HistoryMessage>();
+    const toolOwner = new Map<string, HistoryMessage>();
+    for (const entry of entries) {
+      if (entry.parent_tool_use_id) continue;
+      const message = record(entry.message) ?? {};
+      const content = message.content;
+      if (entry.type === 'user') {
+        if (Array.isArray(content) && content.some((b) => record(b)?.type === 'tool_result')) {
+          for (const block of content) {
+            const b = record(block);
+            if (!b || b.type !== 'tool_result' || typeof b.tool_use_id !== 'string') continue;
+            const owner = toolOwner.get(b.tool_use_id);
+            const text = textOf(b.content);
+            owner?.blocks.push({
+              type: 'tool_result',
+              id: `${b.tool_use_id}-result`,
+              toolCallId: b.tool_use_id,
+              ok: b.is_error !== true,
+              output: text,
+              ...(b.is_error === true ? { error: text } : {}),
+            });
+          }
+          continue;
+        }
+        const text = textOf(content);
+        const trimmed = text.trim();
+        // The CLI's own bookkeeping rows: an interrupt marker, local command echoes.
+        if (!trimmed || CLI_MARKER_TEXT.test(trimmed)) continue;
+        // A compaction's summary reads as the session's own note, not as something the user typed.
+        const role = trimmed.startsWith(COMPACT_SUMMARY_PREFIX) ? 'system' : 'user';
+        out.push({
+          id: `h:${entry.uuid}`,
+          entryId: entry.uuid,
+          role,
+          blocks: [{ type: 'text', id: `${entry.uuid}-text`, text }],
+        });
+        continue;
+      }
+      if (entry.type !== 'assistant') continue;
+      const apiId = typeof message.id === 'string' ? message.id : entry.uuid;
+      let target = byApiId.get(apiId);
+      if (!target) {
+        target = {
+          id: `h:${entry.uuid}`,
+          entryId: entry.uuid,
+          role: 'assistant',
+          ...(typeof message.model === 'string' ? { model: message.model } : {}),
+          blocks: [],
+        };
+        byApiId.set(apiId, target);
+        out.push(target);
+      }
+      if (!Array.isArray(content)) continue;
+      for (const [i, block] of content.entries()) {
+        const b = record(block);
+        if (!b) continue;
+        const id = `${entry.uuid}-${i}`;
+        let projected: HistoryBlock | null = null;
+        if (b.type === 'text' && typeof b.text === 'string')
+          projected = { type: 'text', id, text: b.text };
+        else if (b.type === 'thinking' && typeof b.thinking === 'string') {
+          projected = { type: 'thinking', id, text: b.thinking };
+        } else if (b.type === 'tool_use' && typeof b.id === 'string') {
+          projected = {
+            type: 'tool_call',
+            id: b.id,
+            toolCallId: b.id,
+            name: String(b.name),
+            input: b.input,
+          };
+          toolOwner.set(b.id, target);
+        }
+        if (projected) target.blocks.push(projected);
+      }
+    }
+    return out;
+  }
+
+  async tree(): Promise<WorkerTreeResult> {
+    return {
+      snapshot: {
+        logicalSessionId: this.options.logicalSessionId,
+        sessionFile: this.stubFile,
+        workspacePath: this.options.cwd,
+        leaf: { activeEntryId: null, fileTailEntryId: null },
+        nodes: [],
+        totalNodes: 0,
+        returnedNodes: 0,
+        truncated: false,
+      },
+    } as WorkerTreeResult;
+  }
+
+  async commands(): Promise<WorkerCommandsResult> {
+    return {
+      commands: this.slashCommands.map((name) => ({ name, source: 'command' })),
+      truncated: false,
+    };
+  }
+
+  async panels(): Promise<WorkerPanelsResult> {
+    return {
+      projections: [
+        { key: 'goalActivation', view: null },
+        { key: 'jobs', view: [] },
+      ],
+    };
+  }
+
+  /** `/compact` is the CLI's own command: sent as a message, settled by its result. */
+  async compact(input: { instructions?: string }): Promise<WorkerCompactResult> {
+    if (this.turn || this.compacting) {
+      throw new BridgeSessionError('WORKER_SESSION_BUSY', 'A turn is already running', true);
+    }
+    this.ensureQuery();
+    const done = new Promise<WorkerCompactResult>((resolve, reject) => {
+      this.compacting = { resolve, reject };
+    });
+    const instructions = input.instructions?.trim();
+    this.input?.push({
+      type: 'user',
+      message: { role: 'user', content: instructions ? `/compact ${instructions}` : '/compact' },
+      parent_tool_use_id: null,
+      uuid: randomUUID(),
+    });
+    return done;
+  }
+
+  cancelCompact(): WorkerCompactCancelResult {
+    return { cancelled: false };
+  }
+
+  async command(): Promise<WorkerCommandResult> {
+    return { ok: false, error: 'Not available on the Claude SDK engine' };
+  }
+
+  async killJob(): Promise<WorkerJobKillResult> {
+    throw unsupported('worker.job.kill');
+  }
+
+  async readJob(): Promise<WorkerJobReadResult> {
+    throw unsupported('worker.job.read');
+  }
+
+  async interruptSubagent(): Promise<WorkerSubagentInterruptResult> {
+    return { interrupted: false };
+  }
+
+  async rewind(): Promise<WorkerRewindResult> {
+    throw unsupported('worker.rewind');
+  }
+
+  async fork(): Promise<WorkerForkResult> {
+    throw unsupported('worker.fork');
+  }
+
+  async discardFork(): Promise<WorkerDiscardForkResult> {
+    return { discarded: false };
+  }
+
+  async acceptFork(): Promise<WorkerAcceptForkResult> {
+    return { accepted: false };
+  }
+
+  private requireStub(): ClaudeSdkSessionStub {
+    if (!this.stub)
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    return this.stub;
+  }
+}
+
+function unsupported(method: string): BridgeSessionError {
+  return new BridgeSessionError(
+    'WORKER_METHOD_UNSUPPORTED',
+    `${method} is not available on the Claude SDK engine`
+  );
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The card body the permission card reads: our own summary, not the raw arguments. */
+function describeCall(
+  toolName: string,
+  input: Record<string, unknown>,
+  workspace: string
+): {
+  kind: PermissionRequestKind;
+  action?: PermissionRequestAction;
+  input: Record<string, unknown>;
+  detail?: PermissionDetail;
+} {
+  const path =
+    typeof input.file_path === 'string'
+      ? input.file_path
+      : typeof input.notebook_path === 'string'
+        ? input.notebook_path
+        : undefined;
+  if (SHELL_TOOLS.has(toolName)) {
+    const command = String(input.command ?? '');
+    return {
+      kind: 'exec',
+      action: 'run_command',
+      input: { command, workspace },
+      detail: { kind: 'exec', command, cwd: workspace },
+    };
+  }
+  if (FILE_CHANGE_TOOLS.has(toolName) && path) {
+    const content =
+      typeof input.content === 'string'
+        ? input.content
+        : typeof input.new_string === 'string'
+          ? input.new_string
+          : undefined;
+    return {
+      kind: 'file_change',
+      action: toolName === 'Write' ? 'write_file' : 'edit_file',
+      input: {
+        path,
+        ...(content !== undefined ? { content, contentLabel: 'Content' } : {}),
+        workspace,
+      },
+      detail: {
+        kind: 'file_change',
+        changes: [{ path, change: toolName === 'Write' ? 'add' : 'update' }],
+      },
+    };
+  }
+  if (toolName === 'Read' && path) {
+    return { kind: 'tool', action: 'read_file', input: { path, workspace } };
+  }
+  return { kind: 'tool', input: { ...input, workspace } };
+}

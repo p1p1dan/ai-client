@@ -1,0 +1,99 @@
+# compare-captures.mjs output, 2026-10-14 (Windows 10, Node 24.12)
+# 1) PiLab 1.1.1-test.1 / DSH 0.1.7-rc.2, claude/claude-opus-5-5, effort high
+# 2) Claude Code 2.1.295 (-p, isolated config), claude-opus-5-5, --effort high
+# 3) PiLab, china/glm-5.2 (openai-completions), effort high
+
+## 1.json  /v1/messages?beta=true
+user-agent: claude-cli-pilab/1.1.1-test.1
+anthropic-beta: null
+params: {"model":"claude-opus-5-5","max_tokens":128000,"stream":true,"thinking":{"type":"adaptive","display":"summarized"},"output_config":{"effort":"high"},"metadata":"(present)"}
+system field: 1 blocks, 2273 chars [2273]
+system-role messages: 0 chars 0
+  ask_user_question         111  questions
+  create_goal               222  objective,max_goal_rounds
+  edit                       59  file_path,old_string,new_string,replace_all,sandbox_permissions,justification
+  exit_plan_mode            250  plan
+  get_goal                   87  
+  glob                      235  pattern,path
+  grep                      206  pattern,path,include
+  interrupt_agent           202  agent_id
+  job_kill                   49  job_id,reason
+  job_list                   85  
+  job_output                116  job_id,wait,timeout_ms
+  list_agents               276  scope
+  pwsh                     1663  command,description,timeoutMs,workdir,run_in_background,sandbox_permissions,justification
+  read                       56  file_path,offset,limit
+  read_image                174  file_path
+  send_message              169  agent_id,message
+  skill                     139  name
+  subagent                  434  description,prompt,run_in_background
+  subagent_fork             438  description,prompt,run_in_background
+  todo_write                317  todos
+  update_goal                24  goal_id,revision,action,objective,max_goal_rounds,blocked_reason
+  workflow                 1667  script,meta,args,run_in_background
+  write                      42  file_path,content,sandbox_permissions,justification
+tools: 23 | description chars: 7021 | tools JSON chars: 20882
+messages: user[text:28] user[text:349] user[text:1883]
+
+## 1.json  /v1/messages?beta=true
+user-agent: claude-cli/2.1.295 (external, sdk-cli)
+anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31
+params: {"model":"claude-opus-5-5","metadata":"(present)","max_tokens":128000,"thinking":{"type":"adaptive","display":"omitted"},"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"all"}]},"safeguards":"(1 entries)","output_config":{"effort":"high"},"stream":true}
+system field: 3 blocks, 5851 chars [74,62,5715]
+system-role messages: 1 chars 9030
+  Agent                    1668  description,prompt,subagent_type,model,effort,run_in_background,isolation
+  Bash                     1257  command,timeout,description,run_in_background,dangerouslyDisableSandbox
+  CronCreate               2924  cron,prompt,recurring,durable
+  CronDelete                167  id
+  CronList                  106  
+  Edit                      360  file_path,old_string,new_string,replace_all
+  EnterWorktree            3220  name,path
+  ExitWorktree             1923  action,discard_changes
+  Glob                      140  pattern,path
+  Grep                      477  pattern,path,glob,output_mode,-B,-A,-C,context,-n,-i,-o,type,head_limit,offset,multiline
+  ListAgents                777  channel,q
+  NotebookEdit              619  notebook_path,cell_id,new_source,cell_type,edit_mode
+  Read                      790  file_path,offset,limit,pages
+  ReportFindings            574  level,findings
+  ScheduleWakeup           3396  delaySeconds,reason,prompt,stop,noop
+  SendMessage              4259  to,summary,message,notify_when_idle
+  Skill                    1417  skill,args
+  TaskStop                  364  task_id,shell_id
+  WebFetch                  469  url,prompt,offset
+  WebSearch                 334  query,allowed_domains,blocked_domains
+  Workflow                 3480  script,name,description,title,args,scriptPath,resumeFromRunId
+  Write                     240  file_path,content
+tools: 22 | description chars: 28961 | tools JSON chars: 50466
+messages: user[text:406+text:567+text:581+text:25] system[text:9030]
+
+## 3.json  /v1/chat/completions
+user-agent: claude-cli-pilab/1.1.1-test.1
+anthropic-beta: null
+params: {"model":"glm-5.2","stream":true,"prompt_cache_key":"aiclient-cap-glm","prompt_cache_retention":"24h","stream_options":{"include_usage":true},"store":false,"max_completion_tokens":131072,"reasoning_effort":"high"}
+system field: 0 blocks, 0 chars []
+system-role messages: 1 chars 2273
+  ask_user_question         111  questions
+  create_goal               222  objective,max_goal_rounds
+  edit                       59  file_path,old_string,new_string,replace_all,sandbox_permissions,justification
+  exit_plan_mode            250  plan
+  get_goal                   87  
+  glob                      235  pattern,path
+  grep                      206  pattern,path,include
+  interrupt_agent           202  agent_id
+  job_kill                   49  job_id,reason
+  job_list                   85  
+  job_output                116  job_id,wait,timeout_ms
+  list_agents               276  scope
+  pwsh                     1663  command,description,timeoutMs,workdir,run_in_background,sandbox_permissions,justification
+  read                       56  file_path,offset,limit
+  read_image                174  file_path
+  send_message              169  agent_id,message
+  skill                     139  name
+  subagent                  434  description,prompt,run_in_background
+  subagent_fork             438  description,prompt,run_in_background
+  todo_write                317  todos
+  update_goal                24  goal_id,revision,action,objective,max_goal_rounds,blocked_reason
+  workflow                 1667  script,meta,args,run_in_background
+  write                      42  file_path,content,sandbox_permissions,justification
+tools: 23 | description chars: 7021 | tools JSON chars: 21185
+messages: system[text:2273] user[text:32] user[text:349] user[text:1883]
