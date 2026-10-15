@@ -3,19 +3,26 @@
  * fresh sandbox with a clean repository copy. Arms rotate per case and
  * repetition so neither client always goes first. Each run leaves a record
  * (record.json and a line of records.jsonl), a normalized trace, the diff and
- * the client's raw artifacts; the suite leaves a manifest with the version
- * stamp, the report, and a scan proving no secret reached the output.
+ * the client's raw artifacts; the report is rewritten after every run, and
+ * the suite ends with a manifest carrying the version stamp and a scan
+ * proving no secret reached the output.
+ *
+ * `planSuite` is the preflight (`--dry-run`): what would run and what stops
+ * it, without starting anything. A suite can be resumed (`resume`): recorded
+ * runs stay, the rest run, `runs` may grow, and runs that ended in a client
+ * or setup error can be run again (`retryErrors`).
  */
 
-import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { join, relative } from 'node:path';
-import { loadCases, suiteVersion } from './cases.ts';
-import { commandChecks, staticChecks } from './checks.ts';
+import { isGitUrl, loadCases, suiteVersion } from './cases.ts';
+import { commandChecks, runCommandList, staticChecks } from './checks.ts';
 import { runClaudeCode } from './claudeCode.ts';
-import { type Gateway, realGateway, startFakeGateway } from './gateway.ts';
+import { type Gateway, gatewayId, realGateway, startFakeGateway } from './gateway.ts';
 import { JUDGE_VERSION, type JudgeEndpoint, runJudge } from './judge.ts';
 import { runPilab } from './pilab.ts';
+import { git } from './proc.ts';
 import { makeRedactor, type Redactor, scanForSecrets } from './redact.ts';
 import {
   baseEnv,
@@ -23,14 +30,21 @@ import {
   findClaude,
   findGitBash,
   instructionFilesAbove,
+  packageCacheEnv,
   type Sandbox,
 } from './sandbox.ts';
 import { versionStamp } from './stamp.ts';
-import { renderReport, type SuiteManifest } from './summary.ts';
+import { loadSuite, renderReport, type SuiteManifest } from './summary.ts';
 import { excerpt, summarizeEvents } from './toolMetrics.ts';
 import type { Arm, CheckResult, ClientRun, LoadedCase, RunRecord, RunStatus } from './types.ts';
 import { parseArms } from './variants.ts';
-import { applyOverlay, collectChanges, DEFAULT_IGNORE, prepareWorkspace } from './workspace.ts';
+import {
+  applyOverlay,
+  collectChanges,
+  commitSetup,
+  DEFAULT_IGNORE,
+  prepareWorkspace,
+} from './workspace.ts';
 
 export interface SuiteOptions {
   repoRoot: string;
@@ -54,7 +68,24 @@ export interface SuiteOptions {
   /** Keep the fake gateway's request captures (the self-test reads them). */
   capture: boolean;
   allowAncestorInstructions: boolean;
+  /** An earlier suite's output directory to continue. */
+  resume?: string;
+  /** With `resume`: run again what ended in client_error or setup_error. */
+  retryErrors?: boolean;
   log: (line: string) => void;
+}
+
+export interface SuitePlan {
+  cases: LoadedCase[];
+  arms: Arm[];
+  runs: number;
+  scratchRoot: string;
+  claudeBin?: string;
+  gitBash?: string;
+  /** What stops the suite from running. */
+  problems: string[];
+  /** Upper bound of the agents' time: every run using its whole time budget. */
+  maxMs: number;
 }
 
 export interface SuiteResult {
@@ -66,6 +97,9 @@ export interface SuiteResult {
   /** Scratch files that contained a secret before cleanup (should be none). */
   scratchLeaks: string[];
 }
+
+/** Run statuses `retryErrors` runs again: the run never got a fair go. */
+const RETRIED: readonly RunStatus[] = ['client_error', 'setup_error'];
 
 function stampId(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -80,11 +114,92 @@ function removeTree(path: string): void {
   }
 }
 
+const runKey = (caseId: string, armId: string, rep: number) => `${caseId}\0${armId}\0${rep}`;
+
+/** The preflight: what would run, and every problem that would stop it. Starts nothing. */
+export function planSuite(options: SuiteOptions): SuitePlan {
+  const problems: string[] = [];
+  const [major] = process.versions.node.split('.').map(Number);
+  if (major < 24) problems.push(`Node 24 or newer is required (this is ${process.version})`);
+  let cases = loadCases(options.casePaths);
+  if (options.caseFilter && options.caseFilter.length > 0) {
+    const unknown = options.caseFilter.filter((id) => !cases.some((c) => c.id === id));
+    if (unknown.length > 0) problems.push(`unknown case ids: ${unknown.join(', ')}`);
+    cases = cases.filter((c) => options.caseFilter?.includes(c.id));
+  }
+  if (cases.length === 0) problems.push('no cases to run');
+  const arms = parseArms(options.arms, join(options.abDir, 'variants'));
+  if (!Number.isInteger(options.runs) || options.runs < 1)
+    problems.push('--runs must be a positive integer');
+  const scratchRoot = options.scratch ?? join(os.tmpdir(), 'ab-eval');
+  const above = instructionFilesAbove(scratchRoot);
+  if (above.length > 0 && !options.allowAncestorInstructions) {
+    problems.push(
+      `instruction files above the scratch directory would leak into every run: ${above.join(', ')}.` +
+        ' Pick another --scratch, or pass --allow-ancestor-instructions.'
+    );
+  }
+  const needsClaude = arms.some((arm) => arm.client === 'claude-code');
+  const claudeBin = needsClaude ? findClaude(options.claudeBin) : undefined;
+  if (needsClaude && !claudeBin)
+    problems.push('Claude Code not found: pass --claude-bin, or set AB_CLAUDE_BIN');
+  const gitBash = needsClaude ? findGitBash(options.gitBash) : undefined;
+  if (needsClaude && process.platform === 'win32' && !gitBash) {
+    problems.push('Git Bash not found (Claude Code needs it on Windows): pass --git-bash');
+  }
+  if (
+    arms.some((arm) => arm.client === 'pilab') &&
+    !existsSync(
+      join(options.repoRoot, 'src', 'dsh-host', 'node_modules', '@deepseek-ai', 'dsh-app-boot')
+    )
+  ) {
+    problems.push('the DSH host is not installed: run `npm ci --ignore-scripts` in src/dsh-host');
+  }
+  if (
+    options.gateway === 'real' &&
+    (!process.env.AB_BASE_URL?.trim() || !process.env.AB_API_KEY?.trim())
+  ) {
+    problems.push('--gateway real needs AB_BASE_URL and AB_API_KEY in the environment');
+  }
+  // A local git source must have the commit; a remote one is checked when cloned.
+  const gitEnv: Record<string, string> = {
+    PATH: process.env.PATH ?? '',
+    ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
+    HOME: os.tmpdir(),
+    USERPROFILE: os.tmpdir(),
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_TERMINAL_PROMPT: '0',
+  };
+  for (const c of cases) {
+    if (!('git' in c.repo) || isGitUrl(c.repo.git)) continue;
+    try {
+      git(c.repo.git, ['cat-file', '-e', `${c.repo.commit}^{commit}`], gitEnv);
+    } catch {
+      problems.push(`${c.id}: commit ${c.repo.commit} is not in ${c.repo.git}`);
+    }
+  }
+  const maxMs =
+    cases.reduce((sum, c) => sum + c.budgetResolved.timeMs, 0) *
+    arms.length *
+    Math.max(1, options.runs);
+  return {
+    cases,
+    arms,
+    runs: options.runs,
+    scratchRoot,
+    ...(claudeBin ? { claudeBin } : {}),
+    ...(gitBash ? { gitBash } : {}),
+    problems,
+    maxMs,
+  };
+}
+
 interface RunContext {
   options: SuiteOptions;
   suiteRunId: string;
   outDir: string;
   scratchDir: string;
+  scratchRoot: string;
   gitCache: string;
   gateway: Gateway;
   judge?: JudgeEndpoint;
@@ -122,6 +237,7 @@ async function runOne(
   const { options, redact } = ctx;
   const runId = `${ctx.suiteRunId}-${c.id}-${arm.id}-${rep}`;
   const runDir = join(ctx.outDir, 'runs', c.id, arm.id, String(rep));
+  removeTree(runDir);
   mkdirSync(runDir, { recursive: true });
   const rel = (path: string) => relative(ctx.outDir, path).split('\\').join('/');
   const box: Sandbox = createSandbox(ctx.scratchDir, `r${order}`);
@@ -129,13 +245,34 @@ async function runOne(
   const errors: string[] = [];
   const clientDir = join(runDir, 'client');
   let baseCommit = '';
-  let client: ClientRun;
+  let setup: RunRecord['setup'];
+  let client: ClientRun | undefined;
   try {
-    try {
-      baseCommit = prepareWorkspace(c, box.ws, ctx.gitCache, base);
-    } catch (error) {
-      throw new Error(`preparing the workspace: ${error instanceof Error ? error.message : error}`);
+    baseCommit = prepareWorkspace(c, box.ws, ctx.gitCache, base);
+  } catch (error) {
+    client = errorRun(
+      'setup_error',
+      `preparing the workspace: ${error instanceof Error ? error.message : error}`
+    );
+  }
+  if (!client && c.setup && c.setup.length > 0) {
+    // Setup may need the network (package registries) and gets shared caches.
+    const setupEnv = { ...baseEnv(box, { proxies: true }), ...packageCacheEnv(ctx.scratchRoot) };
+    const started = performance.now();
+    const results = await runCommandList(c.setup, 'setup', box.ws, setupEnv);
+    setup = { ms: Math.round(performance.now() - started), results };
+    const failed = results.find((result) => !result.passed);
+    if (failed) {
+      client = errorRun('setup_error', `setup failed: ${failed.id}`);
+    } else {
+      try {
+        baseCommit = commitSetup(box.ws, baseCommit, base);
+      } catch (error) {
+        client = errorRun('setup_error', `committing setup: ${String(error)}`);
+      }
     }
+  }
+  if (!client) {
     const common = {
       box,
       base,
@@ -149,27 +286,30 @@ async function runOne(
       clientDir,
       redact,
     };
-    client =
-      arm.client === 'pilab'
-        ? await runPilab({
-            ...common,
-            repoRoot: options.repoRoot,
-            appVersion: ctx.appVersion,
-            label: `${order}`,
-          })
-        : await runClaudeCode({
-            ...common,
-            claudeBin: ctx.claudeBin as string,
-            ...(ctx.gitBash ? { gitBash: ctx.gitBash } : {}),
-          });
-  } catch (error) {
-    client = errorRun('client_error', String(error instanceof Error ? error.message : error));
+    try {
+      client =
+        arm.client === 'pilab'
+          ? await runPilab({
+              ...common,
+              repoRoot: options.repoRoot,
+              appVersion: ctx.appVersion,
+              label: `${order}`,
+            })
+          : await runClaudeCode({
+              ...common,
+              claudeBin: ctx.claudeBin as string,
+              ...(ctx.gitBash ? { gitBash: ctx.gitBash } : {}),
+            });
+    } catch (error) {
+      client = errorRun('client_error', String(error instanceof Error ? error.message : error));
+    }
   }
   if (client.error) errors.push(client.error);
 
   const ignore = [...DEFAULT_IGNORE, ...(c.checks?.ignore ?? [])];
   let changes: ReturnType<typeof collectChanges> = { files: [], patch: '' };
-  if (baseCommit) {
+  const ranAgent = baseCommit !== '' && client.status !== 'setup_error';
+  if (ranAgent) {
     try {
       changes = collectChanges(box.ws, baseCommit, ignore, base);
     } catch (error) {
@@ -180,7 +320,7 @@ async function runOne(
 
   const checks = c.checks ?? {};
   const results: CheckResult[] = [];
-  if (baseCommit) {
+  if (ranAgent) {
     try {
       results.push(
         ...staticChecks(checks, {
@@ -214,12 +354,12 @@ async function runOne(
     : [
         ...(client.status !== 'completed' ? [client.status] : []),
         ...results.filter((result) => !result.passed).map((result) => `check:${result.id}`),
-        ...(client.answer.trim() === '' ? ['empty_answer'] : []),
+        ...(ranAgent && client.answer.trim() === '' ? ['empty_answer'] : []),
         ...(counted.unknownToolCalls > 0 ? ['unknown_tool'] : []),
       ];
 
   let judge: RunRecord['judge'];
-  if (ctx.judge && c.judge) {
+  if (ctx.judge && c.judge && ranAgent) {
     judge = await runJudge(ctx.judge, {
       prompt: c.prompt,
       judge: c.judge,
@@ -281,6 +421,7 @@ async function runOne(
     gateway: { kind: ctx.gateway.kind, id: ctx.gateway.id },
     status: client.status,
     passed,
+    ...(setup ? { setup } : {}),
     checks: results,
     failureTags,
     metrics: {
@@ -323,45 +464,87 @@ async function runOne(
   return record;
 }
 
-export async function runSuite(options: SuiteOptions): Promise<SuiteResult> {
-  const [major] = process.versions.node.split('.').map(Number);
-  if (major < 24) throw new Error(`Node 24 or newer is required (this is ${process.version})`);
-  let cases = loadCases(options.casePaths);
-  if (options.caseFilter && options.caseFilter.length > 0) {
-    const unknown = options.caseFilter.filter((id) => !cases.some((c) => c.id === id));
-    if (unknown.length > 0) throw new Error(`unknown case ids: ${unknown.join(', ')}`);
-    cases = cases.filter((c) => options.caseFilter?.includes(c.id));
-  }
-  if (cases.length === 0) throw new Error('no cases to run');
-  const arms = parseArms(options.arms, join(options.abDir, 'variants'));
-  if (!Number.isInteger(options.runs) || options.runs < 1)
-    throw new Error('--runs must be a positive integer');
+function manifestArms(arms: readonly Arm[]): SuiteManifest['arms'] {
+  return arms.map((arm) => ({
+    id: arm.id,
+    client: arm.client,
+    ...(arm.variant
+      ? {
+          variant: {
+            name: arm.variant.name,
+            sha256: arm.variant.sha256,
+            ...(arm.variant.description ? { description: arm.variant.description } : {}),
+          },
+        }
+      : {}),
+  }));
+}
 
-  const label = options.label.replace(/[^A-Za-z0-9._-]/g, '-');
+function manifestCases(cases: readonly LoadedCase[]): SuiteManifest['cases'] {
+  return cases.map((c) => ({
+    id: c.id,
+    ...(c.title ? { title: c.title } : {}),
+    ...(c.tier ? { tier: c.tier } : {}),
+    sha256: c.sha256,
+    repoSha256: c.repoSha256,
+  }));
+}
+
+/** Why `earlier` cannot be continued with these options; empty when it can. */
+function resumeConflicts(
+  earlier: SuiteManifest,
+  options: SuiteOptions,
+  arms: readonly Arm[],
+  cases: readonly LoadedCase[]
+): string[] {
+  const conflicts: string[] = [];
+  if (earlier.model !== options.model) conflicts.push(`model ${earlier.model} ≠ ${options.model}`);
+  if (earlier.effort !== options.effort)
+    conflicts.push(`effort ${earlier.effort} ≠ ${options.effort}`);
+  if (earlier.gateway.kind !== options.gateway) {
+    conflicts.push(`gateway ${earlier.gateway.kind} ≠ ${options.gateway}`);
+  } else if (options.gateway === 'real') {
+    const url = process.env.AB_BASE_URL?.trim().replace(/\/+$/, '') ?? '';
+    if (gatewayId(url) !== earlier.gateway.id)
+      conflicts.push('AB_BASE_URL is not the gateway the suite started on');
+  }
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  if (
+    !same(
+      earlier.arms.map((arm) => [arm.id, arm.variant?.sha256]),
+      arms.map((arm) => [arm.id, arm.variant?.sha256])
+    )
+  ) {
+    conflicts.push('the arms (or a variant) changed');
+  }
+  for (const c of manifestCases(cases)) {
+    const before = earlier.cases.find((item) => item.id === c.id);
+    if (!before) conflicts.push(`case ${c.id} was not in the suite`);
+    else if (before.sha256 !== c.sha256 || before.repoSha256 !== c.repoSha256)
+      conflicts.push(`case ${c.id} changed`);
+  }
+  if (cases.length !== earlier.cases.length) conflicts.push('the set of cases changed');
+  return conflicts;
+}
+
+export async function runSuite(options: SuiteOptions): Promise<SuiteResult> {
+  const plan = planSuite(options);
+  if (plan.problems.length > 0) throw new Error(plan.problems.join('\n'));
+  const { cases, arms, claudeBin, gitBash, scratchRoot } = plan;
+
+  const earlier = options.resume ? loadSuite(options.resume) : undefined;
+  if (earlier) {
+    const conflicts = resumeConflicts(earlier.manifest, options, arms, cases);
+    if (conflicts.length > 0)
+      throw new Error(`cannot resume ${options.resume}: ${conflicts.join('; ')}`);
+  }
+  const label = earlier?.manifest.label ?? options.label.replace(/[^A-Za-z0-9._-]/g, '-');
   const started = new Date();
-  const suiteRunId = `${stampId(started)}-${label}`;
-  const outDir = options.outDir ?? join(options.abDir, 'out', suiteRunId);
-  const scratchRoot = options.scratch ?? join(os.tmpdir(), 'ab-eval');
+  const suiteRunId = earlier?.manifest.suiteRunId ?? `${stampId(started)}-${label}`;
+  const outDir = earlier?.dir ?? options.outDir ?? join(options.abDir, 'out', suiteRunId);
   const scratchDir = join(scratchRoot, suiteRunId);
   mkdirSync(scratchDir, { recursive: true });
   mkdirSync(outDir, { recursive: true });
-
-  const above = instructionFilesAbove(scratchDir);
-  if (above.length > 0 && !options.allowAncestorInstructions) {
-    throw new Error(
-      `instruction files above the scratch directory would leak into every run: ${above.join(', ')}.` +
-        ' Pick another --scratch, or pass --allow-ancestor-instructions.'
-    );
-  }
-  const needsClaude = arms.some((arm) => arm.client === 'claude-code');
-  const claudeBin = needsClaude ? findClaude(options.claudeBin) : undefined;
-  if (needsClaude && !claudeBin) {
-    throw new Error('Claude Code not found: pass --claude-bin, or set AB_CLAUDE_BIN');
-  }
-  const gitBash = needsClaude ? findGitBash(options.gitBash) : undefined;
-  if (needsClaude && process.platform === 'win32' && !gitBash) {
-    throw new Error('Git Bash not found (Claude Code needs it on Windows): pass --git-bash');
-  }
 
   const stampBox = createSandbox(scratchDir, 'stamp');
   const stamp = await versionStamp({
@@ -396,53 +579,71 @@ export async function runSuite(options: SuiteOptions): Promise<SuiteResult> {
   const secrets = [...gateway.secrets, ...judgeSecrets];
   const redact = makeRedactor(secrets);
 
-  const manifest: SuiteManifest = {
-    schema: 'ab-eval.suite/1',
-    suiteRunId,
-    label,
-    startedAt: started.toISOString(),
-    model: options.model,
-    effort: options.effort,
-    runs: options.runs,
-    gateway: { kind: gateway.kind, id: gateway.id },
-    arms: arms.map((arm) => ({
-      id: arm.id,
-      client: arm.client,
-      ...(arm.variant
-        ? {
-            variant: {
-              name: arm.variant.name,
-              sha256: arm.variant.sha256,
-              ...(arm.variant.description ? { description: arm.variant.description } : {}),
-            },
-          }
-        : {}),
-    })),
-    cases: cases.map((c) => ({
-      id: c.id,
-      ...(c.title ? { title: c.title } : {}),
-      ...(c.tier ? { tier: c.tier } : {}),
-      sha256: c.sha256,
-      repoSha256: c.repoSha256,
-    })),
-    suiteVersion: suiteVersion(cases),
-    stamp,
-    ...(judge
-      ? {
-          judge: {
-            model: judge.model,
-            version: JUDGE_VERSION,
-            endpoint: judgeSecrets.length > 0 ? ('separate' as const) : ('gateway' as const),
-          },
-        }
-      : {}),
-  };
+  const manifest: SuiteManifest = earlier
+    ? {
+        ...earlier.manifest,
+        runs: Math.max(earlier.manifest.runs, options.runs),
+        resumes: [
+          ...(earlier.manifest.resumes ?? []),
+          { at: started.toISOString(), runs: options.runs, harness: stamp.harness },
+        ],
+      }
+    : {
+        schema: 'ab-eval.suite/1',
+        suiteRunId,
+        label,
+        startedAt: started.toISOString(),
+        model: options.model,
+        effort: options.effort,
+        runs: options.runs,
+        gateway: { kind: gateway.kind, id: gateway.id },
+        arms: manifestArms(arms),
+        cases: manifestCases(cases),
+        suiteVersion: suiteVersion(cases),
+        stamp,
+        casePaths: options.casePaths,
+        ...(options.caseFilter && options.caseFilter.length > 0
+          ? { caseFilter: options.caseFilter }
+          : {}),
+      };
+  if (judge) {
+    manifest.judge = {
+      model: judge.model,
+      version: JUDGE_VERSION,
+      endpoint: judgeSecrets.length > 0 ? 'separate' : 'gateway',
+    };
+  }
+  if (earlier) {
+    const before = earlier.manifest.stamp.harness;
+    if (
+      before.commit !== stamp.harness.commit ||
+      before.dirtyDiffSha256 !== stamp.harness.dirtyDiffSha256
+    ) {
+      options.log('warning: the harness changed since the suite started; its records mix versions');
+    }
+  }
+  delete manifest.finishedAt;
+  delete manifest.outcome;
   const writeManifest = () =>
     writeFileSync(join(outDir, 'manifest.json'), `${redact(JSON.stringify(manifest, null, 2))}\n`);
   writeManifest();
+
+  // Records to keep from an earlier start; the file is rewritten to hold exactly them.
+  const records: RunRecord[] = (earlier?.records ?? []).filter(
+    (record) => !(options.retryErrors && RETRIED.includes(record.status))
+  );
+  if (earlier) {
+    writeFileSync(
+      join(outDir, 'records.jsonl'),
+      records.map((record) => `${JSON.stringify(record)}\n`).join('')
+    );
+  }
+  const done = new Set(records.map((record) => runKey(record.case.id, record.arm.id, record.rep)));
+  const total = cases.length * arms.length * manifest.runs;
   options.log(
-    `suite ${suiteRunId}: ${cases.length} case(s) × ${arms.length} arm(s) × ${options.runs} run(s), ` +
-      `gateway ${gateway.kind}, model ${options.model}/${options.effort}`
+    `suite ${suiteRunId}: ${cases.length} case(s) × ${arms.length} arm(s) × ${manifest.runs} run(s), ` +
+      `gateway ${gateway.kind}, model ${options.model}/${options.effort}` +
+      (earlier ? `; resuming with ${done.size} of ${total} recorded` : '')
   );
   options.log(`output: ${outDir}`);
 
@@ -451,6 +652,7 @@ export async function runSuite(options: SuiteOptions): Promise<SuiteResult> {
     suiteRunId,
     outDir,
     scratchDir,
+    scratchRoot,
     gitCache: join(scratchRoot, 'git-cache'),
     gateway,
     ...(judge ? { judge } : {}),
@@ -462,16 +664,22 @@ export async function runSuite(options: SuiteOptions): Promise<SuiteResult> {
     sandboxLeaks: [],
   };
   mkdirSync(ctx.gitCache, { recursive: true });
-  const records: RunRecord[] = [];
+  const writeReport = () =>
+    writeFileSync(
+      join(outDir, 'report.md'),
+      redact(renderReport([{ dir: outDir, manifest, records }]))
+    );
   let scratchLeaks: string[] = [];
   try {
-    let order = 0;
-    for (let rep = 1; rep <= options.runs; rep += 1) {
+    let order = records.reduce((max, record) => Math.max(max, record.order), 0);
+    for (let rep = 1; rep <= manifest.runs; rep += 1) {
       for (const [index, c] of cases.entries()) {
         const shift = (rep - 1 + index) % arms.length;
         for (const arm of [...arms.slice(shift), ...arms.slice(0, shift)]) {
+          if (done.has(runKey(c.id, arm.id, rep))) continue;
           order += 1;
           records.push(await runOne(ctx, c, arm, rep, order));
+          writeReport();
         }
       }
     }
@@ -494,10 +702,7 @@ export async function runSuite(options: SuiteOptions): Promise<SuiteResult> {
     leakScan: { clean: leaks.length === 0, files: leaks },
   };
   writeManifest();
-  writeFileSync(
-    join(outDir, 'report.md'),
-    redact(renderReport([{ dir: outDir, manifest, records }]))
-  );
+  writeReport();
   if (!options.keepWorkspaces && !options.capture) removeTree(scratchDir);
   return { outDir, scratchDir, manifest, records, gateway, scratchLeaks };
 }

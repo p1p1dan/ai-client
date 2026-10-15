@@ -101,6 +101,22 @@ export function baseEnv(box: Sandbox, options: { proxies: boolean }): Record<str
   return env;
 }
 
+/**
+ * Package-manager caches for a case's setup commands, shared by every run of
+ * every suite under the scratch root: each run has a fresh HOME, and without
+ * these `npm ci` or `pnpm install` would download everything every time.
+ * Registry credentials are not part of it (the real home's .npmrc is never read).
+ */
+export function packageCacheEnv(scratchRoot: string): Record<string, string> {
+  const cache = join(scratchRoot, 'pkg-cache');
+  return {
+    npm_config_cache: join(cache, 'npm'),
+    npm_config_store_dir: join(cache, 'pnpm-store'),
+    YARN_CACHE_FOLDER: join(cache, 'yarn'),
+    PIP_CACHE_DIR: join(cache, 'pip'),
+  };
+}
+
 /** Instruction files either client would pick up from a directory or its ancestors. */
 const INSTRUCTION_FILES = [
   'CLAUDE.md',

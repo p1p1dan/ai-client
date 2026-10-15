@@ -1,0 +1,61 @@
+{
+  "id": "selftest-setup",
+  "title": "自测：promptFile 与 setup（setup 的结果算进基准，不算代理的改动）",
+  "tier": "selftest",
+  "tags": ["selftest", "setup"],
+  "repo": {
+    "fixture": "../../fixtures/retry-policy"
+  },
+  "promptFile": "setup.prompt.md",
+  "setup": [
+    {
+      "id": "marker",
+      "argv": [
+        "node",
+        "-e",
+        "require('node:fs').writeFileSync('setup-marker.txt', 'prepared by setup')"
+      ]
+    }
+  ],
+  "checks": {
+    "mustNotChange": ["**"],
+    "required": [
+      {
+        "id": "setup-ran",
+        "pattern": "prepared by setup",
+        "in": "content",
+        "paths": ["setup-marker.txt"]
+      },
+      {
+        "id": "answer-quotes-marker",
+        "pattern": "prepared by setup",
+        "in": "answer"
+      }
+    ]
+  },
+  "budget": {
+    "timeMs": 120000,
+    "maxSteps": 10
+  },
+  "fakeModel": {
+    "steps": [
+      {
+        "op": "cwd"
+      },
+      {
+        "op": "read",
+        "path": "setup-marker.txt"
+      },
+      {
+        "op": "answer",
+        "text": "setup-marker.txt 里写的是：prepared by setup"
+      }
+    ],
+    "expect": {
+      "passed": true,
+      "steps": 3,
+      "toolCalls": 2,
+      "changedFiles": 0
+    }
+  }
+}

@@ -311,7 +311,9 @@
  *                       relative paths are made absolute), `shell {command}`, `read
  *                       {path}`, `edit {path, old, new}`, `write {path, content}`, `grep
  *                       {pattern, path?}`, `glob {pattern, path?}`, `call {tool, input}`
- *                       (a literal tool name, e.g. one nobody offers) and `answer {text}`.
+ *                       (a literal tool name, e.g. one nobody offers), `ask {question,
+ *                       options?}` (the client's question tool; the step is left out
+ *                       where none is offered, as under `claude -p`) and `answer {text}`.
  *                       Replies are billed with cache reads and writes that grow per step.
  *                       A request whose system prompt carries AB-EVAL-JUDGE (the harness's
  *                       LLM judge) is answered with the scripts' `judge` JSON; a request
@@ -3202,6 +3204,7 @@ const AB_TOOLS = {
   grep: ['Grep', 'grep'],
   glob: ['Glob', 'glob'],
   shell: ['Bash', 'bash', 'pwsh', 'PowerShell'],
+  ask: ['AskUserQuestion', 'ask_user_question'],
 };
 
 /** `--ab-scripts`, read once at startup. */
@@ -3271,17 +3274,19 @@ function decideAbEval(parsed, book) {
     cache_creation_input_tokens: step === 0 ? 2000 : 150,
     cache_read_input_tokens: step === 0 ? 0 : 2000 + 150 * (step - 1),
   };
-  const s = script.steps[step];
-  if (!s) return { ...say(`ab-eval ${script.id}: script finished`), usage, label };
-  const cwd = calls
-    .map((call) => (call.result === undefined ? undefined : AB_CWD.exec(call.result)?.[1]))
-    .findLast((found) => found !== undefined);
-  const at = (rel) => (cwd ? abJoin(cwd, rel) : rel);
   const pick = (op) =>
     AB_TOOLS[op].find((name) => offered.includes(name)) ??
     offered.find((name) =>
       AB_TOOLS[op].some((known) => known.toLowerCase() === name.toLowerCase())
     );
+  // An `ask` step is left out where the client offers no question tool.
+  const askTool = pick('ask');
+  const s = script.steps.filter((item) => item.op !== 'ask' || askTool)[step];
+  if (!s) return { ...say(`ab-eval ${script.id}: script finished`), usage, label };
+  const cwd = calls
+    .map((call) => (call.result === undefined ? undefined : AB_CWD.exec(call.result)?.[1]))
+    .findLast((found) => found !== undefined);
+  const at = (rel) => (cwd ? abJoin(cwd, rel) : rel);
   const use = (op, input) => {
     const name = pick(op);
     if (!name) return say(`ab-eval: the request offers no tool for ${op}`);
@@ -3308,6 +3313,32 @@ function decideAbEval(parsed, book) {
         return use('glob', { pattern: s.pattern, ...(s.path ? { path: at(s.path) } : {}) });
       case 'call':
         return tool(String(s.tool), s.input ?? {});
+      case 'ask': {
+        const labels = Array.isArray(s.options) ? s.options.map(String) : [];
+        return askTool === 'ask_user_question'
+          ? tool(askTool, {
+              questions: [
+                {
+                  id: 'q1',
+                  question: s.question,
+                  ...(labels.length > 0 ? { options: labels.map((label) => ({ label })) } : {}),
+                },
+              ],
+            })
+          : tool(askTool, {
+              questions: [
+                {
+                  question: s.question,
+                  header: 'Question',
+                  options: (labels.length > 0 ? labels : ['Yes', 'No']).map((label) => ({
+                    label,
+                    description: label,
+                  })),
+                  multiSelect: false,
+                },
+              ],
+            });
+      }
       case 'answer':
         return say(String(s.text));
       default:

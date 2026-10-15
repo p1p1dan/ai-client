@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadCases, validateCase } from '../lib/cases.ts';
+import { isGitUrl, loadCases, validateCase } from '../lib/cases.ts';
 import { makeRedactor, REDACTED, scanForSecrets } from '../lib/redact.ts';
 import { fmt, meanSd, spread } from '../lib/stats.ts';
-import { renderReport, type SuiteManifest } from '../lib/summary.ts';
+import { passCell, renderReport, type SuiteManifest, wilson } from '../lib/summary.ts';
 import type { RunRecord } from '../lib/types.ts';
 import { parseArms } from '../lib/variants.ts';
 
@@ -37,9 +37,12 @@ describe('bundled cases and variants', () => {
       'retry-total-sleep',
       'slugify-max-length',
       'selftest-gives-up',
+      'selftest-question',
+      'selftest-setup',
       'selftest-step-budget',
       'selftest-time-budget',
     ]);
+    expect(cases.find((c) => c.id === 'selftest-setup')?.prompt).toContain('setup-marker.txt');
     for (const c of cases) {
       expect(c.fakeModel?.steps.at(-1)?.op).toBe('answer');
       expect(c.repoSha256).toMatch(/^[0-9a-f]{64}$/);
@@ -82,6 +85,54 @@ describe('validateCase', () => {
     writeFileSync(join(dir, 'a.json'), body);
     writeFileSync(join(dir, 'b.json'), body);
     expect(() => loadCases([dir])).toThrow(/duplicate case id same/);
+  });
+
+  it('reads a prompt file, resolves paths beside the case, and hashes the prompt too', () => {
+    const dir = scratch();
+    mkdirSync(join(dir, 'repo'));
+    writeFileSync(join(dir, 'task.md'), '\uFEFF修一下这个 bug\n');
+    const body = {
+      id: 'field-1',
+      promptFile: 'task.md',
+      repo: { git: 'repo', commit: 'abcdef1' },
+      setup: [{ shell: 'npm ci' }],
+    };
+    writeFileSync(join(dir, 'case.json'), JSON.stringify(body));
+    const [first] = loadCases([join(dir, 'case.json')]);
+    expect(first.prompt).toBe('修一下这个 bug\n');
+    expect(first.repo).toEqual({ git: join(dir, 'repo'), commit: 'abcdef1' });
+    writeFileSync(join(dir, 'task.md'), '换一个任务\n');
+    const [second] = loadCases([join(dir, 'case.json')]);
+    expect(second.sha256).not.toBe(first.sha256);
+    expect(second.repoSha256).toBe(first.repoSha256);
+  });
+
+  it('wants exactly one of prompt and promptFile, and well-formed setup commands', () => {
+    const dir = scratch();
+    mkdirSync(join(dir, 'fx'));
+    const problems = validateCase(
+      {
+        id: 'x',
+        prompt: 'p',
+        promptFile: 'missing.md',
+        repo: { fixture: 'fx' },
+        setup: [{ id: 'empty' }],
+      },
+      dir
+    );
+    expect(problems).toEqual([
+      'give the task as prompt or promptFile (one of them)',
+      'promptFile missing.md not found',
+      'setup[0] needs argv or shell (one of them)',
+    ]);
+  });
+
+  it('tells a git remote from a local path', () => {
+    expect(isGitUrl('https://example.invalid/org/repo.git')).toBe(true);
+    expect(isGitUrl('git@example.invalid:org/repo.git')).toBe(true);
+    expect(isGitUrl('file:///srv/repo.git')).toBe(true);
+    expect(isGitUrl('F:\\work\\repo')).toBe(false);
+    expect(isGitUrl('../repos/service')).toBe(false);
   });
 });
 
@@ -187,9 +238,23 @@ describe('renderReport', () => {
         records: [record('pilab', 'c1', false, 9), record('claude-code', 'c1', true, 5)],
       },
     ]);
-    expect(text).toContain('| c1 | pilab | 1 | 0/1 | 9 |');
-    expect(text).toContain('| c1 | claude-code | 1 | 1/1 | 5 |');
-    expect(text).toContain('| claude-code | +100 | -4 |');
+    // Per case × arm: passes with their interval, then the means.
+    expect(text).toContain('| c1 | pilab | 0/1 · 0%（0–79%） | 9 |');
+    expect(text).toContain('| c1 | claude-code | 1/1 · 100%（21–100%） | 5 |');
+    // Against the baseline, per case and over all cases.
+    expect(text).toContain('| c1 | claude-code | +100 | -4 |');
+    expect(text).toContain('| **全部用例** | claude-code | +100 | -4 |');
+    // The spread table, and the failing run.
+    expect(text).toContain('| c1 | pilab | 1 | 9 | 8 | 0 | 100 | 1 | 2 |');
     expect(text).toContain('| c1 | pilab | 1 | completed | check:command:tests |');
+  });
+
+  it('gives pass rates a Wilson interval that stays wide for few runs', () => {
+    const [low, high] = wilson(2, 3);
+    expect(fmt(low, 3)).toBe('0.208');
+    expect(fmt(high, 3)).toBe('0.939');
+    expect(wilson(0, 0)).toEqual([0, 1]);
+    const runs = [record('a', 'c', true, 1), record('a', 'c', true, 1), record('a', 'c', false, 1)];
+    expect(passCell(runs)).toBe('2/3 · 67%（21–94%）');
   });
 });

@@ -1,0 +1,27 @@
+{
+  "id": "selftest-question",
+  "title": "自测：PiLab 的模型提问时，评测框架当场应答，不会干等到超时",
+  "tier": "selftest",
+  "tags": ["selftest", "unattended"],
+  "repo": { "fixture": "../../fixtures/retry-policy" },
+  "prompt": "（自测，提问）先问我一个问题，再回答：默认最多尝试几次？",
+  "checks": {
+    "mustNotChange": ["**"],
+    "required": [{ "id": "answered", "pattern": "maxAttempts", "in": "answer" }]
+  },
+  "budget": { "timeMs": 60000, "maxSteps": 10 },
+  "fakeModel": {
+    "asymmetric": true,
+    "steps": [
+      { "op": "ask", "question": "要按默认策略回答吗？", "options": ["是", "否"] },
+      { "op": "answer", "text": "按默认策略：maxAttempts 是 5（src/policy.js:3）。" }
+    ],
+    "expect": {
+      "passed": true,
+      "byClient": {
+        "pilab": { "steps": 2, "toolCalls": 1, "toolErrors": 0 },
+        "claude-code": { "steps": 1, "toolCalls": 0 }
+      }
+    }
+  }
+}

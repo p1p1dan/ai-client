@@ -69,10 +69,12 @@ export type FakeStep =
   | { op: 'grep'; pattern: string; path?: string }
   | { op: 'glob'; pattern: string; path?: string }
   | { op: 'call'; tool: string; input?: Record<string, unknown> }
+  /** The client's question tool; skipped where none is offered (Claude Code under -p). */
+  | { op: 'ask'; question: string; options?: string[] }
   | { op: 'answer'; text: string };
 
 /** What the self-test expects of every client's record when the fake model plays `steps`. */
-export interface FakeExpect {
+export interface FakeExpectation {
   /** Default `completed`. */
   status?: RunStatus;
   passed?: boolean;
@@ -86,25 +88,46 @@ export interface FakeExpect {
   failureTags?: string[];
 }
 
+export interface FakeExpect extends FakeExpectation {
+  /** Overrides for one client, where the script plays differently (an `ask` step). */
+  byClient?: Partial<Record<ClientName, FakeExpectation>>;
+}
+
 export interface CaseFile {
   id: string;
   title?: string;
-  /** smoke | main | incident (§7). */
+  /** smoke | main | incident | field (§7). */
   tier?: string;
   tags?: string[];
   repo: RepoSource;
-  prompt: string;
+  /** The task, inline; or `promptFile`, a text file relative to the case file. */
+  prompt?: string;
+  promptFile?: string;
+  /**
+   * Commands run in the workspace before the agent starts (installing
+   * dependencies, say). What they change is committed into the base, so it is
+   * never counted as the agent's work; a failing one ends the run as
+   * `setup_error`.
+   */
+  setup?: CommandCheck[];
   checks?: CaseChecks;
   budget?: CaseBudget;
   judge?: CaseJudge;
   /** The happy path as a scripted model, for the fake gateway (§3). */
-  fakeModel?: { steps: FakeStep[]; expect?: FakeExpect };
+  fakeModel?: {
+    steps: FakeStep[];
+    expect?: FakeExpect;
+    /** The clients play it differently (an `ask` step), so their totals may differ. */
+    asymmetric?: boolean;
+  };
 }
 
 export interface LoadedCase extends CaseFile {
   file: string;
   dir: string;
-  /** sha256 of the case file's bytes. */
+  /** The task text, from `prompt` or `promptFile`. */
+  prompt: string;
+  /** sha256 of the case file's bytes (and of its prompt file). */
   sha256: string;
   /** sha256 over the fixture tree (fixture sources) or the commit (git sources). */
   repoSha256: string;
@@ -241,11 +264,11 @@ export interface ClientRun {
 
 // ---- records ----------------------------------------------------------------
 
-export type RunStatus = 'completed' | 'timeout' | 'step_budget' | 'client_error';
+export type RunStatus = 'completed' | 'timeout' | 'step_budget' | 'client_error' | 'setup_error';
 
 export interface CheckResult {
   id: string;
-  kind: 'command' | 'mustChange' | 'mustNotChange' | 'forbidden' | 'required';
+  kind: 'setup' | 'command' | 'mustChange' | 'mustNotChange' | 'forbidden' | 'required';
   passed: boolean;
   detail: Record<string, unknown>;
 }
@@ -310,6 +333,8 @@ export interface RunRecord {
   status: RunStatus;
   /** Completed and every deterministic check passed. */
   passed: boolean;
+  /** The case's setup commands, before the agent started (not in `metrics`). */
+  setup?: { ms: number; results: CheckResult[] };
   checks: CheckResult[];
   failureTags: string[];
   metrics: RunMetrics;

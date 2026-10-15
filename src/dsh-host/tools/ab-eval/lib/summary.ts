@@ -1,15 +1,17 @@
 /**
  * The comparison report (docs/agent-project-engineering.md §10, §13): per
- * case × arm, mean ± sample standard deviation of every counter, pass rates,
- * check pass rates, the cost columns next to the quality ones, the failing
- * runs with their tags, and the stamp of what ran. Several suite directories
- * merge into one report; arms are then prefixed with each suite's label.
+ * case × arm, pass rates with their 95% interval, mean ± sample standard
+ * deviation and the spread (median, min–max) of every counter over the runs,
+ * paired differences against a baseline arm (per case and overall), check pass
+ * rates, the cost columns next to the quality ones, the failing runs with
+ * their tags, and the stamp of what ran. Several suite directories merge into
+ * one report; arms are then prefixed with each suite's label.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { VersionStamp } from './stamp.ts';
-import { fmt, meanSd, meanSdKilo, spread } from './stats.ts';
+import { fmt, kilo, meanSd, meanSdKilo, spread } from './stats.ts';
 import type { RunRecord, ToolCategory } from './types.ts';
 
 export interface SuiteManifest {
@@ -32,6 +34,11 @@ export interface SuiteManifest {
   stamp: VersionStamp;
   judge?: { model: string; version: string; endpoint: 'gateway' | 'separate' };
   outcome?: { records: number; leakScan: { clean: boolean; files: string[] } };
+  /** Every later continuation (`--resume`), with the harness version it ran. */
+  resumes?: Array<{ at: string; runs: number; harness: VersionStamp['harness'] }>;
+  /** Where the cases came from, so `--resume` can find them again (local paths). */
+  casePaths?: string[];
+  caseFilter?: string[];
 }
 
 export interface LoadedSuite {
@@ -71,8 +78,23 @@ interface Row {
   records: RunRecord[];
 }
 
-function pct(part: number, whole: number): string {
-  return whole > 0 ? `${fmt((100 * part) / whole, 0)}%` : '—';
+/** Wilson score interval (95%) for `k` passes out of `n`, as fractions. */
+export function wilson(k: number, n: number): [number, number] {
+  if (n === 0) return [0, 1];
+  const z = 1.96;
+  const z2 = z * z;
+  const center = (k + z2 / 2) / (n + z2);
+  const half = (z * Math.sqrt((k * (n - k)) / n + z2 / 4)) / (n + z2);
+  return [Math.max(0, center - half), Math.min(1, center + half)];
+}
+
+/** `2/3 · 67%（21–94%）`: passes, rate, and its 95% interval. */
+export function passCell(records: readonly RunRecord[]): string {
+  const n = records.length;
+  if (n === 0) return '—';
+  const k = records.filter((record) => record.passed).length;
+  const [low, high] = wilson(k, n);
+  return `${k}/${n} · ${fmt((100 * k) / n, 0)}%（${fmt(100 * low, 0)}–${fmt(100 * high, 0)}%）`;
 }
 
 function cell(text: string): string {
@@ -87,37 +109,83 @@ function table(header: string[], rows: string[][]): string {
   ].join('\n');
 }
 
-const values = (records: RunRecord[], pick: (record: RunRecord) => number | undefined) =>
+const values = (records: readonly RunRecord[], pick: (record: RunRecord) => number | undefined) =>
   records.map(pick).filter((value): value is number => value !== undefined);
 
-function judged(records: RunRecord[]): string {
+const failures = (record: RunRecord) => record.metrics.toolErrors + record.metrics.unknownToolCalls;
+const seconds = (record: RunRecord) => record.metrics.durationMs / 1000;
+const tokens = (record: RunRecord) => record.metrics.tokens.total;
+
+function judged(records: readonly RunRecord[]): string {
   const scores = values(records, (record) => record.judge?.score);
   return scores.length > 0 ? meanSd(scores) : '—';
 }
 
-/** Mean over cases of (arm mean − baseline mean), cases both arms ran only. */
-function pairedDelta(
-  rows: Row[],
+/** Cards the harness answered for PiLab (questions, plan reviews, ...); `—` when no record says. */
+function cardsAnswered(records: readonly RunRecord[]): string {
+  const tallies = records
+    .map((record) => record.client.cardsAnswered as Record<string, number> | undefined)
+    .filter((tally): tally is Record<string, number> => tally !== undefined);
+  if (tallies.length === 0) return '—';
+  const total = tallies.reduce(
+    (sum, tally) => sum + Object.values(tally).reduce((a, b) => a + (Number(b) || 0), 0),
+    0
+  );
+  const runs = tallies.filter((tally) =>
+    Object.values(tally).some((count) => Number(count) > 0)
+  ).length;
+  return total === 0 ? '0' : `${total}（${runs} 次运行）`;
+}
+
+/** `median [min–max]`. */
+function range(list: readonly number[], format: (value: number) => string = (v) => fmt(v)): string {
+  const s = spread(list);
+  if (!s) return '—';
+  return s.n > 1 ? `${format(s.median)} [${format(s.min)}–${format(s.max)}]` : format(s.median);
+}
+
+function mean(
+  records: readonly RunRecord[],
+  pick: (record: RunRecord) => number
+): number | undefined {
+  return spread(records.map(pick))?.mean;
+}
+
+function passRate(records: readonly RunRecord[]): number | undefined {
+  return records.length > 0
+    ? (100 * records.filter((record) => record.passed).length) / records.length
+    : undefined;
+}
+
+function signed(value: number | undefined, format: (v: number) => string = (v) => fmt(v)): string {
+  if (value === undefined || !Number.isFinite(value)) return '—';
+  return `${value > 0 ? '+' : ''}${format(value)}`;
+}
+
+/** Per case both arms ran: arm minus baseline (absolute), and arm / baseline − 1 (relative). */
+function caseDeltas(
+  rows: readonly Row[],
   arm: string,
   baseline: string,
-  pick: (records: RunRecord[]) => number | undefined
-): number | undefined {
-  const deltas: number[] = [];
+  pick: (records: readonly RunRecord[]) => number | undefined
+): Array<{ caseId: string; abs: number; rel?: number }> {
+  const out: Array<{ caseId: string; abs: number; rel?: number }> = [];
   for (const row of rows.filter((item) => item.arm === arm)) {
     const base = rows.find((item) => item.arm === baseline && item.caseId === row.caseId);
     if (!base) continue;
     const a = pick(row.records);
     const b = pick(base.records);
-    if (a !== undefined && b !== undefined) deltas.push(a - b);
+    if (a === undefined || b === undefined) continue;
+    out.push({ caseId: row.caseId, abs: a - b, ...(b > 0 ? { rel: a / b - 1 } : {}) });
   }
-  return deltas.length > 0
-    ? deltas.reduce((sum, value) => sum + value, 0) / deltas.length
-    : undefined;
+  return out;
 }
 
-function mean(records: RunRecord[], pick: (record: RunRecord) => number): number | undefined {
-  return spread(records.map(pick))?.mean;
+function average(list: readonly number[]): number | undefined {
+  return list.length > 0 ? list.reduce((sum, value) => sum + value, 0) / list.length : undefined;
 }
+
+const percent = (value: number) => `${fmt(100 * value, 0)}%`;
 
 export function renderReport(
   suites: readonly LoadedSuite[],
@@ -148,6 +216,8 @@ export function renderReport(
   const sortedRows = caseIds.flatMap((caseId) =>
     arms.flatMap((arm) => rows.filter((row) => row.caseId === caseId && row.arm === arm))
   );
+  const armRecords = (arm: string) =>
+    sortedRows.filter((row) => row.arm === arm).flatMap((row) => row.records);
   const out: string[] = ['# A/B 评测报告', ''];
 
   for (const suite of suites) {
@@ -157,11 +227,16 @@ export function renderReport(
       `## 运行 ${m.suiteRunId}${merged ? `（标签 ${m.label}）` : ''}`,
       '',
       `- 时间：${m.startedAt} → ${m.finishedAt ?? '未结束'}`,
-      `- 模型 / 档位：\`${m.model}\` / \`${m.effort}\`；每组重复 ${m.runs} 次`,
+      `- 模型 / 档位：\`${m.model}\` / \`${m.effort}\`；每组重复 ${m.runs} 次（已记录 ${suite.records.length} 次运行）`,
       `- 网关：${m.gateway.kind === 'fake' ? '本机假网关（plan ab-eval）' : '真实网关'}（${m.gateway.id}）`,
       `- 用例集：${m.cases.length} 个用例，版本 \`${m.suiteVersion}\``,
       `- 版本：harness \`${s.harness.commit.slice(0, 12)}\`${s.harness.dirty ? `（有未提交改动，diff ${s.harness.dirtyDiffSha256 ?? '?'}）` : ''}，应用 ${s.appVersion}，DSH ${s.dsh['dsh-base'] ?? '?'}，Claude Code ${s.claudeCode ?? '未用'}，Node ${s.node}，${s.platform}`,
       `- 臂：${m.arms.map((arm) => (arm.variant ? `\`${arm.id}\`（变体 sha256 ${arm.variant.sha256.slice(0, 12)}）` : `\`${arm.id}\``)).join('；')}`,
+      ...(m.resumes && m.resumes.length > 0
+        ? [
+            `- 续跑 ${m.resumes.length} 次：${m.resumes.map((r) => `${r.at}（harness \`${r.harness.commit.slice(0, 12)}\`${r.harness.dirty ? '，有未提交改动' : ''}）`).join('；')}`,
+          ]
+        : []),
       ...(m.judge ? [`- LLM 评分：\`${m.judge.model}\`，${m.judge.version}`] : []),
       ...(m.outcome
         ? [
@@ -172,14 +247,15 @@ export function renderReport(
     );
   }
 
-  const all = rows.flatMap((row) => row.records);
-  out.push('## 总览（每臂，全部用例）', '');
   out.push(
+    '## 总览（每臂，全部用例）',
+    '',
+    '离散度里混着用例之间的差别；看重复运行的波动请看「按用例 × 臂」与「多次运行的分布」。',
+    '',
     table(
       [
         '臂',
-        '运行数',
-        '通过率',
+        '通过（95% 区间）',
         '步数',
         '工具调用',
         '工具失败',
@@ -189,22 +265,23 @@ export function renderReport(
         '耗时 s',
         '改动行数',
         '评分',
+        '自动应答',
       ],
       arms.map((arm) => {
-        const records = rows.filter((row) => row.arm === arm).flatMap((row) => row.records);
+        const records = armRecords(arm);
         return [
           arm,
-          String(records.length),
-          pct(records.filter((record) => record.passed).length, records.length),
+          passCell(records),
           meanSd(values(records, (r) => r.metrics.steps)),
           meanSd(values(records, (r) => r.metrics.toolCalls)),
-          meanSd(values(records, (r) => r.metrics.toolErrors + r.metrics.unknownToolCalls)),
+          meanSd(values(records, failures)),
           meanSd(values(records, (r) => r.metrics.unknownToolCalls)),
           meanSd(values(records, (r) => r.metrics.nonZeroExits)),
-          meanSdKilo(values(records, (r) => r.metrics.tokens.total)),
-          meanSd(values(records, (r) => r.metrics.durationMs / 1000)),
+          meanSdKilo(values(records, tokens)),
+          meanSd(values(records, seconds)),
           meanSd(values(records, (r) => r.metrics.changes.lines)),
           judged(records),
+          cardsAnswered(records),
         ];
       })
     ),
@@ -212,27 +289,70 @@ export function renderReport(
   );
 
   const baseline = options.baseline ?? arms[0];
-  if (arms.length > 1 && baseline) {
-    out.push(`## 相对基线 \`${baseline}\`（按用例配对，取各用例差值的均值）`, '');
+  const others = arms.filter((arm) => arm !== baseline);
+  if (others.length > 0 && baseline) {
+    const metrics = [
+      { name: '通过率差（百分点）', pick: passRate, rel: false, digits: 0 },
+      {
+        name: '步数差',
+        pick: (r: readonly RunRecord[]) => mean(r, (x) => x.metrics.steps),
+        rel: false,
+        digits: 1,
+      },
+      {
+        name: '工具失败差',
+        pick: (r: readonly RunRecord[]) => mean(r, failures),
+        rel: false,
+        digits: 1,
+      },
+      {
+        name: '计费 token 差',
+        pick: (r: readonly RunRecord[]) => mean(r, tokens),
+        rel: true,
+        digits: 0,
+      },
+      {
+        name: '耗时差 s',
+        pick: (r: readonly RunRecord[]) => mean(r, seconds),
+        rel: true,
+        digits: 1,
+      },
+    ];
+    const deltaCell = (
+      deltas: Array<{ abs: number; rel?: number }>,
+      metric: (typeof metrics)[number]
+    ) => {
+      const abs = average(deltas.map((d) => d.abs));
+      const format = metric.name.startsWith('计费') ? kilo : (v: number) => fmt(v, metric.digits);
+      if (!metric.rel) return signed(abs, format);
+      const rel = average(deltas.flatMap((d) => (d.rel === undefined ? [] : [d.rel])));
+      return rel === undefined
+        ? signed(abs, format)
+        : `${signed(abs, format)}（${signed(rel, percent)}）`;
+    };
     out.push(
+      `## 相对基线 \`${baseline}\``,
+      '',
+      '逐个用例算「该臂均值 − 基线均值」，括号里是相对变化；汇总行是各用例差值的平均。',
+      '',
       table(
-        ['臂', '通过率差（百分点）', '步数差', '工具调用差', '计费 token 差', '耗时差 s'],
-        arms
-          .filter((arm) => arm !== baseline)
-          .map((arm) => {
-            const d = (pick: (records: RunRecord[]) => number | undefined, digits = 1) => {
-              const value = pairedDelta(sortedRows, arm, baseline, pick);
-              return value === undefined ? '—' : `${value > 0 ? '+' : ''}${fmt(value, digits)}`;
-            };
-            return [
-              arm,
-              d((records) => (100 * records.filter((r) => r.passed).length) / records.length, 0),
-              d((records) => mean(records, (r) => r.metrics.steps)),
-              d((records) => mean(records, (r) => r.metrics.toolCalls)),
-              d((records) => mean(records, (r) => r.metrics.tokens.total), 0),
-              d((records) => mean(records, (r) => r.metrics.durationMs / 1000)),
-            ];
-          })
+        ['用例', '臂', ...metrics.map((metric) => metric.name)],
+        others.flatMap((arm) => [
+          ...caseIds.flatMap((caseId) => {
+            const per = metrics.map((metric) =>
+              caseDeltas(sortedRows, arm, baseline, metric.pick).filter((d) => d.caseId === caseId)
+            );
+            if (per[0].length === 0) return [];
+            return [[caseId, arm, ...per.map((deltas, i) => deltaCell(deltas, metrics[i]))]];
+          }),
+          [
+            '**全部用例**',
+            arm,
+            ...metrics.map((metric) =>
+              deltaCell(caseDeltas(sortedRows, arm, baseline, metric.pick), metric)
+            ),
+          ],
+        ])
       ),
       ''
     );
@@ -244,8 +364,7 @@ export function renderReport(
       [
         '用例',
         '臂',
-        'n',
-        '通过',
+        '通过（95% 区间）',
         '步数',
         '工具调用',
         '工具失败',
@@ -263,17 +382,16 @@ export function renderReport(
         return [
           row.caseId,
           row.arm,
-          String(r.length),
-          `${r.filter((x) => x.passed).length}/${r.length}`,
+          passCell(r),
           meanSd(values(r, (x) => x.metrics.steps)),
           meanSd(values(r, (x) => x.metrics.toolCalls)),
-          meanSd(values(r, (x) => x.metrics.toolErrors + x.metrics.unknownToolCalls)),
+          meanSd(values(r, failures)),
           meanSd(values(r, (x) => x.metrics.unknownToolCalls)),
           meanSdKilo(values(r, (x) => x.metrics.tokens.input)),
           meanSdKilo(values(r, (x) => x.metrics.tokens.cacheRead)),
           meanSdKilo(values(r, (x) => x.metrics.tokens.cacheWrite)),
           meanSdKilo(values(r, (x) => x.metrics.tokens.output)),
-          meanSd(values(r, (x) => x.metrics.durationMs / 1000)),
+          meanSd(values(r, seconds)),
           meanSd(values(r, (x) => x.metrics.changes.lines)),
           judged(r),
         ];
@@ -282,6 +400,29 @@ export function renderReport(
     ''
   );
 
+  out.push('## 多次运行的分布（中位数 [最小–最大]）', '');
+  out.push(
+    table(
+      ['用例', '臂', 'n', '步数', '工具调用', '工具失败', '计费 token', '耗时 s', '改动行数'],
+      sortedRows.map((row) => {
+        const r = row.records;
+        return [
+          row.caseId,
+          row.arm,
+          String(r.length),
+          range(values(r, (x) => x.metrics.steps)),
+          range(values(r, (x) => x.metrics.toolCalls)),
+          range(values(r, failures)),
+          range(values(r, tokens), kilo),
+          range(values(r, seconds)),
+          range(values(r, (x) => x.metrics.changes.lines)),
+        ];
+      })
+    ),
+    ''
+  );
+
+  const all = rows.flatMap((row) => row.records);
   out.push('## 工具调用（每次运行的均值：调用 / 失败）', '');
   const used = CATEGORIES.filter((category) =>
     all.some((record) => (record.metrics.categories[category]?.calls ?? 0) > 0)
@@ -290,7 +431,7 @@ export function renderReport(
     table(
       ['臂', ...used],
       arms.map((arm) => {
-        const records = sortedRows.filter((row) => row.arm === arm).flatMap((row) => row.records);
+        const records = armRecords(arm);
         return [
           arm,
           ...used.map((category) => {
@@ -361,14 +502,15 @@ export function renderReport(
   out.push(
     '## 口径',
     '',
-    '- **通过**：客户端正常结束，且用例的全部确定性检查通过（命令退出码、必须改动 / 不得改动的路径、禁止 / 必须出现的模式）。',
+    '- **通过**：客户端正常结束，且用例的全部确定性检查通过（命令退出码、必须 / 不得改动的路径、禁止 / 必须出现的模式）。括号里是 Wilson 95% 区间：重复次数少时区间很宽，两臂区间大幅重叠就不能说谁更好。',
     '- **步数**：主代理的模型调用次数（子代理另计）。PiLab 取 DSH 会话日志的 `assistant/message`，Claude Code 取不同的 assistant 消息 id。',
     '- **工具失败**：工具自己报错的次数加上调用了不存在的工具的次数；后者单列为 **未知工具**。',
     '- **非零退出**：shell 命令跑完了但退出码非零（例如修复前先跑一遍测试），不计入工具失败。',
     '- **计费 token**：客户端自己报告的用量之和（输入 + 缓存读 + 缓存写 + 输出）。PiLab 是 DSH 会话日志每一步 usage 之和（含子代理会话）；Claude Code 是 `result.modelUsage` 各模型之和（含辅助模型）。',
     '- **耗时**：从提交提示词到最终回复。PiLab 不含宿主启动（产品里宿主常驻）；Claude Code 取它自报的 `duration_ms`。',
-    '- **改动行数**：相对基准提交的增删行数之和，含未提交与新建文件，不含忽略路径。',
-    '- 数值为均值 ± 样本标准差（n − 1）；n = 1 时只给均值。',
+    '- **改动行数**：相对基准提交（含用例 setup 的结果）的增删行数之和，含未提交与新建文件，不含忽略路径。',
+    '- **自动应答**：无人值守时 PiLab 的模型发起的提问、计划审阅等卡片，由评测框架当场应答的次数（Claude Code 在 `-p` 模式下没有提问工具）。',
+    '- 数值为均值 ± 样本标准差（n − 1）；n = 1 时只给均值。分布表给中位数与最小–最大值。',
     ''
   );
   return out.join('\n');

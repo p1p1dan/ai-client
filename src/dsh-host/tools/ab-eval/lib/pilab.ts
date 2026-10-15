@@ -5,7 +5,10 @@
  * (`buildDshHostEnvironment`) over the sandbox's allowlist; its model plan is
  * built by the product's translation from the bundled catalog's Claude
  * provider; the key is handed over IPC per request and never written. The
- * session runs in the `bypass` gear, so no tool call waits on a card.
+ * session runs in the `bypass` gear, so no tool call waits on a card, and a
+ * card the model raises itself (a question, a plan review) is answered at
+ * once (`answerCards`): an unattended run must not wait out its time budget.
+ * The run lasts until the session rests, turns it starts by itself included.
  *
  * A variant may set host environment variables, plugin overrides, files in
  * $DSH_HOME (a source-checkout host applies `$DSH_HOME/cordis.patch.yml`) and
@@ -21,12 +24,14 @@ import {
 } from '../../../../main/services/agent-host/dshHostEnvironment.ts';
 import { buildDshModelPlan } from '../../../../shared/dshModelPlan/build.ts';
 import type { DshRouteSettingsInput } from '../../../../shared/dshModelPlan/types.ts';
+import { PLAN_REVIEW_QUESTION_ID } from '../../../../shared/planReview.ts';
 import {
+  type ExperimentHost,
   readyOrFatal,
   startExperimentHost,
   stopExperimentHost,
 } from '../../lib/experiment-host.ts';
-import { BYPASS_PERMISSIONS, type Message } from '../../lib/hostClient.ts';
+import { BYPASS_PERMISSIONS, isRecord, type Message } from '../../lib/hostClient.ts';
 import { decodeSessionLog, findSessionLogs, summarizeDshSession } from './dshLog.ts';
 import type { Gateway } from './gateway.ts';
 import type { Redactor } from './redact.ts';
@@ -82,6 +87,77 @@ function writeFiles(dir: string, files: Record<string, string>): string[] {
 
 function payloadOf(event: Message): Message {
   return (event.payload ?? {}) as Message;
+}
+
+/** How long a session must stay idle before the run counts as over. */
+const SETTLE_MS = 2_000;
+
+/**
+ * What a headless run answers when the model asks the user something. Claude
+ * Code under `-p` offers no question tool at all; PiLab's is answered at once
+ * with this, the same way every time, instead of waiting out the time budget.
+ */
+export const HEADLESS_ANSWER =
+  'No user is available to answer: this is an unattended run. Proceed with your best judgment and state any assumptions in your final reply.';
+
+export interface CardTally {
+  questions: number;
+  planReviews: number;
+  permissions: number;
+  previews: number;
+}
+
+/**
+ * Answers every card the session raises on `ch`: a question with
+ * HEADLESS_ANSWER, a plan review with "run on auto" (no goal), a permission
+ * with allow (none should come up in the bypass gear), a preview with "no
+ * window". Counted in `tally`; returns the unsubscribe.
+ */
+function answerCards(
+  host: ExperimentHost,
+  ch: string,
+  logicalSessionId: string,
+  tally: CardTally
+): () => void {
+  const seen = new Set<string>();
+  const respond = (type: string, payload: Message) => {
+    host.client.call(ch, type, { logicalSessionId, ...payload }, 30_000).catch(() => undefined);
+  };
+  const onMessage = (message: unknown) => {
+    if (!isRecord(message) || message.ch !== ch || !isRecord(message.rpc)) return;
+    if (message.rpc.kind !== 'event' || message.rpc.type !== 'runtime.event') return;
+    const event = message.rpc.payload as Message;
+    const p = payloadOf(event);
+    const id = String(p.questionId ?? p.permissionId ?? p.previewId ?? '');
+    if (!id || seen.has(`${event.type}:${id}`)) return;
+    if (event.type === 'question.requested') {
+      seen.add(`${event.type}:${id}`);
+      if (p.review !== undefined) {
+        tally.planReviews += 1;
+        respond('worker.question.respond', {
+          questionId: id,
+          answers: { [PLAN_REVIEW_QUESTION_ID]: 'run:auto' },
+        });
+      } else {
+        tally.questions += 1;
+        respond('worker.question.respond', { questionId: id, response: HEADLESS_ANSWER });
+      }
+    } else if (event.type === 'permission.requested') {
+      seen.add(`${event.type}:${id}`);
+      tally.permissions += 1;
+      respond('worker.permission.respond', { permissionId: id, decision: 'allow' });
+    } else if (event.type === 'preview.requested') {
+      seen.add(`${event.type}:${id}`);
+      tally.previews += 1;
+      respond('worker.preview.respond', {
+        previewId: id,
+        ok: false,
+        error: 'There is no preview window in an unattended run.',
+      });
+    }
+  };
+  host.child.on('message', onMessage);
+  return () => host.child.off('message', onMessage);
 }
 
 export interface PilabInput {
@@ -159,6 +235,8 @@ export async function runPilab(input: PilabInput): Promise<ClientRun> {
   let startedAt: number | undefined;
   let ch: string | undefined;
   let dshSessionId: string | undefined;
+  let stopAnswering: (() => void) | undefined;
+  const cards: CardTally = { questions: 0, planReviews: 0, permissions: 0, previews: 0 };
   const logicalSessionId = `ab-${input.label}`;
   try {
     const ready = await readyOrFatal(host, 180_000);
@@ -181,17 +259,9 @@ export async function runPilab(input: PilabInput): Promise<ClientRun> {
     );
     dshSessionId = String(boot.piSessionId);
     const channel = ch;
+    stopAnswering = answerCards(host, channel, logicalSessionId, cards);
     const requestId = `${logicalSessionId}-turn`;
     const from = host.client.events(channel).length;
-    const isIdle = (events: Message[]) =>
-      events
-        .slice(from)
-        .some(
-          (event) =>
-            event.type === 'session.status' &&
-            payloadOf(event).status === 'idle' &&
-            event.requestId === requestId
-        );
     const modelCalls = (events: Message[]) =>
       events
         .slice(from)
@@ -200,6 +270,7 @@ export async function runPilab(input: PilabInput): Promise<ClientRun> {
         ).length;
     startedAt = Date.now();
     const sendStart = performance.now();
+    const remaining = () => input.timeMs - (performance.now() - sendStart);
     await host.client.request(channel, 'worker.send', {
       logicalSessionId,
       requestId,
@@ -208,38 +279,83 @@ export async function runPilab(input: PilabInput): Promise<ClientRun> {
       model: modelRef,
       effort: input.effort,
     });
-    const outcome = await Promise.race([
-      host.client
-        .until(
-          channel,
-          (events) => isIdle(events) || modelCalls(events) > input.maxSteps,
-          input.timeMs
-        )
-        .then((settled) => {
-          if (!settled) return 'timeout' as const;
-          return isIdle(host.client.events(channel)) ? ('idle' as const) : ('steps' as const);
-        }),
-      host.exited.then(() => 'exited' as const),
-    ]);
+    // At rest: our turn went idle and so did whatever ran after it. A turn the
+    // session starts by itself (a goal round, a background job's wake-up) is
+    // followed to its end; the run is over once no status arrives for SETTLE_MS.
+    const statuses = (events: Message[]) =>
+      events.slice(from).filter((event) => event.type === 'session.status');
+    const resting = (event: Message | undefined) =>
+      ['idle', 'completed', 'failed'].includes(String(payloadOf(event ?? {}).status));
+    const atRest = (events: Message[]) => {
+      const all = statuses(events);
+      return (
+        resting(all.at(-1)) && all.some((event) => resting(event) && event.requestId === requestId)
+      );
+    };
+    let lastIdle = sendStart;
+    let outcome: 'idle' | 'steps' | 'timeout' | 'exited' = 'idle';
+    for (;;) {
+      outcome = await Promise.race([
+        host.client
+          .until(
+            channel,
+            (events) => atRest(events) || modelCalls(events) > input.maxSteps,
+            Math.max(0, remaining())
+          )
+          .then((settled) => {
+            if (!settled) return 'timeout' as const;
+            return modelCalls(host.client.events(channel)) > input.maxSteps
+              ? ('steps' as const)
+              : ('idle' as const);
+          }),
+        host.exited.then(() => 'exited' as const),
+      ]);
+      if (outcome !== 'idle') break;
+      lastIdle = performance.now();
+      const seen = statuses(host.client.events(channel)).length;
+      const woke = await host.client.until(
+        channel,
+        (events) => statuses(events).length > seen,
+        SETTLE_MS
+      );
+      if (!woke) break;
+    }
+    info.extraTurns = new Set(
+      statuses(host.client.events(channel))
+        .map((event) => event.requestId)
+        .filter((id) => typeof id === 'string' && id !== requestId)
+    ).size;
     if (outcome === 'steps' || outcome === 'timeout') {
       status = outcome === 'steps' ? 'step_budget' : 'timeout';
+      const stopFrom = host.client.events(channel).length;
       await host.client
         .call(channel, 'worker.stop', { logicalSessionId, reason: 'user' }, 30_000)
         .catch(() => undefined);
-      await host.client.until(channel, isIdle, 30_000);
+      await host.client.until(
+        channel,
+        (events) =>
+          events
+            .slice(stopFrom)
+            .some((event) => event.type === 'session.status' && payloadOf(event).status === 'idle'),
+        30_000
+      );
+      lastIdle = performance.now();
     } else if (outcome === 'exited') {
       status = 'client_error';
       error = 'the host exited during the turn';
+      lastIdle = performance.now();
     }
-    durationMs = Math.round(performance.now() - sendStart);
+    durationMs = Math.round(lastIdle - sendStart);
   } catch (caught) {
     status = 'client_error';
     error = String(caught instanceof Error ? caught.message : caught);
   } finally {
+    stopAnswering?.();
     const stopped = await stopExperimentHost(host);
     info.hostStopped = stopped.stopped;
     info.hostExit = stopped.exit;
   }
+  info.cardsAnswered = cards;
   const wallMs = Math.round(performance.now() - wallStart);
   mkdirSync(input.clientDir, { recursive: true });
   writeFileSync(join(input.clientDir, 'host-stderr.txt'), redact(host.stderrLines().join('\n')));

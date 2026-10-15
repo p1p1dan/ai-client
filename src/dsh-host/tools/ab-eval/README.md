@@ -1,9 +1,10 @@
 # ab-eval：PiLab 与 Claude Code 的无头 A/B 评测
 
-同一批编码任务，用 PiLab（本仓库的 DSH 宿主）和 Claude Code 各跑 N 次，输出可对比的结构化记录和 Markdown 报告。用来量化两件事：
+同一批编码任务，用 PiLab（本仓库的 DSH 宿主）和 Claude Code 各跑 N 次，输出可对比的结构化记录和 Markdown 报告。它用来量化三件事：
 
-- 网关透传修好前后的差距：同一套用例在不同网关上各跑一遍，再用 `report.ts` 合并对比；
-- 客户端各项改进（提示词包、工具补齐等）开与关的效果：用变体开关，同一轮里并排对比。
+- **PiLab（DSH）与 Claude Code 在同一网关上的差距**。Claude Code 这一侧跑的运行时，就是路线 B（Claude 模型改走官方 Claude Agent SDK 引擎）将来要嵌进 PiLab 的那一套，所以这组对比是路线 B 预期收益的主要依据；
+- **网关透传修好前后的差距**：同一套用例在不同网关上各跑一遍，再用 `report.ts` 合并对比；
+- **客户端各项改进（提示词包、工具补齐等）开与关的效果**：用变体开关，同一轮里并排对比。
 
 背景见 [2026-10-14 差距调研](../../../../docs/plans/2026-10-14-pilab-vs-claude-code-gap-study.md) §6 T2（文档在 `docs/quality-gap-study` 分支）。工程规范见 [docs/agent-project-engineering.md](../../../../docs/agent-project-engineering.md)。
 
@@ -13,6 +14,7 @@
 |---|---|
 | 网关、key、模型、档位 | 两边用同一个网关、同一个 key，`--model`、`--effort` 同时传给两边 |
 | 审批 | 全自动：PiLab 用 `bypass` 档位；Claude Code 用 `--dangerously-skip-permissions` |
+| 无人值守 | Claude Code 在 `-p` 模式下没有提问工具。PiLab 的模型如果提问或发起计划审阅，评测框架当场用固定的一句话应答，不会干等到超时，次数记在报告的「自动应答」一栏（见「无人值守」） |
 | 仓库 | 每次运行一份干净副本（同一个基准提交），互不影响 |
 | 环境 | 每次运行一个临时沙箱：独立的工作区、HOME、临时目录；PiLab 的 `DSH_HOME` 与 agent 目录、Claude Code 的 `CLAUDE_CONFIG_DIR` 都是新建的。环境变量从空白开始，只放 PATH 和系统基本变量（真实网关时再加代理） |
 | 预算 | 时间上限与步数上限对两边相同（见「用例格式」的 `budget`） |
@@ -33,28 +35,61 @@ PiLab 侧是真实宿主：`src/dsh-host/host.ts` 经 worker RPC 驱动，和 Ma
 node src/dsh-host/tools/ab-eval/selftest.ts
 ```
 
-自测只连本机假网关，大约两三分钟。它跑的是 PiLab、Claude Code、PiLab+自测变体三个臂，用例是 3 个随附用例再加 4 个自测用例（假模型放弃、步数预算、时间预算、git 来源），然后逐项断言，见「自测验证了什么」。
+自测只连本机假网关，大约三四分钟。它跑的是 PiLab、Claude Code、PiLab+自测变体三个臂，用例是 3 个随附用例加 7 个自测用例，然后逐项断言，见「自测验证了什么」。
 
 ```bash
 node src/dsh-host/tools/ab-eval/run.ts --runs 1
 ```
 
-这条只对本机假网关跑一遍随附用例，用来检查流程，产出的报告在 `src/dsh-host/tools/ab-eval/out/<运行 id>/report.md`。
+这条只对本机假网关跑一遍随附用例，用来检查流程，产出的报告在 `src/dsh-host/tools/ab-eval/out/<运行 id>/report.md`。不加 `--gateway real` 时永远只连本机假网关，不会碰真实网关。
 
-### 连真实网关
+## 真实网关评测：一步一步
 
-网关 URL 与 key 只从环境变量读，不写进任何文件：
+网关 URL 与 key 只从环境变量读，不写进任何文件：`AB_BASE_URL`（网关根地址，不带 `/v1`）、`AB_API_KEY`。
 
-- `AB_BASE_URL`：网关根地址，不带 `/v1`；
-- `AB_API_KEY`。
+1. **先跑自测**，确认这台机器上两边都能跑：
 
-然后加 `--gateway real`：
+   ```bash
+   node src/dsh-host/tools/ab-eval/selftest.ts
+   ```
 
-```bash
-node src/dsh-host/tools/ab-eval/run.ts --gateway real --runs 3 --judge --label rewrite-channel
-```
+2. **只在当前终端里设置环境变量**，不要写进配置文件或脚本：
+   - bash：`export AB_BASE_URL=… AB_API_KEY=…`
+   - PowerShell：`$env:AB_BASE_URL='…'; $env:AB_API_KEY='…'`
 
-不加 `--gateway real` 时永远只连本机假网关，不会碰真实网关。
+3. **预检**。`--dry-run` 什么都不启动，只检查用例、两个客户端、沙箱目录和环境变量，并给出最坏情况下的总时长；`--probe` 再向网关发一个极小的请求，确认 URL、key 和模型可用（只显示状态码和耗时）：
+
+   ```bash
+   node src/dsh-host/tools/ab-eval/run.ts --gateway real --dry-run --probe
+   ```
+
+4. **正式跑**。每个「用例 × 臂」至少 3 次，要更窄的区间就 5 次以上：
+
+   ```bash
+   node src/dsh-host/tools/ab-eval/run.ts --gateway real --runs 3 --judge --label official-channel
+   ```
+
+   - 报告在每次运行后都会重写，跑到一半就能看；
+   - 中途断了，或者想加次数，就接着跑，已记录的运行会保留：
+
+     ```bash
+     node src/dsh-host/tools/ab-eval/run.ts --resume src/dsh-host/tools/ab-eval/out/<运行 id> --runs 5
+     ```
+
+   - 因网关或网络出错（`client_error`、`setup_error`）的运行，加 `--retry-errors` 重跑。
+
+5. **读报告**（见「怎么读 report.md」）。先确认报告开头的密钥扫描写着「干净」，再看：
+   - 通过率的 95% 区间是否重叠；
+   - 「相对基线」里步数、工具失败、计费 token 和耗时的差值，以及这些差值在各用例上的方向是否一致；
+   - 「多次运行的分布」里同一臂各次运行之间相差多大。
+
+6. **对外只分享 `report.md`**。`out/` 下的轨迹含本地路径和模型输出，不入库。
+
+7. **前后对比**（例如换了网关通道，或开了某项改进）：两轮各跑一遍，合并成一份报告：
+
+   ```bash
+   node src/dsh-host/tools/ab-eval/report.ts out/<第一轮> out/<第二轮> --out compare.md
+   ```
 
 ## 怎么跑：run.ts 参数
 
@@ -75,8 +110,12 @@ node src/dsh-host/tools/ab-eval/run.ts --gateway real --runs 3 --judge --label r
 | `--keep-workspaces` | 关 | 保留沙箱，便于排查 |
 | `--claude-bin`、`--git-bash` | 自动查找 | 见「快速开始」 |
 | `--allow-ancestor-instructions` | 关 | 见「凭据与隔离」 |
+| `--dry-run` | 关 | 只预检，不启动任何东西；加 `--probe` 再向真实网关发一个极小请求 |
+| `--check-cases` | 关 | 不用模型：准备每个用例、跑 setup，再对没动过的仓库跑检查（见「加现场用例」） |
+| `--resume 目录` | — | 接着跑一轮评测：沿用它的设置，已记录的运行保留，`--runs` 可以加大 |
+| `--retry-errors` | 关 | 与 `--resume` 一起用：重跑 `client_error`、`setup_error` 的运行 |
 
-退出码：跑完就是 0，不管通过率多少；出错或扫描到密钥是 1。
+退出码：跑完就是 0，不管通过率多少；出错或扫描到密钥是 1。`--dry-run` 和 `--check-cases` 发现问题时也是 1。
 
 ## 用例格式（`cases/*.json`）
 
@@ -86,11 +125,12 @@ node src/dsh-host/tools/ab-eval/run.ts --gateway real --runs 3 --judge --label r
 {
   "id": "fix-median-sort",                    // 唯一，字母数字和 ._-
   "title": "修复让单测失败的 bug：median 按字符串排序",
-  "tier": "smoke",                            // smoke / main / incident（规范 §7）
+  "tier": "smoke",                            // smoke / main / incident / field（规范 §7）
   "tags": ["bugfix"],
-  "repo": { "fixture": "../fixtures/stats-median" },   // 相对用例文件
-  // 或者：  "repo": { "git": "https://…/repo.git", "commit": "<完整 sha>" }
-  "prompt": "运行 `node --test` 会有测试失败……",
+  "repo": { "fixture": "../fixtures/stats-median" },   // 目录，相对用例文件，也可以是绝对路径
+  // 或者：  "repo": { "git": "<URL 或本地克隆的路径>", "commit": "<提交 id>" }
+  "prompt": "运行 `node --test` 会有测试失败……",       // 或者 "promptFile": "task.md"
+  "setup": [{ "id": "deps", "shell": "npm ci" }],       // 可选：代理开始前在工作区里执行
   "checks": {
     "commands": [{ "id": "tests", "argv": ["node", "--test"], "expectExit": 0, "timeoutMs": 120000 }],
     "mustChange": ["src/stats.js"],           // 每个 glob 都要命中至少一个改动文件
@@ -105,6 +145,21 @@ node src/dsh-host/tools/ab-eval/run.ts --gateway real --runs 3 --judge --label r
   "fakeModel": { "steps": [ … ], "expect": { … } }   // 可选：见下
 }
 ```
+
+仓库与提示词：
+
+- 用例里的相对路径都相对用例文件所在目录。现场用例可以和它的提示词文件、本地克隆放在一起，不必放进这个仓库。
+- `fixture` 每次运行都会复制一份，复制时跳过 `.git` 和 `node_modules`，再自动初始化并提交。作者和时间是固定的，所以基准提交在哪台机器上都一样。
+- `git` 可以是 URL，也可以是本地克隆的路径；`commit` 必须是提交 id。克隆在隔离环境里进行，不用本机的 git 凭据。私有仓库请先自己克隆到本地，再写本地路径。
+- 提示词较长时用 `promptFile`，它的内容也计入用例的哈希。
+
+`setup`：
+
+- 在代理开始前、在工作区里执行，比如安装依赖；
+- 它产生的已跟踪改动会提交进基准，不算代理的改动。被 `.gitignore` 忽略的产物（如 `node_modules`）留在工作区，也不进 diff；
+- 任何一条失败，这次运行就记为 `setup_error`；
+- setup 可以联网（会带上代理变量），npm、pnpm、yarn、pip 的缓存放在沙箱根目录下，各次运行共用；
+- setup 读不到你本机的 `~/.npmrc` 等凭据。需要私有源时，请先在本地克隆里装好依赖，或者把依赖放进仓库。
 
 确定性检查（规范 §4）：
 
@@ -125,34 +180,61 @@ node src/dsh-host/tools/ab-eval/run.ts --gateway real --runs 3 --judge --label r
 
 `fakeModel` 是这个用例的 happy path（规范 §3），写成假模型剧本，只在假网关上使用：
 
-- 抽象步骤有 `cwd`、`shell`、`read`、`edit`、`write`、`grep`、`glob`、`call`（任意工具名）和 `answer`；
+- 抽象步骤有 `cwd`、`shell`、`read`、`edit`、`write`、`grep`、`glob`、`call`（任意工具名）、`ask`（客户端的提问工具，没有这个工具的客户端会跳过这一步）和 `answer`；
 - 假网关把每步映射成各客户端自己的工具（`Read` / `read`，`Bash` / `pwsh`），同一份剧本能同时驱动两边；
-- `expect` 写的是两边都应得到的记录值，供自测断言。
+- `expect` 写的是两边都应得到的记录值，供自测断言。剧本在两边走法不同时（有 `ask` 步骤），用 `expect.byClient` 分别写，并标上 `"asymmetric": true`。
 
 真实用例不写这一段也行：假网关会直接回一句文本，流程照样能跑通。
 
-### 怎么加一个用例
+## 加现场用例
 
-1. **准备仓库**，二选一：
-   - 在 `fixtures/` 下放一个小目录。不需要 `.git`，每次运行时会自动初始化并提交，作者和时间固定，所以基准提交在哪台机器上都一样；
-   - 用 `"git": "<URL>", "commit": "<sha>"`。仓库会在隔离环境里克隆进缓存，不用本机的 git 凭据。私有仓库请先自己克隆到本地，再把 `git` 写成本地路径。
-2. **写 `prompt`**，按真实用户的说法来写，中文没有问题。
-3. **写检查**：
-   - 能机判的尽量机判，比如测试命令、该改和不该改的文件、禁止的写法、答案里必须有的数字；
-   - 代理自己写的测试不可信时，放一份隐藏验收测试到 `overlay`；
-   - 项目规范可以放进 fixture 里的 `CLAUDE.md`。两边都会读这个文件，DSH 先找 `AGENTS.md`，没有再读 `CLAUDE.md`。
-4. **定预算**和可选的 `judge.rubric`。
-5. **先在假网关上验证用例本身**：
+推荐的流程：
+
+1. **脚手架**：用 `new-case.ts` 从本地克隆生成用例文件。它会把引用（默认 `HEAD`）解析成提交 id，以后用例始终指向同一份代码：
 
    ```bash
-   node src/dsh-host/tools/ab-eval/run.ts --case <id> --runs 1
+   node src/dsh-host/tools/ab-eval/new-case.ts --id order-rounding --out F:/ab-cases \
+     --git F:/work/order-service --prompt-file F:/ab-cases/order-rounding.md \
+     --setup "pnpm install --frozen-lockfile" --test "pnpm test" \
+     --must-change "src/**" --must-not-change "test/**" --rubric "满分标准……"
    ```
 
-   - 有 `fakeModel` 时，两边都应该通过；
-   - 没有 `fakeModel` 时，应该看到检查失败（因为代理什么都没做），说明检查确实能判出失败。
-6. **用真实网关跑**。
+   - 也可以用 `--dir <目录>` 代替 `--git`，或者用 `--prompt "<文字>"` 代替 `--prompt-file`；
+   - 问答类任务加 `--answer-pattern <正则>`，要求答案里必须出现某个关键结论；
+   - 生成后可以直接编辑 JSON，补 `forbidden`、`required`、`overlay` 等。
 
-现场用例还可以放在别的目录里，用 `--cases <目录>` 指定，不必放进这个公开仓库。
+2. **检查用例本身**。这一步不用模型：准备仓库、跑 setup，再对没动过的仓库跑一遍检查：
+
+   ```bash
+   node src/dsh-host/tools/ab-eval/run.ts --cases F:/ab-cases --check-cases
+   ```
+
+   - 每个用例都应该至少有一项检查失败，否则这组检查判不出「什么都没做」，会标成 `TOOTHLESS`；
+   - setup 失败会标成 `NOT READY`。
+
+3. **在假网关上跑通流程**：
+
+   ```bash
+   node src/dsh-host/tools/ab-eval/run.ts --cases F:/ab-cases --runs 1
+   ```
+
+   没有 `fakeModel` 时，假网关只回一句文本，检查应当失败。
+
+4. **用真实网关跑**，见「真实网关评测：一步一步」。
+
+三类任务的写法：
+
+| 任务 | 检查怎么写 |
+|---|---|
+| 修 bug | `--test` 用能复现问题的测试命令；`mustChange` 写该改的源码目录，`mustNotChange` 写测试目录，防止代理改测试过关；可以再放一份隐藏回归测试到 `overlay` |
+| 加功能 | 隐藏验收测试最可靠，放进 `overlay`；`mustChange` 列出必须动到的文件；用 `forbidden`（`in: added`）检查项目规范不允许的写法 |
+| 读代码回答问题 | `mustNotChange: ["**"]`；用 `required`（`in: answer`）要求答案里有正确结论（数字、函数名、`文件:行号`）；推理质量交给 `judge.rubric` |
+
+其他建议：
+
+- 提示词按真实用户的说法写，中文没有问题；
+- 项目规范可以放进仓库里的 `CLAUDE.md`。两边都会读，DSH 先找 `AGENTS.md`，没有再读 `CLAUDE.md`；
+- 仓库是公开的：现场用例、提示词和代码请放在仓库外的目录里，用 `--cases` 指定。
 
 ## 变体：改进的开与关（规范 §6）
 
@@ -194,13 +276,24 @@ node src/dsh-host/tools/ab-eval/run.ts --gateway real --runs 3 --judge --label r
 
   合并后臂名前面会加上各轮的 `--label`；用 `--baseline <臂>` 指定基线。
 
+## 无人值守
+
+- **提问与卡片**：PiLab 的模型发起的卡片都由评测框架当场应答，并按种类计数（`record.client.cardsAnswered`）：
+  - 提问（`ask_user_question`）统一回答「没有人可以回答：这是无人值守的运行，请按你的判断继续，并在最终回复里写明你的假设」；
+  - 计划审阅选「批准，自动执行（不设目标）」；
+  - 预览回答「没有预览窗口」；
+  - 权限卡片回答允许。`bypass` 档位下本不该出现权限卡片，出现了也会计数。
+
+  Claude Code 在 `-p` 模式下根本不提供提问工具，所以这一栏只对 PiLab 有意义。数字明显不为零时，说明 PiLab 的模型倾向于停下来问人，这本身就是一项差异。
+- **自己启动的后续轮次**：PiLab 的会话在本轮结束后，可能自己开始新的一轮（目标轮次、后台任务完成的唤醒）。评测会跟到会话持续空闲 2 秒为止，次数记在 `record.client.extraTurns`。
+
 ## 输出与报告
 
 ```
 out/<运行 id>/
-  manifest.json        版本戳与配置（规范 §15）、用例与臂的哈希、密钥扫描结果
+  manifest.json        版本戳与配置（规范 §15）、用例与臂的哈希、续跑记录、密钥扫描结果
   records.jsonl        每次运行一行，与各自的 record.json 内容相同
-  report.md            对比报告
+  report.md            对比报告，每次运行后重写
   runs/<用例>/<臂>/<第几次>/
     record.json        结构化记录（schema ab-eval.run/1）
     trace.jsonl        统一格式的轨迹：每次模型调用（usage、文本）与每次工具调用（名称、类别、输入、结果、出错、退出码）
@@ -214,35 +307,38 @@ out/<运行 id>/
 
 | 字段 | 内容 |
 |---|---|
-| `status` | `completed`、`timeout`、`step_budget` 或 `client_error` |
+| `status` | `completed`、`timeout`、`step_budget`、`client_error` 或 `setup_error` |
 | `passed` | `completed` 且全部检查通过 |
+| `setup` | setup 命令的耗时和结果（不计入 `metrics`） |
 | `checks[]` | 每项检查的结果和细节，包括命令输出尾部和命中位置 |
 | `failureTags` | 失败分类（规范 §14）：状态、`check:<id>`、`empty_answer`、`unknown_tool` |
 | `metrics` | `steps`、`toolCalls`、`toolErrors`、`unknownToolCalls`、`nonZeroExits`、`pendingToolCalls`、按工具名与按类别的统计、`tokens`（`input` / `cacheRead` / `cacheWrite` / `output` / `total`）、`durationMs`、`wallMs`、`changes`（文件数、增删行数） |
-| `client` | PiLab：请求实际用的模型和档位、系统提示词哈希、轮次结束原因、重试次数；Claude Code：版本、`apiKeySource`、权限模式、`num_turns`、它自估的费用 |
+| `client` | PiLab：请求实际用的模型和档位、系统提示词哈希、轮次结束原因、重试次数、`cardsAnswered`、`extraTurns`；Claude Code：版本、`apiKeySource`、权限模式、MCP 服务器与插件、`num_turns`、它自估的费用 |
 | `judge` | 分数、各维度、问题清单；或者 `error` |
 
 另一个代理接手时（规范 §11），读失败用例的 `record.json`、`trace.jsonl` 和 `diff.patch` 就能复盘。
 
 ### 怎么读 report.md
 
-1. **运行信息**：时间、模型和档位、网关类型（真实网关只记 URL 的哈希）、用例集版本、harness 提交（含未提交改动的 diff 哈希）、DSH 与 Claude Code 版本、各臂与变体哈希、密钥扫描结果。比较两份报告前，先确认这些一致。
-2. **总览**：每个臂在全部用例上的通过率、步数、工具调用与失败、未知工具、非零退出、计费 token、耗时、改动行数和评分。离散度里混着用例之间的差别，看单个用例的波动要看第 4 节。
-3. **相对基线**：其余各臂相对基线臂（默认第一个）的配对差值，逐个用例算差再取平均。一眼看出谁通过率更高、谁更费 token、谁更慢。
+1. **运行信息**：时间、模型和档位、网关类型（真实网关只记 URL 的哈希）、用例集版本、harness 提交（含未提交改动的 diff 哈希）、DSH 与 Claude Code 版本、各臂与变体哈希、续跑记录、密钥扫描结果。比较两份报告前，先确认这些一致。
+2. **总览**：每个臂在全部用例上的通过数、通过率与 95% 区间，以及步数、工具调用与失败、未知工具、非零退出、计费 token、耗时、改动行数、评分、自动应答。这里的离散度混着用例之间的差别。
+3. **相对基线**：其余各臂相对基线臂（默认第一个）的差值。逐个用例各给一行，最后一行是各用例差值的平均；token 和耗时还给出相对变化。逐个用例的方向一致，结论才可靠。
 4. **按用例 × 臂**：主表，给出均值 ± 样本标准差，n = 1 时只给均值。
-5. **工具调用**：按类别（read、edit、shell、search、web……）列出每次运行平均的调用和失败次数，能看出工具用法的差异，比如 PiLab 在 Windows 上走 pwsh。
-6. **检查项通过次数**：具体卡在哪一项。
-7. **未通过的运行**：失败标签和记录路径，从这里进入复盘。
-8. **口径**：各指标的精确定义。
+5. **多次运行的分布**：同一臂各次运行的中位数与最小–最大值，用来看波动有多大。
+6. **工具调用**：按类别（read、edit、shell、search、web……）列出每次运行平均的调用和失败次数，能看出工具用法的差异，比如 PiLab 在 Windows 上走 pwsh。
+7. **检查项通过次数**：具体卡在哪一项。
+8. **未通过的运行**：失败标签和记录路径，从这里进入复盘。
+9. **口径**：各指标的精确定义。
 
-几个容易误读的口径：
+几个容易误读的地方：
 
+- **通过率的区间**：用的是 Wilson 95% 区间。3 次全过的区间是 44–100%，3 次过 2 次是 21–94%。两臂区间大幅重叠时，不能据此说谁更好，要加次数或加用例。
 - **工具失败** = 工具报错加未知工具。shell 命令跑完了但退出码非零，记为 **非零退出**，不算失败，因为修复前先跑一遍测试就是这样。
 - **计费 token**：
   - PiLab 取 DSH 会话日志里每一步 usage 之和，含子代理会话；
   - Claude Code 取 `result.modelUsage` 各模型之和，含它的辅助模型；
   - 被截停的运行，Claude Code 只能用逐条消息的近似值，`metrics.tokensSource` 会写明来源。
-- **耗时**：PiLab 从 `worker.send` 算到会话回到 idle，不含宿主启动（产品里宿主常驻）；Claude Code 取它自报的 `duration_ms`。`wallMs` 包含启动时间。
+- **耗时**：PiLab 从 `worker.send` 算到会话回到空闲，不含宿主启动（产品里宿主常驻）；Claude Code 取它自报的 `duration_ms`。`wallMs` 包含启动时间。
   - Claude Code 在一个会话里第一次调用 Bash 时要建 shell 快照，Windows 上要几秒，偶尔更久（本机见过 23 秒），所以要多跑几次看离散度。
 
 ## 凭据与隔离
@@ -250,11 +346,13 @@ out/<运行 id>/
 - **不碰本机任何账户**：
   - PiLab 宿主拿到的 key 只经 IPC 按请求下发，宿主的凭据库没有参与；
   - Claude Code 用临时的 `CLAUDE_CONFIG_DIR` 和 HOME，key 只经 `ANTHROPIC_API_KEY` 传入，记录里的 `apiKeySource` 可以核对；
-  - 两边的环境都设了 `GIT_CONFIG_NOSYSTEM=1` 和 `GIT_TERMINAL_PROMPT=0`，git 的凭据管理器不会参与。
+  - 两边的环境都设了 `GIT_CONFIG_NOSYSTEM=1` 和 `GIT_TERMINAL_PROMPT=0`，git 的凭据管理器不会参与；
+  - setup 读不到本机的 `~/.npmrc` 等包管理器凭据。
 - **key 与 URL 不落盘**：
   - 写出的每个文件都先把 key、真实网关 URL 和主机名替换成 `[REDACTED]`；
   - 每次运行结束扫描一遍沙箱，整轮结束再扫描一遍输出目录，结果写进 `manifest.json` 和报告；
-  - 发现泄漏时退出码为 1。
+  - 发现泄漏时退出码为 1；
+  - `--probe` 只显示状态码和耗时，出错信息同样先替换再显示。
 - **祖先目录检查**：Claude Code 会沿父目录读 `CLAUDE.md`。如果沙箱目录的某个上级有 `CLAUDE.md`、`AGENTS.md` 或 `.claude/CLAUDE.md`，就拒绝运行，避免这些说明混进每一次评测。可以换一个 `--scratch`。
 - **轨迹不要入库**：轨迹里有本地路径和模型输出，`out/` 已被 git 忽略。仓库是公开的，需要分享时只分享 `report.md`，它不含路径和密钥。
 - **抓包只在自测时开**：自测会抓假网关收到的请求，用来做隔离断言，抓完随沙箱一起删掉。Claude Code 的系统提示词版权属于 Anthropic，不要保存这些抓包。
@@ -263,23 +361,28 @@ out/<运行 id>/
 
 `selftest.ts` 断言以下几点，全部成立才退出 0：
 
-1. 每条记录都与用例的 `fakeModel.expect` 一致：状态、是否通过、步数、工具调用、工具报错、未知工具、非零退出、改动文件数和失败标签。
-   - 其中 retry 用例故意读一个不存在的文件、调用一个不存在的工具，用来验证这两个计数在两边都对；
-   - 失败、截停和超时的路径都覆盖到了。
+1. 每条记录都与用例的 `fakeModel.expect` 一致：状态、是否通过、步数、工具调用、工具报错、未知工具、非零退出、改动文件数和失败标签。剧本两边走法不同时按客户端分别核对。覆盖到的路径有：
+   - retry 用例故意读一个不存在的文件、调用一个不存在的工具，验证这两个计数在两边都对；
+   - 假模型放弃（检查必须判失败）、步数截停、超时截停；
+   - git 来源检出到指定的旧提交；
+   - setup 的产物进入基准、不算改动，`promptFile` 正确读入；
+   - PiLab 的模型提问时当场被应答，不会等到超时。
 2. 同一用例三个臂都正常结束时：
-   - 两边报告的计费 token 完全相同且大于 0（假网关按步计费）；
    - 假网关收到的模型请求数等于记录里的步数，没有多出来的请求；
+   - 剧本对称时，两边报告的计费 token 完全相同且大于 0（假网关按步计费）；
    - 评分请求数等于被评分的记录数。
 3. 每个客户端确实按要求运行：
    - Claude Code 用的是环境变量里的 key，权限模式是 bypass，没有加载任何 MCP 服务器，插件也只有内置的；
-   - PiLab 的请求用的是指定的模型和档位，宿主正常停止。
+   - PiLab 的请求用的是指定的模型和档位，宿主正常停止，只有提问用例才出现自动应答。
 4. 变体确实生效：变体臂的系统提示词里有 home patch 加的标记，基线臂的没有。
 5. 隔离：
    - 抓到的请求里没有真实的 `~/.claude`、`~/.dsh` 路径；
    - 输出目录和沙箱里都找不到这把 key；
-   - 报告覆盖了全部用例和臂。
+   - 报告覆盖了全部用例和臂，几个主要小节都在。
+6. `--check-cases`：随附用例都准备得起来，而且在什么都不做时至少有一项检查失败。
+7. `--resume`：一轮跑 1 次后续到 2 次，原来那次保持不变，只补上缺的。
 
-`__tests__/` 里是不需要宿主的单元测试，覆盖两边轨迹的解析与计数规则、检查引擎、统计、报告、用例与变体校验，以及密钥扫描。它们在根 Vitest 里运行：
+`__tests__/` 里是不需要宿主的单元测试，覆盖两边轨迹的解析与计数规则、检查引擎、统计与区间、报告、用例与变体校验（含 `promptFile`、setup、相对路径），以及密钥扫描。它们在根 Vitest 里运行：
 
 ```bash
 pnpm exec vitest run src/dsh-host/tools/ab-eval
@@ -291,29 +394,32 @@ pnpm exec vitest run src/dsh-host/tools/ab-eval
 - PiLab 的步数截停比 Claude Code 晚一步发生：多发出的那次调用会被中止（见「用例格式」）。
 - `dshHomeFiles` 只对从源码运行的宿主有效。改进项确定以后，要落到 `bundle/cordis.patch.yml` 或正式开关里，再用 `env` 变体做对比。
 - 评分默认和被测请求走同一个网关。如果网关会改写请求（调研 §4），评分请求也可能被改写，可以用 `AB_JUDGE_BASE_URL`、`AB_JUDGE_API_KEY` 指定一个干净的端点。
-- 评分请求由本进程用 `fetch` 发出，Node 默认不读代理变量。需要代理时，运行前设置 `NODE_USE_ENV_PROXY=1`，或者用 `node --use-env-proxy` 启动。两个客户端本身会照常使用传给它们的代理变量。
+- 评分和 `--probe` 的请求由本进程用 `fetch` 发出，Node 默认不读代理变量。需要代理时，运行前设置 `NODE_USE_ENV_PROXY=1`，或者用 `node --use-env-proxy` 启动。两个客户端本身会照常使用传给它们的代理变量。
+- 每次运行都会重新执行 setup。依赖多的仓库会慢一些，缓存只能省掉下载。
 
 ## 文件
 
 | 路径 | 作用 |
 |---|---|
-| `run.ts` | 跑一轮评测 |
+| `run.ts` | 跑一轮评测；也负责预检、用例检查和续跑 |
 | `report.ts` | 由一个或多个输出目录重建报告 |
+| `new-case.ts` | 生成现场用例 |
 | `selftest.ts` | 假网关上的端到端自测 |
 | `cases/` | 随附用例：修 bug、跨文件加功能、读代码回答问题 |
 | `fixtures/` | 用例仓库，`*-hidden` 是隐藏验收文件 |
 | `selftest/cases/` | 只给自测用的用例 |
 | `variants/` | 变体 |
-| `lib/suite.ts` | 编排：沙箱、仓库副本、客户端、检查、记录 |
-| `lib/pilab.ts` | PiLab 侧运行器 |
+| `lib/suite.ts` | 编排：预检、沙箱、仓库副本、setup、客户端、检查、记录、续跑 |
+| `lib/pilab.ts` | PiLab 侧运行器（含卡片应答） |
 | `lib/claudeCode.ts` | Claude Code 侧运行器 |
 | `lib/dshLog.ts` | 解析 DSH 会话日志 |
 | `lib/claudeStream.ts` | 解析 Claude Code 的 stream-json |
 | `lib/toolMetrics.ts` | 两边共用的计数规则 |
-| `lib/checks.ts` | 确定性检查 |
+| `lib/checks.ts` | 确定性检查与命令执行 |
+| `lib/caseCheck.ts` | `--check-cases` |
 | `lib/judge.ts` | LLM 评分 |
 | `lib/summary.ts` | 汇总与报告 |
-| `lib/workspace.ts` | 仓库副本与 diff |
+| `lib/workspace.ts` | 仓库副本、setup 提交与 diff |
 | `lib/sandbox.ts` | 隔离环境 |
 | `lib/redact.ts` | 密钥替换与扫描 |
 | `lib/stamp.ts` | 版本戳 |

@@ -55,6 +55,58 @@ export function realGateway(): Gateway {
   };
 }
 
+/**
+ * One tiny request to the real gateway (`--dry-run --probe`): does the URL
+ * answer, does it take the key, does it serve the model. A few tokens; the
+ * reply's text is not shown, and an error is shown with the secrets redacted.
+ */
+export async function probeGateway(
+  model: string
+): Promise<{ ok: boolean; status?: number; ms: number; model?: string; error?: string }> {
+  const gateway = realGateway();
+  const started = performance.now();
+  const hide = (text: string) => {
+    let out = text;
+    for (const secret of gateway.secrets) out = out.split(secret).join('[REDACTED]');
+    return out;
+  };
+  try {
+    const response = await fetch(`${gateway.baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'x-api-key': gateway.apiKey,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 16,
+        messages: [{ role: 'user', content: 'Reply with: OK' }],
+        stream: true,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    const body = await response.text();
+    const ms = Math.round(performance.now() - started);
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        ms,
+        error: `HTTP ${response.status}: ${hide(body.slice(0, 300))}`,
+      };
+    }
+    const served = /"model"\s*:\s*"([^"]+)"/.exec(body)?.[1];
+    return { ok: true, status: response.status, ms, ...(served ? { model: served } : {}) };
+  } catch (error) {
+    return {
+      ok: false,
+      ms: Math.round(performance.now() - started),
+      error: hide(String(error instanceof Error ? error.message : error)),
+    };
+  }
+}
+
 /** The scripts the `ab-eval` plan plays: one per case that has a fake model. */
 export function writeFakeScripts(cases: readonly LoadedCase[], file: string): number {
   const scripts = cases

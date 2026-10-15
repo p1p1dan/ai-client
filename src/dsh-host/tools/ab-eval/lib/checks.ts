@@ -155,14 +155,28 @@ function commandId(command: CommandCheck): string {
   return command.id ?? (command.argv ? command.argv.join(' ') : String(command.shell));
 }
 
-/** The case's commands, in order, in the workspace. */
-export async function commandChecks(
+/** The case's check commands, in order, in the workspace. */
+export function commandChecks(
   checks: CaseChecks,
   ws: string,
   env: Record<string, string>
 ): Promise<CheckResult[]> {
+  return runCommandList(checks.commands ?? [], 'command', ws, env);
+}
+
+/**
+ * Commands in order, in the workspace, each judged by its exit code. Setup
+ * stops at the first failure (nothing after it would mean anything); checks
+ * all run, so a report shows every one that failed.
+ */
+export async function runCommandList(
+  commands: readonly CommandCheck[],
+  kind: 'setup' | 'command',
+  ws: string,
+  env: Record<string, string>
+): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
-  for (const command of checks.commands ?? []) {
+  for (const command of commands) {
     const expectExit = command.expectExit ?? 0;
     const [file, args, shell] = command.argv
       ? [command.argv[0], command.argv.slice(1), false]
@@ -171,12 +185,13 @@ export async function commandChecks(
       cwd: ws,
       env,
       shell,
-      timeoutMs: command.timeoutMs ?? 120_000,
+      timeoutMs: command.timeoutMs ?? (kind === 'setup' ? 600_000 : 120_000),
     });
+    const passed = !run.timedOut && run.code === expectExit;
     results.push({
-      id: `command:${commandId(command)}`,
-      kind: 'command',
-      passed: !run.timedOut && run.code === expectExit,
+      id: `${kind}:${commandId(command)}`,
+      kind,
+      passed,
       detail: {
         ...(command.argv ? { argv: command.argv } : { shell: command.shell }),
         expectExit,
@@ -187,6 +202,7 @@ export async function commandChecks(
         stderrTail: run.stderr.slice(-2000),
       },
     });
+    if (!passed && kind === 'setup') break;
   }
   return results;
 }

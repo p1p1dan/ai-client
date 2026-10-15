@@ -2,22 +2,28 @@
  * End-to-end self-test of the harness on the local fake gateway (no model, no
  * network beyond 127.0.0.1). PiLab, Claude Code and a PiLab variant each run
  * every bundled case plus the self-test cases (the fake model gives up; the
- * step and time budgets run out; a git source pinned to an older commit),
- * once, with the judge on. Then it asserts:
+ * step and time budgets run out; a git source pinned to an older commit; a
+ * case with setup and a prompt file; a model that asks a question), once,
+ * with the judge on. Then it asserts:
  *
  * - every record matches its case's `fakeModel.expect` (status, pass or fail,
  *   steps, tool calls, errors, unknown tools, non-zero exits, changed files,
- *   failure tags);
- * - for every case all arms completed, both clients report identical,
- *   non-zero token totals (the fake gateway bills per step), the gateway saw
- *   exactly the model calls the records count, and the judge scored it;
+ *   failure tags), per client where the script plays differently;
+ * - for every case all arms completed, the gateway saw exactly the model calls
+ *   the records count; for symmetric scripts both clients report identical,
+ *   non-zero token totals (the fake gateway bills per step); the judge scored
+ *   every judged case;
  * - each client ran with what the harness asked for (Claude Code on the
  *   environment's key in bypass mode, with no MCP server or plugin a user
- *   configuration would add; PiLab on the requested model and effort);
+ *   configuration would add; PiLab on the requested model and effort), and a
+ *   question PiLab's model asked was answered at once, not waited out;
  * - the variant reached the host: its system prompt carries the marker its
  *   home patch adds, the baseline's does not;
  * - isolation: no captured request mentions the real ~/.claude or ~/.dsh, and
- *   the key is in no output or sandbox file.
+ *   the key is in no output or sandbox file;
+ * - `--check-cases`: every bundled case is ready and fails a check when the
+ *   agent does nothing; `--resume`: a suite continued with more runs keeps
+ *   its recorded runs and adds the missing ones.
  *
  *   node src/dsh-host/tools/ab-eval/selftest.ts [--claude-bin <path>] [--git-bash <path>] [--keep]
  */
@@ -35,10 +41,11 @@ import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { checkCases } from './lib/caseCheck.ts';
 import { loadCases } from './lib/cases.ts';
 import { git, killAllTracked } from './lib/proc.ts';
-import { runSuite } from './lib/suite.ts';
-import type { FakeExpect, RunRecord } from './lib/types.ts';
+import { runSuite, type SuiteOptions } from './lib/suite.ts';
+import type { FakeExpectation, RunRecord } from './lib/types.ts';
 
 const abDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(abDir, '..', '..', '..', '..');
@@ -47,6 +54,7 @@ const EFFORT = 'high';
 const ARMS = ['pilab', 'claude-code', 'pilab+selftest-persona'];
 const VARIANT_ARM = 'pilab+selftest-persona';
 const VARIANT_MARKER = 'AB-EVAL-VARIANT-MARKER';
+const QUESTION_CASE = 'selftest-question';
 const FAKE_JUDGE_SCORE = 7;
 
 const { values } = parseArgs({
@@ -98,7 +106,8 @@ function gitSourceCase(): { dir: string; file: string } {
         id: 'selftest-git-source',
         title: '自测：git 来源要检出用例指定的提交',
         tier: 'selftest',
-        repo: { git: origin, commit },
+        // Relative to the case file, as a field case beside its clone would write it.
+        repo: { git: 'origin', commit },
         prompt: '（自测，git 来源）默认重试策略最多尝试几次？',
         checks: {
           mustNotChange: ['**'],
@@ -124,35 +133,40 @@ function gitSourceCase(): { dir: string; file: string } {
   return { dir, file };
 }
 
-const generated = gitSourceCase();
-const casePaths = [join(abDir, 'cases'), join(abDir, 'selftest', 'cases'), generated.file];
-const cases = loadCases(casePaths);
-const result = await runSuite({
-  repoRoot,
-  abDir,
-  casePaths,
-  arms: ARMS.join(','),
-  runs: 1,
-  model: MODEL,
-  effort: EFFORT,
-  gateway: 'fake',
-  label: 'selftest',
-  keepWorkspaces: values.keep,
-  judge: true,
-  ...(values['claude-bin'] ? { claudeBin: values['claude-bin'] } : {}),
-  ...(values['git-bash'] ? { gitBash: values['git-bash'] } : {}),
-  capture: true,
-  allowAncestorInstructions: false,
-  log: (line) => process.stdout.write(`${line}\n`),
-});
-
 const failures: string[] = [];
 const expectThat = (ok: boolean, what: string) => {
   if (!ok) failures.push(what);
 };
+const log = (line: string) => process.stdout.write(`${line}\n`);
+
+const generated = gitSourceCase();
+const casePaths = [join(abDir, 'cases'), join(abDir, 'selftest', 'cases'), generated.file];
+const cases = loadCases(casePaths);
+const common: Omit<SuiteOptions, 'casePaths' | 'arms' | 'runs' | 'label' | 'judge' | 'capture'> = {
+  repoRoot,
+  abDir,
+  model: MODEL,
+  effort: EFFORT,
+  gateway: 'fake',
+  keepWorkspaces: values.keep,
+  ...(values['claude-bin'] ? { claudeBin: values['claude-bin'] } : {}),
+  ...(values['git-bash'] ? { gitBash: values['git-bash'] } : {}),
+  allowAncestorInstructions: false,
+  log,
+};
+const result = await runSuite({
+  ...common,
+  casePaths,
+  arms: ARMS.join(','),
+  runs: 1,
+  label: 'selftest',
+  judge: true,
+  capture: true,
+});
+
 const label = (record: RunRecord) => `${record.case.id} × ${record.arm.id}`;
 const metricOf: Record<
-  Exclude<keyof FakeExpect, 'status' | 'passed' | 'failureTags'>,
+  Exclude<keyof FakeExpectation, 'status' | 'passed' | 'failureTags'>,
   (r: RunRecord) => number
 > = {
   steps: (r) => r.metrics.steps,
@@ -189,7 +203,8 @@ expectThat(
 
 for (const record of result.records) {
   const c = cases.find((item) => item.id === record.case.id);
-  const expect = c?.fakeModel?.expect ?? {};
+  const { byClient, ...shared } = c?.fakeModel?.expect ?? {};
+  const expect: FakeExpectation = { ...shared, ...(byClient?.[record.arm.client] ?? {}) };
   const name = label(record);
   const status = expect.status ?? 'completed';
   expectThat(
@@ -208,6 +223,8 @@ for (const record of result.records) {
   }
   if (record.status === 'completed') {
     for (const field of ['input', 'cacheRead', 'cacheWrite', 'output'] as const) {
+      // A one-step script never reads the cache the fake gateway bills from step 2 on.
+      if (field === 'cacheRead' && record.metrics.steps < 2) continue;
       expectThat(
         record.metrics.tokens[field] > 0,
         `${name}: tokens.${field} is ${record.metrics.tokens[field]}`
@@ -251,6 +268,12 @@ for (const record of result.records) {
     `${name}: the request used effort ${String(config.reasoningEffort)}`
   );
   expectThat(record.client.hostStopped === true, `${name}: the host did not stop cleanly`);
+  const cards = (record.client.cardsAnswered ?? {}) as Record<string, number>;
+  const wantQuestions = record.case.id === QUESTION_CASE ? 1 : 0;
+  expectThat(
+    cards.questions === wantQuestions,
+    `${name}: ${cards.questions} question(s) answered, expected ${wantQuestions}`
+  );
   const prompts = systemPrompts(record);
   expectThat(prompts.length > 0, `${name}: no system prompt in the session log`);
   const marked = prompts.includes(VARIANT_MARKER);
@@ -266,14 +289,14 @@ for (const record of result.records) {
   }
 }
 
-const log =
+const gatewayLog =
   result.gateway.logFile && existsSync(result.gateway.logFile)
     ? readFileSync(result.gateway.logFile, 'utf8')
         .split('\n')
         .filter(Boolean)
         .map((line) => JSON.parse(line) as { decision?: string })
     : [];
-const decisions = log.map((entry) => entry.decision ?? '');
+const decisions = gatewayLog.map((entry) => entry.decision ?? '');
 for (const stray of ['ab-eval:unmatched', 'ab-eval:no-tools']) {
   const count = decisions.filter((decision) => decision === stray).length;
   expectThat(count === 0, `${count} gateway request(s) decided ${stray}`);
@@ -287,16 +310,17 @@ expectThat(
 for (const c of cases) {
   const records = result.records.filter((record) => record.case.id === c.id);
   if (!records.every((record) => record.status === 'completed')) continue;
-  const totals = records.map((record) => `${record.arm.id}=${record.metrics.tokens.total}`);
-  expectThat(
-    new Set(records.map((record) => record.metrics.tokens.total)).size === 1,
-    `${c.id}: token totals differ across arms (${totals.join(', ')})`
-  );
   const requests = decisions.filter((decision) => decision.startsWith(`ab-eval:${c.id} `)).length;
   const steps = records.reduce((sum, record) => sum + record.metrics.steps, 0);
   expectThat(
     requests === steps,
     `${c.id}: the gateway saw ${requests} model calls, the records count ${steps}`
+  );
+  if (c.fakeModel?.asymmetric) continue;
+  const totals = records.map((record) => `${record.arm.id}=${record.metrics.tokens.total}`);
+  expectThat(
+    new Set(records.map((record) => record.metrics.tokens.total)).size === 1,
+    `${c.id}: token totals differ across arms (${totals.join(', ')})`
   );
 }
 
@@ -305,6 +329,9 @@ const report = existsSync(reportFile) ? readFileSync(reportFile, 'utf8') : '';
 expectThat(report.length > 0, 'report.md was not written');
 for (const c of cases) expectThat(report.includes(c.id), `report.md does not mention ${c.id}`);
 for (const arm of ARMS) expectThat(report.includes(arm), `report.md does not mention ${arm}`);
+for (const section of ['## 相对基线', '## 多次运行的分布', '## 检查项通过次数']) {
+  expectThat(report.includes(section), `report.md has no section ${section}`);
+}
 
 expectThat(
   result.manifest.outcome?.leakScan.clean === true,
@@ -323,14 +350,53 @@ const forbidden = [join(home, '.claude'), join(home, '.dsh'), process.env.CLAUDE
 const captureDir = result.gateway.captureDir;
 const captures = captureDir && existsSync(captureDir) ? readdirSync(captureDir) : [];
 expectThat(
-  captures.length === log.length,
-  `${captures.length} captures for ${log.length} requests`
+  captures.length === gatewayLog.length,
+  `${captures.length} captures for ${gatewayLog.length} requests`
 );
 for (const name of captures) {
   const body = readFileSync(join(captureDir as string, name), 'utf8');
   const hit = forbidden.find((needle) => body.includes(needle));
   expectThat(!hit, `capture ${name} mentions ${hit}`);
 }
+
+// --check-cases: the bundled cases (and setup) are ready, and none passes with no agent work.
+log('\n--check-cases on the bundled cases and the setup case:');
+const checked = await checkCases(
+  loadCases([join(abDir, 'cases'), join(abDir, 'selftest', 'cases', 'setup.json')]),
+  join(os.tmpdir(), 'ab-eval'),
+  join(result.scratchDir, 'check-cases'),
+  log
+);
+for (const item of checked) {
+  expectThat(!item.error, `check-cases ${item.id}: ${item.error}`);
+  expectThat(!item.toothless, `check-cases ${item.id}: every check passes with no agent work`);
+}
+
+// --resume: one run recorded, continued to two; the first stays as it was.
+log('\n--resume: a one-run suite continued to two runs:');
+const short = {
+  ...common,
+  casePaths: [join(abDir, 'selftest', 'cases', 'gives-up.json')],
+  arms: 'claude-code',
+  label: 'selftest-resume',
+  judge: false,
+  capture: false,
+};
+const first = await runSuite({ ...short, runs: 1 });
+const resumed = await runSuite({ ...short, runs: 2, resume: first.outDir });
+const reps = resumed.records.map((record) => record.rep).sort();
+expectThat(
+  JSON.stringify(reps) === '[1,2]',
+  `the resumed suite holds runs ${JSON.stringify(reps)}, expected [1,2]`
+);
+expectThat(
+  resumed.records.find((record) => record.rep === 1)?.runId === first.records[0]?.runId,
+  'the resumed suite did not keep the recorded run'
+);
+expectThat(
+  resumed.manifest.resumes?.length === 1 && resumed.outDir === first.outDir,
+  'the resume is not recorded in the same suite'
+);
 
 process.stdout.write(
   '\ncase × arm: status, passed, steps, tools (errors/unknown/non-zero), tokens\n'
@@ -354,4 +420,6 @@ if (failures.length > 0) {
   );
   process.exit(1);
 }
-process.stdout.write(`\nSELF-TEST PASSED: ${result.records.length} runs, every assertion held.\n`);
+process.stdout.write(
+  `\nSELF-TEST PASSED: ${result.records.length + resumed.records.length} runs, every assertion held.\n`
+);
