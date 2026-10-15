@@ -7,9 +7,14 @@ import {
   DEFAULT_MAX_TOKENS,
   type DshModelPlan,
   type DshModelPlanInput,
+  type DshProtocol,
+  defaultMaxTokensFor,
   dshRouteSettings,
   keyRefFor,
+  PROTOCOL_MAX_TOKENS_ENV,
   plannedMaxTokens,
+  REASONING_DEFAULT_MAX_TOKENS,
+  resolveDefaultMaxTokensMode,
   resolveRoute,
   translateReasoningEfforts,
 } from '../index.ts';
@@ -343,8 +348,13 @@ describe('MP-05 protocols and defaults (R2, R7, decision 036)', () => {
     const route = p.routes.mine;
     expect(route?.defaultContextWindow).toBe(DEFAULT_CONTEXT_WINDOW);
     expect(route?.defaultMaxTokens).toBe(DEFAULT_MAX_TOKENS);
+    // Decision 190: the output limit is the protocol's raise for a reasoning row.
     expect(route?.models).toEqual([
-      { id: 'r1', reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' } },
+      {
+        id: 'r1',
+        maxTokens: 16384,
+        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
+      },
     ]);
     expect(p.index['mine/r1']).toEqual({
       route: 'mine',
@@ -1102,5 +1112,136 @@ describe('MN-01 the menu keeps what the plan routes (decision 033 rule 3)', () =
     const menu = applyDshPlanToCatalog(catalog, plan({}));
     expect(menu.models).toEqual([]);
     expect(menu.unavailable).toHaveLength(5);
+  });
+});
+
+describe('decision 190: the output limit of a row that declares none', () => {
+  const think = (extra: Record<string, unknown> = {}) => ({
+    id: 'think',
+    reasoning: true,
+    ...extra,
+  });
+
+  it('raises a reasoning row by protocol, within a quarter of the window, never below 8192', () => {
+    const cases: Array<[DshProtocol, number | undefined, number]> = [
+      ['anthropic-messages', undefined, 32000],
+      ['openai-responses', undefined, 32000],
+      ['openai-completions', undefined, 16384],
+      // Decision 146's share of a declared window caps the raise ...
+      ['anthropic-messages', 64000, 16000],
+      ['openai-completions', 40000, 10000],
+      // ... and a window too small for any raise keeps today's 8192.
+      ['anthropic-messages', 32768, DEFAULT_MAX_TOKENS],
+      ['anthropic-messages', 1_000_000, 32000],
+    ];
+    for (const [api, contextWindow, expected] of cases) {
+      expect(
+        defaultMaxTokensFor({ api, reasoning: true, contextWindow }),
+        `${api} ${contextWindow}`
+      ).toBe(expected);
+    }
+    expect(REASONING_DEFAULT_MAX_TOKENS).toEqual({
+      'anthropic-messages': 32000,
+      'openai-responses': 32000,
+      'openai-completions': 16384,
+    });
+  });
+
+  it('keeps 8192 for a non-reasoning row and for the flat mode', () => {
+    for (const api of ['anthropic-messages', 'openai-responses', 'openai-completions'] as const) {
+      expect(defaultMaxTokensFor({ api, reasoning: false })).toBe(DEFAULT_MAX_TOKENS);
+      expect(defaultMaxTokensFor({ api, reasoning: true, mode: 'flat' })).toBe(DEFAULT_MAX_TOKENS);
+    }
+  });
+
+  it('writes the raise into the row, and nothing where the number would be the route default', () => {
+    const p = plan({
+      a: provider('anthropic-messages', [
+        think(),
+        think({ id: 'small', contextWindow: 32768 }),
+        think({ id: 'mid', contextWindow: 64000 }),
+        { id: 'plain' },
+        // An adaptive-only row is a reasoning row too (decision 141).
+        { id: 'adaptive', reasoning: true, compat: { forceAdaptiveThinking: true } },
+        // An off-only map is not a reasoning model (R8), so it is not raised.
+        {
+          id: 'offonly',
+          reasoning: true,
+          thinkingLevelMap: { low: null, medium: null, high: null },
+        },
+      ]),
+    });
+    const sizes = Object.fromEntries(
+      (p.routes.a?.models ?? []).map((model) => [model.id, model.maxTokens])
+    );
+    expect(sizes).toEqual({
+      think: 32000,
+      small: undefined,
+      mid: 16000,
+      plain: undefined,
+      adaptive: 32000,
+      offonly: undefined,
+    });
+    // Nothing is reported as dropped or clamped for a defaulted row.
+    expect(p.dropped.filter((drop) => drop.kind === 'field' && drop.field === 'maxTokens')).toEqual(
+      []
+    );
+  });
+
+  it('leaves a declared output limit to decision 146 alone', () => {
+    const p = plan({
+      a: provider('anthropic-messages', [
+        think({ maxTokens: 4096 }),
+        think({ id: 'big', contextWindow: 100000, maxTokens: 90000 }),
+      ]),
+    });
+    expect(p.routes.a?.models.map((model) => model.maxTokens)).toEqual([4096, 25000]);
+  });
+
+  it('plans byte for byte as before in the flat mode', () => {
+    const providers = {
+      a: provider('anthropic-messages', [think(), { id: 'plain' }]),
+      c: provider('openai-completions', [think({ contextWindow: 64000 })]),
+    };
+    const flat = plan(providers, { settings: { defaultMaxTokens: 'flat' } });
+    for (const route of Object.values(flat.routes)) {
+      expect(route.defaultMaxTokens).toBe(DEFAULT_MAX_TOKENS);
+      for (const model of route.models) expect(model).not.toHaveProperty('maxTokens');
+    }
+    expect(flat.revision).not.toBe(plan(providers).revision);
+    // Anything but `flat` is the default mode.
+    expect(plan(providers, { settings: { defaultMaxTokens: 'bogus' as never } }).revision).toBe(
+      plan(providers).revision
+    );
+  });
+
+  it('reads the switch the way Main does: only `0` selects flat', () => {
+    expect(PROTOCOL_MAX_TOKENS_ENV).toBe('AICLIENT_RUNTIME_PROTOCOL_MAX_TOKENS');
+    expect(resolveDefaultMaxTokensMode('0')).toBe('flat');
+    for (const value of [undefined, '', '1', 'false', 'off', 0]) {
+      expect(resolveDefaultMaxTokensMode(value)).toBe('protocol');
+    }
+  });
+
+  it('sizes the menu’s compaction from the raised limit, as the host does', () => {
+    const p = plan({ a: provider('anthropic-messages', [think()]) });
+    const menu = applyDshPlanToCatalog(
+      {
+        models: [{ id: 'a/think', label: 'Think' }],
+        source: 'local',
+        stale: false,
+        fetchedAt: null,
+      },
+      p
+    );
+    // Decision 177 over 128000 / 32000: the headroom is lowered to keep a usable span.
+    expect(menu.models[0]?.autoCompaction).toMatchObject({
+      auto: true,
+      contextWindow: DEFAULT_CONTEXT_WINDOW,
+      maxTokens: 32000,
+      thresholdTokens: 39936,
+      headroomLowered: true,
+      contextWindowDefaulted: true,
+    });
   });
 });

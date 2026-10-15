@@ -330,6 +330,13 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
           · {t('Exit code {{code}}', { code: view.exitCode })}
         </span>
       )}
+      {/* Decision 190: what grep found, or how a fetched page came back
+          (「3 个文件」「HTTP 404」「已截断」) — the exit code's slot and tone. */}
+      {view.resultNote && (
+        <span data-slot="tool-row-result" className={cn(toolRowPermissionClass(), 'tabular-nums')}>
+          · {t(view.resultNote.key, view.resultNote.params)}
+        </span>
+      )}
       {/* 2026-09-23 (user report: a 1800s command gave no sign of progress):
           the live clock on a running row — elapsed since `tool.started`, and
           the deadline the runtime will apply when the input named one (on DSH,

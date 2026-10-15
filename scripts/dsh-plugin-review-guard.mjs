@@ -45,6 +45,8 @@ export const OWN_PRODUCT_ROWS = Object.freeze([
   'aiclient-permissions',
   'aiclient-loop-guard',
   'aiclient-encrypted-read',
+  // Decision 190: the workspace search row in place of dsh-base's tool-fs-search.
+  'aiclient-fs-search',
 ]);
 
 export const CRITERIA = Object.freeze({

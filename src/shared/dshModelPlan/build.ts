@@ -19,12 +19,14 @@ import {
   DSH_EFFORT_LEVELS,
   DSH_OFFERED_COMPAT,
   DSH_PROTOCOLS,
+  defaultMaxTokensFor,
   EMPTY_PLAN_DEFAULT_MODEL,
   IMPLIED_EFFORT_LEVELS,
   KEY_REF_PREFIX,
   plannedMaxTokens,
 } from './tables.ts';
 import type {
+  DefaultMaxTokensMode,
   DshEffortLevel,
   DshFieldDropReason,
   DshModelPlan,
@@ -167,6 +169,9 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
   const env = input.env ?? {};
   const settings = dshRouteSettings(input.settings);
   const cacheControlOnTools = resolveCacheControlOnTools(input.settings?.cacheControlOnTools);
+  // Decision 190: absent (or anything unrecognised) is `protocol`.
+  const maxTokensMode: DefaultMaxTokensMode =
+    input.settings?.defaultMaxTokens === 'flat' ? 'flat' : 'protocol';
   const drops: DshPlanDrop[] = [];
   // Decision 171: one User-Agent for every route, relayed past DSH's own.
   const userAgent = resolveRequestUserAgent(
@@ -333,6 +338,23 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     return planned;
   };
 
+  /**
+   * Decision 190: the output limit of a row that declares none. A reasoning
+   * row in `protocol` mode is written its protocol's default
+   * (`defaultMaxTokensFor`); every other row stays unsized, so the host fills
+   * it with the route's `defaultMaxTokens` exactly as before. A default equal
+   * to the route's is not written either, so the plan only changes where the
+   * number does.
+   */
+  const defaultedRowMaxTokens = (
+    api: DshProtocol,
+    reasoning: boolean,
+    contextWindow: number | undefined
+  ): number | undefined => {
+    const planned = defaultMaxTokensFor({ api, reasoning, contextWindow, mode: maxTokensMode });
+    return planned === DEFAULT_MAX_TOKENS ? undefined : planned;
+  };
+
   /** R7 / R8 for one row. */
   const planModel = (
     model: AcceptedModel,
@@ -343,12 +365,11 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     const { raw, id } = model;
     const name = nonEmptyString(raw.name);
     const contextWindow = positiveInteger(raw.contextWindow);
-    const maxTokens = planRowMaxTokens(
-      providerId,
-      id,
-      contextWindow,
-      positiveInteger(raw.maxTokens)
-    );
+    const declaredMaxTokens = positiveInteger(raw.maxTokens);
+    const plannedDeclared =
+      declaredMaxTokens === undefined
+        ? undefined
+        : planRowMaxTokens(providerId, id, contextWindow, declaredMaxTokens);
     const input = Array.isArray(raw.input)
       ? [
           ...new Set(
@@ -383,6 +404,8 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
       // the switch, even as `false`, made that call on purpose.
       dropField(providerId, id, 'compat.forceAdaptiveThinking', 'adaptive_thinking_undeclared');
     }
+    const maxTokens =
+      plannedDeclared ?? defaultedRowMaxTokens(api, reasoningEfforts !== false, contextWindow);
     return {
       id,
       ...(name ? { name } : {}),

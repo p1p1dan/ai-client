@@ -397,6 +397,8 @@ describe('the product bundle: one bridge row always on, the permission row, the 
       /^- id: aiclient-bridge\n\s+name: '@aiclient\/dsh-app\/bridge'\n?$/
     );
     expect(patch.match(/- id: aiclient-[a-z-]+/g)).toEqual([
+      // Decision 190's section, beside the rows it patches.
+      '- id: aiclient-fs-search',
       '- id: aiclient-credentials',
       '- id: aiclient-bridge',
       '- id: aiclient-permissions',
@@ -466,10 +468,77 @@ describe('the product bundle: one bridge row always on, the permission row, the 
       './cordis.patch.yml',
       './credentials',
       './encrypted-read',
+      './fs-search',
       './loop-guard',
       './package.json',
       './permissions',
     ]);
+  });
+});
+
+describe('decision 190: the tool gaps, each behind its switch', () => {
+  const patch = read('bundle', 'cordis.patch.yml');
+  const switches = read('lib', 'toolSwitches.ts');
+  /** One top-level patch: from its `- id:` line to the next blank line. */
+  const patchOf = (id: string) => {
+    const start = patch.indexOf(`\n- id: ${id}\n`);
+    expect(start, id).toBeGreaterThanOrEqual(0);
+    const end = patch.indexOf('\n\n', start + 1);
+    return patch.slice(start + 1, end < 0 ? undefined : end + 1);
+  };
+  const webFetchOff = `!!js "process.env.${switches.match(/WEB_FETCH_ENV = '([A-Z_]+)'/)?.[1]} === '0'"`;
+
+  it('keeps the whole change in one section of the patch', () => {
+    const start = patch.indexOf('# ---- Decision 190: tool gaps');
+    const end = patch.indexOf('# ---- end of decision 190');
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    for (const id of [
+      'web',
+      'web-fetch-http',
+      'tool-web',
+      'web-search-deepseek',
+      'tool-fs-search',
+    ]) {
+      const at = patch.indexOf(`\n- id: ${id}\n`);
+      expect(at, id).toBeGreaterThan(start);
+      expect(at, id).toBeLessThan(end);
+    }
+    expect(patch.indexOf('- id: aiclient-fs-search')).toBeLessThan(end);
+  });
+
+  it('composes web_fetch alone, switched by AICLIENT_RUNTIME_WEB_FETCH', () => {
+    expect(webFetchOff).toBe(`!!js "process.env.AICLIENT_RUNTIME_WEB_FETCH === '0'"`);
+    expect(patchOf('web')).toBe(
+      `- id: web\n  disabled: ${webFetchOff}\n  config:\n    fetchProvider: http\n`
+    );
+    expect(patchOf('web-fetch-http')).toBe(`- id: web-fetch-http\n  disabled: ${webFetchOff}\n`);
+    expect(patchOf('tool-web')).toBe(
+      `- id: tool-web\n  disabled: ${webFetchOff}\n  config:\n    search: false\n    fetch: true\n`
+    );
+    // web_search's DSH backend is the official DeepSeek endpoint: off, and required off.
+    expect(patchOf('web-search-deepseek')).toBe('- id: web-search-deepseek\n  disabled: true\n');
+    expect(read('lib', 'hostProfile.ts')).toContain("  'web-search-deepseek',");
+  });
+
+  it("puts aiclient-fs-search in tool-fs-search's place, with tool-fs-search's config", () => {
+    expect(patchOf('tool-fs-search')).toBe('- id: tool-fs-search\n  disabled: true\n');
+    const start = patch.indexOf('    - id: aiclient-fs-search\n');
+    expect(patch.slice(start, patch.indexOf('\n\n', start) + 1)).toBe(
+      "    - id: aiclient-fs-search\n      name: '@aiclient/dsh-app/fs-search'\n      config:\n        sampleOverCapGlobResults: false\n"
+    );
+    const base = readFileSync(
+      join(HOST_DIR, 'node_modules', '@deepseek-ai', 'dsh-base', 'cordis.patch.yml'),
+      'utf8'
+    );
+    expect(base).toMatch(
+      /- id: tool-fs-search\n\s+name: '@deepseek-ai\/dsh-tool-fs-search'\n\s+config:\n\s+sampleOverCapGlobResults: false\n/
+    );
+    expect(read('fsSearch', 'plugin.ts')).toContain('richGrepEnabled(env)');
+  });
+
+  it('logs the switches at every start', () => {
+    expect(host).toContain('describeToolSwitches(process.env)');
   });
 });
 

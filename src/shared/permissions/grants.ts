@@ -300,6 +300,10 @@ export function describeGrantScope(
     const prefixes = commandPrefixes(request);
     return prefixes ? { kind: 'command', value: prefixes.join(', ') } : undefined;
   }
+  // Decision 190: a network grant is keyed by its host, which the URL on the
+  // card does not say on its own — every page of that site is covered.
+  if (request.network === true && request.policyValue !== undefined)
+    return { kind: 'host', value: request.policyValue };
   if (request.policyValue !== undefined) return undefined;
   const paths = new Set(
     [request.path, ...(request.paths ?? [])].map((path) => normalizeGrantPath(path))

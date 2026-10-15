@@ -2,9 +2,10 @@
  * The deny list applied to what glob / grep found (dsh-rebase decision 048).
  *
  * DSH's glob lists hidden and ignored files (`--no-ignore --hidden`) and grep
- * reads whatever ripgrep's defaults let through, so `.env` names and `*.key`
- * lines reach a result the gate never saw path by path. Each entry is judged
- * with `gate.canTraverse`, the check the 1.0.x walkers made per file.
+ * reads whatever ripgrep's defaults let through (decision 190's grep, hidden
+ * files too), so `.env` names and `*.key` lines reach a result the gate never
+ * saw path by path. Each entry is judged with `gate.canTraverse`, the check
+ * the 1.0.x walkers made per file.
  */
 
 import { resolve } from 'node:path';
@@ -20,6 +21,14 @@ interface GlobValue {
 
 interface GrepValue {
   matches: Array<{ path: string; lineNumber: number; line: string }>;
+}
+
+/**
+ * Decision 190's grep (`aiclient-fs-search`): every entry names its file,
+ * whatever the output mode (a printed line, a file, a file's count).
+ */
+interface RichGrepValue {
+  entries: Array<{ path: string }>;
 }
 
 function isGlobValue(value: unknown): value is GlobValue {
@@ -38,6 +47,31 @@ function isGrepValue(value: unknown): value is GrepValue {
     Array.isArray((value as GrepValue).matches) &&
     (value as GrepValue).matches.every((match) => typeof match?.path === 'string')
   );
+}
+
+function isRichGrepValue(value: unknown): value is RichGrepValue {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray((value as RichGrepValue).entries) &&
+    (value as RichGrepValue).entries.every((entry) => typeof entry?.path === 'string')
+  );
+}
+
+/** Keep what `allowed` lets through, judging each path once. */
+function keepAllowed<T extends { path: string }>(
+  items: readonly T[],
+  allowed: (path: string) => boolean
+): T[] {
+  const verdicts = new Map<string, boolean>();
+  return items.filter((item) => {
+    let verdict = verdicts.get(item.path);
+    if (verdict === undefined) {
+      verdict = allowed(item.path);
+      verdicts.set(item.path, verdict);
+    }
+    return verdict;
+  });
 }
 
 /**
@@ -60,17 +94,14 @@ export function filterSearchValue(
     return removed > 0 ? { value: { ...value, paths }, removed } : undefined;
   }
   if (tool === 'grep' && isGrepValue(value)) {
-    const verdicts = new Map<string, boolean>();
-    const matches = value.matches.filter((match) => {
-      let verdict = verdicts.get(match.path);
-      if (verdict === undefined) {
-        verdict = allowed(match.path);
-        verdicts.set(match.path, verdict);
-      }
-      return verdict;
-    });
+    const matches = keepAllowed(value.matches, allowed);
     const removed = value.matches.length - matches.length;
     return removed > 0 ? { value: { ...value, matches }, removed } : undefined;
+  }
+  if (tool === 'grep' && isRichGrepValue(value)) {
+    const entries = keepAllowed(value.entries, allowed);
+    const removed = value.entries.length - entries.length;
+    return removed > 0 ? { value: { ...value, entries }, removed } : undefined;
   }
   return undefined;
 }

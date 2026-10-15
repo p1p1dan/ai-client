@@ -215,7 +215,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { compactInstructionsPrompt } from '../bridge/compactInstructions.ts';
 import { grantsSidecarFor } from '../bridge/stub.ts';
 import { comparePrefix, prefixUnitsOf, verdictLogFields } from '../lib/requestPrefix.ts';
@@ -243,7 +243,8 @@ const hostDir = resolve(here, '..');
 const repoRoot = resolve(hostDir, '..', '..');
 const hostEntry = join(hostDir, 'host.ts');
 const gatewayEntry = join(here, 'fake-gateway.mjs');
-const hooksEntry = join(here, 'lib', 'probe-hooks.mjs');
+// A URL: `--import` refuses a Windows drive path (ERR_UNSUPPORTED_ESM_URL_SCHEME).
+const hooksEntry = pathToFileURL(join(here, 'lib', 'probe-hooks.mjs')).href;
 const FIXTURE_DIR = join(repoRoot, 'src', 'shared', '__tests__', 'fixtures', 'dsh');
 const MIN_AVAILABLE_MB = 900;
 

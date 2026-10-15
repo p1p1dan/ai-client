@@ -455,8 +455,13 @@ describe('ProviderSetupDialog — model settings (decision 168)', () => {
     return panel()?.querySelector<HTMLInputElement>('input[placeholder="Default 128000"]') ?? null;
   }
 
+  /**
+   * The output limit: the numeric field after the context window. Found by
+   * position, since its placeholder follows the model (decision 190).
+   */
   function maxTokens(): HTMLInputElement | null {
-    return panel()?.querySelector<HTMLInputElement>('input[placeholder="Default 8192"]') ?? null;
+    const numeric = panel()?.querySelectorAll<HTMLInputElement>('input[inputmode="numeric"]');
+    return numeric?.[1] ?? null;
   }
 
   function displayName(): HTMLInputElement | null {
@@ -924,6 +929,36 @@ describe('ProviderSetupDialog — model settings (decision 168)', () => {
       await type(contextWindow(), '200000');
       expect(panel()?.textContent).not.toContain('Over half of');
       expect(saveButton()?.disabled).toBe(false);
+    });
+
+    it('decision 190: shows the planned default output limit and asks for the real one while it is empty', async () => {
+      await mountDialog(
+        provider({
+          ...CLAUDE,
+          models: ['claude-opus-5-5', 'plain'],
+          modelMeta: { 'claude-opus-5-5': { reasoning: true, adaptiveThinking: true } },
+        })
+      );
+      const hint = (value: number) =>
+        `Left empty, ${value} tokens are reserved, shared by thinking and the reply.`;
+
+      // An adaptive Claude is a reasoning row: Anthropic's raise.
+      expect(maxTokens()?.getAttribute('placeholder')).toBe('Default 32000');
+      expect(panel()?.textContent).toContain(hint(32000));
+      // A quarter of a declared window caps it.
+      await type(contextWindow(), '64000');
+      expect(maxTokens()?.getAttribute('placeholder')).toBe('Default 16000');
+      expect(panel()?.textContent).toContain(hint(16000));
+      // Filled in: the hint gives way to the reasoning advice.
+      await type(maxTokens(), '20000');
+      expect(panel()?.textContent).not.toContain('Left empty,');
+      expect(panel()?.textContent).toContain('Thinking counts toward the output limit');
+
+      // A model without reasoning keeps 8192, and is still asked for its limit.
+      await click(tab('plain'));
+      expect(maxTokens()?.getAttribute('placeholder')).toBe('Default 8192');
+      expect(panel()?.textContent).toContain(hint(8192));
+      expect(panel()?.textContent).not.toContain('Thinking counts toward the output limit');
     });
 
     it('resets a model to its defaults: the prefill for an adaptive Claude, nothing otherwise', async () => {

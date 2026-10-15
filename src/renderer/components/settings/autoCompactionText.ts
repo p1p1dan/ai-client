@@ -9,10 +9,13 @@ import { type AutoCompactionPolicy, autoCompactionPolicy } from '@shared/dshAuto
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_TOKENS,
+  DSH_PROTOCOLS,
+  defaultMaxTokensFor,
   plannedMaxTokens,
 } from '@shared/dshModelPlan/tables';
+import type { DshProtocol } from '@shared/dshModelPlan/types';
 import type { Translate } from '@shared/i18n';
-import type { UserModelMeta } from '@shared/userProviders';
+import type { UserModelMeta, UserProviderApi } from '@shared/userProviders';
 
 export interface AutoCompactionNote {
   tone: 'muted' | 'warning';
@@ -31,15 +34,42 @@ export function formatApproxTokens(tokens: number): string {
 }
 
 /**
- * The model settings panel's draft as the plan will size it: the route's
- * defaults for what is left empty, decision 146's cap on the output limit.
+ * The output limit the plan gives a draft that leaves it empty (decision 190:
+ * a reasoning model's protocol default, at most a quarter of the window).
+ * Always the `protocol` mode: the switch that selects `flat` is Main's
+ * evaluation switch, which the renderer does not see.
+ */
+export function draftDefaultMaxTokens(
+  api: UserProviderApi,
+  meta: Pick<UserModelMeta, 'contextWindow' | 'reasoning' | 'adaptiveThinking'>
+): number {
+  // An interface style DSH cannot route is never planned; the route default stands in.
+  if (!isDshProtocol(api)) return DEFAULT_MAX_TOKENS;
+  return defaultMaxTokensFor({
+    api,
+    // As the panel reads it: adaptive thinking only counts on Anthropic Messages.
+    reasoning:
+      meta.reasoning === true || (api === 'anthropic-messages' && meta.adaptiveThinking === true),
+    contextWindow: meta.contextWindow,
+  });
+}
+
+function isDshProtocol(api: string): api is DshProtocol {
+  return (DSH_PROTOCOLS as readonly string[]).includes(api);
+}
+
+/**
+ * The model settings panel's draft as the plan will size it: the defaults
+ * for what is left empty, decision 146's cap on the output limit.
  */
 export function draftAutoCompaction(
-  meta: Pick<UserModelMeta, 'contextWindow' | 'maxTokens'>
+  api: UserProviderApi,
+  meta: Pick<UserModelMeta, 'contextWindow' | 'maxTokens' | 'reasoning' | 'adaptiveThinking'>
 ): AutoCompactionPolicy | undefined {
   return autoCompactionPolicy({
     contextWindow: meta.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
-    maxTokens: plannedMaxTokens(meta.contextWindow, meta.maxTokens) ?? DEFAULT_MAX_TOKENS,
+    maxTokens:
+      plannedMaxTokens(meta.contextWindow, meta.maxTokens) ?? draftDefaultMaxTokens(api, meta),
   });
 }
 

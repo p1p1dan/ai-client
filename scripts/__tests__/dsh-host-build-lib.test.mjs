@@ -709,6 +709,7 @@ describe('the host bundle (P1-3a)', () => {
     // they share with the bridge and Main.
     // Decision 177: the per-model compaction policies and the shared rules.
     // Decision 182: the tap's user content blocks.
+    // Decision 190: the tool switches the host logs at every start.
     expect(verdict.inputs.sort()).toEqual([
       'src/dsh-host/host.ts',
       'src/dsh-host/lib/anonymousId.ts',
@@ -721,6 +722,7 @@ describe('the host bundle (P1-3a)', () => {
       'src/dsh-host/lib/requestScope.ts',
       'src/dsh-host/lib/requestTap.ts',
       'src/dsh-host/lib/sessionMetadata.ts',
+      'src/dsh-host/lib/toolSwitches.ts',
       'src/dsh-host/lib/userAgentRelay.ts',
       'src/dsh-host/lib/userContentBlocks.ts',
       'src/shared/dshAutoCompaction.ts',
@@ -829,6 +831,8 @@ describe('bridge bundles (decision 011)', () => {
     'aiclient-permissions': ['tools'],
     'aiclient-loop-guard': ['tools'],
     'aiclient-encrypted-read': ['fs'],
+    // Decision 190: dsh-tool-fs-search's own three.
+    'aiclient-fs-search': ['tools', 'systemPrompt', 'subprocess'],
   };
   /** Rows that are a Cordis service class (the default export) instead of `apply`. */
   const SERVICE_ROWS = new Set(['aiclient-credentials']);
@@ -845,6 +849,16 @@ describe('bridge bundles (decision 011)', () => {
       'export class FsError extends Error {\n' +
       '  constructor(message, code, options) { super(message, options); this.code = code; }\n' +
       '}\n',
+    '@deepseek-ai/dsh-tool-fs-search':
+      'export function applyGlobTool() {}\nexport function applyGrepTool() {}\n' +
+      'export const GLOB_MAX_RESULTS = 100, GREP_MAX_LINE_BYTES = 2000, GREP_MAX_MATCHES = 250;\n' +
+      'export const RAW_OUTPUT_MAX_BYTES = 20000000, SEARCH_GRACE_MS = 3000;\n' +
+      'export const SEARCH_META_MAX_BYTES = 65536, SEARCH_STDERR_MAX_BYTES = 65536;\n' +
+      'export const SEARCH_TIMEOUT_MS = 30000, GLOB_VCS_EXCLUDES = [".git"];\n' +
+      'export async function resolveRgPath() { return "rg"; }\n' +
+      'export function toWorkdirRelative(path) { return path; }\n' +
+      'export class SearchError extends Error {}\n',
+    '@deepseek-ai/dsh-tools': 'export function defineTool(options) { return options; }\n',
   };
 
   it('flags a credentials row bundle that takes in more than its sources and the key rules (P1-5b)', () => {

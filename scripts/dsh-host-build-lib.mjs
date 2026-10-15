@@ -108,9 +108,10 @@ export const BRIDGE_EXTERNALS = ['@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-agent
  * The product bundle's own rows, each an esbuild bundle of our TypeScript:
  * the shared host's only bridge (P1-3a, decision 019), the permission gate
  * (P1-6b, decision 042), the loop guard (P1-8, decisions 065 and 066), the
- * read-only credentials provider (P1-5b, decision 034) and the encrypted-read
- * fallback (P1-13c, decision 091). `inputs` are the source prefixes a row may
- * take in, `externals` the npm packages it may import at run time.
+ * read-only credentials provider (P1-5b, decision 034), the encrypted-read
+ * fallback (P1-13c, decision 091) and the workspace search tools (decision
+ * 190). `inputs` are the source prefixes a row may take in, `externals` the
+ * npm packages it may import at run time.
  */
 export const BRIDGE_ENTRIES = [
   {
@@ -160,6 +161,17 @@ export const BRIDGE_ENTRIES = [
     // FsError must stay the host's own class: dsh-tool-fs routes failures by
     // `instanceof FsError`, and a bundled twin would break that (P1-13c).
     externals: ['@deepseek-ai/dsh-fs'],
+  },
+  {
+    entry: 'fsSearch/plugin.ts',
+    out: 'bundle/lib/fs-search.js',
+    row: 'aiclient-fs-search',
+    // Decision 190: the row reads its switch from the host's pure switch table.
+    inputs: ['src/dsh-host/fsSearch/', 'src/dsh-host/lib/toolSwitches.ts'],
+    // DSH's glob (and grep, switched off) and the shared search plumbing come
+    // from the host's own dsh-tool-fs-search; tools are defined with the
+    // registry's own dsh-tools.
+    externals: ['@deepseek-ai/dsh-tool-fs-search', '@deepseek-ai/dsh-tools'],
   },
 ];
 
@@ -1201,6 +1213,8 @@ export function requiredFiles(target) {
     'node_modules/@aiclient/dsh-app/lib/loop-guard.js',
     // P1-13c: the encrypted-read fallback row, required on the same way.
     'node_modules/@aiclient/dsh-app/lib/encrypted-read.js',
+    // Decision 190: the search row that replaced dsh-base's tool-fs-search.
+    'node_modules/@aiclient/dsh-app/lib/fs-search.js',
   ];
   // libvips: the library list and versions travel with the binaries (licenses shard §2.3).
   if (target.platform === 'win32')

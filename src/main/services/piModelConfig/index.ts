@@ -1,6 +1,11 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { applyDshPlanToCatalog, type DshModelPlan } from '@shared/dshModelPlan';
+import {
+  applyDshPlanToCatalog,
+  type DshModelPlan,
+  PROTOCOL_MAX_TOKENS_ENV,
+  resolveDefaultMaxTokensMode,
+} from '@shared/dshModelPlan';
 import {
   MANAGED_CREDENTIALS_DISABLED_ERROR,
   MANAGED_CREDENTIALS_UNAVAILABLE_ERROR,
@@ -198,6 +203,9 @@ function dshModelPlanFor(native: NativeModelCatalog | undefined): DshModelPlan {
       // Decision 171: the User-Agent every route relays; its default is built
       // from `clientVersion` below.
       ...requestUserAgentSettings(),
+      // Decision 190: `AICLIENT_RUNTIME_PROTOCOL_MAX_TOKENS=0` plans every
+      // unsized row with 8192, as before.
+      defaultMaxTokens: resolveDefaultMaxTokensMode(process.env[PROTOCOL_MAX_TOKENS_ENV]),
     },
     clientVersion: app.getVersion(),
     log: (...args) => console.info(...args),

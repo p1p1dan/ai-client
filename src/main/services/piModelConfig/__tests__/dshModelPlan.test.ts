@@ -139,8 +139,13 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
     ]);
     const route = plan.routes['u-openai-completions'];
     expect(route).toMatchObject({ defaultContextWindow: 128000, defaultMaxTokens: 8192 });
+    // Decision 190: the unsized reasoning row gets openai-completions' raise.
     expect(route?.models).toEqual([
-      { id: 'think', reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' } },
+      {
+        id: 'think',
+        maxTokens: 16384,
+        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
+      },
       { id: 'sized', contextWindow: 32000, maxTokens: 4096, reasoningEfforts: false },
     ]);
   });
@@ -159,11 +164,13 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
     expect(route?.models).toEqual([
       {
         id: 'claude-opus-5-5',
+        maxTokens: 32000,
         reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
         compat: { forceAdaptiveThinking: true },
       },
       {
         id: 'claude-sonnet-4-5',
+        maxTokens: 32000,
         reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
       },
     ]);
@@ -217,11 +224,13 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
       {
         id: 'claude-opus-5-5',
         name: 'Opus 5.5',
+        maxTokens: 32000,
         reasoningEfforts: { low: 'low', medium: 'medium', high: 'high', max: 'max' },
         compat: { forceAdaptiveThinking: true },
       },
       {
         id: 'claude-haiku-4-5',
+        maxTokens: 32000,
         reasoningEfforts: { minimal: 'minimal', low: 'low', high: 'high' },
       },
     ]);
@@ -235,6 +244,7 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
     expect(completions?.models).toEqual([
       {
         id: 'deepseek-v4-pro',
+        maxTokens: 16384,
         reasoningEfforts: { minimal: 'minimal', high: 'high', max: 'max' },
         compat: {
           thinkingFormat: 'deepseek',
@@ -247,6 +257,7 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
       },
       {
         id: 'qwen3-local',
+        maxTokens: 16384,
         reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
         compat: {
           thinkingFormat: 'qwen-chat-template',
@@ -332,19 +343,58 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
     });
     resolveDshModelPlanWith({ native, env: ENV, settings: { promptCacheTtl: '5m' }, log });
     resolveDshModelPlanWith({ native, env: ENV, settings: { promptCacheTtl: '5m' }, log });
-    // Decision 159 adds the GW-16 mode line and decision 171 the User-Agent
-    // line, once per revision as well.
+    // Decision 159 adds the GW-16 mode line, decision 171 the User-Agent line
+    // and decision 190 the default output limit line, once per revision as well.
     const leftOut = log.mock.calls.filter(
       ([first]) => first === '[dsh-model-plan] left out of the plan'
     );
     expect(leftOut).toHaveLength(1);
-    expect(log).toHaveBeenCalledTimes(3);
+    expect(log).toHaveBeenCalledTimes(4);
     const logged = JSON.stringify(leftOut);
     expect(logged).toContain('u-pi-messages/u1: unsupported_api (pi-messages)');
     expect(logged).toContain('compat.supportsToolReferences: compat_not_offered');
     // Decision 146 (GW-4): the shipped catalog's Grok row reserves its whole window.
     expect(logged).toContain('grok/grok-4.6 maxTokens: max_tokens_clamped (500000 -> 125000)');
     expect(logged).not.toContain(CANARY);
+  });
+
+  it('decision 190: logs how unsized rows were sized; `flat` plans them as before', () => {
+    const lines: string[] = [];
+    const log = (first: unknown) => lines.push(String(first));
+    const native = service([
+      userService('anthropic-messages', {
+        models: ['think', 'plain'],
+        modelMeta: { think: { reasoning: true } },
+      }),
+    ]).buildNativeModelCatalog({ inheritedApiKey: CANARY, inheritedBaseUrl: LOGIN_BASE_URL });
+    const byProtocol = resolveDshModelPlanWith({ native, env: ENV, settings: {}, log });
+    const flat = resolveDshModelPlanWith({
+      native,
+      env: ENV,
+      settings: { defaultMaxTokens: 'flat' },
+      log,
+    });
+    expect(byProtocol.routes['u-anthropic-messages']?.models).toEqual([
+      {
+        id: 'think',
+        maxTokens: 32000,
+        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
+      },
+      { id: 'plain', reasoningEfforts: false },
+    ]);
+    expect(flat.routes['u-anthropic-messages']?.models).toEqual([
+      { id: 'think', reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' } },
+      { id: 'plain', reasoningEfforts: false },
+    ]);
+    // The managed rows all declare their sizes, so `flat` changes nothing else.
+    expect({ ...flat.routes, 'u-anthropic-messages': undefined }).toEqual({
+      ...byProtocol.routes,
+      'u-anthropic-messages': undefined,
+    });
+    expect(lines.filter((line) => line.startsWith('[dsh-plan] default output limit'))).toEqual([
+      `[dsh-plan] default output limit: reasoning rows by protocol (anthropic-messages 32000, openai-responses 32000, openai-completions 16384; at most a quarter of the window), 8192 otherwise, plan ${byProtocol.revision.slice(0, 12)}`,
+      `[dsh-plan] default output limit: flat 8192, plan ${flat.revision.slice(0, 12)}`,
+    ]);
   });
 });
 

@@ -115,6 +115,14 @@ export interface ToolPermissionRequest {
    * `tool` keeps the plugin's own name for the card, grants and scopes.
    */
   fileWrite?: boolean;
+  /**
+   * dsh-rebase decision 190: a request to a URL the model chose (`web_fetch`).
+   * Its subject is `policyValue`, the host: the tool's policy rules decide
+   * on it, and a session grant remembers it. `path` is only the session's
+   * workspace, so no file rule asks about it. Plan mode lets it through, as
+   * it does reads: fetching a page changes nothing in the workspace.
+   */
+  network?: boolean;
 }
 /**
  * What a delegate's tool call resolves under.
@@ -607,8 +615,12 @@ export class PermissionGate implements PermissionGateService {
       // and is now gated through this same `evaluate`, so it has to stay
       // callable wherever it stays listed — a plan session that can see the
       // tool but has every call throw would be a contract the registration
-      // does not keep.
-      (!(['read', 'glob', 'grep', 'skill'].includes(request.tool) || isShellTool(request.tool)) ||
+      // does not keep. Decision 190: a network fetch reads too.
+      (!(
+        ['read', 'glob', 'grep', 'skill'].includes(request.tool) ||
+        isShellTool(request.tool) ||
+        request.network === true
+      ) ||
         (isShellTool(request.tool) && !request.exploration))
     )
       return 'deny';
@@ -644,6 +656,12 @@ export class PermissionGate implements PermissionGateService {
     // it — a path outside the workspace, a secret file — `granted` withholds.
     if (this.granted(request)) return 'allow';
     if (request.unresolvedPaths) return 'ask';
+    // Decision 190: a network request's `path` is the workspace, not a file it
+    // touches, so the file rules below have nothing to ask about. The tool's
+    // own rule for the host decides, `'*': 'ask'` by default, and with no
+    // policy at all it asks; the gears above already let it through under
+    // auto and bypass.
+    if (request.network === true) return policy && !toolDecisions.includes('ask') ? 'allow' : 'ask';
     // A trusted path skips straight past the workspace-boundary checks below:
     // every deny above (policy, bundled secrets, scope) has already had its
     // say, and what remains is only "this is outside cwd", which does not

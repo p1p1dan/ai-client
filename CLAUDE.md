@@ -7,7 +7,7 @@
 - **新会话先读** `docs/plantree/plans/dsh-rebase/implementation-status.md` 的 Current Phase 与 Next Target（当前状态与下一步：P1-14 发版后的收尾项），再看 `decision-review-4.md`（待审批决策）。`handoff-2026-09-28.md` 已过期，只有其中的工作规则仍可参考。
 - **进度与计划**：`docs/plantree/plans/dsh-rebase/`，看 `implementation-status.md`（进度看板）、`roadmap.md`（任务 P1-0～P1-16）、`topics/`（各任务方案）、`decisions/`（005 起是自主决定、待用户审批）。
 - **代码入口**：
-  - `src/dsh-host/`：宿主 `host.ts`、bridge（`bridge/`，含 RPC 服务端 `bridgeRpcServer.ts` 与错误类型 `bridgeErrors.ts`），以及几个宿主行：`credentials/`、`permissions/`、`loopGuard/`、`encryptedRead/`；工具脚本在 `tools/`，加密机上机包在 `tools/p0-4/`、`tools/p1-13b/`。
+  - `src/dsh-host/`：宿主 `host.ts`、bridge（`bridge/`，含 RPC 服务端 `bridgeRpcServer.ts` 与错误类型 `bridgeErrors.ts`），以及几个宿主行：`credentials/`、`permissions/`、`loopGuard/`、`encryptedRead/`、`fsSearch/`（决策 190：DSH 的 glob 与我方 grep）；工具脚本在 `tools/`，加密机上机包在 `tools/p0-4/`、`tools/p1-13b/`。
   - `src/main/services/agent-host/`（目录名沿用，未改）：`DshHostSupervisor`、`WorkerManager`、`DshCredentialBroker`、`createDshChatSlot`。
   - `src/shared/` 下的纯库：`dshModelPlan/`（模型计划）、`dshHistory/`（历史投影）、`legacyPiSession/`（pi 解码与迁移转换）、`permissions/`（权限）、`skills/`、`mcp/`、`subagentCatalogRoots.ts`（后三者从 runtime 搬来）、`dshPluginAllowlist.ts`（插件白名单审计）、`stderrRedaction.ts`（stderr 脱敏，从 `src/agent-host` 搬来）。
   - 自有 runtime（`src/runtime/`）与 `src/agent-host/` 已在 P1-12 删除；Codex 导入的映射搬到了 `src/main/services/legacyImport/`。

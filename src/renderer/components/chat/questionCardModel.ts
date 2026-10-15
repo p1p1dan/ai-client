@@ -659,6 +659,13 @@ export function derivePermissionGrantScopeNote(
       ? `${reach} · ${t(PERMISSION_PWSH_ALIAS_NOTE)}`
       : reach;
   }
+  // Decision 190: a fetch grant covers the whole host, not the one page shown.
+  if (scope.kind === 'host') {
+    return t('Allow for session remembers {{tool}} for every page on {{host}}', {
+      tool: toolName ?? '',
+      host: scope.value,
+    });
+  }
   return t('Allow for session remembers {{tool}} on {{path}}', {
     tool: toolName ?? '',
     path: scope.value,
@@ -1028,6 +1035,8 @@ export const PERMISSION_ACTION_LABELS: Readonly<Record<PermissionRequestAction, 
   read_file: 'Read file contents',
   // dsh-rebase P1-6b; the wording is P1-7's to refine.
   escalate_sandbox: 'Run once with wider sandbox permissions',
+  // dsh-rebase decision 190: web_fetch; the URL is the card's body.
+  fetch_url: 'Fetch a web page',
 };
 
 /**

@@ -140,12 +140,13 @@ const PROBES: Readonly<Record<string, Probe>> = {
     icon: 'search',
     arg: '**/*.ts',
   },
+  // Decision 190: the file filter follows the pattern (DSH's `include`, our `glob` / `type`).
   grep: {
     input: { pattern: 'TODO', path: 'src', include: '*.ts' },
     verb: 'Grepped',
     zhVerb: '搜索',
     icon: 'search',
-    arg: 'TODO',
+    arg: 'TODO · *.ts',
   },
   bash: {
     input: { command: 'cd /w && npm test', description: 'Run the tests' },
@@ -919,5 +920,73 @@ describe('every icon kind has an element', () => {
     expect(source).toContain("t('Exit code {{code}}', { code: view.exitCode })");
     expect(source).toContain("t('to background at {{limit}}'");
     expect(source).toContain("case 'todos':");
+  });
+});
+
+describe('decision 190: the grep and web_fetch rows', () => {
+  const settled = (toolName: string, input: unknown, output: string) =>
+    deriveToolRowView(run(toolName, input, { output }));
+
+  it('names the file filter of our grep after its pattern, and the rest in the body', () => {
+    expect(settled('grep', { pattern: 'useState', glob: '*.tsx' }, '').arg).toBe(
+      'useState · *.tsx'
+    );
+    expect(settled('grep', { pattern: 'fn main', type: 'rust' }, '').arg).toBe('fn main · rust');
+    const view = settled(
+      'grep',
+      { pattern: 'TODO', output_mode: 'content', '-C': 2, head_limit: 50 },
+      ''
+    );
+    expect(view.arg).toBe('TODO');
+    expect(view.input).toContain('"output_mode": "content"');
+    expect(view.input).toContain('"-C": 2');
+    expect(ARG_COVERED_FIELDS.grep).toEqual(['pattern', 'glob', 'include', 'type']);
+  });
+
+  it.each([
+    ['Found 3 files\n\na.ts\nb.ts\nc.ts', '3 files', '3 个文件'],
+    ['Found 1 file\n\na.ts', '1 file', '1 个文件'],
+    ['Found 12 matching lines in 3 files\n\na.ts:1:x', '12 matching lines', '12 处匹配'],
+    ['Found 1 matching line in 1 file\n\na.ts:1', '1 matching line', '1 处匹配'],
+    // DSH's own grep, switched back on (AICLIENT_RUNTIME_RICH_GREP=0).
+    ['Found 7 matches\n\na.ts\nLine 1: x', '7 matching lines', '7 处匹配'],
+    ['Found 250 of 900 matches\n\na.ts\nLine 1: x', '900 matching lines', '900 处匹配'],
+    ['No matches found', 'No matches', '无匹配'],
+  ])('tails a grep that printed %j with its totals', (output, english, chinese) => {
+    const note = settled('grep', { pattern: 'x' }, output).resultNote;
+    expect(note).toBeDefined();
+    expect(translate('en', note?.key ?? '', note?.params)).toBe(english);
+    expect(zh(note?.key ?? '', note?.params)).toBe(chinese);
+  });
+
+  it('says how a fetched page came back: a status outside 2xx, or a cut page', () => {
+    const url = { url: 'https://example.com/a' };
+    const head = (status: number) => `Fetched https://example.com/a (HTTP ${status})\n\nbody`;
+    expect(settled('web_fetch', url, head(200)).resultNote).toBeUndefined();
+    expect(settled('web_fetch', url, head(404)).resultNote).toEqual({
+      key: 'HTTP {{status}}',
+      params: { status: 404 },
+    });
+    expect(zh('HTTP {{status}}', { status: 404 })).toBe('HTTP 404');
+    const cut = `${head(200)}\n\n(Content truncated. Fetch a more specific URL or section for the full text.)`;
+    expect(settled('web_fetch', url, cut).resultNote).toEqual({ key: 'Truncated' });
+    expect(zh('Truncated')).toBe('已截断');
+    // The status wins over the cut; a failed fetch has its error body, not a tail.
+    expect(settled('web_fetch', url, `${head(500)}\n\n(Content truncated.`).resultNote?.key).toBe(
+      'HTTP {{status}}'
+    );
+    expect(
+      deriveToolRowView(run('web_fetch', url, { status: 'failed', output: 'Error: blocked' }))
+        .resultNote
+    ).toBeUndefined();
+  });
+
+  it('paints the tail in the exit code’s slot, translated', () => {
+    const source = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '../ToolRows.tsx'),
+      'utf8'
+    );
+    expect(source).toContain('data-slot="tool-row-result"');
+    expect(source).toContain('t(view.resultNote.key, view.resultNote.params)');
   });
 });

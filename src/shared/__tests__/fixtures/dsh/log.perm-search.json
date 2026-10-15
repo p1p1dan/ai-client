@@ -177,6 +177,7 @@
             "subagent_fork",
             "todo_write",
             "update_goal",
+            "web_fetch",
             "workflow",
             "write"
           ]
@@ -536,27 +537,11 @@
           "content": [
             {
               "type": "text",
-              "text": "Found 1 match\n\nnotes.txt\nLine 1: PERM-SECRET in plain notes"
+              "text": "Found 1 file\n\nnotes.txt"
             }
           ],
           "isError": false,
           "id": "id-11"
-        },
-        "meta": {
-          "shape": "matches",
-          "files": [
-            {
-              "path": "notes.txt",
-              "matches": [
-                {
-                  "lineNumber": 1,
-                  "line": "PERM-SECRET in plain notes"
-                }
-              ]
-            }
-          ],
-          "truncated": false,
-          "total": 1
         }
       },
       "sourceEventSeqs": [16],

@@ -178,6 +178,7 @@
             "subagent_fork",
             "todo_write",
             "update_goal",
+            "web_fetch",
             "workflow",
             "write"
           ]
@@ -455,6 +456,7 @@
             "subagent_fork",
             "todo_write",
             "update_goal",
+            "web_fetch",
             "workflow",
             "write"
           ]
@@ -777,6 +779,7 @@
                 "subagent_fork",
                 "todo_write",
                 "update_goal",
+                "web_fetch",
                 "workflow",
                 "write"
               ]

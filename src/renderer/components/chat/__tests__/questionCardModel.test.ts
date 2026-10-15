@@ -934,6 +934,18 @@ describe('permission card grant-scope copy', () => {
     expect(derivePermissionGrantScopeNote(undefined, 'Bash')).toBeNull();
   });
 
+  it('words a fetch grant as the whole host, in both languages (decision 190)', () => {
+    const scope = { kind: 'host', value: 'docs.example.com' } as const;
+    expect(derivePermissionGrantScopeNote(scope, 'web_fetch')).toBe(
+      'Allow for session remembers web_fetch for every page on docs.example.com'
+    );
+    expect(
+      derivePermissionGrantScopeNote(scope, 'web_fetch', (key, params) =>
+        translate('zh', key, params)
+      )
+    ).toBe('「本会话内允许」会记住 web_fetch 可访问 docs.example.com 的所有页面');
+  });
+
   it('puts the reach before the audience on the card, and keeps both', () => {
     const view = derivePermissionCardView(
       permissionBlock({
@@ -1584,6 +1596,8 @@ describe('permission action copy (T023)', () => {
     ['read_file', 'Read file contents', '读取文件内容'],
     // dsh-rebase P1-6b: the DSH engine asks to run one call outside its sandbox.
     ['escalate_sandbox', 'Run once with wider sandbox permissions', '以更宽的沙箱权限运行一次'],
+    // dsh-rebase decision 190: web_fetch asks to fetch the URL on the card.
+    ['fetch_url', 'Fetch a web page', '获取网页'],
   ];
 
   // dsh-rebase P1-7c (plan P1-7 shard 04 §6): the shells go by their product

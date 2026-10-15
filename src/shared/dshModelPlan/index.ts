@@ -32,8 +32,13 @@ export {
   DSH_EFFORT_LEVELS,
   DSH_OFFERED_COMPAT,
   DSH_PROTOCOLS,
+  defaultMaxTokensFor,
+  describeDefaultMaxTokens,
   EMPTY_PLAN_DEFAULT_MODEL,
   KEY_REF_PREFIX,
+  PROTOCOL_MAX_TOKENS_ENV,
   plannedMaxTokens,
+  REASONING_DEFAULT_MAX_TOKENS,
+  resolveDefaultMaxTokensMode,
 } from './tables.ts';
 export type * from './types.ts';

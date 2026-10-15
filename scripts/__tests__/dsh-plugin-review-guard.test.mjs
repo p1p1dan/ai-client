@@ -52,6 +52,7 @@ const EXPECTED_OWN_ROWS = [
   'aiclient-bridge',
   'aiclient-credentials',
   'aiclient-encrypted-read',
+  'aiclient-fs-search',
   'aiclient-loop-guard',
   'aiclient-permissions',
 ];

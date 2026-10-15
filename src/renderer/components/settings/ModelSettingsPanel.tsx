@@ -17,7 +17,6 @@
 
 import {
   DEFAULT_CONTEXT_WINDOW,
-  DEFAULT_MAX_TOKENS,
   IMPLIED_EFFORT_LEVELS,
   MAX_TOKENS_WINDOW_SHARE_LIMIT,
   plannedMaxTokens,
@@ -57,7 +56,11 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
-import { autoCompactionNote, draftAutoCompaction } from './autoCompactionText';
+import {
+  autoCompactionNote,
+  draftAutoCompaction,
+  draftDefaultMaxTokens,
+} from './autoCompactionText';
 
 /** The two number fields, whose raw text the dialog keeps per model. */
 export type TokenField = 'contextWindow' | 'maxTokens';
@@ -250,6 +253,19 @@ function ModelFields({
   const rawText = (field: TokenField): string =>
     drafts[field] ?? (meta[field] !== undefined ? String(meta[field]) : '');
   const invalid = (field: TokenField): boolean => parseModelTokenCount(rawText(field)).invalid;
+  // Decision 190: what the plan reserves when the output limit is left empty.
+  const defaultMaxTokens = draftDefaultMaxTokens(api, meta);
+  const outputLimitHint =
+    rawText('maxTokens').trim() === ''
+      ? t(
+          "Left empty, {{value}} tokens are reserved, shared by thinking and the reply. Fill in the output limit from the provider's documentation: a number above what the model allows is refused on every request, and one too small cuts long replies short.",
+          { value: defaultMaxTokens }
+        )
+      : reasoning
+        ? t(
+            'Thinking counts toward the output limit; 32000 or more is recommended for high levels.'
+          )
+        : undefined;
 
   return (
     <>
@@ -332,19 +348,15 @@ function ModelFields({
         <TokenInput
           label={t('Output limit')}
           raw={rawText('maxTokens')}
-          placeholder={t('Default {{value}}', { value: DEFAULT_MAX_TOKENS })}
+          placeholder={t('Default {{value}}', { value: defaultMaxTokens })}
           invalid={invalid('maxTokens')}
           warning={invalid('maxTokens') ? undefined : outputLimitWarning(meta, t)}
-          description={
-            reasoning
-              ? t(
-                  'Thinking counts toward the output limit; 32000 or more is recommended for high levels.'
-                )
-              : undefined
-          }
+          description={outputLimitHint}
           onChange={(raw) => onTokenDraft('maxTokens', raw)}
         />
-        {!invalid('contextWindow') && !invalid('maxTokens') && <AutoCompactionLine meta={meta} />}
+        {!invalid('contextWindow') && !invalid('maxTokens') && (
+          <AutoCompactionLine api={api} meta={meta} />
+        )}
       </PanelSection>
 
       <PanelSection legend={t('Input')}>
@@ -393,9 +405,9 @@ function outputLimitWarning(
  * itself, and from about where, worked out from the draft as the plan will
  * size it. Hidden while either number is not valid (its error says why).
  */
-function AutoCompactionLine({ meta }: { meta: UserModelMeta }) {
+function AutoCompactionLine({ api, meta }: { api: UserProviderApi; meta: UserModelMeta }) {
   const { t } = useI18n();
-  const policy = draftAutoCompaction(meta);
+  const policy = draftAutoCompaction(api, meta);
   if (!policy) return null;
   const note = autoCompactionNote(policy, meta.contextWindow === undefined, t);
   return (

@@ -543,13 +543,17 @@ export type PermissionRequestKind = 'tool' | 'exec' | 'file_change';
  * `escalate_sandbox` (dsh-rebase P1-6b): the DSH engine asks to run one call
  * with wider sandbox permissions than the session's; its card offers allow /
  * deny only.
+ *
+ * `fetch_url` (dsh-rebase decision 190): `web_fetch` asks to fetch the URL on
+ * the card.
  */
 export type PermissionRequestAction =
   | 'run_command'
   | 'write_file'
   | 'edit_file'
   | 'read_file'
-  | 'escalate_sandbox';
+  | 'escalate_sandbox'
+  | 'fetch_url';
 
 /**
  * S2 (c): agent-neutral decision vocabulary, four wide. `decisions.ts`
@@ -602,12 +606,15 @@ export type PermissionAskReason = 'unresolved';
  * extra to state, and the card keeps its generic scope line.
  */
 export interface PermissionGrantScope {
-  /** `command`: a bash prefix. `path`: one file, for one tool. */
-  kind: 'command' | 'path';
   /**
-   * Already shaped for display: a comma-joined prefix list, or a
+   * `command`: a bash prefix. `path`: one file, for one tool. `host`
+   * (decision 190): one host, for one network tool.
+   */
+  kind: 'command' | 'path' | 'host';
+  /**
+   * Already shaped for display: a comma-joined prefix list, a
    * workspace-relative path (absolute when the path is outside the workspace, so
-   * an approval that reaches out of the project reads like one).
+   * an approval that reaches out of the project reads like one), or a host.
    */
   value: string;
 }
