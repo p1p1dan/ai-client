@@ -3514,7 +3514,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       expect(supervisor.status().pluginSelection).toBe(dshPluginSelectionKey(undefined));
       expect(supervisor.pluginReport()).toEqual({
         enabledFrom: 'default',
-        plugins: [{ name: PILOT, version: '1.0.4', defaultEnabled: false, state: 'disabled' }],
+        plugins: [{ name: PILOT, version: '1.0.6', defaultEnabled: false, state: 'disabled' }],
         // The shared DSH home's profile still listed PLG-4's fixture, which
         // this install's allowlist does not carry.
         dropped: [{ name: kit.FIXTURE_PLUGIN, reason: 'not on the allowlist' }],
@@ -3526,11 +3526,11 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       expect(on).toMatchObject({ settled: true, completed: true });
       expect(supervisor.pluginReport()).toEqual({
         enabledFrom: 'main',
-        plugins: [{ name: PILOT, version: '1.0.4', defaultEnabled: false, state: 'loaded' }],
+        plugins: [{ name: PILOT, version: '1.0.6', defaultEnabled: false, state: 'loaded' }],
         dropped: [],
       });
       expect(profileBundles()).toEqual(['@deepseek-ai/dsh-base', '@aiclient/dsh-app', PILOT]);
-      // word_*, excel_* and ppt_*: three reads and five writes (reviews/dsh-office-tools-1.0.4.md).
+      // word_*, excel_* and ppt_*: three reads and five writes (reviews/dsh-office-tools-1.0.6.md).
       expect(on.tools[0]).toBe(Number(off.tools[0]) + 8);
     }, 240_000);
   });

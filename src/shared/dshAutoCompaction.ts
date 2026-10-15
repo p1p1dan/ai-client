@@ -1,7 +1,7 @@
 /**
  * dsh-rebase decision 177 — automatic compaction, model by model.
  *
- * DSH's `compaction-basic` row (0.1.7-rc.2) compacts a conversation once its
+ * DSH's `compaction-basic` row (0.2.0-rc.2) compacts a conversation once its
  * request reaches a threshold worked out from the routed model's context
  * window W and output reservation O (`resolveCompactSpec`):
  *

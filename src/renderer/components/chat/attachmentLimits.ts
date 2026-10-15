@@ -28,7 +28,7 @@ export const SUPPORTED_IMAGE_MEDIA_TYPES = [
 
 /**
  * The longer-edge cap, taken from the engine that admits the image (P1-7e e5,
- * decision 143): DSH's `@deepseek-ai/dsh-attachment-local` (0.1.7-rc.2) refuses an image
+ * decision 143): DSH's `@deepseek-ai/dsh-attachment-local` (0.2.0-rc.2) refuses an image
  * whose longer side exceeds `DEFAULT_MAX_IMAGE_DIMENSION` (8192, its per-side
  * pixel limit) with `IMAGE_DIMENSION_TOO_LARGE`, and our host profile keeps
  * that default. Admitted images are normalized by the engine before any model

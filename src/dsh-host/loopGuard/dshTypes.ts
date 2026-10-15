@@ -1,6 +1,6 @@
 /**
  * Narrow structural views of the DSH shapes the `aiclient-loop-guard` row
- * reads (DSH 0.1.7-rc.2: dsh-llm, dsh-agent, dsh-session, dsh-tools).
+ * reads (DSH 0.2.0-rc.2: dsh-llm, dsh-agent, dsh-session, dsh-tools).
  *
  * Declared here instead of imported so the row's unit tests build them by
  * hand and the row's bundle takes in no DSH types.

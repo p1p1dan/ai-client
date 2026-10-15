@@ -2,7 +2,7 @@
 
 /**
  * The slice of DSH's session-log vocabulary (`@deepseek-ai/dsh-session` and
- * `@deepseek-ai/dsh-llm` 0.1.7-rc.2) the history projection reads.
+ * `@deepseek-ai/dsh-llm` 0.2.0-rc.2) the history projection reads.
  *
  * Declared here rather than imported: this library runs where DSH is not
  * installed (the root Vitest, Electron Main's read-only replay) and inside the

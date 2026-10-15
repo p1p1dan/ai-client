@@ -121,7 +121,7 @@ packages whose published archive does not include a standalone license file.
 ## DeepSeek Harness host
 
 Source: https://github.com/deepseek-ai/deepseek-harness (packages
-`@deepseek-ai/dsh-*` 0.1.7-rc.2 and their dependencies, from
+`@deepseek-ai/dsh-*` 0.2.0-rc.2 and their dependencies, from
 `src/dsh-host/package-lock.json`).
 
 AiClient ships the DeepSeek Harness (DSH) packages as its chat engine in

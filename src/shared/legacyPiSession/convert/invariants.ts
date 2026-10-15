@@ -7,7 +7,7 @@
  * Three layers, each rule named in the violation:
  * - `seed/…`: what `dsh-session`'s constructor checks before it accepts a
  *   seed (envelope, lossless JSON, seq from 0, surface markers and
- *   replacements, message shapes, settlement fields; 0.1.7-rc.2
+ *   replacements, message shapes, settlement fields; 0.2.0-rc.2
  *   `lib/index.js` `assertSessionEventEnvelope`, `planSurfaceEvent`,
  *   `assertMessageEventShape`);
  * - `invariant/…`: `dsh-session/invariant`'s relational checks, transcribed

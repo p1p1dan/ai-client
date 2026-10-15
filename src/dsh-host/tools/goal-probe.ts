@@ -72,7 +72,7 @@ const nodeBin = option('node', existsSync(bundledNode) ? bundledNode : process.e
 const trace = argv.includes('--trace');
 const keep = argv.includes('--keep');
 const outFile = option('out', '');
-const plugin = option('plugin', 'dsh-office-tools@1.0.4');
+const plugin = option('plugin', 'dsh-office-tools@1.0.6');
 const scratchRoot = join('/var/tmp', `aiclient-dsh-p0-2-${Date.now()}`);
 const log = (message: string) => process.stderr.write(`[goal-probe] ${message}\n`);
 

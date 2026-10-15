@@ -2,7 +2,7 @@
  * How each DSH tool reaches the permission gate (dsh-rebase decision 047;
  * P1-6 design shard 03 §2).
  *
- * One table for every built-in tool of the pinned DSH (0.1.7-rc.2), whether or
+ * One table for every built-in tool of the pinned DSH (0.2.0-rc.2), whether or
  * not the product composition mounts it today, and for the DSH packages the
  * host installs beside dsh-base (P1-4d3: dsh-tool-ask-user). `permissionsClassification`
  * tests fail when an installed DSH package defines a tool this table does not
@@ -90,7 +90,8 @@ export interface PluginToolClass {
  */
 export const PLUGIN_TOOL_CLASSES: Readonly<Record<string, Readonly<PluginToolClass>>> =
   Object.freeze({
-    // dsh-office-tools@1.0.4 (P1-10d; reviews/dsh-office-tools-1.0.4.md): the
+    // dsh-office-tools (1.0.4 in P1-10d, reviews/dsh-office-tools-1.0.4.md;
+    // 1.0.6, the same eight tools, in decision 189): the
     // catalog says `fs-read` only, but five of its eight tools write a file
     // through ctx.fs.writeText. Every tool confines `path` to the session
     // workspace itself; ppt_create also reads the linked images it is given.

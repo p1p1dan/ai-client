@@ -523,8 +523,8 @@ export function compatPresetSendsEfforts(preset: UserCompatPreset | undefined): 
 
 /**
  * The compat group of each vendor dialect: the six openai-completions
- * switches that set a vendor apart in pi-ai 0.85.1, at the values its own
- * detection and catalog give that vendor's native endpoint
+ * switches that set a vendor apart in pi-ai 0.87.1 (as in 0.85.1), at the
+ * values its own detection and catalog give that vendor's native endpoint
  * (`openai-completions.js` `detectCompat`, `providers/data/*.json`). Written
  * whole, so the result no longer depends on the service's name or address.
  */

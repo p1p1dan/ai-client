@@ -65,15 +65,16 @@ describe('parseAllowlist', () => {
     ).toEqual([
       {
         name: 'dsh-office-tools',
-        version: '1.0.4',
+        version: '1.0.6',
         kind: 'internal',
         defaultEnabled: false,
         rows: ['dsh-office-tools'],
       },
     ]);
     const [pilot] = allowlist.plugins;
+    // Decision 189: 1.0.4's dsh peers stop below 0.2.0; 1.0.6 is the DSH 0.2.0-rc.2 pilot.
     expect(pilot.review).toMatchObject({
-      record: 'reviews/dsh-office-tools-1.0.4.md',
+      record: 'reviews/dsh-office-tools-1.0.6.md',
       verdict: 'conditional',
     });
     // Its review found five of the eight tools writing files (decision 060 rule 4).

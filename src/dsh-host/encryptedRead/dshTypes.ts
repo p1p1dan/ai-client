@@ -1,6 +1,6 @@
 /**
  * Narrow structural views of the DSH shapes the `aiclient-encrypted-read`
- * row reads (DSH 0.1.7-rc.2: dsh-fs, dsh-fs-local, dsh-fs-sandbox).
+ * row reads (DSH 0.2.0-rc.2: dsh-fs, dsh-fs-local, dsh-fs-sandbox).
  *
  * Declared here instead of imported so the row's unit tests build them by
  * hand and the row's bundle takes in no DSH types, like the loop guard's
