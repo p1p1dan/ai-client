@@ -1,0 +1,26 @@
+{
+  // Route-B prototype: type-check gate for the Claude Agent SDK host.
+  // Its own npm package (the SDK is pinned in `package.json`, outside the root
+  // lockfile), so the root gate excludes `src/claude-sdk-host/**`. Run from the
+  // repo root after `npm ci` in here:
+  //   pnpm exec tsc --noEmit -p src/claude-sdk-host/tsconfig.json
+  // Node strips types at runtime (erasable syntax only), as for the DSH host.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "lib": ["ESNext"],
+    "types": ["node"],
+    "typeRoots": ["../../node_modules/@types"]
+  },
+  "include": ["*.ts", "__tests__/*.ts", "tools/*.ts"],
+  "exclude": ["node_modules"]
+}
