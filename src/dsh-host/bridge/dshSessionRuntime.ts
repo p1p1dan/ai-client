@@ -241,6 +241,7 @@ import {
   type DshSkillsView,
   dshCommandName,
   HIDDEN_DSH_COMMANDS,
+  isInvocableSkill,
   slashCommandRows,
   WORKER_COMPACT_FAILED,
   WORKER_COMPACT_TIMEOUT,
@@ -1192,15 +1193,18 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
 
   /**
    * Every skill the agent's catalog has (`ctx.skills`, the agent's scope and
-   * workspace), model- or user-invocable. Undefined — "not reported" — when
-   * the host has no skill registry or the read fails; never a failed bootstrap.
+   * workspace), model- or user-invocable; an entry neither can call is not
+   * counted (decision 189). Undefined — "not reported" — when the host has no
+   * skill registry or the read fails; never a failed bootstrap.
    */
   private async skillCount(): Promise<number | undefined> {
     const agent = this.handle?.agent;
     if (!agent) return undefined;
     try {
       const skills = this.ctx.get?.('skills');
-      return skills ? (await skills.list(this.skillLookup(agent))).length : undefined;
+      return skills
+        ? (await skills.list(this.skillLookup(agent))).filter(isInvocableSkill).length
+        : undefined;
     } catch (error) {
       this.options.log?.('[dsh-bridge] skill catalog unreadable', error);
       return undefined;

@@ -111,6 +111,20 @@ export function dshCommandName(line: string): string | undefined {
 }
 
 /**
+ * Whether the model or a person can call a skill (DSH's default when a
+ * summary carries no policy: both). One neither can call is not a skill the
+ * session has, like the entry that hides DSH's sandbox skill (decision 189).
+ */
+export function isInvocableSkill(skill: DshSkillSummary): boolean {
+  const invocation = skill.invocation;
+  return (
+    invocation === undefined ||
+    invocation.modelInvocable === true ||
+    invocation.userInvocable === true
+  );
+}
+
+/**
  * `worker.commands`: the commands the menu offers, then the skills a person
  * may call. A skill named like an offered command is left out: a `/name` at
  * the start of a line runs the command, never the skill.

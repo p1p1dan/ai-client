@@ -8,7 +8,8 @@
  * registers two prompt contexts: `aiclient:permission` (`promptContext.ts`)
  * and `aiclient:environment` (`environmentContext.ts`, decision 164: the OS,
  * shell, workspace, home and date, with the `aiclient_cwd` / `aiclient_home`
- * prompt variables its text references).
+ * prompt variables its text references). On Windows it also hides the skill
+ * DSH's sandbox brings for a sandbox this app keeps off (decision 189).
  *
  * Always on in the product bundle (P1-6b part 2): the bridge injects the
  * service and attaches a gate per chat session before it opens the session's
@@ -69,8 +70,11 @@ export interface PermissionRowContext {
    * Cordis `inject`: runs `callback` on a scope holding `deps` once they are
    * up (and again when they come back). Absent in a context without it.
    */
-  inject?(deps: string[], callback: (scope: PromptRowScope) => void): unknown;
+  inject?(deps: string[], callback: (scope: RowScope) => void): unknown;
 }
+
+/** The services this row injects lazily; a callback reads only the ones it asked for. */
+export type RowScope = PromptRowScope & SkillRowScope;
 
 /** What a prompt context's text and a prompt variable's provider are given. */
 export interface PromptAssemblyView {
@@ -96,9 +100,54 @@ export interface PromptRowScope {
   };
 }
 
+/** The slice of `ctx.skills` (dsh-skill) used to hide the sandbox's skills. */
+export interface SkillRowScope {
+  skills: {
+    register(skill: {
+      name: string;
+      description: string;
+      content: string;
+      source: string;
+      invocation: { modelInvocable: boolean; userInvocable: boolean };
+    }): () => void;
+  };
+}
+
 /** The slice of `ctx.aiclientLoopGuard` (P1-8) read here. */
 interface LoopGuardView {
   refusalFor(exec: DshToolCall): string | undefined;
+}
+
+/**
+ * Decision 189: skills dsh-sandbox-local brings for DSH's own sandbox, which
+ * this app keeps off (decisions 044, 045). 0.2.0 registers the first one on
+ * Windows; its script rewrites folder permissions to repair sandbox denials.
+ */
+export const HIDDEN_SANDBOX_SKILLS: readonly string[] = ['diagnose-windows-sandbox-acl'];
+
+/**
+ * Hides {@link HIDDEN_SANDBOX_SKILLS} where DSH registers them (Windows): a
+ * runtime skill outranks a bundled one of the same name (dsh-skill ranks 250
+ * and 600), and this one is invocable by neither the model nor the user, so
+ * no catalog lists it and no load reaches DSH's copy. Elsewhere there is
+ * nothing to hide, and an extra entry would change the bridge's skill count.
+ */
+export function hideSandboxSkills(
+  ctx: PermissionRowContext,
+  platform: string = process.platform
+): void {
+  if (platform !== 'win32') return;
+  ctx.inject?.(['skills'], (scope) => {
+    for (const name of HIDDEN_SANDBOX_SKILLS) {
+      scope.skills.register({
+        name,
+        description: 'Unavailable: the DSH sandbox it repairs is off in this app.',
+        content: '',
+        source: 'runtime',
+        invocation: { modelInvocable: false, userInvocable: false },
+      });
+    }
+  });
 }
 
 export function apply(ctx: PermissionRowContext): void {
@@ -160,5 +209,6 @@ export function apply(ctx: PermissionRowContext): void {
       text: (assembly) => host.promptContext(assembly.agent),
     });
   });
+  hideSandboxSkills(ctx);
   ctx.provide(PERMISSION_HOST_SERVICE, host.api);
 }
