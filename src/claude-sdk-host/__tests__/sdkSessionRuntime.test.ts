@@ -13,6 +13,7 @@ interface FakeQuery {
   end: () => void;
   setModel: ReturnType<typeof vi.fn>;
   applyFlagSettings: ReturnType<typeof vi.fn>;
+  setPermissionMode: ReturnType<typeof vi.fn>;
 }
 const sdk = vi.hoisted(() => ({ queries: [] as FakeQuery[] }));
 
@@ -34,6 +35,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       },
       setModel: vi.fn(async () => {}),
       applyFlagSettings: vi.fn(async () => {}),
+      setPermissionMode: vi.fn(async () => {}),
     };
     sdk.queries.push(fake);
     return {
@@ -51,7 +53,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       interrupt: vi.fn(async () => {}),
       setModel: fake.setModel,
       applyFlagSettings: fake.applyFlagSettings,
-      setPermissionMode: vi.fn(async () => {}),
+      setPermissionMode: fake.setPermissionMode,
     };
   },
 }));
@@ -130,7 +132,8 @@ describe('the CLI launch (decision 6)', () => {
   it('passes the pinned env in the flag tier and never the key there', async () => {
     const { rt, q } = await started();
     const settings = q.options.settings as { attribution: boolean; env: Record<string, string> };
-    expect(settings).toEqual({ attribution: false, env: PINS });
+    // S-2 A-13: plan mode never hands calls to Auto's classifier.
+    expect(settings).toEqual({ attribution: false, env: PINS, useAutoModeDuringPlan: false });
     expect(JSON.stringify(settings)).not.toContain(KEY);
     // The key travels in the child's environment only.
     expect((q.options.env as Record<string, string>).ANTHROPIC_API_KEY).toBe(KEY);
@@ -385,6 +388,652 @@ describe('the stub model (S-1 contract)', () => {
     const step = events.find((e) => e.type === 'message.started' && e.payload.role === 'assistant');
     expect(step?.payload).toMatchObject({ model: 'gw/claude-opus-5-5' });
     q.end();
+    await rt.dispose();
+  });
+});
+
+// ---- Route B, S-2: permission modes (topic s2-permission-modes.md §3.1 items 1-5) ----
+
+const { cliPermissionMode, permissionsForCliMode, PLAN_MODE_REFUSAL } = await import(
+  '../sdkSessionRuntime.ts'
+);
+type Posture = { mode: 'plan' | 'agent'; gear: 'ask' | 'accept-edits' | 'auto' | 'bypass' };
+
+async function startedOn(permissions: Posture) {
+  const rt = new ClaudeSdkSessionRuntime(
+    {
+      logicalSessionId: 'chat-1',
+      cwd: configDir,
+      model: 'gw/claude-opus-5-5',
+      projectTrusted: true,
+      permissions,
+      emit: (event) => events.push(event),
+    },
+    {
+      configDir,
+      settingSources: ['project'],
+      cliEnv: { ANTHROPIC_API_KEY: KEY, ANTHROPIC_BASE_URL: PINS.ANTHROPIC_BASE_URL },
+      settingsEnv: PINS,
+      secrets: [KEY],
+    },
+    () => {}
+  );
+  await rt.bootstrap();
+  return { rt, q: sdk.queries[0] as FakeQuery };
+}
+
+type CanUse = (
+  toolName: string,
+  input: Record<string, unknown>,
+  opts: Record<string, unknown>
+) => Promise<Record<string, unknown>>;
+const canUse = (q: FakeQuery) => q.options.canUseTool as CanUse;
+const toolOpts = (toolUseID: string) => ({
+  toolUseID,
+  signal: new AbortController().signal,
+  suggestions: [],
+});
+const ofType = <T extends RuntimeEventDraft['type']>(type: T) =>
+  events.filter((e) => e.type === type) as Extract<RuntimeEventDraft, { type: T }>[];
+/** A promise whose settling the test decides. */
+function deferred() {
+  let resolve!: () => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+describe('the five modes (S-2 A-1)', () => {
+  const PAIRS: Array<[Posture, string]> = [
+    [{ mode: 'agent', gear: 'ask' }, 'default'],
+    [{ mode: 'agent', gear: 'accept-edits' }, 'acceptEdits'],
+    [{ mode: 'plan', gear: 'auto' }, 'plan'],
+    [{ mode: 'plan', gear: 'ask' }, 'plan'],
+    [{ mode: 'agent', gear: 'auto' }, 'auto'],
+    [{ mode: 'agent', gear: 'bypass' }, 'bypassPermissions'],
+  ];
+
+  it('maps each stored pair to one CLI mode, Auto to the CLI auto mode', () => {
+    for (const [pair, mode] of PAIRS)
+      expect(cliPermissionMode(pair), JSON.stringify(pair)).toBe(mode);
+  });
+
+  it('maps every CLI mode back to the pair the composer stores, and none it never sets', () => {
+    for (const mode of ['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions']) {
+      const pair = permissionsForCliMode(mode);
+      expect(pair && cliPermissionMode(pair), mode).toBe(mode);
+    }
+    expect(permissionsForCliMode('plan')).toEqual({ mode: 'plan', gear: 'auto' });
+    expect(permissionsForCliMode('dontAsk')).toBeNull();
+  });
+
+  it('launches the CLI on the mode the chat comes up on', async () => {
+    for (const [pair, mode] of PAIRS) {
+      sdk.queries.length = 0;
+      const { rt, q } = await startedOn(pair);
+      expect(q.options.permissionMode, JSON.stringify(pair)).toBe(mode);
+      expect(q.options.allowDangerouslySkipPermissions).toBe(true);
+      await rt.dispose();
+    }
+  });
+});
+
+describe('what reaches canUseTool is never answered by the host (S-2 A-2)', () => {
+  it('in plan mode, on any gear, a change is refused with no card: the CLI would carry it out', async () => {
+    for (const pair of [
+      { mode: 'plan', gear: 'auto' },
+      { mode: 'plan', gear: 'bypass' },
+      { mode: 'plan', gear: 'ask' },
+    ] as Posture[]) {
+      sdk.queries.length = 0;
+      events = [];
+      const { rt, q } = await startedOn(pair);
+      for (const [tool, input] of [
+        ['Write', { file_path: join(configDir, 'x.txt'), content: 'x' }],
+        ['Bash', { command: 'mkdir build' }],
+      ] as const) {
+        await expect(
+          canUse(q)(tool, input, toolOpts(`t-${tool}`)),
+          JSON.stringify(pair)
+        ).resolves.toEqual({
+          behavior: 'deny',
+          message: PLAN_MODE_REFUSAL,
+        });
+      }
+      expect(ofType('permission.requested')).toEqual([]);
+      await rt.dispose();
+    }
+  });
+
+  it('in every other mode, a card, never an allow of its own (Auto and Bypass too)', async () => {
+    for (const pair of [
+      { mode: 'agent', gear: 'ask' },
+      { mode: 'agent', gear: 'accept-edits' },
+      { mode: 'agent', gear: 'auto' },
+      { mode: 'agent', gear: 'bypass' },
+    ] as Posture[]) {
+      sdk.queries.length = 0;
+      events = [];
+      const { rt, q } = await startedOn(pair);
+      let settled = false;
+      void canUse(q)(
+        'Write',
+        { file_path: join(configDir, 'x.txt'), content: 'x' },
+        toolOpts('t-1')
+      ).then(() => {
+        settled = true;
+      });
+      await flush();
+      expect(ofType('permission.requested'), JSON.stringify(pair)).toHaveLength(1);
+      expect(settled, JSON.stringify(pair)).toBe(false);
+      await rt.dispose();
+    }
+  });
+});
+
+describe('mode switches (S-2 A-3, A-5)', () => {
+  it('waits for the CLI to take the mode before it counts', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    const answer = deferred();
+    q.setPermissionMode.mockImplementationOnce(() => answer.promise);
+    let done = false;
+    const switching = rt.setPermissions({ mode: 'agent', gear: 'auto' }).then(() => {
+      done = true;
+    });
+    await flush();
+    expect(q.setPermissionMode).toHaveBeenCalledWith('auto');
+    expect(done).toBe(false);
+    answer.resolve();
+    await switching;
+    expect(done).toBe(true);
+    // The CLI's report of the mode it took is not a change of its own.
+    q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'auto' });
+    await flush();
+    expect(ofType('session.permissions')).toEqual([]);
+    await rt.dispose();
+  });
+
+  it('a refused mode fails the request with our code and reason, and the mode stays', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    // As 2.1.300 rejects (s2 topic §4.1): the code in `errorCode`, never in the message.
+    q.setPermissionMode.mockRejectedValueOnce(
+      Object.assign(
+        new Error('Cannot set permission mode to auto: auto mode unavailable for this model'),
+        {
+          errorClass: 'control_request_failed',
+          errorCode: 'auto_mode_model',
+        }
+      )
+    );
+    const failure = await rt.setPermissions({ mode: 'agent', gear: 'auto' }).catch((e) => e);
+    expect(failure).toMatchObject({
+      code: 'WORKER_PERMISSION_MODE_REFUSED',
+      message: 'auto_mode_model',
+    });
+    // Never the CLI's own sentence.
+    expect(String(failure.message)).not.toContain('unavailable for this model');
+    q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'default' });
+    await flush();
+    expect(ofType('session.permissions')).toEqual([]);
+    // Still Manual: the next switch starts from it.
+    await rt.setPermissionGear('accept-edits');
+    expect(q.setPermissionMode).toHaveBeenLastCalledWith('acceptEdits');
+    await rt.dispose();
+  });
+
+  it('a refusal it cannot name is `other`', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    q.setPermissionMode.mockRejectedValueOnce(new Error('something else'));
+    await expect(rt.setPermissions({ mode: 'agent', gear: 'bypass' })).rejects.toMatchObject({
+      code: 'WORKER_PERMISSION_MODE_REFUSED',
+      message: 'other',
+    });
+    await rt.dispose();
+  });
+
+  it('leaves a card already up to the user when the mode widens', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    let settled = false;
+    void canUse(q)('Bash', { command: 'rm -rf build' }, toolOpts('t-2')).then(() => {
+      settled = true;
+    });
+    await flush();
+    await rt.setPermissionGear('bypass');
+    await rt.setPermissions({ mode: 'agent', gear: 'auto' });
+    await flush();
+    expect(settled).toBe(false);
+    expect(ofType('permission.resolved')).toEqual([]);
+    await rt.dispose();
+  });
+
+  it('with no CLI running, the next launch starts on the mode', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    q.end();
+    await flush();
+    await rt.setPermissions({ mode: 'agent', gear: 'accept-edits' });
+    expect(q.setPermissionMode).not.toHaveBeenCalled();
+    await send(rt);
+    expect(sdk.queries[1]?.options.permissionMode).toBe('acceptEdits');
+    await rt.dispose();
+  });
+});
+
+describe('the CLI changes its own mode (S-2 A-6)', () => {
+  it('reports a mode it entered by itself as `engine`, in the pair the composer stores', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'accept-edits' });
+    q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'plan' });
+    await flush();
+    expect(ofType('session.permissions').map((e) => e.payload)).toEqual([
+      { permissions: { mode: 'plan', gear: 'auto' }, cause: 'engine' },
+    ]);
+    // Said once: the same report again changes nothing.
+    q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'plan' });
+    await flush();
+    expect(ofType('session.permissions')).toHaveLength(1);
+    await rt.dispose();
+  });
+
+  it('reads the mode the CLI came up on (init), and ignores a mode it never sets', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'auto' });
+    q.push({ type: 'system', subtype: 'init', permissionMode: 'default', slash_commands: [] });
+    await flush();
+    expect(ofType('session.permissions').map((e) => e.payload.permissions)).toEqual([
+      { mode: 'agent', gear: 'ask' },
+    ]);
+    q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'dontAsk' });
+    await flush();
+    expect(ofType('session.permissions')).toHaveLength(1);
+    await rt.dispose();
+  });
+
+  it('takes no report as a change while a switch of its own is in flight', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    const answer = deferred();
+    q.setPermissionMode.mockImplementationOnce(() => answer.promise);
+    const switching = rt.setPermissions({ mode: 'agent', gear: 'bypass' });
+    await flush();
+    q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'default' });
+    await flush();
+    expect(ofType('session.permissions')).toEqual([]);
+    answer.resolve();
+    await switching;
+    await flush();
+    expect(ofType('session.permissions')).toEqual([]);
+    await rt.dispose();
+  });
+});
+
+describe('the plan review on this engine (S-2 A-7)', () => {
+  async function reviewUp(q: FakeQuery) {
+    const allowed = canUse(q)('ExitPlanMode', { plan: '# Ship it\n\n1. step' }, toolOpts('t-plan'));
+    // The host waits up to 2 s for the streamed plan before it raises the card.
+    for (let i = 0; i < 300 && ofType('question.requested').length === 0; i += 1)
+      await new Promise((r) => setTimeout(r, 10));
+    const card = ofType('question.requested')[0];
+    return { allowed, card };
+  }
+
+  it('offers the modes to continue in, no goals, Edit automatically first', async () => {
+    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
+    const { card } = await reviewUp(q);
+    expect(card?.payload.review?.choices).toEqual([
+      'run:accept-edits',
+      'run:ask',
+      'run:auto',
+      'run:bypass',
+      'keep-planning',
+    ]);
+    await rt.dispose();
+  }, 10_000);
+
+  it('an approval switches to the chosen mode before the CLI hears it, and says so at once', async () => {
+    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
+    const { allowed, card } = await reviewUp(q);
+    const questionId = card?.payload.questionId as string;
+    expect(rt.respondQuestion({ questionId, answers: { 'plan-review': 'run:accept-edits' } })).toBe(
+      true
+    );
+    expect(q.setPermissionMode).toHaveBeenCalledWith('acceptEdits');
+    expect(ofType('session.permissions').map((e) => e.payload)).toEqual([
+      { permissions: { mode: 'agent', gear: 'accept-edits' }, cause: 'plan-approved', questionId },
+    ]);
+    await expect(allowed).resolves.toMatchObject({ behavior: 'allow' });
+    await rt.dispose();
+  }, 10_000);
+
+  it('a mode the CLI refused after an approval is corrected by its own report', async () => {
+    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
+    const { card } = await reviewUp(q);
+    q.setPermissionMode.mockRejectedValueOnce(
+      Object.assign(new Error('Cannot set permission mode to auto'), {
+        errorCode: 'auto_mode_model',
+      })
+    );
+    rt.respondQuestion({
+      questionId: card?.payload.questionId as string,
+      answers: { 'plan-review': 'run:auto' },
+    });
+    // Leaving plan mode put the CLI back on the mode before it.
+    q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'default' });
+    await flush();
+    await flush();
+    expect(
+      ofType('session.permissions').map((e) => [e.payload.cause, e.payload.permissions])
+    ).toEqual([
+      ['plan-approved', { mode: 'agent', gear: 'auto' }],
+      ['engine', { mode: 'agent', gear: 'ask' }],
+    ]);
+    await rt.dispose();
+  }, 10_000);
+
+  it('a goal choice is not one this card offers: the review closes', async () => {
+    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
+    const { allowed, card } = await reviewUp(q);
+    rt.respondQuestion({
+      questionId: card?.payload.questionId as string,
+      answers: { 'plan-review': 'goal:auto' },
+    });
+    await expect(allowed).resolves.toMatchObject({ behavior: 'deny', interrupt: true });
+    expect(q.setPermissionMode).not.toHaveBeenCalled();
+    expect(ofType('session.permissions')).toEqual([]);
+    await rt.dispose();
+  }, 10_000);
+});
+
+// ---- Route B, S-2 review fixes ----
+
+const { cliRefusalText } = await import('../sdkSessionRuntime.ts');
+
+describe('plan mode refuses changes only (S-2 A-2, review)', () => {
+  it('a read outside the workspace and a web fetch are the user cards; writes and commands are refused', async () => {
+    for (const gear of ['auto', 'ask', 'bypass'] as const) {
+      sdk.queries.length = 0;
+      events = [];
+      const { rt, q } = await startedOn({ mode: 'plan', gear });
+      for (const [tool, input] of [
+        ['Read', { file_path: join(tmpdir(), 'outside.txt') }],
+        ['WebFetch', { url: 'http://127.0.0.1:1/docs', prompt: 'read' }],
+      ] as const) {
+        let settled = false;
+        void canUse(q)(tool, input, toolOpts(`t-${tool}`)).then(() => {
+          settled = true;
+        });
+        await flush();
+        expect(settled, `${tool} on ${gear}`).toBe(false);
+      }
+      expect(ofType('permission.requested').map((e) => e.payload.toolName)).toEqual([
+        'Read',
+        'WebFetch',
+      ]);
+      await expect(
+        canUse(q)('Edit', { file_path: join(configDir, 'x.txt') }, toolOpts('t-edit'))
+      ).resolves.toEqual({ behavior: 'deny', message: PLAN_MODE_REFUSAL });
+      await rt.dispose();
+    }
+  });
+
+  it('a call the CLI asks about while a switch out of plan mode is in flight is still refused', async () => {
+    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
+    const answer = deferred();
+    q.setPermissionMode.mockImplementationOnce(() => answer.promise);
+    const switching = rt.setPermissions({ mode: 'agent', gear: 'auto' }).catch((e) => e);
+    await flush();
+    await expect(
+      canUse(q)('Write', { file_path: join(configDir, 'x.txt'), content: 'x' }, toolOpts('t-w'))
+    ).resolves.toEqual({ behavior: 'deny', message: PLAN_MODE_REFUSAL });
+    expect(ofType('permission.requested')).toEqual([]);
+    answer.reject(
+      Object.assign(new Error('Cannot set permission mode to auto'), {
+        errorCode: 'auto_mode_model',
+      })
+    );
+    expect(await switching).toMatchObject({
+      code: 'WORKER_PERMISSION_MODE_REFUSED',
+      message: 'auto_mode_model',
+    });
+    await rt.dispose();
+  });
+
+  it('a subagent the repository declares wider is sent back to the plan-mode refusal', async () => {
+    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
+    const guard = (
+      q.options.hooks as { PreToolUse: Array<{ hooks: Array<(i: unknown) => Promise<unknown>> }> }
+    ).PreToolUse[0]?.hooks[0];
+    const call = (over: Record<string, unknown>) =>
+      guard?.({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'agent-1',
+        permission_mode: 'acceptEdits',
+        tool_name: 'Write',
+        ...over,
+      });
+    expect(await call({})).toMatchObject({
+      hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'ask' },
+    });
+    expect(await call({ tool_name: 'Bash' })).toMatchObject({
+      hookSpecificOutput: { permissionDecision: 'ask' },
+    });
+    // The main thread, a read, a subagent already in plan mode: nothing to send back.
+    expect(await call({ agent_id: undefined })).toEqual({});
+    expect(await call({ tool_name: 'Read' })).toEqual({});
+    expect(await call({ permission_mode: 'plan' })).toEqual({});
+    // Outside plan mode the repository's declaration stands (ruling 5).
+    await rt.setPermissions({ mode: 'agent', gear: 'ask' });
+    expect(await call({})).toEqual({});
+    await rt.dispose();
+  });
+});
+
+describe('an approval whose mode the CLI refuses (S-2 A-7, review)', () => {
+  async function approveWithRefusal(firstAnswer: 'reject' | 'reject-both') {
+    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
+    // The CLI reported plan mode for the turn; it put Bypass permissions away as the earlier mode.
+    q.push({ type: 'system', subtype: 'init', permissionMode: 'plan', slash_commands: [] });
+    await flush();
+    const allowed = canUse(q)('ExitPlanMode', { plan: '# Ship it' }, toolOpts('t-plan'));
+    for (let i = 0; i < 300 && ofType('question.requested').length === 0; i += 1)
+      await new Promise((r) => setTimeout(r, 10));
+    const card = ofType('question.requested')[0];
+    q.setPermissionMode.mockRejectedValueOnce(
+      Object.assign(new Error('Cannot set permission mode to auto'), {
+        errorCode: 'auto_mode_model',
+      })
+    );
+    if (firstAnswer === 'reject-both') q.setPermissionMode.mockRejectedValueOnce(new Error('no'));
+    rt.respondQuestion({
+      questionId: card?.payload.questionId as string,
+      answers: { 'plan-review': 'run:auto' },
+    });
+    return { rt, q, allowed };
+  }
+
+  it('runs the plan in Manual, says why, and only then lets the CLI leave plan mode', async () => {
+    const { rt, q, allowed } = await approveWithRefusal('reject');
+    await expect(allowed).resolves.toMatchObject({ behavior: 'allow' });
+    expect(q.setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual(['auto', 'default']);
+    expect(ofType('session.permissions').map((e) => e.payload)).toEqual([
+      expect.objectContaining({
+        cause: 'plan-approved',
+        permissions: { mode: 'agent', gear: 'auto' },
+      }),
+      {
+        cause: 'engine',
+        permissions: { mode: 'agent', gear: 'ask' },
+        refusedReason: 'auto_mode_model',
+      },
+    ]);
+    // Its own report of Manual changes nothing more.
+    q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'default' });
+    await flush();
+    expect(ofType('session.permissions')).toHaveLength(2);
+    await rt.dispose();
+  }, 10_000);
+
+  it('if even Manual is refused, the plan does not run and the chat stays in plan mode', async () => {
+    const { rt, allowed } = await approveWithRefusal('reject-both');
+    await expect(allowed).resolves.toMatchObject({ behavior: 'deny', interrupt: true });
+    expect(ofType('session.permissions').at(-1)?.payload).toEqual({
+      cause: 'engine',
+      permissions: { mode: 'plan', gear: 'auto' },
+      refusedReason: 'auto_mode_model',
+    });
+    await rt.dispose();
+  }, 10_000);
+});
+
+describe('CLI refusals in our words (S-2 A-18, review)', () => {
+  const BLOCK =
+    "Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Irreversible Local Destruction]. If it keeps failing, continue with other tasks that don't require this action and come back to it later.";
+  const DOWN =
+    'claude-opus-5-5 is temporarily unavailable, so auto mode cannot determine the safety of Bash right now. Wait a moment and then try this action again.';
+
+  async function toolTurn() {
+    const { rt, q } = await started();
+    await send(rt);
+    q.push({
+      type: 'stream_event',
+      parent_tool_use_id: null,
+      event: { type: 'message_start', message: { id: 'm1', usage: {} } },
+    });
+    q.push({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: {
+        id: 'm1',
+        content: [{ type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'node -e 1' } }],
+      },
+    });
+    await flush();
+    return { rt, q };
+  }
+  const result = (q: FakeQuery, content: string) =>
+    q.push({
+      type: 'user',
+      parent_tool_use_id: null,
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'tu1', is_error: true, content }],
+      },
+    });
+  const completed = () => ofType('tool.completed').at(-1)?.payload;
+
+  it('a classifier refusal with its event: refused, the reason kept, never the CLI sentence', async () => {
+    const { rt, q } = await toolTurn();
+    q.push({
+      type: 'system',
+      subtype: 'permission_denied',
+      tool_use_id: 'tu1',
+      tool_name: 'Bash',
+      decision_reason_type: 'classifier',
+      decision_reason: '[Irreversible Local Destruction]',
+      message: BLOCK,
+    });
+    result(q, BLOCK);
+    await flush();
+    const text = "Auto mode's safety check blocked this call: [Irreversible Local Destruction].";
+    expect(completed()).toMatchObject({
+      ok: false,
+      output: { content: [{ type: 'text', text }], details: { refused: true } },
+      error: text,
+    });
+    expect(JSON.stringify(completed())).not.toMatch(/claude code/i);
+    q.end();
+    await rt.dispose();
+  });
+
+  it('the sentence alone (no event) and the check being down read our way too', async () => {
+    const { rt, q } = await toolTurn();
+    result(q, DOWN);
+    await flush();
+    expect(completed()?.error).toBe(
+      "Auto mode's safety check was not available, so this call did not run."
+    );
+    expect(JSON.stringify(completed())).not.toMatch(/claude code/i);
+    q.end();
+    await rt.dispose();
+  });
+
+  it('an unrelated failure passes through unchanged', async () => {
+    const { rt, q } = await toolTurn();
+    result(q, 'Exit code 1: boom');
+    await flush();
+    expect(completed()?.error).toBe('Exit code 1: boom');
+    q.end();
+    await rt.dispose();
+  });
+
+  it('a safety-check reason naming the product reads naturally', () => {
+    for (const reason of [
+      'This writes to the Claude Code shell-snapshots folder. Each Bash command first runs a file from there, without asking anyone.',
+      'This writes to the Claude Code session-env folder. Claude Code runs the scripts there ahead of Bash commands, without asking anyone.',
+    ]) {
+      const text = cliRefusalText('safetyCheck', reason);
+      expect(text).not.toMatch(/claude code/i);
+      expect(text).not.toMatch(/\bthe the\b/i);
+      expect(text).not.toMatch(/\.\.$/);
+      expect(text).not.toMatch(/\. the agent/);
+    }
+    expect(cliRefusalText('mode', undefined)).toBe('The permission settings refused this call.');
+  });
+
+  it('a reopened chat shows the refusal as it did live', async () => {
+    const { getSessionMessages } = await import('@anthropic-ai/claude-agent-sdk');
+    const rt = runtime();
+    await rt.bootstrap();
+    (rt as unknown as { stub: { started: boolean } }).stub.started = true;
+    vi.mocked(getSessionMessages).mockResolvedValueOnce([
+      {
+        type: 'assistant',
+        message: {
+          id: 'm1',
+          content: [{ type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'node -e 1' } }],
+        },
+      },
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'tu1', is_error: true, content: BLOCK }],
+        },
+      },
+    ] as never);
+    const page = await rt.history({ logicalSessionId: 'chat-1', offset: 0, limit: 80 });
+    expect(JSON.stringify(page)).not.toMatch(/claude code/i);
+    expect(JSON.stringify(page)).toContain("Auto mode's safety check blocked this call");
+    await rt.dispose();
+  });
+});
+
+describe('the card offers what the CLI will remember (review)', () => {
+  it('no "Allow for session" when the CLI has no rule to keep', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    void canUse(q)('Bash', { command: 'rm -rf build' }, { ...toolOpts('t-1'), suggestions: [] });
+    void canUse(q)(
+      'Bash',
+      { command: 'rm -rf dist' },
+      {
+        ...toolOpts('t-2'),
+        suppressAlwaysAllowRule: true,
+        suggestions: [{ type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }],
+      }
+    );
+    void canUse(q)(
+      'Bash',
+      { command: 'touch x' },
+      {
+        ...toolOpts('t-3'),
+        suggestions: [{ type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }],
+      }
+    );
+    await flush();
+    expect(ofType('permission.requested').map((e) => e.payload.decisions)).toEqual([
+      ['allow', 'deny'],
+      ['allow', 'deny'],
+      ['allow', 'allow_session', 'deny'],
+    ]);
     await rt.dispose();
   });
 });

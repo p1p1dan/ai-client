@@ -33,10 +33,17 @@ export const PLAN_REVIEW_QUESTION_ID = 'plan-review';
 export const PLAN_REVIEW_APPROVE_LABEL = 'Approve';
 export const PLAN_REVIEW_KEEP_PLANNING_LABEL = 'Keep planning';
 
-export type PlanReviewChoice = 'goal:auto' | 'goal:bypass' | 'run:auto' | 'keep-planning';
+export type PlanReviewChoice =
+  | 'goal:auto'
+  | 'goal:bypass'
+  | 'run:auto'
+  | 'run:ask'
+  | 'run:accept-edits'
+  | 'run:bypass'
+  | 'keep-planning';
 export type PlanReviewApproval = Exclude<PlanReviewChoice, 'keep-planning'>;
 
-/** Card order; the first is the default. */
+/** DSH's card, in card order; the first is the default. A card that names no choices offers these. */
 export const PLAN_REVIEW_CHOICES: readonly PlanReviewChoice[] = [
   'goal:auto',
   'goal:bypass',
@@ -44,8 +51,36 @@ export const PLAN_REVIEW_CHOICES: readonly PlanReviewChoice[] = [
   'keep-planning',
 ];
 
+/**
+ * Route B, S-2 (plan topic s2-permission-modes.md A-7): the Claude Agent SDK
+ * engine has no goals, so its card only picks the mode the plan runs in:
+ * Edit automatically (the default), Manual, Auto, Bypass permissions (the
+ * renderer confirms it a second time, decision 023), or keep planning.
+ */
+export const SDK_PLAN_REVIEW_CHOICES: readonly PlanReviewChoice[] = [
+  'run:accept-edits',
+  'run:ask',
+  'run:auto',
+  'run:bypass',
+  'keep-planning',
+];
+
+const ALL_CHOICES: readonly PlanReviewChoice[] = [
+  ...PLAN_REVIEW_CHOICES,
+  'run:ask',
+  'run:accept-edits',
+  'run:bypass',
+];
+
 export function isPlanReviewChoice(value: unknown): value is PlanReviewChoice {
-  return PLAN_REVIEW_CHOICES.includes(value as PlanReviewChoice);
+  return ALL_CHOICES.includes(value as PlanReviewChoice);
+}
+
+/** The choices a card offers: its own list when it names one, else DSH's. */
+export function planReviewChoicesOf(review: {
+  choices?: readonly PlanReviewChoice[];
+}): readonly PlanReviewChoice[] {
+  return review.choices && review.choices.length > 0 ? review.choices : PLAN_REVIEW_CHOICES;
 }
 
 /** Whether an approval sets the plan as the session goal. */
@@ -53,9 +88,19 @@ export function planReviewSetsGoal(choice: PlanReviewApproval): boolean {
   return choice === 'goal:auto' || choice === 'goal:bypass';
 }
 
-/** The posture an approval switches the session to: execute mode, full auto or bypass. */
+/** The posture an approval switches the session to: execute mode on the gear it names. */
 export function planReviewPermissions(choice: PlanReviewApproval): RuntimePermissionSettings {
-  return { mode: 'agent', gear: choice === 'goal:bypass' ? 'bypass' : 'auto' };
+  switch (choice) {
+    case 'goal:bypass':
+    case 'run:bypass':
+      return { mode: 'agent', gear: 'bypass' };
+    case 'run:ask':
+      return { mode: 'agent', gear: 'ask' };
+    case 'run:accept-edits':
+      return { mode: 'agent', gear: 'accept-edits' };
+    default:
+      return { mode: 'agent', gear: 'auto' };
+  }
 }
 
 export type PlanReviewDecision =
@@ -90,10 +135,14 @@ export function planReviewResponse(
 /**
  * A card response read back (the bridge acts on it, Main derives the posture
  * it may accept from it). Fails closed: a cancel, an unknown or missing
- * choice, extra keys, or keep-planning without feedback all close the review.
+ * choice, a choice the card did not offer (`offered`, DSH's four when not
+ * given), extra keys, or keep-planning without feedback all close the review.
  * Free text alone is keep-planning with that feedback.
  */
-export function decodePlanReviewResponse(response: PlanReviewResponse): PlanReviewDecision {
+export function decodePlanReviewResponse(
+  response: PlanReviewResponse,
+  offered: readonly PlanReviewChoice[] = PLAN_REVIEW_CHOICES
+): PlanReviewDecision {
   if (response.cancel) return { kind: 'dismiss' };
   const feedback = typeof response.response === 'string' ? response.response.trim() : '';
   const answers = response.answers ?? {};
@@ -102,7 +151,8 @@ export function decodePlanReviewResponse(response: PlanReviewResponse): PlanRevi
     return feedback ? { kind: 'keep-planning', feedback } : { kind: 'dismiss' };
   }
   const choice = answers[PLAN_REVIEW_QUESTION_ID];
-  if (keys.length !== 1 || !isPlanReviewChoice(choice)) return { kind: 'dismiss' };
+  if (keys.length !== 1 || !isPlanReviewChoice(choice) || !offered.includes(choice))
+    return { kind: 'dismiss' };
   if (choice === 'keep-planning') {
     return feedback ? { kind: 'keep-planning', feedback } : { kind: 'dismiss' };
   }

@@ -21,6 +21,7 @@ import { randomUUID } from 'node:crypto';
 import {
   type CanUseTool,
   getSessionMessages,
+  type HookCallback,
   type Options,
   type PermissionMode,
   type PermissionResult,
@@ -35,8 +36,14 @@ import type {
   BridgeSessionRuntime,
   BridgeSessionRuntimeOptions,
 } from '../dsh-host/bridge/bridgeRpcServer.ts';
+import { PERMISSION_MODE_REFUSED, permissionModeRefusalReason } from '../shared/claudeSdkEngine.ts';
 import { buildPiInterimUsagePayload, buildPiUsagePayload } from '../shared/piUsage.ts';
-import { decodePlanReviewResponse, PLAN_REVIEW_QUESTION_ID } from '../shared/planReview.ts';
+import {
+  decodePlanReviewResponse,
+  PLAN_REVIEW_QUESTION_ID,
+  REVIEW_DISMISSED_TEXT,
+  SDK_PLAN_REVIEW_CHOICES,
+} from '../shared/planReview.ts';
 import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type {
   PermissionDecisionId,
@@ -152,6 +159,8 @@ const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const FILE_CHANGE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 /** How long Stop waits for the CLI to close the turn itself before closing it here. */
 const STOP_SETTLE_MS = 5_000;
+/** How long a mode switch waits for the CLI's answer; under Main's 10 s RPC timeout. */
+const MODE_SWITCH_TIMEOUT_MS = 8_000;
 
 type Log = (...args: unknown[]) => void;
 
@@ -192,6 +201,8 @@ interface Turn {
   toolMessage: Map<string, string>;
   /** toolCallId → why the call did not run (our card said no, or Stop took it). */
   toolOutcome: Map<string, 'refused' | 'stopped' | 'notStarted'>;
+  /** toolCallId → what the row says of a call the CLI refused itself (S-2: Auto's check). */
+  refusals: Map<string, string>;
   interjections: Map<string, Interjection>;
   stopTimer?: ReturnType<typeof setTimeout>;
 }
@@ -245,19 +256,97 @@ export function bareModelId(ref: string | undefined): string | undefined {
   return slash >= 0 ? ref.slice(slash + 1) : ref;
 }
 
-/** PiLab's mode and gear → Claude Code's permission mode. */
+/**
+ * PiLab's mode and gear → the CLI's permission mode, one to one (S-2 A-1):
+ * Manual, Edit automatically, Plan, Auto, Bypass permissions. Plan mode is
+ * `plan` whatever gear it is stored with.
+ */
 export function cliPermissionMode(settings: RuntimePermissionSettings): PermissionMode {
   if (settings.mode === 'plan') return 'plan';
   switch (settings.gear) {
     case 'bypass':
       return 'bypassPermissions';
     case 'accept-edits':
-    case 'auto':
       return 'acceptEdits';
+    case 'auto':
+      return 'auto';
     default:
       return 'default';
   }
 }
+
+/**
+ * The CLI's mode → the pair PiLab stores (the composer's plan preset for
+ * `plan`). Null for a mode PiLab never sets (`dontAsk`) or does not know.
+ */
+export function permissionsForCliMode(mode: string): RuntimePermissionSettings | null {
+  switch (mode) {
+    case 'plan':
+      return { mode: 'plan', gear: 'auto' };
+    case 'default':
+      return { mode: 'agent', gear: 'ask' };
+    case 'acceptEdits':
+      return { mode: 'agent', gear: 'accept-edits' };
+    case 'auto':
+      return { mode: 'agent', gear: 'auto' };
+    case 'bypassPermissions':
+      return { mode: 'agent', gear: 'bypass' };
+    default:
+      return null;
+  }
+}
+
+/** A refused `setPermissionMode` as the worker reports it: our code, the reason as the message. */
+function permissionModeRefused(error: unknown): BridgeSessionError {
+  // 2.1.300 rejects with a plain Error carrying a stable `errorCode` (auto_mode_settings,
+  // bypass_disabled, ...); its message never names the code (s2 topic §4.1).
+  const fields = (error ?? {}) as { errorCode?: unknown; code?: unknown };
+  const code = [fields.errorCode, fields.code].filter((item) => typeof item === 'string').join(' ');
+  const text = `${code} ${error instanceof Error ? error.message : String(error)}`;
+  return new BridgeSessionError(PERMISSION_MODE_REFUSED, permissionModeRefusalReason(text));
+}
+
+/**
+ * S-2: the tool row's words for a call the CLI refused itself. Never its own
+ * sentence, which names Claude Code; the reason it gives (a rule name such as
+ * `[Irreversible Local Destruction]`, or `Classifier unavailable`) is kept.
+ */
+export function cliRefusalText(type: unknown, reason: unknown): string {
+  // Safety-check reasons name the product too ("This writes to the Claude Code
+  // shell-snapshots folder. Claude Code runs the scripts there…", 2.1.300).
+  const why =
+    typeof reason === 'string' && reason.trim()
+      ? reason
+          .trim()
+          .replace(/\bthe Claude Code\b/gi, "the agent's")
+          .replace(/(^|[.!?]\s+)Claude Code\b/g, '$1The agent')
+          .replace(/\bClaude Code\b/gi, 'the agent')
+          .replace(/[.!?\s]+$/, '')
+      : '';
+  if (type === 'classifier') {
+    return /unavailable|could not evaluate|no (server )?verdict/i.test(why)
+      ? "Auto mode's safety check was not available, so this call did not run."
+      : `Auto mode's safety check blocked this call${why ? `: ${why}` : ''}.`;
+  }
+  return `The permission settings refused this call${why ? `: ${why}` : ''}.`;
+}
+
+/** A refusal the CLI wrote into the tool result without its event (the same rewording). */
+function cliRefusalRewrite(text: string): string {
+  if (/denied by the Claude Code auto mode classifier/i.test(text)) {
+    const reason = /Reason: (.+?)\. /.exec(text)?.[1];
+    return cliRefusalText('classifier', reason);
+  }
+  if (
+    /auto mode cannot determine|Auto mode could not evaluate|Auto mode is unavailable/i.test(text)
+  )
+    return cliRefusalText('classifier', 'Classifier unavailable');
+  return text;
+}
+
+/** What the model is told of a change refused in plan mode (S-2 A-2). */
+export const PLAN_MODE_REFUSAL =
+  'Plan mode is on: nothing may be changed until the user approves a plan. Keep exploring with read-only tools, write your plan, then present it with ExitPlanMode.';
 
 function effortOptions(
   effort: SessionEffortLevel | undefined
@@ -329,6 +418,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private modelRef: string | undefined;
   private effort: SessionEffortLevel | undefined;
   private permissions: RuntimePermissionSettings;
+  /** The mode the CLI last reported (`system/init`, `system/status`); null while none runs. */
+  private cliMode: string | null = null;
+  /** Mode switches sent and not answered yet: the CLI's reports in between are not drift. */
+  private modeRequests = 0;
   private turn: Turn | null = null;
   private turnCount = 0;
   private userMessageCount = 0;
@@ -456,7 +549,14 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       // No "Co-Authored-By" / "Generated with Claude Code" lines in the user's commits and PRs.
       // `env` is the flag tier, above the repository's settings: the gateway, the proxies
       // and the provider switches stay ours (decision 6). On the CLI's command line.
-      settings: { attribution: false, env: this.config.settingsEnv },
+      // S-2 A-13: plan mode never hands calls to Auto's classifier (the CLI's default
+      // `useAutoModeDuringPlan: true` lets it run or refuse changes in plan mode without
+      // PiLab); what plan mode asks about reaches `canUseTool`, which refuses it.
+      settings: {
+        attribution: false,
+        env: this.config.settingsEnv,
+        useAutoModeDuringPlan: false,
+      } as Options['settings'],
       settingSources: this.config.settingSources,
       // A repository's own `.claude/settings*.json` may add allow rules (which skip
       // `canUseTool`, i.e. PiLab's card) and hooks (commands run with no tool call).
@@ -474,6 +574,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       // Set once at launch so a later switch to "bypass" is accepted; the mode itself stays ours.
       allowDangerouslySkipPermissions: true,
       canUseTool: this.canUseTool,
+      // In-process: callback hooks are not settings hooks, so no settings tier turns them off.
+      hooks: { PreToolUse: [{ hooks: [this.planModeSubagentGuard] }] },
       includePartialMessages: true,
       ...(stub.started ? { resume: stub.ccSessionId } : { sessionId: stub.ccSessionId }),
       // A .js CLI runs on this host's own node (the app's whitelisted node.exe), never a
@@ -513,6 +615,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       if (this.query === q) {
         this.query = null;
         this.input = null;
+        this.cliMode = null;
         // The CLI's tasks went with it.
         const hadTasks = this.backgroundTasks > 0;
         this.resetBackgroundTasks();
@@ -567,6 +670,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       step: null,
       toolMessage: new Map(),
       toolOutcome: new Map(),
+      refusals: new Map(),
       interjections: new Map(),
     };
     if (this.turnCount === 1) {
@@ -861,6 +965,24 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         }
         // The CLI is up on `modelRef` (a resume may start on another model than the stub's).
         this.recordStubModel();
+        this.noteCliMode(message.permissionMode);
+        return;
+      }
+      case 'status': {
+        // S-2 A-6: every mode change, the CLI's own included (plan mode entered or left).
+        this.noteCliMode(message.permissionMode);
+        return;
+      }
+      case 'permission_denied': {
+        // S-2: a call the CLI refused with no card (Auto's safety check, a mode or a rule).
+        // Its own sentence names Claude Code (plan §2 rule 4): the row says it our way.
+        const id = typeof message.tool_use_id === 'string' ? message.tool_use_id : '';
+        if (!id || !this.turn) return;
+        this.turn.toolOutcome.set(id, 'refused');
+        this.turn.refusals.set(
+          id,
+          cliRefusalText(message.decision_reason_type, message.decision_reason)
+        );
         return;
       }
       case 'background_tasks_changed': {
@@ -1097,8 +1219,9 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       const toolCallId = b.tool_use_id;
       const messageId = turn.toolMessage.get(toolCallId) ?? turn.step?.messageId;
       if (!messageId) continue;
-      const text = textOf(b.content);
+      const raw = textOf(b.content);
       const failed = b.is_error === true;
+      const text = turn.refusals.get(toolCallId) ?? (failed ? cliRefusalRewrite(raw) : raw);
       const outcome =
         turn.toolOutcome.get(toolCallId) ??
         (failed && (turn.stopRequested || /interrupted by user/i.test(text))
@@ -1207,6 +1330,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       step: null,
       toolMessage: new Map(),
       toolOutcome: new Map(),
+      refusals: new Map(),
       interjections: new Map(),
     };
     this.emitStatus('running');
@@ -1293,15 +1417,65 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
 
   // ---- approvals and questions ----------------------------------------------------
 
+  /**
+   * S-2 A-2: the CLI's mode decides what needs asking, and the host never
+   * answers for the user. In plan mode the CLI asks about file changes and
+   * shell commands it could not class as read-only, and carries them out if
+   * allowed (it does not enforce plan mode itself, s2 topic §4.2): those are
+   * refused, with no card, until a plan is approved. Everything else that
+   * reaches here (a read outside the workspace, a web fetch, an MCP tool; in
+   * the other modes a call Auto's check hands to a person, a safety check
+   * Bypass does not skip, an ask in Manual) is the user's card.
+   */
   private readonly canUseTool: CanUseTool = (toolName, input, opts) => {
+    if (process.env.AICLIENT_CLAUDE_SDK_TRACE) {
+      this.log(
+        `[trace] canUseTool ${toolName} id=${opts.toolUseID} mode=${cliPermissionMode(this.permissions)}`
+      );
+    }
     if (toolName === 'AskUserQuestion') return this.askQuestion(input, opts.toolUseID, opts.signal);
     if (toolName === 'ExitPlanMode') return this.reviewPlan(input, opts.toolUseID, opts.signal);
-    const gear: PermissionGear = this.permissions.gear;
-    // `auto` and `bypass`: the CLI only reaches us for what its own mode did not settle.
-    if (gear === 'auto' || gear === 'bypass') {
-      return Promise.resolve({ behavior: 'allow', updatedInput: input });
+    if (
+      this.permissions.mode === 'plan' &&
+      (FILE_CHANGE_TOOLS.has(toolName) || SHELL_TOOLS.has(toolName))
+    ) {
+      this.turn?.toolOutcome.set(opts.toolUseID, 'refused');
+      return Promise.resolve({ behavior: 'deny', message: PLAN_MODE_REFUSAL });
     }
     return this.askPermission(toolName, input, opts);
+  };
+
+  /**
+   * S-2 A-20: a subagent the repository declares with a wider mode
+   * (`.claude/agents/*.md` `permissionMode: acceptEdits`, `auto`) changes files
+   * without asking even while the chat is in plan mode (measured). Its file
+   * changes and shell commands are sent back to `canUseTool`, which refuses
+   * them in plan mode; in every other mode the repository's declaration stands
+   * (ruling 5, as its allow rules do).
+   */
+  private readonly planModeSubagentGuard: HookCallback = async (input) => {
+    const call = input as {
+      hook_event_name?: string;
+      agent_id?: string;
+      permission_mode?: string;
+      tool_name?: string;
+    };
+    if (
+      call.hook_event_name !== 'PreToolUse' ||
+      !call.agent_id ||
+      this.permissions.mode !== 'plan' ||
+      call.permission_mode === 'plan' ||
+      !(FILE_CHANGE_TOOLS.has(call.tool_name ?? '') || SHELL_TOOLS.has(call.tool_name ?? ''))
+    ) {
+      return {};
+    }
+    return {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'ask',
+        permissionDecisionReason: 'The chat is in plan mode',
+      },
+    };
   };
 
   private askPermission(
@@ -1317,7 +1491,12 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         permissionId,
         toolName,
         ...described,
-        decisions: ['allow', 'allow_session', 'deny'],
+        // "Allow for session" only when it remembers something: the CLI offers no rule for
+        // a call it marks `suppressAlwaysAllowRule` (a safety check, a classifier escalation).
+        decisions:
+          !opts.suppressAlwaysAllowRule && (opts.suggestions?.length ?? 0) > 0
+            ? ['allow', 'allow_session', 'deny']
+            : ['allow', 'deny'],
         ...(opts.decisionReason ? { reason: opts.decisionReason } : {}),
         ...(opts.agentID ? { agentId: opts.agentID } : {}),
       },
@@ -1464,6 +1643,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           ...(plan ? { plan } : {}),
           callId: toolUseId,
           goalObjective: plan || title,
+          // S-2 A-7: no goals on this engine; the card picks the mode the plan runs in.
+          choices: [...SDK_PLAN_REVIEW_CHOICES],
         },
       },
     });
@@ -1534,22 +1715,17 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     pending: PendingQuestion
   ): boolean {
     this.pendingQuestions.delete(input.questionId);
-    const decision = decodePlanReviewResponse(input);
+    const decision = decodePlanReviewResponse(input, SDK_PLAN_REVIEW_CHOICES);
     if (decision.kind === 'approve') {
-      const goal = decision.goal
-        ? { set: false as const, reason: 'Goals are not available on the Claude SDK engine' }
-        : undefined;
+      // Reported at once, inside Main's window for this answer (decision 169); the CLI
+      // hears the approval once it is in the chosen mode (`leavePlanMode`).
       this.permissions = decision.permissions;
-      void this.query
-        ?.setPermissionMode(cliPermissionMode(decision.permissions))
-        .catch((error) => this.log('setPermissionMode failed', error));
       this.emit({
         type: 'session.permissions',
         payload: {
           permissions: decision.permissions,
           cause: 'plan-approved',
           questionId: input.questionId,
-          ...(goal ? { goal } : {}),
         },
       });
       this.emit({
@@ -1558,10 +1734,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           questionId: input.questionId,
           outcome: 'answered',
           answers: { [PLAN_REVIEW_QUESTION_ID]: decision.choice },
-          review: { choice: decision.choice, ...(goal ? { goal } : {}) },
+          review: { choice: decision.choice },
         },
       });
-      pending.resolve({ behavior: 'allow', updatedInput: pending.input });
+      void this.leavePlanMode(decision.permissions, pending);
     } else if (decision.kind === 'keep-planning') {
       this.emit({
         type: 'question.resolved',
@@ -1582,13 +1758,58 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         type: 'question.resolved',
         payload: { questionId: input.questionId, outcome: 'cancelled' },
       });
-      pending.resolve({
-        behavior: 'deny',
-        message: 'The user closed the plan review. Stop and wait for their next message.',
-        interrupt: true,
-      });
+      // The shared wording, so the tool row reads "review closed" (`planReviewRowOutcome`).
+      pending.resolve({ behavior: 'deny', message: REVIEW_DISMISSED_TEXT, interrupt: true });
     }
     return true;
+  }
+
+  /**
+   * S-2 A-7: the approved plan runs in the mode the card picked. The CLI hears the
+   * approval only once it is in that mode: leaving plan mode otherwise puts the
+   * mode before it back, Bypass permissions included (measured). A mode the CLI
+   * refuses becomes Manual, said with its reason; if even that fails, the plan
+   * does not run and the chat stays in plan mode.
+   */
+  private async leavePlanMode(
+    chosen: RuntimePermissionSettings,
+    pending: PendingQuestion
+  ): Promise<void> {
+    const q = this.query;
+    // One switch for the whole sequence: no report in between is a change of the CLI's own.
+    this.modeRequests += 1;
+    try {
+      if (q) {
+        try {
+          await this.trackModeSwitch(q.setPermissionMode(cliPermissionMode(chosen)), chosen);
+        } catch (refusal) {
+          const refusedReason = permissionModeRefused(refusal).message;
+          this.log('the approved mode was refused; the plan runs in Manual', refusal);
+          const manual: RuntimePermissionSettings = { mode: 'agent', gear: 'ask' };
+          try {
+            await this.trackModeSwitch(q.setPermissionMode('default'), manual);
+          } catch (error) {
+            this.log('leaving plan mode failed', error);
+            const plan: RuntimePermissionSettings = { mode: 'plan', gear: 'auto' };
+            this.permissions = plan;
+            this.emit({
+              type: 'session.permissions',
+              payload: { permissions: plan, cause: 'engine', refusedReason },
+            });
+            pending.resolve({ behavior: 'deny', message: REVIEW_DISMISSED_TEXT, interrupt: true });
+            return;
+          }
+          this.emit({
+            type: 'session.permissions',
+            payload: { permissions: manual, cause: 'engine', refusedReason },
+          });
+        }
+      }
+      pending.resolve({ behavior: 'allow', updatedInput: pending.input });
+    } finally {
+      this.modeRequests -= 1;
+      this.reconcileCliMode();
+    }
   }
 
   private autoSettleQuestion(questionId: string): void {
@@ -1612,30 +1833,86 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     return false;
   }
 
-  setPermissions(permissions: RuntimePermissionSettings): void {
-    this.permissions = permissions;
-    this.applyPermissionMode();
+  // S-2 A-3, A-5: a switch counts once the CLI took it; a refusal fails the request and leaves
+  // the mode as it was. Cards already up stay up: the CLI does not ask again under a new mode.
+
+  setPermissions(permissions: RuntimePermissionSettings): Promise<void> {
+    return this.applyPermissions(permissions);
   }
 
-  setPermissionGear(gear: PermissionGear): void {
-    this.permissions = { ...this.permissions, gear };
-    this.applyPermissionMode();
-    // A wider gear answers the cards it now covers (the DSH gate does the same).
-    if (gear === 'auto' || gear === 'bypass') {
-      for (const permissionId of [...this.pendingPermissions.keys()]) {
-        this.respondPermission({ permissionId, decision: 'allow' });
-      }
+  setPermissionGear(gear: PermissionGear): Promise<void> {
+    return this.applyPermissions({ ...this.permissions, gear });
+  }
+
+  setPermissionTier(tier: SessionPermissionTier): Promise<void> {
+    return this.applyPermissions(migratePermissionTier(tier));
+  }
+
+  private async applyPermissions(next: RuntimePermissionSettings): Promise<void> {
+    // No CLI running (a reopened chat before its first send): the next launch starts on it.
+    const q = this.query;
+    if (!q) {
+      this.permissions = next;
+      return;
+    }
+    // The mode PiLab holds changes only once the CLI took the new one: a call the CLI asks
+    // about meanwhile is judged by the mode still in force (e.g. refused in plan mode).
+    try {
+      await this.trackModeSwitch(q.setPermissionMode(cliPermissionMode(next)), next);
+    } catch (error) {
+      this.log('setPermissionMode refused', error);
+      throw permissionModeRefused(error);
     }
   }
 
-  setPermissionTier(tier: SessionPermissionTier): void {
-    this.setPermissions(migratePermissionTier(tier));
+  /**
+   * One mode switch in flight, bounded in time; on success `requested` is what
+   * PiLab holds. The CLI's reports are judged once no switch is in flight.
+   */
+  private async trackModeSwitch(
+    request: Promise<void> | undefined,
+    requested: RuntimePermissionSettings
+  ): Promise<void> {
+    if (!request) return;
+    this.modeRequests += 1;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        request,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('timeout: the engine did not answer the mode switch')),
+            MODE_SWITCH_TIMEOUT_MS
+          );
+        }),
+      ]);
+      this.permissions = requested;
+      this.cliMode = cliPermissionMode(requested);
+    } finally {
+      clearTimeout(timer);
+      this.modeRequests -= 1;
+      this.reconcileCliMode();
+    }
   }
 
-  private applyPermissionMode(): void {
-    void this.query
-      ?.setPermissionMode(cliPermissionMode(this.permissions))
-      .catch((error) => this.log('setPermissionMode failed', error));
+  /** S-2 A-6: the mode the CLI reports. */
+  private noteCliMode(mode: unknown): void {
+    if (typeof mode !== 'string') return;
+    this.cliMode = mode;
+    this.reconcileCliMode();
+  }
+
+  /**
+   * The CLI is in another mode than the one PiLab holds and no switch of ours is in
+   * flight: it changed by itself, or refused ours. Take its mode and say so.
+   */
+  private reconcileCliMode(): void {
+    if (this.modeRequests > 0 || this.cliMode === null || this.disposed) return;
+    if (this.cliMode === cliPermissionMode(this.permissions)) return;
+    const next = permissionsForCliMode(this.cliMode);
+    if (!next) return;
+    this.permissions = next;
+    this.emit({ type: 'session.permissions', payload: { permissions: next, cause: 'engine' } });
   }
 
   // ---- reads ----------------------------------------------------------------------
@@ -1683,7 +1960,9 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             const b = record(block);
             if (!b || b.type !== 'tool_result' || typeof b.tool_use_id !== 'string') continue;
             const owner = toolOwner.get(b.tool_use_id);
-            const text = textOf(b.content);
+            // A refusal of the CLI's own reads as it did live: never its sentence (A-18).
+            const raw = textOf(b.content);
+            const text = b.is_error === true ? cliRefusalRewrite(raw) : raw;
             owner?.blocks.push({
               type: 'tool_result',
               id: `${b.tool_use_id}-result`,

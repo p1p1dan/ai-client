@@ -31,6 +31,18 @@
  * are edited in place: give it a fresh copy each run. Without PROBE_ENC_FILES / _DIR it
  * writes four plain samples into the workspace (a dry run).
  *
+ * Route B S-2, one scenario per permission mode (topic s2-permission-modes.md §3.2), each
+ * on the pair the composer sends and each judged by what the CLI did (cards raised, files
+ * written), scripted through the fake gateway's `CC-RUN`: `mode-manual`, `mode-edits`,
+ * `mode-plan` (changes refused in plan mode, the SDK review card, the chosen mode taking
+ * effect), `mode-bypass`, `mode-switch` (a switch while a card is up, then the next call
+ * of the same turn) and `mode-enterplan` (the model entering plan mode by itself reaches
+ * PiLab as `session.permissions` `engine`), `mode-plan-refused` (its own workspace and run:
+ * the workspace's settings disable Bypass permissions, so approving a plan into it falls to
+ * Manual with the reason), and `mode-auto` (run it last: the fake gateway's
+ * safety check allows, then blocks three calls in a row, the third falling back to PiLab's
+ * card, then is down; each refused row in PiLab's words, never the CLI's).
+ *
  * The key is a fake one unless PROBE_API_KEY is set in the shell; nothing here reads a
  * stored credential.
  */
@@ -105,6 +117,15 @@ const REPO_ENV: Record<string, string> = {
   ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID: 'repo-workspace',
   CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH: '1',
   CLAUDE_CODE_USE_GATEWAY: '1',
+  // Route B S-2: the model of Auto's safety check and of `sonnet` subagents, the request
+  // betas, and Auto's server-side check (each measured changeable by a repository).
+  ANTHROPIC_DEFAULT_SONNET_MODEL: 'repo-model',
+  ANTHROPIC_DEFAULT_OPUS_MODEL: 'repo-model',
+  ANTHROPIC_DEFAULT_HAIKU_MODEL: 'repo-model',
+  ANTHROPIC_SMALL_FAST_MODEL: 'repo-model',
+  CLAUDE_CODE_SUBAGENT_MODEL: 'repo-model',
+  CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1',
+  CLAUDE_CODE_AUTO_MODE_SERVER: '0',
   // A pin that did not hold fails the turn at once instead of after minutes of retries.
   CLAUDE_CODE_MAX_RETRIES: '0',
 };
@@ -184,6 +205,12 @@ function startHost(): void {
     } else if (message.kind === 'event' && message.type === 'runtime.event') {
       const event = message.payload as Event;
       events.push(event);
+      if (
+        process.env.PROBE_VERBOSE &&
+        !event.type.endsWith('.delta') &&
+        event.type !== 'usage.updated'
+      )
+        console.log(`  [event] ${event.type} ${JSON.stringify(event.payload ?? {}).slice(0, 160)}`);
       for (const w of [...waiters]) {
         if (w.test(event)) {
           waiters.splice(waiters.indexOf(w), 1);
@@ -260,6 +287,82 @@ function checkTools(scenario: string, expected: string[]): void {
 }
 
 const countOf = (type: string) => events.filter((e) => e.type === type).length;
+
+/** S-2: the SDK review card's choices (`SDK_PLAN_REVIEW_CHOICES`). */
+const SDK_REVIEW_CHOICES = [
+  'run:accept-edits',
+  'run:ask',
+  'run:auto',
+  'run:bypass',
+  'keep-planning',
+];
+
+/**
+ * S-2: one turn of scripted calls (`CC-RUN`). Each permission card is answered as
+ * `answer` says (it may act first, e.g. switch the mode while the card is up); a plan
+ * review card with `review`. Returns the terminal event and the tool name of each card.
+ */
+async function runCalls(
+  calls: Array<{ name: string; input: Record<string, unknown> }>,
+  answer: (card: Event) => Promise<'allow' | 'deny'> | 'allow' | 'deny',
+  review?: string,
+  /** Words after the script, e.g. the fake gateway's `CC-CLS-BLOCK` for Auto's check. */
+  suffix = ''
+): Promise<{ end: Event; cards: string[]; reviews: Event[]; answeredByProbe: boolean[] }> {
+  const answered = new Set<string>();
+  const cards: string[] = [];
+  const reviews: Event[] = [];
+  /** Per card: nothing had settled it before the probe's answer, and the answer took. */
+  const answeredByProbe: boolean[] = [];
+  // `send` starts the turn's event list afresh: everything in it is this turn's.
+  await send(`CC-RUN ${JSON.stringify({ calls })}${suffix ? ` ${suffix}` : ''}`);
+  for (;;) {
+    const e = await waitFor(
+      (ev) =>
+        terminal(ev) ||
+        (ev.type === 'permission.requested' && !answered.has(String(ev.payload?.permissionId))) ||
+        (ev.type === 'question.requested' && !answered.has(String(ev.payload?.questionId))),
+      'scripted turn',
+      120_000
+    );
+    if (terminal(e)) return { end: e, cards, reviews, answeredByProbe };
+    if (e.type === 'question.requested') {
+      answered.add(String(e.payload?.questionId));
+      reviews.push(e);
+      await request('worker.question.respond', {
+        logicalSessionId,
+        questionId: e.payload?.questionId,
+        answers: { 'plan-review': review ?? 'keep-planning' },
+        ...(review ? {} : { response: 'probe: keep planning' }),
+      });
+      continue;
+    }
+    const id = String(e.payload?.permissionId);
+    answered.add(id);
+    cards.push(String(e.payload?.toolName));
+    const decision = await answer(e);
+    const settledBefore = events.some(
+      (ev) => ev.type === 'permission.resolved' && String(ev.payload?.permissionId) === id
+    );
+    const taken = await request<{ handled?: boolean }>('worker.permission.respond', {
+      logicalSessionId,
+      permissionId: e.payload?.permissionId,
+      decision,
+    });
+    answeredByProbe.push(!settledBefore && taken?.handled === true);
+  }
+}
+
+/** A fresh path in the workspace for a mode scenario (removed first). */
+function modePath(name: string): string {
+  const file = join(workspace, name);
+  rmSync(file, { recursive: true, force: true });
+  return file;
+}
+
+async function setPosture(mode: 'plan' | 'agent', gear: string): Promise<unknown> {
+  return request('worker.setPermissions', { logicalSessionId, permissions: { mode, gear } });
+}
 
 /** Text of the assistant's messages only: the host also echoes the user's text as message.delta. */
 function assistantText(): string {
@@ -444,7 +547,13 @@ function writeRepoSettings(): void {
     throw new Error(`repoenv: ${repoSettingsFile} already exists; use a fresh workspace`);
   }
   mkdirSync(dirname(repoSettingsFile), { recursive: true });
-  writeFileSync(repoSettingsFile, `${JSON.stringify({ env: REPO_ENV }, null, 2)}\n`);
+  const settings = {
+    ...(scenarios.includes('repoenv') ? { env: REPO_ENV } : {}),
+    ...(scenarios.includes('mode-plan-refused')
+      ? { permissions: { disableBypassPermissionsMode: 'disable' } }
+      : {}),
+  };
+  writeFileSync(repoSettingsFile, `${JSON.stringify(settings, null, 2)}\n`);
   wroteRepoSettings = true;
 }
 
@@ -479,7 +588,7 @@ const ERROR_CASES: Array<{ status: number; code: string; message?: string; echoK
 ];
 
 async function main(): Promise<void> {
-  if (scenarios.includes('repoenv')) writeRepoSettings();
+  if (scenarios.includes('repoenv') || scenarios.includes('mode-plan-refused')) writeRepoSettings();
   startHost();
   const t0 = Date.now();
   const boot = await request<Record<string, unknown>>('worker.bootstrap', {
@@ -595,9 +704,10 @@ async function main(): Promise<void> {
         break;
       }
       case 'plan': {
+        // S-2: the composer's plan preset ({plan, auto}), and the SDK card's default choice.
         await request('worker.setPermissions', {
           logicalSessionId,
-          permissions: { mode: 'plan', gear: 'ask' },
+          permissions: { mode: 'plan', gear: 'auto' },
         });
         await send('CC-PLAN make a plan');
         const q = await waitFor((e) => e.type === 'question.requested', 'plan review');
@@ -605,7 +715,7 @@ async function main(): Promise<void> {
         await request('worker.question.respond', {
           logicalSessionId,
           questionId: q.payload?.questionId,
-          answers: { 'plan-review': 'run:auto' },
+          answers: { 'plan-review': 'run:accept-edits' },
         });
         const end = await waitFor(terminal, 'plan turn end');
         show('plan');
@@ -622,11 +732,315 @@ async function main(): Promise<void> {
             (e) => e.type === 'session.permissions' && e.payload?.cause === 'plan-approved'
           )
         );
+        check(
+          'plan',
+          'the card offers the modes to continue in, no goals (S-2 A-7)',
+          JSON.stringify((q.payload?.review as { choices?: unknown })?.choices) ===
+            JSON.stringify(SDK_REVIEW_CHOICES)
+        );
         checkTools('plan', ['ExitPlanMode']);
         await request('worker.setPermissions', {
           logicalSessionId,
           permissions: { mode: 'agent', gear: 'ask' },
         });
+        break;
+      }
+      case 'mode-manual': {
+        await setPosture('agent', 'ask');
+        const file = modePath('mode-manual.txt');
+        const dir = modePath('mode-manual-dir');
+        const { end, cards } = await runCalls(
+          [
+            { name: 'Write', input: { file_path: file, content: 'manual' } },
+            {
+              name: 'Bash',
+              input: { command: 'mkdir mode-manual-dir', description: 'Make a dir' },
+            },
+          ],
+          () => 'allow'
+        );
+        show('mode-manual');
+        check('mode-manual', 'ends in session.completed', end.type === 'session.completed');
+        check('mode-manual', 'the write and the command each ask', cards.join() === 'Write,Bash');
+        check('mode-manual', 'both ran once allowed', existsSync(file) && existsSync(dir));
+        break;
+      }
+      case 'mode-edits': {
+        await setPosture('agent', 'accept-edits');
+        const file = modePath('mode-edits.txt');
+        const dir = modePath('mode-edits-dir');
+        const other = modePath('mode-edits-node.txt');
+        const { end, cards } = await runCalls(
+          [
+            { name: 'Write', input: { file_path: file, content: 'edits' } },
+            { name: 'Bash', input: { command: 'mkdir mode-edits-dir', description: 'Make a dir' } },
+            {
+              name: 'Bash',
+              input: {
+                command: `node -e "require('fs').writeFileSync('mode-edits-node.txt','x')"`,
+                description: 'Write a file with node',
+              },
+            },
+          ],
+          () => 'deny'
+        );
+        await setPosture('agent', 'ask');
+        show('mode-edits');
+        check('mode-edits', 'ends in session.completed', end.type === 'session.completed');
+        check(
+          'mode-edits',
+          'the workspace write and mkdir run without a card',
+          existsSync(file) && existsSync(dir)
+        );
+        check('mode-edits', 'only the other command asks', cards.join() === 'Bash');
+        check('mode-edits', 'the denied command did not run', !existsSync(other));
+        break;
+      }
+      case 'mode-plan': {
+        await setPosture('plan', 'auto');
+        const file = modePath('mode-plan.txt');
+        const dir = modePath('mode-plan-dir');
+        // A file outside the workspace: the CLI asks about reading it, in plan mode too.
+        const outside = join(tmpdir(), `pilab-probe-outside-${Date.now()}.txt`);
+        writeFileSync(outside, 'outside the workspace\n');
+        const { end, cards, reviews } = await runCalls(
+          [
+            { name: 'Read', input: { file_path: outside } },
+            { name: 'Write', input: { file_path: file, content: 'plan' } },
+            { name: 'Bash', input: { command: 'mkdir mode-plan-dir', description: 'Make a dir' } },
+            { name: 'ExitPlanMode', input: {} },
+          ],
+          () => 'allow',
+          'run:accept-edits'
+        );
+        rmSync(outside, { force: true });
+        show('mode-plan');
+        check('mode-plan', 'ends in session.completed', end.type === 'session.completed');
+        check(
+          'mode-plan',
+          'only the read outside the workspace asks; changes are refused with no card',
+          cards.join() === 'Read'
+        );
+        check(
+          'mode-plan',
+          'the write and the command were refused',
+          !existsSync(file) && !existsSync(dir)
+        );
+        check(
+          'mode-plan',
+          'the SDK review card came up',
+          reviews.length === 1 &&
+            JSON.stringify((reviews[0]?.payload?.review as { choices?: unknown })?.choices) ===
+              JSON.stringify(SDK_REVIEW_CHOICES)
+        );
+        // The CLI now runs in Edit automatically: a workspace write needs no card.
+        const after = modePath('mode-plan-after.txt');
+        const next = await runCalls(
+          [{ name: 'Write', input: { file_path: after, content: 'after' } }],
+          () => 'deny'
+        );
+        await setPosture('agent', 'ask');
+        check(
+          'mode-plan',
+          'after approval the chosen mode is in force',
+          next.cards.length === 0 && existsSync(after)
+        );
+        break;
+      }
+      case 'mode-plan-refused': {
+        // The workspace's settings disable Bypass permissions (written before the host starts).
+        await setPosture('plan', 'auto');
+        const { end, reviews } = await runCalls(
+          [{ name: 'ExitPlanMode', input: {} }],
+          () => 'deny',
+          'run:bypass'
+        );
+        const fell = events.find(
+          (e) => e.type === 'session.permissions' && e.payload?.cause === 'engine'
+        );
+        // The plan ran in Manual: a write asks.
+        const after = modePath('mode-plan-refused.txt');
+        const next = await runCalls(
+          [{ name: 'Write', input: { file_path: after, content: 'x' } }],
+          () => 'deny'
+        );
+        await setPosture('agent', 'ask');
+        show('mode-plan-refused');
+        check(
+          'mode-plan-refused',
+          'the review came up and the turn ended',
+          reviews.length === 1 && end.type === 'session.completed'
+        );
+        check(
+          'mode-plan-refused',
+          'the refused mode falls to Manual, with its reason',
+          JSON.stringify(fell?.payload) ===
+            JSON.stringify({
+              permissions: { mode: 'agent', gear: 'ask' },
+              cause: 'engine',
+              refusedReason: 'bypass_disabled',
+            })
+        );
+        check(
+          'mode-plan-refused',
+          'Manual is in force: the next write asks',
+          next.cards.join() === 'Write' && !existsSync(after)
+        );
+        break;
+      }
+      case 'mode-bypass': {
+        await setPosture('agent', 'bypass');
+        const file = modePath('mode-bypass.txt');
+        const other = modePath('mode-bypass-node.txt');
+        const { end, cards } = await runCalls(
+          [
+            { name: 'Write', input: { file_path: file, content: 'bypass' } },
+            {
+              name: 'Bash',
+              input: {
+                command: `node -e "require('fs').writeFileSync('mode-bypass-node.txt','x')"`,
+                description: 'Write a file with node',
+              },
+            },
+          ],
+          () => 'deny'
+        );
+        await setPosture('agent', 'ask');
+        show('mode-bypass');
+        check('mode-bypass', 'ends in session.completed', end.type === 'session.completed');
+        check('mode-bypass', 'no card', cards.length === 0);
+        check('mode-bypass', 'both ran', existsSync(file) && existsSync(other));
+        break;
+      }
+      case 'mode-switch': {
+        await setPosture('agent', 'ask');
+        const first = modePath('mode-switch-1.txt');
+        const second = modePath('mode-switch-2.txt');
+        let switched: unknown;
+        const { end, cards, answeredByProbe } = await runCalls(
+          [
+            { name: 'Write', input: { file_path: first, content: '1' } },
+            { name: 'Write', input: { file_path: second, content: '2' } },
+          ],
+          async () => {
+            // Mid-turn, with the card up: Edit automatically from the next call on.
+            switched = await setPosture('agent', 'accept-edits');
+            return 'allow' as const;
+          }
+        );
+        await setPosture('agent', 'ask');
+        show('mode-switch');
+        check('mode-switch', 'ends in session.completed', end.type === 'session.completed');
+        check(
+          'mode-switch',
+          'the switch mid-turn is applied',
+          (switched as { applied?: boolean })?.applied === true
+        );
+        check(
+          'mode-switch',
+          'the card already up stays for the user (nothing settles it before their answer)',
+          cards.join() === 'Write' && answeredByProbe.every(Boolean)
+        );
+        check(
+          'mode-switch',
+          'the next call of the turn runs on the new mode',
+          existsSync(first) && existsSync(second)
+        );
+        break;
+      }
+      case 'mode-enterplan': {
+        await setPosture('agent', 'ask');
+        const { end } = await runCalls([{ name: 'EnterPlanMode', input: {} }], () => 'deny');
+        // The turn's own events (`send` starts the list afresh).
+        const reported = events.find(
+          (e) => e.type === 'session.permissions' && e.payload?.cause === 'engine'
+        );
+        await setPosture('agent', 'ask');
+        show('mode-enterplan');
+        check('mode-enterplan', 'ends in session.completed', end.type === 'session.completed');
+        check(
+          'mode-enterplan',
+          'the model entering plan mode reaches PiLab (engine)',
+          JSON.stringify(reported?.payload?.permissions) ===
+            JSON.stringify({ mode: 'plan', gear: 'auto' })
+        );
+        break;
+      }
+      case 'mode-auto': {
+        await setPosture('agent', 'auto');
+        const node = (file: string) => ({
+          name: 'Bash',
+          input: {
+            command: `node -e "require('fs').writeFileSync('${file}','x')"`,
+            description: 'Write a file with node',
+          },
+        });
+        const refusedRows = () =>
+          events.filter((e) => e.type === 'tool.completed' && e.payload?.ok === false);
+        const rowText = (e: Event) => JSON.stringify(e.payload ?? {});
+        // 1. The check allows: the call runs, no card.
+        const allowed = modePath('mode-auto-allow.txt');
+        const a = await runCalls([node('mode-auto-allow.txt')], () => 'deny');
+        show('mode-auto (allow)');
+        check(
+          'mode-auto',
+          'allowed by the check: ran with no card',
+          a.cards.length === 0 && existsSync(allowed)
+        );
+        // 2. Three blocks in a row: refused with no card, the third falls back to PiLab's card.
+        const blocked = ['mode-auto-b1.txt', 'mode-auto-b2.txt', 'mode-auto-b3.txt'].map(modePath);
+        const b = await runCalls(
+          [node('mode-auto-b1.txt'), node('mode-auto-b2.txt'), node('mode-auto-b3.txt')],
+          () => 'deny',
+          undefined,
+          'CC-CLS-BLOCK'
+        );
+        const blockRows = refusedRows();
+        show('mode-auto (block)');
+        check(
+          'mode-auto',
+          'blocked calls did not run',
+          blocked.every((file) => !existsSync(file))
+        );
+        check(
+          'mode-auto',
+          'the third block in a row comes to PiLab as a card',
+          b.cards.join() === 'Bash'
+        );
+        check(
+          'mode-auto',
+          'a blocked row says why in our words, never the CLI sentence',
+          blockRows.some((e) =>
+            rowText(e).includes("Auto mode's safety check blocked this call")
+          ) && blockRows.every((e) => !rowText(e).includes('Claude Code'))
+        );
+        // 3. The check is down: refused with no card (the CLI fails closed).
+        const down = modePath('mode-auto-down.txt');
+        const d = await runCalls(
+          [node('mode-auto-down.txt')],
+          () => 'allow',
+          undefined,
+          'CC-CLS-DOWN'
+        );
+        const downRows = refusedRows();
+        await setPosture('agent', 'ask');
+        show('mode-auto (down)');
+        check(
+          'mode-auto',
+          'with the check down the call does not run',
+          d.cards.length === 0 && !existsSync(down)
+        );
+        check(
+          'mode-auto',
+          'the row says the check was not available, never the CLI sentence',
+          downRows.some((e) => rowText(e).includes("Auto mode's safety check was not available")) &&
+            downRows.every((e) => !rowText(e).includes('Claude Code'))
+        );
+        check(
+          'mode-auto',
+          'each turn completes',
+          [a, b, d].every((r) => r.end.type === 'session.completed')
+        );
         break;
       }
       case 'steer': {
@@ -860,6 +1274,34 @@ async function main(): Promise<void> {
           'repoenv',
           "no header from the repository's env",
           !reply.toLowerCase().includes('x-repo-injected')
+        );
+        // S-2: the fake gateway refuses the repository's model (401), so an Auto check sent
+        // to it is unavailable and the call is refused; with the pins the check allows it.
+        await setPosture('agent', 'auto');
+        const checked = modePath('repoenv-auto.txt');
+        await runCalls(
+          [
+            {
+              name: 'Bash',
+              input: {
+                command: `node -e "require('fs').writeFileSync('repoenv-auto.txt','x')"`,
+                description: 'Write a file with node',
+              },
+            },
+          ],
+          () => 'deny'
+        );
+        await setPosture('agent', 'ask');
+        check(
+          'repoenv',
+          "Auto's check is not sent to the repository's model (model aliases pinned)",
+          existsSync(checked)
+        );
+        // S-2: CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS from the repository would drop these.
+        check(
+          'repoenv',
+          "the request betas are the CLI's own (experimental betas pinned)",
+          reply.includes('context-management-')
         );
         break;
       }

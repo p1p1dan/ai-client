@@ -162,10 +162,15 @@ export interface BridgeSessionRuntime {
   }): boolean;
   /** P5-2-3 — report what Main did with one `preview.requested`. */
   respondPreview(input: { previewId: string; ok: boolean; error?: string }): boolean;
-  setPermissions(permissions: RuntimePermissionSettings): void;
+  /**
+   * The three posture setters. DSH applies them on the spot; the Claude Agent
+   * SDK engine (route B, S-2) answers once its CLI took the mode, and rejects
+   * when the CLI refused it. `applied: true` is sent only after either.
+   */
+  setPermissions(permissions: RuntimePermissionSettings): void | Promise<void>;
   /** The gear alone, which a running turn does not lock. */
-  setPermissionGear(gear: PermissionGear): void;
-  setPermissionTier(tier: SessionPermissionTier): void;
+  setPermissionGear(gear: PermissionGear): void | Promise<void>;
+  setPermissionTier(tier: SessionPermissionTier): void | Promise<void>;
   dispose(): Promise<void>;
 }
 
@@ -431,13 +436,13 @@ export class BridgeRpcServer {
           this.handlePreviewResponse(request);
           break;
         case 'worker.setPermissions':
-          this.handleSetPermissions(request);
+          await this.handleSetPermissions(request);
           break;
         case 'worker.setPermissionGear':
-          this.handleSetPermissionGear(request);
+          await this.handleSetPermissionGear(request);
           break;
         case 'worker.setPermissionTier':
-          this.handleSetPermissionTier(request);
+          await this.handleSetPermissionTier(request);
           break;
         case 'worker.dispose':
           await this.handleDispose(request);
@@ -926,7 +931,7 @@ export class BridgeRpcServer {
     this.respondSuccess(request, result);
   }
 
-  private handleSetPermissions(request: WorkerRpcRequest): void {
+  private async handleSetPermissions(request: WorkerRpcRequest): Promise<void> {
     if (!isWorkerSetPermissionsPayload(request.payload))
       throw new BridgeSessionError('WORKER_INVALID_PAYLOAD', 'Invalid mode or permission gear');
     if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId)
@@ -936,7 +941,8 @@ export class BridgeRpcServer {
       );
     if (!this.runtime)
       throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
-    this.runtime.setPermissions(request.payload.permissions);
+    const applying = this.runtime.setPermissions(request.payload.permissions);
+    if (applying) await applying;
     this.respondSuccess(request, { applied: true });
   }
 
@@ -949,7 +955,7 @@ export class BridgeRpcServer {
    * without an engine behind it would put a posture on screen that nothing is
    * enforcing.
    */
-  private handleSetPermissionGear(request: WorkerRpcRequest): void {
+  private async handleSetPermissionGear(request: WorkerRpcRequest): Promise<void> {
     if (!isWorkerSetPermissionGearPayload(request.payload))
       throw new BridgeSessionError('WORKER_INVALID_PAYLOAD', 'Invalid permission gear');
     if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId)
@@ -959,11 +965,12 @@ export class BridgeRpcServer {
       );
     if (!this.runtime)
       throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
-    this.runtime.setPermissionGear(request.payload.gear);
+    const applying = this.runtime.setPermissionGear(request.payload.gear);
+    if (applying) await applying;
     this.respondSuccess(request, { applied: true });
   }
 
-  private handleSetPermissionTier(request: WorkerRpcRequest): void {
+  private async handleSetPermissionTier(request: WorkerRpcRequest): Promise<void> {
     if (!isWorkerSetPermissionTierPayload(request.payload)) {
       this.respondError(request, {
         code: 'WORKER_INVALID_PAYLOAD',
@@ -986,7 +993,8 @@ export class BridgeRpcServer {
     if (!this.runtime) {
       throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
-    this.runtime.setPermissionTier(request.payload.tier);
+    const applying = this.runtime.setPermissionTier(request.payload.tier);
+    if (applying) await applying;
     const result: WorkerSetPermissionTierResult = { applied: true };
     this.respondSuccess(request, result);
   }

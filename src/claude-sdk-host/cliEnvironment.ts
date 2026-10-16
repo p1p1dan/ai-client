@@ -78,8 +78,9 @@ export function buildCliEnvironment(input: CliEnvironmentInput): Record<string, 
  * settings source's `env` to its own process, later sources winning per key,
  * and the SDK's `settings` option is the flag tier, above the project and
  * local tiers (measured on 2.1.300 against the fake gateway; `managedSettings.env`
- * does not pin). Each entry below was measured both ways: the repository's
- * value took effect without the pin, and the pin won with it.
+ * does not pin). Each entry below was measured both ways (S-1, and S-2 for
+ * the model and Auto variables): the repository's value took effect without the
+ * pin, and the pin won with it; the alias family is pinned with its member.
  */
 const PROXY_VARIABLES = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'];
 /** `''` reads as unset for each of these (measured). */
@@ -88,6 +89,18 @@ const UNSET_VARIABLES = [
   'ANTHROPIC_AUTH_TOKEN',
   // Extra request headers of the repository's choosing.
   'ANTHROPIC_CUSTOM_HEADERS',
+  // Route B S-2 (measured on 2.1.300, s2 topic §4.4): the model Auto's safety check and
+  // every `sonnet`-alias subagent are sent to, under the repository's choosing.
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  // The same alias family, pinned with it (not measured one by one).
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_SMALL_FAST_MODEL',
+  'CLAUDE_CODE_SUBAGENT_MODEL',
+  // Measured: strips the request betas and `context_management` (cache, thinking clean-up).
+  'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS',
+  // Measured: turns Auto's server-side check off.
+  'CLAUDE_CODE_AUTO_MODE_SERVER',
 ];
 /**
  * Pinned to what PiLab itself was given (a private CA the gateway needs), or

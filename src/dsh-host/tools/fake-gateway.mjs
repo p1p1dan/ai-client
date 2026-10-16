@@ -310,6 +310,15 @@
  *                       retrying for minutes; `CC-ENV` answers one text line saying how the
  *                       request identified itself (`key=` / `bearer=` digests, `headers=` the
  *                       header names), for the host probe's repository-env checks.
+ *                       Route B S-2 adds `CC-RUN {"calls":[{"name":"Write","input":{...}}, ...]}`:
+ *                       one scripted tool call per step, in order, then a `CC-RUN done` line,
+ *                       for the per-mode permission probes. It also answers Auto mode's
+ *                       safety-check requests (non-streaming, measured on 2.1.300): allow,
+ *                       or block when the checked transcript carries `CC-CLS-BLOCK`, or HTTP
+ *                       500 when it carries `CC-CLS-DOWN`; in the severity format the CLI asks
+ *                       of `claude-sonnet-5` and in the `<block>` format it asks of any other
+ *                       model. Main requests get no `safeguard_results`, so the CLI checks
+ *                       locally from the first call on.
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
@@ -3182,7 +3191,7 @@ function sendBurst(res, model, decision, seq) {
 // script, and the number of tool calls since it is the step. Every reply is
 // paced (`sendPaced`), so a window shows the stream as it arrives.
 
-const CC_MARKER = /\bCC-(TEXT|TOOLS|ASK|SLOW|PLAN|AGENT|CHILD|STEER|SEARCH|ENC|ERR|ENV)\b/;
+const CC_MARKER = /\bCC-(TEXT|TOOLS|ASK|SLOW|PLAN|AGENT|CHILD|STEER|SEARCH|ENC|ERR|ENV|RUN)\b/;
 const CC_CWD = /Primary working directory: ([^\n]+)/;
 
 /** CC-ERR: the Anthropic error type and a gateway-like sentence per HTTP status. */
@@ -3208,7 +3217,10 @@ function ccEnvReport(req) {
   const names = Object.keys(req?.headers ?? {})
     .sort()
     .join(',');
-  return `CC-ENV key=${keyDigest(apiKey) ?? 'none'} bearer=${keyDigest(bearer) ?? 'none'} headers=${names}`;
+  // Route B S-2: the betas too, so a pin on CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS is visible.
+  const betas =
+    typeof req?.headers?.['anthropic-beta'] === 'string' ? req.headers['anthropic-beta'] : '';
+  return `CC-ENV key=${keyDigest(apiKey) ?? 'none'} bearer=${keyDigest(bearer) ?? 'none'} headers=${names} betas=${betas || 'none'}`;
 }
 
 /** All text a request carries (system blocks and messages), for the cwd line. */
@@ -3332,7 +3344,67 @@ function ccFrames(model, { thinking, text, tool, chunkMs = 60 }) {
 }
 
 /** Decide one claude-sdk reply; see the plan's header note. `req` only feeds CC-ENV. */
+/** Auto mode's safety check (2.1.300): its system prompt, or the stop sequence of its first stage. */
+const CC_CLASSIFIER_PROMPT = 'You are a security monitor for autonomous AI coding agents';
+
+/**
+ * Route B S-2: one safety-check request of Auto mode, or null. The checked transcript
+ * holds the user's prompt, CC marker included, so this runs before the marker routing.
+ * Stage 1 stops on `</severity>` (claude-sonnet-5) or `</block>` (any other model);
+ * stage 2 has no stop sequence and asks for the same format in its own words.
+ */
+function decideClaudeSdkClassifier(parsed) {
+  const stops = Array.isArray(parsed?.stop_sequences) ? parsed.stop_sequences : [];
+  const text = ccAllText(parsed);
+  const system = JSON.stringify(parsed?.system ?? '');
+  if (
+    !system.includes(CC_CLASSIFIER_PROMPT) &&
+    !stops.includes('</severity>') &&
+    !stops.includes('</block>')
+  ) {
+    return null;
+  }
+  const label = (stage, verdict) => `cc-classifier-${stage}-${verdict}`;
+  // The host probe's `repoenv` names this model in the repository's settings: a check sent to
+  // it (a model pin that did not hold) gets 401, which the CLI does not retry or demote.
+  if (String(parsed?.model ?? '').startsWith('repo-model')) {
+    return {
+      kind: 'cc-error',
+      status: 401,
+      label: label('any', 'repo-model'),
+      errorType: 'authentication_error',
+      message: 'fake gateway: the repository model is not served',
+    };
+  }
+  if (text.includes('CC-CLS-DOWN')) {
+    return {
+      kind: 'cc-error',
+      status: 500,
+      label: label('any', 'down'),
+      errorType: 'api_error',
+      message: 'fake gateway: the safety-check model is down',
+    };
+  }
+  const block = text.includes('CC-CLS-BLOCK');
+  const verdict = block ? 'block' : 'allow';
+  const severityFormat =
+    stops.includes('</severity>') || (!stops.includes('</block>') && /<severity>/.test(text));
+  if (stops.length > 0) {
+    const stop = severityFormat ? '</severity>' : '</block>';
+    const reply = severityFormat ? `<severity>${block ? 90 : 5}` : `<block>${block ? 'yes' : 'no'}`;
+    return { kind: 'cc-json', label: label('1', verdict), text: reply, stopSequence: stop };
+  }
+  const reply = severityFormat
+    ? `<thinking>fake gateway check</thinking><severity>${block ? 90 : 5}</severity>${block ? '<category>Irreversible Local Destruction</category>' : ''}`
+    : block
+      ? '<block>yes</block><reason>[Irreversible Local Destruction]</reason>'
+      : '<block>no</block>';
+  return { kind: 'cc-json', label: label('2', verdict), text: reply };
+}
+
 function decideClaudeSdk(parsed, req) {
+  const classifier = decideClaudeSdkClassifier(parsed);
+  if (classifier) return classifier;
   const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
   let at = -1;
   let scenario = null;
@@ -3389,6 +3461,12 @@ function decideClaudeSdk(parsed, req) {
     }
     case 'ENV':
       return reply({ text: ccEnvReport(req) }, label);
+    case 'RUN': {
+      // Route B S-2: the probe scripts the calls itself, one per step.
+      const calls = Array.isArray(params.calls) ? params.calls : [];
+      if (step < calls.length) return reply({ tool: calls[step], chunkMs: 5 }, label);
+      return reply({ text: `CC-RUN done (${calls.length} calls)`, chunkMs: 5 }, label);
+    }
     case 'TEXT':
       return reply(
         {
@@ -3811,6 +3889,21 @@ function main() {
         sendBurst(res, model, decision, seq);
       } else if (decision.kind === 'cc-frames') {
         sendPaced(res, decision.frames(model));
+      } else if (decision.kind === 'cc-json') {
+        // Auto mode's safety check asks without streaming: one Messages body.
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            id: `msg_fake_classifier_${seq}`,
+            type: 'message',
+            role: 'assistant',
+            model,
+            content: [{ type: 'text', text: decision.text }],
+            stop_reason: decision.stopSequence ? 'stop_sequence' : 'end_turn',
+            stop_sequence: decision.stopSequence ?? null,
+            usage: { input_tokens: 1200, output_tokens: 8 },
+          })
+        );
       } else if (decision.kind === 'cc-error') {
         // `x-should-retry: false`: the CLI's retry loop honours it, so the turn fails now.
         res.writeHead(decision.status, {

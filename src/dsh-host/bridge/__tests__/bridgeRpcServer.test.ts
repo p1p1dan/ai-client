@@ -6,6 +6,7 @@ import {
   type WorkerBootstrapResult,
   type WorkerRpcRequest,
 } from '../../../shared/types/workerRpc.ts';
+import { BridgeSessionError } from '../bridgeErrors.ts';
 import {
   BridgeRpcServer,
   type BridgeSessionRuntime,
@@ -460,6 +461,65 @@ describe('BridgeRpcServer', () => {
     await vi.waitFor(() => expect(messages).toHaveLength(3));
     expect(messages[2]).toMatchObject({ ok: false, error: { code: 'WORKER_INVALID_PAYLOAD' } });
     expect(setPermissions).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers applied only once an asynchronous runtime took the posture, and its refusal as an error (route B, S-2)', async () => {
+    // The Claude Agent SDK runtime answers once its CLI took the mode; DSH's answers at once.
+    const messages: Array<Record<string, unknown>> = [];
+    let take: () => void = () => undefined;
+    const refuse = () =>
+      Promise.reject(new BridgeSessionError('WORKER_PERMISSION_MODE_REFUSED', 'bypass_disabled'));
+    const server = new BridgeRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      createRuntime: () =>
+        runtime({
+          setPermissions: vi
+            .fn()
+            .mockImplementationOnce(
+              () =>
+                new Promise<void>((resolve) => {
+                  take = resolve;
+                })
+            )
+            .mockImplementationOnce(refuse),
+          setPermissionGear: vi.fn(refuse),
+          setPermissionTier: vi.fn(refuse),
+        }),
+    });
+    server.receive(
+      request('boot', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    const payload = { logicalSessionId: 'logical-1', permissions: { mode: 'agent', gear: 'auto' } };
+    server.receive(request('pending', 'worker.setPermissions', payload));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(messages).toHaveLength(1);
+    take();
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(messages[1]).toMatchObject({
+      requestId: 'pending',
+      ok: true,
+      result: { applied: true },
+    });
+    server.receive(request('refused', 'worker.setPermissions', payload));
+    server.receive(
+      request('gear', 'worker.setPermissionGear', { logicalSessionId: 'logical-1', gear: 'bypass' })
+    );
+    server.receive(
+      request('tier', 'worker.setPermissionTier', {
+        logicalSessionId: 'logical-1',
+        tier: 'fullopen',
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(5));
+    for (const message of messages.slice(2)) {
+      expect(message).toMatchObject({
+        ok: false,
+        error: { code: 'WORKER_PERMISSION_MODE_REFUSED', message: 'bypass_disabled' },
+      });
+    }
   });
 
   it('forwards the gear-only change and refuses one that names no valid gear', async () => {

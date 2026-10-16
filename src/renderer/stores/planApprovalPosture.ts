@@ -13,14 +13,16 @@
  * not on screen is stored too.
  */
 
+import type { ChatEngine } from '@shared/claudeSdkEngine';
 import type { Translate } from '@shared/i18n';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import {
   isRuntimePermissionSettings,
-  PERMISSION_PRESET_LABELS,
+  permissionPresetLabelsFor,
   presetOf,
   type RuntimePermissionSettings,
 } from '@shared/types/runtimePermission';
+import { permissionModeRefusalReasonText } from '@/components/chat/permissionModeRefusal';
 import { subscribeRuntimeEvent } from './runtimeEventBus';
 
 export interface PlanApprovalPostureEffects {
@@ -28,6 +30,8 @@ export interface PlanApprovalPostureEffects {
   writeSessionPermissions(sessionId: string, settings: RuntimePermissionSettings): void;
   notePostureSynced(sessionId: string): void;
   toast(toast: { type: 'info' | 'warning'; title: string; description?: string }): void;
+  /** Route B, S-2: the engine the chat reported; its posture is named in that engine's words. */
+  engineOf?(sessionId: string): ChatEngine | undefined;
 }
 
 /** Fold one runtime event; anything but `session.permissions` is ignored. */
@@ -40,8 +44,20 @@ export function applyPlanApprovalPosture(
   if (!isRuntimePermissionSettings(permissions)) return;
   effects.writeSessionPermissions(event.sessionId, permissions);
   effects.notePostureSynced(event.sessionId);
+  const labels = permissionPresetLabelsFor(effects.engineOf?.(event.sessionId));
+  const preset = effects.t(labels[presetOf(permissions)]);
+  // Route B, S-2 (A-6): the SDK engine changed its own mode (plan mode entered or
+  // left); said once. A mode it refused (A-7) is a warning, with why.
+  if (cause === 'engine') {
+    const refused = event.payload?.refusedReason;
+    effects.toast({
+      type: refused ? 'warning' : 'info',
+      title: effects.t('Mode is now {{preset}}', { preset }),
+      ...(refused ? { description: effects.t(permissionModeRefusalReasonText(refused)) } : {}),
+    });
+    return;
+  }
   if (cause !== 'plan-approved') return;
-  const preset = effects.t(PERMISSION_PRESET_LABELS[presetOf(permissions)]);
   effects.toast({
     type: goal?.set === false ? 'warning' : 'info',
     title: effects.t('Plan approved: switched to {{preset}}', { preset }),

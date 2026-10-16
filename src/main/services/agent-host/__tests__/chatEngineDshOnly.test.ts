@@ -153,10 +153,14 @@ describe('chat engines: DSH, and the Claude Agent SDK engine for Anthropic-proto
       'enabled: () => claudeSdkEngineEnabled(),',
       'plan: () => lastPlan ?? resolveDshModelPlan(),',
       'key: (providerId) => broker.keyFor(providerId),',
-      'hostAvailable: createClaudeSdkHostAvailability({',
+      // Route B, S-2: one availability check, shared with the model menu.
+      'hostAvailable: claudeSdkHostAvailable,',
     ]) {
       expect(wiring, line).toContain(line);
     }
+    expect(code(path.join(AGENT_HOST, 'claudeSdkHostAvailability.ts'))).toContain(
+      'export const claudeSdkHostAvailable = createClaudeSdkHostAvailability({'
+    );
     const manager = code(path.join(AGENT_HOST, 'WorkerManager.ts'));
     for (const banned of ['readSettingsState', 'claudeSdkEngineEnabled', 'DshCredentialBroker']) {
       expect(manager, banned).not.toContain(banned);

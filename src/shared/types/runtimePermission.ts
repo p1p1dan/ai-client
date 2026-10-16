@@ -63,6 +63,35 @@ export const PERMISSION_PRESET_LABELS: Record<PermissionPreset, string> = {
   bypass: 'Bypass all prompts',
 };
 /**
+ * Route B, S-2 (rulings 6 and 14): a chat on the Claude Agent SDK engine shows
+ * Claude's own five modes over the same five pairs, in the order ruling 6
+ * names them: Manual (`ask` → CLI `default`), Edit automatically
+ * (`accept-edits` → `acceptEdits`), Plan (`plan`), Auto (`auto`, the CLI's
+ * classifier mode) and Bypass permissions (`bypass` → `bypassPermissions`).
+ * Dictionary keys, like the labels above; 'Plan mode' and 'Bypass permissions'
+ * already read 「计划模式」 and 「跳过权限确认」.
+ */
+export const SDK_PERMISSION_PRESETS: readonly PermissionPreset[] = [
+  'ask',
+  'accept-edits',
+  'plan',
+  'auto',
+  'bypass',
+];
+export const SDK_PERMISSION_PRESET_LABELS: Record<PermissionPreset, string> = {
+  ask: 'Manual',
+  'accept-edits': 'Edit automatically',
+  plan: 'Plan mode',
+  auto: 'Auto',
+  bypass: 'Bypass permissions',
+};
+/** The labels a chat on `engine` shows its posture with. */
+export function permissionPresetLabelsFor(
+  engine: 'dsh' | 'claude-sdk' | undefined
+): Record<PermissionPreset, string> {
+  return engine === 'claude-sdk' ? SDK_PERMISSION_PRESET_LABELS : PERMISSION_PRESET_LABELS;
+}
+/**
  * The preset a stored pair shows as. Any plan-mode pair is `plan`, including
  * the `plan + ask` a 1.0.x `readonly` tier migrates to: it is displayed, never
  * rewritten.

@@ -25,6 +25,8 @@ import {
   planReviewBody,
   planReviewOptionRows,
   planReviewSubmit,
+  SDK_PLAN_REVIEW_BYPASS_CONFIRM,
+  SDK_PLAN_REVIEW_BYPASS_WARNING,
 } from './planReviewModel';
 import type { GoalBarView } from './sessionPanelsModel';
 
@@ -60,7 +62,11 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
   const { t } = useI18n();
   const id = useId();
   const card = block.planReview;
-  const [choice, setChoice] = useState<PlanReviewChoice>(() => defaultPlanReviewChoice(goal));
+  // Route B, S-2: the Claude Agent SDK engine names its own choices (no goals).
+  const offered = card?.choices;
+  const [choice, setChoice] = useState<PlanReviewChoice>(() =>
+    defaultPlanReviewChoice(goal, offered)
+  );
   const [feedback, setFeedback] = useState('');
   const [confirmingBypass, setConfirmingBypass] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -68,13 +74,14 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
   const [failed, setFailed] = useState(false);
 
   // A goal the goal bar shows while the card is up (or one cleared) moves the choices.
-  const effective = availablePlanReviewChoice(choice, goal);
+  const effective = availablePlanReviewChoice(choice, goal, offered);
   useEffect(() => {
     if (effective !== choice) setChoice(effective);
   }, [effective, choice]);
 
   if (!card) return null;
-  const rows = planReviewOptionRows(goal);
+  const rows = planReviewOptionRows(goal, offered);
+  const ownChoices = offered !== undefined && offered.length > 0;
   const body = planReviewBody(card);
   const title = card.source === 'create_goal' ? PLAN_REVIEW_GOAL_TITLE : PLAN_REVIEW_TITLE;
 
@@ -148,7 +155,7 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
             {expanded ? t('Show less of the plan') : t('Show the whole plan')}
           </Button>
         </div>
-        {card.source === 'exit_plan_mode' && (
+        {card.source === 'exit_plan_mode' && !ownChoices && (
           <div className="flex min-w-0 flex-col gap-0.5 text-meta">
             <span className="text-muted-foreground">{t('Goal it would set')}</span>
             <span className="line-clamp-2 min-w-0 whitespace-pre-wrap break-words text-foreground">
@@ -163,7 +170,7 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
           >
             <p className="flex items-start gap-2 text-ui text-foreground">
               <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden />
-              {t(PLAN_REVIEW_BYPASS_WARNING)}
+              {t(ownChoices ? SDK_PLAN_REVIEW_BYPASS_WARNING : PLAN_REVIEW_BYPASS_WARNING)}
             </p>
             <div className="flex justify-end gap-2">
               <Button
@@ -184,7 +191,7 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
                 disabled={submitting}
                 onClick={() => void confirm(true)}
               >
-                {t(PLAN_REVIEW_BYPASS_CONFIRM)}
+                {t(ownChoices ? SDK_PLAN_REVIEW_BYPASS_CONFIRM : PLAN_REVIEW_BYPASS_CONFIRM)}
               </Button>
             </div>
           </div>

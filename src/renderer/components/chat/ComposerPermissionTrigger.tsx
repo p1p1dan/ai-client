@@ -1,10 +1,11 @@
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
+import type { ChatEngine } from '@shared/claudeSdkEngine';
 import {
   DEFAULT_RUNTIME_PERMISSION,
   isPermissionGear,
   PERMISSION_GEAR_LABELS,
-  PERMISSION_PRESET_LABELS,
   type PermissionPreset,
+  permissionPresetLabelsFor,
   presetOf,
   type RuntimePermissionSettings,
   settingsOf,
@@ -31,6 +32,12 @@ import {
   composerPopupSide,
   type MiddleColumnMode,
 } from './middleColumnLayout';
+import { permissionModeRefusalText } from './permissionModeRefusal';
+import {
+  SDK_AUTO_CONFIRMATION,
+  SDK_BYPASS_CONFIRMATION,
+  SDK_MODE_DESCRIPTIONS,
+} from './sdkModeCopy';
 import {
   readDefaultPermissions,
   readSessionPermissions,
@@ -38,10 +45,13 @@ import {
   writeSessionPermissions,
 } from './sessionPreferenceStore';
 
-function readPermissionsFor(sessionId: string | null): RuntimePermissionSettings {
+function readPermissionsFor(
+  sessionId: string | null,
+  engine: ChatEngine | undefined
+): RuntimePermissionSettings {
   return (
     (sessionId ? readSessionPermissions(sessionId) : null) ??
-    readDefaultPermissions() ??
+    readDefaultPermissions(engine) ??
     DEFAULT_RUNTIME_PERMISSION
   );
 }
@@ -85,6 +95,20 @@ const PRESET_OPTIONS: readonly {
 ];
 
 /**
+ * Route B, S-2 (rulings 6, 13, 14): a chat on the Claude Agent SDK engine
+ * offers Claude's five modes over the same five pairs, in ruling 6's order,
+ * described as the engine behaves. The engine keeps no deny list of PiLab's,
+ * so nothing here says one applies.
+ */
+const SDK_PRESET_OPTIONS: typeof PRESET_OPTIONS = [
+  { id: 'ask', description: SDK_MODE_DESCRIPTIONS.ask, icon: Shield },
+  { id: 'accept-edits', description: SDK_MODE_DESCRIPTIONS['accept-edits'], icon: ShieldOff },
+  { id: 'plan', description: SDK_MODE_DESCRIPTIONS.plan, icon: ClipboardList },
+  { id: 'auto', description: SDK_MODE_DESCRIPTIONS.auto, icon: ShieldAlert },
+  { id: 'bypass', description: SDK_MODE_DESCRIPTIONS.bypass, icon: ShieldBan },
+];
+
+/**
  * Presets that take effect only after the user confirms a second time.
  *
  * Both hand work to the model that nobody will be asked about again, and both
@@ -119,6 +143,11 @@ interface ComposerPermissionTriggerProps {
    */
   turnActive?: boolean;
   goalEntry?: ComposerGoalEntry;
+  /**
+   * Route B, S-2: the engine whose modes the menu shows (`chatEngineForDisplay`).
+   * The Claude Agent SDK engine switches mode at any time, plan mode included.
+   */
+  engine?: ChatEngine;
 }
 
 export function ComposerPermissionTrigger({
@@ -128,9 +157,13 @@ export function ComposerPermissionTrigger({
   disabled,
   turnActive,
   goalEntry,
+  engine,
 }: ComposerPermissionTriggerProps) {
   const { t } = useI18n();
-  const [settings, setSettings] = useState(() => readPermissionsFor(sessionId));
+  const sdk = engine === 'claude-sdk';
+  const options = sdk ? SDK_PRESET_OPTIONS : PRESET_OPTIONS;
+  const presetLabels = permissionPresetLabelsFor(engine);
+  const [settings, setSettings] = useState(() => readPermissionsFor(sessionId, engine));
   /** Which dangerous gear is waiting on its confirmation, if any. */
   const [confirming, setConfirming] = useState<'auto' | 'bypass' | null>(null);
   const [pending, setPending] = useState(false);
@@ -150,10 +183,10 @@ export function ComposerPermissionTrigger({
   );
   useEffect(() => {
     void postureRevision;
-    setSettings(readPermissionsFor(sessionId));
+    setSettings(readPermissionsFor(sessionId, engine));
     setConfirming(null);
     setError(null);
-  }, [sessionId, postureRevision]);
+  }, [sessionId, postureRevision, engine]);
 
   const apply = async (next: RuntimePermissionSettings) => {
     if (pending) return;
@@ -164,7 +197,8 @@ export function ComposerPermissionTrigger({
         await window.electronAPI.chat.setPermissions({ sessionId, permissions: next });
         writeSessionPermissions(sessionId, next);
       } else {
-        writeDefaultPermissions(next);
+        // S-2: remembered with the engine whose wording it was picked under.
+        writeDefaultPermissions(next, sdk ? 'claude-sdk' : 'dsh');
       }
       if (currentSession.current === sessionId) {
         setSettings(next);
@@ -173,7 +207,13 @@ export function ComposerPermissionTrigger({
       }
     } catch (failure) {
       if (currentSession.current === sessionId) {
-        const message = failure instanceof Error ? failure.message : String(failure);
+        // Route B, S-2 (A-5): a mode the SDK engine refused says why, in our words.
+        const refusal = permissionModeRefusalText(failure);
+        const message = refusal
+          ? t(refusal)
+          : failure instanceof Error
+            ? failure.message
+            : String(failure);
         // The popup has usually closed by the time this lands (the press closes
         // it), so an in-popup alert would report the failure to nobody. Keep
         // both surfaces: the alert for the confirmation panel, which is still
@@ -191,13 +231,16 @@ export function ComposerPermissionTrigger({
   };
   const degraded = usePermissionGateStore((state) => isTierControlDegraded(state.gates, sessionId));
   const preset = presetOf(settings);
-  const current = PRESET_OPTIONS.find((option) => option.id === preset) ?? PRESET_OPTIONS[1];
+  const current =
+    options.find((option) => option.id === preset) ??
+    (options.find((option) => option.id === 'ask') as (typeof options)[number]);
   const Icon = degraded ? ShieldQuestion : current.icon;
-  const label = degraded ? t('Your own policy') : t(PERMISSION_PRESET_LABELS[preset]);
+  const label = degraded ? t('Your own policy') : t(presetLabels[preset]);
   // A plan-mode pair on another gear (1.0.x `readonly` migrates to plan + ask)
   // shows as 「计划模式」 and is left as stored; the tooltip names its gear.
+  // Not on the SDK engine, whose plan mode has no gear.
   const legacyNote =
-    !degraded && settings.mode === 'plan' && settings.gear !== 'auto'
+    !degraded && !sdk && settings.mode === 'plan' && settings.gear !== 'auto'
       ? t('Read-only tools keep the earlier approval level: {{gear}}.', {
           gear: t(PERMISSION_GEAR_LABELS[settings.gear]),
         })
@@ -218,7 +261,8 @@ export function ComposerPermissionTrigger({
    * is every other preset while the chat is in plan mode, since each of them
    * leaves it. In execute mode the four gear presets stay pickable.
    */
-  const modeLocked = turnActive === true;
+  // Route B, S-2 (A-4): the SDK engine takes a mode change mid-turn, plan mode included.
+  const modeLocked = turnActive === true && !sdk;
   const lockedByTurn = (id: PermissionPreset) =>
     modeLocked && (id === 'plan' || settings.mode === 'plan');
   const turnNote = t('Plan mode cannot be turned on or off while this turn runs.');
@@ -265,16 +309,20 @@ export function ComposerPermissionTrigger({
           <div className="flex max-w-72 flex-col gap-2 p-3">
             <p className="text-ui font-medium text-destructive">
               {confirming === 'bypass'
-                ? t('Turn off every approval prompt?')
-                : t('Turn on full auto?')}
+                ? t(sdk ? 'Turn on Bypass permissions?' : 'Turn off every approval prompt?')
+                : t(sdk ? 'Turn on Auto mode?' : 'Turn on full auto?')}
             </p>
             <p className="text-meta text-muted-foreground">
               {confirming === 'bypass'
                 ? t(
-                    'Every tool call runs without asking, including the commands full auto still stops to confirm. Explicit deny rules still apply. This is never saved as the default for new chats.'
+                    sdk
+                      ? SDK_BYPASS_CONFIRMATION
+                      : 'Every tool call runs without asking, including the commands full auto still stops to confirm. Explicit deny rules still apply. This is never saved as the default for new chats.'
                   )
                 : t(
-                    'Runs the available tools automatically, including operations outside the workspace; explicit deny rules still apply.'
+                    sdk
+                      ? SDK_AUTO_CONFIRMATION
+                      : 'Runs the available tools automatically, including operations outside the workspace; explicit deny rules still apply.'
                   )}
               {confirming === 'bypass' ? '' : scope}
             </p>
@@ -313,7 +361,7 @@ export function ComposerPermissionTrigger({
                 else void apply(settingsOf(value));
               }}
             >
-              {PRESET_OPTIONS.map((option) => {
+              {options.map((option) => {
                 const OptionIcon = option.icon;
                 // `bypass` never becomes a new-chat default, so offering it on
                 // the start screen would show a chip the next session would not
@@ -336,7 +384,7 @@ export function ComposerPermissionTrigger({
                   >
                     <OptionIcon className="size-3.5 shrink-0" />
                     <span className="flex min-w-0 flex-1 flex-col">
-                      <span>{t(PERMISSION_PRESET_LABELS[option.id])}</span>
+                      <span>{t(presetLabels[option.id])}</span>
                       <span className="text-meta text-muted-foreground">
                         {locked
                           ? t('Can be changed once this turn ends.')

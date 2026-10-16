@@ -30,8 +30,8 @@ import {
   resolveNativeModelCatalog,
 } from '../piModelConfig';
 import { watchCacheControlOnTools } from './cacheControlOnToolsSetting';
-import { createClaudeSdkHostAvailability } from './claudeSdkEngine';
 import { claudeSdkEngineEnabled } from './claudeSdkEngineSetting';
+import { claudeSdkHostAvailable } from './claudeSdkHostAvailability';
 import { DshCredentialBroker } from './DshCredentialBroker';
 import { dshHostSupervisor } from './DshHostSupervisor';
 import { watchRequestUserAgent } from './requestUserAgentSetting';
@@ -61,10 +61,7 @@ export function installDshHostModelSource(): void {
     // Building announces the plan, which sets `lastPlan` through the listener above.
     plan: () => lastPlan ?? resolveDshModelPlan(),
     key: (providerId) => broker.keyFor(providerId),
-    hostAvailable: createClaudeSdkHostAvailability({
-      appPath: () => app.getAppPath(),
-      log: (message) => console.info(message),
-    }),
+    hostAvailable: claudeSdkHostAvailable,
   });
   // GW-16 temporary switch (decision 159): a flip rebuilds the plan at once.
   watchCacheControlOnTools({

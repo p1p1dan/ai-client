@@ -185,6 +185,24 @@ describe('buildPinnedSettingsEnv (decision 6: the flag tier a repository cannot 
     for (const name of SWITCHES) expect(env[name]).toBe('0');
   });
 
+  it("pins the model aliases, the experimental-betas switch and Auto's server check unset (route B S-2 A-17)", () => {
+    // Written out, not imported: dropping one from the source must fail here.
+    const S2 = [
+      'ANTHROPIC_DEFAULT_SONNET_MODEL',
+      'ANTHROPIC_DEFAULT_OPUS_MODEL',
+      'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+      'ANTHROPIC_SMALL_FAST_MODEL',
+      'CLAUDE_CODE_SUBAGENT_MODEL',
+      'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS',
+      'CLAUDE_CODE_AUTO_MODE_SERVER',
+    ];
+    const { env } = buildPinnedSettingsEnv({
+      inherited: Object.fromEntries(S2.map((name) => [name, 'inherited'])),
+      baseUrl: 'http://gw',
+    });
+    for (const name of S2) expect(env[name], name).toBe('');
+  });
+
   it("pins the trust store to PiLab's own CA, so a private-CA gateway works and a repository cannot swap it", () => {
     const { env } = buildPinnedSettingsEnv({
       inherited: { NODE_EXTRA_CA_CERTS: 'C:corpca.pem' },

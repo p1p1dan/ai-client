@@ -875,6 +875,12 @@ export interface PlanReviewCard {
   callId?: string;
   /** The objective of the goal an approval with a goal sets. */
   goalObjective: string;
+  /**
+   * Route B, S-2: the choices the engine offers, in card order (the first is
+   * the default). Absent: DSH's (`PLAN_REVIEW_CHOICES`); the Claude Agent SDK
+   * engine names its own (`SDK_PLAN_REVIEW_CHOICES`, no goals).
+   */
+  choices?: PlanReviewChoice[];
 }
 
 export interface SessionTerminalEvent extends RuntimeEventBase {
@@ -1463,17 +1469,27 @@ export interface SessionProjectionEvent extends RuntimeEventBase {
  * `plan-approved` only for a review answer it forwarded itself, with the
  * posture it derived from that answer. The renderer stores it as the
  * session's posture and re-reads the chip.
+ *
+ * Route B, S-2 (`engine`): the Claude Agent SDK engine changed its own mode —
+ * the model entered plan mode, leaving plan mode restored the earlier mode,
+ * or a mode the host asked for was refused. Main takes it only from an SDK
+ * session.
  */
 export interface SessionPermissionsEvent extends RuntimeEventBase {
   type: 'session.permissions';
   sessionId: string;
   payload: {
     permissions: RuntimePermissionSettings;
-    cause: 'plan-approved' | 'sync';
+    cause: 'plan-approved' | 'sync' | 'engine';
     /** The review card answered (`plan-approved`). */
     questionId?: string;
     /** The goal the approval asked for, when it asked for one. */
     goal?: PlanReviewGoalOutcome;
+    /**
+     * Route B, S-2 (`engine`): the mode the user picked was refused, and why
+     * (`PERMISSION_MODE_REFUSAL_REASONS`); the payload is the mode it fell to.
+     */
+    refusedReason?: string;
   };
 }
 

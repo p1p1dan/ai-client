@@ -143,6 +143,12 @@ export interface AgentModelCatalog {
    * example an unsupported wire protocol, decision 036). Absent when none.
    */
   unavailable?: AgentModelUnavailable[];
+  /**
+   * Route B, S-2: whether this build can start the Claude Agent SDK host, so
+   * a new chat on an Anthropic-protocol model runs there. Absent: not known
+   * (an older Main), read as available.
+   */
+  claudeSdkHostAvailable?: boolean;
 }
 
 /** Pi-only catalog request. `force` skips the TTL, never the single-flight. */

@@ -7,9 +7,14 @@ import {
   CLAUDE_ENGINE_EXITED,
   claudeSdkRouteFor,
   MODEL_ENGINE_MISMATCH,
+  PERMISSION_MODE_REFUSED,
 } from '@shared/claudeSdkEngine';
 import { translate } from '@shared/i18n';
-import { decodePlanReviewResponse } from '@shared/planReview';
+import {
+  decodePlanReviewResponse,
+  type PlanReviewChoice,
+  planReviewChoicesOf,
+} from '@shared/planReview';
 import { forkSessionTitle } from '@shared/sessionTitles';
 import { STDERR_FORWARD_MAX_LINES_PER_TURN, sanitizeStderrLine } from '@shared/stderrRedaction';
 import type { SessionAttachment, SessionEffortLevel } from '@shared/types/agentHost';
@@ -26,6 +31,7 @@ import {
 } from '@shared/types/runtimeEvents';
 import {
   DEFAULT_RUNTIME_PERMISSION,
+  isRuntimePermissionSettings,
   migratePermissionTier,
   type RuntimePermissionSettings,
 } from '@shared/types/runtimePermission';
@@ -141,7 +147,7 @@ import {
 } from './DshHostSupervisor';
 import { claimedDshSessionIds, DSH_SESSION_GC_GRACE_MS, readDshSessionStub } from './dshSessionGc';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
-import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
+import { type WorkerSlot, WorkerSlotError, type WorkerSlotLifecycleEvent } from './WorkerSlot';
 import type { WorkerTransport, WorkerTransportExit } from './WorkerTransport';
 import { WorkerManagerError } from './workerManagerError';
 import {
@@ -327,15 +333,18 @@ interface ManagedSlot {
    * and only with that posture; anything else is dropped.
    */
   planReviews?: Map<string, RuntimePermissionSettings | null>;
+  /** Route B, S-2: the choices each of those cards offered; an answer outside them is a dismissal. */
+  planReviewChoices?: Map<string, readonly PlanReviewChoice[]>;
   /**
-   * dsh-rebase decision 169 — `permissions` was last set by a plan review's
-   * approval, not by the renderer. A renderer that missed that event (a
-   * reload while the card was answered) reopens the chat with its older
-   * posture; a warm create / resume then hands this one back
+   * dsh-rebase decision 169 — `permissions` was last set by the worker, not
+   * by the renderer: a plan review's approval, or (route B, S-2 A-6) a mode
+   * the Claude Agent SDK engine changed by itself. A renderer that missed
+   * that event (a reload while the card was answered) reopens the chat with
+   * its older posture; a warm create / resume then hands this one back
    * (`session.permissions` cause `sync`) instead of re-applying the stale
    * one. Cleared by the next `setPermissions`.
    */
-  postureFromPlanReview?: boolean;
+  postureFromWorker?: boolean;
   /**
    * Route B: the engine this chat runs on, fixed for its life — chosen when it
    * is created (`chooseNewChatEngine`), read off its session file when it is
@@ -1184,6 +1193,7 @@ export class WorkerManager {
         const model = sdkLaunch?.model ?? input.model;
         const effort = input.effort ? { effort: input.effort } : {};
         let created: CreatedDshChatSlot;
+        let narrowedForDsh = false;
         try {
           created = await this.spawnForEntry(
             entry,
@@ -1203,6 +1213,7 @@ export class WorkerManager {
               `the new chat runs on DSH (${error instanceof Error ? error.message : String(error)})`
           );
           this.forgetFailedClaudeSdkStart(entry);
+          narrowedForDsh = this.narrowForDshFallback(entry);
           created = await this.spawnForEntry(
             entry,
             { ...(input.model ? { model: input.model } : {}), ...effort },
@@ -1273,6 +1284,14 @@ export class WorkerManager {
           requestId,
           payload: { status: 'idle' },
         });
+        if (narrowedForDsh && entry.permissions) {
+          this.dispatch({
+            type: 'session.permissions',
+            sessionId: entry.logicalSessionId,
+            requestId,
+            payload: { permissions: { ...entry.permissions }, cause: 'sync' },
+          });
+        }
         this.scheduleOrphanCollection();
       } catch (error) {
         entry.error = error instanceof Error ? error.message : String(error);
@@ -2706,7 +2725,10 @@ export class WorkerManager {
     // reports the switch before it acknowledges the answer).
     const review = entry.planReviews;
     if (review?.has(input.questionId)) {
-      const decision = decodePlanReviewResponse(input);
+      const decision = decodePlanReviewResponse(
+        input,
+        entry.planReviewChoices?.get(input.questionId)
+      );
       review.set(input.questionId, decision.kind === 'approve' ? decision.permissions : null);
     }
     let result: unknown;
@@ -2746,16 +2768,58 @@ export class WorkerManager {
       (entry.permissions?.mode === permissions.mode && entry.permissions?.gear === permissions.gear)
     )
       return;
-    if (entry.postureFromPlanReview && entry.permissions) {
+    const handBack = () =>
       this.dispatch({
         type: 'session.permissions',
         sessionId: entry.logicalSessionId,
         requestId,
-        payload: { permissions: { ...entry.permissions }, cause: 'sync' },
+        payload: {
+          permissions: { ...(entry.permissions as RuntimePermissionSettings) },
+          cause: 'sync',
+        },
       });
+    if (entry.postureFromWorker && entry.permissions) {
+      handBack();
       return;
     }
-    await this.setPermissions(entry.logicalSessionId, permissions);
+    try {
+      await this.setPermissions(entry.logicalSessionId, permissions);
+    } catch (error) {
+      // Route B, S-2 (A-5): the SDK engine refused the window's stored mode (a repository
+      // that disables Auto, say): the chat opens on the mode it is in, and the window is told.
+      if (
+        entry.engine === 'claude-sdk' &&
+        entry.permissions &&
+        error instanceof WorkerSlotError &&
+        error.remoteCode === PERMISSION_MODE_REFUSED
+      ) {
+        handBack();
+        return;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Route B, S-2 (topic s2-permission-modes.md A-6): the Claude Agent SDK
+   * engine changed its own mode (plan mode entered or left by the model, a
+   * mode the host asked for refused). Taken from an SDK session only; it is
+   * then what a crash restart re-applies. False: not this kind of event.
+   */
+  private acceptEngineMode(
+    entry: ManagedSlot,
+    payload: { permissions?: unknown; cause?: string }
+  ): boolean {
+    if (payload.cause !== 'engine') return false;
+    if (entry.engine !== 'claude-sdk' || !isRuntimePermissionSettings(payload.permissions)) {
+      console.warn(
+        `[dsh-chat:${entry.logicalSessionId}] engine posture change refused: not an SDK session`
+      );
+      return false;
+    }
+    entry.permissions = { ...payload.permissions };
+    entry.postureFromWorker = true;
+    return true;
   }
 
   /**
@@ -2785,7 +2849,7 @@ export class WorkerManager {
     }
     entry.planReviews?.set(payload.questionId as string, null);
     entry.permissions = { ...approved };
-    entry.postureFromPlanReview = true;
+    entry.postureFromWorker = true;
     return true;
   }
 
@@ -2862,23 +2926,35 @@ export class WorkerManager {
     // so the comparison is against that rather than refused outright.
     const current = entry?.permissions ?? DEFAULT_RUNTIME_PERMISSION;
     const gearOnly = permissions.mode === current.mode;
-    if (entry?.activeRequestId && !gearOnly)
+    // Route B, S-2 (A-4): the Claude Agent SDK engine switches modes mid-turn, plan
+    // mode included (its CLI takes `setPermissionMode` at any time). DSH keeps the lock.
+    const sdk = entry?.engine === 'claude-sdk';
+    if (entry?.activeRequestId && !gearOnly && !sdk)
       throw new WorkerManagerError(
         'session_busy',
         'The mode cannot change during a turn; the permission level can'
       );
+    // A `/compact` holds the SDK host's request chain until it ends: a switch queued
+    // behind it could land after this call already timed out (decision 178's guard).
+    if (sdk && entry?.compacting)
+      throw new WorkerManagerError(
+        'session_busy',
+        'The mode cannot change while the conversation is being compacted',
+        true
+      );
     if (entry?.slot && entry.state === 'ready') {
       // Mid-turn the narrow RPC is the only one the worker will accept, and
       // between turns the broad one is what re-applies both axes from scratch.
-      const result = entry.activeRequestId
-        ? await entry.slot.request<WorkerSetPermissionTierResult, WorkerSetPermissionGearPayload>(
-            'worker.setPermissionGear',
-            { logicalSessionId: sessionId, gear: permissions.gear }
-          )
-        : await entry.slot.request<WorkerSetPermissionTierResult, WorkerSetPermissionsPayload>(
-            'worker.setPermissions',
-            { logicalSessionId: sessionId, permissions }
-          );
+      const result =
+        entry.activeRequestId && !sdk
+          ? await entry.slot.request<WorkerSetPermissionTierResult, WorkerSetPermissionGearPayload>(
+              'worker.setPermissionGear',
+              { logicalSessionId: sessionId, gear: permissions.gear }
+            )
+          : await entry.slot.request<WorkerSetPermissionTierResult, WorkerSetPermissionsPayload>(
+              'worker.setPermissions',
+              { logicalSessionId: sessionId, permissions }
+            );
       if (!isWorkerSetPermissionTierResult(result) || !result.applied)
         throw new WorkerManagerError(
           'worker_permission_not_applied',
@@ -2888,7 +2964,7 @@ export class WorkerManager {
     }
     if (entry) {
       entry.permissions = { ...permissions };
-      entry.postureFromPlanReview = false;
+      entry.postureFromWorker = false;
     }
     return requestId;
   }
@@ -3297,6 +3373,22 @@ export class WorkerManager {
     entry.sdkModel = undefined;
     entry.sdkFingerprint = undefined;
     entry.backgroundTasks = undefined;
+  }
+
+  /**
+   * Route B, S-2 (A-11): the user picked Auto or Edit automatically under the
+   * Claude Agent SDK engine's meaning: Auto has a check deciding each call, Edit
+   * automatically still asks for commands other than simple file ones. DSH's
+   * gears of the same slots run every workspace command unasked. A new chat that
+   * falls back to DSH with either starts on Manual; true when it did (the
+   * renderer is told).
+   */
+  private narrowForDshFallback(entry: ManagedSlot): boolean {
+    const gear = entry.permissions?.gear;
+    if (entry.permissions?.mode !== 'agent' || (gear !== 'auto' && gear !== 'accept-edits'))
+      return false;
+    entry.permissions = { mode: 'agent', gear: 'ask' };
+    return true;
   }
 
   /** Route B, S-1 (decision 2): the model and route a reopened SDK chat starts on. */
@@ -4046,10 +4138,22 @@ export class WorkerManager {
     if (event.type === 'question.requested' && event.payload?.review) {
       entry.planReviews ??= new Map();
       entry.planReviews.set(event.payload.questionId, null);
+      entry.planReviewChoices ??= new Map();
+      entry.planReviewChoices.set(
+        event.payload.questionId,
+        planReviewChoicesOf(event.payload.review)
+      );
     }
-    if (event.type === 'question.resolved') entry.planReviews?.delete(event.payload?.questionId);
+    if (event.type === 'question.resolved') {
+      entry.planReviews?.delete(event.payload?.questionId);
+      entry.planReviewChoices?.delete(event.payload?.questionId);
+    }
     if (event.type === 'session.permissions') {
-      if (!this.acceptPlanApproval(entry, event.payload ?? {})) return;
+      if (
+        !this.acceptEngineMode(entry, event.payload ?? {}) &&
+        !this.acceptPlanApproval(entry, event.payload ?? {})
+      )
+        return;
       this.dispatch({
         ...event,
         sessionId: event.sessionId ?? entry.logicalSessionId,

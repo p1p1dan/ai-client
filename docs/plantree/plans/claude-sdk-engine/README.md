@@ -26,6 +26,10 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 | 9 | 按什么选引擎 | **只看协议**：模型路由是 Anthropic 协议（anthropic-messages）的新会话走 SDK 引擎，不论是不是 Claude；只有 SDK 宿主起不来（宿主、SDK 包或 `claude.exe` 缺失，或宿主启动失败）时退回 DSH，回合里的失败照常报错。首轮因端点不兼容而失败属于模型配置问题：配成 Anthropic 协议，就是声明它接得住 Agent SDK 的请求 |
 | 10 | 会话中途换模型 | 先用简单方案：SDK 会话只在同一路由内换；以后再做“把前文打包进新对话”的跨引擎换模型 |
 | 11 | SDK 的请求 | 按 SDK 官方的来，不转发计划路由上的请求头，User-Agent 用 CLI 自己的（§8.2 #26） |
+| 12 | 网关 key 与子进程（§7.4 #2，S-2 开工时裁决） | **不让 key 进子进程**：先试 CLI 自带的“从文件描述符读 key”，Windows 上不行就在宿主里做本机鉴权代理；在 S-3 放开仓库 hooks 之前做完 |
+| 13 | DSH 的内置禁止清单（.env、~/.ssh、*.pem、*.key 等，决策 023） | **按官方行为，SDK 会话不补**；权限菜单里“明确拒绝的规则仍生效”之类的说法对 SDK 会话改掉 |
+| 14 | 五档的中文名 | 手动审批 / 自动编辑 / 计划模式 / 自动模式 / 跳过权限确认（顺序同裁决 6） |
+| 15 | 身份说明（§7.4 #13） | **不加**：保持 SDK 预设提示词，界面上仍不出现 Claude Code |
 
 ## 2 硬约束
 
@@ -58,7 +62,7 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 |---|---|---|---|---|
 | S-0 | 移植原型 | 从 `proto/claude-agent-sdk-engine` 移入 `src/claude-sdk-host/`（不含 `tools/enc-kit/` 里的 Cometix 部分）与 Main 侧接线（`ClaudeSdkProcessTransport`、`claudeSdkEngine`、`WorkerManager` 改动）、假网关 `claude-sdk` 计划；按 main 现状解决冲突 | 两套 tsc、宿主单测、`host-probe.ts` 全场景对假网关通过 | **完成**（2026-10-16，见 §7） |
 | S-1 | 引擎选择与开关 | 新会话按模型选引擎；会话桩固定引擎；设置开关（默认开），关掉后 Anthropic 协议模型的新会话走 DSH | 单测；GUI 点验两种模型各开新会话、重启后续聊 | **完成**（2026-10-16，见 §8；并入 §7.4 的 #1、#4、#18、#5 的 errorCode、#7 的两条、#10） |
-| S-2 | 五档权限 | 渲染层：引擎是 SDK 时显示五档；`default`/`acceptEdits`/`plan`/`auto`/`bypassPermissions` 映射；中途切换；Plan 档与计划审阅卡衔接；Auto 档实测它额外发的安全检查请求能否经网关正常完成 | 每档一个探针场景；真实网关上 Auto 档跑通一个会触发检查的回合 | 待做 |
+| S-2 | 五档权限 | 渲染层：引擎是 SDK 时显示五档；`default`/`acceptEdits`/`plan`/`auto`/`bypassPermissions` 映射；中途切换；Plan 档与计划审阅卡衔接；Auto 档实测它额外发的安全检查请求能否经网关正常完成 | 每档一个探针场景；真实网关上 Auto 档跑通一个会触发检查的回合 | **完成**（2026-10-16，见 §9；真实网关上的 Auto 回合待用户提供网关后补跑，§9.2 #32） |
 | S-3 | 项目级配置 | `settingSources: ['project','local']`；去掉 `managedSettings` 对 hooks 与 allow 的锁定；`CLAUDE.md` 进上下文 | 探针：带 `.claude/settings.json`（allow + hook）与 `CLAUDE.md` 的测试仓库，断言 allow 生效、hook 执行、`CLAUDE.md` 被引用 | 待做 |
 | S-4 | 打包 | 宿主构建（esbuild，参照 DSH 宿主）；`claude.exe` 进 extraResources（只带目标平台），`pathToClaudeCodeExecutable` 指向它；体积门禁（安装后增量 ≤ 0.6 GB）；`DISABLE_AUTOUPDATER` | 打包后冒烟：从安装目录拉起宿主 → 假网关一个回合；体积门禁 | 待做 |
 | S-5 | 回归与证据 | 探针场景进回归集；录制 SDK 事件序列做门禁；真实网关复跑 T1；GUI 点验清单 | 回归绿；证据写进 `evidence/` | 待做 |
@@ -72,6 +76,9 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 - docx、xlsx、pptx、pdf 等二进制，CLI 按扩展名拒读，与加密无关。
 - 每个活动的 SDK 引擎会话常驻约 250 MB（宿主 node 约 80 MB，`claude.exe` 约 170 MB）。
 - **配成 Anthropic 协议的模型，要接得住 Agent SDK 的请求**（裁决 9）：CLI 发的请求比 DSH 多一批 beta 头、`thinking: adaptive`、effort 参数与 15 个工具的完整定义。同一个配置可能在 DSH 上能用、在 SDK 上被拒（通常是 400）。这种模型应改配成 OpenAI 协议，或在设置里关掉 Agent SDK 引擎。管理员配置模型与用户自加服务时都要注意。
+- **自动模式（Auto）要靠网关做安全检查**（S-2 §4.3）：网关在回复里带检查结果最好；不带时 CLI 改为每次另发检查请求（非流式，模型缺省 `claude-sonnet-5`，出错退到会话模型）。检查都不可用时，需要检查的命令一律被拒、不再问人（读取、工作区内写文件等不经检查）。GLM 等非 Claude 模型上自动模式是否可用，取决于网关怎么回这些检查请求。
+- **自动模式会把检查上下文发给网关**：本机用户名、主目录、工作目录、git 分支与远端地址（官方行为，裁决 11）。
+- **计划模式由 PiLab 拒绝改动**：CLI 本身不拦计划模式里的写操作，SDK 会话在计划模式里由宿主拒掉写文件与改动类命令；模型写的计划文件在应用私有目录里。
 
 ## 6 风险
 
@@ -126,7 +133,7 @@ S-0 做了一轮多维审查：移植保真、Main 侧接线、宿主运行时�
 | # | 发现 | 去向 |
 |---|---|---|
 | 1 | **仓库可改走网关**：被打开仓库的 `.claude/settings.json` 写 `env.ANTHROPIC_BASE_URL`，请求连同 key 就发到它指定的地址（两个假网关实测）。钉在 `managedSettings.env` 无效；钉在 SDK 的 `settings`（flag 层）`env` 里有效（实测）。同理应钉 `DISABLE_AUTOUPDATER`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`、`CLAUDE_CODE_GIT_BASH_PATH` | **S-1 已做**：flag 层钉住 23 个变量（逐项实测见 [S-1 设计 §4.1](topics/s1-engine-selection.md)），探针 `repoenv`；`ANTHROPIC_API_KEY` 钉不了，并入 #2 |
-| 2 | **key 进子进程**：网关 key 在 `claude.exe` 的环境里，Bash 工具能读到（实测会随工具结果写进 transcript），S-3 之后仓库 hooks 也能读到。CLI 的 `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` 能清掉，但会把权限档强制成 default，与 S-2 冲突 | **待定**：S-2/S-3 一起定（`apiKeyHelper`、本机鉴权代理等）；S-5 加 key 金丝雀场景。S-1 另实测：仓库设置能把 key 换成自己的（请求仍到我们的网关），带凭据的代理 URL 不能钉 |
+| 2 | **key 进子进程**：网关 key 在 `claude.exe` 的环境里，Bash 工具能读到（实测会随工具结果写进 transcript），S-3 之后仓库 hooks 也能读到。CLI 的 `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` 能清掉，但会把权限档强制成 default，与 S-2 冲突 | **用户裁决（裁决 12）**：不让 key 进子进程，S-3 之前做完；S-5 加 key 金丝雀场景。S-1 另实测：仓库设置能把 key 换成自己的（请求仍到我们的网关），带凭据的代理 URL 不能钉 |
 | 3 | 网关在报错里回显 key 时，CLI 把它原样写进 transcript（`api_error` 记录，实测） | S-5 金丝雀场景；只能事后清理或写进已知限制 |
 | 4 | **产品版的网关与 key 来源没有任务**：现在 Main 只从自己的环境变量读；原型 §8 列了"凭据：从托管目录或凭据库取，经宿主注入，不落盘"（0.5 人周）。引擎按模型 id 前缀 `claude-` 选，正式版应按路由协议 `anthropic-messages` | **S-1 已做**：取自计划路由与凭据；按 anthropic-messages 协议选引擎（裁决 9）；换 key 后空闲会话自动重开 |
 | 5 | **上游错误映射**：401 重试 10 次约 3 分钟；失败的 `errorCode` 是 `success`（取的是 result 的 subtype）；没设流空闲超时；`/compact` 遇到坏网关会堵住同一会话的停止与发送。CLI 自己的提示（如 "Fix external API key"）原样进失败卡。原型 §8 的"宿主硬化"（1～1.5 人周）在任务表里没有对应行 | errorCode 映射 **S-1 已做**（探针 `errors`）；重试次数与超时 S-5 |
@@ -137,7 +144,7 @@ S-0 做了一轮多维审查：移植保真、Main 侧接线、宿主运行时�
 | 10 | 新接缝没有单测；`chatEngineDshOnly.test.ts` 的前提（只有 DSH 一个引擎）已不成立但仍通过 | **S-1 已做** |
 | 11 | CI 不跑宿主 tsc（宿主依赖 DSH bridge 与 `src/shared` 的类型，main 上改了不会被发现）。脚本已加，CI 步骤可用 `npm ci --omit=optional`（不下 `claude.exe`） | S-4 或 S-5 |
 | 12 | 打包门禁：`packaging-config.test.mjs` 与 `t31PiOnlyAbsence.test.ts` 禁止 builder 配置与根依赖里出现 SDK 包 | S-4：照 DSH 宿主做法单独产出目录，由 afterPack 拷入 |
-| 13 | 模型看到的身份是 Claude Code（SDK 预设提示词），PiLab 追加的说明里没有身份句；裁决 9 之后，走 Anthropic 协议的非 Claude 模型（如 GLM）也会被告知自己是 Claude Code | **待定**：是否在追加说明里加身份句（界面文案已不出现 Claude Code） |
+| 13 | 模型看到的身份是 Claude Code（SDK 预设提示词），PiLab 追加的说明里没有身份句；裁决 9 之后，走 Anthropic 协议的非 Claude 模型（如 GLM）也会被告知自己是 Claude Code | **用户裁决（裁决 15）**：不加身份句（界面文案已不出现 Claude Code） |
 | 14 | CLI 内置的 `totalTokensReminder` 在每一步注入 `<total_tokens>15000000 tokens left</total_tokens>` | S-5 记录，评估要不要关 |
 | 15 | `/compact` 后重开会话只见摘要（2 条），看不到压缩前的内容（原型 §3 写"要再核"，已确认） | 功能对等版（历史投影补全） |
 | 16 | 探针：agent 场景没断言子代理结果到达模型 | S-5 |
@@ -176,3 +183,30 @@ S-1 同样做了多维审查（Main、宿主、渲染层、跨层契约与安全
 | 29 | 跨引擎换模型：会话中途换到另一条路由或另一种协议的模型，做法是把前文打包进新对话（不是无缝衔接） | 后续优化（裁决 10） |
 | 30 | 模型的 Agent SDK 兼容性：在添加或编辑模型处加“测试模型”，经 Agent SDK 跑一个极短的回合并记录结果；记为不兼容的 Anthropic 协议模型走 DSH，重测通过改回 SDK（用户 2026-10-16 提议）。连带：SDK 会话报 `MODEL_SETTING_UNSUPPORTED` 时给出专门提示（这个模型接不住 Agent SDK 的请求，改配成 OpenAI 协议或关掉 Agent SDK 引擎），有了按钮后指向它 | **待定**：单独一个任务，约 1～1.5 天 |
 | 31 | 可用性检查与 SDK 找 CLI 的方式可能不一致（宿主 Node 的 CPU 类型、安装布局）。做法：由 Main 定一个 CLI 路径传给宿主（`AICLIENT_CLAUDE_SDK_CLI` / `pathToClaudeCodeExecutable`），可用性检查只查这一个 | S-4 |
+
+## 9 S-2 记录（2026-10-16）
+
+决定、契约、逐项实测与验证见 [S-2 设计](topics/s2-permission-modes.md)。一句话：SDK 会话显示 Claude 的五档（手动审批、自动编辑、计划模式、自动模式、跳过权限确认），一一对应 CLI 的五个模式，回合中也能切；切档以 CLI 确认为准，被拒时说明原因并保持原档；CLI 自己改的档（模型进出计划模式、批准时被拒）同步到界面；计划模式由宿主拒绝改动；审阅卡选"批准后用哪一档继续"；宿主不再替用户批准任何请求。自主决定 A-1～A-22 列在设计 §1.2，待审阅。
+
+### 9.1 审查后在 S-2 修的
+
+S-2 做了五个维度的审查（宿主、Main 与桥、渲染层、安全与契约、验证质量），每条由独立复核员尝试推翻。确认要修的 23 条都在 S-2 修掉，每条补了测试或探针断言，并确认去掉修复时会失败。要点：
+
+1. 计划模式只拒改动：原来连工作区外的读取、网页抓取也一并拒绝，现在这些出卡。
+2. 计划审阅批准的档被 CLI 拒绝时，原来会回到进计划前的档（可能是跳过权限确认）；现在先切档、确认后才放行，被拒改为手动审批并说明原因。
+3. 仓库声明更宽档位的子代理在计划模式里能不经卡写文件；现在由进程内 hook 送回拒绝。
+4. 重开会话的历史里，自动模式拒掉的调用会显示 CLI 原句（含 Claude Code）；现在与实时一样用 PiLab 的话。
+5. 新会话的引擎预测没看宿主是否可用；退回 DSH 与开始页的默认档会把 SDK 的"自动模式""自动编辑"原样带成 DSH 更宽的同名档；都已收窄。
+6. 菜单与审阅卡对自动模式、跳过权限确认的说明与实测不符；改成实测的说法，两处共用一份文案。
+7. 其余：切档途中到来的写操作仍按旧档判断；窗口重开时不拿旧档覆盖引擎报过的档、存的档被拒也照样打开；压缩进行中不切档；无规则可记时卡上不出"本会话允许"；安全检查原因里的产品名改写通顺；桥的异步设置、7 个钉值、审阅卡挂载、菜单接线都补了测试。
+
+### 9.2 S-2 新发现与去向
+
+| # | 发现 | 去向 |
+|---|---|---|
+| 32 | **S-2 的验证还差一项**：真实网关上用自动模式跑一个会触发检查的回合（看网关是否回 `safeguard_results`、能否服务 `claude-sonnet-5` 的检查请求） | **待用户**：用真实网关前须先问（CLAUDE.md），需要用户在会话里给网关地址与 key |
+| 33 | "本会话允许"带的 `setMode acceptEdits` 会把整个会话切到自动编辑；切换后有提示，但点之前卡上没说 | 功能对等版或 S-5：卡上预先说明 |
+| 34 | 切档超时（8 秒）这条路径没有单测；排在慢请求（如 Windows 上的停止）后面的切档，可能在 Main 超时后才生效 | S-5 |
+| 35 | 假网关的检查按整段对话里出现过的 `CC-CLS-*` 标记决定，`mode-auto` 要放在最后跑 | S-5 加固 |
+| 36 | S-2 的实测都在 Windows 上；Linux 未测 | S-5 / S-6 |
+| 37 | `canUseTool` 的 `defaultToNo` 未使用：卡上没有一键批准，暂无影响；以后给卡加快捷键时要遵守 | 记录 |

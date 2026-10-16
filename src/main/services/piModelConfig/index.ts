@@ -17,6 +17,7 @@ import {
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { app, net } from 'electron';
 import { cacheControlOnToolsSettings } from '../agent-host/cacheControlOnToolsSetting';
+import { claudeSdkHostAvailable } from '../agent-host/claudeSdkHostAvailability';
 import { promptCacheTtlSettings } from '../agent-host/promptCacheSettings';
 import { providerTimeoutSettings } from '../agent-host/providerTimeoutSettings';
 import { requestUserAgentSettings } from '../agent-host/requestUserAgentSetting';
@@ -366,7 +367,12 @@ export function readPiModelCatalog(): AgentModelCatalog {
   // listed model is one the host can serve, with the efforts it accepts.
   const native = resolveNativeModelCatalog();
   const menu = service.readCatalog(managed ? undefined : 'local', native);
-  return applyDshPlanToCatalog(menu, dshModelPlanFor(native));
+  // Route B, S-2: the renderer names a new chat's modes after the engine it will
+  // get, which needs the host as much as an Anthropic-protocol route.
+  return {
+    ...applyDshPlanToCatalog(menu, dshModelPlanFor(native)),
+    claudeSdkHostAvailable: claudeSdkHostAvailable(),
+  };
 }
 
 export function clearManagedPiCredential(): void {

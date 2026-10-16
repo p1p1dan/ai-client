@@ -66,7 +66,8 @@ describe('U29 the start screen keeps its bar controls', () => {
     // being deleted.
     expect(STORE).toContain("export const DEFAULT_TIER_STORAGE_KEY = 'aiclient:chat:default-tier'");
     expect(STORE).toContain('export function readDefaultTier()');
-    expect(PERMISSION).toContain('writeDefaultPermissions(next);');
+    // Route B, S-2: remembered with the engine whose wording it was picked under.
+    expect(PERMISSION).toContain("writeDefaultPermissions(next, sdk ? 'claude-sdk' : 'dsh');");
     // …and a live chat still writes its own row plus tells its worker.
     expect(PERMISSION).toContain('writeSessionPermissions(sessionId, next);');
     expect(PERMISSION).toContain('.setPermissions({ sessionId, permissions: next })');

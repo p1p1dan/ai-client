@@ -21,7 +21,9 @@ export function clippedPlanFeedback(text: string): string {
   return line.length > FEEDBACK_CHARS ? `${line.slice(0, FEEDBACK_CHARS)}…` : line;
 }
 
-const REVIEW_TOOLS = new Set(['exit_plan_mode', 'create_goal']);
+/** Route B, S-2: the Claude Agent SDK engine's plan tool is `ExitPlanMode`. */
+const REVIEW_TOOLS = new Set(['exit_plan_mode', 'create_goal', 'ExitPlanMode']);
+const PLAN_TOOLS = new Set(['exit_plan_mode', 'ExitPlanMode']);
 
 /**
  * The row's word: approved, keep revising (with the feedback), closed;
@@ -34,7 +36,7 @@ export function planReviewRowWord(
   output: string | undefined
 ): PlanReviewWord | undefined {
   if (!REVIEW_TOOLS.has(toolName) || status === 'running') return undefined;
-  if (status === 'ok') return toolName === 'exit_plan_mode' ? { key: 'Plan approved' } : undefined;
+  if (status === 'ok') return PLAN_TOOLS.has(toolName) ? { key: 'Plan approved' } : undefined;
   const outcome = planReviewRowOutcome(output);
   switch (outcome?.kind) {
     case 'keep-planning':

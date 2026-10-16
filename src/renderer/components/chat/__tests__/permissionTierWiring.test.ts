@@ -49,7 +49,8 @@ describe('[U12 fix] the send path carries the stored tier into the spawn', () =>
     // live goal start that switched the posture also moves what a
     // `session_not_found` re-create spawns on (`goalStartWiringStatic`).
     expect(COMPOSER.replace(/\s+/g, ' ')).toContain(
-      'let spawnPermissions = readSessionPermissions(sessionId) ?? readDefaultPermissions() ?? undefined'
+      // Route B, S-2: the new-chat default is read for the engine the chat will run on.
+      "let spawnPermissions = readSessionPermissions(sessionId) ?? readDefaultPermissions(sdkChat ? 'claude-sdk' : 'dsh') ?? undefined"
     );
   });
 

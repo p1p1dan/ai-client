@@ -32,10 +32,13 @@ describe('[decision 166] a goal-creating `/goal` switches the posture as it is d
     // re-enters `runSend`, which is where the switch happens.
     expect(HANDLE_SEND).not.toContain('planGoalStart');
     expect(HANDLE_SEND).not.toContain('applyGoalStart');
-    // A retry re-runs a turn; it starts no goal.
+    // A retry re-runs a turn; it starts no goal. Neither does a chat on the
+    // Claude Agent SDK engine, which has no goals (route B, S-2 A-8).
     expect(RUN_SEND.replace(/\s+/g, ' ')).toContain(
-      'const goalStart = retryLastTurn ? null : planGoalStart( trimmed,'
+      'const goalStart = retryLastTurn || sdkChat ? null : planGoalStart( trimmed,'
     );
+    expect(RUN_SEND.indexOf('const sdkChat =')).toBeGreaterThan(-1);
+    expect(RUN_SEND.indexOf('const sdkChat =')).toBeLessThan(RUN_SEND.indexOf('const goalStart ='));
   });
 
   it('stores the posture before the spawn reads it, for a chat whose worker is not up', () => {
@@ -73,7 +76,22 @@ describe('[decision 166] a goal-creating `/goal` switches the posture as it is d
     expect(body).not.toContain('writeDefaultPermissions');
   });
 
-  it('hands the menu its goal entry', () => {
-    expect(COMPOSER).toContain('goalEntry={{ ...goalEntry, onSelect: startGoal }}');
+  it('hands the menu its goal entry, except on the Claude Agent SDK engine (route B, S-2)', () => {
+    expect(COMPOSER.replace(/\s+/g, ' ')).toContain(
+      "{...(chatEngine === 'claude-sdk' ? {} : { goalEntry: { ...goalEntry, onSelect: startGoal } })}"
+    );
+  });
+
+  it('tells the menu which engine it speaks for, and the window which engine a posture is named after (S-2)', () => {
+    const start = COMPOSER.indexOf('<ComposerPermissionTrigger');
+    const element = COMPOSER.slice(start, COMPOSER.indexOf('/>', start));
+    expect(element).toContain('engine={chatEngine}');
+    const app = stripComments(
+      readFileSync(path.resolve(here, '../../../App.tsx'), 'utf8'),
+      'App.tsx'
+    ).replace(/\s+/g, ' ');
+    expect(app).toContain(
+      'engineOf: (sessionId) => useChatSessionsStore.getState().sessions.find((session) => session.id === sessionId) ?.engine'
+    );
   });
 });

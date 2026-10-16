@@ -67,6 +67,7 @@ import {
   useWorktreeResolveConflict,
 } from './hooks/useWorktree';
 import { useI18n } from './i18n';
+import { useChatSessionsStore } from './stores/chatSessions';
 import { initCloneProgressListener } from './stores/cloneTasks';
 import { useEditorStore } from './stores/editor';
 import { preselectAddedRepository } from './stores/homeDraft';
@@ -154,6 +155,9 @@ export default function App() {
         notePostureSynced: (sessionId) =>
           useLegacyMigrationStore.getState().notePostureSynced(sessionId),
         toast: (toast) => addToast(toast),
+        engineOf: (sessionId) =>
+          useChatSessionsStore.getState().sessions.find((session) => session.id === sessionId)
+            ?.engine,
       })),
     []
   );

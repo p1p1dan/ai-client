@@ -1,3 +1,4 @@
+import type { ChatEngine } from '@shared/claudeSdkEngine';
 import {
   isRuntimePermissionSettings,
   migratePermissionTier,
@@ -140,6 +141,39 @@ export function writeDefaultTier(tier: SessionPermissionTier): void {
 
 export const SESSION_PERMISSIONS_STORAGE_KEY = 'aiclient:chat:session-permissions';
 export const DEFAULT_PERMISSIONS_STORAGE_KEY = 'aiclient:chat:default-permissions';
+/**
+ * Route B, S-2: the engine whose wording the new-chat default was picked under
+ * (beside the pair, which crosses IPC as it is). Absent: DSH, as before.
+ */
+export const DEFAULT_PERMISSIONS_ENGINE_STORAGE_KEY = 'aiclient:chat:default-permissions-engine';
+
+function readDefaultPermissionsEngine(): ChatEngine {
+  try {
+    return localStorage.getItem(DEFAULT_PERMISSIONS_ENGINE_STORAGE_KEY) === 'claude-sdk'
+      ? 'claude-sdk'
+      : 'dsh';
+  } catch {
+    return 'dsh';
+  }
+}
+
+/**
+ * Route B, S-2 (topic s2-permission-modes.md A-11): Auto and Edit automatically
+ * picked under the Agent SDK engine's wording (a safety check decides each call;
+ * file edits and simple file commands only) are narrower than DSH's gears of the
+ * same slots, which run every workspace command unasked. Such a default starts a
+ * chat that is not known to run on the SDK engine on Manual instead.
+ */
+function defaultFor(
+  settings: RuntimePermissionSettings,
+  engine: ChatEngine | undefined
+): RuntimePermissionSettings {
+  if (engine === 'claude-sdk' || settings.mode !== 'agent') return settings;
+  if (settings.gear !== 'auto' && settings.gear !== 'accept-edits') return settings;
+  return readDefaultPermissionsEngine() === 'claude-sdk'
+    ? { mode: 'agent', gear: 'ask' }
+    : settings;
+}
 
 export function readSessionPermissions(sessionId: string): RuntimePermissionSettings | null {
   const value = loadMap(SESSION_PERMISSIONS_STORAGE_KEY)[sessionId];
@@ -155,7 +189,8 @@ export function writeSessionPermissions(
   map[sessionId] = settings;
   saveMap(SESSION_PERMISSIONS_STORAGE_KEY, map);
 }
-export function readDefaultPermissions(): RuntimePermissionSettings | null {
+/** `engine`: the engine the chat it starts runs on, when known (S-2, `defaultFor`). */
+export function readDefaultPermissions(engine?: ChatEngine): RuntimePermissionSettings | null {
   try {
     const raw = localStorage.getItem(DEFAULT_PERMISSIONS_STORAGE_KEY);
     if (raw) {
@@ -165,7 +200,7 @@ export function readDefaultPermissions(): RuntimePermissionSettings | null {
       // reading one lands on `auto` rather than starting a fresh chat with
       // every approval prompt already switched off.
       if (isRuntimePermissionSettings(value))
-        return value.gear === 'bypass' ? { ...value, gear: 'auto' } : value;
+        return defaultFor(value.gear === 'bypass' ? { ...value, gear: 'auto' } : value, engine);
     }
   } catch {
     // Fall back to the old setting when the new storage is unavailable or invalid.
@@ -218,10 +253,14 @@ export function copySessionPreferences(fromSessionId: string, toSessionId: strin
  * previous non-bypass default in place, which is what the composer falls back
  * to when a new chat is started.
  */
-export function writeDefaultPermissions(settings: RuntimePermissionSettings): void {
+export function writeDefaultPermissions(
+  settings: RuntimePermissionSettings,
+  engine: ChatEngine = 'dsh'
+): void {
   if (settings.gear === 'bypass') return;
   try {
     localStorage.setItem(DEFAULT_PERMISSIONS_STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(DEFAULT_PERMISSIONS_ENGINE_STORAGE_KEY, engine);
   } catch {
     // The current selection remains usable when storage is unavailable.
   }

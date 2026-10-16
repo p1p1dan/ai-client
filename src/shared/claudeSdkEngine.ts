@@ -139,3 +139,37 @@ export const MODEL_ENGINE_MISMATCH = 'model_engine_mismatch';
 
 /** `session.failed` code: an SDK chat's engine process exited mid-turn. */
 export const CLAUDE_ENGINE_EXITED = 'claude_engine_exited';
+
+/**
+ * Route B, S-2 (topic s2-permission-modes.md A-5): the Claude Agent SDK engine
+ * refused a permission mode the host asked for. The worker's error code; its
+ * message is one of `PERMISSION_MODE_REFUSAL_REASONS`, never the CLI's own
+ * sentence. It reaches the renderer inside Electron's invoke error text as
+ * `WORKER_PERMISSION_MODE_REFUSED: <reason>`.
+ */
+export const PERMISSION_MODE_REFUSED = 'WORKER_PERMISSION_MODE_REFUSED';
+
+/** Why a mode was refused; the CLI's own codes where it gives one, `timeout` and `other` otherwise. */
+export const PERMISSION_MODE_REFUSAL_REASONS = [
+  'auto_mode_model',
+  'auto_mode_settings',
+  'auto_mode_circuit_breaker',
+  'auto_mode_fast_mode',
+  'auto_mode_unavailable',
+  'bypass_disabled',
+  'bypass_restricted',
+  'bypass_not_launched',
+  'invalid_mode',
+  'timeout',
+  'other',
+] as const;
+export type PermissionModeRefusalReason = (typeof PERMISSION_MODE_REFUSAL_REASONS)[number];
+
+/** The refusal named in an error's text, `other` when none is. */
+export function permissionModeRefusalReason(text: string): PermissionModeRefusalReason {
+  return (
+    PERMISSION_MODE_REFUSAL_REASONS.find((reason) =>
+      new RegExp(`(?:^|[^a-z_])${reason}(?![a-z_])`).test(text)
+    ) ?? 'other'
+  );
+}

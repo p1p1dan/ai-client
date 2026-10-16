@@ -99,6 +99,7 @@ import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { ComposerUsageChip } from './ComposerUsageChip';
 import { deriveChatEmptySurface } from './chatEmptyState';
+import { chatEngineForDisplay, predictNewChatEngine } from './chatEngineView';
 import {
   compactInstructionsIgnoredToast,
   compactOutcomeSettle,
@@ -719,6 +720,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     activeSessionId ? state.bySession[activeSessionId] : undefined
   );
   const goalEntry = goalEntryState(deriveGoalBarView(goalPanels, false), sendingHere);
+  // Route B, S-2 (A-9): which engine's names the permission menu shows (display only).
+  const claudeSdkEngineEnabled = useSettingsStore((state) => state.claudeSdkEngineEnabled);
+  const activeEngineBound = useChatSessionsStore((state) =>
+    activeSessionId ? state.hostBoundSessionIds.includes(activeSessionId) : false
+  );
+  const activeEngineReport = useChatSessionsStore((state) =>
+    activeSessionId ? state.sessions.find((item) => item.id === activeSessionId)?.engine : undefined
+  );
+  const activeRuntimeIdentity = useChatSessionsStore((state) =>
+    activeSessionId
+      ? state.sessions.find((item) => item.id === activeSessionId)?.runtimeIdentity
+      : undefined
+  );
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
   const lastError = useChatSessionsStore((state) => {
@@ -2213,15 +2227,30 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // gets its own row, never the new-chat default. A chat whose worker this
     // send brings up spawns on it; a live one is switched just before the
     // send below.
-    const goalStart = retryLastTurn
-      ? null
-      : planGoalStart(
-          trimmed,
-          readSessionPermissions(sessionId) ??
-            readDefaultPermissions() ??
-            DEFAULT_RUNTIME_PERMISSION,
-          deriveGoalBarView(useSessionPanelsStore.getState().bySession[sessionId], false)
-        );
+    // Route B, S-2 (A-8): the Claude Agent SDK engine has no goals, so `/goal` switches
+    // no posture there.
+    const sdkChat =
+      chatEngineForDisplay({
+        bound: hostBound,
+        engine: preSession?.engine,
+        ...(knownIdentity ? { runtimeIdentity: knownIdentity } : {}),
+        predicted: predictNewChatEngine({
+          enabled: useSettingsStore.getState().claudeSdkEngineEnabled,
+          hostAvailable: modelCatalog?.claudeSdkHostAvailable !== false,
+          catalog: catalogModels(modelCatalog),
+          model,
+        }),
+      }) === 'claude-sdk';
+    const goalStart =
+      retryLastTurn || sdkChat
+        ? null
+        : planGoalStart(
+            trimmed,
+            readSessionPermissions(sessionId) ??
+              readDefaultPermissions(sdkChat ? 'claude-sdk' : 'dsh') ??
+              DEFAULT_RUNTIME_PERMISSION,
+            deriveGoalBarView(useSessionPanelsStore.getState().bySession[sessionId], false)
+          );
     if (goalStart && preamble.action !== 'direct') {
       applyGoalStartBeforeSpawn(sessionId, goalStart, goalStartEffects);
     }
@@ -2237,7 +2266,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // `let`: a live goal switch (decision 166) also moves what a
     // `session_not_found` re-create below spawns on.
     let spawnPermissions =
-      readSessionPermissions(sessionId) ?? readDefaultPermissions() ?? undefined;
+      readSessionPermissions(sessionId) ??
+      readDefaultPermissions(sdkChat ? 'claude-sdk' : 'dsh') ??
+      undefined;
     const wireAttachments = toWireAttachments(drafts);
     // F2 (2026-08-18): `sendTimeoutMs(attachmentBytes)` is gone. The wait is no
     // longer a fixed deadline predicted from the payload size — it is a
@@ -4144,6 +4175,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const nextSendModel = activeSessionId
     ? resolveResumeModel(getSessionModel, activeSessionId, agentDefaultModel(chatAgentDefaults))
     : toWireModel(agentDefaultModel(chatAgentDefaults));
+  const chatEngine = chatEngineForDisplay({
+    bound: activeEngineBound,
+    ...(activeEngineReport ? { engine: activeEngineReport } : {}),
+    ...(activeRuntimeIdentity ? { runtimeIdentity: activeRuntimeIdentity } : {}),
+    predicted: predictNewChatEngine({
+      enabled: claudeSdkEngineEnabled,
+      hostAvailable: modelCatalog?.claudeSdkHostAvailable !== false,
+      catalog: catalogModels(modelCatalog),
+      model: nextSendModel,
+    }),
+  });
   const imageInputHintBlock = modelLacksImageInput({
     drafts: attachments.drafts,
     model: nextSendModel,
@@ -4571,7 +4613,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // T091: the latch half is per-session, so another chat's turn no
         // longer locks the tier picker on the one the user is looking at.
         turnActive={busy || sendingHere}
-        goalEntry={{ ...goalEntry, onSelect: startGoal }}
+        engine={chatEngine}
+        // Route B, S-2 (A-8): no goals on the Claude Agent SDK engine.
+        {...(chatEngine === 'claude-sdk'
+          ? {}
+          : { goalEntry: { ...goalEntry, onSelect: startGoal } })}
       />
     ),
     // U06-b: renders nothing until the runtime reports occupancy (T38-a).

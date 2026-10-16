@@ -212,6 +212,9 @@ function createHarness(
         return { disposed: true };
       }
       if (type === 'worker.stop') return { stopped: true };
+      if (type === 'worker.setPermissions' || type === 'worker.setPermissionGear')
+        return { applied: true };
+      if (type === 'worker.question.respond') return { handled: true };
       throw new Error(`unexpected request ${type}`);
     });
     const record: Rec = {
@@ -938,5 +941,264 @@ describe('WorkerManager on the Claude Agent SDK engine (route B, S-1)', () => {
       expect(h.released('s1')).toHaveLength(1);
       expect(h.released('s2')).toHaveLength(1);
     });
+  });
+});
+
+describe('WorkerManager on the Claude Agent SDK engine: permission modes (route B, S-2)', () => {
+  const posture = (record: Rec) => record.options.permissions;
+
+  it('an SDK chat switches mode mid-turn, plan mode included, through the full setter (A-4)', async () => {
+    const h = createHarness();
+    const record = await createSdk(h, 's1');
+    await h.manager.send({ sessionId: 's1', attemptId: 'a1', text: 'go' });
+    await h.manager.setPermissions('s1', { mode: 'plan', gear: 'auto' });
+    expect(record.methods()).toEqual(['worker.send', 'worker.setPermissions']);
+    expect(record.request).toHaveBeenLastCalledWith('worker.setPermissions', {
+      logicalSessionId: 's1',
+      permissions: { mode: 'plan', gear: 'auto' },
+    });
+  });
+
+  it('a DSH chat keeps the mid-turn lock', async () => {
+    const h = createHarness();
+    await createDsh(h, 'd1');
+    await h.manager.send({ sessionId: 'd1', attemptId: 'a1', text: 'go' });
+    expect(await codeOf(h.manager.setPermissions('d1', { mode: 'plan', gear: 'auto' }))).toBe(
+      'session_busy'
+    );
+  });
+
+  it('a mode the engine refused reaches the caller with its code, and is not recorded (A-5)', async () => {
+    const h = createHarness();
+    const record = await createSdk(h, 's1');
+    record.request.mockImplementationOnce(async () => {
+      throw Object.assign(new Error('WORKER_PERMISSION_MODE_REFUSED: auto_mode_model'), {
+        code: 'WORKER_RPC_REMOTE_ERROR',
+      });
+    });
+    await expect(h.manager.setPermissions('s1', { mode: 'agent', gear: 'auto' })).rejects.toThrow(
+      'WORKER_PERMISSION_MODE_REFUSED: auto_mode_model'
+    );
+    // A crash restart comes back on the mode the engine was last confirmed on, not the refused one.
+    record.crash({ code: 1, signal: null, cause: 'exit' });
+    await h.settle();
+    expect(posture(h.latest('s1'))).toBeUndefined();
+  });
+
+  it('takes a mode change the engine made itself, from an SDK chat, and forwards it (A-6)', async () => {
+    const h = createHarness();
+    const record = await createSdk(h, 's1');
+    record.emit({
+      type: 'session.permissions',
+      payload: { permissions: { mode: 'plan', gear: 'auto' }, cause: 'engine' },
+    });
+    expect(h.eventsOf('session.permissions', 's1').map((e) => e.payload)).toEqual([
+      { permissions: { mode: 'plan', gear: 'auto' }, cause: 'engine' },
+    ]);
+    // It is what a crash restart re-applies.
+    record.crash({ code: 1, signal: null, cause: 'exit' });
+    await h.settle();
+    expect(posture(h.latest('s1'))).toEqual({ mode: 'plan', gear: 'auto' });
+  });
+
+  it('drops an `engine` change from a DSH chat', async () => {
+    const h = createHarness();
+    const record = await createDsh(h, 'd1');
+    record.emit({
+      type: 'session.permissions',
+      payload: { permissions: { mode: 'agent', gear: 'bypass' }, cause: 'engine' },
+    });
+    expect(h.eventsOf('session.permissions', 'd1')).toEqual([]);
+  });
+
+  it('answers a plan review only with a choice the card offered (A-7)', async () => {
+    const h = createHarness();
+    const record = await createSdk(h, 's1');
+    record.emit({
+      type: 'question.requested',
+      payload: {
+        questionId: 'q1',
+        questions: [{ id: 'plan-review', header: 'Plan review', question: 'Plan', options: [] }],
+        review: {
+          kind: 'plan',
+          source: 'exit_plan_mode',
+          goalObjective: 'Plan',
+          choices: ['run:accept-edits', 'run:ask', 'run:auto', 'run:bypass', 'keep-planning'],
+        },
+      },
+    });
+    // The worker reports the posture of the answer while it handles it (decision 169).
+    const report = (permissions: Record<string, string>) =>
+      record.request.mockImplementationOnce(async () => {
+        record.emit({
+          type: 'session.permissions',
+          payload: { permissions, cause: 'plan-approved', questionId: 'q1' },
+        });
+        return { handled: true };
+      });
+    // A goal choice is not this card's: no posture is taken for it.
+    report({ mode: 'agent', gear: 'auto' });
+    await h.manager.respondQuestion({
+      sessionId: 's1',
+      questionId: 'q1',
+      answers: { 'plan-review': 'goal:auto' },
+    });
+    expect(h.eventsOf('session.permissions', 's1')).toEqual([]);
+    report({ mode: 'agent', gear: 'accept-edits' });
+    await h.manager.respondQuestion({
+      sessionId: 's1',
+      questionId: 'q1',
+      answers: { 'plan-review': 'run:accept-edits' },
+    });
+    expect(h.eventsOf('session.permissions', 's1').map((e) => e.payload)).toEqual([
+      {
+        permissions: { mode: 'agent', gear: 'accept-edits' },
+        cause: 'plan-approved',
+        questionId: 'q1',
+      },
+    ]);
+  });
+
+  it('a new chat that falls back to DSH leaves Auto for Manual, and says so (A-11)', async () => {
+    const h = createHarness();
+    h.createSlot.mockImplementationOnce(async (options: Record<string, unknown>) => {
+      (options.createTransport as (input: unknown) => unknown)({ generation: 1, cwd: '/repo' });
+      throw Object.assign(new Error('Worker exited before bootstrap'), { code: 'WORKER_EXITED' });
+    });
+    await h.manager.createSession({
+      sessionId: 's1',
+      workspacePath: '/repo',
+      model: 'claude/claude-opus-5',
+      permissions: { mode: 'agent', gear: 'auto' },
+    });
+    expect(h.latest('s1').sdk).toBe(false);
+    expect(posture(h.latest('s1'))).toEqual({ mode: 'agent', gear: 'ask' });
+    const order = h.events
+      .filter((e) => e.sessionId === 's1')
+      .map(
+        (e) =>
+          `${e.type}${e.type === 'session.permissions' ? `:${(e.payload as { cause: string }).cause}` : ''}`
+      );
+    expect(order).toContain('session.permissions:sync');
+    expect(order.indexOf('session.permissions:sync')).toBeGreaterThan(
+      order.indexOf('session.created')
+    );
+  });
+
+  it('a fallback keeps Manual, Plan and Bypass permissions as they were', async () => {
+    for (const permissions of [
+      { mode: 'agent', gear: 'ask' },
+      { mode: 'plan', gear: 'auto' },
+      { mode: 'agent', gear: 'bypass' },
+    ] as const) {
+      const h = createHarness();
+      h.createSlot.mockImplementationOnce(async (options: Record<string, unknown>) => {
+        (options.createTransport as (input: unknown) => unknown)({ generation: 1, cwd: '/repo' });
+        throw Object.assign(new Error('Worker exited before bootstrap'), { code: 'WORKER_EXITED' });
+      });
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        model: 'claude/claude-opus-5',
+        permissions: { ...permissions },
+      });
+      expect(posture(h.latest('s1'))).toEqual(permissions);
+      expect(h.eventsOf('session.permissions', 's1')).toEqual([]);
+    }
+  });
+});
+
+describe('WorkerManager on the Claude Agent SDK engine: review fixes (route B, S-2)', () => {
+  const refusal = () =>
+    new WorkerSlotError(
+      'WORKER_RPC_REMOTE_ERROR',
+      'WORKER_PERMISSION_MODE_REFUSED: auto_mode_model',
+      { code: 'WORKER_PERMISSION_MODE_REFUSED', message: 'auto_mode_model', retryable: false }
+    );
+  const causes = (h: ReturnType<typeof createHarness>, id: string) =>
+    h.eventsOf('session.permissions', id).map((e) => (e.payload as { cause: string }).cause);
+
+  it('a warm open hands back the mode the engine changed to, not the window copy', async () => {
+    const h = createHarness();
+    const record = await createSdk(h, 's1');
+    record.emit({
+      type: 'session.permissions',
+      payload: { permissions: { mode: 'plan', gear: 'ask' }, cause: 'engine' },
+    });
+    const before = record.methods().length;
+    await h.manager.createSession({
+      sessionId: 's1',
+      workspacePath: '/repo',
+      model: 'claude/claude-opus-5',
+      permissions: { mode: 'agent', gear: 'ask' },
+    });
+    expect(record.methods().slice(before)).toEqual([]);
+    expect(causes(h, 's1')).toEqual(['engine', 'sync']);
+    expect(h.eventsOf('session.permissions', 's1').at(-1)?.payload).toMatchObject({
+      permissions: { mode: 'plan', gear: 'ask' },
+    });
+  });
+
+  it('a warm open whose stored mode the engine refuses opens anyway, on the mode the chat is in', async () => {
+    const h = createHarness();
+    const record = await createSdk(h, 's1');
+    record.emit({
+      type: 'session.permissions',
+      payload: { permissions: { mode: 'agent', gear: 'ask' }, cause: 'engine' },
+    });
+    // A later choice of the user's clears the engine's claim...
+    await h.manager.setPermissions('s1', { mode: 'agent', gear: 'accept-edits' });
+    // ...and the window's copy is applied again on the next open, which the engine refuses.
+    record.request.mockImplementationOnce(async () => {
+      throw refusal();
+    });
+    await h.manager.createSession({
+      sessionId: 's1',
+      workspacePath: '/repo',
+      model: 'claude/claude-opus-5',
+      permissions: { mode: 'agent', gear: 'auto' },
+    });
+    expect(record.methods().at(-1)).toBe('worker.setPermissions');
+    expect(h.eventsOf('session.permissions', 's1').at(-1)?.payload).toMatchObject({
+      cause: 'sync',
+      permissions: { mode: 'agent', gear: 'accept-edits' },
+    });
+    expect(h.eventsOf('session.created', 's1')).toHaveLength(2);
+  });
+
+  it('no mode switch while the conversation is being compacted', async () => {
+    const h = createHarness();
+    const record = await createSdk(h, 's1');
+    let finish: (value: unknown) => void = () => undefined;
+    record.request.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const compacting = h.manager.compactSession({ sessionId: 's1' }).catch(() => undefined);
+    await h.settle();
+    expect(await codeOf(h.manager.setPermissions('s1', { mode: 'agent', gear: 'auto' }))).toBe(
+      'session_busy'
+    );
+    expect(record.methods()).not.toContain('worker.setPermissions');
+    finish({ compacted: true });
+    await compacting;
+  });
+
+  it('a fallback to DSH also leaves Edit automatically for Manual (A-11)', async () => {
+    const h = createHarness();
+    h.createSlot.mockImplementationOnce(async (options: Record<string, unknown>) => {
+      (options.createTransport as (input: unknown) => unknown)({ generation: 1, cwd: '/repo' });
+      throw Object.assign(new Error('Worker exited before bootstrap'), { code: 'WORKER_EXITED' });
+    });
+    await h.manager.createSession({
+      sessionId: 's1',
+      workspacePath: '/repo',
+      model: 'claude/claude-opus-5',
+      permissions: { mode: 'agent', gear: 'accept-edits' },
+    });
+    expect(h.latest('s1').options.permissions).toEqual({ mode: 'agent', gear: 'ask' });
+    expect(causes(h, 's1')).toEqual(['sync']);
   });
 });

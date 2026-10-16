@@ -4559,3 +4559,55 @@ Object.assign(zhTranslations, {
   'The Agent SDK engine could not start. Send your message again to try once more.':
     'Agent SDK 引擎没能启动，再发一次消息即可重试。',
 });
+
+// Agent SDK engine permission modes (route B, S-2)
+/**
+ * Route B, S-2 (docs/plantree/plans/claude-sdk-engine/topics/s2-permission-modes.md):
+ * the five modes an SDK chat shows (ruling 14's names; 'Plan mode' and
+ * 'Bypass permissions' are already in the catalog), their confirmations, the
+ * refusals, the engine's own mode changes and the SDK plan review card.
+ */
+Object.assign(zhTranslations, {
+  Manual: '手动审批',
+  'Edit automatically': '自动编辑',
+  Auto: '自动模式',
+  'Reads in the workspace run without asking; edits, commands that change something and anything outside the workspace ask first.':
+    '工作区内的读取直接进行；编辑、会改动内容的命令以及工作区外的操作都先问你。',
+  'File edits in the workspace and simple file commands run without asking; other commands still ask.':
+    '工作区内的文件编辑和简单的文件命令直接进行；其他命令仍会先问你。',
+  'Explores and reads without changing anything, then presents its plan for your review.':
+    '只探索和阅读、不做改动，然后交出计划请你审阅。',
+  'Reads and workspace edits run without asking; other calls pass a safety check first. What it blocks, or cannot check, does not run; after several blocks in a row it asks you.':
+    '读取和工作区内的编辑直接进行；其他调用先过安全检查，被拦下或检查不可用的不执行，连续被拦几次后会问你。',
+  'Runs calls without asking; a few dangerous ones, such as deleting the workspace, still ask.':
+    '调用基本不再询问，直接执行；删除工作区等少数危险操作仍会先问你。',
+  'Turn on Bypass permissions?': '打开跳过权限确认？',
+  'Turn on Auto mode?': '打开自动模式？',
+  'Calls run without asking; a few dangerous ones, such as deleting the workspace, still ask. This is never saved as the default for new chats.':
+    '调用基本不再询问；删除工作区等少数危险操作仍会先问你。这一档不会存为新对话的默认档。',
+  'Calls other than reads and workspace edits pass a safety check first: most go through without asking, risky ones are blocked, and if the check is unavailable they do not run. The check is extra model traffic through your model service. ':
+    '读取和工作区内的编辑以外的调用先过安全检查：多数直接放行，有风险的会被拦下，检查不可用时不执行。检查本身会经你的模型服务多发一些请求。',
+  'This model cannot run in Auto mode.': '这个模型不能用自动模式。',
+  'Auto mode is turned off by settings.': '自动模式被设置关闭了。',
+  'Auto mode is not available right now.': '自动模式暂时不可用。',
+  'Auto mode is not available while fast mode is on.': '快速模式打开时不能用自动模式。',
+  'Bypass permissions is turned off by settings.': '跳过权限确认被设置关闭了。',
+  'This chat cannot switch to Bypass permissions. Start a new chat for it.':
+    '这个对话不能切到跳过权限确认，请新开一个对话。',
+  'The engine refused this mode.': '引擎没有接受这一档。',
+  'The engine did not answer in time. Try again.': '引擎没有及时回应，请再试一次。',
+  'Mode is now {{preset}}': '已切换到「{{preset}}」',
+  'Approve, continue in Edit automatically': '批准，用自动编辑继续',
+  'Approve, continue in Manual': '批准，用手动审批继续',
+  'Approve, continue in Auto': '批准，用自动模式继续',
+  'Approve, continue in Bypass permissions': '批准，用跳过权限确认继续',
+  'Calls run without asking, except a few dangerous ones. You confirm this once more.':
+    '之后调用基本不再询问，少数危险操作除外。需要再确认一次。',
+  'With Bypass permissions, calls run without asking (a few dangerous ones still ask) until you pick another mode at the bottom left of the message box.':
+    '跳过权限确认后调用基本不再询问（少数危险操作仍会先问你），直到你在输入框左下角换成别的档。',
+  'Confirm: continue with Bypass permissions': '确认用跳过权限确认继续',
+  'Plan review · approved: continue in Manual': '计划审阅 · 已批准：用手动审批继续',
+  'Plan review · approved: continue in Edit automatically': '计划审阅 · 已批准：用自动编辑继续',
+  'Plan review · approved: continue in Auto': '计划审阅 · 已批准：用自动模式继续',
+  'Plan review · approved: continue in Bypass permissions': '计划审阅 · 已批准：用跳过权限确认继续',
+});
