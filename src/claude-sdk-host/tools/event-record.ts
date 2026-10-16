@@ -24,6 +24,14 @@ import { freePort, groupPassed, readProbeOutput, run, waitForHealth } from './pr
 /** The scenarios whose events do not depend on timing (the fake gateway's own scripts). */
 export const RECORDED_SCENARIOS = ['text', 'tools', 'ask', 'plan'] as const;
 
+/**
+ * A sample as the recorder writes it, whatever a formatter made of the committed file
+ * (the commit hook reflows JSON): the gate compares content, not layout.
+ */
+export function canonicalSample(text: string): string {
+  return `${JSON.stringify(JSON.parse(text), null, 2)}\n`;
+}
+
 /** The first difference between two normalized recordings, as lines a person can read. */
 export function firstDifference(expected: string, actual: string): string | null {
   if (expected === actual) return null;
@@ -121,9 +129,7 @@ async function main(): Promise<void> {
         console.log(`[event-record] wrote ${sample}`);
         continue;
       }
-      const expected = existsSync(sample)
-        ? readFileSync(sample, 'utf8').replace(/\r\n/g, '\n')
-        : '';
+      const expected = existsSync(sample) ? canonicalSample(readFileSync(sample, 'utf8')) : '';
       const difference = expected
         ? firstDifference(expected, recorded)
         : 'no sample yet (run --update)';

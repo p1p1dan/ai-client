@@ -267,3 +267,4 @@ GUI 点验（与 S-2 §3.4 一并做，隔离 profile，只用本机假网关）
 | 46 | CLI 能否运行只查文件在不在：若加密机上安装器写下的 `claude.exe` 被加密，新会话会进 SDK 引擎然后在第一回合失败，不会退回 DSH | S-6 核对；若确被加密，可用性检查加读文件头（PE/ELF，拒 `%TSD`） |
 | 47 | 随安装包分发 SDK 与 CLI：两者不是开源许可，声明为"© Anthropic PBC，使用受其法律协议约束"，已原样写进第三方声明 | 待用户确认分发条款可以接受（发版前） |
 | 48 | 本机 Windows 打目录包需加 `-c.win.signAndEditExecutable=false`（`winCodeSign` 里的符号链接解压失败） | 记录（CI 不受影响） |
+| 49 | `scripts/assert-no-webfonts.mjs` 在 Windows 上找不到 `out/renderer`：它用 `new URL('..', import.meta.url).pathname` 拼路径，得到 `\F:\...`，于是 `pnpm dist:prereq` 在本机 Windows 上第一步之后就停了（与路线 B 无关，早已存在；CI 的工作流逐步构建、不调它，不受影响） | 记录；修法是改用 `fileURLToPath`，一行，等用户决定是否顺手修 |

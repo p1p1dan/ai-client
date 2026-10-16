@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { normalizeRecording, type RawRecording } from '../tools/event-normalize.ts';
-import { firstDifference, RECORDED_SCENARIOS } from '../tools/event-record.ts';
+import { canonicalSample, firstDifference, RECORDED_SCENARIOS } from '../tools/event-record.ts';
 
 /**
  * Route B S-5 (topic s5-regression.md R-3): what the recorded-event gate keeps and
@@ -86,6 +86,14 @@ describe('normalizeRecording', () => {
 });
 
 describe('the recorded-event gate', () => {
+  it('compares content, not the layout a formatter gave the committed sample', () => {
+    const recorded = `${JSON.stringify({ choices: ['a', 'b'], n: 1 }, null, 2)}\n`;
+    // As the commit hook leaves it: short arrays on one line, Windows line ends.
+    const reflowed = ['{', '  "choices": ["a", "b"],', '  "n": 1', '}', ''].join('\r\n');
+    expect(canonicalSample(reflowed)).toBe(recorded);
+    expect(firstDifference(canonicalSample(reflowed), recorded)).toBeNull();
+  });
+
   it('reports the first differing line', () => {
     expect(firstDifference('a\nb\nc', 'a\nb\nc')).toBeNull();
     expect(firstDifference('a\nb\nc', 'a\nX\nc')).toBe('line 2\n  expected: b\n  recorded: X');

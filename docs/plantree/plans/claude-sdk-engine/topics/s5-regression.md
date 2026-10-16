@@ -53,3 +53,10 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 - 确定性：连录两遍，四个场景逐字节相同（113、296、189、193 行）。
 - 能抓到改动：临时去掉宿主 `message.started` 的 `model` 字段，`--check` 报 `DIFF text`、指到第 58 行；还原后通过。
 - 样本是在 Windows 上录的。Linux 上 Bash 的输出与路径应已被规范化覆盖，接 CI（R-2）时在 Linux 上跑一遍确认，不同就按平台分样本。
+
+## 6 合入 S-4 后对安装目录复核（2026-10-16）
+
+- 合并 S-4 分支（`8be0f815`）后在本分支重新打包：`dist:prereq` 的各步（`assert-no-webfonts` 除外，见 README §11.2 #49）→ `electron-builder --win --x64 --dir -c.win.signAndEditExecutable=false` → `verify-packaged-app.mjs` 通过（两个宿主的结构、体积、第三方声明，DSH 冒烟、SDK 冒烟 8 条）。SDK 宿主产物 262.2 MiB、19 个文件（CLI 258.3 MiB）。
+- **回归命令对安装目录**：用随包的 node、随包的 `host.js` 与随包的 `claude.exe` 跑 `probe-suite.ts`，7 组 130 条全过。合并前 S-4 会话打的旧包（早于裁决 17～20）同样跑出 124/130，差的 6 条正是计划模式与插件市场那几条，说明回归命令能分辨新旧宿主。
+- **录制门禁对安装目录与源码**：两边都与样本一致。
+- **门禁自身的一处修正**：提交时 lint-staged 用 biome 重排了样本 JSON（短数组并成一行），按文本比对就报了只有排版不同的差异；改为解析后再比（`canonicalSample`），单测 1 条，去掉这一步时该用例失败。
