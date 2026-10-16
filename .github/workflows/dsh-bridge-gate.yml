@@ -9,7 +9,8 @@ name: DSH bridge gate
 # src/shared/__tests__/fixtures/dsh/. The samples are never re-recorded here:
 # a difference is uploaded for a person to read.
 #
-# Alongside: the DSH host's typecheck, and the two suites that read the same
+# Alongside: the DSH host's typecheck (and route B's Claude Agent SDK host's,
+# which implements the same bridge types), and the two suites that read the same
 # samples (the renderer replay and the history projection). A manual run can
 # add the broader headless smoke (bridge-smoke.ts), which is not a gate yet.
 #
@@ -94,6 +95,11 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: src/dsh-host
 
+      # Route B S-4 (#11): the SDK host's types only, no CLI binary (as build.yml's gate).
+      - name: Install claude-sdk-host dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund --omit=optional
+        working-directory: src/claude-sdk-host
+
       # E8-A (decision 153): the three must-reject criteria, approved for the
       # review checklist but not yet for CI (decision 153 §7). Added here on
       # its own commit so it is easy to drop. Needs the scan source the step
@@ -114,6 +120,10 @@ jobs:
 
       - name: Typecheck the DSH host
         run: pnpm typecheck:dsh-host
+
+      # The SDK host answers the worker RPC through this bridge's BridgeRpcServer.
+      - name: Typecheck the Claude SDK host
+        run: pnpm typecheck:claude-sdk-host
 
       # Heavy steps stay separate, never chained into one command (build.yml's
       # gate has OOM'd that way before).

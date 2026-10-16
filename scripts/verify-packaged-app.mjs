@@ -3,6 +3,10 @@
  * host artifact (dsh-rebase P1-2), then the DSH host's L1 smoke on the
  * packaged node (`--skip-dsh-smoke` skips it; it needs no Electron).
  *
+ * Route B S-4: the Claude Agent SDK host artifact too (resources/claude-sdk-host:
+ * structure, the target's CLI, budget), then its smoke, a chat turn on the
+ * packaged node against the local fake gateway (`--skip-claude-sdk-smoke`).
+ *
  * dsh-rebase P1-12 step 1 (decision 147): the native worker artifact is no
  * longer built or shipped, so its structure, size and Electron bootstrap smoke
  * are gone, and a package that still carries `resources/agent-host` fails.
@@ -20,6 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { findAsarPackages, readAsarFile, readAsarHeader } from './asar-inspect.mjs';
+import { verifyClaudeSdkHostArtifact } from './claude-sdk-host-build-lib.mjs';
 import { verifyDshArtifact } from './dsh-host-build-lib.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
 import { evaluateDshHostArtifact, formatBytes, topDirectories } from './packaging-budget.mjs';
@@ -57,8 +62,10 @@ function parseArgs(argv) {
   const args = {
     appDir: path.join(repoRoot, 'dist', 'win-unpacked'),
     skipDshSmoke: false,
+    skipClaudeSdkSmoke: false,
     reportFile: null,
     dshReportFile: null,
+    claudeSdkReportFile: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--app-dir') {
@@ -70,6 +77,10 @@ function parseArgs(argv) {
       args.skipDshSmoke = true;
     } else if (argv[i] === '--dsh-report-file') {
       args.dshReportFile = path.resolve(argv[++i]);
+    } else if (argv[i] === '--skip-claude-sdk-smoke') {
+      args.skipClaudeSdkSmoke = true;
+    } else if (argv[i] === '--claude-sdk-report-file') {
+      args.claudeSdkReportFile = path.resolve(argv[++i]);
     } else {
       throw new Error(`unknown argument: ${argv[i]}`);
     }
@@ -129,6 +140,8 @@ function checkLegalNotices(resourceDir, failures) {
     '@earendil-works/pi-agent-core',
     // DSH host (dsh-rebase P1-2): the MIT notice of the @deepseek-ai packages.
     'Copyright (c) 2026 DeepSeek',
+    // Claude Agent SDK host (route B S-4): the SDK's and its CLI's own notice.
+    '© Anthropic PBC. All rights reserved.',
   ]) {
     if (!notices.includes(required)) {
       failures.push(`third-party notices are missing required attribution: ${required}`);
@@ -207,6 +220,59 @@ function checkDshHost(resourceDir, failures) {
   }
 }
 
+/** Route B S-4: the Claude Agent SDK host under resources/claude-sdk-host. */
+function checkClaudeSdkHost(resourceDir, failures) {
+  const hostDir = path.join(resourceDir, 'claude-sdk-host');
+  try {
+    const verified = verifyClaudeSdkHostArtifact({
+      outDir: hostDir,
+      target: { platform: process.platform, arch: process.arch },
+      requireManifest: true,
+    });
+    console.log(
+      `[verify-packaged-app] Claude SDK host artifact: ${formatBytes(verified.bytes)} (${verified.bytes}B), ` +
+        `${verified.files} files, CLI ${formatBytes(verified.cli.bytes)}` +
+        `${verified.budget.overTarget ? ' (over the size target)' : ''}`
+    );
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : String(error));
+  }
+  const hostJs = path.join(hostDir, 'host.js');
+  if (fs.existsSync(hostJs) && firstBytes(hostJs, 16).startsWith('%TSD')) {
+    failures.push('claude-sdk-host/host.js has a TSD header');
+  }
+}
+
+/** Route B S-4 B-9: a chat turn of the packaged SDK host on the packaged node; no Electron. */
+function runClaudeSdkSmoke(appDir, reportFile, failures) {
+  const helper = path.join(repoRoot, 'scripts', 'packaged-claude-sdk-host-smoke.mjs');
+  const report = reportFile ?? path.join(repoRoot, 'dist', 'claude-sdk-host-smoke-report.json');
+  const result = spawnSync(process.execPath, [helper, '--app-dir', appDir, '--report', report], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    timeout: 10 * 60_000,
+    windowsHide: true,
+  });
+  let summary;
+  try {
+    summary = JSON.parse(result.stdout.trim().split(/\r?\n/).at(-1) ?? '');
+  } catch {
+    summary = undefined;
+  }
+  if (result.status !== 0 || summary?.ok !== true) {
+    failures.push(
+      `packaged Claude SDK host smoke failed (status=${result.status} signal=${result.signal}): ` +
+        `${summary ? `failed checks ${summary.failed.join(', ')}; report ${report}` : ''} ${result.stderr}`.slice(
+          -2000
+        )
+    );
+  }
+  console.log(
+    `[verify-packaged-app] Claude SDK smoke: ${result.stdout.trim().split(/\r?\n/).at(-1) ?? ''}`
+  );
+  return { claudeSdkSmoke: summary ?? null, report };
+}
+
 /** L1 smoke of the packaged DSH host on the packaged node (decision 017); no Electron. */
 function runDshSmoke(appDir, reportFile, failures) {
   const helper = path.join(repoRoot, 'scripts', 'packaged-dsh-host-smoke.mjs');
@@ -261,10 +327,14 @@ function main() {
   checkNoRetiredResources(resourceDir, failures);
   checkAppAsar(resourceDir, failures);
   checkDshHost(resourceDir, failures);
+  checkClaudeSdkHost(resourceDir, failures);
   checkNodeRuntime(resourceDir, failures);
   const reports = [];
   if (!args.skipDshSmoke && failures.length === 0) {
     reports.push(runDshSmoke(args.appDir, args.dshReportFile, failures));
+  }
+  if (!args.skipClaudeSdkSmoke && failures.length === 0) {
+    reports.push(runClaudeSdkSmoke(args.appDir, args.claudeSdkReportFile, failures));
   }
   if (args.reportFile)
     fs.writeFileSync(
@@ -272,13 +342,16 @@ function main() {
       `${JSON.stringify({ appDir: args.appDir, reports, failures }, null, 2)}\n`
     );
   if (args.skipDshSmoke) console.log('[verify-packaged-app] DSH smoke skipped (--skip-dsh-smoke)');
+  if (args.skipClaudeSdkSmoke) {
+    console.log('[verify-packaged-app] Claude SDK smoke skipped (--skip-claude-sdk-smoke)');
+  }
 
   if (failures.length > 0) {
     console.error(`[verify-packaged-app] FAIL — ${failures.join('\n---\n')}`);
     process.exit(1);
   }
   console.log(
-    '[verify-packaged-app] PASS — legal notices + no native worker or runtime + DSH host artifact + DSH smoke if it ran'
+    '[verify-packaged-app] PASS — legal notices + no native worker or runtime + DSH host artifact + Claude SDK host artifact + the smokes that ran'
   );
 }
 

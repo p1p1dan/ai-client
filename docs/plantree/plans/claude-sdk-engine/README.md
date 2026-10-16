@@ -53,7 +53,7 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 - 原型已跑通的全部能力：流式正文与思考、工具行、审批卡、提问卡、计划审阅卡、Ctrl+Enter 插话、停止（含 Windows 上 Bash 孤儿进程清理）、用量、重开续聊、`/compact`。
 - 五档权限：界面上随时切换，会话中途经 `setPermissionMode` 生效。
 - 项目级配置：`settingSources` 取 `project` 与 `local`，hooks、allow 规则照官方行为生效。
-- 打包：宿主与 SDK 随包（与 DSH 宿主同样的落盘方式），`claude.exe` 随包（win32-x64、linux-x64、linux-arm64）。
+- 打包：宿主与 SDK 随包（与 DSH 宿主同样的落盘方式），`claude.exe` 随包（win32-x64、linux-x64；应用本身只出 x64，linux-arm64 不带，S-4 B-14）。
 - 开关：设置里可以关掉 SDK 引擎，让这些模型的新会话退回 DSH（规范第 6 条）。
 
 **不做（首版）**：
@@ -70,8 +70,8 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 | S-1 | 引擎选择与开关 | 新会话按模型选引擎；会话桩固定引擎；设置开关（默认开），关掉后 Anthropic 协议模型的新会话走 DSH | 单测；GUI 点验两种模型各开新会话、重启后续聊 | **完成**（2026-10-16，见 §8；并入 §7.4 的 #1、#4、#18、#5 的 errorCode、#7 的两条、#10） |
 | S-2 | 五档权限 | 渲染层：引擎是 SDK 时显示五档；`default`/`acceptEdits`/`plan`/`auto`/`bypassPermissions` 映射；中途切换；Plan 档与计划审阅卡衔接；Auto 档实测它额外发的安全检查请求能否经网关正常完成 | 每档一个探针场景；真实网关上 Auto 档跑通一个会触发检查的回合 | **完成**（2026-10-16，见 §9；真实网关上的 Auto 回合待用户提供网关后补跑，§9.2 #32） |
 | S-3 | 项目级配置 | `settingSources: ['project','local']`；去掉 `managedSettings` 对 hooks 与 allow 的锁定；`CLAUDE.md` 进上下文 | 探针：带 `.claude/settings.json`（allow + hook）与 `CLAUDE.md` 的测试仓库，断言 allow 生效、hook 执行、`CLAUDE.md` 被引用 | **完成**（2026-10-16，见 §10；先单独提交了裁决 12 的 key 隔离） |
-| S-4 | 打包 | 宿主构建（esbuild，参照 DSH 宿主）；`claude.exe` 进 extraResources（只带目标平台），`pathToClaudeCodeExecutable` 指向它；体积门禁（安装后增量 ≤ 0.6 GB）；`DISABLE_AUTOUPDATER` | 打包后冒烟：从安装目录拉起宿主 → 假网关一个回合；体积门禁 | 待做 |
-| S-5 | 回归与证据 | 探针场景进回归集；录制 SDK 事件序列做门禁；真实网关复跑 T1；GUI 点验清单 | 回归绿；证据写进 `evidence/` | **进行中**（2026-10-16，见 [S-5 记录](topics/s5-regression.md)）：回归命令、录制门禁、GUI 清单与几项加固已做；接 CI 等 S-4 合入；真实网关复跑 T1 待用户 |
+| S-4 | 打包 | 宿主构建（esbuild，参照 DSH 宿主）；`claude.exe` 随宿主产物由 afterPack 拷进 `resources/claude-sdk-host`（只带目标平台），`pathToClaudeCodeExecutable` 指向它；体积门禁（安装后增量 ≤ 0.6 GB）；`DISABLE_AUTOUPDATER` | 打包后冒烟：从安装目录拉起宿主 → 假网关一个回合；体积门禁 | **完成**（2026-10-16，见 §11；安装包里经界面的回合留给 S-6） |
+| S-5 | 回归与证据 | 探针场景进回归集；录制 SDK 事件序列做门禁；真实网关复跑 T1；GUI 点验清单 | 回归绿；证据写进 `evidence/` | **进行中**（2026-10-16，见 [S-5 记录](topics/s5-regression.md)）：回归命令、录制门禁、GUI 清单与几项加固已做；S-4 已合入，接 CI（R-2）待做；真实网关复跑 T1 待用户 |
 | S-6 | 测试包与加密机复核 | 出测试包；加密机上装正式安装包，从开始菜单启动 PiLab，跑一个读写加对话的回合；核对安装包落盘的 `claude.exe` 未被加密 | 用户配合上机，结果脱敏入库 | 待做 |
 
 顺序：S-0 → S-1 → S-2、S-3（可并行）→ S-4 → S-5 → S-6。推送与发版需用户确认。
@@ -85,6 +85,7 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 - **自动模式（Auto）要靠网关做安全检查**（S-2 §4.3）：网关在回复里带检查结果最好；不带时 CLI 改为每次另发检查请求（非流式，模型缺省 `claude-sonnet-5`，出错退到会话模型）。检查都不可用时，需要检查的命令一律被拒、不再问人（读取、工作区内写文件等不经检查）。GLM 等非 Claude 模型上自动模式是否可用，取决于网关怎么回这些检查请求。
 - **自动模式会把检查上下文发给网关**：本机用户名、主目录、工作目录、git 分支与远端地址（官方行为，裁决 11）。
 - **工具进程能借会话令牌用网关**：网关 key 不进 CLI 与子进程（裁决 12），但它们拿得到会话令牌，在这个对话存活期间可以经宿主的本机代理调同一个网关的对话接口（拿不到 key 本身；代理只放行对话、计数与模型查询）。
+- **安装包变大**（S-4）：SDK 引擎随包带 SDK 与本平台的 CLI 二进制，Windows 上安装后多 262 MiB（实测），安装包多约 80 MiB（LZMA 估算）；只带 x64，Linux 只带 glibc 版；macOS 未测（决策 090）。
 - **计划模式照官方行为**（裁决 20）：CLI 让模型只做规划，但不强制；模型仍要改动时，命令与工作区外的读取交给自动模式的安全检查（缺省 `useAutoModeDuringPlan`），写文件出卡由用户决定，allow 规则照样放行。计划模式因此也会往网关发安全检查请求，检查不可用时这类调用被拒、不转问人。模型写的计划文件在应用私有目录里。
 - **项目设置照 CLI 生效**（裁决 5，S-3）：绑定项目的会话读项目的 `.claude/settings.json`、`.claude/settings.local.json`、CLAUDE.md（含 `.claude/CLAUDE.md`、`.claude/rules`、CLAUDE.local.md，以及项目外各级祖先目录的 CLAUDE.md）。仓库的 hooks 会执行仓库里的命令（会话开始、每次调用工具前后等），allow 规则放行的调用不出卡；仓库还能禁用自动模式或跳过权限确认。临时会话、绑定到主目录本身的会话都不读项目层。打开项目即视为信任它（信任记在应用私有目录）。
 - **用户级配置在软件目录**（裁决 19）：读 `~/.pilab/<配置名>/claude`（正式版 `~/.pilab/PiLabAi/claude`）里的 `CLAUDE.md`、`settings.json`、`skills/`、`agents/`、`commands/`，所有会话都读；用户自己的 `~/.claude` 一律不读。这个目录同时放着 CLI 自己的会话记录与缓存。
@@ -112,7 +113,7 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 2. **`host-probe.ts` 能自己判定通过与否**：每个场景末尾加确定性断言（`[check]` 行），有一条不过、宿主中途退出或抛错，都以退出码 1 结束。agent 场景等子代理通知那一回合结束再往下走：2.1.300 的子代理是异步的，原来会与下一个场景抢回合（S-0 第一遍跑时 search 场景因此没有调到 Grep/Glob，而退出码仍是 0）。正文类断言只算助手消息，不算宿主回显的用户原文。
 3. **`sdkSessionRuntime.ts` 两处**：子代理通知回合的 `origin` 按 `task_id` 判定（原型里 `task_notification` 不带任务类型，把 `task_started` 设的标记冲掉，永远报成 `job`）；运行时自己的失败文案不再写 Claude Code（§2 第 4 条）。
 4. **`processTree.ts`**：`reap` 的杀进程函数可注入（工程规范附录 B1），新增 `processTree.test.ts`，测试里 `taskkill` 与 `process.kill` 都被替换。
-5. 新增 `pnpm typecheck:claude-sdk-host`（CI 还没跑它，见 7.4）。
+5. 新增 `pnpm typecheck:claude-sdk-host`（CI 还没跑它，见 7.4；S-4 已加进 CI 门禁，§11）。
 
 ### 7.3 验证（全部只用本机假网关）
 
@@ -152,8 +153,8 @@ S-0 做了一轮多维审查：移植保真、Main 侧接线、宿主运行时�
 | 8 | `ClaudeSdkProcessTransport`：`taskkill /T` 假阴性、进程已退出时 `kill()` 返回 false、spawn 失败不报 exit、stderr 按块解码；另：`openClaudeSdkTransport` 里 spawn 之前的步骤（建私有目录、构造 transport）抛的错没映射成 `claude_sdk_host_unavailable`，新会话既不退回 DSH 也不出引擎卡 | S-5 |
 | 9 | Windows 停止清理：会杀掉前几回合起的后台任务；会话空闲时关闭反而不清；`ps.exe` 路径推导对 `usr\bin\bash.exe` 不对 | S-5 |
 | 10 | 新接缝没有单测；`chatEngineDshOnly.test.ts` 的前提（只有 DSH 一个引擎）已不成立但仍通过 | **S-1 已做** |
-| 11 | CI 不跑宿主 tsc（宿主依赖 DSH bridge 与 `src/shared` 的类型，main 上改了不会被发现）。脚本已加，CI 步骤可用 `npm ci --omit=optional`（不下 `claude.exe`） | S-4 或 S-5 |
-| 12 | 打包门禁：`packaging-config.test.mjs` 与 `t31PiOnlyAbsence.test.ts` 禁止 builder 配置与根依赖里出现 SDK 包 | S-4：照 DSH 宿主做法单独产出目录，由 afterPack 拷入 |
+| 11 | CI 不跑宿主 tsc（宿主依赖 DSH bridge 与 `src/shared` 的类型，main 上改了不会被发现）。脚本已加，CI 步骤可用 `npm ci --omit=optional`（不下 `claude.exe`） | **S-4 已做**（§11，B-10） |
+| 12 | 打包门禁：`packaging-config.test.mjs` 与 `t31PiOnlyAbsence.test.ts` 禁止 builder 配置与根依赖里出现 SDK 包 | **S-4 已做**：照 DSH 宿主做法单独产出目录，由 afterPack 拷入，两条门禁不变（§11，B-1） |
 | 13 | 模型看到的身份是 Claude Code（SDK 预设提示词），PiLab 追加的说明里没有身份句；裁决 9 之后，走 Anthropic 协议的非 Claude 模型（如 GLM）也会被告知自己是 Claude Code | **用户裁决（裁决 15）**：不加身份句（界面文案已不出现 Claude Code） |
 | 14 | CLI 内置的 `totalTokensReminder` 在每一步注入 `<total_tokens>15000000 tokens left</total_tokens>` | S-5 记录，评估要不要关 |
 | 15 | `/compact` 后重开会话只见摘要（2 条），看不到压缩前的内容（原型 §3 写"要再核"，已确认） | 功能对等版（历史投影补全） |
@@ -188,11 +189,11 @@ S-1 同样做了多维审查（Main、宿主、渲染层、跨层契约与安全
 | 24 | 会话索引不记引擎：重开的 SDK 会话在 `session.resumed` 到达之前，模型列表不受限（发送时 Main 仍会拒绝）。另：重开时会话桩只记模型不记路由，桩里的模型已不在计划里时退到计划里第一个 SDK 模型，裁决 9 之后可能落到另一家的模型（如 Claude 会话改由 GLM 续聊）；请求带来的模型在另一条 Anthropic 路由上时同样会跨路由。做法待定：桩里记路由，重开限同一路由，路由没了报“拿不到密钥”而不跨路由 | S-5 |
 | 25 | 529 仍被 CLI 重试 2 次（约 2.3 s）；413 被 CLI 报成 `terminal_reason: image_error`，按状态码映射为 `CONTEXT_TOO_LARGE` | 并入 #5（S-5） |
 | 26 | **SDK 会话不带计划路由上的请求头**：`X-Pilab-Client`、User-Agent 设置（决策 171）、服务自带的头都不发。真实网关 T1/T2 用 CLI 自己的 UA 能通；但按 UA 放行或要求服务级请求头的服务上，SDK 新会话会失败，而模型页的 User-Agent 设置对 SDK 会话不生效 | **用户裁决（裁决 11）**：按 SDK 官方的来，不改 |
-| 27 | 没有 SDK 宿主的构建（S-4 之前的安装包）里，开关照样显示、可以切换，但不起作用；开发用覆盖变量 `AICLIENT_CLAUDE_SDK_CLI`、`_RG_DIR`、`_SETTING_SOURCES` 在安装包里没加限制 | S-4 |
+| 27 | 没有 SDK 宿主的构建（S-4 之前的安装包）里，开关照样显示、可以切换，但不起作用；开发用覆盖变量 `AICLIENT_CLAUDE_SDK_CLI`、`_RG_DIR`、`_SETTING_SOURCES` 在安装包里没加限制 | **S-4 已做**：安装包都带宿主；三个覆盖只在未打包时读（§11，B-5）。宿主缺失或损坏时开关仍照样显示，新会话退回 DSH 并记日志 |
 | 28 | SDK 会话失败卡上的 Continue 得到 `retry_unavailable`（原文退回输入框） | 功能对等版（失败重试） |
 | 29 | 跨引擎换模型：会话中途换到另一条路由或另一种协议的模型，做法是把前文打包进新对话（不是无缝衔接） | 后续优化（裁决 10） |
 | 30 | 模型的 Agent SDK 兼容性：在添加或编辑模型处加“测试模型”，经 Agent SDK 跑一个极短的回合并记录结果；记为不兼容的 Anthropic 协议模型走 DSH，重测通过改回 SDK（用户 2026-10-16 提议）。连带：SDK 会话报 `MODEL_SETTING_UNSUPPORTED` 时给出专门提示（这个模型接不住 Agent SDK 的请求，改配成 OpenAI 协议或关掉 Agent SDK 引擎），有了按钮后指向它 | **待定**：单独一个任务，约 1～1.5 天 |
-| 31 | 可用性检查与 SDK 找 CLI 的方式可能不一致（宿主 Node 的 CPU 类型、安装布局）。做法：由 Main 定一个 CLI 路径传给宿主（`AICLIENT_CLAUDE_SDK_CLI` / `pathToClaudeCodeExecutable`），可用性检查只查这一个 | S-4 |
+| 31 | 可用性检查与 SDK 找 CLI 的方式可能不一致（宿主 Node 的 CPU 类型、安装布局）。做法：由 Main 定一个 CLI 路径传给宿主（`AICLIENT_CLAUDE_SDK_CLI` / `pathToClaudeCodeExecutable`），可用性检查只查这一个 | **S-4 已做**（§11，B-4） |
 
 ## 9 S-2 记录（2026-10-16）
 
@@ -245,3 +246,24 @@ GUI 点验（与 S-2 §3.4 一并做，隔离 profile，只用本机假网关）
 | 40 | S-3 的实测都在 Windows 上；Linux 未测（链接的主目录、大小写敏感的路径、`/proc` 下的环境） | S-5 / S-6 |
 | 41 | P-9 的代价：计划模式里探索语法以外的只读命令（`find`、`git branch` 等）也被拒 | **不再适用**：P-9 已按裁决 20 撤掉 |
 | 42 | 刚打开对话就切档时，若 CLI 启动超过 8 秒（偶发，实测两次），切档以 `timeout` 失败，界面提示没切成 | **已修**（2026-10-16，S-5 H-4：CLI 就绪前的切档先记下、就绪后发出，见 [S-5 记录](topics/s5-regression.md) §4） |
+
+## 11 S-4 记录（2026-10-16）
+
+决定、实测与验证见 [S-4 设计](topics/s4-packaging.md)。一句话：照 DSH 宿主的做法单独构建 SDK 宿主的产物（`host.js`、SDK 与本平台的 CLI），afterPack 拷进 `resources/claude-sdk-host`；Main 打包后从那里起宿主、只认随包的 CLI，三个开发覆盖只在未打包时读；构建、afterPack、打包后核验都自检产物与体积，打包后用随包的 node 对假网关跑一个回合；CI 检查作业跑宿主的 tsc，三个打包作业构建、核验、冒烟。自主决定 B-1～B-15 列在设计 §1.2，用户 2026-10-16 确认全部照推荐。
+
+体积：Windows 安装后多 262 MiB（门槛 0.6 GB），安装包约多 80 MiB（估算）。
+
+### 11.1 审查后在 S-4 修的
+
+见设计 §5.2：Main 打包时的启动参数补了单测；冒烟改到仓库外带空格的路径跑，构建时另查 SDK 入口不 import 任何包；相对路径的 CLI 覆盖解析成绝对路径；`biome.json` 排除产物目录；Windows 上预演 Linux 的可执行位检查；冒烟的两层超时；文档与实现对齐。
+
+### 11.2 S-4 新发现与去向
+
+| # | 发现 | 去向 |
+|---|---|---|
+| 43 | 安装包强制登录，本机没在打包后的程序界面里跑 SDK 回合；打包后的宿主与 CLI 由冒烟覆盖，Main 打包时的启动参数由单测覆盖 | S-6：加密机上装正式安装包时，经界面跑一个 Claude 模型的回合 |
+| 44 | Linux 的打包（glibc 版 CLI、可执行位、AppImage 里的路径）本机没测，第一次在 CI 的 Linux 作业上跑 | 推送后看第一次 CI；推送前问用户 |
+| 45 | CI 的超时按估算调高（B-13） | 第一次全绿后按工作流里的规矩重算 |
+| 46 | CLI 能否运行只查文件在不在：若加密机上安装器写下的 `claude.exe` 被加密，新会话会进 SDK 引擎然后在第一回合失败，不会退回 DSH | S-6 核对；若确被加密，可用性检查加读文件头（PE/ELF，拒 `%TSD`） |
+| 47 | 随安装包分发 SDK 与 CLI：两者不是开源许可，声明为"© Anthropic PBC，使用受其法律协议约束"，已原样写进第三方声明 | 待用户确认分发条款可以接受（发版前） |
+| 48 | 本机 Windows 打目录包需加 `-c.win.signAndEditExecutable=false`（`winCodeSign` 里的符号链接解压失败） | 记录（CI 不受影响） |

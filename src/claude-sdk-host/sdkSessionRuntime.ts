@@ -691,8 +691,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       canUseTool: this.canUseTool,
       includePartialMessages: true,
       ...(stub.started ? { resume: stub.ccSessionId } : { sessionId: stub.ccSessionId }),
-      // A .js CLI runs on this host's own node (the app's whitelisted node.exe), never a
-      // `node` found on PATH. The SDK spawns `executable` as given; its type lists names only.
+      // The CLI Main chose (route B S-4 B-4). A .js CLI runs on this host's own node (the
+      // app's whitelisted node.exe), never a `node` found on PATH; the SDK spawns
+      // `executable` as given (its type lists names only) and ignores it for a native
+      // binary, which it starts directly (0.3.300: decided by the file extension).
       ...(this.config.cliPath
         ? {
             pathToClaudeCodeExecutable: this.config.cliPath,

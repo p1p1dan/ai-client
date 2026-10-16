@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
-import { copyDshHost, resolveResourcesDir } from '../afterPack.mjs';
-import { npmCiArgs, PROBE_BUNDLE } from '../dsh-host-build-lib.mjs';
+import { copyClaudeSdkHost, copyDshHost, resolveResourcesDir } from '../afterPack.mjs';
+import { buildManifest, cliBinaryRel, SDK_PACKAGE } from '../claude-sdk-host-build-lib.mjs';
+import { npmCiArgs, PROBE_BUNDLE, sha256File } from '../dsh-host-build-lib.mjs';
 
 /**
  * Packaging spec C4 / C5 / C6 — structural assertions on the two config files
@@ -181,6 +182,17 @@ describe('electron-builder.yml (C4)', () => {
     }
     for (const pattern of builderYml.files) expect(String(pattern)).not.toContain('dsh-host');
   });
+
+  it('keeps the Claude SDK host artifact out of extraResources and the asar (route B S-4)', () => {
+    // afterPack copies out-claude-sdk-host to resources/claude-sdk-host (B-1).
+    for (const entry of builderYml.extraResources ?? []) {
+      const from = typeof entry === 'string' ? entry : entry.from;
+      expect(from).not.toContain('claude-sdk-host');
+    }
+    for (const pattern of builderYml.files) {
+      expect(String(pattern)).not.toContain('claude-sdk-host');
+    }
+  });
 });
 
 /**
@@ -270,6 +282,7 @@ describe('build.yml gate wiring (C5)', () => {
     for (const cmd of [
       'pnpm typecheck',
       'pnpm typecheck:dsh-host',
+      'pnpm typecheck:claude-sdk-host',
       'pnpm lint',
       'pnpm test',
       'pnpm verify:release',
@@ -299,12 +312,14 @@ describe('build.yml gate wiring (C5)', () => {
     expect(dirs).not.toContain('src/agent-host');
     expect(dirs).not.toContain('src/runtime');
     const numbered = steps.map((s) => s.name).filter((name) => /^Gate \d+\/\d+/.test(name ?? ''));
+    // Route B S-4 added the Claude SDK host's type check: six gates.
     expect(numbered.map((name) => name.match(/^Gate (\d+\/\d+)/)[1])).toEqual([
-      '1/5',
-      '2/5',
-      '3/5',
-      '4/5',
-      '5/5',
+      '1/6',
+      '2/6',
+      '3/6',
+      '4/6',
+      '5/6',
+      '6/6',
     ]);
     const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
     for (const retired of [
@@ -530,6 +545,36 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
     }
   });
 
+  /** Route B S-4 (#11): the gate type-checks the SDK host with its types, never its CLI. */
+  it('installs the Claude SDK host without its CLI for the gate only', () => {
+    const install = jobs.gate.steps.find(
+      (step) => step['working-directory'] === 'src/claude-sdk-host'
+    );
+    expect(install?.run).toBe('npm ci --ignore-scripts --no-audit --no-fund --omit=optional');
+    for (const job of ['build-windows', 'build-linux', 'build-macos']) {
+      for (const step of jobs[job].steps) {
+        expect(String(step.run ?? ''), job).not.toContain('--omit=optional');
+      }
+    }
+  });
+
+  it('builds, verifies and smokes the Claude SDK host on every packaging job (route B S-4)', () => {
+    for (const job of ['build-windows', 'build-linux', 'build-macos']) {
+      const steps = jobs[job].steps;
+      const build = steps.findIndex((s) => s.run === 'node scripts/build-claude-sdk-host.mjs');
+      const pack = steps.findIndex((s) => s.run?.includes('electron-builder'));
+      expect(build, job).toBeGreaterThanOrEqual(0);
+      expect(build, job).toBeLessThan(pack);
+      const verify = steps.find((s) => s.run?.includes('verify-packaged-app.mjs'));
+      expect(verify.run, job).toContain('--claude-sdk-report-file');
+      expect(verify.run, job).not.toContain('--skip-claude-sdk-smoke');
+      const upload = steps.find((s) => s.name === 'Upload Claude SDK host evidence');
+      expect(upload?.with?.path, job).toContain(
+        'out-claude-sdk-host/claude-sdk-host-manifest.json'
+      );
+    }
+  });
+
   it('builds the DSH host artifact before electron-builder on every packaging job', () => {
     for (const job of ['build-windows', 'build-linux', 'build-macos']) {
       const steps = jobs[job].steps;
@@ -551,6 +596,11 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
     )?.run;
     expect(run).toContain("'C:\\p12app\\PiLab Ai'");
     expect(run).toContain('packaged-dsh-host-smoke.mjs --app-dir $dir --level 1');
+  });
+
+  it('stages the Claude SDK host in dist:prereq (route B S-4)', () => {
+    expect(pkg.scripts['build:claude-sdk-host']).toBe('node scripts/build-claude-sdk-host.mjs');
+    expect(pkg.scripts['dist:prereq']).toContain('pnpm build:claude-sdk-host');
   });
 
   it('stages the DSH host in dist:prereq', () => {
@@ -661,7 +711,9 @@ describe('afterPack copies the DSH host for its own target only (dsh-rebase P1-2
 
   it('runs the Windows TSD rewrite over resources/dsh-host too', () => {
     expect(afterPackText).toContain("path.join(context.appOutDir, 'resources', 'dsh-host')");
-    expect(afterPackText).toMatch(/copyDshHost\(context\);\s+copyNodeRuntime\(context\);/);
+    expect(afterPackText).toMatch(
+      /copyDshHost\(context\);\s+copyClaudeSdkHost\(context\);\s+copyNodeRuntime\(context\);/
+    );
   });
 
   /** dsh-rebase P1-12 step 1 (decision 147): the native worker is not packaged. */
@@ -669,5 +721,109 @@ describe('afterPack copies the DSH host for its own target only (dsh-rebase P1-2
     expect(afterPackText).not.toContain('copyAgentHost');
     expect(afterPackText).not.toContain('out-agent-host');
     expect(afterPackText).not.toContain("'resources', 'agent-host'");
+  });
+});
+
+describe('afterPack copies the Claude SDK host for its own target only (route B S-4)', () => {
+  const afterPackText = readFileSync(path.join(repoRoot, 'scripts', 'afterPack.mjs'), 'utf8');
+
+  function context(root, platform) {
+    return {
+      appOutDir: path.join(root, 'app'),
+      electronPlatformName: platform,
+      arch: 1,
+      packager: { info: { projectDir: root }, appInfo: { productFilename: 'PiLab Ai' } },
+    };
+  }
+
+  /** A minimal artifact built for `target`, its CLI an executable header for `cliFor`. */
+  function artifact(root, target, cliFor = target) {
+    const out = path.join(root, 'out-claude-sdk-host');
+    const put = (rel, content) => {
+      mkdirSync(path.dirname(path.join(out, rel)), { recursive: true });
+      writeFileSync(path.join(out, rel), content);
+    };
+    put('host.js', '// x\n');
+    put('package.json', '{"type":"module"}');
+    put('THIRD_PARTY_LICENSES.json', '{}');
+    put(`node_modules/${SDK_PACKAGE}/package.json`, '{}');
+    put(`node_modules/${SDK_PACKAGE}/sdk.mjs`, '// sdk\n');
+    const bytes = Buffer.alloc(256);
+    if (cliFor.platform === 'win32') {
+      bytes.write('MZ', 0, 'latin1');
+      bytes.writeUInt32LE(0x80, 0x3c);
+      bytes.write('PE\0\0', 0x80, 'latin1');
+      bytes.writeUInt16LE(0x8664, 0x84);
+      bytes.writeUInt16LE(0x20b, 0x80 + 24);
+    } else {
+      bytes.write('\x7fELF', 0, 'latin1');
+      bytes[4] = 2;
+      bytes[5] = 1;
+      bytes.writeUInt16LE(62, 18);
+    }
+    const cliRel = cliBinaryRel(target);
+    put(cliRel, bytes);
+    const cliFile = path.join(out, ...cliRel.split('/'));
+    if (target.platform !== 'win32') spawnSync('chmod', ['755', cliFile]);
+    const cli = { rel: cliRel, bytes: 256, sha256: sha256File(cliFile) };
+    put(
+      'claude-sdk-host-manifest.json',
+      JSON.stringify(
+        buildManifest({
+          target,
+          appVersion: '1.0.0',
+          sdkVersion: '0.3.300',
+          cliPackage: `${SDK_PACKAGE}-${target.platform}-${target.arch}`,
+          cliVersion: '0.3.300',
+          cli,
+          gitCommit: 'x',
+          builtOn: {},
+          builtAt: 'now',
+          lockSha256: 'x',
+          stats: { bytes: 1, files: 1, longestRelativePath: 1 },
+          packages: 2,
+          pruned: {},
+        })
+      )
+    );
+  }
+
+  it('copies a matching artifact to resources/claude-sdk-host', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'afterpack-ccsdk-'));
+    try {
+      artifact(root, { platform: 'win32', arch: 'x64' });
+      copyClaudeSdkHost(context(root, 'win32'));
+      const dest = path.join(root, 'app', 'resources', 'claude-sdk-host');
+      expect(readFileSync(path.join(dest, 'host.js'), 'utf8')).toBe('// x\n');
+      expect(
+        readFileSync(
+          path.join(dest, ...cliBinaryRel({ platform: 'win32', arch: 'x64' }).split('/'))
+        ).length
+      ).toBe(256);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses no artifact, one built for another platform, or a CLI for another platform', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'afterpack-ccsdk-'));
+    try {
+      expect(() => copyClaudeSdkHost(context(root, 'win32'))).toThrow(/pnpm build:claude-sdk-host/);
+      artifact(root, { platform: 'linux', arch: 'x64' });
+      expect(() => copyClaudeSdkHost(context(root, 'win32'))).toThrow(
+        /not packageable for win32-x64[\s\S]*missing node_modules\/@anthropic-ai\/claude-agent-sdk-win32-x64\/claude\.exe/
+      );
+      rmSync(path.join(root, 'out-claude-sdk-host'), { recursive: true, force: true });
+      artifact(root, { platform: 'win32', arch: 'x64' }, { platform: 'linux', arch: 'x64' });
+      expect(() => copyClaudeSdkHost(context(root, 'win32'))).toThrow(
+        /ELF64 x64, not for win32-x64/
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('runs the Windows TSD rewrite over resources/claude-sdk-host too', () => {
+    expect(afterPackText).toContain("path.join(context.appOutDir, 'resources', 'claude-sdk-host')");
   });
 });

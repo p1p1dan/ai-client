@@ -12,7 +12,8 @@
  *   AICLIENT_CLAUDE_SDK_CONFIG_DIR   app-private CLAUDE_CONFIG_DIR
  *   AICLIENT_CLAUDE_SDK_BASE_URL     gateway root
  *   AICLIENT_CLAUDE_SDK_SETTING_SOURCES  comma list of 'project' / 'local' / 'user', or empty
- *   AICLIENT_CLAUDE_SDK_CLI          optional pathToClaudeCodeExecutable (e.g. a .js build run by node)
+ *   AICLIENT_CLAUDE_SDK_CLI          the CLI binary Main chose (S-4 B-4), given to the SDK as
+ *                                    pathToClaudeCodeExecutable; a .js build runs on this node
  *   AICLIENT_CLAUDE_SDK_CLIENT_APP   User-Agent suffix
  *   AICLIENT_CLAUDE_SDK_RG_DIR       optional directory with an `rg` used instead of the CLI's built-in one
  *
