@@ -754,6 +754,36 @@ describe('mode switches (S-2 A-3, A-5)', () => {
     await rt.dispose();
   });
 
+  it('a switch the CLI does not answer in 8 s fails as `timeout`; a late take is followed (README §9.2 #34)', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      // Queued behind a slow request (e.g. a stop on Windows): no answer in time.
+      q.setPermissionMode.mockImplementationOnce(() => new Promise<void>(() => {}));
+      const failure = rt.setPermissions({ mode: 'agent', gear: 'auto' }).catch((e) => e);
+      await vi.advanceTimersByTimeAsync(7_999);
+      expect(ofType('session.permissions')).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await failure).toMatchObject({
+        code: 'WORKER_PERMISSION_MODE_REFUSED',
+        message: 'timeout',
+      });
+      // Manual is still what PiLab holds: the next switch starts from it.
+      await rt.setPermissionGear('accept-edits');
+      expect(q.setPermissionMode).toHaveBeenLastCalledWith('acceptEdits');
+      // The CLI took the timed-out mode after all, after the newer one: its report wins,
+      // so PiLab and the CLI agree again (and say so).
+      q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'auto' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(ofType('session.permissions').map((e) => e.payload)).toEqual([
+        { permissions: { mode: 'agent', gear: 'auto' }, cause: 'engine' },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+    await rt.dispose();
+  });
+
   it('a refusal it cannot name is `other`', async () => {
     const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
     q.setPermissionMode.mockRejectedValueOnce(new Error('something else'));

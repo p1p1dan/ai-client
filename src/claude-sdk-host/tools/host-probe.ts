@@ -39,7 +39,7 @@
  * of the same turn) and `mode-enterplan` (the model entering plan mode by itself reaches
  * PiLab as `session.permissions` `engine`), `mode-plan-refused` (its own workspace and run:
  * the workspace's settings disable Bypass permissions, so approving a plan into it falls to
- * Manual with the reason), and `mode-auto` (run it last: the fake gateway's
+ * Manual with the reason), and `mode-auto` (the fake gateway's
  * safety check allows, then blocks three calls in a row, the third falling back to PiLab's
  * card, then is down; each refused row in PiLab's words, never the CLI's).
  *
@@ -928,8 +928,17 @@ async function main(): Promise<void> {
             Boolean((e.payload?.input as Record<string, unknown>)?.command),
           'slow tool input'
         );
-        await new Promise((r) => setTimeout(r, 3_000));
-        const during = sleepers(seconds);
+        // Until both sleeps run (README §10.2 #39): with the full vitest run beside it the
+        // command took about 30 s to start (measured), so a fixed 3 s missed it. Capped by
+        // PROBE_STOP_WAIT_S (default 60 s) so a command that never starts still fails.
+        const waitCap = Number(process.env.PROBE_STOP_WAIT_S ?? 60) * 1000;
+        const waitStart = Date.now();
+        let during = sleepers(seconds);
+        while (during < before + 2 && Date.now() - waitStart < waitCap) {
+          await new Promise((r) => setTimeout(r, 500));
+          during = sleepers(seconds);
+        }
+        console.log(`  sleeps seen: ${during - before} after ${Date.now() - waitStart} ms`);
         const t = Date.now();
         const stopped = await request('worker.stop', { logicalSessionId, reason: 'user' });
         const end = await waitFor(terminal, 'stop turn end', 15_000);
