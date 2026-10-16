@@ -335,9 +335,8 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
   Object.assign(env, {
     AICLIENT_CLAUDE_SDK_GENERATION: String(input.generation),
     AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
-    // From the plan and the broker (decision 3); the host drops its copy of the key on start.
+    // From the plan (decision 3); the key goes by IPC, never here (S-3 K-5).
     AICLIENT_CLAUDE_SDK_BASE_URL: baseURL,
-    AICLIENT_CLAUDE_SDK_API_KEY: apiKey,
     // The prototype's choice (its doc §4): project-level CLAUDE.md and settings
     // only, never the user's ~/.claude. S-3 revisits the sources. Dev override.
     AICLIENT_CLAUDE_SDK_SETTING_SOURCES:
@@ -352,5 +351,11 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
       ? { AICLIENT_CLAUDE_SDK_RG_DIR: process.env.AICLIENT_CLAUDE_SDK_RG_DIR.trim() }
       : {}),
   });
-  return new ClaudeSdkProcessTransport({ command: node, args: [entry], cwd: configDir, env });
+  return new ClaudeSdkProcessTransport({
+    command: node,
+    args: [entry],
+    cwd: configDir,
+    env,
+    apiKey,
+  });
 }

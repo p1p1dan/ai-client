@@ -251,8 +251,9 @@ describe('buildPinnedSettingsEnv (decision 6: the flag tier a repository cannot 
     expect(credentialedProxies).toEqual([]);
     expect(env.HTTPS_PROXY).toBe('http://proxy.corp:3128');
     expect(env.https_proxy).toBe('http://proxy.corp:3128');
-    expect(env.NO_PROXY).toBe('localhost,127.0.0.1');
-    expect(env.no_proxy).toBe('localhost,127.0.0.1');
+    // Route B S-3 (K-4): loopback added, so the host's auth proxy is never proxied.
+    expect(env.NO_PROXY).toBe('localhost,127.0.0.1,::1');
+    expect(env.no_proxy).toBe('localhost,127.0.0.1,::1');
     expect(env.HTTP_PROXY).toBe('');
     expect(env.http_proxy).toBe('');
     expect(env.ALL_PROXY).toBe('');
@@ -291,5 +292,41 @@ describe('hasUrlCredentials', () => {
     expect(hasUrlCredentials('alice:pw@proxy:3128')).toBe(true);
     expect(hasUrlCredentials('http://proxy:3128')).toBe(false);
     expect(hasUrlCredentials('proxy.corp:80')).toBe(false);
+  });
+});
+
+describe('the key stays out of the CLI (route B S-3, K-1, K-4)', () => {
+  const TOKEN = 'sk-pilab-session-0123456789abcdef0123456789abcdef0123456789abcdef';
+
+  it('the CLI is handed the proxy and its token, and loopback is never proxied', () => {
+    const env = buildCliEnvironment({
+      inherited: { NO_PROXY: 'corp.example', HTTPS_PROXY: 'http://proxy.corp:3128' },
+      configDir: 'D:stateclaude-sdk-home',
+      baseUrl: 'http://127.0.0.1:50123',
+      apiKey: TOKEN,
+      clientApp: 'pilab/0',
+    });
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:50123');
+    expect(env.ANTHROPIC_API_KEY).toBe(TOKEN);
+    expect(env.NO_PROXY).toBe('corp.example,127.0.0.1,localhost,::1');
+    expect(env.no_proxy).toBe(env.NO_PROXY);
+    // One spelling per case, none of them the inherited one without loopback.
+    expect(
+      Object.keys(env)
+        .filter((name) => name.toUpperCase() === 'NO_PROXY')
+        .sort()
+    ).toEqual(['NO_PROXY', 'no_proxy']);
+  });
+
+  it('the flag tier pins the token (a repository cannot send its own key) and never the gateway key', () => {
+    const { env } = buildPinnedSettingsEnv({
+      inherited: { ANTHROPIC_API_KEY: 'sk-real-gateway-key', no_proxy: 'localhost' },
+      baseUrl: 'http://127.0.0.1:50123',
+      sessionToken: TOKEN,
+    });
+    expect(env.ANTHROPIC_API_KEY).toBe(TOKEN);
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:50123');
+    expect(JSON.stringify(env)).not.toContain('sk-real-gateway-key');
+    expect(env.NO_PROXY).toBe('localhost,127.0.0.1,::1');
   });
 });

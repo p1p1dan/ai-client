@@ -136,7 +136,13 @@ describe('chat engines: DSH, and the Claude Agent SDK engine for Anthropic-proto
     expect(offenders).toEqual([]);
     const engine = code(path.join(AGENT_HOST, 'claudeSdkEngine.ts'));
     expect(engine).toContain('AICLIENT_CLAUDE_SDK_BASE_URL: baseURL,');
-    expect(engine).toContain('AICLIENT_CLAUDE_SDK_API_KEY: apiKey,');
+    // Route B S-3 (K-5): the key is never a launch variable; it goes by IPC.
+    expect(engine).not.toContain('AICLIENT_CLAUDE_SDK_API_KEY');
+    expect(engine.replace(/\s+/g, ' ')).toContain(
+      'new ClaudeSdkProcessTransport({ command: node, args: [entry], cwd: configDir, env, apiKey, })'
+    );
+    const transport = code(path.join(AGENT_HOST, 'ClaudeSdkProcessTransport.ts'));
+    expect(transport).toContain('this.child.send(secret);');
   });
 
   /**

@@ -43,6 +43,11 @@
  * safety check allows, then blocks three calls in a row, the third falling back to PiLab's
  * card, then is down; each refused row in PiLab's words, never the CLI's).
  *
+ * Route B S-3 (topic s3-project-config.md K-1, K-5): `keyiso`. The key reaches the host by
+ * IPC and the CLI only through the host's auth proxy: the Bash tool's `env`, a PowerShell
+ * child's environment and every file under the config dir hold the session token at most,
+ * never the key, while the gateway still gets the key (`CC-ENV`).
+ *
  * The key is a fake one unless PROBE_API_KEY is set in the shell; nothing here reads a
  * stored credential.
  */
@@ -166,8 +171,6 @@ function startHost(): void {
       AICLIENT_CLAUDE_SDK_GENERATION: String(generation),
       AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
       AICLIENT_CLAUDE_SDK_BASE_URL: gatewayUrl,
-      // A real gateway key comes from PROBE_API_KEY in this shell only; never a file.
-      AICLIENT_CLAUDE_SDK_API_KEY: apiKey,
       AICLIENT_CLAUDE_SDK_SETTING_SOURCES: 'project',
       ...(process.env.AICLIENT_CLAUDE_SDK_RG_DIR
         ? { AICLIENT_CLAUDE_SDK_RG_DIR: process.env.AICLIENT_CLAUDE_SDK_RG_DIR }
@@ -182,6 +185,9 @@ function startHost(): void {
     },
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
+  // Route B S-3 (K-5): the key goes as the first IPC message, as Main sends it. A real
+  // gateway key comes from PROBE_API_KEY in this shell only; never a file.
+  child.send({ type: 'host.secret', apiKey });
   child.stderr?.on('data', (chunk: Buffer) => {
     for (const line of chunk.toString('utf8').split('\n')) {
       if (!line.trim()) continue;
@@ -844,6 +850,55 @@ async function main(): Promise<void> {
           'mode-plan',
           'after approval the chosen mode is in force',
           next.cards.length === 0 && existsSync(after)
+        );
+        break;
+      }
+      case 'keyiso': {
+        await setPosture('agent', 'bypass');
+        const { end } = await runCalls(
+          [
+            { name: 'Bash', input: { command: 'env', description: 'Print the environment' } },
+            {
+              name: 'Bash',
+              input: {
+                command: `powershell.exe -NoProfile -Command "Get-ChildItem env: | ForEach-Object { $_.Name + '=' + $_.Value }"`,
+                description: 'Print the environment from PowerShell',
+              },
+            },
+          ],
+          () => 'deny'
+        );
+        await setPosture('agent', 'ask');
+        const outputs = events
+          .filter((e) => e.type === 'tool.completed')
+          .map((e) => JSON.stringify(e.payload?.output ?? ''));
+        await send('CC-ENV which key');
+        await waitFor(terminal, 'keyiso env turn end');
+        const reply = assistantText();
+        const filesWithKey: string[] = [];
+        const walk = (dir: string) => {
+          for (const entry of readdirSync(dir, { withFileTypes: true })) {
+            const full = join(dir, entry.name);
+            if (entry.isDirectory()) walk(full);
+            else if (readFileSync(full, 'latin1').includes(apiKey)) filesWithKey.push(full);
+          }
+        };
+        walk(configDir);
+        show('keyiso');
+        check('keyiso', 'the turn completed', end.type === 'session.completed');
+        check(
+          'keyiso',
+          'the tools saw a session token, not the key',
+          outputs.length === 2 &&
+            outputs.every((text) => !text.includes(apiKey)) &&
+            outputs.some((text) => text.includes('sk-pilab-session-'))
+        );
+        check('keyiso', 'the gateway still got the key', reply.includes(`key=${keyDigest}`));
+        check('keyiso', 'no file under the config dir holds the key', filesWithKey.length === 0);
+        check(
+          'keyiso',
+          "the host's stderr never quotes the key",
+          hostStderr.every((line) => !line.includes(apiKey))
         );
         break;
       }

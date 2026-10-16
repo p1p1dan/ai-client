@@ -31,7 +31,7 @@ Role: topic（S-3 方案，2026-10-16）。上位：[README](../README.md) §1 �
 | K-3 | **代理的上游自己守代理与证书设置**：上游请求用 `proxyEnv` 的 Agent（继承到的 `HTTP(S)_PROXY`、`NO_PROXY`），证书用宿主继承到的 `NODE_EXTRA_CA_CERTS`；连不上网关时回 502（Anthropic 格式的错误体），交给现有的失败映射 | 原来这些由 CLI 自己按钉住的变量做；改走代理后由宿主做 |
 | K-4 | **`NO_PROXY` 必含回环**：CLI 的环境与 flag 层都在继承到的值后补 `127.0.0.1,localhost,::1` | 实测 CLI 对回环地址不自动绕过代理：没有这一条，公司代理会收到明文令牌，回合失败（§4.1） |
 | K-5 | **Main 交 key 改走 IPC**：宿主启动后由 Main 发第一条 IPC 消息 `{ type: 'host.secret', apiKey }`，宿主收到前不处理 RPC；去掉 `AICLIENT_CLAUDE_SDK_API_KEY` 环境变量 | Linux 上 `/proc/<pid>/environ` 一直留着进程的初始环境（宿主与 CLI 都是），子进程同用户可读；IPC 通道 Main 本来就开着 |
-| K-6 | 令牌加进宿主的脱敏名单；CLI 每次重启换新令牌 | 令牌虽不是 key，但能在会话存活期间花 key |
+| K-6 | 令牌加进宿主的脱敏名单；每个宿主进程（即每个对话的一次运行）一个令牌，宿主退出代理随之关闭 | 令牌虽不是 key，但能在会话存活期间花 key；初稿想在 CLI 每次重启时换令牌，收益小（同一对话内）而要让 CLI 环境随启动重算，未做 |
 | P-1 | **设置来源**：绑定项目的会话 `['project','local']`；未绑定（临时）会话 `[]`，沿用共享规则 `resolveSettingSources`（决策 008 第 5 条：不受信任的检出不读 project/local） | 裁决 5；临时目录是应用自建的空目录 |
 | P-2 | **去掉 `managedSettings` 锁**（`allowManagedPermissionRulesOnly`、`allowManagedHooksOnly`），实验开关 `AICLIENT_CLAUDE_SDK_REPO_POLICY` 一并删掉 | 裁决 5 |
 | P-3 | **绑定项目的会话由宿主声明工作区受信任**（SDK 选项 `workspaceTrust`，按会话的 cwd）；不另做 PiLab 的信任提示框 | 不声明信任时项目 allow 规则一律被忽略（§4.2），裁决 5 落空；用户在 PiLab 里打开项目，就是把它当自己的项目用（与 DSH 对绑定项目 `projectTrusted: true` 一致）。信任会记进应用私有配置目录 |
@@ -97,4 +97,10 @@ Role: topic（S-3 方案，2026-10-16）。上位：[README](../README.md) §1 �
 
 ## 5 实现记录
 
-待填。
+### 5.1 key 隔离（2026-10-16，先于项目设置单独提交）
+
+- 宿主 `authProxy.ts`：`127.0.0.1:0` 上的代理，令牌常数时间比较，只转发 `POST /v1/messages`、`POST /v1/messages/count_tokens` 与 `GET /v1/models[/<id>]`，换上真 key 后与路由的路径前缀拼接，双向流式，客户端断开即断上游，连不上上游回 502（Anthropic 格式）；上游用 `proxyEnv` 的 Agent。
+- 宿主 `host.ts`：不再读 key 的环境变量；等 Main 的 `host.secret`（10 秒，等不到就退出），之前到的 RPC 先存着；起代理后用 `hostConfig.ts` 组 CLI 配置（地址与令牌，flag 层也钉这两项）；退出时关代理。
+- `cliEnvironment.ts`：`NO_PROXY`（两种拼写）补回环；flag 层可钉会话令牌。
+- Main：`openClaudeSdkTransport` 去掉 key 的环境变量；`ClaudeSdkProcessTransport` 起进程后先发 `host.secret`。
+- 验证：代理 8 条、CLI 环境 22 条、`buildHostConfig` 3 条、传输 1 条（真子进程：第一条消息是密钥、环境里没有 key）单测；变异检查：把真 key 交给 CLI 时 `buildHostConfig` 的用例失败。探针 `keyiso`（Bash 的 `env`、PowerShell 的环境、配置目录、宿主 stderr 都没有 key，网关照样收到 key）与原有全部场景通过。探针本身对"CLI 进程初始环境里有没有 key"看不到（flag 层的令牌钉值会盖住子进程看到的值），这一项由 `buildHostConfig` 的单测守。

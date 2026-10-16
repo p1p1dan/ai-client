@@ -11,23 +11,34 @@
  *   AICLIENT_CLAUDE_SDK_GENERATION   the slot generation this process serves
  *   AICLIENT_CLAUDE_SDK_CONFIG_DIR   app-private CLAUDE_CONFIG_DIR
  *   AICLIENT_CLAUDE_SDK_BASE_URL     gateway root
- *   AICLIENT_CLAUDE_SDK_API_KEY      gateway key (memory only, never written)
  *   AICLIENT_CLAUDE_SDK_SETTING_SOURCES  comma list of 'project' / 'local' / 'user', or empty
  *   AICLIENT_CLAUDE_SDK_CLI          optional pathToClaudeCodeExecutable (e.g. a .js build run by node)
  *   AICLIENT_CLAUDE_SDK_CLIENT_APP   User-Agent suffix
  *   AICLIENT_CLAUDE_SDK_RG_DIR       optional directory with an `rg` used instead of the CLI's built-in one
+ *
+ * The gateway key is never a launch variable (route B S-3, topic
+ * s3-project-config.md K-5): on Linux a process's initial environment stays
+ * readable in /proc/<pid>/environ. Main sends it as the first IPC message,
+ * `{ type: 'host.secret', apiKey }`; worker requests that arrive before it wait.
+ * The CLI never gets it either: it talks to this host's loopback auth proxy
+ * with a session token (`authProxy.ts`).
  */
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { BridgeRpcServer } from '../dsh-host/bridge/bridgeRpcServer.ts';
-import { buildCliEnvironment, buildPinnedSettingsEnv, findGitBash } from './cliEnvironment.ts';
+import { CLAUDE_SDK_HOST_SECRET, isClaudeSdkHostSecret } from '../shared/claudeSdkEngine.ts';
+import { type AuthProxy, startAuthProxy } from './authProxy.ts';
+import { findGitBash } from './cliEnvironment.ts';
 import { sanitizeHostLogLine } from './failureMapping.ts';
+import { buildHostConfig } from './hostConfig.ts';
 import { ClaudeSdkSessionRuntime, type SdkHostConfig } from './sdkSessionRuntime.ts';
 
-/** The gateway key, once read: blanked out of every line before it leaves the process. */
+/** The gateway key and the session token, once known: blanked out of every line that leaves. */
 const logSecrets: string[] = [];
+/** How long the host waits for Main's secret before it gives up (Main sends it at once). */
+const SECRET_TIMEOUT_MS = 10_000;
 
 function log(...args: unknown[]): void {
   // stderr is Main's diagnostics channel, and Main shows it in the Host stderr
@@ -64,30 +75,6 @@ const gitBashPath = process.platform === 'win32' ? findGitBash(process.env) : un
 // Optional: PiLab's own `rg` instead of the CLI's built-in one (see cliEnvironment.ts).
 const ripgrepDir = process.env.AICLIENT_CLAUDE_SDK_RG_DIR?.trim() || undefined;
 const baseUrl = required('AICLIENT_CLAUDE_SDK_BASE_URL');
-const apiKey = required('AICLIENT_CLAUDE_SDK_API_KEY');
-// What a repository's `.claude/settings.json` `env` may not change (decision 6); never the key.
-const pinned = buildPinnedSettingsEnv({ inherited: process.env, baseUrl, gitBashPath });
-const config: SdkHostConfig = {
-  configDir,
-  settingSources,
-  cliPath: process.env.AICLIENT_CLAUDE_SDK_CLI?.trim() || undefined,
-  trustRepoPolicy: process.env.AICLIENT_CLAUDE_SDK_REPO_POLICY === 'trust',
-  gitBashPath,
-  cliEnv: buildCliEnvironment({
-    inherited: process.env,
-    configDir,
-    baseUrl,
-    apiKey,
-    clientApp: process.env.AICLIENT_CLAUDE_SDK_CLIENT_APP?.trim() || 'pilab-claude-sdk-proto/0',
-    gitBashPath,
-    ripgrepDir,
-  }),
-  settingsEnv: pinned.env,
-  secrets: [apiKey],
-};
-// The key now lives only in `config`; drop it from this process's own environment.
-delete process.env.AICLIENT_CLAUDE_SDK_API_KEY;
-logSecrets.push(apiKey);
 
 if (
   ripgrepDir &&
@@ -95,37 +82,87 @@ if (
 ) {
   log(`warning: no rg in ${ripgrepDir}; the CLI falls back to its built-in one`);
 }
-log(
-  `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} rg=${ripgrepDir ?? '(built-in)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'} pinned=${Object.keys(pinned.env).length}`
-);
-if (pinned.credentialedProxies.length > 0) {
-  // Their values never reach the CLI's command line; a repository's env can override them.
-  log(`warning: not pinned (proxy URL with credentials): ${pinned.credentialedProxies.join(',')}`);
+/** The host's configuration once the key is in: the CLI reaches the gateway through `proxy`. */
+function hostConfig(proxy: AuthProxy, apiKey: string): SdkHostConfig {
+  const { config, credentialedProxies } = buildHostConfig({
+    inherited: process.env,
+    configDir,
+    settingSources,
+    ...(gitBashPath ? { gitBashPath } : {}),
+    ...(ripgrepDir ? { ripgrepDir } : {}),
+    apiKey,
+    proxy,
+  });
+  log(
+    `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} rg=${ripgrepDir ?? '(built-in)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'} pinned=${Object.keys(config.settingsEnv).length} proxy=${proxy.url}`
+  );
+  if (credentialedProxies.length > 0) {
+    // Their values never reach the CLI's command line; a repository's env can override them.
+    log(`warning: not pinned (proxy URL with credentials): ${credentialedProxies.join(',')}`);
+  }
+  return config;
 }
 
 let runtime: ClaudeSdkSessionRuntime | null = null;
-const server = new BridgeRpcServer({
-  port: { postMessage: (message) => process.send?.(message) },
-  generation,
-  projectTrusted: true,
-  createRuntime: (options) => {
-    runtime = new ClaudeSdkSessionRuntime(options, config, log);
-    return runtime;
-  },
-  log,
-  onDisposed: () => {
-    log('disposed; exiting');
-    setTimeout(() => process.exit(0), 50);
-  },
-});
+let proxy: AuthProxy | null = null;
+let server: BridgeRpcServer | null = null;
+/** Worker requests that came before the secret, answered once the host is up. */
+const early: unknown[] = [];
 
-process.on('message', (message) => server.receive(message));
+async function start(apiKey: string): Promise<void> {
+  logSecrets.push(apiKey);
+  proxy = await startAuthProxy({ upstream: baseUrl, apiKey, log });
+  logSecrets.push(proxy.token);
+  const config = hostConfig(proxy, apiKey);
+  server = new BridgeRpcServer({
+    port: { postMessage: (message) => process.send?.(message) },
+    generation,
+    projectTrusted: true,
+    createRuntime: (options) => {
+      runtime = new ClaudeSdkSessionRuntime(options, config, log);
+      return runtime;
+    },
+    log,
+    onDisposed: () => {
+      log('disposed; exiting');
+      void proxy?.close();
+      setTimeout(() => process.exit(0), 50);
+    },
+  });
+  for (const message of early.splice(0)) server.receive(message);
+}
+
+const secretTimer = setTimeout(() => {
+  log(`no ${CLAUDE_SDK_HOST_SECRET} from Main within ${SECRET_TIMEOUT_MS} ms; exiting`);
+  process.exit(1);
+}, SECRET_TIMEOUT_MS);
+let starting = false;
+process.on('message', (message) => {
+  if (server) {
+    server.receive(message);
+    return;
+  }
+  if (!starting && isClaudeSdkHostSecret(message)) {
+    starting = true;
+    clearTimeout(secretTimer);
+    start(message.apiKey).catch((error) => {
+      log('the host could not start', error);
+      process.exit(1);
+    });
+    return;
+  }
+  // Never logged: before the secret, a message may be anything Main sends first.
+  early.push(message);
+});
 process.on('disconnect', () => {
   // Main went away without a dispose: close the CLI child first so it is not orphaned.
   log('IPC channel closed; exiting');
   const done = () => process.exit(0);
   setTimeout(done, 3_000).unref();
-  void (runtime?.dispose() ?? Promise.resolve()).finally(done);
+  void (runtime?.dispose() ?? Promise.resolve()).finally(() => {
+    void proxy?.close();
+    done();
+  });
 });
 process.on('uncaughtException', (error) => log('uncaught', error));
 process.on('unhandledRejection', (error) => log('unhandled rejection', error));

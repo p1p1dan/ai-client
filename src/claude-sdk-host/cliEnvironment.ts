@@ -4,10 +4,14 @@
  * The SDK's `env` option REPLACES the child's environment, so it is built from
  * an allowlist instead of a copy of `process.env`. Nothing credential-shaped
  * crosses: no `ANTHROPIC_*`, no `CLAUDE_*` (a developer machine running Claude
- * Code has dozens, an OAuth token among them), no cloud-provider switches. The
- * gateway address and key are injected by the host from its own launch
- * variables, and `CLAUDE_CONFIG_DIR` points at an app-private directory so the
- * CLI never reads the user's `~/.claude` (settings, login, history).
+ * Code has dozens, an OAuth token among them), no cloud-provider switches.
+ * `CLAUDE_CONFIG_DIR` points at an app-private directory so the CLI never reads
+ * the user's `~/.claude` (settings, login, history).
+ *
+ * Route B S-3 (topic s3-project-config.md K-1): the gateway key is not here at
+ * all. The CLI's base URL is the host's loopback auth proxy and its key a
+ * session token the proxy swaps for the real one, so the Bash tool, a
+ * repository's hooks and every other child see only the token.
  */
 
 import { existsSync } from 'node:fs';
@@ -21,9 +25,12 @@ export interface CliEnvironmentInput {
   inherited: NodeJS.ProcessEnv;
   /** App-private `CLAUDE_CONFIG_DIR`. */
   configDir: string;
-  /** Gateway root, as `ANTHROPIC_BASE_URL` (no `/v1`). */
+  /** The host's auth proxy, as `ANTHROPIC_BASE_URL` (no `/v1`). */
   baseUrl: string;
-  /** Sent as `x-api-key` (`ANTHROPIC_API_KEY`): the Agent SDK terms require API-key auth. */
+  /**
+   * Sent as `x-api-key` (`ANTHROPIC_API_KEY`; the Agent SDK terms require
+   * API-key auth): the auth proxy's session token, never the gateway key.
+   */
   apiKey: string;
   /** `CLAUDE_AGENT_SDK_CLIENT_APP`, appended to the CLI's User-Agent. */
   clientApp: string;
@@ -50,14 +57,40 @@ export function withPathPrefix(
   return { ...env, [key]: env[key] ? `${dir}${delimiter}${env[key]}` : dir };
 }
 
+/** Loopback, which the CLI sends through HTTP(S)_PROXY too unless NO_PROXY names it (measured). */
+const LOOPBACK = ['127.0.0.1', 'localhost', '::1'];
+
+/**
+ * S-3 K-4: an inherited NO_PROXY with loopback added. The auth proxy is on
+ * 127.0.0.1: without this a corporate proxy would get the token in clear and
+ * could not reach it anyway (`localhost` alone does not cover 127.0.0.1).
+ */
+export function withLoopbackNoProxy(value: string | undefined): string {
+  const entries = (value ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const lower = new Set(entries.map((entry) => entry.toLowerCase()));
+  return [...entries, ...LOOPBACK.filter((host) => !lower.has(host))].join(',');
+}
+
+function inheritedNoProxy(inherited: NodeJS.ProcessEnv): string | undefined {
+  return inheritedValue(inherited, 'no_proxy');
+}
+
 export function buildCliEnvironment(input: CliEnvironmentInput): Record<string, string> {
   let env: Record<string, string> = {};
   for (const [name, value] of Object.entries(input.inherited)) {
     if (value !== undefined && INHERITED.has(name.toUpperCase())) env[name] = value;
   }
   if (input.ripgrepDir) env = withPathPrefix(env, input.ripgrepDir);
+  // One spelling of each: the inherited copies (any case) give way to the loopback-aware value.
+  for (const name of Object.keys(env)) if (name.toUpperCase() === 'NO_PROXY') delete env[name];
+  const noProxy = withLoopbackNoProxy(inheritedNoProxy(input.inherited));
   return {
     ...env,
+    NO_PROXY: noProxy,
+    no_proxy: noProxy,
     ...(input.ripgrepDir ? { USE_BUILTIN_RIPGREP: '0' } : {}),
     CLAUDE_CONFIG_DIR: input.configDir,
     ANTHROPIC_BASE_URL: input.baseUrl,
@@ -122,8 +155,14 @@ const PROVIDER_SWITCHES = [
 export interface PinnedSettingsEnvInput {
   /** The host's own environment: proxies are pinned to what PiLab itself was given. */
   inherited: NodeJS.ProcessEnv;
-  /** Gateway root, as `ANTHROPIC_BASE_URL`. */
+  /** The host's auth proxy, as `ANTHROPIC_BASE_URL`. */
   baseUrl: string;
+  /**
+   * S-3 K-1: the auth proxy's session token, pinned as `ANTHROPIC_API_KEY` so a
+   * repository cannot send its own key (measured: without a pin it can). Not
+   * the gateway key, so it may go on the CLI's command line.
+   */
+  sessionToken?: string;
   gitBashPath?: string;
 }
 
@@ -175,6 +214,7 @@ export function buildPinnedSettingsEnv(input: PinnedSettingsEnvInput): PinnedSet
     // '0' turns certificate checks off for the whole CLI; '1' is the default.
     NODE_TLS_REJECT_UNAUTHORIZED: '1',
     ...(input.gitBashPath ? { CLAUDE_CODE_GIT_BASH_PATH: input.gitBashPath } : {}),
+    ...(input.sessionToken ? { ANTHROPIC_API_KEY: input.sessionToken } : {}),
   };
   for (const name of UNSET_VARIABLES) env[name] = '';
   for (const name of INHERITED_PINS) env[name] = inheritedValue(input.inherited, name) ?? '';
@@ -182,7 +222,9 @@ export function buildPinnedSettingsEnv(input: PinnedSettingsEnvInput): PinnedSet
   const credentialedProxies: string[] = [];
   for (const name of PROXY_VARIABLES) {
     const lower = name.toLowerCase();
-    const value = inheritedValue(input.inherited, lower) ?? '';
+    const inherited = inheritedValue(input.inherited, lower) ?? '';
+    // S-3 K-4: the auth proxy on loopback is never reached through a proxy.
+    const value = name === 'NO_PROXY' ? withLoopbackNoProxy(inherited) : inherited;
     if (name !== 'NO_PROXY' && value && hasUrlCredentials(value)) {
       credentialedProxies.push(name);
       continue;

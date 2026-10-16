@@ -78,6 +78,7 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 - **配成 Anthropic 协议的模型，要接得住 Agent SDK 的请求**（裁决 9）：CLI 发的请求比 DSH 多一批 beta 头、`thinking: adaptive`、effort 参数与 15 个工具的完整定义。同一个配置可能在 DSH 上能用、在 SDK 上被拒（通常是 400）。这种模型应改配成 OpenAI 协议，或在设置里关掉 Agent SDK 引擎。管理员配置模型与用户自加服务时都要注意。
 - **自动模式（Auto）要靠网关做安全检查**（S-2 §4.3）：网关在回复里带检查结果最好；不带时 CLI 改为每次另发检查请求（非流式，模型缺省 `claude-sonnet-5`，出错退到会话模型）。检查都不可用时，需要检查的命令一律被拒、不再问人（读取、工作区内写文件等不经检查）。GLM 等非 Claude 模型上自动模式是否可用，取决于网关怎么回这些检查请求。
 - **自动模式会把检查上下文发给网关**：本机用户名、主目录、工作目录、git 分支与远端地址（官方行为，裁决 11）。
+- **工具进程能借会话令牌用网关**：网关 key 不进 CLI 与子进程（裁决 12），但它们拿得到会话令牌，在这个对话存活期间可以经宿主的本机代理调同一个网关的对话接口（拿不到 key 本身；代理只放行对话、计数与模型查询）。
 - **计划模式由 PiLab 拒绝改动**：CLI 本身不拦计划模式里的写操作，SDK 会话在计划模式里由宿主拒掉写文件与改动类命令；模型写的计划文件在应用私有目录里。
 
 ## 6 风险
@@ -133,7 +134,7 @@ S-0 做了一轮多维审查：移植保真、Main 侧接线、宿主运行时�
 | # | 发现 | 去向 |
 |---|---|---|
 | 1 | **仓库可改走网关**：被打开仓库的 `.claude/settings.json` 写 `env.ANTHROPIC_BASE_URL`，请求连同 key 就发到它指定的地址（两个假网关实测）。钉在 `managedSettings.env` 无效；钉在 SDK 的 `settings`（flag 层）`env` 里有效（实测）。同理应钉 `DISABLE_AUTOUPDATER`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`、`CLAUDE_CODE_GIT_BASH_PATH` | **S-1 已做**：flag 层钉住 23 个变量（逐项实测见 [S-1 设计 §4.1](topics/s1-engine-selection.md)），探针 `repoenv`；`ANTHROPIC_API_KEY` 钉不了，并入 #2 |
-| 2 | **key 进子进程**：网关 key 在 `claude.exe` 的环境里，Bash 工具能读到（实测会随工具结果写进 transcript），S-3 之后仓库 hooks 也能读到。CLI 的 `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` 能清掉，但会把权限档强制成 default，与 S-2 冲突 | **用户裁决（裁决 12）**：不让 key 进子进程，S-3 之前做完；S-5 加 key 金丝雀场景。S-1 另实测：仓库设置能把 key 换成自己的（请求仍到我们的网关），带凭据的代理 URL 不能钉 |
+| 2 | **key 进子进程**：网关 key 在 `claude.exe` 的环境里，Bash 工具能读到（实测会随工具结果写进 transcript），S-3 之后仓库 hooks 也能读到。CLI 的 `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` 能清掉，但会把权限档强制成 default，与 S-2 冲突 | **已做（裁决 12，S-3 之前单独提交）**：宿主内的本机鉴权代理，CLI 及其子进程只拿到会话令牌，Main 经 IPC 交 key（见 [S-3 设计](topics/s3-project-config.md) K-1～K-6，探针 `keyiso`）；S-5 再加 key 金丝雀场景。S-1 另实测：仓库设置能把 key 换成自己的（请求仍到我们的网关），带凭据的代理 URL 不能钉 |
 | 3 | 网关在报错里回显 key 时，CLI 把它原样写进 transcript（`api_error` 记录，实测） | S-5 金丝雀场景；只能事后清理或写进已知限制 |
 | 4 | **产品版的网关与 key 来源没有任务**：现在 Main 只从自己的环境变量读；原型 §8 列了"凭据：从托管目录或凭据库取，经宿主注入，不落盘"（0.5 人周）。引擎按模型 id 前缀 `claude-` 选，正式版应按路由协议 `anthropic-messages` | **S-1 已做**：取自计划路由与凭据；按 anthropic-messages 协议选引擎（裁决 9）；换 key 后空闲会话自动重开 |
 | 5 | **上游错误映射**：401 重试 10 次约 3 分钟；失败的 `errorCode` 是 `success`（取的是 result 的 subtype）；没设流空闲超时；`/compact` 遇到坏网关会堵住同一会话的停止与发送。CLI 自己的提示（如 "Fix external API key"）原样进失败卡。原型 §8 的"宿主硬化"（1～1.5 人周）在任务表里没有对应行 | errorCode 映射 **S-1 已做**（探针 `errors`）；重试次数与超时 S-5 |

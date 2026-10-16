@@ -173,3 +173,24 @@ export function permissionModeRefusalReason(text: string): PermissionModeRefusal
     ) ?? 'other'
   );
 }
+
+/**
+ * Route B, S-3 (topic s3-project-config.md K-5): Main hands the SDK host the
+ * gateway key as the first IPC message, never as a launch variable (a
+ * process's initial environment stays readable on Linux).
+ */
+export const CLAUDE_SDK_HOST_SECRET = 'host.secret';
+export interface ClaudeSdkHostSecret {
+  type: typeof CLAUDE_SDK_HOST_SECRET;
+  apiKey: string;
+}
+export function isClaudeSdkHostSecret(value: unknown): value is ClaudeSdkHostSecret {
+  const record = value as { type?: unknown; apiKey?: unknown } | null;
+  return (
+    typeof record === 'object' &&
+    record !== null &&
+    record.type === CLAUDE_SDK_HOST_SECRET &&
+    typeof record.apiKey === 'string' &&
+    record.apiKey.trim() !== ''
+  );
+}

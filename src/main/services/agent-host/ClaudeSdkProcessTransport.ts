@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { CLAUDE_SDK_HOST_SECRET, type ClaudeSdkHostSecret } from '@shared/claudeSdkEngine';
 import type { WorkerRpcRequest } from '@shared/types/workerRpc';
 import type { WorkerTransport, WorkerTransportExit } from './WorkerTransport';
 
@@ -17,6 +18,11 @@ export interface ClaudeSdkProcessLaunch {
   args: string[];
   cwd: string;
   env: Record<string, string>;
+  /**
+   * Route B S-3 (K-5): the gateway key, sent as the first IPC message and never
+   * put in `env` (a process's initial environment stays readable on Linux).
+   */
+  apiKey: string;
 }
 
 export class ClaudeSdkProcessTransport implements WorkerTransport {
@@ -33,6 +39,9 @@ export class ClaudeSdkProcessTransport implements WorkerTransport {
     this.child.once('exit', (code, signal) => {
       this.exitInfo = { code, signal, cause: 'host-exit' };
     });
+    // Before any worker request: the host answers none until it has the key.
+    const secret: ClaudeSdkHostSecret = { type: CLAUDE_SDK_HOST_SECRET, apiKey: launch.apiKey };
+    this.child.send(secret);
     // Stdout carries nothing the protocol needs; drain it so the pipe never fills.
     this.child.stdout?.resume();
   }
