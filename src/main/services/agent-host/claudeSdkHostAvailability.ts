@@ -10,5 +10,7 @@ import { createClaudeSdkHostAvailability } from './claudeSdkEngine';
 
 export const claudeSdkHostAvailable = createClaudeSdkHostAvailability({
   appPath: () => app.getAppPath(),
+  isPackaged: () => app.isPackaged,
+  resourcesPath: () => process.resourcesPath,
   log: (message) => console.info(message),
 });

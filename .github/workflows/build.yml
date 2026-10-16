@@ -87,6 +87,13 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: src/dsh-host
 
+      # Route B S-4 (#11): the Claude Agent SDK host's types for its type check and
+      # its unit tests. --omit=optional here only: the gate needs no CLI binary
+      # (about 250 MB per platform); the packaging jobs build the artifact with it.
+      - name: Install claude-sdk-host dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund --omit=optional
+        working-directory: src/claude-sdk-host
+
       # The DSH bridge recording (below) starts real DSH hosts, which run on the
       # node the app bundles, exactly as packaged; same cache and fetch as
       # build-linux.
@@ -101,16 +108,20 @@ jobs:
 
       # Heavy gates run serially, never chained into one command: the combined
       # form has OOM'd (exit 137) before — see baseline/test-and-release-gates.md.
-      - name: Gate 1/5 — typecheck
+      - name: Gate 1/6 — typecheck
         run: pnpm typecheck
 
-      - name: Gate 2/5 — typecheck:dsh-host
+      - name: Gate 2/6 — typecheck:dsh-host
         run: pnpm typecheck:dsh-host
 
-      - name: Gate 3/5 — lint
+      # Route B S-4 (#11): the host takes the DSH bridge's and src/shared's types.
+      - name: Gate 3/6 — typecheck:claude-sdk-host
+        run: pnpm typecheck:claude-sdk-host
+
+      - name: Gate 4/6 — lint
         run: pnpm lint
 
-      - name: Gate 4/5 — test
+      - name: Gate 5/6 — test
         run: pnpm test
 
       # dsh-rebase P1-4e (decisions 100 and 133): drive the product bridge
@@ -135,7 +146,7 @@ jobs:
       # The self-owned runtime's two offline smokes (ARD risk R1) went with
       # src/runtime in dsh-rebase P1-12 step 3; the DSH bridge recording above
       # is the gate's end-to-end check now.
-      - name: Gate 5/5 — release metadata
+      - name: Gate 6/6 — release metadata
         run: pnpm verify:release
 
   build-app:
@@ -186,7 +197,9 @@ jobs:
     # 20 -> 30 for the DSH host (dsh-rebase P1-2): its npm ci, TSD rewrite of
     # ~7k .js files, ~100 MiB more to compress, and two L1 smokes. Re-derive
     # from the first green run.
-    timeout-minutes: 30
+    # 30 -> 40 for the Claude SDK host (route B S-4): its npm ci, ~260 MiB more to
+    # compress (the CLI binary) and a chat-turn smoke. Re-derive from the first green run.
+    timeout-minutes: 40
     # Pin to windows-2022: windows-latest 已升级到 windows-2025，仅装 VS 2026 (path \18\),
     # 而 @electron/rebuild@4.0.1 bundled node-gyp@11.5.0 的 find-visualstudio.js 白名单
     # 只到 [2019, 2022]，找不到 VS 2026 → "Could not find any Visual Studio installation".
@@ -267,6 +280,12 @@ jobs:
       - name: Build DSH host artifact
         run: node scripts/build-dsh-host.mjs
 
+      # Claude Agent SDK host artifact (route B S-4): a clean `npm ci` of
+      # src/claude-sdk-host's lockfile without peers, pruned to the SDK and this
+      # runner's CLI, verified into out-claude-sdk-host/; afterPack copies it.
+      - name: Build Claude SDK host artifact
+        run: node scripts/build-claude-sdk-host.mjs
+
       # The legacy pi permission-plugin smoke (T08-a) was removed with the legacy
       # engine (fe246bd6, P6-5); the permission row is exercised by the DSH L1
       # smoke inside "Verify packaged app" below.
@@ -298,7 +317,7 @@ jobs:
         run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
       - name: Verify packaged app
-        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json --claude-sdk-report-file dist/claude-sdk-host-smoke-report.json
 
       # The installed layout is `Programs\PiLab Ai` (a space in the path);
       # win-unpacked has none, so run the DSH smoke once more from a copy that does.
@@ -331,6 +350,20 @@ jobs:
             out-dsh-host/dsh-host-manifest.json
             out-dsh-host/THIRD_PARTY_LICENSES.json
             dist/dsh-host-smoke-report*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      # Route B S-4 evidence: the SDK host's manifest (CLI version, digest, size),
+      # its licence list and its smoke report.
+      - name: Upload Claude SDK host evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: claude-sdk-host-${{ runner.os }}
+          path: |
+            out-claude-sdk-host/claude-sdk-host-manifest.json
+            out-claude-sdk-host/THIRD_PARTY_LICENSES.json
+            dist/claude-sdk-host-smoke-report.json
           retention-days: 14
           if-no-files-found: warn
 
@@ -368,7 +401,8 @@ jobs:
   build-linux:
     needs: build-app
     # 20 -> 25 for the DSH host (dsh-rebase P1-2); re-derive from the first green run.
-    timeout-minutes: 25
+    # 25 -> 35 for the Claude SDK host (route B S-4), as build-windows.
+    timeout-minutes: 35
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -424,6 +458,12 @@ jobs:
       - name: Build DSH host artifact
         run: node scripts/build-dsh-host.mjs
 
+      # Claude Agent SDK host artifact (route B S-4): a clean `npm ci` of
+      # src/claude-sdk-host's lockfile without peers, pruned to the SDK and this
+      # runner's CLI, verified into out-claude-sdk-host/; afterPack copies it.
+      - name: Build Claude SDK host artifact
+        run: node scripts/build-claude-sdk-host.mjs
+
       - name: Cache bundled Node runtime
         uses: actions/cache@v5
         with:
@@ -447,7 +487,7 @@ jobs:
       - name: Verify packaged app
         # No Xvfb since dsh-rebase P1-12 step 1: the Electron worker smoke it
         # was for is gone, and the DSH smoke runs on the bundled node.
-        run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json --claude-sdk-report-file dist/claude-sdk-host-smoke-report.json
 
       - name: Upload worker smoke evidence
         if: always()
@@ -472,6 +512,20 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+      # Route B S-4 evidence: the SDK host's manifest (CLI version, digest, size),
+      # its licence list and its smoke report.
+      - name: Upload Claude SDK host evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: claude-sdk-host-${{ runner.os }}
+          path: |
+            out-claude-sdk-host/claude-sdk-host-manifest.json
+            out-claude-sdk-host/THIRD_PARTY_LICENSES.json
+            dist/claude-sdk-host-smoke-report.json
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Upload Linux packages
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v5
@@ -490,7 +544,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs: build-app
     # 25 -> 35 for the DSH host (dsh-rebase P1-2); re-derive from the first green run.
-    timeout-minutes: 35
+    # 35 -> 45 for the Claude SDK host (route B S-4), as build-windows.
+    timeout-minutes: 45
     # An unsigned x64 artifact closes the structural packaged gate on a native
     # macOS runner. General release still requires Developer ID signing,
     # notarization, and Gatekeeper verification on a real Mac.
@@ -547,6 +602,12 @@ jobs:
       - name: Build DSH host artifact
         run: node scripts/build-dsh-host.mjs
 
+      # Claude Agent SDK host artifact (route B S-4): a clean `npm ci` of
+      # src/claude-sdk-host's lockfile without peers, pruned to the SDK and this
+      # runner's CLI, verified into out-claude-sdk-host/; afterPack copies it.
+      - name: Build Claude SDK host artifact
+        run: node scripts/build-claude-sdk-host.mjs
+
       - name: Resolve native macOS target
         id: target
         run: |
@@ -594,7 +655,7 @@ jobs:
 
       - name: Verify packaged app
         # Quoted: `productName` is "PiLab Ai", so the bundle path has a space in it.
-        run: node scripts/verify-packaged-app.mjs --app-dir "${{ steps.target.outputs.app_dir }}" --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json
+        run: node scripts/verify-packaged-app.mjs --app-dir "${{ steps.target.outputs.app_dir }}" --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json --claude-sdk-report-file dist/claude-sdk-host-smoke-report.json
 
       - name: Upload worker smoke evidence
         if: always()
@@ -616,6 +677,20 @@ jobs:
             out-dsh-host/dsh-host-manifest.json
             out-dsh-host/THIRD_PARTY_LICENSES.json
             dist/dsh-host-smoke-report*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      # Route B S-4 evidence: the SDK host's manifest (CLI version, digest, size),
+      # its licence list and its smoke report.
+      - name: Upload Claude SDK host evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: claude-sdk-host-${{ runner.os }}
+          path: |
+            out-claude-sdk-host/claude-sdk-host-manifest.json
+            out-claude-sdk-host/THIRD_PARTY_LICENSES.json
+            dist/claude-sdk-host-smoke-report.json
           retention-days: 14
           if-no-files-found: warn
 

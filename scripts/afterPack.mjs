@@ -2,6 +2,10 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import {
+  CLAUDE_SDK_HOST_OUT_REL,
+  verifyClaudeSdkHostArtifact,
+} from './claude-sdk-host-build-lib.mjs';
 import { DSH_HOST_MANIFEST, executablePaths } from './dsh-host-build-lib.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
 
@@ -22,6 +26,7 @@ export default async function afterPack(context) {
   // The native worker artifact is neither built nor copied; the DSH host is
   // the only engine the package carries.
   copyDshHost(context);
+  copyClaudeSdkHost(context);
   copyNodeRuntime(context);
 
   if (process.platform !== 'win32') return;
@@ -30,6 +35,8 @@ export default async function afterPack(context) {
     path.join(context.appOutDir, 'resources', 'app.asar.unpacked'),
     // DSH host artifact: plain files run by the bundled node.exe (dsh-rebase P1-2).
     path.join(context.appOutDir, 'resources', 'dsh-host'),
+    // Claude Agent SDK host (route B S-4 B-11): host.js and the SDK's .mjs files.
+    path.join(context.appOutDir, 'resources', 'claude-sdk-host'),
   ];
   for (const dir of targets) {
     fixTsdEncryption(dir);
@@ -80,6 +87,40 @@ export function copyDshHost(context) {
   }
   console.log(
     `[afterPack] Copied DSH host artifact ${manifest.version} (DSH ${manifest.dsh}, ${built}) -> ${dest}`
+  );
+}
+
+/**
+ * Copy the Claude Agent SDK host artifact into resources/claude-sdk-host (route
+ * B S-4, topic s4-packaging.md B-1): built by scripts/build-claude-sdk-host.mjs
+ * for one platform, so the source and the copy are both verified against the
+ * target being packaged (manifest, the target's CLI binary and its exec bit,
+ * the size budget). Serial here for the same reason as copyDshHost.
+ */
+export function copyClaudeSdkHost(context) {
+  const src = path.join(context.packager.info.projectDir, CLAUDE_SDK_HOST_OUT_REL);
+  const platform = context.electronPlatformName;
+  const arch = context.arch === undefined ? 'x64' : archToKey(context.arch);
+  const target = { platform, arch };
+  if (!fs.existsSync(src)) {
+    throw new Error(
+      `[afterPack] ${CLAUDE_SDK_HOST_OUT_REL} missing at ${src} — run "pnpm build:claude-sdk-host" first`
+    );
+  }
+  try {
+    verifyClaudeSdkHostArtifact({ outDir: src, target, requireManifest: true });
+  } catch (error) {
+    throw new Error(
+      `[afterPack] ${CLAUDE_SDK_HOST_OUT_REL} is not packageable for ${platform}-${arch}: ${error.message}`
+    );
+  }
+  const dest = path.join(resolveResourcesDir(context), 'claude-sdk-host');
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.cpSync(src, dest, { recursive: true });
+  const copied = verifyClaudeSdkHostArtifact({ outDir: dest, target, requireManifest: true });
+  console.log(
+    `[afterPack] Copied Claude SDK host artifact (${platform}-${arch}, ${copied.files} files, ` +
+      `${(copied.bytes / 1024 / 1024).toFixed(1)} MiB) -> ${dest}`
   );
 }
 

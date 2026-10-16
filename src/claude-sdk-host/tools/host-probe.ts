@@ -78,6 +78,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CLAUDE_SDK_INHERITED_ENV } from '../../shared/claudeSdkEngine.ts';
 
 const [gatewayUrl, workspace, ...wanted] = process.argv.slice(2);
 if (!gatewayUrl || !workspace)
@@ -169,17 +170,24 @@ const hostStderr: string[] = [];
 let sessionFile: string | undefined;
 const logicalSessionId = `probe-${Date.now()}`;
 
+/**
+ * What Main lets the host inherit (`claudeSdkEngine.ts`, `HOST_INHERITED`), only the
+ * names set here, as Main passes them (route B S-4: the packaged smoke runs this on
+ * Linux too, where HOME and TMPDIR matter).
+ */
+function inheritedEnv(): Record<string, string> {
+  const names = new Set([...CLAUDE_SDK_INHERITED_ENV, 'AICLIENT_GIT_BASH_PATH']);
+  const env: Record<string, string> = {};
+  for (const [name, value] of Object.entries(process.env)) {
+    if (value !== undefined && names.has(name.toUpperCase())) env[name] = value;
+  }
+  return env;
+}
+
 function startHost(): void {
   child = fork(hostEntry, [], {
     env: {
-      PATH: process.env.PATH ?? '',
-      SystemRoot: process.env.SystemRoot ?? '',
-      TEMP: process.env.TEMP ?? '',
-      TMP: process.env.TMP ?? '',
-      USERPROFILE: process.env.USERPROFILE ?? '',
-      APPDATA: process.env.APPDATA ?? '',
-      LOCALAPPDATA: process.env.LOCALAPPDATA ?? '',
-      ProgramFiles: process.env.ProgramFiles ?? '',
+      ...inheritedEnv(),
       AICLIENT_CLAUDE_SDK_GENERATION: String(generation),
       AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
       AICLIENT_CLAUDE_SDK_BASE_URL: gatewayUrl,

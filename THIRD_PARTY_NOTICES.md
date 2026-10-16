@@ -112,7 +112,8 @@ SOFTWARE.
 ## Other bundled dependencies
 
 AiClient also distributes third-party npm dependencies declared by the root
-`package.json` and `src/dsh-host/package-lock.json`. Their package metadata and
+`package.json`, `src/dsh-host/package-lock.json` and
+`src/claude-sdk-host/package-lock.json`. Their package metadata and
 source repositories remain the authority for their respective copyright holders
 and license terms. The packaged DeepSeek Harness host preserves license files
 provided by its dependency packages; this consolidated notice supplements
@@ -222,6 +223,22 @@ licenses. The following are not, or need a note:
   `@reflink/reflink*` (MIT, https://github.com/pnpm/reflink) and the
   BlueOak-1.0.0 packages bundled in `pnpm`; and the libvips packages above,
   whose license terms are in their README.
+
+## Claude Agent SDK host
+
+Source: https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk (package
+`@anthropic-ai/claude-agent-sdk` 0.3.300 and its platform package
+`@anthropic-ai/claude-agent-sdk-<platform>-<arch>`, from
+`src/claude-sdk-host/package-lock.json`).
+
+AiClient ships the Claude Agent SDK and its command-line binary for the
+installed platform in `resources/claude-sdk-host`, as the engine of chats on
+Anthropic-protocol models. Both packages keep their own license files there,
+and `resources/claude-sdk-host/THIRD_PARTY_LICENSES.json` lists them. Their
+notice:
+
+© Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements
+outlined here: https://code.claude.com/docs/en/legal-and-compliance.
 
 ## pi-permission-system runtime compatibility
 

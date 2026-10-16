@@ -29,6 +29,34 @@ export function evaluateDshHostArtifact({ bytes, files }) {
 }
 
 /**
+ * Claude Agent SDK host artifact (route B S-4, topic s4-packaging.md B-7): the
+ * SDK and one platform's CLI binary, measured 262 MiB / 19 files on win32-x64.
+ * The plan's gate is an installed increment of at most 0.6 GB; the ceiling sits
+ * one CLI above the measurement, so a second CLI (another platform or the musl
+ * build, about +250 MiB) or the SDK's peer dependencies coming back fail it.
+ */
+export const CLAUDE_SDK_HOST_ARTIFACT_MAX_BYTES = 350 * 1024 * 1024;
+export const CLAUDE_SDK_HOST_ARTIFACT_MAX_FILES = 500;
+export const CLAUDE_SDK_HOST_ARTIFACT_TARGET_BYTES = 280 * 1024 * 1024;
+
+export function evaluateClaudeSdkHostArtifact({ bytes, files }) {
+  const reasons = [];
+  if (bytes > CLAUDE_SDK_HOST_ARTIFACT_MAX_BYTES) reasons.push('bytes');
+  if (files > CLAUDE_SDK_HOST_ARTIFACT_MAX_FILES) reasons.push('files');
+  return {
+    status: reasons.length === 0 ? 'ok' : 'over',
+    reasons,
+    overTarget: bytes > CLAUDE_SDK_HOST_ARTIFACT_TARGET_BYTES,
+    bytes,
+    files,
+    ceiling: {
+      bytes: CLAUDE_SDK_HOST_ARTIFACT_MAX_BYTES,
+      files: CLAUDE_SDK_HOST_ARTIFACT_MAX_FILES,
+    },
+  };
+}
+
+/**
  * One preinstalled plugin (decision 058), measured after pruning over its
  * package and the closure it brings: 5 MiB / 500 files unless its allowlist
  * entry carries `limits` approved in the review record.

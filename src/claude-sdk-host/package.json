@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Route-B prototype: a worker that drives Claude models through the official Claude Agent SDK and speaks PiLab's worker RPC. Not shipped.",
+  "description": "Route B: the worker that drives Claude models through the official Claude Agent SDK and speaks PiLab's worker RPC. Shipped as resources/claude-sdk-host (scripts/build-claude-sdk-host.mjs).",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.300"
   },

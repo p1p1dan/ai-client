@@ -202,15 +202,89 @@ export function currentClaudeSdkFingerprint(
   return gateway && key ? claudeSdkGatewayFingerprint(gateway, key) : null;
 }
 
-/** The host's entry in an unpackaged checkout; packaged builds get theirs in S-4. */
-export function claudeSdkHostEntry(appPath: string): string {
-  return path.join(appPath, 'src', 'claude-sdk-host', 'host.ts');
+/**
+ * Where the SDK host lives (route B S-4 B-1): its source in a checkout, the
+ * artifact afterPack copies (scripts/build-claude-sdk-host.mjs) when packaged.
+ */
+export const CLAUDE_SDK_HOST_LAYOUT = {
+  unpackaged: ['src', 'claude-sdk-host', 'host.ts'],
+  packaged: ['claude-sdk-host', 'host.js'],
+} as const;
+
+/** The setting sources a host gets unless a dev override says otherwise (S-3 P-1). */
+const DEFAULT_SETTING_SOURCES = 'project,local';
+
+export interface ClaudeSdkHostLayoutInput {
+  isPackaged: boolean;
+  appPath: string;
+  resourcesPath: string;
+  platform?: NodeJS.Platform;
+  arch?: string;
+  /** Read only when unpackaged (S-4 B-5). */
+  env?: NodeJS.ProcessEnv;
+}
+
+export interface ClaudeSdkHostLayout {
+  entry: string;
+  /** The SDK's package.json beside the entry. */
+  sdk: string;
+  /** Where the CLI binary may be, in order; the first that exists is the one (S-4 B-4). */
+  cliCandidates: string[];
+}
+
+export function claudeSdkHostLayout(input: ClaudeSdkHostLayoutInput): ClaudeSdkHostLayout {
+  const root = input.isPackaged ? input.resourcesPath : input.appPath;
+  const entry = path.join(
+    root,
+    ...(input.isPackaged ? CLAUDE_SDK_HOST_LAYOUT.packaged : CLAUDE_SDK_HOST_LAYOUT.unpackaged)
+  );
+  const modules = path.join(path.dirname(entry), 'node_modules', '@anthropic-ai');
+  return {
+    entry,
+    sdk: path.join(modules, 'claude-agent-sdk', 'package.json'),
+    cliCandidates: claudeSdkCliCandidates(
+      modules,
+      input.platform ?? process.platform,
+      input.arch ?? process.arch,
+      // S-4 B-5: a packaged build runs its own CLI, whatever the environment says.
+      input.isPackaged ? {} : (input.env ?? process.env)
+    ),
+  };
 }
 
 /**
- * Where the CLI binary the SDK starts may be: the dev override
- * (`AICLIENT_CLAUDE_SDK_CLI`), else the SDK's platform package for this OS and
- * CPU (Linux also has a musl build).
+ * S-4 B-4 (#31): the one CLI binary Main checks and hands to the host, which
+ * gives it to the SDK as `pathToClaudeCodeExecutable`; undefined when none exists.
+ */
+export function claudeSdkCliPath(
+  layout: ClaudeSdkHostLayout,
+  exists: (file: string) => boolean = existsSync
+): string | undefined {
+  return layout.cliCandidates.find((file) => exists(file));
+}
+
+/**
+ * S-4 B-5 (#27): the dev-only knobs, read from Main's environment only in an
+ * unpackaged checkout. A packaged build reads the project and local settings
+ * (S-3 P-1) and uses the CLI's built-in `rg`.
+ */
+export function claudeSdkHostDevSettings(
+  isPackaged: boolean,
+  env: NodeJS.ProcessEnv
+): { settingSources: string; rgDir?: string } {
+  if (isPackaged) return { settingSources: DEFAULT_SETTING_SOURCES };
+  const rgDir = env.AICLIENT_CLAUDE_SDK_RG_DIR?.trim();
+  return {
+    settingSources: env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES?.trim() ?? DEFAULT_SETTING_SOURCES,
+    ...(rgDir ? { rgDir } : {}),
+  };
+}
+
+/**
+ * Where the CLI binary may be: the dev override (`AICLIENT_CLAUDE_SDK_CLI`, an
+ * unpackaged checkout only, see `claudeSdkHostLayout`), else the SDK's platform
+ * package for this OS and CPU (Linux also has a musl build; packaged builds
+ * carry the glibc one only, S-4 B-3).
  */
 export function claudeSdkCliCandidates(
   modules: string,
@@ -218,8 +292,9 @@ export function claudeSdkCliCandidates(
   arch: string,
   env: NodeJS.ProcessEnv
 ): string[] {
+  // Absolute, so the file Main checks is the one the SDK starts from the chat's cwd.
   const override = env.AICLIENT_CLAUDE_SDK_CLI?.trim();
-  if (override) return [override];
+  if (override) return [path.resolve(override)];
   const binary = platform === 'win32' ? 'claude.exe' : 'claude';
   const base = `claude-agent-sdk-${platform}-${arch}`;
   const packages = platform === 'linux' ? [base, `${base}-musl`] : [base];
@@ -228,11 +303,13 @@ export function claudeSdkCliCandidates(
 
 /**
  * Can this build start the SDK host: its entry, its SDK package and the CLI
- * binary are on disk. A build without them (every installer before S-4) runs
+ * binary Main would hand it (S-4 B-4) are on disk. A build without them runs
  * every new chat on DSH, and says so once in the log.
  */
 export function createClaudeSdkHostAvailability(deps: {
   appPath: () => string;
+  isPackaged?: () => boolean;
+  resourcesPath?: () => string;
   exists?: (file: string) => boolean;
   log?: (message: string) => void;
   platform?: NodeJS.Platform;
@@ -244,20 +321,19 @@ export function createClaudeSdkHostAvailability(deps: {
   return () => {
     let missing: string | undefined;
     try {
-      const entry = claudeSdkHostEntry(deps.appPath());
-      const modules = path.join(path.dirname(entry), 'node_modules', '@anthropic-ai');
-      const sdk = path.join(modules, 'claude-agent-sdk', 'package.json');
-      missing = [entry, sdk].find((file) => !exists(file));
+      const layout = claudeSdkHostLayout({
+        isPackaged: deps.isPackaged?.() ?? false,
+        appPath: deps.appPath(),
+        resourcesPath: deps.resourcesPath?.() ?? '',
+        platform: deps.platform ?? process.platform,
+        arch: deps.arch ?? process.arch,
+        env: deps.env ?? process.env,
+      });
+      missing = [layout.entry, layout.sdk].find((file) => !exists(file));
       // The CLI binary too (user ruling 2026-10-16: a host that cannot start sends
       // a new chat to DSH), so a missing one is found here rather than at the first turn.
-      if (missing === undefined) {
-        const cli = claudeSdkCliCandidates(
-          modules,
-          deps.platform ?? process.platform,
-          deps.arch ?? process.arch,
-          deps.env ?? process.env
-        );
-        if (!cli.some((file) => exists(file))) missing = cli.join(' | ');
+      if (missing === undefined && claudeSdkCliPath(layout, exists) === undefined) {
+        missing = layout.cliCandidates.join(' | ');
       }
     } catch (error) {
       missing = error instanceof Error ? error.message : String(error);
@@ -287,8 +363,9 @@ export interface ClaudeSdkTransportInput {
 
 /**
  * Start one SDK host for one chat. Runs on the same Node the DSH host runs on
- * (`resolveDshHostLayout`, so `AICLIENT_DSH_NODE` applies in dev); unpackaged
- * only until S-4, from `src/claude-sdk-host/host.ts`.
+ * (`resolveDshHostLayout`, so `AICLIENT_DSH_NODE` applies in dev), from
+ * `src/claude-sdk-host/host.ts` in a checkout and `resources/claude-sdk-host/host.js`
+ * when packaged (S-4).
  */
 export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTransport {
   if (!existsSync(input.cwd)) {
@@ -317,7 +394,12 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
       true
     );
   }
-  const entry = claudeSdkHostEntry(app.getAppPath());
+  const layout = claudeSdkHostLayout({
+    isPackaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+  });
+  const entry = layout.entry;
   if (!existsSync(entry)) {
     throw new WorkerManagerError(
       CLAUDE_SDK_HOST_UNAVAILABLE,
@@ -325,6 +407,15 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
       true
     );
   }
+  const cli = claudeSdkCliPath(layout);
+  if (!cli) {
+    throw new WorkerManagerError(
+      CLAUDE_SDK_HOST_UNAVAILABLE,
+      `The Claude Agent SDK host has no CLI binary: ${layout.cliCandidates.join(' | ')}`,
+      true
+    );
+  }
+  const dev = claudeSdkHostDevSettings(app.isPackaged, process.env);
   const configDir = path.join(getAppStateRoot(), CLAUDE_SDK_HOME_DIR_NAME);
   ensurePrivateDirectory(configDir);
 
@@ -339,18 +430,14 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
     AICLIENT_CLAUDE_SDK_BASE_URL: baseURL,
     // S-3 P-1 (ruling 5): the project's settings and CLAUDE.md, and the user's private
     // project settings (`.claude/settings.local.json`, CLAUDE.local.md); never the user's
-    // ~/.claude. A scratch chat reads neither (the host closes them). Dev override.
-    AICLIENT_CLAUDE_SDK_SETTING_SOURCES:
-      process.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES?.trim() ?? 'project,local',
+    // ~/.claude. A scratch chat reads neither (the host closes them). Dev override only
+    // when unpackaged (S-4 B-5).
+    AICLIENT_CLAUDE_SDK_SETTING_SOURCES: dev.settingSources,
     AICLIENT_CLAUDE_SDK_CLIENT_APP: `pilab/${app.getVersion()}`,
-    // Dev override: another CLI binary.
-    ...(process.env.AICLIENT_CLAUDE_SDK_CLI?.trim()
-      ? { AICLIENT_CLAUDE_SDK_CLI: process.env.AICLIENT_CLAUDE_SDK_CLI.trim() }
-      : {}),
+    // S-4 B-4: the CLI binary the availability check found, never the SDK's own lookup.
+    AICLIENT_CLAUDE_SDK_CLI: cli,
     // Dev override: PiLab's bundled `rg` (@vscode/ripgrep) instead of the CLI's built-in one.
-    ...(process.env.AICLIENT_CLAUDE_SDK_RG_DIR?.trim()
-      ? { AICLIENT_CLAUDE_SDK_RG_DIR: process.env.AICLIENT_CLAUDE_SDK_RG_DIR.trim() }
-      : {}),
+    ...(dev.rgDir ? { AICLIENT_CLAUDE_SDK_RG_DIR: dev.rgDir } : {}),
   });
   return new ClaudeSdkProcessTransport({
     command: node,

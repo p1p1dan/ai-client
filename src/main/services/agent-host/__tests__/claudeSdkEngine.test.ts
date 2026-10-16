@@ -9,8 +9,10 @@ import {
   type ClaudeSdkPlanView,
   chooseNewChatEngine,
   claudeSdkCliCandidates,
+  claudeSdkCliPath,
   claudeSdkGatewayFingerprint,
-  claudeSdkHostEntry,
+  claudeSdkHostDevSettings,
+  claudeSdkHostLayout,
   claudeSdkLaunchFor,
   claudeSdkRouteByName,
   claudeSdkStubModel,
@@ -29,14 +31,26 @@ import { WorkerManagerError } from '../workerManagerError';
  * functions with injected sources; no process is ever started here.
  */
 
-const electron = vi.hoisted(() => ({ appPath: '' }));
+const electron = vi.hoisted(() => ({ appPath: '', isPackaged: false }));
+/** What `openClaudeSdkTransport` would spawn (S-4): no process is started. */
+const launches = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 
 vi.mock('electron', () => ({
   app: {
-    isPackaged: false,
+    get isPackaged() {
+      return electron.isPackaged;
+    },
     getAppPath: () => electron.appPath,
     getVersion: () => '0.0.0-test',
     getPath: () => tmpdir(),
+  },
+}));
+
+vi.mock('../ClaudeSdkProcessTransport', () => ({
+  ClaudeSdkProcessTransport: class {
+    constructor(launch: Record<string, unknown>) {
+      launches.push(launch);
+    }
   },
 }));
 
@@ -343,7 +357,11 @@ describe('host availability (decision 1)', () => {
     expect(log).toHaveBeenCalledTimes(1);
     expect(log.mock.calls[0]?.[0]).toContain('new chats run on DSH');
     expect(log.mock.calls[0]?.[0]).not.toMatch(/Claude Code/);
-    const entry = claudeSdkHostEntry('/app');
+    const { entry } = claudeSdkHostLayout({
+      isPackaged: false,
+      appPath: '/app',
+      resourcesPath: '',
+    });
     present.add(entry);
     expect(available()).toBe(false);
     present.add(
@@ -384,7 +402,36 @@ describe('host availability (decision 1)', () => {
       claudeSdkCliCandidates(modules, 'win32', 'x64', {
         AICLIENT_CLAUDE_SDK_CLI: ' D:cliclaude.exe ',
       })
-    ).toEqual(['D:cliclaude.exe']);
+    ).toEqual([path.resolve('D:cliclaude.exe')]);
+    // Resolved against Main's cwd, the file it checks (the SDK would start a relative
+    // path from the chat's workspace).
+    expect(
+      claudeSdkCliCandidates(modules, 'linux', 'x64', { AICLIENT_CLAUDE_SDK_CLI: 'build/cli.js' })
+    ).toEqual([path.resolve('build/cli.js')]);
+  });
+
+  it('a packaged build checks its resources and its own CLI, whatever the environment says (S-4)', () => {
+    const resources = path.join('/res');
+    const host = path.join(resources, 'claude-sdk-host');
+    const modules = path.join(host, 'node_modules', '@anthropic-ai');
+    const present = new Set([
+      path.join(host, 'host.js'),
+      path.join(modules, 'claude-agent-sdk', 'package.json'),
+      // Only the dev override's binary exists: it must not count.
+      'D:cliclaude.exe',
+    ]);
+    const available = createClaudeSdkHostAvailability({
+      appPath: () => '/app.asar',
+      isPackaged: () => true,
+      resourcesPath: () => resources,
+      exists: (file) => present.has(file),
+      platform: 'linux',
+      arch: 'x64',
+      env: { AICLIENT_CLAUDE_SDK_CLI: 'D:cliclaude.exe' },
+    });
+    expect(available()).toBe(false);
+    present.add(path.join(modules, 'claude-agent-sdk-linux-x64', 'claude'));
+    expect(available()).toBe(true);
   });
 
   it('an app path that cannot be read is no host', () => {
@@ -394,6 +441,76 @@ describe('host availability (decision 1)', () => {
       },
     });
     expect(available()).toBe(false);
+  });
+});
+
+describe('the packaged layout (S-4 B-4, B-5)', () => {
+  it('runs the source in a checkout and the artifact in resources when packaged', () => {
+    const unpackaged = claudeSdkHostLayout({
+      isPackaged: false,
+      appPath: '/app',
+      resourcesPath: '/res',
+      platform: 'win32',
+      arch: 'x64',
+      env: {},
+    });
+    expect(unpackaged.entry).toBe(path.join('/app', 'src', 'claude-sdk-host', 'host.ts'));
+    const packaged = claudeSdkHostLayout({
+      isPackaged: true,
+      appPath: '/app.asar',
+      resourcesPath: '/res',
+      platform: 'win32',
+      arch: 'x64',
+      env: { AICLIENT_CLAUDE_SDK_CLI: 'D:other.exe' },
+    });
+    const modules = path.join('/res', 'claude-sdk-host', 'node_modules', '@anthropic-ai');
+    expect(packaged).toEqual({
+      entry: path.join('/res', 'claude-sdk-host', 'host.js'),
+      sdk: path.join(modules, 'claude-agent-sdk', 'package.json'),
+      // The override is ignored: the bundled binary is the only candidate.
+      cliCandidates: [path.join(modules, 'claude-agent-sdk-win32-x64', 'claude.exe')],
+    });
+  });
+
+  it('a checkout honours the CLI override, and the first CLI that exists is the one', () => {
+    const overridden = claudeSdkHostLayout({
+      isPackaged: false,
+      appPath: '/app',
+      resourcesPath: '',
+      platform: 'linux',
+      arch: 'x64',
+      env: { AICLIENT_CLAUDE_SDK_CLI: ' /opt/cli.js ' },
+    });
+    expect(overridden.cliCandidates).toEqual([path.resolve('/opt/cli.js')]);
+    const layout = claudeSdkHostLayout({
+      isPackaged: false,
+      appPath: '/app',
+      resourcesPath: '',
+      platform: 'linux',
+      arch: 'x64',
+      env: {},
+    });
+    const [glibc, musl] = layout.cliCandidates;
+    expect(claudeSdkCliPath(layout, (file) => file === musl)).toBe(musl);
+    expect(claudeSdkCliPath(layout, () => true)).toBe(glibc);
+    expect(claudeSdkCliPath(layout, () => false)).toBeUndefined();
+  });
+
+  it('reads the dev knobs only in a checkout (#27)', () => {
+    const env = {
+      AICLIENT_CLAUDE_SDK_SETTING_SOURCES: ' project ',
+      AICLIENT_CLAUDE_SDK_RG_DIR: ' D:rg ',
+    };
+    expect(claudeSdkHostDevSettings(true, env)).toEqual({ settingSources: 'project,local' });
+    expect(claudeSdkHostDevSettings(false, env)).toEqual({
+      settingSources: 'project',
+      rgDir: 'D:rg',
+    });
+    expect(claudeSdkHostDevSettings(false, {})).toEqual({ settingSources: 'project,local' });
+    // An empty override means no sources at all, as before.
+    expect(claudeSdkHostDevSettings(false, { AICLIENT_CLAUDE_SDK_SETTING_SOURCES: '' })).toEqual({
+      settingSources: '',
+    });
   });
 });
 
@@ -439,9 +556,137 @@ describe('openClaudeSdkTransport refusals (no process is started)', () => {
       throw new Error('expected a refusal');
     } catch (error) {
       expect(error).toMatchObject({ code: CLAUDE_SDK_HOST_UNAVAILABLE });
-      expect((error as Error).message).toContain(claudeSdkHostEntry(electron.appPath));
+      expect((error as Error).message).toContain(
+        claudeSdkHostLayout({ isPackaged: false, appPath: electron.appPath, resourcesPath: '' })
+          .entry
+      );
       expect((error as Error).message).not.toContain('sk-1');
     }
+  });
+
+  it('a host entry without a CLI binary is claude_sdk_host_unavailable (S-4 B-4)', () => {
+    const originalCli = process.env.AICLIENT_CLAUDE_SDK_CLI;
+    delete process.env.AICLIENT_CLAUDE_SDK_CLI;
+    try {
+      process.env.AICLIENT_DSH_NODE = process.execPath;
+      for (const rel of [
+        ['src', 'dsh-host', 'host.ts'],
+        ['src', 'claude-sdk-host', 'host.ts'],
+      ]) {
+        mkdirSync(path.join(electron.appPath, ...rel.slice(0, -1)), { recursive: true });
+        writeFileSync(path.join(electron.appPath, ...rel), '');
+      }
+      const input = { generation: 1, cwd: dir, baseURL: 'https://gw.example', apiKey: 'sk-1' };
+      expectCode(() => openClaudeSdkTransport(input), CLAUDE_SDK_HOST_UNAVAILABLE);
+      expect(() => openClaudeSdkTransport(input)).toThrow(/has no CLI binary/);
+    } finally {
+      if (originalCli === undefined) delete process.env.AICLIENT_CLAUDE_SDK_CLI;
+      else process.env.AICLIENT_CLAUDE_SDK_CLI = originalCli;
+    }
+  });
+
+  /** S-4 B-4, B-5: the launch Main composes, packaged and in a checkout. */
+  describe('the launch', () => {
+    const overrides = {
+      AICLIENT_CLAUDE_SDK_CLI: path.join(tmpdir(), 'other-cli.js'),
+      AICLIENT_CLAUDE_SDK_RG_DIR: path.join(tmpdir(), 'rg'),
+      AICLIENT_CLAUDE_SDK_SETTING_SOURCES: 'user',
+      AICLIENT_CLAUDE_SDK_HOME: path.join(tmpdir(), 'home'),
+    };
+    const saved: Record<string, string | undefined> = {};
+    const originalResources = process.resourcesPath;
+    const nodeName = process.platform === 'win32' ? 'node.exe' : 'node';
+    const touch = (file: string) => {
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, '');
+    };
+
+    beforeEach(() => {
+      launches.length = 0;
+      for (const [name, value] of Object.entries(overrides)) {
+        saved[name] = process.env[name];
+        process.env[name] = value;
+      }
+    });
+
+    afterEach(() => {
+      electron.isPackaged = false;
+      (process as { resourcesPath?: string }).resourcesPath = originalResources;
+      for (const name of Object.keys(overrides)) {
+        if (saved[name] === undefined) delete process.env[name];
+        else process.env[name] = saved[name];
+      }
+    });
+
+    it('a packaged build starts the bundled host with its own CLI, whatever the environment says', () => {
+      const resources = path.join(dir, 'resources');
+      const layout = claudeSdkHostLayout({
+        isPackaged: true,
+        appPath: electron.appPath,
+        resourcesPath: resources,
+      });
+      const node = path.join(resources, 'node-runtime', nodeName);
+      for (const file of [
+        node,
+        path.join(resources, 'dsh-host', 'host.js'),
+        layout.entry,
+        layout.sdk,
+        layout.cliCandidates[0] as string,
+        overrides.AICLIENT_CLAUDE_SDK_CLI,
+      ]) {
+        touch(file);
+      }
+      electron.isPackaged = true;
+      (process as { resourcesPath?: string }).resourcesPath = resources;
+      openClaudeSdkTransport({
+        generation: 3,
+        cwd: dir,
+        baseURL: 'https://gw.example',
+        apiKey: 'sk-1',
+      });
+      const launch = launches.at(-1) as {
+        command: string;
+        args: string[];
+        env: Record<string, string>;
+        apiKey: string;
+      };
+      expect(launch.command).toBe(node);
+      expect(launch.args).toEqual([path.join(resources, 'claude-sdk-host', 'host.js')]);
+      expect(launch.env.AICLIENT_CLAUDE_SDK_CLI).toBe(layout.cliCandidates[0]);
+      expect(launch.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES).toBe('project,local');
+      expect(launch.env).not.toHaveProperty('AICLIENT_CLAUDE_SDK_RG_DIR');
+      expect(launch.env).not.toHaveProperty('AICLIENT_CLAUDE_SDK_HOME');
+      expect(launch.env.AICLIENT_CLAUDE_SDK_GENERATION).toBe('3');
+      // The key goes by IPC only (S-3 K-5).
+      expect(JSON.stringify(launch.env)).not.toContain('sk-1');
+      expect(launch.apiKey).toBe('sk-1');
+    });
+
+    it('a checkout honours the dev overrides', () => {
+      process.env.AICLIENT_DSH_NODE = process.execPath;
+      for (const rel of [
+        ['src', 'dsh-host', 'host.ts'],
+        ['src', 'claude-sdk-host', 'host.ts'],
+      ]) {
+        touch(path.join(electron.appPath, ...rel));
+      }
+      touch(overrides.AICLIENT_CLAUDE_SDK_CLI);
+      openClaudeSdkTransport({
+        generation: 1,
+        cwd: dir,
+        baseURL: 'https://gw.example',
+        apiKey: 'sk-1',
+      });
+      const launch = launches.at(-1) as { args: string[]; env: Record<string, string> };
+      expect(launch.args).toEqual([
+        path.join(electron.appPath, 'src', 'claude-sdk-host', 'host.ts'),
+      ]);
+      expect(launch.env.AICLIENT_CLAUDE_SDK_CLI).toBe(overrides.AICLIENT_CLAUDE_SDK_CLI);
+      expect(launch.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES).toBe('user');
+      expect(launch.env.AICLIENT_CLAUDE_SDK_RG_DIR).toBe(overrides.AICLIENT_CLAUDE_SDK_RG_DIR);
+      // Probes only: Main never hands the host a stand-in home (S-3 P-11).
+      expect(launch.env).not.toHaveProperty('AICLIENT_CLAUDE_SDK_HOME');
+    });
   });
 
   it('a missing workspace keeps the code the renderer already knows', () => {
