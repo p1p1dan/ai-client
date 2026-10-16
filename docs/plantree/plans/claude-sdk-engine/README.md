@@ -241,7 +241,7 @@ GUI 点验（与 S-2 §3.4 一并做，隔离 profile，只用本机假网关）
 
 ## 11 S-4 记录（2026-10-16）
 
-决定、实测与验证见 [S-4 设计](topics/s4-packaging.md)。一句话：照 DSH 宿主的做法单独构建 SDK 宿主的产物（`host.js`、SDK 与本平台的 CLI），afterPack 拷进 `resources/claude-sdk-host`；Main 打包后从那里起宿主、只认随包的 CLI，三个开发覆盖只在未打包时读；构建、afterPack、打包后核验都自检产物与体积，打包后用随包的 node 对假网关跑一个回合；CI 检查作业跑宿主的 tsc，三个打包作业构建、核验、冒烟。自主决定 B-1～B-15 列在设计 §1.2，待审阅。
+决定、实测与验证见 [S-4 设计](topics/s4-packaging.md)。一句话：照 DSH 宿主的做法单独构建 SDK 宿主的产物（`host.js`、SDK 与本平台的 CLI），afterPack 拷进 `resources/claude-sdk-host`；Main 打包后从那里起宿主、只认随包的 CLI，三个开发覆盖只在未打包时读；构建、afterPack、打包后核验都自检产物与体积，打包后用随包的 node 对假网关跑一个回合；CI 检查作业跑宿主的 tsc，三个打包作业构建、核验、冒烟。自主决定 B-1～B-15 列在设计 §1.2，用户 2026-10-16 确认全部照推荐。
 
 体积：Windows 安装后多 262 MiB（门槛 0.6 GB），安装包约多 80 MiB（估算）。
 
