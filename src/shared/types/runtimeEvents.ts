@@ -268,6 +268,12 @@ export interface SessionStatusEvent extends RuntimeEventBase {
     liveness?: SessionLivenessNote;
     disconnectReason?: SessionDisconnectReason;
     recovery?: SessionRecoveryNote;
+    /**
+     * Route B, S-1: background tasks (async subagents, background shells) the
+     * Claude Agent SDK engine still runs for this chat. Main keeps such a chat
+     * from being reclaimed as idle; the renderer ignores it.
+     */
+    backgroundTasks?: number;
   };
 }
 
@@ -1046,6 +1052,13 @@ export interface SessionCreatedEvent extends RuntimeEventBase {
      * same claim as "bundled".
      */
     permissionGate?: 'bundled' | 'user_configured';
+    /**
+     * Route B, S-1: the chat runs on the Claude Agent SDK engine (absent: DSH),
+     * and on which plan route. The composer offers such a chat only models of
+     * that route (`AgentModelOption.sdkRoute`); Main refuses others.
+     */
+    engine?: 'claude-sdk';
+    engineRoute?: string;
   };
 }
 

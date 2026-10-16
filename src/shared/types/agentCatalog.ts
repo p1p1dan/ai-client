@@ -69,6 +69,13 @@ export interface AgentModelOption {
    * with. Shown in the settings; absent outside the DSH plan.
    */
   autoCompaction?: AgentModelAutoCompaction;
+  /**
+   * Route B, S-1: the plan route this model runs on when a chat runs on the
+   * Claude Agent SDK engine (`claudeSdkRouteFor`); absent for models that
+   * engine does not serve. A running SDK chat may switch only among models of
+   * its own route.
+   */
+  sdkRoute?: string;
 }
 
 /** Why a catalog model is left out of the menu under the DSH engine. */
