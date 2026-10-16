@@ -110,6 +110,12 @@ import {
 import { sessionIndexService } from '../chat/SessionIndexService';
 import { getCurrentLocale } from '../i18n';
 import { type PreviewShowRequest, previewWindowManager } from '../preview/PreviewWindowManager';
+import {
+  type ChatEngine,
+  engineForNewSession,
+  engineForSessionFile,
+  openClaudeSdkTransport,
+} from './claudeSdkEngine';
 import { type CreatedDshChatSlot, createDshChatSlot } from './createDshChatSlot';
 import {
   DSH_HOST_RESTART_BUDGET,
@@ -324,6 +330,12 @@ interface ManagedSlot {
    * one. Cleared by the next `setPermissions`.
    */
   postureFromPlanReview?: boolean;
+  /**
+   * Route-B prototype: the engine this chat runs on, fixed for its life —
+   * chosen from the model when it is created, read off its session file when
+   * it is reopened (`claudeSdkEngine.ts`). Absent is DSH.
+   */
+  engine?: ChatEngine;
 }
 
 /**
@@ -676,6 +688,8 @@ export class WorkerManager {
   private readonly historyPageFlights = new Map<string, Promise<void>>();
   /** Every spawned physical slot, including failed-disposal retired generations. */
   private readonly ownedSlots = new Set<WorkerSlot>();
+  /** Route-B prototype: slots whose transport is a Claude SDK host process, not a DSH channel. */
+  private readonly claudeSdkSlots = new WeakSet<WorkerSlot>();
   private eventSequence = 0;
   private lifecycleChain: Promise<void> = Promise.resolve();
   private state: WorkerManagerState = 'stopped';
@@ -1072,6 +1086,7 @@ export class WorkerManager {
         permissions: input.permissions,
         sessionFile: null,
         identityCommitted: false,
+        engine: engineForNewSession(input.model),
         slot: null,
         bootstrap: null,
         state: 'creating',
@@ -1339,6 +1354,7 @@ export class WorkerManager {
         // Resume is only reachable through an indexed runtimeIdentity, so the
         // durable commit already happened — for this file, by definition.
         identityCommitted: true,
+        engine: engineForSessionFile(sessionFile),
         slot: null,
         bootstrap: null,
         state: 'creating',
@@ -3050,8 +3066,10 @@ export class WorkerManager {
       // provider idle timeout. The bridge never read them; the main TTL and
       // the timeout reach the host through the model plan (decision 040).
       ...selection,
+      ...(entry.engine === 'claude-sdk' ? { createTransport: openClaudeSdkTransport } : {}),
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);
+        if (entry.engine === 'claude-sdk') this.claudeSdkSlots.add(slot);
         expectedSlot = slot;
         entry.slot = slot;
         entry.generation = slot.generation;
@@ -3527,6 +3545,15 @@ export class WorkerManager {
    * channels it released.
    */
   private async releaseStuckChannels(slots: WorkerSlot[]): Promise<number> {
+    // Route-B prototype: an SDK chat that would not close is its own process; kill it.
+    let released = 0;
+    for (const slot of slots) {
+      if (this.claudeSdkSlots.has(slot) && slot.state === 'dispose-failed' && slot.forceKillNow()) {
+        this.ownedSlots.delete(slot);
+        released += 1;
+      }
+    }
+    if (released > 0) return released;
     const host = this.host;
     const stuck = slots.filter((slot) => slot.state === 'dispose-failed');
     if (!host || stuck.length === 0) return 0;
@@ -3895,6 +3922,8 @@ export class WorkerManager {
     slot: WorkerSlot,
     exit: WorkerTransportExit | undefined
   ): 'crashed' | 'restarted' | null {
+    // Route-B prototype: an SDK chat is its own process, never a host channel.
+    if (this.claudeSdkSlots.has(slot)) return null;
     const host = this.host;
     if (!host) return null;
     if (exit?.cause === 'channel-closed' && this.drainedSlots.has(slot)) return 'restarted';
@@ -4218,8 +4247,13 @@ export class WorkerManager {
           if (oldSlot.state !== 'disposed') {
             // A channel on the shared host is never confirmed by waiting
             // longer: its agent still holds the lock (decision 021 ladder B).
-            if (!this.host) throw error;
-            await this.escalateStuckChannel(entry, oldSlot);
+            if (entry.engine === 'claude-sdk') {
+              // Its own process tree, not a host channel: kill it rather than the DSH host.
+              if (oldSlot.forceKillNow()) this.ownedSlots.delete(oldSlot);
+            } else {
+              if (!this.host) throw error;
+              await this.escalateStuckChannel(entry, oldSlot);
+            }
             exitMark = this.hostExitMark();
             if ((entry.hostFaultStreak ?? 0) >= HOST_FAULT_SUSPECT_STREAK) {
               this.parkInError(
@@ -4309,7 +4343,7 @@ export class WorkerManager {
     } catch (error) {
       entry.state = 'crashed';
       entry.error = error instanceof Error ? error.message : String(error);
-      if (this.host && this.isHostFault(error, exitMark)) {
+      if (this.host && entry.engine !== 'claude-sdk' && this.isHostFault(error, exitMark)) {
         // decision 020 rule 4: the host went away under this attempt, which is
         // not the session's doing and costs it nothing. A failed host (budget
         // spent, or a predecessor that would not die) leaves it in the shared

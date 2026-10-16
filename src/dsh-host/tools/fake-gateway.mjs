@@ -297,6 +297,13 @@
  *                       cache (`simulateCache`): `single` one cache, `split` a second
  *                       backend B that takes every 4th request of the session, counts
  *                       0.55x and caches apart, `off` the static usage other scripts get.
+ *   claude-sdk         (route-B Claude Agent SDK engine, docs/plantree/plans/claude-sdk-engine/README.md)
+ *                       CONTENT-KEYED plan for the Claude Agent SDK engine: replies use Claude
+ *                       Code's tool names. The latest user message carrying CC-TEXT, CC-TOOLS,
+ *                       CC-ASK, CC-SLOW, CC-PLAN, CC-AGENT, CC-CHILD, CC-STEER, CC-SEARCH or CC-ENC
+ *                       (the encrypted-machine matrix) is the trigger;
+ *                       the step is the number of tool calls since it. Frames are paced, so the
+ *                       window shows the stream as it arrives. See `decideClaudeSdk`.
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
@@ -355,6 +362,7 @@ const VALID_PLANS = [
   'slow-fail',
   'echo-key-error',
   'dsh-p0-2',
+  'claude-sdk',
 ];
 
 /** Per-plan pacing defaults, applied only when the caller did not say. */
@@ -3159,6 +3167,418 @@ function sendBurst(res, model, decision, seq) {
   step();
 }
 
+// --- claude-sdk plan (route-B prototype) --------------------------------------
+//
+// Replies shaped for Claude Code's tool set (`Bash`, `Write`, `Read`,
+// `AskUserQuestion`, `ExitPlanMode`, `Agent`), so the Claude Agent SDK engine of
+// the prototype can be driven end to end without a real model. Content-keyed
+// like dsh-p0-2: the latest user message carrying a `CC-<NAME>` marker picks the
+// script, and the number of tool calls since it is the step. Every reply is
+// paced (`sendPaced`), so a window shows the stream as it arrives.
+
+const CC_MARKER = /\bCC-(TEXT|TOOLS|ASK|SLOW|PLAN|AGENT|CHILD|STEER|SEARCH|ENC)\b/;
+const CC_CWD = /Primary working directory: ([^\n]+)/;
+
+/** All text a request carries (system blocks and messages), for the cwd line. */
+function ccAllText(parsed) {
+  const parts = [];
+  const walk = (value) => {
+    if (typeof value === 'string') parts.push(value);
+    else if (Array.isArray(value)) value.forEach(walk);
+    else if (value && typeof value === 'object') {
+      if (typeof value.text === 'string') parts.push(value.text);
+      if (value.content !== undefined) walk(value.content);
+    }
+  };
+  walk(parsed?.system);
+  walk(parsed?.messages);
+  return parts.join('\n');
+}
+
+function ccToolResultTexts(messages) {
+  const out = [];
+  for (const message of messages) {
+    if (message?.role !== 'user' || !Array.isArray(message.content)) continue;
+    for (const block of message.content) {
+      if (block?.type === 'tool_result') out.push(toolResultText(block));
+    }
+  }
+  return out;
+}
+
+/** `[delayMs, event, data]` frames of one paced reply: thinking, text, then one tool call. */
+function ccFrames(model, { thinking, text, tool, chunkMs = 60 }) {
+  const frames = [messageStartFrame(model, 1200)];
+  let index = 0;
+  if (thinking) {
+    frames.push([
+      0,
+      'content_block_start',
+      {
+        type: 'content_block_start',
+        index,
+        content_block: { type: 'thinking', thinking: '', signature: '' },
+      },
+    ]);
+    for (const piece of splitInto(thinking, 8)) {
+      frames.push([
+        chunkMs,
+        'content_block_delta',
+        { type: 'content_block_delta', index, delta: { type: 'thinking_delta', thinking: piece } },
+      ]);
+    }
+    frames.push([
+      0,
+      'content_block_delta',
+      {
+        type: 'content_block_delta',
+        index,
+        delta: { type: 'signature_delta', signature: `cc-sig-${crypto.randomUUID()}` },
+      },
+    ]);
+    frames.push([0, 'content_block_stop', { type: 'content_block_stop', index }]);
+    index += 1;
+  }
+  if (text) {
+    frames.push([
+      0,
+      'content_block_start',
+      { type: 'content_block_start', index, content_block: { type: 'text', text: '' } },
+    ]);
+    for (const piece of splitInto(text, Math.min(12, Math.max(1, text.length)))) {
+      frames.push([
+        chunkMs,
+        'content_block_delta',
+        { type: 'content_block_delta', index, delta: { type: 'text_delta', text: piece } },
+      ]);
+    }
+    frames.push([0, 'content_block_stop', { type: 'content_block_stop', index }]);
+    index += 1;
+  }
+  if (tool) {
+    frames.push([
+      0,
+      'content_block_start',
+      {
+        type: 'content_block_start',
+        index,
+        content_block: {
+          type: 'tool_use',
+          id: `toolu_${crypto.randomUUID().replaceAll('-', '')}`,
+          name: tool.name,
+          input: {},
+        },
+      },
+    ]);
+    for (const partial_json of chunkString(JSON.stringify(tool.input), 4)) {
+      frames.push([
+        chunkMs,
+        'content_block_delta',
+        { type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json } },
+      ]);
+    }
+    frames.push([0, 'content_block_stop', { type: 'content_block_stop', index }]);
+  }
+  frames.push(
+    [
+      0,
+      'message_delta',
+      {
+        type: 'message_delta',
+        delta: { stop_reason: tool ? 'tool_use' : 'end_turn', stop_sequence: null },
+        usage: {
+          input_tokens: 1200,
+          cache_read_input_tokens: 3400,
+          cache_creation_input_tokens: 500,
+          output_tokens: 80,
+        },
+      },
+    ],
+    [0, 'message_stop', { type: 'message_stop' }]
+  );
+  return frames;
+}
+
+/** Decide one claude-sdk reply; see the plan's header note. */
+function decideClaudeSdk(parsed) {
+  const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
+  let at = -1;
+  let scenario = null;
+  let trigger = '';
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role !== 'user') continue;
+    const own = ownText(messages[i]);
+    const match = CC_MARKER.exec(own);
+    if (match) {
+      at = i;
+      scenario = match[1];
+      // From the marker on: a reminder block before it (e.g. CLAUDE.md) may carry braces too.
+      trigger = own.slice(match.index);
+      break;
+    }
+  }
+  const reply = (spec, label) => ({
+    kind: 'cc-frames',
+    status: 200,
+    label,
+    frames: (model) => ccFrames(model, spec),
+  });
+  if (!scenario) return reply({ text: 'fake gateway ok' }, 'cc-default');
+  const after = messages.slice(at + 1);
+  const step = after.filter(
+    (m) =>
+      m?.role === 'assistant' &&
+      Array.isArray(m.content) &&
+      m.content.some((block) => block?.type === 'tool_use')
+  ).length;
+  const results = ccToolResultTexts(after);
+  const lastResult = (results[results.length - 1] ?? '').slice(0, 400);
+  const cwd = (CC_CWD.exec(ccAllText(parsed))?.[1] ?? '.').trim();
+  const sep = cwd.includes('\\') ? '\\' : '/';
+  let params = {};
+  try {
+    const object = firstJsonObject(trigger);
+    if (object) params = JSON.parse(object);
+  } catch {
+    // No parameters: the script defaults apply.
+  }
+  const label = `cc-${scenario.toLowerCase()}-${step}`;
+  switch (scenario) {
+    case 'TEXT':
+      return reply(
+        {
+          thinking: 'The user wants a streamed answer. I will reply in two short sentences.',
+          text: 'PiLab × Claude Agent SDK：这一段正文是逐块流式送达的。第二句也在流里。',
+        },
+        label
+      );
+    case 'TOOLS': {
+      const file = `${cwd}${sep}cc-proto.txt`;
+      if (step === 0) {
+        return reply(
+          {
+            thinking: 'First run a shell command, then write a file, then read it back.',
+            text: '先跑一个命令。',
+            tool: {
+              name: 'Bash',
+              input: {
+                command: 'echo cc-proto-bash && pwd && uname -s',
+                description: 'Print a marker and the shell environment',
+              },
+            },
+          },
+          label
+        );
+      }
+      if (step === 1) {
+        return reply(
+          {
+            text: '再写一个文件。',
+            tool: {
+              name: 'Write',
+              input: { file_path: file, content: 'hello from the claude-sdk plan\n' },
+            },
+          },
+          label
+        );
+      }
+      if (step === 2) {
+        return reply({ tool: { name: 'Read', input: { file_path: file } } }, label);
+      }
+      return reply({ text: `工具都跑完了。最后一个结果：${lastResult.slice(0, 120)}` }, label);
+    }
+    case 'ASK':
+      if (step === 0) {
+        return reply(
+          {
+            text: '需要你选一下。',
+            tool: {
+              name: 'AskUserQuestion',
+              input: {
+                questions: [
+                  {
+                    question: '原型下一步先验证哪一项？',
+                    header: '下一步',
+                    multiSelect: false,
+                    options: [
+                      { label: '审批卡', description: '写文件时弹出的审批' },
+                      { label: '提问卡', description: '就是这一张' },
+                      { label: '停止', description: '中途停止回合' },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+          label
+        );
+      }
+      return reply({ text: `收到回答：${lastResult}` }, label);
+    case 'SLOW': {
+      const seconds = Number.isFinite(params.seconds) ? params.seconds : 60;
+      if (step === 0) {
+        return reply(
+          {
+            text: '开始一个很慢的命令。',
+            tool: {
+              name: 'Bash',
+              input: {
+                command: `sleep ${seconds} & sleep ${seconds}; wait; echo slept`,
+                description: 'Sleep in two processes so Stop has a process tree to end',
+              },
+            },
+          },
+          label
+        );
+      }
+      return reply({ text: `命令结束：${lastResult.slice(0, 120)}` }, label);
+    }
+    case 'PLAN':
+      if (step === 0) {
+        return reply(
+          {
+            text: '计划写好了，请审阅。',
+            tool: {
+              name: 'ExitPlanMode',
+              input: { plan: '## 原型计划\n\n1. 读入口文件\n2. 改一处\n3. 跑测试' },
+            },
+          },
+          label
+        );
+      }
+      return reply({ text: `计划审阅结果：${lastResult.slice(0, 200)}` }, label);
+    case 'AGENT':
+      if (step === 0) {
+        return reply(
+          {
+            text: '派一个子代理。',
+            tool: {
+              name: 'Agent',
+              input: {
+                description: 'Child check',
+                prompt: 'CC-CHILD reply with one line',
+                subagent_type: 'general-purpose',
+              },
+            },
+          },
+          label
+        );
+      }
+      return reply({ text: `子代理返回：${lastResult.slice(0, 200)}` }, label);
+    case 'CHILD':
+      return reply({ text: 'child agent here: one line from the subagent.' }, label);
+    case 'SEARCH':
+      if (step === 0) {
+        return reply(
+          {
+            tool: {
+              name: 'Grep',
+              input: { pattern: 'point-check', path: cwd, output_mode: 'content', '-n': true },
+            },
+          },
+          label
+        );
+      }
+      if (step === 1)
+        return reply({ tool: { name: 'Glob', input: { pattern: '**/*.md', path: cwd } } }, label);
+      return reply({ text: `搜索结果：${results.map((r) => r.slice(0, 120)).join(' / ')}` }, label);
+    case 'ENC': {
+      // Encrypted-machine matrix (host-probe.ts `enc`, one sample file per turn). Per file:
+      // Read, Grep, Bash cat, Bash sed, Edit (marker -> CCSDK-EDITED-marker), Read again,
+      // Write a new file of the same name (`writes[i]`) and Read that back; then one
+      // verdict row per file, in the order of the calls.
+      const files = Array.isArray(params.files) ? params.files.map(String) : [];
+      const writes = Array.isArray(params.writes) ? params.writes.map(String) : [];
+      const marker = typeof params.marker === 'string' ? params.marker : 'P113B-MARKER-';
+      const plan = files.flatMap((file, i) => {
+        const quoted = `'${file.replaceAll('\\', '/').replaceAll("'", "'\\''")}'`;
+        const calls = [
+          ['Read', { name: 'Read', input: { file_path: file } }],
+          [
+            'Grep',
+            { name: 'Grep', input: { pattern: marker, path: file, output_mode: 'content' } },
+          ],
+          [
+            'cat',
+            { name: 'Bash', input: { command: `cat ${quoted} | head -c 400`, description: 'cat' } },
+          ],
+          [
+            'sed',
+            { name: 'Bash', input: { command: `sed -n '1,5p' ${quoted}`, description: 'sed' } },
+          ],
+          [
+            'Edit',
+            {
+              name: 'Edit',
+              input: { file_path: file, old_string: marker, new_string: `CCSDK-EDITED-${marker}` },
+            },
+          ],
+          ['Read2', { name: 'Read', input: { file_path: file } }],
+        ];
+        if (writes[i]) {
+          calls.push(
+            [
+              'Write',
+              {
+                name: 'Write',
+                input: { file_path: writes[i], content: `CCSDK-WRITTEN ${marker}\nline two\n` },
+              },
+            ],
+            ['Read3', { name: 'Read', input: { file_path: writes[i] } }]
+          );
+        }
+        return calls.map(([cell, tool]) => ({ file: i, cell, tool }));
+      });
+      if (step < plan.length) return reply({ tool: plan[step].tool }, label);
+      const verdict = (cell, text) => {
+        if (text.includes('%TSD-Header')) return 'cipher';
+        if (cell === 'Edit' || cell === 'Write') return /success/i.test(text) ? 'ok' : 'failed';
+        // The CLI refused the call itself (e.g. Read on any .docx: "cannot read binary files").
+        if (text.includes('<tool_use_error>')) return 'error';
+        if (cell === 'Read2' && text.includes('CCSDK-EDITED-')) return 'plain-edited';
+        if (cell === 'Read3') return text.includes('CCSDK-WRITTEN') ? 'plain-written' : 'other';
+        return text.includes(marker) ? 'plain' : 'other';
+      };
+      const rows = files.map((file, i) => {
+        const cells = plan
+          .map((entry, k) => ({ ...entry, text: results[k] ?? '' }))
+          .filter((entry) => entry.file === i)
+          .map((entry) => `${entry.cell}=${verdict(entry.cell, entry.text)}`);
+        return `${file.split(/[\\/]/).pop()}: ${cells.join(' ')}`;
+      });
+      return reply({ text: `ENC-MATRIX\n${rows.join('\n')}` }, label);
+    }
+    case 'STEER': {
+      if (step < 2) {
+        return reply(
+          {
+            text: `第 ${step + 1} 步。`,
+            tool: {
+              name: 'Bash',
+              input: { command: `sleep 4 && echo steer-step-${step + 1}`, description: 'Wait' },
+            },
+          },
+          label
+        );
+      }
+      // Claude Code folds a message sent mid-turn in as a system message.
+      const notes = after
+        .filter((m) => m?.role === 'user' || m?.role === 'system')
+        .map((m) => (typeof m.content === 'string' ? m.content : ownText(m)))
+        .filter(
+          (t) =>
+            t.trim().length > 0 &&
+            !t.includes('<system-reminder>') &&
+            !t.startsWith('# Environment')
+        )
+        .map((t) => t.trim().slice(0, 80));
+      return reply({ text: `收到的插话：${notes.length ? notes.join(' / ') : '（没有）'}` }, label);
+    }
+    default:
+      return reply({ text: 'fake gateway ok' }, label);
+  }
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.log) LOG_PATH = args.log;
@@ -3245,11 +3665,13 @@ function main() {
       }
 
       const decision =
-        args.plan === 'dsh-p0-2'
-          ? decideDshP02(parsed, seq)
-          : args.plan === 'echo-key-error'
-            ? { kind: 'echo-key', status: 401 }
-            : decide(args.plan, seq, toolResultPresent, args.sleep, { hold: args.hold });
+        args.plan === 'claude-sdk'
+          ? decideClaudeSdk(parsed)
+          : args.plan === 'dsh-p0-2'
+            ? decideDshP02(parsed, seq)
+            : args.plan === 'echo-key-error'
+              ? { kind: 'echo-key', status: 401 }
+              : decide(args.plan, seq, toolResultPresent, args.sleep, { hold: args.hold });
       const key = receivedKey(req);
       // Decision 173: P1-CHAIN replies are billed by the simulated upstream cache.
       const simulated =
@@ -3342,6 +3764,8 @@ function main() {
         sendPaced(res, stampedFrames(model, decision));
       } else if (decision.kind === 'burst') {
         sendBurst(res, model, decision, seq);
+      } else if (decision.kind === 'cc-frames') {
+        sendPaced(res, decision.frames(model));
       } else if (decision.kind === 'paced') {
         const frames =
           decision.flavour === 'slow-write'
