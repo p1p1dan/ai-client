@@ -1,0 +1,292 @@
+{
+  "scenario": "tools",
+  "events": [
+    {
+      "type": "session.status",
+      "payload": {
+        "status": "idle",
+        "backgroundTasks": 0
+      }
+    },
+    {
+      "type": "session.status",
+      "payload": {
+        "status": "running",
+        "backgroundTasks": 0
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<user#1>",
+        "role": "user",
+        "attemptId": "<attempt#1>"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<user#1>",
+        "blockId": "<user#2>",
+        "text": "CC-TOOLS run a command, write, read"
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<user#1>"
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<msg#1>",
+        "role": "assistant",
+        "model": "probe-gw/claude-opus-5-5"
+      }
+    },
+    {
+      "type": "thinking.started",
+      "payload": {
+        "messageId": "<msg#1>",
+        "blockId": "<msg#2>"
+      }
+    },
+    {
+      "type": "thinking.delta",
+      "payload": {
+        "messageId": "<msg#1>",
+        "blockId": "<msg#2>",
+        "text": "First run a shell command, then write a file, then read it back."
+      }
+    },
+    {
+      "type": "thinking.completed",
+      "payload": {
+        "messageId": "<msg#1>",
+        "blockId": "<msg#2>"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<msg#1>",
+        "blockId": "<msg#3>",
+        "text": "先跑一个命令。"
+      }
+    },
+    {
+      "type": "tool.started",
+      "payload": {
+        "messageId": "<msg#1>",
+        "toolCallId": "<call#1>",
+        "name": "Bash",
+        "input": {
+          "__streaming": {
+            "bytes": 0,
+            "lines": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "tool.updated",
+      "payload": {
+        "messageId": "<msg#1>",
+        "toolCallId": "<call#1>",
+        "input": {
+          "command": "echo cc-proto-bash && pwd && uname -s",
+          "description": "Print a marker and the shell environment"
+        }
+      }
+    },
+    {
+      "type": "tool.completed",
+      "payload": {
+        "messageId": "<msg#1>",
+        "toolCallId": "<call#1>",
+        "ok": true,
+        "output": "cc-proto-bash\n<ws>\n<os>"
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<msg#1>"
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<msg#4>",
+        "role": "assistant",
+        "model": "probe-gw/claude-opus-5-5"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<msg#4>",
+        "blockId": "<msg#5>",
+        "text": "再写一个文件。"
+      }
+    },
+    {
+      "type": "tool.started",
+      "payload": {
+        "messageId": "<msg#4>",
+        "toolCallId": "<call#2>",
+        "name": "Write",
+        "input": {
+          "__streaming": {
+            "bytes": 0,
+            "lines": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "tool.updated",
+      "payload": {
+        "messageId": "<msg#4>",
+        "toolCallId": "<call#2>",
+        "input": {
+          "file_path": "<ws>/cc-proto.txt",
+          "content": "hello from the claude-sdk plan\n"
+        }
+      }
+    },
+    {
+      "type": "permission.requested",
+      "payload": {
+        "permissionId": "<call#2>",
+        "toolName": "Write",
+        "kind": "file_change",
+        "action": "write_file",
+        "input": {
+          "path": "<ws>/cc-proto.txt",
+          "content": "hello from the claude-sdk plan\n",
+          "contentLabel": "Content",
+          "workspace": "<ws>"
+        },
+        "detail": {
+          "kind": "file_change",
+          "changes": [
+            {
+              "path": "<ws>/cc-proto.txt",
+              "change": "add"
+            }
+          ]
+        },
+        "decisions": ["allow", "allow_session", "deny"]
+      }
+    },
+    {
+      "type": "permission.resolved",
+      "payload": {
+        "permissionId": "<call#2>",
+        "allow": true,
+        "decision": "allow"
+      }
+    },
+    {
+      "type": "tool.completed",
+      "payload": {
+        "messageId": "<msg#4>",
+        "toolCallId": "<call#2>",
+        "ok": true,
+        "output": "File created successfully at: <ws>/cc-proto.txt (file state is current in your context — no need to Read it back)"
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<msg#4>"
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<msg#6>",
+        "role": "assistant",
+        "model": "probe-gw/claude-opus-5-5"
+      }
+    },
+    {
+      "type": "tool.started",
+      "payload": {
+        "messageId": "<msg#6>",
+        "toolCallId": "<call#3>",
+        "name": "Read",
+        "input": {
+          "__streaming": {
+            "bytes": 0,
+            "lines": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "tool.updated",
+      "payload": {
+        "messageId": "<msg#6>",
+        "toolCallId": "<call#3>",
+        "input": {
+          "file_path": "<ws>/cc-proto.txt"
+        }
+      }
+    },
+    {
+      "type": "tool.completed",
+      "payload": {
+        "messageId": "<msg#6>",
+        "toolCallId": "<call#3>",
+        "ok": true,
+        "output": "1\thello from the claude-sdk plan\n2\t"
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<msg#6>"
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<msg#7>",
+        "role": "assistant",
+        "model": "probe-gw/claude-opus-5-5"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<msg#7>",
+        "blockId": "<msg#8>",
+        "text": "工具都跑完了。最后一个结果：1\thello from the claude-sdk plan\n2\t"
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<msg#7>"
+      }
+    },
+    {
+      "type": "session.completed",
+      "payload": {}
+    }
+  ],
+  "usageKeys": [
+    "cacheRead",
+    "cacheWrite",
+    "context",
+    "costUsd",
+    "input",
+    "output",
+    "pending",
+    "session",
+    "totalTokens"
+  ]
+}

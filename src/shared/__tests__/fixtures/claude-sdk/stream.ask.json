@@ -1,0 +1,189 @@
+{
+  "scenario": "ask",
+  "events": [
+    {
+      "type": "session.status",
+      "payload": {
+        "status": "idle",
+        "backgroundTasks": 0
+      }
+    },
+    {
+      "type": "session.status",
+      "payload": {
+        "status": "running",
+        "backgroundTasks": 0
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<user#1>",
+        "role": "user",
+        "attemptId": "<attempt#1>"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<user#1>",
+        "blockId": "<user#2>",
+        "text": "CC-ASK please"
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<user#1>"
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<msg#1>",
+        "role": "assistant",
+        "model": "probe-gw/claude-opus-5-5"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<msg#1>",
+        "blockId": "<msg#2>",
+        "text": "需要你选一下。"
+      }
+    },
+    {
+      "type": "tool.started",
+      "payload": {
+        "messageId": "<msg#1>",
+        "toolCallId": "<call#1>",
+        "name": "AskUserQuestion",
+        "input": {
+          "__streaming": {
+            "bytes": 0,
+            "lines": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "question.requested",
+      "payload": {
+        "questionId": "<question#1>",
+        "questions": [
+          {
+            "question": "原型下一步先验证哪一项？",
+            "header": "下一步",
+            "options": [
+              {
+                "label": "审批卡",
+                "description": "写文件时弹出的审批"
+              },
+              {
+                "label": "提问卡",
+                "description": "就是这一张"
+              },
+              {
+                "label": "停止",
+                "description": "中途停止回合"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "tool.updated",
+      "payload": {
+        "messageId": "<msg#1>",
+        "toolCallId": "<call#1>",
+        "input": {
+          "questions": [
+            {
+              "question": "原型下一步先验证哪一项？",
+              "header": "下一步",
+              "multiSelect": false,
+              "options": [
+                {
+                  "label": "审批卡",
+                  "description": "写文件时弹出的审批"
+                },
+                {
+                  "label": "提问卡",
+                  "description": "就是这一张"
+                },
+                {
+                  "label": "停止",
+                  "description": "中途停止回合"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "question.resolved",
+      "payload": {
+        "questionId": "<question#1>",
+        "outcome": "answered",
+        "answers": {
+          "原型下一步先验证哪一项？": "提问卡"
+        }
+      }
+    },
+    {
+      "type": "tool.completed",
+      "payload": {
+        "messageId": "<msg#1>",
+        "toolCallId": "<call#1>",
+        "ok": true,
+        "output": "Your questions have been answered: \"原型下一步先验证哪一项？\"=\"提问卡\". You can now continue with these answers in mind."
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<msg#1>"
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<msg#3>",
+        "role": "assistant",
+        "model": "probe-gw/claude-opus-5-5"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<msg#3>",
+        "blockId": "<msg#4>",
+        "text": "收到回答：Your questions have been answered: \"原型下一步先验证哪一项？\"=\"提问卡\". You can now continue with these answers in mind."
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<msg#3>"
+      }
+    },
+    {
+      "type": "session.completed",
+      "payload": {}
+    }
+  ],
+  "usageKeys": [
+    "cacheRead",
+    "cacheWrite",
+    "context",
+    "costUsd",
+    "input",
+    "output",
+    "pending",
+    "session",
+    "totalTokens"
+  ]
+}

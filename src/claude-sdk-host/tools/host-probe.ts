@@ -158,6 +158,8 @@ const generation = 1;
 let seq = 0;
 const pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 let events: Event[] = [];
+/** S-5 R-3: every event of the running scenario, dumped when PROBE_RECORD_DIR is set. */
+let scenarioEvents: Event[] = [];
 const waiters: Array<{
   test: (e: Event) => boolean;
   resolve: (e: Event) => void;
@@ -224,6 +226,7 @@ function startHost(): void {
     } else if (message.kind === 'event' && message.type === 'runtime.event') {
       const event = message.payload as Event;
       events.push(event);
+      scenarioEvents.push(event);
       if (
         process.env.PROBE_VERBOSE &&
         !event.type.endsWith('.delta') &&
@@ -792,6 +795,21 @@ function marketplaceTraces(): string[] {
   return found;
 }
 
+/**
+ * S-5 R-3 (topic s5-regression.md): the scenario's events as the host sent them, with
+ * the directories they may name, for `event-record.ts` to normalize. Unnormalized: a
+ * local file the gate reads, never committed.
+ */
+function recordScenario(scenario: string): void {
+  const dir = process.env.PROBE_RECORD_DIR?.trim();
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `raw.${scenario}.json`),
+    `${JSON.stringify({ scenario, workspace, configDir, tmp: tmpdir(), events: scenarioEvents }, null, 2)}\n`
+  );
+}
+
 /** `errors`: status, the code `session.failed` must carry, and an optional gateway message. */
 const ERROR_CASES: Array<{ status: number; code: string; message?: string; echoKey?: boolean }> = [
   { status: 401, code: 'PROVIDER_UNAUTHORIZED' },
@@ -869,6 +887,7 @@ async function main(): Promise<void> {
   await bootstrap();
 
   for (const scenario of scenarios) {
+    scenarioEvents = [];
     switch (scenario) {
       case 'text': {
         await send('CC-TEXT hello');
@@ -1850,6 +1869,7 @@ async function main(): Promise<void> {
       default:
         check(scenario, 'is a known scenario', false);
     }
+    recordScenario(scenario);
   }
   const commands = await request<{ commands: unknown[] }>('worker.commands', { logicalSessionId });
   console.log(`\ncommands: ${commands.commands.length}`);

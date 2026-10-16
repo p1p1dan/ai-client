@@ -1,0 +1,187 @@
+{
+  "scenario": "plan",
+  "events": [
+    {
+      "type": "session.status",
+      "payload": {
+        "status": "idle",
+        "backgroundTasks": 0
+      }
+    },
+    {
+      "type": "session.status",
+      "payload": {
+        "status": "running",
+        "backgroundTasks": 0
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<user#1>",
+        "role": "user",
+        "attemptId": "<attempt#1>"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<user#1>",
+        "blockId": "<user#2>",
+        "text": "CC-PLAN make a plan"
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<user#1>"
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<msg#1>",
+        "role": "assistant",
+        "model": "probe-gw/claude-opus-5-5"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<msg#1>",
+        "blockId": "<msg#2>",
+        "text": "计划写好了，请审阅。"
+      }
+    },
+    {
+      "type": "tool.started",
+      "payload": {
+        "messageId": "<msg#1>",
+        "toolCallId": "<call#1>",
+        "name": "ExitPlanMode",
+        "input": {
+          "__streaming": {
+            "bytes": 0,
+            "lines": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "tool.updated",
+      "payload": {
+        "messageId": "<msg#1>",
+        "toolCallId": "<call#1>",
+        "input": {
+          "plan": "## 原型计划\n\n1. 读入口文件\n2. 改一处\n3. 跑测试"
+        }
+      }
+    },
+    {
+      "type": "question.requested",
+      "payload": {
+        "questionId": "<question#1>",
+        "questions": [
+          {
+            "id": "plan-review",
+            "header": "Plan review",
+            "question": "原型计划",
+            "options": []
+          }
+        ],
+        "review": {
+          "kind": "plan",
+          "source": "exit_plan_mode",
+          "title": "原型计划",
+          "plan": "## 原型计划\n\n1. 读入口文件\n2. 改一处\n3. 跑测试",
+          "callId": "<call#1>",
+          "goalObjective": "## 原型计划\n\n1. 读入口文件\n2. 改一处\n3. 跑测试",
+          "choices": ["run:accept-edits", "run:ask", "run:auto", "run:bypass", "keep-planning"]
+        }
+      }
+    },
+    {
+      "type": "session.permissions",
+      "payload": {
+        "permissions": {
+          "mode": "agent",
+          "gear": "accept-edits"
+        },
+        "cause": "plan-approved",
+        "questionId": "<question#1>"
+      }
+    },
+    {
+      "type": "question.resolved",
+      "payload": {
+        "questionId": "<question#1>",
+        "outcome": "answered",
+        "answers": {
+          "plan-review": "run:accept-edits"
+        },
+        "review": {
+          "choice": "run:accept-edits"
+        }
+      }
+    },
+    {
+      "type": "tool.completed",
+      "payload": {
+        "messageId": "<msg#1>",
+        "toolCallId": "<call#1>",
+        "ok": true,
+        "output": "User has approved exiting plan mode. You can now proceed."
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<msg#1>"
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<msg#3>",
+        "role": "assistant",
+        "model": "probe-gw/claude-opus-5-5"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<msg#3>",
+        "blockId": "<msg#4>",
+        "text": "计划审阅结果：User has approved exiting plan mode. You can now proceed."
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<msg#3>"
+      }
+    },
+    {
+      "type": "session.completed",
+      "payload": {}
+    },
+    {
+      "type": "session.status",
+      "payload": {
+        "status": "idle",
+        "backgroundTasks": 0
+      }
+    }
+  ],
+  "usageKeys": [
+    "cacheRead",
+    "cacheWrite",
+    "context",
+    "costUsd",
+    "input",
+    "output",
+    "pending",
+    "session",
+    "totalTokens"
+  ]
+}

@@ -127,7 +127,7 @@ function parseArgs(argv: string[]): {
   return args;
 }
 
-function freePort(): Promise<number> {
+export function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer();
     server.once('error', reject);
@@ -139,7 +139,7 @@ function freePort(): Promise<number> {
   });
 }
 
-async function waitForHealth(url: string, timeoutMs: number): Promise<void> {
+export async function waitForHealth(url: string, timeoutMs: number): Promise<void> {
   const started = Date.now();
   for (;;) {
     try {
@@ -153,7 +153,7 @@ async function waitForHealth(url: string, timeoutMs: number): Promise<void> {
   }
 }
 
-function run(
+export function run(
   command: string,
   args: string[],
   options: { cwd: string; env: NodeJS.ProcessEnv; log: string; timeoutMs: number }

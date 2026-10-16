@@ -44,4 +44,12 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 - **H-4（#42）**：宿主在启动 CLI 时订阅 `initializationResult()`；就绪前的切档立即应答、先记下（多次只发最后一次），就绪后发出；被拒时按 CLI 的档同步并带原因（`engine`、`refusedReason`）。就绪前 CLI 报来的起始档不当作它自己改了档。单测 2 条，变异检查 3 处都能抓到：去掉"就绪前先记下"、记下时不计入在途、被拒时不带原因。
 - **R-4**：[GUI 点验清单](gui-checklist.md)，9 项，附 2026-10-16 开发版的结果；打包后照清单再走一遍。
 - 整跑：H-4 落地后 `probe-suite.ts` 一次跑完 7 组全过（流程 35、各档 34、mode-plan-refused 3、errors+repoenv 33、projcfg 12、scratch 9、home 4，共 130 条，约 1.5 分钟）。
-- R-2（接 CI）与 R-3（录制门禁）未做：R-2 等 S-4 合入；R-3 下一批。
+- R-2（接 CI）未做，等 S-4 合入。
+
+## 5 录制门禁（R-3，2026-10-16）
+
+- `node src/claude-sdk-host/tools/event-record.ts [--check | --update] [--only ...] [--out-dir ...]`：自起本机假网关，用探针录 `text`、`tools`、`ask`、`plan` 四个场景（探针的 `PROBE_RECORD_DIR` 把每个场景的原始事件写到本机临时目录，不入库），规范化后与 `src/shared/__tests__/fixtures/claude-sdk/stream.<场景>.json` 比对；`--update` 重写样本。
+- 规范化（`event-normalize.ts`，纯函数，单测 5 条）：各类 id 按首次出现编号；工作区、配置目录、临时目录的 Windows、正斜杠与 Git Bash（`/tmp/...`）写法换成 `<ws>`、`<config>`、`<tmp>`，其后的路径一律正斜杠；`uname` 的系统名换成 `<os>`；同一块的增量合并；连续相同的状态与同一调用的多次更新只留最后一条；`usage.updated` 不进序列，只记它的字段名。
+- 确定性：连录两遍，四个场景逐字节相同（113、296、189、193 行）。
+- 能抓到改动：临时去掉宿主 `message.started` 的 `model` 字段，`--check` 报 `DIFF text`、指到第 58 行；还原后通过。
+- 样本是在 Windows 上录的。Linux 上 Bash 的输出与路径应已被规范化覆盖，接 CI（R-2）时在 Linux 上跑一遍确认，不同就按平台分样本。

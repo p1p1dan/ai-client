@@ -1,0 +1,113 @@
+{
+  "scenario": "text",
+  "events": [
+    {
+      "type": "session.projection",
+      "payload": {
+        "key": "todos",
+        "view": null
+      }
+    },
+    {
+      "type": "session.projection",
+      "payload": {
+        "key": "goal",
+        "view": null
+      }
+    },
+    {
+      "type": "session.projection",
+      "payload": {
+        "key": "subagentCatalog",
+        "view": []
+      }
+    },
+    {
+      "type": "session.status",
+      "payload": {
+        "status": "running",
+        "backgroundTasks": 0
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<user#1>",
+        "role": "user",
+        "attemptId": "<attempt#1>"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<user#1>",
+        "blockId": "<user#2>",
+        "text": "CC-TEXT hello"
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<user#1>"
+      }
+    },
+    {
+      "type": "message.started",
+      "payload": {
+        "messageId": "<msg#1>",
+        "role": "assistant",
+        "model": "probe-gw/claude-opus-5-5"
+      }
+    },
+    {
+      "type": "thinking.started",
+      "payload": {
+        "messageId": "<msg#1>",
+        "blockId": "<msg#2>"
+      }
+    },
+    {
+      "type": "thinking.delta",
+      "payload": {
+        "messageId": "<msg#1>",
+        "blockId": "<msg#2>",
+        "text": "The user wants a streamed answer. I will reply in two short sentences."
+      }
+    },
+    {
+      "type": "thinking.completed",
+      "payload": {
+        "messageId": "<msg#1>",
+        "blockId": "<msg#2>"
+      }
+    },
+    {
+      "type": "message.delta",
+      "payload": {
+        "messageId": "<msg#1>",
+        "blockId": "<msg#3>",
+        "text": "PiLab × Claude Agent SDK：这一段正文是逐块流式送达的。第二句也在流里。"
+      }
+    },
+    {
+      "type": "message.completed",
+      "payload": {
+        "messageId": "<msg#1>"
+      }
+    },
+    {
+      "type": "session.completed",
+      "payload": {}
+    }
+  ],
+  "usageKeys": [
+    "cacheRead",
+    "cacheWrite",
+    "costUsd",
+    "input",
+    "output",
+    "pending",
+    "session",
+    "totalTokens"
+  ]
+}
