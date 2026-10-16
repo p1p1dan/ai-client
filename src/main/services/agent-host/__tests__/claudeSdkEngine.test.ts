@@ -8,6 +8,7 @@ import {
   CLAUDE_SDK_HOST_UNAVAILABLE,
   type ClaudeSdkPlanView,
   chooseNewChatEngine,
+  claudeSdkCliCandidates,
   claudeSdkGatewayFingerprint,
   claudeSdkHostEntry,
   claudeSdkLaunchFor,
@@ -50,7 +51,7 @@ function route(api: DshPlanRoute['api'], baseURL: string, apiKeyEnv: string): Ds
   } as unknown as DshPlanRoute;
 }
 
-/** GLM first, so "automatic" lands on DSH unless a test reorders the index. */
+/** GLM on the OpenAI protocol first, so "automatic" lands on DSH unless a test reorders the index. */
 const PLAN: Pick<DshModelPlan, 'index' | 'routes' | 'refs'> = {
   index: {
     'zai/glm-5': { route: 'zai', model: 'glm-5', efforts: [], image: false },
@@ -63,9 +64,11 @@ const PLAN: Pick<DshModelPlan, 'index' | 'routes' | 'refs'> = {
     },
     'other/claude-haiku-5': { route: 'other', model: 'claude-haiku-5', efforts: [], image: true },
     'proxy/claude-sonnet-5': { route: 'proxy', model: 'claude-sonnet-5', efforts: [], image: true },
+    'zaia/glm-5': { route: 'zaia', model: 'glm-5', efforts: [], image: false },
   },
   routes: {
-    zai: route('anthropic-messages', 'https://glm.example/anthropic', 'AICLIENT_KEY_ZAI'),
+    zai: route('openai-completions', 'https://glm.example/v1', 'AICLIENT_KEY_ZAI'),
+    zaia: route('anthropic-messages', 'https://glm.example/anthropic', 'AICLIENT_KEY_ZAIA'),
     claude: route('anthropic-messages', 'https://gw.example', 'AICLIENT_KEY_CLAUDE'),
     other: route('anthropic-messages', 'https://other.example', 'AICLIENT_KEY_OTHER'),
     proxy: route('openai-completions', 'https://proxy.example/v1', 'AICLIENT_KEY_PROXY'),
@@ -75,6 +78,7 @@ const PLAN: Pick<DshModelPlan, 'index' | 'routes' | 'refs'> = {
     AICLIENT_KEY_CLAUDE: 'claude',
     AICLIENT_KEY_OTHER: 'other',
     AICLIENT_KEY_PROXY: 'proxy',
+    AICLIENT_KEY_ZAIA: 'zaia',
   },
 };
 
@@ -140,7 +144,15 @@ describe('chooseNewChatEngine (decision 1)', () => {
     });
   });
 
-  it('GLM on an Anthropic-compatible route and a Claude name behind OpenAI stay on DSH', () => {
+  it('the protocol decides: any model on an Anthropic route runs on the SDK engine', () => {
+    expect(chooseNewChatEngine('zaia/glm-5', source())).toMatchObject({
+      engine: 'claude-sdk',
+      model: 'zaia/glm-5',
+      route: { route: 'zaia', providerId: 'zaia' },
+    });
+  });
+
+  it('a model on another protocol, a Claude name behind OpenAI included, stays on DSH', () => {
     for (const model of ['zai/glm-5', 'proxy/claude-sonnet-5', 'claude/claude-unknown']) {
       const s = source();
       expect(chooseNewChatEngine(model, s), model).toEqual({ engine: 'dsh' });
@@ -315,18 +327,21 @@ describe('the gateway an SDK chat runs on (decisions 3, 4)', () => {
 });
 
 describe('host availability (decision 1)', () => {
-  it('needs the host entry and its SDK package, and logs a missing host once', () => {
+  it('needs the host entry, its SDK package and the CLI binary, and logs a missing host once', () => {
     const present = new Set<string>();
     const log = vi.fn();
     const available = createClaudeSdkHostAvailability({
       appPath: () => '/app',
       exists: (file) => present.has(file),
       log,
+      platform: 'win32',
+      arch: 'x64',
+      env: {},
     });
     expect(available()).toBe(false);
     expect(available()).toBe(false);
     expect(log).toHaveBeenCalledTimes(1);
-    expect(log.mock.calls[0]?.[0]).toContain('Claude chats run on DSH');
+    expect(log.mock.calls[0]?.[0]).toContain('new chats run on DSH');
     expect(log.mock.calls[0]?.[0]).not.toMatch(/Claude Code/);
     const entry = claudeSdkHostEntry('/app');
     present.add(entry);
@@ -340,8 +355,36 @@ describe('host availability (decision 1)', () => {
         'package.json'
       )
     );
+    // No CLI binary yet: a host that would start and then fail every first turn.
+    expect(available()).toBe(false);
+    present.add(
+      path.join(
+        path.dirname(entry),
+        'node_modules',
+        '@anthropic-ai',
+        'claude-agent-sdk-win32-x64',
+        'claude.exe'
+      )
+    );
     expect(available()).toBe(true);
     expect(log).toHaveBeenCalledTimes(1);
+  });
+
+  it('looks for the CLI where the SDK would start it', () => {
+    const modules = path.join('/h', 'node_modules', '@anthropic-ai');
+    expect(claudeSdkCliCandidates(modules, 'linux', 'arm64', {})).toEqual([
+      path.join(modules, 'claude-agent-sdk-linux-arm64', 'claude'),
+      path.join(modules, 'claude-agent-sdk-linux-arm64-musl', 'claude'),
+    ]);
+    expect(claudeSdkCliCandidates(modules, 'win32', 'x64', {})).toEqual([
+      path.join(modules, 'claude-agent-sdk-win32-x64', 'claude.exe'),
+    ]);
+    // The dev override is the only place then.
+    expect(
+      claudeSdkCliCandidates(modules, 'win32', 'x64', {
+        AICLIENT_CLAUDE_SDK_CLI: ' D:cliclaude.exe ',
+      })
+    ).toEqual(['D:cliclaude.exe']);
   });
 
   it('an app path that cannot be read is no host', () => {

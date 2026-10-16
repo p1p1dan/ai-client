@@ -4537,24 +4537,25 @@ Object.assign(zhTranslations, {
  * that exited mid-turn, and the create/resume failures of that engine.
  */
 Object.assign(zhTranslations, {
-  'Claude engine': 'Claude 模型引擎',
-  'Run Claude models on the official Agent SDK': 'Claude 模型使用官方 Agent SDK',
+  'Agent SDK engine': 'Agent SDK 引擎',
+  'Run Anthropic-protocol models on the official Agent SDK':
+    'Anthropic 协议的模型使用官方 Agent SDK',
   'Use Agent SDK': '使用 Agent SDK',
-  'The Claude engine could not start': 'Claude 引擎没能启动',
+  'The Agent SDK engine could not start': 'Agent SDK 引擎没能启动',
   'The engine process for this chat would not start. Your other chats are not affected, and nothing is wrong with this chat.':
     '这个对话的引擎进程没能启动。其他对话不受影响，这个对话本身也没有问题。',
-  'When on, new Claude chats run on the official Claude Agent SDK; when off, they run on the built-in engine like other models. Applies to new chats; existing chats keep the engine they started on.':
-    '开启后，新建的 Claude 对话由官方 Claude Agent SDK 驱动；关闭则与其他模型一样由内置引擎驱动。只影响新对话，已有对话保持创建时的引擎。',
-  'This chat runs on the Claude engine. Pick a Claude model from the same service, or start a new chat.':
-    '这个对话由 Claude 引擎驱动，请选同一服务下的 Claude 模型，或新开一个对话。',
-  'The Claude engine stopped': 'Claude 引擎已退出',
+  'When on, new chats whose model uses the Anthropic protocol (Claude, or another model behind an Anthropic-compatible endpoint) run on the official Claude Agent SDK, and on the built-in engine if that one cannot start. When off, they run on the built-in engine like other models. Applies to new chats; existing chats keep the engine they started on.':
+    '开启后，所选模型走 Anthropic 协议（Claude，或经 Anthropic 兼容接口接入的其他模型）的新对话由官方 Claude Agent SDK 驱动，这个引擎无法启动时改用内置引擎；关闭则与其他模型一样由内置引擎驱动。只影响新对话，已有对话保持创建时的引擎。',
+  'This chat runs on the Agent SDK engine. Pick a model from the same service, or start a new chat.':
+    '这个对话由 Agent SDK 引擎驱动，请选同一服务下的模型，或新开一个对话。',
+  'The Agent SDK engine stopped': 'Agent SDK 引擎已退出',
   'The engine process for this chat exited, so this reply was cut off.':
     '这个对话的引擎进程退出了，这次回复被打断。',
   'Send your message again to reopen it.': '再发一次消息即可重新打开。',
-  'This chat runs on the Claude engine, and this app could not give that engine an address and key for the model service: your sign-in has expired, the system keyring is locked, or no Claude model is offered any more.':
-    '这个对话由 Claude 引擎驱动，应用没能为它拿到模型服务的地址和密钥：登录已过期、系统钥匙串已锁定，或已没有可用的 Claude 模型。',
-  'The Claude engine could not get a key for the model service. Sign in again, or unlock the system keyring, then send your message again.':
-    'Claude 引擎拿不到模型服务的密钥。请重新登录或解锁系统钥匙串，然后再发一次消息。',
-  'The Claude engine could not start. Send your message again to try once more.':
-    'Claude 引擎没能启动，再发一次消息即可重试。',
+  'This chat runs on the Agent SDK engine, and this app could not give that engine an address and key for the model service: your sign-in has expired, the system keyring is locked, or no model on the Anthropic protocol is offered any more.':
+    '这个对话由 Agent SDK 引擎驱动，应用没能为它拿到模型服务的地址和密钥：登录已过期、系统钥匙串已锁定，或已没有走 Anthropic 协议的模型。',
+  'The Agent SDK engine could not get a key for the model service. Sign in again, or unlock the system keyring, then send your message again.':
+    'Agent SDK 引擎拿不到模型服务的密钥。请重新登录或解锁系统钥匙串，然后再发一次消息。',
+  'The Agent SDK engine could not start. Send your message again to try once more.':
+    'Agent SDK 引擎没能启动，再发一次消息即可重试。',
 });

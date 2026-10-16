@@ -246,8 +246,9 @@ export interface SettingsState {
   experimentalCacheControlOnTools: boolean;
 
   /**
-   * Route B, S-1 (`@shared/claudeSdkEngine`): new Claude chats run on the
-   * official Claude Agent SDK engine. On by default; off sends them to DSH like
+   * Route B, S-1 (`@shared/claudeSdkEngine`): new chats whose model is on the
+   * Anthropic protocol run on the official Claude Agent SDK engine. On by
+   * default; off sends them to DSH like
    * every other model. Main reads it when it creates a chat; a chat keeps the
    * engine it was created on.
    */

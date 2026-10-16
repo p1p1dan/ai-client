@@ -1386,7 +1386,7 @@ describe('the Claude engine could not start a chat (S-1)', () => {
       continuationHint:
         'Sign in again, or unlock the system keyring, then send your message again.',
     });
-    expect(view?.guidance).toContain('Claude engine');
+    expect(view?.guidance).toContain('Agent SDK engine');
     expect(view?.forceTakeover).toBeUndefined();
     // Main's sentence stays as the detail, the card's words are translated.
     expect(view?.message).toBe(NO_KEY);
@@ -1437,7 +1437,7 @@ describe('the Claude engine could not start a chat (S-1)', () => {
     }
     for (const hint of [CLAUDE_SDK_CREDENTIALS_HINT, CLAUDE_SDK_HOST_UNAVAILABLE_HINT]) {
       expect(zhTranslations[hint], hint).toBeDefined();
-      expect(hint).toContain('Claude engine');
+      expect(hint).toContain('Agent SDK engine');
       expect(hint).not.toContain('Claude Code');
     }
   });

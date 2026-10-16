@@ -7,7 +7,8 @@
  *   node gui-probe.mjs launch       `node scripts/dev.js --remote-debugging-port=<port>` (detached)
  *   node gui-probe.mjs enter        attach CDP, get past the welcome surface
  *   node gui-probe.mjs seed         add the fake gateway as two custom AI services (fake keys):
- *                                   an anthropic-messages one with Claude models (SDK engine)
+ *                                   an anthropic-messages one with two Claude models and a GLM
+ *                                   (all on the SDK engine: the protocol decides)
  *                                   and an openai-completions one with a GLM model (DSH)
  *   node gui-probe.mjs look         what is on screen
  *   node gui-probe.mjs send <text>  type into the composer and send
@@ -239,7 +240,7 @@ switch (command) {
           const value = await evalAsync(
             `const claude = await window.electronAPI.userProviders.upsert({
                name: 'Fake Claude gateway', baseUrl: ${JSON.stringify(GATEWAY)}, api: 'anthropic-messages',
-               apiKey: 'sk-ccsdk-gui-fake-key', models: ['claude-opus-5-5', 'claude-sonnet-5-5'], enabled: true });
+               apiKey: 'sk-ccsdk-gui-fake-key', models: ['claude-opus-5-5', 'claude-sonnet-5-5', 'glm-anth-1'], enabled: true });
              const glm = await window.electronAPI.userProviders.upsert({
                name: 'Fake GLM gateway', baseUrl: ${JSON.stringify(`${GATEWAY}/v1`)}, api: 'openai-completions',
                apiKey: 'sk-ccsdk-gui-fake-glm-key', models: ['glm-fake-1'], enabled: true });

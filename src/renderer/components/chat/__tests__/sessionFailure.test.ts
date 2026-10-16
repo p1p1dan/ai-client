@@ -160,14 +160,14 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       error: 'Claude SDK host exited (code=1 signal=null)',
     });
     expect(view).toMatchObject({
-      title: 'The Claude engine stopped',
+      title: 'The Agent SDK engine stopped',
       reason: 'The engine process for this chat exited, so this reply was cut off.',
       hint: 'Send your message again to reopen it.',
       action: 'none',
       showsDetail: false,
     });
     expect(canContinueSession(view, true)).toBe(false);
-    expect(zhTranslations[view.title]).toBe('Claude 引擎已退出');
+    expect(zhTranslations[view.title]).toBe('Agent SDK 引擎已退出');
     expect(zhTranslations[view.reason]).toBe('这个对话的引擎进程退出了，这次回复被打断。');
     expect(zhTranslations[view.hint]).toBe('再发一次消息即可重新打开。');
     for (const sentence of [view.title, view.reason, view.hint]) {

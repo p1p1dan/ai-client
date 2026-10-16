@@ -17,9 +17,10 @@ export type ChatEngine = 'dsh' | 'claude-sdk';
 export const CLAUDE_SDK_STUB_SUFFIX = '.ccsdk.json';
 
 /**
- * Renderer-owned switch in `aiclient-settings`: new Claude chats run on the SDK
- * engine. On by default (plan §4 S-1); off sends them to DSH like every other
- * model. Existing chats keep their engine either way.
+ * Renderer-owned switch in `aiclient-settings`: new chats whose model is on the
+ * Anthropic protocol run on the SDK engine. On by default (plan §4 S-1); off
+ * sends them to DSH like every other model. Existing chats keep their engine
+ * either way.
  */
 export const CLAUDE_SDK_ENGINE_SETTING_KEY = 'claudeSdkEngineEnabled';
 export const DEFAULT_CLAUDE_SDK_ENGINE_ENABLED = true;
@@ -82,11 +83,6 @@ export const CLAUDE_SDK_INHERITED_ENV: readonly string[] = [
   'NODE_USE_SYSTEM_CA',
 ];
 
-/** A Claude model, by its provider-side id (`claude-opus-5`, `claude-sonnet-5`, ...). */
-export function isClaudeFamilyModelId(modelId: string): boolean {
-  return /^claude-/i.test(modelId.trim());
-}
-
 /** Where a model runs when it runs on the SDK engine. */
 export interface ClaudeSdkRoute {
   /** The plan's route name (`claude`, `claude~2`); a running SDK chat stays on one route. */
@@ -114,10 +110,12 @@ export function effectiveModelRef(
 }
 
 /**
- * The SDK route for `ref`, or null when the model is not one the SDK engine
- * serves: it must be in the plan, on an `anthropic-messages` route, and a
- * Claude model. Protocol alone is not enough — an Anthropic-compatible
- * endpoint can serve GLM and others, which stay on DSH (plan §2 rule 5).
+ * The SDK route for `ref`, or null when the SDK engine does not serve it: it
+ * must be in the plan, on an `anthropic-messages` route. The protocol is the
+ * whole rule (user ruling 2026-10-16, plan §2 rule 5): whoever configures a
+ * model on the Anthropic protocol declares it speaks Claude Code's requests —
+ * Claude, or another model behind an Anthropic-compatible endpoint. Every
+ * other protocol stays on DSH.
  */
 export function claudeSdkRouteFor(
   plan: PlanView,
@@ -128,7 +126,6 @@ export function claudeSdkRouteFor(
   if (!entry) return null;
   const route = Object.hasOwn(plan.routes, entry.route) ? plan.routes[entry.route] : undefined;
   if (!route || route.api !== 'anthropic-messages') return null;
-  if (!isClaudeFamilyModelId(entry.model)) return null;
   const providerId = Object.hasOwn(plan.refs, route.apiKeyEnv) ? plan.refs[route.apiKeyEnv] : '';
   if (!providerId || !route.baseURL) return null;
   return { route: entry.route, providerId, baseURL: route.baseURL, model: entry.model };

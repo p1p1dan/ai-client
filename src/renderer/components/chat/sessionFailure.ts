@@ -207,7 +207,7 @@ const FAILURE_VIEWS = {
   // on that engine yet, and a new message is what reopens the chat. Main's
   // sentence names a process, which the reason already says in words.
   claude_engine_exited: {
-    title: 'The Claude engine stopped',
+    title: 'The Agent SDK engine stopped',
     reason: 'The engine process for this chat exited, so this reply was cut off.',
     hint: 'Send your message again to reopen it.',
     action: 'none',

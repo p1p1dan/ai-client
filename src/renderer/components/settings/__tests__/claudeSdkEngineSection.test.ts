@@ -33,12 +33,12 @@ vi.hoisted(() => {
 vi.mock('@/utils/logging', () => ({ updateRendererLogging: vi.fn() }));
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: 'en' }) }));
 
-const TITLE = 'Claude engine';
-const LABEL = 'Run Claude models on the official Agent SDK';
+const TITLE = 'Agent SDK engine';
+const LABEL = 'Run Anthropic-protocol models on the official Agent SDK';
 /** The row's visible label; the full sentence is the switch's accessible name. */
 const ROW_LABEL = 'Use Agent SDK';
 const DESCRIPTION =
-  'When on, new Claude chats run on the official Claude Agent SDK; when off, they run on the built-in engine like other models. Applies to new chats; existing chats keep the engine they started on.';
+  'When on, new chats whose model uses the Anthropic protocol (Claude, or another model behind an Anthropic-compatible endpoint) run on the official Claude Agent SDK, and on the built-in engine if that one cannot start. When off, they run on the built-in engine like other models. Applies to new chats; existing chats keep the engine they started on.';
 
 describe('Claude engine switch (route B, S-1)', () => {
   it('starts on, says what it changes, and writes the switch to the store', async () => {
@@ -110,11 +110,11 @@ describe('Claude engine switch (route B, S-1)', () => {
   });
 
   it('has the Chinese copy the design names', () => {
-    expect(zhTranslations[TITLE]).toBe('Claude 模型引擎');
-    expect(zhTranslations[LABEL]).toBe('Claude 模型使用官方 Agent SDK');
+    expect(zhTranslations[TITLE]).toBe('Agent SDK 引擎');
+    expect(zhTranslations[LABEL]).toBe('Anthropic 协议的模型使用官方 Agent SDK');
     expect(zhTranslations[ROW_LABEL]).toBe('使用 Agent SDK');
     expect(zhTranslations[DESCRIPTION]).toBe(
-      '开启后，新建的 Claude 对话由官方 Claude Agent SDK 驱动；关闭则与其他模型一样由内置引擎驱动。只影响新对话，已有对话保持创建时的引擎。'
+      '开启后，所选模型走 Anthropic 协议（Claude，或经 Anthropic 兼容接口接入的其他模型）的新对话由官方 Claude Agent SDK 驱动，这个引擎无法启动时改用内置引擎；关闭则与其他模型一样由内置引擎驱动。只影响新对话，已有对话保持创建时的引擎。'
     );
   });
 });

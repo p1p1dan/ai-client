@@ -60,7 +60,7 @@ function count(text: string, pattern: RegExp): number {
   return text.match(pattern)?.length ?? 0;
 }
 
-describe('chat engines: DSH, and the Claude Agent SDK engine for Claude chats (route B)', () => {
+describe('chat engines: DSH, and the Claude Agent SDK engine for Anthropic-protocol chats (route B)', () => {
   it('createDshChatSlot opens a DSH channel by default and has no engine logic of its own', () => {
     const source = code(path.join(AGENT_HOST, 'createDshChatSlot.ts'));
     // P1-3a: a chat session is a channel on the app's one shared DSH host.
@@ -190,10 +190,12 @@ describe('chat engines: DSH, and the Claude Agent SDK engine for Claude chats (r
     expect(manager).toContain('...(sdk ? { createTransport: sdk.createTransport } : {}),');
   });
 
-  it('WorkerManager spawns through exactly four paths and never binds a session to pi', () => {
+  it('WorkerManager spawns through exactly five paths and never binds a session to pi', () => {
     const source = read(path.join(AGENT_HOST, 'WorkerManager.ts'));
-    // create, cold resume, fork target, crash restart.
-    expect(source.match(/this\.spawnForEntry\(/g)).toHaveLength(4);
+    // create, create's DSH retry after an SDK host that did not start (user
+    // ruling 2026-10-16), cold resume, fork target, crash restart.
+    expect(source.match(/this\.spawnForEntry\(/g)).toHaveLength(5);
+    expect(source).toContain('this.forgetFailedClaudeSdkStart(entry);');
     expect(source).not.toContain('PI_AGENT');
     expect(source.match(/agent: DSH_AGENT/g)?.length).toBeGreaterThanOrEqual(7);
   });

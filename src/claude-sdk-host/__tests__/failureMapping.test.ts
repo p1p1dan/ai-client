@@ -272,7 +272,7 @@ describe('mapSdkFailure: the engine itself', () => {
   it('the CLI going away mid-turn is claude_engine_exited', () => {
     expect(mapSdkFailure({ cliExited: true })).toEqual({
       errorCode: CLAUDE_ENGINE_EXITED,
-      error: 'The Claude engine exited',
+      error: 'The Agent SDK engine exited',
     });
   });
 
@@ -283,7 +283,7 @@ describe('mapSdkFailure: the engine itself', () => {
     ]) {
       expect(mapSdkFailure({ thrown })).toEqual({
         errorCode: CLAUDE_ENGINE_EXITED,
-        error: 'The Claude engine exited',
+        error: 'The Agent SDK engine exited',
       });
     }
     expect(
@@ -299,7 +299,7 @@ describe('mapSdkFailure: the engine itself', () => {
 
   it('anything else carries no code and a neutral sentence', () => {
     expect(mapSdkFailure({ thrown: 'Claude Code hit something odd' })).toEqual({
-      error: 'The Claude engine reported an error',
+      error: 'The Agent SDK engine reported an error',
     });
     expect(
       mapSdkFailure({
@@ -312,9 +312,9 @@ describe('mapSdkFailure: the engine itself', () => {
     ).toEqual({ error: 'The turn reached its step limit' });
     expect(
       mapSdkFailure({ result: { subtype: 'error_during_execution', is_error: true, errors: [] } })
-    ).toEqual({ error: 'The Claude engine failed during the turn' });
+    ).toEqual({ error: 'The Agent SDK engine failed during the turn' });
     expect(mapSdkFailure({ assistantError: 'max_output_tokens' })).toEqual({
-      error: 'The Claude engine reported an error',
+      error: 'The Agent SDK engine reported an error',
     });
   });
 });
@@ -364,7 +364,7 @@ describe('sanitizeHostLogLine', () => {
     );
     expect(line).not.toContain(key);
     expect(line).not.toMatch(/claude code/i);
-    expect(line).toContain('Claude engine process exited');
+    expect(line).toContain('Agent SDK engine process exited');
     expect(line).not.toContain('abcdefghijklmnopqrstuvwxyz');
   });
 });

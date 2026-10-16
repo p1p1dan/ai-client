@@ -101,4 +101,4 @@ export function isModelEngineMismatchError(error: unknown): boolean {
 
 /** The composer's one line for it; a dictionary key. */
 export const MODEL_ENGINE_MISMATCH_HINT =
-  'This chat runs on the Claude engine. Pick a Claude model from the same service, or start a new chat.';
+  'This chat runs on the Agent SDK engine. Pick a model from the same service, or start a new chat.';

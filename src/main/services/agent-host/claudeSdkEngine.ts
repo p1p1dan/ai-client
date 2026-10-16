@@ -24,9 +24,11 @@ import { WorkerManagerError } from './workerManagerError';
  *
  * The engine is fixed per chat:
  * - a NEW chat runs on it when the settings switch is on, its model (or, for
- *   "automatic", the plan's first model) is a Claude model on an
- *   `anthropic-messages` route (`claudeSdkRouteFor`), and this build has the
- *   host; the resolved model is handed to the host explicitly;
+ *   "automatic", the plan's first model) is on an `anthropic-messages`
+ *   route (`claudeSdkRouteFor`; the protocol alone decides, user ruling
+ *   2026-10-16), and this build has the host; the resolved model is handed to
+ *   the host explicitly. A host that still fails to start sends the new chat
+ *   to DSH (`WorkerManager.createSession`);
  * - a REOPENED chat runs on the engine that created it, read off its session
  *   file ({@link CLAUDE_SDK_STUB_SUFFIX}), whatever the switch says now.
  *
@@ -136,7 +138,7 @@ export function claudeSdkLaunchFor(
   }
   throw new WorkerManagerError(
     CLAUDE_SDK_CREDENTIALS_UNAVAILABLE,
-    'No Claude model in the current model plan can run this chat on the Claude Agent SDK engine',
+    'No model in the current model plan can run this chat on the Claude Agent SDK engine',
     true
   );
 }
@@ -206,14 +208,36 @@ export function claudeSdkHostEntry(appPath: string): string {
 }
 
 /**
- * Can this build start the SDK host: its entry and its SDK package are on disk.
- * A build without them (every installer before S-4) runs Claude chats on DSH,
- * and says so once in the log.
+ * Where the CLI binary the SDK starts may be: the dev override
+ * (`AICLIENT_CLAUDE_SDK_CLI`), else the SDK's platform package for this OS and
+ * CPU (Linux also has a musl build).
+ */
+export function claudeSdkCliCandidates(
+  modules: string,
+  platform: NodeJS.Platform,
+  arch: string,
+  env: NodeJS.ProcessEnv
+): string[] {
+  const override = env.AICLIENT_CLAUDE_SDK_CLI?.trim();
+  if (override) return [override];
+  const binary = platform === 'win32' ? 'claude.exe' : 'claude';
+  const base = `claude-agent-sdk-${platform}-${arch}`;
+  const packages = platform === 'linux' ? [base, `${base}-musl`] : [base];
+  return packages.map((name) => path.join(modules, name, binary));
+}
+
+/**
+ * Can this build start the SDK host: its entry, its SDK package and the CLI
+ * binary are on disk. A build without them (every installer before S-4) runs
+ * every new chat on DSH, and says so once in the log.
  */
 export function createClaudeSdkHostAvailability(deps: {
   appPath: () => string;
   exists?: (file: string) => boolean;
   log?: (message: string) => void;
+  platform?: NodeJS.Platform;
+  arch?: string;
+  env?: NodeJS.ProcessEnv;
 }): () => boolean {
   const exists = deps.exists ?? existsSync;
   let logged = false;
@@ -221,14 +245,20 @@ export function createClaudeSdkHostAvailability(deps: {
     let missing: string | undefined;
     try {
       const entry = claudeSdkHostEntry(deps.appPath());
-      const sdk = path.join(
-        path.dirname(entry),
-        'node_modules',
-        '@anthropic-ai',
-        'claude-agent-sdk',
-        'package.json'
-      );
+      const modules = path.join(path.dirname(entry), 'node_modules', '@anthropic-ai');
+      const sdk = path.join(modules, 'claude-agent-sdk', 'package.json');
       missing = [entry, sdk].find((file) => !exists(file));
+      // The CLI binary too (user ruling 2026-10-16: a host that cannot start sends
+      // a new chat to DSH), so a missing one is found here rather than at the first turn.
+      if (missing === undefined) {
+        const cli = claudeSdkCliCandidates(
+          modules,
+          deps.platform ?? process.platform,
+          deps.arch ?? process.arch,
+          deps.env ?? process.env
+        );
+        if (!cli.some((file) => exists(file))) missing = cli.join(' | ');
+      }
     } catch (error) {
       missing = error instanceof Error ? error.message : String(error);
     }
@@ -236,7 +266,7 @@ export function createClaudeSdkHostAvailability(deps: {
     if (!logged) {
       logged = true;
       deps.log?.(
-        `[claude-sdk] this build has no Claude Agent SDK host (${missing}); Claude chats run on DSH`
+        `[claude-sdk] this build has no Claude Agent SDK host (${missing}); new chats run on DSH`
       );
     }
     return false;
@@ -269,7 +299,7 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
   if (!baseURL || !apiKey) {
     throw new WorkerManagerError(
       CLAUDE_SDK_CREDENTIALS_UNAVAILABLE,
-      'The Claude model route has no gateway address or no key',
+      'The model route has no gateway address or no key',
       true
     );
   }

@@ -344,7 +344,7 @@ interface ManagedSlot {
   engine?: ChatEngine;
   /**
    * Route B, S-1 (decision 5): the plan route an SDK chat was started on. A
-   * running SDK chat only switches among Claude models of this route;
+   * running SDK chat only switches among models of this route;
    * `startTurn` refuses any other (`model_engine_mismatch`).
    */
   sdkRoute?: string;
@@ -1182,15 +1182,33 @@ export class WorkerManager {
 
       try {
         const model = sdkLaunch?.model ?? input.model;
-        const created = await this.spawnForEntry(
-          entry,
-          {
+        const effort = input.effort ? { effort: input.effort } : {};
+        let created: CreatedDshChatSlot;
+        try {
+          created = await this.spawnForEntry(
+            entry,
             // An SDK chat is started on an explicit model, "automatic" resolved.
-            ...(model ? { model } : {}),
-            ...(input.effort ? { effort: input.effort } : {}),
-          },
-          { userInitiated: true, ...(sdkLaunch ? { claudeSdk: sdkLaunch } : {}) }
-        );
+            { ...(model ? { model } : {}), ...effort },
+            { userInitiated: true, ...(sdkLaunch ? { claudeSdk: sdkLaunch } : {}) }
+          );
+        } catch (error) {
+          // User ruling 2026-10-16: an SDK host that will not start sends a new
+          // chat to DSH. Only that: a missing key would fail on DSH too, and a
+          // chat moved there would stay there once the user signed in again.
+          if (!sdkLaunch || (error as { code?: unknown })?.code !== CLAUDE_SDK_HOST_UNAVAILABLE) {
+            throw error;
+          }
+          console.warn(
+            `[worker-manager] ${entry.logicalSessionId}: the Claude Agent SDK host did not start; ` +
+              `the new chat runs on DSH (${error instanceof Error ? error.message : String(error)})`
+          );
+          this.forgetFailedClaudeSdkStart(entry);
+          created = await this.spawnForEntry(
+            entry,
+            { ...(input.model ? { model: input.model } : {}), ...effort },
+            { userInitiated: true }
+          );
+        }
         if (!created.bootstrap.sessionFile) {
           throw new WorkerManagerError(
             'worker_session_file_missing',
@@ -2388,9 +2406,9 @@ export class WorkerManager {
 
   /**
    * Route B, S-1 (decision 5, finding 18): a running SDK chat sends every
-   * request through its route's gateway, so it may only switch to a Claude
-   * model the SDK serves on that same route. Anything else — a DSH model, or a
-   * Claude model of another route — is `model_engine_mismatch`, and the
+   * request through its route's gateway, so it may only switch to a model
+   * the SDK serves on that same route. Anything else — a DSH model, or a
+   * model of another route — is `model_engine_mismatch`, and the
    * renderer hands the message back. The model it already runs on needs no
    * plan to pass; a DSH chat is never limited.
    */
@@ -2401,7 +2419,7 @@ export class WorkerManager {
     if (route !== undefined && route === entry.sdkRoute) return;
     throw new WorkerManagerError(
       MODEL_ENGINE_MISMATCH,
-      `Model ${model} cannot be used in this chat: it runs on the Claude Agent SDK engine and only switches among Claude models of route ${entry.sdkRoute ?? 'unknown'}`
+      `Model ${model} cannot be used in this chat: it runs on the Claude Agent SDK engine and only switches among models of route ${entry.sdkRoute ?? 'unknown'}`
     );
   }
 
@@ -3228,7 +3246,7 @@ export class WorkerManager {
     if (!source || !launch) {
       throw new WorkerManagerError(
         CLAUDE_SDK_CREDENTIALS_UNAVAILABLE,
-        `No Claude model route to start ${entry.logicalSessionId} on`,
+        `No Agent SDK route to start ${entry.logicalSessionId} on`,
         true
       );
     }
@@ -3256,6 +3274,29 @@ export class WorkerManager {
         open({ generation, cwd, baseURL: route.baseURL, apiKey }),
       fingerprint: claudeSdkGatewayFingerprint(route, apiKey),
     };
+  }
+
+  /**
+   * User ruling 2026-10-16: a new chat whose SDK host did not start goes on as
+   * a DSH one. `createDshChatSlot` already disposed a slot that got as far as
+   * bootstrap; one that did not exit is force-killed here, and the entry drops
+   * everything SDK before its DSH spawn (on a new generation, as a restart does).
+   */
+  private forgetFailedClaudeSdkStart(entry: ManagedSlot): void {
+    const slot = entry.slot;
+    if (slot) {
+      if (slot.state === 'disposed' || slot.forceKillNow()) this.ownedSlots.delete(slot);
+      entry.slot = null;
+      entry.generation += 1;
+    }
+    entry.engine = 'dsh';
+    entry.state = 'creating';
+    entry.error = null;
+    entry.bootstrap = null;
+    entry.sdkRoute = undefined;
+    entry.sdkModel = undefined;
+    entry.sdkFingerprint = undefined;
+    entry.backgroundTasks = undefined;
   }
 
   /** Route B, S-1 (decision 2): the model and route a reopened SDK chat starts on. */
@@ -3342,8 +3383,8 @@ export class WorkerManager {
       },
       onStderr: (chunk, generation) => this.absorbStderr(entry, generation, chunk),
     }).catch((error: unknown) => {
-      // A worker that dies during bootstrap never reaches handleLifecycle, so
-      // this is the only place its own stderr can still be recovered.
+      // A worker that dies during bootstrap may never reach handleLifecycle (an
+      // SDK host does not, see there), so its own stderr is recovered here.
       this.dumpWorkerStderr(entry, 'failed to start');
       // Route B, S-1: an SDK host that did not come up is its own code.
       if (sdk) throw claudeSdkSpawnError(error);
@@ -4142,6 +4183,10 @@ export class WorkerManager {
     // Route B, S-1 (decision 7): an SDK chat's own host process exited. Never a
     // DSH host fault (`hostFaultOf`); the failed turn says which engine went.
     const sdkExit = this.claudeSdkSlots.has(slot);
+    // An SDK host that died before its bootstrap answered: the create or open
+    // awaiting it owns that failure (a new chat goes on as a DSH one), so no
+    // `disconnected` for a chat not yet announced and no restart of its own.
+    if (sdkExit && entry.state === 'creating' && entry.bootstrap === null) return;
     // decision 020 rule 5: a session the host died under while it was being
     // recovered was at the scene as much as one mid-turn.
     const recovering = entry.state === 'restarting';

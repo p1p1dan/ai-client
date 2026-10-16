@@ -5,7 +5,8 @@ import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 /**
  * Route B, S-1 (docs/plantree/plans/claude-sdk-engine/topics/s1-engine-selection.md
- * decision 10): whether new Claude chats run on the official Claude Agent SDK.
+ * decision 10, §5): whether new chats whose model is on the Anthropic
+ * protocol run on the official Claude Agent SDK.
  * On by default; off sends them to the built-in engine like every other model.
  * Main reads it when it creates a chat, so it never moves a chat that exists.
  */
@@ -16,9 +17,9 @@ export function ClaudeSdkEngineSection() {
 
   return (
     <SettingsSectionBlock
-      title={t('Claude engine')}
+      title={t('Agent SDK engine')}
       description={t(
-        'When on, new Claude chats run on the official Claude Agent SDK; when off, they run on the built-in engine like other models. Applies to new chats; existing chats keep the engine they started on.'
+        'When on, new chats whose model uses the Anthropic protocol (Claude, or another model behind an Anthropic-compatible endpoint) run on the official Claude Agent SDK, and on the built-in engine if that one cannot start. When off, they run on the built-in engine like other models. Applies to new chats; existing chats keep the engine they started on.'
       )}
     >
       {/* The same row layout as the neighbouring switches: a short label in the
@@ -27,7 +28,7 @@ export function ClaudeSdkEngineSection() {
         <span className="text-ui">{t('Use Agent SDK')}</span>
         <div className="min-w-0">
           <Switch
-            aria-label={t('Run Claude models on the official Agent SDK')}
+            aria-label={t('Run Anthropic-protocol models on the official Agent SDK')}
             checked={enabled}
             onCheckedChange={setEnabled}
           />

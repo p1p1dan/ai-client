@@ -92,8 +92,9 @@ const RESUME_ERROR_CODES: Readonly<Record<string, HistoryErrorCode>> = {
   // dsh-rebase P1-3c (decision 020 rule 6): the shared DSH engine could not be
   // brought up for this open. Main's code for it (`WorkerManager.ts`).
   dsh_host_unavailable: 'engine_unavailable',
-  // Route B, S-1: Main could not give the Claude engine a gateway route or key
-  // for this chat (signed out, keyring locked, no Claude model left), or could
+  // Route B, S-1: Main could not give the Agent SDK engine a gateway route or
+  // key for this chat (signed out, keyring locked, no Anthropic-protocol model
+  // left), or could
   // not start its host process (`WorkerManager.ts`). The second is the same
   // card as the shared engine being down: nothing is wrong with the chat.
   claude_sdk_credentials_unavailable: 'credentials_unavailable',
@@ -191,9 +192,9 @@ export const ENGINE_UNAVAILABLE_HINT =
 
 /** Route B, S-1: the status strip's lines for the two codes; dictionary keys. */
 export const CLAUDE_SDK_CREDENTIALS_HINT =
-  'The Claude engine could not get a key for the model service. Sign in again, or unlock the system keyring, then send your message again.';
+  'The Agent SDK engine could not get a key for the model service. Sign in again, or unlock the system keyring, then send your message again.';
 export const CLAUDE_SDK_HOST_UNAVAILABLE_HINT =
-  'The Claude engine could not start. Send your message again to try once more.';
+  'The Agent SDK engine could not start. Send your message again to try once more.';
 
 /**
  * Route B, S-1 — the status strip's line for a Claude-engine create or open
@@ -402,7 +403,7 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     severity: 'error',
     title: 'The model service key is not available',
     guidance:
-      'This chat runs on the Claude engine, and this app could not give that engine an address and key for the model service: your sign-in has expired, the system keyring is locked, or no Claude model is offered any more.',
+      'This chat runs on the Agent SDK engine, and this app could not give that engine an address and key for the model service: your sign-in has expired, the system keyring is locked, or no model on the Anthropic protocol is offered any more.',
     retryable: true,
     continuationHint: 'Sign in again, or unlock the system keyring, then send your message again.',
   },
@@ -411,12 +412,12 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
   // budget to run out (unlike the shared engine's `engine_unavailable`).
   claude_engine_unavailable: {
     severity: 'error',
-    title: 'The Claude engine could not start',
+    title: 'The Agent SDK engine could not start',
     guidance:
       'The engine process for this chat would not start. Your other chats are not affected, and nothing is wrong with this chat.',
     retryable: true,
     continuationHint:
-      'The Claude engine could not start. Send your message again to try once more.',
+      'The Agent SDK engine could not start. Send your message again to try once more.',
   },
   workspace_missing: {
     severity: 'error',

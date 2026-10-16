@@ -50,14 +50,23 @@ const PLAN: Pick<DshModelPlan, 'index' | 'routes' | 'refs'> = {
       image: true,
     },
     'other/claude-haiku-5': { route: 'other', model: 'claude-haiku-5', efforts: [], image: true },
+    // GLM on the OpenAI protocol: DSH.
     'zai/glm-5': { route: 'zai', model: 'glm-5', efforts: [], image: false },
+    // GLM behind an Anthropic-compatible endpoint: the protocol decides, so the SDK engine.
+    'zaia/glm-5': { route: 'zaia', model: 'glm-5', efforts: [], image: false },
   },
   routes: {
     claude: route('anthropic-messages', 'https://gw.example', 'AICLIENT_KEY_CLAUDE'),
     other: route('anthropic-messages', 'https://other.example', 'AICLIENT_KEY_OTHER'),
-    zai: route('anthropic-messages', 'https://glm.example/anthropic', 'AICLIENT_KEY_ZAI'),
+    zai: route('openai-completions', 'https://glm.example/v1', 'AICLIENT_KEY_ZAI'),
+    zaia: route('anthropic-messages', 'https://glm.example/anthropic', 'AICLIENT_KEY_ZAIA'),
   },
-  refs: { AICLIENT_KEY_CLAUDE: 'claude', AICLIENT_KEY_OTHER: 'other', AICLIENT_KEY_ZAI: 'zai' },
+  refs: {
+    AICLIENT_KEY_CLAUDE: 'claude',
+    AICLIENT_KEY_OTHER: 'other',
+    AICLIENT_KEY_ZAI: 'zai',
+    AICLIENT_KEY_ZAIA: 'zaia',
+  },
 };
 
 interface Rec {
@@ -88,6 +97,7 @@ function createHarness(
     claude: 'sk-claude-1',
     other: 'sk-other-1',
     zai: 'sk-zai-1',
+    zaia: 'sk-zaia-1',
   };
   const sdk: { enabled: boolean; hostAvailable: boolean; plan: ClaudeSdkPlanView | null } = {
     enabled: true,
@@ -409,7 +419,19 @@ describe('WorkerManager on the Claude Agent SDK engine (route B, S-1)', () => {
       expect(record.options.model).toBe('claude/claude-opus-5');
     });
 
-    it('GLM, the switch off, or no host in the build: a DSH chat that says nothing of engines', async () => {
+    it('a GLM on the Anthropic protocol runs on the SDK engine too', async () => {
+      const h = createHarness();
+      const record = await createSdk(h, 'glma', 'zaia/glm-5');
+      expect(record.options.model).toBe('zaia/glm-5');
+      expect(h.opened.at(-1)).toMatchObject({
+        baseURL: 'https://glm.example/anthropic',
+        apiKey: 'sk-zaia-1',
+      });
+      const payload = h.eventsOf('session.created', 'glma')[0]?.payload as Record<string, unknown>;
+      expect(payload).toMatchObject({ engine: 'claude-sdk', engineRoute: 'zaia' });
+    });
+
+    it('GLM on the OpenAI protocol, the switch off, or no host in the build: a DSH chat that says nothing of engines', async () => {
       const h = createHarness();
       await createDsh(h, 'glm');
       h.sdk.enabled = false;
@@ -450,21 +472,106 @@ describe('WorkerManager on the Claude Agent SDK engine (route B, S-1)', () => {
       expect(h.manager.getStatus().slots).toBe(0);
     });
 
-    it('an SDK host that fails to bootstrap is claude_sdk_host_unavailable', async () => {
+    it('an SDK host that will not start sends the new chat to DSH (user ruling 2026-10-16)', async () => {
       const h = createHarness();
       h.createSlot.mockImplementationOnce(async (options: Record<string, unknown>) => {
         (options.createTransport as (input: unknown) => unknown)({ generation: 1, cwd: '/repo' });
         throw Object.assign(new Error('Worker exited before bootstrap'), { code: 'WORKER_EXITED' });
       });
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        model: 'claude/claude-opus-5',
+        effort: 'high',
+      });
+      expect(h.createSlot).toHaveBeenCalledTimes(2);
+      const record = h.latest('s1');
+      expect(record.sdk).toBe(false);
+      expect(record.options).toMatchObject({ model: 'claude/claude-opus-5', effort: 'high' });
+      expect(record.options).not.toHaveProperty('createTransport');
+      const payload = h.eventsOf('session.created', 's1')[0]?.payload as Record<string, unknown>;
+      expect(payload).not.toHaveProperty('engine');
+      expect(h.manager.getStatus().slots).toBe(1);
+      // A DSH chat now: a model of another route is no longer refused.
+      await h.manager.send({ sessionId: 's1', attemptId: 'a1', text: 'go', model: 'zai/glm-5' });
+      expect(record.methods()).toEqual(['worker.send']);
+    });
+
+    it('a failed SDK slot that did not exit is force-killed before the DSH spawn', async () => {
+      const h = createHarness();
+      const forceKillNow = vi.fn(() => true);
+      h.createSlot.mockImplementationOnce(async (options: Record<string, unknown>) => {
+        (options.onSlotCreated as (slot: unknown) => void)({
+          state: 'dispose-failed',
+          generation: 1,
+          forceKillNow,
+        });
+        throw Object.assign(new Error('Worker exited before bootstrap'), { code: 'WORKER_EXITED' });
+      });
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        model: 'claude/claude-opus-5',
+      });
+      expect(forceKillNow).toHaveBeenCalledTimes(1);
+      expect(h.latest('s1').sdk).toBe(false);
+      // The DSH slot runs on a generation of its own.
+      expect(h.latest('s1').options.generation).toBe(2);
+    });
+
+    it('an SDK host that crashes during bootstrap: no disconnect, no restart, no crash left on the DSH chat', async () => {
+      const h = createHarness();
+      h.createSlot.mockImplementationOnce(async (options: Record<string, unknown>) => {
+        (options.createTransport as (input: unknown) => unknown)({ generation: 1, cwd: '/repo' });
+        // The order a real WorkerSlot reports a bootstrap crash in: the slot,
+        // then `crashed`, then the rejection once it is disposed.
+        const slot = { state: 'running', generation: 1, forceKillNow: vi.fn(() => true) };
+        (options.onSlotCreated as (slot: unknown) => void)(slot);
+        slot.state = 'crashed';
+        (options.onLifecycle as (event: WorkerSlotLifecycleEvent) => void)({
+          type: 'crashed',
+          slotKey: String(options.slotKey),
+          generation: 1,
+          error: Object.assign(new Error('Worker exited (code=1 signal=null)'), {
+            code: 'WORKER_EXITED',
+          }),
+          exit: { code: 1, signal: null },
+        } as WorkerSlotLifecycleEvent);
+        slot.state = 'disposed';
+        throw Object.assign(new Error('Worker exited (code=1 signal=null)'), {
+          code: 'WORKER_EXITED',
+        });
+      });
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        model: 'claude/claude-opus-5',
+      });
+      await h.settle();
+      expect(h.createSlot).toHaveBeenCalledTimes(2);
+      expect(h.latest('s1').sdk).toBe(false);
+      const statuses = h
+        .eventsOf('session.status', 's1')
+        .map((event) => (event.payload as { status: string }).status);
+      expect(statuses).toEqual(['idle']);
+      expect(h.manager.getStatus().state).toBe('ready');
+      expect(h.manager.getSlotSnapshots()).toEqual([
+        expect.objectContaining({ logicalSessionId: 's1', state: 'ready', error: null }),
+      ]);
+    });
+
+    it('a reopened SDK chat whose host will not start still fails: its history is the CLI’s', async () => {
+      const file = SDK_STUB('r1');
+      const h = createHarness({ stubs: { [file]: { model: 'claude/claude-opus-5' } } });
+      h.createSlot.mockImplementationOnce(async (options: Record<string, unknown>) => {
+        (options.createTransport as (input: unknown) => unknown)({ generation: 1, cwd: '/repo' });
+        throw Object.assign(new Error('Worker exited before bootstrap'), { code: 'WORKER_EXITED' });
+      });
       const code = await codeOf(
-        h.manager.createSession({
-          sessionId: 's1',
-          workspacePath: '/repo',
-          model: 'claude/claude-opus-5',
-        })
+        h.manager.resumeSession({ sessionId: 'r1', sessionFile: file, workspacePath: '/repo' })
       );
       expect(code).toBe('claude_sdk_host_unavailable');
-      expect(h.manager.getStatus().slots).toBe(0);
+      expect(h.createSlot).toHaveBeenCalledTimes(1);
     });
   });
 

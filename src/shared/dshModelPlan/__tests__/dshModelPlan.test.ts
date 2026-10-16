@@ -1105,9 +1105,9 @@ describe('MN-01 the menu keeps what the plan routes (decision 033 rule 3)', () =
   });
 
   /**
-   * Route B, S-1 (decision 5): a model the Claude Agent SDK engine serves (a
-   * Claude model on an anthropic-messages route) carries its route, so an SDK
-   * chat's menu can offer only the models of the route it runs on.
+   * Route B, S-1 (decision 5): a model the Claude Agent SDK engine serves (any
+   * model on an anthropic-messages route, user ruling 2026-10-16) carries its
+   * route, so an SDK chat's menu can offer only the models of the route it runs on.
    */
   it('marks the models the Claude Agent SDK engine serves with their route', () => {
     const routed = plan({
@@ -1141,11 +1141,12 @@ describe('MN-01 the menu keeps what the plan routes (decision 033 rule 3)', () =
     expect(byId.get('c/claude-opus-5')).toBe(cRoute);
     expect(byId.get('c/claude-sonnet-5')).toBe(cRoute);
     expect(byId.get('d/claude-haiku-5')).toBe(dRoute);
-    // GLM on an Anthropic-compatible endpoint, and a Claude name behind an
-    // OpenAI-shaped one, stay on DSH and carry no route.
-    for (const id of ['z/glm-5', 'o/claude-sonnet-5']) {
-      expect(byId.has(id)).toBe(true);
-      expect(menu.models.find((model) => model.id === id)).not.toHaveProperty('sdkRoute');
-    }
+    // The protocol decides: GLM behind an Anthropic-compatible endpoint runs on
+    // the SDK engine too, while a Claude name behind an OpenAI-shaped one stays on DSH.
+    expect(byId.get('z/glm-5')).toBe(routed.index['z/glm-5']?.route);
+    expect(byId.has('o/claude-sonnet-5')).toBe(true);
+    expect(menu.models.find((model) => model.id === 'o/claude-sonnet-5')).not.toHaveProperty(
+      'sdkRoute'
+    );
   });
 });

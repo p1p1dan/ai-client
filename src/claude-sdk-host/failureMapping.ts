@@ -78,7 +78,7 @@ const SUBTYPE_SENTENCES: Readonly<Record<string, string>> = {
   error_max_turns: 'The turn reached its step limit',
   error_max_budget_usd: 'The turn reached its budget limit',
   error_max_structured_output_retries: 'The turn could not produce its structured output',
-  error_during_execution: 'The Claude engine failed during the turn',
+  error_during_execution: 'The Agent SDK engine failed during the turn',
 };
 
 function statusOf(signals: SdkFailureSignals, texts: readonly string[]): number | undefined {
@@ -109,7 +109,7 @@ export function redactSecrets(text: string, secrets: readonly string[] = []): st
  * shapes blanked out, and never the name Claude Code (plan hard constraint 4).
  */
 export function sanitizeHostLogLine(text: string, secrets: readonly string[] = []): string {
-  return redactSecrets(text, secrets).replace(/claude code/gi, 'Claude engine');
+  return redactSecrets(text, secrets).replace(/claude code/gi, 'Agent SDK engine');
 }
 
 /** The gateway's own message, when the CLI quoted it: one line, redacted, never naming Claude Code. */
@@ -137,7 +137,7 @@ function sentenceOf(
   errorCode: string | undefined,
   secrets: readonly string[]
 ): string {
-  if (errorCode === CLAUDE_ENGINE_EXITED) return 'The Claude engine exited';
+  if (errorCode === CLAUDE_ENGINE_EXITED) return 'The Agent SDK engine exited';
   if (status !== undefined) {
     const message = gatewayMessageOf(texts, secrets);
     return `Upstream request failed (HTTP ${status})${message ? `: ${message}` : ''}`;
@@ -150,7 +150,7 @@ function sentenceOf(
   if (errorCode === 'CONTEXT_TOO_LARGE') return 'The conversation is too large for the model';
   const subtype = signals.result?.subtype;
   if (subtype && Object.hasOwn(SUBTYPE_SENTENCES, subtype)) return SUBTYPE_SENTENCES[subtype];
-  return 'The Claude engine reported an error';
+  return 'The Agent SDK engine reported an error';
 }
 
 function codeOf(

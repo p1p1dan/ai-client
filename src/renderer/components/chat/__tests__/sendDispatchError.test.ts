@@ -161,10 +161,10 @@ describe('isModelEngineMismatchError', () => {
 
   it('has a translated status line that never names Claude Code', () => {
     expect(MODEL_ENGINE_MISMATCH_HINT).toBe(
-      'This chat runs on the Claude engine. Pick a Claude model from the same service, or start a new chat.'
+      'This chat runs on the Agent SDK engine. Pick a model from the same service, or start a new chat.'
     );
     expect(zhTranslations[MODEL_ENGINE_MISMATCH_HINT]).toBe(
-      '这个对话由 Claude 引擎驱动，请选同一服务下的 Claude 模型，或新开一个对话。'
+      '这个对话由 Agent SDK 引擎驱动，请选同一服务下的模型，或新开一个对话。'
     );
     expect(MODEL_ENGINE_MISMATCH_HINT).not.toContain('Claude Code');
   });

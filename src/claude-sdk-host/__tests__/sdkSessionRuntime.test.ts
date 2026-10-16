@@ -247,7 +247,7 @@ describe('failed turns (decision 7)', () => {
     const failed = events.find((e) => e.type === 'session.failed');
     expect(failed?.payload).toEqual({
       errorCode: 'claude_engine_exited',
-      error: 'The Claude engine exited',
+      error: 'The Agent SDK engine exited',
     });
     await rt.dispose();
   });

@@ -5,7 +5,6 @@ import {
   claudeSdkRouteFor,
   DEFAULT_CLAUDE_SDK_ENGINE_ENABLED,
   effectiveModelRef,
-  isClaudeFamilyModelId,
   resolveClaudeSdkEngineEnabled,
 } from '../claudeSdkEngine';
 import type { DshModelPlan, DshPlanRoute } from '../dshModelPlan/types';
@@ -30,7 +29,7 @@ const plan: Pick<DshModelPlan, 'index' | 'routes' | 'refs'> = {
   },
   routes: {
     claude: route('anthropic-messages', 'https://gw.example', 'AICLIENT_KEY_CLAUDE'),
-    // An Anthropic-compatible endpoint serving GLM: stays on DSH.
+    // An Anthropic-compatible endpoint serving GLM: the SDK engine serves it.
     zai: route('anthropic-messages', 'https://glm.example/anthropic', 'AICLIENT_KEY_ZAI'),
     // A Claude-named model behind an OpenAI-shaped endpoint: the CLI cannot speak it.
     proxy: route('openai-completions', 'https://proxy.example/v1', 'AICLIENT_KEY_PROXY'),
@@ -53,8 +52,17 @@ describe('claudeSdkRouteFor', () => {
     });
   });
 
-  it('leaves other models, other protocols and unknown refs to DSH', () => {
-    expect(claudeSdkRouteFor(plan, 'zai/glm-5')).toBeNull();
+  it('serves any model on an anthropic-messages route, a GLM behind a compatible endpoint too', () => {
+    expect(claudeSdkRouteFor(plan, 'zai/glm-5')).toEqual({
+      route: 'zai',
+      providerId: 'zai',
+      baseURL: 'https://glm.example/anthropic',
+      model: 'glm-5',
+    });
+  });
+
+  it('leaves other protocols and unknown refs to DSH', () => {
+    // A Claude-named model behind an OpenAI-shaped endpoint: the protocol decides, not the name.
     expect(claudeSdkRouteFor(plan, 'proxy/claude-sonnet-5')).toBeNull();
     expect(claudeSdkRouteFor(plan, 'claude/claude-unknown')).toBeNull();
     expect(claudeSdkRouteFor(plan, undefined)).toBeNull();
@@ -87,15 +95,6 @@ describe('the settings switch', () => {
     expect(resolveClaudeSdkEngineEnabled('false')).toBe(true);
     expect(resolveClaudeSdkEngineEnabled(false)).toBe(false);
     expect(resolveClaudeSdkEngineEnabled(true)).toBe(true);
-  });
-});
-
-describe('isClaudeFamilyModelId', () => {
-  it('matches the provider-side id prefix only', () => {
-    expect(isClaudeFamilyModelId('claude-opus-5')).toBe(true);
-    expect(isClaudeFamilyModelId('Claude-Sonnet-5')).toBe(true);
-    expect(isClaudeFamilyModelId('glm-5')).toBe(false);
-    expect(isClaudeFamilyModelId('my-claude-proxy')).toBe(false);
   });
 });
 
