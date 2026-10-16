@@ -922,7 +922,9 @@ async function main(): Promise<void> {
         break;
       }
       case 'stop': {
-        const seconds = 97;
+        // The sleeps are counted machine-wide by their command line: a duration of this
+        // run's own keeps another probe running at the same time out of the count (S-5).
+        const seconds = 97 + (process.pid % 400);
         const before = sleepers(seconds);
         // Bypass gear: the command runs without a card, so Stop meets a live process tree.
         await request('worker.setPermissionGear', { logicalSessionId, gear: 'bypass' });

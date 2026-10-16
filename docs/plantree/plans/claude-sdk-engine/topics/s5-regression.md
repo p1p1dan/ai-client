@@ -1,6 +1,16 @@
 # S-5 回归与证据（记录）
 
-Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5。S-5 本身（探针场景进回归集、录制 SDK 事件序列做门禁、真实网关复跑 T1、GUI 点验清单）排在 S-4 之后；这里先记 S-4 进行期间先做掉的几项加固，它们不碰打包相关的文件。真实网关复跑 T1 前须先问用户。
+Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5。S-4（打包）在另一个会话里做；S-5 里不依赖打包、也不碰打包文件的部分先做（§1、§3），接 CI 的部分等 S-4 合入后再接。真实网关复跑 T1 前须先问用户。
+
+## 0 范围
+
+| 项 | README 的要求 | 本节做什么 |
+|---|---|---|
+| 回归集 | 探针场景进回归集 | 一条命令跑完全部探针场景（§3 R-1），本机与 CI 都能用 |
+| 录制门禁 | 录制 SDK 事件序列做门禁 | 照 DSH 的 `bridge-record.ts` 录几个确定的场景，`--check` 比对（R-3） |
+| 真实网关 | 复跑 T1 | **待用户**：用真实网关前先问 |
+| GUI 清单 | GUI 点验清单 | 把 S-1～S-3 与开始页跳过权限确认做过的点验写成清单（R-4），打包后照它再走一遍 |
+| 加固 | §9.2、§10.2 里标给 S-5 的 | #34、#35、#39 见 §1；#42 见 H-4 |
 
 ## 1 先做的加固（2026-10-16）
 
@@ -16,3 +26,22 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 
 - 宿主 tsc 无错；`sdkSessionRuntime` 单测全过；全量 vitest 与基线一致（两次）。
 - 探针（新代码的假网关，单独端口）：flow 35（含 `stop`）、各档 33（`mode-auto` 在最前）、`mode-auto repoenv` 13；负载下 `stop` 两次（150 秒上限与缺省 60 秒）都过。
+
+## 3 主体的决定（自主决定，待审阅）
+
+| # | 决定 | 理由 |
+|---|---|---|
+| R-1 | **回归命令 `src/claude-sdk-host/tools/probe-suite.ts`**：自己起一个本机假网关（空闲端口），每组场景一个新建的临时工作区与配置目录，依次跑：流程（text tools ask stop plan steer agent search compact history）、各档（keyiso mode-manual mode-edits mode-plan mode-bypass mode-switch mode-enterplan mode-auto）、mode-plan-refused、errors+repoenv、projcfg、projcfg-scratch、projcfg-home（替身主目录由它建）；汇总成 JSON（每组通过与失败的检查、耗时），有一条不过就以 1 退出。`--only` 选组，`--host-entry` 换成打包后的 `host.js`（与 S-4 的冒烟同一入口），`--keep` 保留临时目录 | 现在这些组靠手敲长命令、各用各的目录，换人就难复现；一条命令才算"进回归集"。只用假网关，不碰真实网关 |
+| R-2 | **接 CI 等 S-4 合入后再做**：S-4 正在改 `build.yml`；回归要 CLI 二进制（平台包），CI 那一步装宿主依赖时不能省可选依赖 | 避免两个分支同改一个工作流文件 |
+| R-3 | **录制门禁先做一个最小版**：只录确定性的场景（text、tools、ask、plan），把 `runtime.event` 序列规范化（合并同一条消息的增量、去掉 id/时间/用量数字/临时路径），存到 `src/shared/__tests__/fixtures/claude-sdk/`，`--check` 比对、`--update` 重写 | 照 DSH 的 `bridge-record.ts`；SDK 升级或宿主改动改变了界面收到的事件时第一时间看到。先做小，确定性站得住再加场景 |
+| R-4 | **GUI 点验清单** `topics/gui-checklist.md`：把做过的点验（引擎选择、五档与中文名、回合中切档、审阅卡、DSH 菜单不变、项目 CLAUDE.md 与规则、开始页跳过权限确认）写成步骤，注明用 `gui-probe.mjs` 怎么走 | 打包后（S-6 前）照清单在安装目录上再走一遍 |
+| H-4 | **#42：CLI 还没就绪时的切档**：宿主用 SDK 的 `initializationResult()` 判断 CLI 是否已初始化；没就绪时先把要切的档记下、立即应答，等 CLI 就绪后再发切档，被拒时照 S-2 A-6 按 CLI 报的档同步并说明原因 | Main 给一次切档的总时长是 10 秒，宿主无法为慢启动多等；就绪前 CLI 不会调工具，先记下不会让某个调用按错的档判断 |
+
+## 4 主体的实现记录（第一批，2026-10-16）
+
+- **R-1 回归命令**：`node src/claude-sdk-host/tools/probe-suite.ts`（在 `src/claude-sdk-host` 下跑）。一组一个临时目录，通过的组随即删掉，失败的组留下日志并打印路径；`--out` 写 JSON 汇总。判定只看探针自己的输出：退出码 0、有检查、全部通过、有"all passed"那一行才算过，崩溃、超时、零检查都算失败（单测 `probeSuite.test.ts`）。
+- **第一次整跑就抓到一处脆弱**：`stop` 场景按命令行在全机数 `sleep 97`，另一个会话同时跑同一场景时会数进别人的进程（停后 2 秒清零、6～7 秒又冒出两个）。改为每次运行用自己的时长（`97 + 进程号 % 400` 秒），单独重跑 flow 35/35。
+- **H-4（#42）**：宿主在启动 CLI 时订阅 `initializationResult()`；就绪前的切档立即应答、先记下（多次只发最后一次），就绪后发出；被拒时按 CLI 的档同步并带原因（`engine`、`refusedReason`）。就绪前 CLI 报来的起始档不当作它自己改了档。单测 2 条，变异检查 3 处都能抓到：去掉"就绪前先记下"、记下时不计入在途、被拒时不带原因。
+- **R-4**：[GUI 点验清单](gui-checklist.md)，9 项，附 2026-10-16 开发版的结果；打包后照清单再走一遍。
+- 整跑：H-4 落地后 `probe-suite.ts` 一次跑完 7 组全过（流程 35、各档 34、mode-plan-refused 3、errors+repoenv 33、projcfg 12、scratch 9、home 4，共 130 条，约 1.5 分钟）。
+- R-2（接 CI）与 R-3（录制门禁）未做：R-2 等 S-4 合入；R-3 下一批。

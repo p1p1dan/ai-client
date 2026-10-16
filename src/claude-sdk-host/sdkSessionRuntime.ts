@@ -527,6 +527,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private cliMode: string | null = null;
   /** Mode switches sent and not answered yet: the CLI's reports in between are not drift. */
   private modeRequests = 0;
+  /** S-5 H-4: the running CLI has initialized and answers control requests. */
+  private cliReady = false;
+  /** S-5 H-4: a mode picked before the CLI was ready, sent once it is. */
+  private deferredMode: RuntimePermissionSettings | null = null;
   private turn: Turn | null = null;
   private turnCount = 0;
   private userMessageCount = 0;
@@ -700,6 +704,20 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const q = query({ prompt: input, options });
     this.query = q;
     this.input = input;
+    // S-5 H-4 (README §10.2 #42): the CLI starts on this mode, and answers a mode switch
+    // only once it has initialized, which on a slow machine can outlast Main's budget.
+    this.cliMode = cliPermissionMode(this.permissions);
+    this.cliReady = false;
+    q.initializationResult().then(
+      () => {
+        if (this.query !== q || this.disposed) return;
+        this.cliReady = true;
+        void this.sendDeferredMode(q);
+      },
+      () => {
+        // A CLI that never initializes fails its turn through the pump.
+      }
+    );
     // A new CLI process starts with no background tasks; its level arrives on the first change.
     this.resetBackgroundTasks();
     this.pumpDone = this.pump(q);
@@ -1920,13 +1938,52 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       this.permissions = next;
       return;
     }
+    // S-5 H-4: a CLI still starting runs no tool yet, so the mode is taken now and sent
+    // once it is ready (`sendDeferredMode`); the last one picked meanwhile wins.
+    if (!this.cliReady) {
+      if (!this.deferredMode) this.modeRequests += 1;
+      this.deferredMode = next;
+      this.permissions = next;
+      return;
+    }
     // The mode PiLab holds changes only once the CLI took the new one: a call the CLI asks
-    // about meanwhile is judged by the mode still in force (e.g. refused in plan mode).
+    // about meanwhile is judged by the mode still in force.
     try {
       await this.trackModeSwitch(q.setPermissionMode(cliPermissionMode(next)), next);
     } catch (error) {
       this.log('setPermissionMode refused', error);
       throw permissionModeRefused(error);
+    }
+  }
+
+  /**
+   * S-5 H-4: the mode picked while the CLI was starting, now that it answers. A refusal
+   * is the CLI keeping its own mode: PiLab takes that mode back and says why, as it does
+   * for a mode the CLI changed by itself (S-2 A-6).
+   */
+  private async sendDeferredMode(q: Query): Promise<void> {
+    const next = this.deferredMode;
+    if (!next) return;
+    this.deferredMode = null;
+    try {
+      await this.trackModeSwitch(q.setPermissionMode(cliPermissionMode(next)), next);
+    } catch (error) {
+      this.log('setPermissionMode refused once the CLI was ready', error);
+      const kept = permissionsForCliMode(this.cliMode ?? '');
+      if (kept && !this.disposed) {
+        this.permissions = kept;
+        this.emit({
+          type: 'session.permissions',
+          payload: {
+            permissions: kept,
+            cause: 'engine',
+            refusedReason: permissionModeRefused(error).message,
+          },
+        });
+      }
+    } finally {
+      this.modeRequests -= 1;
+      this.reconcileCliMode();
     }
   }
 

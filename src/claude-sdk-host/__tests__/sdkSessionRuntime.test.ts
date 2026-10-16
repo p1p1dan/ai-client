@@ -16,7 +16,11 @@ interface FakeQuery {
   applyFlagSettings: ReturnType<typeof vi.fn>;
   setPermissionMode: ReturnType<typeof vi.fn>;
 }
-const sdk = vi.hoisted(() => ({ queries: [] as FakeQuery[] }));
+/** `init`: what the next CLI's `initializationResult()` waits on (S-5 H-4); ready at once if unset. */
+const sdk = vi.hoisted(() => ({
+  queries: [] as FakeQuery[],
+  init: null as Promise<unknown> | null,
+}));
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   getSessionMessages: vi.fn(async () => []),
@@ -55,6 +59,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       setModel: fake.setModel,
       applyFlagSettings: fake.applyFlagSettings,
       setPermissionMode: fake.setPermissionMode,
+      initializationResult: () => sdk.init ?? Promise.resolve({}),
     };
   },
 }));
@@ -78,6 +83,7 @@ beforeEach(() => {
   configDir = mkdtempSync(join(tmpdir(), 'ccsdk-runtime-test-'));
   events = [];
   sdk.queries.length = 0;
+  sdk.init = null;
 });
 
 afterEach(() => {
@@ -784,6 +790,54 @@ describe('mode switches (S-2 A-3, A-5)', () => {
     } finally {
       vi.useRealTimers();
     }
+    await rt.dispose();
+  });
+
+  it('a switch before the CLI is ready is taken at once and sent when it is (S-5 H-4, #42)', async () => {
+    const ready = deferred();
+    sdk.init = ready.promise;
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    // Answered at once: Main's budget never meets a slow start.
+    await rt.setPermissions({ mode: 'agent', gear: 'accept-edits' });
+    await rt.setPermissions({ mode: 'agent', gear: 'auto' });
+    expect(q.setPermissionMode).not.toHaveBeenCalled();
+    // The CLI reports the mode it started on meanwhile: not a change of its own.
+    q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'default' });
+    await flush();
+    expect(ofType('session.permissions')).toEqual([]);
+    ready.resolve();
+    await flush();
+    // Only the last mode picked is sent, once.
+    expect(q.setPermissionMode.mock.calls).toEqual([['auto']]);
+    expect(ofType('session.permissions')).toEqual([]);
+    // The next switch goes straight to the CLI again.
+    await rt.setPermissionGear('ask');
+    expect(q.setPermissionMode).toHaveBeenLastCalledWith('default');
+    await rt.dispose();
+  });
+
+  it('a mode the CLI refuses once ready is taken back, with its reason (S-5 H-4)', async () => {
+    const ready = deferred();
+    sdk.init = ready.promise;
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    q.setPermissionMode.mockRejectedValueOnce(
+      Object.assign(new Error('Cannot set permission mode to bypassPermissions'), {
+        errorCode: 'bypass_disabled',
+      })
+    );
+    await rt.setPermissions({ mode: 'agent', gear: 'bypass' });
+    ready.resolve();
+    await flush();
+    expect(ofType('session.permissions').map((e) => e.payload)).toEqual([
+      {
+        permissions: { mode: 'agent', gear: 'ask' },
+        cause: 'engine',
+        refusedReason: 'bypass_disabled',
+      },
+    ]);
+    // Manual is what PiLab holds again: the next switch starts from it.
+    await rt.setPermissionGear('accept-edits');
+    expect(q.setPermissionMode).toHaveBeenLastCalledWith('acceptEdits');
     await rt.dispose();
   });
 
