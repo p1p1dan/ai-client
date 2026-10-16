@@ -91,11 +91,13 @@ async function openDshChannel(cwd: string, userInitiated: boolean): Promise<Work
 }
 
 /**
- * Open and bootstrap one chat session on the DSH engine: a channel of the
- * app's one shared DSH host (decision 019).
- *
- * dsh-rebase P1-1 (decisions 004, 009): every chat session runs on DSH, in
- * packaged and unpackaged builds alike, with no switch and no native fallback.
+ * Open and bootstrap one chat session. By default that is a channel of the
+ * app's one shared DSH host (decision 019); a caller's `createTransport`
+ * replaces the channel, which is how a Claude Agent SDK chat gets its own host
+ * process (route B). Which chats run on which engine is decided in
+ * `claudeSdkEngine.ts` and handed in by `WorkerManager`, never here: this
+ * module has no engine switch, no packaging gate and no native fallback
+ * (dsh-rebase P1-1, decisions 004 and 009; route B S-1).
  * Named `createPiWorkerSlot` until dsh-rebase P1-12 step 4 renamed the seam
  * (decisions 010 and 147); the `worker.*` method names on the wire stay.
  *

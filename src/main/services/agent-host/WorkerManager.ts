@@ -2,6 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { readdir, stat, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import { dirname } from 'node:path';
+import {
+  type ChatEngine,
+  CLAUDE_ENGINE_EXITED,
+  claudeSdkRouteFor,
+  MODEL_ENGINE_MISMATCH,
+} from '@shared/claudeSdkEngine';
 import { translate } from '@shared/i18n';
 import { decodePlanReviewResponse } from '@shared/planReview';
 import { forkSessionTitle } from '@shared/sessionTitles';
@@ -111,10 +117,18 @@ import { sessionIndexService } from '../chat/SessionIndexService';
 import { getCurrentLocale } from '../i18n';
 import { type PreviewShowRequest, previewWindowManager } from '../preview/PreviewWindowManager';
 import {
-  type ChatEngine,
-  engineForNewSession,
+  CLAUDE_SDK_CREDENTIALS_UNAVAILABLE,
+  CLAUDE_SDK_HOST_UNAVAILABLE,
+  type ClaudeSdkEngineSource,
+  type ClaudeSdkLaunch,
+  type ClaudeSdkTransportInput,
+  chooseNewChatEngine,
+  claudeSdkGatewayFingerprint,
+  currentClaudeSdkFingerprint,
   engineForSessionFile,
   openClaudeSdkTransport,
+  readClaudeSdkPlan,
+  resolveClaudeSdkLaunch,
 } from './claudeSdkEngine';
 import { type CreatedDshChatSlot, createDshChatSlot } from './createDshChatSlot';
 import {
@@ -128,7 +142,8 @@ import {
 import { claimedDshSessionIds, DSH_SESSION_GC_GRACE_MS, readDshSessionStub } from './dshSessionGc';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
-import type { WorkerTransportExit } from './WorkerTransport';
+import type { WorkerTransport, WorkerTransportExit } from './WorkerTransport';
+import { WorkerManagerError } from './workerManagerError';
 import {
   joinWorkerPath,
   normalizeWorkerPath,
@@ -146,16 +161,7 @@ export type WorkerManagerEntryState =
   | 'disposing'
   | 'error';
 
-export class WorkerManagerError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly retryable = false
-  ) {
-    super(message);
-    this.name = 'WorkerManagerError';
-  }
-}
+export { WorkerManagerError };
 
 interface ManagedSlot {
   key: string;
@@ -331,11 +337,30 @@ interface ManagedSlot {
    */
   postureFromPlanReview?: boolean;
   /**
-   * Route-B prototype: the engine this chat runs on, fixed for its life —
-   * chosen from the model when it is created, read off its session file when
-   * it is reopened (`claudeSdkEngine.ts`). Absent is DSH.
+   * Route B: the engine this chat runs on, fixed for its life — chosen when it
+   * is created (`chooseNewChatEngine`), read off its session file when it is
+   * reopened (`claudeSdkEngine.ts`). Absent is DSH.
    */
   engine?: ChatEngine;
+  /**
+   * Route B, S-1 (decision 5): the plan route an SDK chat was started on. A
+   * running SDK chat only switches among Claude models of this route;
+   * `startTurn` refuses any other (`model_engine_mismatch`).
+   */
+  sdkRoute?: string;
+  /** The model an SDK chat was started on, or last sent with on its route. */
+  sdkModel?: string;
+  /**
+   * Decision 4: route, gateway and a key hash prefix this SDK chat's host was
+   * started with (`claudeSdkGatewayFingerprint`). A plan build that changes it
+   * releases the chat once idle, so its next send reopens it with the new key.
+   */
+  sdkFingerprint?: string;
+  /**
+   * Decision 8: background tasks (async subagents, background shells) the SDK
+   * engine last reported running for this chat. Not idle while above zero.
+   */
+  backgroundTasks?: number;
 }
 
 /**
@@ -422,6 +447,14 @@ export interface WorkerManagerOptions {
   readDshStub?: (file: string) => Promise<unknown>;
   /** How long after the host is first up the collection waits; see `scheduleOrphanCollection`. */
   orphanCollectionDelayMs?: number;
+  /**
+   * Route B, S-1 — the Claude Agent SDK engine's switch, plan, keys and host
+   * (`dshHostModelSource.ts` sets the real one later, `setClaudeSdkEngineSource`).
+   * Without one every new chat runs on DSH and an SDK chat cannot be reopened.
+   */
+  claudeSdk?: ClaudeSdkEngineSource;
+  /** Starts one SDK chat's host; tests stand one in. Default `openClaudeSdkTransport`. */
+  openClaudeSdkTransport?: (input: ClaudeSdkTransportInput) => WorkerTransport;
 }
 
 export interface WorkerManagerSlotSnapshot {
@@ -512,6 +545,22 @@ function hostUnavailableError(error: unknown): unknown {
   return new WorkerManagerError(
     HOST_UNAVAILABLE,
     error instanceof Error ? error.message : String(error),
+    true
+  );
+}
+
+/**
+ * Route B, S-1: an SDK host that exited, failed or did not answer its
+ * bootstrap never came up — `claude_sdk_host_unavailable`. The contract's own
+ * codes pass through; the worker's own refusals (a bad stub) keep theirs.
+ */
+function claudeSdkSpawnError(error: unknown): unknown {
+  if (error instanceof WorkerManagerError) return error;
+  const code = localSlotFailure(error);
+  if (!code) return error;
+  return new WorkerManagerError(
+    CLAUDE_SDK_HOST_UNAVAILABLE,
+    `The Claude Agent SDK host did not start (${code}): ${error instanceof Error ? error.message : String(error)}`,
     true
   );
 }
@@ -688,8 +737,11 @@ export class WorkerManager {
   private readonly historyPageFlights = new Map<string, Promise<void>>();
   /** Every spawned physical slot, including failed-disposal retired generations. */
   private readonly ownedSlots = new Set<WorkerSlot>();
-  /** Route-B prototype: slots whose transport is a Claude SDK host process, not a DSH channel. */
+  /** Route B: slots whose transport is a Claude SDK host process, not a DSH channel. */
   private readonly claudeSdkSlots = new WeakSet<WorkerSlot>();
+  /** Route B, S-1: see {@link WorkerManagerOptions.claudeSdk}. */
+  private claudeSdk: ClaudeSdkEngineSource | null;
+  private readonly openClaudeSdkTransport: (input: ClaudeSdkTransportInput) => WorkerTransport;
   private eventSequence = 0;
   private lifecycleChain: Promise<void> = Promise.resolve();
   private state: WorkerManagerState = 'stopped';
@@ -717,6 +769,8 @@ export class WorkerManager {
 
   constructor(options: WorkerManagerOptions = {}) {
     this.host = options.host ?? null;
+    this.claudeSdk = options.claudeSdk ?? null;
+    this.openClaudeSdkTransport = options.openClaudeSdkTransport ?? openClaudeSdkTransport;
     this.readDshStub = options.readDshStub ?? readDshSessionStub;
     this.orphanCollectionDelayMs = nonNegativeFinite(
       options.orphanCollectionDelayMs ?? DEFAULT_ORPHAN_COLLECTION_DELAY_MS,
@@ -777,6 +831,11 @@ export class WorkerManager {
   onEvent(handler: (event: RuntimeEvent) => void): () => void {
     this.handlers.add(handler);
     return () => this.handlers.delete(handler);
+  }
+
+  /** Route B, S-1: the SDK engine's sources, installed with the DSH host's (`dshHostModelSource.ts`). */
+  setClaudeSdkEngineSource(source: ClaudeSdkEngineSource | null): void {
+    this.claudeSdk = source;
   }
 
   async ensureReady(): Promise<void> {
@@ -1038,6 +1097,7 @@ export class WorkerManager {
               agent: DSH_AGENT,
               ...(committed ? { runtimeIdentity: existing.sessionFile } : {}),
               ...this.gatePayload(existing),
+              ...this.enginePayload(existing),
             },
           });
           // decision 046 — re-announce only what the worker itself last said
@@ -1075,6 +1135,15 @@ export class WorkerManager {
         logicalSessionId: input.sessionId,
         createToken: this.createToken(),
       });
+      // Route B, S-1 (decision 1): the switch, the model's route and the host decide.
+      const chosen = chooseNewChatEngine(input.model, this.claudeSdk);
+      const sdkLaunch: ClaudeSdkLaunch | undefined =
+        chosen.engine === 'claude-sdk' ? { model: chosen.model, route: chosen.route } : undefined;
+      if (sdkLaunch) {
+        console.info(
+          `[worker-manager] ${input.sessionId}: new chat on the Claude Agent SDK engine (route ${sdkLaunch.route.route}, model ${sdkLaunch.model})`
+        );
+      }
       const timestamp = this.now();
       const entry: ManagedSlot = {
         key: temporaryKey,
@@ -1086,7 +1155,7 @@ export class WorkerManager {
         permissions: input.permissions,
         sessionFile: null,
         identityCommitted: false,
-        engine: engineForNewSession(input.model),
+        engine: chosen.engine,
         slot: null,
         bootstrap: null,
         state: 'creating',
@@ -1112,13 +1181,15 @@ export class WorkerManager {
       this.state = 'ready';
 
       try {
+        const model = sdkLaunch?.model ?? input.model;
         const created = await this.spawnForEntry(
           entry,
           {
-            ...(input.model ? { model: input.model } : {}),
+            // An SDK chat is started on an explicit model, "automatic" resolved.
+            ...(model ? { model } : {}),
             ...(input.effort ? { effort: input.effort } : {}),
           },
-          { userInitiated: true }
+          { userInitiated: true, ...(sdkLaunch ? { claudeSdk: sdkLaunch } : {}) }
         );
         if (!created.bootstrap.sessionFile) {
           throw new WorkerManagerError(
@@ -1175,6 +1246,7 @@ export class WorkerManager {
             agent: DSH_AGENT,
             ...(materialized ? { runtimeIdentity: sessionFile } : {}),
             ...this.gatePayload(entry),
+            ...this.enginePayload(entry),
           },
         });
         this.dispatch({
@@ -1295,12 +1367,14 @@ export class WorkerManager {
         this.claimEntry(entry, input.ownerWebContentsId);
         await this.reconcilePermissions(entry, input.permissions, requestId);
         const history = await this.readHistory(entry, 0, 80);
+        // An SDK chat records the model it runs on, not one it may not switch to.
+        const warmModel = entry.engine === 'claude-sdk' ? entry.sdkModel : input.model;
         await this.commitResumed({
           sessionId: input.sessionId,
           workspacePath: cwd,
           runtimeIdentity: sessionFile,
           agent: DSH_AGENT,
-          ...(input.model ? { model: input.model } : {}),
+          ...(warmModel ? { model: warmModel } : {}),
           ...(entry.leafCheckpoint ? { piLeaf: entry.leafCheckpoint } : {}),
         });
         this.claimEntry(
@@ -1332,6 +1406,14 @@ export class WorkerManager {
           `Pi session file is already owned by logical session ${conflict.logicalSessionId}`
         );
       }
+      // Route B, S-1 (decision 2): a chat reopens on the engine that created it,
+      // whatever the switch says now. An SDK chat's model and route are settled
+      // before anything is touched: none is `claude_sdk_credentials_unavailable`.
+      const engine = engineForSessionFile(sessionFile);
+      const sdkLaunch =
+        engine === 'claude-sdk'
+          ? await this.claudeSdkLaunchForReopen(sessionFile, input.model)
+          : undefined;
       // concurrency-02 on DSH (P1-3c): the session lock is a kernel lock that
       // cannot be forced, and the holder this app can reach is its own shared
       // host keeping an agent that never let go. Restarting the host is the
@@ -1339,8 +1421,9 @@ export class WorkerManager {
       // sessions are interrupted gracefully (the busy ones closed first,
       // decision 155) and reopened in one batch after this resume. A holder
       // outside the app keeps the lock regardless, and the reopen below
-      // reports it again.
-      if (input.forceTakeover && this.host) await this.restartHost('user');
+      // reports it again. An SDK chat holds no lock in the DSH host, so its
+      // takeover restarts nothing (decision 8).
+      if (input.forceTakeover && this.host && !sdkLaunch) await this.restartHost('user');
       const timestamp = this.now();
       entry = {
         key: durableKey,
@@ -1354,7 +1437,7 @@ export class WorkerManager {
         // Resume is only reachable through an indexed runtimeIdentity, so the
         // durable commit already happened — for this file, by definition.
         identityCommitted: true,
-        engine: engineForSessionFile(sessionFile),
+        engine,
         slot: null,
         bootstrap: null,
         state: 'creating',
@@ -1379,18 +1462,23 @@ export class WorkerManager {
       this.claimEntry(entry, input.ownerWebContentsId);
       this.state = 'ready';
 
+      const resumedModel = sdkLaunch?.model ?? input.model;
       try {
         const created = await this.spawnForEntry(
           entry,
           {
-            ...(input.model ? { model: input.model } : {}),
+            ...(resumedModel ? { model: resumedModel } : {}),
             ...(input.effort ? { effort: input.effort } : {}),
           },
           // Third argument, not folded into `selection`: a takeover is a
           // property of THIS spawn, where selection is what the session runs
           // on. `spawnForEntry` is also reached from the crash restart and the
           // fork, neither of which may ever inherit it.
-          { ...(input.forceTakeover ? { forceTakeover: true } : {}), userInitiated: true }
+          {
+            ...(input.forceTakeover ? { forceTakeover: true } : {}),
+            userInitiated: true,
+            ...(sdkLaunch ? { claudeSdk: sdkLaunch } : {}),
+          }
         );
         const reopenedFile = created.bootstrap.sessionFile
           ? normalizeWorkerPath(created.bootstrap.sessionFile, 'Pi session file')
@@ -1437,7 +1525,7 @@ export class WorkerManager {
           workspacePath: cwd,
           runtimeIdentity: resumedFile,
           agent: DSH_AGENT,
-          ...(input.model ? { model: input.model } : {}),
+          ...(resumedModel ? { model: resumedModel } : {}),
           piLeaf: created.bootstrap.leaf,
         });
         entry.leafCheckpoint = created.bootstrap.leaf;
@@ -2129,6 +2217,7 @@ export class WorkerManager {
               agent: DSH_AGENT,
               runtimeIdentity: sessionFile,
               ...this.gatePayload(target),
+              ...this.enginePayload(target),
             },
           });
           this.dispatchHistory(target, requestId, history, 'initial');
@@ -2231,6 +2320,8 @@ export class WorkerManager {
       throw new WorkerManagerError('invalid_send_attempt', 'Pi send attemptId must be non-empty');
     }
     this.claimEntry(entry, input.ownerWebContentsId);
+    // Route B, S-1 (decision 5): refused before anything is latched or sent.
+    this.assertSdkModelOnRoute(entry, input.model);
     if (entry.activeRequestId || entry.mutationInFlight !== null) {
       throw new WorkerManagerError(
         'session_busy',
@@ -2277,6 +2368,7 @@ export class WorkerManager {
           'Pi worker returned an invalid send acknowledgement'
         );
       }
+      if (entry.engine === 'claude-sdk' && input.model) entry.sdkModel = input.model;
       return requestId;
     } catch (error) {
       if (entry.activeRequestId === requestId) {
@@ -2292,6 +2384,25 @@ export class WorkerManager {
       }
       throw error;
     }
+  }
+
+  /**
+   * Route B, S-1 (decision 5, finding 18): a running SDK chat sends every
+   * request through its route's gateway, so it may only switch to a Claude
+   * model the SDK serves on that same route. Anything else — a DSH model, or a
+   * Claude model of another route — is `model_engine_mismatch`, and the
+   * renderer hands the message back. The model it already runs on needs no
+   * plan to pass; a DSH chat is never limited.
+   */
+  private assertSdkModelOnRoute(entry: ManagedSlot, model: string | undefined): void {
+    if (entry.engine !== 'claude-sdk' || !model || model === entry.sdkModel) return;
+    const plan = this.claudeSdk ? readClaudeSdkPlan(this.claudeSdk) : null;
+    const route = plan ? claudeSdkRouteFor(plan, model)?.route : undefined;
+    if (route !== undefined && route === entry.sdkRoute) return;
+    throw new WorkerManagerError(
+      MODEL_ENGINE_MISMATCH,
+      `Model ${model} cannot be used in this chat: it runs on the Claude Agent SDK engine and only switches among Claude models of route ${entry.sdkRoute ?? 'unknown'}`
+    );
   }
 
   /**
@@ -2827,11 +2938,25 @@ export class WorkerManager {
    * fresh host.
    */
   invalidateAll(): Promise<void> {
+    return this.invalidate(() => true);
+  }
+
+  /**
+   * `invalidateAll` for the sessions `includes` names; the shared host goes
+   * either way. Route B, S-1 (decision 8): a stale plan or plugin selection
+   * only concerns the DSH host, so its restart leaves SDK chats running (their
+   * gateway is checked on its own, `checkClaudeSdkGateways`).
+   */
+  private invalidate(includes: (entry: ManagedSlot) => boolean): Promise<void> {
     return this.serialize(async () => {
       this.configGeneration += 1;
       // P1-7e e6 (problem 37, decision 145): nothing reopens these sessions,
       // so each one says it went (`released`) and leaves "Active now".
-      await this.disposeEntries([...this.entriesBySession.values()], 'slot-replace', 'released');
+      await this.disposeEntries(
+        [...this.entriesBySession.values()].filter(includes),
+        'slot-replace',
+        'released'
+      );
       this.pendingHostRecovery.clear();
       this.updateManagerState();
       if (this.host) {
@@ -2851,11 +2976,66 @@ export class WorkerManager {
    * `invalidateAll`, but only once no session has a turn or other work under
    * way; until then the check repeats. A host that is not running starts on
    * the new plan anyway. Idempotent: calling it for the host's own revision
-   * cancels a pending restart.
+   * cancels a pending restart. Route B, S-1: the restart takes the DSH
+   * sessions only, and SDK chats get their own check (`checkClaudeSdkGateways`).
    */
   reconcileModelPlan(revision: string): void {
     this.pendingPlanRevision = revision;
     this.recheckModelPlan();
+    this.checkClaudeSdkGateways();
+  }
+
+  /**
+   * Route B, S-1 (decision 4) — every plan build may come with another
+   * gateway or key for a route an SDK chat runs on (a sync replaced the
+   * administrator key). The key lives in that chat's host process, so it is
+   * compared by fingerprint, and a chat that changed is released once it is
+   * idle (`released`, like `invalidateAll`): the renderer's next send reopens
+   * it (`session_not_found`), with the key as of then. A busy one is compared
+   * again at the next build. An open chat is released too, the same way a
+   * login or a plan change releases every open DSH chat.
+   */
+  private checkClaudeSdkGateways(): void {
+    const source = this.claudeSdk;
+    if (!source) return;
+    // Queue the check for any SDK chat, one still spawning included: a create or
+    // resume holds the lifecycle chain, so its fingerprint is set by the time this runs.
+    const anySdk = [...this.entriesBySession.values()].some(
+      (entry) => entry.engine === 'claude-sdk'
+    );
+    if (!anySdk) return;
+    void this.serialize(async () => {
+      const stale = [...this.entriesBySession.values()].filter((entry) => {
+        if (entry.engine !== 'claude-sdk' || entry.state !== 'ready') return false;
+        if (entry.sdkRoute === undefined || entry.sdkFingerprint === undefined) return false;
+        if (!this.claudeSdkIdle(entry)) return false;
+        try {
+          return currentClaudeSdkFingerprint(source, entry.sdkRoute) !== entry.sdkFingerprint;
+        } catch (error) {
+          this.log('[worker-manager] Claude SDK gateway check failed', error);
+          return false;
+        }
+      });
+      if (stale.length === 0) return;
+      console.info(
+        `[worker-manager] the gateway or key of ${stale.length} Claude SDK chat(s) changed; ` +
+          'releasing them so they reopen with the new one'
+      );
+      const stuck = await this.disposeEntries(stale, 'slot-replace', 'released');
+      await this.releaseStuckChannels(stuck);
+      this.updateManagerState();
+    });
+  }
+
+  /** Route B, S-1: nothing under way that a release would cut short. */
+  private claudeSdkIdle(entry: ManagedSlot): boolean {
+    return (
+      entry.activeRequestId === null &&
+      entry.mutationInFlight === null &&
+      entry.compacting !== true &&
+      entry.stopWatchdog === undefined &&
+      !this.claudeSdkWorking(entry)
+    );
   }
 
   /**
@@ -2907,7 +3087,7 @@ export class WorkerManager {
           `Main has ${String(selection)}; restarting it`
       );
     }
-    this.invalidateAll()
+    this.invalidate((entry) => entry.engine !== 'claude-sdk')
       .then(() => (pluginsStale ? this.startHostAfterPluginChange() : undefined))
       .catch((error: unknown) =>
         this.log('[worker-manager] restart for a new model plan or plugin selection failed', error)
@@ -2948,6 +3128,8 @@ export class WorkerManager {
     if ((this.host?.status().completions ?? 0) > 0) return true;
     const busy = this.busyChannels();
     return [...this.entriesBySession.values()].some((entry) => {
+      // Route B, S-1: an SDK chat is not on the host and survives its restart.
+      if (entry.engine === 'claude-sdk') return false;
       const channel = entry.slot?.channelId;
       return (
         entry.activeRequestId !== null ||
@@ -3028,6 +3210,69 @@ export class WorkerManager {
     this.host?.forceKillNow();
   }
 
+  /**
+   * Route B, S-1 (decisions 3, 4): what one SDK spawn needs — the key of its
+   * route's provider now, the transport that hands it and the gateway to the
+   * host, and the fingerprint the rotation check compares later. Records the
+   * route and model on the entry. Throws the contract codes before anything
+   * starts.
+   */
+  private claudeSdkSpawn(
+    entry: ManagedSlot,
+    launch: ClaudeSdkLaunch | undefined
+  ): {
+    createTransport: (input: { generation: number; cwd: string }) => WorkerTransport;
+    fingerprint: string;
+  } {
+    const source = this.claudeSdk;
+    if (!source || !launch) {
+      throw new WorkerManagerError(
+        CLAUDE_SDK_CREDENTIALS_UNAVAILABLE,
+        `No Claude model route to start ${entry.logicalSessionId} on`,
+        true
+      );
+    }
+    if (!source.hostAvailable()) {
+      throw new WorkerManagerError(
+        CLAUDE_SDK_HOST_UNAVAILABLE,
+        'This build has no Claude Agent SDK host',
+        true
+      );
+    }
+    const { route } = launch;
+    const apiKey = source.key(route.providerId);
+    if (!apiKey) {
+      throw new WorkerManagerError(
+        CLAUDE_SDK_CREDENTIALS_UNAVAILABLE,
+        `No key for provider ${route.providerId} (route ${route.route})`,
+        true
+      );
+    }
+    entry.sdkRoute = route.route;
+    entry.sdkModel = launch.model;
+    const open = this.openClaudeSdkTransport;
+    return {
+      createTransport: ({ generation, cwd }) =>
+        open({ generation, cwd, baseURL: route.baseURL, apiKey }),
+      fingerprint: claudeSdkGatewayFingerprint(route, apiKey),
+    };
+  }
+
+  /** Route B, S-1 (decision 2): the model and route a reopened SDK chat starts on. */
+  private async claudeSdkLaunchForReopen(
+    sessionFile: string,
+    preferred: string | undefined,
+    fallback?: string
+  ): Promise<ClaudeSdkLaunch> {
+    return resolveClaudeSdkLaunch({
+      plan: this.claudeSdk ? readClaudeSdkPlan(this.claudeSdk) : null,
+      sessionFile,
+      readStub: this.readDshStub,
+      ...(preferred ? { preferred } : {}),
+      ...(fallback ? { fallback } : {}),
+    });
+  }
+
   private async spawnForEntry(
     entry: ManagedSlot,
     selection: { model?: string; effort?: SessionEffortLevel } = {},
@@ -3044,10 +3289,20 @@ export class WorkerManager {
      * `userInitiated` — dsh-rebase P1-3a — marks a user's create, resume or
      * fork: only those may try the shared DSH host again after it failed
      * (decision 020 rule 6). A crash restart never sets it.
+     *
+     * `claudeSdk` — Route B, S-1 — the model and route an SDK entry starts on;
+     * required for one, ignored for DSH.
      */
-    options: { fresh?: boolean; forceTakeover?: boolean; userInitiated?: boolean } = {}
+    options: {
+      fresh?: boolean;
+      forceTakeover?: boolean;
+      userInitiated?: boolean;
+      claudeSdk?: ClaudeSdkLaunch;
+    } = {}
   ): Promise<CreatedDshChatSlot> {
     let expectedSlot: WorkerSlot | null = null;
+    const sdk =
+      entry.engine === 'claude-sdk' ? this.claudeSdkSpawn(entry, options.claudeSdk) : null;
     // dsh-rebase P1-1: no model catalog here. Its `auth` half holds plaintext
     // provider keys and the DSH host never reads it; keys reach the host per
     // request instead (P1-5, decision 034). See `ChatSlotBootstrapPayload`.
@@ -3066,10 +3321,11 @@ export class WorkerManager {
       // provider idle timeout. The bridge never read them; the main TTL and
       // the timeout reach the host through the model plan (decision 040).
       ...selection,
-      ...(entry.engine === 'claude-sdk' ? { createTransport: openClaudeSdkTransport } : {}),
+      // Route B: the SDK chat's own host process instead of a DSH channel.
+      ...(sdk ? { createTransport: sdk.createTransport } : {}),
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);
-        if (entry.engine === 'claude-sdk') this.claudeSdkSlots.add(slot);
+        if (sdk) this.claudeSdkSlots.add(slot);
         expectedSlot = slot;
         entry.slot = slot;
         entry.generation = slot.generation;
@@ -3089,11 +3345,17 @@ export class WorkerManager {
       // A worker that dies during bootstrap never reaches handleLifecycle, so
       // this is the only place its own stderr can still be recovered.
       this.dumpWorkerStderr(entry, 'failed to start');
+      // Route B, S-1: an SDK host that did not come up is its own code.
+      if (sdk) throw claudeSdkSpawnError(error);
       // dsh-rebase P1-3c: a shared host that could not be brought up reaches
       // the renderer as `dsh_host_unavailable`, its card, not as prose.
       throw hostUnavailableError(error);
     });
     this.ownedSlots.add(created.slot);
+    if (sdk) {
+      this.claudeSdkSlots.add(created.slot);
+      entry.sdkFingerprint = sdk.fingerprint;
+    }
     expectedSlot = created.slot;
     entry.slot = created.slot;
     entry.bootstrap = created.bootstrap;
@@ -3346,6 +3608,17 @@ export class WorkerManager {
     return entry.bootstrap ? { permissionGate: entry.bootstrap.permissionGate } : {};
   }
 
+  /**
+   * Route B, S-1 (decision 9): an SDK chat says so on `session.created` and
+   * `session.resumed`, with the route it may switch models within. Absent for
+   * DSH, so a DSH chat's payload is what it was.
+   */
+  private enginePayload(entry: ManagedSlot): { engine?: 'claude-sdk'; engineRoute?: string } {
+    return entry.engine === 'claude-sdk' && entry.sdkRoute
+      ? { engine: 'claude-sdk', engineRoute: entry.sdkRoute }
+      : {};
+  }
+
   private publishHistoryTriplet(
     entry: ManagedSlot,
     requestId: string,
@@ -3360,6 +3633,7 @@ export class WorkerManager {
         agent: DSH_AGENT,
         runtimeIdentity: history.sessionFile,
         ...this.gatePayload(entry),
+        ...this.enginePayload(entry),
       },
     });
     this.dispatchHistory(entry, requestId, history, mode);
@@ -3437,6 +3711,10 @@ export class WorkerManager {
    * dsh-rebase P1-3d (decision 025): a session the shared host last reported
    * busy — a goal round, or a background job still running after its turn —
    * is not idle, and closing its channel would end that work.
+   *
+   * Route B, S-1 (decision 8): an SDK chat has no channel the host could call
+   * busy, so its own reports stand in: a turn the CLI started itself, or a
+   * background task (a subagent, a background shell) still running.
    */
   private isSafeToEvict(entry: ManagedSlot, busy: ReadonlySet<string>): boolean {
     const channel = entry.slot?.channelId;
@@ -3447,8 +3725,14 @@ export class WorkerManager {
       entry.mutationInFlight === null &&
       // Decision 180: a `/compact` of up to ten minutes is not idle.
       entry.compacting !== true &&
-      !(channel !== undefined && busy.has(channel))
+      !(channel !== undefined && busy.has(channel)) &&
+      !(entry.engine === 'claude-sdk' && this.claudeSdkWorking(entry))
     );
+  }
+
+  /** Route B, S-1 (decision 8): work an SDK chat reported that Main did not send. */
+  private claudeSdkWorking(entry: ManagedSlot): boolean {
+    return entry.workerTurn !== undefined || (entry.backgroundTasks ?? 0) > 0;
   }
 
   /** Channels the shared host's last pong reported busy. */
@@ -3545,7 +3829,7 @@ export class WorkerManager {
    * channels it released.
    */
   private async releaseStuckChannels(slots: WorkerSlot[]): Promise<number> {
-    // Route-B prototype: an SDK chat that would not close is its own process; kill it.
+    // Route B: an SDK chat that would not close is its own process; kill it.
     let released = 0;
     for (const slot of slots) {
       if (this.claudeSdkSlots.has(slot) && slot.state === 'dispose-failed' && slot.forceKillNow()) {
@@ -3561,13 +3845,15 @@ export class WorkerManager {
     // A host already going away takes the locks with it.
     if (status.state !== 'ready') return 0;
     const stuckChannels = new Set(stuck.map((slot) => slot.channelId));
+    // Route B, S-1 (decision 8): an SDK chat is not on this host, so its work is no reason to wait.
     const working = [...this.entriesBySession.values()].some(
       (entry) =>
-        entry.activeRequestId !== null ||
-        entry.stopWatchdog !== undefined ||
-        entry.mutationInFlight !== null ||
-        entry.state === 'creating' ||
-        entry.state === 'restarting'
+        entry.engine !== 'claude-sdk' &&
+        (entry.activeRequestId !== null ||
+          entry.stopWatchdog !== undefined ||
+          entry.mutationInFlight !== null ||
+          entry.state === 'creating' ||
+          entry.state === 'restarting')
     );
     const busy = [...this.busyChannels()].some((channel) => !stuckChannels.has(channel));
     const budgetLeft = status.recentFaults < DSH_HOST_RESTART_BUDGET.restarts;
@@ -3653,6 +3939,7 @@ export class WorkerManager {
     this.clearStopWatchdog(entry);
     entry.reportedStatus = undefined;
     entry.workerTurn = undefined;
+    entry.backgroundTasks = undefined;
     entry.acceptEvents = false;
     // main-host-03: routing stops here, the event stream does not. The worker
     // emits its parked resolutions during `worker.dispose`, so the window
@@ -3763,6 +4050,11 @@ export class WorkerManager {
             status: event.payload.status,
             ...(event.requestId ? { requestId: event.requestId } : {}),
           };
+      // Route B, S-1 (decision 8): the SDK engine's count stands until it reports another.
+      const tasks = event.payload.backgroundTasks;
+      if (typeof tasks === 'number' && Number.isFinite(tasks)) {
+        entry.backgroundTasks = Math.max(0, Math.floor(tasks));
+      }
     }
     if (
       event.type === 'session.completed' ||
@@ -3847,6 +4139,9 @@ export class WorkerManager {
       return;
     }
     const hostFault = this.hostFaultOf(slot, event.exit);
+    // Route B, S-1 (decision 7): an SDK chat's own host process exited. Never a
+    // DSH host fault (`hostFaultOf`); the failed turn says which engine went.
+    const sdkExit = this.claudeSdkSlots.has(slot);
     // decision 020 rule 5: a session the host died under while it was being
     // recovered was at the scene as much as one mid-turn.
     const recovering = entry.state === 'restarting';
@@ -3888,6 +4183,7 @@ export class WorkerManager {
           // the sentence (`sessionFailure.ts`).
           ...(hostFault === 'crashed' ? { errorCode: SESSION_FAILED_HOST_CRASHED } : {}),
           ...(hostFault === 'restarted' ? { errorCode: SESSION_FAILED_ENGINE_RESTARTED } : {}),
+          ...(sdkExit ? { errorCode: CLAUDE_ENGINE_EXITED } : {}),
         },
       });
     } else {
@@ -3922,7 +4218,7 @@ export class WorkerManager {
     slot: WorkerSlot,
     exit: WorkerTransportExit | undefined
   ): 'crashed' | 'restarted' | null {
-    // Route-B prototype: an SDK chat is its own process, never a host channel.
+    // Route B: an SDK chat is its own process, never a host channel.
     if (this.claudeSdkSlots.has(slot)) return null;
     const host = this.host;
     if (!host) return null;
@@ -4099,7 +4395,8 @@ export class WorkerManager {
    * reads `engine_restarted` (`hostFaultOf`), and it waits for the same
    * recovery batch as the rest. One that does not answer in time, or fails,
    * goes with the host as before. Idle sessions, and one mid-rewind or fork,
-   * are left to the restart: nothing they streamed is at stake.
+   * are left to the restart: nothing they streamed is at stake. SDK chats are
+   * not on the host and are left alone.
    */
   private async closeBusyChannelsBeforeRestart(stuck: ManagedSlot | undefined): Promise<void> {
     const busy = this.busyChannels();
@@ -4108,6 +4405,9 @@ export class WorkerManager {
       if (entry === stuck || entry.state !== 'ready' || entry.mutationInFlight !== null) {
         return false;
       }
+      // Route B, S-1 (decision 8): an SDK chat is its own process; the DSH
+      // host's restart does not touch it, so neither does its drain.
+      if (entry.engine === 'claude-sdk') return false;
       if (!slot || slot.state !== 'running') return false;
       return (
         entry.activeRequestId !== null ||
@@ -4171,6 +4471,8 @@ export class WorkerManager {
     entry.activeRequestId = null;
     entry.reportedStatus = undefined;
     entry.workerTurn = undefined;
+    // Its background tasks went with the process.
+    entry.backgroundTasks = undefined;
     entry.lastIdleAt = this.now();
     return { turnId, stopping };
   }
@@ -4270,13 +4572,24 @@ export class WorkerManager {
       }
       entry.generation += 1;
       entry.slot = null;
+      // Route B, S-1: an SDK chat comes back on the model it last ran on (else
+      // its stub's, else the plan's), with its route's key as of now.
+      const sdkLaunch =
+        entry.engine === 'claude-sdk'
+          ? await this.claudeSdkLaunchForReopen(
+              entry.sessionFile,
+              entry.sdkModel,
+              entry.bootstrap?.model
+            )
+          : undefined;
+      const model = sdkLaunch?.model ?? entry.bootstrap?.model;
       const created = await this.spawnForEntry(
         entry,
         {
-          ...(entry.bootstrap?.model ? { model: entry.bootstrap.model } : {}),
+          ...(model ? { model } : {}),
           ...(entry.bootstrap?.effort ? { effort: entry.bootstrap.effort } : {}),
         },
-        { fresh: rematerialize }
+        { fresh: rematerialize, ...(sdkLaunch ? { claudeSdk: sdkLaunch } : {}) }
       );
       const reopenedFile = created.bootstrap.sessionFile
         ? normalizeWorkerPath(created.bootstrap.sessionFile, 'Pi session file')

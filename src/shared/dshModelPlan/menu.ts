@@ -10,8 +10,13 @@
  * Decision 177: each offered model also carries its automatic compaction, from
  * the same sizes the host hands `llm-pi-ai` and the same rules the host turns
  * into `compaction-basic`'s policies, for the settings to show.
+ *
+ * Route B, S-1 (decision 5): a model the Claude Agent SDK engine serves also
+ * carries its route (`sdkRoute`), so an SDK chat's menu offers only the models
+ * of the route it runs on.
  */
 
+import { claudeSdkRouteFor } from '../claudeSdkEngine.ts';
 import { autoCompactionPolicy } from '../dshAutoCompaction.ts';
 import type {
   AgentModelAutoCompaction,
@@ -52,10 +57,13 @@ export function applyDshPlanToCatalog(
     const entry = Object.hasOwn(plan.index, option.id) ? plan.index[option.id] : undefined;
     if (entry) {
       const autoCompaction = autoCompactionOf(plan, entry);
+      const sdkRoute = claudeSdkRouteFor(plan, option.id)?.route;
+      const { sdkRoute: _stale, ...offered } = option;
       models.push({
-        ...option,
+        ...offered,
         efforts: [...entry.efforts],
         ...(autoCompaction ? { autoCompaction } : {}),
+        ...(sdkRoute ? { sdkRoute } : {}),
       });
     } else {
       // `not_in_plan`: no catalog could be assembled for the plan at all (for

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CLAUDE_SDK_ENGINE_SETTING_KEY,
+  CLAUDE_SDK_INHERITED_ENV,
   claudeSdkRouteFor,
   DEFAULT_CLAUDE_SDK_ENGINE_ENABLED,
   effectiveModelRef,
@@ -95,5 +96,16 @@ describe('isClaudeFamilyModelId', () => {
     expect(isClaudeFamilyModelId('Claude-Sonnet-5')).toBe(true);
     expect(isClaudeFamilyModelId('glm-5')).toBe(false);
     expect(isClaudeFamilyModelId('my-claude-proxy')).toBe(false);
+  });
+});
+
+describe('CLAUDE_SDK_INHERITED_ENV', () => {
+  it('passes the trust store the DSH host gets, and never a credential or Claude variable', () => {
+    expect(CLAUDE_SDK_INHERITED_ENV).toContain('NODE_EXTRA_CA_CERTS');
+    expect(CLAUDE_SDK_INHERITED_ENV).toContain('NODE_USE_SYSTEM_CA');
+    for (const name of CLAUDE_SDK_INHERITED_ENV) {
+      expect(name).toBe(name.toUpperCase());
+      expect(name).not.toMatch(/^(ANTHROPIC|CLAUDE)_|KEY|TOKEN|SECRET|PASSWORD|NODE_OPTIONS/);
+    }
   });
 });

@@ -189,7 +189,9 @@ describe('D2 — an attachment the engine refused (WORKER_ATTACHMENT_REJECTED)',
     expect(branch).not.toContain('unbindHost(');
     expect(branch).not.toContain('lastError');
     expect(branch).not.toContain('setRetryable(');
-    expect(count(COMPOSER, 'refusedByRule: true')).toBe(1);
+    // Route B, S-1 added the one other refusal by rule (`model_engine_mismatch`,
+    // pinned below); no third site slipped in.
+    expect(count(COMPOSER, 'refusedByRule: true')).toBe(2);
   });
 
   it('a Ctrl+Enter interjection refused the same way keeps its draft and says why', () => {
@@ -246,5 +248,79 @@ describe('P1-3c — the shared engine is down (dsh_host_unavailable)', () => {
     expect(detector).toBeGreaterThan(-1);
     expect(COMPOSER).toContain('t(ENGINE_UNAVAILABLE_HINT)');
     expect(detector).toBeLessThan(COMPOSER.indexOf(`\`Error: \${lastError}\``));
+  });
+});
+
+/**
+ * Route B, S-1 (claude-sdk-engine topics/s1-engine-selection.md decision 5) —
+ * Main refused the model of a send or a Continue into a Claude-engine chat
+ * (`model_engine_mismatch`). Handled like D2: nothing admitted, the slot is
+ * healthy, the same model is refused the same way, and the message goes back
+ * to the composer with a line saying why.
+ */
+describe('S-1 — a model the Claude engine cannot run (model_engine_mismatch)', () => {
+  const dispatchCatch = () => {
+    const dispatch = slice(
+      COMPOSER,
+      'const sendResult = await cancellation',
+      'if (sendResult === SEND_CANCELLED)'
+    );
+    return dispatch.slice(dispatch.indexOf('.catch((error: unknown) => {'));
+  };
+  const exitBranch = () => {
+    const body = slice(COMPOSER, 'const runSend = async (', 'useQueueRelease({');
+    const start = body.indexOf('if (engineMismatch) {');
+    expect(start).toBeGreaterThan(body.indexOf('if (retryUnavailable) {'));
+    // Decided before a generic failure (or the attachment branch) could claim it.
+    expect(start).toBeLessThan(body.indexOf('if (attachmentRejection) {', start));
+    expect(start).toBeLessThan(body.indexOf('if (fatalHostError) {', start));
+    return body.slice(start, body.indexOf('if (attachmentRejection) {', start));
+  };
+
+  it('the dispatch catch records the refusal, for a send and a Continue alike, before rethrowing', () => {
+    const handler = dispatchCatch();
+    const detected = handler.indexOf('if (isModelEngineMismatchError(error)) {');
+    expect(detected).toBeGreaterThan(-1);
+    expect(detected).toBeLessThan(handler.indexOf('if (!code) throw error;'));
+    const branch = handler.slice(detected, handler.indexOf('}', detected));
+    expect(branch).toContain('engineMismatch = ');
+    expect(branch).toContain('return null;');
+    // Not gated on `!retryLastTurn`: a Continue names a model too.
+    expect(branch).not.toContain('retryLastTurn');
+  });
+
+  it('hands the message back, says why, and arms nothing', () => {
+    const branch = exitBranch();
+    expect(branch).toContain('return finalizeOutcome(');
+    expect(branch).toContain('{ refusedByRule: true }');
+    expect(branch).not.toContain('unbindHost(');
+    expect(branch).not.toContain('setRetryable(');
+    // A send's line is the status strip (via `lastError`, mapped below); a
+    // Continue keeps its card, which hides that strip, so it gets a toast.
+    expect(branch).toContain('useChatSessionsStore.setState({ lastError: engineMismatch });');
+    expect(branch).toContain(
+      "toastManager.add({ type: 'warning', title: t(MODEL_ENGINE_MISMATCH_HINT) });"
+    );
+  });
+
+  it('the status strip says it in words, ahead of the raw fallback', () => {
+    const detector = COMPOSER.indexOf('isModelEngineMismatchError(lastError)');
+    expect(detector).toBeGreaterThan(-1);
+    expect(COMPOSER).toContain('t(MODEL_ENGINE_MISMATCH_HINT)');
+    expect(detector).toBeLessThan(COMPOSER.indexOf(`\`Error: \${lastError}\``));
+  });
+});
+
+/**
+ * Route B, S-1 — a Claude-engine chat Main could not create or open
+ * (`claude_sdk_credentials_unavailable`, `claude_sdk_host_unavailable`). The
+ * create path reaches only the status strip, so it says it in words too.
+ */
+describe('S-1 — the Claude engine could not start a chat', () => {
+  it('the status strip maps both codes, ahead of the raw fallback', () => {
+    expect(COMPOSER).toContain('const claudeSdkStartHint = claudeSdkStartFailureHint(lastError);');
+    const used = COMPOSER.indexOf('t(claudeSdkStartHint)');
+    expect(used).toBeGreaterThan(-1);
+    expect(used).toBeLessThan(COMPOSER.indexOf(`\`Error: \${lastError}\``));
   });
 });

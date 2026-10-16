@@ -881,7 +881,7 @@ describe('pinned wire facts', () => {
     expect(Object.keys(AGENT_DISPLAY_NAMES).sort()).toEqual([...AGENT_WIRE_NAMES].sort());
   });
 
-  it('[W-1] SessionStatusEvent.payload optional keys stay exactly {retry, liveness, disconnectReason, recovery}', () => {
+  it('[W-1] SessionStatusEvent.payload optional keys stay exactly {retry, liveness, disconnectReason, recovery, backgroundTasks}', () => {
     // F2 (S0, 2026-08-18 watchdog redesign spec §3.4/§12.1): `liveness` rides
     // this payload as a THIRD optional field, same precedent as `retry`
     // (SessionRetryInfo, E11) — an optional-field addition, protocol version
@@ -903,6 +903,12 @@ describe('pinned wire facts', () => {
     // because a worker's open-time events are dropped while Main still has the
     // slot in `creating`. The renderer keeps it across later statuses; see
     // SessionRecoveryNote for why it is line numbers only.
+    //
+    // Route B S-1 added a SIXTH, `backgroundTasks`, from the Claude Agent SDK
+    // host. Same answer as `liveness`: it qualifies a status the run emits
+    // anyway ("idle — and N background tasks of this chat are still running"),
+    // and Main reads it only to keep such a chat from being reclaimed as idle.
+    // The SDK host puts the current count on every status it sends.
     const source = parse(RUNTIME_EVENTS_MODULE, read(RUNTIME_EVENTS_MODULE));
     let optionalKeys: string[] | undefined;
     eachNode(source, (node) => {
@@ -925,7 +931,13 @@ describe('pinned wire facts', () => {
           .map((m) => (m.name as ts.Identifier).text);
       }
     });
-    expect(optionalKeys?.sort()).toEqual(['disconnectReason', 'liveness', 'recovery', 'retry']);
+    expect(optionalKeys?.sort()).toEqual([
+      'backgroundTasks',
+      'disconnectReason',
+      'liveness',
+      'recovery',
+      'retry',
+    ]);
   });
 
   it('[W-1a] SessionLivenessNote field set stays exactly {source, budgetMs, reason, degraded}, all required', () => {

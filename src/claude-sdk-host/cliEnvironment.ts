@@ -12,50 +12,10 @@
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { CLAUDE_SDK_INHERITED_ENV } from '../shared/claudeSdkEngine.ts';
 
 /** Inherited names the CLI may see, compared upper-cased (Windows names are case-insensitive). */
-const INHERITED = new Set([
-  'PATH',
-  'PATHEXT',
-  'SYSTEMROOT',
-  'SYSTEMDRIVE',
-  'WINDIR',
-  'COMSPEC',
-  'TEMP',
-  'TMP',
-  'TMPDIR',
-  'HOME',
-  'USERPROFILE',
-  'HOMEDRIVE',
-  'HOMEPATH',
-  'APPDATA',
-  'LOCALAPPDATA',
-  'PROGRAMDATA',
-  'PROGRAMFILES',
-  'PROGRAMFILES(X86)',
-  'PROGRAMW6432',
-  'COMMONPROGRAMFILES',
-  'COMMONPROGRAMFILES(X86)',
-  'COMMONPROGRAMW6432',
-  'NUMBER_OF_PROCESSORS',
-  'PROCESSOR_ARCHITECTURE',
-  'OS',
-  'USERNAME',
-  'USERDOMAIN',
-  'COMPUTERNAME',
-  'LANG',
-  'LC_ALL',
-  'LC_CTYPE',
-  'TERM',
-  'USER',
-  'LOGNAME',
-  'SHELL',
-  'XDG_RUNTIME_DIR',
-  'HTTP_PROXY',
-  'HTTPS_PROXY',
-  'NO_PROXY',
-  'ALL_PROXY',
-]);
+const INHERITED = new Set(CLAUDE_SDK_INHERITED_ENV);
 
 export interface CliEnvironmentInput {
   inherited: NodeJS.ProcessEnv;
@@ -110,6 +70,114 @@ export function buildCliEnvironment(input: CliEnvironmentInput): Record<string, 
     CLAUDE_AGENT_SDK_CLIENT_APP: input.clientApp,
     ...(input.gitBashPath ? { CLAUDE_CODE_GIT_BASH_PATH: input.gitBashPath } : {}),
   };
+}
+
+/**
+ * Route B S-1 (decision 6): variables the opened repository's own
+ * `.claude/settings*.json` `env` must not change. The CLI applies every
+ * settings source's `env` to its own process, later sources winning per key,
+ * and the SDK's `settings` option is the flag tier, above the project and
+ * local tiers (measured on 2.1.300 against the fake gateway; `managedSettings.env`
+ * does not pin). Each entry below was measured both ways: the repository's
+ * value took effect without the pin, and the pin won with it.
+ */
+const PROXY_VARIABLES = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'];
+/** `''` reads as unset for each of these (measured). */
+const UNSET_VARIABLES = [
+  // Sent as `Authorization: Bearer …` next to our key.
+  'ANTHROPIC_AUTH_TOKEN',
+  // Extra request headers of the repository's choosing.
+  'ANTHROPIC_CUSTOM_HEADERS',
+];
+/**
+ * Pinned to what PiLab itself was given (a private CA the gateway needs), or
+ * `''`: never a trust anchor of the repository's choosing (TLS interception).
+ * A file path, not a credential, so it may go on the CLI's command line.
+ */
+const INHERITED_PINS = ['NODE_EXTRA_CA_CERTS'];
+/** Provider switches: each sends the conversation to its own endpoint instead of the gateway. */
+const PROVIDER_SWITCHES = [
+  'CLAUDE_CODE_USE_BEDROCK',
+  'CLAUDE_CODE_USE_VERTEX',
+  'CLAUDE_CODE_USE_FOUNDRY',
+  'CLAUDE_CODE_USE_ANTHROPIC_AWS',
+  'CLAUDE_CODE_USE_MANTLE',
+  'CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD',
+  'CLAUDE_CODE_USE_GATEWAY',
+];
+
+export interface PinnedSettingsEnvInput {
+  /** The host's own environment: proxies are pinned to what PiLab itself was given. */
+  inherited: NodeJS.ProcessEnv;
+  /** Gateway root, as `ANTHROPIC_BASE_URL`. */
+  baseUrl: string;
+  gitBashPath?: string;
+}
+
+export interface PinnedSettingsEnv {
+  /** The flag tier's `env`: `settings: { env }`. */
+  env: Record<string, string>;
+  /**
+   * Proxy variables left unpinned because their value carries credentials
+   * (`http://user:pass@proxy`): the SDK puts `settings` on the CLI's command
+   * line, which other local processes can read. A repository can still
+   * override these; the host logs their names.
+   */
+  credentialedProxies: string[];
+}
+
+/** First value of `name` in `env`, exact spelling first, then any case (Windows names are case-insensitive). */
+function inheritedValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  const exact = env[name];
+  if (exact !== undefined) return exact;
+  const upper = name.toUpperCase();
+  return Object.entries(env).find(
+    ([key, value]) => key.toUpperCase() === upper && value !== undefined
+  )?.[1];
+}
+
+/** Whether a proxy URL carries a user name or password. */
+export function hasUrlCredentials(value: string): boolean {
+  try {
+    const url = new URL(value.includes('://') ? value : `http://${value}`);
+    return url.username !== '' || url.password !== '';
+  } catch {
+    return value.includes('@');
+  }
+}
+
+/**
+ * The flag-tier `env` the host pins (decision 6). Never the key: the SDK
+ * serializes `settings` onto the CLI's command line (measured), so only
+ * non-secret values go here and the key stays in the child's environment.
+ * Proxies keep PiLab's own value (lower-case spelling first, as the usual
+ * tools read it), or `''`, which the CLI reads as unset (measured); both
+ * spellings are pinned because Linux names are case-sensitive.
+ */
+export function buildPinnedSettingsEnv(input: PinnedSettingsEnvInput): PinnedSettingsEnv {
+  const env: Record<string, string> = {
+    ANTHROPIC_BASE_URL: input.baseUrl,
+    DISABLE_AUTOUPDATER: '1',
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    // '0' turns certificate checks off for the whole CLI; '1' is the default.
+    NODE_TLS_REJECT_UNAUTHORIZED: '1',
+    ...(input.gitBashPath ? { CLAUDE_CODE_GIT_BASH_PATH: input.gitBashPath } : {}),
+  };
+  for (const name of UNSET_VARIABLES) env[name] = '';
+  for (const name of INHERITED_PINS) env[name] = inheritedValue(input.inherited, name) ?? '';
+  for (const name of PROVIDER_SWITCHES) env[name] = '0';
+  const credentialedProxies: string[] = [];
+  for (const name of PROXY_VARIABLES) {
+    const lower = name.toLowerCase();
+    const value = inheritedValue(input.inherited, lower) ?? '';
+    if (name !== 'NO_PROXY' && value && hasUrlCredentials(value)) {
+      credentialedProxies.push(name);
+      continue;
+    }
+    env[name] = value;
+    env[lower] = value;
+  }
+  return { env, credentialedProxies };
 }
 
 /**

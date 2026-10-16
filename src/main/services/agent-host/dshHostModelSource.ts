@@ -12,9 +12,15 @@
  *            was spawned with; a different revision restarts the host once no
  *            session is working (`WorkerManager.reconcileModelPlan`).
  *
+ * Route B, S-1 (decision 3): the Claude Agent SDK engine reads the same two
+ * sources. Its routes come from the plan Main built last, kept here so a
+ * lookup never rebuilds (and so never re-announces) one; only before the first
+ * build does it build one. Its keys come from the broker, by provider id.
+ *
  * Installed once at startup (`registerIpcHandlers`), before any host starts.
  */
 
+import type { DshModelPlan } from '@shared/dshModelPlan';
 import { app } from 'electron';
 import { onRendererSettingsWrite } from '../../ipc/settings';
 import { getCredentialVault } from '../auth';
@@ -24,6 +30,8 @@ import {
   resolveNativeModelCatalog,
 } from '../piModelConfig';
 import { watchCacheControlOnTools } from './cacheControlOnToolsSetting';
+import { createClaudeSdkHostAvailability } from './claudeSdkEngine';
+import { claudeSdkEngineEnabled } from './claudeSdkEngineSetting';
 import { DshCredentialBroker } from './DshCredentialBroker';
 import { dshHostSupervisor } from './DshHostSupervisor';
 import { watchRequestUserAgent } from './requestUserAgentSetting';
@@ -40,10 +48,23 @@ export function installDshHostModelSource(): void {
     log: (...args) => console.info(...args),
   });
   dshHostSupervisor.setModelSource({ plan: () => resolveDshModelPlan(), credentials: broker });
+  let lastPlan: DshModelPlan | null = null;
   onDshModelPlanBuilt((plan) => {
+    lastPlan = plan;
     // A new plan may name other keys (a sync replaced the administrator key).
     broker.invalidate();
+    // Also compares each SDK chat's gateway with this plan and the keys now (decision 4).
     workerManager.reconcileModelPlan(plan.revision);
+  });
+  workerManager.setClaudeSdkEngineSource({
+    enabled: () => claudeSdkEngineEnabled(),
+    // Building announces the plan, which sets `lastPlan` through the listener above.
+    plan: () => lastPlan ?? resolveDshModelPlan(),
+    key: (providerId) => broker.keyFor(providerId),
+    hostAvailable: createClaudeSdkHostAvailability({
+      appPath: () => app.getAppPath(),
+      log: (message) => console.info(message),
+    }),
   });
   // GW-16 temporary switch (decision 159): a flip rebuilds the plan at once.
   watchCacheControlOnTools({

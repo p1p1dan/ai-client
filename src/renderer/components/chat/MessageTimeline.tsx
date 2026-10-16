@@ -16,6 +16,7 @@ import {
   FileText,
   History,
   Image as ImageIcon,
+  KeyRound,
   Lock,
   PackageSearch,
   RefreshCw,
@@ -1226,6 +1227,11 @@ const HISTORY_ERROR_ICON = {
   legacy_migration_required: History,
   // dsh-rebase P1-3c: the engine is down, not the chat.
   engine_unavailable: TriangleAlert,
+  // Route B, S-1: the Claude engine has no key for the model service; the
+  // chat is fine.
+  credentials_unavailable: KeyRound,
+  // Route B, S-1: this chat's engine process, not the chat.
+  claude_engine_unavailable: TriangleAlert,
   unknown: TriangleAlert,
 } as const;
 

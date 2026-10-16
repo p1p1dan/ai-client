@@ -1,5 +1,12 @@
+import { MODEL_ENGINE_MISMATCH } from '@shared/claudeSdkEngine';
+import { zhTranslations } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
-import { parseAttachmentRejection, parseSendDispatchErrorCode } from '../sendDispatchError';
+import {
+  isModelEngineMismatchError,
+  MODEL_ENGINE_MISMATCH_HINT,
+  parseAttachmentRejection,
+  parseSendDispatchErrorCode,
+} from '../sendDispatchError';
 
 /**
  * The strings here are the real wire shape, not simplified: `chat.ts`
@@ -109,5 +116,56 @@ describe('parseAttachmentRejection', () => {
     ]) {
       expect(parseAttachmentRejection(other), String(other)).toBeNull();
     }
+  });
+});
+
+/**
+ * Route B, S-1 (claude-sdk-engine topics/s1-engine-selection.md decision 5):
+ * Main refuses a send or a Continue into a Claude-engine chat that names a
+ * model of the other engine or of another route, before `worker.send`.
+ */
+describe('isModelEngineMismatchError', () => {
+  const REFUSAL =
+    'model_engine_mismatch: china/glm5.2 cannot run in chat s1, which runs on the Claude engine (route claude)';
+
+  it('finds the code inside the Electron wrapper, for a send and a Continue alike', () => {
+    expect(MODEL_ENGINE_MISMATCH).toBe('model_engine_mismatch');
+    expect(isModelEngineMismatchError(electronWrapped(REFUSAL))).toBe(true);
+    expect(
+      isModelEngineMismatchError(
+        new Error(`Error invoking remote method 'chat:retryLastTurn': Error: ${REFUSAL}`)
+      )
+    ).toBe(true);
+    expect(isModelEngineMismatchError(REFUSAL)).toBe(true);
+  });
+
+  it('matches the code as a whole word only', () => {
+    for (const text of [
+      'xmodel_engine_mismatch: nope',
+      'model_engine_mismatch_v2: nope',
+      'pi_model_engine_mismatch: nope',
+      'session_busy: Session s1 already has active turn send-4',
+      'WORKER_ATTACHMENT_REJECTED: IMAGE_DIMENSION_TOO_LARGE "a.png": too large',
+      '',
+    ]) {
+      expect(isModelEngineMismatchError(new Error(text)), text).toBe(false);
+    }
+    expect(isModelEngineMismatchError(null)).toBe(false);
+    expect(isModelEngineMismatchError(undefined)).toBe(false);
+  });
+
+  it('is not a recoverable code: the same model is refused the same way every time', () => {
+    expect(parseSendDispatchErrorCode(electronWrapped(REFUSAL))).toBeNull();
+    expect(parseAttachmentRejection(electronWrapped(REFUSAL))).toBeNull();
+  });
+
+  it('has a translated status line that never names Claude Code', () => {
+    expect(MODEL_ENGINE_MISMATCH_HINT).toBe(
+      'This chat runs on the Claude engine. Pick a Claude model from the same service, or start a new chat.'
+    );
+    expect(zhTranslations[MODEL_ENGINE_MISMATCH_HINT]).toBe(
+      '这个对话由 Claude 引擎驱动，请选同一服务下的 Claude 模型，或新开一个对话。'
+    );
+    expect(MODEL_ENGINE_MISMATCH_HINT).not.toContain('Claude Code');
   });
 });

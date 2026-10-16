@@ -42,6 +42,7 @@
  * tabled under the repo's node-env vitest (`pureModuleImports.test.ts`).
  */
 
+import type { ChatEngine } from '@shared/claudeSdkEngine';
 import type { AgentModelOption } from '@shared/types/agentCatalog';
 
 export interface ChatModel {
@@ -138,6 +139,29 @@ export function modelOptionsFor(catalog: readonly AgentModelOption[]): ChatModel
       ...(option.input ? { input: [...option.input] } : {}),
     })),
   ];
+}
+
+/**
+ * Route B, S-1 (decision 5): the part of the catalog a chat may switch to.
+ *
+ * A chat on the Claude Agent SDK engine stays on the plan route it started on
+ * (Main refuses any other model with `model_engine_mismatch`), so it is offered
+ * only that route's models (`AgentModelOption.sdkRoute`). When the chat has not
+ * reported its route, any model the SDK engine serves; never a model of the
+ * other engine. Every other chat gets the catalog as it is. `Automatic` is not
+ * a catalog entry, so it stays: `modelOptionsFor` adds it to whatever this
+ * returns.
+ *
+ * A stored selection this leaves out is not reset: it shows as an unverified
+ * leftover, the same as any id the catalog does not list.
+ */
+export function modelCatalogForEngine(
+  catalog: readonly AgentModelOption[],
+  session: { engine?: ChatEngine; engineRoute?: string } | null | undefined
+): readonly AgentModelOption[] {
+  if (session?.engine !== 'claude-sdk') return catalog;
+  const route = session.engineRoute;
+  return catalog.filter((option) => (route ? option.sdkRoute === route : Boolean(option.sdkRoute)));
 }
 
 export interface ChatModelGroup {

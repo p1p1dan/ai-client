@@ -312,6 +312,14 @@ export function migrateSettings(
       currentState.requestUserAgentCustom
     ),
 
+    // Route B, S-1: only a real boolean counts, the rule Main reads it by
+    // (`resolveClaudeSdkEngineEnabled`), so the page cannot show a state the
+    // engine choice is not using.
+    claudeSdkEngineEnabled: sanitizeBoolean(
+      persisted.claudeSdkEngineEnabled,
+      currentState.claudeSdkEngineEnabled
+    ),
+
     // D48 S2 §4.3: replaced wholesale rather than shallow-merged. The record's
     // shape is nested (`byAgent[agent].model`), so `{...current, ...persisted}`
     // would keep a `byAgent` from one side and a `lastAgent` from the other; and

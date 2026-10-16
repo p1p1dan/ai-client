@@ -54,7 +54,7 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 | ID | 任务 | 要点 | 验证 | 状态 |
 |---|---|---|---|---|
 | S-0 | 移植原型 | 从 `proto/claude-agent-sdk-engine` 移入 `src/claude-sdk-host/`（不含 `tools/enc-kit/` 里的 Cometix 部分）与 Main 侧接线（`ClaudeSdkProcessTransport`、`claudeSdkEngine`、`WorkerManager` 改动）、假网关 `claude-sdk` 计划；按 main 现状解决冲突 | 两套 tsc、宿主单测、`host-probe.ts` 全场景对假网关通过 | **完成**（2026-10-16，见 §7） |
-| S-1 | 引擎选择与开关 | 新会话按模型选引擎；会话桩固定引擎；设置开关（默认开），关掉后 Claude 新会话走 DSH | 单测；GUI 点验两种模型各开新会话、重启后续聊 | 待做 |
+| S-1 | 引擎选择与开关 | 新会话按模型选引擎；会话桩固定引擎；设置开关（默认开），关掉后 Claude 新会话走 DSH | 单测；GUI 点验两种模型各开新会话、重启后续聊 | **完成**（2026-10-16，见 §8；并入 §7.4 的 #1、#4、#18、#5 的 errorCode、#7 的两条、#10） |
 | S-2 | 五档权限 | 渲染层：引擎是 SDK 时显示五档；`default`/`acceptEdits`/`plan`/`auto`/`bypassPermissions` 映射；中途切换；Plan 档与计划审阅卡衔接；Auto 档实测它额外发的安全检查请求能否经网关正常完成 | 每档一个探针场景；真实网关上 Auto 档跑通一个会触发检查的回合 | 待做 |
 | S-3 | 项目级配置 | `settingSources: ['project','local']`；去掉 `managedSettings` 对 hooks 与 allow 的锁定；`CLAUDE.md` 进上下文 | 探针：带 `.claude/settings.json`（allow + hook）与 `CLAUDE.md` 的测试仓库，断言 allow 生效、hook 执行、`CLAUDE.md` 被引用 | 待做 |
 | S-4 | 打包 | 宿主构建（esbuild，参照 DSH 宿主）；`claude.exe` 进 extraResources（只带目标平台），`pathToClaudeCodeExecutable` 指向它；体积门禁（安装后增量 ≤ 0.6 GB）；`DISABLE_AUTOUPDATER` | 打包后冒烟：从安装目录拉起宿主 → 假网关一个回合；体积门禁 | 待做 |
@@ -121,16 +121,16 @@ S-0 做了一轮多维审查：移植保真、Main 侧接线、宿主运行时�
 
 | # | 发现 | 去向 |
 |---|---|---|
-| 1 | **仓库可改走网关**：被打开仓库的 `.claude/settings.json` 写 `env.ANTHROPIC_BASE_URL`，请求连同 key 就发到它指定的地址（两个假网关实测）。钉在 `managedSettings.env` 无效；钉在 SDK 的 `settings`（flag 层）`env` 里有效（实测）。同理应钉 `DISABLE_AUTOUPDATER`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`、`CLAUDE_CODE_GIT_BASH_PATH` | **待定**：建议提前到 S-1 钉住；项目 `env` 其余变量是否生效由 S-3 定。加探针场景 |
-| 2 | **key 进子进程**：网关 key 在 `claude.exe` 的环境里，Bash 工具能读到（实测会随工具结果写进 transcript），S-3 之后仓库 hooks 也能读到。CLI 的 `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` 能清掉，但会把权限档强制成 default，与 S-2 冲突 | **待定**：S-2/S-3 一起定（`apiKeyHelper`、本机鉴权代理等）；S-5 加 key 金丝雀场景 |
+| 1 | **仓库可改走网关**：被打开仓库的 `.claude/settings.json` 写 `env.ANTHROPIC_BASE_URL`，请求连同 key 就发到它指定的地址（两个假网关实测）。钉在 `managedSettings.env` 无效；钉在 SDK 的 `settings`（flag 层）`env` 里有效（实测）。同理应钉 `DISABLE_AUTOUPDATER`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`、`CLAUDE_CODE_GIT_BASH_PATH` | **S-1 已做**：flag 层钉住 23 个变量（逐项实测见 [S-1 设计 §4.1](topics/s1-engine-selection.md)），探针 `repoenv`；`ANTHROPIC_API_KEY` 钉不了，并入 #2 |
+| 2 | **key 进子进程**：网关 key 在 `claude.exe` 的环境里，Bash 工具能读到（实测会随工具结果写进 transcript），S-3 之后仓库 hooks 也能读到。CLI 的 `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` 能清掉，但会把权限档强制成 default，与 S-2 冲突 | **待定**：S-2/S-3 一起定（`apiKeyHelper`、本机鉴权代理等）；S-5 加 key 金丝雀场景。S-1 另实测：仓库设置能把 key 换成自己的（请求仍到我们的网关），带凭据的代理 URL 不能钉 |
 | 3 | 网关在报错里回显 key 时，CLI 把它原样写进 transcript（`api_error` 记录，实测） | S-5 金丝雀场景；只能事后清理或写进已知限制 |
-| 4 | **产品版的网关与 key 来源没有任务**：现在 Main 只从自己的环境变量读；原型 §8 列了"凭据：从托管目录或凭据库取，经宿主注入，不落盘"（0.5 人周）。引擎按模型 id 前缀 `claude-` 选，正式版应按路由协议 `anthropic-messages` | **待定**：建议并入 S-1 |
-| 5 | **上游错误映射**：401 重试 10 次约 3 分钟；失败的 `errorCode` 是 `success`（取的是 result 的 subtype）；没设流空闲超时；`/compact` 遇到坏网关会堵住同一会话的停止与发送。CLI 自己的提示（如 "Fix external API key"）原样进失败卡。原型 §8 的"宿主硬化"（1～1.5 人周）在任务表里没有对应行 | **待定**：建议并入 S-5（或 S-1 先做 errorCode 映射） |
+| 4 | **产品版的网关与 key 来源没有任务**：现在 Main 只从自己的环境变量读；原型 §8 列了"凭据：从托管目录或凭据库取，经宿主注入，不落盘"（0.5 人周）。引擎按模型 id 前缀 `claude-` 选，正式版应按路由协议 `anthropic-messages` | **S-1 已做**：取自计划路由与凭据；按 anthropic-messages 且 Claude 系列选引擎；换 key 后空闲会话自动重开 |
+| 5 | **上游错误映射**：401 重试 10 次约 3 分钟；失败的 `errorCode` 是 `success`（取的是 result 的 subtype）；没设流空闲超时；`/compact` 遇到坏网关会堵住同一会话的停止与发送。CLI 自己的提示（如 "Fix external API key"）原样进失败卡。原型 §8 的"宿主硬化"（1～1.5 人周）在任务表里没有对应行 | errorCode 映射 **S-1 已做**（探针 `errors`）；重试次数与超时 S-5 |
 | 6 | 回合归属竞态（S-0 第一遍探针撞到）：发送与结果没有按 SDK 的 `user_message_uuid` 绑定；CLI 自起回合期间发送会被拒（DSH 是接受的） | S-5 |
-| 7 | 跨引擎故障路径：DSH 宿主重启会给忙着的 SDK 会话发 dispose，回合被切断；SDK 会话不受“忙碌不回收”守卫保护（决策 025），后台子代理或 CLI 自起回合可能被空闲回收或容量淘汰关掉；回收批次里 SDK 与 DSH 混在一起时提前返回；杀不掉旧进程树时仍起新进程续写同一会话；退出应用时 SDK 会话不收 dispose；Linux 上只杀宿主进程 | S-1（DSH 宿主重启、忙碌不回收两条）、S-5（其余） |
+| 7 | 跨引擎故障路径：DSH 宿主重启会给忙着的 SDK 会话发 dispose，回合被切断；SDK 会话不受“忙碌不回收”守卫保护（决策 025），后台子代理或 CLI 自起回合可能被空闲回收或容量淘汰关掉；回收批次里 SDK 与 DSH 混在一起时提前返回；杀不掉旧进程树时仍起新进程续写同一会话；退出应用时 SDK 会话不收 dispose；Linux 上只杀宿主进程 | DSH 宿主重启、忙碌不回收两条 **S-1 已做**；其余 S-5 |
 | 8 | `ClaudeSdkProcessTransport`：`taskkill /T` 假阴性、进程已退出时 `kill()` 返回 false、spawn 失败不报 exit、stderr 按块解码 | S-5 |
 | 9 | Windows 停止清理：会杀掉前几回合起的后台任务；会话空闲时关闭反而不清；`ps.exe` 路径推导对 `usr\bin\bash.exe` 不对 | S-5 |
-| 10 | 新接缝没有单测；`chatEngineDshOnly.test.ts` 的前提（只有 DSH 一个引擎）已不成立但仍通过 | S-1 |
+| 10 | 新接缝没有单测；`chatEngineDshOnly.test.ts` 的前提（只有 DSH 一个引擎）已不成立但仍通过 | **S-1 已做** |
 | 11 | CI 不跑宿主 tsc（宿主依赖 DSH bridge 与 `src/shared` 的类型，main 上改了不会被发现）。脚本已加，CI 步骤可用 `npm ci --omit=optional`（不下 `claude.exe`） | S-4 或 S-5 |
 | 12 | 打包门禁：`packaging-config.test.mjs` 与 `t31PiOnlyAbsence.test.ts` 禁止 builder 配置与根依赖里出现 SDK 包 | S-4：照 DSH 宿主做法单独产出目录，由 afterPack 拷入 |
 | 13 | 模型看到的身份是 Claude Code（SDK 预设提示词），PiLab 追加的说明里没有身份句 | **待定**：是否在追加说明里加身份句（界面文案已不出现 Claude Code） |
@@ -138,7 +138,34 @@ S-0 做了一轮多维审查：移植保真、Main 侧接线、宿主运行时�
 | 15 | `/compact` 后重开会话只见摘要（2 条），看不到压缩前的内容（原型 §3 写"要再核"，已确认） | 功能对等版（历史投影补全） |
 | 16 | 探针：agent 场景没断言子代理结果到达模型 | S-5 |
 | 17 | `run-ccsdk-enc.ps1` 的两个上机缺陷（原型 §5.2） | 下次用上机包前修 |
-| 18 | **跨引擎换模型**：Claude 会话中途把模型换成 GLM 等，会经 Claude CLI 发到 Claude 网关（违反 §2 第 5 条，假网关实测） | **待定**：S-1 定界面怎么拦（模型列表只给同引擎的、发送时拒绝，或另开会话） |
+| 18 | **跨引擎换模型**：Claude 会话中途把模型换成 GLM 等，会经 Claude CLI 发到 Claude 网关（违反 §2 第 5 条，假网关实测） | **S-1 已做**：SDK 会话的模型列表只列同一路由上的 Claude 模型，Main 发送时拒绝（`model_engine_mismatch`） |
 | 19 | 换模型时宿主先记下新模型再等 CLI 校验，校验失败被吞掉，回合却标成新模型；假网关答不了 CLI 的模型校验请求，换模型目前无法用探针验证 | S-2（中途切换）/S-5 |
 | 20 | 推送本分支不会触发任何 CI 门禁；DSH 录制回归 `bridge-record.ts --check`（Linux 工具）本地没跑。假网关改动是纯新增：自检 21/21，三个 DSH 计划与 main 版逐字节一致 | 合并前在分支上手动触发 `dsh-bridge-gate`（要推送，需用户同意） |
 | 21 | `gui-probe.mjs stop` 按一个从不清理的 pid 文件执行 `taskkill /T /F` | S-5 |
+
+## 8 S-1 记录（2026-10-16）
+
+决定、契约、逐项实测、偏离与验证结果见 [S-1 设计](topics/s1-engine-selection.md)。一句话：新会话在"开关开、anthropic-messages 路由上的 Claude 模型、SDK 宿主可用"时走 SDK，网关与 key 取自 DSH 同一份计划与凭据，SDK 会话只能换同一路由上的 Claude 模型，失败映射到渲染层已有的卡；GUI 点验 5 项全部通过。
+
+### 8.1 审查后在 S-1 修的
+
+S-1 同样做了多维审查（Main、宿主、渲染层、跨层契约与安全，各配对抗式复核，再加查漏）。下面几条在 S-1 里修掉，每条都补了测试，并确认去掉修复时测试会失败：
+
+1. SDK 宿主起不来时用自己的历史卡（原来借用 DSH 共享引擎那张，文案说"所有对话的引擎反复退出"，对 SDK 会话不成立）。
+2. 换 key 的比对不再跳过正在启动的 SDK 会话（原来换 key 后的第一个会话可能一直带着旧 key）。
+3. 同一回合里已被应答的重试不再影响这一回合的失败分类（原来会把之后的非 HTTP 失败标成限流等）。
+4. 宿主写往 stderr 的每一行先脱敏（本会话的 key 与通用凭据形状）并去掉 "Claude Code"：Main 会把它显示在"上下文"面板的 Host stderr 一栏（§2 第 4 条）。探针 `errors` 加了一个"网关报错里点名 Claude Code 并回显 key"的回合来断言这一点。
+5. DSH 卡住通道触发的宿主重启，不再被忙着的 SDK 会话推迟（与 S-1 已让计划重启不等 SDK 会话一致）。
+6. SDK 引擎继承用户的信任根设置（`NODE_EXTRA_CA_CERTS`、`NODE_USE_SYSTEM_CA`），`NODE_EXTRA_CA_CERTS` 钉成继承到的值：原来被丢掉并钉成空，私有 CA 或 TLS 检查代理后面的网关上，Claude 新会话会从"走 DSH 能用"变成必然失败（查漏实测）。Main 与宿主的继承名单合成一份（`CLAUDE_SDK_INHERITED_ENV`），原来两份不一致，宿主名单里有几项实际传不到 CLI。
+
+### 8.2 S-1 新发现与去向
+
+| # | 发现 | 去向 |
+|---|---|---|
+| 22 | 打开一个尚未载入的 SDK 对话时，`chat:readSessionPage` 走 DSH 宿主读历史，报 "Not a DSH session identity"（控制台报错；随后恢复会话照常显示历史）。即原型 §3 的"侧栏只读预览要移植" | S-5 或新任务 |
+| 23 | 重开 SDK 会话时，CLI 合成的"API 出错"助手消息（model `<synthetic>`）显示为正文 | S-5：投影成失败占位行 |
+| 24 | 会话索引不记引擎：重开的 SDK 会话在 `session.resumed` 到达之前，模型列表不受限（发送时 Main 仍会拒绝） | S-5 |
+| 25 | 529 仍被 CLI 重试 2 次（约 2.3 s）；413 被 CLI 报成 `terminal_reason: image_error`，按状态码映射为 `CONTEXT_TOO_LARGE` | 并入 #5（S-5） |
+| 26 | **SDK 会话不带计划路由上的请求头**：`X-Pilab-Client`、User-Agent 设置（决策 171）、服务自带的头都不发。真实网关 T1/T2 用 CLI 自己的 UA 能通；但按 UA 放行或要求服务级请求头的服务上，Claude 新会话会失败，而模型页的 User-Agent 设置对 Claude 会话静默无效 | **待定** |
+| 27 | 没有 SDK 宿主的构建（S-4 之前的安装包）里，开关照样显示、可以切换，但不起作用；开发用覆盖变量 `AICLIENT_CLAUDE_SDK_CLI`、`_RG_DIR`、`_SETTING_SOURCES` 在安装包里没加限制 | S-4 |
+| 28 | SDK 会话失败卡上的 Continue 得到 `retry_unavailable`（原文退回输入框） | 功能对等版（失败重试） |

@@ -304,6 +304,12 @@
  *                       (the encrypted-machine matrix) is the trigger;
  *                       the step is the number of tool calls since it. Frames are paced, so the
  *                       window shows the stream as it arrives. See `decideClaudeSdk`.
+ *                       Route B S-1 adds two: `CC-ERR {"status":401}` (any status; optional
+ *                       "message", and "echoKey": true to quote the request's key back) answers that HTTP status with an Anthropic-format error body
+ *                       and `x-should-retry: false`, so the CLI fails the turn at once instead of
+ *                       retrying for minutes; `CC-ENV` answers one text line saying how the
+ *                       request identified itself (`key=` / `bearer=` digests, `headers=` the
+ *                       header names), for the host probe's repository-env checks.
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
@@ -3176,8 +3182,34 @@ function sendBurst(res, model, decision, seq) {
 // script, and the number of tool calls since it is the step. Every reply is
 // paced (`sendPaced`), so a window shows the stream as it arrives.
 
-const CC_MARKER = /\bCC-(TEXT|TOOLS|ASK|SLOW|PLAN|AGENT|CHILD|STEER|SEARCH|ENC)\b/;
+const CC_MARKER = /\bCC-(TEXT|TOOLS|ASK|SLOW|PLAN|AGENT|CHILD|STEER|SEARCH|ENC|ERR|ENV)\b/;
 const CC_CWD = /Primary working directory: ([^\n]+)/;
+
+/** CC-ERR: the Anthropic error type and a gateway-like sentence per HTTP status. */
+const CC_ERRORS = {
+  400: ['invalid_request_error', 'Invalid request'],
+  401: ['authentication_error', 'invalid x-api-key'],
+  403: ['permission_error', 'Your API key does not have permission to use the specified resource.'],
+  404: ['not_found_error', 'model not found'],
+  408: ['timeout_error', 'Request timed out'],
+  413: ['request_too_large', 'Request exceeds the maximum allowed number of bytes.'],
+  429: ['rate_limit_error', 'Number of requests has exceeded your rate limit.'],
+  500: ['api_error', 'Internal server error'],
+  503: ['api_error', 'Service unavailable'],
+  504: ['timeout_error', 'Gateway timeout'],
+  529: ['overloaded_error', 'Overloaded'],
+};
+
+/** CC-ENV: how a request identified itself (key digests and header names, never values). */
+function ccEnvReport(req) {
+  const apiKey = typeof req?.headers?.['x-api-key'] === 'string' ? req.headers['x-api-key'] : null;
+  const auth = typeof req?.headers?.authorization === 'string' ? req.headers.authorization : null;
+  const bearer = auth ? auth.replace(/^bearer\s+/i, '') : null;
+  const names = Object.keys(req?.headers ?? {})
+    .sort()
+    .join(',');
+  return `CC-ENV key=${keyDigest(apiKey) ?? 'none'} bearer=${keyDigest(bearer) ?? 'none'} headers=${names}`;
+}
 
 /** All text a request carries (system blocks and messages), for the cwd line. */
 function ccAllText(parsed) {
@@ -3299,8 +3331,8 @@ function ccFrames(model, { thinking, text, tool, chunkMs = 60 }) {
   return frames;
 }
 
-/** Decide one claude-sdk reply; see the plan's header note. */
-function decideClaudeSdk(parsed) {
+/** Decide one claude-sdk reply; see the plan's header note. `req` only feeds CC-ENV. */
+function decideClaudeSdk(parsed, req) {
   const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
   let at = -1;
   let scenario = null;
@@ -3308,7 +3340,9 @@ function decideClaudeSdk(parsed) {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i]?.role !== 'user') continue;
     const own = ownText(messages[i]);
-    const match = CC_MARKER.exec(own);
+    // The last marker of the message: after a failed request the CLI sends the failed
+    // prompt and the next one as one user message (S-1 `CC-ERR`, measured on 2.1.300).
+    const match = [...own.matchAll(new RegExp(CC_MARKER.source, 'g'))].at(-1);
     if (match) {
       at = i;
       scenario = match[1];
@@ -3344,6 +3378,17 @@ function decideClaudeSdk(parsed) {
   }
   const label = `cc-${scenario.toLowerCase()}-${step}`;
   switch (scenario) {
+    case 'ERR': {
+      const status = Number.isInteger(params.status) ? params.status : 500;
+      const [errorType, sentence] = CC_ERRORS[status] ?? ['api_error', `upstream error ${status}`];
+      const base = typeof params.message === 'string' ? params.message : sentence;
+      // `echoKey`: a gateway that quotes the key it was sent back in its error (§7.4 #3).
+      const message =
+        params.echoKey === true ? `${base} (key ${receivedKey(req) ?? '(none)'})` : base;
+      return { kind: 'cc-error', status, label, errorType, message };
+    }
+    case 'ENV':
+      return reply({ text: ccEnvReport(req) }, label);
     case 'TEXT':
       return reply(
         {
@@ -3666,7 +3711,7 @@ function main() {
 
       const decision =
         args.plan === 'claude-sdk'
-          ? decideClaudeSdk(parsed)
+          ? decideClaudeSdk(parsed, req)
           : args.plan === 'dsh-p0-2'
             ? decideDshP02(parsed, seq)
             : args.plan === 'echo-key-error'
@@ -3766,6 +3811,18 @@ function main() {
         sendBurst(res, model, decision, seq);
       } else if (decision.kind === 'cc-frames') {
         sendPaced(res, decision.frames(model));
+      } else if (decision.kind === 'cc-error') {
+        // `x-should-retry: false`: the CLI's retry loop honours it, so the turn fails now.
+        res.writeHead(decision.status, {
+          'content-type': 'application/json',
+          'x-should-retry': 'false',
+        });
+        res.end(
+          JSON.stringify({
+            type: 'error',
+            error: { type: decision.errorType, message: decision.message },
+          })
+        );
       } else if (decision.kind === 'paced') {
         const frames =
           decision.flavour === 'slow-write'

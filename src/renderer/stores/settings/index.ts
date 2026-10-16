@@ -1,3 +1,4 @@
+import { DEFAULT_CLAUDE_SDK_ENGINE_ENABLED } from '@shared/claudeSdkEngine';
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
 import { EMPTY_CHAT_AGENT_DEFAULTS } from '@shared/models/chatAgentDefaults';
@@ -188,6 +189,9 @@ export function getInitialState() {
     // GW-16 temporary switch (decision 159): the plan's own default.
     experimentalCacheControlOnTools: DEFAULT_CACHE_CONTROL_ON_TOOLS,
 
+    // Route B, S-1: the default Main applies when the key is absent.
+    claudeSdkEngineEnabled: DEFAULT_CLAUDE_SDK_ENGINE_ENABLED,
+
     // Decision 171: the plan's own default, `claude-cli-pilab/<app version>`.
     requestUserAgentMode: DEFAULT_REQUEST_USER_AGENT_MODE,
     requestUserAgentCustom: '',
@@ -338,6 +342,8 @@ export const useSettingsStore = create<SettingsState>()(
 
       setExperimentalCacheControlOnTools: (experimentalCacheControlOnTools) =>
         set({ experimentalCacheControlOnTools }),
+
+      setClaudeSdkEngineEnabled: (claudeSdkEngineEnabled) => set({ claudeSdkEngineEnabled }),
 
       // Decision 171: guarded at the door, like the idle timeout above — a
       // value the plan would refuse is never stored. `''` clears the custom

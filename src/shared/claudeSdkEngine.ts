@@ -29,6 +29,59 @@ export function resolveClaudeSdkEngineEnabled(value: unknown): boolean {
   return typeof value === 'boolean' ? value : DEFAULT_CLAUDE_SDK_ENGINE_ENABLED;
 }
 
+/**
+ * Environment names (upper-cased; Windows names are case-insensitive) the SDK
+ * host and the CLI under it may inherit: system paths, locale, proxies and the
+ * trust store settings the DSH host inherits too, never credentials or any
+ * `ANTHROPIC_*` / `CLAUDE_*` (plan §2 rule 2). Main and the host share this one list.
+ */
+export const CLAUDE_SDK_INHERITED_ENV: readonly string[] = [
+  'PATH',
+  'PATHEXT',
+  'SYSTEMROOT',
+  'SYSTEMDRIVE',
+  'WINDIR',
+  'COMSPEC',
+  'TEMP',
+  'TMP',
+  'TMPDIR',
+  'HOME',
+  'USERPROFILE',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'PROGRAMDATA',
+  'PROGRAMFILES',
+  'PROGRAMFILES(X86)',
+  'PROGRAMW6432',
+  'COMMONPROGRAMFILES',
+  'COMMONPROGRAMFILES(X86)',
+  'COMMONPROGRAMW6432',
+  'NUMBER_OF_PROCESSORS',
+  'PROCESSOR_ARCHITECTURE',
+  'OS',
+  'USERNAME',
+  'USERDOMAIN',
+  'COMPUTERNAME',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TERM',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'XDG_RUNTIME_DIR',
+  'HTTP_PROXY',
+  'HTTPS_PROXY',
+  'NO_PROXY',
+  'ALL_PROXY',
+  // A private CA or a TLS-inspecting proxy: what lets the DSH host reach the
+  // gateway must reach the CLI too.
+  'NODE_EXTRA_CA_CERTS',
+  'NODE_USE_SYSTEM_CA',
+];
+
 /** A Claude model, by its provider-side id (`claude-opus-5`, `claude-sonnet-5`, ...). */
 export function isClaudeFamilyModelId(modelId: string): boolean {
   return /^claude-/i.test(modelId.trim());

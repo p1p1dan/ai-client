@@ -104,6 +104,15 @@ export class DshCredentialBroker {
     return { host: 'credential-result', id: request.id, ok: true, value: key };
   }
 
+  /**
+   * Route B, S-1 (decision 3): one provider's key for an SDK chat's launch,
+   * from the same in-memory catalog the host's requests are answered from.
+   * `undefined` when there is none to give; never throws, never logs a value.
+   */
+  keyFor(providerId: string): string | undefined {
+    return this.keysNow()?.get(providerId);
+  }
+
   private check(request: DshHostCredentialRequest, context: DshCredentialContext): string | null {
     if (!context.current) return 'not the running host';
     if (context.nonce === '' || request.nonce !== context.nonce) return 'wrong nonce';

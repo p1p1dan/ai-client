@@ -409,7 +409,9 @@ export function registerChatHandlers(): void {
               );
             });
         }
-        throw error;
+        // With its code, like resume and send: the renderer names the cause
+        // from it (`claude_sdk_credentials_unavailable`, `dsh_host_unavailable`).
+        throw withWorkerErrorCode(error);
       }
     }
   );

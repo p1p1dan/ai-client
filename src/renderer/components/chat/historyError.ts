@@ -35,7 +35,9 @@ export type HistoryErrorCode =
   | 'session_too_large'
   | 'legacy_migration_failed'
   | 'legacy_migration_required'
-  | 'engine_unavailable';
+  | 'engine_unavailable'
+  | 'credentials_unavailable'
+  | 'claude_engine_unavailable';
 
 /**
  * ah-lib-03 — what a failed resume can carry, and which card each one gets.
@@ -90,6 +92,12 @@ const RESUME_ERROR_CODES: Readonly<Record<string, HistoryErrorCode>> = {
   // dsh-rebase P1-3c (decision 020 rule 6): the shared DSH engine could not be
   // brought up for this open. Main's code for it (`WorkerManager.ts`).
   dsh_host_unavailable: 'engine_unavailable',
+  // Route B, S-1: Main could not give the Claude engine a gateway route or key
+  // for this chat (signed out, keyring locked, no Claude model left), or could
+  // not start its host process (`WorkerManager.ts`). The second is the same
+  // card as the shared engine being down: nothing is wrong with the chat.
+  claude_sdk_credentials_unavailable: 'credentials_unavailable',
+  claude_sdk_host_unavailable: 'claude_engine_unavailable',
 };
 
 /**
@@ -180,6 +188,25 @@ export function isEngineUnavailableError(message: string | null | undefined): bo
 /** The status strip's one line for it; a dictionary key. */
 export const ENGINE_UNAVAILABLE_HINT =
   'The chat engine is not running. Retry, or send a message: either one starts the engine again.';
+
+/** Route B, S-1: the status strip's lines for the two codes; dictionary keys. */
+export const CLAUDE_SDK_CREDENTIALS_HINT =
+  'The Claude engine could not get a key for the model service. Sign in again, or unlock the system keyring, then send your message again.';
+export const CLAUDE_SDK_HOST_UNAVAILABLE_HINT =
+  'The Claude engine could not start. Send your message again to try once more.';
+
+/**
+ * Route B, S-1 — the status strip's line for a Claude-engine create or open
+ * that failed, in words instead of Main's sentence (the history card keeps
+ * that under Details); null for anything else. Whole words, as above. A
+ * dictionary key.
+ */
+export function claudeSdkStartFailureHint(message: string | null | undefined): string | null {
+  if (typeof message !== 'string') return null;
+  if (/\bclaude_sdk_credentials_unavailable\b/.test(message)) return CLAUDE_SDK_CREDENTIALS_HINT;
+  if (/\bclaude_sdk_host_unavailable\b/.test(message)) return CLAUDE_SDK_HOST_UNAVAILABLE_HINT;
+  return null;
+}
 
 export interface HistoryErrorView {
   code: HistoryErrorCode;
@@ -367,6 +394,29 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
       'The engine that runs your chats stopped several times in a short while, or could not start, so it is no longer restarted by itself. Nothing is wrong with this chat.',
     retryable: true,
     continuationHint: 'Retry, or send a message: either one starts the engine again.',
+  },
+  // Route B, S-1: the Claude engine got no gateway route or key for this
+  // chat. Nothing is wrong with the chat itself; once the user signs in or
+  // unlocks the keyring, a retry (a resume) is what opens it.
+  credentials_unavailable: {
+    severity: 'error',
+    title: 'The model service key is not available',
+    guidance:
+      'This chat runs on the Claude engine, and this app could not give that engine an address and key for the model service: your sign-in has expired, the system keyring is locked, or no Claude model is offered any more.',
+    retryable: true,
+    continuationHint: 'Sign in again, or unlock the system keyring, then send your message again.',
+  },
+  // Route B, S-1: this chat's own Claude engine process would not start. One
+  // process per chat, so no other chat is affected, and there is no restart
+  // budget to run out (unlike the shared engine's `engine_unavailable`).
+  claude_engine_unavailable: {
+    severity: 'error',
+    title: 'The Claude engine could not start',
+    guidance:
+      'The engine process for this chat would not start. Your other chats are not affected, and nothing is wrong with this chat.',
+    retryable: true,
+    continuationHint:
+      'The Claude engine could not start. Send your message again to try once more.',
   },
   workspace_missing: {
     severity: 'error',

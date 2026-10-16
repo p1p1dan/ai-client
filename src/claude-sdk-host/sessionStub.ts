@@ -3,16 +3,15 @@
  * Main keeps as the session's durable `sessionFile` (same role as the DSH
  * bridge's `*.dsh.json`, `src/dsh-host/bridge/stub.ts`).
  *
- * `<configDir>/aiclient-sessions/<ccSessionId>.ccsdk.json`. The suffix is what
- * Main's engine switch reads on resume (`claudeSdkEngine.ts`), so a session
+ * `<configDir>/aiclient-sessions/<ccSessionId><CLAUDE_SDK_STUB_SUFFIX>`. The suffix is
+ * what Main's engine switch reads on resume (`claudeSdkEngine.ts`), so a session
  * created on this engine reopens on it whatever the switch says today.
  */
 
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-
-export const CLAUDE_SDK_STUB_SUFFIX = '.ccsdk.json';
+import { CLAUDE_SDK_STUB_SUFFIX } from '../shared/claudeSdkEngine.ts';
 
 export interface ClaudeSdkSessionStub {
   engine: 'claude-sdk';
@@ -25,6 +24,12 @@ export interface ClaudeSdkSessionStub {
   createdAt: number;
   /** True once the CLI has written a transcript, so `resume` can find it. */
   started: boolean;
+  /**
+   * Route B S-1: the chat's model as our `provider/modelId` ref. Written at
+   * create from the bootstrap model, updated once a model switch has taken;
+   * Main resumes with it. Absent in stubs written before S-1.
+   */
+  model?: string;
 }
 
 export function stubPathFor(configDir: string, ccSessionId: string): string {
@@ -34,7 +39,8 @@ export function stubPathFor(configDir: string, ccSessionId: string): string {
 export function createStub(
   configDir: string,
   logicalSessionId: string,
-  cwd: string
+  cwd: string,
+  model?: string
 ): { file: string; stub: ClaudeSdkSessionStub } {
   const stub: ClaudeSdkSessionStub = {
     engine: 'claude-sdk',
@@ -44,6 +50,7 @@ export function createStub(
     cwd,
     createdAt: Date.now(),
     started: false,
+    ...(model ? { model } : {}),
   };
   const file = stubPathFor(configDir, stub.ccSessionId);
   writeStub(file, stub);
@@ -82,5 +89,6 @@ export function readStub(file: string): ClaudeSdkSessionStub {
     cwd: value.cwd,
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
     started: value.started === true,
+    ...(typeof value.model === 'string' && value.model ? { model: value.model } : {}),
   };
 }

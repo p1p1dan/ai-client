@@ -246,6 +246,14 @@ export interface SettingsState {
   experimentalCacheControlOnTools: boolean;
 
   /**
+   * Route B, S-1 (`@shared/claudeSdkEngine`): new Claude chats run on the
+   * official Claude Agent SDK engine. On by default; off sends them to DSH like
+   * every other model. Main reads it when it creates a chat; a chat keeps the
+   * engine it was created on.
+   */
+  claudeSdkEngineEnabled: boolean;
+
+  /**
    * dsh-rebase decision 171 (GitHub issue #7): the User-Agent of every request
    * to a model service (`@shared/types/requestUserAgent`): `default`
    * (`claude-cli-pilab/<app version>`), `engine` (DSH's own) or `custom`.
@@ -379,6 +387,8 @@ export interface SettingsState {
   setProviderIdleTimeoutMs: (idleTimeoutMs: number) => void;
   /** GW-16 temporary switch (decision 159). */
   setExperimentalCacheControlOnTools: (enabled: boolean) => void;
+  /** Route B, S-1: the Claude engine switch. */
+  setClaudeSdkEngineEnabled: (enabled: boolean) => void;
   /** Decision 171: ignores a mode it does not know. */
   setRequestUserAgentMode: (mode: RequestUserAgentMode) => void;
   /** Decision 171: stores a value that passes the check (trimmed), or `''` to clear; ignores the rest. */

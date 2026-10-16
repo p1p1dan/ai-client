@@ -28,6 +28,7 @@ import { useI18n } from '@/i18n';
 import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
 import { AutoCompactionSection } from './AutoCompactionSection';
+import { ClaudeSdkEngineSection } from './ClaudeSdkEngineSection';
 import { ExperimentalCacheControlSection } from './ExperimentalCacheControlSection';
 import { RequestUserAgentSection } from './RequestUserAgentSection';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
@@ -238,6 +239,7 @@ export function PiModelManagementSettings({
       <PromptCacheTtlSection />
       <ProviderIdleTimeoutSection />
       <RequestUserAgentSection />
+      <ClaudeSdkEngineSection />
       <ExperimentalCacheControlSection />
     </div>
   );

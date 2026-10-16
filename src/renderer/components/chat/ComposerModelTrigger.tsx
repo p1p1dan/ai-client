@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
 import { formatAbsoluteDateTime } from '@/lib/relativeTime';
+import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useSettingsHydrated, useSettingsStore } from '@/stores/settings';
 import {
   type ComposerMenuItem,
@@ -47,6 +48,7 @@ import {
   AUTOMATIC_MODEL_LABEL,
   filterChatModels,
   groupChatModels,
+  modelCatalogForEngine,
   modelOptionsFor,
   modelScopeHint,
   modelVerification,
@@ -235,6 +237,17 @@ function SessionModelTrigger({
     usePiModelCatalog(hostState);
   const catalogOptions = catalogModels(catalog);
   const unavailableNotice = unavailableModelsNotice(catalog, t);
+  // Route B, S-1 (decision 5): a chat on the Claude engine is offered only the
+  // models of its own route. Selection and effort still read the whole
+  // catalog: what is stored is never rewritten here, and a model outside this
+  // list shows as an unverified leftover.
+  const engine = useChatSessionsStore((state) =>
+    sessionId ? state.sessions.find((session) => session.id === sessionId)?.engine : undefined
+  );
+  const engineRoute = useChatSessionsStore((state) =>
+    sessionId ? state.sessions.find((session) => session.id === sessionId)?.engineRoute : undefined
+  );
+  const offeredCatalog = modelCatalogForEngine(catalogOptions, { engine, engineRoute });
 
   useEffect(() => {
     if (sessionId && settingsHydrated) {
@@ -293,7 +306,7 @@ function SessionModelTrigger({
     );
   }, [sessionId, chatAgentDefaults, getSessionEffort]);
 
-  const options = modelOptionsFor(catalogOptions);
+  const options = modelOptionsFor(offeredCatalog);
   const selectedCatalogModel = catalogOptions.find((option) => option.id === model);
   const availableEfforts = effortsForModel(selectedCatalogModel);
 
@@ -324,7 +337,7 @@ function SessionModelTrigger({
   // about it moved.
   const verification = modelVerification({
     model,
-    catalog: catalogOptions,
+    catalog: offeredCatalog,
     catalogAuthoritative: authoritative,
   });
   // The label the prepended row carries, and the label the TRIGGER carries, are

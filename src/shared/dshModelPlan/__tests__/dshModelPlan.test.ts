@@ -1103,4 +1103,49 @@ describe('MN-01 the menu keeps what the plan routes (decision 033 rule 3)', () =
     expect(menu.models).toEqual([]);
     expect(menu.unavailable).toHaveLength(5);
   });
+
+  /**
+   * Route B, S-1 (decision 5): a model the Claude Agent SDK engine serves (a
+   * Claude model on an anthropic-messages route) carries its route, so an SDK
+   * chat's menu can offer only the models of the route it runs on.
+   */
+  it('marks the models the Claude Agent SDK engine serves with their route', () => {
+    const routed = plan({
+      c: provider('anthropic-messages', [{ id: 'claude-opus-5' }, { id: 'claude-sonnet-5' }]),
+      d: provider('anthropic-messages', [{ id: 'claude-haiku-5' }]),
+      z: provider('anthropic-messages', [{ id: 'glm-5' }]),
+      o: provider('openai-completions', [{ id: 'claude-sonnet-5' }]),
+    });
+    const menu = applyDshPlanToCatalog(
+      {
+        models: [
+          { id: 'c/claude-opus-5', label: 'Opus' },
+          { id: 'c/claude-sonnet-5', label: 'Sonnet' },
+          { id: 'd/claude-haiku-5', label: 'Haiku' },
+          { id: 'z/glm-5', label: 'GLM' },
+          // A stale route on the way in is replaced, never passed through.
+          { id: 'o/claude-sonnet-5', label: 'Sonnet via OpenAI', sdkRoute: 'stale' },
+        ],
+        source: 'local',
+        stale: false,
+        fetchedAt: null,
+      },
+      routed
+    );
+    const byId = new Map(menu.models.map((model) => [model.id, model.sdkRoute]));
+    const cRoute = routed.index['c/claude-opus-5']?.route;
+    const dRoute = routed.index['d/claude-haiku-5']?.route;
+    expect(cRoute).toBeTruthy();
+    expect(dRoute).toBeTruthy();
+    expect(cRoute).not.toBe(dRoute);
+    expect(byId.get('c/claude-opus-5')).toBe(cRoute);
+    expect(byId.get('c/claude-sonnet-5')).toBe(cRoute);
+    expect(byId.get('d/claude-haiku-5')).toBe(dRoute);
+    // GLM on an Anthropic-compatible endpoint, and a Claude name behind an
+    // OpenAI-shaped one, stay on DSH and carry no route.
+    for (const id of ['z/glm-5', 'o/claude-sonnet-5']) {
+      expect(byId.has(id)).toBe(true);
+      expect(menu.models.find((model) => model.id === id)).not.toHaveProperty('sdkRoute');
+    }
+  });
 });

@@ -6,6 +6,7 @@ import {
   AUTOMATIC_MODEL_LABEL,
   filterChatModels,
   groupChatModels,
+  modelCatalogForEngine,
   modelOptionsFor,
   modelScopeHint,
   modelVerification,
@@ -173,5 +174,98 @@ describe('F07 model verification state', () => {
     });
     expect(next).toBe('glm/glm-5');
     expect(verify(next, true)).toBe('verified');
+  });
+});
+
+/**
+ * Route B, S-1 (claude-sdk-engine topics/s1-engine-selection.md decision 5):
+ * a chat on the Claude engine stays on the plan route it started on, so its
+ * picker offers only that route's models. Every other chat is unchanged.
+ */
+describe('S-1 model list of a Claude-engine chat', () => {
+  const SDK_CATALOG: AgentModelOption[] = [
+    { id: 'company/claude-opus-5', label: 'Claude Opus 5', sdkRoute: 'claude' },
+    { id: 'company/claude-sonnet-5', label: 'Claude Sonnet 5', sdkRoute: 'claude' },
+    { id: 'byok/claude-opus-5', label: 'Claude Opus 5 (own key)', sdkRoute: 'claude~2' },
+    // An Anthropic-compatible GLM, and an OpenAI-style one: never the SDK's.
+    { id: 'company/glm-5', label: 'GLM 5' },
+    { id: 'china/glm-5.2', label: 'GLM 5.2' },
+  ];
+  const ids = (catalog: readonly AgentModelOption[]) => catalog.map((option) => option.id);
+
+  it('offers a Claude-engine chat only the models of its own route, plus Automatic', () => {
+    const offered = modelCatalogForEngine(SDK_CATALOG, {
+      engine: 'claude-sdk',
+      engineRoute: 'claude',
+    });
+    expect(ids(offered)).toEqual(['company/claude-opus-5', 'company/claude-sonnet-5']);
+    expect(modelOptionsFor(offered).map((option) => option.id)).toEqual([
+      AUTOMATIC_MODEL_ID,
+      'company/claude-opus-5',
+      'company/claude-sonnet-5',
+    ]);
+    expect(
+      ids(modelCatalogForEngine(SDK_CATALOG, { engine: 'claude-sdk', engineRoute: 'claude~2' }))
+    ).toEqual(['byok/claude-opus-5']);
+  });
+
+  it('falls back to every model the SDK engine serves when the route is not known', () => {
+    expect(ids(modelCatalogForEngine(SDK_CATALOG, { engine: 'claude-sdk' }))).toEqual([
+      'company/claude-opus-5',
+      'company/claude-sonnet-5',
+      'byok/claude-opus-5',
+    ]);
+    expect(
+      ids(modelCatalogForEngine(SDK_CATALOG, { engine: 'claude-sdk', engineRoute: '' }))
+    ).toHaveLength(3);
+  });
+
+  it('leaves every other chat, and a draft with no chat yet, on the whole catalog', () => {
+    for (const session of [null, undefined, {}, { engine: 'dsh' as const }]) {
+      expect(modelCatalogForEngine(SDK_CATALOG, session)).toBe(SDK_CATALOG);
+    }
+    // A DSH chat that somehow carries a route still gets everything.
+    expect(modelCatalogForEngine(SDK_CATALOG, { engine: 'dsh', engineRoute: 'claude' })).toBe(
+      SDK_CATALOG
+    );
+  });
+
+  it('shows a stored model outside the list as an unverified leftover, never resetting it', () => {
+    const offered = modelCatalogForEngine(SDK_CATALOG, {
+      engine: 'claude-sdk',
+      engineRoute: 'claude',
+    });
+    // The verification reads the offered list, so a GLM stored on this chat
+    // (or a Claude model of another route) earns the mark.
+    for (const stored of ['china/glm-5.2', 'byok/claude-opus-5']) {
+      expect(
+        modelVerification({ model: stored, catalog: offered, catalogAuthoritative: true }),
+        stored
+      ).toBe('unverified');
+      const menu = composerModelMenuModel({
+        options: modelOptionsFor(offered),
+        selectedModel: stored,
+        selectedEffort: 'default',
+        unknownModelLabel: unverifiedModelLabel(stored),
+      });
+      const rows = menu.sections[0]?.items ?? [];
+      expect(rows[0], stored).toMatchObject({
+        id: stored,
+        label: `${stored} · unverified`,
+        selected: true,
+        verified: false,
+      });
+    }
+    // The selection itself still resolves from storage, whatever the list.
+    expect(resolveModelSelection({ storedModel: 'china/glm-5.2', catalog: offered })).toBe(
+      'china/glm-5.2'
+    );
+    expect(
+      modelVerification({
+        model: 'company/claude-opus-5',
+        catalog: offered,
+        catalogAuthoritative: true,
+      })
+    ).toBe('verified');
   });
 });

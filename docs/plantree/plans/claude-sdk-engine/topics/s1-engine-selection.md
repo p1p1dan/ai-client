@@ -91,4 +91,52 @@ Role: topic（S-1 方案，2026-10-16）。上位：[README](../README.md) §4 S
 | Main | `src/main/**`、`src/shared/dshModelPlan/menu.ts` | 决定 1～5、8、9 的 Main 半边；开关读取；单测；重写 `chatEngineDshOnly` |
 | 渲染层 | `src/renderer/**`、`src/shared/i18n.ts` | 开关区块；`ChatSession.engine`；模型列表过滤；拒绝处理；新卡；建会话与重开的错误文案 |
 
-实现记录（完成后补）：钉住环境变量的实测结论、各线偏离本稿之处、验证结果。
+### 4.1 钉住环境变量：逐项实测（宿主线，2026-10-16）
+
+做法：工作区放 `.claude/settings.json` 写入 `env`，对假网关逐项比较"不钉"与"钉"两种情况（另设 `CLAUDE_CODE_MAX_RETRIES=0`，让失败立即可见）。SDK 会把 `settings` 以 `--settings "{…}"` 的形式写进 `claude.exe` 的命令行，所以钉住的值不能含任何凭据。
+
+| 变量 | 仓库能做什么（实测） | 钉成 |
+|---|---|---|
+| `ANTHROPIC_BASE_URL` | 改走请求，连同 key | 配置的网关 |
+| `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`（大小写两种） | 任一指向死端口，发往 `http://127.0.0.1` 网关的请求也会走代理（CLI 不豁免本机；`HTTPS_PROXY` 对 http 网关也生效） | 宿主继承到的值，没有就 `''`（`''` 等于未设）；URL 带用户名密码的不钉，只记变量名 |
+| `NO_PROXY`（大小写两种） | 仓库改掉后，网关请求被迫走代理 | 宿主继承到的值或 `''` |
+| `NODE_TLS_REJECT_UNAUTHORIZED` | `'0'` 关掉证书校验（自签名 HTTPS 前置实测） | `'1'` |
+| `NODE_EXTRA_CA_CERTS` | 加入仓库自带的信任根 | 宿主继承到的值，没有就 `''`：私有 CA 的网关照样能用（S-1 审查实测：钉成 `''` 时这类网关必然失败，而 DSH 能用），仓库也换不掉信任根。它与 `NODE_USE_SYSTEM_CA` 一起进了 Main 与宿主共用的继承名单 `CLAUDE_SDK_INHERITED_ENV` |
+| `ANTHROPIC_AUTH_TOKEN` | 额外带上 `Authorization: Bearer` | `''` |
+| `ANTHROPIC_CUSTOM_HEADERS` | 额外带上仓库指定的请求头 | `''` |
+| `CLAUDE_CODE_USE_BEDROCK`、`_VERTEX`、`_FOUNDRY`、`_ANTHROPIC_AWS`、`_MANTLE`、`_ANTHROPIC_GOOGLE_CLOUD` | 配合各自的地址与跳过鉴权变量，把对话发到仓库指定的端点（网关收到 0 个请求） | `'0'` |
+| `CLAUDE_CODE_USE_GATEWAY` | 实测只多带一个 bearer 头 | `'0'`（保险） |
+| `DISABLE_AUTOUPDATER`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`、找到时的 `CLAUDE_CODE_GIT_BASH_PATH` | 假网关上观察不到，只有单测 | `'1'`、`'1'`、宿主找到的路径 |
+| `CLAUDE_CONFIG_DIR`、`CLAUDE_CODE_API_BASE_URL`、`ANTHROPIC_UNIX_SOCKET`、OTEL 一组 | 从项目设置改不动（实测） | 不钉 |
+| `ANTHROPIC_API_KEY` | 仓库可以换成自己的 key（请求仍发往我们的网关） | **钉不了**：钉就要把 key 写进命令行。并入 §7.4 #2，S-2/S-3 一起定 |
+
+`applyFlagSettings` 只经一个包装函数调用，类型与运行时都拒绝 `env`，避免浅合并把钉住的整组换掉。
+
+### 4.2 各线偏离本稿之处
+
+- **Main**：
+  - 宿主可用还要求 `src/claude-sdk-host/node_modules` 里有 SDK 包；没 `npm ci` 的检出退回 DSH。
+  - SDK 会话发送时带着当前模型，即使计划暂时不可用也放行。
+  - SDK 会话崩溃后重启时重新解析启动参数并重新取 key；重开时索引记录实际启动的模型。
+  - **DSH 宿主因计划或插件变化重启时，只释放 DSH 会话**（原型里会连带释放 SDK 会话）；`hasWorkInFlight` 不再计 SDK 的回合。登录、登出、改服务等全量重置仍释放全部会话。
+  - 换 key 时打开着的 SDK 会话也会释放（渲染层对 `released` 的处理与全量重置相同，下次发送自动重开）。
+- **宿主**：
+  - 失败文字为"`Upstream request failed (HTTP n)`"，网关自己给了说明时接在后面（脱敏、去掉含 Claude Code 的句子、截 300 字）。
+  - SDK 抛出的"进程退出"也映射为 `claude_engine_exited`（真实 CLI 被杀时就是这条路）。
+  - 每条 `session.status` 都带当前的 `backgroundTasks`。
+  - 会话桩的 `model` 还在 CLI 初始化、发现重开用了别的模型时更新。
+  - 换模型改为 `setModel` 成功后才记新模型（顺带修了 §7.4 #19 的一半）。
+  - 假网关的 CC 标记改取消息里最后一个：CLI 会把失败的提问与下一条合并重发。另加 `CC-ENV` 标记，供 `repoenv` 场景检查。
+- **渲染层**：
+  - 新增历史卡 `credentials_unavailable`。
+  - 宿主起不来时，状态行用 Claude 引擎专用的一句，不沿用 DSH 共享引擎的文案。
+  - 被拒的 Continue 用提示条说明原因，失败卡保留。
+  - 开关区块按集成时的 GUI 点验改为与相邻开关一致的两栏行布局（行标签"使用 Agent SDK"，开关的无障碍名称为整句）。
+
+### 4.3 验证结果（2026-10-16，含审查后的修复）
+
+- tsc 三套通过；biome 通过。
+- 单测：SDK 宿主 61 个；Main 的 `WorkerManagerClaudeSdk.test.ts` 23 个、`claudeSdkEngine.test.ts` 20 个；共享契约 8 个；渲染层新增挂载测试覆盖开关、模型列表、被拒的发送与 Continue、建会话失败。审查后修的 6 处，每处都补了测试，并确认去掉修复时测试会失败（README §8.1）。
+- 全量 vitest：失败文件与 S-0 记录的本机环境基线逐个相同，稳定文件的失败条数也相同；git 类超时每次不同。无新增。
+- 探针（假网关）：流程 34 条连跑两遍、`errors` 27 条（含"网关点名 Claude Code 并回显 key"的回合与宿主 stderr 断言）、`repoenv` 4 条、矩阵空跑 8 条、续聊 9 → 12，全部通过。
+- GUI 点验（隔离 profile，一个假网关同时扮演 Anthropic 服务与 openai-completions 服务）：§3 的 5 项全部通过；开关区块改为两栏行布局后另截图确认。截图只留在本机临时目录。

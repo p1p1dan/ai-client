@@ -1,3 +1,5 @@
+import { MODEL_ENGINE_MISMATCH } from '@shared/claudeSdkEngine';
+
 /**
  * Read a WorkerManager error code out of a rejected `chat.send` IPC call.
  *
@@ -74,3 +76,29 @@ export function parseAttachmentRejection(error: unknown): AttachmentRejection | 
   }
   return { code: match[1] as string, ...(name ? { name } : {}) };
 }
+
+/**
+ * Route B, S-1 (decision 5) — Main refused a send or a Continue into a chat on
+ * the Claude engine because it named a model that chat cannot run: one of the
+ * other engine, or of another service (route). It arrives as
+ * `model_engine_mismatch: <message>` inside Electron's wrapper, and is matched
+ * with the same word guards as the codes above.
+ *
+ * Deliberately NOT one of the recoverable codes: resending with the same model
+ * is refused the same way every time. Like an attachment refusal, nothing was
+ * admitted and the slot is healthy, so the composer hands the message back and
+ * says why ({@link MODEL_ENGINE_MISMATCH_HINT}).
+ */
+const MODEL_ENGINE_MISMATCH_PATTERN = new RegExp(
+  `(?:^|[^A-Za-z0-9_])${MODEL_ENGINE_MISMATCH}(?![A-Za-z0-9_])`
+);
+
+export function isModelEngineMismatchError(error: unknown): boolean {
+  if (error === null || error === undefined) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return MODEL_ENGINE_MISMATCH_PATTERN.test(message);
+}
+
+/** The composer's one line for it; a dictionary key. */
+export const MODEL_ENGINE_MISMATCH_HINT =
+  'This chat runs on the Claude engine. Pick a Claude model from the same service, or start a new chat.';

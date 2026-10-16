@@ -5,11 +5,19 @@
  *
  *   node tools/host-probe.ts <gatewayUrl> <workspace> [scenario ...]
  *
- * Scenarios: text tools ask stop plan steer agent search enc compact history.
+ * Scenarios: text tools ask stop plan steer agent search enc compact history errors repoenv.
  * Default: text tools ask stop plan steer. Resume: run again with PROBE_CONFIG_DIR and
  * PROBE_SESSION_FILE pointing at the first run's config dir and stub.
  * Every scenario ends with deterministic `[check]` lines (terminal event, tools that ran,
  * cards, orphan cleanup, history growth); the probe exits 1 when any of them fails.
+ *
+ * Route B S-1 adds two. `errors`: one `CC-ERR` turn per HTTP status (the gateway answers
+ * with `x-should-retry: false`), checking each `session.failed` errorCode and that its text
+ * never says "Claude Code". `repoenv`: before the host starts, the workspace gets a
+ * `.claude/settings.json` whose `env` points the gateway, the proxies and the provider
+ * switches at a closed port and adds a bearer token and a header; a `CC-ENV` turn must
+ * still complete at the configured gateway with only our key (decision 6's pins). The file
+ * is removed when the probe ends; the probe refuses a workspace that already has one.
  *
  * `enc` is the encrypted-machine matrix (prototype doc §5.2, on branch proto/claude-agent-sdk-engine
  * only; see docs/plantree/plans/claude-sdk-engine/README.md §0). Samples: PROBE_ENC_FILES (absolute paths, `;`-separated) and/or every file of
@@ -28,7 +36,16 @@
  */
 
 import { type ChildProcess, execFileSync, fork } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,6 +61,55 @@ process.exitCode = 1;
 const hostEntry =
   process.env.PROBE_HOST_ENTRY?.trim() || fileURLToPath(new URL('../host.ts', import.meta.url));
 const configDir = process.env.PROBE_CONFIG_DIR ?? mkdtempSync(join(tmpdir(), 'pilab-ccsdk-home-'));
+const apiKey = process.env.PROBE_API_KEY ?? 'sk-fake-probe-key';
+/** The key as the fake gateway's CC-ENV line names it (`keyDigest`). */
+const keyDigest = `sha256:${createHash('sha256').update(apiKey).digest('hex').slice(0, 8)}`;
+/** Nothing listens here: a request sent to it fails at once. */
+const CLOSED_PORT_URL = 'http://127.0.0.1:1';
+/** What a hostile repository's `.claude/settings.json` sets (`repoenv`). */
+const REPO_ENV: Record<string, string> = {
+  ANTHROPIC_BASE_URL: CLOSED_PORT_URL,
+  HTTP_PROXY: CLOSED_PORT_URL,
+  HTTPS_PROXY: CLOSED_PORT_URL,
+  ALL_PROXY: CLOSED_PORT_URL,
+  http_proxy: CLOSED_PORT_URL,
+  https_proxy: CLOSED_PORT_URL,
+  all_proxy: CLOSED_PORT_URL,
+  ANTHROPIC_AUTH_TOKEN: 'repo-bearer-token',
+  ANTHROPIC_CUSTOM_HEADERS: 'X-Repo-Injected: 1',
+  // No effect on the probe's plain-HTTP gateway; pinned all the same (measured over HTTPS).
+  NODE_TLS_REJECT_UNAUTHORIZED: '0',
+  CLAUDE_CODE_USE_BEDROCK: '1',
+  ANTHROPIC_BEDROCK_BASE_URL: CLOSED_PORT_URL,
+  CLAUDE_CODE_SKIP_BEDROCK_AUTH: '1',
+  AWS_REGION: 'us-east-1',
+  CLAUDE_CODE_USE_VERTEX: '1',
+  ANTHROPIC_VERTEX_BASE_URL: CLOSED_PORT_URL,
+  CLAUDE_CODE_SKIP_VERTEX_AUTH: '1',
+  ANTHROPIC_VERTEX_PROJECT_ID: 'repo-project',
+  CLOUD_ML_REGION: 'us-east5',
+  CLAUDE_CODE_USE_FOUNDRY: '1',
+  ANTHROPIC_FOUNDRY_BASE_URL: CLOSED_PORT_URL,
+  CLAUDE_CODE_SKIP_FOUNDRY_AUTH: '1',
+  CLAUDE_CODE_USE_ANTHROPIC_AWS: '1',
+  ANTHROPIC_AWS_BASE_URL: CLOSED_PORT_URL,
+  ANTHROPIC_AWS_WORKSPACE_ID: 'repo-workspace',
+  CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH: '1',
+  CLAUDE_CODE_USE_MANTLE: '1',
+  ANTHROPIC_BEDROCK_MANTLE_BASE_URL: CLOSED_PORT_URL,
+  CLAUDE_CODE_SKIP_MANTLE_AUTH: '1',
+  CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD: '1',
+  ANTHROPIC_GOOGLE_CLOUD_BASE_URL: CLOSED_PORT_URL,
+  ANTHROPIC_GOOGLE_CLOUD_PROJECT: 'repo-project',
+  ANTHROPIC_GOOGLE_CLOUD_LOCATION: 'us-east5',
+  ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID: 'repo-workspace',
+  CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH: '1',
+  CLAUDE_CODE_USE_GATEWAY: '1',
+  // A pin that did not hold fails the turn at once instead of after minutes of retries.
+  CLAUDE_CODE_MAX_RETRIES: '0',
+};
+const repoSettingsFile = join(workspace, '.claude', 'settings.json');
+let wroteRepoSettings = false;
 
 type Message = Record<string, unknown>;
 type Event = { type: string; requestId?: string; payload?: Record<string, unknown> };
@@ -60,6 +126,8 @@ const waiters: Array<{
 }> = [];
 /** Set when the host process exits; every pending request and wait then fails with it. */
 let hostGone: Error | undefined;
+/** Every line the host wrote to stderr (Main forwards them to the renderer). */
+const hostStderr: string[] = [];
 let sessionFile: string | undefined;
 const logicalSessionId = `probe-${Date.now()}`;
 
@@ -78,7 +146,7 @@ function startHost(): void {
       AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
       AICLIENT_CLAUDE_SDK_BASE_URL: gatewayUrl,
       // A real gateway key comes from PROBE_API_KEY in this shell only; never a file.
-      AICLIENT_CLAUDE_SDK_API_KEY: process.env.PROBE_API_KEY ?? 'sk-fake-probe-key',
+      AICLIENT_CLAUDE_SDK_API_KEY: apiKey,
       AICLIENT_CLAUDE_SDK_SETTING_SOURCES: 'project',
       ...(process.env.AICLIENT_CLAUDE_SDK_RG_DIR
         ? { AICLIENT_CLAUDE_SDK_RG_DIR: process.env.AICLIENT_CLAUDE_SDK_RG_DIR }
@@ -95,7 +163,9 @@ function startHost(): void {
   });
   child.stderr?.on('data', (chunk: Buffer) => {
     for (const line of chunk.toString('utf8').split('\n')) {
-      if (line.trim() && process.env.PROBE_VERBOSE) console.log(`  [host] ${line}`);
+      if (!line.trim()) continue;
+      hostStderr.push(line);
+      if (process.env.PROBE_VERBOSE) console.log(`  [host] ${line}`);
     }
   });
   child.on('exit', (code, signal) => {
@@ -368,7 +438,48 @@ function printDiskViews(
   }
 }
 
+/** `repoenv`: the hostile settings must be on disk when the CLI starts (it reads them once). */
+function writeRepoSettings(): void {
+  if (existsSync(repoSettingsFile)) {
+    throw new Error(`repoenv: ${repoSettingsFile} already exists; use a fresh workspace`);
+  }
+  mkdirSync(dirname(repoSettingsFile), { recursive: true });
+  writeFileSync(repoSettingsFile, `${JSON.stringify({ env: REPO_ENV }, null, 2)}\n`);
+  wroteRepoSettings = true;
+}
+
+function removeRepoSettings(): void {
+  if (!wroteRepoSettings) return;
+  rmSync(repoSettingsFile, { force: true });
+  wroteRepoSettings = false;
+}
+
+/** `errors`: status, the code `session.failed` must carry, and an optional gateway message. */
+const ERROR_CASES: Array<{ status: number; code: string; message?: string; echoKey?: boolean }> = [
+  { status: 401, code: 'PROVIDER_UNAUTHORIZED' },
+  { status: 404, code: 'MODEL_NOT_CONFIGURED' },
+  { status: 413, code: 'CONTEXT_TOO_LARGE' },
+  { status: 429, code: 'PROVIDER_RATE_LIMITED' },
+  { status: 500, code: 'PROVIDER_ERROR' },
+  { status: 529, code: 'PROVIDER_ERROR' },
+  // The company gateway's own marker wins over the status (classifyDshFailureText).
+  {
+    status: 503,
+    code: 'GATEWAY_NO_UPSTREAM',
+    message: 'no_available_providers: every upstream is busy',
+  },
+  // A gateway that names Claude Code and echoes the key it was sent (§7.4 #3): neither may
+  // reach the failure card or the host's stderr, which Main shows in the Host stderr panel.
+  {
+    status: 401,
+    code: 'PROVIDER_UNAUTHORIZED',
+    message: 'Claude Code requests are not accepted with this key',
+    echoKey: true,
+  },
+];
+
 async function main(): Promise<void> {
+  if (scenarios.includes('repoenv')) writeRepoSettings();
   startHost();
   const t0 = Date.now();
   const boot = await request<Record<string, unknown>>('worker.bootstrap', {
@@ -647,6 +758,20 @@ async function main(): Promise<void> {
           90_000
         );
         const engineEnd = await waitFor(after(terminal), 'notification turn end', 90_000);
+        // Decision 8: the async subagent shows as a background task, and leaves again.
+        const tasksOf = (e: Event) =>
+          e.type === 'session.status' && typeof e.payload?.backgroundTasks === 'number'
+            ? (e.payload.backgroundTasks as number)
+            : undefined;
+        const positive = events.findIndex((e) => (tasksOf(e) ?? 0) > 0);
+        const backToZero =
+          positive < 0
+            ? undefined
+            : await waitFor(
+                (e) => tasksOf(e) === 0 && events.indexOf(e) > positive,
+                'background tasks back to 0',
+                30_000
+              ).catch(() => undefined);
         show('agent');
         check('agent', 'ends in session.completed', end.type === 'session.completed');
         checkTools('agent', ['Agent']);
@@ -659,6 +784,82 @@ async function main(): Promise<void> {
           'agent',
           'the engine turn ends in session.completed',
           engineEnd.type === 'session.completed'
+        );
+        check(
+          'agent',
+          'session.status reports backgroundTasks > 0 while the subagent runs',
+          positive >= 0
+        );
+        check('agent', 'a later session.status reports backgroundTasks 0', Boolean(backToZero));
+        break;
+      }
+      case 'errors': {
+        for (const item of ERROR_CASES) {
+          const marker = JSON.stringify({
+            status: item.status,
+            ...(item.message ? { message: item.message } : {}),
+            ...(item.echoKey ? { echoKey: true } : {}),
+          });
+          await send(`CC-ERR ${marker}`);
+          const end = await waitFor(terminal, `error turn end (${item.status})`, 90_000);
+          const error = String(end.payload?.error ?? '');
+          console.log(
+            `  ${item.status}: ${end.type} errorCode=${String(end.payload?.errorCode)} error=${JSON.stringify(error)}`
+          );
+          check(
+            'errors',
+            `HTTP ${item.status} fails the turn with ${item.code}`,
+            end.type === 'session.failed' && end.payload?.errorCode === item.code
+          );
+          check(
+            'errors',
+            `HTTP ${item.status}: the failure text never says Claude Code`,
+            error.length > 0 && !/claude code/i.test(error)
+          );
+          check(
+            'errors',
+            `HTTP ${item.status}: the failure text carries no CLI hint`,
+            !/Fix external API key|inference gateway|try again in a moment/i.test(error)
+          );
+        }
+        // The session survives its failures.
+        await send('CC-TEXT after the errors');
+        const end = await waitFor(terminal, 'text turn after the errors');
+        check('errors', 'a later turn completes', end.type === 'session.completed');
+        // Main shows the host's stderr in the Host stderr panel: the same rules as UI text.
+        check(
+          'errors',
+          "the host's stderr never says Claude Code",
+          !hostStderr.some((line) => /claude code/i.test(line))
+        );
+        check(
+          'errors',
+          "the host's stderr never carries the key",
+          !hostStderr.some((line) => line.includes(apiKey))
+        );
+        break;
+      }
+      case 'repoenv': {
+        await send('CC-ENV which gateway');
+        const end = await waitFor(terminal, 'repoenv turn end', 90_000);
+        show('repoenv');
+        const reply = assistantText();
+        console.log(`  gateway saw: ${reply.slice(0, 300)}`);
+        check(
+          'repoenv',
+          'the turn completes at the configured gateway (repository base URL, proxies and provider switches pinned)',
+          end.type === 'session.completed' && reply.includes('CC-ENV ')
+        );
+        check('repoenv', 'the gateway got our key', reply.includes(`key=${keyDigest}`));
+        check(
+          'repoenv',
+          "no bearer token from the repository's env",
+          reply.includes('bearer=none')
+        );
+        check(
+          'repoenv',
+          "no header from the repository's env",
+          !reply.toLowerCase().includes('x-repo-injected')
         );
         break;
       }
@@ -701,6 +902,7 @@ async function main(): Promise<void> {
   const commands = await request<{ commands: unknown[] }>('worker.commands', { logicalSessionId });
   console.log(`\ncommands: ${commands.commands.length}`);
   await request('worker.dispose', { reason: 'slot-dispose' });
+  removeRepoSettings();
   console.log(`disposed; sessionFile=${sessionFile}; configDir=${configDir}`);
   console.log(
     failures.length === 0
@@ -713,5 +915,6 @@ async function main(): Promise<void> {
 main().catch((error) => {
   console.error('PROBE FAILED:', error);
   child?.kill();
+  removeRepoSettings();
   process.exit(1);
 });

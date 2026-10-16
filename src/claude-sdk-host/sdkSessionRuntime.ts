@@ -78,6 +78,7 @@ import type {
   WorkerSubagentInterruptResult,
   WorkerTreeResult,
 } from '../shared/types/workerRpc.ts';
+import { mapSdkFailure, redactSecrets, type SdkFailureSignals } from './failureMapping.ts';
 import {
   descendantsOf,
   msysToolProcesses,
@@ -94,8 +95,24 @@ export interface SdkHostConfig {
   cliPath?: string;
   gitBashPath?: string;
   cliEnv: Record<string, string>;
+  /**
+   * The flag tier's `env` (`buildPinnedSettingsEnv`): what a repository's
+   * settings may not change. Goes onto the CLI's command line, so never a secret.
+   */
+  settingsEnv: Record<string, string>;
+  /** Values blanked out of any text the host quotes to the UI (the gateway key). */
+  secrets?: readonly string[];
   /** Experiment switch: let the repository's allow rules and hooks apply (the CLI's default). */
   trustRepoPolicy?: boolean;
+}
+
+/** A flag-tier change. Never `env`: the CLI replaces the key whole, which would drop the pins. */
+type FlagSettingsPatch = Omit<Parameters<Query['applyFlagSettings']>[0], 'env'>;
+
+/** What the turn's messages said about a failure before its result (decision 7's inputs). */
+interface FailureSignals {
+  assistantError?: string;
+  retry?: { error?: string; error_status?: number | null; no_response?: unknown };
 }
 
 /**
@@ -325,6 +342,12 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   /** Tool inputs as streamed, for a card raised before the stream finished (ExitPlanMode's plan). */
   private readonly streamedInputs = new Map<string, unknown>();
   private readonly streamedWaiters = new Map<string, (input: unknown) => void>();
+  /** Live background tasks of this CLI process (decision 8), reported on every `session.status`. */
+  private backgroundTasks = 0;
+  /** Once the CLI sends `background_tasks_changed`, its level replaces the task_* edge count. */
+  private backgroundLevelSeen = false;
+  private readonly backgroundEdges = new Set<string>();
+  private failureSignals: FailureSignals = {};
   private contextWindow = 0;
   private lastCostUsd = 0;
   private readonly session = {
@@ -362,11 +385,14 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     if (this.options.sessionFile) {
       this.stubFile = this.options.sessionFile;
       this.stub = readStub(this.stubFile);
+      // Main names the model it resumes with; an older Main may not, then the stub's is kept.
+      this.modelRef ??= this.stub.model;
     } else {
       const created = createStub(
         this.config.configDir,
         this.options.logicalSessionId,
-        this.options.cwd
+        this.options.cwd,
+        this.modelRef
       );
       this.stubFile = created.file;
       this.stub = created.stub;
@@ -428,7 +454,9 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       tools: { type: 'preset', preset: 'claude_code' },
       disallowedTools: HOST_ONLY_TOOLS,
       // No "Co-Authored-By" / "Generated with Claude Code" lines in the user's commits and PRs.
-      settings: { attribution: false },
+      // `env` is the flag tier, above the repository's settings: the gateway, the proxies
+      // and the provider switches stay ours (decision 6). On the CLI's command line.
+      settings: { attribution: false, env: this.config.settingsEnv },
       settingSources: this.config.settingSources,
       // A repository's own `.claude/settings*.json` may add allow rules (which skip
       // `canUseTool`, i.e. PiLab's card) and hooks (commands run with no tool call).
@@ -461,6 +489,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const q = query({ prompt: input, options });
     this.query = q;
     this.input = input;
+    // A new CLI process starts with no background tasks; its level arrives on the first change.
+    this.resetBackgroundTasks();
     this.pumpDone = this.pump(q);
     return q;
   }
@@ -476,23 +506,43 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       }
     } catch (error) {
       this.log('query ended with an error', error);
-      if (this.turn)
-        this.endTurn('failed', { error: errorText(error), errorCode: 'CLAUDE_SDK_QUERY_FAILED' });
+      if (this.turn) this.failTurn({ ...this.failureSignals, thrown: errorText(error) });
       this.compacting?.reject(error instanceof Error ? error : new Error(String(error)));
       this.compacting = null;
     } finally {
       if (this.query === q) {
         this.query = null;
         this.input = null;
+        // The CLI's tasks went with it.
+        const hadTasks = this.backgroundTasks > 0;
+        this.resetBackgroundTasks();
+        if (hadTasks && !this.turn) this.emitStatus('idle');
       }
-      if (this.turn && !this.disposed) {
-        // The product UI never names Claude Code (plan hard constraint 4).
-        this.endTurn('failed', {
-          error: 'The Claude engine exited',
-          errorCode: 'CLAUDE_SDK_CLI_EXITED',
-        });
-      }
+      // The product UI never names Claude Code (plan hard constraint 4).
+      if (this.turn && !this.disposed) this.failTurn({ cliExited: true });
     }
+  }
+
+  /** End the open turn as failed, with decision 7's code and a neutral sentence. */
+  private failTurn(signals: SdkFailureSignals): void {
+    const failure = mapSdkFailure(signals, this.config.secrets);
+    // The CLI's own text can quote a gateway that echoes the key: redact before it reaches stderr.
+    const cli = JSON.stringify({
+      subtype: signals.result?.subtype,
+      status: signals.result?.api_error_status,
+      terminal: signals.result?.terminal_reason,
+      assistantError: signals.assistantError,
+      retry: signals.retry,
+      text: signals.result?.result ?? signals.result?.errors ?? signals.thrown,
+      cliExited: signals.cliExited,
+    });
+    this.log(
+      `turn failed: code=${failure.errorCode ?? '(none)'} cli=${redactSecrets(cli, this.config.secrets)}`
+    );
+    this.endTurn('failed', {
+      error: failure.error,
+      ...(failure.errorCode ? { errorCode: failure.errorCode } : {}),
+    });
   }
 
   // ---- sends ----------------------------------------------------------------------
@@ -510,6 +560,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const q = this.ensureQuery();
     await this.applySelection(q, input.model, input.effort);
     this.turnCount += 1;
+    this.failureSignals = {};
     this.turn = {
       requestId: input.requestId,
       stopRequested: false,
@@ -523,7 +574,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       this.emit({ type: 'session.projection', payload: { key: 'goal', view: null } });
       this.emit({ type: 'session.projection', payload: { key: 'subagentCatalog', view: [] } });
     }
-    this.emit({ type: 'session.status', payload: { status: 'running' } });
+    this.emitStatus('running');
     this.echoUser(input.attemptId, input.text, input.attachments);
     this.input?.push({
       type: 'user',
@@ -540,15 +591,46 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     effort: SessionEffortLevel | undefined
   ): Promise<void> {
     if (model && model !== this.modelRef) {
-      this.modelRef = model;
-      await q.setModel(bareModelId(model)).catch((error) => this.log('setModel failed', error));
+      const switched = await q.setModel(bareModelId(model)).then(
+        () => true,
+        (error) => {
+          this.log('setModel failed', error);
+          return false;
+        }
+      );
+      // Only a switch the CLI took: the turn's label and the stub follow what really runs.
+      if (switched) {
+        this.modelRef = model;
+        this.recordStubModel();
+      }
     }
     if (effort && effort !== this.effort) {
       this.effort = effort;
       const level = effort === 'off' || effort === 'minimal' ? 'low' : effort;
-      await q
-        .applyFlagSettings({ effortLevel: level })
-        .catch((error) => this.log('effort change failed', error));
+      await this.applyFlagSettings(q, { effortLevel: level }).catch((error) =>
+        this.log('effort change failed', error)
+      );
+    }
+  }
+
+  /**
+   * Every flag-tier change goes through here. The CLI replaces a top-level key
+   * whole, so a patch carrying `env` would drop the pinned variables (decision 6).
+   */
+  private applyFlagSettings(q: Query, patch: FlagSettingsPatch): Promise<void> {
+    if ('env' in patch) return Promise.reject(new Error('flag settings may not carry env'));
+    return q.applyFlagSettings(patch);
+  }
+
+  /** The stub's `model`: what Main resumes this chat with when it names none. */
+  private recordStubModel(): void {
+    const stub = this.stub;
+    if (!stub || !this.modelRef || stub.model === this.modelRef) return;
+    stub.model = this.modelRef;
+    try {
+      writeStub(this.stubFile, stub);
+    } catch (error) {
+      this.log('stub write failed', error);
     }
   }
 
@@ -558,7 +640,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     if (!turn) return { stopped: false };
     if (turn.stopRequested) return { stopped: true };
     turn.stopRequested = true;
-    this.emit({ type: 'session.status', payload: { status: 'stopping' } });
+    this.emitStatus('stopping');
     this.drainPending('aborted');
     // Windows: the CLI's interrupt leaves a Bash call's children running (see processTree.ts).
     const toolProcesses = await this.toolProcesses();
@@ -668,6 +750,35 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     } as RuntimeEventDraft);
   }
 
+  /** `session.status`, always with the live background-task count (decision 8). */
+  private emitStatus(
+    status: 'running' | 'stopping' | 'idle',
+    retry?: Extract<EventBody, { type: 'session.status' }>['payload']['retry']
+  ): void {
+    this.emit({
+      type: 'session.status',
+      payload: { status, ...(retry ? { retry } : {}), backgroundTasks: this.backgroundTasks },
+    });
+  }
+
+  /** The status a background-task change is reported under: the open turn's, else idle. */
+  private currentStatus(): 'running' | 'stopping' | 'idle' {
+    if (!this.turn) return 'idle';
+    return this.turn.stopRequested ? 'stopping' : 'running';
+  }
+
+  private setBackgroundTasks(count: number): void {
+    if (count === this.backgroundTasks) return;
+    this.backgroundTasks = count;
+    this.emitStatus(this.currentStatus());
+  }
+
+  private resetBackgroundTasks(): void {
+    this.backgroundTasks = 0;
+    this.backgroundLevelSeen = false;
+    this.backgroundEdges.clear();
+  }
+
   private echoUser(
     attemptId: string | undefined,
     text: string,
@@ -748,6 +859,16 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           stub.started = true;
           writeStub(this.stubFile, stub);
         }
+        // The CLI is up on `modelRef` (a resume may start on another model than the stub's).
+        this.recordStubModel();
+        return;
+      }
+      case 'background_tasks_changed': {
+        // The level signal: replace, never pair edges (sdk.d.ts SDKBackgroundTasksChangedMessage).
+        this.backgroundLevelSeen = true;
+        this.backgroundEdges.clear();
+        const tasks = Array.isArray(message.tasks) ? message.tasks : [];
+        this.setBackgroundTasks(tasks.filter((task) => record(task)?.ambient !== true).length);
         return;
       }
       case 'task_started': {
@@ -755,28 +876,35 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         if (/agent/i.test(kind) || typeof message.subagent_type === 'string') {
           this.agentTaskIds.add(String(message.task_id));
         }
+        // Edge count, only for a CLI that never sent the level.
+        if (!this.backgroundLevelSeen && message.ambient !== true) {
+          this.backgroundEdges.add(String(message.task_id));
+          this.setBackgroundTasks(this.backgroundEdges.size);
+        }
         return;
       }
       case 'task_notification': {
         this.lastTaskWasAgent = this.agentTaskIds.delete(String(message.task_id));
+        if (!this.backgroundLevelSeen && this.backgroundEdges.delete(String(message.task_id))) {
+          this.setBackgroundTasks(this.backgroundEdges.size);
+        }
         return;
       }
       case 'api_retry': {
         const attempt = num(message.attempt);
         const delayMs = num(message.retry_delay_ms);
-        this.emit({
-          type: 'session.status',
-          payload: {
-            status: 'running',
-            retry: {
-              attempt,
-              maxRetries: num(message.max_retries),
-              delayMs,
-              errorStatus: message.error_status == null ? null : String(message.error_status),
-              error: typeof message.error === 'string' ? message.error : 'unknown',
-              retryAt: Date.now() + delayMs,
-            },
-          },
+        this.failureSignals.retry = {
+          ...(typeof message.error === 'string' ? { error: message.error } : {}),
+          error_status: typeof message.error_status === 'number' ? message.error_status : null,
+          ...(message.no_response ? { no_response: message.no_response } : {}),
+        };
+        this.emitStatus('running', {
+          attempt,
+          maxRetries: num(message.max_retries),
+          delayMs,
+          errorStatus: message.error_status == null ? null : String(message.error_status),
+          error: typeof message.error === 'string' ? message.error : 'unknown',
+          retryAt: Date.now() + delayMs,
         });
         return;
       }
@@ -794,6 +922,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     if (!turn) return;
     switch (event.type) {
       case 'message_start': {
+        // A request answered: an earlier retry of this turn is no longer what the turn ends on.
+        delete this.failureSignals.retry;
         this.closeStep();
         const apiMessage = record(event.message) ?? {};
         const usage = record(apiMessage.usage) ?? {};
@@ -925,8 +1055,13 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     }
   }
 
-  /** The SDK's complete assistant frame: only used to recover a tool input the stream could not parse. */
+  /**
+   * The SDK's complete assistant frame: used to recover a tool input the stream
+   * could not parse, and for the `error` class of the CLI's synthetic API-error
+   * reply (decision 7; its text is the CLI's hint and is never shown).
+   */
   private ingestAssistant(message: Extract<SDKMessage, { type: 'assistant' }>): void {
+    if (message.error) this.failureSignals.assistantError = message.error;
     const turn = this.turn;
     const step = turn?.step;
     if (!turn || !step) return;
@@ -1017,27 +1152,42 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     if (this.compacting) {
       const done = this.compacting;
       this.compacting = null;
+      this.failureSignals = {};
       if (message.is_error === true)
         done.reject(new Error(String(message.result ?? 'compaction failed')));
       else done.resolve({ compacted: true });
       return;
     }
     const turn = this.turn;
-    if (!turn) return;
+    if (!turn) {
+      this.failureSignals = {};
+      return;
+    }
     // A Ctrl+Enter message the turn never took in runs as the CLI's next turn:
     // keep this product turn open so it lands under the same request.
     if (turn.interjections.size > 0 && num(message.queued_turn_count) > 0 && !turn.stopRequested)
       return;
     this.session.turns += 1;
+    const signals = this.failureSignals;
+    this.failureSignals = {};
     if (turn.stopRequested) {
       this.endTurn('stopped', {});
     } else if (message.is_error === true || message.subtype !== 'success') {
-      const errors = Array.isArray(message.errors) ? message.errors.join('; ') : '';
-      this.endTurn('failed', {
-        error:
-          errors ||
-          String(message.result ?? message.subtype ?? 'The Claude engine reported an error'),
-        errorCode: String(message.subtype ?? 'error'),
+      this.failTurn({
+        ...signals,
+        result: {
+          ...(typeof message.subtype === 'string' ? { subtype: message.subtype } : {}),
+          is_error: message.is_error === true,
+          api_error_status:
+            typeof message.api_error_status === 'number' ? message.api_error_status : null,
+          ...(typeof message.terminal_reason === 'string'
+            ? { terminal_reason: message.terminal_reason }
+            : {}),
+          ...(Array.isArray(message.errors)
+            ? { errors: message.errors.filter((e): e is string => typeof e === 'string') }
+            : {}),
+          ...(typeof message.result === 'string' ? { result: message.result } : {}),
+        },
       });
     } else {
       this.endTurn('completed', {});
@@ -1059,7 +1209,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       toolOutcome: new Map(),
       interjections: new Map(),
     };
-    this.emit({ type: 'session.status', payload: { status: 'running' } });
+    this.emitStatus('running');
     this.userMessageCount += 1;
     const messageId = `cc-user-${this.userMessageCount}`;
     this.emit({
@@ -1137,7 +1287,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           ? 'session.stopped'
           : 'session.failed';
     this.emit({ type, payload });
-    this.emit({ type: 'session.status', payload: { status: 'idle' } });
+    this.emitStatus('idle');
     this.turn = null;
   }
 

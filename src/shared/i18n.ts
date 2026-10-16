@@ -4528,3 +4528,33 @@ Object.assign(zhTranslations, {
   'Cancelling…': '正在取消…',
   'Cancel the compaction': '取消压缩',
 });
+
+// Claude engine (route B, S-1)
+/**
+ * Route B, S-1 (docs/plantree/plans/claude-sdk-engine/topics/s1-engine-selection.md):
+ * the Models page switch for the Claude engine, the refusal of a model from
+ * another engine or service in a Claude chat, the card of an engine process
+ * that exited mid-turn, and the create/resume failures of that engine.
+ */
+Object.assign(zhTranslations, {
+  'Claude engine': 'Claude 模型引擎',
+  'Run Claude models on the official Agent SDK': 'Claude 模型使用官方 Agent SDK',
+  'Use Agent SDK': '使用 Agent SDK',
+  'The Claude engine could not start': 'Claude 引擎没能启动',
+  'The engine process for this chat would not start. Your other chats are not affected, and nothing is wrong with this chat.':
+    '这个对话的引擎进程没能启动。其他对话不受影响，这个对话本身也没有问题。',
+  'When on, new Claude chats run on the official Claude Agent SDK; when off, they run on the built-in engine like other models. Applies to new chats; existing chats keep the engine they started on.':
+    '开启后，新建的 Claude 对话由官方 Claude Agent SDK 驱动；关闭则与其他模型一样由内置引擎驱动。只影响新对话，已有对话保持创建时的引擎。',
+  'This chat runs on the Claude engine. Pick a Claude model from the same service, or start a new chat.':
+    '这个对话由 Claude 引擎驱动，请选同一服务下的 Claude 模型，或新开一个对话。',
+  'The Claude engine stopped': 'Claude 引擎已退出',
+  'The engine process for this chat exited, so this reply was cut off.':
+    '这个对话的引擎进程退出了，这次回复被打断。',
+  'Send your message again to reopen it.': '再发一次消息即可重新打开。',
+  'This chat runs on the Claude engine, and this app could not give that engine an address and key for the model service: your sign-in has expired, the system keyring is locked, or no Claude model is offered any more.':
+    '这个对话由 Claude 引擎驱动，应用没能为它拿到模型服务的地址和密钥：登录已过期、系统钥匙串已锁定，或已没有可用的 Claude 模型。',
+  'The Claude engine could not get a key for the model service. Sign in again, or unlock the system keyring, then send your message again.':
+    'Claude 引擎拿不到模型服务的密钥。请重新登录或解锁系统钥匙串，然后再发一次消息。',
+  'The Claude engine could not start. Send your message again to try once more.':
+    'Claude 引擎没能启动，再发一次消息即可重试。',
+});

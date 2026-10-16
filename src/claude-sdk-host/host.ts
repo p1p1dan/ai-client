@@ -22,14 +22,22 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { BridgeRpcServer } from '../dsh-host/bridge/bridgeRpcServer.ts';
-import { buildCliEnvironment, findGitBash } from './cliEnvironment.ts';
+import { buildCliEnvironment, buildPinnedSettingsEnv, findGitBash } from './cliEnvironment.ts';
+import { sanitizeHostLogLine } from './failureMapping.ts';
 import { ClaudeSdkSessionRuntime, type SdkHostConfig } from './sdkSessionRuntime.ts';
 
+/** The gateway key, once read: blanked out of every line before it leaves the process. */
+const logSecrets: string[] = [];
+
 function log(...args: unknown[]): void {
-  // stderr is Main's diagnostics channel; it redacts and keeps the tail.
-  process.stderr.write(
-    `[claude-sdk-host] ${args.map((a) => (a instanceof Error ? (a.stack ?? a.message) : typeof a === 'string' ? a : JSON.stringify(a))).join(' ')}\n`
-  );
+  // stderr is Main's diagnostics channel, and Main shows it in the Host stderr
+  // panel: every line, the CLI's own included, is sanitized here first.
+  const line = args
+    .map((a) =>
+      a instanceof Error ? (a.stack ?? a.message) : typeof a === 'string' ? a : JSON.stringify(a)
+    )
+    .join(' ');
+  process.stderr.write(`[claude-sdk-host] ${sanitizeHostLogLine(line, logSecrets)}\n`);
 }
 
 function required(name: string): string {
@@ -55,6 +63,10 @@ const settingSources = (process.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES ?? '')
 const gitBashPath = process.platform === 'win32' ? findGitBash(process.env) : undefined;
 // Optional: PiLab's own `rg` instead of the CLI's built-in one (see cliEnvironment.ts).
 const ripgrepDir = process.env.AICLIENT_CLAUDE_SDK_RG_DIR?.trim() || undefined;
+const baseUrl = required('AICLIENT_CLAUDE_SDK_BASE_URL');
+const apiKey = required('AICLIENT_CLAUDE_SDK_API_KEY');
+// What a repository's `.claude/settings.json` `env` may not change (decision 6); never the key.
+const pinned = buildPinnedSettingsEnv({ inherited: process.env, baseUrl, gitBashPath });
 const config: SdkHostConfig = {
   configDir,
   settingSources,
@@ -64,15 +76,18 @@ const config: SdkHostConfig = {
   cliEnv: buildCliEnvironment({
     inherited: process.env,
     configDir,
-    baseUrl: required('AICLIENT_CLAUDE_SDK_BASE_URL'),
-    apiKey: required('AICLIENT_CLAUDE_SDK_API_KEY'),
+    baseUrl,
+    apiKey,
     clientApp: process.env.AICLIENT_CLAUDE_SDK_CLIENT_APP?.trim() || 'pilab-claude-sdk-proto/0',
     gitBashPath,
     ripgrepDir,
   }),
+  settingsEnv: pinned.env,
+  secrets: [apiKey],
 };
-// The key now lives only in `config.cliEnv`; drop it from this process's own environment.
+// The key now lives only in `config`; drop it from this process's own environment.
 delete process.env.AICLIENT_CLAUDE_SDK_API_KEY;
+logSecrets.push(apiKey);
 
 if (
   ripgrepDir &&
@@ -81,8 +96,12 @@ if (
   log(`warning: no rg in ${ripgrepDir}; the CLI falls back to its built-in one`);
 }
 log(
-  `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} rg=${ripgrepDir ?? '(built-in)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'}`
+  `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} rg=${ripgrepDir ?? '(built-in)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'} pinned=${Object.keys(pinned.env).length}`
 );
+if (pinned.credentialedProxies.length > 0) {
+  // Their values never reach the CLI's command line; a repository's env can override them.
+  log(`warning: not pinned (proxy URL with credentials): ${pinned.credentialedProxies.join(',')}`);
+}
 
 let runtime: ClaudeSdkSessionRuntime | null = null;
 const server = new BridgeRpcServer({

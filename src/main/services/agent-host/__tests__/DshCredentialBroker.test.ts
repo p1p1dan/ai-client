@@ -129,4 +129,31 @@ describe('DshCredentialBroker', () => {
       '[dsh-credentials] last 61 s: 6 served, 0 unavailable, 1 refused',
     ]);
   });
+
+  /** Route B, S-1 (decision 3): an SDK chat's launch reads one provider's key the same way. */
+  it('[BR-06] gives one provider’s key from the same cache, and nothing it does not hold', () => {
+    let key = CANARY;
+    const { instance, log, readAuth } = broker(() => ({
+      gw: { key },
+      blank: { key: '  ' },
+    }));
+    expect(instance.keyFor('gw')).toBe(CANARY);
+    expect(instance.keyFor('blank')).toBeUndefined();
+    expect(instance.keyFor('missing')).toBeUndefined();
+    expect(instance.keyFor('__proto__')).toBeUndefined();
+    expect(readAuth).toHaveBeenCalledTimes(1);
+    key = 'sk-rotated-key-0002';
+    instance.invalidate();
+    expect(instance.keyFor('gw')).toBe('sk-rotated-key-0002');
+    expect(log.mock.calls.flat().map(String).join(' ')).not.toContain('sk-');
+  });
+
+  it('[BR-07] has no key to give while the catalog cannot be read, and does not throw', () => {
+    const { instance } = broker(() => {
+      throw new Error('keyring locked');
+    });
+    expect(instance.keyFor('gw')).toBeUndefined();
+    const signedOut = broker(() => undefined).instance;
+    expect(signedOut.keyFor('gw')).toBeUndefined();
+  });
 });

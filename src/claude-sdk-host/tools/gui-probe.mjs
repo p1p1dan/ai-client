@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /**
- * Route-B prototype: dev-GUI point-check of the Claude Agent SDK engine.
+ * Route B: dev-GUI point-check of the Claude Agent SDK engine (S-1 checklist in
+ * docs/plantree/plans/claude-sdk-engine/topics/s1-engine-selection.md §3).
  *
  *   node gui-probe.mjs setup        scratch dirs and a fake-only env file
  *   node gui-probe.mjs launch       `node scripts/dev.js --remote-debugging-port=<port>` (detached)
  *   node gui-probe.mjs enter        attach CDP, get past the welcome surface
- *   node gui-probe.mjs seed         add the fake gateway as a custom AI service (fake key)
+ *   node gui-probe.mjs seed         add the fake gateway as two custom AI services (fake keys):
+ *                                   an anthropic-messages one with Claude models (SDK engine)
+ *                                   and an openai-completions one with a GLM model (DSH)
  *   node gui-probe.mjs look         what is on screen
  *   node gui-probe.mjs send <text>  type into the composer and send
  *   node gui-probe.mjs click <text> click the visible button with that text
@@ -128,9 +131,8 @@ function setup() {
       'AICLIENT_SKIP_AUTH_GATE=1',
       'AICLIENT_PROFILE=ccsdkproto',
       `AICLIENT_DSH_NODE=${process.execPath}`,
-      'AICLIENT_CLAUDE_SDK_ENGINE=1',
-      `AICLIENT_CLAUDE_SDK_BASE_URL=${GATEWAY}`,
-      'AICLIENT_CLAUDE_SDK_API_KEY=sk-ccsdk-gui-fake-key',
+      // S-1: the SDK engine is the settings switch (default on) and takes its
+      // gateway and key from the seeded services, like DSH; no env for either.
       '',
     ].join('\n')
   );
@@ -232,11 +234,17 @@ switch (command) {
           break;
         }
         case 'seed': {
+          // The gateway answers any OpenAI-wire request with one plain line, whatever
+          // its plan, so one fake gateway serves both services.
           const value = await evalAsync(
-            `return await window.electronAPI.userProviders.upsert({
+            `const claude = await window.electronAPI.userProviders.upsert({
                name: 'Fake Claude gateway', baseUrl: ${JSON.stringify(GATEWAY)}, api: 'anthropic-messages',
-               apiKey: 'sk-ccsdk-gui-fake-key', models: ['claude-opus-5-5', 'glm-fake-1'], enabled: true });`,
-            { label: 'seed provider' }
+               apiKey: 'sk-ccsdk-gui-fake-key', models: ['claude-opus-5-5', 'claude-sonnet-5-5'], enabled: true });
+             const glm = await window.electronAPI.userProviders.upsert({
+               name: 'Fake GLM gateway', baseUrl: ${JSON.stringify(`${GATEWAY}/v1`)}, api: 'openai-completions',
+               apiKey: 'sk-ccsdk-gui-fake-glm-key', models: ['glm-fake-1'], enabled: true });
+             return { claude, glm };`,
+            { label: 'seed providers' }
           );
           console.log(JSON.stringify(value, null, 1));
           break;

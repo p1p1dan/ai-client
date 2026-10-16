@@ -330,6 +330,19 @@ describe('session operations keep their code (decision 176)', () => {
     ).rejects.toThrow('session_not_ready: Session s1 is restarting');
   });
 
+  it('[S-1] a create keeps its code too, after taking back its row', async () => {
+    const { WorkerManagerError } = await import('../../services/agent-host/WorkerManager');
+    const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+    vi.mocked(sessionIndexService.get).mockResolvedValueOnce(undefined);
+    createSession.mockRejectedValueOnce(
+      new WorkerManagerError('claude_sdk_credentials_unavailable', 'No key for provider claude')
+    );
+    await expect(
+      invoke('chat:createSession', { sessionId: 's-new', workspacePath: '/repo' })
+    ).rejects.toThrow(/^claude_sdk_credentials_unavailable: No key for provider claude$/);
+    expect(removeUncommittedCreated).toHaveBeenCalledWith('s-new', '/repo');
+  });
+
   it('[176-IPC] the worker’s own refusal goes through unchanged', async () => {
     const remote = new Error('WORKER_COMPACT_FAILED: Compaction cancelled.');
     compactSession.mockRejectedValueOnce(remote);

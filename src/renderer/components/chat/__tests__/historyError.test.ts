@@ -8,6 +8,9 @@ import type {
 import { describe, expect, it } from 'vitest';
 import { applyRuntimeEvent, type ChatSession, type ChatSessionsState } from '@/stores/chatSessions';
 import {
+  CLAUDE_SDK_CREDENTIALS_HINT,
+  CLAUDE_SDK_HOST_UNAVAILABLE_HINT,
+  claudeSdkStartFailureHint,
   deriveHistoryNotice,
   deriveRetryControl,
   deriveTakeoverControl,
@@ -139,6 +142,8 @@ describe('parseHistoryError (T-03)', () => {
       'model_missing',
       'session_locked',
       'engine_unavailable',
+      'credentials_unavailable',
+      'claude_engine_unavailable',
     ];
     const views = codes.map((code) => parseHistoryError(`${code}: x`));
     for (const view of views) {
@@ -1352,5 +1357,88 @@ describe('moving a legacy chat (P1-9e)', () => {
       deriveHistoryNotice({ sessionId: null, messageCount: 0, error: undefined, migrating: true })
         .kind
     ).toBe('none');
+  });
+});
+
+/**
+ * Route B, S-1 — Main could not create or open a chat on the Claude engine:
+ * no gateway route or key (`claude_sdk_credentials_unavailable`), or its host
+ * process would not start (`claude_sdk_host_unavailable`). Both arrive as
+ * `<code>: <message>` text inside Electron's wrapper, and both are said in
+ * words: on the history card for an open, on the status strip for a create.
+ */
+describe('the Claude engine could not start a chat (S-1)', () => {
+  const NO_KEY =
+    "Error invoking remote method 'chat:resumeSession': Error: claude_sdk_credentials_unavailable: no key for provider company (keyring locked)";
+  const NO_HOST =
+    "Error invoking remote method 'chat:resumeSession': Error: claude_sdk_host_unavailable: the Claude engine host exited during startup (code 1)";
+
+  it('files a missing key or route under its own card, which says what to do', () => {
+    const encoded = encodePiResumeError(new Error(NO_KEY));
+    expect(encoded.code).toBe('credentials_unavailable');
+    const view = parseHistoryError(encoded.encoded);
+    expect(view).toMatchObject({
+      code: 'credentials_unavailable',
+      severity: 'error',
+      title: 'The model service key is not available',
+      // Once the user has signed in or unlocked the keyring, a retry opens it.
+      retryable: true,
+      continuationHint:
+        'Sign in again, or unlock the system keyring, then send your message again.',
+    });
+    expect(view?.guidance).toContain('Claude engine');
+    expect(view?.forceTakeover).toBeUndefined();
+    // Main's sentence stays as the detail, the card's words are translated.
+    expect(view?.message).toBe(NO_KEY);
+    for (const key of [view?.title, view?.guidance, view?.continuationHint]) {
+      expect(key && zhTranslations[key], key).toBeDefined();
+      expect(key).not.toContain('Claude Code');
+    }
+  });
+
+  it('files a host that would not start under its own card, not the shared engine one', () => {
+    const encoded = encodePiResumeError(new Error(NO_HOST));
+    expect(encoded.code).toBe('claude_engine_unavailable');
+    const view = parseHistoryError(encoded.encoded);
+    expect(view).toMatchObject({ code: 'claude_engine_unavailable', retryable: true });
+    // One process per chat: the copy never says the shared engine stopped.
+    expect(view?.guidance).toContain('Your other chats are not affected');
+    expect(view?.guidance).not.toContain('engine that runs your chats');
+    expect(view?.continuationHint).toBe(CLAUDE_SDK_HOST_UNAVAILABLE_HINT);
+    // Not the shared DSH engine's code: its strip line stays its own.
+    expect(isEngineUnavailableError(NO_HOST)).toBe(false);
+  });
+
+  it('a code the error carries maps the same way', () => {
+    const carried = Object.assign(new Error('no key for provider company'), {
+      code: 'claude_sdk_credentials_unavailable',
+    });
+    expect(encodePiResumeError(carried).code).toBe('credentials_unavailable');
+  });
+
+  it('gives the status strip one line for each, in words, and nothing for other text', () => {
+    expect(claudeSdkStartFailureHint(NO_KEY)).toBe(CLAUDE_SDK_CREDENTIALS_HINT);
+    expect(claudeSdkStartFailureHint(NO_HOST)).toBe(CLAUDE_SDK_HOST_UNAVAILABLE_HINT);
+    expect(
+      claudeSdkStartFailureHint(
+        "Error invoking remote method 'chat:createSession': Error: claude_sdk_host_unavailable: spawn failed"
+      )
+    ).toBe(CLAUDE_SDK_HOST_UNAVAILABLE_HINT);
+    for (const message of [
+      null,
+      undefined,
+      '',
+      'dsh_host_unavailable: DSH_HOST_UNAVAILABLE: down',
+      'xclaude_sdk_credentials_unavailable: nope',
+      'claude_sdk_host_unavailable_v2: nope',
+      'model_engine_mismatch: china/glm5.2',
+    ]) {
+      expect(claudeSdkStartFailureHint(message), String(message)).toBeNull();
+    }
+    for (const hint of [CLAUDE_SDK_CREDENTIALS_HINT, CLAUDE_SDK_HOST_UNAVAILABLE_HINT]) {
+      expect(zhTranslations[hint], hint).toBeDefined();
+      expect(hint).toContain('Claude engine');
+      expect(hint).not.toContain('Claude Code');
+    }
   });
 });

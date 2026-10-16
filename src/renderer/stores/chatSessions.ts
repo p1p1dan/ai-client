@@ -174,6 +174,15 @@ export interface ChatSession {
    */
   agent?: AgentWireName;
   /**
+   * Route B, S-1 (decision 9, optional-field addition): this chat runs on the
+   * Claude Agent SDK engine, and on which plan route. Copied from the
+   * `session.created` / `session.resumed` payload; absent means DSH. Never
+   * guessed from `runtimeIdentity`, which is opaque. The model picker offers
+   * such a chat only models of its route (`modelCatalogForEngine`).
+   */
+  engine?: 'claude-sdk';
+  engineRoute?: string;
+  /**
    * U13 (D04, optional-field addition): this chat has no project folder — it
    * runs in the isolated scratch directory named here, which Main allocated
    * for it (U05). Set from the index row's `unbound` marker, by
@@ -1648,6 +1657,11 @@ function applyRuntimeEventCore(
       // had (an old Host never sends it), and turning undefined into a default
       // remains `mergeSessionIndex`'s job alone.
       const agent = event.payload?.agent;
+      // Route B, S-1: the engine is fixed when the chat is created, and every
+      // open reports it again. An absent value keeps what the row had, like
+      // `agent` above; an SDK chat never turns into a DSH one.
+      const engine = event.payload?.engine;
+      const engineRoute = event.payload?.engineRoute;
       const hostBoundSessionIds = state.hostBoundSessionIds.includes(sessionId)
         ? state.hostBoundSessionIds
         : [...state.hostBoundSessionIds, sessionId];
@@ -1664,6 +1678,8 @@ function applyRuntimeEventCore(
                 ...session,
                 runtimeIdentity: runtimeIdentity ?? session.runtimeIdentity,
                 agent: agent ?? session.agent,
+                ...(engine ? { engine } : {}),
+                ...(engine && engineRoute ? { engineRoute } : {}),
                 ...(created ? { updatedAt: Math.max(session.updatedAt, Date.now()) } : {}),
               }
             : session

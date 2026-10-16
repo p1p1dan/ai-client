@@ -1873,6 +1873,49 @@ describe('applyRuntimeEvent — session.created / session.resumed', () => {
     );
     expect(patch.hostBoundSessionIds).toEqual([SESSION_ID]);
   });
+
+  it('[S1-ENGINE] records the Claude engine and its route from the payload, and keeps them on a bare resume', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const created = applyRuntimeEvent(state, {
+      type: 'session.created',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { runtimeIdentity: '/s/a.ccsdk.json', engine: 'claude-sdk', engineRoute: 'claude' },
+    });
+    const row = created.sessions?.find((session) => session.id === SESSION_ID);
+    expect(row?.engine).toBe('claude-sdk');
+    expect(row?.engineRoute).toBe('claude');
+
+    // An open that does not report the engine (an older Main) keeps what the
+    // row has: a chat never moves to the other engine.
+    const state2 = { ...state, ...created } as ChatSessionsState;
+    const resumed = applyRuntimeEvent(state2, {
+      type: 'session.resumed',
+      seq: 2,
+      sessionId: SESSION_ID,
+      timestamp: 2,
+      payload: { runtimeIdentity: '/s/a.ccsdk.json' },
+    });
+    const kept = resumed.sessions?.find((session) => session.id === SESSION_ID);
+    expect(kept?.engine).toBe('claude-sdk');
+    expect(kept?.engineRoute).toBe('claude');
+  });
+
+  it('[S1-ENGINE] leaves a DSH chat without an engine field, and never reads one off runtimeIdentity', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const patch = applyRuntimeEvent(state, {
+      type: 'session.created',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      // The SDK stub's suffix in the identity alone says nothing to the renderer.
+      payload: { runtimeIdentity: '/s/a.ccsdk.json', agent: 'dsh' },
+    });
+    const row = patch.sessions?.find((session) => session.id === SESSION_ID);
+    expect(row).not.toHaveProperty('engine');
+    expect(row).not.toHaveProperty('engineRoute');
+  });
 });
 
 describe('applyRuntimeEvent — event routing edge cases', () => {

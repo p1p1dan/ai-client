@@ -201,6 +201,18 @@ const FAILURE_VIEWS = {
     action: 'continue',
     detail: false,
   },
+  // Route B, S-1 (decision 7, `CLAUDE_ENGINE_EXITED`): a chat on the Claude
+  // engine lost its engine process mid-turn — the CLI exited, or Main saw the
+  // host process die. No Continue: re-running a cut-short turn is not offered
+  // on that engine yet, and a new message is what reopens the chat. Main's
+  // sentence names a process, which the reason already says in words.
+  claude_engine_exited: {
+    title: 'The Claude engine stopped',
+    reason: 'The engine process for this chat exited, so this reply was cut off.',
+    hint: 'Send your message again to reopen it.',
+    action: 'none',
+    detail: false,
+  },
   // dsh-rebase P1-5b (decision 034): the engine asked Main for the model
   // service's key and got none — signed out, or the system keyring is locked.
   // Resending fails the same way until that changes, so no Continue.

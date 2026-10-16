@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { CLAUDE_ENGINE_EXITED } from '@shared/claudeSdkEngine';
 import { zhTranslations } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import { canContinueSession, deriveSessionFailure, toSessionFailureCode } from '../sessionFailure';
@@ -148,6 +149,32 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
     expect(deriveSessionFailure({ errorCode: 'something_new' }).showsDetail).toBe(true);
   });
 
+  it('[S1-EXITED] names the Claude engine exiting, offers no Continue, and leaves the process sentence out', () => {
+    // Route B, S-1 (decision 7): Main or the SDK host writes this code when a
+    // Claude-engine chat lost its engine process mid-turn. Continue is not
+    // offered on that engine yet (S-5); a new message reopens the chat.
+    expect(CLAUDE_ENGINE_EXITED).toBe('claude_engine_exited');
+    expect(toSessionFailureCode(CLAUDE_ENGINE_EXITED)).toBe('claude_engine_exited');
+    const view = deriveSessionFailure({
+      errorCode: CLAUDE_ENGINE_EXITED,
+      error: 'Claude SDK host exited (code=1 signal=null)',
+    });
+    expect(view).toMatchObject({
+      title: 'The Claude engine stopped',
+      reason: 'The engine process for this chat exited, so this reply was cut off.',
+      hint: 'Send your message again to reopen it.',
+      action: 'none',
+      showsDetail: false,
+    });
+    expect(canContinueSession(view, true)).toBe(false);
+    expect(zhTranslations[view.title]).toBe('Claude 引擎已退出');
+    expect(zhTranslations[view.reason]).toBe('这个对话的引擎进程退出了，这次回复被打断。');
+    expect(zhTranslations[view.hint]).toBe('再发一次消息即可重新打开。');
+    for (const sentence of [view.title, view.reason, view.hint]) {
+      expect(sentence).not.toContain('Claude Code');
+    }
+  });
+
   it('[P1-4d1] a DSH code that means an existing card reads that card', () => {
     // src/shared/dshFailureCodes.ts names DSH failures in the native provider vocabulary.
     expect(toSessionFailureCode('TIMEOUT')).toBe('timeout');
@@ -226,6 +253,7 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       'model_missing',
       'dsh_host_crashed',
       'dsh_engine_restarted',
+      'claude_engine_exited',
       'CREDENTIALS_UNAVAILABLE',
       'PROVIDER_UNAUTHORIZED',
       'PROVIDER_RATE_LIMITED',
@@ -362,6 +390,7 @@ describe('every failure sentence has a Chinese entry', () => {
       'model_missing',
       'dsh_host_crashed',
       'dsh_engine_restarted',
+      'claude_engine_exited',
       'CREDENTIALS_UNAVAILABLE',
       'PROVIDER_UNAUTHORIZED',
       'PROVIDER_RATE_LIMITED',

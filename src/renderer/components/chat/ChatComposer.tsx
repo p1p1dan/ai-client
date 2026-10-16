@@ -123,6 +123,7 @@ import {
 } from './goalStart';
 import { HomeSendBlockedNotice } from './HomeSendBlockedNotice';
 import {
+  claudeSdkStartFailureHint,
   ENGINE_UNAVAILABLE_HINT,
   encodePiResumeError,
   isEngineUnavailableError,
@@ -193,6 +194,8 @@ import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { createSendCancellation, SEND_CANCELLED, type SendCancellation } from './sendCancellation';
 import {
   type AttachmentRejection,
+  isModelEngineMismatchError,
+  MODEL_ENGINE_MISMATCH_HINT,
   parseAttachmentRejection,
   parseSendDispatchErrorCode,
 } from './sendDispatchError';
@@ -1146,6 +1149,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // U28: no session is no longer one of the rungs. It used to be the first and
   // most blocking one; now it is the state the app opens in, and the composer
   // above is live in it.
+  const claudeSdkStartHint = claudeSdkStartFailureHint(lastError);
   const statusHint =
     !isUnboundSession && activeSessionId && !activeWorkspace
       ? 'Active session has no workspace — re-open a repository and refresh.'
@@ -1166,17 +1170,24 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             // as Main's sentence; the `engine_unavailable` card keeps that.
             isEngineUnavailableError(lastError)
             ? t(ENGINE_UNAVAILABLE_HINT)
-            : lastError
-              ? `Error: ${lastError}`
-              : // Decision 156: in the UI language, and without the engine
-                // process's development name (`Agent Host`).
-                sendingHere
-                ? t('Sending…')
-                : busy
-                  ? t(TURN_RUNNING_PLACEHOLDER)
-                  : effectiveCwd
-                    ? `Ready · cwd: ${effectiveCwd}`
-                    : 'Ready · temporary chat — a private folder is created on the first message.';
+            : // Route B, S-1: the same, for the Claude engine — a model it
+              // cannot run (decision 5), or a create/resume it could not
+              // start (no key or route, or no host process).
+              isModelEngineMismatchError(lastError)
+              ? t(MODEL_ENGINE_MISMATCH_HINT)
+              : claudeSdkStartHint
+                ? t(claudeSdkStartHint)
+                : lastError
+                  ? `Error: ${lastError}`
+                  : // Decision 156: in the UI language, and without the engine
+                    // process's development name (`Agent Host`).
+                    sendingHere
+                    ? t('Sending…')
+                    : busy
+                      ? t(TURN_RUNNING_PLACEHOLDER)
+                      : effectiveCwd
+                        ? `Ready · cwd: ${effectiveCwd}`
+                        : 'Ready · temporary chat — a private folder is created on the first message.';
 
   // T-27 round-3 (point-check #10): fire-and-forget after ANY `runSend` call
   // site sees a 'committed' outcome (the Host admitted the turn — see
@@ -2545,6 +2556,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // this send's attachments (`WORKER_ATTACHMENT_REJECTED`). Nothing was
     // admitted, and the same payload is refused the same way every time.
     let attachmentRejection: AttachmentRejection | null = null;
+    // Route B, S-1 (decision 5): Main refused the model for this Claude-engine
+    // chat (`model_engine_mismatch`). Same shape: nothing admitted, and the
+    // same model is refused the same way every time. Holds Main's sentence.
+    let engineMismatch: string | null = null;
     const acceptRetry = () => {
       if (sawUserEcho) return;
       // Stands in for the echo everywhere below — the terminal gating, the
@@ -2857,6 +2872,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             !retryLastTurn && wireAttachments ? parseAttachmentRejection(error) : null;
           if (rejection) {
             attachmentRejection = rejection;
+            return null;
+          }
+          // Route B, S-1: refused by rule as well, a send or a Continue alike.
+          if (isModelEngineMismatchError(error)) {
+            engineMismatch = error instanceof Error ? error.message : String(error);
             return null;
           }
           // The WorkerManager can refuse a send outright — an idle-evicted
@@ -3357,6 +3377,26 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               ),
         });
         return 'skipped';
+      }
+
+      // Route B, S-1 (decision 5) — Main refused the model: this chat runs on
+      // the Claude engine, which serves only the models of its own route.
+      // Handled like the attachment refusal below: nothing was admitted, the
+      // slot that answered is healthy (no `unbindHost()`), and the same model
+      // is refused the same way (no Retry). A send's text goes back to the
+      // composer (`refusedByRule`) and the status line says why
+      // (`statusHint`); a Continue keeps its failure card standing, which
+      // hides that line, so a toast says it instead.
+      if (engineMismatch) {
+        if (retryLastTurn) {
+          toastManager.add({ type: 'warning', title: t(MODEL_ENGINE_MISMATCH_HINT) });
+        } else {
+          useChatSessionsStore.setState({ lastError: engineMismatch });
+        }
+        return finalizeOutcome(
+          decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho }),
+          { refusedByRule: true }
+        );
       }
 
       // P1-4c2 — the engine refused an attachment (decision 096; P1-1 D2's
