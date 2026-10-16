@@ -18,6 +18,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
+import path from 'node:path';
 import {
   type CanUseTool,
   getSessionMessages,
@@ -44,6 +47,8 @@ import {
   REVIEW_DISMISSED_TEXT,
   SDK_PLAN_REVIEW_CHOICES,
 } from '../shared/planReview.ts';
+import { isExplorationCommand } from '../shared/runtimeShellPolicy.ts';
+import { resolveSettingSources } from '../shared/settingSources.ts';
 import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type {
   PermissionDecisionId,
@@ -109,8 +114,11 @@ export interface SdkHostConfig {
   settingsEnv: Record<string, string>;
   /** Values blanked out of any text the host quotes to the UI (the gateway key). */
   secrets?: readonly string[];
-  /** Experiment switch: let the repository's allow rules and hooks apply (the CLI's default). */
-  trustRepoPolicy?: boolean;
+  /**
+   * Probes only: a stand-in home directory whose `.claude` the CLI's walk up from
+   * the cwd must not read either, besides `os.homedir()`'s (S-3 P-5, P-11).
+   */
+  homeDir?: string;
 }
 
 /** A flag-tier change. Never `env`: the CLI replaces the key whole, which would drop the pins. */
@@ -344,6 +352,109 @@ function cliRefusalRewrite(text: string): string {
   return text;
 }
 
+/**
+ * S-3 P-1: the setting sources a chat's CLI starts with: the configured ones,
+ * project and local closed for an untrusted checkout (`resolveSettingSources`).
+ */
+export function launchSettingSources(
+  configured: SdkHostConfig['settingSources'],
+  projectTrusted: boolean | undefined
+): SdkHostConfig['settingSources'] {
+  const gate = resolveSettingSources({
+    settingSources: configured,
+    projectTrusted: projectTrusted === true,
+  });
+  return (['user', 'project', 'local'] as const).filter((source) => gate[source]);
+}
+
+/** Where a path leads past links, junctions and substituted drives; null if it does not exist. */
+export type ResolvePath = (target: string) => string | null;
+
+const resolveRealPath: ResolvePath = (target) => {
+  try {
+    return realpathSync.native(target);
+  } catch {
+    return null;
+  }
+};
+
+/** One spelling of a directory, for comparisons: Windows paths fold case and slashes. */
+function foldDir(dir: string): string {
+  const trimmed = dir.length > 1 ? dir.replace(/(?<!^[A-Za-z]:)[\\/]+$/, '') : dir;
+  return process.platform === 'win32' ? trimmed.replace(/\\/g, '/').toLowerCase() : trimmed;
+}
+
+/**
+ * A directory as a picomatch literal: forward slashes, and syntax characters as
+ * one-character classes (a backslash escape would read as a separator on Windows).
+ */
+function globLiteral(dir: string): string {
+  const slashed = dir.replace(/\\/g, '/').replace(/\/+$/, '');
+  return slashed.replace(/[()[\]{}*?+@]/g, '[$&]');
+}
+
+/** The home directories as spelled and as they resolve, folded. */
+function homeTargets(homes: readonly string[], resolve: ResolvePath): Set<string> {
+  const targets = new Set<string>();
+  for (const home of homes) {
+    targets.add(foldDir(home));
+    const real = resolve(home);
+    if (real) targets.add(foldDir(real));
+  }
+  return targets;
+}
+
+/** The cwd and each of its ancestors, as spelled. */
+function selfAndAncestors(cwd: string): string[] {
+  const dirs = [cwd];
+  for (let dir = cwd; path.dirname(dir) !== dir; ) {
+    dir = path.dirname(dir);
+    dirs.push(dir);
+  }
+  return dirs;
+}
+
+const isHomeDir = (dir: string, targets: Set<string>, resolve: ResolvePath) => {
+  if (targets.has(foldDir(dir))) return true;
+  const real = resolve(dir);
+  return real !== null && targets.has(foldDir(real));
+};
+
+/**
+ * S-3 P-5, P-7: the `claudeMdExcludes` globs for the user's `~/.claude`. The CLI
+ * walks up from the cwd as spelled and matches case-sensitively (measured on
+ * Windows: the drive letter's case matters, either slash works), so every
+ * ancestor of the cwd that is a home directory (in another case, or reached
+ * through a link, a junction or a substituted drive) adds a glob in the cwd's
+ * own spelling; each home directory as given is always one.
+ */
+export function userClaudeDirExcludes(
+  cwd: string,
+  homes: readonly string[],
+  resolve: ResolvePath = resolveRealPath
+): string[] {
+  const targets = homeTargets(homes, resolve);
+  const globs = new Set(homes.map((home) => `${globLiteral(home)}/.claude/**`));
+  for (const dir of selfAndAncestors(cwd)) {
+    if (isHomeDir(dir, targets, resolve)) globs.add(`${globLiteral(dir)}/.claude/**`);
+  }
+  return [...globs];
+}
+
+/**
+ * S-3 P-10: a chat bound to a home directory itself would read the user's own
+ * `~/.claude/settings*.json` (hooks, allow rules, env) as the project's, since
+ * the CLI's user tier is the app-private config dir (plan §3: PiLab reads no
+ * user-level layer), so it is opened as a scratch chat is.
+ */
+export function isUserHomeDir(
+  cwd: string,
+  homes: readonly string[],
+  resolve: ResolvePath = resolveRealPath
+): boolean {
+  return isHomeDir(cwd, homeTargets(homes, resolve), resolve);
+}
+
 /** What the model is told of a change refused in plan mode (S-2 A-2). */
 export const PLAN_MODE_REFUSAL =
   'Plan mode is on: nothing may be changed until the user approves a plan. Keep exploring with read-only tools, write your plan, then present it with ExitPlanMode.';
@@ -538,6 +649,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const stub = this.requireStub();
     const input = new InputQueue();
     const model = bareModelId(this.modelRef);
+    // S-3 P-5, P-11: the user's home directory, and a probe's stand-in for it besides.
+    const homes = [...new Set([homedir(), ...(this.config.homeDir ? [this.config.homeDir] : [])])];
+    const projectTrusted =
+      this.options.projectTrusted === true && !isUserHomeDir(this.options.cwd, homes);
     const options: Options = {
       cwd: this.options.cwd,
       env: this.config.cliEnv,
@@ -556,18 +671,24 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         attribution: false,
         env: this.config.settingsEnv,
         useAutoModeDuringPlan: false,
+        // S-3 P-5: the CLI reads CLAUDE.md and `.claude/rules` all the way up from the cwd,
+        // the user's own `~/.claude` included; PiLab reads no user-level layer (plan §3).
+        claudeMdExcludes: userClaudeDirExcludes(this.options.cwd, homes),
       } as Options['settings'],
-      settingSources: this.config.settingSources,
-      // A repository's own `.claude/settings*.json` may add allow rules (which skip
-      // `canUseTool`, i.e. PiLab's card) and hooks (commands run with no tool call).
-      // Pinned as the parent's policy tier, so a cloned repo can do neither; its
-      // CLAUDE.md still loads. Dropped if an IT-managed tier exists on the machine
-      // and does not opt in (`parentSettingsBehavior`), see the prototype doc §4.
-      ...(this.config.trustRepoPolicy
-        ? {}
-        : {
-            managedSettings: { allowManagedPermissionRulesOnly: true, allowManagedHooksOnly: true },
-          }),
+      // S-3 P-1: the project's and the user's private project settings (ruling 5), never
+      // for a scratch chat (decision 008 clause 5: an untrusted checkout reads neither).
+      settingSources: launchSettingSources(this.config.settingSources, projectTrusted),
+      // S-3 P-2, P-4: a repository's hooks and allow rules apply as the CLI applies them
+      // (ruling 5); the policy tier only closes plugin marketplaces, which a trusted
+      // workspace would otherwise clone at start-up past the gateway (git over ssh).
+      // Dropped if an IT-managed tier exists on the machine and does not opt in
+      // (`parentSettingsBehavior`), see the prototype doc §4.
+      managedSettings: { strictKnownMarketplaces: [] } as Options['managedSettings'],
+      // S-3 P-3: a project the user opened is trusted, or the CLI drops its allow rules.
+      // Untyped in 0.3.300 (measured); recorded in the app-private config dir.
+      ...(projectTrusted
+        ? ({ workspaceTrust: { accepted: true, directory: this.options.cwd } } as Partial<Options>)
+        : {}),
       // Only servers PiLab passes; never a repository's `.mcp.json`.
       strictMcpConfig: true,
       permissionMode: cliPermissionMode(this.permissions),
@@ -575,7 +696,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       allowDangerouslySkipPermissions: true,
       canUseTool: this.canUseTool,
       // In-process: callback hooks are not settings hooks, so no settings tier turns them off.
-      hooks: { PreToolUse: [{ hooks: [this.planModeSubagentGuard] }] },
+      hooks: { PreToolUse: [{ hooks: [this.planModeGuard] }] },
       includePartialMessages: true,
       ...(stub.started ? { resume: stub.ccSessionId } : { sessionId: stub.ccSessionId }),
       // A .js CLI runs on this host's own node (the app's whitelisted node.exe), never a
@@ -1446,29 +1567,35 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   };
 
   /**
-   * S-2 A-20: a subagent the repository declares with a wider mode
-   * (`.claude/agents/*.md` `permissionMode: acceptEdits`, `auto`) changes files
-   * without asking even while the chat is in plan mode (measured). Its file
-   * changes and shell commands are sent back to `canUseTool`, which refuses
-   * them in plan mode; in every other mode the repository's declaration stands
-   * (ruling 5, as its allow rules do).
+   * Plan mode, past what allows a call before `canUseTool` (which refuses changes
+   * in plan mode, S-2 A-2). Sent back to `canUseTool` while the chat is in plan mode:
+   * - S-2 A-20: the file changes of a subagent the repository declares with a wider
+   *   mode (`.claude/agents/*.md` `permissionMode: acceptEdits`, `auto`), which
+   *   write without asking even in plan mode (measured);
+   * - S-3 P-9: any agent's shell command outside the exploration grammar DSH's plan
+   *   mode admits (`isExplorationCommand`), so neither an allow rule (the project's,
+   *   the user's local one, "allow for this session") nor a repository hook's
+   *   `allow` runs one: 2.1.300 lets a rule allow a shell call before any plan-mode
+   *   check. The main agent's file changes need nothing: the CLI refuses those in
+   *   plan mode before it reads allow rules (probe `projcfg`).
+   * A hook's `ask` outranks another hook's `allow`. In every other mode the
+   * repository's declarations stand (ruling 5).
    */
-  private readonly planModeSubagentGuard: HookCallback = async (input) => {
+  private readonly planModeGuard: HookCallback = async (input) => {
     const call = input as {
       hook_event_name?: string;
       agent_id?: string;
       permission_mode?: string;
       tool_name?: string;
+      tool_input?: { command?: unknown };
     };
-    if (
-      call.hook_event_name !== 'PreToolUse' ||
-      !call.agent_id ||
-      this.permissions.mode !== 'plan' ||
-      call.permission_mode === 'plan' ||
-      !(FILE_CHANGE_TOOLS.has(call.tool_name ?? '') || SHELL_TOOLS.has(call.tool_name ?? ''))
-    ) {
-      return {};
-    }
+    if (call.hook_event_name !== 'PreToolUse' || this.permissions.mode !== 'plan') return {};
+    const tool = call.tool_name ?? '';
+    const command = call.tool_input?.command;
+    const sendBack = SHELL_TOOLS.has(tool)
+      ? !(typeof command === 'string' && isExplorationCommand(command))
+      : FILE_CHANGE_TOOLS.has(tool) && Boolean(call.agent_id) && call.permission_mode !== 'plan';
+    if (!sendBack) return {};
     return {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',

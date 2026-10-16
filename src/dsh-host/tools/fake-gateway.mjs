@@ -319,6 +319,10 @@
  *                       of `claude-sonnet-5` and in the `<block>` format it asks of any other
  *                       model. Main requests get no `safeguard_results`, so the CLI checks
  *                       locally from the first call on.
+ *                       Route B S-3 adds `CC-ECHO`: one text line naming every distinct
+ *                       `CANARY-...` word in the request's system prompt and user messages
+ *                       (sorted; `none` if there is none), so the host probe sees which
+ *                       instruction files (CLAUDE.md, rules, CLAUDE.local.md) the CLI sent.
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
@@ -3191,7 +3195,9 @@ function sendBurst(res, model, decision, seq) {
 // script, and the number of tool calls since it is the step. Every reply is
 // paced (`sendPaced`), so a window shows the stream as it arrives.
 
-const CC_MARKER = /\bCC-(TEXT|TOOLS|ASK|SLOW|PLAN|AGENT|CHILD|STEER|SEARCH|ENC|ERR|ENV|RUN)\b/;
+const CC_MARKER = /\bCC-(TEXT|TOOLS|ASK|SLOW|PLAN|AGENT|CHILD|STEER|SEARCH|ENC|ERR|ENV|RUN|ECHO)\b/;
+/** Route B S-3: the canary words a probe's instruction files carry (`CC-ECHO`). */
+const CC_CANARY = /\bCANARY-[A-Z0-9-]+\b/g;
 const CC_CWD = /Primary working directory: ([^\n]+)/;
 
 /** CC-ERR: the Anthropic error type and a gateway-like sentence per HTTP status. */
@@ -3461,6 +3467,16 @@ function decideClaudeSdk(parsed, req) {
     }
     case 'ENV':
       return reply({ text: ccEnvReport(req) }, label);
+    case 'ECHO': {
+      // Route B S-3: the assistant's own earlier replies are left out, so a canary this
+      // marker echoed before does not count as sent again.
+      const sent = ccAllText({
+        system: parsed?.system,
+        messages: messages.filter((m) => m?.role === 'user'),
+      });
+      const canaries = [...new Set(sent.match(CC_CANARY) ?? [])].sort();
+      return reply({ text: `CC-ECHO canaries=${canaries.join(',') || 'none'}` }, label);
+    }
     case 'RUN': {
       // Route B S-2: the probe scripts the calls itself, one per step.
       const calls = Array.isArray(params.calls) ? params.calls : [];

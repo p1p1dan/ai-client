@@ -337,10 +337,11 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
     AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
     // From the plan (decision 3); the key goes by IPC, never here (S-3 K-5).
     AICLIENT_CLAUDE_SDK_BASE_URL: baseURL,
-    // The prototype's choice (its doc §4): project-level CLAUDE.md and settings
-    // only, never the user's ~/.claude. S-3 revisits the sources. Dev override.
+    // S-3 P-1 (ruling 5): the project's settings and CLAUDE.md, and the user's private
+    // project settings (`.claude/settings.local.json`, CLAUDE.local.md); never the user's
+    // ~/.claude. A scratch chat reads neither (the host closes them). Dev override.
     AICLIENT_CLAUDE_SDK_SETTING_SOURCES:
-      process.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES?.trim() ?? 'project',
+      process.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES?.trim() ?? 'project,local',
     AICLIENT_CLAUDE_SDK_CLIENT_APP: `pilab/${app.getVersion()}`,
     // Dev override: another CLI binary.
     ...(process.env.AICLIENT_CLAUDE_SDK_CLI?.trim()

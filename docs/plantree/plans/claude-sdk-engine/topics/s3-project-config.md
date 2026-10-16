@@ -38,6 +38,11 @@ Role: topic（S-3 方案，2026-10-16）。上位：[README](../README.md) §1 �
 | P-4 | **封住插件市场**：`managedSettings` 只放 `strictKnownMarketplaces: []`（policy 层；§4.3 实测唯一管用、又不关 hooks 与 allow 的设置） | 受信任后 CLI 启动就去拉，git+ssh 直连外网，不经网关、不经代理；目录源的插件还会当场加载并跑它的 hooks |
 | P-5 | **用户级 `~/.claude` 不读**：flag 层 `claudeMdExcludes` 排除 `<主目录>/.claude/**`，写法按 cwd 的拼写（盘符大小写一致，正斜杠） | §3 不做项；CLI 沿 cwd 往上逐级读 `CLAUDE.md`、`.claude/CLAUDE.md`、`.claude/rules`，工作区在主目录下时会读到用户自己的 `~/.claude/CLAUDE.md` |
 | P-6 | 其余照官方行为：项目外祖先目录的 CLAUDE.md 照读；`settings.local.json` 的 allow 规则不需信任就生效；仓库可禁用自动模式或跳过权限确认（切档被拒时按 S-2 A-5 提示）；`.mcp.json` 仍不读（`strictMcpConfig`） | 裁决 5 "照官方行为" |
+| P-7 | **主目录的各种写法都排除**：cwd 自身及每一级祖先目录，只要与主目录是同一目录（大小写不同，或经软链、目录联接、`subst` 盘符到达），按 cwd 里的拼写各排除一次；主目录原样也排除一次。目录名里的 glob 语法字符（`()[]{}*?+@`）写成单字符的方括号类，只匹配它自己 | CLI 按 cwd 的拼写往上找，只排一种写法会漏；Windows 用户名可以带括号，原样写进 glob 会被当成语法：探针实测主目录叫 `pilab-fakehome (s3)` 时，不转义则排除失效 |
+| P-8 | §3.2 的"外连检查"改成看结果：仓库声明的市场是目录源，其插件带一个 SessionStart hook 留标记；`projcfg` 在同一次运行里重启一次宿主（CLI 从受信任工作区的第二次启动起才去拉），再断言标记不存在、配置目录 `plugins/` 下没有这个市场的登记 | 抓进程的网络连接与平台相关、容易漏；目录源会当场加载插件并跑它的 hook，是最直接的可观测结果，且能做变异检查（去掉封锁即失败）。不用"预置信任记录"让第一次启动就拉：那样会盖住 P-3 的检查（信任记录本身就让 allow 规则生效） |
+| P-9 | **计划模式里 allow 规则放不过改动**：宿主的进程内 PreToolUse 回调在计划模式里把任何代理的命令（Bash、PowerShell）送回 `canUseTool` 拒绝，除非命令在 DSH 计划模式的探索语法内（`isExplorationCommand`：`git status/diff/log/show/…`、`ls`、`cat`、`head`、`rg`、`grep` 等，不含重定向与命令替换）；主代理的文件改动 CLI 在计划模式里先于 allow 规则就拒了（探针实测：`Edit(...)` 规则匹配的写入照样被拒），不另加。回调的 `ask` 也压过仓库 hook 的 `allow` | 审查确认（读 2.1.300 的代码）：规则放行 Bash 先于任何计划模式检查，项目、本机或"本会话允许"的 `Bash(npm run:*)` 在计划模式里会直接执行，S-2 A-2 与说明里"计划模式由 PiLab 拒绝改动"落空；S-2 A-20 对子代理已是同一立场，DSH 的计划模式也用同一套探索语法。代价：语法以外的只读命令（如 `find`、`git branch`）计划模式里也被拒，原来 CLI 认作只读会放行。另一做法是照官方行为放行（裁决 5 的字面），未采用，待审阅 |
+| P-10 | **绑定到主目录本身的会话按临时会话开**（不读 project、local，不声明信任） | 此时项目层的 `.claude/settings*.json` 就是用户自己的 `~/.claude/settings*.json`（PiLab 改了配置目录，CLI 认不出它是用户层），用户的 hooks、allow 规则会当成项目的生效，违背 §0"用户级不读" |
+| P-11 | 探针用的替身主目录（`AICLIENT_CLAUDE_SDK_HOME`）是**追加**排除，不顶替真主目录 | 探针工作区在 `%TEMP%` 下，也在真主目录下；顶替会让开发者自己的 `~/.claude/CLAUDE.md` 进请求 |
 
 ## 2 契约
 
@@ -95,6 +100,11 @@ Role: topic（S-3 方案，2026-10-16）。上位：[README](../README.md) §1 �
 
 所以 P-4 定为：`managedSettings` 只放 `strictKnownMarketplaces: []`。
 
+### 4.4 放开之后（2026-10-16，假网关）
+
+- 仓库 `.claude/settings.json` 的 `permissions.defaultMode`（试了 `bypassPermissions`、`acceptEdits`）盖不过宿主启动时给的模式：`mode-manual` 在两种仓库里都照样出卡。仓库换不了会话的起始档。
+- 信任记在应用私有配置目录的 `.claude.json`（该工作目录一项 `hasTrustDialogAccepted: true`）；宿主每次启动都声明，不依赖这份记录。
+
 ## 5 实现记录
 
 ### 5.1 key 隔离（2026-10-16，先于项目设置单独提交）
@@ -104,3 +114,35 @@ Role: topic（S-3 方案，2026-10-16）。上位：[README](../README.md) §1 �
 - `cliEnvironment.ts`：`NO_PROXY`（两种拼写）补回环；flag 层可钉会话令牌。
 - Main：`openClaudeSdkTransport` 去掉 key 的环境变量；`ClaudeSdkProcessTransport` 起进程后先发 `host.secret`。
 - 验证：代理 8 条、CLI 环境 22 条、`buildHostConfig` 3 条、传输 1 条（真子进程：第一条消息是密钥、环境里没有 key）单测；变异检查：把真 key 交给 CLI 时 `buildHostConfig` 的用例失败。探针 `keyiso`（Bash 的 `env`、PowerShell 的环境、配置目录、宿主 stderr 都没有 key，网关照样收到 key）与原有全部场景通过。探针本身对"CLI 进程初始环境里有没有 key"看不到（flag 层的令牌钉值会盖住子进程看到的值），这一项由 `buildHostConfig` 的单测守。
+
+### 5.2 项目设置（2026-10-16）
+
+- 宿主 `sdkSessionRuntime.ts`：
+  - `settingSources` 由共享规则 `resolveSettingSources` 按信任收窄（`launchSettingSources`，P-1）；绑定到主目录本身的会话按临时会话开（`isUserHomeDir`，P-10）。
+  - `managedSettings` 只放 `strictKnownMarketplaces: []`（P-2、P-4）；删去 `trustRepoPolicy` 与实验开关 `AICLIENT_CLAUDE_SDK_REPO_POLICY`。
+  - 绑定会话声明 `workspaceTrust`（P-3）。
+  - flag 层 `claudeMdExcludes` 由 `userClaudeDirExcludes` 算（P-5、P-7、P-11）。
+  - 进程内 PreToolUse 回调改名 `planModeGuard`，在 S-2 A-20 之外加上 P-9。
+- `hostConfig.ts`、`host.ts`：探针专用的 `AICLIENT_CLAUDE_SDK_HOME`（追加排除，P-11），头注释列出。
+- Main：`AICLIENT_CLAUDE_SDK_SETTING_SOURCES` 缺省改为 `project,local`。
+- 假网关：`CC-ECHO` 回显请求的系统提示与用户消息里的 `CANARY-…` 词。
+- 探针：`projcfg` 11 条（指令文件、项目与本机 allow 规则、无规则仍出卡、计划模式 P-9、hook 跑且只见令牌、仓库禁用跳过权限确认、重启宿主后市场与插件不拉不装）；`projcfg-home` 4 条（替身主目录，Windows 上 cwd 的盘符大小写翻转；另用带括号的主目录名跑一遍）；`projcfg-scratch` 9 条。
+- 单测：S-3 一组 8 条（Windows 跑 7 条，非 Windows 的拼写用例在 Linux 上跑）、计划模式回调 1 条、CLI 启动 1 条、`buildHostConfig` 1 条。
+- 变异检查：
+  - 单测 11 处，各自至少一条用例失败：去掉 glob 转义、去掉按祖先目录的排除、不解析主目录或祖先目录、不折叠大小写、去掉主目录守卫、替身顶替真主目录、不按信任收窄来源、总是或从不声明信任、信任声明给错目录、`managedSettings` 加回锁。
+  - 探针 6 处，各自有检查失败：去掉市场封锁（同一次运行内的第二次启动即失败）、去掉 glob 转义、去掉按祖先目录的排除、不按信任收窄来源、不声明信任、计划模式回调不管命令。
+- 回归：三套 tsc；原有探针 flow 35、keyiso 与各档 33、mode-plan-refused 3、errors 与 repoenv 33 全过；全量 vitest 的失败文件与基线一致（`chatShiki` 一次 5 秒超时，单独重跑 23 条全过）。
+- 实测补记见 §4.4。
+
+### 5.3 审查（2026-10-16）
+
+三个维度（宿主正确性与安全、测试与探针、设计符合度），共 19 条发现，每条由独立复核员尝试推翻。确认或采纳的都已修：
+
+1. 计划模式里，仓库 allow 规则（或仓库 hook 的 allow）放行的命令直接执行，不经宿主的计划模式拒绝：P-9。
+2. 绑定到主目录本身的会话，会把用户自己的 `~/.claude/settings*.json` 当项目设置读：P-10。
+3. 主目录名里的 glob 语法字符（Windows 用户名可带括号）让排除失效：P-7 的转义。
+4. 探针的"什么都没读"检查在回显回合失败、或网关不认 `CC-ECHO` 时会空过：先断言回显到了。
+5. 单测的 cwd 与配置目录是同一个目录，查不出两者用混：分开。
+6. 采纳但复核认为不算缺陷的：市场检查改为一次运行内重启宿主（P-8）、替身主目录改为追加（P-11）、经链接到达主目录的写法（P-7）、宿主头注释、链接用例在 macOS 上的临时目录。
+
+被推翻的：IT 下发的策略层会丢掉 `managedSettings`（§4.3 已记，转入 README §10.2）；`CC-ECHO` 会数到恢复会话里的旧暗号（探针不这么用）；探针夹具会覆盖真仓库的文件（文档要求空工作区）；界面的档位说明没提规则（与 S-2 的"本会话允许"同理，说明写默认行为）。

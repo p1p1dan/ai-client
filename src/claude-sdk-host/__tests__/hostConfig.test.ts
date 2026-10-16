@@ -39,4 +39,19 @@ describe('buildHostConfig', () => {
   it('redacts both the key and the token', () => {
     expect(config.secrets).toEqual([KEY, TOKEN]);
   });
+
+  it('S-3: keeps the setting sources, and a home directory only when one is given', () => {
+    expect(config.settingSources).toEqual(['project']);
+    expect(config).not.toHaveProperty('homeDir');
+    const withHome = buildHostConfig({
+      inherited: {},
+      configDir: 'D:stateclaude-sdk-home',
+      settingSources: ['project', 'local'],
+      apiKey: KEY,
+      homeDir: 'D:fakehome',
+      proxy: { url: 'http://127.0.0.1:50123', token: TOKEN },
+    }).config;
+    expect(withHome.settingSources).toEqual(['project', 'local']);
+    expect(withHome.homeDir).toBe('D:fakehome');
+  });
 });

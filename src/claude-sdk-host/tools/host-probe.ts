@@ -48,6 +48,18 @@
  * child's environment and every file under the config dir hold the session token at most,
  * never the key, while the gateway still gets the key (`CC-ENV`).
  *
+ * Route B S-3 (P-1..P-5), each in its own workspace: `projcfg` (the project's CLAUDE.md,
+ * `.claude/CLAUDE.md`, `.claude/rules` and CLAUDE.local.md reach the model; the project's
+ * allow rule (`.claude/settings.json`, applied only in a trusted workspace) and the local one
+ * skip the card; its PreToolUse hook runs and sees the session token; its
+ * `disableBypassPermissionsMode` refuses Bypass permissions; the plugin marketplace it
+ * declares is neither fetched nor loaded on the host's second start, as the CLI fetches from
+ * the second start of a trusted workspace on: the scenario restarts the host itself), `projcfg-home` (the
+ * workspace's parent, whose name must contain `fakehome`, stands in for the home directory:
+ * its CLAUDE.md is read, its `.claude` is not; on Windows the cwd is given with the drive
+ * letter's case flipped) and `projcfg-scratch` (an unbound chat: none of it applies).
+ * PROBE_SETTING_SOURCES overrides the host's setting sources (default `project,local`).
+ *
  * The key is a fake one unless PROBE_API_KEY is set in the shell; nothing here reads a
  * stored credential.
  */
@@ -171,14 +183,13 @@ function startHost(): void {
       AICLIENT_CLAUDE_SDK_GENERATION: String(generation),
       AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
       AICLIENT_CLAUDE_SDK_BASE_URL: gatewayUrl,
-      AICLIENT_CLAUDE_SDK_SETTING_SOURCES: 'project',
+      AICLIENT_CLAUDE_SDK_SETTING_SOURCES: process.env.PROBE_SETTING_SOURCES ?? 'project,local',
+      // S-3 P-5: the fake home directory (`projcfg-home`).
+      ...(scenarios.includes('projcfg-home') ? { AICLIENT_CLAUDE_SDK_HOME: fakeHome() } : {}),
       ...(process.env.AICLIENT_CLAUDE_SDK_RG_DIR
         ? { AICLIENT_CLAUDE_SDK_RG_DIR: process.env.AICLIENT_CLAUDE_SDK_RG_DIR }
         : {}),
       ...(process.env.AICLIENT_CLAUDE_SDK_TRACE ? { AICLIENT_CLAUDE_SDK_TRACE: '1' } : {}),
-      ...(process.env.AICLIENT_CLAUDE_SDK_REPO_POLICY
-        ? { AICLIENT_CLAUDE_SDK_REPO_POLICY: process.env.AICLIENT_CLAUDE_SDK_REPO_POLICY }
-        : {}),
       ...(process.env.AICLIENT_CLAUDE_SDK_CLI
         ? { AICLIENT_CLAUDE_SDK_CLI: process.env.AICLIENT_CLAUDE_SDK_CLI }
         : {}),
@@ -569,6 +580,213 @@ function removeRepoSettings(): void {
   wroteRepoSettings = false;
 }
 
+/** S-3: the scenarios that bring their own project fixture (`writeProjectFixture`). */
+const PROJCFG_SCENARIOS = ['projcfg', 'projcfg-home', 'projcfg-scratch'];
+/** S-3: the canaries each instruction file carries (`CC-ECHO` names the ones sent). */
+const CANARIES = {
+  projectMd: 'CANARY-PROJECT-MD',
+  projectDotClaude: 'CANARY-PROJECT-DOTCLAUDE',
+  projectRule: 'CANARY-PROJECT-RULE',
+  localMd: 'CANARY-LOCAL-MD',
+  homeMd: 'CANARY-HOME-MD',
+  homeDotClaude: 'CANARY-HOME-DOTCLAUDE',
+  homeRule: 'CANARY-HOME-RULE',
+};
+const PROJECT_CANARIES = [
+  CANARIES.projectMd,
+  CANARIES.projectDotClaude,
+  CANARIES.projectRule,
+  CANARIES.localMd,
+];
+/** Where the project's PreToolUse hook and the marketplace's plugin hook leave their marks. */
+const hookMarker = join(workspace, 'projcfg-hook.jsonl');
+const pluginMarker = join(workspace, 'projcfg-plugin.txt');
+const MARKETPLACE = 'probe-market';
+
+/** `projcfg-home`: the workspace's parent, refused unless it is plainly a stand-in. */
+function fakeHome(): string {
+  const home = dirname(workspace);
+  if (!basename(home).includes('fakehome')) {
+    throw new Error(`projcfg-home: the workspace's parent (${home}) must be named *fakehome*`);
+  }
+  return home;
+}
+
+/** A forward-slash path for a hook command line (Git Bash and cmd both take it). */
+const slashed = (file: string) => file.replace(/\\/g, '/');
+
+function writeText(file: string, text: string): void {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, text);
+}
+
+/**
+ * S-3: the project the `projcfg` scenarios open, written before the host starts (the CLI
+ * reads it once). Rewritten on every run, so a second run with the same PROBE_CONFIG_DIR
+ * (`projcfg`'s marketplace check) finds it as the first left it.
+ */
+function writeProjectFixture(): void {
+  if (existsSync(repoSettingsFile) && !existsSync(join(workspace, '.claude', 'probe-hook.js'))) {
+    throw new Error(`projcfg: ${repoSettingsFile} is not the probe's; use a fresh workspace`);
+  }
+  rmSync(hookMarker, { force: true });
+  rmSync(pluginMarker, { force: true });
+  writeText(join(workspace, 'CLAUDE.md'), `Project note: ${CANARIES.projectMd}.\n`);
+  writeText(
+    join(workspace, '.claude', 'CLAUDE.md'),
+    `Project note: ${CANARIES.projectDotClaude}.\n`
+  );
+  writeText(
+    join(workspace, '.claude', 'rules', 'probe.md'),
+    `Project rule: ${CANARIES.projectRule}.\n`
+  );
+  writeText(join(workspace, 'CLAUDE.local.md'), `Private note: ${CANARIES.localMd}.\n`);
+  // The hook records which tool it saw and the key in its environment, then allows nothing
+  // and refuses nothing (no output).
+  const hookScript = join(workspace, '.claude', 'probe-hook.js');
+  writeText(
+    hookScript,
+    [
+      "const fs = require('node:fs');",
+      "let input = '';",
+      "process.stdin.on('data', (chunk) => { input += chunk; });",
+      "process.stdin.on('end', () => {",
+      '  let tool = null;',
+      '  try { tool = JSON.parse(input).tool_name ?? null; } catch {}',
+      `  fs.appendFileSync(${JSON.stringify(hookMarker)}, JSON.stringify({ tool, key: process.env.ANTHROPIC_API_KEY ?? null }) + '\\n');`,
+      '});',
+      '',
+    ].join('\n')
+  );
+  // A directory-source marketplace whose plugin's SessionStart hook leaves a mark (§4.3).
+  const market = join(workspace, '.probe-market');
+  writeText(
+    join(market, '.claude-plugin', 'marketplace.json'),
+    `${JSON.stringify(
+      {
+        name: MARKETPLACE,
+        owner: { name: 'probe' },
+        plugins: [{ name: 'probe-plugin', source: './probe-plugin', description: 'probe' }],
+      },
+      null,
+      2
+    )}\n`
+  );
+  writeText(
+    join(market, 'probe-plugin', '.claude-plugin', 'plugin.json'),
+    `${JSON.stringify({ name: 'probe-plugin', version: '0.0.1', description: 'probe' })}\n`
+  );
+  const pluginHook = join(market, 'probe-plugin', 'hook.js');
+  writeText(
+    pluginHook,
+    `require('node:fs').writeFileSync(${JSON.stringify(pluginMarker)}, 'loaded\\n');\n`
+  );
+  writeText(
+    join(market, 'probe-plugin', 'hooks', 'hooks.json'),
+    `${JSON.stringify(
+      {
+        hooks: {
+          SessionStart: [
+            { hooks: [{ type: 'command', command: `node "${slashed(pluginHook)}"` }] },
+          ],
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+  writeText(
+    repoSettingsFile,
+    `${JSON.stringify(
+      {
+        permissions: {
+          allow: ['Bash(touch:*)', 'Edit(projcfg-rule-*)'],
+          disableBypassPermissionsMode: 'disable',
+        },
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: 'Bash',
+              hooks: [{ type: 'command', command: `node "${slashed(hookScript)}"` }],
+            },
+          ],
+        },
+        extraKnownMarketplaces: {
+          [MARKETPLACE]: { source: { source: 'directory', path: market } },
+        },
+        enabledPlugins: { [`probe-plugin@${MARKETPLACE}`]: true },
+      },
+      null,
+      2
+    )}\n`
+  );
+  writeText(
+    join(workspace, '.claude', 'settings.local.json'),
+    `${JSON.stringify({ permissions: { allow: ['Bash(mkdir:*)'] } }, null, 2)}\n`
+  );
+  if (scenarios.includes('projcfg-home')) {
+    const home = fakeHome();
+    writeText(join(home, 'CLAUDE.md'), `Home note: ${CANARIES.homeMd}.\n`);
+    writeText(join(home, '.claude', 'CLAUDE.md'), `Home note: ${CANARIES.homeDotClaude}.\n`);
+    writeText(join(home, '.claude', 'rules', 'home.md'), `Home rule: ${CANARIES.homeRule}.\n`);
+  }
+}
+
+/** `projcfg-home` on Windows: the cwd as the user might have typed it, drive letter flipped. */
+function bootstrapCwd(): string {
+  if (!scenarios.includes('projcfg-home') || process.platform !== 'win32') return workspace;
+  const drive = /^([A-Za-z]):/.exec(workspace)?.[1];
+  if (!drive) return workspace;
+  const flipped = drive === drive.toUpperCase() ? drive.toLowerCase() : drive.toUpperCase();
+  return `${flipped}${workspace.slice(1)}`;
+}
+
+/**
+ * S-3: one `CC-ECHO` turn and the canaries the gateway named; a turn that did not end
+ * normally, or a gateway that does not know the marker, fails the run (no vacuous `none`).
+ */
+async function echoTurn(scenario: string): Promise<string[]> {
+  await send('CC-ECHO which instructions');
+  const end = await waitFor(terminal, `${scenario} echo turn end`);
+  const listed = /CC-ECHO canaries=(\S+)/.exec(assistantText())?.[1];
+  check(
+    scenario,
+    'the echo turn completed at a gateway that knows CC-ECHO',
+    end.type === 'session.completed' && listed !== undefined
+  );
+  return listed === undefined || listed === 'none' ? [] : listed.split(',');
+}
+
+/** The lines the project's PreToolUse hook wrote. */
+function hookLines(): Array<{ tool: string | null; key: string | null }> {
+  if (!existsSync(hookMarker)) return [];
+  return readFileSync(hookMarker, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as { tool: string | null; key: string | null });
+}
+
+/** Files under the config dir that name the probe's marketplace (fetched or registered). */
+function marketplaceTraces(): string[] {
+  const found: string[] = [];
+  const walk = (dir: string) => {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.name.includes(MARKETPLACE)) found.push(full);
+      if (entry.isDirectory()) walk(full);
+      else if (
+        entry.name.endsWith('.json') &&
+        dirname(full) !== configDir &&
+        readFileSync(full, 'utf8').includes(MARKETPLACE)
+      )
+        found.push(full);
+    }
+  };
+  walk(join(configDir, 'plugins'));
+  return found;
+}
+
 /** `errors`: status, the code `session.failed` must carry, and an optional gateway message. */
 const ERROR_CASES: Array<{ status: number; code: string; message?: string; echoKey?: boolean }> = [
   { status: 401, code: 'PROVIDER_UNAUTHORIZED' },
@@ -593,13 +811,14 @@ const ERROR_CASES: Array<{ status: number; code: string; message?: string; echoK
   },
 ];
 
-async function main(): Promise<void> {
-  if (scenarios.includes('repoenv') || scenarios.includes('mode-plan-refused')) writeRepoSettings();
-  startHost();
+/** `worker.bootstrap` for the probe's chat, on the host just started. */
+async function bootstrap(): Promise<void> {
   const t0 = Date.now();
   const boot = await request<Record<string, unknown>>('worker.bootstrap', {
     logicalSessionId,
-    cwd: workspace,
+    cwd: bootstrapCwd(),
+    // S-3: a chat not bound to a project (Main sends this for a scratch chat).
+    ...(scenarios.includes('projcfg-scratch') ? { unbound: true } : {}),
     model: 'probe-gw/claude-opus-5-5',
     ...(process.env.PROBE_SESSION_FILE ? { sessionFile: process.env.PROBE_SESSION_FILE } : {}),
   });
@@ -615,6 +834,34 @@ async function main(): Promise<void> {
   console.log(
     `bootstrap ${Date.now() - t0} ms: ${JSON.stringify({ ...boot, initialHistory: boot.initialHistory ? `(page of ${(boot.initialHistory as { page: { messages: unknown[] } }).page.messages.length})` : undefined })}`
   );
+}
+
+/** S-3: dispose the host, wait for it to exit, and start and bootstrap a new one. */
+async function restartHost(): Promise<void> {
+  const previous = child;
+  const exited = new Promise<void>((resolve) => {
+    if (previous.exitCode !== null || previous.signalCode !== null) resolve();
+    else previous.once('exit', () => resolve());
+  });
+  await request('worker.dispose', { reason: 'slot-dispose' });
+  await exited;
+  hostGone = undefined;
+  startHost();
+  await bootstrap();
+}
+
+async function main(): Promise<void> {
+  const projcfg = scenarios.filter((s) => PROJCFG_SCENARIOS.includes(s));
+  if (projcfg.length > 0) {
+    if (scenarios.length !== 1) {
+      throw new Error(`${projcfg.join(',')}: run on its own, in its own workspace`);
+    }
+    writeProjectFixture();
+  } else if (scenarios.includes('repoenv') || scenarios.includes('mode-plan-refused')) {
+    writeRepoSettings();
+  }
+  startHost();
+  await bootstrap();
 
   for (const scenario of scenarios) {
     switch (scenario) {
@@ -899,6 +1146,158 @@ async function main(): Promise<void> {
           'keyiso',
           "the host's stderr never quotes the key",
           hostStderr.every((line) => !line.includes(apiKey))
+        );
+        break;
+      }
+      case 'projcfg':
+      case 'projcfg-scratch': {
+        const bound = scenario === 'projcfg';
+        const canaries = await echoTurn(scenario);
+        show(`${scenario} echo`);
+        const touched = modePath('projcfg-touched.txt');
+        const made = modePath('projcfg-made');
+        const ruled = modePath('projcfg-rule-manual.txt');
+        const allowed = await runCalls(
+          [
+            {
+              name: 'Bash',
+              input: { command: 'touch projcfg-touched.txt', description: 'Create a file' },
+            },
+            { name: 'Bash', input: { command: 'mkdir projcfg-made', description: 'Make a dir' } },
+            { name: 'Write', input: { file_path: ruled, content: 'x' } },
+          ],
+          () => 'deny'
+        );
+        show(`${scenario} rules`);
+        const written = modePath('projcfg-written.txt');
+        const asked = await runCalls(
+          [{ name: 'Write', input: { file_path: written, content: 'x' } }],
+          () => 'deny'
+        );
+        // P-9: in plan mode an allow rule runs no change: the command and the write the
+        // project's rules allow are refused without a card; exploration still runs.
+        await setPosture('plan', 'ask');
+        const planTouched = modePath('projcfg-plan.txt');
+        const planWritten = modePath('projcfg-rule-plan.txt');
+        const planned = await runCalls(
+          [
+            {
+              name: 'Bash',
+              input: { command: 'touch projcfg-plan.txt', description: 'Create a file' },
+            },
+            { name: 'Bash', input: { command: 'ls', description: 'List files' } },
+            { name: 'Write', input: { file_path: planWritten, content: 'x' } },
+          ],
+          () => 'deny'
+        );
+        const planOk = toolRuns().okNames;
+        await setPosture('agent', 'ask');
+        let refusal = '';
+        await setPosture('agent', 'bypass').catch((error: Error) => {
+          refusal = error.message;
+        });
+        await setPosture('agent', 'ask').catch(() => undefined);
+        const hooks = hookLines();
+        // P-4: a trusted workspace's marketplaces are fetched from the CLI's second start on.
+        await restartHost();
+        await send('CC-TEXT second start');
+        const second = await waitFor(terminal, `${scenario} second start turn end`);
+        const traces = marketplaceTraces();
+        console.log(`  echoed: ${canaries.join(',') || 'none'}`);
+        console.log(`  hook lines: ${hooks.length}; bypass refusal: ${refusal || '(none)'}`);
+        console.log(`  marketplace traces: ${traces.join(', ') || 'none'}`);
+        if (bound) {
+          check(
+            scenario,
+            "the project's CLAUDE.md, .claude/CLAUDE.md, rules and CLAUDE.local.md reach the model",
+            PROJECT_CANARIES.every((c) => canaries.includes(c))
+          );
+          check(
+            scenario,
+            'the project allow rules (trusted workspace) and the local one skip the card',
+            allowed.end.type === 'session.completed' &&
+              allowed.cards.length === 0 &&
+              existsSync(touched) &&
+              existsSync(made) &&
+              existsSync(ruled)
+          );
+          check(
+            scenario,
+            'a call no rule allows still asks',
+            asked.cards.join() === 'Write' && !existsSync(written)
+          );
+          check(
+            scenario,
+            'plan mode: what the rules allow is refused, exploration runs',
+            planned.end.type === 'session.completed' &&
+              planned.cards.length === 0 &&
+              !existsSync(planTouched) &&
+              !existsSync(planWritten) &&
+              planOk.join() === 'Bash'
+          );
+          check(
+            scenario,
+            "the project's PreToolUse hook ran for each Bash call (four)",
+            hooks.filter((line) => line.tool === 'Bash').length === 4
+          );
+          check(
+            scenario,
+            'the hook saw the session token, never the key',
+            hooks.length > 0 &&
+              hooks.every(
+                (line) => line.key?.startsWith('sk-pilab-session-') && line.key !== apiKey
+              )
+          );
+          check(
+            scenario,
+            "the project's disableBypassPermissionsMode refuses Bypass permissions",
+            refusal.includes('WORKER_PERMISSION_MODE_REFUSED') &&
+              refusal.includes('bypass_disabled')
+          );
+        } else {
+          check(scenario, 'no instruction file reaches the model', canaries.length === 0);
+          check(
+            scenario,
+            'no project or local allow rule: every call asks',
+            allowed.cards.join() === 'Bash,Bash,Write' &&
+              !existsSync(touched) &&
+              !existsSync(made) &&
+              !existsSync(ruled)
+          );
+          check(
+            scenario,
+            'plan mode: with no rule, the changes are refused, exploration runs',
+            planned.cards.length === 0 &&
+              !existsSync(planTouched) &&
+              !existsSync(planWritten) &&
+              planOk.join() === 'Bash'
+          );
+          check(scenario, "the project's hook never runs", hooks.length === 0);
+          check(scenario, "the project's settings refuse nothing", refusal === '');
+        }
+        check(scenario, 'the host started again', second.type === 'session.completed');
+        check(scenario, 'the declared plugin was not loaded', !existsSync(pluginMarker));
+        check(scenario, 'the declared marketplace was not fetched', traces.length === 0);
+        break;
+      }
+      case 'projcfg-home': {
+        const canaries = await echoTurn('projcfg-home');
+        show('projcfg-home');
+        console.log(`  cwd: ${bootstrapCwd()}; echoed: ${canaries.join(',') || 'none'}`);
+        check(
+          'projcfg-home',
+          "the project's instruction files reach the model",
+          PROJECT_CANARIES.every((c) => canaries.includes(c))
+        );
+        check(
+          'projcfg-home',
+          "an ancestor's CLAUDE.md is read (official behaviour)",
+          canaries.includes(CANARIES.homeMd)
+        );
+        check(
+          'projcfg-home',
+          "the home directory's .claude (CLAUDE.md, rules) is not",
+          !canaries.includes(CANARIES.homeDotClaude) && !canaries.includes(CANARIES.homeRule)
         );
         break;
       }

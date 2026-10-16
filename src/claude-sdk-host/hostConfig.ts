@@ -17,6 +17,8 @@ export interface HostConfigInput {
   ripgrepDir?: string;
   /** The gateway key, from Main's first IPC message. */
   apiKey: string;
+  /** Probes only: a stand-in home directory, excluded besides `os.homedir()` (S-3 P-11). */
+  homeDir?: string;
   proxy: { url: string; token: string };
 }
 
@@ -37,7 +39,7 @@ export function buildHostConfig(input: HostConfigInput): {
       configDir: input.configDir,
       settingSources: input.settingSources,
       cliPath: input.inherited.AICLIENT_CLAUDE_SDK_CLI?.trim() || undefined,
-      trustRepoPolicy: input.inherited.AICLIENT_CLAUDE_SDK_REPO_POLICY === 'trust',
+      ...(input.homeDir ? { homeDir: input.homeDir } : {}),
       ...(input.gitBashPath ? { gitBashPath: input.gitBashPath } : {}),
       cliEnv: buildCliEnvironment({
         inherited: input.inherited,

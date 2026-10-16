@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import type { ResolvePath } from '../sdkSessionRuntime.ts';
 
 // No CLI is started: `query()` is replaced by a fake whose message stream the test feeds,
 // so the runtime's real pump and ingest run on SDK messages shaped as 2.1.300 sends them.
@@ -64,7 +65,8 @@ vi.mock('../processTree.ts', () => ({
   reap: vi.fn(() => []),
 }));
 
-const { ClaudeSdkSessionRuntime } = await import('../sdkSessionRuntime.ts');
+const { ClaudeSdkSessionRuntime, isUserHomeDir, launchSettingSources, userClaudeDirExcludes } =
+  await import('../sdkSessionRuntime.ts');
 
 const KEY = 'sk-fake-runtime-test-key';
 const PINS = { ANTHROPIC_BASE_URL: 'http://127.0.0.1:18950', DISABLE_AUTOUPDATER: '1' };
@@ -82,21 +84,30 @@ afterEach(() => {
   rmSync(configDir, { recursive: true, force: true });
 });
 
-function runtime(model = 'gw/claude-opus-5-5') {
+function runtime(
+  model = 'gw/claude-opus-5-5',
+  launch: {
+    cwd?: string;
+    projectTrusted?: boolean;
+    settingSources?: Array<'user' | 'project' | 'local'>;
+    homeDir?: string;
+  } = {}
+) {
   return new ClaudeSdkSessionRuntime(
     {
       logicalSessionId: 'chat-1',
-      cwd: configDir,
+      cwd: launch.cwd ?? configDir,
       model,
-      projectTrusted: true,
+      projectTrusted: launch.projectTrusted ?? true,
       emit: (event) => events.push(event),
     },
     {
       configDir,
-      settingSources: ['project'],
+      settingSources: launch.settingSources ?? ['project'],
       cliEnv: { ANTHROPIC_API_KEY: KEY, ANTHROPIC_BASE_URL: PINS.ANTHROPIC_BASE_URL },
       settingsEnv: PINS,
       secrets: [KEY],
+      ...(launch.homeDir ? { homeDir: launch.homeDir } : {}),
     },
     () => {}
   );
@@ -133,7 +144,12 @@ describe('the CLI launch (decision 6)', () => {
     const { rt, q } = await started();
     const settings = q.options.settings as { attribution: boolean; env: Record<string, string> };
     // S-2 A-13: plan mode never hands calls to Auto's classifier.
-    expect(settings).toEqual({ attribution: false, env: PINS, useAutoModeDuringPlan: false });
+    expect(settings).toEqual({
+      attribution: false,
+      env: PINS,
+      useAutoModeDuringPlan: false,
+      claudeMdExcludes: userClaudeDirExcludes(configDir, [homedir()]),
+    });
     expect(JSON.stringify(settings)).not.toContain(KEY);
     // The key travels in the child's environment only.
     expect((q.options.env as Record<string, string>).ANTHROPIC_API_KEY).toBe(KEY);
@@ -153,6 +169,160 @@ describe('the CLI launch (decision 6)', () => {
     for (const [patch] of q.applyFlagSettings.mock.calls) expect(patch).not.toHaveProperty('env');
     q.end();
     await rt.dispose();
+  });
+});
+
+describe('project settings (S-3 P-1..P-7)', () => {
+  /** A project directory apart from the config dir, so a mix-up of the two shows. */
+  const project = () => {
+    const dir = join(configDir, 'project');
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  };
+  /** No links anywhere: each path resolves to itself. */
+  const asSpelled: ResolvePath = (target) => target;
+  const slashed = (dir: string) => dir.replace(/\\/g, '/');
+
+  it('a bound chat reads the project and local settings, as a trusted workspace', async () => {
+    const cwd = project();
+    const rt = runtime(undefined, { cwd, settingSources: ['project', 'local'] });
+    await rt.bootstrap();
+    const { options } = sdk.queries[0];
+    expect(options.settingSources).toEqual(['project', 'local']);
+    expect(options.workspaceTrust).toEqual({ accepted: true, directory: cwd });
+    // P-2, P-4: the repository's hooks and allow rules are not locked; marketplaces are.
+    expect(options.managedSettings).toEqual({ strictKnownMarketplaces: [] });
+    await rt.dispose();
+  });
+
+  it('a scratch chat reads neither and is not declared trusted', async () => {
+    const rt = runtime(undefined, {
+      cwd: project(),
+      settingSources: ['project', 'local'],
+      projectTrusted: false,
+    });
+    await rt.bootstrap();
+    const { options } = sdk.queries[0];
+    expect(options.settingSources).toEqual([]);
+    expect(options).not.toHaveProperty('workspaceTrust');
+    expect(options.managedSettings).toEqual({ strictKnownMarketplaces: [] });
+    await rt.dispose();
+  });
+
+  it('a chat bound to the home directory itself is opened as a scratch chat', async () => {
+    const home = project();
+    const rt = runtime(undefined, {
+      cwd: home,
+      settingSources: ['project', 'local'],
+      homeDir: home,
+    });
+    await rt.bootstrap();
+    const { options } = sdk.queries[0];
+    expect(options.settingSources).toEqual([]);
+    expect(options).not.toHaveProperty('workspaceTrust');
+    await rt.dispose();
+  });
+
+  it("excludes both the user's and a stand-in home directory's .claude", async () => {
+    const cwd = project();
+    const home = join(configDir, 'fake-home');
+    const rt = runtime(undefined, { cwd, homeDir: home });
+    await rt.bootstrap();
+    const settings = sdk.queries[0].options.settings as { claudeMdExcludes: string[] };
+    expect(settings.claudeMdExcludes).toContain(`${slashed(home)}/.claude/**`);
+    expect(settings.claudeMdExcludes).toEqual(userClaudeDirExcludes(cwd, [homedir(), home]));
+    await rt.dispose();
+  });
+
+  it('a home directory reached through a link is excluded as the cwd spells it', () => {
+    // Resolved first, so the only link in these paths is the one made here (macOS: /var).
+    const base = realpathSync(configDir);
+    const real = join(base, 'real-home');
+    const link = join(base, 'linked-home');
+    mkdirSync(join(real, 'repo'), { recursive: true });
+    // A junction needs no privilege on Windows; the type is ignored elsewhere.
+    symlinkSync(real, link, 'junction');
+    // HOME is the link, the project is opened by its real path.
+    expect(userClaudeDirExcludes(join(real, 'repo'), [link])).toEqual([
+      `${slashed(link)}/.claude/**`,
+      `${slashed(real)}/.claude/**`,
+    ]);
+    // HOME is the real path, the project is opened through the link.
+    expect(userClaudeDirExcludes(join(link, 'repo'), [real])).toEqual([
+      `${slashed(real)}/.claude/**`,
+      `${slashed(link)}/.claude/**`,
+    ]);
+    expect(isUserHomeDir(link, [real])).toBe(true);
+    expect(isUserHomeDir(join(link, 'repo'), [real])).toBe(false);
+    expect(isUserHomeDir(join(base, 'missing'), [real])).toBe(false);
+  });
+
+  it('launchSettingSources: the configured sources, project and local only when trusted', () => {
+    expect(launchSettingSources(['project', 'local'], true)).toEqual(['project', 'local']);
+    expect(launchSettingSources(['project', 'local'], false)).toEqual([]);
+    expect(launchSettingSources(['project', 'local'], undefined)).toEqual([]);
+    expect(launchSettingSources(['user', 'project'], false)).toEqual(['user']);
+    expect(launchSettingSources([], true)).toEqual([]);
+  });
+
+  it.runIf(process.platform === 'win32')(
+    "userClaudeDirExcludes on Windows: the cwd's spelling, forward slashes",
+    () => {
+      const home = 'C:\\Users\\Ann';
+      // Measured: the CLI matches case-sensitively against the cwd's own spelling.
+      expect(userClaudeDirExcludes('c:\\Users\\Ann\\repo', [home], asSpelled)).toEqual([
+        'C:/Users/Ann/.claude/**',
+        'c:/Users/Ann/.claude/**',
+      ]);
+      expect(userClaudeDirExcludes('C:/USERS/ann/repo', ['C:\\Users\\Ann\\'], asSpelled)).toEqual([
+        'C:/Users/Ann/.claude/**',
+        'C:/USERS/ann/.claude/**',
+      ]);
+      expect(userClaudeDirExcludes(home, [home], asSpelled)).toEqual(['C:/Users/Ann/.claude/**']);
+      // Not under the home directory (a sibling with the same prefix included).
+      expect(userClaudeDirExcludes('c:\\users\\anna\\repo', [home], asSpelled)).toEqual([
+        'C:/Users/Ann/.claude/**',
+      ]);
+      expect(userClaudeDirExcludes('D:\\work', [home], asSpelled)).toEqual([
+        'C:/Users/Ann/.claude/**',
+      ]);
+      // A substituted drive for the home directory (`subst H: C:\Users\Ann`).
+      const subst: ResolvePath = (target) =>
+        /^h:/i.test(target) ? `${home}${target.slice(2).replace(/\\$/, '')}` : target;
+      expect(userClaudeDirExcludes('H:\\repo', [home], subst)).toEqual([
+        'C:/Users/Ann/.claude/**',
+        'H:/.claude/**',
+      ]);
+      // Glob syntax in a folder name matches only itself.
+      expect(
+        userClaudeDirExcludes('C:\\Users\\Jane (Work)\\repo', ['C:\\Users\\Jane (Work)'], asSpelled)
+      ).toEqual(['C:/Users/Jane [(]Work[)]/.claude/**']);
+      expect(isUserHomeDir('c:\\users\\ann\\', [home], asSpelled)).toBe(true);
+      expect(isUserHomeDir('C:\\Users\\Ann\\repo', [home], asSpelled)).toBe(false);
+    }
+  );
+
+  it.runIf(process.platform !== 'win32')('userClaudeDirExcludes elsewhere: as spelled', () => {
+    expect(userClaudeDirExcludes('/home/ann/repo', ['/home/ann/'], asSpelled)).toEqual([
+      '/home/ann/.claude/**',
+    ]);
+    expect(userClaudeDirExcludes('/home/anna/repo', ['/home/ann'], asSpelled)).toEqual([
+      '/home/ann/.claude/**',
+    ]);
+    // Case matters here: another directory.
+    expect(userClaudeDirExcludes('/Home/ann/repo', ['/home/ann'], asSpelled)).toEqual([
+      '/home/ann/.claude/**',
+    ]);
+    // `/home` a link to `/var/home` (ostree systems), HOME the real path.
+    const varHome: ResolvePath = (target) => target.replace(/^\/home(?=\/|$)/, '/var/home');
+    expect(userClaudeDirExcludes('/home/ann/repo', ['/var/home/ann'], varHome)).toEqual([
+      '/var/home/ann/.claude/**',
+      '/home/ann/.claude/**',
+    ]);
+    expect(userClaudeDirExcludes('/home/a{b}/repo', ['/home/a{b}'], asSpelled)).toEqual([
+      '/home/a[{]b[}]/.claude/**',
+    ]);
+    expect(isUserHomeDir('/home/ann/', ['/home/ann'], asSpelled)).toBe(true);
   });
 });
 
@@ -816,13 +986,50 @@ describe('plan mode refuses changes only (S-2 A-2, review)', () => {
     expect(await call({ tool_name: 'Bash' })).toMatchObject({
       hookSpecificOutput: { permissionDecision: 'ask' },
     });
-    // The main thread, a read, a subagent already in plan mode: nothing to send back.
+    // The main thread's writes (the CLI refuses those itself), a read, a subagent
+    // already in plan mode: nothing to send back.
     expect(await call({ agent_id: undefined })).toEqual({});
     expect(await call({ tool_name: 'Read' })).toEqual({});
     expect(await call({ permission_mode: 'plan' })).toEqual({});
     // Outside plan mode the repository's declaration stands (ruling 5).
     await rt.setPermissions({ mode: 'agent', gear: 'ask' });
     expect(await call({})).toEqual({});
+    await rt.dispose();
+  });
+
+  it('S-3 P-9: in plan mode only exploration commands may pass an allow rule', async () => {
+    const { rt, q } = await startedOn({ mode: 'plan', gear: 'ask' });
+    const guard = (
+      q.options.hooks as { PreToolUse: Array<{ hooks: Array<(i: unknown) => Promise<unknown>> }> }
+    ).PreToolUse[0]?.hooks[0];
+    const shell = (command: unknown, over: Record<string, unknown> = {}) =>
+      guard?.({
+        hook_event_name: 'PreToolUse',
+        permission_mode: 'plan',
+        tool_name: 'Bash',
+        tool_input: { command },
+        ...over,
+      });
+    const sentBack = { hookSpecificOutput: { permissionDecision: 'ask' } };
+    // A project rule such as `Bash(touch:*)` would let these run: they go to the refusal.
+    expect(await shell('touch notes.txt')).toMatchObject(sentBack);
+    expect(await shell('npm run build')).toMatchObject(sentBack);
+    expect(await shell('ls && rm -rf build')).toMatchObject(sentBack);
+    expect(await shell('git status > out.txt')).toMatchObject(sentBack);
+    expect(await shell(undefined)).toMatchObject(sentBack);
+    expect(await shell('Remove-Item notes.txt', { tool_name: 'PowerShell' })).toMatchObject(
+      sentBack
+    );
+    // A subagent's commands, whatever its own mode.
+    expect(await shell('touch notes.txt', { agent_id: 'agent-1' })).toMatchObject(sentBack);
+    // Exploration is left to the CLI, as before.
+    expect(await shell('git log --oneline -5')).toEqual({});
+    expect(await shell('ls -la')).toEqual({});
+    expect(await shell('rg TODO src | head -5')).toEqual({});
+    expect(await shell('ls', { agent_id: 'agent-1', permission_mode: 'acceptEdits' })).toEqual({});
+    // Outside plan mode a rule or a hook decides (ruling 5).
+    await rt.setPermissions({ mode: 'agent', gear: 'ask' });
+    expect(await shell('touch notes.txt')).toEqual({});
     await rt.dispose();
   });
 });

@@ -16,6 +16,10 @@
  *   AICLIENT_CLAUDE_SDK_CLIENT_APP   User-Agent suffix
  *   AICLIENT_CLAUDE_SDK_RG_DIR       optional directory with an `rg` used instead of the CLI's built-in one
  *
+ * Probes only, never set by Main:
+ *   AICLIENT_CLAUDE_SDK_HOME         a stand-in home directory whose `.claude` is excluded
+ *                                    besides the user's own (S-3 P-5)
+ *
  * The gateway key is never a launch variable (route B S-3, topic
  * s3-project-config.md K-5): on Linux a process's initial environment stays
  * readable in /proc/<pid>/environ. Main sends it as the first IPC message,
@@ -92,6 +96,10 @@ function hostConfig(proxy: AuthProxy, apiKey: string): SdkHostConfig {
     ...(ripgrepDir ? { ripgrepDir } : {}),
     apiKey,
     proxy,
+    // Probes only: a stand-in home directory (S-3 P-5). Main never sets it.
+    ...(process.env.AICLIENT_CLAUDE_SDK_HOME?.trim()
+      ? { homeDir: process.env.AICLIENT_CLAUDE_SDK_HOME.trim() }
+      : {}),
   });
   log(
     `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} rg=${ripgrepDir ?? '(built-in)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'} pinned=${Object.keys(config.settingsEnv).length} proxy=${proxy.url}`
