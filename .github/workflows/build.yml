@@ -199,7 +199,9 @@ jobs:
     # from the first green run.
     # 30 -> 40 for the Claude SDK host (route B S-4): its npm ci, ~260 MiB more to
     # compress (the CLI binary) and a chat-turn smoke. Re-derive from the first green run.
-    timeout-minutes: 40
+    # 40 -> 50 for its regression set and event gate (route B S-5 R-2): about 3 minutes
+    # on a developer machine. Re-derive from the first green run.
+    timeout-minutes: 50
     # Pin to windows-2022: windows-latest 已升级到 windows-2025，仅装 VS 2026 (path \18\),
     # 而 @electron/rebuild@4.0.1 bundled node-gyp@11.5.0 的 find-visualstudio.js 白名单
     # 只到 [2019, 2022]，找不到 VS 2026 → "Could not find any Visual Studio installation".
@@ -319,6 +321,21 @@ jobs:
       - name: Verify packaged app
         run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json --claude-sdk-report-file dist/claude-sdk-host-smoke-report.json
 
+      # Route B S-5 R-2: the full probe regression set and the recorded-event gate
+      # against the installed layout (the bundled node, host.js and CLI), on the local
+      # fake gateway only. The samples were recorded on Windows: the gate blocks here.
+      - name: Claude SDK host regression set and event gate (packaged)
+        shell: pwsh
+        run: |
+          $r = Join-Path $PWD 'dist\win-unpacked\resources'
+          $node = Join-Path $r 'node-runtime\node.exe'
+          $env:AICLIENT_CLAUDE_SDK_CLI = Join-Path $r 'claude-sdk-host\node_modules\@anthropic-ai\claude-agent-sdk-win32-x64\claude.exe'
+          & $node src/claude-sdk-host/tools/probe-suite.ts --host-entry (Join-Path $r 'claude-sdk-host\host.js') --out dist/claude-sdk-probe-suite.json --logs dist/claude-sdk-probe-logs
+          if ($LASTEXITCODE -ne 0) { throw "probe-suite exited $LASTEXITCODE" }
+          $env:PROBE_HOST_ENTRY = Join-Path $r 'claude-sdk-host\host.js'
+          & $node src/claude-sdk-host/tools/event-record.ts --check --out-dir dist/claude-sdk-recorded
+          if ($LASTEXITCODE -ne 0) { throw "event-record exited $LASTEXITCODE" }
+
       # The installed layout is `Programs\PiLab Ai` (a space in the path);
       # win-unpacked has none, so run the DSH smoke once more from a copy that does.
       - name: DSH host smoke from a path with a space
@@ -364,6 +381,9 @@ jobs:
             out-claude-sdk-host/claude-sdk-host-manifest.json
             out-claude-sdk-host/THIRD_PARTY_LICENSES.json
             dist/claude-sdk-host-smoke-report.json
+            dist/claude-sdk-probe-suite.json
+            dist/claude-sdk-probe-logs/
+            dist/claude-sdk-recorded/
           retention-days: 14
           if-no-files-found: warn
 
@@ -402,7 +422,8 @@ jobs:
     needs: build-app
     # 20 -> 25 for the DSH host (dsh-rebase P1-2); re-derive from the first green run.
     # 25 -> 35 for the Claude SDK host (route B S-4), as build-windows.
-    timeout-minutes: 35
+    # 35 -> 45 for its regression set and event gate (route B S-5 R-2), as build-windows.
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -489,6 +510,24 @@ jobs:
         # was for is gone, and the DSH smoke runs on the bundled node.
         run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json --claude-sdk-report-file dist/claude-sdk-host-smoke-report.json
 
+      # Route B S-5 R-2: as build-windows. The regression set blocks; the event gate
+      # only reports until a first run shows whether Linux matches the Windows-recorded
+      # samples (README §10.2 #40), its recordings uploaded either way.
+      - name: Claude SDK host regression set (packaged)
+        run: |
+          r="$PWD/dist/linux-unpacked/resources"
+          AICLIENT_CLAUDE_SDK_CLI="$r/claude-sdk-host/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude" \
+            "$r/node-runtime/node" src/claude-sdk-host/tools/probe-suite.ts \
+            --host-entry "$r/claude-sdk-host/host.js" --out dist/claude-sdk-probe-suite.json --logs dist/claude-sdk-probe-logs
+
+      - name: Claude SDK host event gate (packaged; reports only on Linux)
+        continue-on-error: true
+        run: |
+          r="$PWD/dist/linux-unpacked/resources"
+          AICLIENT_CLAUDE_SDK_CLI="$r/claude-sdk-host/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude" \
+          PROBE_HOST_ENTRY="$r/claude-sdk-host/host.js" \
+            "$r/node-runtime/node" src/claude-sdk-host/tools/event-record.ts --check --out-dir dist/claude-sdk-recorded
+
       - name: Upload worker smoke evidence
         if: always()
         uses: actions/upload-artifact@v5
@@ -523,6 +562,9 @@ jobs:
             out-claude-sdk-host/claude-sdk-host-manifest.json
             out-claude-sdk-host/THIRD_PARTY_LICENSES.json
             dist/claude-sdk-host-smoke-report.json
+            dist/claude-sdk-probe-suite.json
+            dist/claude-sdk-probe-logs/
+            dist/claude-sdk-recorded/
           retention-days: 14
           if-no-files-found: warn
 

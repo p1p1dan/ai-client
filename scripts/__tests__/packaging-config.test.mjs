@@ -575,6 +575,34 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
     }
   });
 
+  it('runs the Claude SDK host regression set and event gate on the packaged host (route B S-5 R-2)', () => {
+    for (const job of ['build-windows', 'build-linux']) {
+      const steps = jobs[job].steps;
+      const verify = steps.findIndex((s) => s.run?.includes('verify-packaged-app.mjs'));
+      const suite = steps.findIndex((s) => s.run?.includes('tools/probe-suite.ts'));
+      const gate = steps.findIndex((s) => s.run?.includes('tools/event-record.ts --check'));
+      // After the package is verified, against its own node, host.js and CLI.
+      expect(suite, job).toBeGreaterThan(verify);
+      expect(gate, job).toBeGreaterThanOrEqual(suite);
+      for (const at of [suite, gate]) {
+        expect(steps[at].run, job).toContain('claude-sdk-host');
+        expect(steps[at].run, job).toMatch(/node-runtime[\\/]node/);
+      }
+      expect(steps[suite].run, job).toContain('--host-entry');
+      expect(steps[gate].run, job).toContain('PROBE_HOST_ENTRY');
+      // The regression set always blocks.
+      expect(steps[suite]['continue-on-error'], job).toBeUndefined();
+      const upload = steps.find((s) => s.name === 'Upload Claude SDK host evidence');
+      expect(upload?.with?.path, job).toContain('dist/claude-sdk-probe-suite.json');
+      expect(upload?.with?.path, job).toContain('dist/claude-sdk-probe-logs/');
+    }
+    // The samples were recorded on Windows: the gate blocks there and only reports on Linux.
+    const gateOf = (job) =>
+      jobs[job].steps.find((s) => s.run?.includes('tools/event-record.ts --check'));
+    expect(gateOf('build-windows')['continue-on-error']).toBeUndefined();
+    expect(gateOf('build-linux')['continue-on-error']).toBe(true);
+  });
+
   it('builds the DSH host artifact before electron-builder on every packaging job', () => {
     for (const job of ['build-windows', 'build-linux', 'build-macos']) {
       const steps = jobs[job].steps;

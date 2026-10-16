@@ -442,25 +442,21 @@ async function send(text: string): Promise<string> {
   return requestId;
 }
 
-/** sleep.exe processes running exactly `sleep <seconds>` (Windows), so leftovers of other runs do not count. */
+/** Processes running exactly `sleep <seconds>`, so leftovers of other runs do not count. */
 function sleepers(seconds: number): number {
-  if (process.platform !== 'win32') return processesNamed('sleep');
+  if (process.platform !== 'win32') {
+    // `sleep <seconds>` exactly, as on Windows: another probe's sleeps do not count (S-5).
+    return Number(
+      execFileSync('sh', ['-c', `pgrep -fc '^sleep ${seconds}$' || true`])
+        .toString()
+        .trim() || 0
+    );
+  }
   const filter = `Name='sleep.exe'`;
   const script = `@(Get-CimInstance Win32_Process -Filter "${filter}" | Where-Object { $_.CommandLine -match ' ${seconds}\\s*$' }).Count`;
   return Number(
     execFileSync('powershell', ['-NoProfile', '-Command', script]).toString().trim() || 0
   );
-}
-
-function processesNamed(name: string): number {
-  if (process.platform !== 'win32')
-    return Number(
-      execFileSync('sh', ['-c', `pgrep -c ${name} || true`])
-        .toString()
-        .trim() || 0
-    );
-  const out = execFileSync('tasklist', ['/FI', `IMAGENAME eq ${name}.exe`, '/NH']).toString();
-  return out.split('\n').filter((line) => line.toLowerCase().startsWith(name)).length;
 }
 
 /**

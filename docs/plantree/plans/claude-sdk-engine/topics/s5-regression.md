@@ -60,3 +60,11 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 - **回归命令对安装目录**：用随包的 node、随包的 `host.js` 与随包的 `claude.exe` 跑 `probe-suite.ts`，7 组 130 条全过。合并前 S-4 会话打的旧包（早于裁决 17～20）同样跑出 124/130，差的 6 条正是计划模式与插件市场那几条，说明回归命令能分辨新旧宿主。
 - **录制门禁对安装目录与源码**：两边都与样本一致。
 - **门禁自身的一处修正**：提交时 lint-staged 用 biome 重排了样本 JSON（短数组并成一行），按文本比对就报了只有排版不同的差异；改为解析后再比（`canonicalSample`），单测 1 条，去掉这一步时该用例失败。
+
+## 7 接 CI（R-2，2026-10-16）
+
+- `build.yml` 的 Windows 与 Linux 打包作业，在"Verify packaged app"之后用随包的 node、`host.js` 与 CLI 跑 `probe-suite.ts`（`--logs` 把失败组的日志放进 `dist/claude-sdk-probe-logs/`）与 `event-record.ts --check`（录下的放进 `dist/claude-sdk-recorded/`），三者随"Upload Claude SDK host evidence"上传。Windows 上两步都会挡住构建；Linux 上回归命令挡、录制门禁只报告（`continue-on-error`），因样本是在 Windows 上录的，等第一次 Linux 结果再定。macOS 作业不跑（Linux 与 Windows 之外暂不做，dsh-rebase 决策 090）。
+- 超时：Windows 40 → 50 分钟、Linux 35 → 45 分钟，照工作流的规矩在第一次全绿后重算。
+- `stop` 场景在 Linux 上也只数自己那个时长的 `sleep`（`pgrep -fc '^sleep N$'`），与 Windows 一致。
+- 门禁测试 `packaging-config.test.mjs` 加 1 条：两个作业里这两步都在核验之后、用随包的 node 与宿主，回归命令不允许 `continue-on-error`，录制门禁 Windows 挡、Linux 只报告，证据路径都上传；去掉 Windows 的回归步骤、或把 Linux 的录制门禁改成挡，这条都失败。
+- 本机照 Windows 作业那一步原样跑（PowerShell，对本分支重打的 `win-unpacked`）：130/130、四个样本一致、退出码 0。证据见 [evidence/s5-regression-2026-10-16.md](../evidence/s5-regression-2026-10-16.md)。

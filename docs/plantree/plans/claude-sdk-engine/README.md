@@ -71,7 +71,7 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 | S-2 | 五档权限 | 渲染层：引擎是 SDK 时显示五档；`default`/`acceptEdits`/`plan`/`auto`/`bypassPermissions` 映射；中途切换；Plan 档与计划审阅卡衔接；Auto 档实测它额外发的安全检查请求能否经网关正常完成 | 每档一个探针场景；真实网关上 Auto 档跑通一个会触发检查的回合 | **完成**（2026-10-16，见 §9；真实网关上的 Auto 回合待用户提供网关后补跑，§9.2 #32） |
 | S-3 | 项目级配置 | `settingSources: ['project','local']`；去掉 `managedSettings` 对 hooks 与 allow 的锁定；`CLAUDE.md` 进上下文 | 探针：带 `.claude/settings.json`（allow + hook）与 `CLAUDE.md` 的测试仓库，断言 allow 生效、hook 执行、`CLAUDE.md` 被引用 | **完成**（2026-10-16，见 §10；先单独提交了裁决 12 的 key 隔离） |
 | S-4 | 打包 | 宿主构建（esbuild，参照 DSH 宿主）；`claude.exe` 随宿主产物由 afterPack 拷进 `resources/claude-sdk-host`（只带目标平台），`pathToClaudeCodeExecutable` 指向它；体积门禁（安装后增量 ≤ 0.6 GB）；`DISABLE_AUTOUPDATER` | 打包后冒烟：从安装目录拉起宿主 → 假网关一个回合；体积门禁 | **完成**（2026-10-16，见 §11；安装包里经界面的回合留给 S-6） |
-| S-5 | 回归与证据 | 探针场景进回归集；录制 SDK 事件序列做门禁；真实网关复跑 T1；GUI 点验清单 | 回归绿；证据写进 `evidence/` | **进行中**（2026-10-16，见 [S-5 记录](topics/s5-regression.md)）：回归命令、录制门禁、GUI 清单与几项加固已做；S-4 已合入，接 CI（R-2）待做；真实网关复跑 T1 待用户 |
+| S-5 | 回归与证据 | 探针场景进回归集；录制 SDK 事件序列做门禁；真实网关复跑 T1；GUI 点验清单 | 回归绿；证据写进 `evidence/` | **完成**（2026-10-16，见 [S-5 记录](topics/s5-regression.md)、[证据](evidence/s5-regression-2026-10-16.md)）：回归命令、录制门禁、GUI 清单、接 CI 与几项加固；源码与安装目录的宿主都 130/130。真实网关复跑 T1 待用户提供网关后补跑（同 §9.2 #32），Linux 上的结果等推送后的第一次 CI |
 | S-6 | 测试包与加密机复核 | 出测试包；加密机上装正式安装包，从开始菜单启动 PiLab，跑一个读写加对话的回合；核对安装包落盘的 `claude.exe` 未被加密 | 用户配合上机，结果脱敏入库 | 待做 |
 
 顺序：S-0 → S-1 → S-2、S-3（可并行）→ S-4 → S-5 → S-6。推送与发版需用户确认。

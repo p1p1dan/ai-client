@@ -5,16 +5,17 @@
  * summary; exits 1 when a check fails or a group does not finish.
  *
  *   node tools/probe-suite.ts [--only flow,modes] [--host-entry <host.js>]
- *                             [--out <summary.json>] [--keep]
+ *                             [--out <summary.json>] [--logs <dir>] [--keep]
  *
  * `--host-entry` drives another host entry (a packaged `resources/claude-sdk-host/host.js`)
  * through PROBE_HOST_ENTRY. `--keep` keeps the temporary directories; a failed group's
- * are kept anyway, and its log path is printed. Only the fake gateway is used: the probe
+ * are kept anyway, and its log path is printed; `--logs` also copies it there (CI uploads it). Only the fake gateway is used: the probe
  * key is a fake one and nothing here reads a stored credential.
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
 import {
+  copyFileSync,
   createWriteStream,
   mkdirSync,
   mkdtempSync,
@@ -108,12 +109,14 @@ function parseArgs(argv: string[]): {
   only: string[] | null;
   hostEntry: string | null;
   out: string | null;
+  logs: string | null;
   keep: boolean;
 } {
   const args = {
     only: null as string[] | null,
     hostEntry: null as string | null,
     out: null as string | null,
+    logs: null as string | null,
     keep: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -122,6 +125,7 @@ function parseArgs(argv: string[]): {
     else if (flag === '--only') args.only = (argv[++i] ?? '').split(',').filter(Boolean);
     else if (flag === '--host-entry') args.hostEntry = argv[++i] ?? null;
     else if (flag === '--out') args.out = argv[++i] ?? null;
+    else if (flag === '--logs') args.logs = argv[++i] ?? null;
     else throw new Error(`unknown argument: ${flag}`);
   }
   return args;
@@ -244,6 +248,10 @@ async function main(): Promise<void> {
         `[probe-suite] ${passed ? 'ok  ' : 'FAIL'} ${group.name.padEnd(8)} ${parsed.summary ?? `exit ${exit}, no verdict`} (${Math.round((Date.now() - started) / 1000)} s)${passed ? '' : ` log: ${log}`}`
       );
       for (const label of parsed.failed) console.log(`[probe-suite]        - ${label}`);
+      if (!passed && args.logs) {
+        mkdirSync(args.logs, { recursive: true });
+        copyFileSync(log, join(args.logs, `${group.name}.log`));
+      }
       if (passed && !args.keep) rmSync(dir, { recursive: true, force: true });
     }
   } finally {
