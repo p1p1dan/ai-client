@@ -35,12 +35,12 @@ Role: topic（S-3 方案，2026-10-16）。上位：[README](../README.md) §1 �
 | P-1 | **设置来源**：绑定项目的会话 `['project','local']`；未绑定（临时）会话 `[]`，沿用共享规则 `resolveSettingSources`（决策 008 第 5 条：不受信任的检出不读 project/local） | 裁决 5；临时目录是应用自建的空目录 |
 | P-2 | **去掉 `managedSettings` 锁**（`allowManagedPermissionRulesOnly`、`allowManagedHooksOnly`），实验开关 `AICLIENT_CLAUDE_SDK_REPO_POLICY` 一并删掉 | 裁决 5 |
 | P-3 | **绑定项目的会话由宿主声明工作区受信任**（SDK 选项 `workspaceTrust`，按会话的 cwd）；不另做 PiLab 的信任提示框 | 不声明信任时项目 allow 规则一律被忽略（§4.2），裁决 5 落空；用户在 PiLab 里打开项目，就是把它当自己的项目用（与 DSH 对绑定项目 `projectTrusted: true` 一致）。信任会记进应用私有配置目录 |
-| P-4 | **封住插件市场**：`managedSettings` 只放 `strictKnownMarketplaces: []`（policy 层；§4.3 实测唯一管用、又不关 hooks 与 allow 的设置） | 受信任后 CLI 启动就去拉，git+ssh 直连外网，不经网关、不经代理；目录源的插件还会当场加载并跑它的 hooks |
+| P-4 | **已撤（2026-10-16，README 裁决 18：插件市场开着）** **封住插件市场**：`managedSettings` 只放 `strictKnownMarketplaces: []`（policy 层；§4.3 实测唯一管用、又不关 hooks 与 allow 的设置） | 受信任后 CLI 启动就去拉，git+ssh 直连外网，不经网关、不经代理；目录源的插件还会当场加载并跑它的 hooks |
 | P-5 | **用户级 `~/.claude` 不读**：flag 层 `claudeMdExcludes` 排除 `<主目录>/.claude/**`，写法按 cwd 的拼写（盘符大小写一致，正斜杠） | §3 不做项；CLI 沿 cwd 往上逐级读 `CLAUDE.md`、`.claude/CLAUDE.md`、`.claude/rules`，工作区在主目录下时会读到用户自己的 `~/.claude/CLAUDE.md` |
 | P-6 | 其余照官方行为：项目外祖先目录的 CLAUDE.md 照读；`settings.local.json` 的 allow 规则不需信任就生效；仓库可禁用自动模式或跳过权限确认（切档被拒时按 S-2 A-5 提示）；`.mcp.json` 仍不读（`strictMcpConfig`） | 裁决 5 "照官方行为" |
 | P-7 | **主目录的各种写法都排除**：cwd 自身及每一级祖先目录，只要与主目录是同一目录（大小写不同，或经软链、目录联接、`subst` 盘符到达），按 cwd 里的拼写各排除一次；主目录原样也排除一次。目录名里的 glob 语法字符（`()[]{}*?+@`）写成单字符的方括号类，只匹配它自己 | CLI 按 cwd 的拼写往上找，只排一种写法会漏；Windows 用户名可以带括号，原样写进 glob 会被当成语法：探针实测主目录叫 `pilab-fakehome (s3)` 时，不转义则排除失效 |
 | P-8 | §3.2 的"外连检查"改成看结果：仓库声明的市场是目录源，其插件带一个 SessionStart hook 留标记；`projcfg` 在同一次运行里重启一次宿主（CLI 从受信任工作区的第二次启动起才去拉），再断言标记不存在、配置目录 `plugins/` 下没有这个市场的登记 | 抓进程的网络连接与平台相关、容易漏；目录源会当场加载插件并跑它的 hook，是最直接的可观测结果，且能做变异检查（去掉封锁即失败）。不用"预置信任记录"让第一次启动就拉：那样会盖住 P-3 的检查（信任记录本身就让 allow 规则生效） |
-| P-9 | **计划模式里 allow 规则放不过改动**：宿主的进程内 PreToolUse 回调在计划模式里把任何代理的命令（Bash、PowerShell）送回 `canUseTool` 拒绝，除非命令在 DSH 计划模式的探索语法内（`isExplorationCommand`：`git status/diff/log/show/…`、`ls`、`cat`、`head`、`rg`、`grep` 等，不含重定向与命令替换）；主代理的文件改动 CLI 在计划模式里先于 allow 规则就拒了（探针实测：`Edit(...)` 规则匹配的写入照样被拒），不另加。回调的 `ask` 也压过仓库 hook 的 `allow` | 审查确认（读 2.1.300 的代码）：规则放行 Bash 先于任何计划模式检查，项目、本机或"本会话允许"的 `Bash(npm run:*)` 在计划模式里会直接执行，S-2 A-2 与说明里"计划模式由 PiLab 拒绝改动"落空；S-2 A-20 对子代理已是同一立场，DSH 的计划模式也用同一套探索语法。代价：语法以外的只读命令（如 `find`、`git branch`）计划模式里也被拒，原来 CLI 认作只读会放行。另一做法是照官方行为放行（裁决 5 的字面），未采用，待审阅 |
+| P-9 | **已撤（2026-10-16，README 裁决 20：计划模式照官方行为）** **计划模式里 allow 规则放不过改动**：宿主的进程内 PreToolUse 回调在计划模式里把任何代理的命令（Bash、PowerShell）送回 `canUseTool` 拒绝，除非命令在 DSH 计划模式的探索语法内（`isExplorationCommand`：`git status/diff/log/show/…`、`ls`、`cat`、`head`、`rg`、`grep` 等，不含重定向与命令替换）；主代理的文件改动 CLI 在计划模式里先于 allow 规则就拒了（探针实测：`Edit(...)` 规则匹配的写入照样被拒），不另加。回调的 `ask` 也压过仓库 hook 的 `allow` | 审查确认（读 2.1.300 的代码）：规则放行 Bash 先于任何计划模式检查，项目、本机或"本会话允许"的 `Bash(npm run:*)` 在计划模式里会直接执行，S-2 A-2 与说明里"计划模式由 PiLab 拒绝改动"落空；S-2 A-20 对子代理已是同一立场，DSH 的计划模式也用同一套探索语法。代价：语法以外的只读命令（如 `find`、`git branch`）计划模式里也被拒，原来 CLI 认作只读会放行。另一做法是照官方行为放行（裁决 5 的字面），未采用，待审阅 |
 | P-10 | **绑定到主目录本身的会话按临时会话开**（不读 project、local，不声明信任） | 此时项目层的 `.claude/settings*.json` 就是用户自己的 `~/.claude/settings*.json`（PiLab 改了配置目录，CLI 认不出它是用户层），用户的 hooks、allow 规则会当成项目的生效，违背 §0"用户级不读" |
 | P-11 | 探针用的替身主目录（`AICLIENT_CLAUDE_SDK_HOME`）是**追加**排除，不顶替真主目录 | 探针工作区在 `%TEMP%` 下，也在真主目录下；顶替会让开发者自己的 `~/.claude/CLAUDE.md` 进请求 |
 
@@ -147,3 +147,10 @@ Role: topic（S-3 方案，2026-10-16）。上位：[README](../README.md) §1 �
 6. 采纳但复核认为不算缺陷的：市场检查改为一次运行内重启宿主（P-8）、替身主目录改为追加（P-11）、经链接到达主目录的写法（P-7）、宿主头注释、链接用例在 macOS 上的临时目录。
 
 被推翻的：IT 下发的策略层会丢掉 `managedSettings`（§4.3 已记，转入 README §10.2）；`CC-ECHO` 会数到恢复会话里的旧暗号（探针不这么用）；探针夹具会覆盖真仓库的文件（文档要求空工作区）；界面的档位说明没提规则（与 S-2 的"本会话允许"同理，说明写默认行为）。
+
+### 5.4 裁决 17～20 之后（2026-10-16）
+
+- **用户层（裁决 19）**：SDK 引擎的配置目录从 `claude-sdk-home` 改为 `~/.pilab/<配置名>/claude`（未发布过，不迁移），设置来源缺省 `user,project,local`；用户层对所有会话生效，项目层与本机层仍只给绑定且受信任的项目。`~/.claude` 的排除（P-5、P-7）与"主目录本身按临时会话开"（P-10）不变。探针在配置目录放一个 CLAUDE.md 暗号：绑定项目与临时会话都读到；关掉用户层时这条检查失败。
+- **插件市场（裁决 18）**：宿主不再传 `managedSettings`。探针 `projcfg` 改为断言第二次启动时仓库声明的插件被加载、市场被登记。另测：仓库声明一个地址不通的 git 市场（`10.255.255.1`），尝试拉取的那次启动首轮回复仍约 3 秒，结束后没有残留的 git 进程。
+- **计划模式（裁决 20）**：见 [S-2 设计](s2-permission-modes.md) §5.4；`projcfg` 的计划模式检查改为照官方行为：规则放行的命令执行，写入出卡，探索命令执行。
+- 过程中两次遇到"刚打开对话就切档，8 秒内 CLI 没回应"而超时；随后有、无用户层各跑三遍都没有复现（4～9 秒），与用户层无关，记为 README §10.2 #42。

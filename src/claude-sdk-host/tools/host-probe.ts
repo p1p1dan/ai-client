@@ -39,7 +39,7 @@
  * of the same turn) and `mode-enterplan` (the model entering plan mode by itself reaches
  * PiLab as `session.permissions` `engine`), `mode-plan-refused` (its own workspace and run:
  * the workspace's settings disable Bypass permissions, so approving a plan into it falls to
- * Manual with the reason), and `mode-auto` (run it last: the fake gateway's
+ * Manual with the reason), and `mode-auto` (the fake gateway's
  * safety check allows, then blocks three calls in a row, the third falling back to PiLab's
  * card, then is down; each refused row in PiLab's words, never the CLI's).
  *
@@ -53,12 +53,13 @@
  * allow rule (`.claude/settings.json`, applied only in a trusted workspace) and the local one
  * skip the card; its PreToolUse hook runs and sees the session token; its
  * `disableBypassPermissionsMode` refuses Bypass permissions; the plugin marketplace it
- * declares is neither fetched nor loaded on the host's second start, as the CLI fetches from
- * the second start of a trusted workspace on: the scenario restarts the host itself), `projcfg-home` (the
+ * declares is fetched and its plugin loaded on the host's second start (ruling 18), as the
+ * CLI fetches from the second start of a trusted workspace on: the scenario restarts the
+ * host itself), `projcfg-home` (the
  * workspace's parent, whose name must contain `fakehome`, stands in for the home directory:
  * its CLAUDE.md is read, its `.claude` is not; on Windows the cwd is given with the drive
  * letter's case flipped) and `projcfg-scratch` (an unbound chat: none of it applies).
- * PROBE_SETTING_SOURCES overrides the host's setting sources (default `project,local`).
+ * PROBE_SETTING_SOURCES overrides the host's setting sources (default `user,project,local`).
  *
  * The key is a fake one unless PROBE_API_KEY is set in the shell; nothing here reads a
  * stored credential.
@@ -191,7 +192,8 @@ function startHost(): void {
       AICLIENT_CLAUDE_SDK_GENERATION: String(generation),
       AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
       AICLIENT_CLAUDE_SDK_BASE_URL: gatewayUrl,
-      AICLIENT_CLAUDE_SDK_SETTING_SOURCES: process.env.PROBE_SETTING_SOURCES ?? 'project,local',
+      AICLIENT_CLAUDE_SDK_SETTING_SOURCES:
+        process.env.PROBE_SETTING_SOURCES ?? 'user,project,local',
       // S-3 P-5: the fake home directory (`projcfg-home`).
       ...(scenarios.includes('projcfg-home') ? { AICLIENT_CLAUDE_SDK_HOME: fakeHome() } : {}),
       ...(process.env.AICLIENT_CLAUDE_SDK_RG_DIR
@@ -599,6 +601,8 @@ const CANARIES = {
   homeMd: 'CANARY-HOME-MD',
   homeDotClaude: 'CANARY-HOME-DOTCLAUDE',
   homeRule: 'CANARY-HOME-RULE',
+  /** Ruling 19: the user layer, the CLI's config dir (the app's own, never ~/.claude). */
+  userMd: 'CANARY-USER-MD',
 };
 const PROJECT_CANARIES = [
   CANARIES.projectMd,
@@ -639,6 +643,7 @@ function writeProjectFixture(): void {
   }
   rmSync(hookMarker, { force: true });
   rmSync(pluginMarker, { force: true });
+  writeText(join(configDir, 'CLAUDE.md'), `User note: ${CANARIES.userMd}.\n`);
   writeText(join(workspace, 'CLAUDE.md'), `Project note: ${CANARIES.projectMd}.\n`);
   writeText(
     join(workspace, '.claude', 'CLAUDE.md'),
@@ -936,8 +941,17 @@ async function main(): Promise<void> {
             Boolean((e.payload?.input as Record<string, unknown>)?.command),
           'slow tool input'
         );
-        await new Promise((r) => setTimeout(r, 3_000));
-        const during = sleepers(seconds);
+        // Until both sleeps run (README §10.2 #39): with the full vitest run beside it the
+        // command took about 30 s to start (measured), so a fixed 3 s missed it. Capped by
+        // PROBE_STOP_WAIT_S (default 60 s) so a command that never starts still fails.
+        const waitCap = Number(process.env.PROBE_STOP_WAIT_S ?? 60) * 1000;
+        const waitStart = Date.now();
+        let during = sleepers(seconds);
+        while (during < before + 2 && Date.now() - waitStart < waitCap) {
+          await new Promise((r) => setTimeout(r, 500));
+          during = sleepers(seconds);
+        }
+        console.log(`  sleeps seen: ${during - before} after ${Date.now() - waitStart} ms`);
         const t = Date.now();
         const stopped = await request('worker.stop', { logicalSessionId, reason: 'user' });
         const end = await waitFor(terminal, 'stop turn end', 15_000);
@@ -1058,7 +1072,25 @@ async function main(): Promise<void> {
         break;
       }
       case 'mode-plan': {
+        // Ruling 20: the CLI's own plan mode. Auto's check decides first (the fake
+        // gateway's blocks a call here), then a write asks, a command and a read outside
+        // the workspace pass the check, and the review card leaves plan mode.
         await setPosture('plan', 'auto');
+        const checked = modePath('mode-plan-checked.txt');
+        const blocked = await runCalls(
+          [
+            {
+              name: 'Bash',
+              input: {
+                command: `node -e "require('fs').writeFileSync('mode-plan-checked.txt','x')"`,
+                description: 'Write a file with node',
+              },
+            },
+          ],
+          () => 'allow',
+          undefined,
+          'CC-CLS-BLOCK'
+        );
         const file = modePath('mode-plan.txt');
         const dir = modePath('mode-plan-dir');
         // A file outside the workspace: the CLI asks about reading it, in plan mode too.
@@ -1079,13 +1111,20 @@ async function main(): Promise<void> {
         check('mode-plan', 'ends in session.completed', end.type === 'session.completed');
         check(
           'mode-plan',
-          'only the read outside the workspace asks; changes are refused with no card',
-          cards.join() === 'Read'
+          "plan mode goes through Auto's check: the call it blocks does not run, no card",
+          blocked.end.type === 'session.completed' &&
+            blocked.cards.length === 0 &&
+            !existsSync(checked)
         );
         check(
           'mode-plan',
-          'the write and the command were refused',
-          !existsSync(file) && !existsSync(dir)
+          'a write asks (the CLI refuses writes in plan mode unless allowed); nothing else does',
+          cards.join() === 'Write'
+        );
+        check(
+          'mode-plan',
+          'the allowed write and the checked command ran',
+          existsSync(file) && existsSync(dir)
         );
         check(
           'mode-plan',
@@ -1182,8 +1221,8 @@ async function main(): Promise<void> {
           [{ name: 'Write', input: { file_path: written, content: 'x' } }],
           () => 'deny'
         );
-        // P-9: in plan mode an allow rule runs no change: the command and the write the
-        // project's rules allow are refused without a card; exploration still runs.
+        // Ruling 20 (P-9 withdrawn): in plan mode the CLI's own rules hold: the command
+        // a project rule allows runs, a write asks even with a rule, exploration runs.
         await setPosture('plan', 'ask');
         const planTouched = modePath('projcfg-plan.txt');
         const planWritten = modePath('projcfg-rule-plan.txt');
@@ -1222,6 +1261,11 @@ async function main(): Promise<void> {
           );
           check(
             scenario,
+            "the user layer's CLAUDE.md (the app's config dir) reaches the model",
+            canaries.includes(CANARIES.userMd)
+          );
+          check(
+            scenario,
             'the project allow rules (trusted workspace) and the local one skip the card',
             allowed.end.type === 'session.completed' &&
               allowed.cards.length === 0 &&
@@ -1236,12 +1280,12 @@ async function main(): Promise<void> {
           );
           check(
             scenario,
-            'plan mode: what the rules allow is refused, exploration runs',
+            'plan mode: the allowed command runs, a write asks, exploration runs (official)',
             planned.end.type === 'session.completed' &&
-              planned.cards.length === 0 &&
-              !existsSync(planTouched) &&
+              planned.cards.join() === 'Write' &&
+              existsSync(planTouched) &&
               !existsSync(planWritten) &&
-              planOk.join() === 'Bash'
+              planOk.join() === 'Bash,Bash'
           );
           check(
             scenario,
@@ -1263,7 +1307,11 @@ async function main(): Promise<void> {
               refusal.includes('bypass_disabled')
           );
         } else {
-          check(scenario, 'no instruction file reaches the model', canaries.length === 0);
+          check(
+            scenario,
+            "only the user layer's CLAUDE.md reaches the model, no project file",
+            canaries.join() === CANARIES.userMd
+          );
           check(
             scenario,
             'no project or local allow rule: every call asks',
@@ -1274,18 +1322,24 @@ async function main(): Promise<void> {
           );
           check(
             scenario,
-            'plan mode: with no rule, the changes are refused, exploration runs',
-            planned.cards.length === 0 &&
-              !existsSync(planTouched) &&
+            "plan mode: a write asks; the command and exploration pass Auto's rules (official)",
+            planned.cards.join() === 'Write' &&
+              existsSync(planTouched) &&
               !existsSync(planWritten) &&
-              planOk.join() === 'Bash'
+              planOk.join() === 'Bash,Bash'
           );
           check(scenario, "the project's hook never runs", hooks.length === 0);
           check(scenario, "the project's settings refuse nothing", refusal === '');
         }
         check(scenario, 'the host started again', second.type === 'session.completed');
-        check(scenario, 'the declared plugin was not loaded', !existsSync(pluginMarker));
-        check(scenario, 'the declared marketplace was not fetched', traces.length === 0);
+        if (bound) {
+          // Ruling 18: a trusted project's marketplaces as the CLI has them.
+          check(scenario, 'the declared plugin was loaded (official)', existsSync(pluginMarker));
+          check(scenario, 'the declared marketplace was fetched (official)', traces.length > 0);
+        } else {
+          check(scenario, 'the declared plugin was not loaded', !existsSync(pluginMarker));
+          check(scenario, 'the declared marketplace was not fetched', traces.length === 0);
+        }
         break;
       }
       case 'projcfg-home': {

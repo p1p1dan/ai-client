@@ -501,12 +501,12 @@ describe('the packaged layout (S-4 B-4, B-5)', () => {
       AICLIENT_CLAUDE_SDK_SETTING_SOURCES: ' project ',
       AICLIENT_CLAUDE_SDK_RG_DIR: ' D:rg ',
     };
-    expect(claudeSdkHostDevSettings(true, env)).toEqual({ settingSources: 'project,local' });
+    expect(claudeSdkHostDevSettings(true, env)).toEqual({ settingSources: 'user,project,local' });
     expect(claudeSdkHostDevSettings(false, env)).toEqual({
       settingSources: 'project',
       rgDir: 'D:rg',
     });
-    expect(claudeSdkHostDevSettings(false, {})).toEqual({ settingSources: 'project,local' });
+    expect(claudeSdkHostDevSettings(false, {})).toEqual({ settingSources: 'user,project,local' });
     // An empty override means no sources at all, as before.
     expect(claudeSdkHostDevSettings(false, { AICLIENT_CLAUDE_SDK_SETTING_SOURCES: '' })).toEqual({
       settingSources: '',
@@ -653,7 +653,7 @@ describe('openClaudeSdkTransport refusals (no process is started)', () => {
       expect(launch.command).toBe(node);
       expect(launch.args).toEqual([path.join(resources, 'claude-sdk-host', 'host.js')]);
       expect(launch.env.AICLIENT_CLAUDE_SDK_CLI).toBe(layout.cliCandidates[0]);
-      expect(launch.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES).toBe('project,local');
+      expect(launch.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES).toBe('user,project,local');
       expect(launch.env).not.toHaveProperty('AICLIENT_CLAUDE_SDK_RG_DIR');
       expect(launch.env).not.toHaveProperty('AICLIENT_CLAUDE_SDK_HOME');
       expect(launch.env.AICLIENT_CLAUDE_SDK_GENERATION).toBe('3');

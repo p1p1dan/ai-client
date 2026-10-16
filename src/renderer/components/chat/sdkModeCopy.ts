@@ -12,7 +12,8 @@ export const SDK_MODE_DESCRIPTIONS: Readonly<Record<PermissionPreset, string>> =
   ask: 'Reads in the workspace run without asking; edits, commands that change something and anything outside the workspace ask first.',
   'accept-edits':
     'File edits in the workspace and simple file commands run without asking; other commands still ask.',
-  plan: 'Explores and reads without changing anything, then presents its plan for your review.',
+  // Ruling 20: the CLI's own plan mode; nothing refuses a change for it.
+  plan: "Explores and plans, then presents the plan for your review. It is asked not to change anything meanwhile; a change it tries anyway goes to Auto's check or to you.",
   auto: 'Reads and workspace edits run without asking; other calls pass a safety check first. What it blocks, or cannot check, does not run; after several blocks in a row it asks you.',
   bypass:
     'Runs calls without asking; a few dangerous ones, such as deleting the workspace, still ask.',

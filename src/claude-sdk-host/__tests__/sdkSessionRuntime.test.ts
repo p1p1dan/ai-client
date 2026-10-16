@@ -143,11 +143,10 @@ describe('the CLI launch (decision 6)', () => {
   it('passes the pinned env in the flag tier and never the key there', async () => {
     const { rt, q } = await started();
     const settings = q.options.settings as { attribution: boolean; env: Record<string, string> };
-    // S-2 A-13: plan mode never hands calls to Auto's classifier.
+    // Ruling 20: plan mode is the CLI's own, Auto's check included (no pin).
     expect(settings).toEqual({
       attribution: false,
       env: PINS,
-      useAutoModeDuringPlan: false,
       claudeMdExcludes: userClaudeDirExcludes(configDir, [homedir()]),
     });
     expect(JSON.stringify(settings)).not.toContain(KEY);
@@ -183,29 +182,29 @@ describe('project settings (S-3 P-1..P-7)', () => {
   const asSpelled: ResolvePath = (target) => target;
   const slashed = (dir: string) => dir.replace(/\\/g, '/');
 
-  it('a bound chat reads the project and local settings, as a trusted workspace', async () => {
+  it('a bound chat reads the user layer, the project and local settings, as a trusted workspace', async () => {
     const cwd = project();
-    const rt = runtime(undefined, { cwd, settingSources: ['project', 'local'] });
+    const rt = runtime(undefined, { cwd, settingSources: ['user', 'project', 'local'] });
     await rt.bootstrap();
     const { options } = sdk.queries[0];
-    expect(options.settingSources).toEqual(['project', 'local']);
+    expect(options.settingSources).toEqual(['user', 'project', 'local']);
     expect(options.workspaceTrust).toEqual({ accepted: true, directory: cwd });
-    // P-2, P-4: the repository's hooks and allow rules are not locked; marketplaces are.
-    expect(options.managedSettings).toEqual({ strictKnownMarketplaces: [] });
+    // Rulings 5, 18: hooks, allow rules and plugin marketplaces as the CLI has them.
+    expect(options).not.toHaveProperty('managedSettings');
     await rt.dispose();
   });
 
-  it('a scratch chat reads neither and is not declared trusted', async () => {
+  it('a scratch chat reads the user layer only and is not declared trusted', async () => {
     const rt = runtime(undefined, {
       cwd: project(),
-      settingSources: ['project', 'local'],
+      settingSources: ['user', 'project', 'local'],
       projectTrusted: false,
     });
     await rt.bootstrap();
     const { options } = sdk.queries[0];
-    expect(options.settingSources).toEqual([]);
+    expect(options.settingSources).toEqual(['user']);
     expect(options).not.toHaveProperty('workspaceTrust');
-    expect(options.managedSettings).toEqual({ strictKnownMarketplaces: [] });
+    expect(options).not.toHaveProperty('managedSettings');
     await rt.dispose();
   });
 
@@ -213,12 +212,12 @@ describe('project settings (S-3 P-1..P-7)', () => {
     const home = project();
     const rt = runtime(undefined, {
       cwd: home,
-      settingSources: ['project', 'local'],
+      settingSources: ['user', 'project', 'local'],
       homeDir: home,
     });
     await rt.bootstrap();
     const { options } = sdk.queries[0];
-    expect(options.settingSources).toEqual([]);
+    expect(options.settingSources).toEqual(['user']);
     expect(options).not.toHaveProperty('workspaceTrust');
     await rt.dispose();
   });
@@ -262,6 +261,12 @@ describe('project settings (S-3 P-1..P-7)', () => {
     expect(launchSettingSources(['project', 'local'], false)).toEqual([]);
     expect(launchSettingSources(['project', 'local'], undefined)).toEqual([]);
     expect(launchSettingSources(['user', 'project'], false)).toEqual(['user']);
+    // Ruling 19: the user layer (the app's own config dir) holds for every chat.
+    expect(launchSettingSources(['user', 'project', 'local'], true)).toEqual([
+      'user',
+      'project',
+      'local',
+    ]);
     expect(launchSettingSources([], true)).toEqual([]);
   });
 
@@ -564,9 +569,7 @@ describe('the stub model (S-1 contract)', () => {
 
 // ---- Route B, S-2: permission modes (topic s2-permission-modes.md §3.1 items 1-5) ----
 
-const { cliPermissionMode, permissionsForCliMode, PLAN_MODE_REFUSAL } = await import(
-  '../sdkSessionRuntime.ts'
-);
+const { cliPermissionMode, permissionsForCliMode } = await import('../sdkSessionRuntime.ts');
 type Posture = { mode: 'plan' | 'agent'; gear: 'ask' | 'accept-edits' | 'auto' | 'bypass' };
 
 async function startedOn(permissions: Posture) {
@@ -651,8 +654,8 @@ describe('the five modes (S-2 A-1)', () => {
   });
 });
 
-describe('what reaches canUseTool is never answered by the host (S-2 A-2)', () => {
-  it('in plan mode, on any gear, a change is refused with no card: the CLI would carry it out', async () => {
+describe('what reaches canUseTool is never answered by the host (S-2 A-2, ruling 20)', () => {
+  it('in plan mode, on any gear, a change the CLI asks about is the user card (official)', async () => {
     for (const pair of [
       { mode: 'plan', gear: 'auto' },
       { mode: 'plan', gear: 'bypass' },
@@ -661,19 +664,19 @@ describe('what reaches canUseTool is never answered by the host (S-2 A-2)', () =
       sdk.queries.length = 0;
       events = [];
       const { rt, q } = await startedOn(pair);
+      const settled: string[] = [];
       for (const [tool, input] of [
         ['Write', { file_path: join(configDir, 'x.txt'), content: 'x' }],
         ['Bash', { command: 'mkdir build' }],
       ] as const) {
-        await expect(
-          canUse(q)(tool, input, toolOpts(`t-${tool}`)),
-          JSON.stringify(pair)
-        ).resolves.toEqual({
-          behavior: 'deny',
-          message: PLAN_MODE_REFUSAL,
-        });
+        void canUse(q)(tool, input, toolOpts(`t-${tool}`)).then(() => settled.push(tool));
       }
-      expect(ofType('permission.requested')).toEqual([]);
+      await flush();
+      expect(
+        ofType('permission.requested').map((e) => e.payload.toolName),
+        JSON.stringify(pair)
+      ).toEqual(['Write', 'Bash']);
+      expect(settled, JSON.stringify(pair)).toEqual([]);
       await rt.dispose();
     }
   });
@@ -751,6 +754,36 @@ describe('mode switches (S-2 A-3, A-5)', () => {
     // Still Manual: the next switch starts from it.
     await rt.setPermissionGear('accept-edits');
     expect(q.setPermissionMode).toHaveBeenLastCalledWith('acceptEdits');
+    await rt.dispose();
+  });
+
+  it('a switch the CLI does not answer in 8 s fails as `timeout`; a late take is followed (README §9.2 #34)', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      // Queued behind a slow request (e.g. a stop on Windows): no answer in time.
+      q.setPermissionMode.mockImplementationOnce(() => new Promise<void>(() => {}));
+      const failure = rt.setPermissions({ mode: 'agent', gear: 'auto' }).catch((e) => e);
+      await vi.advanceTimersByTimeAsync(7_999);
+      expect(ofType('session.permissions')).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await failure).toMatchObject({
+        code: 'WORKER_PERMISSION_MODE_REFUSED',
+        message: 'timeout',
+      });
+      // Manual is still what PiLab holds: the next switch starts from it.
+      await rt.setPermissionGear('accept-edits');
+      expect(q.setPermissionMode).toHaveBeenLastCalledWith('acceptEdits');
+      // The CLI took the timed-out mode after all, after the newer one: its report wins,
+      // so PiLab and the CLI agree again (and say so).
+      q.push({ type: 'system', subtype: 'status', status: null, permissionMode: 'auto' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(ofType('session.permissions').map((e) => e.payload)).toEqual([
+        { permissions: { mode: 'agent', gear: 'auto' }, cause: 'engine' },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
     await rt.dispose();
   });
 
@@ -917,119 +950,33 @@ describe('the plan review on this engine (S-2 A-7)', () => {
 
 const { cliRefusalText } = await import('../sdkSessionRuntime.ts');
 
-describe('plan mode refuses changes only (S-2 A-2, review)', () => {
-  it('a read outside the workspace and a web fetch are the user cards; writes and commands are refused', async () => {
-    for (const gear of ['auto', 'ask', 'bypass'] as const) {
-      sdk.queries.length = 0;
-      events = [];
-      const { rt, q } = await startedOn({ mode: 'plan', gear });
-      for (const [tool, input] of [
-        ['Read', { file_path: join(tmpdir(), 'outside.txt') }],
-        ['WebFetch', { url: 'http://127.0.0.1:1/docs', prompt: 'read' }],
-      ] as const) {
-        let settled = false;
-        void canUse(q)(tool, input, toolOpts(`t-${tool}`)).then(() => {
-          settled = true;
-        });
-        await flush();
-        expect(settled, `${tool} on ${gear}`).toBe(false);
-      }
-      expect(ofType('permission.requested').map((e) => e.payload.toolName)).toEqual([
-        'Read',
-        'WebFetch',
-      ]);
-      await expect(
-        canUse(q)('Edit', { file_path: join(configDir, 'x.txt') }, toolOpts('t-edit'))
-      ).resolves.toEqual({ behavior: 'deny', message: PLAN_MODE_REFUSAL });
-      await rt.dispose();
+describe('plan mode is the CLI own (ruling 20, official behaviour)', () => {
+  it('no plan-mode pin, no hook and no policy tier of PiLab', async () => {
+    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
+    expect(q.options.settings).not.toHaveProperty('useAutoModeDuringPlan');
+    expect(q.options).not.toHaveProperty('hooks');
+    expect(q.options).not.toHaveProperty('managedSettings');
+    expect(q.options.permissionMode).toBe('plan');
+    await rt.dispose();
+  });
+
+  it('a read outside the workspace, a web fetch and an edit are all the user cards', async () => {
+    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
+    const settled: string[] = [];
+    for (const [tool, input] of [
+      ['Read', { file_path: join(tmpdir(), 'outside.txt') }],
+      ['WebFetch', { url: 'http://127.0.0.1:1/docs', prompt: 'read' }],
+      ['Edit', { file_path: join(configDir, 'x.txt') }],
+    ] as const) {
+      void canUse(q)(tool, input, toolOpts(`t-${tool}`)).then(() => settled.push(tool));
     }
-  });
-
-  it('a call the CLI asks about while a switch out of plan mode is in flight is still refused', async () => {
-    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
-    const answer = deferred();
-    q.setPermissionMode.mockImplementationOnce(() => answer.promise);
-    const switching = rt.setPermissions({ mode: 'agent', gear: 'auto' }).catch((e) => e);
     await flush();
-    await expect(
-      canUse(q)('Write', { file_path: join(configDir, 'x.txt'), content: 'x' }, toolOpts('t-w'))
-    ).resolves.toEqual({ behavior: 'deny', message: PLAN_MODE_REFUSAL });
-    expect(ofType('permission.requested')).toEqual([]);
-    answer.reject(
-      Object.assign(new Error('Cannot set permission mode to auto'), {
-        errorCode: 'auto_mode_model',
-      })
-    );
-    expect(await switching).toMatchObject({
-      code: 'WORKER_PERMISSION_MODE_REFUSED',
-      message: 'auto_mode_model',
-    });
-    await rt.dispose();
-  });
-
-  it('a subagent the repository declares wider is sent back to the plan-mode refusal', async () => {
-    const { rt, q } = await startedOn({ mode: 'plan', gear: 'auto' });
-    const guard = (
-      q.options.hooks as { PreToolUse: Array<{ hooks: Array<(i: unknown) => Promise<unknown>> }> }
-    ).PreToolUse[0]?.hooks[0];
-    const call = (over: Record<string, unknown>) =>
-      guard?.({
-        hook_event_name: 'PreToolUse',
-        agent_id: 'agent-1',
-        permission_mode: 'acceptEdits',
-        tool_name: 'Write',
-        ...over,
-      });
-    expect(await call({})).toMatchObject({
-      hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'ask' },
-    });
-    expect(await call({ tool_name: 'Bash' })).toMatchObject({
-      hookSpecificOutput: { permissionDecision: 'ask' },
-    });
-    // The main thread's writes (the CLI refuses those itself), a read, a subagent
-    // already in plan mode: nothing to send back.
-    expect(await call({ agent_id: undefined })).toEqual({});
-    expect(await call({ tool_name: 'Read' })).toEqual({});
-    expect(await call({ permission_mode: 'plan' })).toEqual({});
-    // Outside plan mode the repository's declaration stands (ruling 5).
-    await rt.setPermissions({ mode: 'agent', gear: 'ask' });
-    expect(await call({})).toEqual({});
-    await rt.dispose();
-  });
-
-  it('S-3 P-9: in plan mode only exploration commands may pass an allow rule', async () => {
-    const { rt, q } = await startedOn({ mode: 'plan', gear: 'ask' });
-    const guard = (
-      q.options.hooks as { PreToolUse: Array<{ hooks: Array<(i: unknown) => Promise<unknown>> }> }
-    ).PreToolUse[0]?.hooks[0];
-    const shell = (command: unknown, over: Record<string, unknown> = {}) =>
-      guard?.({
-        hook_event_name: 'PreToolUse',
-        permission_mode: 'plan',
-        tool_name: 'Bash',
-        tool_input: { command },
-        ...over,
-      });
-    const sentBack = { hookSpecificOutput: { permissionDecision: 'ask' } };
-    // A project rule such as `Bash(touch:*)` would let these run: they go to the refusal.
-    expect(await shell('touch notes.txt')).toMatchObject(sentBack);
-    expect(await shell('npm run build')).toMatchObject(sentBack);
-    expect(await shell('ls && rm -rf build')).toMatchObject(sentBack);
-    expect(await shell('git status > out.txt')).toMatchObject(sentBack);
-    expect(await shell(undefined)).toMatchObject(sentBack);
-    expect(await shell('Remove-Item notes.txt', { tool_name: 'PowerShell' })).toMatchObject(
-      sentBack
-    );
-    // A subagent's commands, whatever its own mode.
-    expect(await shell('touch notes.txt', { agent_id: 'agent-1' })).toMatchObject(sentBack);
-    // Exploration is left to the CLI, as before.
-    expect(await shell('git log --oneline -5')).toEqual({});
-    expect(await shell('ls -la')).toEqual({});
-    expect(await shell('rg TODO src | head -5')).toEqual({});
-    expect(await shell('ls', { agent_id: 'agent-1', permission_mode: 'acceptEdits' })).toEqual({});
-    // Outside plan mode a rule or a hook decides (ruling 5).
-    await rt.setPermissions({ mode: 'agent', gear: 'ask' });
-    expect(await shell('touch notes.txt')).toEqual({});
+    expect(ofType('permission.requested').map((e) => e.payload.toolName)).toEqual([
+      'Read',
+      'WebFetch',
+      'Edit',
+    ]);
+    expect(settled).toEqual([]);
     await rt.dispose();
   });
 });

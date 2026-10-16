@@ -314,8 +314,9 @@
  *                       one scripted tool call per step, in order, then a `CC-RUN done` line,
  *                       for the per-mode permission probes. It also answers Auto mode's
  *                       safety-check requests (non-streaming, measured on 2.1.300): allow,
- *                       or block when the checked transcript carries `CC-CLS-BLOCK`, or HTTP
- *                       500 when it carries `CC-CLS-DOWN`; in the severity format the CLI asks
+ *                       or block when the newest `CC-RUN` prompt in the checked transcript
+ *                       carries `CC-CLS-BLOCK`, or HTTP 500 when it carries `CC-CLS-DOWN`
+ *                       (earlier prompts do not count); in the severity format the CLI asks
  *                       of `claude-sonnet-5` and in the `<block>` format it asks of any other
  *                       model. Main requests get no `safeguard_results`, so the CLI checks
  *                       locally from the first call on.
@@ -3382,7 +3383,13 @@ function decideClaudeSdkClassifier(parsed) {
       message: 'fake gateway: the repository model is not served',
     };
   }
-  if (text.includes('CC-CLS-DOWN')) {
+  // Route B S-5 (claude-sdk-engine README §9.2 #35): only the newest prompt's markers
+  // count. The checked transcript holds every earlier prompt too, so a scenario run after
+  // `mode-auto` used to inherit its CC-CLS-DOWN. The newest prompt is the last `CC-RUN`:
+  // the turn's own calls never carry that word.
+  const latest = text.lastIndexOf('CC-RUN');
+  const prompt = latest >= 0 ? text.slice(latest) : text;
+  if (prompt.includes('CC-CLS-DOWN')) {
     return {
       kind: 'cc-error',
       status: 500,
@@ -3391,7 +3398,7 @@ function decideClaudeSdkClassifier(parsed) {
       message: 'fake gateway: the safety-check model is down',
     };
   }
-  const block = text.includes('CC-CLS-BLOCK');
+  const block = prompt.includes('CC-CLS-BLOCK');
   const verdict = block ? 'block' : 'allow';
   const severityFormat =
     stops.includes('</severity>') || (!stops.includes('</block>') && /<severity>/.test(text));

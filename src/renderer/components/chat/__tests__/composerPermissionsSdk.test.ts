@@ -7,6 +7,8 @@ import { useLegacyMigrationStore } from '@/stores/legacyMigration';
 import { ComposerPermissionTrigger } from '../ComposerPermissionTrigger';
 import { SDK_MODE_DESCRIPTIONS } from '../sdkModeCopy';
 import {
+  clearStartScreenPermissions,
+  peekStartScreenPermissions,
   readDefaultPermissions,
   readSessionPermissions,
   writeSessionPermissions,
@@ -36,6 +38,7 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal('electronAPI', { chat: { setPermissions } });
   localStorage.clear();
+  clearStartScreenPermissions();
   setPermissions.mockReset();
   toasts.length = 0;
   useLegacyMigrationStore.setState({ migrating: {}, postureRevisions: {} });
@@ -165,9 +168,17 @@ describe('the five modes of an SDK chat (rulings 6, 13, 14)', () => {
     expect(chip()?.textContent).toBe('手动审批');
   });
 
-  it('keeps Bypass permissions off the start screen (decision 023)', async () => {
+  it('turns Bypass permissions on before the first message, for that chat only (ruling 2026-10-16)', async () => {
     await render(null);
     await open();
-    expect(choice('跳过权限确认')?.getAttribute('aria-disabled')).toBe('true');
+    expect(choice('跳过权限确认')?.getAttribute('aria-disabled')).not.toBe('true');
+    await click(choice('跳过权限确认'));
+    expect(document.body.textContent).toContain('打开跳过权限确认？');
+    expect(document.body.textContent).toContain('只作用于下一句话新建的对话');
+    await click(confirmButton());
+    expect(setPermissions).not.toHaveBeenCalled();
+    expect(peekStartScreenPermissions()).toEqual({ mode: 'agent', gear: 'bypass' });
+    expect(readDefaultPermissions('claude-sdk')).toBeNull();
+    expect(chip()?.textContent).toBe('跳过权限确认');
   });
 });

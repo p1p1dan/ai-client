@@ -44,7 +44,7 @@ export const CLAUDE_SDK_CREDENTIALS_UNAVAILABLE = 'claude_sdk_credentials_unavai
 export const CLAUDE_SDK_HOST_UNAVAILABLE = 'claude_sdk_host_unavailable';
 
 /** `CLAUDE_CONFIG_DIR` of every SDK chat, under the app state root. */
-export const CLAUDE_SDK_HOME_DIR_NAME = 'claude-sdk-home';
+export const CLAUDE_SDK_HOME_DIR_NAME = 'claude';
 
 export type ClaudeSdkPlanView = Pick<DshModelPlan, 'index' | 'routes' | 'refs'>;
 
@@ -211,8 +211,11 @@ export const CLAUDE_SDK_HOST_LAYOUT = {
   packaged: ['claude-sdk-host', 'host.js'],
 } as const;
 
-/** The setting sources a host gets unless a dev override says otherwise (S-3 P-1). */
-const DEFAULT_SETTING_SOURCES = 'project,local';
+/**
+ * The setting sources a host gets unless a dev override says otherwise: this app's
+ * config dir as the user layer (ruling 19), the project and local settings (S-3 P-1).
+ */
+const DEFAULT_SETTING_SOURCES = 'user,project,local';
 
 export interface ClaudeSdkHostLayoutInput {
   isPackaged: boolean;
@@ -265,8 +268,8 @@ export function claudeSdkCliPath(
 
 /**
  * S-4 B-5 (#27): the dev-only knobs, read from Main's environment only in an
- * unpackaged checkout. A packaged build reads the project and local settings
- * (S-3 P-1) and uses the CLI's built-in `rg`.
+ * unpackaged checkout. A packaged build reads the default sources and uses the
+ * CLI's built-in `rg`.
  */
 export function claudeSdkHostDevSettings(
   isPackaged: boolean,
@@ -428,10 +431,11 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
     AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
     // From the plan (decision 3); the key goes by IPC, never here (S-3 K-5).
     AICLIENT_CLAUDE_SDK_BASE_URL: baseURL,
+    // Ruling 19: the user layer is this app's config dir (`configDir`), never ~/.claude;
     // S-3 P-1 (ruling 5): the project's settings and CLAUDE.md, and the user's private
-    // project settings (`.claude/settings.local.json`, CLAUDE.local.md); never the user's
-    // ~/.claude. A scratch chat reads neither (the host closes them). Dev override only
-    // when unpackaged (S-4 B-5).
+    // project settings (`.claude/settings.local.json`, CLAUDE.local.md). A scratch chat
+    // reads neither of the last two (the host closes them). Dev override only when
+    // unpackaged (S-4 B-5).
     AICLIENT_CLAUDE_SDK_SETTING_SOURCES: dev.settingSources,
     AICLIENT_CLAUDE_SDK_CLIENT_APP: `pilab/${app.getVersion()}`,
     // S-4 B-4: the CLI binary the availability check found, never the SDK's own lookup.

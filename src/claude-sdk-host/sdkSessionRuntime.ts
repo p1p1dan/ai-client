@@ -24,7 +24,6 @@ import path from 'node:path';
 import {
   type CanUseTool,
   getSessionMessages,
-  type HookCallback,
   type Options,
   type PermissionMode,
   type PermissionResult,
@@ -47,7 +46,6 @@ import {
   REVIEW_DISMISSED_TEXT,
   SDK_PLAN_REVIEW_CHOICES,
 } from '../shared/planReview.ts';
-import { isExplorationCommand } from '../shared/runtimeShellPolicy.ts';
 import { resolveSettingSources } from '../shared/settingSources.ts';
 import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type {
@@ -455,10 +453,6 @@ export function isUserHomeDir(
   return isHomeDir(cwd, homeTargets(homes, resolve), resolve);
 }
 
-/** What the model is told of a change refused in plan mode (S-2 A-2). */
-export const PLAN_MODE_REFUSAL =
-  'Plan mode is on: nothing may be changed until the user approves a plan. Keep exploring with read-only tools, write your plan, then present it with ExitPlanMode.';
-
 function effortOptions(
   effort: SessionEffortLevel | undefined
 ): Pick<Options, 'effort' | 'thinking'> {
@@ -664,26 +658,22 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       // No "Co-Authored-By" / "Generated with Claude Code" lines in the user's commits and PRs.
       // `env` is the flag tier, above the repository's settings: the gateway, the proxies
       // and the provider switches stay ours (decision 6). On the CLI's command line.
-      // S-2 A-13: plan mode never hands calls to Auto's classifier (the CLI's default
-      // `useAutoModeDuringPlan: true` lets it run or refuse changes in plan mode without
-      // PiLab); what plan mode asks about reaches `canUseTool`, which refuses it.
+      // Plan mode is the CLI's own (ruling 20): Auto's check decides there as it does by
+      // default (`useAutoModeDuringPlan`), and what it asks about is the user's card.
       settings: {
         attribution: false,
         env: this.config.settingsEnv,
-        useAutoModeDuringPlan: false,
         // S-3 P-5: the CLI reads CLAUDE.md and `.claude/rules` all the way up from the cwd,
-        // the user's own `~/.claude` included; PiLab reads no user-level layer (plan §3).
+        // the user's own `~/.claude` included; PiLab's user layer is its own config dir
+        // (ruling 19), never `~/.claude`.
         claudeMdExcludes: userClaudeDirExcludes(this.options.cwd, homes),
       } as Options['settings'],
-      // S-3 P-1: the project's and the user's private project settings (ruling 5), never
-      // for a scratch chat (decision 008 clause 5: an untrusted checkout reads neither).
+      // S-3 P-1, ruling 19: the user layer (the app's own config dir, `~/.pilab/<profile>/
+      // claude`), and the project's and the user's private project settings (ruling 5);
+      // project and local never for a scratch chat (decision 008 clause 5).
       settingSources: launchSettingSources(this.config.settingSources, projectTrusted),
-      // S-3 P-2, P-4: a repository's hooks and allow rules apply as the CLI applies them
-      // (ruling 5); the policy tier only closes plugin marketplaces, which a trusted
-      // workspace would otherwise clone at start-up past the gateway (git over ssh).
-      // Dropped if an IT-managed tier exists on the machine and does not opt in
-      // (`parentSettingsBehavior`), see the prototype doc §4.
-      managedSettings: { strictKnownMarketplaces: [] } as Options['managedSettings'],
+      // A repository's hooks, allow rules and plugin marketplaces apply as the CLI applies
+      // them (rulings 5, 18): no policy tier of PiLab's.
       // S-3 P-3: a project the user opened is trusted, or the CLI drops its allow rules.
       // Untyped in 0.3.300 (measured); recorded in the app-private config dir.
       ...(projectTrusted
@@ -695,8 +685,6 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       // Set once at launch so a later switch to "bypass" is accepted; the mode itself stays ours.
       allowDangerouslySkipPermissions: true,
       canUseTool: this.canUseTool,
-      // In-process: callback hooks are not settings hooks, so no settings tier turns them off.
-      hooks: { PreToolUse: [{ hooks: [this.planModeGuard] }] },
       includePartialMessages: true,
       ...(stub.started ? { resume: stub.ccSessionId } : { sessionId: stub.ccSessionId }),
       // The CLI Main chose (route B S-4 B-4). A .js CLI runs on this host's own node (the
@@ -1541,14 +1529,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   // ---- approvals and questions ----------------------------------------------------
 
   /**
-   * S-2 A-2: the CLI's mode decides what needs asking, and the host never
-   * answers for the user. In plan mode the CLI asks about file changes and
-   * shell commands it could not class as read-only, and carries them out if
-   * allowed (it does not enforce plan mode itself, s2 topic §4.2): those are
-   * refused, with no card, until a plan is approved. Everything else that
-   * reaches here (a read outside the workspace, a web fetch, an MCP tool; in
-   * the other modes a call Auto's check hands to a person, a safety check
-   * Bypass does not skip, an ask in Manual) is the user's card.
+   * The CLI's mode decides what needs asking, and the host never answers for the
+   * user: everything that reaches here (an ask in Manual, a call Auto's check hands
+   * to a person, a safety check Bypass does not skip, a change in plan mode) is the
+   * user's card. Plan mode is the CLI's own (ruling 20, official behaviour).
    */
   private readonly canUseTool: CanUseTool = (toolName, input, opts) => {
     if (process.env.AICLIENT_CLAUDE_SDK_TRACE) {
@@ -1558,53 +1542,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     }
     if (toolName === 'AskUserQuestion') return this.askQuestion(input, opts.toolUseID, opts.signal);
     if (toolName === 'ExitPlanMode') return this.reviewPlan(input, opts.toolUseID, opts.signal);
-    if (
-      this.permissions.mode === 'plan' &&
-      (FILE_CHANGE_TOOLS.has(toolName) || SHELL_TOOLS.has(toolName))
-    ) {
-      this.turn?.toolOutcome.set(opts.toolUseID, 'refused');
-      return Promise.resolve({ behavior: 'deny', message: PLAN_MODE_REFUSAL });
-    }
     return this.askPermission(toolName, input, opts);
-  };
-
-  /**
-   * Plan mode, past what allows a call before `canUseTool` (which refuses changes
-   * in plan mode, S-2 A-2). Sent back to `canUseTool` while the chat is in plan mode:
-   * - S-2 A-20: the file changes of a subagent the repository declares with a wider
-   *   mode (`.claude/agents/*.md` `permissionMode: acceptEdits`, `auto`), which
-   *   write without asking even in plan mode (measured);
-   * - S-3 P-9: any agent's shell command outside the exploration grammar DSH's plan
-   *   mode admits (`isExplorationCommand`), so neither an allow rule (the project's,
-   *   the user's local one, "allow for this session") nor a repository hook's
-   *   `allow` runs one: 2.1.300 lets a rule allow a shell call before any plan-mode
-   *   check. The main agent's file changes need nothing: the CLI refuses those in
-   *   plan mode before it reads allow rules (probe `projcfg`).
-   * A hook's `ask` outranks another hook's `allow`. In every other mode the
-   * repository's declarations stand (ruling 5).
-   */
-  private readonly planModeGuard: HookCallback = async (input) => {
-    const call = input as {
-      hook_event_name?: string;
-      agent_id?: string;
-      permission_mode?: string;
-      tool_name?: string;
-      tool_input?: { command?: unknown };
-    };
-    if (call.hook_event_name !== 'PreToolUse' || this.permissions.mode !== 'plan') return {};
-    const tool = call.tool_name ?? '';
-    const command = call.tool_input?.command;
-    const sendBack = SHELL_TOOLS.has(tool)
-      ? !(typeof command === 'string' && isExplorationCommand(command))
-      : FILE_CHANGE_TOOLS.has(tool) && Boolean(call.agent_id) && call.permission_mode !== 'plan';
-    if (!sendBack) return {};
-    return {
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'ask',
-        permissionDecisionReason: 'The chat is in plan mode',
-      },
-    };
   };
 
   private askPermission(
