@@ -35,8 +35,15 @@ Role: evidence（脱敏摘要）。上位：[S-5 记录](../topics/s5-regression
 - 通过：第三方声明、无旧 worker、DSH 宿主产物（85.2 MiB、9769 个文件）、SDK 宿主产物（262.2 MiB、19 个文件，其中 CLI 258.3 MiB）、DSH 冒烟、SDK 冒烟（8 条）。
 - 安装后增量即 SDK 宿主产物 262.2 MiB，低于 0.6 GB 门槛。
 
-## 4 未覆盖
+## 4 安装目录的界面点验（README §11.2 #43）
+
+- 同一个 `win-unpacked`，隔离 profile（临时 home），用本机已登录账号的凭据副本过登录页，副本用完连同临时 home 删掉。
+- [GUI 清单](../topics/gui-checklist.md) 9 项全过，细节见清单 §2.1。
+- 假网关收到 15 个请求：13 个 SDK 回合、1 个自动模式的安全检查、1 个 DSH 回合；SDK 回合的 User-Agent 带 `client-app/pilab/1.1.1-test.1`。日志里没有 key 原文。
+- 退出应用后 2 秒内宿主与 CLI 进程全部退出。
+
+## 5 未覆盖
 
 - 真实网关上的 T1 复跑与自动模式回合（README §9.2 #32）：待用户。
 - Linux：CI 的 Linux 打包作业第一次推送后才跑（README §11.2 #44）；录制门禁在 Linux 上先只报告。
-- 安装包界面里的 SDK 回合：安装包强制登录，留给 S-6（README §11.2 #43）。
+- 加密机上的正式安装包：S-6。

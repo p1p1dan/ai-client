@@ -46,7 +46,10 @@ export class Cdp {
       try {
         const res = await fetch(`http://127.0.0.1:${port}/json/list`);
         const targets = await res.json();
-        const page = targets.find((t) => t.type === 'page' && /^https?:\/\//.test(t.url ?? ''));
+        // The dev server's page (http) or a packaged build's (file://.../app.asar/...).
+        const page = targets.find(
+          (t) => t.type === 'page' && /^(?:https?:\/\/|file:\/\/\/)/.test(t.url ?? '')
+        );
         if (page?.webSocketDebuggerUrl) {
           const client = new Cdp();
           await client.#connect(page.webSocketDebuggerUrl);
