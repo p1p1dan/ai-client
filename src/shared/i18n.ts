@@ -4575,8 +4575,8 @@ Object.assign(zhTranslations, {
     '工作区内的读取直接进行；编辑、会改动内容的命令以及工作区外的操作都先问你。',
   'File edits in the workspace and simple file commands run without asking; other commands still ask.':
     '工作区内的文件编辑和简单的文件命令直接进行；其他命令仍会先问你。',
-  'Explores and reads without changing anything, then presents its plan for your review.':
-    '只探索和阅读、不做改动，然后交出计划请你审阅。',
+  "Explores and plans, then presents the plan for your review. It is asked not to change anything meanwhile; a change it tries anyway goes to Auto's check or to you.":
+    '先探索和规划，再交出计划请你审阅。规划期间它被要求不做改动；若仍要改动，交给自动模式的安全检查或由你决定。',
   'Reads and workspace edits run without asking; other calls pass a safety check first. What it blocks, or cannot check, does not run; after several blocks in a row it asks you.':
     '读取和工作区内的编辑直接进行；其他调用先过安全检查，被拦下或检查不可用的不执行，连续被拦几次后会问你。',
   'Runs calls without asking; a few dangerous ones, such as deleting the workspace, still ask.':

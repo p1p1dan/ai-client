@@ -44,7 +44,7 @@ export const CLAUDE_SDK_CREDENTIALS_UNAVAILABLE = 'claude_sdk_credentials_unavai
 export const CLAUDE_SDK_HOST_UNAVAILABLE = 'claude_sdk_host_unavailable';
 
 /** `CLAUDE_CONFIG_DIR` of every SDK chat, under the app state root. */
-export const CLAUDE_SDK_HOME_DIR_NAME = 'claude-sdk-home';
+export const CLAUDE_SDK_HOME_DIR_NAME = 'claude';
 
 export type ClaudeSdkPlanView = Pick<DshModelPlan, 'index' | 'routes' | 'refs'>;
 
@@ -337,11 +337,12 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
     AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
     // From the plan (decision 3); the key goes by IPC, never here (S-3 K-5).
     AICLIENT_CLAUDE_SDK_BASE_URL: baseURL,
+    // Ruling 19: the user layer is this app's config dir (`configDir`), never ~/.claude;
     // S-3 P-1 (ruling 5): the project's settings and CLAUDE.md, and the user's private
-    // project settings (`.claude/settings.local.json`, CLAUDE.local.md); never the user's
-    // ~/.claude. A scratch chat reads neither (the host closes them). Dev override.
+    // project settings (`.claude/settings.local.json`, CLAUDE.local.md). A scratch chat
+    // reads neither of the last two (the host closes them). Dev override.
     AICLIENT_CLAUDE_SDK_SETTING_SOURCES:
-      process.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES?.trim() ?? 'project,local',
+      process.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES?.trim() ?? 'user,project,local',
     AICLIENT_CLAUDE_SDK_CLIENT_APP: `pilab/${app.getVersion()}`,
     // Dev override: another CLI binary.
     ...(process.env.AICLIENT_CLAUDE_SDK_CLI?.trim()
