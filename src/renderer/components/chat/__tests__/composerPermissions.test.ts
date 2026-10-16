@@ -7,6 +7,10 @@ import { useLegacyMigrationStore } from '@/stores/legacyMigration';
 import { type ComposerGoalEntry, ComposerPermissionTrigger } from '../ComposerPermissionTrigger';
 import { applyGoalStartLive, GOAL_ENTRY_HINT_LIVE, planGoalStart } from '../goalStart';
 import {
+  adoptStartScreenPermissions,
+  clearStartScreenPermissions,
+  holdStartScreenPermissions,
+  peekStartScreenPermissions,
   readDefaultPermissions,
   readSessionPermissions,
   writeSessionPermissions,
@@ -41,6 +45,7 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal('electronAPI', { chat: { setPermissions } });
   localStorage.clear();
+  clearStartScreenPermissions();
   setPermissions.mockReset();
   toasts.length = 0;
   useLegacyMigrationStore.setState({ migrating: {}, postureRevisions: {} });
@@ -85,6 +90,10 @@ function choice(text: string) {
   );
 }
 const chip = () => container.querySelector('button');
+/** What the start screen's Apply does for bypass, without the clicks. */
+function holdBypass() {
+  holdStartScreenPermissions({ mode: 'agent', gear: 'bypass' });
+}
 const confirmButton = () =>
   [...document.querySelectorAll('button')].find((button) => button.textContent === '应用') ?? null;
 
@@ -274,24 +283,75 @@ describe('a turn in flight locks plan mode and leaves the gear presets open', ()
 
 /**
  * The fifth preset. `bypass` answers every approval prompt on the user's
- * behalf, including the shell calls `auto` still stops for, so the three
- * claims worth pinning here are: it cannot be reached in one press, it cannot
- * be reached at all before a chat exists, and it is visible for as long as it
- * is on (decision 023 of runtime-hardening, unchanged by decision 166).
+ * behalf, including the shell calls `auto` still stops for, so the claims
+ * worth pinning here are: it cannot be reached in one press, it is never the
+ * new-chat default, and it is visible for as long as it is on (decision 023 of
+ * runtime-hardening). Since the user ruling of 2026-10-16 it can be turned on
+ * before the first message, for the chat that message starts only.
  */
 describe('bypass · the composer side', () => {
-  it('cannot be picked on the start screen, where no thread would honour it', async () => {
+  it('on the start screen it is held for the next chat only, never the default', async () => {
     await render(null);
     await open();
     const item = choice('完全放行');
-    expect(item).not.toBeNull();
-    // Base UI marks a disabled radio item rather than removing it, so the
-    // preset is still legible — with the reason attached.
-    expect(item?.getAttribute('data-disabled')).not.toBeNull();
-    expect(item?.textContent).toContain('需要先有对话才能开启');
+    expect(item?.getAttribute('data-disabled')).toBeNull();
     await click(item);
-    expect(readDefaultPermissions()).toBeNull();
+    // Still two presses, and the confirmation says how far it reaches.
+    expect(peekStartScreenPermissions()).toBeNull();
+    expect(document.body.textContent).toContain('所有工具调用都不再询问');
+    expect(document.body.textContent).toContain('只作用于下一句话新建的对话');
+    await click(confirmButton());
     expect(setPermissions).not.toHaveBeenCalled();
+    expect(readDefaultPermissions()).toBeNull();
+    expect(peekStartScreenPermissions()).toEqual({ mode: 'agent', gear: 'bypass' });
+    expect(chip()?.textContent).toBe('完全放行');
+    expect(chip()?.className).toContain('text-destructive');
+    expect(chip()?.getAttribute('title')).toContain('只作用于下一句话新建的对话');
+  });
+
+  it('the start screen shows the hold again when it comes back, and a chat never does', async () => {
+    holdBypass();
+    // Back on the start screen (a fresh chip): it still says what the next chat gets.
+    await render(null);
+    expect(chip()?.textContent).toBe('完全放行');
+    // An existing chat with no posture of its own is not the chat the hold is for.
+    await render('s1');
+    expect(chip()?.textContent).toBe('改动前确认');
+  });
+
+  it('another preset picked on the start screen drops the hold and is the default', async () => {
+    await render(null);
+    await open();
+    await click(choice('完全放行'));
+    await click(confirmButton());
+    await open();
+    await click(choice('自动编辑'));
+    expect(peekStartScreenPermissions()).toBeNull();
+    expect(readDefaultPermissions()).toEqual({ mode: 'agent', gear: 'accept-edits' });
+    expect(chip()?.textContent).toBe('自动编辑');
+  });
+
+  it('the chat the start screen makes takes the hold; nothing else does', () => {
+    writeSessionPermissions('old', { mode: 'agent', gear: 'ask' });
+    // Nothing held: nothing adopted.
+    expect(adoptStartScreenPermissions('fresh-0')).toBeNull();
+    expect(readSessionPermissions('fresh-0')).toBeNull();
+    // A chat with a posture of its own keeps it, and the hold is spent.
+    clearStartScreenPermissions();
+    expect(peekStartScreenPermissions()).toBeNull();
+    writeSessionPermissions('own', { mode: 'agent', gear: 'auto' });
+    holdBypass();
+    expect(adoptStartScreenPermissions('own')).toBeNull();
+    expect(readSessionPermissions('own')).toEqual({ mode: 'agent', gear: 'auto' });
+    expect(peekStartScreenPermissions()).toBeNull();
+    // A fresh chat starts on it, once.
+    holdBypass();
+    expect(adoptStartScreenPermissions('fresh-1')).toEqual({ mode: 'agent', gear: 'bypass' });
+    expect(readSessionPermissions('fresh-1')).toEqual({ mode: 'agent', gear: 'bypass' });
+    expect(adoptStartScreenPermissions('fresh-2')).toBeNull();
+    expect(readSessionPermissions('fresh-2')).toBeNull();
+    expect(readSessionPermissions('old')).toEqual({ mode: 'agent', gear: 'ask' });
+    expect(readDefaultPermissions()).toBeNull();
   });
 
   it('asks a second time before it applies, and says what it turns off', async () => {

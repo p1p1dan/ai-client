@@ -2894,7 +2894,7 @@ export const zhTranslations: Record<string, string> = {
   'Turn off every approval prompt?': '关闭全部授权询问？',
   'Every tool call runs without asking, including the commands full auto still stops to confirm. Explicit deny rules still apply. This is never saved as the default for new chats.':
     '所有工具调用都不再询问，包括「全自动」仍会停下确认的那些命令。明确的拒绝规则依然生效。该档位不会被保存为新对话的默认。',
-  'Can be turned on once this chat exists.': '需要先有对话才能开启。',
+  'Applies only to the chat your next message starts.': '只作用于下一句话新建的对话。',
   'Check that Claude Code or Codex has been used on this machine and that its session directory holds JSONL records.':
     '请确认本机使用过 Claude Code 或 Codex，且会话目录中存在 JSONL 记录。',
   "Copies history read-only from this machine's Claude Code or Codex session directories, so you can carry on in Pi":

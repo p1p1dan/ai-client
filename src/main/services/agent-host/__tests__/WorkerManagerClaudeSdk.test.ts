@@ -1085,11 +1085,31 @@ describe('WorkerManager on the Claude Agent SDK engine: permission modes (route 
     );
   });
 
-  it('a fallback keeps Manual, Plan and Bypass permissions as they were', async () => {
+  it('a fallback leaves Bypass permissions for Manual too (user ruling 2026-10-16)', async () => {
+    // A new chat can start on bypass now (picked on the start screen); DSH's asks
+    // for nothing at all, the SDK's still asks for a few dangerous calls.
+    const h = createHarness();
+    h.createSlot.mockImplementationOnce(async (options: Record<string, unknown>) => {
+      (options.createTransport as (input: unknown) => unknown)({ generation: 1, cwd: '/repo' });
+      throw Object.assign(new Error('Worker exited before bootstrap'), { code: 'WORKER_EXITED' });
+    });
+    await h.manager.createSession({
+      sessionId: 's1',
+      workspacePath: '/repo',
+      model: 'claude/claude-opus-5',
+      permissions: { mode: 'agent', gear: 'bypass' },
+    });
+    expect(h.latest('s1').sdk).toBe(false);
+    expect(posture(h.latest('s1'))).toEqual({ mode: 'agent', gear: 'ask' });
+    expect(
+      h.eventsOf('session.permissions', 's1').map((e) => (e.payload as { cause: string }).cause)
+    ).toEqual(['sync']);
+  });
+
+  it('a fallback keeps Manual and Plan as they were', async () => {
     for (const permissions of [
       { mode: 'agent', gear: 'ask' },
       { mode: 'plan', gear: 'auto' },
-      { mode: 'agent', gear: 'bypass' },
     ] as const) {
       const h = createHarness();
       h.createSlot.mockImplementationOnce(async (options: Record<string, unknown>) => {

@@ -210,6 +210,7 @@ import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
 import { archiveSessionIndexEntry } from './sessionIndex/useSessionIndex';
 import { deriveGoalBarView } from './sessionPanelsModel';
 import {
+  adoptStartScreenPermissions,
   readDefaultPermissions,
   readSessionPermissions,
   writeSessionPermissions,
@@ -1657,6 +1658,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       ? createChatSessionOnWorkspace(workspace.id)
       : createUnboundChatSession();
     if (!sessionId) return;
+    // User ruling 2026-10-16: bypass picked on this page goes to the chat it just
+    // made, whether the message goes out now or waits in the queue.
+    adoptStartScreenPermissions(sessionId);
 
     if (action === 'enqueue') {
       const queued: QueuedMessage = {
@@ -2170,6 +2174,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
      */
     const sessionId = options.home?.sessionId ?? activeSessionId ?? createUnboundChatSession();
     captureSessionGenerationPreferences(sessionId, chatAgentDefaults);
+    // User ruling 2026-10-16: a chat made here for want of any (no home page in
+    // between) takes bypass picked on the start screen, as the home send's does.
+    if (!options.home && activeSessionId === null) adoptStartScreenPermissions(sessionId);
     inFlightRef.current = true;
     inFlightSessionIdRef.current = sessionId;
     // F6: this attempt's cancellation token — handleStop bumps the shared

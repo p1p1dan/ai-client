@@ -39,6 +39,9 @@ import {
   SDK_MODE_DESCRIPTIONS,
 } from './sdkModeCopy';
 import {
+  clearStartScreenPermissions,
+  holdStartScreenPermissions,
+  peekStartScreenPermissions,
   readDefaultPermissions,
   readSessionPermissions,
   writeDefaultPermissions,
@@ -50,7 +53,7 @@ function readPermissionsFor(
   engine: ChatEngine | undefined
 ): RuntimePermissionSettings {
   return (
-    (sessionId ? readSessionPermissions(sessionId) : null) ??
+    (sessionId ? readSessionPermissions(sessionId) : peekStartScreenPermissions()) ??
     readDefaultPermissions(engine) ??
     DEFAULT_RUNTIME_PERMISSION
   );
@@ -196,7 +199,12 @@ export function ComposerPermissionTrigger({
       if (sessionId) {
         await window.electronAPI.chat.setPermissions({ sessionId, permissions: next });
         writeSessionPermissions(sessionId, next);
+      } else if (next.gear === 'bypass') {
+        // User ruling 2026-10-16: bypass can be turned on before the first message,
+        // for the chat that message starts only; never as the new-chat default.
+        holdStartScreenPermissions(next);
       } else {
+        clearStartScreenPermissions();
         // S-2: remembered with the engine whose wording it was picked under.
         writeDefaultPermissions(next, sdk ? 'claude-sdk' : 'dsh');
       }
@@ -245,7 +253,15 @@ export function ComposerPermissionTrigger({
           gear: t(PERMISSION_GEAR_LABELS[settings.gear]),
         })
       : null;
-  const scope = sessionId ? t('Applies immediately, to this thread.') : t('Applies to new chats.');
+  const scope = sessionId
+    ? t('Applies immediately, to this thread.')
+    : settings.gear === 'bypass'
+      ? t('Applies only to the chat your next message starts.')
+      : t('Applies to new chats.');
+  /** Bypass picked here, before any chat exists: it is never the new-chat default. */
+  const bypassScope = sessionId ? null : (
+    <span className="mt-1 block">{t('Applies only to the chat your next message starts.')}</span>
+  );
   /**
    * A running turn locks the MODE and leaves the gear open.
    *
@@ -324,7 +340,7 @@ export function ComposerPermissionTrigger({
                       ? SDK_AUTO_CONFIRMATION
                       : 'Runs the available tools automatically, including operations outside the workspace; explicit deny rules still apply.'
                   )}
-              {confirming === 'bypass' ? '' : scope}
+              {confirming === 'bypass' ? bypassScope : scope}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -363,16 +379,12 @@ export function ComposerPermissionTrigger({
             >
               {options.map((option) => {
                 const OptionIcon = option.icon;
-                // `bypass` never becomes a new-chat default, so offering it on
-                // the start screen would show a chip the next session would not
-                // honour. It is a live-thread decision, taken in the thread.
-                const unavailable = option.id === 'bypass' && !sessionId;
                 const locked = lockedByTurn(option.id);
                 return (
                   <MenuPrimitive.RadioItem
                     key={option.id}
                     value={option.id}
-                    disabled={pending || unavailable || locked}
+                    disabled={pending || locked}
                     // U30 rev.3 — closing is Base UI's own press handling, never
                     // a consequence of the worker acknowledging: a slow or failed
                     // `setPermissions` must not leave the popup up with the
@@ -386,11 +398,7 @@ export function ComposerPermissionTrigger({
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span>{t(presetLabels[option.id])}</span>
                       <span className="text-meta text-muted-foreground">
-                        {locked
-                          ? t('Can be changed once this turn ends.')
-                          : unavailable
-                            ? t('Can be turned on once this chat exists.')
-                            : t(option.description)}
+                        {locked ? t('Can be changed once this turn ends.') : t(option.description)}
                       </span>
                     </span>
                     <MenuPrimitive.RadioItemIndicator>

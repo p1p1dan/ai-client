@@ -245,6 +245,43 @@ export function copySessionPreferences(fromSessionId: string, toSessionId: strin
 }
 
 /**
+ * Bypass picked on the start screen (user ruling 2026-10-16, route B plan
+ * README §1 ruling 16): it applies to the chat the next start-screen send
+ * creates, and to nothing else. Held in memory only, never in storage, so it
+ * is never a new-chat default (`writeDefaultPermissions` still refuses one)
+ * and an app restart forgets it.
+ */
+let startScreenBypass: RuntimePermissionSettings | null = null;
+
+/** Hold `settings` for the next chat the start screen starts; only bypass is ever held. */
+export function holdStartScreenPermissions(settings: RuntimePermissionSettings): void {
+  startScreenBypass = settings.gear === 'bypass' ? settings : null;
+}
+
+/** What the start screen holds for its next chat, if anything. */
+export function peekStartScreenPermissions(): RuntimePermissionSettings | null {
+  return startScreenBypass;
+}
+
+/** Drop the start screen's hold (another preset was picked there). */
+export function clearStartScreenPermissions(): void {
+  startScreenBypass = null;
+}
+
+/**
+ * The chat a start-screen send just created takes what the start screen held,
+ * unless it already has a posture of its own; the hold is spent either way.
+ * Returns what the chat now starts on from the hold, or null.
+ */
+export function adoptStartScreenPermissions(sessionId: string): RuntimePermissionSettings | null {
+  const held = startScreenBypass;
+  startScreenBypass = null;
+  if (!held || readSessionPermissions(sessionId) !== null) return null;
+  writeSessionPermissions(sessionId, held);
+  return held;
+}
+
+/**
  * Remember the gear new chats start on — except `bypass`.
  *
  * `bypass` turns off every approval prompt, and a default is the one setting

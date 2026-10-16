@@ -3381,11 +3381,16 @@ export class WorkerManager {
    * automatically still asks for commands other than simple file ones. DSH's
    * gears of the same slots run every workspace command unasked. A new chat that
    * falls back to DSH with either starts on Manual; true when it did (the
-   * renderer is told).
+   * renderer is told). So does Bypass permissions, which a new chat can start on
+   * since the user ruling of 2026-10-16: the SDK's still asks for a few dangerous
+   * calls, DSH's asks for none.
    */
   private narrowForDshFallback(entry: ManagedSlot): boolean {
     const gear = entry.permissions?.gear;
-    if (entry.permissions?.mode !== 'agent' || (gear !== 'auto' && gear !== 'accept-edits'))
+    if (
+      entry.permissions?.mode !== 'agent' ||
+      (gear !== 'auto' && gear !== 'accept-edits' && gear !== 'bypass')
+    )
       return false;
     entry.permissions = { mode: 'agent', gear: 'ask' };
     return true;
