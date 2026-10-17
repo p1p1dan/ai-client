@@ -1526,3 +1526,46 @@ describe('turns the CLI started by itself, reopened (S-6)', () => {
     await rt.dispose();
   });
 });
+
+describe('a wake-up whose own row the SDK reader drops (S-6, measured)', () => {
+  it('heads the reply that answers it, read from the moved file of a chat in a worktree', async () => {
+    const { rt } = await started();
+    const stub = (rt as unknown as { stub: { ccSessionId: string; started: boolean } }).stub;
+    stub.started = true;
+    const id = stub.ccSessionId;
+    // The chat entered a worktree: the CLI keeps its file under that worktree's project dir.
+    const dir = join(configDir, 'projects', 'C--proj--claude-worktrees-wt');
+    mkdirSync(dir, { recursive: true });
+    const raw = [
+      { type: 'user', uuid: 'w1', isMeta: true, turnOrigin: 'scheduled' },
+      { type: 'assistant', uuid: 'a1', parentUuid: 'w1' },
+    ];
+    writeFileSync(join(dir, `${id}.jsonl`), raw.map((row) => JSON.stringify(row)).join('\n'));
+    const sdkModule = await import('@anthropic-ai/claude-agent-sdk');
+    vi.mocked(sdkModule.getSessionMessages).mockResolvedValueOnce([
+      {
+        type: 'user',
+        uuid: 'u0',
+        session_id: id,
+        parent_tool_use_id: null,
+        parent_agent_id: null,
+        message: { role: 'user', content: 'schedule a wake-up' },
+      },
+      {
+        type: 'assistant',
+        uuid: 'a1',
+        session_id: id,
+        parent_tool_use_id: null,
+        parent_agent_id: null,
+        message: { role: 'assistant', id: 'msg-a1', content: [{ type: 'text', text: 'woke up' }] },
+      },
+    ]);
+    const page = (await rt.history({ logicalSessionId: 'chat-1' })).page;
+    expect(page.messages.map((m) => ({ id: m.id, origin: m.origin }))).toEqual([
+      { id: 'h:u0', origin: undefined },
+      { id: 'h:a1-scheduled', origin: { kind: 'scheduled' } },
+      { id: 'h:a1', origin: undefined },
+    ]);
+    await rt.dispose();
+  });
+});

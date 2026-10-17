@@ -2310,18 +2310,23 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   }
 
   /**
-   * S-6: the uuids of the transcript rows the CLI wrote for a schedule that came due
-   * (`turnOrigin: "scheduled"`), read from the file itself: the SDK's reader drops the field.
+   * S-6: the transcript rows the CLI wrote for a schedule that came due
+   * (`turnOrigin: "scheduled"`, `isMeta`), read from the file itself: the SDK's reader
+   * drops those rows altogether (measured, 0.3.300), so the reply that follows one
+   * (`heads`: the assistant row whose parent it is) is where the turn's head goes.
+   * Every copy is read: a chat that entered a worktree has its file under that worktree's
+   * project directory.
    */
-  private scheduledPromptIds(ccSessionId: string): Set<string> {
-    const ids = new Set<string>();
-    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return ids;
+  private scheduledPrompts(ccSessionId: string): { rows: Set<string>; heads: Set<string> } {
+    const rows = new Set<string>();
+    const heads = new Set<string>();
+    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return { rows, heads };
     const root = path.join(this.config.configDir, 'projects');
     let dirs: string[] = [];
     try {
       dirs = readdirSync(root);
     } catch {
-      return ids;
+      return { rows, heads };
     }
     for (const dir of dirs) {
       let raw: string;
@@ -2330,18 +2335,34 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       } catch {
         continue;
       }
+      const parsed: Array<{ uuid?: unknown; parentUuid?: unknown; type?: unknown }> = [];
       for (const line of raw.split(/\r?\n/)) {
-        if (!line.includes('"turnOrigin":"scheduled"')) continue;
+        if (!line.trim()) continue;
         try {
-          const row = JSON.parse(line) as { uuid?: unknown };
-          if (typeof row.uuid === 'string') ids.add(row.uuid);
+          const row = JSON.parse(line) as {
+            uuid?: unknown;
+            parentUuid?: unknown;
+            type?: unknown;
+            turnOrigin?: unknown;
+          };
+          parsed.push(row);
+          if (row.turnOrigin === 'scheduled' && typeof row.uuid === 'string') rows.add(row.uuid);
         } catch {
           // a torn line
         }
       }
-      break;
+      for (const row of parsed) {
+        if (
+          row.type === 'assistant' &&
+          typeof row.uuid === 'string' &&
+          typeof row.parentUuid === 'string' &&
+          rows.has(row.parentUuid)
+        ) {
+          heads.add(row.uuid);
+        }
+      }
     }
-    return ids;
+    return { rows, heads };
   }
 
   /** The CLI's own transcript, projected onto history messages (tool results folded into their call's message). */
@@ -2356,8 +2377,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const out: HistoryMessage[] = [];
     const byApiId = new Map<string, HistoryMessage>();
     const toolOwner = new Map<string, HistoryMessage>();
-    // S-6: rows the CLI wrote for itself, which the SDK's reader does not mark.
-    const scheduled = this.scheduledPromptIds(ccSessionId);
+    // S-6: rows the CLI wrote for itself, which the SDK's reader does not mark (or drops).
+    const scheduled = this.scheduledPrompts(ccSessionId);
     for (const entry of entries) {
       if (entry.parent_tool_use_id) continue;
       const message = record(entry.message) ?? {};
@@ -2389,7 +2410,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         // S-6: a turn the CLI started by itself reads as it did live, as an engine turn's
         // head, never as something the user typed: a schedule that came due, or a
         // background task's (or subagent's) notification.
-        const origin: TurnOrigin | undefined = scheduled.has(entry.uuid)
+        const origin: TurnOrigin | undefined = scheduled.rows.has(entry.uuid)
           ? { kind: 'scheduled' }
           : trimmed.startsWith('<task-notification>')
             ? /<summary>Agent /.test(trimmed)
@@ -2417,6 +2438,16 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         continue;
       }
       if (entry.type !== 'assistant') continue;
+      // The reply to a schedule that came due, whose own row the SDK dropped: its head first.
+      if (scheduled.heads.has(entry.uuid)) {
+        out.push({
+          id: `h:${entry.uuid}-scheduled`,
+          entryId: entry.uuid,
+          role: 'user',
+          origin: { kind: 'scheduled' },
+          blocks: [],
+        });
+      }
       const apiId = typeof message.id === 'string' ? message.id : entry.uuid;
       let target = byApiId.get(apiId);
       if (!target) {
