@@ -6,7 +6,9 @@ import {
   AUTOMATIC_MODEL_LABEL,
   filterChatModels,
   groupChatModels,
+  LOCKED_MODEL_HINT,
   modelCatalogForEngine,
+  modelMenuOptionsFor,
   modelOptionsFor,
   modelScopeHint,
   modelVerification,
@@ -268,6 +270,93 @@ describe('S-1 model list of a Claude-engine chat', () => {
         catalogAuthoritative: true,
       })
     ).toBe('verified');
+  });
+});
+
+/**
+ * S-6 feedback 3 (claude-sdk-engine README ruling 25): a Claude-engine chat
+ * lists the whole catalog, the models it cannot switch to locked.
+ */
+describe('S-6 the greyed-out models of a Claude-engine chat', () => {
+  const SDK_CATALOG: AgentModelOption[] = [
+    { id: 'company/claude-opus-5', label: 'Claude Opus 5', tags: ['claude'], sdkRoute: 'claude' },
+    { id: 'company/glm-5', label: 'GLM 5', tags: ['china'] },
+    { id: 'byok/claude-opus-5', label: 'Claude Opus 5 (own key)', sdkRoute: 'claude~2' },
+  ];
+  const locked = (options: ReturnType<typeof modelMenuOptionsFor>) =>
+    options.filter((option) => option.locked).map((option) => option.id);
+
+  it('lists the whole catalog in its order, locking what the chat cannot switch to', () => {
+    const options = modelMenuOptionsFor(SDK_CATALOG, {
+      engine: 'claude-sdk',
+      engineRoute: 'claude',
+    });
+    expect(options.map((option) => option.id)).toEqual([
+      AUTOMATIC_MODEL_ID,
+      'company/claude-opus-5',
+      'company/glm-5',
+      'byok/claude-opus-5',
+    ]);
+    expect(locked(options)).toEqual(['company/glm-5', 'byok/claude-opus-5']);
+    // An SDK chat whose route is not known yet still locks only the other engine.
+    expect(locked(modelMenuOptionsFor(SDK_CATALOG, { engine: 'claude-sdk' }))).toEqual([
+      'company/glm-5',
+    ]);
+  });
+
+  it('locks nothing for any other chat, or a draft', () => {
+    for (const session of [
+      null,
+      undefined,
+      {},
+      { engine: 'dsh' as const, engineRoute: 'claude' },
+    ]) {
+      const options = modelMenuOptionsFor(SDK_CATALOG, session);
+      expect(locked(options)).toEqual([]);
+      expect(options).toEqual(modelOptionsFor(SDK_CATALOG));
+    }
+  });
+
+  it('turns a locked model into a disabled row with the hint, never the selected one', () => {
+    const options = modelMenuOptionsFor(SDK_CATALOG, {
+      engine: 'claude-sdk',
+      engineRoute: 'claude',
+    });
+    const menu = composerModelMenuModel({
+      options,
+      selectedModel: 'company/claude-opus-5',
+      selectedEffort: 'default',
+      lockedModelHint: LOCKED_MODEL_HINT,
+    });
+    const rows = menu.sections[0]?.items ?? [];
+    expect(rows.map((row) => [row.id, row.selected, row.disabled ?? false])).toEqual([
+      [AUTOMATIC_MODEL_ID, false, false],
+      ['company/claude-opus-5', true, false],
+      ['company/glm-5', false, true],
+      ['byok/claude-opus-5', false, true],
+    ]);
+    expect(rows.find((row) => row.id === 'company/glm-5')?.hint).toBe(LOCKED_MODEL_HINT);
+    expect(rows.find((row) => row.id === 'company/claude-opus-5')?.hint).toBeUndefined();
+    expect(LOCKED_MODEL_HINT).toContain('Start a new chat');
+  });
+
+  it('keeps a stored locked model as the unverified leftover, listed once', () => {
+    const options = modelMenuOptionsFor(SDK_CATALOG, {
+      engine: 'claude-sdk',
+      engineRoute: 'claude',
+    });
+    const menu = composerModelMenuModel({
+      options,
+      selectedModel: 'company/glm-5',
+      selectedEffort: 'default',
+      unknownModelLabel: unverifiedModelLabel('company/glm-5'),
+      lockedModelHint: LOCKED_MODEL_HINT,
+    });
+    const rows = menu.sections[0]?.items ?? [];
+    expect(rows.filter((row) => row.id === 'company/glm-5')).toEqual([
+      { id: 'company/glm-5', label: 'company/glm-5 · unverified', selected: true, verified: false },
+    ]);
+    expect(rows.filter((row) => row.selected).map((row) => row.id)).toEqual(['company/glm-5']);
   });
 });
 

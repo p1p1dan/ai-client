@@ -59,6 +59,11 @@ export interface ChatModel {
    * point of the flag).
    */
   verified?: boolean;
+  /**
+   * S-6 feedback 3: a catalog model this chat cannot switch to (another route of
+   * an Agent SDK chat, `modelMenuOptionsFor`). Listed greyed out, never selectable.
+   */
+  locked?: boolean;
 }
 
 /**
@@ -163,6 +168,30 @@ export function modelCatalogForEngine(
   const route = session.engineRoute;
   return catalog.filter((option) => (route ? option.sdkRoute === route : Boolean(option.sdkRoute)));
 }
+
+/**
+ * S-6 feedback 3 (claude-sdk-engine README ruling 25): the rows a chat's model
+ * menu lists. The whole catalog, in its own order, so the menu reads the same
+ * as any other chat's; the models `modelCatalogForEngine` leaves out are marked
+ * `locked` and shown greyed out with a hint to start a new chat. Display only:
+ * Main still refuses them with `model_engine_mismatch`. Lift the lock once
+ * switching across engines exists (https://github.com/p1p1dan/ai-client/issues/23).
+ */
+export function modelMenuOptionsFor(
+  catalog: readonly AgentModelOption[],
+  session: { engine?: ChatEngine; engineRoute?: string } | null | undefined
+): ChatModel[] {
+  const offered = new Set(modelCatalogForEngine(catalog, session).map((option) => option.id));
+  return modelOptionsFor(catalog).map((option) =>
+    option.id === AUTOMATIC_MODEL_ID || offered.has(option.id)
+      ? option
+      : { ...option, locked: true }
+  );
+}
+
+/** The hover hint of a locked row (a catalog key). */
+export const LOCKED_MODEL_HINT =
+  'An Agent SDK chat can only switch to models of the same service. Start a new chat to use another model.';
 
 export interface ChatModelGroup {
   id: string;

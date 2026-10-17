@@ -4624,3 +4624,13 @@ Object.assign(zhTranslations, {
   'Shows settings meant for development and testing on the Models page: request identity (User-Agent), the Agent SDK engine switch and caching tool definitions. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.':
     '在「模型」页显示供开发与测试用的设置：请求标识（User-Agent）、Agent SDK 引擎开关和缓存工具定义。关闭时这些设置隐藏，并按默认值生效；你改过的值会保留，重新打开后恢复生效。',
 });
+
+// Agent SDK chat model menu (route B, S-6 feedback 3)
+/**
+ * claude-sdk-engine README ruling 25: the hint on a model an Agent SDK chat
+ * lists greyed out (`models.ts`'s `LOCKED_MODEL_HINT`).
+ */
+Object.assign(zhTranslations, {
+  'An Agent SDK chat can only switch to models of the same service. Start a new chat to use another model.':
+    'Agent SDK 对话只能换同一服务的模型，换其他模型请新建对话',
+});

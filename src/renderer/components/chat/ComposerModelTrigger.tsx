@@ -17,6 +17,7 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from '@/components/ui/menu';
+import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { formatAbsoluteDateTime } from '@/lib/relativeTime';
 import { useChatSessionsStore } from '@/stores/chatSessions';
@@ -48,8 +49,9 @@ import {
   AUTOMATIC_MODEL_LABEL,
   filterChatModels,
   groupChatModels,
+  LOCKED_MODEL_HINT,
   modelCatalogForEngine,
-  modelOptionsFor,
+  modelMenuOptionsFor,
   modelScopeHint,
   modelVerification,
   resolveModelSelection,
@@ -118,21 +120,36 @@ function MenuRadioRows({
 }) {
   return (
     <MenuRadioGroup value={selectedId}>
-      {items.map((item) => (
-        <MenuPrimitive.RadioItem
-          key={item.id}
-          value={item.id}
-          className={composerMenuItemClass()}
-          title={item.hint}
-          closeOnClick={false}
-          onClick={() => onSelect(item.id)}
-        >
-          <span className="min-w-0 flex-1 truncate">{item.label}</span>
-          <MenuPrimitive.RadioItemIndicator className="shrink-0">
-            <Check className="size-3.5" />
-          </MenuPrimitive.RadioItemIndicator>
-        </MenuPrimitive.RadioItem>
-      ))}
+      {items.map((item) => {
+        const row = (
+          <MenuPrimitive.RadioItem
+            key={item.id}
+            value={item.id}
+            disabled={item.disabled}
+            className={composerMenuItemClass()}
+            title={item.disabled ? undefined : item.hint}
+            closeOnClick={false}
+            onClick={() => {
+              if (!item.disabled) onSelect(item.id);
+            }}
+          >
+            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            <MenuPrimitive.RadioItemIndicator className="shrink-0">
+              <Check className="size-3.5" />
+            </MenuPrimitive.RadioItemIndicator>
+          </MenuPrimitive.RadioItem>
+        );
+        if (!item.disabled || !item.hint) return row;
+        // S-6 feedback 3: a disabled row takes no pointer events, so the hint
+        // hangs on a wrapper that does.
+        return (
+          <Tooltip key={item.id}>
+            <TooltipTrigger render={<div data-slot="locked-model-row" />}>{row}</TooltipTrigger>
+            {/* Decision 174: 14px, the hint is CJK and coss's popup is 12px. */}
+            <TooltipPopup className="max-w-80 text-meta">{item.hint}</TooltipPopup>
+          </Tooltip>
+        );
+      })}
     </MenuRadioGroup>
   );
 }
@@ -238,10 +255,11 @@ function SessionModelTrigger({
     usePiModelCatalog(hostState);
   const catalogOptions = catalogModels(catalog);
   const unavailableNotice = unavailableModelsNotice(catalog, t);
-  // Route B, S-1 (decision 5): a chat on the Claude engine is offered only the
-  // models of its own route. Selection and effort still read the whole
-  // catalog: what is stored is never rewritten here, and a model outside this
-  // list shows as an unverified leftover.
+  // Route B, S-1 (decision 5): a chat on the Claude engine can switch only to
+  // the models of its own route; S-6 feedback 3 lists the others greyed out
+  // (`modelMenuOptionsFor`). Selection and effort still read the whole
+  // catalog: what is stored is never rewritten here, and a stored model this
+  // chat cannot switch to shows as an unverified leftover.
   const engine = useChatSessionsStore((state) =>
     sessionId ? state.sessions.find((session) => session.id === sessionId)?.engine : undefined
   );
@@ -321,7 +339,7 @@ function SessionModelTrigger({
     );
   }, [sessionId, chatAgentDefaults, getSessionEffort]);
 
-  const options = modelOptionsFor(offeredCatalog);
+  const options = modelMenuOptionsFor(catalogOptions, { engine, engineRoute });
   const selectedCatalogModel = catalogOptions.find((option) => option.id === model);
   const availableEfforts = effortsForModel(selectedCatalogModel);
 
@@ -363,7 +381,9 @@ function SessionModelTrigger({
   // own label is a name and stays as it is.
   const modelLabel = isAutomatic
     ? t(AUTOMATIC_MODEL_LABEL)
-    : (options.find((option) => option.id === model)?.label ?? unknownLabel ?? model);
+    : (options.find((option) => option.id === model && !option.locked)?.label ??
+      unknownLabel ??
+      model);
   const { base, suffix } = composerModelLabelParts({ modelLabel, effort }, t);
   const menu = composerModelMenuModel({
     options,
@@ -371,11 +391,14 @@ function SessionModelTrigger({
     selectedEffort: effort,
     unknownModelLabel: unknownLabel,
     efforts: availableEfforts,
+    lockedModelHint: t(LOCKED_MODEL_HINT),
     t,
   });
 
   const handleSelect = (sectionId: ComposerMenuSection['id'], itemId: string) => {
     if (sectionId === 'model') {
+      // The row is disabled already; a locked model never becomes the selection.
+      if (options.some((option) => option.id === itemId && option.locked)) return;
       setModel(itemId);
       // Persist Automatic too: it must not inherit another chat's next pick.
       if (sessionId) {

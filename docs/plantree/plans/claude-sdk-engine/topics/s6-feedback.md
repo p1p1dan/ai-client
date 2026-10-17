@@ -14,7 +14,7 @@
 |---|---|---|---|
 | 1 | 为什么少了 11 个工具 | 已裁决（§3 第 1 条） | 待做 |
 | 2 | 官方行为与提示词不改，只可在后面追加 | 已裁决（§3 第 7 条） | **已记**（README 裁决 22） |
-| 3 | SDK 对话开始后模型菜单只剩同一路由的模型 | 已裁决（§3 第 2 条） | 待做 |
+| 3 | SDK 对话开始后模型菜单只剩同一路由的模型 | 已裁决（§3 第 2 条） | **已做**（单测通过，界面待复核） |
 | 4 | 子代理与后台任务只在输出里有，后台任务窗与子代理页都看不到 | 直接修 | 待做 |
 | 5 | WebFetch 报"无法验证域名是否安全" | 已裁决（§3 第 6 条） | **已修**（本机探针与单测通过） |
 | 6 | 网关 502 `empty_stream`，随后 503"所有供应商暂时不可用" | 要实测（§3 第 9 条） | 待查（最后做，用真实网关前先问） |
@@ -48,6 +48,8 @@
 
 - **原因**：有意的，裁决 10"SDK 会话只在同一路由内换模型"。`src/renderer/components/chat/models.ts` 的 `modelCatalogForEngine` 对 SDK 会话只留同一 `sdkRoute` 的模型。会话已经绑定到 CLI 自己的会话记录，换到别的路由或 DSH 模型要"把前文打包进新对话"（README §8.2 #29），还没做。
 - **待裁决**：保持现状但在菜单里加一行说明（"Agent SDK 对话只能换同一服务的模型，换其他模型请新建对话"）；或者把其他模型显示为灰色并带同样的提示；或者现在就做跨引擎换模型。建议先做灰色加提示，跨引擎换模型另排。
+- **已做**（按裁决 25，分支 `ccv/s6-parallel`）：`models.ts` 新增 `modelMenuOptionsFor`：菜单按目录原顺序列出全部模型，`modelCatalogForEngine` 排除的（SDK 对话里其他路由与 DSH 的模型）标为 `locked`。`composerModel.ts` 把它们做成 `disabled` 的菜单项并带提示；`ComposerModelTrigger.tsx` 用 base-ui 菜单项自带的 `disabled`（`composerMenuItemClass` 原有的 `data-disabled` 灰显、不接收指针），提示用 `@/components/ui/tooltip`，挂在禁用项外面一层（禁用项不接收指针事件），文案「Agent SDK 对话只能换同一服务的模型，换其他模型请新建对话」走 i18n。点它不改选中值：菜单项禁用，`onClick` 与 `handleSelect` 各拦一道。只是显示变化：选中值、校验（存着的跨路由模型仍显示为「· unverified」的遗留项，且不再重复列出灰色那一行）与发送路径都不变，主进程照旧拒绝 `model_engine_mismatch`。DSH 对话与首页草稿不标灰。代码注释引用 [issue #23](https://github.com/p1p1dan/ai-client/issues/23)，跨引擎换模型做完后去掉锁。
+- **验证**：挂载测试 `chat/__tests__/composerModelEngineFilter.test.ts` 改写并补到 8 条：SDK 对话里同路由模型可选、其他路由与 DSH 模型在各自分组里且禁用；悬停禁用项出现提示；点两种禁用项后会话存的模型、默认模板与按钮文字都不变；存着的跨路由模型仍是遗留项；DSH 对话与草稿没有禁用项、能选另一路由的模型。把两道拦截与 `disabled` 临时去掉后其中 5 条失败（已还原）。单测 `models.test.ts` 加 4 条（全量按序、锁的范围、禁用项带提示且不被选中、存着的锁定模型只列一次）。根 `pnpm typecheck` 0 错，`src/renderer/components/chat` 177 个文件 3450 条全过。界面上没有实点，等起开发版时复核；键盘停在禁用项上时看不到提示（提示只认指针悬停），待复核时看是否需要补。
 
 ### 4 子代理与后台任务在界面上看不到
 

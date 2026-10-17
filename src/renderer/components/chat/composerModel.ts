@@ -74,9 +74,11 @@ export function composerModelLabelParts(
 export interface ComposerMenuItem {
   id: string;
   label: string;
-  /** Tooltip text, present only for effort levels that ship one. */
+  /** Tooltip text: an effort level's own, or why a disabled model row cannot be picked. */
   hint?: string;
   selected: boolean;
+  /** S-6 feedback 3: a locked model (`ChatModel.locked`), listed greyed out and never selectable. */
+  disabled?: boolean;
   /**
    * D48 S2 §4.4: `false` on a row this build could not corroborate against the
    * live catalog — a legacy short name, or a stored full name the family
@@ -147,6 +149,8 @@ export function composerModelMenuModel(input: {
   unknownModelLabel?: string;
   /** T25 model-declared levels; defaults to the legacy shared catalog. */
   efforts?: readonly ChatEffort[];
+  /** S-6 feedback 3: the hint a locked model row carries, already translated. */
+  lockedModelHint?: string;
   /**
    * dsh-rebase decision 144: the section headings and the effort rows are
    * catalog keys. Model rows are ids and names, and an unknown level is the
@@ -173,7 +177,10 @@ export function composerModelMenuModel(input: {
   // rule the fallback protected ("exactly one row is always marked") still
   // holds; it is now satisfied by widening the list instead of moving the mark.
   const selectedModel = input.selectedModel;
-  const modelInCatalog = options.some((option) => option.id === selectedModel);
+  // A locked row cannot carry the selection: a stored model this chat cannot
+  // switch to is a leftover like any other, and its locked row is left out
+  // below so the radio group never holds the same value twice.
+  const modelInCatalog = options.some((option) => option.id === selectedModel && !option.locked);
   // `null` is the one case with nothing to prepend — it means no selection is
   // stored at all, not that an unrecognised one is, so the first option keeps
   // the mark and no phantom row is invented.
@@ -207,16 +214,21 @@ export function composerModelMenuModel(input: {
           },
         ]
       : []),
-    ...options.map((option) => ({
-      id: option.id,
-      label: option.label,
-      selected: option.id === effectiveModel,
-      ...(option.verified === undefined ? {} : { verified: option.verified }),
-      ...(option.tags ? { tags: [...option.tags] } : {}),
-      ...(option.reasoning !== undefined ? { reasoning: option.reasoning } : {}),
-      ...(option.thinkingLevelMap ? { thinkingLevelMap: { ...option.thinkingLevelMap } } : {}),
-      ...(option.input ? { input: [...option.input] } : {}),
-    })),
+    ...options
+      .filter((option) => option.id !== unknownModel)
+      .map((option) => ({
+        id: option.id,
+        label: option.label,
+        selected: option.id === effectiveModel,
+        ...(option.locked
+          ? { disabled: true, ...(input.lockedModelHint ? { hint: input.lockedModelHint } : {}) }
+          : {}),
+        ...(option.verified === undefined ? {} : { verified: option.verified }),
+        ...(option.tags ? { tags: [...option.tags] } : {}),
+        ...(option.reasoning !== undefined ? { reasoning: option.reasoning } : {}),
+        ...(option.thinkingLevelMap ? { thinkingLevelMap: { ...option.thinkingLevelMap } } : {}),
+        ...(option.input ? { input: [...option.input] } : {}),
+      })),
   ];
 
   const effortItems: ComposerMenuItem[] = [
