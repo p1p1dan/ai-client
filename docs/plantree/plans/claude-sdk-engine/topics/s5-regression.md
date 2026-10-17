@@ -123,3 +123,15 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 | # | 决定 | 理由 |
 |---|---|---|
 | C-10 | `probe-suite.ts` 的 `--logs` 改为每组日志都复制（通过的组也复制） | 只报告的检查与 ps-diag 只出现在探针日志里；通过的组日志被删，CI 上就看不到 |
+
+**第七次 CI（run 39012315765，`76b7441e`，2026-10-17，用户同意只为拿诊断再跑一轮）**：Windows 作业又全绿（`stop` 仍只报告），`claude-sdk-host-Windows` 产物里的 `dist/claude-sdk-probe-logs/flow.log` 给出了证据：
+
+- **慢因找到了：宿主环境缺 `PSModulePath`**。ps-diag（宿主一样的起法）：受限环境下 `-Command 1` 147 毫秒（PowerShell 启动不慢），**宿主那条进程查询 20 秒超时**；同步起法也 20 秒超时（与起法无关）；完整环境下 375 毫秒（同步 754）；**受限环境只补回 `PSModulePath` 就是 352 毫秒**，全部补回 359。runner 上宿主缺的变量共 70 个（名字在 flow.log 第 130 行），`PSModulePath` 是逐个补回时第一个试的，试到它就停了，所以别的变量没有单独试过，但"缺它就慢、有它就快"已足够。为什么缺它会让 `Get-CimInstance` 慢（没有 `PSModulePath` 时 PowerShell 5.1 用内建缺省路径，runner 的 `Program Files\WindowsPowerShell\Modules` 下模块极多）没有再查，不影响修法。
+- **修法 A 在 CI 上没生效**：命令 373 毫秒就起来了，但宿主后台第一次取样 15 秒超时（`process sample failed after 15022 ms`），Stop 等进行中的那次 1 秒就中断（Stop 到回合结束 1023 毫秒），没有快照、两个 `sleep` 留下（`[report] WARN`，`[left]` 打印了它们与 Git Bash 的 `ps` 表：进程组的 bash 已退出）。修法 A 的价值只剩"Stop 不被快照拖住"：Stop 从 5 秒降到约 1 秒。
+- 本机（有 `PSModulePath`）一直快，所以 §8.2 的"本机复现不出"与这一结论一致。
+
+| # | 决定 | 理由 |
+|---|---|---|
+| C-11 | **`PSMODULEPATH` 加进 `CLAUDE_SDK_INHERITED_ENV`**（`src/shared/claudeSdkEngine.ts`，Main 与宿主共用这一份；单测加 1 条） | 第七次 CI 的证据。它只是模块搜索路径，不是凭据；**也会传给 CLI 的子进程**，即模型经 PowerShell 工具跑的命令从此也带着用户的模块路径（这是正常的 PowerShell 环境，缺了反而让 CLI 的 PowerShell 命令在同类机器上同样慢）。待审 |
+
+本机（加了 C-11）：根与宿主 tsc 0 错；shared 与宿主单测 137 条过；`stop` 场景 Stop 58 毫秒、两个 `sleep` 清掉；探针的"宿主环境"现在含 `PSModulePath`，ps-diag 六条都在 0.14～0.46 秒。**CI 上未验证**（按约定不再跑第三轮）：`build.yml` 里 `PROBE_STOP_LEFTOVER_REPORT_ONLY` 与 `PROBE_PS_DIAG` 两行先留着，下一轮 CI 若 `flow.log` 里 `[report] ok` 且宿主有 `process snapshot: N rows in <1000 ms`，就删掉这两行恢复拦截。

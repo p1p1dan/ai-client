@@ -39,6 +39,11 @@ export function resolveClaudeSdkEngineEnabled(value: unknown): boolean {
 export const CLAUDE_SDK_INHERITED_ENV: readonly string[] = [
   'PATH',
   'PATHEXT',
+  // Windows PowerShell's module path. Without it the host's process query (Get-CimInstance,
+  // processTree.ts) ran past 20 s on GitHub's Windows runners while it took 0.35 s with
+  // it put back, alone (route B S-5 §8.3, README §11.2 #52); the CLI's own PowerShell
+  // tool runs with it too.
+  'PSMODULEPATH',
   'SYSTEMROOT',
   'SYSTEMDRIVE',
   'WINDIR',

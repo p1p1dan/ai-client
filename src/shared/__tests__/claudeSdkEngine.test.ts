@@ -102,6 +102,8 @@ describe('CLAUDE_SDK_INHERITED_ENV', () => {
   it('passes the trust store the DSH host gets, and never a credential or Claude variable', () => {
     expect(CLAUDE_SDK_INHERITED_ENV).toContain('NODE_EXTRA_CA_CERTS');
     expect(CLAUDE_SDK_INHERITED_ENV).toContain('NODE_USE_SYSTEM_CA');
+    // README §11.2 #52: PowerShell's process query hung on GitHub's runners without it.
+    expect(CLAUDE_SDK_INHERITED_ENV).toContain('PSMODULEPATH');
     for (const name of CLAUDE_SDK_INHERITED_ENV) {
       expect(name).toBe(name.toUpperCase());
       expect(name).not.toMatch(/^(ANTHROPIC|CLAUDE)_|KEY|TOKEN|SECRET|PASSWORD|NODE_OPTIONS/);
