@@ -3004,8 +3004,8 @@ export const zhTranslations: Record<string, string> = {
   'Resending...': '重发中…',
   'Restore the directory at its original path and retry, or archive this chat and start a new one.':
     '请把该目录恢复到原路径后重试，或归档该会话并新建一个继续工作。',
-  'Runs the available tools automatically; explicit deny rules still apply.':
-    '自动执行可用工具；显式拒绝规则仍生效。',
+  'Runs tools without asking. Dangerous commands such as recursive deletes and force pushes, and commands that name a path outside the workspace, still ask; explicit deny rules still apply.':
+    '工具调用基本不再询问。递归删除、强推等危险命令，以及明确指向工作区外路径的命令仍会先问你；显式拒绝规则仍生效。',
   'Select all in this project': '全选当前项目',
   'Send code': '发送验证码',
   'Sending may or may not still work; if it fails, start a new chat to carry on.':
@@ -4008,8 +4008,8 @@ Object.assign(zhTranslations, {
   'Auto edit': '自动编辑',
   'Edits and commands inside the workspace run without asking; paths outside it, web access and other tools still ask.':
     '工作区内的改动和命令直接执行；工作区外的路径、联网和其他工具仍会询问。',
-  'Runs the available tools automatically, including operations outside the workspace; explicit deny rules still apply.':
-    '自动执行可用工具，包括工作区外操作；显式拒绝规则仍生效。',
+  'Runs tools without asking, including commands whose arguments cannot be read. Dangerous commands such as recursive deletes, force pushes and hard resets, and commands that name a path outside the workspace, still ask; explicit deny rules still apply.':
+    '工具调用基本不再询问，包括参数解析不了的命令。递归删除、强推、硬重置等危险命令，以及明确指向工作区外路径的命令仍会先问你；显式拒绝规则仍生效。',
   'Read-only tools keep the earlier approval level: {{gear}}.':
     '只读工具沿用之前的确认方式：{{gear}}。',
   'Plan mode cannot be turned on or off while this turn runs.':
@@ -4631,4 +4631,26 @@ Object.assign(zhTranslations, {
   'Plan review · approved: continue in Edit automatically': '计划审阅 · 已批准：用自动编辑继续',
   'Plan review · approved: continue in Auto': '计划审阅 · 已批准：用自动模式继续',
   'Plan review · approved: continue in Bypass permissions': '计划审阅 · 已批准：用跳过权限确认继续',
+});
+
+// Developer mode (route B, S-6 feedback 10)
+/**
+ * claude-sdk-engine README ruling 26: the Advanced page switch that shows the
+ * development and testing settings on the Models page.
+ */
+Object.assign(zhTranslations, {
+  'Developer mode': '开发人员模式',
+  'Enable developer mode': '启用开发人员模式',
+  'Shows settings meant for development and testing on the Models page: request identity (User-Agent), the Agent SDK engine switch and caching tool definitions. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.':
+    '在「模型」页显示供开发与测试用的设置：请求标识（User-Agent）、Agent SDK 引擎开关和缓存工具定义。关闭时这些设置隐藏，并按默认值生效；你改过的值会保留，重新打开后恢复生效。',
+});
+
+// Agent SDK chat model menu (route B, S-6 feedback 3)
+/**
+ * claude-sdk-engine README ruling 25: the hint on a model an Agent SDK chat
+ * lists greyed out (`models.ts`'s `LOCKED_MODEL_HINT`).
+ */
+Object.assign(zhTranslations, {
+  'An Agent SDK chat can only switch to models of the same service. Start a new chat to use another model.':
+    'Agent SDK 对话只能换同一服务的模型，换其他模型请新建对话',
 });

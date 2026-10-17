@@ -86,7 +86,9 @@ const PRESET_OPTIONS: readonly {
   },
   {
     id: 'auto',
-    description: 'Runs the available tools automatically; explicit deny rules still apply.',
+    // Decision 191: what full auto still stops to confirm (gate.ts `autoStillAsks`).
+    description:
+      'Runs tools without asking. Dangerous commands such as recursive deletes and force pushes, and commands that name a path outside the workspace, still ask; explicit deny rules still apply.',
     icon: ShieldAlert,
   },
   {
@@ -338,7 +340,7 @@ export function ComposerPermissionTrigger({
                 : t(
                     sdk
                       ? SDK_AUTO_CONFIRMATION
-                      : 'Runs the available tools automatically, including operations outside the workspace; explicit deny rules still apply.'
+                      : 'Runs tools without asking, including commands whose arguments cannot be read. Dangerous commands such as recursive deletes, force pushes and hard resets, and commands that name a path outside the workspace, still ask; explicit deny rules still apply.'
                   )}
               {confirming === 'bypass' ? bypassScope : scope}
             </p>

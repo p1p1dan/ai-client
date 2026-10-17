@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
+import { DeveloperModeSection } from './DeveloperModeSection';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 // Parse shell arguments string, supporting single/double quotes for paths with spaces
@@ -108,6 +109,7 @@ export function AdvancedSettings() {
           </div>
         </SettingsRow>
       </SettingsSectionBlock>
+      <DeveloperModeSection />
     </div>
   );
 }

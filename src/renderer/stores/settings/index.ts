@@ -1,4 +1,5 @@
 import { DEFAULT_CLAUDE_SDK_ENGINE_ENABLED } from '@shared/claudeSdkEngine';
+import { DEFAULT_DEVELOPER_MODE_ENABLED } from '@shared/developerMode';
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
 import { EMPTY_CHAT_AGENT_DEFAULTS } from '@shared/models/chatAgentDefaults';
@@ -196,6 +197,9 @@ export function getInitialState() {
     requestUserAgentMode: DEFAULT_REQUEST_USER_AGENT_MODE,
     requestUserAgentCustom: '',
 
+    // S-6 feedback 10: the default Main applies when the key is absent.
+    developerModeEnabled: DEFAULT_DEVELOPER_MODE_ENABLED,
+
     // T104: chat typography. Empty family = follow the app's `--font-sans`.
     // The two sizes are D1's 17 / 14 (bumped from 16 / 13 on 2026-09-24, see
     // `a86cefa4`), and MUST equal `globals.css`'s `--text-chat-body` /
@@ -359,6 +363,8 @@ export const useSettingsStore = create<SettingsState>()(
         const checked = checkRequestUserAgent(value);
         if (checked.ok) set({ requestUserAgentCustom: checked.value });
       },
+
+      setDeveloperModeEnabled: (developerModeEnabled) => set({ developerModeEnabled }),
 
       // T104: three pure `set({…})` writers with no side effects, like every
       // other setter here — the override is applied by `ChatWorkspace` reading

@@ -61,6 +61,7 @@ import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { useSettingsStore } from '@/stores/settings';
+import { effectiveClaudeSdkEngineEnabled } from '@/stores/settings/developerMode';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
@@ -722,7 +723,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   );
   const goalEntry = goalEntryState(deriveGoalBarView(goalPanels, false), sendingHere);
   // Route B, S-2 (A-9): which engine's names the permission menu shows (display only).
-  const claudeSdkEngineEnabled = useSettingsStore((state) => state.claudeSdkEngineEnabled);
+  const claudeSdkEngineEnabled = useSettingsStore(effectiveClaudeSdkEngineEnabled);
   const activeEngineBound = useChatSessionsStore((state) =>
     activeSessionId ? state.hostBoundSessionIds.includes(activeSessionId) : false
   );
@@ -2242,7 +2243,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         engine: preSession?.engine,
         ...(knownIdentity ? { runtimeIdentity: knownIdentity } : {}),
         predicted: predictNewChatEngine({
-          enabled: useSettingsStore.getState().claudeSdkEngineEnabled,
+          enabled: effectiveClaudeSdkEngineEnabled(useSettingsStore.getState()),
           hostAvailable: modelCatalog?.claudeSdkHostAvailable !== false,
           catalog: catalogModels(modelCatalog),
           model,

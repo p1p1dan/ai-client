@@ -10,8 +10,12 @@
  * and the User-Agent it means is different; the new revision is announced, and
  * `WorkerManager.reconcileModelPlan` restarts the host once no session is
  * working, so the next turn sends the new value.
+ *
+ * A developer-mode setting: with developer mode off it reads as unset, so the
+ * default goes out (`@shared/developerMode`).
  */
 
+import { applyDeveloperModeGate } from '@shared/developerMode';
 import type { DshRouteSettingsInput } from '@shared/dshModelPlan';
 import {
   isRequestUserAgentMode,
@@ -31,12 +35,12 @@ export type RequestUserAgentSettings = Pick<
  * The stored choice, as the plan takes it: a mode only when it is one of the
  * three, the custom text whenever it is text (the plan checks it and falls
  * back with a diagnostic, so a bad value is reported rather than dropped
- * here). Nothing for an install that never touched it.
+ * here). Nothing for an install that never touched it, or out of developer mode.
  */
 export function requestUserAgentSettings(
   read: () => Record<string, unknown> = readSettingsState
 ): RequestUserAgentSettings {
-  const state = read();
+  const state = applyDeveloperModeGate(read());
   const mode = state[REQUEST_USER_AGENT_MODE_SETTING_KEY];
   const custom = state[REQUEST_USER_AGENT_CUSTOM_SETTING_KEY];
   return {

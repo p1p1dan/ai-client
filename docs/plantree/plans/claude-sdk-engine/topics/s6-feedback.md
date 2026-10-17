@@ -14,17 +14,17 @@
 |---|---|---|---|
 | 1 | 为什么少了 11 个工具 | 已裁决（§3 第 1 条） | **已做**（探针、单测、开发版界面都过；Monitor/TaskList 是 CLI 非交互模式本来就不提供） |
 | 2 | 官方行为与提示词不改，只可在后面追加 | 已裁决（§3 第 7 条） | **已记**（README 裁决 22） |
-| 3 | SDK 对话开始后模型菜单只剩同一路由的模型 | 已裁决（§3 第 2 条） | 待做 |
+| 3 | SDK 对话开始后模型菜单只剩同一路由的模型 | 已裁决（§3 第 2 条） | **已做**（单测通过，界面待复核） |
 | 4 | 子代理与后台任务只在输出里有，后台任务窗与子代理页都看不到 | 直接修 | **已修**（探针、单测、开发版界面都过） |
 | 5 | WebFetch 报"无法验证域名是否安全" | 已裁决（§3 第 6 条） | **已修**（本机探针与单测通过） |
 | 6 | 网关 502 `empty_stream`，随后 503"所有供应商暂时不可用" | 要实测（§3 第 9 条） | 待查（最后做，用真实网关前先问） |
 | 7 | 左侧工作区标出当前对话记录文件的位置 | 已裁决（§3 第 8 条） | **已做**（单测、开发版界面都过） |
 | 8 | 计划审阅卡里放计划的框太小 | 直接修 | **已修**（单测、开发版界面都过） |
 | 9 | `loop` 能加载但跑不起来 | 随第 1 条 | **已做**（ScheduleWakeup 实测可用；`/loop` 本身未单测） |
-| 10 | 加开发人员模式开关，收起不该给用户调的设置 | 已裁决（§3 第 3 条） | 待做 |
+| 10 | 加开发人员模式开关，收起不该给用户调的设置 | 已裁决（§3 第 3 条） | **已做**（单测通过，界面待复核） |
 | 11a | issue #17：`/compact` 后出现两条「上下文摘要」 | 直接修（DSH） | **已修**（单测通过，界面待复核） |
 | 11b | issue #18：新装登录后模型按钮显示「自动」 | 直接修 | **已修**（单测、开发版界面都过） |
-| 11c | issue #19：首次发送连接慢；发送前不能完全放行；全自动模式鸡肋 | 已裁决（§3 第 4 条），慢要实测 | 待做 |
+| 11c | issue #19：首次发送连接慢；发送前不能完全放行；全自动模式鸡肋 | 已裁决（§3 第 4 条），慢要实测 | 全自动**已做**（单测通过，界面待复核）；首次发送慢仍待实测 |
 | 12 | 侧栏「按工作目录」时最新添加的目录排在最下面 | 直接修 | **已修**（单测、开发版界面都过） |
 | 13 | Ctrl+Enter 插话卡在「待送达」、撤回显示「无法撤回」，之后的回复错位；另查排队与立刻发送 | 直接修 | **已修**（本机探针与单测通过，待推送后 CI） |
 
@@ -53,6 +53,8 @@
 
 - **原因**：有意的，裁决 10"SDK 会话只在同一路由内换模型"。`src/renderer/components/chat/models.ts` 的 `modelCatalogForEngine` 对 SDK 会话只留同一 `sdkRoute` 的模型。会话已经绑定到 CLI 自己的会话记录，换到别的路由或 DSH 模型要"把前文打包进新对话"（README §8.2 #29），还没做。
 - **待裁决**：保持现状但在菜单里加一行说明（"Agent SDK 对话只能换同一服务的模型，换其他模型请新建对话"）；或者把其他模型显示为灰色并带同样的提示；或者现在就做跨引擎换模型。建议先做灰色加提示，跨引擎换模型另排。
+- **已做**（按裁决 25，分支 `ccv/s6-parallel`）：`models.ts` 新增 `modelMenuOptionsFor`：菜单按目录原顺序列出全部模型，`modelCatalogForEngine` 排除的（SDK 对话里其他路由与 DSH 的模型）标为 `locked`。`composerModel.ts` 把它们做成 `disabled` 的菜单项并带提示；`ComposerModelTrigger.tsx` 用 base-ui 菜单项自带的 `disabled`（`composerMenuItemClass` 原有的 `data-disabled` 灰显、不接收指针），提示用 `@/components/ui/tooltip`，挂在禁用项外面一层（禁用项不接收指针事件），文案「Agent SDK 对话只能换同一服务的模型，换其他模型请新建对话」走 i18n。点它不改选中值：菜单项禁用，`onClick` 与 `handleSelect` 各拦一道。只是显示变化：选中值、校验（存着的跨路由模型仍显示为「· unverified」的遗留项，且不再重复列出灰色那一行）与发送路径都不变，主进程照旧拒绝 `model_engine_mismatch`。DSH 对话与首页草稿不标灰。代码注释引用 [issue #23](https://github.com/p1p1dan/ai-client/issues/23)，跨引擎换模型做完后去掉锁。
+- **验证**：挂载测试 `chat/__tests__/composerModelEngineFilter.test.ts` 改写并补到 8 条：SDK 对话里同路由模型可选、其他路由与 DSH 模型在各自分组里且禁用；悬停禁用项出现提示；点两种禁用项后会话存的模型、默认模板与按钮文字都不变；存着的跨路由模型仍是遗留项；DSH 对话与草稿没有禁用项、能选另一路由的模型。把两道拦截与 `disabled` 临时去掉后其中 5 条失败（已还原）。单测 `models.test.ts` 加 4 条（全量按序、锁的范围、禁用项带提示且不被选中、存着的锁定模型只列一次）。根 `pnpm typecheck` 0 错，`src/renderer/components/chat` 177 个文件 3450 条全过。界面上没有实点，等起开发版时复核；键盘停在禁用项上时看不到提示（提示只认指针悬停），待复核时看是否需要补。
 
 ### 4 子代理与后台任务在界面上看不到
 
@@ -100,6 +102,8 @@
 - **需求**：正式版里有些设置不该让用户随意改，应收进"开发人员模式"，默认关、默认值固定。
 - **候选**（待用户定）：模型页的「Cache tool definitions」（实验、临时，`ExperimentalCacheControlSection.tsx`）；「Agent SDK engine」开关（`ClaudeSdkEngineSection.tsx`）；「Request identity (User-Agent)」（`RequestUserAgentSection.tsx`）；「Web Inspector」（`WebInspectorSettings.tsx`）。
 - **方向**：设置里加开发人员模式开关；关着时这些项不显示，并且一律按默认值生效（不只是隐藏界面，已存的非默认值也不再生效）。打开的方法要不要藏起来（例如连点版本号）由用户定。
+- **已做**（按裁决 26，分支 `ccv/s6-parallel`）：「高级」页末尾新增「开发人员模式」一节（`DeveloperModeSection.tsx`），开关明着放，默认关。设置键 `developerModeEnabled`，走现有持久化，`migration.ts` 只认布尔值。「模型」页的「请求标识（User-Agent）」「Agent SDK 引擎」「工具定义缓存断点」三节改由 `DeveloperModelSections`（`PiModelManagementSettings.tsx`）渲染，关着时不渲染。按默认值生效靠一处门控 `src/shared/developerMode.ts` 的 `applyDeveloperModeGate`：关着时这四个键（`experimentalCacheControlOnTools`、`claudeSdkEngineEnabled`、`requestUserAgentMode`、`requestUserAgentCustom`）读作未设置，各读取方落回自己的默认值。经它读取的有主进程的三个读取函数（`claudeSdkEngineSetting.ts`、`cacheControlOnToolsSetting.ts`、`requestUserAgentSetting.ts`；模型计划、新建对话选引擎、模型列表请求的 User-Agent 都经它们），以及渲染端 `ChatComposer` 预测引擎的两处（`stores/settings/developerMode.ts` 的 `effectiveClaudeSdkEngineEnabled`）。存的值不动，打开后恢复；开关一翻，缓存断点与 User-Agent 的监听照常重建模型计划，引擎开关仍只影响之后新建的对话。Web Inspector 不收。
+- **验证**：单测 `stores/settings/__tests__/developerMode.test.ts` 6 条（门控只含这四个键、关着时读不到、打开后原样、迁移只认布尔值、持久化且翻开关不改存值）；主进程三个读取函数的测试各加「开发人员模式」一组（关着读到默认值、打开读到存值、开关翻转时重建模型计划），原有用例改为在开发人员模式下存值；挂载测试 `settings/__tests__/developerModeSection.test.ts` 4 条（「高级」页有开关且默认关；关着三节不渲染、打开后渲染并显示存的值、再关又不渲染；三节只在门控里出现；中文文案）。根 `pnpm typecheck` 0 错，`src/renderer/components/settings` 与 `src/renderer/stores/settings` 36 个文件 309 条全过。界面上没有实点，等起开发版时复核。
 
 ### 11a issue #17：`/compact` 后两条「上下文摘要」
 
@@ -117,6 +121,14 @@
 - **发送前不能完全放行**：路线 B 裁决 16 已做（SDK 的「跳过权限确认」与 DSH 的「完全放行」发送前都能开，见 [开始页的跳过权限确认](bypass-before-first-message.md)），本测试包里已有。用户在加密机上复核即可关这一点。
 - **首次发送慢**：要实测。记下新对话第一句从点发送到开始出字的时间，分 DSH 与 SDK 两种；SDK 首轮要起 `claude.exe`（约 270 MB），可能比 DSH 慢。测完再看是起进程、建连还是网关排队。
 - **全自动模式鸡肋**：要用户裁决：DSH 的全自动模式保留、改进还是去掉。
+- **全自动已做**（按裁决 27，分支 `ccv/s6-parallel`，记为 [DSH 决策 191](../../dsh-rebase/decisions/191-dsh-full-auto-asks-less.md)）：`src/shared/permissions/gate.ts` 里全自动档对 shell 命令（bash、pwsh）只在两种情况下问：危险命令（新文件 `dangerousCommands.ts`：递归删除、强推与几种丢弃改动的 git 命令、格式化磁盘），以及命令写明了工作区外的路径（`/dev/null` 这类设备不算）。其余都放行，包括解析不了的参数（变量、`$(…)`、循环、PowerShell 脚本块、`python x.py`）。只经环境变量得到的路径（`$HOME`、`$env:TEMP`）算参数、不算写明，所以 `echo $HOME` 不问；两个分析器为此新增 `parameterPaths`，`checkShellPaths` 与 `authorizeTarget` 一路带到门上。所有 deny、完全放行、「每次询问」与「自动编辑」、文件工具、`run_code` 这类看不进去的工具和 DSH 自己的询问都不变。权限菜单与确认框里「全自动」的说明同步改了。**与说明不一致**：实测改前全自动对能解析的命令连工作区外路径也放行，所以「写明了工作区外路径的命令要问」是新加的，只加在 shell 命令上。
+- **验证**：
+  - 新增 `src/shared/permissions/__tests__/dangerousCommands.test.ts`（89 条）与 `autoGear.test.ts`（33 条）：全自动下 `echo $HOME`、`npm test $FLAGS` 这类工作区内命令不问；危险命令问；写明工作区外的命令问；deny 仍拒绝；完全放行不变。
+  - `src/dsh-host/permissions/__tests__/bashGate.test.ts` 新增 22 条，用真实 bash 语法跑同一组情形。
+  - 按旧行为写的 5 条用例改成「全自动不再问，自动编辑仍问」。
+  - 根与宿主 tsc 0 错。
+  - `src/shared/permissions` 只剩改动前就有的 3 条 `8dot3-*` 失败，`src/dsh-host/permissions` 只剩改动前就有的 2 条。
+  - 界面上没有实点，等起开发版时复核。待用户定的 8 件事见决策 191 第 5 节。
 
 ### 12 侧栏「按工作目录」时最新目录在最下面
 

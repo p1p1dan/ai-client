@@ -32,7 +32,12 @@ vi.mock('electron', () => ({
   },
 }));
 
-const values = (record: Record<string, unknown>) => () => record;
+// A developer-mode setting (S-6 feedback 10): the reads below run with
+// developer mode on; the gate itself has its own block.
+const values = (record: Record<string, unknown>) => () => ({
+  developerModeEnabled: true,
+  ...record,
+});
 
 describe('requestUserAgentSettings', () => {
   it('reports nothing for an install that never chose, so the plan applies its default', () => {
@@ -56,6 +61,49 @@ describe('requestUserAgentSettings', () => {
         values({ requestUserAgentMode: 'Custom', requestUserAgentCustom: 7 })
       )
     ).toEqual({});
+  });
+});
+
+describe('developer mode (S-6 feedback 10)', () => {
+  const stored = { requestUserAgentMode: 'custom', requestUserAgentCustom: 'gw/2' };
+
+  it('reads a stored choice as unset while developer mode is off, so the default goes out', () => {
+    for (const developerModeEnabled of [false, undefined, 'true']) {
+      const read = () => ({ developerModeEnabled, ...stored });
+      expect(requestUserAgentSettings(read), String(developerModeEnabled)).toEqual({});
+      expect(resolveMainRequestUserAgent('1.1.0', read).userAgent).toBe('claude-cli-pilab/1.1.0');
+    }
+  });
+
+  it('reads the stored choice once developer mode is on', () => {
+    const read = () => ({ developerModeEnabled: true, ...stored });
+    expect(requestUserAgentSettings(read)).toEqual({
+      userAgentMode: 'custom',
+      userAgentCustom: 'gw/2',
+    });
+    expect(resolveMainRequestUserAgent('1.1.0', read).userAgent).toBe('gw/2');
+  });
+
+  it('rebuilds the plan when developer mode turns a stored choice off and back on', () => {
+    const store: Record<string, unknown> = { developerModeEnabled: true, ...stored };
+    let fire: () => void = () => undefined;
+    const rebuild = vi.fn();
+    const stop = watchRequestUserAgent({
+      onSettingsWrite: (listener) => {
+        fire = listener;
+        return () => undefined;
+      },
+      rebuild,
+      appVersion: () => '1.1.0',
+      read: () => store,
+    });
+    store.developerModeEnabled = false;
+    fire();
+    expect(rebuild).toHaveBeenCalledTimes(1);
+    store.developerModeEnabled = true;
+    fire();
+    expect(rebuild).toHaveBeenCalledTimes(2);
+    stop();
   });
 });
 
@@ -84,7 +132,7 @@ describe('resolveMainRequestUserAgent', () => {
 
 describe('watchRequestUserAgent', () => {
   function harness(initial: Record<string, unknown>) {
-    const store = { ...initial };
+    const store: Record<string, unknown> = { developerModeEnabled: true, ...initial };
     let fire: () => void = () => undefined;
     const rebuild = vi.fn();
     const log = vi.fn();
@@ -196,7 +244,10 @@ describe('a renderer save reaches the watch through the settings IPC', () => {
     const write = handlers.get(IPC_CHANNELS.SETTINGS_WRITE);
     if (!write) throw new Error('settings handlers not registered');
     const save = (state: Record<string, unknown>) =>
-      write({}, { 'aiclient-settings': { state, version: 0 } });
+      write(
+        {},
+        { 'aiclient-settings': { state: { developerModeEnabled: true, ...state }, version: 0 } }
+      );
     try {
       await save({ theme: 'dark', requestUserAgentMode: 'default' });
       expect(rebuild).not.toHaveBeenCalled();

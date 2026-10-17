@@ -40,6 +40,7 @@ function pwsh(command: string, workdir = ROOT): ToolPermissionRequest {
     unresolvedPaths: analysis.unresolvedPaths,
     exploration: analysis.exploration,
     ...(analysis.ungrantable ? { ungrantable: true } : {}),
+    ...(analysis.parameterPaths ? { parameterPaths: analysis.parameterPaths } : {}),
   };
 }
 
@@ -167,12 +168,11 @@ describe('the bash policy surface, shared by pwsh (P1-6d)', () => {
 });
 
 describe('why the card is up (askReason, P1-6d)', () => {
-  it('is `unresolved` under auto when only the unreadable part made the gate ask', async () => {
-    const { gate: g, contexts, asked } = gate({ gear: 'auto', answer: 'allow-once' });
+  it('never comes up for a workspace command under auto, which no longer asks about it (decision 191)', async () => {
+    const { gate: g, asked } = gate({ gear: 'auto', answer: 'allow-once' });
     await g.authorize(pwsh('Write-Output a > out.txt'));
     await g.authorize(pwsh('Write-Output $X > out.txt'));
-    expect(asked).toEqual(['Write-Output $X > out.txt']);
-    expect(contexts).toEqual([{ askReason: 'unresolved' }]);
+    expect(asked).toEqual([]);
   });
 
   it('is `unresolved` under accept-edits for a workspace command, and absent once the path is outside', async () => {
@@ -196,8 +196,9 @@ describe('why the card is up (askReason, P1-6d)', () => {
   });
 
   it('covers a program the gate cannot see into, too', async () => {
-    const { gate: g, contexts } = gate({ gear: 'auto', answer: 'allow-once' });
-    await g.authorize({
+    // Under auto an opaque tool still asks; a shell program no longer does (decision 191).
+    const auto = gate({ gear: 'auto', answer: 'allow-once' });
+    await auto.gate.authorize({
       tool: 'run_code',
       toolCallId: 'p-1',
       path: ROOT,
@@ -205,8 +206,12 @@ describe('why the card is up (askReason, P1-6d)', () => {
       policyValue: 'run_code',
       unresolvedPaths: true,
     });
-    await g.authorize(pwsh('python build.py'));
-    expect(contexts).toEqual([{ askReason: 'unresolved' }, { askReason: 'unresolved' }]);
+    await auto.gate.authorize(pwsh('python build.py'));
+    expect(auto.asked).toEqual(['run_code']);
+    expect(auto.contexts).toEqual([{ askReason: 'unresolved' }]);
+    const edits = gate({ gear: 'accept-edits', answer: 'allow-once' });
+    await edits.gate.authorize(pwsh('python build.py'));
+    expect(edits.contexts).toEqual([{ askReason: 'unresolved' }]);
   });
 
   it('reaches the card: the payload carries it, and only when given', async () => {

@@ -576,6 +576,13 @@ export function analyzePwsh(
     throw createError('invalid_tool_arguments', 'pwsh command exceeds analysis limit');
   });
   const paths = new Set<string>();
+  // Decision 191: which registered paths only the environment spelled.
+  const environmentPaths = new Set<string>();
+  const spelledPaths = new Set<string>();
+  const note = (path: string, env: boolean) => {
+    paths.add(path);
+    (env ? environmentPaths : spelledPaths).add(path);
+  };
   const commands: string[] = [];
   let unresolvedPaths = lexOpaque;
   let ungrantable = lexOpaque;
@@ -583,6 +590,8 @@ export function analyzePwsh(
   let cwdNow = cwd;
   /** A `cd -`, `popd` or `cd $x` happened: every relative path after it is a guess. */
   let cwdLost = false;
+  /** `cwdNow` was reached through the environment (`cd $env:TEMP`). */
+  let cwdFromEnv = false;
 
   const resolveVariable = (name: string): string | undefined => {
     const lower = name.toLowerCase();
@@ -594,6 +603,13 @@ export function analyzePwsh(
     if (lower.startsWith('env:')) return envValue(name.slice(4));
     return undefined;
   };
+  /** The word expands a variable the environment supplies: `$HOME`, `$env:NAME`. */
+  const fromEnvironment = (word: WordToken): boolean =>
+    word.parts.some((part) => {
+      if (!('variable' in part)) return false;
+      const lower = part.variable.toLowerCase();
+      return lower === 'home' || lower.startsWith('env:') || (lower === 'pwd' && cwdFromEnv);
+    });
   const resolveWord = (word: WordToken): string | undefined => {
     if (word.opaque) return undefined;
     let text = '';
@@ -614,13 +630,19 @@ export function analyzePwsh(
    * command is a cmdlet, so a drive-qualified word may name a PowerShell
    * provider (`HKCU:`, `Env:`, `Function:`) rather than a file.
    */
-  const operand = (value: string, providerPaths: boolean): { path?: string; opaque?: true } => {
+  const operand = (
+    value: string,
+    providerPaths: boolean
+  ): { path?: string; opaque?: true; relative?: true } => {
     if (!value || /^[a-z][a-z\d+.-]*:\/\//i.test(value)) return {};
     let text = value;
     if (text === '~' || /^~[\\/]/.test(text)) text = `${home}${text.slice(1)}`;
     else if (text.startsWith('~')) return { opaque: true };
     if (providerPaths && /^[A-Za-z][\w.-]+:/.test(text)) return { opaque: true };
-    if (!windows) return { path: posix.isAbsolute(text) ? text : `${cwdNow}/${text}` };
+    if (!windows)
+      return posix.isAbsolute(text)
+        ? { path: text }
+        : { path: `${cwdNow}/${text}`, relative: true };
     text = stripExtendedPrefix(text);
     if (/^[\\/]{2}/.test(text)) {
       // UNC: resolving it would reach the network before anyone approved the
@@ -637,9 +659,11 @@ export function analyzePwsh(
       if (!drive) return { opaque: true };
       text = `${drive}${text}`;
     }
-    const absolute = (win32.isAbsolute(text) ? text : `${cwdNow}\\${text}`).replaceAll('/', '\\');
+    const relative = !win32.isAbsolute(text);
+    const absolute = (relative ? `${cwdNow}\\${text}` : text).replaceAll('/', '\\');
     return {
       path: /^[a-z]:/.test(absolute) ? absolute[0].toUpperCase() + absolute.slice(1) : absolute,
+      ...(relative ? { relative: true as const } : {}),
     };
   };
 
@@ -651,9 +675,10 @@ export function analyzePwsh(
     const opaqueWord = () => {
       opaqueText = true;
     };
-    const register = (value: string, providerPaths: boolean) => {
+    const register = (value: string, providerPaths: boolean, env = false) => {
       const target = operand(value, providerPaths);
-      if (target.path !== undefined) paths.add(target.path);
+      if (target.path !== undefined)
+        note(target.path, env || (target.relative === true && cwdFromEnv));
       if (target.opaque) opaqueWord();
     };
 
@@ -688,7 +713,7 @@ export function analyzePwsh(
       // `2>$null` discards; anything else is a file PowerShell writes (Out-File).
       if (value === '') continue;
       writesFile = true;
-      register(value, true);
+      register(value, true, fromEnvironment(target));
     }
 
     const head = words[0];
@@ -698,7 +723,8 @@ export function analyzePwsh(
       // what can be read, then give up on the segment.
       for (const word of words) {
         const value = resolveWord(word);
-        if (value !== undefined && !value.startsWith('-')) register(value, true);
+        if (value !== undefined && !value.startsWith('-'))
+          register(value, true, fromEnvironment(word));
       }
       unresolvedPaths = true;
       ungrantable = true;
@@ -710,7 +736,7 @@ export function analyzePwsh(
     const name = normalizePwshCommandName(headValue);
     const stem = pwshProgramStem(name);
     const cmdlet = isKnownPwshCommand(name) || /^[a-z]+-[a-z]+$/i.test(name);
-    if (/[\\/]/.test(headValue)) register(headValue, false);
+    if (/[\\/]/.test(headValue)) register(headValue, false, fromEnvironment(head));
     if (isUngrantablePwshCommand(name)) {
       opaqueProgram = true;
       ungrantable = true;
@@ -743,6 +769,7 @@ export function analyzePwsh(
     let skipNextValue = false;
     let namedValueNext = false;
     let locationTarget: string | undefined;
+    let locationFromEnv = false;
     let locationOpaque = false;
     for (const word of args) {
       const value = resolveWord(word);
@@ -751,13 +778,14 @@ export function analyzePwsh(
         locationOpaque = true;
         continue;
       }
+      const env = fromEnvironment(word);
       values.push(value);
       if (value === '--%') {
         // Stop-parsing: the rest of the line goes to the program verbatim.
         opaqueWord();
         break;
       }
-      if (runsCode) for (const literal of literalWords(value)) register(literal, false);
+      if (runsCode) for (const literal of literalWords(value)) register(literal, false, env);
       if (skipNextValue) {
         skipNextValue = false;
         continue;
@@ -765,7 +793,7 @@ export function analyzePwsh(
       if (namedValueNext) {
         // The value of a named parameter, not the positional pattern.
         namedValueNext = false;
-        register(value, cmdlet);
+        register(value, cmdlet, env);
         continue;
       }
       if (isParameter(word, value)) {
@@ -775,7 +803,7 @@ export function analyzePwsh(
           // `-f file` names a file of patterns: that one is an operand.
           const file = !cmdlet && (parameter === '-f' || parameter === '--file');
           if (separator > 0) {
-            if (file) register(value.slice(separator + 1), false);
+            if (file) register(value.slice(separator + 1), false, env);
           } else if (!file) skipNextValue = true;
           continue;
         }
@@ -787,12 +815,15 @@ export function analyzePwsh(
           // Only the target and `-PassThru`: `-StackName` and friends are not read here.
           const kind = locationParameter(parameter);
           if (kind === undefined) locationOpaque = true;
-          else if (kind === 'path' && separator > 0) locationTarget ??= value.slice(separator + 1);
+          else if (kind === 'path' && separator > 0 && locationTarget === undefined) {
+            locationTarget = value.slice(separator + 1);
+            locationFromEnv = env;
+          }
           continue;
         }
-        if (separator > 0) register(value.slice(separator + 1), cmdlet);
+        if (separator > 0) register(value.slice(separator + 1), cmdlet, env);
         // `-C/path`, `-oout.txt`: a native program's value glued to its switch.
-        else if (!cmdlet && /^-[A-Za-z].+/.test(value)) register(value.slice(2), false);
+        else if (!cmdlet && /^-[A-Za-z].+/.test(value)) register(value.slice(2), false, env);
         continue;
       }
       // A native program's `/switch` (`ipconfig /all`, `robocopy a b /MIR`) is not an operand.
@@ -803,10 +834,13 @@ export function analyzePwsh(
       }
       if (location) {
         if (locationTarget !== undefined) locationOpaque = true;
-        locationTarget ??= value;
+        else {
+          locationTarget = value;
+          locationFromEnv = env;
+        }
         continue;
       }
-      register(value, cmdlet);
+      register(value, cmdlet, env);
     }
 
     if (location) {
@@ -818,10 +852,11 @@ export function analyzePwsh(
         // Where the rest of the line runs is no longer known.
         cwdLost = true;
         opaqueWord();
-        if (target.path !== undefined) paths.add(target.path);
+        if (target.path !== undefined) note(target.path, locationFromEnv);
       } else {
+        cwdFromEnv = locationFromEnv || (target.relative === true && cwdFromEnv);
         cwdNow = target.path;
-        paths.add(target.path);
+        note(target.path, cwdFromEnv);
       }
     }
     if (name === 'Pop-Location') {
@@ -849,11 +884,13 @@ export function analyzePwsh(
   }
 
   if (commands.length === 0) exploration = false;
+  const parameterPaths = [...environmentPaths].filter((path) => !spelledPaths.has(path));
   return {
     paths: [...paths],
     commands,
     unresolvedPaths,
     exploration: exploration && !unresolvedPaths,
     ...(ungrantable ? { ungrantable: true } : {}),
+    ...(parameterPaths.length > 0 ? { parameterPaths } : {}),
   };
 }

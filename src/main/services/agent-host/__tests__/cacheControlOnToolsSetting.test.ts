@@ -31,7 +31,12 @@ vi.mock('electron', () => ({
   },
 }));
 
-const values = (record: Record<string, unknown>) => () => record;
+// A developer-mode setting (S-6 feedback 10): the reads below run with
+// developer mode on; the gate itself has its own block.
+const values = (record: Record<string, unknown>) => () => ({
+  developerModeEnabled: true,
+  ...record,
+});
 
 describe('cacheControlOnToolsSettings', () => {
   it('reports nothing for an install that never chose, so the plan applies its default', () => {
@@ -56,9 +61,55 @@ describe('cacheControlOnToolsSettings', () => {
   });
 });
 
+describe('developer mode (S-6 feedback 10)', () => {
+  it('reads a stored value as unset while developer mode is off, and as stored once it is on', () => {
+    for (const developerModeEnabled of [false, undefined, 'true']) {
+      expect(
+        cacheControlOnToolsSettings(() => ({
+          developerModeEnabled,
+          experimentalCacheControlOnTools: true,
+        })),
+        String(developerModeEnabled)
+      ).toEqual({});
+    }
+    expect(
+      cacheControlOnToolsSettings(() => ({
+        developerModeEnabled: true,
+        experimentalCacheControlOnTools: true,
+      }))
+    ).toEqual({ cacheControlOnTools: true });
+  });
+
+  it('rebuilds the plan when developer mode turns a stored switch off and back on', () => {
+    const store: Record<string, unknown> = {
+      developerModeEnabled: true,
+      experimentalCacheControlOnTools: true,
+    };
+    let fire: () => void = () => undefined;
+    const rebuild = vi.fn();
+    const stop = watchCacheControlOnTools({
+      onSettingsWrite: (listener) => {
+        fire = listener;
+        return () => undefined;
+      },
+      rebuild,
+      read: () => store,
+    });
+    store.developerModeEnabled = false;
+    fire();
+    expect(rebuild).toHaveBeenCalledTimes(1);
+    // The stored value is kept, so turning developer mode back on restores it.
+    expect(store.experimentalCacheControlOnTools).toBe(true);
+    store.developerModeEnabled = true;
+    fire();
+    expect(rebuild).toHaveBeenCalledTimes(2);
+    stop();
+  });
+});
+
 describe('watchCacheControlOnTools', () => {
   function harness(initial: Record<string, unknown>) {
-    const store = { ...initial };
+    const store: Record<string, unknown> = { developerModeEnabled: true, ...initial };
     let fire: () => void = () => undefined;
     const rebuild = vi.fn();
     const log = vi.fn();
@@ -156,7 +207,10 @@ describe('a renderer save reaches the watch through the settings IPC', () => {
     const write = handlers.get(IPC_CHANNELS.SETTINGS_WRITE);
     if (!write) throw new Error('settings handlers not registered');
     const save = (state: Record<string, unknown>) =>
-      write({}, { 'aiclient-settings': { state, version: 0 } });
+      write(
+        {},
+        { 'aiclient-settings': { state: { developerModeEnabled: true, ...state }, version: 0 } }
+      );
     try {
       await save({ theme: 'dark', experimentalCacheControlOnTools: false });
       expect(rebuild).not.toHaveBeenCalled();
