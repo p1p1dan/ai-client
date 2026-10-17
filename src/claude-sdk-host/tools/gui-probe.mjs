@@ -4,7 +4,8 @@
  * docs/plantree/plans/claude-sdk-engine/topics/s1-engine-selection.md §3).
  *
  *   node gui-probe.mjs setup        scratch dirs and a fake-only env file
- *   node gui-probe.mjs launch       `node scripts/dev.js --remote-debugging-port=<port>` (detached)
+ *   node gui-probe.mjs launch       `node scripts/dev.js --remote-debugging-port=<port>` (detached);
+ *                                   CCSDK_GUI_KEEP_RENDERING=1 keeps the page rendering behind other windows
  *   node gui-probe.mjs enter        attach CDP, get past the welcome surface
  *   node gui-probe.mjs seed         add the fake gateway as two custom AI services (fake keys):
  *                                   an anthropic-messages one with two Claude models and a GLM
@@ -186,6 +187,16 @@ function launch() {
       path.join(repoRoot, 'scripts/dev.js'),
       `--open-path=${dirs.workspace}`,
       `--remote-debugging-port=${PORT}`,
+      // Behind other windows Chromium marks the page hidden and stops animation
+      // frames, so dialogs never finish opening and focus lands late. Set
+      // CCSDK_GUI_KEEP_RENDERING=1 to keep it rendering while occluded.
+      ...(process.env.CCSDK_GUI_KEEP_RENDERING === '1'
+        ? [
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-background-timer-throttling',
+          ]
+        : []),
     ],
     { cwd: repoRoot, env, detached: true, stdio: ['ignore', logFd, logFd], windowsHide: true }
   );
