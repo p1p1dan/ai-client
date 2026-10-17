@@ -39,7 +39,7 @@ import { app, BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { CLAUDE_SDK_HOME_DIR_NAME } from '../services/agent-host/claudeSdkEngine';
 import { currentDshSkillHomes, resolveDshHome } from '../services/agent-host/DshHostProcess';
 import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
-import { createDshHostPrewarm } from '../services/agent-host/dshHostPrewarm';
+import { createDshHostPrewarm, prewarmDshHost } from '../services/agent-host/dshHostPrewarm';
 import {
   composerSlashCommands,
   listDshSkillsFromDisk,
@@ -334,10 +334,17 @@ export function registerChatHandlers(): void {
 
   // S-6 feedback 11c: the DSH host starts with the chat surface, not on the first send.
   // Once per app run: every send calls `chat:ensureHost` too (see `createDshHostPrewarm`).
-  const prewarmDshHostOnce = createDshHostPrewarm({
+  const dshPrewarmDeps = {
     assertSpawnAllowed: assertAgentSpawnAllowed,
     ensureHost: () => dshHostSupervisor.ensureHost(),
-    log: (message, error) => console.warn(`[chat] ${message}`, error),
+    log: (message: string, error?: unknown) => console.warn(`[chat] ${message}`, error),
+  };
+  const prewarmDshHostOnce = createDshHostPrewarm(dshPrewarmDeps);
+
+  // S-6 feedback 11c (user, 2026-10-17): and again while the user types in a DSH
+  // chat, for a host that stopped after 10 idle minutes. A running host answers at once.
+  ipcMain.handle(IPC_CHANNELS.CHAT_WARM_DSH_HOST, () => {
+    prewarmDshHost(dshPrewarmDeps);
   });
 
   ipcMain.handle(IPC_CHANNELS.CHAT_ENSURE_HOST, async () => {

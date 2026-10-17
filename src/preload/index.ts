@@ -946,6 +946,8 @@ const electronAPI = {
       errors: number;
       capabilities: { history: true; thinking: true };
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_ENSURE_HOST),
+    /** S-6 feedback 11c: start the DSH host while the user types; resolves at once. */
+    warmDshHost: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_WARM_DSH_HOST),
     getHostStatus: (): Promise<{
       state: string;
       capacity: number;

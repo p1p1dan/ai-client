@@ -325,6 +325,13 @@ export const IPC_CHANNELS = {
 
   // OpenChamber Chat / Agent Host Runtime
   CHAT_ENSURE_HOST: 'chat:ensureHost',
+  /**
+   * Route B S-6 feedback 11c (user ruling 2026-10-17): the composer of a DSH chat
+   * asks for the DSH host while the user types, so a host stopped after 10 idle
+   * minutes (decision 025) is up again by the time the message is sent. Fire and
+   * forget; nothing starts before the spawn gate allows an agent session.
+   */
+  CHAT_WARM_DSH_HOST: 'chat:warmDshHost',
   CHAT_GET_HOST_STATUS: 'chat:getHostStatus',
   CHAT_CREATE_SESSION: 'chat:createSession',
   /**

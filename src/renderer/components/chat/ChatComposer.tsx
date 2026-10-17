@@ -1,3 +1,4 @@
+import type { ChatEngine } from '@shared/claudeSdkEngine';
 import { readCompactInstructions } from '@shared/compactInstructions';
 import { dshCompactCommandText } from '@shared/dshHistory/types';
 import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentDefaults';
@@ -111,6 +112,7 @@ import { cancelCompactRun, nextCompactRunId, runCompactWhenRunning } from './com
 import { buildBranchColumn } from './composerColumns';
 import { onComposerFocusRequest, onComposerStopRequest } from './composerFocus';
 import { isTargetableWorkspace, resolveActiveTarget } from './composerTarget';
+import { warmDshHostWhileTyping } from './dshHostWarmup';
 import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
@@ -689,6 +691,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const [mentionIndex, setMentionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
+  // S-6 feedback 11c: the engine the next send goes to, as last rendered, for the
+  // DSH host warm-up in `handleContentChange` (set where `chatEngine` is derived).
+  const chatEngineRef = useRef<ChatEngine>('dsh');
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   /**
    * P1-7e (problem 33, decision 139): the chat whose draft the composer holds.
@@ -1871,6 +1876,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // F4 (round-4 Codex NEEDS-FIX #3): `updateValue` writes `valueRef`
     // synchronously, same tick as `setValue` — see the ref's own comment.
     updateValue(next);
+    // S-6 feedback 11c (user, 2026-10-17): a DSH host stopped while idle starts
+    // again as the user types, not on the send.
+    warmDshHostWhileTyping({ text: next, engine: chatEngineRef.current });
     // R02-c: tracked before the cwd guard below. The menu needs no workspace —
     // the window's commands and the user's skills come without one (decision
     // 175 adds the project's when there is one) — so a chat with no folder yet
@@ -4194,6 +4202,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       model: nextSendModel,
     }),
   });
+  chatEngineRef.current = chatEngine;
   const imageInputHintBlock = modelLacksImageInput({
     drafts: attachments.drafts,
     model: nextSendModel,

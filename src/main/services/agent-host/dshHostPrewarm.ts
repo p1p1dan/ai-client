@@ -13,6 +13,12 @@
  * throws and never waits: a failed start is logged, and the first send starts the host
  * the way it always has. The Agent SDK engine is not warmed (ruling: it keeps starting
  * per chat).
+ *
+ * User ruling 2026-10-17, second half: the composer of a DSH chat also asks while
+ * the user types (`chat:warmDshHost`, at most once a minute, `dshHostWarmup.ts` in
+ * the renderer), so a host stopped after 10 idle minutes is starting again before the
+ * message goes out. That path calls `prewarmDshHost` itself, every time: a running
+ * host answers at once.
  */
 
 export interface DshHostPrewarmDeps {
