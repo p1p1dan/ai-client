@@ -1816,6 +1816,206 @@ async function main(): Promise<void> {
         );
         break;
       }
+      case 'steer-late': {
+        // S-6 feedback 13: a Ctrl+Enter message sent while the turn's LAST reply streams
+        // (no tool step left to fold it in at). The CLI runs it as its next turn; the
+        // product turn must stay open, echo it and show that reply, never strand it as
+        // 'awaiting delivery' or open an engine turn as if a background task had woken it.
+        const delays = (process.env.PROBE_STEER_LATE_DELAYS ?? '0,400,1200,2500')
+          .split(',')
+          .map((d) => Number(d.trim()))
+          .filter((d) => Number.isFinite(d) && d >= 0);
+        for (const delay of delays) {
+          const tag = `late-${delay}`;
+          await send(`CC-TEXT steer ${tag}`);
+          await waitFor(
+            (e) => e.type === 'thinking.delta' || e.type === 'message.delta',
+            `${tag}: first streamed delta`
+          );
+          if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+          const attemptId = `interject-${tag}`;
+          const before = events.find(terminal);
+          const r = await request('worker.interject', {
+            logicalSessionId,
+            attemptId,
+            text: `插话 ${tag}`,
+          });
+          console.log(
+            `  ${tag}: interject → ${JSON.stringify(r)} (turn already ended: ${Boolean(before)})`
+          );
+          const accepted = (r as { interjected?: boolean }).interjected === true;
+          let end: Event | undefined;
+          try {
+            end = await waitFor(terminal, `${tag}: turn end`, 60_000);
+          } catch (error) {
+            console.log(`  ${tag}: ${String(error)}`);
+          }
+          // Whatever the CLI does next with the message happens within a few seconds.
+          await new Promise((r) => setTimeout(r, 6000));
+          show(`steer-late ${tag}`);
+          const echoed = events.some(
+            (e) =>
+              e.type === 'message.started' &&
+              e.payload?.role === 'user' &&
+              e.payload?.attemptId === attemptId
+          );
+          const engineHeads = events.filter(
+            (e) =>
+              e.type === 'message.started' &&
+              e.payload?.role === 'user' &&
+              typeof e.payload?.origin === 'object'
+          ).length;
+          const terminals = events.filter(terminal).length;
+          const replies = assistantText().split('PiLab × Claude Agent SDK').length - 1;
+          console.log(
+            `  ${tag}: accepted=${accepted} echoed=${echoed} engineHeads=${engineHeads} terminals=${terminals} replies=${replies}`
+          );
+          if (!accepted) {
+            // Too late for the turn: the composer sends it as a normal message instead.
+            check(
+              'steer-late',
+              `${tag}: a refused interjection leaves no engine turn`,
+              engineHeads === 0
+            );
+            continue;
+          }
+          check(
+            'steer-late',
+            `${tag}: the turn ends in session.completed`,
+            end?.type === 'session.completed'
+          );
+          check('steer-late', `${tag}: the accepted interjection is echoed`, echoed);
+          check('steer-late', `${tag}: no engine turn opens for it`, engineHeads === 0);
+          check('steer-late', `${tag}: one product turn, one terminal event`, terminals === 1);
+          check('steer-late', `${tag}: the reply to it is shown`, replies >= 2);
+        }
+        await send('CC-TEXT after the late interjections');
+        const after = await waitFor(terminal, 'steer-late follow-up end');
+        check(
+          'steer-late',
+          'a normal send afterwards completes',
+          after.type === 'session.completed'
+        );
+        check(
+          'steer-late',
+          'and its reply is shown',
+          assistantText().includes('PiLab × Claude Agent SDK')
+        );
+        break;
+      }
+      case 'steer-withdraw': {
+        // S-6 feedback 13: a late Ctrl+Enter message taken back at once. Either the CLI
+        // dropped it (withdrawn: no echo, no reply to it, the turn ends) or a CLI turn
+        // already ran on it (delivered: echoed and answered). Never both, never stranded.
+        await send('CC-TEXT steer withdraw');
+        await waitFor(
+          (e) => e.type === 'thinking.delta' || e.type === 'message.delta',
+          'withdraw: first streamed delta'
+        );
+        const attemptId = 'interject-withdraw';
+        const r = await request('worker.interject', {
+          logicalSessionId,
+          attemptId,
+          text: '插话 withdraw',
+        });
+        const w = (await request('worker.interject.withdraw', {
+          logicalSessionId,
+          attemptId,
+        }).catch((error) => ({ outcome: `error ${String(error)}` }))) as { outcome?: string };
+        console.log(`  interject → ${JSON.stringify(r)}; withdraw → ${JSON.stringify(w)}`);
+        let end: Event | undefined;
+        try {
+          end = await waitFor(terminal, 'withdraw: turn end', 60_000);
+        } catch (error) {
+          console.log(`  withdraw: ${String(error)}`);
+        }
+        await new Promise((r) => setTimeout(r, 6000));
+        show('steer-withdraw');
+        const echoed = events.some(
+          (e) =>
+            e.type === 'message.started' &&
+            e.payload?.role === 'user' &&
+            e.payload?.attemptId === attemptId
+        );
+        const engineHeads = events.filter(
+          (e) =>
+            e.type === 'message.started' &&
+            e.payload?.role === 'user' &&
+            typeof e.payload?.origin === 'object'
+        ).length;
+        const replies = assistantText().split('PiLab × Claude Agent SDK').length - 1;
+        console.log(`  withdraw: echoed=${echoed} engineHeads=${engineHeads} replies=${replies}`);
+        check(
+          'steer-withdraw',
+          'the turn ends in session.completed',
+          end?.type === 'session.completed'
+        );
+        check('steer-withdraw', 'one terminal event', events.filter(terminal).length === 1);
+        check('steer-withdraw', 'no engine turn opens', engineHeads === 0);
+        check(
+          'steer-withdraw',
+          'withdrawn means not echoed and not answered; delivered means both',
+          w.outcome === 'withdrawn'
+            ? !echoed && replies === 1
+            : w.outcome === 'delivered'
+              ? echoed && replies >= 2
+              : false
+        );
+        await send('CC-TEXT after the withdrawal');
+        const after = await waitFor(terminal, 'withdraw follow-up end');
+        check(
+          'steer-withdraw',
+          'a normal send afterwards completes',
+          after.type === 'session.completed'
+        );
+        break;
+      }
+      case 'sendnow': {
+        // S-6 feedback 13, the queue's "Send now": Stop the running turn, then send at once.
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'bypass' });
+        await send('CC-SLOW {"seconds":20}');
+        await waitFor((e) => e.type === 'tool.started', 'sendnow: slow command started');
+        await new Promise((r) => setTimeout(r, 1500));
+        const stopped = await request('worker.stop', { logicalSessionId, reason: 'user' });
+        const first = await waitFor(terminal, 'sendnow: stopped turn end', 30_000);
+        const firstEvents = events;
+        await send('CC-TEXT sent right after Stop');
+        let second: Event | undefined;
+        try {
+          second = await waitFor(terminal, 'sendnow: next turn end', 60_000);
+        } catch (error) {
+          console.log(`  sendnow: ${String(error)}`);
+        }
+        await new Promise((r) => setTimeout(r, 4000));
+        show('sendnow');
+        console.log(
+          `  sendnow: stop → ${JSON.stringify(stopped)}; first=${first.type} second=${second?.type}`
+        );
+        check(
+          'sendnow',
+          'the running turn ends in session.stopped',
+          first.type === 'session.stopped'
+        );
+        check(
+          'sendnow',
+          'the stopped turn has one terminal event',
+          firstEvents.filter(terminal).length === 1
+        );
+        check('sendnow', 'the next send completes', second?.type === 'session.completed');
+        check('sendnow', 'and only once', events.filter(terminal).length === 1);
+        check(
+          'sendnow',
+          'its reply is shown',
+          assistantText().includes('PiLab × Claude Agent SDK')
+        );
+        check(
+          'sendnow',
+          'no engine turn opens',
+          !events.some((e) => e.type === 'message.started' && typeof e.payload?.origin === 'object')
+        );
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
+        break;
+      }
       case 'enc': {
         const marker = process.env.PROBE_ENC_MARKER?.trim() || 'P113B-MARKER-';
         const files = encSamples(marker);

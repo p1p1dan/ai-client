@@ -49,6 +49,10 @@ export const GROUPS: readonly Group[] = [
       'stop',
       'plan',
       'steer',
+      // S-6 feedback 13: Ctrl+Enter during the last reply, taken back, and Send now.
+      'steer-late',
+      'steer-withdraw',
+      'sendnow',
       'agent',
       'search',
       'compact',

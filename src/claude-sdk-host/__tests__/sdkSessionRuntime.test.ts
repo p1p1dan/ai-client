@@ -1245,3 +1245,156 @@ describe('the card offers what the CLI will remember (review)', () => {
     await rt.dispose();
   });
 });
+
+describe('Ctrl+Enter after the last step (S-6 feedback 13)', () => {
+  const pendingUuid = (rt: InstanceType<typeof ClaudeSdkSessionRuntime>) =>
+    [
+      ...(
+        rt as unknown as { turn: { interjections: Map<string, unknown> } }
+      ).turn.interjections.keys(),
+    ][0];
+  const terminals = () => events.filter((e) => e.type === 'session.completed').length;
+  const userHeads = () =>
+    events
+      .filter((e) => e.type === 'message.started')
+      .map((e) => (e as { payload: Record<string, unknown> }).payload)
+      .filter((p) => p.role === 'user');
+
+  async function interjected() {
+    const { rt, q } = await started();
+    await send(rt);
+    expect(rt.interject({ logicalSessionId: 'chat-1', attemptId: 'late-1', text: 'late' })).toEqual(
+      {
+        interjected: true,
+        turnActive: true,
+      }
+    );
+    const uuid = pendingUuid(rt);
+    return { rt, q, uuid };
+  }
+
+  it('keeps the turn open for the CLI turn that runs a message it queued, and echoes it there', async () => {
+    const { rt, q, uuid } = await interjected();
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'queued' });
+    // The CLI's own count leaves such a message out (measured on 2.1.300).
+    q.push({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'ok',
+      queued_turn_count: 0,
+    });
+    await flush();
+    expect(terminals()).toBe(0);
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'started' });
+    q.push({ type: 'system', subtype: 'status', user_message_uuids: [uuid] });
+    await flush();
+    expect(userHeads().some((p) => p.attemptId === 'late-1')).toBe(true);
+    q.push({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'ok',
+      queued_turn_count: 0,
+    });
+    await flush();
+    expect(terminals()).toBe(1);
+    // Never an engine turn, as if a background task had woken the CLI.
+    expect(userHeads().every((p) => p.origin === undefined)).toBe(true);
+    q.end();
+    await rt.dispose();
+  });
+
+  it('ends the turn as before when the CLI sends no lifecycle frames and counts nothing queued', async () => {
+    const { rt, q } = await interjected();
+    q.push({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'ok',
+      queued_turn_count: 0,
+    });
+    await flush();
+    expect(terminals()).toBe(1);
+    q.end();
+    await rt.dispose();
+  });
+
+  it('withdrawing the message a turn is held for ends that turn', async () => {
+    const { rt, q, uuid } = await interjected();
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'queued' });
+    q.push({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'ok',
+      queued_turn_count: 0,
+    });
+    await flush();
+    expect(terminals()).toBe(0);
+    expect(rt.withdrawInterjection({ attemptId: 'late-1' })).toEqual({ outcome: 'withdrawn' });
+    await flush();
+    expect(terminals()).toBe(1);
+    q.end();
+    await rt.dispose();
+  });
+
+  it('a message a CLI turn already runs on is reported delivered, not withdrawn', async () => {
+    const { rt, q, uuid } = await interjected();
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'started' });
+    await flush();
+    expect(rt.withdrawInterjection({ attemptId: 'late-1' })).toEqual({ outcome: 'delivered' });
+    q.end();
+    await rt.dispose();
+  });
+
+  it('a cancelled lifecycle drops the message and releases a held turn', async () => {
+    const { rt, q, uuid } = await interjected();
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'queued' });
+    q.push({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'ok',
+      queued_turn_count: 0,
+    });
+    await flush();
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'cancelled' });
+    await flush();
+    expect(terminals()).toBe(1);
+    q.end();
+    await rt.dispose();
+  });
+});
+
+describe('Ctrl+Enter completed without being named (S-6 feedback 13)', () => {
+  it('is echoed and releases a held turn', async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    rt.interject({ logicalSessionId: 'chat-1', attemptId: 'late-2', text: 'late' });
+    const uuid = [
+      ...(
+        rt as unknown as { turn: { interjections: Map<string, unknown> } }
+      ).turn.interjections.keys(),
+    ][0];
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'queued' });
+    q.push({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'ok',
+      queued_turn_count: 0,
+    });
+    await flush();
+    expect(events.filter((e) => e.type === 'session.completed').length).toBe(0);
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'completed' });
+    await flush();
+    const heads = events
+      .filter((e) => e.type === 'message.started')
+      .map((e) => (e as { payload: Record<string, unknown> }).payload);
+    expect(heads.some((p) => p.attemptId === 'late-2')).toBe(true);
+    expect(events.filter((e) => e.type === 'session.completed').length).toBe(1);
+    q.end();
+    await rt.dispose();
+  });
+});

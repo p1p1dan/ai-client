@@ -205,6 +205,12 @@ interface Interjection {
   attemptId: string;
   text: string;
   attachments?: SessionAttachment[];
+  /**
+   * What the CLI's `command_lifecycle` frames last said of it (2.1.300): `queued` once it
+   * is in the CLI's command queue, `started` once a CLI turn runs on it. Absent until the
+   * first frame (an older CLI sends none).
+   */
+  cliState?: 'queued' | 'started';
 }
 
 interface Turn {
@@ -218,6 +224,11 @@ interface Turn {
   /** toolCallId → what the row says of a call the CLI refused itself (S-2: Auto's check). */
   refusals: Map<string, string>;
   interjections: Map<string, Interjection>;
+  /**
+   * The CLI ended its turn while a Ctrl+Enter message of this one was still in its queue:
+   * the product turn stays open for the CLI turn that runs it (S-6 feedback 13).
+   */
+  heldForInterjection?: boolean;
   /** toolCallId of every Bash/PowerShell call still running: while any is, its processes are sampled. */
   shellCalls: Set<string>;
   stopTimer?: ReturnType<typeof setTimeout>;
@@ -1009,17 +1020,22 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       ? [...turn.interjections].find(([, value]) => value.attemptId === input.attemptId)
       : undefined;
     if (!turn || !entry) return { outcome: 'not_found' };
-    const [uuid] = entry;
+    const [uuid, pending] = entry;
+    // A CLI turn already runs on it: it was delivered, whatever the bubble still says.
+    if (pending.cliState === 'started') return { outcome: 'delivered' };
     turn.interjections.delete(uuid);
     const cancel = (
       this.query as unknown as { cancelAsyncMessage?: (uuid: string) => Promise<boolean> } | null
     )?.cancelAsyncMessage;
     void cancel
       ?.call(this.query, uuid)
-      .then((cancelled) =>
-        this.log(`withdraw ${uuid}: ${cancelled ? 'cancelled' : 'already taken in'}`)
-      )
+      .then((cancelled) => {
+        this.log(`withdraw ${uuid}: ${cancelled ? 'cancelled' : 'already taken in'}`);
+        if (cancelled) this.releaseHeldTurn();
+      })
       .catch((error) => this.log('withdraw failed', error));
+    // No cancel to wait for (an SDK without it): a turn held only for this message ends now.
+    if (!cancel) this.releaseHeldTurn();
     return { outcome: 'withdrawn' };
   }
 
@@ -1102,7 +1118,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       const event = m.type === 'stream_event' ? (record(m.event)?.type as string) : '';
       if (event !== 'content_block_delta') {
         this.log(
-          `[trace] ${m.type}${m.subtype ? `/${m.subtype}` : ''}${event ? `/${event}` : ''} uuid=${String(m.uuid ?? '')} umu=${JSON.stringify(m.user_message_uuids ?? m.user_message_uuid ?? null)} ${m.type === 'user' ? JSON.stringify(m).slice(0, 300) : ''}`
+          `[trace] ${m.type}${m.subtype ? `/${m.subtype}` : ''}${event ? `/${event}` : ''} uuid=${String(m.uuid ?? '')} umu=${JSON.stringify(m.user_message_uuids ?? m.user_message_uuid ?? null)} ${m.type === 'result' ? `qtc=${String(m.queued_turn_count)} ` : ''}${m.type === 'user' || m.type === 'command_lifecycle' ? JSON.stringify(m).slice(0, 300) : ''}`
         );
       }
     }
@@ -1127,8 +1143,51 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         this.ingestResult(message as unknown as Record<string, unknown>);
         return;
       default:
+        if ((message as { type: string }).type === 'command_lifecycle')
+          this.ingestCommandLifecycle(message as unknown as Record<string, unknown>);
         return;
     }
+  }
+
+  /**
+   * The CLI's per-command lifecycle (2.1.300, untyped): `queued` → `started` → `completed`,
+   * or `cancelled`. Only our own Ctrl+Enter messages are tracked here: a message the turn
+   * never folded in at a step boundary runs as the CLI's next turn, and `queued_turn_count`
+   * on the result before it does not count such a message (measured: 0), so this is how
+   * the host knows to keep the product turn open for it.
+   */
+  private ingestCommandLifecycle(message: Record<string, unknown>): void {
+    const turn = this.turn;
+    if (!turn) return;
+    const uuid = String(message.command_uuid ?? '');
+    const pending = turn.interjections.get(uuid);
+    if (!pending) return;
+    const state = message.state;
+    if (state === 'queued' || state === 'started') {
+      pending.cliState = state;
+      return;
+    }
+    if (state === 'cancelled') {
+      turn.interjections.delete(uuid);
+      this.releaseHeldTurn();
+      return;
+    }
+    // Done, yet no turn named it in `user_message_uuids`: it was delivered all the same,
+    // so the bubble settles and a turn held for it does not wait for good.
+    if (state === 'completed') {
+      this.echoTakenInterjections([uuid]);
+      this.releaseHeldTurn();
+    }
+  }
+
+  /** A turn held only for Ctrl+Enter messages that are all gone now ends as completed. */
+  private releaseHeldTurn(): void {
+    const turn = this.turn;
+    if (!turn?.heldForInterjection || turn.interjections.size > 0) return;
+    turn.heldForInterjection = false;
+    this.session.turns += 1;
+    this.failureSignals = {};
+    this.endTurn(turn.stopRequested ? 'stopped' : 'completed', {});
   }
 
   private ingestSystem(message: Record<string, unknown>): void {
@@ -1471,9 +1530,17 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       return;
     }
     // A Ctrl+Enter message the turn never took in runs as the CLI's next turn:
-    // keep this product turn open so it lands under the same request.
-    if (turn.interjections.size > 0 && num(message.queued_turn_count) > 0 && !turn.stopRequested)
-      return;
+    // keep this product turn open so it lands under the same request. The CLI says so
+    // through `command_lifecycle` (its `queued_turn_count` leaves such a message out);
+    // a CLI that sends no lifecycle frames is judged by the count, as before.
+    if (turn.interjections.size > 0 && !turn.stopRequested) {
+      const queuedInCli = [...turn.interjections.values()].some((i) => i.cliState !== undefined);
+      if (queuedInCli || num(message.queued_turn_count) > 0) {
+        turn.heldForInterjection = true;
+        return;
+      }
+    }
+    turn.heldForInterjection = false;
     this.session.turns += 1;
     const signals = this.failureSignals;
     this.failureSignals = {};
