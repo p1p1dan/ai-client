@@ -12,7 +12,7 @@
 
 | # | 反馈 | 类别 | 状态 |
 |---|---|---|---|
-| 1 | 为什么少了 11 个工具 | 已裁决（§3 第 1 条） | **已做**（本机探针与单测通过，界面待复核；Monitor/TaskList 待查） |
+| 1 | 为什么少了 11 个工具 | 已裁决（§3 第 1 条） | **已做**（本机探针与单测通过，界面待复核；Monitor/TaskList 是 CLI 非交互模式本来就不提供） |
 | 2 | 官方行为与提示词不改，只可在后面追加 | 已裁决（§3 第 7 条） | **已记**（README 裁决 22） |
 | 3 | SDK 对话开始后模型菜单只剩同一路由的模型 | 已裁决（§3 第 2 条） | 待做 |
 | 4 | 子代理与后台任务只在输出里有，后台任务窗与子代理页都看不到 | 直接修 | **已修**（本机探针与单测通过，界面待复核） |
@@ -40,7 +40,8 @@
   - **实测**（假网关）：EnterWorktree 在 git 工作区里建 worktree，随后的命令在里面跑，ExitWorktree 退出并删除；ScheduleWakeup 到点后 CLI 自己发起一轮并正常结束（最短 60 秒）。
   - **配套**：定时到点的回合以前会被当成"后台任务已结束"，现在宿主认出它（没有打开的回合时 CLI 开始执行一条不属于我们的命令），新增来源 `scheduled`，标题"定时任务到点，自动继续"；重新打开对话时按 CLI 记录里的 `turnOrigin: "scheduled"` 同样标出（SDK 自带的读取接口会丢掉这个字段，宿主直接读记录文件）。顺带修了：重新打开对话时后台任务通知（`<task-notification>…`）不再显示成用户消息，而是"后台任务／子代理已结束"的标题。工具行文案：定时类写成"已设定时（对话开着时有效）"，说明对话关掉后定时失效；worktree 两个写成"已进入 worktree / 已退出 worktree"；TaskStop 改称"已停止后台任务"，并按任务 ID 显示任务名。左侧「上下文」的「工作区」组在 SDK 对话进入 worktree 后多一行"当前 worktree"（从最近一次进入或退出的工具结果读出路径）。
   - **验证**：探针新增 `worktree`、`wakeup` 两个场景，回归套件单独成组 `hosttools`（6 条）；单测：工具文案 6 条、worktree 路径推导 1 条、定时来源 2 条、重新打开时的历史投影 1 条、标题文案 1 条。本机全套回归 9 组全过，录制门禁一致。
-  - **未做**：Monitor、TaskList 不在禁用名单里，是 SDK 的 `claude_code` 预设本身没带，要用同版本命令行对比才能查清，留待下一步；CronCreate 没有单独跑探针（与 ScheduleWakeup 同一条唤醒路径）；ReportFindings 继续禁用待用户确认。
+  - **Monitor、TaskList 查清了**：用随包的同一个 `claude.exe`（2.1.300）在命令行非交互模式（`-p`）下跑，启动时报告的工具清单里也没有 Monitor、TaskList（也没有 TodoWrite）；它们只在终端里交互运行时提供。SDK 会话属于非交互模式，所以不是 PiLab 禁掉的，预设也打不开。用户在命令行里对比看到它们，是交互模式。非交互模式的清单：Bash、CronCreate、CronDelete、CronList、Edit、EnterWorktree、ExitWorktree、Glob、Grep、ListAgents、NotebookEdit、Read、ReportFindings、ScheduleWakeup、SendMessage、Skill、Task、TaskStop、WebFetch、WebSearch、Workflow、Write；SDK 会话另有 AskUserQuestion 与计划模式两个。
+  - **未做**：CronCreate 没有单独跑探针（与 ScheduleWakeup 同一条唤醒路径）；ReportFindings 继续禁用待用户确认。
 
 ### 2 提示词只追加不插入
 
