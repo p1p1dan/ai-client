@@ -361,6 +361,8 @@ export const IPC_CHANNELS = {
    */
   CHAT_WITHDRAW_INTERJECTION: 'chat:withdrawInterjection',
   CHAT_CLOSE_SESSION: 'chat:closeSession',
+  /** Route B S-6 feedback 7: where a chat's conversation record lives, from its identity stub. */
+  CHAT_LOCATE_TRANSCRIPT: 'chat:locateTranscript',
   /**
    * Answer one `permission.requested`. Addressed by session plus the
    * `permissionId` the timeline block and the pending queue already carry.

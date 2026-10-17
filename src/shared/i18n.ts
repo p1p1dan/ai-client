@@ -1068,6 +1068,7 @@ export const zhTranslations: Record<string, string> = {
   'View more': '查看更多',
   'Waiting {{seconds}} seconds': '{{seconds}} 秒',
   Workspace: '工作区',
+  'Conversation record': '对话记录',
   'Workspace clean': '工作区干净',
   'Workspace is not a Git repository': '当前目录还不是 Git 仓库，初始化后即可使用 Git 功能',
   'Workspace panel shortcuts': '工作区面板快捷键',

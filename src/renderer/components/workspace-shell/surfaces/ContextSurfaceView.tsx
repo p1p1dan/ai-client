@@ -7,7 +7,7 @@
  * only renders, never decides.
  */
 import { agentDefaultEffort } from '@shared/models/chatAgentDefaults';
-import { ChevronDown, ChevronRight, Copy } from 'lucide-react';
+import { ChevronDown, ChevronRight, Copy, FolderOpen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { resolveEffortSelection } from '@/components/chat/efforts';
 import { useHostStatus } from '@/components/chat/useHostStatus';
@@ -123,17 +123,64 @@ function CopyRowButton({ value }: { value: string }) {
   );
 }
 
+/** S-6 feedback 7: shows a row's local path (the conversation record) in the file manager. */
+function RevealRowButton({ value }: { value: string }) {
+  const { t } = useI18n();
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="h-6 w-6 shrink-0"
+      aria-label={t('Reveal in Explorer')}
+      title={t('Reveal in Explorer')}
+      onClick={() => void window.electronAPI?.file.revealInFileManager(value).catch(() => {})}
+    >
+      <FolderOpen className="h-3.5 w-3.5" />
+    </Button>
+  );
+}
+
 function ContextRowLine({ row }: { row: ContextGroup['rows'][number] }) {
   const { t } = useI18n();
   return (
-    <div className="flex h-7 shrink-0 items-center gap-2 px-1">
+    <div className="flex h-7 shrink-0 items-center gap-2 px-1" data-row={row.id}>
       <span className="text-meta text-muted-foreground shrink-0">{t(row.label)}</span>
       <span className="min-w-0 flex-1 truncate text-ui" title={row.title ?? row.value}>
         {row.value}
       </span>
       {row.copyable && <CopyRowButton value={row.value} />}
+      {row.revealable && <RevealRowButton value={row.value} />}
     </div>
   );
+}
+
+/**
+ * Route B S-6 feedback 7: where this chat's record is on disk, asked of Main from its
+ * identity stub. Asked again when a turn settles: an Agent SDK chat's CLI writes its
+ * transcript only once the first message has gone out.
+ */
+function useTranscriptPath(
+  runtimeIdentity: string | null | undefined,
+  status: string | undefined
+): string | null {
+  const [found, setFound] = useState<{ stub: string; path: string | null } | null>(null);
+  const settled = status !== 'running';
+  useEffect(() => {
+    if (!runtimeIdentity || !settled) return;
+    let live = true;
+    void window.electronAPI?.chat
+      .locateTranscript(runtimeIdentity)
+      .then((location) => {
+        if (live) setFound({ stub: runtimeIdentity, path: location?.path ?? null });
+      })
+      .catch(() => {
+        if (live) setFound({ stub: runtimeIdentity, path: null });
+      });
+    return () => {
+      live = false;
+    };
+  }, [runtimeIdentity, settled]);
+  return found && found.stub === runtimeIdentity ? found.path : null;
 }
 
 /**
@@ -393,6 +440,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
     () => workspaces.find((item) => item.id === session?.workspaceId) ?? null,
     [workspaces, session]
   );
+  const transcriptPath = useTranscriptPath(session?.runtimeIdentity, session?.status);
 
   const lastAssistantMessageId = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -446,6 +494,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
             kind: workspace.kind,
             branch: workspace.branch ?? null,
             gitEnabled: workspace.gitEnabled,
+            transcriptPath,
           }
         : null,
       runtime: {
@@ -488,6 +537,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
     effortSelection,
     hostStatus,
     stderrFacts,
+    transcriptPath,
   ]);
 
   // U07: the composition of what this window has loaded. Memoized on the

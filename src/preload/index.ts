@@ -955,6 +955,14 @@ const electronAPI = {
       errors: number;
       capabilities: { history: true; thinking: true };
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_HOST_STATUS),
+    /** Route B S-6 feedback 7: the record behind a chat's identity stub (`runtimeIdentity`). */
+    locateTranscript: (
+      stubFile: string
+    ): Promise<{
+      path: string;
+      kind: 'file' | 'directory';
+      engine: 'dsh' | 'claude-sdk';
+    } | null> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_LOCATE_TRANSCRIPT, stubFile),
     createSession: (payload: {
       sessionId: string;
       workspacePath: string;

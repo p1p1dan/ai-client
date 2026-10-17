@@ -31,6 +31,8 @@ export interface ContextRow {
   /** Full-value tooltip; the view falls back to `value` when this is unset. */
   title?: string;
   copyable?: boolean;
+  /** S-6 feedback 7: the value is a local path the row can show in the file manager. */
+  revealable?: boolean;
 }
 
 export type ContextGroupId = 'workspace' | 'runtime' | 'session' | 'stderr';
@@ -53,6 +55,11 @@ export interface ContextWorkspaceFacts {
   branch: string | null;
   /** Tri-state: `true` is the only value that unlocks the branch row. */
   gitEnabled: boolean | null | undefined;
+  /**
+   * Route B S-6 feedback 7: the chat's conversation record on disk (Main's
+   * `chat:locateTranscript`); absent while it is unknown or not written yet.
+   */
+  transcriptPath?: string | null;
 }
 
 export interface ContextHostFacts {
@@ -130,6 +137,16 @@ function buildWorkspaceRows(facts: ContextWorkspaceFacts | null): ContextRow[] {
   // — `gitEnabled` unknown/false must not show a stale/irrelevant branch name.
   if (facts.gitEnabled === true && facts.branch) {
     rows.push({ id: 'branch', label: 'Branch', value: facts.branch });
+  }
+  if (facts.transcriptPath) {
+    rows.push({
+      id: 'transcript',
+      label: 'Conversation record',
+      value: facts.transcriptPath,
+      title: facts.transcriptPath,
+      copyable: true,
+      revealable: true,
+    });
   }
   return rows;
 }

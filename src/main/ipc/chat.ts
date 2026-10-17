@@ -2,11 +2,13 @@ import {
   isRuntimePermissionSettings,
   type RuntimePermissionSettings,
 } from '@shared/types/runtimePermission';
+
 /**
  * Chat / Runtime IPC — Renderer ↔ Main ↔ Agent Host.
  * Forwards Host Runtime Events to all BrowserWindows.
  */
 
+import path from 'node:path';
 import { IPC_CHANNELS } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import {
@@ -33,8 +35,9 @@ import {
   type WorkerCommandsResult,
   type WorkerInterjectWithdrawResult,
 } from '@shared/types/workerRpc';
-import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
-import { currentDshSkillHomes } from '../services/agent-host/DshHostProcess';
+import { app, BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
+import { CLAUDE_SDK_HOME_DIR_NAME } from '../services/agent-host/claudeSdkEngine';
+import { currentDshSkillHomes, resolveDshHome } from '../services/agent-host/DshHostProcess';
 import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
 import {
   composerSlashCommands,
@@ -42,8 +45,13 @@ import {
 } from '../services/agent-host/dshSkillCatalog';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
 import { adoptTempWorkspace } from '../services/agent-host/TempWorkspaceService';
+import {
+  locateTranscript,
+  type TranscriptLocation,
+} from '../services/agent-host/transcriptLocation';
 import { WorkerManagerError, workerManager } from '../services/agent-host/WorkerManager';
 import { sameWorkerDirectory } from '../services/agent-host/workerSessionKey';
+import { getAppStateRoot } from '../services/appStatePaths';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { legacyMigrationService } from '../services/chat/LegacyMigrationService';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
@@ -331,6 +339,19 @@ export function registerChatHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.CHAT_GET_HOST_STATUS, async () => {
     return workerManager.getStatus();
   });
+
+  // Route B S-6 feedback 7: the Context panel's "Conversation record" row.
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_LOCATE_TRANSCRIPT,
+    async (_event, stubFile: unknown): Promise<TranscriptLocation | null> => {
+      if (typeof stubFile !== 'string') return null;
+      const appStateRoot = getAppStateRoot();
+      return locateTranscript(stubFile, {
+        dshHome: resolveDshHome({ isPackaged: app.isPackaged, appStateRoot }),
+        claudeSdkConfigDir: path.join(appStateRoot, CLAUDE_SDK_HOME_DIR_NAME),
+      });
+    }
+  );
 
   ipcMain.handle(
     IPC_CHANNELS.CHAT_CREATE_SESSION,

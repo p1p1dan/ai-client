@@ -34,6 +34,46 @@ function baseInput(overrides: Partial<ContextGroupsInput> = {}): ContextGroupsIn
 }
 
 describe('deriveContextGroups', () => {
+  // Route B S-6 feedback 7: the chat's conversation record, in the Workspace group.
+  it('names the conversation record in the Workspace group, copyable and revealable, once Main found it', () => {
+    const record = 'C:/Users/u/.pilab/PiLabAi/claude/projects/E--proj/abc.jsonl';
+    const groups = deriveContextGroups(
+      baseInput({
+        workspace: {
+          path: '/repo/app',
+          kind: 'main',
+          branch: null,
+          gitEnabled: false,
+          transcriptPath: record,
+        },
+      })
+    );
+    const row = groups.find((g) => g.id === 'workspace')?.rows.find((r) => r.id === 'transcript');
+    expect(row).toEqual({
+      id: 'transcript',
+      label: 'Conversation record',
+      value: record,
+      title: record,
+      copyable: true,
+      revealable: true,
+    });
+    const without = deriveContextGroups(
+      baseInput({
+        workspace: {
+          path: '/repo/app',
+          kind: 'main',
+          branch: null,
+          gitEnabled: false,
+          transcriptPath: null,
+        },
+      })
+    );
+    expect(without.find((g) => g.id === 'workspace')?.rows.map((r) => r.id)).toEqual([
+      'path',
+      'kind',
+    ]);
+  });
+
   it('drops the Workspace and Session groups entirely with no session/workspace, keeping only Runtime (Host)', () => {
     const groups = deriveContextGroups(baseInput());
     expect(groups.map((g) => g.id)).toEqual(['runtime']);
