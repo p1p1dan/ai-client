@@ -203,6 +203,17 @@ export const ensureRepositoryId = <
   };
 };
 
+/**
+ * Issue #15: 「按工作目录」 sorts repositories by when they were added, newest first.
+ * Every entry point that adds one stamps it here; the add dialog's path once did not, and
+ * its repository sorted below every older one until the next launch backfilled a stamp
+ * (S-6 feedback 12).
+ */
+export const stampAddedAt = <T extends object>(
+  repo: T,
+  now: number = Date.now()
+): T & { addedAt: number } => ({ ...repo, addedAt: now });
+
 // Check if two paths are equal (considering OS-specific rules)
 export const pathsEqual = (path1: string, path2: string): boolean => {
   return normalizePath(path1) === normalizePath(path2);

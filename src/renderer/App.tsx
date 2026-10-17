@@ -28,7 +28,7 @@ import {
   useWorktreeState,
   useWorktreeSync,
 } from './App/hooks';
-import { getStoredWorktreeMap, pathsEqual, STORAGE_KEYS } from './App/storage';
+import { getStoredWorktreeMap, pathsEqual, STORAGE_KEYS, stampAddedAt } from './App/storage';
 import { SignInConfirmHost } from './components/auth/SignInConfirmHost';
 import { writeSessionPermissions } from './components/chat/sessionPreferenceStore';
 import { DevToolsOverlay } from './components/DevToolsOverlay';
@@ -803,22 +803,23 @@ export default function App() {
       repoPath: string,
       groupId: string | null,
       options?: { kind?: 'local' | 'remote'; connectionId?: string }
-    ): Repository => ({
-      id: buildRepositoryId(options?.kind ?? 'local', repoPath, {
+    ): Repository =>
+      stampAddedAt({
+        id: buildRepositoryId(options?.kind ?? 'local', repoPath, {
+          connectionId: options?.connectionId,
+          platform:
+            window.electronAPI.env.platform === 'win32'
+              ? 'win32'
+              : window.electronAPI.env.platform === 'darwin'
+                ? 'darwin'
+                : 'linux',
+        }),
+        name: getDisplayPathBasename(repoPath),
+        path: repoPath,
+        kind: options?.kind ?? 'local',
         connectionId: options?.connectionId,
-        platform:
-          window.electronAPI.env.platform === 'win32'
-            ? 'win32'
-            : window.electronAPI.env.platform === 'darwin'
-              ? 'darwin'
-              : 'linux',
+        groupId: groupId || undefined,
       }),
-      name: getDisplayPathBasename(repoPath),
-      path: repoPath,
-      kind: options?.kind ?? 'local',
-      connectionId: options?.connectionId,
-      groupId: groupId || undefined,
-    }),
     []
   );
 

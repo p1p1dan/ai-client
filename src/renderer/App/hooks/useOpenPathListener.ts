@@ -1,7 +1,7 @@
 import { getPathBasename } from '@shared/utils/path';
 import { useEffect } from 'react';
 import type { Repository } from '../constants';
-import { ensureRepositoryId, pathsEqual } from '../storage';
+import { ensureRepositoryId, pathsEqual, stampAddedAt } from '../storage';
 
 export function useOpenPathListener(
   enabled: boolean,
@@ -21,11 +21,13 @@ export function useOpenPathListener(
         setSelectedRepo(existingRepo.path);
       } else {
         const name = getPathBasename(path);
-        const newRepo: Repository = ensureRepositoryId({
-          name,
-          path,
-          kind: 'local',
-        });
+        const newRepo: Repository = stampAddedAt(
+          ensureRepositoryId({
+            name,
+            path,
+            kind: 'local',
+          })
+        );
         const updated = [...repositories, newRepo];
         saveRepositories(updated);
         setSelectedRepo(path);

@@ -25,7 +25,7 @@
 | 11a | issue #17：`/compact` 后出现两条「上下文摘要」 | 直接修（DSH） | 待做 |
 | 11b | issue #18：新装登录后模型按钮显示「自动」 | 直接修 | 待做 |
 | 11c | issue #19：首次发送连接慢；发送前不能完全放行；全自动模式鸡肋 | 已裁决（§3 第 4 条），慢要实测 | 待做 |
-| 12 | 侧栏「按工作目录」时最新添加的目录排在最下面 | 直接修 | 原因已定位，待修 |
+| 12 | 侧栏「按工作目录」时最新添加的目录排在最下面 | 直接修 | **已修**（单测通过，界面待复核） |
 | 13 | Ctrl+Enter 插话卡在「待送达」、撤回显示「无法撤回」，之后的回复错位；另查排队与立刻发送 | 直接修 | **已修**（本机探针与单测通过，待推送后 CI） |
 
 ## 2 逐项记录
@@ -110,7 +110,7 @@
 - **原因（已定位）**：排序本身按添加时间倒序（issue #15、决策 186，`sidebarTree.ts` 的 `orderFoldersByAddedAt`），但左上角按钮打开的是添加仓库对话框，它走 `src/renderer/App.tsx` 的 `createRepositoryEntry`（本地、克隆、远程三种都经它），这个函数**没写 `addedAt`**。issue #15 的修复只给 `useRepositoryState.ts` 的 `handleAddRepository` 加了 `addedAt`，而对话框不走那条路。侧栏对没有时间的仓库按 0 算（`LeftNav.tsx` 的 `repo.addedAt ?? 0`），比所有老仓库启动时补上的时间都小，所以排在最下。
 - **旁证**：重启应用后，启动时的补时间逻辑会按数组位置给它补一个最大的时间，它应该会跳到最上面。可以用这一点复核。
 - **同类漏洞**：`useOpenPathListener.ts`（从外部用路径打开目录）新建仓库时也没写 `addedAt`。
-- **修法**：三处都写 `addedAt: Date.now()`，最好让所有新建仓库都经同一个构造函数；补单测：从对话框、克隆、远程、外部打开四个入口新加的仓库都排在最上。
+- **已修**：`src/renderer/App/storage.ts` 新增 `stampAddedAt`，添加仓库对话框（本地、克隆、远程三种都经 `App.tsx` 的 `createRepositoryEntry`）与外部打开路径（`useOpenPathListener.ts`）都用它写入添加时间；`useRepositoryState.ts` 原本就写。单测 `App/__tests__/repositoryAddedAt.test.ts`：刚加的仓库排在启动时补过时间的老仓库上面。界面上没有实点，等下一个测试包时复核。
 
 ### 13 Ctrl+Enter 插话卡住，之后的回复错位
 
