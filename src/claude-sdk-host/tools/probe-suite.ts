@@ -81,6 +81,9 @@ export const GROUPS: readonly Group[] = [
   { name: 'home', scenarios: ['projcfg-home'], layout: 'fakehome' },
   // S-6 feedback 5: its host runs behind a recording proxy, so it goes on its own.
   { name: 'webfetch', scenarios: ['webfetch'] },
+  // S-6 feedback 1/9 (ruling 24): the worktree tools (a git workspace of its own) and a
+  // ScheduleWakeup coming due (a minute at least).
+  { name: 'hosttools', scenarios: ['worktree', 'wakeup'] },
 ];
 
 /** What one group's probe output says: its checks, the failed ones, and its verdict line. */

@@ -6,6 +6,7 @@ import {
   deriveContextGroups,
   deriveRunState,
   deriveSessionReferences,
+  deriveWorktreePath,
   initialSessionRuntimeFacts,
   reduceSessionRuntimeFacts,
   STDERR_CONTEXT_KEEP_LINES,
@@ -1026,5 +1027,28 @@ describe('reduceSessionRuntimeFacts — active tool status (T38-c)', () => {
       payload: { status: 'failed' },
     });
     expect(failed.s1.activeToolStatus).toBeUndefined();
+  });
+});
+
+// Route B S-6 (ruling 24): the worktree an Agent SDK chat moved into.
+describe('deriveWorktreePath', () => {
+  const call = (id: string, name: string, output?: string, ok = true) => ({
+    blocks: [{ toolCallId: id, toolName: name, toolOk: ok, toolOutput: output }],
+  });
+  it('is the path the last successful EnterWorktree named, until an ExitWorktree', () => {
+    const entered = call(
+      't1',
+      'EnterWorktree',
+      'Created worktree at C:/repo/.claude/worktrees/wt on branch worktree-wt. The session is now working in the worktree.'
+    );
+    expect(deriveWorktreePath([entered])).toBe('C:/repo/.claude/worktrees/wt');
+    expect(
+      deriveWorktreePath([
+        entered,
+        call('t2', 'ExitWorktree', 'Exited and removed worktree. Session is now back in C:/repo.'),
+      ])
+    ).toBeNull();
+    expect(deriveWorktreePath([call('t3', 'EnterWorktree', 'boom', false)])).toBeNull();
+    expect(deriveWorktreePath([])).toBeNull();
   });
 });

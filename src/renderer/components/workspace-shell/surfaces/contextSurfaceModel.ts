@@ -60,6 +60,8 @@ export interface ContextWorkspaceFacts {
    * `chat:locateTranscript`); absent while it is unknown or not written yet.
    */
   transcriptPath?: string | null;
+  /** Route B S-6 (ruling 24): the worktree an Agent SDK chat moved into (`deriveWorktreePath`). */
+  worktreePath?: string | null;
 }
 
 export interface ContextHostFacts {
@@ -137,6 +139,16 @@ function buildWorkspaceRows(facts: ContextWorkspaceFacts | null): ContextRow[] {
   // — `gitEnabled` unknown/false must not show a stale/irrelevant branch name.
   if (facts.gitEnabled === true && facts.branch) {
     rows.push({ id: 'branch', label: 'Branch', value: facts.branch });
+  }
+  if (facts.worktreePath) {
+    rows.push({
+      id: 'worktree',
+      label: 'Current worktree',
+      value: facts.worktreePath,
+      title: facts.worktreePath,
+      copyable: true,
+      revealable: true,
+    });
   }
   if (facts.transcriptPath) {
     rows.push({
@@ -275,6 +287,44 @@ function buildStderrRows(stderr: SessionStderrFacts | null): ContextRow[] {
     title: line,
     copyable: true,
   }));
+}
+
+/**
+ * Route B S-6 (ruling 24): the worktree an Agent SDK chat works in now, from the last
+ * EnterWorktree / ExitWorktree call that succeeded (the CLI says the path in its result:
+ * "Created worktree at <path> on branch …" / "Exited … Session is now back in <path>").
+ * Null when it never entered one, or left the last one it entered.
+ */
+export function deriveWorktreePath(
+  messages: readonly { blocks: readonly ChatBlockLike[] }[]
+): string | null {
+  const names = new Map<string, string>();
+  let current: string | null = null;
+  for (const message of messages) {
+    for (const block of message.blocks) {
+      if (block.toolCallId && block.toolName) names.set(block.toolCallId, block.toolName);
+      const name = block.toolCallId ? names.get(block.toolCallId) : undefined;
+      if (name !== 'EnterWorktree' && name !== 'ExitWorktree') continue;
+      if (block.toolOk === false) continue;
+      const output = typeof block.toolOutput === 'string' ? block.toolOutput : block.text;
+      if (typeof output !== 'string' || !output) continue;
+      if (name === 'ExitWorktree') {
+        current = null;
+        continue;
+      }
+      const at = /worktree at (.+?)(?: on branch |\. |\.$|$)/i.exec(output.trim());
+      if (at?.[1]) current = at[1].trim();
+    }
+  }
+  return current;
+}
+
+interface ChatBlockLike {
+  toolCallId?: string;
+  toolName?: string;
+  toolOk?: boolean;
+  toolOutput?: unknown;
+  text?: string;
 }
 
 /** Builds the four groups and drops any that end up with zero rows (R6: no group ever fakes content). */

@@ -1156,6 +1156,12 @@ function deriveToolArgRef(run: ToolRun): ToolArgRef | undefined {
       const id = stringField(rec, 'job_id');
       return id ? { kind: 'job', id, format: 'id-label' } : undefined;
     }
+    // Route B S-6: the Agent SDK engine's TaskStop names the task by id; the row shows
+    // its label from the jobs window.
+    case 'TaskStop': {
+      const id = stringField(rec, 'task_id');
+      return id ? { kind: 'job', id, format: 'id-label' } : undefined;
+    }
     case DSH_TOOL_NAMES.sendMessage: {
       const id = stringField(rec, 'agent_id');
       return id ? { kind: 'subagent', id, format: 'to-label' } : undefined;
@@ -1393,10 +1399,39 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
     running: 'Listing subagents',
     refused: 'List subagents',
   },
+  // The Agent SDK engine's TaskStop ends any background task (a command, a subagent).
   [RUNTIME_TOOL_NAMES.taskStop]: {
-    done: 'Stopped subagents',
-    running: 'Stopping subagents',
-    refused: 'Stop subagents',
+    done: 'Stopped a background task',
+    running: 'Stopping a background task',
+    refused: 'Stop a background task',
+  },
+  // Route B S-6 (ruling 24): the schedule and worktree tools the SDK engine now offers. A
+  // schedule lives as long as this chat's engine does, and the row says so.
+  ScheduleWakeup: {
+    done: 'Scheduled (while this chat stays open)',
+    running: 'Scheduling',
+    refused: 'Schedule',
+  },
+  CronCreate: {
+    done: 'Scheduled (while this chat stays open)',
+    running: 'Scheduling',
+    refused: 'Schedule',
+  },
+  CronDelete: {
+    done: 'Removed a schedule',
+    running: 'Removing a schedule',
+    refused: 'Remove a schedule',
+  },
+  CronList: { done: 'Listed schedules', running: 'Listing schedules', refused: 'List schedules' },
+  EnterWorktree: {
+    done: 'Entered a worktree',
+    running: 'Entering a worktree',
+    refused: 'Enter a worktree',
+  },
+  ExitWorktree: {
+    done: 'Left the worktree',
+    running: 'Leaving the worktree',
+    refused: 'Leave the worktree',
   },
   Read: { done: 'Read', running: 'Reading', refused: 'Read' },
   NotebookRead: { done: 'Read', running: 'Reading', refused: 'Read' },
@@ -2381,6 +2416,25 @@ function formatToolArgDetail(
     case 'TodoWrite':
     case 'ExitPlanMode':
       raw = t('next moves');
+      break;
+    // Route B S-6: what a schedule runs, and the worktree a session moves into.
+    case 'ScheduleWakeup':
+      raw = stringField(rec, 'reason') ?? stringField(rec, 'prompt');
+      kind = 'prose';
+      break;
+    case 'CronCreate': {
+      const cron = stringField(rec, 'cron');
+      const prompt = stringField(rec, 'prompt');
+      raw = cron && prompt ? `${cron} · ${prompt}` : (cron ?? prompt);
+      break;
+    }
+    case 'CronDelete':
+      raw = stringField(rec, 'id');
+      if (raw) kind = 'ident';
+      break;
+    case 'EnterWorktree':
+      raw = stringField(rec, 'name') ?? stringField(rec, 'path');
+      if (raw) kind = 'ident';
       break;
     case 'Task':
     case 'Agent':

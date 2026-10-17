@@ -1435,3 +1435,94 @@ describe("a subagent job's output (S-6 feedback 4)", () => {
     expect(subagentText(join(configDir, 'missing.jsonl'))).toBe('');
   });
 });
+
+describe('a turn a schedule started (S-6, ruling 24)', () => {
+  it('opens as a scheduled engine turn when the CLI begins a command of its own', async () => {
+    const { rt, q } = await started();
+    // No turn is open: the CLI begins a queued command that is not ours (a wake-up).
+    q.push({ type: 'command_lifecycle', command_uuid: 'not-ours', state: 'started' });
+    q.push({
+      type: 'stream_event',
+      parent_tool_use_id: null,
+      event: { type: 'message_start', message: { id: 'm1', usage: {} } },
+    });
+    await flush();
+    const head = events
+      .filter((e) => e.type === 'message.started')
+      .map((e) => (e as { payload: Record<string, unknown> }).payload)
+      .find((p) => p.role === 'user');
+    expect(head?.origin).toEqual({ kind: 'scheduled' });
+    q.end();
+    await rt.dispose();
+  });
+
+  it('a task notification before the turn still opens it as a background task', async () => {
+    const { rt, q } = await started();
+    q.push({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'b1',
+      status: 'completed',
+      summary: 'done',
+      output_file: '/x',
+    });
+    q.push({
+      type: 'stream_event',
+      parent_tool_use_id: null,
+      event: { type: 'message_start', message: { id: 'm2', usage: {} } },
+    });
+    await flush();
+    const head = events
+      .filter((e) => e.type === 'message.started')
+      .map((e) => (e as { payload: Record<string, unknown> }).payload)
+      .find((p) => p.role === 'user');
+    expect(head?.origin).toEqual({ kind: 'job' });
+    q.end();
+    await rt.dispose();
+  });
+});
+
+describe('turns the CLI started by itself, reopened (S-6)', () => {
+  it('read as engine-turn heads: a schedule that came due, a subagent notification', async () => {
+    const { rt } = await started();
+    const stub = (rt as unknown as { stub: { ccSessionId: string; started: boolean } }).stub;
+    stub.started = true;
+    const id = stub.ccSessionId;
+    // The CLI marks a wake-up's row `turnOrigin: "scheduled"`; the SDK's reader drops it.
+    const dir = join(configDir, 'projects', 'C--proj');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${id}.jsonl`),
+      `${JSON.stringify({ type: 'user', uuid: 'u2', isMeta: true, turnOrigin: 'scheduled' })}\n`
+    );
+    const sdkModule = await import('@anthropic-ai/claude-agent-sdk');
+    const user = (uuid: string, text: string) => ({
+      type: 'user' as const,
+      uuid,
+      session_id: id,
+      parent_tool_use_id: null,
+      parent_agent_id: null,
+      message: { role: 'user', content: text },
+    });
+    vi.mocked(sdkModule.getSessionMessages).mockResolvedValueOnce([
+      user('u1', 'typed by the user'),
+      user('u2', 'scheduled wake-up check'),
+      user(
+        'u3',
+        '<task-notification><task-id>a1</task-id><summary>Agent "look" finished</summary></task-notification>'
+      ),
+    ]);
+    const page = (await rt.history({ logicalSessionId: 'chat-1' })).page;
+    const rows = page.messages.map((m) => ({
+      id: m.id,
+      origin: m.origin,
+      blocks: m.blocks.length,
+    }));
+    expect(rows).toEqual([
+      { id: 'h:u1', origin: undefined, blocks: 1 },
+      { id: 'h:u2', origin: { kind: 'scheduled' }, blocks: 0 },
+      { id: 'h:u3', origin: { kind: 'subagent' }, blocks: 0 },
+    ]);
+    await rt.dispose();
+  });
+});

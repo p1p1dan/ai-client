@@ -7,6 +7,7 @@
  */
 
 import {
+  AlarmClock,
   ChevronDown,
   ChevronRight,
   CircleX,
@@ -48,6 +49,8 @@ export function autoTurnHeadLabel(view: AutoTurnHeadView, t: TFunction): string 
         : t('Goal · round {{round}}', { round: origin.round });
     case 'job':
       return t('A background task finished, carrying on');
+    case 'scheduled':
+      return t('A scheduled task came due, carrying on');
     case 'subagent':
       return t('A subagent finished, carrying on');
     case 'agent-message':
@@ -64,6 +67,8 @@ function HeadIcon({ view }: { view: AutoTurnHeadView }) {
       return <Target className={className} aria-hidden />;
     case 'job':
       return <Layers className={className} aria-hidden />;
+    case 'scheduled':
+      return <AlarmClock className={className} aria-hidden />;
     default:
       return <Users className={className} aria-hidden />;
   }

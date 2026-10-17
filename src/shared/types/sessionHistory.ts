@@ -247,6 +247,8 @@ export interface HistoryAttachment {
 export type TurnOrigin =
   | { kind: 'goal'; round: number; maxRounds?: number }
   | { kind: 'job' }
+  /** Route B S-6 (ruling 24): a schedule the Agent SDK engine set (ScheduleWakeup, cron) came due. */
+  | { kind: 'scheduled' }
   | { kind: 'subagent'; childSessionId?: string }
   | { kind: 'agent-message'; childSessionId?: string };
 

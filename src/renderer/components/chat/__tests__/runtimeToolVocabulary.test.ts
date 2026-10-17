@@ -71,7 +71,14 @@ describe('this runtime’s tools have verbs of their own', () => {
     [RUNTIME_TOOL_NAMES.newContext, 'Started a new context', 'Starting a new context'],
     [RUNTIME_TOOL_NAMES.taskWait, 'Waited for subagents', 'Waiting for subagents'],
     [RUNTIME_TOOL_NAMES.taskList, 'Listed subagents', 'Listing subagents'],
-    [RUNTIME_TOOL_NAMES.taskStop, 'Stopped subagents', 'Stopping subagents'],
+    // Route B S-6: the Agent SDK engine's TaskStop ends any background task.
+    [RUNTIME_TOOL_NAMES.taskStop, 'Stopped a background task', 'Stopping a background task'],
+    ['ScheduleWakeup', 'Scheduled (while this chat stays open)', 'Scheduling'],
+    ['CronCreate', 'Scheduled (while this chat stays open)', 'Scheduling'],
+    ['CronDelete', 'Removed a schedule', 'Removing a schedule'],
+    ['CronList', 'Listed schedules', 'Listing schedules'],
+    ['EnterWorktree', 'Entered a worktree', 'Entering a worktree'],
+    ['ExitWorktree', 'Left the worktree', 'Leaving the worktree'],
   ])('%s reads as "%s"', (tool, done, running) => {
     expect(toolVerb(tool, 'done')).toBe(done);
     expect(toolVerb(tool, 'running')).toBe(running);
@@ -328,7 +335,7 @@ describe('a call that never did its work', () => {
 
   it.each([
     [RUNTIME_TOOL_NAMES.taskWait, 'Wait for subagents', '等待子 Agent'],
-    [RUNTIME_TOOL_NAMES.taskStop, 'Stop subagents', '停止子 Agent'],
+    [RUNTIME_TOOL_NAMES.taskStop, 'Stop a background task', '停止后台任务'],
     [RUNTIME_TOOL_NAMES.taskList, 'List subagents', '列出子 Agent'],
   ])('[N5-REFUSED-1] a refused %s reads as the request plus 「已拒绝」', (tool, verb, zhVerb) => {
     const view = deriveToolRowView(refused(tool));

@@ -28,6 +28,7 @@ import {
   deriveContextGroups,
   deriveRunState,
   deriveSessionReferences,
+  deriveWorktreePath,
 } from './contextSurfaceModel';
 import {
   type ConversationBucketId,
@@ -495,6 +496,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
             branch: workspace.branch ?? null,
             gitEnabled: workspace.gitEnabled,
             transcriptPath,
+            worktreePath: deriveWorktreePath(messages),
           }
         : null,
       runtime: {

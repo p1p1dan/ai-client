@@ -69,7 +69,7 @@ import {
   type PermissionGear,
   type RuntimePermissionSettings,
 } from '../shared/types/runtimePermission.ts';
-import type { HistoryBlock, HistoryMessage } from '../shared/types/sessionHistory.ts';
+import type { HistoryBlock, HistoryMessage, TurnOrigin } from '../shared/types/sessionHistory.ts';
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 import {
   WORKER_JOB_READ_DEFAULT_BYTES,
@@ -155,17 +155,15 @@ export const PILAB_PROMPT_APPEND = [
 ].join('\n');
 
 /**
- * Preset tools that need a host surface PiLab does not have (schedulers,
- * cross-session messaging, worktree switching, review panes, workflows).
+ * Preset tools PiLab keeps off (README ruling 24, S-6 feedback 1): `RemoteTrigger` needs a
+ * claude.ai account (PiLab authenticates with an API key); `ListAgents` and `SendMessage`
+ * message other sessions with nothing in PiLab to show it (issue #22); `ReportFindings`
+ * hands review findings to a pane PiLab does not have (reviews answer in text without it);
+ * `Workflow` waits for the background-jobs window to carry it. The worktree and schedule
+ * tools are on since S-6.
  */
 export const HOST_ONLY_TOOLS = [
-  'CronCreate',
-  'CronDelete',
-  'CronList',
-  'ScheduleWakeup',
   'RemoteTrigger',
-  'EnterWorktree',
-  'ExitWorktree',
   'ListAgents',
   'SendMessage',
   'ReportFindings',
@@ -623,6 +621,12 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private slashCommands: string[] = [];
   /** The last task notification was a subagent's (an engine turn it wakes is the subagent's). */
   private lastTaskWasAgent = false;
+  /**
+   * S-6 (ruling 24): the CLI began a command of its own while no turn was open (a
+   * ScheduleWakeup or cron prompt coming due; task notifications carry no command
+   * uuid): the engine turn it opens is a scheduled one.
+   */
+  private scheduledWake = false;
   /** Task ids `task_started` named as subagents; `task_notification` carries no task type. */
   private readonly agentTaskIds = new Set<string>();
   /** Tool inputs as streamed, for a card raised before the stream finished (ExitPlanMode's plan). */
@@ -1240,7 +1244,11 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
    */
   private ingestCommandLifecycle(message: Record<string, unknown>): void {
     const turn = this.turn;
-    if (!turn) return;
+    if (!turn) {
+      // Not ours (every send and Ctrl+Enter message has an open turn): a schedule came due.
+      if (message.state === 'started') this.scheduledWake = true;
+      return;
+    }
     const uuid = String(message.command_uuid ?? '');
     const pending = turn.interjections.get(uuid);
     if (!pending) return;
@@ -1357,6 +1365,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       }
       case 'task_notification': {
         this.lastTaskWasAgent = this.agentTaskIds.delete(String(message.task_id));
+        this.scheduledWake = false;
         if (!this.backgroundLevelSeen && this.backgroundEdges.delete(String(message.task_id))) {
           this.setBackgroundTasks(this.backgroundEdges.size);
         }
@@ -1703,7 +1712,11 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       payload: {
         messageId,
         role: 'user',
-        origin: this.lastTaskWasAgent ? { kind: 'subagent' } : { kind: 'job' },
+        origin: this.scheduledWake
+          ? { kind: 'scheduled' }
+          : this.lastTaskWasAgent
+            ? { kind: 'subagent' }
+            : { kind: 'job' },
       },
     });
     this.emit({ type: 'message.completed', payload: { messageId } });
@@ -2296,6 +2309,41 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     };
   }
 
+  /**
+   * S-6: the uuids of the transcript rows the CLI wrote for a schedule that came due
+   * (`turnOrigin: "scheduled"`), read from the file itself: the SDK's reader drops the field.
+   */
+  private scheduledPromptIds(ccSessionId: string): Set<string> {
+    const ids = new Set<string>();
+    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return ids;
+    const root = path.join(this.config.configDir, 'projects');
+    let dirs: string[] = [];
+    try {
+      dirs = readdirSync(root);
+    } catch {
+      return ids;
+    }
+    for (const dir of dirs) {
+      let raw: string;
+      try {
+        raw = readFileSync(path.join(root, dir, `${ccSessionId}.jsonl`), 'utf8');
+      } catch {
+        continue;
+      }
+      for (const line of raw.split(/\r?\n/)) {
+        if (!line.includes('"turnOrigin":"scheduled"')) continue;
+        try {
+          const row = JSON.parse(line) as { uuid?: unknown };
+          if (typeof row.uuid === 'string') ids.add(row.uuid);
+        } catch {
+          // a torn line
+        }
+      }
+      break;
+    }
+    return ids;
+  }
+
   /** The CLI's own transcript, projected onto history messages (tool results folded into their call's message). */
   private async readTranscript(ccSessionId: string): Promise<HistoryMessage[]> {
     let entries: Awaited<ReturnType<typeof getSessionMessages>> = [];
@@ -2308,6 +2356,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const out: HistoryMessage[] = [];
     const byApiId = new Map<string, HistoryMessage>();
     const toolOwner = new Map<string, HistoryMessage>();
+    // S-6: rows the CLI wrote for itself, which the SDK's reader does not mark.
+    const scheduled = this.scheduledPromptIds(ccSessionId);
     for (const entry of entries) {
       if (entry.parent_tool_use_id) continue;
       const message = record(entry.message) ?? {};
@@ -2336,6 +2386,26 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         const trimmed = text.trim();
         // The CLI's own bookkeeping rows: an interrupt marker, local command echoes.
         if (!trimmed || CLI_MARKER_TEXT.test(trimmed)) continue;
+        // S-6: a turn the CLI started by itself reads as it did live, as an engine turn's
+        // head, never as something the user typed: a schedule that came due, or a
+        // background task's (or subagent's) notification.
+        const origin: TurnOrigin | undefined = scheduled.has(entry.uuid)
+          ? { kind: 'scheduled' }
+          : trimmed.startsWith('<task-notification>')
+            ? /<summary>Agent /.test(trimmed)
+              ? { kind: 'subagent' }
+              : { kind: 'job' }
+            : undefined;
+        if (origin) {
+          out.push({
+            id: `h:${entry.uuid}`,
+            entryId: entry.uuid,
+            role: 'user',
+            origin,
+            blocks: [],
+          });
+          continue;
+        }
         // A compaction's summary reads as the session's own note, not as something the user typed.
         const role = trimmed.startsWith(COMPACT_SUMMARY_PREFIX) ? 'system' : 'user';
         out.push({

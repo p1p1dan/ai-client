@@ -115,7 +115,7 @@ it('[N5-DOM-2] a call the run ended before reads 「未执行」, not done and n
 
 it('[N5-DOM-3] a call that really ran keeps its done-state words and no outcome word', async () => {
   const { rowText } = await renderRows();
-  const row = rowText('已停止子 Agent');
+  const row = rowText('已停止后台任务');
   expect(row.querySelector('[data-slot="tool-row-outcome"]')).toBeNull();
 });
 

@@ -12,7 +12,7 @@
 
 | # | 反馈 | 类别 | 状态 |
 |---|---|---|---|
-| 1 | 为什么少了 11 个工具 | 已裁决（§3 第 1 条） | 待做 |
+| 1 | 为什么少了 11 个工具 | 已裁决（§3 第 1 条） | **已做**（本机探针与单测通过，界面待复核；Monitor/TaskList 待查） |
 | 2 | 官方行为与提示词不改，只可在后面追加 | 已裁决（§3 第 7 条） | **已记**（README 裁决 22） |
 | 3 | SDK 对话开始后模型菜单只剩同一路由的模型 | 已裁决（§3 第 2 条） | 待做 |
 | 4 | 子代理与后台任务只在输出里有，后台任务窗与子代理页都看不到 | 直接修 | **已修**（本机探针与单测通过，界面待复核） |
@@ -20,7 +20,7 @@
 | 6 | 网关 502 `empty_stream`，随后 503"所有供应商暂时不可用" | 要实测（§3 第 9 条） | 待查（最后做，用真实网关前先问） |
 | 7 | 左侧工作区标出当前对话记录文件的位置 | 已裁决（§3 第 8 条） | **已做**（单测通过，界面待复核） |
 | 8 | 计划审阅卡里放计划的框太小 | 直接修 | **已修**（单测通过，界面待复核） |
-| 9 | `loop` 能加载但跑不起来 | 随第 1 条 | 待做 |
+| 9 | `loop` 能加载但跑不起来 | 随第 1 条 | **已做**（ScheduleWakeup 实测可用；`/loop` 本身未单测） |
 | 10 | 加开发人员模式开关，收起不该给用户调的设置 | 已裁决（§3 第 3 条） | 待做 |
 | 11a | issue #17：`/compact` 后出现两条「上下文摘要」 | 直接修（DSH） | **已修**（单测通过，界面待复核） |
 | 11b | issue #18：新装登录后模型按钮显示「自动」 | 直接修 | **已修**（单测通过，界面待复核） |
@@ -36,7 +36,11 @@
 - **原因**：宿主有意禁掉了 11 个，`src/claude-sdk-host/sdkSessionRuntime.ts` 的 `HOST_ONLY_TOOLS`：CronCreate、CronDelete、CronList、ScheduleWakeup、RemoteTrigger、EnterWorktree、ExitWorktree、ListAgents、SendMessage、ReportFindings、Workflow。当时的理由是它们要靠 PiLab 没有的宿主能力（定时唤醒、跨会话消息、切换 worktree、审阅面板、工作流）。
 - **另外**：Monitor、TaskList 等工具不在禁用名单里，但 SDK 的 `claude_code` 预设里也没有，是 CLI 自己在 SDK 模式下没给。要比对同版本 CLI（2.1.300）在命令行里的工具清单才能确定。
 - **待裁决**：按裁决 17"都按官方行为来"，是否逐个放开。建议的判断法：放开后 CLI 自己就能完成的（如 EnterWorktree/ExitWorktree）直接放开；要宿主配合才有意义的（定时唤醒要 PiLab 在到点时把会话叫醒，SendMessage/ListAgents 要有别的会话可发）要么做配套，要么继续禁并在界面说明。
-- **下一步**：列出 2.1.300 命令行与 SDK 两边的工具差集，每个工具写"放开后会怎样"，交用户逐个定。
+- **已做**（按 §3 第 1 条）：`HOST_ONLY_TOOLS` 只留 RemoteTrigger、ListAgents、SendMessage、ReportFindings、Workflow；放开 EnterWorktree、ExitWorktree、CronCreate、CronDelete、CronList、ScheduleWakeup。
+  - **实测**（假网关）：EnterWorktree 在 git 工作区里建 worktree，随后的命令在里面跑，ExitWorktree 退出并删除；ScheduleWakeup 到点后 CLI 自己发起一轮并正常结束（最短 60 秒）。
+  - **配套**：定时到点的回合以前会被当成"后台任务已结束"，现在宿主认出它（没有打开的回合时 CLI 开始执行一条不属于我们的命令），新增来源 `scheduled`，标题"定时任务到点，自动继续"；重新打开对话时按 CLI 记录里的 `turnOrigin: "scheduled"` 同样标出（SDK 自带的读取接口会丢掉这个字段，宿主直接读记录文件）。顺带修了：重新打开对话时后台任务通知（`<task-notification>…`）不再显示成用户消息，而是"后台任务／子代理已结束"的标题。工具行文案：定时类写成"已设定时（对话开着时有效）"，说明对话关掉后定时失效；worktree 两个写成"已进入 worktree / 已退出 worktree"；TaskStop 改称"已停止后台任务"，并按任务 ID 显示任务名。左侧「上下文」的「工作区」组在 SDK 对话进入 worktree 后多一行"当前 worktree"（从最近一次进入或退出的工具结果读出路径）。
+  - **验证**：探针新增 `worktree`、`wakeup` 两个场景，回归套件单独成组 `hosttools`（6 条）；单测：工具文案 6 条、worktree 路径推导 1 条、定时来源 2 条、重新打开时的历史投影 1 条、标题文案 1 条。本机全套回归 9 组全过，录制门禁一致。
+  - **未做**：Monitor、TaskList 不在禁用名单里，是 SDK 的 `claude_code` 预设本身没带，要用同版本命令行对比才能查清，留待下一步；CronCreate 没有单独跑探针（与 ScheduleWakeup 同一条唤醒路径）；ReportFindings 继续禁用待用户确认。
 
 ### 2 提示词只追加不插入
 
@@ -87,7 +91,8 @@
 
 ### 9 `loop` 跑不起来
 
-- 与第 1 条同源：`loop` 要靠 ScheduleWakeup、Cron、Monitor、TaskList 来定时与续跑，SDK 会话里没有。随第 1 条一起定：放开并做配套，或者在 SDK 会话里不提供 `loop`。
+- 与第 1 条同源：`loop` 要靠 ScheduleWakeup、Cron、Monitor、TaskList 来定时与续跑。
+- **已做**：随第 1 条放开了 ScheduleWakeup 与 Cron 三个，`loop` 的自定节奏用的正是 ScheduleWakeup，实测到点能续跑。Monitor、TaskList 仍缺（见第 1 条"未做"），`loop` 里依赖它们的部分可能不全；`/loop` 本身没有跑探针。
 
 ### 10 开发人员模式开关
 

@@ -2092,6 +2092,95 @@ async function main(): Promise<void> {
         await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
         break;
       }
+      case 'wakeup': {
+        // S-6 feedback 1/9 (ruling 24): ScheduleWakeup is on; at its time the CLI starts a
+        // turn by itself while this chat's CLI runs.
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'bypass' });
+        const call = {
+          name: 'ScheduleWakeup',
+          input: {
+            delaySeconds: 60,
+            prompt: 'scheduled wake-up check',
+            reason: 'probe wake-up',
+            noop: false,
+          },
+        };
+        await send(`CC-RUN ${JSON.stringify({ calls: [call] })}`);
+        const end = await waitFor(terminal, 'wakeup: turn end', 90_000);
+        const mark = events.length;
+        const woke = await waitFor(
+          (e) =>
+            events.indexOf(e) >= mark && e.type === 'message.started' && e.payload?.role === 'user',
+          'wakeup: the turn it starts',
+          120_000
+        ).catch(() => undefined);
+        const wokeEnd = woke
+          ? await waitFor(
+              (e) => events.indexOf(e) >= mark && terminal(e),
+              'wakeup: its end',
+              90_000
+            ).catch(() => undefined)
+          : undefined;
+        show('wakeup');
+        console.log(`  wakeup: head ${JSON.stringify(woke?.payload ?? null)}`);
+        check('wakeup', 'the scheduling turn completes', end.type === 'session.completed');
+        check('wakeup', 'the CLI starts a turn at the scheduled time', Boolean(woke));
+        check('wakeup', 'that turn completes', wokeEnd?.type === 'session.completed');
+        check(
+          'wakeup',
+          'its head says a schedule came due (origin scheduled)',
+          (woke?.payload?.origin as { kind?: string } | undefined)?.kind === 'scheduled'
+        );
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
+        break;
+      }
+      case 'worktree': {
+        // S-6 feedback 1 (ruling 24): EnterWorktree / ExitWorktree are on. In a git
+        // workspace the CLI makes a worktree, runs there, and comes back.
+        execFileSync('git', ['init', '-q'], { cwd: workspace });
+        execFileSync(
+          'git',
+          [
+            '-c',
+            'user.email=p@p',
+            '-c',
+            'user.name=p',
+            'commit',
+            '-q',
+            '--allow-empty',
+            '-m',
+            'init',
+          ],
+          {
+            cwd: workspace,
+          }
+        );
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'bypass' });
+        const calls = [
+          { name: 'EnterWorktree', input: { name: 'probe-wt' } },
+          { name: 'Bash', input: { command: 'pwd', description: 'Where am I' } },
+          { name: 'ExitWorktree', input: { action: 'remove' } },
+          { name: 'Bash', input: { command: 'pwd', description: 'Where am I now' } },
+        ];
+        await send(`CC-RUN ${JSON.stringify({ calls })}`);
+        const end = await waitFor(terminal, 'worktree: turn end', 120_000);
+        show('worktree');
+        const outputs = events
+          .filter((e) => e.type === 'tool.completed')
+          .map(
+            (e) =>
+              `${String(e.payload?.ok)} ${String(e.payload?.output ?? e.payload?.error ?? '').slice(0, 160)}`
+          );
+        console.log(`  worktree: ${JSON.stringify(outputs)}`);
+        check('worktree', 'ends in session.completed', end.type === 'session.completed');
+        check(
+          'worktree',
+          'EnterWorktree and ExitWorktree both ran',
+          outputs.length === 4 && outputs.every((o) => o.startsWith('true'))
+        );
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
+        break;
+      }
       case 'enc': {
         const marker = process.env.PROBE_ENC_MARKER?.trim() || 'P113B-MARKER-';
         const files = encSamples(marker);
