@@ -2,6 +2,13 @@ import type { PlanReviewChoice } from '@shared/planReview';
 import { ClipboardList, TriangleAlert } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Radio, RadioGroup } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { useI18n } from '@/i18n';
@@ -21,7 +28,6 @@ import {
   PLAN_REVIEW_FEEDBACK_REQUIRED,
   PLAN_REVIEW_GOAL_TITLE,
   PLAN_REVIEW_TITLE,
-  planPreviewClass,
   planReviewBody,
   planReviewOptionRows,
   planReviewSubmit,
@@ -69,7 +75,7 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
   );
   const [feedback, setFeedback] = useState('');
   const [confirmingBypass, setConfirmingBypass] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -116,9 +122,12 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
   };
 
   return (
-    // In the composer's slot: capped at 40% of the window, the body scrolls.
+    // In the composer's slot. S-6 feedback 8: the plan was squeezed to a line or two
+    // under a 40% cap shared with every choice. Now the card may take 70% of the window,
+    // the choices keep a fixed share and the buttons stay at the bottom, and the plan gets
+    // the rest; the whole plan also opens in a larger window.
     <section
-      className={cn(SHELL_CLASS, 'flex max-h-[40vh] min-h-0 flex-col')}
+      className={cn(SHELL_CLASS, 'flex max-h-[70vh] min-h-0 flex-col')}
       aria-label={t(title)}
       data-testid="plan-review-card"
       data-source={card.source}
@@ -132,134 +141,136 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
           </span>
         )}
       </div>
-      <div className="flex min-h-0 flex-col gap-2 overflow-y-auto p-2.5">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
         <div
-          className={cn(
-            'overflow-y-auto rounded-sm border border-border bg-background px-2.5 py-1.5',
-            planPreviewClass(expanded)
-          )}
+          className="min-h-24 flex-1 overflow-y-auto rounded-sm border border-border bg-background px-2.5 py-1.5"
           data-testid="plan-review-body"
         >
           <p className="select-text whitespace-pre-wrap break-words text-ui text-foreground">
             {body.markdown}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button
             size="sm"
             variant="ghost"
             type="button"
             className="h-6 px-2 text-muted-foreground"
-            onClick={() => setExpanded((value) => !value)}
+            onClick={() => setViewerOpen(true)}
           >
-            {expanded ? t('Show less of the plan') : t('Show the whole plan')}
+            {t('Open the whole plan in a larger window')}
           </Button>
         </div>
-        {card.source === 'exit_plan_mode' && !ownChoices && (
-          <div className="flex min-w-0 flex-col gap-0.5 text-meta">
-            <span className="text-muted-foreground">{t('Goal it would set')}</span>
-            <span className="line-clamp-2 min-w-0 whitespace-pre-wrap break-words text-foreground">
-              {card.goalObjective}
-            </span>
-          </div>
-        )}
-        {confirmingBypass ? (
-          <div
-            role="alert"
-            className="flex flex-col gap-2 rounded-sm border border-destructive/40 bg-destructive/5 p-2.5"
-          >
-            <p className="flex items-start gap-2 text-ui text-foreground">
-              <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden />
-              {t(ownChoices ? SDK_PLAN_REVIEW_BYPASS_WARNING : PLAN_REVIEW_BYPASS_WARNING)}
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                type="button"
-                className="h-6 px-2"
-                disabled={submitting}
-                onClick={() => setConfirmingBypass(false)}
-              >
-                {t(PLAN_REVIEW_BACK)}
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                type="button"
-                className="h-6 px-2"
-                disabled={submitting}
-                onClick={() => void confirm(true)}
-              >
-                {t(ownChoices ? SDK_PLAN_REVIEW_BYPASS_CONFIRM : PLAN_REVIEW_BYPASS_CONFIRM)}
-              </Button>
+        <div
+          className="flex max-h-[30vh] shrink-0 flex-col gap-2 overflow-y-auto"
+          data-testid="plan-review-choices"
+        >
+          {card.source === 'exit_plan_mode' && !ownChoices && (
+            <div className="flex min-w-0 flex-col gap-0.5 text-meta">
+              <span className="text-muted-foreground">{t('Goal it would set')}</span>
+              <span className="line-clamp-2 min-w-0 whitespace-pre-wrap break-words text-foreground">
+                {card.goalObjective}
+              </span>
             </div>
-          </div>
-        ) : (
-          <>
-            <RadioGroup
-              value={effective}
-              onValueChange={(value) => setChoice(value as PlanReviewChoice)}
-              aria-label={t('After approval')}
-              className="gap-2"
-              disabled={submitting}
+          )}
+          {confirmingBypass ? (
+            <div
+              role="alert"
+              className="flex flex-col gap-2 rounded-sm border border-destructive/40 bg-destructive/5 p-2.5"
             >
-              {rows.map((row) => {
-                const radioId = `${id}-${row.id}`;
-                return (
-                  <div key={row.id} className="flex items-start gap-2" data-choice={row.id}>
-                    <Radio
-                      id={radioId}
-                      value={row.id}
-                      disabled={row.disabled || submitting}
-                      aria-describedby={`${radioId}-description`}
-                      className="mt-0.5"
-                    />
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <label
-                        htmlFor={radioId}
-                        className={cn(
-                          'text-ui text-foreground',
-                          row.disabled && 'text-muted-foreground'
-                        )}
-                      >
-                        {t(row.label)}
-                      </label>
-                      <span
-                        id={`${radioId}-description`}
-                        className="text-meta text-muted-foreground"
-                      >
-                        {t(row.hint ?? row.description)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </RadioGroup>
-            {effective === 'keep-planning' && (
-              <div className="flex flex-col gap-1 pl-6">
-                <label htmlFor={`${id}-feedback`} className="text-meta text-muted-foreground">
-                  {t(PLAN_REVIEW_FEEDBACK_LABEL)}
-                </label>
-                <Textarea
-                  id={`${id}-feedback`}
+              <p className="flex items-start gap-2 text-ui text-foreground">
+                <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden />
+                {t(ownChoices ? SDK_PLAN_REVIEW_BYPASS_WARNING : PLAN_REVIEW_BYPASS_WARNING)}
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button
                   size="sm"
-                  value={feedback}
+                  variant="ghost"
+                  type="button"
+                  className="h-6 px-2"
                   disabled={submitting}
-                  placeholder={t(PLAN_REVIEW_FEEDBACK_REQUIRED)}
-                  onChange={(event) => setFeedback(event.target.value)}
-                />
+                  onClick={() => setConfirmingBypass(false)}
+                >
+                  {t(PLAN_REVIEW_BACK)}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  type="button"
+                  className="h-6 px-2"
+                  disabled={submitting}
+                  onClick={() => void confirm(true)}
+                >
+                  {t(ownChoices ? SDK_PLAN_REVIEW_BYPASS_CONFIRM : PLAN_REVIEW_BYPASS_CONFIRM)}
+                </Button>
               </div>
-            )}
-          </>
-        )}
-        {failed && (
-          <p role="alert" className="text-meta text-destructive">
-            {t('Could not send your answer. Please try again.')}
-          </p>
-        )}
+            </div>
+          ) : (
+            <>
+              <RadioGroup
+                value={effective}
+                onValueChange={(value) => setChoice(value as PlanReviewChoice)}
+                aria-label={t('After approval')}
+                className="gap-2"
+                disabled={submitting}
+              >
+                {rows.map((row) => {
+                  const radioId = `${id}-${row.id}`;
+                  return (
+                    <div key={row.id} className="flex items-start gap-2" data-choice={row.id}>
+                      <Radio
+                        id={radioId}
+                        value={row.id}
+                        disabled={row.disabled || submitting}
+                        aria-describedby={`${radioId}-description`}
+                        className="mt-0.5"
+                      />
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <label
+                          htmlFor={radioId}
+                          className={cn(
+                            'text-ui text-foreground',
+                            row.disabled && 'text-muted-foreground'
+                          )}
+                        >
+                          {t(row.label)}
+                        </label>
+                        <span
+                          id={`${radioId}-description`}
+                          className="text-meta text-muted-foreground"
+                        >
+                          {t(row.hint ?? row.description)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </RadioGroup>
+              {effective === 'keep-planning' && (
+                <div className="flex flex-col gap-1 pl-6">
+                  <label htmlFor={`${id}-feedback`} className="text-meta text-muted-foreground">
+                    {t(PLAN_REVIEW_FEEDBACK_LABEL)}
+                  </label>
+                  <Textarea
+                    id={`${id}-feedback`}
+                    size="sm"
+                    value={feedback}
+                    disabled={submitting}
+                    placeholder={t(PLAN_REVIEW_FEEDBACK_REQUIRED)}
+                    onChange={(event) => setFeedback(event.target.value)}
+                  />
+                </div>
+              )}
+            </>
+          )}
+          {failed && (
+            <p role="alert" className="text-meta text-destructive">
+              {t('Could not send your answer. Please try again.')}
+            </p>
+          )}
+        </div>
         {!confirmingBypass && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2.5">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border pt-2.5">
             <Button
               size="sm"
               variant="ghost"
@@ -282,6 +293,18 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
           </div>
         )}
       </div>
+      <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
+        <DialogPopup className="max-w-3xl" data-testid="plan-review-viewer">
+          <DialogHeader>
+            <DialogTitle>{card.title || t(title)}</DialogTitle>
+          </DialogHeader>
+          <DialogPanel>
+            <p className="select-text whitespace-pre-wrap break-words text-ui text-foreground">
+              {body.markdown}
+            </p>
+          </DialogPanel>
+        </DialogPopup>
+      </Dialog>
     </section>
   );
 }

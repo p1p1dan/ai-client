@@ -71,13 +71,22 @@ const click = async (element: HTMLElement) => {
 };
 
 describe('the plan review card', () => {
-  it('shows the plan collapsed, opens it in place, and approves the goal on full auto by default', async () => {
+  it('gives the plan the room the choices leave, opens it in a larger window, and approves the goal on full auto by default', async () => {
     const { respond } = await mount();
+    const card = container.querySelector('[data-testid="plan-review-card"]');
     const body = container.querySelector('[data-testid="plan-review-body"]');
     expect(body?.textContent).toContain('CSV opens in Excel');
-    expect(body?.className).toContain('max-h-48');
-    await click(button('Show the whole plan'));
-    expect(body?.className).toContain('max-h-96');
+    // S-6 feedback 8: the plan takes the remaining height, never a few-line cap.
+    expect(card?.className).toContain('max-h-[70vh]');
+    expect(body?.className).toContain('flex-1');
+    expect(body?.className).not.toMatch(/max-h-(48|96)/);
+    expect(container.querySelector('[data-testid="plan-review-choices"]')?.className).toContain(
+      'max-h-[30vh]'
+    );
+    await click(button('Open the whole plan in a larger window'));
+    const viewer = document.querySelector('[data-testid="plan-review-viewer"]');
+    expect(viewer?.textContent).toContain('CSV opens in Excel');
+    expect(viewer?.textContent).toContain('Ship CSV export');
     expect(radio('goal:auto').getAttribute('aria-checked')).toBe('true');
     await click(button('Confirm'));
     expect(respond).toHaveBeenCalledWith({ answers: { 'plan-review': 'goal:auto' } });

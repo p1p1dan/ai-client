@@ -200,10 +200,6 @@ export function planReviewSubmit(
 }
 
 /** The plan preview's height: a few lines in the dock, more once opened. */
-export function planPreviewClass(expanded: boolean): string {
-  return expanded ? 'max-h-96' : 'max-h-48';
-}
-
 /** What the card shows as the reviewed text: the plan, else the goal the model proposed. */
 export function planReviewBody(card: PlanReviewCard): { kind: 'plan' | 'goal'; markdown: string } {
   if (card.plan?.trim()) return { kind: 'plan', markdown: card.plan };

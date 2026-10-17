@@ -9,7 +9,6 @@ import {
   frozenPlanReviewLine,
   PLAN_REVIEW_OPTION_COPY,
   pendingPlanReviewId,
-  planPreviewClass,
   planReviewBody,
   planReviewOptionRows,
   planReviewSubmit,
@@ -93,9 +92,7 @@ describe('what 「确定」 does', () => {
     });
   });
 
-  it('shows a few lines of the plan in the dock, more once opened; a proposed goal without a plan', () => {
-    expect(planPreviewClass(false)).toBe('max-h-48');
-    expect(planPreviewClass(true)).toBe('max-h-96');
+  it('reviews the plan, else the goal the model proposed', () => {
     expect(planReviewBody(CARD)).toEqual({ kind: 'plan', markdown: CARD.plan });
     expect(
       planReviewBody({
