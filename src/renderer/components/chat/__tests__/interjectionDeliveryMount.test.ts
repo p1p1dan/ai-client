@@ -190,9 +190,16 @@ const deliver = () =>
     pending.clear(ATTEMPT);
   });
 
+/**
+ * A running turn's line: 「✻ 」 and what it is doing, verb first (S-6 feedback 11c,
+ * `turnLiveHead.ts`): 「✻ Running …」 while a tool runs, 「✻ Working …」 as the fallback.
+ * A settled one reads 「Worked …」 instead.
+ */
+const RUNNING = expect.stringMatching(/^✻ /);
+
 it('[I8-1] while the interjection waits, the running turn stays open and working', async () => {
   const view = await mount([PROMPT, STEP_1, STEP_2_RUNNING], 'running');
-  expect(view.head('u1')).toEqual({ open: true, summary: expect.stringContaining('Working') });
+  expect(view.head('u1')).toEqual({ open: true, summary: RUNNING });
 
   await interject();
 
@@ -210,10 +217,10 @@ it('[I8-1] while the interjection waits, the running turn stays open and working
   ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   // …but it opens no turn of its own: no second spinner, no second clock.
   expect(view.sections()).toEqual(['u1']);
-  // The turn it waits to join is still running: open, "Working", never "Worked".
+  // The turn it waits to join is still running: open, its live line, never "Worked".
   const head = view.head('u1');
   expect(head.open).toBe(true);
-  expect(head.summary).toContain('Working');
+  expect(head.summary).toEqual(RUNNING);
   expect(head.summary).not.toContain('Worked');
   expect(view.container.textContent).not.toContain('Worked');
 
@@ -246,7 +253,7 @@ it('[I8-2] once DSH takes it in, the old group folds and the message opens the n
   expect(next?.querySelector('[data-awaiting-delivery]')).toBeNull();
   expect(next?.querySelector('p')?.className).toContain('text-foreground');
   expect(next?.querySelector('p')?.className).not.toContain('text-muted-foreground');
-  expect(next?.textContent).toContain('Working');
+  expect(next?.textContent).toContain('✻ ');
   expect(next?.textContent).not.toContain('Worked');
 });
 
@@ -294,7 +301,7 @@ it('[I8-4] the awaiting bubble offers a named, keyboard-reachable withdraw; it h
   expect(useComposerDraftsStore.getState().offered).toEqual({ s: INTERJECTION });
   // The turn it never joined runs on, untouched.
   expect(view.sections()).toEqual(['u1']);
-  expect(view.head('u1')).toEqual({ open: true, summary: expect.stringContaining('Working') });
+  expect(view.head('u1')).toEqual({ open: true, summary: RUNNING });
   expect(toastAdd).not.toHaveBeenCalled();
 });
 

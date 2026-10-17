@@ -186,6 +186,13 @@ import {
   isTurnInFlight,
   ownsSessionFailure,
 } from './turnHead';
+// T113 drops this module's token half from the turn surface. `sumTurnTokens` /
+// `turnProgressClauses` are NOT retired — they are exported, tested and still
+// the one place the two-stage 「先状态词+时间，有内容再加 ↑↓」 rule lives — but the
+// work zone row that replaced the head carries the four figures the user named
+// and token usage is deliberately not among them. Re-wiring them here is a
+// product decision to reopen, not a gap to close.
+import { deriveTurnLivePhase, formatTurnLiveLine, type TurnLiveSend } from './turnLiveHead';
 import {
   countTurnToolCalls,
   deriveTurnCurrentAction,
@@ -196,12 +203,6 @@ import {
   turnWorkGroupAwaitsUser,
   turnWorkGroupOpen,
 } from './turnProcessFold';
-// T113 drops this module's token half from the turn surface. `sumTurnTokens` /
-// `turnProgressClauses` are NOT retired — they are exported, tested and still
-// the one place the two-stage 「先状态词+时间，有内容再加 ↑↓」 rule lives — but the
-// work zone row that replaced the head carries the four figures the user named
-// and token usage is deliberately not among them. Re-wiring them here is a
-// product decision to reopen, not a gap to close.
 import { formatThinkingClause, joinTurnProgressLine, sumTurnThinkingMs } from './turnProgress';
 import {
   deriveTurnStatus,
@@ -231,6 +232,7 @@ import {
   deriveTurnElapsedMs,
   replayedCompletedAt,
   replayedSpanMetadata,
+  splitWorkedForDuration,
   type ThinkingTiming,
 } from './turnTiming';
 import { useMessageMetadata } from './useMessageMetadata';
@@ -630,6 +632,14 @@ export function MessageTimeline({
   });
   const attachedSendStatus = sendStatus && sendBinding === 'attached' ? sendStatus : null;
   const pendingSendStatus = sendStatus && sendBinding === 'pending' ? sendStatus : null;
+  // S-6 feedback 11c: what the clock line needs of the send (`TurnSendContext`), kept
+  // stable across the composer's per-second ticks.
+  const livePhase = attachedSendStatus?.phase ?? null;
+  const livePromptChars = attachedSendStatus?.promptChars ?? 0;
+  const turnLiveSend = useMemo<TurnLiveSend | null>(
+    () => (livePhase ? { phase: livePhase, promptChars: livePromptChars } : null),
+    [livePhase, livePromptChars]
+  );
 
   // Stable identities for the memoized `ChatTurn` (F7): an inline arrow here
   // would change on every render and defeat the memo entirely.
@@ -859,7 +869,7 @@ export function MessageTimeline({
     // participates in the timeline's layout at all. Issue #17: the provider
     // around it tells each summary row whether a later compaction superseded it.
     <SupersededSummariesContext.Provider value={supersededSummaries}>
-      <TurnConnectingContext.Provider value={attachedSendStatus?.phase === 'handshake'}>
+      <TurnSendContext.Provider value={turnLiveSend}>
         <div className="relative flex min-h-0 flex-1 flex-col" ref={scrollRootRef}>
           {/* Round-2 V-b, as narrowed by T-31 §5.7 and simplified again by T12.
           Conclusion ① is back to its original form: this viewport contains no
@@ -1202,7 +1212,7 @@ export function MessageTimeline({
             </button>
           )}
         </div>
-      </TurnConnectingContext.Provider>
+      </TurnSendContext.Provider>
     </SupersededSummariesContext.Provider>
   );
 }
@@ -1605,14 +1615,14 @@ function UserBubble({ message }: { message: ChatMessage }) {
  * every other notice in this file already uses.
  */
 /**
- * S-6 feedback 11c (user, 2026-10-17): while a send is still connecting to the engine,
- * the turn's clock line says so (「✻ 工作中 1 秒 · 正在连接对话引擎…」) instead of a
- * second status row under it counting the same seconds. Provided at the timeline root
+ * S-6 feedback 11c (user, 2026-10-17): the running turn's clock line says what it is
+ * doing, verb first, on one line (`turnLiveHead.ts`), where a second status row used to
+ * count the same seconds again. Before the first byte only the send knows the phase
+ * (connecting, then waiting) and how much was sent, so the timeline root provides it,
  * from the send attached to the last turn (only that turn gets a `sendStatus`); the
- * clock line reads it only while its turn is still working, and `ChatTurn` hides the
- * handshake status row in the same case.
+ * clock line reads it only while its turn is still working.
  */
-const TurnConnectingContext = createContext(false);
+const TurnSendContext = createContext<TurnLiveSend | null>(null);
 
 /** Issue #17: the summary rows a later compaction superseded (`supersededSummaryIds`). */
 const SupersededSummariesContext = createContext<ReadonlySet<string>>(new Set());
@@ -1946,7 +1956,7 @@ function useTurnClockLine({
   items: readonly TurnItem[];
 }): { line: string; spinner: boolean } {
   const { t } = useI18n();
-  const connecting = useContext(TurnConnectingContext);
+  const send = useContext(TurnSendContext);
   const running = zone.kind === 'working';
   const spinner = running && clock;
   const liveAction = spinner ? deriveTurnCurrentAction(items) : null;
@@ -1954,15 +1964,15 @@ function useTurnClockLine({
     return { line: running ? workingHeadText(t, null) : workedHeadText(t, null), spinner };
   }
   if (zone.kind === 'working') {
+    // S-6 feedback 11c (user, 2026-10-17): verb first, one line (`turnLiveHead.ts`).
+    // A clock with no subject reads as a stopwatch, so when nothing more specific is
+    // known the line still says 「工作中」.
+    const live = deriveTurnLivePhase({ send, items, action: liveAction });
     return {
-      line: joinTurnProgressLine(`✻ ${workingHeadText(t, zone.elapsed)}`, [
-        // The live clause: a clock with no subject reads as a stopwatch, and
-        // this is the sentence that says the turn is doing something rather
-        // than merely still open.
-        liveAction ? t(liveAction.verb) : null,
-        // S-6 feedback 11c: the handshake, on the same line as the clock.
-        connecting ? t('Connecting to the chat engine…') : null,
-      ]),
+      line:
+        live.kind === 'working'
+          ? `✻ ${workingHeadText(t, zone.elapsed)}`
+          : formatTurnLiveLine(t, live, zone.elapsed),
       spinner,
     };
   }
@@ -2712,11 +2722,17 @@ const ChatTurn = memo(function ChatTurn({
     toolCalls: countTurnToolCalls(items),
     thinkingMs: turnThinkingMs,
   });
-  // S-6 feedback 11c (user, 2026-10-17): while the send still connects, the clock line
-  // says so (「✻ 工作中 1 秒 · 正在连接对话引擎…」) and the status row under it, which
-  // counted the same seconds a second time, is not drawn.
-  const connectingOnClock = derivedStatus?.kind === 'handshake' && workZone.kind === 'working';
-  const status = connectingOnClock ? null : derivedStatus;
+  // S-6 feedback 11c (user, 2026-10-17): while the turn runs, its clock line says what
+  // it is doing (`turnLiveHead.ts`), so the status row under it is drawn only for what
+  // that line cannot say: the slow and stalled hints, and a failure. A retry's count and
+  // countdown are on the retry banner above.
+  const statusOnClock =
+    workZone.kind === 'working' &&
+    (derivedStatus?.kind === 'handshake' ||
+      derivedStatus?.kind === 'awaiting' ||
+      derivedStatus?.kind === 'streaming' ||
+      derivedStatus?.kind === 'retrying');
+  const status = statusOnClock ? null : derivedStatus;
 
   const renderSegment = (segment: TurnSegment<TurnItem>, intermediate = false) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
@@ -3017,16 +3033,35 @@ function PendingTurnHead({
     t
   );
   if (!status && !retryBanner) return null;
+  // S-6 feedback 11c (user, 2026-10-17): the same one line a running turn shows, verb
+  // first (`turnLiveHead.ts`), counted from the send; the slow and stalled hints keep
+  // their own wording.
+  const live =
+    status?.kind === 'handshake'
+      ? formatTurnLiveLine(t, { kind: 'connecting' }, pendingElapsed(sendStatus, nowMs))
+      : status?.kind === 'awaiting' || status?.kind === 'retrying'
+        ? formatTurnLiveLine(
+            t,
+            { kind: 'thinking', promptChars: sendStatus.promptChars },
+            pendingElapsed(sendStatus, nowMs)
+          )
+        : null;
+  const shown = status && live ? { ...status, text: live } : status;
   return (
     <>
       {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
-      {status && (
+      {shown && (
         <div className={turnHeadClass()}>
-          <TurnStatusContent status={status} />
+          <TurnStatusContent status={shown} />
         </div>
       )}
     </>
   );
+}
+
+/** Time since the send, for the pending head's one line; at least 1 second, as the turn clock. */
+function pendingElapsed(sendStatus: TurnSendStatus, nowMs: number) {
+  return splitWorkedForDuration(Math.max(0, nowMs - sendStatus.turnStartedAtMs));
 }
 
 /**
