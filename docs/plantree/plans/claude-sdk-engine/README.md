@@ -1,6 +1,8 @@
 # 路线 B 立项：Claude 模型改由官方 Claude Agent SDK 驱动（最小可用版）
 
-Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/claude-sdk-engine`，从 main `79f81cdb` 开出。
+Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/claude-sdk-engine`，从 main `79f81cdb` 开出（实际工作分支为 `claude/claude-sdk-engine-mvp-162021`）。
+
+**接手先读** [交接 2026-10-17](handoff-2026-10-17.md)：进度、结论、决定与证据、没成的尝试、测试结果、风险与下一步。
 
 ## 0 依据
 
@@ -270,5 +272,5 @@ GUI 点验（与 S-2 §3.4 一并做，隔离 profile，只用本机假网关）
 | 49 | `scripts/assert-no-webfonts.mjs` 在 Windows 上找不到 `out/renderer`：它用 `new URL('..', import.meta.url).pathname` 拼路径，得到 `\F:\...`，于是 `pnpm dist:prereq` 在本机 Windows 上第一步之后就停了（与路线 B 无关，早已存在；CI 的工作流逐步构建、不调它，不受影响） | 记录；修法是改用 `fileURLToPath`，一行，等用户决定是否顺手修 |
 | 50 | CLI 对 8.3 短名拼写的路径（如 `C:\Users\RUNNER~1\...`）当作"可疑的 Windows 路径"，其下的读写一律先问，手动审批里读文件也出卡。GitHub 的 Windows 机器把 `TEMP` 设成这种写法，CI 上的冒烟因此超时 | 测试工具建临时目录时展开成长名（S-5 §8 C-1）。产品不改：工作区是用户打开的目录或主目录下的临时/草稿目录，都是长名；用短名路径打开项目时按官方行为每次读写都问 |
 | 51 | 2.1.300 在 Linux 上不提供 `Grep` 与 `Glob`，要模型经 Bash 用 `grep`、`find`（Windows 上照旧提供）。Linux 上 SDK 会话的搜索在界面上显示为命令行调用 | 照官方行为，不补这两个工具；探针与假网关按平台分开（S-5 §8 C-2） |
-| 52 | Windows CI 上 Stop 后，工具调用起的两个 `sleep` 没被清掉（本机 4 秒内清零）。宿主经 Git Bash 的 `ps.exe` 找这些 MSYS 进程，CI 的 Git 2.56 与本机的 2.37 可能不同 | 诊断见 S-5 §8.2：宿主 Stop 前的 PowerShell 进程查询在 CI 上跑满 15 秒超时、返回空表。已加固（关 stdin、`-InputFormat None`、只取四个属性、等 5 秒、记原因），等 CI 确认；用户机器上的 Git 版本各不相同，修好之前这是产品问题：Windows 上停止一个正在跑命令的回合，命令起的子进程可能留下 |
+| 52 | Windows CI 上 Stop 后，工具调用起的两个 `sleep` 没被清掉（本机 4 秒内清零）。宿主经 Git Bash 的 `ps.exe` 找这些 MSYS 进程，CI 的 Git 2.56 与本机的 2.37 可能不同 | 诊断见 S-5 §8.2：宿主 Stop 前的 PowerShell 进程查询在 CI 上跑满 15 秒超时、返回空表。加固两步（关 stdin、`-InputFormat None`、只取四个属性、等 5 秒、记原因；按路径导入 CimCmdlets）后第五次 CI 仍超时（`process sample failed after 5031 ms: timed out`），**未解决**，下一步见[交接](handoff-2026-10-17.md) §9；用户机器上的 Git 版本各不相同，修好之前这是产品问题：Windows 上停止一个正在跑命令的回合，命令起的子进程可能留下 |
 | 53 | macOS 的打 DMG 在 `hdiutil` 卡约 25 分钟后报 "Device not configured"（第一次 CI；记录时第二次还在打 DMG）；这是 macOS 包第一次带 SDK 宿主（约 242 MiB） | 记录；macOS 不在本期范围（dsh-rebase 决策 090），不修 |
