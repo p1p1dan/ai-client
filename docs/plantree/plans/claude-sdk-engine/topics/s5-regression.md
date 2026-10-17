@@ -81,3 +81,14 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 | C-4 | Linux 的录制门禁这次没跑 | 它排在回归命令之后，回归命令失败就跳过了 | 加 `if: ${{ !cancelled() }}`：它只报告，回归命令失败也照跑，一次 CI 能看到两边；门禁测试加 1 条断言 |
 
 本机复核（对本分支的 `win-unpacked`，用随包的 node、`host.js` 与 `claude.exe`）：`TEMP` 设成短名时，SDK 冒烟 8/8、回归命令 7 组 130 条、录制门禁四个样本一致；`TEMP` 正常时录制门禁一致；源码宿主录制门禁一致。假网关对"请求里没有 `Grep`"与"有 `Grep`"两种请求分别回 Bash 与 Grep。Linux 上的结果等下一次 CI。
+
+### 8.1 第二次 CI（2026-10-17，run 38999063964）
+
+- **Linux 打包作业全绿**：打包核验（冒烟 8/8）、回归命令 7 组 129 条全过（`search` 在 Linux 上是 1 条合并检查，比 Windows 少 1 条）。录制门禁四个场景都报 DIFF（只报告，不挡）。
+- **Windows**：打包核验过了（C-1 生效），回归命令只剩 `stop` 的"Stop 后 5 秒没有残留的 sleep"一条：两个 `sleep` 在 Stop 后 12 秒里一直在。本机在源码宿主、安装目录、安装包界面上都是 4 秒内清零。
+- macOS 的打 DMG 第一次在 `hdiutil` 卡约 25 分钟后报 "Device not configured"，记录时第二次还在打 DMG（README §11.2 #53；macOS 不在本期范围）。
+
+| # | 现象 | 原因 | 决定 |
+|---|---|---|---|
+| C-5 | Linux 的录制门禁四个场景都差在一条 `session.status idle` | 不是平台差异：回合的结束事件之后宿主紧接着报 idle，探针写录制的时刻与它赛跑。Linux 上它落进本场景的录制，Windows 上它落进下一场景的开头（旧样本 `tools` 等以一条 idle 开头） | 录制前等这条 idle（最多 5 秒）再写，切点在哪台机器上都一样；四个样本按此重录，与 CI 上 Linux 的录制逐条相同；源码宿主与安装目录宿主（短名 `TEMP`）各 `--check` 一遍都一致。Linux 的录制门禁仍只报告，等一次 CI 确认一致后再改成挡 |
+| C-6 | Windows CI 上 Stop 后 `sleep` 没被清掉 | 未定。宿主在 Stop 时经 Git Bash 的 `ps.exe` 找工具调用留下的 MSYS 进程（processTree.ts）；本机 Git 2.37 一直找得到，CI 的 Git 是 2.56，可能输出格式或进程关系不同 | 先补诊断再修（README §11.2 #52）：`stop` 场景打印宿主在 Stop 时的进程快照、找到的 MSYS 进程与清掉的进程（宿主 stderr 本来就记这几行，只是探针没打印）；没清干净时再打印残留 `sleep` 的 Windows 父进程与 Git Bash 的 `ps` 输出。不下载新版 Git 到本机复现 |

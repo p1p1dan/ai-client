@@ -471,6 +471,36 @@ function sleepers(seconds: number): number {
 }
 
 /**
+ * Windows: the `sleep <seconds>` processes still running, with their Windows parent, and
+ * Git Bash's own process table beside them (its `ps.exe`), for a CI run whose Stop left
+ * them behind (the host reaps them through that table, processTree.ts).
+ */
+function describeSleepers(seconds: number): string[] {
+  const script = `@(Get-CimInstance Win32_Process -Filter "Name='sleep.exe'" | Where-Object { $_.CommandLine -match ' ${seconds}\\s*$' } | Select-Object ProcessId,ParentProcessId,ExecutablePath) | ConvertTo-Json -Compress`;
+  try {
+    const raw = execFileSync('powershell', ['-NoProfile', '-Command', script]).toString().trim();
+    const rows = (raw ? [JSON.parse(raw)].flat() : []) as Array<{
+      ProcessId: number;
+      ParentProcessId: number;
+      ExecutablePath: string;
+    }>;
+    const out = rows.map(
+      (row) => `sleep.exe#${row.ProcessId} parent #${row.ParentProcessId} ${row.ExecutablePath}`
+    );
+    const exe = rows[0]?.ExecutablePath;
+    if (exe) {
+      const listing = execFileSync(join(dirname(exe), 'ps.exe'), [], { windowsHide: true })
+        .toString()
+        .split(/\r?\n/);
+      out.push(...listing.filter((line, i) => i === 0 || /sleep|bash/.test(line)));
+    }
+    return out;
+  } catch (error) {
+    return [`(could not describe them: ${error instanceof Error ? error.message : error})`];
+  }
+}
+
+/**
  * `enc` samples: PROBE_ENC_FILES (`;`-separated absolute paths), then the regular files of
  * PROBE_ENC_DIR (not recursive). Neither set: a dry run on plain samples written into the
  * workspace under a few of P1-13b's names, a binary extension and an extensionless one included.
@@ -815,9 +845,21 @@ function marketplaceTraces(): string[] {
  * the directories they may name, for `event-record.ts` to normalize. Unnormalized: a
  * local file the gate reads, never committed.
  */
-function recordScenario(scenario: string): void {
+async function recordScenario(scenario: string): Promise<void> {
   const dir = process.env.PROBE_RECORD_DIR?.trim();
   if (!dir) return;
+  // The host reports idle right after a turn's terminal event. Wait for it, so the cut
+  // falls in the same place on every machine: Linux caught it in this recording, Windows
+  // left it to the next scenario's (S-5 §8 C-5).
+  let last = -1;
+  scenarioEvents.forEach((e, i) => {
+    if (terminal(e)) last = i;
+  });
+  const idle = (e: Event) => e.type === 'session.status' && e.payload?.status === 'idle';
+  const deadline = Date.now() + 5_000;
+  while (last >= 0 && !scenarioEvents.slice(last + 1).some(idle) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, `raw.${scenario}.json`),
@@ -998,12 +1040,19 @@ async function main(): Promise<void> {
         show('stop');
         check('stop', 'ends in session.stopped', end.type === 'session.stopped');
         check('stop', 'the sleeps were running before Stop', during > before);
+        // What the host saw and reaped at Stop (its stderr), so a CI log shows why when
+        // this check fails there (README §11.2 #52).
+        for (const line of hostStderr.filter((l) =>
+          /\bstart pid=|process snapshot:|msys tool processes:|reaped \d+ process/.test(l)
+        )) {
+          console.log(`  [host] ${line.slice(0, 1200)}`);
+        }
+        const left = !trail.slice(4).every((n) => n <= before);
+        if (left && process.platform === 'win32') {
+          for (const line of describeSleepers(seconds)) console.log(`  [left] ${line}`);
+        }
         // The prototype doc's bar (§5.1): orphans are gone within a few seconds of Stop.
-        check(
-          'stop',
-          'no sleep left 5 s after Stop',
-          trail.slice(4).every((n) => n <= before)
-        );
+        check('stop', 'no sleep left 5 s after Stop', !left);
         break;
       }
       case 'plan': {
@@ -1897,7 +1946,7 @@ async function main(): Promise<void> {
       default:
         check(scenario, 'is a known scenario', false);
     }
-    recordScenario(scenario);
+    await recordScenario(scenario);
   }
   const commands = await request<{ commands: unknown[] }>('worker.commands', { logicalSessionId });
   console.log(`\ncommands: ${commands.commands.length}`);

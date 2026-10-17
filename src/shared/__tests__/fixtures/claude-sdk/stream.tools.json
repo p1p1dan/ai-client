@@ -4,13 +4,6 @@
     {
       "type": "session.status",
       "payload": {
-        "status": "idle",
-        "backgroundTasks": 0
-      }
-    },
-    {
-      "type": "session.status",
-      "payload": {
         "status": "running",
         "backgroundTasks": 0
       }
@@ -276,6 +269,13 @@
     {
       "type": "session.completed",
       "payload": {}
+    },
+    {
+      "type": "session.status",
+      "payload": {
+        "status": "idle",
+        "backgroundTasks": 0
+      }
     }
   ],
   "usageKeys": [
