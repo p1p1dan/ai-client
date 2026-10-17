@@ -205,6 +205,7 @@ export async function authorizeTarget(
       unresolvedPaths: shell?.unresolvedPaths,
       exploration: shell?.exploration,
       ...(shell?.ungrantable ? { ungrantable: true } : {}),
+      ...(shell?.parameterPaths ? { parameterPaths: shell.parameterPaths } : {}),
       ...(preview ? { preview } : {}),
     },
     signal
@@ -223,7 +224,9 @@ export async function authorizeTarget(
  * Expand every operand a shell analysis found and check each against the path
  * deny list, both as written and after canonical resolution; wildcards are
  * expanded against the directory (at most 20 000 entries in all). Returns the
- * analysis with `paths` replaced by every spelling that was checked.
+ * analysis with `paths` replaced by every spelling that was checked, and
+ * `parameterPaths` by the spellings only its parameter operands reached
+ * (decision 191).
  */
 export async function checkShellPaths(
   analysis: BashAnalysis,
@@ -231,8 +234,11 @@ export async function checkShellPaths(
 ): Promise<BashAnalysis> {
   const createError = context.createError ?? createPermissionError;
   const paths = new Set<string>();
+  const parameters = new Set(analysis.parameterPaths ?? []);
+  const fromParameters = new Set<string>();
+  const fromSpelled = new Set<string>();
   let visits = 0;
-  const check = async (lexical: string) => {
+  const check = async (lexical: string, reached: Set<string>) => {
     if (++visits > 20_000)
       throw createError('shell_path_limit', 'shell path expansion exceeds 20000 entries');
     if (pathPolicy(lexical) === 'deny')
@@ -242,16 +248,18 @@ export async function checkShellPaths(
       throw createError('tool_denied', `shell operand is denied: ${canonical}`);
     paths.add(lexical);
     paths.add(canonical);
+    reached.add(lexical);
+    reached.add(canonical);
   };
-  const expand = async (path: string): Promise<void> => {
+  const expand = async (path: string, reached: Set<string>): Promise<void> => {
     // Split on either separator: a command writes `conf/*` even on Windows,
     // where splitting on `sep` alone leaves the wildcard glued to its parent
     // and every entry fails to match, so nothing gets checked.
     const parts = splitShellPath(path);
     const wildcard = parts.findIndex((part) => /[*?[]/.test(part));
-    if (wildcard < 0) return check(path);
+    if (wildcard < 0) return check(path, reached);
     const parent = parts.slice(0, wildcard).join(sep) || sep;
-    await check(parent);
+    await check(parent, reached);
     // Even an unmatched pattern can target denied names after another command creates them.
     if (pathPolicy(path) === 'deny')
       throw createError('tool_denied', `shell pattern is denied: ${path}`);
@@ -261,7 +269,7 @@ export async function checkShellPaths(
           throw createError('shell_path_limit', 'shell path expansion exceeds 20000 entries');
         if (entry.name.startsWith('.') && !parts[wildcard].startsWith('.')) continue;
         if (!matchesGlob(entry.name, parts[wildcard])) continue;
-        await expand([parent, entry.name, ...parts.slice(wildcard + 1)].join(sep));
+        await expand([parent, entry.name, ...parts.slice(wildcard + 1)].join(sep), reached);
       }
     } catch (error) {
       // Parent doesn't exist / isn't a directory / isn't readable: a real
@@ -269,6 +277,13 @@ export async function checkShellPaths(
       if (!isSkippableIoError(error)) throw error;
     }
   };
-  for (const path of analysis.paths) await expand(path);
-  return { ...analysis, paths: [...paths].sort() };
+  for (const path of analysis.paths)
+    await expand(path, parameters.has(path) ? fromParameters : fromSpelled);
+  const { parameterPaths: _, ...rest } = analysis;
+  const parameterPaths = [...fromParameters].filter((path) => !fromSpelled.has(path)).sort();
+  return {
+    ...rest,
+    paths: [...paths].sort(),
+    ...(parameterPaths.length > 0 ? { parameterPaths } : {}),
+  };
 }

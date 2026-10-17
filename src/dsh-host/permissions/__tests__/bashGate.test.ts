@@ -333,9 +333,10 @@ describe('Bash AST command-name normalization', () => {
   });
   it('asks for a wrapper whose inner command cannot be read', async () => {
     let approvals = 0;
+    // Under accept-edits: since decision 191 auto runs a workspace command it cannot read.
     await start({
       permissions: {
-        gear: 'auto',
+        gear: 'accept-edits',
         approve: async () => {
           approvals++;
           return 'deny';
@@ -387,19 +388,20 @@ describe('Bash AST interpreter payloads', () => {
   });
 });
 
-// T001 — `auto` used to return allow before `unresolvedPaths` was consulted.
+// T001 made `auto` ask about an operand it could not resolve; decision 191
+// (claude-sdk-engine ruling 27) lets a workspace command run with one, and
+// keeps the question for accept-edits.
 describe('Bash AST unresolved operands under auto', () => {
-  it('asks in auto when an operand could not be resolved', async () => {
+  it('runs a workspace command with an unresolved operand in auto, and asks in accept-edits', async () => {
     let approvals = 0;
-    await start({
-      permissions: {
-        gear: 'auto',
-        approve: async () => {
-          approvals++;
-          return 'deny';
-        },
-      },
-    });
+    const approve = async () => {
+      approvals++;
+      return 'deny' as const;
+    };
+    await start({ permissions: { gear: 'auto', approve } });
+    await expect(bash('cat "$UNKNOWN_DIR/file"')).resolves.toBeDefined();
+    expect(approvals).toBe(0);
+    await start({ permissions: { gear: 'accept-edits', approve } });
     await expect(bash('cat "$UNKNOWN_DIR/file"')).rejects.toMatchObject({ code: 'tool_denied' });
     expect(approvals).toBe(1);
   });
@@ -420,8 +422,93 @@ describe('Bash AST unresolved operands under auto', () => {
 });
 
 /**
- * The fourth gear: `bypass` answers the unresolved-operand asks `auto` still
- * raises, and acquires no authority — every deny is decided before any gear.
+ * Decision 191 (claude-sdk-engine ruling 27, S-6 feedback 11c, issue #19):
+ * full auto runs a workspace command whatever part of it cannot be read, and
+ * stops to confirm a dangerous command or one that spells out a path outside
+ * the workspace. A path reached only through the environment (`$HOME`) is a
+ * parameter, like an unresolved one; a device (`/dev/null`) is never outside.
+ * The same rule through `pwsh` is in src/shared/permissions/__tests__/autoGear.test.ts.
+ */
+describe('full auto (decision 191)', () => {
+  let approvals = 0;
+  async function auto(gear: 'auto' | 'bypass' = 'auto') {
+    approvals = 0;
+    await start({
+      permissions: {
+        gear,
+        approve: async () => {
+          approvals++;
+          return 'deny';
+        },
+      },
+    });
+  }
+
+  it.each([
+    'echo $HOME',
+    'npm test $FLAGS',
+    'cat sub/file 2>/dev/null',
+    'ls nosuchdir > /dev/null 2>&1',
+    'for f in *.txt; do echo "$f"; done',
+    'echo "$(git rev-parse HEAD)" > rev.txt',
+    'cat "$HOME/notes.txt"',
+    'python build.py',
+    'bash deploy.sh',
+    'rm stale.lock',
+  ])('runs %s without a card', async (command) => {
+    await auto();
+    await expect(bash(command), command).resolves.toBeDefined();
+    expect(approvals, command).toBe(0);
+  });
+
+  it.each([
+    'rm -rf build',
+    'rm -r "$DIR"',
+    'git push --force',
+    'git push -f origin main',
+    'git reset --hard HEAD~1',
+    'git clean -fd',
+    'find . -name "*.log" -delete',
+    'npm test && rm -rf coverage',
+    "bash -c 'rm -rf build'",
+  ])('asks about the dangerous command %s', async (command) => {
+    await auto();
+    await expect(bash(command), command).rejects.toMatchObject({ code: 'tool_denied' });
+    expect(approvals, command).toBe(1);
+  });
+
+  it('asks about a command that spells out a path outside the workspace', async () => {
+    for (const command of [
+      `cat '${join(outside, 'file')}'`,
+      `cd '${outside}' && ls`,
+      `TARGET='${outside}'; cat "$TARGET/file"`,
+      `cp note.txt '${outside}'`,
+      'ls ~',
+    ]) {
+      await auto();
+      await expect(bash(command), command).rejects.toMatchObject({ code: 'tool_denied' });
+      expect(approvals, command).toBe(1);
+    }
+  });
+
+  it('still refuses a denied operand without asking', async () => {
+    await auto();
+    await expect(bash('cat .env')).rejects.toMatchObject({ code: 'tool_denied' });
+    await expect(bash('rm -rf "$X" .env')).rejects.toMatchObject({ code: 'tool_denied' });
+    expect(approvals).toBe(0);
+  });
+
+  it('leaves bypass running all of it', async () => {
+    await auto('bypass');
+    for (const command of ['rm -rf build', `cat '${join(outside, 'file')}'`, 'npm test $FLAGS'])
+      await expect(bash(command), command).resolves.toBeDefined();
+    expect(approvals).toBe(0);
+  });
+});
+
+/**
+ * The fourth gear: `bypass` answers the asks `auto` still raises, and acquires
+ * no authority — every deny is decided before any gear.
  * (Its plan-mode / whitelist case needs no syntax tree: gearsAndTools.test.)
  */
 describe('the bypass gear', () => {

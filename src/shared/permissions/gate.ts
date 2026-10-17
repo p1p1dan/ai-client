@@ -8,6 +8,7 @@ import {
   type RuntimePermissionSettings,
   resolveRuntimePermission,
 } from '../types/runtimePermission.ts';
+import { isDangerousShellCommand } from './dangerousCommands.ts';
 import { PermissionError } from './errors.ts';
 import {
   containsPath,
@@ -55,6 +56,12 @@ export interface ToolPermissionRequest {
   paths?: readonly string[];
   commands?: readonly string[];
   unresolvedPaths?: boolean;
+  /**
+   * Decision 191: the entries of `paths` a shell command reaches only through
+   * the environment (`BashAnalysis.parameterPaths`). Full auto reads them as
+   * parameters: they never make the command ask for being outside the workspace.
+   */
+  parameterPaths?: readonly string[];
   exploration?: boolean;
   /**
    * dsh-rebase P1-6d: a shell command no session grant may cover — it carries
@@ -160,8 +167,8 @@ export interface PermissionQueueSlot {
  * `askReason: 'unresolved'` — the gear would have allowed this call, and asks
  * only because the analysis could not read part of it (a variable, a script
  * block, a program's own body). It is the one reason worth putting on the
- * card: under `auto` it is the whole explanation for a question the user
- * thought they had turned off (decision 046). Absent when the gear asks
+ * card (decision 046); since decision 191 a shell command no longer asks for
+ * it under `auto`, only under `ask` and `accept-edits`. Absent when the gear asks
  * anyway, so the card never blames the command for a question the posture
  * would have asked regardless.
  */
@@ -477,9 +484,9 @@ export class PermissionGate implements PermissionGateService {
     const live = this.live;
     if (!live || live.autoAllowed) return;
     // Re-judged, not waved through: widening is not "allow whatever is on
-    // screen". A bash call with an operand the analysis could not read still
-    // asks under `auto`, and a delegate running on its own scoped gear is not
-    // affected by the session's at all — both fall out of `evaluate` for free.
+    // screen". A recursive delete still asks under `auto`, and a delegate
+    // running on its own scoped gear is not affected by the session's at all —
+    // both fall out of `evaluate` for free.
     if (this.evaluate(live.request) !== 'allow') return;
     if (this.config.autoAllow?.(live.request.toolCallId) !== true) return;
     live.autoAllowed = true;
@@ -619,16 +626,15 @@ export class PermissionGate implements PermissionGateService {
     );
     if (matches.some((scope) => scope.action === 'deny')) return 'deny';
     const gear = this.gearFor(request);
-    // `bypass` is the one gear that answers the unresolved-operand case too.
-    // It sits AFTER every deny above — policy, bundled secrets, deny scopes,
-    // plan mode, the tool whitelist — so it can only turn an `ask` into an
-    // `allow`; it never buys authority a denied call did not have.
+    // `bypass` answers every ask, whatever the command. It sits AFTER every
+    // deny above — policy, bundled secrets, deny scopes, plan mode, the tool
+    // whitelist — so it can only turn an `ask` into an `allow`; it never buys
+    // authority a denied call did not have.
     if (gear === 'bypass') return 'allow';
-    // An operand the shell analysis could not read has passed no path, scope or
-    // deny judgement at all, so no gear may wave it through: `auto` has to fall
-    // to the `unresolvedPaths` check below. A session grant for this exact
-    // command still applies, which is why the check stays after `grants`.
-    if (gear === 'auto' && !request.unresolvedPaths) return 'allow';
+    // Decision 191: `auto` asks only for what `autoStillAsks` names; the rest
+    // falls to the checks below, where a session grant for the command still
+    // applies.
+    if (gear === 'auto' && !this.autoStillAsks(request)) return 'allow';
     if (matches.some((scope) => scope.action === 'ask'))
       return this.granted(request) ? 'allow' : 'ask';
     if (
@@ -676,6 +682,30 @@ export class PermissionGate implements PermissionGateService {
     )
       return 'allow';
     return request.trustedPath ? 'allow' : 'ask';
+  }
+  /**
+   * What full auto still stops to confirm (decision 191, claude-sdk-engine
+   * ruling 27), after every deny has had its say.
+   *
+   * A shell command asks when it is on the dangerous list
+   * (`dangerousCommands.ts`) or names a path outside the workspace by spelling
+   * it out; an operand the analysis could not read, or reached only through
+   * the environment, is a parameter and asks nothing. Any other call asks,
+   * as before, only when something in it could not be read: an opaque program
+   * (`run_code`) or one of DSH's own asks.
+   */
+  private autoStillAsks(request: ToolPermissionRequest): boolean {
+    if (!isShellTool(request.tool) || request.hostAsk) return request.unresolvedPaths === true;
+    const segments = request.commands?.length
+      ? request.commands
+      : request.command
+        ? [request.command]
+        : [];
+    if (segments.some(isDangerousShellCommand)) return true;
+    const parameters = new Set(request.parameterPaths ?? []);
+    return [request.path, ...(request.paths ?? [])].some(
+      (path) => !parameters.has(path) && !this.inWorkspace(path) && !isDevicePath(path)
+    );
   }
   /**
    * dsh-rebase P1-6d: `'unresolved'` when the gear would have allowed this
@@ -918,6 +948,16 @@ export class PermissionGate implements PermissionGateService {
       this.releasePrompt();
     }
   }
+}
+/**
+ * A device a command writes to or reads from without touching a file
+ * (`2>/dev/null`), outside every workspace and never worth a card. Git Bash on
+ * Windows spells it `\dev\null`, which resolves to `C:\dev\null`.
+ */
+const DEVICE_PATH =
+  /^(?:[A-Za-z]:)?[\\/]dev[\\/](?:null|zero|full|random|urandom|tty|stdin|stdout|stderr|fd[\\/]\d+)$/;
+function isDevicePath(path: string): boolean {
+  return DEVICE_PATH.test(path);
 }
 /**
  * Gears that answer an `ask` on the user's behalf rather than raising a card.

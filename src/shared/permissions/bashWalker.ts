@@ -17,6 +17,15 @@ export interface BashAnalysis {
    * never sets it.
    */
   ungrantable?: boolean;
+  /**
+   * Decision 191 (claude-sdk-engine ruling 27): the entries of `paths` the
+   * command reaches only through the environment (`$HOME`, `$env:TEMP`, a
+   * relative operand after `cd "$DIR"`), never by spelling them out. Full auto
+   * treats them like an unresolved operand: they never make a command ask for
+   * being outside the workspace. Every other check still reads them. Absent
+   * when there is none.
+   */
+  parameterPaths?: string[];
 }
 
 /**
@@ -46,6 +55,20 @@ export interface BashParser {
 interface ShellState {
   cwd: string;
   variables: Record<string, string | undefined>;
+  /** Variables whose value came from the environment (decision 191). */
+  fromEnv: Set<string>;
+  /** `cwd` was reached through the environment (`cd "$DIR"`). */
+  cwdFromEnv: boolean;
+}
+
+/** A copy for a nested scope: a subshell, a pipeline stage, `bash -c`. */
+function forkState(state: ShellState): ShellState {
+  return {
+    cwd: state.cwd,
+    variables: { ...state.variables },
+    fromEnv: new Set(state.fromEnv),
+    cwdFromEnv: state.cwdFromEnv,
+  };
 }
 
 /**
@@ -156,7 +179,24 @@ export function analyzeBash(
     exploration: true,
   };
   const paths = new Set<string>();
+  // Decision 191: which registered paths only the environment spelled.
+  const environmentPaths = new Set<string>();
+  const spelledPaths = new Set<string>();
+  /** Set by `value` when it expanded a variable that came from the environment. */
+  let readEnvironment = false;
   let visited = 0;
+  /** `value`, and whether the environment supplied any of it. */
+  function read(
+    node: BashSyntaxNode,
+    state: ShellState
+  ): { text: string | undefined; env: boolean } {
+    const outer = readEnvironment;
+    readEnvironment = false;
+    const text = value(node, state);
+    const env = readEnvironment;
+    readEnvironment = outer || env;
+    return { text, env };
+  }
   function value(node: BashSyntaxNode, state: ShellState): string | undefined {
     switch (node.type) {
       case 'command_name':
@@ -189,7 +229,10 @@ export function analyzeBash(
           /^\$(?:[A-Za-z_]\w*|\{[A-Za-z_]\w*\})$/.test(node.text)
         ) {
           const found = state.variables[node.namedChildren[0].text];
-          if (found !== undefined) return found;
+          if (found !== undefined) {
+            if (state.fromEnv.has(node.namedChildren[0].text)) readEnvironment = true;
+            return found;
+          }
         }
         result.unresolvedPaths = true;
         return undefined;
@@ -199,12 +242,21 @@ export function analyzeBash(
         return undefined;
     }
   }
-  function register(text: string, state: ShellState) {
+  /** Whether `text` is joined onto the current directory rather than standing alone. */
+  function relativeOperand(text: string): boolean {
+    const target = normalizeWindowsPathForm(text, process.platform);
+    return !(process.platform === 'win32' ? win32 : posix).isAbsolute(target);
+  }
+  function note(path: string, env: boolean) {
+    paths.add(path);
+    (env ? environmentPaths : spelledPaths).add(path);
+  }
+  function register(text: string, state: ShellState, env: boolean) {
     if (!text) return;
     // Keep wildcard's static parent; glob expansion is handled by the caller.
-    paths.add(shellOperandPath(text, state.cwd));
+    note(shellOperandPath(text, state.cwd), env || (state.cwdFromEnv && relativeOperand(text)));
   }
-  function addPath(text: string | undefined, state: ShellState) {
+  function addPath(text: string | undefined, state: ShellState, env = false) {
     if (!text || /^[a-z][a-z\d+.-]*:\/\//i.test(text)) return;
     if (text.startsWith('-')) {
       const equals = text.indexOf('=');
@@ -212,24 +264,29 @@ export function analyzeBash(
       // operand. Register any single-letter switch with content behind it
       // rather than a fixed letter set; an extra in-workspace candidate costs
       // nothing, a dropped one escapes every deny and scope check.
-      if (equals >= 0) register(text.slice(equals + 1), state);
-      else if (/^-[A-Za-z].+/.test(text)) register(text.slice(2), state);
+      if (equals >= 0) register(text.slice(equals + 1), state, env);
+      else if (/^-[A-Za-z].+/.test(text)) register(text.slice(2), state, env);
       return;
     }
-    register(text, state);
+    register(text, state, env);
     // `of=/outside/x` (dd), `TARGET=/outside` (make): without splitting the
     // value off, the whole word is joined onto cwd and a target outside the
     // workspace reads as one inside it.
     const equals = text.indexOf('=');
     if (equals > 0 && /^[A-Za-z_][\w.-]*=/.test(text)) {
       const operand = text.slice(equals + 1);
-      if (!operand.startsWith('-')) register(operand, state);
+      if (!operand.startsWith('-')) register(operand, state, env);
     }
   }
   function assignment(node: BashSyntaxNode, state: ShellState) {
     const name = node.childForFieldName('name');
     const input = node.childForFieldName('value');
-    if (name) state.variables[name.text] = input ? value(input, state) : '';
+    if (name) {
+      const assigned = input ? read(input, state) : { text: '', env: false };
+      state.variables[name.text] = assigned.text;
+      if (assigned.env) state.fromEnv.add(name.text);
+      else state.fromEnv.delete(name.text);
+    }
     if (input) visitSubstitutions(input, state, 0);
   }
   function parse(text: string, state: ShellState, depth: number) {
@@ -258,7 +315,8 @@ export function analyzeBash(
     }
     if (node.type === 'command') {
       const nameNode = node.childForFieldName('name');
-      const name = nameNode ? value(nameNode, state) : undefined;
+      const nameRead = nameNode ? read(nameNode, state) : { text: undefined, env: false };
+      const name = nameRead.text;
       // `$(which rm) -rf x` resolves to nothing statically, but the inner
       // command's own operands still have to reach the judgement.
       if (nameNode) visitSubstitutions(nameNode, state, depth);
@@ -267,7 +325,8 @@ export function analyzeBash(
       ))
         visitSubstitutions(prefix, state, depth);
       const argumentNodes = node.childrenForFieldName('argument');
-      const args = argumentNodes.map((arg) => value(arg, state));
+      const argReads = argumentNodes.map((arg) => read(arg, state));
+      const args = argReads.map((arg) => arg.text);
       const unit = [name, ...args].filter((word) => word !== undefined).join(' ');
       result.commands.push(unit);
       result.exploration &&=
@@ -281,6 +340,7 @@ export function analyzeBash(
       if (!inner) result.unresolvedPaths = true;
       const effectiveVerb = inner ? inner.verb : verb;
       const effectiveArgs = inner ? args.slice(inner.offset) : args;
+      const effectiveEnv = (inner ? argReads.slice(inner.offset) : argReads).map((arg) => arg.env);
       const normalized = [effectiveVerb, ...effectiveArgs]
         .filter((word) => word !== undefined)
         .join(' ');
@@ -295,7 +355,7 @@ export function analyzeBash(
       // this analysis never sees; nothing about its operands is resolved.
       if (shellVerb && nestedScript === undefined) result.unresolvedPaths = true;
       if (nestedScript !== undefined) {
-        const nestedState = { cwd: state.cwd, variables: { ...state.variables } };
+        const nestedState = forkState(state);
         for (const child of node.namedChildren.filter(
           (child) => child.type === 'variable_assignment'
         ))
@@ -311,12 +371,12 @@ export function analyzeBash(
           const previous = effectiveArgs[index - 1];
           if (previous === '-f' || previous === '--file') {
             skippedPattern = true;
-            addPath(arg, state);
+            addPath(arg, state, effectiveEnv[index]);
             return;
           }
           if (/^(?:-f.|--file=)/.test(arg)) {
             skippedPattern = true;
-            addPath(arg.startsWith('-f') ? arg.slice(2) : arg.slice(7), state);
+            addPath(arg.startsWith('-f') ? arg.slice(2) : arg.slice(7), state, effectiveEnv[index]);
             return;
           }
           if (previous === '-e' || previous === '--regexp' || previous === '--expression') {
@@ -334,9 +394,9 @@ export function analyzeBash(
           skippedPattern = true;
           return;
         }
-        addPath(arg, state);
+        addPath(arg, state, effectiveEnv[index]);
       });
-      if (name?.includes('/')) addPath(name, state);
+      if (name?.includes('/')) addPath(name, state, nameRead.env);
       if (
         [
           'eval',
@@ -354,13 +414,19 @@ export function analyzeBash(
       )
         result.unresolvedPaths = true;
       if (effectiveVerb === 'cd') {
-        const target = effectiveArgs.filter((arg) => arg !== '--')[0] ?? state.variables.HOME;
+        const at = effectiveArgs.findIndex((arg) => arg !== '--');
+        // A bare `cd` names the home directory as plainly as `cd ~` does.
+        const target = at < 0 ? state.variables.HOME : effectiveArgs[at];
         if (!target || target === '-' || effectiveArgs.some((arg) => arg === undefined))
           result.unresolvedPaths = true;
         else {
+          state.cwdFromEnv =
+            (at >= 0 && effectiveEnv[at]) || (state.cwdFromEnv && relativeOperand(target));
           state.cwd = resolve(state.cwd, target);
           state.variables.PWD = state.cwd;
-          paths.add(state.cwd);
+          if (state.cwdFromEnv) state.fromEnv.add('PWD');
+          else state.fromEnv.delete('PWD');
+          note(state.cwd, state.cwdFromEnv);
         }
       }
       // A leading redirect (`> out echo hi`) and a here-string both hang off
@@ -371,8 +437,10 @@ export function analyzeBash(
       return;
     }
     if (node.type === 'file_redirect') {
-      for (const child of node.childrenForFieldName('destination'))
-        addPath(value(child, state), state);
+      for (const child of node.childrenForFieldName('destination')) {
+        const target = read(child, state);
+        addPath(target.text, state, target.env);
+      }
       result.exploration = false;
     }
     if (node.type === 'herestring_redirect') {
@@ -380,7 +448,10 @@ export function analyzeBash(
       // denied name must not reach a command through this door, and
       // `<<< "$(cat .env)"` hides a whole command inside the operand.
       for (const child of node.namedChildren)
-        if (child.type !== 'file_descriptor') addPath(value(child, state), state);
+        if (child.type !== 'file_descriptor') {
+          const word = read(child, state);
+          addPath(word.text, state, word.env);
+        }
       result.exploration = false;
       visitSubstitutions(node, state, depth);
       return;
@@ -388,13 +459,12 @@ export function analyzeBash(
     if (['subshell', 'command_substitution', 'process_substitution'].includes(node.type)) {
       result.exploration = false;
       result.unresolvedPaths ||= node.type !== 'subshell';
-      const nested = { cwd: state.cwd, variables: { ...state.variables } };
+      const nested = forkState(state);
       for (const child of node.namedChildren) walk(child, nested, depth + 1);
       return;
     }
     if (node.type === 'pipeline') {
-      for (const child of node.namedChildren)
-        walk(child, { cwd: state.cwd, variables: { ...state.variables } }, depth + 1);
+      for (const child of node.namedChildren) walk(child, forkState(state), depth + 1);
       return;
     }
     if (
@@ -420,7 +490,20 @@ export function analyzeBash(
       walk(node, state, depth);
     else for (const child of node.namedChildren) visitSubstitutions(child, state, depth);
   }
-  parse(command, { cwd, variables: { ...env, HOME: env.HOME ?? homedir(), PWD: cwd } }, 0);
+  const fromEnv = new Set([...Object.keys(env), 'HOME']);
+  fromEnv.delete('PWD');
+  parse(
+    command,
+    {
+      cwd,
+      variables: { ...env, HOME: env.HOME ?? homedir(), PWD: cwd },
+      fromEnv,
+      cwdFromEnv: false,
+    },
+    0
+  );
   result.paths = [...paths];
+  const parameterPaths = [...environmentPaths].filter((path) => !spelledPaths.has(path));
+  if (parameterPaths.length > 0) result.parameterPaths = parameterPaths;
   return result;
 }

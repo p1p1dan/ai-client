@@ -736,13 +736,14 @@ describe('pre-execute decisions (decision 042 rule 2)', () => {
     }
   });
 
-  it('asks about a command whose operands it cannot read, even under auto', async () => {
+  it('under auto, runs a workspace command it cannot read, and asks about a recursive delete and a program (decision 191)', async () => {
     const { fake, asked } = attached({ gear: 'auto' });
     // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion
     await fake.prepare(call('bash', { command: 'echo a > ${TARGET}' }, root()));
-    expect(asked.map((request) => request.tool)).toEqual(['bash']);
     await fake.prepare(call('bash', { command: 'echo a > out.txt' }, root()));
-    expect(asked).toHaveLength(1);
+    expect(asked).toEqual([]);
+    await fake.prepare(call('bash', { command: 'rm -rf build' }, root()));
+    expect(asked.map((request) => request.tool)).toEqual(['bash']);
     await fake.prepare(call('run_code', { code: 'return 1', description: 'x' }, root()));
     expect(asked.map((request) => request.tool)).toEqual(['bash', 'run_code']);
   });
