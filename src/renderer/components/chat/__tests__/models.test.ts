@@ -13,6 +13,7 @@ import {
   reconcileModelSelection,
   resolveModelSelection,
   resolveResumeModel,
+  seedDefaultModel,
   toWireModel,
   unverifiedModelLabel,
 } from '../models';
@@ -267,5 +268,30 @@ describe('S-1 model list of a Claude-engine chat', () => {
         catalogAuthoritative: true,
       })
     ).toBe('verified');
+  });
+});
+
+describe('seedDefaultModel (issue #18)', () => {
+  const catalog: AgentModelOption[] = [
+    { id: 'plan/first', label: 'First' },
+    { id: 'plan/second', label: 'Second' },
+  ];
+  it('names the first catalog model when the template has none and the catalog answered', () => {
+    expect(
+      seedDefaultModel({ agentDefaultModel: undefined, catalog, catalogAuthoritative: true })
+    ).toBe('plan/first');
+  });
+  it('leaves a template that already names a model alone', () => {
+    expect(
+      seedDefaultModel({ agentDefaultModel: 'plan/second', catalog, catalogAuthoritative: true })
+    ).toBeNull();
+  });
+  it('waits for an authoritative catalog, and seeds nothing from an empty one', () => {
+    expect(
+      seedDefaultModel({ agentDefaultModel: undefined, catalog, catalogAuthoritative: false })
+    ).toBeNull();
+    expect(
+      seedDefaultModel({ agentDefaultModel: undefined, catalog: [], catalogAuthoritative: true })
+    ).toBeNull();
   });
 });

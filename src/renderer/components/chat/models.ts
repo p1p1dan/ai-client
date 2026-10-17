@@ -278,6 +278,25 @@ export function resolveModelSelection(input: ModelSelectionInput): string {
   return AUTOMATIC_MODEL_ID;
 }
 
+/**
+ * Issue #18: the model a fresh install's empty default template gets once the catalog has
+ * answered. `Automatic` left the menu (Q2), so a template with no model showed
+ * 「自动」 with nothing in the menu checked and sent no model at all. The first catalog
+ * model is the one the DSH model plan names as its own default (`dshModelPlan/build.ts`
+ * R9: the first usable model in catalog order), so what the trigger then shows is what a
+ * send without a choice already ran on. Null: nothing to seed (a template that names a
+ * model, a catalog not answered or empty).
+ */
+export function seedDefaultModel(input: {
+  agentDefaultModel: string | null | undefined;
+  catalog: readonly AgentModelOption[];
+  catalogAuthoritative: boolean;
+}): string | null {
+  if (usableFor(input.agentDefaultModel)) return null;
+  if (!input.catalogAuthoritative) return null;
+  return input.catalog[0]?.id ?? null;
+}
+
 export interface ModelReconcileInput extends ModelSelectionInput {
   /** What the trigger is displaying right now. */
   current: string;

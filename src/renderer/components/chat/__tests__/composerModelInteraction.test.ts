@@ -85,24 +85,35 @@ function row(text: string) {
 }
 
 describe('composer model selection', () => {
-  it.each([
-    null,
-    'automatic-history',
-  ])('hides Automatic for draft/history %s without changing its selection', async (sessionId) => {
+  // Issue #18: a fresh install (no default model) once showed 「自动」, which the menu no
+  // longer lists. The catalog's first model (the plan's own default) is seeded instead.
+  it('a fresh install with no default shows the catalog default model, never Automatic', async () => {
     useSettingsStore.setState({ chatAgentDefaults: {} });
-    if (sessionId) writeSessionModel(sessionId, AUTOMATIC_MODEL_ID);
-    await render(sessionId);
+    await render(null);
+    expect(useSettingsStore.getState().chatAgentDefaults.model).toBe('china/glm5.2');
+    const trigger = container.querySelector('button');
+    expect(trigger?.textContent).toContain('GLM 5.2');
+    expect(trigger?.textContent).not.toContain('Automatic');
+    // A send without a choice of its own now names that model on the wire.
+    expect(resolveResumeModel(readSessionModel, 'new-chat', 'china/glm5.2')).toBe('china/glm5.2');
+    await click(trigger);
+    expect(row('Automatic')).toBeUndefined();
+  });
+
+  it('a history chat stored as Automatic keeps it, and Automatic stays out of the menu', async () => {
+    useSettingsStore.setState({ chatAgentDefaults: {} });
+    writeSessionModel('automatic-history', AUTOMATIC_MODEL_ID);
+    await render('automatic-history');
     await click(container.querySelector('button'));
     expect(row('Automatic')).toBeUndefined();
     expect(row('Default')).toBeTruthy();
-    expect(useSettingsStore.getState().chatAgentDefaults.model).toBeUndefined();
-    if (sessionId) expect(readSessionModel(sessionId)).toBe(AUTOMATIC_MODEL_ID);
+    expect(readSessionModel('automatic-history')).toBe(AUTOMATIC_MODEL_ID);
 
     await click(row('china'));
     await click(row('GLM 5.2'));
     expect(container.textContent).toContain('GLM 5.2');
     expect(useSettingsStore.getState().chatAgentDefaults.model).toBe('china/glm5.2');
-    if (sessionId) expect(readSessionModel(sessionId)).toBe('china/glm5.2');
+    expect(readSessionModel('automatic-history')).toBe('china/glm5.2');
     expect(row('Automatic')).toBeUndefined();
   });
 

@@ -53,6 +53,7 @@ import {
   modelScopeHint,
   modelVerification,
   resolveModelSelection,
+  seedDefaultModel,
   unverifiedModelLabel,
 } from './models';
 import { catalogModels, unavailableModelsNotice } from './piModelCatalog';
@@ -293,6 +294,20 @@ function SessionModelTrigger({
     getSessionModel,
     settingsHydrated,
   ]);
+
+  // Issue #18: a fresh install has no default model, and the menu no longer offers
+  // `Automatic`; seed the template with the catalog's first model (the plan's own
+  // default) so the trigger names a model and the next send carries the same one. A
+  // session's own stored choice, `Automatic` included, is left as it is.
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    const seed = seedDefaultModel({
+      agentDefaultModel: agentDefaultModel(chatAgentDefaults),
+      catalog: catalogOptions,
+      catalogAuthoritative: authoritative,
+    });
+    if (seed) setChatAgentDefaults(withAgentPreference(chatAgentDefaults, { model: seed }));
+  }, [settingsHydrated, chatAgentDefaults, catalogOptions, authoritative, setChatAgentDefaults]);
 
   // Re-read this session's own effort. T25 applies the
   // selected model's capability in the reconciliation effect below once its
