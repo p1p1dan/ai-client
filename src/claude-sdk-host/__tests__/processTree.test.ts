@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { killProcess, type ProcessRow, reap } from '../processTree.ts';
+import { killProcess, type ProcessRow, reap, sampleProcesses } from '../processTree.ts';
 
 // No test here may send a real signal (engineering standard, appendix B1): both ways
 // out, `taskkill` and `process.kill`, are replaced before processTree.ts loads, and
 // every pid below is made up.
 const spawnSync = vi.hoisted(() => vi.fn(() => ({ status: 0 })));
+// Sampling (PowerShell on Windows, `ps` elsewhere) is replaced too.
+const execFile = vi.hoisted(() => vi.fn());
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:child_process')>()),
   spawnSync,
+  execFile,
 }));
 const signal = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
@@ -101,5 +104,46 @@ describe('killProcess', () => {
         throw new Error('ESRCH');
       });
     expect(killProcess(4602)).toBe(false);
+  });
+});
+
+describe('sampleProcesses', () => {
+  afterEach(() => execFile.mockReset());
+
+  it('closes stdin, and says why a sample came back empty (README §11.2 #52)', async () => {
+    const end = vi.fn();
+    execFile.mockImplementation((_file, _args, _options, done) => {
+      setTimeout(() => done(Object.assign(new Error('killed'), { killed: true }), '', ''));
+      return { stdin: { end } };
+    });
+    const log = vi.fn();
+    const sampled = await sampleProcesses({ timeoutMs: 5, log });
+    expect(sampled.size).toBe(0);
+    expect(end).toHaveBeenCalledTimes(1);
+    expect(execFile.mock.calls[0][2]).toMatchObject({ timeout: 5, windowsHide: true });
+    expect(log).toHaveBeenCalledWith(
+      expect.stringMatching(/^process sample failed after \d+ ms: timed out$/)
+    );
+    if (process.platform === 'win32') {
+      // PowerShell does not read stdin, and only the four properties are asked for.
+      expect(execFile.mock.calls[0][1]).toEqual(expect.arrayContaining(['-InputFormat', 'None']));
+      expect(execFile.mock.calls[0][1].at(-1)).toContain(
+        '-Property ProcessId,ParentProcessId,CreationDate,Name'
+      );
+    }
+  });
+
+  it('reads the rows of a sample', async () => {
+    const out =
+      process.platform === 'win32'
+        ? '10 4 133700000000000000 claude.exe\r\n11 10 0 bash.exe\r\n'
+        : '10 4 claude\n11 10 bash\n';
+    execFile.mockImplementation((_file, _args, _options, done) => {
+      setTimeout(() => done(null, out, ''));
+      return { stdin: { end: vi.fn() } };
+    });
+    const sampled = await sampleProcesses();
+    expect([...sampled.keys()]).toEqual([10, 11]);
+    expect(sampled.get(11)).toMatchObject({ ppid: 10, start: 0 });
   });
 });

@@ -165,6 +165,11 @@ const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const FILE_CHANGE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 /** How long Stop waits for the CLI to close the turn itself before closing it here. */
 const STOP_SETTLE_MS = 5_000;
+/**
+ * How long Stop waits for the process snapshot before it interrupts (normally under 1 s):
+ * the snapshot has to precede the interrupt, but a slow one must not hold the Stop up.
+ */
+const STOP_SNAPSHOT_MS = 5_000;
 /** How long a mode switch waits for the CLI's answer; under Main's 10 s RPC timeout. */
 const MODE_SWITCH_TIMEOUT_MS = 8_000;
 
@@ -896,10 +901,14 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
 
   /** Processes under the CLI (its own children's descendants): what a tool call started. */
   private async toolProcesses(): Promise<ProcessRow[]> {
-    const table = await sampleProcesses();
+    const started = Date.now();
+    const table = await sampleProcesses({
+      timeoutMs: STOP_SNAPSHOT_MS,
+      log: (message) => this.log(message),
+    });
     const all = descendantsOf(process.pid, table);
     this.log(
-      `process snapshot: ${table.size} rows, host ${process.pid} (${table.get(process.pid)?.name ?? 'missing'}), descendants ${all.map((row) => `${row.name}#${row.pid}<${row.ppid}`).join(' ')}`
+      `process snapshot: ${table.size} rows in ${Date.now() - started} ms, host ${process.pid} (${table.get(process.pid)?.name ?? 'missing'}), descendants ${all.map((row) => `${row.name}#${row.pid}<${row.ppid}`).join(' ')}`
     );
     const tools = all.filter((row) => row.ppid !== process.pid);
     if (process.platform === 'win32' && this.config.gitBashPath) {
@@ -914,7 +923,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   }
 
   private async reapOrphans(before: ProcessRow[], all: boolean): Promise<void> {
-    const killed = reap(before, await sampleProcesses(), all);
+    const killed = reap(before, await sampleProcesses({ log: (m) => this.log(m) }), all);
     if (killed.length > 0) {
       this.log(
         `reaped ${killed.length} process(es) left by the CLI: ${killed.map((row) => `${row.name}#${row.pid}`).join(', ')}`

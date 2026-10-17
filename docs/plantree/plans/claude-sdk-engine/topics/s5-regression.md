@@ -92,3 +92,9 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 |---|---|---|---|
 | C-5 | Linux 的录制门禁四个场景都差在一条 `session.status idle` | 不是平台差异：回合的结束事件之后宿主紧接着报 idle，探针写录制的时刻与它赛跑。Linux 上它落进本场景的录制，Windows 上它落进下一场景的开头（旧样本 `tools` 等以一条 idle 开头） | 录制前等这条 idle（最多 5 秒）再写，切点在哪台机器上都一样；四个样本按此重录，与 CI 上 Linux 的录制逐条相同；源码宿主与安装目录宿主（短名 `TEMP`）各 `--check` 一遍都一致。Linux 的录制门禁仍只报告，等一次 CI 确认一致后再改成挡 |
 | C-6 | Windows CI 上 Stop 后 `sleep` 没被清掉 | 未定。宿主在 Stop 时经 Git Bash 的 `ps.exe` 找工具调用留下的 MSYS 进程（processTree.ts）；本机 Git 2.37 一直找得到，CI 的 Git 是 2.56，可能输出格式或进程关系不同 | 先补诊断再修（README §11.2 #52）：`stop` 场景打印宿主在 Stop 时的进程快照、找到的 MSYS 进程与清掉的进程（宿主 stderr 本来就记这几行，只是探针没打印）；没清干净时再打印残留 `sleep` 的 Windows 父进程与 Git Bash 的 `ps` 输出。不下载新版 Git 到本机复现 |
+
+### 8.2 第三次 CI（2026-10-17，run 39000648641）与 C-6 的修法
+
+- Linux 全绿，录制门禁四个场景一致（C-5 生效）。按用户 2026-10-17 的指示，此后只处理 Windows，Linux 由用户在 Linux 开发机上接手，macOS 不管。
+- Windows 的诊断（C-6）：宿主 Stop 时的进程快照是空的（`process snapshot: 0 rows`），Stop 到回合结束正好 15 秒，即宿主那次 PowerShell 进程查询跑满了 15 秒超时；探针在同一台机器上用 PowerShell 查 `sleep.exe` 只要 0.3 秒，Git Bash 的 `ps` 也看得见那两个 `sleep`（进程组的 bash 已退出）。本机按 CI 的条件（宿主的受限环境、无控制台的分离进程）都复现不出，0.4 秒左右返回。
+- 修法（自主决定，待审阅）：宿主起 PowerShell 时加 `-InputFormat None` 并关掉 stdin（异步 `execFile` 的 stdin 管道原本一直开着，探针用的同步调用会立即关掉）；只取四个用到的属性，没有创建时间的进程（Idle）不再让整条查询报错；Stop 前的快照最多等 5 秒（原 15 秒），取不到也不拖住 Stop；失败时宿主日志写明耗时与原因（超时或退出码与 stderr）。单测 2 条（取样失败时快照为空、关了 stdin、日志写明原因；Windows 上带 `-InputFormat None` 与 `-Property`），去掉关 stdin 或 `-InputFormat None` 时失败。本机源码宿主：快照 339 毫秒，Stop 410 毫秒，两个 `sleep` 清掉。

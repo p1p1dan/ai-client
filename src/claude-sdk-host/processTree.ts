@@ -14,9 +14,44 @@
  */
 
 import { execFile, spawnSync } from 'node:child_process';
-import { promisify } from 'node:util';
 
-const run = promisify(execFile);
+/**
+ * Runs a command with its stdin closed. Windows PowerShell can sit on an open stdin pipe
+ * until its timeout: on GitHub's Windows runners the snapshot below came back empty after
+ * 15 s every time while the same query from the probe took 0.3 s (README §11.2 #52).
+ */
+function runClosed(file: string, args: string[], timeout: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      file,
+      args,
+      { windowsHide: true, timeout, maxBuffer: 8 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) reject(Object.assign(error, { stderrText: String(stderr ?? '') }));
+        else resolve(String(stdout));
+      }
+    );
+    child.stdin?.end();
+  });
+}
+
+function describeFailure(error: unknown): string {
+  const e = error as { killed?: boolean; code?: unknown; message?: string; stderrText?: string };
+  const what = e.killed ? 'timed out' : `code ${String(e.code ?? '?')}`;
+  // A timeout's message only repeats the command line.
+  const detail = (e.stderrText || (e.killed ? '' : e.message) || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 300);
+  return detail ? `${what}: ${detail}` : what;
+}
+
+export interface SampleOptions {
+  /** Default 15 s. */
+  timeoutMs?: number;
+  /** Told why a sample came back empty, and how long it took. */
+  log?: (message: string) => void;
+}
 
 export interface ProcessRow {
   pid: number;
@@ -35,19 +70,22 @@ export interface ProcessRow {
 const FILETIME_EPOCH_DIFF_MS = 11_644_473_600_000;
 const CREATION_TOLERANCE_MS = 2_000;
 
-export async function sampleProcesses(): Promise<Map<number, ProcessRow>> {
+export async function sampleProcesses(
+  options: SampleOptions = {}
+): Promise<Map<number, ProcessRow>> {
   const table = new Map<number, ProcessRow>();
+  const timeout = options.timeoutMs ?? 15_000;
+  const started = Date.now();
   try {
     if (process.platform === 'win32') {
+      // Only the four properties used (the provider skips command lines and owners), and a
+      // process without a creation date (the idle process) does not fail the whole query.
       const script =
-        "Get-CimInstance Win32_Process | ForEach-Object { '{0} {1} {2} {3}' -f $_.ProcessId,$_.ParentProcessId,$_.CreationDate.ToFileTimeUtc(),$_.Name }";
-      const { stdout } = await run(
+        "Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name | ForEach-Object { $t = if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc() } else { 0 }; '{0} {1} {2} {3}' -f $_.ProcessId,$_.ParentProcessId,$t,$_.Name }";
+      const stdout = await runClosed(
         'powershell',
-        ['-NoProfile', '-NonInteractive', '-Command', script],
-        {
-          windowsHide: true,
-          timeout: 15_000,
-        }
+        ['-NoProfile', '-NonInteractive', '-InputFormat', 'None', '-Command', script],
+        timeout
       );
       for (const line of stdout.split(/\r?\n/)) {
         const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s*(.*)$/);
@@ -61,7 +99,7 @@ export async function sampleProcesses(): Promise<Map<number, ProcessRow>> {
         });
       }
     } else {
-      const { stdout } = await run('ps', ['-A', '-o', 'pid=,ppid=,comm='], { timeout: 15_000 });
+      const stdout = await runClosed('ps', ['-A', '-o', 'pid=,ppid=,comm='], timeout);
       for (const line of stdout.split('\n')) {
         const match = line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/);
         if (match) {
@@ -74,8 +112,11 @@ export async function sampleProcesses(): Promise<Map<number, ProcessRow>> {
         }
       }
     }
-  } catch {
-    // No sample, nothing to reap; the stop itself already happened.
+  } catch (error) {
+    // No sample, nothing to reap; the stop itself goes on.
+    options.log?.(
+      `process sample failed after ${Date.now() - started} ms: ${describeFailure(error)}`
+    );
   }
   return table;
 }
@@ -122,7 +163,7 @@ export async function msysToolProcesses(
   const ps = gitBashPath.replace(/[\\/]bin[\\/]bash\.exe$/i, '\\usr\\bin\\ps.exe');
   let stdout = '';
   try {
-    ({ stdout } = await run(ps, [], { windowsHide: true, timeout: 15_000 }));
+    stdout = await runClosed(ps, [], 15_000);
   } catch {
     return [];
   }
