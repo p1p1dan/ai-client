@@ -1043,7 +1043,9 @@ async function main(): Promise<void> {
         // What the host saw and reaped at Stop (its stderr), so a CI log shows why when
         // this check fails there (README §11.2 #52).
         for (const line of hostStderr.filter((l) =>
-          /\bstart pid=|process snapshot:|msys tool processes:|reaped \d+ process/.test(l)
+          /\bstart pid=|process snapshot:|process sample failed|msys tool processes:|reaped \d+ process/.test(
+            l
+          )
         )) {
           console.log(`  [host] ${line.slice(0, 1200)}`);
         }

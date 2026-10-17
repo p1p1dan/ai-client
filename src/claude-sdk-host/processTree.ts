@@ -78,10 +78,13 @@ export async function sampleProcesses(
   const started = Date.now();
   try {
     if (process.platform === 'win32') {
-      // Only the four properties used (the provider skips command lines and owners), and a
-      // process without a creation date (the idle process) does not fail the whole query.
+      // CimCmdlets imported by path: left to auto-loading, Get-CimInstance is looked up
+      // across every installed module, which on a machine with many modules and a cold
+      // module analysis cache can run past the timeout (suspected on GitHub's runners,
+      // README §11.2 #52). Only the four properties used, and a process without a
+      // creation date (the idle process) does not fail the whole query.
       const script =
-        "Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name | ForEach-Object { $t = if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc() } else { 0 }; '{0} {1} {2} {3}' -f $_.ProcessId,$_.ParentProcessId,$t,$_.Name }";
+        "Import-Module (Join-Path $PSHOME 'Modules/CimCmdlets'); Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name | ForEach-Object { $t = if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc() } else { 0 }; '{0} {1} {2} {3}' -f $_.ProcessId,$_.ParentProcessId,$t,$_.Name }";
       const stdout = await runClosed(
         'powershell',
         ['-NoProfile', '-NonInteractive', '-InputFormat', 'None', '-Command', script],

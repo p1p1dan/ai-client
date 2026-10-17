@@ -125,11 +125,12 @@ describe('sampleProcesses', () => {
       expect.stringMatching(/^process sample failed after \d+ ms: timed out$/)
     );
     if (process.platform === 'win32') {
-      // PowerShell does not read stdin, and only the four properties are asked for.
+      // PowerShell does not read stdin, imports CimCmdlets by path instead of looking the
+      // cmdlet up across every module, and asks for the four properties only.
       expect(execFile.mock.calls[0][1]).toEqual(expect.arrayContaining(['-InputFormat', 'None']));
-      expect(execFile.mock.calls[0][1].at(-1)).toContain(
-        '-Property ProcessId,ParentProcessId,CreationDate,Name'
-      );
+      const script = execFile.mock.calls[0][1].at(-1);
+      expect(script).toMatch(/^Import-Module \(Join-Path \$PSHOME 'Modules\/CimCmdlets'\); /);
+      expect(script).toContain('-Property ProcessId,ParentProcessId,CreationDate,Name');
     }
   });
 
