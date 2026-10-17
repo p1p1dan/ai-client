@@ -137,6 +137,23 @@ export function isDshSummaryRow(message: {
 }
 
 /**
+ * Issue #17: every context summary row but the last one on the timeline. The
+ * timeline keeps each compaction's summary (it is what was said), but only the
+ * newest is what the model still sees; the earlier ones are drawn as superseded.
+ * Pages load newest first, so the newest summary is always among the rows given.
+ */
+export function supersededSummaryIds(
+  messages: readonly {
+    readonly id: string;
+    readonly role: string;
+    readonly blocks: readonly { readonly id: string }[];
+  }[]
+): ReadonlySet<string> {
+  const ids = messages.filter((message) => isDshSummaryRow(message)).map((message) => message.id);
+  return new Set(ids.slice(0, -1));
+}
+
+/**
  * dsh-rebase decision 178: the live id of an automatic compaction's row
  * (`dsh-compaction-<compactionId>`, `session.compaction`). The history names
  * it as `liveMessageId` on the same compaction's summary row, or on its note

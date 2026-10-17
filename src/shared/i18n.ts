@@ -3813,6 +3813,7 @@ Object.assign(zhTranslations, {
   'Load earlier messages': '加载更早的消息',
   'Copy reply': '复制回复',
   'Context summary': '上下文摘要',
+  'Context summary · superseded by a later compaction': '上下文摘要 · 已被后续的压缩取代',
   'Attach files': '添加附件',
   'Remove {{name}}': '移除 {{name}}',
   'Dismiss attachment notice': '关闭附件提示',

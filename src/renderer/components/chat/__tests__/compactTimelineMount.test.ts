@@ -278,3 +278,36 @@ describe('/compact after the turn it follows (decision 180, DA-6)', () => {
     expect(container.querySelectorAll('[data-turn-id]')).toHaveLength(1);
   });
 });
+
+// Issue #17: a second /compact left two 「上下文摘要」 on the timeline, both looking current.
+describe('an earlier compaction’s summary (issue #17)', () => {
+  const summary = (id: string, text: string): ChatMessage => ({
+    id,
+    sessionId: 's1',
+    role: 'system',
+    blocks: [{ id: `${id}:summary:0`, type: 'text', text }],
+  });
+
+  it('[17-TL-1] is folded as superseded; only the newest is drawn in full', async () => {
+    setTimeline([
+      summary('h:c1', '上下文摘要\n第一次的摘要'),
+      summary('h:c2', '上下文摘要\n第二次的摘要'),
+    ]);
+    await render();
+    const folded = container.querySelectorAll('[data-testid="superseded-summary"]');
+    expect(folded).toHaveLength(1);
+    expect(folded[0]?.textContent).toContain('上下文摘要 · 已被后续的压缩取代');
+    expect(folded[0]?.textContent).not.toContain('第一次的摘要');
+    expect(container.textContent).toContain('第二次的摘要');
+    // Opened on demand, the earlier summary is still there to read.
+    await act(async () => (folded[0]?.querySelector('button') as HTMLButtonElement).click());
+    expect(container.textContent).toContain('第一次的摘要');
+  });
+
+  it('[17-TL-2] a single summary is drawn in full', async () => {
+    setTimeline([summary('h:c1', '上下文摘要\n唯一的摘要')]);
+    await render();
+    expect(container.querySelector('[data-testid="superseded-summary"]')).toBeNull();
+    expect(container.textContent).toContain('唯一的摘要');
+  });
+});
