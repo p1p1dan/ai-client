@@ -135,3 +135,9 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 | C-11 | **`PSMODULEPATH` 加进 `CLAUDE_SDK_INHERITED_ENV`**（`src/shared/claudeSdkEngine.ts`，Main 与宿主共用这一份；单测加 1 条） | 第七次 CI 的证据。它只是模块搜索路径，不是凭据；**也会传给 CLI 的子进程**，即模型经 PowerShell 工具跑的命令从此也带着用户的模块路径（这是正常的 PowerShell 环境，缺了反而让 CLI 的 PowerShell 命令在同类机器上同样慢）。待审 |
 
 本机（加了 C-11）：根与宿主 tsc 0 错；shared 与宿主单测 137 条过；`stop` 场景 Stop 58 毫秒、两个 `sleep` 清掉；探针的"宿主环境"现在含 `PSModulePath`，ps-diag 六条都在 0.14～0.46 秒。用户 2026-10-17 指示："先把 CI 上 stop 检查从只报告恢复为拦截，和 b8d6a915 一起推送，再跑一轮 Build 验证"：`build.yml` 去掉 `PROBE_STOP_LEFTOVER_REPORT_ONLY`（C-9 撤销），`PROBE_PS_DIAG` 留着（计时进上传的 flow.log，只多几秒）。验证轮的结果见下。
+
+**验证轮（第八次 CI，run 39014148606，`65fe570d`，2026-10-17）：#52 解决。**
+
+- Windows 打包作业全绿，回归命令 7 组 130 条全过（flow 35 条，`stop` 的残留检查**在拦截模式下通过**），录制门禁一致。`windows-installer` 产物可供 S-6。Linux 全绿；macOS 不管。
+- flow.log 的证据：命令 305 毫秒起来；宿主后台取样 7 次，**每次 321～351 毫秒**（第五次起看到两个 `sleep`）；Stop 到 `session.stopped` 34 毫秒；中断后 `reaped 2 process(es)`，12 秒跟踪里第 2 秒起为 0。ps-diag 六条都在 115～363 毫秒，"宿主环境不慢"。
+- 结论：#52 的原因就是宿主环境缺 `PSModulePath`（C-11）；修法 A（C-7）让 Stop 不再被取样拖住（CI 上 34 毫秒，本机 60～370 毫秒）。两者都保留。
