@@ -134,4 +134,4 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 |---|---|---|
 | C-11 | **`PSMODULEPATH` 加进 `CLAUDE_SDK_INHERITED_ENV`**（`src/shared/claudeSdkEngine.ts`，Main 与宿主共用这一份；单测加 1 条） | 第七次 CI 的证据。它只是模块搜索路径，不是凭据；**也会传给 CLI 的子进程**，即模型经 PowerShell 工具跑的命令从此也带着用户的模块路径（这是正常的 PowerShell 环境，缺了反而让 CLI 的 PowerShell 命令在同类机器上同样慢）。待审 |
 
-本机（加了 C-11）：根与宿主 tsc 0 错；shared 与宿主单测 137 条过；`stop` 场景 Stop 58 毫秒、两个 `sleep` 清掉；探针的"宿主环境"现在含 `PSModulePath`，ps-diag 六条都在 0.14～0.46 秒。**CI 上未验证**（按约定不再跑第三轮）：`build.yml` 里 `PROBE_STOP_LEFTOVER_REPORT_ONLY` 与 `PROBE_PS_DIAG` 两行先留着，下一轮 CI 若 `flow.log` 里 `[report] ok` 且宿主有 `process snapshot: N rows in <1000 ms`，就删掉这两行恢复拦截。
+本机（加了 C-11）：根与宿主 tsc 0 错；shared 与宿主单测 137 条过；`stop` 场景 Stop 58 毫秒、两个 `sleep` 清掉；探针的"宿主环境"现在含 `PSModulePath`，ps-diag 六条都在 0.14～0.46 秒。用户 2026-10-17 指示："先把 CI 上 stop 检查从只报告恢复为拦截，和 b8d6a915 一起推送，再跑一轮 Build 验证"：`build.yml` 去掉 `PROBE_STOP_LEFTOVER_REPORT_ONLY`（C-9 撤销），`PROBE_PS_DIAG` 留着（计时进上传的 flow.log，只多几秒）。验证轮的结果见下。
