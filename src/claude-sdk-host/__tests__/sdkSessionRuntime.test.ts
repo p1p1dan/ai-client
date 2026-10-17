@@ -176,6 +176,17 @@ describe('the CLI launch (decision 6)', () => {
     await rt.dispose();
   });
 
+  it('keeps only the host-only tools off; ReportFindings is on (S-6 feedback 1)', async () => {
+    const { rt, q } = await started();
+    expect(q.options.disallowedTools).toEqual([
+      'RemoteTrigger',
+      'ListAgents',
+      'SendMessage',
+      'Workflow',
+    ]);
+    await rt.dispose();
+  });
+
   it('never sends env through applyFlagSettings', async () => {
     const { rt, q } = await started();
     await rt.startSend({

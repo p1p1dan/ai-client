@@ -157,18 +157,12 @@ export const PILAB_PROMPT_APPEND = [
 /**
  * Preset tools PiLab keeps off (README ruling 24, S-6 feedback 1): `RemoteTrigger` needs a
  * claude.ai account (PiLab authenticates with an API key); `ListAgents` and `SendMessage`
- * message other sessions with nothing in PiLab to show it (issue #22); `ReportFindings`
- * hands review findings to a pane PiLab does not have (reviews answer in text without it);
- * `Workflow` waits for the background-jobs window to carry it. The worktree and schedule
- * tools are on since S-6.
+ * message other sessions with nothing in PiLab to show it (issue #22); `Workflow` waits for
+ * the background-jobs window to carry it. The worktree and schedule tools are on since S-6,
+ * and so is `ReportFindings`: the window draws its report as the review card. The CLI marks
+ * it read-only with no permission check of its own, so it never reaches `canUseTool`.
  */
-export const HOST_ONLY_TOOLS = [
-  'RemoteTrigger',
-  'ListAgents',
-  'SendMessage',
-  'ReportFindings',
-  'Workflow',
-];
+export const HOST_ONLY_TOOLS = ['RemoteTrigger', 'ListAgents', 'SendMessage', 'Workflow'];
 
 /** User rows of the CLI transcript that are bookkeeping, not something typed. */
 const CLI_MARKER_TEXT =

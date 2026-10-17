@@ -17,6 +17,12 @@ import {
 } from './piToolNames';
 import { type PlanReviewWord, planReviewRowWord } from './planReviewRowWord';
 import { derivePermissionAutoNote, derivePermissionVerb } from './questionCardModel';
+import {
+  isReviewFindingsRun,
+  REPORT_FINDINGS_TOOL,
+  type ReviewFindings,
+  readReviewFindings,
+} from './reviewFindings';
 import { deriveToolDiff, type ToolDiff } from './toolDiff';
 import { dshShellOutputHead, isDshAbortedText, startAtLine } from './toolOutputHead';
 import { formatThoughtRow } from './turnTiming';
@@ -261,8 +267,13 @@ export function groupTimeline(message: ChatMessage): TimelineItem[] {
       case 'tool_call': {
         const run = runByBlockId.get(block.id);
         if (!run) break;
+        // A review report is a group of its own: the turn places it with the reply
+        // (`isReviewFindingsGroup`), never inside the work group around it.
+        const alone = isReviewFindingsRun(run);
+        if (alone) flush();
         if (currentGroupBlockIndex === null) currentGroupBlockIndex = blockIndex;
         currentGroup.push({ kind: 'run', run });
+        if (alone) flush();
         break;
       }
       default:
@@ -565,6 +576,11 @@ export interface ToolRowView {
   exitCode?: number;
   /** dsh-rebase P1-7c: `todo_write`'s list, for the `todos` body (the todo card's `TodoList`). */
   todos?: readonly DshTodoItem[];
+  /**
+   * Route B S-6: a `ReportFindings` call's report, once its input is whole and the call
+   * did not fail. `ToolRow` draws the review card for it instead of the row.
+   */
+  findings?: ReviewFindings;
   /** dsh-rebase P1-7c: a handle argument whose label the painting leaf looks up. */
   argRef?: ToolArgRef;
   /** Only a row with a body can expand. */
@@ -716,6 +732,10 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // write keeps its error body instead.
   const todos = run.toolName === DSH_TOOL_NAMES.todoWrite ? todoItemsOf(run.input) : undefined;
   const showTodos = Boolean(todos && todos.length > 0) && !failed;
+  const findings =
+    run.toolName === REPORT_FINDINGS_TOOL && !failed && !outcome
+      ? readReviewFindings(run.input)
+      : undefined;
 
   // A never-started call has no output of its own — only the runtime's English
   // note, which `outcome` already says in the reader's language; so has one
@@ -813,6 +833,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     runningTimeoutMs,
     expandable,
     ...(showTodos ? { todos } : {}),
+    ...(findings ? { findings } : {}),
     body: showTodos ? 'todos' : showOutputBody ? 'output' : undefined,
     output: showOutputBody ? (outputHead ? outputHead.text : recordedOutput) : undefined,
     ...(outputHead?.headCut ? { outputHeadOmitted: {} } : {}),
@@ -1433,6 +1454,13 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
     running: 'Leaving the worktree',
     refused: 'Leave the worktree',
   },
+  // The review card stands in for this row once the report is whole; the words remain
+  // for the placeholder while it streams and for a failed call.
+  [REPORT_FINDINGS_TOOL]: {
+    done: 'Reported review findings',
+    running: 'Reporting review findings',
+    refused: 'Report review findings',
+  },
   Read: { done: 'Read', running: 'Reading', refused: 'Read' },
   NotebookRead: { done: 'Read', running: 'Reading', refused: 'Read' },
   Grep: { done: 'Grepped', running: 'Grepping', refused: 'Grep' },
@@ -1845,7 +1873,9 @@ export type ToolIconKind =
   | 'job'
   | 'workflow'
   | 'mcp'
-  | 'deliver';
+  | 'deliver'
+  // Route B S-6: the review card's mark, worn by its placeholder row too.
+  | 'review';
 
 const TERMINAL_TOOL_NAMES = new Set<string>([
   'Bash',
@@ -1911,6 +1941,7 @@ export function toolIconKind(toolName: string): ToolIconKind {
   if (TERMINAL_TOOL_NAMES.has(toolName)) return 'terminal';
   if (EDIT_TOOL_NAMES.has(toolName)) return 'edit';
   if (PLAN_TOOL_NAMES.has(toolName)) return 'plan';
+  if (toolName === REPORT_FINDINGS_TOOL) return 'review';
   if (isDelegationTool(toolName)) return 'delegate';
   // Shard 04 §3: an MCP-bridged tool wears the plug its resource tools wear.
   if (toolName.startsWith(MCP_TOOL_PREFIX)) return 'mcp';
@@ -2436,6 +2467,17 @@ function formatToolArgDetail(
       raw = stringField(rec, 'name') ?? stringField(rec, 'path');
       if (raw) kind = 'ident';
       break;
+    // Nothing while the report streams: the placeholder row is the verb alone.
+    case REPORT_FINDINGS_TOOL: {
+      const report = readReviewFindings(run.input);
+      if (report) {
+        raw =
+          report.findings.length > 0
+            ? t('{{count}} found', { count: report.findings.length })
+            : t('No issues found');
+      }
+      break;
+    }
     case 'Task':
     case 'Agent':
     case DSH_TOOL_NAMES.subagent:

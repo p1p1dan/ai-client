@@ -1,6 +1,7 @@
 import { isDshCompactCommandRow } from '@shared/dshHistory/types';
 import { HISTORY_MESSAGE_ID_PREFIX } from '@shared/types/sessionHistory';
 import type { ChatMessage } from '@/stores/chatSessions';
+import { isReviewFindingsGroup } from './reviewFindings';
 import {
   groupTimeline,
   joinResolvedPermissions,
@@ -243,6 +244,8 @@ export function flattenTurnItems(turn: Turn): TurnItem[] {
  * merge stops there. That is deliberately the same list `turnItemPlacement`
  * treats as its own segment kind, and it is what makes the aggregate's promise
  * honest: N calls in one row are N calls the user watched happen back to back.
+ * A review report (`isReviewFindingsGroup`) never merges either way: it is
+ * placed with the reply, apart from the calls around it.
  *
  * ## Two fields have to survive
  *
@@ -265,7 +268,12 @@ export function mergeAdjacentToolGroups(items: readonly TurnItem[]): TurnItem[] 
   const merged: TurnItem[] = [];
   for (const item of items) {
     const previous = merged[merged.length - 1];
-    if (item.kind === 'toolGroup' && previous?.kind === 'toolGroup') {
+    if (
+      item.kind === 'toolGroup' &&
+      previous?.kind === 'toolGroup' &&
+      !isReviewFindingsGroup(item) &&
+      !isReviewFindingsGroup(previous)
+    ) {
       merged[merged.length - 1] = {
         ...previous,
         entries: [...previous.entries, ...item.entries],
@@ -327,13 +335,17 @@ export interface TurnSegment<T> {
  * arriving token changes an item's CONTENT, never its placement — the segment
  * boundaries cannot oscillate while a turn streams. A new item can only append
  * to the last segment or open one after it.
+ *
+ * Route B S-6: a review report's group (`isReviewFindingsGroup`) is placed with
+ * the answer, so the review card stays out of the folded work group. It moves
+ * once at most, into the process, when its call comes back failed.
  */
 export function segmentTurnBody<T extends { kind: TurnItemKind }>(
   items: readonly T[]
 ): TurnSegment<T>[] {
   const segments: TurnSegment<T>[] = [];
   for (const item of items) {
-    const kind = turnItemPlacement(item.kind);
+    const kind = isReviewFindingsGroup(item) ? 'answer' : turnItemPlacement(item.kind);
     const last = segments[segments.length - 1];
     if (last && last.kind === kind) last.items.push(item);
     else segments.push({ kind, items: [item] });

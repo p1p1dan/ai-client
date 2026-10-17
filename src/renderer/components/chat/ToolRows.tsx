@@ -1,5 +1,7 @@
 import {
   Braces,
+  ChevronDown,
+  ChevronRight,
   FileOutput,
   FileText,
   Globe,
@@ -9,6 +11,7 @@ import {
   ListTree,
   PencilLine,
   Plug,
+  ScanSearch,
   Search,
   SquareTerminal,
   Target,
@@ -25,7 +28,9 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Ident } from '@/components/ui/ident';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
@@ -44,6 +49,17 @@ import {
 } from './chatTimelineLayout';
 import { HitListPopover } from './HitListPopover';
 import { LiveToolOutput } from './LiveToolOutput';
+import {
+  FINDING_OUTCOME_LABEL,
+  FINDING_VERDICT_LABEL,
+  type FindingOutcome,
+  findingLabel,
+  findingOpensAtFirst,
+  findingTarget,
+  REVIEW_LEVEL_LABEL,
+  type ReviewFinding,
+  type ReviewFindings,
+} from './reviewFindings';
 import { deriveSubagentPanelRows } from './subagentActivityModel';
 import { TodoList } from './TodoCard';
 import {
@@ -51,6 +67,7 @@ import {
   type FileLinkTarget,
   isDelegationTool,
   runningElapsedMs,
+  shortPath,
   TOOL_RUN_OUTCOME_LABEL,
   type ToolArgRef,
   type ToolRowView,
@@ -176,6 +193,7 @@ const ROW_ICONS: Record<string, typeof Wrench> = {
   workflow: Workflow,
   mcp: Plug,
   deliver: FileOutput,
+  review: ScanSearch,
 };
 
 function ToolRowIcon({ kind }: { kind?: string }) {
@@ -186,6 +204,16 @@ function ToolRowIcon({ kind }: { kind?: string }) {
 /** One `.ct-row`: verb + arg, optionally expandable into an output/detail/thinking body. */
 export function ToolRow(props: ToolRowProps) {
   const { view } = props;
+  if (view.findings) {
+    return (
+      <ReviewFindingsCard
+        view={view}
+        report={view.findings}
+        onOpenFile={props.onOpenFile}
+        sessionId={props.sessionId}
+      />
+    );
+  }
   if (view.toolName && isDelegationTool(view.toolName) && view.toolCallId) {
     // dsh-rebase P1-7b: `data-tool-call-id` is how the subagents window's
     // 「定位」 finds this row (`locateToolRow`), which marks it for a moment.
@@ -542,6 +570,175 @@ function SubagentActivity({
       }
     : view;
   return <ToolRowContent view={merged} onOpenFile={onOpenFile} sessionId={sessionId} />;
+}
+
+const FINDING_OUTCOME_BADGE: Readonly<Record<FindingOutcome, 'success' | 'warning' | 'outline'>> = {
+  fixed: 'success',
+  skipped: 'warning',
+  no_change_needed: 'outline',
+};
+
+/**
+ * Route B S-6: the card a `ReportFindings` call is drawn as. The head says how many
+ * findings (or none) and how deep the review ran; each finding is a row — its label,
+ * where it points (opened in the editor), its category, verdict and outcome — that opens
+ * onto the whole summary and the failure scenario. Shares the card shell of the plan
+ * review card (`PlanReviewCard`).
+ */
+function ReviewFindingsCard({
+  view,
+  report,
+  onOpenFile,
+  sessionId,
+}: {
+  view: ToolRowView;
+  report: ReviewFindings;
+  onOpenFile?: (target: FileLinkTarget) => void;
+  sessionId?: string;
+}) {
+  const { t } = useI18n();
+  const total = report.findings.length;
+  return (
+    <section
+      data-testid="review-findings-card"
+      aria-label={t('Review findings')}
+      className="overflow-hidden rounded-md border border-border bg-card text-ui"
+    >
+      <div
+        className={cn(
+          'flex min-h-9 items-center gap-2 px-3 py-1.5 text-muted-foreground',
+          total > 0 && 'border-b border-border'
+        )}
+      >
+        <ScanSearch className="size-3.5 shrink-0" aria-hidden />
+        <span className="shrink-0 font-semibold">{t('Review findings')}</span>
+        <span className="min-w-0 truncate text-foreground tabular-nums">
+          {total > 0 ? t('{{count}} found', { count: total }) : t('No issues found')}
+        </span>
+        {report.level && (
+          <span className="shrink-0">
+            · {t('Review depth: {{level}}', { level: t(REVIEW_LEVEL_LABEL[report.level]) })}
+          </span>
+        )}
+      </div>
+      {total > 0 && (
+        <ul className="flex flex-col py-1">
+          {report.findings.map((finding, index) => (
+            <ReviewFindingRow
+              // A report is replaced whole, never edited in place.
+              // biome-ignore lint/suspicious/noArrayIndexKey: a finding's place in its report is its identity
+              key={index}
+              finding={finding}
+              rowKey={`${view.key}~finding-${index}`}
+              defaultOpen={findingOpensAtFirst(index, total)}
+              onOpenFile={onOpenFile}
+              sessionId={sessionId}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
+ * One finding. Its open state is remembered per session like a tool row's, so the card
+ * keeps it when the settled turn moves it out of the work group (a remount).
+ */
+function ReviewFindingRow({
+  finding,
+  rowKey,
+  defaultOpen,
+  onOpenFile,
+  sessionId,
+}: {
+  finding: ReviewFinding;
+  rowKey: string;
+  defaultOpen: boolean;
+  onOpenFile?: (target: FileLinkTarget) => void;
+  sessionId?: string;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(() =>
+    resolveToolRowOpen({ key: rowKey, defaultOpen }, readToolExpandMemory(sessionId))
+  );
+  const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
+  const markUserToggle = useUserDisclosureReport(open);
+  const target = findingTarget(finding);
+  const Chevron = open ? ChevronDown : ChevronRight;
+  return (
+    <li data-slot="review-finding">
+      <Collapsible
+        open={open}
+        onOpenChange={(next) => {
+          markUserToggle();
+          setOpen(next);
+          if (sessionId) setToolRowExpanded(sessionId, rowKey, next);
+        }}
+      >
+        {/* The label keeps half the row at least: on a narrow column the place and the tags
+            go to a line of their own rather than squeezing it to a few words. */}
+        <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-0.5">
+          <CollapsibleTrigger className="flex min-w-0 grow basis-1/2 items-center gap-1.5 text-left text-foreground">
+            <Chevron className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1 truncate">{findingLabel(finding)}</span>
+          </CollapsibleTrigger>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {target && (
+              <button
+                type="button"
+                title={target.line ? `${target.path}:${target.line}` : target.path}
+                className="cursor-pointer border-b border-transparent text-tool-arg hover:border-primary hover:text-primary"
+                onClick={() =>
+                  (onOpenFile ?? ((link: FileLinkTarget) => openFileTarget(link, 'tool-row')))(
+                    target
+                  )
+                }
+              >
+                <Ident>
+                  {shortPath(target.path)}
+                  {target.line ? `:${target.line}` : null}
+                </Ident>
+              </button>
+            )}
+            {finding.category && (
+              <Badge variant="outline" size="lg" className="font-normal">
+                {finding.category}
+              </Badge>
+            )}
+            {finding.verdict && (
+              <Badge variant="outline" size="lg" className="font-normal">
+                {t(FINDING_VERDICT_LABEL[finding.verdict])}
+              </Badge>
+            )}
+            {finding.outcome && (
+              <Badge
+                variant={FINDING_OUTCOME_BADGE[finding.outcome]}
+                size="lg"
+                className="font-normal"
+              >
+                {t(FINDING_OUTCOME_LABEL[finding.outcome])}
+              </Badge>
+            )}
+          </div>
+        </div>
+        <CollapsibleContent className={TOOL_ROW_PANEL_CLASS}>
+          <div className="flex select-text flex-col gap-1 pr-3 pb-2 pl-8">
+            <p className="whitespace-pre-wrap break-words text-foreground">{finding.summary}</p>
+            {finding.failureScenario && (
+              <p
+                data-slot="review-finding-scenario"
+                className="whitespace-pre-wrap break-words text-meta text-muted-foreground"
+              >
+                <span className="font-semibold">{t('Failure scenario')}</span> ·{' '}
+                {finding.failureScenario}
+              </p>
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </li>
+  );
 }
 
 /**

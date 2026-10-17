@@ -65,6 +65,10 @@
  * PROBE_PS_DIAG=1 times PowerShell on Windows in the host's environment and the full one
  * after the scenario (`diagnosePowerShell`).
  *
+ * Route B S-6 feedback 1: `findings`. One `ReportFindings` call per posture (Manual, Edit
+ * automatically, plan, Auto, Bypass): never a card, the input whole on `tool.updated` and
+ * in the history.
+ *
  * The key is a fake one unless PROBE_API_KEY is set in the shell; nothing here reads a
  * stored credential.
  */
@@ -85,6 +89,7 @@ import { createServer as createTcpServer, type Server as TcpServer } from 'node:
 import { tmpdir as osTmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { CLAUDE_SDK_INHERITED_ENV } from '../../shared/claudeSdkEngine.ts';
 import { WINDOWS_POWERSHELL_ARGS, WINDOWS_PROCESS_QUERY } from '../processTree.ts';
 
@@ -396,6 +401,35 @@ const SDK_REVIEW_CHOICES = [
   'run:bypass',
   'keep-planning',
 ];
+
+/** `findings`: a review's report, every field of the CLI's schema used once. */
+const REVIEW_REPORT = {
+  level: 'high',
+  findings: [
+    {
+      file: 'src/pager.ts',
+      line: 42,
+      summary: 'The last page is dropped when the total is an exact multiple of the page size.',
+      short_summary: 'Last page dropped on exact multiples',
+      failure_scenario: 'total=20, pageSize=10: pages() returns 1 instead of 2.',
+      category: 'correctness',
+      verdict: 'CONFIRMED',
+    },
+    {
+      file: 'src/cache.ts',
+      summary: 'The session cache survives a logout.',
+      failure_scenario: 'Log out, log in as another user: the first user’s data is served.',
+    },
+  ],
+};
+
+/** `findings`: the same review re-reported after fixes (`outcome` set on each). */
+const REVIEW_REREPORT = {
+  findings: REVIEW_REPORT.findings.map((finding, index) => ({
+    ...finding,
+    outcome: index === 0 ? 'fixed' : 'skipped',
+  })),
+};
 
 /**
  * S-2: one turn of scripted calls (`CC-RUN`). Each permission card is answered as
@@ -2179,6 +2213,80 @@ async function main(): Promise<void> {
           outputs.length === 4 && outputs.every((o) => o.startsWith('true'))
         );
         await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
+        break;
+      }
+      case 'findings': {
+        // S-6 feedback 1 (ruling 24): ReportFindings is on. It only hands a review's
+        // findings to the window, so no posture raises a card for it (the CLI marks it
+        // read-only and leaves it no permission check), and its input reaches PiLab whole
+        // (the review card draws from it), live and in the history alike.
+        const reports: Array<{
+          posture: ['plan' | 'agent', string];
+          input: Record<string, unknown>;
+        }> = [
+          { posture: ['agent', 'ask'], input: REVIEW_REPORT },
+          { posture: ['agent', 'accept-edits'], input: REVIEW_REREPORT },
+          { posture: ['plan', 'auto'], input: REVIEW_REPORT },
+          { posture: ['agent', 'auto'], input: REVIEW_REPORT },
+          { posture: ['agent', 'bypass'], input: { findings: [] } },
+        ];
+        for (const { posture, input } of reports) {
+          const label = posture.join('/');
+          await setPosture(...posture);
+          const { end, cards } = await runCalls([{ name: 'ReportFindings', input }], () => 'deny');
+          show(`findings ${label}`);
+          const started = events.find(
+            (e) => e.type === 'tool.started' && e.payload?.name === 'ReportFindings'
+          );
+          const id = started?.payload?.toolCallId;
+          const updated = events.find(
+            (e) => e.type === 'tool.updated' && e.payload?.toolCallId === id
+          );
+          const completed = events.find(
+            (e) => e.type === 'tool.completed' && e.payload?.toolCallId === id
+          );
+          const count = (input as { findings: unknown[] }).findings.length;
+          check(
+            'findings',
+            `${label}: ends in session.completed`,
+            end.type === 'session.completed'
+          );
+          check(
+            'findings',
+            `${label}: no card`,
+            cards.length === 0 && countOf('permission.requested') === 0
+          );
+          check(
+            'findings',
+            `${label}: the call starts as a streaming row and its input arrives whole`,
+            Boolean(
+              (started?.payload?.input as { __streaming?: unknown } | undefined)?.__streaming
+            ) && isDeepStrictEqual(updated?.payload?.input, input)
+          );
+          check(
+            'findings',
+            `${label}: it completes ok (${count} reported)`,
+            completed?.payload?.ok === true &&
+              String(completed?.payload?.output).startsWith(
+                count === 0 ? 'No findings reported.' : `${count} findings reported.`
+              )
+          );
+        }
+        await setPosture('agent', 'ask');
+        const h = await request<{
+          page: {
+            messages: Array<{ blocks: Array<{ type: string; name?: string; input?: unknown }> }>;
+          };
+        }>('worker.history', { logicalSessionId, offset: 0, limit: 50 });
+        const replayed = h.page.messages
+          .flatMap((m) => m.blocks)
+          .filter((b) => b.type === 'tool_call' && b.name === 'ReportFindings');
+        check(
+          'findings',
+          'the history replays every report as a tool_call with its input whole',
+          replayed.length === reports.length &&
+            replayed.every((b, i) => isDeepStrictEqual(b.input, reports[i]?.input))
+        );
         break;
       }
       case 'enc': {
