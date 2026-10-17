@@ -14,7 +14,7 @@
 - **推送**：仓库是公开的。加密机的原始现场报告不入库，只放脱敏摘要；2026-09-28 已改写历史删掉曾经入库的那份，见 `docs/plantree/plans/dsh-rebase/evidence/history-rewrite-2026-09-28.md`。
 - **2026-09-28 用户裁决**（决策 090）：默认跟随 DSH 的做法，不再为与 1.0.x 一致而移植；只做 Linux 与 Windows，macOS 暂不做。下一步从 `implementation-status.md` 的 Next Target 接着做。
 - **本地验证**：两套 tsc（根 `pnpm typecheck`、宿主 `pnpm typecheck:dsh-host`，后者要先在 `src/dsh-host` 里 `npm ci`）；`src/dsh-host/tools/bridge-smoke.ts` 与 `bridge-record.ts --check`；真宿主集成测试 `AICLIENT_DSH_INTEGRATION=1`；模型只用本地假网关 `src/dsh-host/tools/fake-gateway.mjs`。
-- **ARD**：`docs/plans/2026-09-08-runtime-evolution-ard.md`（DSH 相关的偏离在 P1-14 回写，提纲已在 ARD 末尾）。
+- **ARD**：`docs/plans/2026-09-08-runtime-evolution-ard.md`。2026-10-18 已回写：每条决策末尾有「现状」注记，现行架构见 §2.3，DSH 偏离见 §10，路线 B 见 §11。
 
 ## 工程规范（Agent 项目）
 

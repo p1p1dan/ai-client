@@ -9,6 +9,13 @@
 > 核心诉求「内部产品，除协议适配层外其余尽可能可控、方便修改和插入」。
 > 前序调研：[PI-Desktop 调研档](./2026-09-08-pi-desktop-study.md) ·
 > [DSH 调研档](./2026-08-18-deepseek-harness-study.md)
+>
+> **2026-10-18 回写**：§1～§7 写的是「自有 runtime」路线，它在 2026-09 落地、09-13 切为默认。
+> 此后 agent 引擎整体换成 DeepSeek Harness（DSH）宿主，2026-10-14 随 `v1.1.0` 合入 main，
+> 自有 runtime 已删除（[决策 147](../plantree/plans/dsh-rebase/decisions/147-p1-12-retire-runtime.md)）。之后又在路线 B 上给 Anthropic 协议的模型
+> 加了官方 Claude Agent SDK 引擎，分支 `claude/claude-sdk-engine-mvp-162021`，还没合入 main。
+> 原文保留作历史，不再改写；每条决策末尾的「现状」注记说明它今天是否还成立，
+> 现行架构见 §2.3，偏离的完整记录见 §10（DSH）与 §11（路线 B）。
 
 ## 1. 一句话定义
 
@@ -50,6 +57,28 @@ Renderer → Preload → Main WorkerManager → WorkerSlot
 **关键约束**：renderer 和 Main 层基本不动，新 runtime 只替换 WorkerSlot 内部的引擎。
 对外暴露的 RuntimeEvent 接口保持兼容，UI 无感切换。
 
+### 2.3 现行（2026-10-18 回写）
+
+```text
+Renderer → Preload → Main
+  ├─ WorkerManager（虚拟槽）+ DshHostSupervisor
+  │    → 一个应用一个 DSH 宿主进程（随包 node，src/dsh-host/host.ts），所有 DSH 会话共用
+  │      ├─ DSH 组合（Cordis 插件图：agent loop、工具、压缩、子代理、goal、todo、后台 jobs）
+  │      └─ 我方宿主行：bridge（RPC + 事件翻译）、凭据（每次请求向 Main 拉 key）、
+  │         权限（tools/pre-execute 审批，纯库 src/shared/permissions）、防空转、加密读回退
+  └─ 路线 B（未合入 main）：Anthropic 协议模型的会话
+       → 每个会话一个 SDK 宿主进程（随包 node，src/claude-sdk-host/）
+         → 经 @anthropic-ai/claude-agent-sdk 拉起随包的官方 claude.exe
+  → 两个引擎都翻译成 RuntimeEvent → Main 路由 → renderer reduce
+```
+
+- **引擎怎么选**：新会话按模型路由的协议定，Anthropic 协议走 SDK 引擎，其余走 DSH；
+  SDK 宿主起不来时退回 DSH；重开会话按会话桩固定当初的引擎（路线 B 裁决 9）。
+- **DSH 宿主的生命周期**：随应用启动预热；没有会话 10 分钟后停下，下一个会话再起
+  （[决策 025](../plantree/plans/dsh-rebase/decisions/025-host-lifecycle.md)）；DSH 对话里开始打字时再预热一次（路线 B S-6 反馈 11c）。
+- **SDK 宿主**：每个活动会话常驻约 250 MB（宿主 node 约 80 MB，`claude.exe` 约 170 MB），
+  接近原 D4 的「一槽一隔离进程」。
+
 ## 3. 技术决策
 
 ### D1 · 插件内核：采用 Cordis
@@ -69,11 +98,15 @@ MIT 协议，69KB，两个依赖。DSH 已验证可承载完整 agent runtime。
 > 这不是缺陷，是当时选型时列出的能力清单里，只有一部分被实际用上；未用上的三项也没有另开
 > 决策记录裁决「保留/推迟/放弃」，本注记只如实记录现状，裁决留待需要用到时再做。
 
+> **现状（2026-10-18）**：仍是 Cordis，但用的是 DSH 的插件组合，不是我们自建的插件图；我方逻辑以宿主行的形式挂进去。见 §10。
+
 ### D2 · 协议层：只保留 pi-ai
 
 `@earendil-works/pi-ai` 负责 provider 差异抹平、模型目录发现、流式响应统一、
 工具定义格式翻译、上下文溢出判定。
 **移除 `pi-coding-agent` 整包依赖。**
+
+> **现状（2026-10-18）**：应用不再直接依赖 pi-ai，协议适配由 DSH 负责（`dsh-llm-pi-ai`），只保留 DSH 支持的三种协议（[决策 036](../plantree/plans/dsh-rebase/decisions/036-filter-unsupported-protocols.md)、[决策 148](../plantree/plans/dsh-rebase/decisions/148-p1-5d-protocol-narrowing-choices.md)）。路线 B 的 Anthropic 协议会话由官方 CLI 自己发请求。
 
 ### D3 · agent loop 原语：保留 pi-agent-core（选项 A）
 
@@ -100,6 +133,8 @@ pi-coding-agent→ 完整 coding agent CLI（工具 + 权限 + prompt + 会话 +
 
 依赖链最终态：`pi-agent-core`（循环原语 + 类型）+ `pi-ai`（协议适配），其余全部自建。
 
+> **现状（2026-10-18）**：`pi-agent-core` 已不用，agent loop 是 DSH 自带的；路线 B 的 loop 在官方 CLI 里。
+
 ### D4 · 进程拓扑：一槽一隔离进程不变，载体按平台分两种
 
 保持「一个 WorkerSlot = 一个隔离进程 = 一个 AgentSession」，WorkerManager/WorkerSlot 的
@@ -107,6 +142,8 @@ ownership、generation、崩溃隔离逻辑不动。**但载体不再固定是 `
 Windows 安装版使用随包 Node + 原生 IPC，其余平台与开发模式使用 utilityProcess + MessagePort，
 由 `WorkerTransport` 适配同一套 RPC 协议。新 runtime 在 worker 进程内初始化 Cordis 插件图，
 对载体无感——具体约束见 D11。
+
+> **现状（2026-10-18）**：DSH 改为一个应用一个共享宿主，所有会话共用，WorkerSlot 成了虚拟槽（[决策 019](../plantree/plans/dsh-rebase/decisions/019-one-host-per-app-virtual-slots.md)），偏离「一槽一隔离进程」；宿主级故障与预算见 [决策 020](../plantree/plans/dsh-rebase/decisions/020-host-fault-handling-and-budgets.md)、[决策 155](../plantree/plans/dsh-rebase/decisions/155-ladder-b-dispose-others-first.md)。路线 B 的 SDK 引擎是每个会话一个宿主进程。载体见 D11 的现状。
 
 ### D5 · 事件接口：保持 RuntimeEvent 兼容
 
@@ -133,16 +170,22 @@ runtime 侧 `guiEventContract.test.ts` 用真实 RPC + 真实插件图录它，r
 两侧跨不过各自的 typecheck 边界（`src/runtime` 没有 `@shared` 路径映射也没有 DOM lib），
 所以用 JSON 文件而不是共享模块作为交界。
 
+> **现状（2026-10-18）**：仍成立。DSH 的 bridge 与 SDK 宿主都把各自的事件翻译成 RuntimeEvent；回归防线换成录制样本：DSH 的 `src/shared/__tests__/fixtures/dsh/`（`bridge-record.ts --check`，CI 门禁），SDK 的录制回归见路线 B S-5。
+
 ### D6 · 会话存储：自有 JSONL + 现有 session-index
 
 沿用 JSONL 格式（与 pi/PI-Desktop 兼容），但由自有 `plugin-session` 读写。
 `SessionIndexService` 保持在 Main 层不动。
 旧 pi-coding-agent 产生的会话文件通过兼容读取保持可访问。
 
+> **现状（2026-10-18）**：DSH 会话存成 DSH 的会话日志，另有 PiLab 的会话桩；旧 pi 会话第一次继续时复制迁移，原文件不动（[决策 050](../plantree/plans/dsh-rebase/decisions/050-migrate-on-first-continue.md)）。SDK 会话存成 CLI 自己的会话记录。`SessionIndexService` 仍在 Main。
+
 ### D7 · 凭据：复用现有 ~/.pilab/<profile>/
 
 凭据体系不动。`plugin-model-adapter` 从现有 credential vault 读取 API key，
 通过 pi-ai 的 `ModelAuth` 接口注入。
+
+> **现状（2026-10-18）**：目录不变；key 不进宿主环境，宿主每次请求时向 Main 拉取（[决策 034](../plantree/plans/dsh-rebase/decisions/034-per-request-credential-pull.md)），管理员 key 存进保险库（[决策 152](../plantree/plans/dsh-rebase/decisions/152-p1-5e-managed-key-vault-choices.md)）。路线 B 的 key 也不进 CLI 与子进程，由 SDK 宿主里的本机鉴权代理转交（路线 B 裁决 12）。
 
 ### D8 · 后端开关：仅 dev 环境变量
 
@@ -160,6 +203,8 @@ runtime 侧 `guiEventContract.test.ts` 用真实 RPC + 真实插件图录它，r
 所以本条的「保留一个版本周期」没有走完：回退窗口由用户主动放弃，回退方式改为
 **装回上一个安装包**（[回退说明](../pi-only-rollout-rollback.md)）。这一步的代价是明写的：
 出问题时不能靠一个环境变量切回去。用户在知道这一点的前提下选了立即退役。
+
+> **现状（2026-10-18）**：环境变量开关已随自有 runtime 一起删除。路线 B 另有一个设置开关「Agent SDK 引擎」，默认开，收在开发人员模式里（路线 B 裁决 26）；关掉后 Anthropic 协议模型的新会话走 DSH。
 
 ### D9 · 缓存命中率：沿用现有公式，用固定脚本会话采基线
 
@@ -180,6 +225,8 @@ runtime 侧 `guiEventContract.test.ts` 用真实 RPC + 真实插件图录它，r
 rate in chat transcript header」），`agent-runtime` 内没有任何缓存优化策略，ADR 也无相关条目。
 所以「请求前缀稳定性的离线度量」没有可搬运的参考实现，属于我们自建，列为 P2 的**可选加强项**
 而非门禁；门禁仍是上面这个 provider 上报的在线比值。
+
+> **现状（2026-10-18）**：公式改了：分母从 `input + cacheRead` 改成整个提示词 `input + cacheRead + cacheWrite`，重建缓存的那一步不再显示 100%（issue #9，[决策 173](../plantree/plans/dsh-rebase/decisions/173-prompt-cache-upstream-split.md)，`src/shared/piUsage.ts` 的 `deriveCacheHitRate`）。
 
 ### D10 · Subagent 拓扑与生命周期：同进程后台任务，完整复刻后优化
 
@@ -211,6 +258,8 @@ rate in chat transcript header」），`agent-runtime` 内没有任何缓存优�
 
 **资源约束**：10 是对标行为上限，非在低资源开发主机同时跑 10 个重任务的授权；用 fake Agent/闸门做并发验收。
 宿主不可接单时明确资源错误。资源自适应调度的进一步优化在完整基线后另案记录。
+
+> **现状（2026-10-18）**：不再复刻 PI-Desktop 的子代理，只用 DSH 自带的子代理，自定义子代理与委派工具取消（[决策 090](../plantree/plans/dsh-rebase/decisions/090-user-rulings-2026-09-28.md)）。路线 B 用 CLI 自带的子代理与后台任务。D17 同此。
 
 ### D11 · 执行载体：按进程身份区分，不按实现语言推断
 
@@ -254,6 +303,8 @@ Main 仍是 Electron，读用户工作区文件拿到的就是密文。已按 D1
 不在本条论证的随包白名单载体内，且读明文的是它 fork 出的叶子进程。论证、选项与现场判定探针见
 [D1 决策论证 · native worker 的 bash 载体](2026-09-09-bash-carrier-decision.md)。未拍板前不写成已解决。
 
+> **现状（2026-10-18）**：原则仍成立，载体统一成随包 node，所有平台都是（[决策 012](../plantree/plans/dsh-rebase/decisions/012-bundled-node-carrier-on-all-platforms.md)）。加密机上读到密文时经 PowerShell 5.1 回读（[决策 091](../plantree/plans/dsh-rebase/decisions/091-p1-13c-windows-read-fallback.md)），部分扩展名可编辑（[决策 135](../plantree/plans/dsh-rebase/decisions/135-user-ruling-encrypted-edit.md)）。路线 B 的 `claude.exe` 由随包 node 拉起，继承它的放行；加密策略不放行的 11 类文件读不出内容，作为已知限制。
+
 ### D12 · 协议依赖版本：pin 新版，不为对比回退
 
 `pi-ai` / `pi-agent-core` 保持 `0.84.4`。P2-0 的旧后端基线实际由 `pi-coding-agent@0.84.3`
@@ -262,6 +313,8 @@ Main 仍是 Electron，读用户工作区文件拿到的就是密文。已按 D1
 **决策（2026-09-08 用户拍板）**：「版本影响不大，用新的」——不把新 runtime 回退到 0.84.3
 去凑对照，也不为此补采一轮基线。P2-6 做新旧对比时，把这个 patch 差记为**已知偏差**写进结论，
 不声称两边协议层完全同构。若对比结果出现无法解释的大幅偏离，再回头把版本作为变量单独排查。
+
+> **现状（2026-10-18）**：pi-ai 不再直接依赖。现在钉的是 DSH `0.1.7-rc.2`（[决策 003](../plantree/plans/dsh-rebase/decisions/003-p0-closeout-enter-p1.md)），路线 B 钉 Agent SDK `0.3.300` 与随包 CLI `2.1.300`，两者由 lockfile 同步升级。
 
 ### D13 · Main 侧读用户文件一律走 TSD-aware 读
 
@@ -290,6 +343,8 @@ Main 进程及其派生的子进程不在白名单内，读用户文件得到的
 PATH 里的 `node` 退为兜底，并留 `AICLIENT_TSD_NODE_PATH` 覆盖。
 
 **归属**：P3-5 与 P4-5 验收此项；改动落在 Main 层，不进 `src/runtime/`。
+
+> **现状（2026-10-18）**：仍成立，Main 侧读工作区文件仍走 `src/main/utils/tsdSafeRead.ts`。
 
 ### D14 · 权限与模式分成两根轴：模式管工具集，档位管打扰程度
 
@@ -331,6 +386,8 @@ PATH 里的 `node` 退为兜底，并留 `AICLIENT_TSD_NODE_PATH` 覆盖。
 **归属**：P1-5 按本条实现，不再实现四档矩阵；P1-6 的审批 UI 与 renderer 档位控件按三档改；
 模式的工具集裁剪在 P1-1 的注册表上做；提示词侧新增 `mode` 段与 `permission-gear` 段（P2-1 已留槽位）。
 
+> **现状（2026-10-18）**：两根轴保留。档位加了第四档「完全放行」（`bypass`），菜单是计划模式加四档的五个预设（[决策 166](../plantree/plans/dsh-rebase/decisions/166-permission-menu-single-column-and-goal-entry.md)）。权限逻辑抽成纯库 `src/shared/permissions`，在 DSH 宿主的 `tools/pre-execute` 审批（[决策 041](../plantree/plans/dsh-rebase/decisions/041-permissions-shared-pure-library.md)）。「全自动」不再是全部放行：删除等危险命令在完全放行以外的各档都每次询问，写明了工作区外路径的调用也问（[决策 191](../plantree/plans/dsh-rebase/decisions/191-dsh-full-auto-asks-less.md)）。路线 B 的会话用 CLI 自己的五档（路线 B 裁决 6、14）。
+
 ### D15 · 模型目录的 baseUrl：客户端按 wire 协议推导，允许每个 model 显式覆盖
 
 **触发**（2026-09-09 用户拍板）：P0 在线冒烟发现 cch 网关**按模型族分端点**——
@@ -349,6 +406,8 @@ Anthropic 系不带 `/v1`、OpenAI 系必须带 `/v1`。配错的表现是 503�
 
 **归属**：P5-5 实现并加单测；P0 在线冒烟证据里的两条端点事实是本条的输入。
 
+> **现状（2026-10-18）**：仍成立，推导逻辑在 `src/shared/modelBaseUrl.ts`。
+
 ### D16 · Windows / 加密机现场验收：攒到 P4-6 一次上机，不分批
 
 **触发**（2026-09-09 用户拍板）：P1-0 的 runner + taskkill 命令树清理、P1-3 的 bash 跨平台、
@@ -363,6 +422,8 @@ Linux 与 CI 的绿色不得代签（D11 第 6 条）。**风险是明知的**�
 而不是「跑通一个会话就算过」，并且保留 P1-8 已有的六项工具探针作为最小定位单元。
 
 测试包用手动 `workflow_dispatch` 出，不推 tag。
+
+> **现状（2026-10-18）**：「攒到一次上机」改成按测试包分批上机：DSH 线是 P1-13 加密机上机与 P1-14 的 Windows 测试版，路线 B 是 S-6。测试包仍用手动 `workflow_dispatch` 出。
 
 ### D17 · Subagent 整体复刻与分阶段验收（2026-09-09）
 
@@ -389,9 +450,13 @@ UI 适配现有组件体系。**用户补充用途（2026-09-09）**：仅在组
 每个矩阵项须有行为要求、适配说明和测试证据；缺管理 UI、BrowserPreview、历史恢复或取消路径时不能标 P5-2 Done。
 P5-2 对依赖能力做必要适配，不借此移植 PI-Desktop 整个插件市场、CDP、goal 模式或独立 A2A 系统。
 
+> **现状（2026-10-18）**：被取代，见 D10 的现状。
+
 ---
 
 ## 4. 模块分类：搬运适配 vs 自建
+
+> **现状（2026-10-18）**：本节的自建清单随自有 runtime 一起作废，现行的模块划分见 §2.3 与 §10。
 
 ### 4.1 直接依赖（零自建）
 
@@ -464,6 +529,10 @@ PI-Desktop 的 agent-runtime（TS 部分）约 9715 行 + Rust host-core 34019 �
 
 P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 
+**实际执行（2026-10-18 回写）**：P0～P6 走完后又改道 DSH（[DSH 二开 roadmap](../plantree/plans/dsh-rebase/roadmap.md)
+P0、P1-0～P1-16），在独立分支上整体替换，2026-10-14 随 1.1.0 合入 main；没有双引擎并存期
+（[决策 004](../plantree/plans/dsh-rebase/decisions/004-branch-isolated-dsh-only.md)）。路线 B 的 S-0～S-6 见 [路线 B 立项](../plantree/plans/claude-sdk-engine/README.md) §4。
+
 ### 5.3 风险与缓解
 
 | 风险 | 缓解 |
@@ -483,6 +552,13 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 | 改变 WorkerSlot 拓扑 | 一槽一隔离进程一 AgentSession 已稳定；D11 改的是载体，不是拓扑 |
 | 改变凭据体系 | `~/.pilab/<profile>/` 已稳定，与 PI-Desktop 的 `~/.pi-desktop/` 同构 |
 | 改变 renderer/UI | RuntimeEvent 接口兼容，UI 无感切换 |
+
+**现状（2026-10-18）**：
+- **Rust 原生模块**：仍不引入。路线 B 随包带的 `claude.exe` 是官方的二进制，不是我们写的原生模块；它由随包 node 拉起，加密机上已复核可用（路线 B S-6）。
+- **第三方插件市场**：DSH 线只放白名单里的插件，构建期审计，用户机上不跑 pnpm（[决策 058](../plantree/plans/dsh-rebase/decisions/058-plugins-preinstalled-no-pnpm.md)、[决策 150](../plantree/plans/dsh-rebase/decisions/150-e8-plugin-credential-isolation.md)、[决策 153](../plantree/plans/dsh-rebase/decisions/153-e8-a-plugin-review-guard-choices.md)）。路线 B 偏离：仓库声明的插件市场与插件照 CLI 官方行为拉取、加载（路线 B 裁决 18）。
+- **改变 WorkerSlot 拓扑**：已改，DSH 一个应用一个宿主（见 D4 的现状）。
+- **改变凭据体系**：目录未变，取 key 的方式变了（见 D7 的现状）。
+- **改变 renderer/UI**：时间线、权限卡、侧栏等改动很多，接口仍是 RuntimeEvent。
 
 ## 7. 成功标准
 
@@ -512,6 +588,17 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 - **下午用户推翻该选择，要求恢复 GUI/TUI 会话互通**，范围冲突随之消解——第 6 条维持原样，不再是待决项。可行性已实测通过（双向读写四轮交替），需补五处格式容忍；见[验证记录](../plantree/plans/runtime-evolution/evidence/gui-tui-session-interop/README.md)与[实施计划](../plantree/plans/runtime-evolution/topics/gui-tui-session-interop.md)。互通成为 P6-1 的前置条件：默认切到 native 之前必须先通，否则切换等于取消 TUI 能力。
 
 第 6 条的 TUI 条款原文是「Edit/Write 后 TUI 与编辑器看到的内容一致」，说的是加密机上同一文件的内容一致性；它与会话格式的关系是间接的——native v4 会话进不了 TUI，这个验收动作就无法执行。互通恢复后该动作重新可做。
+
+**现状（2026-10-18 回写，按 DSH 线）**：
+
+| # | 状态 |
+|---|---|
+| 1 | 达成：DSH 宿主上的多轮对话含工具、审批、压缩，1.1.0 已发布 |
+| 2 | 口径变了，公式见 D9 的现状；DSH 上的真实网关缓存实测见[供应商 A 缓存实测](../plantree/plans/dsh-rebase/evidence/supplier-a-cache-real-gateway-2026-10-11.md)（2026-10-11），没有再和旧后端做对照 |
+| 3 | 字面也达成：`package.json` 里已没有 pi 系包；内嵌 pi 终端随 P1-11 移除（[决策 127](../plantree/plans/dsh-rebase/decisions/127-p1-11-remove-pi-tui-choices.md)），右列改为普通 shell 终端 |
+| 4 | 1.1.0 发版前用户在测试包上实测过；P1-14 列的界面复点验与 Windows 实测清单还没做完 |
+| 5 | 达成：旧 pi 会话第一次继续时迁移（见 D6 的现状） |
+| 6 | 部分：加密机上 DSH 与路线 B 都跑通过读写回合；P1-13 第二轮上机（界面、真实模型、插件子进程、迁移）还没做。TUI 已移除，TUI 条款不再适用 |
 
 ## 8. 加密机实测记录
 
@@ -547,21 +634,75 @@ PI-Desktop 的 Rust host-core 代码仅作 TS 重写参考，不直接使用。
 - DSH `packages/core/agent-loop`：Cordis 插件式 agent loop（TS，未本地持有，从调研档引述）。
 - 本项目 `src/agent-host/`：现有 pi-coding-agent 集成层（TS，8656 行）。
 - Cordis：`cordis@4.0.0-rc.9`，MIT，69KB，[GitHub](https://github.com/cordiverse/cordis)。
+- 现行（2026-10-18）：DSH `@deepseek-ai/*@0.1.7-rc.2`（`src/dsh-host/package.json`）；路线 B 的 `@anthropic-ai/claude-agent-sdk@0.3.300` 与随包 CLI `2.1.300`（`src/claude-sdk-host/package.json`）。
 
-## 10. DSH 偏离（提纲，P1-14 完整回写）
+## 10. DSH 偏离（2026-10-18 回写）
 
-> 2026-10-07 补的提纲，不是正式回写。分支 `feat/dsh-p0-probe` 已把 agent 引擎整体换成 DeepSeek Harness（DSH）宿主，与本文 §2～§7 的多处决策不再一致；完整回写是 [DSH 二开 roadmap](../plantree/plans/dsh-rebase/roadmap.md) P1-14 的一项。在回写完成前，分支上的事实以 [DSH 二开计划](../plantree/plans/dsh-rebase/README.md)的决策为准；总原则是「默认跟随 DSH 的做法」（[决策 090](../plantree/plans/dsh-rebase/decisions/090-user-rulings-2026-09-28.md)）。
+> 2026-10-07 先补了提纲，本节是 P1-14 要求的完整回写。agent 引擎在分支 `feat/dsh-p0-probe` 上整体换成 DeepSeek Harness（DSH）宿主，2026-10-14 快进合入 main 并发布 1.1.0。细节以 [DSH 二开计划](../plantree/plans/dsh-rebase/README.md)的决策为准；总原则是「默认跟随 DSH 的做法」（[决策 090](../plantree/plans/dsh-rebase/decisions/090-user-rulings-2026-09-28.md)）。各条原决策下的「现状」注记是本节的摘要。
 
-- **引擎换成 DSH 宿主**（D3、D4、D10、D17）：B 路线，不做双引擎，合入 main 即切换（dsh-rebase 决策 001、004）。DSH 钉 `0.1.7-rc.2`（决策 003）。一个应用只起一个共享宿主，所有会话共用（决策 002、019），偏离 D4「一槽一隔离进程」；宿主级故障、预算与 Stop 阶梯见决策 020、021、155。
-- **自有 runtime 已删**（P1-12，[决策 147](../plantree/plans/dsh-rebase/decisions/147-p1-12-retire-runtime.md)）：`src/runtime`、native worker、`src/agent-host` 都已删除；pi 会话的解码链留在 `src/shared/legacyPiSession`，供迁移与只读回放（决策 030）。
-- **插件内核**（D1）：仍是 Cordis，但用的是 DSH 的组合；我方逻辑改为宿主行（bridge、凭据、权限、防空转、加密读）。第三方插件走白名单与构建期审计，用户机上不跑 pnpm（决策 058～060、082）；插件审查有必拒三条与静态守卫（决策 150、153）。
-- **协议与模型目录**（D2、D12、D15）：只保留 DSH 支持的三种协议（决策 036、148）；Main 生成不含 key 的模型计划，经 `configure` 下发给宿主（决策 033、035、077、085）。
-- **事件接口**（D5）：渲染层仍吃 RuntimeEvent，由 bridge 从 DSH 事件翻译；历史按消息投影（决策 026～032、106）。
-- **会话存储**（D6）：改为 DSH 的会话日志与 profile；旧 pi 会话第一次继续时复制迁移，原文件不动；CC / Codex 导入直接产出 DSH 格式（决策 050～056、121～124）。
-- **凭据**（D7）：key 不进宿主环境，宿主每次请求时向 Main 拉取（决策 034）；管理员 key 存进保险库（决策 152）；同进程插件与宿主凭据同权，靠审查兜底（决策 150）。
-- **后端开关**（D8）：取消，没有双引擎（决策 004）。
-- **子代理**（D10、D17）：只用 DSH 自带的子代理，自定义子代理与委派工具取消（决策 090）。
-- **执行载体与加密机**（D11、D13、D16）：宿主跑在随包 node 上（决策 012）；加密机上读到密文时经 PowerShell 5.1 回读，6 类扩展名可编辑（决策 091、135、136）；现场验收改为 P1-13 加密机上机与 P1-14 Windows 测试版。
-- **权限**（D14）：权限逻辑抽成纯库 `src/shared/permissions`，宿主行在 `tools/pre-execute` 审批（决策 041、042、078）；DSH 沙箱默认关（决策 044、045）。
-- **新增的宿主能力**：防空转与每个 agent 500 轮上限（决策 065～067）；一次性补全经宿主 `ctx.llm.stream`（决策 039、125）；goal 原样用 DSH 的四件套（决策 001 第 6 条），todo、后台 jobs 也用 DSH 自带的插件（P1-7a、P1-7b）。
-- **未定**：宿主出站代理（[决策 157](../plantree/plans/dsh-rebase/decisions/157-outbound-proxy.md)，待用户拍板，现状是模型请求直连）。
+### 10.1 为什么换
+
+自有 runtime 落地后，要自己维护的面（loop、工具、压缩、子代理、会话格式）太大；DSH 已经把这些做成 Cordis 插件组合，我们只需要在宿主里接上自己的几行。B 路线是「整体替换、不做双引擎」，在独立分支上做完再合入（[决策 001](../plantree/plans/dsh-rebase/decisions/001-route-b-and-scope.md)、[决策 004](../plantree/plans/dsh-rebase/decisions/004-branch-isolated-dsh-only.md)）。
+
+### 10.2 逐条对照
+
+| 原决策 | 现状 | 依据 |
+|---|---|---|
+| D1 插件内核 | 仍是 Cordis，用 DSH 的组合；我方逻辑是宿主行：bridge、凭据、权限、防空转、加密读 | [决策 001](../plantree/plans/dsh-rebase/decisions/001-route-b-and-scope.md)、[决策 065](../plantree/plans/dsh-rebase/decisions/065-loop-guard-host-plugin.md) |
+| D2 协议层 | 协议适配归 DSH；只保留三种协议；Main 生成不含 key 的模型计划，经 `configure` 下发 | [决策 033](../plantree/plans/dsh-rebase/decisions/033-model-plan-via-configure-overlay.md)、[决策 036](../plantree/plans/dsh-rebase/decisions/036-filter-unsupported-protocols.md)、[决策 077](../plantree/plans/dsh-rebase/decisions/077-model-plan-implementation-choices.md)、[决策 148](../plantree/plans/dsh-rebase/decisions/148-p1-5d-protocol-narrowing-choices.md) |
+| D3 loop 原语 | DSH 自带 agent loop，`pi-agent-core` 不用 | [决策 001](../plantree/plans/dsh-rebase/decisions/001-route-b-and-scope.md) |
+| D4 进程拓扑 | 一个应用一个共享宿主，WorkerSlot 成虚拟槽；没有会话 10 分钟停宿主，下一个会话再起 | [决策 019](../plantree/plans/dsh-rebase/decisions/019-one-host-per-app-virtual-slots.md)、[决策 020](../plantree/plans/dsh-rebase/decisions/020-host-fault-handling-and-budgets.md)、[决策 025](../plantree/plans/dsh-rebase/decisions/025-host-lifecycle.md)、[决策 155](../plantree/plans/dsh-rebase/decisions/155-ladder-b-dispose-others-first.md) |
+| D5 事件接口 | 仍是 RuntimeEvent，bridge 从 DSH 事件翻译；历史按消息投影；录制样本做 CI 门禁 | [决策 026](../plantree/plans/dsh-rebase/decisions/026-history-per-message-tree-across-lineage.md)、[决策 106](../plantree/plans/dsh-rebase/decisions/106-p1-4d1-live-mapping-choices.md) |
+| D6 会话存储 | DSH 会话日志加 PiLab 会话桩；旧 pi 会话第一次继续时复制迁移，原文件不动；CC / Codex 导入直接产出 DSH 格式 | [决策 030](../plantree/plans/dsh-rebase/decisions/030-read-only-replay-via-host.md)、[决策 050](../plantree/plans/dsh-rebase/decisions/050-migrate-on-first-continue.md)、[决策 121](../plantree/plans/dsh-rebase/decisions/121-p1-9c-seed-session-choices.md) |
+| D7 凭据 | key 不进宿主环境，每次请求向 Main 拉取；管理员 key 进保险库；同进程插件与宿主凭据同权，靠插件审查兜底 | [决策 034](../plantree/plans/dsh-rebase/decisions/034-per-request-credential-pull.md)、[决策 150](../plantree/plans/dsh-rebase/decisions/150-e8-plugin-credential-isolation.md)、[决策 152](../plantree/plans/dsh-rebase/decisions/152-p1-5e-managed-key-vault-choices.md) |
+| D8 后端开关 | 取消，没有双引擎（路线 B 另加了 SDK 引擎开关，见 §11） | [决策 004](../plantree/plans/dsh-rebase/decisions/004-branch-isolated-dsh-only.md) |
+| D9 缓存命中率 | 分母改为整个提示词 | [决策 173](../plantree/plans/dsh-rebase/decisions/173-prompt-cache-upstream-split.md) |
+| D10、D17 子代理 | 只用 DSH 自带的子代理；自定义子代理与委派工具取消 | [决策 090](../plantree/plans/dsh-rebase/decisions/090-user-rulings-2026-09-28.md) |
+| D11、D13、D16 载体与加密机 | 宿主在所有平台都跑在随包 node 上；读到密文时经 PowerShell 5.1 回读；部分扩展名可编辑；现场验收改为 P1-13 上机与 P1-14 Windows 测试版 | [决策 012](../plantree/plans/dsh-rebase/decisions/012-bundled-node-carrier-on-all-platforms.md)、[决策 091](../plantree/plans/dsh-rebase/decisions/091-p1-13c-windows-read-fallback.md)、[决策 135](../plantree/plans/dsh-rebase/decisions/135-user-ruling-encrypted-edit.md) |
+| D12 版本 | 钉 DSH `0.1.7-rc.2` | [决策 003](../plantree/plans/dsh-rebase/decisions/003-p0-closeout-enter-p1.md) |
+| D14 权限 | 两轴保留，档位四档加计划模式五个预设；权限是纯库，在 `tools/pre-execute` 审批；DSH 沙箱默认关；全自动下危险命令与工作区外仍问 | [决策 041](../plantree/plans/dsh-rebase/decisions/041-permissions-shared-pure-library.md)、[决策 044](../plantree/plans/dsh-rebase/decisions/044-dsh-sandbox-off-by-default-in-p1.md)、[决策 045](../plantree/plans/dsh-rebase/decisions/045-windows-acl-sandbox-default-off.md)、[决策 166](../plantree/plans/dsh-rebase/decisions/166-permission-menu-single-column-and-goal-entry.md)、[决策 191](../plantree/plans/dsh-rebase/decisions/191-dsh-full-auto-asks-less.md) |
+| D15 baseUrl | 不变 | — |
+
+### 10.3 新增的宿主能力
+
+- **防空转**：每个 agent 500 轮上限，含并发回归门槛（[决策 065](../plantree/plans/dsh-rebase/decisions/065-loop-guard-host-plugin.md)、[决策 067](../plantree/plans/dsh-rebase/decisions/067-contention-regression-gates.md)）。
+- **一次性补全**：提交信息、代码审查一类经宿主的 `ctx.llm.stream`（[决策 039](../plantree/plans/dsh-rebase/decisions/039-one-shot-completions-via-host-llm.md)）。
+- **goal、todo、后台 jobs**：原样用 DSH 自带的插件（[决策 001](../plantree/plans/dsh-rebase/decisions/001-route-b-and-scope.md) 第 6 条，P1-7a、P1-7b）。
+- **插件**：白名单与构建期审计，用户机上不跑 pnpm；审查单有必拒三条与静态守卫（[决策 058](../plantree/plans/dsh-rebase/decisions/058-plugins-preinstalled-no-pnpm.md)、[决策 153](../plantree/plans/dsh-rebase/decisions/153-e8-a-plugin-review-guard-choices.md)）。
+- **内嵌 pi 终端移除**：右列改为普通 shell 终端（[决策 127](../plantree/plans/dsh-rebase/decisions/127-p1-11-remove-pi-tui-choices.md)、[决策 128](../plantree/plans/dsh-rebase/decisions/128-p1-11-right-column-terminal-choices.md)）。
+
+### 10.4 未定与未验
+
+- **宿主出站代理**：待用户拍板，现状是模型请求直连（[决策 157](../plantree/plans/dsh-rebase/decisions/157-outbound-proxy.md)）。
+- **Windows 上的凭据隔离结论**：[决策 150](../plantree/plans/dsh-rebase/decisions/150-e8-plugin-credential-isolation.md) 存疑 1 与 [决策 034](../plantree/plans/dsh-rebase/decisions/034-per-request-credential-pull.md) 第 4 条在 Windows 上是否同样成立，留给 P1-14 的 Windows 实测。
+- **P1-14 其余收尾**：界面复点验、Windows 测试版实测、P1-13 第二轮上机，见 [看板](../plantree/plans/dsh-rebase/implementation-status.md) 的 Next Target 第 4 项。
+
+## 11. 路线 B：Anthropic 协议模型改由官方 Claude Agent SDK 驱动（2026-10-18 回写，未合入 main）
+
+> 立项与全部裁决见 [路线 B 立项](../plantree/plans/claude-sdk-engine/README.md)，S-6 试用反馈见 [S-6 反馈清单](../plantree/plans/claude-sdk-engine/topics/s6-feedback.md)。分支 `claude/claude-sdk-engine-mvp-162021`，从 main `79f81cdb` 开出。
+
+### 11.1 为什么做
+
+原型的三项 Go/No-Go 都通过（立项 §0）：真实网关透传正常；同样的用例里，PiLab 加 SDK 与 Claude Code 步数相同、计费比 PiLab 的 DSH 少约 68%；加密机上由随包 node 拉起的官方 `claude.exe` 能读写。
+
+### 11.2 与本文和 §10 的关系
+
+- **双引擎回来了**：§10 写的「没有双引擎」只对 DSH 线成立。路线 B 让 Anthropic 协议的模型走 SDK 引擎，其他协议照旧走 DSH；按会话固定引擎，不是按版本切换（立项裁决 9）。
+- **拓扑**：SDK 引擎每个会话一个宿主进程，宿主经 SDK 拉起 `claude.exe`，与 DSH 的共享宿主并存。
+- **载体**：宿主跑在随包 node 上，`claude.exe` 继承它在加密机上的放行，不能改由 Electron 主进程拉起（立项 §2 第 1 条）。
+- **总原则**：SDK 引擎都按官方行为来，只在用户裁决要求的地方偏离（立项裁决 17）。主要偏离有三条：
+  - 网关 key 不进 CLI 与子进程（裁决 12）；
+  - 不读用户的 `~/.claude`，改读软件目录 `~/.pilab/<配置名>/claude`（裁决 19）；
+  - 官方提示词只在末尾追加（裁决 22）。
+- **权限**：用 CLI 自己的五档，中文名是「手动审批、自动编辑、计划模式、自动模式、跳过权限确认」（裁决 6、14）；DSH 的内置禁止清单不补（裁决 13）。
+- **项目配置**：仓库的 `CLAUDE.md`、hooks、allow 规则都生效（裁决 5）；仓库声明的插件市场照官方行为拉取（裁决 18）。
+- **开关**：设置里的「Agent SDK 引擎」开关默认开，收在开发人员模式里；关掉后这些模型的新会话走 DSH（裁决 26）。
+- **体积**：安装后多约 262 MiB（立项 §5）。
+
+### 11.3 状态
+
+- S-0～S-5 完成；S-6 已在加密机上复核，试用反馈的 13 条都已处理（2026-10-17、10-18）。
+- 合入 main 前还要定的事：
+  - SDK 与 CLI 的分发条款（立项 §11.2 #47）；
+  - 真实网关上自动模式的安全检查（立项 §9.2 #32）；
+  - 版本号与发版时间。
