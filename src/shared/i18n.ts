@@ -4612,3 +4612,15 @@ Object.assign(zhTranslations, {
   'Plan review · approved: continue in Auto': '计划审阅 · 已批准：用自动模式继续',
   'Plan review · approved: continue in Bypass permissions': '计划审阅 · 已批准：用跳过权限确认继续',
 });
+
+// Developer mode (route B, S-6 feedback 10)
+/**
+ * claude-sdk-engine README ruling 26: the Advanced page switch that shows the
+ * development and testing settings on the Models page.
+ */
+Object.assign(zhTranslations, {
+  'Developer mode': '开发人员模式',
+  'Enable developer mode': '启用开发人员模式',
+  'Shows settings meant for development and testing on the Models page: request identity (User-Agent), the Agent SDK engine switch and caching tool definitions. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.':
+    '在「模型」页显示供开发与测试用的设置：请求标识（User-Agent）、Agent SDK 引擎开关和缓存工具定义。关闭时这些设置隐藏，并按默认值生效；你改过的值会保留，重新打开后恢复生效。',
+});

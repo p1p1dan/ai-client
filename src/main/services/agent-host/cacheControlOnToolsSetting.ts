@@ -10,9 +10,13 @@
  * announced, and `WorkerManager.reconcileModelPlan` restarts the host once no
  * session is working, so the next turn runs on the new plan.
  *
+ * A developer-mode setting: with developer mode off it reads as unset, so the
+ * plan applies its default (`@shared/developerMode`).
+ *
  * Remove this file with the switch (decision 159 lists the rest).
  */
 
+import { applyDeveloperModeGate } from '@shared/developerMode';
 import {
   CACHE_CONTROL_ON_TOOLS_SETTING_KEY,
   resolveCacheControlOnTools,
@@ -23,11 +27,11 @@ export interface CacheControlOnToolsSettings {
   cacheControlOnTools?: boolean;
 }
 
-/** The stored choice, or nothing for an install that never touched it. */
+/** The stored choice, or nothing for an install that never touched it or out of developer mode. */
 export function cacheControlOnToolsSettings(
   read: () => Record<string, unknown> = readSettingsState
 ): CacheControlOnToolsSettings {
-  const raw = read()[CACHE_CONTROL_ON_TOOLS_SETTING_KEY];
+  const raw = applyDeveloperModeGate(read())[CACHE_CONTROL_ON_TOOLS_SETTING_KEY];
   return typeof raw === 'boolean' ? { cacheControlOnTools: raw } : {};
 }
 

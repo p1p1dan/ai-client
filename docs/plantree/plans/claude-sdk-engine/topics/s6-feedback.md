@@ -21,7 +21,7 @@
 | 7 | 左侧工作区标出当前对话记录文件的位置 | 已裁决（§3 第 8 条） | **已做**（单测通过，界面待复核） |
 | 8 | 计划审阅卡里放计划的框太小 | 直接修 | **已修**（单测通过，界面待复核） |
 | 9 | `loop` 能加载但跑不起来 | 随第 1 条 | 待做 |
-| 10 | 加开发人员模式开关，收起不该给用户调的设置 | 已裁决（§3 第 3 条） | 待做 |
+| 10 | 加开发人员模式开关，收起不该给用户调的设置 | 已裁决（§3 第 3 条） | **已做**（单测通过，界面待复核） |
 | 11a | issue #17：`/compact` 后出现两条「上下文摘要」 | 直接修（DSH） | **已修**（单测通过，界面待复核） |
 | 11b | issue #18：新装登录后模型按钮显示「自动」 | 直接修 | **已修**（单测通过，界面待复核） |
 | 11c | issue #19：首次发送连接慢；发送前不能完全放行；全自动模式鸡肋 | 已裁决（§3 第 4 条），慢要实测 | 待做 |
@@ -89,6 +89,8 @@
 - **需求**：正式版里有些设置不该让用户随意改，应收进"开发人员模式"，默认关、默认值固定。
 - **候选**（待用户定）：模型页的「Cache tool definitions」（实验、临时，`ExperimentalCacheControlSection.tsx`）；「Agent SDK engine」开关（`ClaudeSdkEngineSection.tsx`）；「Request identity (User-Agent)」（`RequestUserAgentSection.tsx`）；「Web Inspector」（`WebInspectorSettings.tsx`）。
 - **方向**：设置里加开发人员模式开关；关着时这些项不显示，并且一律按默认值生效（不只是隐藏界面，已存的非默认值也不再生效）。打开的方法要不要藏起来（例如连点版本号）由用户定。
+- **已做**（按裁决 26，分支 `ccv/s6-parallel`）：「高级」页末尾新增「开发人员模式」一节（`DeveloperModeSection.tsx`），开关明着放，默认关。设置键 `developerModeEnabled`，走现有持久化，`migration.ts` 只认布尔值。「模型」页的「请求标识（User-Agent）」「Agent SDK 引擎」「工具定义缓存断点」三节改由 `DeveloperModelSections`（`PiModelManagementSettings.tsx`）渲染，关着时不渲染。按默认值生效靠一处门控 `src/shared/developerMode.ts` 的 `applyDeveloperModeGate`：关着时这四个键（`experimentalCacheControlOnTools`、`claudeSdkEngineEnabled`、`requestUserAgentMode`、`requestUserAgentCustom`）读作未设置，各读取方落回自己的默认值。经它读取的有主进程的三个读取函数（`claudeSdkEngineSetting.ts`、`cacheControlOnToolsSetting.ts`、`requestUserAgentSetting.ts`；模型计划、新建对话选引擎、模型列表请求的 User-Agent 都经它们），以及渲染端 `ChatComposer` 预测引擎的两处（`stores/settings/developerMode.ts` 的 `effectiveClaudeSdkEngineEnabled`）。存的值不动，打开后恢复；开关一翻，缓存断点与 User-Agent 的监听照常重建模型计划，引擎开关仍只影响之后新建的对话。Web Inspector 不收。
+- **验证**：单测 `stores/settings/__tests__/developerMode.test.ts` 6 条（门控只含这四个键、关着时读不到、打开后原样、迁移只认布尔值、持久化且翻开关不改存值）；主进程三个读取函数的测试各加「开发人员模式」一组（关着读到默认值、打开读到存值、开关翻转时重建模型计划），原有用例改为在开发人员模式下存值；挂载测试 `settings/__tests__/developerModeSection.test.ts` 4 条（「高级」页有开关且默认关；关着三节不渲染、打开后渲染并显示存的值、再关又不渲染；三节只在门控里出现；中文文案）。根 `pnpm typecheck` 0 错，`src/renderer/components/settings` 与 `src/renderer/stores/settings` 36 个文件 309 条全过。界面上没有实点，等起开发版时复核。
 
 ### 11a issue #17：`/compact` 后两条「上下文摘要」
 

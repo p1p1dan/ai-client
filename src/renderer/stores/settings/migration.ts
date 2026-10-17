@@ -320,6 +320,12 @@ export function migrateSettings(
       currentState.claudeSdkEngineEnabled
     ),
 
+    // S-6 feedback 10: the same rule Main gates by (`resolveDeveloperModeEnabled`).
+    developerModeEnabled: sanitizeBoolean(
+      persisted.developerModeEnabled,
+      currentState.developerModeEnabled
+    ),
+
     // D48 S2 §4.3: replaced wholesale rather than shallow-merged. The record's
     // shape is nested (`byAgent[agent].model`), so `{...current, ...persisted}`
     // would keep a `byAgent` from one side and a `lastAgent` from the other; and

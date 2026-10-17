@@ -26,7 +26,12 @@ vi.mock('electron', () => ({
   },
 }));
 
-const values = (record: Record<string, unknown>) => () => record;
+// A developer-mode setting (S-6 feedback 10): the reads below run with
+// developer mode on; the gate itself has its own block.
+const values = (record: Record<string, unknown>) => () => ({
+  developerModeEnabled: true,
+  ...record,
+});
 
 describe('claudeSdkEngineEnabled', () => {
   it('is on for an install that never chose', () => {
@@ -42,6 +47,20 @@ describe('claudeSdkEngineEnabled', () => {
     for (const value of ['false', 0, null, {}]) {
       expect(claudeSdkEngineEnabled(values({ claudeSdkEngineEnabled: value }))).toBe(true);
     }
+  });
+});
+
+describe('developer mode (S-6 feedback 10)', () => {
+  it('reads a stored "off" as the default while developer mode is off, and as stored once it is on', () => {
+    for (const developerModeEnabled of [false, undefined, 'true']) {
+      expect(
+        claudeSdkEngineEnabled(() => ({ developerModeEnabled, claudeSdkEngineEnabled: false })),
+        String(developerModeEnabled)
+      ).toBe(true);
+    }
+    expect(
+      claudeSdkEngineEnabled(() => ({ developerModeEnabled: true, claudeSdkEngineEnabled: false }))
+    ).toBe(false);
   });
 });
 
@@ -72,7 +91,10 @@ describe('a renderer save reaches the read through the settings IPC', () => {
     const write = handlers.get(IPC_CHANNELS.SETTINGS_WRITE);
     if (!write) throw new Error('settings handlers not registered');
     const save = (saved: Record<string, unknown>) =>
-      write({}, { 'aiclient-settings': { state: saved, version: 0 } });
+      write(
+        {},
+        { 'aiclient-settings': { state: { developerModeEnabled: true, ...saved }, version: 0 } }
+      );
     expect(setting.claudeSdkEngineEnabled()).toBe(true);
     await save({ theme: 'dark', claudeSdkEngineEnabled: false });
     expect(setting.claudeSdkEngineEnabled()).toBe(false);

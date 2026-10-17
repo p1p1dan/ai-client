@@ -238,10 +238,25 @@ export function PiModelManagementSettings({
       <AutoCompactionSection reloadKey={`${providersVersion}:${syncVersion}`} />
       <PromptCacheTtlSection />
       <ProviderIdleTimeoutSection />
+      <DeveloperModelSections />
+    </div>
+  );
+}
+
+/**
+ * S-6 feedback 10 (claude-sdk-engine README ruling 26): the model-request
+ * settings only developer mode shows. Hiding them is half of it; the readers
+ * also see their defaults while it is off (`@shared/developerMode`).
+ */
+export function DeveloperModelSections() {
+  const developerMode = useSettingsStore((state) => state.developerModeEnabled);
+  if (!developerMode) return null;
+  return (
+    <>
       <RequestUserAgentSection />
       <ClaudeSdkEngineSection />
       <ExperimentalCacheControlSection />
-    </div>
+    </>
   );
 }
 

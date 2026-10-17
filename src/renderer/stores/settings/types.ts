@@ -272,6 +272,14 @@ export interface SettingsState {
   requestUserAgentCustom: string;
 
   /**
+   * Route B S-6 feedback 10 (`@shared/developerMode`): off by default. While
+   * off, the settings it gates (the cache switch, the Agent SDK engine switch
+   * and the User-Agent, all above) are hidden and every reader sees their
+   * defaults; their stored values are kept for when it is turned back on.
+   */
+  developerModeEnabled: boolean;
+
+  /**
    * T104: the chat area's own typeface and its two size tiers.
    *
    * Separate from `fontFamily` / `fontSize` above on purpose — those two are
@@ -394,6 +402,8 @@ export interface SettingsState {
   setRequestUserAgentMode: (mode: RequestUserAgentMode) => void;
   /** Decision 171: stores a value that passes the check (trimmed), or `''` to clear; ignores the rest. */
   setRequestUserAgentCustom: (value: string) => void;
+  /** S-6 feedback 10: leaves the gated values as stored. */
+  setDeveloperModeEnabled: (enabled: boolean) => void;
 
   // Setters - Chat typography (T104)
   /** Empty string = follow the app's `--font-sans`. */
