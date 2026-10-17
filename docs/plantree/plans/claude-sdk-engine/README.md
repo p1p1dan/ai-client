@@ -38,6 +38,12 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 | 19 | 用户级配置（S-3 §0 不做项） | **不读 `~/.claude`，读软件目录 `~/.pilab/<配置名>/claude`**（正式版 `~/.pilab/PiLabAi/claude`）：SDK 引擎的配置目录改到这里，打开 CLI 的 user 层 |
 | 20 | 计划模式（撤 S-2 A-2、A-13、A-20 与 S-3 P-9） | **照官方行为**：计划模式走自动模式的安全检查（`useAutoModeDuringPlan` 用缺省），宿主不再自行拒绝改动 |
 | 21 | DSH 的权限向 Claude SDK 看齐 | **以后再说**，先记 [issue #20](https://github.com/p1p1dan/ai-client/issues/20) |
+| 22 | 官方提示词（S-6 反馈 2） | **不改官方提示词，至少不插入，只可在末尾追加**（现状即如此：`PILAB_PROMPT_APPEND` 接在最末）。已有的偏离不恢复：不加署名行、不读 `~/.claude`、不读项目 `.mcp.json` |
+| 23 | WebFetch 的域名预检（S-6 反馈 5） | **一律跳过**（`skipWebFetchPreflight`）：加密机所在网络到不了预检地址，不跳过 WebFetch 就用不了 |
+| 24 | 禁用的宿主工具（S-6 反馈 1、9） | 放开 EnterWorktree/ExitWorktree；放开定时类（Cron 三个与 ScheduleWakeup）并做配套，`loop` 随之可用；RemoteTrigger 继续禁；ListAgents、SendMessage 以后再做（[issue #22](https://github.com/p1p1dan/ai-client/issues/22)）；Workflow 等后台任务界面做好再放开。细节见 [S-6 反馈清单](topics/s6-feedback.md) §3 |
+| 25 | SDK 对话的模型菜单（S-6 反馈 3） | 其他模型显示为灰色、悬停提示新建对话才能换；跨引擎换模型做完再放开（[issue #23](https://github.com/p1p1dan/ai-client/issues/23)） |
+| 26 | 开发人员模式（S-6 反馈 10） | 设置里明着放开关，默认关；关着时"缓存工具定义"、"Agent SDK 引擎"开关、User-Agent 隐藏并一律按默认值生效；Web Inspector 不收 |
+| 27 | DSH 全自动（S-6 反馈 11c，issue #19） | **改进**：工作区内解析不了参数的命令也放行，只有删除、强推这类危险命令和明确碰到工作区外的路径才问 |
 
 ## 2 硬约束
 
