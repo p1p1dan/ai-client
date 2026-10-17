@@ -140,7 +140,7 @@
             },
             {
               "name": "aiclient:permission",
-              "text": "Mode: plan. Inspect and produce an implementation plan for user approval. Write, Edit and write-capable plugins are unavailable. Bash is for inspection only; do not use it to modify files or execute the plan.\nPermission gear: auto. Available tools may execute without ordinary approval. Explicit deny rules and the tool whitelist remain enforced. Never bypass a denied tool or path by switching tools."
+              "text": "Mode: plan. Inspect and produce an implementation plan for user approval. Write, Edit and write-capable plugins are unavailable. Bash is for inspection only; do not use it to modify files or execute the plan.\nPermission gear: auto. Available tools may execute without ordinary approval. Dangerous commands (any delete, force pushes, hard resets and the like) and anything that names a path outside the workspace still ask every time. Explicit deny rules and the tool whitelist remain enforced. Never bypass a denied tool or path by switching tools."
             }
           ]
         },
@@ -904,7 +904,7 @@
             },
             {
               "name": "aiclient:permission",
-              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: auto. Available tools may execute without ordinary approval. Explicit deny rules and the tool whitelist remain enforced. Never bypass a denied tool or path by switching tools."
+              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: auto. Available tools may execute without ordinary approval. Dangerous commands (any delete, force pushes, hard resets and the like) and anything that names a path outside the workspace still ask every time. Explicit deny rules and the tool whitelist remain enforced. Never bypass a denied tool or path by switching tools."
             }
           ]
         },

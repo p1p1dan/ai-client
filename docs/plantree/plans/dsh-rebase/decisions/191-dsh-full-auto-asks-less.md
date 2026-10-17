@@ -73,7 +73,7 @@ DSH 引擎的「全自动」档改进，不去掉：**工作区内解析不了�
 | 3 危险命令的会话授权 | "危险命令还是要问" | 已做 |
 | 4 两档松紧 | "两档松紧的问题要修复" | 已做 |
 | 5 看不进去的程序工具 | "能让宿主看到里面会做什么么？如果不行就照旧问" | 照旧问，理由见下 |
-| 6 告诉模型的权限说明 | "可以做，需要什么，还是说留到最后我去linux开发机做？" | 留到 Linux 开发机，见下 |
+| 6 告诉模型的权限说明 | "可以做，需要什么，还是说留到最后我去linux开发机做？" | 留到 Linux 开发机；2026-10-18 在 Linux 开发机上已做，见 6.3 |
 | 7 卡片上说明为什么问 | "可以简单标注一下，给我看看效果再决定加不加" | 已做；用户看过截图后定为保留（"卡片上的原因说明保留"） |
 | 8 模型安全检查 | "这个后面做，可以调用一个便宜模型来做审核，同时还得改onboarding侧，再管理员设置模型页面就可以设置用什么模型做审核" | 记为后续任务，本次不做 |
 
@@ -121,6 +121,12 @@ DSH 引擎的「全自动」档改进，不去掉：**工作区内解析不了�
   - `bridge-record.ts` 原来在 Windows 上一启动宿主就报 `ERR_UNSUPPORTED_ESM_URL_SCHEME`（`--import` 收到的是 `F:\…` 这种路径而不是 URL），本次改成 `pathToFileURL(...)`，现在能跑了。
   - 但 Windows 上录出来的与 Linux 样本不同：路径分隔符是反斜杠，DSH 在 Windows 上没有 `bash` 工具（报 `unknown tool "bash"`）。样本按 Linux 录，所以重录只能在 Linux 上做。
 
+**已做（2026-10-18，Linux 开发机，本地分支 `claude/claude-sdk-engine-mvp-162021`，基于远端 `62db8a14`）**：
+
+- `promptText.ts` 的 `GEAR_TEXT.auto` 改成上面那句。没有单测写死旧句子，单测不用改。
+- 用 `out-node-runtime/node`（24.18.0，与 `node-runtime-pin.mjs` 一致）运行上面的重录命令。`git diff` 只有这一句话变：`log.perm-gear.json`、`log.plan-dismiss.json` 各 1 处，`log.plan-review.json` 2 处（计划模式与批准后的执行模式各一条）。三个场景的 `stream.*`、`rpc.*` 都没变。
+- 录制工具的 `--import` 改成 `pathToFileURL(...)` 后，Linux 上照样能跑。
+
 ### 6.4 已改的录制样本
 
 `stream.perm-grants.json` 第三张卡（`echo perm-grant-c && rm -f perm-grant-missing.txt`）按新规则手改了 3 处，与重录应得的结果一致：
@@ -130,6 +136,8 @@ DSH 引擎的「全自动」档改进，不去掉：**工作区内解析不了�
 - 加上 `askReason: "dangerous"`。
 
 这张卡在场景里本来就被拒绝，之后的事件不变。没在 Linux 上跑 `--check` 验证，下次在 Linux 开发机上跑一次确认。
+
+**Linux 上已确认（2026-10-18）**：全量 `node src/dsh-host/tools/bridge-record.ts --check` 的 36 个场景全部一致（退出码 0），`perm-grants` 不用重录。样本里这张卡就是 `decisions: ["allow", "deny"]`、没有 `sessionGrantScope`、带 `askReason: "dangerous"`。`--artifacts` 留下的录制结果与样本目录逐字节比对，也一致。
 
 ### 6.5 后续任务：剩下的询问交给便宜模型审核
 
@@ -170,3 +178,8 @@ DSH 引擎的「全自动」档改进，不去掉：**工作区内解析不了�
   - 改前同一条 `Remove-Item notes.txt` 在全自动下不问就删了。
   - 两张截图里有本机用户目录的路径，没有入库，只留在开发机工作树的 `bugOutput/s6-cards/`（已被 .gitignore 忽略）。
   - 注意：宿主进程启动时加载权限代码，改代码后要重启宿主才生效。
+- Linux 开发机（2026-10-18，改了提示词并重录之后；模型只用本机假网关）：
+  - 三套 tsc（`pnpm typecheck`、`pnpm typecheck:dsh-host`、`pnpm typecheck:claude-sdk-host`）都是 0 错。两个宿主包按 CI 的方式装（`npm ci --ignore-scripts`，SDK 宿主另加 `--omit=optional`）。
+  - `pnpm test` 全量：690 个文件通过、6 个跳过；11934 条通过、65 条跳过、0 条失败。
+  - Windows 上因环境失败的几组，在 Linux 上都通过：建符号链接、`8dot3-*`、`sessionGc`、`shellWorkdir`、`legacyShellAbsence`、`dshHostScopes`。把相关的 16 个测试文件单独重跑核对：486 条通过、0 条失败，跳过的 2 条是只在 Windows 上跑的用例。
+  - `bridge-record.ts --check`：36 个场景一致。`bridge-smoke.ts`：退出码 0，判定项全部为真。

@@ -12,7 +12,7 @@ const GEAR_TEXT: Record<PermissionGear, string> = {
   ask: 'Permission gear: ask. Writes, edits and shell calls require approval. Wait for the tool result.',
   'accept-edits':
     'Permission gear: accept-edits. Workspace writes, edits and bash calls are allowed without ordinary approval. External paths and external directories still require approval.',
-  auto: 'Permission gear: auto. Available tools may execute without ordinary approval. Explicit deny rules and the tool whitelist remain enforced.',
+  auto: 'Permission gear: auto. Available tools may execute without ordinary approval. Dangerous commands (any delete, force pushes, hard resets and the like) and anything that names a path outside the workspace still ask every time. Explicit deny rules and the tool whitelist remain enforced.',
   bypass:
     'Permission gear: bypass. The user has turned off approval prompts entirely: available tools execute without approval, including shell commands whose operands cannot be resolved statically. Explicit deny rules and the tool whitelist remain enforced, and a denied call is still denied.',
 };
