@@ -6,7 +6,7 @@
  * - Ids (messages, blocks, tool calls, permissions, questions, attempts) become `<kind#n>`
  *   by first appearance.
  * - The run's directories become `<ws>`, `<config>` and `<tmp>`, in Windows, forward-slash
- *   and Git Bash (`/tmp/...`) spellings; the OS name `uname` prints becomes `<os>`.
+ *   and Git Bash (`/tmp/...`, `/c/...`) spellings; the OS name `uname` prints becomes `<os>`.
  * - Consecutive deltas of one block are joined; a repeated status or tool update keeps its
  *   last; `usage.updated` leaves the sequence (its count and numbers follow the stream's
  *   pacing) and only its keys are kept.
@@ -54,6 +54,20 @@ function spellings(dir: string, tmp: string): string[] {
   return [...new Set(out)].sort((a, b) => b.length - a.length);
 }
 
+/**
+ * Any absolute spelling that ends in the directory's last two names (the run's own
+ * `pilab-record-XXXXXX/ws`). Where Git Bash mounts /tmp depends on how TEMP is spelled
+ * (CI runners use an 8.3 short path), so it may print the run's directory as /c/... or
+ * under a /tmp further up instead of the spellings above.
+ */
+function anyPrefix(dir: string): RegExp | null {
+  const names = dir.split(/[\\/]+/).filter(Boolean);
+  if (names.length < 2) return null;
+  const tail = names.slice(-2).map(escapeRegExp).join('[\\\\/]');
+  const name = `[^\\s"'\\\\/<>]`;
+  return new RegExp(`(?:[A-Za-z]:)?(?:[\\\\/]${name}+)*?[\\\\/]${tail}(?!${name})`, 'gi');
+}
+
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -71,13 +85,19 @@ export function normalizeRecording(raw: RawRecording): NormalizedRecording {
     }
     return id;
   };
+  const fallback = (dir: string, label: string): Array<[RegExp, string]> => {
+    const pattern = anyPrefix(dir);
+    return pattern ? [[pattern, label]] : [];
+  };
   const dirs: Array<[RegExp, string]> = [
     ...spellings(raw.workspace, raw.tmp).map(
       (s) => [new RegExp(escapeRegExp(s), 'gi'), '<ws>'] as [RegExp, string]
     ),
+    ...fallback(raw.workspace, '<ws>'),
     ...spellings(raw.configDir, raw.tmp).map(
       (s) => [new RegExp(escapeRegExp(s), 'gi'), '<config>'] as [RegExp, string]
     ),
+    ...fallback(raw.configDir, '<config>'),
     ...spellings(raw.tmp, raw.tmp).map(
       (s) => [new RegExp(escapeRegExp(s), 'gi'), '<tmp>'] as [RegExp, string]
     ),

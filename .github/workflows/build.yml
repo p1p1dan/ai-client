@@ -512,7 +512,8 @@ jobs:
 
       # Route B S-5 R-2: as build-windows. The regression set blocks; the event gate
       # only reports until a first run shows whether Linux matches the Windows-recorded
-      # samples (README §10.2 #40), its recordings uploaded either way.
+      # samples (README §10.2 #40), its recordings uploaded either way. It runs after a
+      # failed regression set too, so one run reports both.
       - name: Claude SDK host regression set (packaged)
         run: |
           r="$PWD/dist/linux-unpacked/resources"
@@ -521,6 +522,7 @@ jobs:
             --host-entry "$r/claude-sdk-host/host.js" --out dist/claude-sdk-probe-suite.json --logs dist/claude-sdk-probe-logs
 
       - name: Claude SDK host event gate (packaged; reports only on Linux)
+        if: ${{ !cancelled() }}
         continue-on-error: true
         run: |
           r="$PWD/dist/linux-unpacked/resources"

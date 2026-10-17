@@ -601,6 +601,8 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
       jobs[job].steps.find((s) => s.run?.includes('tools/event-record.ts --check'));
     expect(gateOf('build-windows')['continue-on-error']).toBeUndefined();
     expect(gateOf('build-linux')['continue-on-error']).toBe(true);
+    // Reporting only, it runs after a failed regression set too (one CI run shows both).
+    expect(gateOf('build-linux').if).toMatch(/^\$\{\{ !cancelled\(\) \}\}$/);
   });
 
   it('builds the DSH host artifact before electron-builder on every packaging job', () => {

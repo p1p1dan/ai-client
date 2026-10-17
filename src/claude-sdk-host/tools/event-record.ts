@@ -15,11 +15,17 @@
 
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeRecording, type RawRecording } from './event-normalize.ts';
-import { freePort, groupPassed, readProbeOutput, run, waitForHealth } from './probe-suite.ts';
+import {
+  freePort,
+  groupPassed,
+  longTmpdir,
+  readProbeOutput,
+  run,
+  waitForHealth,
+} from './probe-suite.ts';
 
 /** The scenarios whose events do not depend on timing (the fake gateway's own scripts). */
 export const RECORDED_SCENARIOS = ['text', 'tools', 'ask', 'plan'] as const;
@@ -66,7 +72,7 @@ async function main(): Promise<void> {
   const here = fileURLToPath(new URL('.', import.meta.url));
   const hostDir = join(here, '..');
   const fixtures = join(here, '..', '..', 'shared', '__tests__', 'fixtures', 'claude-sdk');
-  const base = mkdtempSync(join(tmpdir(), 'pilab-record-'));
+  const base = mkdtempSync(join(longTmpdir(), 'pilab-record-'));
   const workspace = join(base, 'ws');
   const config = join(base, 'config');
   const rawDir = join(base, 'raw');

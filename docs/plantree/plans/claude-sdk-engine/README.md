@@ -262,9 +262,11 @@ GUI 点验（与 S-2 §3.4 一并做，隔离 profile，只用本机假网关）
 | # | 发现 | 去向 |
 |---|---|---|
 | 43 | 安装包强制登录，本机没在打包后的程序界面里跑 SDK 回合；打包后的宿主与 CLI 由冒烟覆盖，Main 打包时的启动参数由单测覆盖 | **本机已补跑**（2026-10-16）：用本机已登录账号的凭据副本过登录页，在安装目录上经界面跑通 SDK 回合，GUI 清单 9 项全过，只用本机假网关，副本用完即删（[GUI 清单](topics/gui-checklist.md) §2.1）。S-6 在加密机的正式安装包上再跑一次 |
-| 44 | Linux 的打包（glibc 版 CLI、可执行位、AppImage 里的路径）本机没测，第一次在 CI 的 Linux 作业上跑 | 推送后看第一次 CI；推送前问用户 |
+| 44 | Linux 的打包（glibc 版 CLI、可执行位、AppImage 里的路径）本机没测，第一次在 CI 的 Linux 作业上跑 | **第一次 CI（2026-10-17，run 38996951180）**：Linux 打包核验通过（SDK 宿主产物 258.5 MiB，冒烟 8/8），回归命令 7 组里 6 组过，`search` 因 #51 失败；Windows 冒烟因 #50 失败。两处都只改测试工具（[S-5 记录](topics/s5-regression.md) §8），等下一次 CI |
 | 45 | CI 的超时按估算调高（B-13） | 第一次全绿后按工作流里的规矩重算 |
 | 46 | CLI 能否运行只查文件在不在：若加密机上安装器写下的 `claude.exe` 被加密，新会话会进 SDK 引擎然后在第一回合失败，不会退回 DSH | S-6 核对；若确被加密，可用性检查加读文件头（PE/ELF，拒 `%TSD`） |
 | 47 | 随安装包分发 SDK 与 CLI：两者不是开源许可，声明为"© Anthropic PBC，使用受其法律协议约束"，已原样写进第三方声明 | 待用户确认分发条款可以接受（发版前） |
 | 48 | 本机 Windows 打目录包需加 `-c.win.signAndEditExecutable=false`（`winCodeSign` 里的符号链接解压失败） | 记录（CI 不受影响） |
 | 49 | `scripts/assert-no-webfonts.mjs` 在 Windows 上找不到 `out/renderer`：它用 `new URL('..', import.meta.url).pathname` 拼路径，得到 `\F:\...`，于是 `pnpm dist:prereq` 在本机 Windows 上第一步之后就停了（与路线 B 无关，早已存在；CI 的工作流逐步构建、不调它，不受影响） | 记录；修法是改用 `fileURLToPath`，一行，等用户决定是否顺手修 |
+| 50 | CLI 对 8.3 短名拼写的路径（如 `C:\Users\RUNNER~1\...`）当作"可疑的 Windows 路径"，其下的读写一律先问，手动审批里读文件也出卡。GitHub 的 Windows 机器把 `TEMP` 设成这种写法，CI 上的冒烟因此超时 | 测试工具建临时目录时展开成长名（S-5 §8 C-1）。产品不改：工作区是用户打开的目录或主目录下的临时/草稿目录，都是长名；用短名路径打开项目时按官方行为每次读写都问 |
+| 51 | 2.1.300 在 Linux 上不提供 `Grep` 与 `Glob`，要模型经 Bash 用 `grep`、`find`（Windows 上照旧提供）。Linux 上 SDK 会话的搜索在界面上显示为命令行调用 | 照官方行为，不补这两个工具；探针与假网关按平台分开（S-5 §8 C-2） |

@@ -166,8 +166,14 @@ async function main() {
   for (const file of [packaged.node, packaged.entry, packaged.cli, GATEWAY, PROBE]) {
     if (!fs.existsSync(file)) throw new Error(`missing ${file}`);
   }
-  // /tmp may be noexec on Linux; the DSH smoke picks /var/tmp the same way.
-  const base = process.platform === 'linux' && fs.existsSync('/var/tmp') ? '/var/tmp' : os.tmpdir();
+  // /tmp may be noexec on Linux; the DSH smoke picks /var/tmp the same way. On Windows the
+  // temp directory is spelled in full: GitHub's runners set TEMP to an 8.3 short path, and
+  // the CLI asks before every read or write under such a path, which the probe's scripted
+  // turns do not expect (a workspace the user opens is spelled in full).
+  const base =
+    process.platform === 'linux' && fs.existsSync('/var/tmp')
+      ? '/var/tmp'
+      : fs.realpathSync.native(os.tmpdir());
   const dir = fs.mkdtempSync(path.join(base, 'claude-sdk-smoke-'));
   const layout = args.inPlace
     ? packaged

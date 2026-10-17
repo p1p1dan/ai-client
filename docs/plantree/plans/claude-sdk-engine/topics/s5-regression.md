@@ -68,3 +68,16 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 - `stop` 场景在 Linux 上也只数自己那个时长的 `sleep`（`pgrep -fc '^sleep N$'`），与 Windows 一致。
 - 门禁测试 `packaging-config.test.mjs` 加 1 条：两个作业里这两步都在核验之后、用随包的 node 与宿主，回归命令不允许 `continue-on-error`，录制门禁 Windows 挡、Linux 只报告，证据路径都上传；去掉 Windows 的回归步骤、或把 Linux 的录制门禁改成挡，这条都失败。
 - 本机照 Windows 作业那一步原样跑（PowerShell，对本分支重打的 `win-unpacked`）：130/130、四个样本一致、退出码 0。证据见 [evidence/s5-regression-2026-10-16.md](../evidence/s5-regression-2026-10-16.md)。
+
+## 8 第一次 CI（2026-10-17）
+
+本分支推送后手动触发 Build（run 38996951180）：门禁作业、`build-app`、远程运行时都过；Windows 与 Linux 打包作业各挂在 SDK 宿主上，原因都是 CI 机器与本机不同，宿主本身没问题。修法只改测试工具，自主决定，待审阅：
+
+| # | 现象 | 原因 | 决定 |
+|---|---|---|---|
+| C-1 | Windows："Verify packaged app" 里 SDK 冒烟的 `tools` 回合超时 | GitHub 的 Windows 机器把 `TEMP` 设成 8.3 短名（`C:\Users\RUNNER~1\...`）。CLI 把这种拼写当作"可疑的 Windows 路径"，其下的读写一律先问（手动审批里读文件本不问），于是 `Read` 也出了一张卡，探针只答第一张，回合停住。本机用一个带短名的 `TEMP` 复现了同样的超时 | 冒烟、回归命令、录制门禁与探针建临时目录时先把系统临时目录展开成长名（`realpathSync.native`，`longTmpdir`）。产品不改：对话的工作区是用户打开的目录或主目录下的临时/草稿目录，都是长名；用户若用短名路径打开项目，按官方行为每次读写都问（README §11.2 #50） |
+| C-2 | Linux：回归命令 `flow` 组的 `search` 两条失败（`Grep`、`Glob` 没跑成） | 2.1.300 在 Linux 上不提供 `Grep` 与 `Glob`，回的是"Grep is not available in this session — search file contents with `grep` via Bash"，要模型经 Bash 用 `grep`、`find`；假网关的脚本写死了调这两个工具 | 照官方行为：假网关看请求里有没有 `Grep`，没有就像模型那样经 Bash 跑 `grep -rn … \|\| true` 与 `find … -name '*.md'`；探针在 Windows 上照旧要求 `Grep`、`Glob` 跑通，其他平台要求两条 Bash 搜索跑通、且没出现 `Grep`、`Glob`（README §11.2 #51） |
+| C-3 | （改 C-1 时发现）录制门禁在短名 `TEMP` 下 `tools` 样本不一致 | Git Bash 只在路径与它挂 `/tmp` 的写法一致时才显示 `/tmp/...`；临时目录换成长名后，`pwd` 会显示成 `/c/...` 或挂在更上层的 `/tmp/...` | 规范化再认一种写法：任何以本次运行目录最后两级（如 `pilab-record-XXXXXX/ws`）结尾的绝对路径都算 `<ws>`（`<config>` 同理）。单测 1 条，去掉这条兜底时该用例失败 |
+| C-4 | Linux 的录制门禁这次没跑 | 它排在回归命令之后，回归命令失败就跳过了 | 加 `if: ${{ !cancelled() }}`：它只报告，回归命令失败也照跑，一次 CI 能看到两边；门禁测试加 1 条断言 |
+
+本机复核（对本分支的 `win-unpacked`，用随包的 node、`host.js` 与 `claude.exe`）：`TEMP` 设成短名时，SDK 冒烟 8/8、回归命令 7 组 130 条、录制门禁四个样本一致；`TEMP` 正常时录制门禁一致；源码宿主录制门禁一致。假网关对"请求里没有 `Grep`"与"有 `Grep`"两种请求分别回 Bash 与 Grep。Linux 上的结果等下一次 CI。

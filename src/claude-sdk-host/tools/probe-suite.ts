@@ -20,6 +20,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -131,6 +132,20 @@ function parseArgs(argv: string[]): {
   return args;
 }
 
+/**
+ * The system temporary directory spelled in full. GitHub's Windows runners set TEMP to an
+ * 8.3 short path (`C:\Users\RUNNER~1\...`), and the CLI asks before every read or write
+ * under a path spelled that way ("a suspicious Windows path pattern"), which the scripted
+ * scenarios do not expect. A workspace the user opens is spelled in full.
+ */
+export function longTmpdir(): string {
+  try {
+    return realpathSync.native(tmpdir());
+  } catch {
+    return tmpdir();
+  }
+}
+
 export function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer();
@@ -189,7 +204,7 @@ async function main(): Promise<void> {
     throw new Error(`unknown group in --only; groups are ${GROUPS.map((g) => g.name).join(', ')}`);
   }
 
-  const base = mkdtempSync(join(tmpdir(), 'pilab-probe-suite-'));
+  const base = mkdtempSync(join(longTmpdir(), 'pilab-probe-suite-'));
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const gateway: ChildProcess = spawn(

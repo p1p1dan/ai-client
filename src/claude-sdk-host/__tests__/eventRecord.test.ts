@@ -62,6 +62,35 @@ describe('normalizeRecording', () => {
     });
   });
 
+  it('names the workspace however Git Bash mounted /tmp', () => {
+    // CI: TEMP is an 8.3 short path and the run uses the long one, so Git Bash's /tmp is
+    // not the run's temp directory: it prints /c/..., or /tmp/... from higher up.
+    const ws = 'C:\\Users\\ann\\AppData\\Local\\Temp\\s1v\\longdir\\pilab-record-AbC\\ws';
+    const out = normalizeRecording({
+      scenario: 'tools',
+      workspace: ws,
+      configDir: 'C:\\Users\\ann\\AppData\\Local\\Temp\\s1v\\longdir\\pilab-record-AbC\\config',
+      tmp: 'C:\\Users\\ann\\AppData\\Local\\Temp\\s1v\\longdir',
+      events: [
+        {
+          type: 'tool.completed',
+          payload: {
+            a: '/c/Users/ann/AppData/Local/Temp/s1v/longdir/pilab-record-AbC/ws',
+            b: 'x /tmp/s1v/longdir/pilab-record-AbC/ws/sub/y.txt',
+            c: '/tmp/s1v/longdir/pilab-record-AbC/config/plans',
+            d: '/tmp/s1v/longdir/pilab-record-AbC/wsx',
+          },
+        },
+      ],
+    });
+    expect(out.events[0].payload).toEqual({
+      a: '<ws>',
+      b: 'x <ws>/sub/y.txt',
+      c: '<config>/plans',
+      d: '/tmp/s1v/longdir/pilab-record-AbC/wsx',
+    });
+  });
+
   it('joins a block deltas, keeps the last of repeats, and keeps usage only as keys', () => {
     const out = normalizeRecording(
       raw([

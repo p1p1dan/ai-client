@@ -73,10 +73,11 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir as osTmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CLAUDE_SDK_INHERITED_ENV } from '../../shared/claudeSdkEngine.ts';
@@ -91,6 +92,16 @@ process.exitCode = 1;
 // PROBE_HOST_ENTRY: drive a bundled host.js instead of the source entry.
 const hostEntry =
   process.env.PROBE_HOST_ENTRY?.trim() || fileURLToPath(new URL('../host.ts', import.meta.url));
+// The temp directory spelled in full (probe-suite.ts `longTmpdir`): the CLI asks before
+// every read or write under an 8.3 short path, as GitHub's Windows runners set TEMP.
+const longTmp = (() => {
+  try {
+    return realpathSync.native(osTmpdir());
+  } catch {
+    return osTmpdir();
+  }
+})();
+const tmpdir = () => longTmp;
 const configDir = process.env.PROBE_CONFIG_DIR ?? mkdtempSync(join(tmpdir(), 'pilab-ccsdk-home-'));
 const apiKey = process.env.PROBE_API_KEY ?? 'sk-fake-probe-key';
 /** The key as the fake gateway's CC-ENV line names it (`keyDigest`). */
@@ -1687,7 +1698,20 @@ async function main(): Promise<void> {
         const end = await waitFor(terminal, 'search turn end');
         show('search');
         check('search', 'ends in session.completed', end.type === 'session.completed');
-        checkTools('search', ['Grep', 'Glob']);
+        if (process.platform === 'win32') {
+          checkTools('search', ['Grep', 'Glob']);
+        } else {
+          // 2.1.300 on Linux offers no Grep or Glob: the model is told to use grep and find
+          // through Bash, and the fake gateway searches that way when they are not offered.
+          const { started, okNames } = toolRuns();
+          check(
+            'search',
+            'no Grep or Glob offered: grep and find ran through Bash',
+            !started.includes('Grep') &&
+              !started.includes('Glob') &&
+              okNames.filter((name) => name === 'Bash').length === 2
+          );
+        }
         break;
       }
       case 'agent': {

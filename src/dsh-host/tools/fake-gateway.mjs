@@ -3613,8 +3613,23 @@ function decideClaudeSdk(parsed, req) {
       return reply({ text: `子代理返回：${lastResult.slice(0, 200)}` }, label);
     case 'CHILD':
       return reply({ text: 'child agent here: one line from the subagent.' }, label);
-    case 'SEARCH':
-      if (step === 0) {
+    case 'SEARCH': {
+      // Route B S-5: 2.1.300 offers Grep and Glob on Windows only; on Linux it leaves them
+      // out and tells the model to use grep and find through Bash, so search that way when
+      // the request offers no Grep, as a model would there.
+      const offered = (Array.isArray(parsed?.tools) ? parsed.tools : []).map((t) => t?.name);
+      if (!offered.includes('Grep')) {
+        const quoted = `'${cwd.replaceAll('\\', '/').replaceAll("'", "'\\''")}'`;
+        const calls = [
+          {
+            command: `grep -rn point-check ${quoted} || true`,
+            description: 'Search file contents',
+          },
+          { command: `find ${quoted} -name '*.md'`, description: 'Find Markdown files' },
+        ];
+        if (step < calls.length)
+          return reply({ tool: { name: 'Bash', input: calls[step] } }, label);
+      } else if (step === 0) {
         return reply(
           {
             tool: {
@@ -3624,10 +3639,11 @@ function decideClaudeSdk(parsed, req) {
           },
           label
         );
-      }
-      if (step === 1)
+      } else if (step === 1) {
         return reply({ tool: { name: 'Glob', input: { pattern: '**/*.md', path: cwd } } }, label);
+      }
       return reply({ text: `搜索结果：${results.map((r) => r.slice(0, 120)).join(' / ')}` }, label);
+    }
     case 'ENC': {
       // Encrypted-machine matrix (host-probe.ts `enc`, one sample file per turn). Per file:
       // Read, Grep, Bash cat, Bash sed, Edit (marker -> CCSDK-EDITED-marker), Read again,
