@@ -54,6 +54,8 @@ export const GROUPS: readonly Group[] = [
       'steer-withdraw',
       'sendnow',
       'agent',
+      // S-6 feedback 4: background jobs in the window, their output, Stop and TaskStop.
+      'jobs',
       'search',
       'compact',
       'history',

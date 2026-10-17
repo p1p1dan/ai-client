@@ -2230,6 +2230,209 @@ async function main(): Promise<void> {
           positive >= 0
         );
         check('agent', 'a later session.status reports backgroundTasks 0', Boolean(backToZero));
+        // S-6 feedback 4: the subagent reaches the subagents window and the jobs window.
+        const lanes = events.filter((e) => e.type === 'subagent.activity');
+        const laneKinds = lanes.map((e) => String(e.payload?.kind));
+        const projections = (key: string) =>
+          events.filter((e) => e.type === 'session.projection' && e.payload?.key === key);
+        const lastView = (key: string) =>
+          (projections(key).at(-1)?.payload?.view ?? []) as Array<Record<string, unknown>>;
+        console.log(`  agent: lane events ${JSON.stringify(laneKinds)}`);
+        check(
+          'agent',
+          'its lane starts and ends (subagent.activity started, then status)',
+          laneKinds.includes('started') && laneKinds.includes('status')
+        );
+        check(
+          'agent',
+          'the subagents window lists it (subagentCatalog)',
+          lastView('subagentCatalog').length === 1
+        );
+        check(
+          'agent',
+          'the jobs window lists it as a settled subagent job',
+          lastView('jobs').some((job) => job.kind === 'subagent' && job.status === 'completed')
+        );
+        const agentJob = lastView('jobs').find((job) => job.kind === 'subagent');
+        const agentOut = (await request('worker.job.read', {
+          logicalSessionId,
+          jobId: String(agentJob?.id ?? ''),
+        }).catch(() => ({}))) as { text?: string };
+        console.log(
+          `  agent: job output ${JSON.stringify(String(agentOut.text ?? '').slice(0, 120))}`
+        );
+        check(
+          'agent',
+          'the jobs window reads what the subagent said',
+          String(agentOut.text ?? '').trim().length > 0
+        );
+        break;
+      }
+      case 'jobs': {
+        // S-6 feedback 4: a background command in the jobs window, its output, and Stop.
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'bypass' });
+        const short = {
+          name: 'Bash',
+          input: {
+            command: 'sleep 2 && echo job-out-ok',
+            description: 'Short background job',
+            run_in_background: true,
+          },
+        };
+        await send(`CC-RUN ${JSON.stringify({ calls: [short] })}`);
+        await waitFor(terminal, 'jobs: turn end', 90_000);
+        const jobsViewsLatest = () =>
+          (events.filter((e) => e.type === 'session.projection' && e.payload?.key === 'jobs').at(-1)
+            ?.payload?.view ?? []) as Array<Record<string, unknown>>;
+        const jobsViews = () =>
+          events
+            .filter((e) => e.type === 'session.projection' && e.payload?.key === 'jobs')
+            .map((e) => (e.payload?.view ?? []) as Array<Record<string, unknown>>);
+        const settled = await waitFor(
+          (e) =>
+            e.type === 'session.projection' &&
+            e.payload?.key === 'jobs' &&
+            ((e.payload?.view ?? []) as Array<Record<string, unknown>>).some(
+              (job) => job.label === 'Short background job' && job.status === 'completed'
+            ),
+          'jobs: the short job settles',
+          60_000
+        ).catch(() => undefined);
+        const job = jobsViews()
+          .flat()
+          .find((j) => j.label === 'Short background job');
+        const jobId = String(job?.id ?? '');
+        const read = (await request('worker.job.read', { logicalSessionId, jobId }).catch(
+          (error) => ({
+            error: String(error),
+          })
+        )) as { text?: string; error?: string };
+        const panels = (await request('worker.panels', { logicalSessionId })) as {
+          projections: Array<{ key: string; view: unknown }>;
+        };
+        console.log(
+          `  jobs: views ${JSON.stringify(jobsViews().map((v) => v.map((j) => j.status)))}`
+        );
+        console.log(`  jobs: read ${JSON.stringify(read).slice(0, 200)}`);
+        check(
+          'jobs',
+          'the background command is listed as a running bash job',
+          jobsViews().some((v) => v.some((j) => j.kind === 'bash' && j.status === 'running'))
+        );
+        check(
+          'jobs',
+          'it settles as completed with its exit code',
+          Boolean(settled) &&
+            /exit code 0/.test(
+              String(
+                jobsViews()
+                  .flat()
+                  .find((j) => j.label === 'Short background job' && j.status === 'completed')
+                  ?.detail ?? ''
+              )
+            )
+        );
+        check(
+          'jobs',
+          "the window reads the job's output",
+          String(read.text ?? '').includes('job-out-ok')
+        );
+        check(
+          'jobs',
+          'panels answers the same jobs',
+          panels.projections.some(
+            (entry) =>
+              entry.key === 'jobs' &&
+              Array.isArray(entry.view) &&
+              (entry.view as unknown[]).length > 0
+          )
+        );
+        // Stop from the window: a long one.
+        await new Promise((r) => setTimeout(r, 4000));
+        const long = {
+          name: 'Bash',
+          input: {
+            command: 'sleep 61',
+            description: 'Long background job',
+            run_in_background: true,
+          },
+        };
+        // A second one that keeps running: stopping the first must not touch it.
+        const other = {
+          name: 'Bash',
+          input: {
+            command: 'sleep 62',
+            description: 'Other background job',
+            run_in_background: true,
+          },
+        };
+        await send(`CC-RUN ${JSON.stringify({ calls: [long, other] })}`);
+        await waitFor(terminal, 'jobs: long turn end', 90_000);
+        const longJob = await waitFor(
+          (e) =>
+            e.type === 'session.projection' &&
+            e.payload?.key === 'jobs' &&
+            ((e.payload?.view ?? []) as Array<Record<string, unknown>>).some(
+              (j) => j.label === 'Long background job' && j.status === 'running'
+            ),
+          'jobs: the long job runs',
+          30_000
+        );
+        const longId = String(
+          ((longJob.payload?.view ?? []) as Array<Record<string, unknown>>).find(
+            (j) => j.label === 'Long background job'
+          )?.id
+        );
+        const killed = (await request('worker.job.kill', { logicalSessionId, jobId: longId })) as {
+          outcome?: string;
+        };
+        const ended = await waitFor(
+          (e) =>
+            e.type === 'session.projection' &&
+            e.payload?.key === 'jobs' &&
+            ((e.payload?.view ?? []) as Array<Record<string, unknown>>).some(
+              (j) => j.id === longId && j.status === 'killed'
+            ),
+          'jobs: the long job is killed',
+          30_000
+        ).catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 2000));
+        console.log(
+          `  jobs: kill → ${JSON.stringify(killed)}; sleep 61 left: ${sleepers(61)}, sleep 62 left: ${sleepers(62)}`
+        );
+        check('jobs', 'Stop is requested for the running job', killed.outcome === 'requested');
+        check('jobs', 'the job settles as killed', Boolean(ended));
+        check('jobs', 'its process is gone', sleepers(61) === 0);
+        check('jobs', "the other job's process is left running", sleepers(62) === 1);
+        const otherId = String(
+          jobsViewsLatest().find((j) => j.label === 'Other background job')?.id ?? ''
+        );
+        if (otherId) await request('worker.job.kill', { logicalSessionId, jobId: otherId });
+        await new Promise((r) => setTimeout(r, 3000));
+        check('jobs', 'stopping the other one ends it too', sleepers(62) === 0);
+        // The model's own TaskStop on a background command (the user's test, S-6).
+        const third = {
+          name: 'Bash',
+          input: {
+            command: 'sleep 63',
+            description: 'Third background job',
+            run_in_background: true,
+          },
+        };
+        await send(`CC-RUN ${JSON.stringify({ calls: [third] })}`);
+        await waitFor(terminal, 'jobs: third turn end', 90_000);
+        await new Promise((r) => setTimeout(r, 1500));
+        const thirdId = String(
+          jobsViewsLatest().find((j) => j.label === 'Third background job')?.id ?? ''
+        );
+        await send(
+          `CC-RUN ${JSON.stringify({ calls: [{ name: 'TaskStop', input: { task_id: thirdId } }] })}`
+        );
+        await waitFor(terminal, 'jobs: TaskStop turn end', 90_000);
+        await new Promise((r) => setTimeout(r, 4000));
+        console.log(`  jobs: TaskStop ${thirdId}; sleep 63 left: ${sleepers(63)}`);
+        check('jobs', "the model's TaskStop leaves no process of the command", sleepers(63) === 0);
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
         break;
       }
       case 'errors': {

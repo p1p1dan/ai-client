@@ -150,7 +150,7 @@ export function descendantsOf(rootPid: number, table: Map<number, ProcessRow>): 
   return out;
 }
 
-interface MsysRow {
+export interface MsysRow {
   pid: number;
   ppid: number;
   pgid: number;
@@ -168,11 +168,11 @@ interface MsysRow {
  * the shells the CLI started are matched by Windows pid, and their process
  * groups and MSYS descendants are what the tool call started.
  */
-export async function msysToolProcesses(
+/** Git Bash's own process table (`usr\\bin\\ps.exe`); empty when it cannot be read. */
+export async function msysProcessTable(
   gitBashPath: string,
-  shells: ProcessRow[],
   timeoutMs = 15_000
-): Promise<ProcessRow[]> {
+): Promise<MsysRow[]> {
   const ps = gitBashPath.replace(/[\\/]bin[\\/]bash\.exe$/i, '\\usr\\bin\\ps.exe');
   let stdout = '';
   try {
@@ -196,6 +196,15 @@ export async function msysToolProcesses(
       });
     }
   }
+  return rows;
+}
+
+export async function msysToolProcesses(
+  gitBashPath: string,
+  shells: ProcessRow[],
+  timeoutMs = 15_000
+): Promise<ProcessRow[]> {
+  const rows = await msysProcessTable(gitBashPath, timeoutMs);
   const shellWinPids = new Set(shells.map((row) => row.pid));
   const roots = rows.filter((row) => shellWinPids.has(row.winpid));
   const groups = new Set(roots.map((row) => row.pgid));

@@ -18,8 +18,16 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { realpathSync } from 'node:fs';
-import { homedir } from 'node:os';
+import {
+  closeSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   type CanUseTool,
@@ -63,40 +71,46 @@ import {
 } from '../shared/types/runtimePermission.ts';
 import type { HistoryBlock, HistoryMessage } from '../shared/types/sessionHistory.ts';
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
-import type {
-  WorkerAcceptForkResult,
-  WorkerBootstrapResult,
-  WorkerCommandResult,
-  WorkerCommandsResult,
-  WorkerCompactCancelResult,
-  WorkerCompactResult,
-  WorkerDiscardForkResult,
-  WorkerForkResult,
-  WorkerHistoryPayload,
-  WorkerHistoryResult,
-  WorkerInterjectPayload,
-  WorkerInterjectResult,
-  WorkerInterjectWithdrawResult,
-  WorkerJobKillResult,
-  WorkerJobReadResult,
-  WorkerPanelsResult,
-  WorkerRewindResult,
-  WorkerSendPayload,
-  WorkerSendResult,
-  WorkerStopPayload,
-  WorkerStopResult,
-  WorkerSubagentInterruptResult,
-  WorkerTreeResult,
+import {
+  WORKER_JOB_READ_DEFAULT_BYTES,
+  type WorkerAcceptForkResult,
+  type WorkerBootstrapResult,
+  type WorkerCommandResult,
+  type WorkerCommandsResult,
+  type WorkerCompactCancelResult,
+  type WorkerCompactResult,
+  type WorkerDiscardForkResult,
+  type WorkerForkResult,
+  type WorkerHistoryPayload,
+  type WorkerHistoryResult,
+  type WorkerInterjectPayload,
+  type WorkerInterjectResult,
+  type WorkerInterjectWithdrawResult,
+  type WorkerJobKillPayload,
+  type WorkerJobKillResult,
+  type WorkerJobReadPayload,
+  type WorkerJobReadResult,
+  type WorkerPanelsResult,
+  type WorkerRewindResult,
+  type WorkerSendPayload,
+  type WorkerSendResult,
+  type WorkerStopPayload,
+  type WorkerStopResult,
+  type WorkerSubagentInterruptResult,
+  type WorkerTreeResult,
 } from '../shared/types/workerRpc.ts';
 import { mapSdkFailure, redactSecrets, type SdkFailureSignals } from './failureMapping.ts';
 import {
   descendantsOf,
+  killProcess,
+  msysProcessTable,
   msysToolProcesses,
   type ProcessRow,
   reap,
   sampleProcesses,
 } from './processTree.ts';
 import { type ClaudeSdkSessionStub, createStub, readStub, writeStub } from './sessionStub.ts';
+import { type BoardChange, TaskBoard } from './taskBoard.ts';
 import { ToolProcessTracker } from './toolProcessTracker.ts';
 
 export interface SdkHostConfig {
@@ -531,6 +545,53 @@ function num(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+/** What a subagent said, in order: the text blocks of its transcript's assistant messages. */
+export function subagentText(transcriptFile: string): string {
+  let raw = '';
+  try {
+    raw = readFileSync(transcriptFile, 'utf8');
+  } catch {
+    return '';
+  }
+  const parts: string[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let entry: { type?: unknown; message?: { content?: unknown } };
+    try {
+      entry = JSON.parse(line) as typeof entry;
+    } catch {
+      continue;
+    }
+    if (entry.type !== 'assistant' || !Array.isArray(entry.message?.content)) continue;
+    for (const block of entry.message.content as Array<{ type?: unknown; text?: unknown }>) {
+      if (block?.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
+        parts.push(block.text.trim());
+      }
+    }
+  }
+  return parts.join('\n\n');
+}
+
+/** `worker.job.read`'s window over bytes held in memory (from/next/omitted as for a file). */
+function windowOf(
+  bytes: Buffer,
+  from: number | undefined,
+  maxBytes: number,
+  source: string
+): WorkerJobReadResult {
+  const size = bytes.length;
+  const asked = Math.min(Math.max(0, from ?? Math.max(0, size - maxBytes)), size);
+  const start = Math.max(asked, size - maxBytes);
+  return {
+    text: bytes.subarray(start).toString('utf8'),
+    from: start,
+    next: size,
+    omittedBytes: from === undefined ? start : start - asked,
+    lossy: false,
+    spillPaths: [source],
+  };
+}
+
 export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private readonly options: BridgeSessionRuntimeOptions;
   private readonly config: SdkHostConfig;
@@ -569,6 +630,17 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private readonly streamedWaiters = new Map<string, (input: unknown) => void>();
   /** Live background tasks of this CLI process (decision 8), reported on every `session.status`. */
   private backgroundTasks = 0;
+  /** S-6 feedback 4: the CLI's tasks as the jobs window, the subagents window and lanes draw them. */
+  private readonly board = new TaskBoard();
+  /**
+   * S-6 feedback 4 (Windows): a background command's Git Bash process group, noted when
+   * it starts. A stopped task's MSYS processes outlive the shell the CLI ends (as at
+   * Stop, #52); whoever stopped it (the jobs window, the model's TaskStop), what is left
+   * of its group is ended.
+   */
+  private readonly taskGroups = new Map<string, { shell: number; pgid: number }>();
+  /** One shell lookup at a time, in task start order, so two tasks never take one shell. */
+  private shellLookup: Promise<void> = Promise.resolve();
   /** Once the CLI sends `background_tasks_changed`, its level replaces the task_* edge count. */
   private backgroundLevelSeen = false;
   private readonly backgroundEdges = new Set<string>();
@@ -776,6 +848,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         // The CLI's tasks went with it.
         const hadTasks = this.backgroundTasks > 0;
         this.resetBackgroundTasks();
+        if (this.board.settleAll()) this.applyBoard({ jobs: true, catalog: false, activity: [] });
         if (hadTasks && !this.turn) this.emitStatus('idle');
       }
       // The product UI never names Claude Code (plan hard constraint 4).
@@ -834,7 +907,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     if (this.turnCount === 1) {
       this.emit({ type: 'session.projection', payload: { key: 'todos', view: null } });
       this.emit({ type: 'session.projection', payload: { key: 'goal', view: null } });
-      this.emit({ type: 'session.projection', payload: { key: 'subagentCatalog', view: [] } });
+      this.emit({
+        type: 'session.projection',
+        payload: { key: 'subagentCatalog', view: this.board.subagentCatalog() },
+      });
     }
     this.emitStatus('running');
     this.echoUser(input.attemptId, input.text, input.attachments);
@@ -1138,10 +1214,12 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         return;
       case 'assistant':
         if (message.parent_tool_use_id === null) this.ingestAssistant(message);
+        else this.applySubagentThread(message as unknown as Record<string, unknown>);
         return;
       case 'user':
         if (message.parent_tool_use_id === null)
           this.ingestUser(message as unknown as Record<string, unknown>);
+        else this.applySubagentThread(message as unknown as Record<string, unknown>);
         return;
       case 'result':
         this.ingestResult(message as unknown as Record<string, unknown>);
@@ -1194,7 +1272,35 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     this.endTurn(turn.stopRequested ? 'stopped' : 'completed', {});
   }
 
+  /** S-6 feedback 4: what the board says changed, as projections and lane events. */
+  private applyBoard(change: BoardChange): void {
+    if (change.jobs) {
+      this.emit({ type: 'session.projection', payload: { key: 'jobs', view: this.board.jobs() } });
+    }
+    if (change.catalog) {
+      this.emit({
+        type: 'session.projection',
+        payload: { key: 'subagentCatalog', view: this.board.subagentCatalog() },
+      });
+    }
+    for (const payload of change.activity) this.emit({ type: 'subagent.activity', payload });
+  }
+
+  /** A subagent's own thread (S-6 feedback 4): its lane's text and tool calls. */
+  private applySubagentThread(message: Record<string, unknown>): void {
+    const activity = this.board.ingestSubagentMessage(message);
+    if (activity.length > 0) this.applyBoard({ jobs: false, catalog: false, activity });
+  }
+
   private ingestSystem(message: Record<string, unknown>): void {
+    this.applyBoard(this.board.ingestSystem(message));
+    const taskId = typeof message.task_id === 'string' ? message.task_id : undefined;
+    if (taskId && message.subtype === 'task_started' && this.board.kindOf(taskId) === 'bash') {
+      this.noteTaskShell(taskId);
+    }
+    if (taskId && message.subtype === 'task_notification') {
+      this.settleTaskShell(taskId, message.status);
+    }
     switch (message.subtype) {
       case 'init': {
         if (Array.isArray(message.slash_commands)) {
@@ -2306,7 +2412,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     return {
       projections: [
         { key: 'goalActivation', view: null },
-        { key: 'jobs', view: [] },
+        { key: 'jobs', view: this.board.jobs() },
+        { key: 'subagentCatalog', view: this.board.subagentCatalog() },
       ],
     };
   }
@@ -2338,12 +2445,182 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     return { ok: false, error: 'Not available on the Claude SDK engine' };
   }
 
-  async killJob(): Promise<WorkerJobKillResult> {
-    throw unsupported('worker.job.kill');
+  /** S-6 feedback 4: the jobs window's Stop, through the CLI's own `stop_task`. */
+  async killJob(input: WorkerJobKillPayload): Promise<WorkerJobKillResult> {
+    if (!this.board.isRunning(input.jobId)) return { outcome: 'already-finished' };
+    const q = this.query as (Query & { stopTask?: (taskId: string) => Promise<void> }) | null;
+    if (!q?.stopTask) return { outcome: 'already-finished' };
+    if (this.board.markStopping(input.jobId)) {
+      this.applyBoard({ jobs: true, catalog: false, activity: [] });
+    }
+    // The task's MSYS leftovers are ended when its notification says it stopped: its
+    // shell has to be known before the CLI ends it.
+    await this.shellLookup;
+    await q
+      .stopTask(input.jobId)
+      .catch((error) => this.log(`stop task ${input.jobId} failed`, error));
+    return { outcome: 'requested' };
   }
 
-  async readJob(): Promise<WorkerJobReadResult> {
-    throw unsupported('worker.job.read');
+  /**
+   * A background command started: note its Git Bash's MSYS process group (Windows). Its
+   * shell is the Git Bash under the CLI, owned by no other task, created closest to when
+   * the task started (the CLI reports a task once its shell runs); one task at a time,
+   * in start order.
+   */
+  private noteTaskShell(taskId: string): void {
+    if (process.platform !== 'win32' || !this.config.gitBashPath) return;
+    const gitBash = this.config.gitBashPath;
+    const startedAt = this.board.startedAt(taskId) ?? Date.now();
+    this.log(`task ${taskId}: looking for its Git Bash`);
+    const lookup = async () => {
+      if (!this.board.isRunning(taskId)) {
+        this.log(`task ${taskId}: ended before its Git Bash was looked for`);
+        return;
+      }
+      const table = await sampleProcesses({ log: (m) => this.log(m) });
+      const msys = await msysProcessTable(gitBash, STOP_SAMPLE_WAIT_MS);
+      const owned = new Set([...this.taskGroups.values()].map((group) => group.shell));
+      // Two bash.exe appear per command, a few ms apart; only the one Git Bash's own table
+      // lists runs the command (its MSYS group is the one to end).
+      const listed = new Map(msys.map((row) => [row.winpid, row] as const));
+      const candidates = descendantsOf(process.pid, table)
+        .filter(
+          (row) => /^bash\.exe$/i.test(row.name) && !owned.has(row.pid) && listed.has(row.pid)
+        )
+        .sort((a, b) => Math.abs(a.start - startedAt) - Math.abs(b.start - startedAt));
+      this.log(
+        `task ${taskId} (started ${startedAt}): shells ${candidates.map((row) => `#${row.pid}@${Math.round(row.start)}`).join(' ') || '(none)'}`
+      );
+      const shell = candidates[0];
+      const root = shell ? listed.get(shell.pid) : undefined;
+      if (!shell || !root) return;
+      this.taskGroups.set(taskId, { shell: shell.pid, pgid: root.pgid });
+      this.log(`task ${taskId}: Git Bash #${shell.pid}, MSYS group ${root.pgid}`);
+    };
+    this.shellLookup = this.shellLookup
+      .then(lookup)
+      .catch((error) => this.log(`task ${taskId}: no shell group`, error));
+  }
+
+  /** A task ended: if it was stopped, end what is left of its MSYS group. */
+  private settleTaskShell(taskId: string, status: unknown): void {
+    const group = this.taskGroups.get(taskId);
+    if (!group) return;
+    this.taskGroups.delete(taskId);
+    if (status !== 'stopped' || !this.config.gitBashPath) return;
+    const gitBash = this.config.gitBashPath;
+    setTimeout(() => {
+      void (async () => {
+        const left = (await msysProcessTable(gitBash, STOP_SAMPLE_WAIT_MS)).filter(
+          (row) => row.pgid === group.pgid && row.winpid !== group.shell
+        );
+        const killed = left.filter((row) => killProcess(row.winpid));
+        if (killed.length > 0) {
+          this.log(
+            `task ${taskId} stopped: ended ${killed.length} process(es) of its group: ${killed.map((row) => `${row.command}#${row.winpid}`).join(', ')}`
+          );
+        }
+      })().catch((error) => this.log(`task ${taskId}: reap failed`, error));
+    }, 1_000);
+  }
+
+  /**
+   * S-6 feedback 4: a job's output, read from the file the CLI writes it to
+   * (`<tmp>/claude/<cwd dir>/<session id>/tasks/<task id>.output`), named by its
+   * notification once it ended and found by its id while it runs.
+   */
+  async readJob(input: WorkerJobReadPayload): Promise<WorkerJobReadResult> {
+    const empty: WorkerJobReadResult = {
+      text: '',
+      from: 0,
+      next: 0,
+      omittedBytes: 0,
+      lossy: false,
+    };
+    const maxBytes = Math.max(1, input.maxBytes ?? WORKER_JOB_READ_DEFAULT_BYTES);
+    // A subagent's output file stays empty on Windows (measured, 2.1.300): what it said
+    // is in its own transcript.
+    if (this.board.kindOf(input.jobId) === 'subagent') {
+      const transcript = this.findSubagentTranscript(input.jobId);
+      if (!transcript) return empty;
+      const bytes = Buffer.from(subagentText(transcript), 'utf8');
+      return windowOf(bytes, input.from, maxBytes, transcript);
+    }
+    const file = this.board.outputFile(input.jobId) ?? this.findTaskOutput(input.jobId);
+    if (!file) return empty;
+    let size: number;
+    try {
+      size = statSync(file).size;
+    } catch {
+      return empty;
+    }
+    const asked = Math.min(Math.max(0, input.from ?? Math.max(0, size - maxBytes)), size);
+    const start = Math.max(asked, size - maxBytes);
+    const length = size - start;
+    const buffer = Buffer.alloc(length);
+    if (length > 0) {
+      const fd = openSync(file, 'r');
+      try {
+        readSync(fd, buffer, 0, length, start);
+      } finally {
+        closeSync(fd);
+      }
+    }
+    return {
+      text: buffer.toString('utf8'),
+      from: start,
+      next: size,
+      omittedBytes: input.from === undefined ? start : start - asked,
+      lossy: false,
+      spillPaths: [file],
+    };
+  }
+
+  /** `<configDir>/projects/<cwd dir>/<session id>/subagents/agent-<task id>.jsonl`. */
+  private findSubagentTranscript(taskId: string): string | undefined {
+    if (!/^[A-Za-z0-9_-]+$/.test(taskId)) return undefined;
+    const ccSessionId = this.stub?.ccSessionId;
+    if (!ccSessionId) return undefined;
+    const root = path.join(this.config.configDir, 'projects');
+    let dirs: string[] = [];
+    try {
+      dirs = readdirSync(root);
+    } catch {
+      return undefined;
+    }
+    for (const dir of dirs) {
+      const file = path.join(root, dir, ccSessionId, 'subagents', `agent-${taskId}.jsonl`);
+      try {
+        if (statSync(file).isFile()) return file;
+      } catch {
+        // not this directory
+      }
+    }
+    return undefined;
+  }
+
+  /** A running task's output file: the CLI names it only when the task ends. */
+  private findTaskOutput(taskId: string): string | undefined {
+    if (!/^[A-Za-z0-9_-]+$/.test(taskId)) return undefined;
+    const ccSessionId = this.stub?.ccSessionId;
+    if (!ccSessionId) return undefined;
+    const root = path.join(tmpdir(), 'claude');
+    let dirs: string[] = [];
+    try {
+      dirs = readdirSync(root);
+    } catch {
+      return undefined;
+    }
+    for (const dir of dirs) {
+      const file = path.join(root, dir, ccSessionId, 'tasks', `${taskId}.output`);
+      try {
+        if (statSync(file).isFile()) return file;
+      } catch {
+        // not this directory
+      }
+    }
+    return undefined;
   }
 
   async interruptSubagent(): Promise<WorkerSubagentInterruptResult> {

@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -70,8 +78,13 @@ vi.mock('../processTree.ts', () => ({
   reap: vi.fn(() => []),
 }));
 
-const { ClaudeSdkSessionRuntime, isUserHomeDir, launchSettingSources, userClaudeDirExcludes } =
-  await import('../sdkSessionRuntime.ts');
+const {
+  ClaudeSdkSessionRuntime,
+  isUserHomeDir,
+  launchSettingSources,
+  subagentText,
+  userClaudeDirExcludes,
+} = await import('../sdkSessionRuntime.ts');
 
 const KEY = 'sk-fake-runtime-test-key';
 const PINS = { ANTHROPIC_BASE_URL: 'http://127.0.0.1:18950', DISABLE_AUTOUPDATER: '1' };
@@ -1398,5 +1411,27 @@ describe('Ctrl+Enter completed without being named (S-6 feedback 13)', () => {
     expect(events.filter((e) => e.type === 'session.completed').length).toBe(1);
     q.end();
     await rt.dispose();
+  });
+});
+
+describe("a subagent job's output (S-6 feedback 4)", () => {
+  it('is what the subagent said, from its transcript, in order', () => {
+    const file = join(configDir, 'agent-a1.jsonl');
+    const lines = [
+      { type: 'user', message: { content: [{ type: 'text', text: 'the task' }] } },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'First.' },
+            { type: 'tool_use', id: 't', name: 'Grep', input: {} },
+          ],
+        },
+      },
+      { type: 'assistant', message: { content: [{ type: 'text', text: '  Second.  ' }] } },
+    ];
+    writeFileSync(file, `${lines.map((l) => JSON.stringify(l)).join('\n')}\nnot json\n`);
+    expect(subagentText(file)).toBe('First.\n\nSecond.');
+    expect(subagentText(join(configDir, 'missing.jsonl'))).toBe('');
   });
 });
