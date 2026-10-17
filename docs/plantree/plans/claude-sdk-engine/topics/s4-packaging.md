@@ -78,7 +78,8 @@ Role: topic（S-4 方案，2026-10-16）。上位：[README](../README.md) §4 S
 - 打包（`electron-builder --win --x64 --dir`）：`win-unpacked` 共 1,017.8 MiB，其中 `resources/claude-sdk-host` 262.2 MiB（即安装后的增量，低于 0.6 GB 门槛），`dsh-host` 85.2 MiB、`node-runtime` 88.2 MiB、`app.asar` 105.0 MiB。把产物按 LZMA 最高压缩是 80.1 MiB，安装包约增大这么多（估算，未出安装包）。afterPack 对产物里 8 个 `.js`/`.mjs` 做了 TSD 改写。
 - 本机打目录包时，electron-builder 解压 `winCodeSign`（给 exe 改资源用）因包里的 macOS 符号链接失败，与本任务无关；加 `-c.win.signAndEditExecutable=false` 跳过那一步即可（CI 的 Windows 机器没有这个问题）。
 - `verify-packaged-app.mjs` 对 `win-unpacked`：两个宿主的结构、体积、声明都过；DSH 冒烟与 SDK 冒烟都过（SDK：随包 node + 随包 `host.js` + 随包 `claude.exe`，8 条断言）；SDK 冒烟从仓库外带空格的路径再跑一遍也过。
-- 安装包强制登录（`resolveSkipAuthGate` 在打包后恒为假），本机没有测试用的登录凭据，所以没在打包后的程序界面里跑回合；Main 在打包时组出的启动参数由单测覆盖（下一节）。
+- 安装包强制登录（`resolveSkipAuthGate` 在打包后恒为假），本机没有测试用的登录凭据，所以没在打包后的程序界面里跑回合；Main 在打包时组出的启动参数由单测覆盖（下一节）。后来用本机已登录账号的凭据副本补跑了（README §11.2 #43，[GUI 清单](gui-checklist.md) §2.1）。
+- 合进 S-5 与裁决 17～20 之后（`8be0f815`）重打目录包：产物仍为 262.2 MiB、19 个文件，SDK 入口仍只 import Node 内置模块；`verify-packaged-app` 全过（两个宿主的冒烟）。S-5 的回归命令 `probe-suite.ts` 用随包的 node、随包的 `host.js` 与 `claude.exe`，从仓库外带空格的 `PiLab Ai/resources` 副本跑：7 组 130 条全过（flow 35、modes 34、refused 3、errors 33、projcfg 12、scratch 9、home 4）。合并前的旧目录包跑同一组是 124/130，差的 6 条正是裁决 18、20 改了的计划模式与插件市场检查。
 
 ## 5 实现记录
 
