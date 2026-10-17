@@ -9,8 +9,10 @@
  *
  * `--host-entry` drives another host entry (a packaged `resources/claude-sdk-host/host.js`)
  * through PROBE_HOST_ENTRY. `--keep` keeps the temporary directories; a failed group's
- * are kept anyway, and its log path is printed; `--logs` also copies it there (CI uploads it). Only the fake gateway is used: the probe
- * key is a fake one and nothing here reads a stored credential.
+ * are kept anyway, and its log path is printed; `--logs` copies every group's log there, a
+ * passed group's too (CI uploads them: a report-only check and the `stop` scenario's
+ * PowerShell timings, README §11.2 #52, are only in the log). Only the fake gateway is used:
+ * the probe key is a fake one and nothing here reads a stored credential.
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
@@ -263,7 +265,9 @@ async function main(): Promise<void> {
         `[probe-suite] ${passed ? 'ok  ' : 'FAIL'} ${group.name.padEnd(8)} ${parsed.summary ?? `exit ${exit}, no verdict`} (${Math.round((Date.now() - started) / 1000)} s)${passed ? '' : ` log: ${log}`}`
       );
       for (const label of parsed.failed) console.log(`[probe-suite]        - ${label}`);
-      if (!passed && args.logs) {
+      // Every group's log, not only a failed one: what a passed group reported without
+      // blocking (the `stop` leftover check on CI, ps-diag) is only there (#52).
+      if (args.logs) {
         mkdirSync(args.logs, { recursive: true });
         copyFileSync(log, join(args.logs, `${group.name}.log`));
       }
