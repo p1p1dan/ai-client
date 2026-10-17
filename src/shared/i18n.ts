@@ -2852,6 +2852,7 @@ export const zhTranslations: Record<string, string> = {
 
   // 回合进行中的状态行。等待动词按秒轮换，整张表都要有词条。
   'Connecting to the chat engine… · {{seconds}}s': '正在连接对话引擎… · {{seconds}}s',
+  'Connecting to the chat engine…': '正在连接对话引擎…',
   'Still waiting · {{seconds}}s': '仍在等待 · {{seconds}}s',
   'past the usual range; no reply and no error yet. Stop to abort.':
     '已超出常见时长；既没有回复也没有报错。按停止可中止。',

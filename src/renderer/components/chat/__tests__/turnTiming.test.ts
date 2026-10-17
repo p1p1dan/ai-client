@@ -581,6 +581,19 @@ describe('deriveTurnElapsedMs', () => {
     ).toBeNull();
   });
 
+  it('[WG-CLOCK-2b] an origin less than a tick ahead of now is a turn that just started', () => {
+    // S-6 feedback 11c: the user message's own stamp lands just after the last tick.
+    expect(
+      deriveTurnElapsedMs({ startedAtMs: 1_400, metadata: [], nowMs: 1_000, running: true })
+    ).toBe(0);
+    expect(
+      deriveTurnElapsedMs({ startedAtMs: 2_000, metadata: [], nowMs: 1_000, running: true })
+    ).toBe(0);
+    expect(
+      deriveTurnElapsedMs({ startedAtMs: 2_001, metadata: [], nowMs: 1_000, running: true })
+    ).toBeNull();
+  });
+
   /**
    * A multi-step turn (tool call, or an authorization wait) settles several
    * messages. The span is send -> the LAST completion, never the last model

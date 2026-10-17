@@ -859,8 +859,9 @@ export function MessageTimeline({
     // participates in the timeline's layout at all. Issue #17: the provider
     // around it tells each summary row whether a later compaction superseded it.
     <SupersededSummariesContext.Provider value={supersededSummaries}>
-      <div className="relative flex min-h-0 flex-1 flex-col" ref={scrollRootRef}>
-        {/* Round-2 V-b, as narrowed by T-31 §5.7 and simplified again by T12.
+      <TurnConnectingContext.Provider value={attachedSendStatus?.phase === 'handshake'}>
+        <div className="relative flex min-h-0 flex-1 flex-col" ref={scrollRootRef}>
+          {/* Round-2 V-b, as narrowed by T-31 §5.7 and simplified again by T12.
           Conclusion ① is back to its original form: this viewport contains no
           sticky or fixed element at all (T-31's per-turn bubble band retired —
           see `chatTimelineLayout.ts`), and nothing above it
@@ -875,132 +876,132 @@ export function MessageTimeline({
           BOTTOM-ONLY. It was narrowed to soften the hard bottom clip under the
           composer; a top fade has nothing left to do now that no band is pinned
           up there, and adding one back would only wash out live prose. */}
-        {/* 2026-09-24: the second clock rides along with the disclosure
+          {/* 2026-09-24: the second clock rides along with the disclosure
           callback, so a tick reaches a running row's elapsed tail as a context
           update and re-renders that one leaf, not the tool groups around it. */}
-        <ToolRowTimelineContext follow={preserveDisclosurePosition} nowMs={nowMs}>
-          <ScrollArea className="min-h-0 flex-1" scrollFade="bottom">
-            {/* Padding stays outside ReadingColumn — inside it would shave 24px off
+          <ToolRowTimelineContext follow={preserveDisclosurePosition} nowMs={nowMs}>
+            <ScrollArea className="min-h-0 flex-1" scrollFade="bottom">
+              {/* Padding stays outside ReadingColumn — inside it would shave 24px off
             the documented 45rem/60rem (D25 §3.4) reading width (T-22 spec §2.13). */}
-            <div className={TIMELINE_PADDING_CLASS} ref={contentRef}>
-              {/* T-05 (A07 `.tl` :846): 20px turn spacing. T-31 §5.4 had split it
+              <div className={TIMELINE_PADDING_CLASS} ref={contentRef}>
+                {/* T-05 (A07 `.tl` :846): 20px turn spacing. T-31 §5.4 had split it
               into 10 here + 10 of sticky-band padding; T12 retired the band, so
               the whole beat is back in one place (F-B9). */}
-              <ReadingColumn className={readingColumnSpacingClass()}>
-                {historyPagination?.hasMore && (
-                  <div className="flex justify-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={loadingOlderHistory || nextTurnStatus !== 'idle'}
-                      onClick={() => void loadOlderHistory()}
+                <ReadingColumn className={readingColumnSpacingClass()}>
+                  {historyPagination?.hasMore && (
+                    <div className="flex justify-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={loadingOlderHistory || nextTurnStatus !== 'idle'}
+                        onClick={() => void loadOlderHistory()}
+                      >
+                        {loadingOlderHistory ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw />}
+                        {t('Load earlier messages')}
+                      </Button>
+                    </div>
+                  )}
+                  {historyNotice.kind === 'loading' && pendingSendStatus == null ? (
+                    // The transcript is on its way. Reads as the timeline warming
+                    // up rather than as a statement about this chat — the 「还没有
+                    // 消息」 copy below is reserved for a chat that really is empty.
+                    // Gated on the pending send like that copy: a message the user
+                    // just sent has its own head below, and outranks both.
+                    <p
+                      className="flex items-center gap-2 text-ui text-muted-foreground"
+                      role="status"
                     >
-                      {loadingOlderHistory ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw />}
-                      {t('Load earlier messages')}
-                    </Button>
-                  </div>
-                )}
-                {historyNotice.kind === 'loading' && pendingSendStatus == null ? (
-                  // The transcript is on its way. Reads as the timeline warming
-                  // up rather than as a statement about this chat — the 「还没有
-                  // 消息」 copy below is reserved for a chat that really is empty.
-                  // Gated on the pending send like that copy: a message the user
-                  // just sent has its own head below, and outranks both.
-                  <p
-                    className="flex items-center gap-2 text-ui text-muted-foreground"
-                    role="status"
-                  >
-                    <Spinner className="h-3.5 w-3.5" />
-                    {t('Loading this conversation…')}
-                  </p>
-                ) : historyNotice.kind === 'empty' && pendingSendStatus == null ? (
-                  // Decision 144: says what to do, not which process answers it.
-                  <p className="text-ui text-muted-foreground">
-                    {t('No messages yet. Send a message to start.')}
-                  </p>
-                ) : (
-                  turns.map((turn, index) => {
-                    // DA-6 (decision 180): a `/compact` the user ran, after the
-                    // turn before it and that turn's line, as no turn of its own.
-                    if (turn.kind === 'compaction') {
+                      <Spinner className="h-3.5 w-3.5" />
+                      {t('Loading this conversation…')}
+                    </p>
+                  ) : historyNotice.kind === 'empty' && pendingSendStatus == null ? (
+                    // Decision 144: says what to do, not which process answers it.
+                    <p className="text-ui text-muted-foreground">
+                      {t('No messages yet. Send a message to start.')}
+                    </p>
+                  ) : (
+                    turns.map((turn, index) => {
+                      // DA-6 (decision 180): a `/compact` the user ran, after the
+                      // turn before it and that turn's line, as no turn of its own.
+                      if (turn.kind === 'compaction') {
+                        return (
+                          <ManualCompactionTurn
+                            key={turn.id}
+                            turn={turn}
+                            sessionId={sessionId}
+                            thinkingEnabled={thinkingEnabled}
+                            repoName={repoName}
+                            getThinkingDurationMs={getThinkingDurationMs}
+                          />
+                        );
+                      }
+                      // F7: the two ticking props are handed ONLY to the turn that
+                      // can read them. Every other turn keeps byte-identical props
+                      // across a tick, which is what lets `React.memo` on `ChatTurn`
+                      // hold and returns the per-second derivation cost to
+                      // O(in-flight turn) instead of O(whole session).
+                      const isLastTurn = index === lastTurnIndex;
                       return (
-                        <ManualCompactionTurn
+                        <ChatTurn
                           key={turn.id}
                           turn={turn}
                           sessionId={sessionId}
+                          isLastTurn={isLastTurn}
+                          sessionStatus={status}
+                          inFlightSession={inFlightSession}
+                          sendStatus={isLastTurn ? attachedSendStatus : null}
+                          // F2 §4.5: same last-turn-only discipline as `nowMs` — a
+                          // pending reply belongs to the turn the send opened.
+                          pendingReply={isLastTurn ? pendingReply : null}
+                          statusOwnedByPendingHead={pendingSendStatus != null}
+                          baselineKnown={sendBaseline != null}
+                          baselineMessageId={sendBaseline?.messageId ?? null}
+                          // T-33: session-scoped retry belongs to the turn actually
+                          // in flight — the pending head below while the user echo
+                          // has not landed, the last turn otherwise. Nulled for every
+                          // other turn for the same reason the two ticking props are
+                          // (F7): a retry tick must not break `memo` session-wide.
+                          retry={isLastTurn && pendingSendStatus == null ? sessionRetry : null}
+                          // T093: narrowed exactly like `retry` above — the name is
+                          // only ever read next to it, so handing it to every turn
+                          // would break `memo` for a string nobody else renders.
+                          retryDelegateName={
+                            isLastTurn && pendingSendStatus == null ? retryDelegateName : null
+                          }
+                          nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}
+                          getMetadata={getMeta}
                           thinkingEnabled={thinkingEnabled}
                           repoName={repoName}
                           getThinkingDurationMs={getThinkingDurationMs}
+                          getToolStartedAtMs={isLastTurn ? getToolStartedAtMs : NO_TOOL_STARTS}
+                          // The progress head needs the SPAN, not just the settled
+                          // duration: a thought that has started and not finished is
+                          // the whole point of a live 「思考 N 秒」 clause, and
+                          // `durationMs` is null for exactly that case. Already
+                          // `useCallback`-stable at its source, so the memo holds.
+                          getThinkingTiming={getThinking}
                         />
                       );
-                    }
-                    // F7: the two ticking props are handed ONLY to the turn that
-                    // can read them. Every other turn keeps byte-identical props
-                    // across a tick, which is what lets `React.memo` on `ChatTurn`
-                    // hold and returns the per-second derivation cost to
-                    // O(in-flight turn) instead of O(whole session).
-                    const isLastTurn = index === lastTurnIndex;
-                    return (
-                      <ChatTurn
-                        key={turn.id}
-                        turn={turn}
-                        sessionId={sessionId}
-                        isLastTurn={isLastTurn}
-                        sessionStatus={status}
-                        inFlightSession={inFlightSession}
-                        sendStatus={isLastTurn ? attachedSendStatus : null}
-                        // F2 §4.5: same last-turn-only discipline as `nowMs` — a
-                        // pending reply belongs to the turn the send opened.
-                        pendingReply={isLastTurn ? pendingReply : null}
-                        statusOwnedByPendingHead={pendingSendStatus != null}
-                        baselineKnown={sendBaseline != null}
-                        baselineMessageId={sendBaseline?.messageId ?? null}
-                        // T-33: session-scoped retry belongs to the turn actually
-                        // in flight — the pending head below while the user echo
-                        // has not landed, the last turn otherwise. Nulled for every
-                        // other turn for the same reason the two ticking props are
-                        // (F7): a retry tick must not break `memo` session-wide.
-                        retry={isLastTurn && pendingSendStatus == null ? sessionRetry : null}
-                        // T093: narrowed exactly like `retry` above — the name is
-                        // only ever read next to it, so handing it to every turn
-                        // would break `memo` for a string nobody else renders.
-                        retryDelegateName={
-                          isLastTurn && pendingSendStatus == null ? retryDelegateName : null
-                        }
-                        nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}
-                        getMetadata={getMeta}
-                        thinkingEnabled={thinkingEnabled}
-                        repoName={repoName}
-                        getThinkingDurationMs={getThinkingDurationMs}
-                        getToolStartedAtMs={isLastTurn ? getToolStartedAtMs : NO_TOOL_STARTS}
-                        // The progress head needs the SPAN, not just the settled
-                        // duration: a thought that has started and not finished is
-                        // the whole point of a live 「思考 N 秒」 clause, and
-                        // `durationMs` is null for exactly that case. Already
-                        // `useCallback`-stable at its source, so the memo holds.
-                        getThinkingTiming={getThinking}
-                      />
-                    );
-                  })
-                )}
-                {pendingSendStatus && (
-                  <PendingTurnHead
-                    sessionId={sessionId}
-                    sendStatus={pendingSendStatus}
-                    retry={sessionRetry}
-                    retryDelegateName={retryDelegateName}
-                    nowMs={nowMs}
-                  />
-                )}
-                {/* Issue #8 (decision 172): Ctrl+Enter messages DSH has not taken
+                    })
+                  )}
+                  {pendingSendStatus && (
+                    <PendingTurnHead
+                      sessionId={sessionId}
+                      sendStatus={pendingSendStatus}
+                      retry={sessionRetry}
+                      retryDelegateName={retryDelegateName}
+                      nowMs={nowMs}
+                    />
+                  )}
+                  {/* Issue #8 (decision 172): Ctrl+Enter messages DSH has not taken
                 in yet, at the end of the timeline (decision 111 rule 12) and in
                 no turn. The turn they wait to join keeps running above them;
                 each echo opens its turn where DSH took the message in. */}
-                {awaitingDelivery.map((message) => (
-                  <UserBubble key={message.id} message={message} />
-                ))}
-                {/* dsh-rebase P1-7e (problem 25, decision 139): the history card
+                  {awaitingDelivery.map((message) => (
+                    <UserBubble key={message.id} message={message} />
+                  ))}
+                  {/* dsh-rebase P1-7e (problem 25, decision 139): the history card
                 and the migration notice sit at the END of the timeline, beside
                 the session-failed card below, not above the first turn. Both
                 usually answer something the user just did — sending in an old
@@ -1008,104 +1009,106 @@ export function MessageTimeline({
                 and the user is at the bottom when they do it: drawn first, a
                 chat with history put them hundreds of pixels out of sight. In
                 an empty chat the two places are the same place. */}
-                {historyNotice.kind === 'error' && (
-                  // Keyed by session: detail/retry state must not follow the user
-                  // across sessions when React reuses this slot.
-                  <HistoryErrorNotice
-                    key={sessionId}
-                    view={historyNotice.error}
-                    sessionId={sessionId}
-                    status={status}
-                  />
-                )}
-                {historyNotice.kind === 'migrating' && <LegacyMigrationProgressNotice />}
-                {/* T-31 §9-ζ: stays SESSION-level and stays here, after the last
+                  {historyNotice.kind === 'error' && (
+                    // Keyed by session: detail/retry state must not follow the user
+                    // across sessions when React reuses this slot.
+                    <HistoryErrorNotice
+                      key={sessionId}
+                      view={historyNotice.error}
+                      sessionId={sessionId}
+                      status={status}
+                    />
+                  )}
+                  {historyNotice.kind === 'migrating' && <LegacyMigrationProgressNotice />}
+                  {/* T-31 §9-ζ: stays SESSION-level and stays here, after the last
                 turn. Folding it into the failing turn would leave a
                 session-level failure (one that belongs to no turn) with
                 nowhere to render, and would move a block T-30 batch 1 already
                 landed as P-06. The failed turn gets its own short head label
                 instead (`deriveTurnStatus` -> 'Failed'). */}
-                {status === 'failed' && (
-                  <div
-                    className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-meta"
-                    role="alert"
-                  >
-                    {/* T-30 P-06: only the title carries weight — body and hint
+                  {status === 'failed' && (
+                    <div
+                      className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-meta"
+                      role="alert"
+                    >
+                      {/* T-30 P-06: only the title carries weight — body and hint
                     fall back to muted-foreground so a session-level failure
                     doesn't stack a second red block on top of the already-red
                     failed tool rows above it. P1-7e (decision 142): the title
                     is body ink now; the red is the card's border and tint. */}
-                    {/* 2026-09-21: the title used to be the bare words 「Session
+                      {/* 2026-09-21: the title used to be the bare words 「Session
                     failed」, which is the label of the sensor, not of the
                     event. It is now the KIND of stop ("Stopped at the
                     tool-call ceiling" / "The model's reply was cut off"), with
                     a reason line and a next step under it. The user's report
                     was 「停下了很莫名其妙」, and the fix for that is naming what
                     happened, not repeating that something did. */}
-                    <p className={sessionFailureTitleClass()}>{t(failure.title)}</p>
-                    {lastError && isAuthRequiredError(lastError) ? (
-                      // D47 S5 §3: spawn-gate rejection (resolveSpawnGateDecision,
-                      // @shared/authGate) — retrying won't help without a fresh
-                      // login, so this replaces the raw diagnostic + Retry hint
-                      // with mapped copy and a re-login action instead.
-                      <>
-                        <p className="mt-1 text-muted-foreground">
-                          {t(AUTH_REQUIRED_ERROR_VIEW.message)}
-                        </p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="mt-2 h-6 text-ui"
-                          onClick={() => void requestSignIn()}
-                          disabled={signInRequesting}
-                        >
-                          {signInRequesting ? <Spinner className="h-3.5 w-3.5" /> : null}
-                          {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
-                        </Button>
-                      </>
-                    ) : lastError && isModelMissingError(lastError) ? (
-                      // H/21 P0: the session's recorded model is not in this app's
-                      // model directory (H/19 U1 gave the app its own agent dir).
-                      // Same reasoning as the auth branch above — resending cannot
-                      // work until the model exists here, so the generic "可从下方
-                      // 输入框重发上条消息" hint would be wrong, and the only useful
-                      // affordance is the migration that puts the model there.
-                      <>
-                        <p className="mt-1 text-muted-foreground">
-                          {t(MODEL_MISSING_ERROR_VIEW.message)}
-                        </p>
-                        <p className="mt-1 text-muted-foreground">
-                          {t(MODEL_MISSING_ERROR_VIEW.hint)}
-                        </p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="mt-2 h-6 text-ui"
-                          onClick={() => requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)}
-                        >
-                          {t(MODEL_MISSING_ERROR_VIEW.actionLabel)}
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        {/* 2026-09-21: WHY it stopped, before the raw sentence that
+                      <p className={sessionFailureTitleClass()}>{t(failure.title)}</p>
+                      {lastError && isAuthRequiredError(lastError) ? (
+                        // D47 S5 §3: spawn-gate rejection (resolveSpawnGateDecision,
+                        // @shared/authGate) — retrying won't help without a fresh
+                        // login, so this replaces the raw diagnostic + Retry hint
+                        // with mapped copy and a re-login action instead.
+                        <>
+                          <p className="mt-1 text-muted-foreground">
+                            {t(AUTH_REQUIRED_ERROR_VIEW.message)}
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 h-6 text-ui"
+                            onClick={() => void requestSignIn()}
+                            disabled={signInRequesting}
+                          >
+                            {signInRequesting ? <Spinner className="h-3.5 w-3.5" /> : null}
+                            {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
+                          </Button>
+                        </>
+                      ) : lastError && isModelMissingError(lastError) ? (
+                        // H/21 P0: the session's recorded model is not in this app's
+                        // model directory (H/19 U1 gave the app its own agent dir).
+                        // Same reasoning as the auth branch above — resending cannot
+                        // work until the model exists here, so the generic "可从下方
+                        // 输入框重发上条消息" hint would be wrong, and the only useful
+                        // affordance is the migration that puts the model there.
+                        <>
+                          <p className="mt-1 text-muted-foreground">
+                            {t(MODEL_MISSING_ERROR_VIEW.message)}
+                          </p>
+                          <p className="mt-1 text-muted-foreground">
+                            {t(MODEL_MISSING_ERROR_VIEW.hint)}
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 h-6 text-ui"
+                            onClick={() =>
+                              requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)
+                            }
+                          >
+                            {t(MODEL_MISSING_ERROR_VIEW.actionLabel)}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          {/* 2026-09-21: WHY it stopped, before the raw sentence that
                         says what the provider said. The two are different
                         kinds of fact and the card needs both — the reason is
                         what a reader can act on, the sentence is the evidence
                         they forward when they ask for help. */}
-                        <p className="mt-1 text-muted-foreground">{t(failure.reason)}</p>
-                        {/* P1-3c: an engine-process sentence ("Worker exited …")
+                          <p className="mt-1 text-muted-foreground">{t(failure.reason)}</p>
+                          {/* P1-3c: an engine-process sentence ("Worker exited …")
                         is not evidence a user can forward; the reason says it. */}
-                        {lastError && failedCardShowsError && failure.showsDetail && (
-                          // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
-                          // content family as ChatComposer's destructive banner — mono.
-                          // Round-10 ③: suppressed when the latest error notice above
-                          // already prints this exact failure (see failedCardShowsError).
-                          <p className="mt-1 select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
-                            {lastError}
-                          </p>
-                        )}
-                        {/* F3 fast-fix batch, superseded 2026-09-21: this used to be
+                          {lastError && failedCardShowsError && failure.showsDetail && (
+                            // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
+                            // content family as ChatComposer's destructive banner — mono.
+                            // Round-10 ③: suppressed when the latest error notice above
+                            // already prints this exact failure (see failedCardShowsError).
+                            <p className="mt-1 select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
+                              {lastError}
+                            </p>
+                          )}
+                          {/* F3 fast-fix batch, superseded 2026-09-21: this used to be
                         affordance-neutral on purpose — "whether this failure
                         armed the composer's Retry or restored the draft is
                         decided by queueRelease's outcome, so the card must not
@@ -1121,61 +1124,61 @@ export function MessageTimeline({
                         reason re-sending cannot fix), the card says what to do
                         in words instead of offering the button. What is gone
                         is the case where it did nothing at all. */}
-                        {canContinueSession(failure, resumeMessageId != null) ? (
-                          // T135 / decision 045: retries the failed turn itself
-                          // (no second copy of the prompt), and only once the
-                          // failure has settled — see `retryLastTurn.ts`.
-                          // Decision 140: a failure retrying usually repeats
-                          // keeps its hint beside a button that says so.
-                          <>
-                            {failure.hintWithContinue && (
-                              <p className="mt-1 text-muted-foreground">{t(failure.hint)}</p>
-                            )}
-                            <FailureContinueButton
-                              blockedReason={continueBlockedReason({
-                                failureSettled,
-                                sendInFlight: sendStatus != null,
-                              })}
-                              label={failure.continueLabel}
-                              onContinue={() =>
-                                resumeMessageId && requestContinue(sessionId, resumeMessageId)
-                              }
-                            />
-                          </>
-                        ) : (
-                          <p className="mt-1 text-muted-foreground">{t(failure.hint)}</p>
-                        )}
-                        {pendingPermissions.some((item) => item.sessionId === sessionId) && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-2 h-6 text-ui"
-                            onClick={() => void stopChatSession(sessionId)}
-                          >
-                            {t('Stop')}
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-                {/* decision 040: a run that paused at the turn ceiling COMPLETED —
+                          {canContinueSession(failure, resumeMessageId != null) ? (
+                            // T135 / decision 045: retries the failed turn itself
+                            // (no second copy of the prompt), and only once the
+                            // failure has settled — see `retryLastTurn.ts`.
+                            // Decision 140: a failure retrying usually repeats
+                            // keeps its hint beside a button that says so.
+                            <>
+                              {failure.hintWithContinue && (
+                                <p className="mt-1 text-muted-foreground">{t(failure.hint)}</p>
+                              )}
+                              <FailureContinueButton
+                                blockedReason={continueBlockedReason({
+                                  failureSettled,
+                                  sendInFlight: sendStatus != null,
+                                })}
+                                label={failure.continueLabel}
+                                onContinue={() =>
+                                  resumeMessageId && requestContinue(sessionId, resumeMessageId)
+                                }
+                              />
+                            </>
+                          ) : (
+                            <p className="mt-1 text-muted-foreground">{t(failure.hint)}</p>
+                          )}
+                          {pendingPermissions.some((item) => item.sessionId === sessionId) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 h-6 text-ui"
+                              onClick={() => void stopChatSession(sessionId)}
+                            >
+                              {t('Stop')}
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {/* decision 040: a run that paused at the turn ceiling COMPLETED —
                 its wrap-up summary is the last reply above — so this is a
                 neutral notice beside it, not the failed card. Idle only: the
                 store clears the cause as soon as the next run starts. */}
-                {sessionId && status === 'idle' && stopCause === 'turn_limit' && (
-                  <TurnCeilingNotice onContinue={() => requestCarryOn(sessionId)} />
-                )}
-              </ReadingColumn>
-            </div>
-          </ScrollArea>
-        </ToolRowTimelineContext>
-        {/* Round-13 (user request 17): the prompt-history rail. Same floating
+                  {sessionId && status === 'idle' && stopCause === 'turn_limit' && (
+                    <TurnCeilingNotice onContinue={() => requestCarryOn(sessionId)} />
+                  )}
+                </ReadingColumn>
+              </div>
+            </ScrollArea>
+          </ToolRowTimelineContext>
+          {/* Round-13 (user request 17): the prompt-history rail. Same floating
           contract as the jump button below — mounted inside this `relative`
           wrapper, OUTSIDE the ScrollArea, so it hovers over the timeline
           without scrolling with it. Anchors itself to `data-turn-id`. */}
-        <PromptNavRail prompts={promptNavItems} containerRef={scrollRootRef} />
-        {/* T12-d: the bottom anchor. Shape is the app's OWN — `ShellTerminal`
+          <PromptNavRail prompts={promptNavItems} containerRef={scrollRootRef} />
+          {/* T12-d: the bottom anchor. Shape is the app's OWN — `ShellTerminal`
           (and the pi TUI's terminal, until P1-11) has carried this exact
           button for as long as it has had scrollback, and a second
           vocabulary for "jump to the live end" in the same window would be
@@ -1187,18 +1190,19 @@ export function MessageTimeline({
           acceptable (a duplicate of an action available elsewhere) does not
           transfer to the only way back to a running stream. It is a real
           <button>, so it is reachable by keyboard whenever it is on screen. */}
-        {showJumpToBottom && (
-          <button
-            type="button"
-            onClick={jumpToBottom}
-            className="absolute right-3 bottom-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary/80 text-primary-foreground shadow-lg transition-all hover:scale-105 hover:bg-primary active:scale-95"
-            title={t('Scroll to bottom')}
-            aria-label={t('Scroll to bottom')}
-          >
-            <ArrowDown className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+          {showJumpToBottom && (
+            <button
+              type="button"
+              onClick={jumpToBottom}
+              className="absolute right-3 bottom-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary/80 text-primary-foreground shadow-lg transition-all hover:scale-105 hover:bg-primary active:scale-95"
+              title={t('Scroll to bottom')}
+              aria-label={t('Scroll to bottom')}
+            >
+              <ArrowDown className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </TurnConnectingContext.Provider>
     </SupersededSummariesContext.Provider>
   );
 }
@@ -1600,6 +1604,16 @@ function UserBubble({ message }: { message: ChatMessage }) {
  * uppercase role label is gone (P-08); that matches the color-only signal
  * every other notice in this file already uses.
  */
+/**
+ * S-6 feedback 11c (user, 2026-10-17): while a send is still connecting to the engine,
+ * the turn's clock line says so (「✻ 工作中 1 秒 · 正在连接对话引擎…」) instead of a
+ * second status row under it counting the same seconds. Provided at the timeline root
+ * from the send attached to the last turn (only that turn gets a `sendStatus`); the
+ * clock line reads it only while its turn is still working, and `ChatTurn` hides the
+ * handshake status row in the same case.
+ */
+const TurnConnectingContext = createContext(false);
+
 /** Issue #17: the summary rows a later compaction superseded (`supersededSummaryIds`). */
 const SupersededSummariesContext = createContext<ReadonlySet<string>>(new Set());
 
@@ -1932,6 +1946,7 @@ function useTurnClockLine({
   items: readonly TurnItem[];
 }): { line: string; spinner: boolean } {
   const { t } = useI18n();
+  const connecting = useContext(TurnConnectingContext);
   const running = zone.kind === 'working';
   const spinner = running && clock;
   const liveAction = spinner ? deriveTurnCurrentAction(items) : null;
@@ -1945,6 +1960,8 @@ function useTurnClockLine({
         // this is the sentence that says the turn is doing something rather
         // than merely still open.
         liveAction ? t(liveAction.verb) : null,
+        // S-6 feedback 11c: the handshake, on the same line as the clock.
+        connecting ? t('Connecting to the chat engine…') : null,
       ]),
       spinner,
     };
@@ -2438,7 +2455,7 @@ const ChatTurn = memo(function ChatTurn({
   // A turn that is running with NEITHER clock (a session left running before
   // this window opened) gets no status row rather than one frozen at "0s" —
   // the composer showed nothing in that case either, so no information is lost.
-  const status = deriveTurnStatus(
+  const derivedStatus = deriveTurnStatus(
     {
       active: turnActive,
       phase: sendStatus?.phase ?? 'awaiting',
@@ -2690,11 +2707,16 @@ const ChatTurn = memo(function ChatTurn({
     // request it failed on still says so (decision 145 rule 17).
     endedWithoutReply:
       turnEndsWithoutReply(turn.body) ||
-      status?.kind === 'failed' ||
+      derivedStatus?.kind === 'failed' ||
       turnEndsOnFailedRequest(turn.body),
     toolCalls: countTurnToolCalls(items),
     thinkingMs: turnThinkingMs,
   });
+  // S-6 feedback 11c (user, 2026-10-17): while the send still connects, the clock line
+  // says so (「✻ 工作中 1 秒 · 正在连接对话引擎…」) and the status row under it, which
+  // counted the same seconds a second time, is not drawn.
+  const connectingOnClock = derivedStatus?.kind === 'handshake' && workZone.kind === 'working';
+  const status = connectingOnClock ? null : derivedStatus;
 
   const renderSegment = (segment: TurnSegment<TurnItem>, intermediate = false) => {
     // Keyed off the segment's FIRST item, not its index: an index key would

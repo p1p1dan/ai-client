@@ -415,8 +415,17 @@ export function deriveTurnElapsedMs(input: TurnElapsedInput): number | null {
   const origin = earliestTurnStartMs(input.metadata, input.startedAtMs);
   if (origin === null) return null;
   const span = input.nowMs - origin;
-  return span < 0 ? null : span;
+  // S-6 feedback 11c: `nowMs` is the last one-second tick, so an origin stamped after
+  // it (the user message's own `message.started`, landing just after a send) is at
+  // most one tick ahead. That is tick lag, not a clock that ran backwards: the turn
+  // started this instant. Reading it as unknown dropped the seconds for one tick
+  // (「工作中 1 秒」 → 「工作中」 → 「工作中 1 秒」).
+  if (span < 0) return span >= -TICK_LAG_MS ? 0 : null;
+  return span;
 }
+
+/** How far ahead of the last tick a fresh origin can be (`useSecondsTick` ticks each second). */
+const TICK_LAG_MS = 1_000;
 
 /**
  * Turn-level "Worked for Ns" row. `latencyMs == null` (no T-06 metadata yet,

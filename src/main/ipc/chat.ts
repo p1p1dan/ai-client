@@ -39,6 +39,7 @@ import { app, BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { CLAUDE_SDK_HOME_DIR_NAME } from '../services/agent-host/claudeSdkEngine';
 import { currentDshSkillHomes, resolveDshHome } from '../services/agent-host/DshHostProcess';
 import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
+import { createDshHostPrewarm } from '../services/agent-host/dshHostPrewarm';
 import {
   composerSlashCommands,
   listDshSkillsFromDisk,
@@ -331,8 +332,17 @@ function legacyPosture(
 export function registerChatHandlers(): void {
   ensureEventBridge();
 
+  // S-6 feedback 11c: the DSH host starts with the chat surface, not on the first send.
+  // Once per app run: every send calls `chat:ensureHost` too (see `createDshHostPrewarm`).
+  const prewarmDshHostOnce = createDshHostPrewarm({
+    assertSpawnAllowed: assertAgentSpawnAllowed,
+    ensureHost: () => dshHostSupervisor.ensureHost(),
+    log: (message, error) => console.warn(`[chat] ${message}`, error),
+  });
+
   ipcMain.handle(IPC_CHANNELS.CHAT_ENSURE_HOST, async () => {
     await workerManager.ensureReady();
+    prewarmDshHostOnce();
     return workerManager.getStatus();
   });
 
