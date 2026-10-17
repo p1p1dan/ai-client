@@ -70,6 +70,22 @@ export interface ProcessRow {
 const FILETIME_EPOCH_DIFF_MS = 11_644_473_600_000;
 const CREATION_TOLERANCE_MS = 2_000;
 
+/**
+ * The Windows sample: CimCmdlets imported by path (left to auto-loading, Get-CimInstance is
+ * looked up across every installed module), only the four properties used, and a process
+ * without a creation date (the idle process) does not fail the whole query. Exported so
+ * the host probe can time exactly this query in other environments (README §11.2 #52).
+ */
+export const WINDOWS_POWERSHELL_ARGS: readonly string[] = [
+  '-NoProfile',
+  '-NonInteractive',
+  '-InputFormat',
+  'None',
+  '-Command',
+];
+export const WINDOWS_PROCESS_QUERY =
+  "Import-Module (Join-Path $PSHOME 'Modules/CimCmdlets'); Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name | ForEach-Object { $t = if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc() } else { 0 }; '{0} {1} {2} {3}' -f $_.ProcessId,$_.ParentProcessId,$t,$_.Name }";
+
 export async function sampleProcesses(
   options: SampleOptions = {}
 ): Promise<Map<number, ProcessRow>> {
@@ -78,16 +94,9 @@ export async function sampleProcesses(
   const started = Date.now();
   try {
     if (process.platform === 'win32') {
-      // CimCmdlets imported by path: left to auto-loading, Get-CimInstance is looked up
-      // across every installed module, which on a machine with many modules and a cold
-      // module analysis cache can run past the timeout (suspected on GitHub's runners,
-      // README §11.2 #52). Only the four properties used, and a process without a
-      // creation date (the idle process) does not fail the whole query.
-      const script =
-        "Import-Module (Join-Path $PSHOME 'Modules/CimCmdlets'); Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name | ForEach-Object { $t = if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc() } else { 0 }; '{0} {1} {2} {3}' -f $_.ProcessId,$_.ParentProcessId,$t,$_.Name }";
       const stdout = await runClosed(
         'powershell',
-        ['-NoProfile', '-NonInteractive', '-InputFormat', 'None', '-Command', script],
+        [...WINDOWS_POWERSHELL_ARGS, WINDOWS_PROCESS_QUERY],
         timeout
       );
       for (const line of stdout.split(/\r?\n/)) {
@@ -161,12 +170,13 @@ interface MsysRow {
  */
 export async function msysToolProcesses(
   gitBashPath: string,
-  shells: ProcessRow[]
+  shells: ProcessRow[],
+  timeoutMs = 15_000
 ): Promise<ProcessRow[]> {
   const ps = gitBashPath.replace(/[\\/]bin[\\/]bash\.exe$/i, '\\usr\\bin\\ps.exe');
   let stdout = '';
   try {
-    stdout = await runClosed(ps, [], 15_000);
+    stdout = await runClosed(ps, [], timeoutMs);
   } catch {
     return [];
   }

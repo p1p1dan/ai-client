@@ -97,6 +97,7 @@ import {
   sampleProcesses,
 } from './processTree.ts';
 import { type ClaudeSdkSessionStub, createStub, readStub, writeStub } from './sessionStub.ts';
+import { ToolProcessTracker } from './toolProcessTracker.ts';
 
 export interface SdkHostConfig {
   configDir: string;
@@ -166,10 +167,12 @@ const FILE_CHANGE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']
 /** How long Stop waits for the CLI to close the turn itself before closing it here. */
 const STOP_SETTLE_MS = 5_000;
 /**
- * How long Stop waits for the process snapshot before it interrupts (normally under 1 s):
- * the snapshot has to precede the interrupt, but a slow one must not hold the Stop up.
+ * How long Stop (and dispose) waits for a process sample already in flight before it
+ * interrupts (README §11.2 #52): the sample is taken in the background from the moment a
+ * shell call starts (toolProcessTracker.ts), so this only closes the gap for a call that
+ * started just before Stop. A sample is never started here; a slow one is left behind.
  */
-const STOP_SNAPSHOT_MS = 5_000;
+const STOP_SAMPLE_WAIT_MS = 1_000;
 /** How long a mode switch waits for the CLI's answer; under Main's 10 s RPC timeout. */
 const MODE_SWITCH_TIMEOUT_MS = 8_000;
 
@@ -215,6 +218,8 @@ interface Turn {
   /** toolCallId → what the row says of a call the CLI refused itself (S-2: Auto's check). */
   refusals: Map<string, string>;
   interjections: Map<string, Interjection>;
+  /** toolCallId of every Bash/PowerShell call still running: while any is, its processes are sampled. */
+  shellCalls: Set<string>;
   stopTimer?: ReturnType<typeof setTimeout>;
 }
 
@@ -519,6 +524,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private readonly options: BridgeSessionRuntimeOptions;
   private readonly config: SdkHostConfig;
   private readonly log: Log;
+  /** What the running shell call started, sampled in the background for Stop (#52). */
+  private readonly tracker = new ToolProcessTracker(() => this.collectToolProcesses());
   private stubFile = '';
   private stub: ClaudeSdkSessionStub | null = null;
   private bootstrapResult: WorkerBootstrapResult | null = null;
@@ -636,7 +643,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     if (this.disposed) return;
     this.disposed = true;
     this.drainPending('session_closed');
-    const toolProcesses = this.turn ? await this.toolProcesses() : [];
+    const toolProcesses = this.turn ? await this.toolProcessesForStop() : [];
+    this.tracker.stop();
     this.input?.close();
     try {
       this.query?.close();
@@ -806,6 +814,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       toolOutcome: new Map(),
       refusals: new Map(),
       interjections: new Map(),
+      shellCalls: new Set(),
     };
     if (this.turnCount === 1) {
       this.emit({ type: 'session.projection', payload: { key: 'todos', view: null } });
@@ -881,7 +890,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     this.emitStatus('stopping');
     this.drainPending('aborted');
     // Windows: the CLI's interrupt leaves a Bash call's children running (see processTree.ts).
-    const toolProcesses = await this.toolProcesses();
+    // The latest background sample, never a sample taken here (#52).
+    const toolProcesses = await this.toolProcessesForStop();
     const q = this.query;
     if (q) {
       await Promise.race([
@@ -899,13 +909,46 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     return { stopped: true };
   }
 
-  /** Processes under the CLI (its own children's descendants): what a tool call started. */
-  private async toolProcesses(): Promise<ProcessRow[]> {
+  /** A shell call started: sample what it starts, in the background, until it ends. */
+  private noteToolStarted(turn: Turn, toolCallId: string, name: string): void {
+    if (!SHELL_TOOLS.has(name)) return;
+    turn.shellCalls.add(toolCallId);
+    this.tracker.start();
+  }
+
+  private noteToolEnded(turn: Turn, toolCallId: string): void {
+    if (turn.shellCalls.delete(toolCallId) && turn.shellCalls.size === 0) this.tracker.stop();
+  }
+
+  /**
+   * What Stop (or dispose) ends afterwards: the latest background sample, and on Windows
+   * what its shells have started since, from Git Bash's own process table (quick, unlike
+   * the Windows one: a command's `sleep`s may well postdate the latest sample).
+   */
+  private async toolProcessesForStop(): Promise<ProcessRow[]> {
+    const rows = await this.tracker.latest(STOP_SAMPLE_WAIT_MS);
+    if (process.platform !== 'win32' || !this.config.gitBashPath) return rows;
+    const shells = rows.filter((row) => !row.msys && /^bash\.exe$/i.test(row.name));
+    if (shells.length === 0) return rows;
+    const msys = await msysToolProcesses(this.config.gitBashPath, shells, STOP_SAMPLE_WAIT_MS);
+    const fresh = msys.filter((row) => !rows.some((r) => r.pid === row.pid));
+    if (fresh.length > 0) {
+      this.log(
+        `msys tool processes at stop: ${fresh.map((row) => `${row.name}#${row.pid}`).join(' ')}`
+      );
+    }
+    return [...rows, ...fresh];
+  }
+
+  /**
+   * Processes under the CLI (its own children's descendants): what a tool call started.
+   * One background sample of the tracker; undefined when the sample itself failed (the
+   * table is never empty otherwise: this host is in it).
+   */
+  private async collectToolProcesses(): Promise<ProcessRow[] | undefined> {
     const started = Date.now();
-    const table = await sampleProcesses({
-      timeoutMs: STOP_SNAPSHOT_MS,
-      log: (message) => this.log(message),
-    });
+    const table = await sampleProcesses({ log: (message) => this.log(message) });
+    if (table.size === 0) return undefined;
     const all = descendantsOf(process.pid, table);
     this.log(
       `process snapshot: ${table.size} rows in ${Date.now() - started} ms, host ${process.pid} (${table.get(process.pid)?.name ?? 'missing'}), descendants ${all.map((row) => `${row.name}#${row.pid}<${row.ppid}`).join(' ')}`
@@ -1232,6 +1275,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           const name = String(block.name);
           step.blocks.set(index, { kind: 'tool', blockId: toolCallId, toolCallId, name, json: '' });
           turn.toolMessage.set(toolCallId, step.messageId);
+          this.noteToolStarted(turn, toolCallId, name);
           this.emit({
             type: 'tool.started',
             payload: {
@@ -1333,6 +1377,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       if (!turn.toolMessage.has(b.id)) {
         // No stream frames for this call (a gateway that does not stream): open the row now.
         turn.toolMessage.set(b.id, step.messageId);
+        this.noteToolStarted(turn, b.id, String(b.name));
         this.emit({
           type: 'tool.started',
           payload: {
@@ -1355,6 +1400,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       const b = record(block);
       if (!b || b.type !== 'tool_result' || typeof b.tool_use_id !== 'string') continue;
       const toolCallId = b.tool_use_id;
+      this.noteToolEnded(turn, toolCallId);
       const messageId = turn.toolMessage.get(toolCallId) ?? turn.step?.messageId;
       if (!messageId) continue;
       const raw = textOf(b.content);
@@ -1470,6 +1516,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       toolOutcome: new Map(),
       refusals: new Map(),
       interjections: new Map(),
+      shellCalls: new Set(),
     };
     this.emitStatus('running');
     this.userMessageCount += 1;
@@ -1540,6 +1587,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const turn = this.turn;
     if (!turn) return;
     if (turn.stopTimer) clearTimeout(turn.stopTimer);
+    this.tracker.stop();
     this.closeStep();
     this.drainPending(outcome === 'stopped' ? 'aborted' : 'session_closed');
     const type =

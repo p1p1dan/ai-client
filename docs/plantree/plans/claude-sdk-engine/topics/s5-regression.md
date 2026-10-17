@@ -100,3 +100,16 @@ Role: topic（S-5，2026-10-16 起）。上位：[README](../README.md) §4 S-5�
 - 修法（自主决定，待审阅）：宿主起 PowerShell 时加 `-InputFormat None` 并关掉 stdin（异步 `execFile` 的 stdin 管道原本一直开着，探针用的同步调用会立即关掉）；只取四个用到的属性，没有创建时间的进程（Idle）不再让整条查询报错；Stop 前的快照最多等 5 秒（原 15 秒），取不到也不拖住 Stop；失败时宿主日志写明耗时与原因（超时或退出码与 stderr）。单测 2 条（取样失败时快照为空、关了 stdin、日志写明原因；Windows 上带 `-InputFormat None` 与 `-Property`），去掉关 stdin 或 `-InputFormat None` 时失败。本机源码宿主：快照 339 毫秒，Stop 410 毫秒，两个 `sleep` 清掉。
 - 第四次 CI（run 39002273416）：仍是空表，这次在 5 秒处超时，说明 stdin 与查询属性不是原因。剩下的差别是宿主的受限环境：怀疑 GitHub 的机器装了大量 PowerShell 模块，并用环境变量指向预建的模块分析缓存，宿主没继承这个变量，于是 `Get-CimInstance` 自动加载时要把全部模块分析一遍，又被超时杀掉、缓存存不下来。本机用空缓存对比：自动加载首次 1.3 秒、显式导入 0.65 秒（本机只有 81 个模块）。改为按路径显式导入 `$PSHOME/Modules/CimCmdlets`，不再跨模块查找命令；探针的诊断也打印"取样失败"那一行。
 - 第五次 CI（run 39003481072）：仍超时，宿主日志 `process sample failed after 5031 ms: timed out`，显式导入不是解法。按用户指示本阶段收尾，下一步见[交接](../handoff-2026-10-17.md) §9。
+
+### 8.3 第六轮（2026-10-17）：修法 A、PowerShell 计时诊断、CI 上 `stop` 检查临时只报告
+
+按交接 §9 第 1、2 步做，三样合在一轮 CI 里。自主决定，待审阅：
+
+| # | 决定 | 做法与理由 |
+|---|---|---|
+| C-7 | **修法 A：进程快照改在后台取，Stop 不再等 PowerShell**（`src/claude-sdk-host/toolProcessTracker.ts`，宿主 `sdkSessionRuntime.ts`） | Bash/PowerShell 的 `tool.started` 一到就开始取样（Windows 进程表 + Git Bash 的 `ps.exe`），命令运行期间按 `[0, 0, 0.5, 0.5, 1, 1, 1, 1, 2, 3]` 秒的间隔刷新（前三次背靠背，头 8 秒内间隔不超过 1 秒：机器有负载时命令的 bash 可能几秒后才起来，实测 3.9 秒；没有哪次快照见过那个 bash，Stop 时就无从去 Git Bash 的表里查；之后每 3 秒，一次取样约 0.4 秒的 PowerShell），该调用的 `tool.completed` 到了就停并清掉记录；回合结束也停。Stop 取最近一次成功的快照，**只有正在进行中的那次才等，最多 1 秒**（`STOP_SAMPLE_WAIT_MS`），绝不在 Stop 里新起一次；取样失败（超时）时保留上一次的结果。Stop 时再用快照里的 bash 查一次 `ps.exe`（CI 上它很快），补上最近一次快照之后才起来的 `sleep`。后台取样用缺省 15 秒超时，宿主日志每次都记 `process snapshot: N rows in X ms`，所以 CI 上能看到宿主进程里 PowerShell 究竟要多久、是否能在 15 秒内完成。`dispose` 同样用最近快照。单测 4 条（`toolProcessTracker.test.ts`：开始即取样、前几次背靠背、进行中的等待有上限、失败保留上一次、结束清空） |
+| C-8 | **探针加 PowerShell 计时诊断**（`host-probe.ts` `diagnosePowerShell`，`PROBE_PS_DIAG=1` 且 Windows 时在 `stop` 场景之后跑） | 用宿主一样的起法（异步 `execFile`、`windowsHide`、关 stdin）依次计时：受限环境（`CLAUDE_SDK_INHERITED_ENV` 现场组出）下 `-Command 1` 与宿主那条查询（查询串从 `processTree.ts` 导出，保证一字不差）、完整环境下同样两条、两种环境下同步起法的查询；只有"受限慢、完整快"时才逐个补回缺的变量（先 `PSModulePath`、`PSModuleAnalysisCachePath`、`ALLUSERSPROFILE`、`PUBLIC`，再其余系统变量，跳过 `GITHUB_*`/`RUNNER_*`/`ACTIONS_*` 等 runner 自己的），遇到第一个让它变快的就停，最后把缺的全部补回再跑一次。只打印变量名，不打印值 |
+| C-7b | **探针 `stop` 场景看到两个 `sleep` 后先等 1.5 秒再 Stop**（`PROBE_STOP_SETTLE_MS`，缺省 1500） | 取样是周期性的：命令的 bash 刚起来、下一次取样还没到时 Stop，最近快照里只有 CLI 预备步骤那个已退出的 bash，Stop 时查 `ps.exe` 也查不到（本机三连跑里负载下的一次就是这样：命令 3.9 秒才起来，Stop 落在间隔里，两个 `sleep` 留下）。这是修法 A 的已知边界：**命令起来后约 1 秒内就 Stop，子进程可能留下**；人的 Stop 很少这么快。门槛"Stop 后 5 秒清掉"不变。加密后本机 4 连跑全过（含录制门禁并行跑的一次） |
+| C-9 | **CI 的 Windows 作业里 `stop` 的"Stop 后 5 秒没有残留 sleep"临时降为只报告**（`build.yml` 设 `PROBE_STOP_LEFTOVER_REPORT_ONLY=1`；探针打印 `[report] ok/WARN … (report only)`，`probe-suite.ts` 只数 `[check]` 行） | 修法 A 在 CI 上验证通过后恢复（把 `build.yml` 里那两行环境变量删掉）。目的是这一轮无论 A 在 CI 上过不过，Windows 作业都能出 `windows-installer` 产物给 S-6 |
+
+本机（源码宿主，假网关）：`flow` 组 35/35 三次；单跑 `stop` 4 连跑全过：Stop 到 `session.stopped` 62～371 毫秒（原 410），后台取样各 370～393 毫秒，Stop 前的快照已含两个 `sleep`，中断后清掉；录制门禁四个一致；根 tsc、宿主 tsc 0 错；宿主单测 62 条过（含新 4 条）。本机 ps-diag：受限与完整环境、两种起法都在 0.13～0.42 秒，"受限环境不慢"，与 §8.2 的本机结论一致。CI 结果见下。

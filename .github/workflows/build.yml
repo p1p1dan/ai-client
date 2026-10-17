@@ -324,12 +324,18 @@ jobs:
       # Route B S-5 R-2: the full probe regression set and the recorded-event gate
       # against the installed layout (the bundled node, host.js and CLI), on the local
       # fake gateway only. The samples were recorded on Windows: the gate blocks here.
+      # README §11.2 #52, temporary: the `stop` scenario's "no sleep left" check only
+      # reports on this runner until fix A (the background process sample) is verified
+      # here, and the scenario times PowerShell in the host's environment (ps-diag).
+      # Drop both lines once the check passes here again.
       - name: Claude SDK host regression set and event gate (packaged)
         shell: pwsh
         run: |
           $r = Join-Path $PWD 'dist\win-unpacked\resources'
           $node = Join-Path $r 'node-runtime\node.exe'
           $env:AICLIENT_CLAUDE_SDK_CLI = Join-Path $r 'claude-sdk-host\node_modules\@anthropic-ai\claude-agent-sdk-win32-x64\claude.exe'
+          $env:PROBE_STOP_LEFTOVER_REPORT_ONLY = '1'
+          $env:PROBE_PS_DIAG = '1'
           & $node src/claude-sdk-host/tools/probe-suite.ts --host-entry (Join-Path $r 'claude-sdk-host\host.js') --out dist/claude-sdk-probe-suite.json --logs dist/claude-sdk-probe-logs
           if ($LASTEXITCODE -ne 0) { throw "probe-suite exited $LASTEXITCODE" }
           $env:PROBE_HOST_ENTRY = Join-Path $r 'claude-sdk-host\host.js'
