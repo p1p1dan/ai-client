@@ -12,7 +12,7 @@
 
 | # | 反馈 | 类别 | 状态 |
 |---|---|---|---|
-| 1 | 为什么少了 11 个工具 | 已裁决（§3 第 1 条） | **已做**（探针、单测、开发版界面都过；Monitor/TaskList 是 CLI 非交互模式本来就不提供） |
+| 1 | 为什么少了 11 个工具 | 已裁决（§3 第 1 条） | **已做**（探针、单测、开发版界面都过；Monitor/TaskList 是 CLI 非交互模式本来就不提供）；ReportFindings 与审查结果卡**已做**（并行分支 `ccv/s6-findings`，已合入）；卡片不跟着折叠待用户确认 |
 | 2 | 官方行为与提示词不改，只可在后面追加 | 已裁决（§3 第 7 条） | **已记**（README 裁决 22） |
 | 3 | SDK 对话开始后模型菜单只剩同一路由的模型 | 已裁决（§3 第 2 条） | **已做**（并行分支 `ccv/s6-parallel`；单测、开发版界面都过） |
 | 4 | 子代理与后台任务只在输出里有，后台任务窗与子代理页都看不到 | 直接修 | **已修**（探针、单测、开发版界面都过） |
@@ -42,6 +42,14 @@
   - **验证**：探针新增 `worktree`、`wakeup` 两个场景，回归套件单独成组 `hosttools`（6 条）；单测：工具文案 6 条、worktree 路径推导 1 条、定时来源 2 条、重新打开时的历史投影 1 条、标题文案 1 条。本机全套回归 9 组全过，录制门禁一致。
   - **Monitor、TaskList 查清了**：用随包的同一个 `claude.exe`（2.1.300）在命令行非交互模式（`-p`）下跑，启动时报告的工具清单里也没有 Monitor、TaskList（也没有 TodoWrite）；它们只在终端里交互运行时提供。SDK 会话属于非交互模式，所以不是 PiLab 禁掉的，预设也打不开。用户在命令行里对比看到它们，是交互模式。非交互模式的清单：Bash、CronCreate、CronDelete、CronList、Edit、EnterWorktree、ExitWorktree、Glob、Grep、ListAgents、NotebookEdit、Read、ReportFindings、ScheduleWakeup、SendMessage、Skill、Task、TaskStop、WebFetch、WebSearch、Workflow、Write；SDK 会话另有 AskUserQuestion 与计划模式两个。
   - **未做**：CronCreate 没有单独跑探针（与 ScheduleWakeup 同一条唤醒路径）；ReportFindings 继续禁用待用户确认。
+- **ReportFindings 放开并做审查结果卡（用户 2026-10-17："放开并做配套"）**：交给另一个代理做（说明见 [s6-findings-brief.md](s6-findings-brief.md)），分支 `ccv/s6-findings`（b9af3db1、38bf0605，基于 a3bfd537），已合入 `claude/s6-feedback`（合并提交 28741282，无冲突）。
+  - 宿主：`HOST_ONLY_TOOLS` 只剩 RemoteTrigger、ListAgents、SendMessage、Workflow。实测五个权限档位都不经过 `canUseTool`、不弹卡（CLI 把它定义成只读、没有自己的权限检查），宿主没加放行代码。
+  - 渲染层：新文件 `reviewFindings.ts`（解析输入、短标签、默认展开）；`ToolRows.tsx` 把成功的调用画成卡片，失败或被拒的仍是普通工具行；`toolCard.ts` 补了动词与图标；`chatTurn.ts` 让报告单独成一组、放在「最终输出」里。
+  - 对方自己定的：
+    - 不超过 3 条全部展开，超过 3 条只展开第 1 条（最严重的），展开状态按会话记住。
+    - **卡片不跟着折叠**：回合结束后它留在「最终输出」里，不进「已处理 N 个步骤」。理由是审查技能被要求不在正文里重复问题，折起来用户就看不到结果。说明里没写这条，**待用户确认**。
+  - 验证（对方）：两套 tsc 0 错；`src/renderer/components/chat` 3483 条、`src/claude-sdk-host` 149 条全过；probe-suite 9 组全过，其中 `hosttools` 新增 `findings` 场景 21 项；开发版看过卡片、点文件跳到行、窄宽两种布局、重新打开后从历史画出。没截到输入还在到达时的占位行（假网关太快），暗色主题与 Linux 没看。
+  - 验证（合并后）：三套 tsc 0 错；`src/renderer`、`src/claude-sdk-host`、`src/shared`、`src/main/ipc`、`src/main/services/agent-host`、`src/preload` 的 vitest 只剩改动前就有的本机失败；probe-suite 的 `hosttools`（27 项）与 `flow` 两组通过。
 
 ### 2 提示词只追加不插入
 
@@ -146,10 +154,16 @@
     | 同一次运行里第二个 DSH 新对话 | 0.31 秒 | 0.32 秒 |
 
     宿主日志确认应用启动时就起了宿主，没有发送。第一个新对话仍比第二个慢约 0.5 秒，是新宿主上第一个会话自己的开销。
-  - 已知的限制：没有任何 DSH 会话 10 分钟后宿主照旧会停（决策 025，约 180 MB），之后的第一句又要付约 1.6 秒。要不要改（比如开始打字时再预热一次）留给用户定。
+  - 已知的限制：没有任何 DSH 会话 10 分钟后宿主照旧会停（决策 025，约 180 MB），之后的第一句又要付约 1.6 秒。
+  - **开始打字时再预热一次（用户 2026-10-17："可以改成开始打字时再预热一次"，已做）**：
+    - 渲染层新文件 `dshHostWarmup.ts`：DSH 对话的输入框里草稿非空时，经新通道 `chat:warmDshHost` 请主进程启动宿主，每分钟最多一次。SDK 对话不预热。
+    - 主进程每次都调 `prewarmDshHost`：宿主在跑就立即返回，登录前不启动，失败只记日志。
+    - 单测 3 条，挂载测试 1 条（SDK 对话打字不请求，DSH 对话连续打字只请求一次；去掉接线后失败）。
+    - 开发版实测：宿主空闲 10 分钟停掉后，在首页输入框打字（不发送），宿主约 0.1 秒内开始启动；随后发送，从点发送到请求到达网关 0.73 秒（冷启动时约 1.9 秒）。
 - **发送后马上显示"工作中"（已确认）**：点发送后约 0.3 秒就出现「✻ 工作中 1 秒」，不用等首字。
 - **连接中改成一行（已做）**：连接阶段（handshake）时，计时行带上「正在连接对话引擎…」这一段，下面那行状态不再画，变成一行「✻ 工作中 1 秒 · 正在连接对话引擎…」。`MessageTimeline.tsx` 在时间线根上放一个只给最后一轮的标记，计时行与状态行按同一个条件取舍。挂载测试 `turnHandshakeOneLineMount.test.ts`（2 条，改前第 1 条失败）。截图：[连接中一行](../evidence/s6-head-2026-10-17/connecting-one-line.png)。
   - 连上之后、首字之前（awaiting）仍是两行：「✻ 工作中 1 秒」下面一行「思索中… · ↑ 15 字符 · 0s」，见[截图](../evidence/s6-head-2026-10-17/awaiting-two-lines.png)。这一行按设计数的是当前阶段已沉默几秒（超时提示靠它），还带发出与收到的字数，与上面的总计时不是同一个数，所以没有合并；要不要也并成一行留给用户定。
+    - 用户问为什么（2026-10-17），答复要点：第二行是这次发送的传输状态，整个回合都在（`turnStatus.ts`、`attachments.ts` 的 `composerSendingLine`）。首字前写「思索中…」、发出的字数和这一阶段沉默的秒数；有输出后写收到的字数；沉默到 45 秒、180 秒分别换成两档「仍在等待」提示；重试时带次数与倒计时。连接阶段那一行只有秒数，而且和计时行从同一时刻数起，所以并掉不丢信息；其余阶段并掉会丢掉沉默秒数和超时提示。可选做法：平时并成一行（「✻ 工作中 3 秒 · 思索中… · ↑ 15 字符」），只在变慢、卡住或重试时才出第二行。
   - 顺带修了计时一闪：发送后第一秒里计时会从「工作中 1 秒」跳成不带秒数的「工作中」再跳回来。原因是用户消息自己的开始时间比最近一次每秒刷新还晚一点，算出负数就当成"没有计时"。`turnTiming.ts` 的 `deriveTurnElapsedMs` 现在把不到一次刷新间隔（1 秒）的负数当成刚开始；更大的负数仍当成未知。单测 1 条。
 - **全自动模式鸡肋**：要用户裁决：DSH 的全自动模式保留、改进还是去掉。
 - **全自动已做**（按裁决 27，分支 `ccv/s6-parallel`，记为 [DSH 决策 191](../../dsh-rebase/decisions/191-dsh-full-auto-asks-less.md)）：`src/shared/permissions/gate.ts` 里全自动档对 shell 命令（bash、pwsh）只在两种情况下问：危险命令（新文件 `dangerousCommands.ts`：递归删除、强推与几种丢弃改动的 git 命令、格式化磁盘），以及命令写明了工作区外的路径（`/dev/null` 这类设备不算）。其余都放行，包括解析不了的参数（变量、`$(…)`、循环、PowerShell 脚本块、`python x.py`）。只经环境变量得到的路径（`$HOME`、`$env:TEMP`）算参数、不算写明，所以 `echo $HOME` 不问；两个分析器为此新增 `parameterPaths`，`checkShellPaths` 与 `authorizeTarget` 一路带到门上。所有 deny、完全放行、「每次询问」与「自动编辑」、文件工具、`run_code` 这类看不进去的工具和 DSH 自己的询问都不变。权限菜单与确认框里「全自动」的说明同步改了。**与说明不一致**：实测改前全自动对能解析的命令连工作区外路径也放行，所以「写明了工作区外路径的命令要问」是新加的，只加在 shell 命令上。
