@@ -690,6 +690,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       // default (`useAutoModeDuringPlan`), and what it asks about is the user's card.
       settings: {
         attribution: false,
+        // S-6 feedback 5 (user ruling 6): WebFetch asks api.anthropic.com whether a domain is
+        // safe before every fetch; a network that cannot reach it (the encrypted machine's)
+        // got every URL refused as unverifiable. The fetch itself still goes direct.
+        skipWebFetchPreflight: true,
         env: this.config.settingsEnv,
         // S-3 P-5: the CLI reads CLAUDE.md and `.claude/rules` all the way up from the cwd,
         // the user's own `~/.claude` included; PiLab's user layer is its own config dir

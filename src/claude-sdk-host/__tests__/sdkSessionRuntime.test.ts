@@ -152,6 +152,8 @@ describe('the CLI launch (decision 6)', () => {
     // Ruling 20: plan mode is the CLI's own, Auto's check included (no pin).
     expect(settings).toEqual({
       attribution: false,
+      // S-6 feedback 5: WebFetch never asks the domain check first.
+      skipWebFetchPreflight: true,
       env: PINS,
       claudeMdExcludes: userClaudeDirExcludes(configDir, [homedir()]),
     });

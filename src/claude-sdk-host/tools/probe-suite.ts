@@ -77,6 +77,8 @@ export const GROUPS: readonly Group[] = [
   { name: 'projcfg', scenarios: ['projcfg'] },
   { name: 'scratch', scenarios: ['projcfg-scratch'] },
   { name: 'home', scenarios: ['projcfg-home'], layout: 'fakehome' },
+  // S-6 feedback 5: its host runs behind a recording proxy, so it goes on its own.
+  { name: 'webfetch', scenarios: ['webfetch'] },
 ];
 
 /** What one group's probe output says: its checks, the failed ones, and its verdict line. */

@@ -81,6 +81,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createServer as createTcpServer, type Server as TcpServer } from 'node:net';
 import { tmpdir as osTmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -171,6 +172,40 @@ type Message = Record<string, unknown>;
 type Event = { type: string; requestId?: string; payload?: Record<string, unknown> };
 
 let child: ChildProcess;
+
+/**
+ * `webfetch` (S-6 feedback 5): a proxy that only writes down where the CLI wanted to go
+ * and refuses every connection, so the probe sees whether WebFetch asked claude.ai first.
+ */
+let fetchProxy: { server: TcpServer; url: string; targets: string[] } | null = null;
+
+function startFetchProxy(): Promise<void> {
+  const targets: string[] = [];
+  const server = createTcpServer((socket) => {
+    socket.once('data', (chunk) => {
+      const first = chunk.toString('latin1').split('\r\n')[0] ?? '';
+      const [method, target] = first.split(' ');
+      if (method === 'CONNECT' && target) targets.push(target.toLowerCase());
+      else if (target) {
+        try {
+          targets.push(new URL(target).host.toLowerCase());
+        } catch {
+          targets.push(String(target));
+        }
+      }
+      socket.end('HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n');
+    });
+    socket.on('error', () => {});
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      fetchProxy = { server, url: `http://127.0.0.1:${port}`, targets };
+      resolve();
+    });
+  });
+}
 const generation = 1;
 let seq = 0;
 const pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
@@ -218,6 +253,15 @@ function startHost(): void {
         ? { AICLIENT_CLAUDE_SDK_RG_DIR: process.env.AICLIENT_CLAUDE_SDK_RG_DIR }
         : {}),
       ...(process.env.AICLIENT_CLAUDE_SDK_TRACE ? { AICLIENT_CLAUDE_SDK_TRACE: '1' } : {}),
+      // `webfetch`: every outside connection goes to the recording proxy; the gateway and
+      // the host's own auth proxy stay on loopback.
+      ...(fetchProxy
+        ? {
+            HTTPS_PROXY: fetchProxy.url,
+            HTTP_PROXY: fetchProxy.url,
+            NO_PROXY: '127.0.0.1,localhost',
+          }
+        : {}),
       ...(process.env.AICLIENT_CLAUDE_SDK_CLI
         ? { AICLIENT_CLAUDE_SDK_CLI: process.env.AICLIENT_CLAUDE_SDK_CLI }
         : {}),
@@ -1069,6 +1113,7 @@ async function main(): Promise<void> {
   } else if (scenarios.includes('repoenv') || scenarios.includes('mode-plan-refused')) {
     writeRepoSettings();
   }
+  if (scenarios.includes('webfetch')) await startFetchProxy();
   startHost();
   await bootstrap();
 
@@ -2012,6 +2057,37 @@ async function main(): Promise<void> {
           'sendnow',
           'no engine turn opens',
           !events.some((e) => e.type === 'message.started' && typeof e.payload?.origin === 'object')
+        );
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
+        break;
+      }
+      case 'webfetch': {
+        // S-6 feedback 5 (ruling 6): WebFetch must not ask claude.ai's domain check first; an
+        // encrypted machine's network cannot reach it, and the tool then refused every URL.
+        if (!fetchProxy) throw new Error('webfetch: the recording proxy did not start');
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'bypass' });
+        const call = { name: 'WebFetch', input: { url: 'https://example.com/', prompt: 'title?' } };
+        await send(`CC-RUN ${JSON.stringify({ calls: [call] })}`);
+        const end = await waitFor(terminal, 'webfetch turn end', 90_000);
+        show('webfetch');
+        console.log(`  webfetch: proxy saw ${JSON.stringify(fetchProxy.targets)}`);
+        const said = JSON.stringify(events.map((e) => e.payload ?? {}));
+        check('webfetch', 'ends in session.completed', end.type === 'session.completed');
+        check(
+          'webfetch',
+          'the CLI went for the page itself',
+          fetchProxy.targets.some((t) => t.startsWith('example.com'))
+        );
+        check(
+          'webfetch',
+          // 2.1.300 asks api.anthropic.com (measured); the error text names claude.ai.
+          'it never asked the domain check (api.anthropic.com or claude.ai)',
+          fetchProxy.targets.every((t) => !t.includes('claude.ai') && !t.includes('anthropic.com'))
+        );
+        check(
+          'webfetch',
+          'the call is not refused as unverifiable',
+          !said.includes('Unable to verify')
         );
         await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
         break;
