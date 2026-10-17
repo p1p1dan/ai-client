@@ -194,6 +194,11 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
     reason: "dsh-rebase P1-7a: the goal bar's edit — the objective's textarea in a DialogPanel.",
   },
   {
+    file: 'components/chat/PlanReviewCard.tsx',
+    category: 'panel',
+    reason: 'Route B S-6 feedback 8: the whole plan, read-only, in a DialogPanel under its title.',
+  },
+  {
     file: 'components/files/NewItemDialog.tsx',
     category: 'panel',
     reason: 'Standard DialogPanel body (a single name input) between header and footer.',
