@@ -42,6 +42,8 @@ import {
   PERMISSION_ACTION_LABELS,
   PERMISSION_ALLOW_SESSION_NOTE,
   PERMISSION_ASK_REASON_CALL,
+  PERMISSION_ASK_REASON_DANGEROUS,
+  PERMISSION_ASK_REASON_OUTSIDE,
   PERMISSION_ASK_REASON_PWSH,
   PERMISSION_ASK_REASON_SHELL,
   PERMISSION_DECISION_LABELS,
@@ -1777,6 +1779,29 @@ describe('the PowerShell card: aliases and the reason it asks (P1-6d)', () => {
     expect(PERMISSION_ASK_REASON_CALL).not.toBe(zh(PERMISSION_ASK_REASON_CALL));
   });
 
+  it('says a dangerous command is confirmed every time, and names a path outside the workspace (DSH decision 191 §6)', () => {
+    for (const toolName of ['bash', 'pwsh']) {
+      const block = permissionBlock({
+        toolName,
+        permissionKind: 'exec',
+        permissionAskReason: 'dangerous',
+      });
+      expect(derivePermissionAskReasonNote(block)).toBe(PERMISSION_ASK_REASON_DANGEROUS);
+      expect(derivePermissionAskReasonNote(block, zh)).toBe(
+        '这条命令会删除文件或丢弃改动，每次都要你确认，不能按本会话允许'
+      );
+    }
+    const write = permissionBlock({
+      toolName: 'write',
+      permissionKind: 'file_change',
+      permissionAskReason: 'outside_workspace',
+    });
+    expect(derivePermissionAskReasonNote(write)).toBe(PERMISSION_ASK_REASON_OUTSIDE);
+    expect(derivePermissionAskReasonNote(write, zh)).toBe(
+      '这次调用涉及工作区外的路径，所以需要你确认'
+    );
+  });
+
   it('gives no reason when the gate gave none, and none once the card is settled', () => {
     const plain = permissionBlock({ toolName: 'pwsh', permissionKind: 'exec' });
     expect(derivePermissionCardView(plain, true).askReasonNote).toBeNull();
@@ -1800,6 +1825,8 @@ describe('the PowerShell card: aliases and the reason it asks (P1-6d)', () => {
       PERMISSION_ASK_REASON_PWSH,
       PERMISSION_ASK_REASON_SHELL,
       PERMISSION_ASK_REASON_CALL,
+      PERMISSION_ASK_REASON_DANGEROUS,
+      PERMISSION_ASK_REASON_OUTSIDE,
     ]) {
       expect(zh(key)).not.toBe(key);
       expect(/[一-鿿]/.test(zh(key))).toBe(true);

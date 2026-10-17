@@ -166,11 +166,13 @@ export interface PermissionQueueSlot {
  *
  * `askReason: 'unresolved'` — the gear would have allowed this call, and asks
  * only because the analysis could not read part of it (a variable, a script
- * block, a program's own body). It is the one reason worth putting on the
- * card (decision 046); since decision 191 a shell command no longer asks for
- * it under `auto`, only under `ask` and `accept-edits`. Absent when the gear asks
- * anyway, so the card never blames the command for a question the posture
- * would have asked regardless.
+ * block, a program's own body) (decision 046); since decision 191 a shell
+ * command no longer asks for it under `auto`, only under `ask` and
+ * `accept-edits`. Decision 191 §6 adds `'dangerous'` (a command on the
+ * dangerous list, asked every time) and `'outside_workspace'` (a path outside
+ * the workspace under a gear that allows what stays inside). Absent when the
+ * gear asks anyway, so the card never blames the command for a question the
+ * posture would have asked regardless.
  */
 export interface PermissionAskContext {
   askReason?: PermissionAskReason;
@@ -547,6 +549,8 @@ export class PermissionGate implements PermissionGateService {
    */
   private granted(request: ToolPermissionRequest): boolean {
     if (this.grants.size === 0) return false;
+    // Decision 191 §6: a dangerous command is confirmed every time.
+    if (isDangerousShellRequest(request)) return false;
     if (!grantCovers(this.grants.values(), request)) return false;
     if (request.trustedPath) return true;
     const inspected = [request.path, ...(request.paths ?? [])];
@@ -563,6 +567,9 @@ export class PermissionGate implements PermissionGateService {
   }
   /** Write down what this approval covers, and keep it across restarts. */
   private remember(request: ToolPermissionRequest): void {
+    // Decision 191 §6: its card offers no "for session"; an answer that says so
+    // anyway is taken as "allow once".
+    if (isDangerousShellRequest(request)) return;
     const grants = grantsFor(request);
     // Nothing to remember is a real outcome, not a failure: a command whose
     // program name the shell analysis could not read has no prefix worth
@@ -631,8 +638,13 @@ export class PermissionGate implements PermissionGateService {
     // whitelist — so it can only turn an `ask` into an `allow`; it never buys
     // authority a denied call did not have.
     if (gear === 'bypass') return 'allow';
+    // Decision 191 §6 (user, 2026-10-17): a dangerous command asks under every
+    // other gear, every time. Before the gear, the allow scopes and the session
+    // grants below, none of which may wave it through: `accept-edits` used to
+    // run `rm -rf` in the workspace unasked while `auto` asked.
+    if (isDangerousShellRequest(request)) return 'ask';
     // Decision 191: `auto` asks only for what `autoStillAsks` names; the rest
-    // falls to the checks below, where a session grant for the command still
+    // falls to the checks below, where a session grant for the call still
     // applies.
     if (gear === 'auto' && !this.autoStillAsks(request)) return 'allow';
     if (matches.some((scope) => scope.action === 'ask'))
@@ -685,38 +697,64 @@ export class PermissionGate implements PermissionGateService {
   }
   /**
    * What full auto still stops to confirm (decision 191, claude-sdk-engine
-   * ruling 27), after every deny has had its say.
+   * ruling 27), after every deny has had its say and after the dangerous
+   * commands, which ask under every gear (`evaluate`).
    *
-   * A shell command asks when it is on the dangerous list
-   * (`dangerousCommands.ts`) or names a path outside the workspace by spelling
-   * it out; an operand the analysis could not read, or reached only through
-   * the environment, is a parameter and asks nothing. Any other call asks,
-   * as before, only when something in it could not be read: an opaque program
-   * (`run_code`) or one of DSH's own asks.
+   * Any call that names a path outside the workspace by spelling it out: a
+   * shell command (an operand the analysis could not read, or reached only
+   * through the environment, is a parameter and asks nothing) and, since
+   * decision 191 §6, a file tool too (`read`, `write`, `edit`, `glob`, `grep`,
+   * a plugin's file tools). Besides that a call asks, as before, only when
+   * something in it could not be read: an opaque program (`run_code`) or one
+   * of DSH's own asks.
    */
   private autoStillAsks(request: ToolPermissionRequest): boolean {
-    if (!isShellTool(request.tool) || request.hostAsk) return request.unresolvedPaths === true;
-    const segments = request.commands?.length
-      ? request.commands
-      : request.command
-        ? [request.command]
-        : [];
-    if (segments.some(isDangerousShellCommand)) return true;
-    const parameters = new Set(request.parameterPaths ?? []);
+    if (request.hostAsk) return request.unresolvedPaths === true;
+    if (!isShellTool(request.tool) && request.unresolvedPaths) return true;
+    return this.namesOutsidePath(request, { parametersCount: false });
+  }
+  /**
+   * A path outside the workspace (by any of its spellings) that is not a device
+   * and not one the host produced itself (`trustedPath`). `parametersCount`
+   * says whether a path reached only through the environment counts.
+   */
+  private namesOutsidePath(
+    request: ToolPermissionRequest,
+    { parametersCount }: { parametersCount: boolean }
+  ): boolean {
+    if (request.trustedPath) return false;
+    const parameters = new Set(parametersCount ? [] : (request.parameterPaths ?? []));
     return [request.path, ...(request.paths ?? [])].some(
       (path) => !parameters.has(path) && !this.inWorkspace(path) && !isDevicePath(path)
     );
   }
   /**
-   * dsh-rebase P1-6d: `'unresolved'` when the gear would have allowed this
-   * call had the analysis been able to read all of it — i.e. the unreadable
-   * part is the reason for the card. See `PermissionAskContext`.
+   * Why a card is up, when the gate can say (see `PermissionAskContext`):
+   *
+   *  - `'dangerous'`: a dangerous command, which asks under every gear but
+   *    `bypass` and is never remembered for the session (decision 191 §6);
+   *  - `'unresolved'` (P1-6d): the gear would have allowed this call had the
+   *    analysis been able to read all of it;
+   *  - `'outside_workspace'` (decision 191 §6): under `auto` or `accept-edits`,
+   *    which allow what stays in the workspace, the call names a path outside it.
+   *
+   * None for DSH's own asks, and none when `ask` would have asked anyway.
    */
   private askReasonFor(request: ToolPermissionRequest): PermissionAskReason | undefined {
-    if (!request.unresolvedPaths || request.hostAsk) return undefined;
-    return this.evaluate({ ...request, unresolvedPaths: false }) === 'allow'
-      ? 'unresolved'
-      : undefined;
+    if (request.hostAsk) return undefined;
+    if (isDangerousShellRequest(request)) return 'dangerous';
+    if (
+      request.unresolvedPaths &&
+      this.evaluate({ ...request, unresolvedPaths: false }) === 'allow'
+    )
+      return 'unresolved';
+    const gear = this.gearFor(request);
+    if (
+      (gear === 'auto' || gear === 'accept-edits') &&
+      this.namesOutsidePath(request, { parametersCount: gear === 'accept-edits' })
+    )
+      return 'outside_workspace';
+    return undefined;
   }
   canTraverse(request: ToolPermissionRequest): boolean {
     if (
@@ -958,6 +996,24 @@ const DEVICE_PATH =
   /^(?:[A-Za-z]:)?[\\/]dev[\\/](?:null|zero|full|random|urandom|tty|stdin|stdout|stderr|fd[\\/]\d+)$/;
 function isDevicePath(path: string): boolean {
   return DEVICE_PATH.test(path);
+}
+/**
+ * A shell command on the dangerous list (`dangerousCommands.ts`): any delete,
+ * a force push and the git commands that throw work away, disk formatting.
+ * Decision 191 §6 (user, 2026-10-17): it asks under every gear but `bypass`,
+ * every time, and its card offers no "for session". DSH's own asks
+ * (`hostAsk`) are judged as before.
+ */
+export function isDangerousShellRequest(
+  request: Pick<ToolPermissionRequest, 'tool' | 'command' | 'commands' | 'hostAsk'>
+): boolean {
+  if (!isShellTool(request.tool) || request.hostAsk) return false;
+  const segments = request.commands?.length
+    ? request.commands
+    : request.command
+      ? [request.command]
+      : [];
+  return segments.some(isDangerousShellCommand);
 }
 /**
  * Gears that answer an `ask` on the user's behalf rather than raising a card.

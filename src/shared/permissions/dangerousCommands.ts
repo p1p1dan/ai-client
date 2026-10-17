@@ -1,9 +1,10 @@
 // New in dsh-rebase decision 191 (claude-sdk-engine README ruling 27, S-6 feedback 11c).
 
 /**
- * The shell commands full auto still stops to confirm, however well their
- * operands resolve: recursive deletes, force pushes and the git commands that
- * throw away work, and disk formatting.
+ * The shell commands every gear but `bypass` stops to confirm, however well
+ * their operands resolve: any delete (decision 191 §6, user 2026-10-17: "任何删除
+ * 都是危险动作"; it was recursive deletes only), force pushes and the git commands
+ * that throw away work, and disk formatting.
  *
  * Read off the command segments the shell analyses already produce
  * (`BashAnalysis.commands`: one entry per command, wrappers peeled, aliases
@@ -54,8 +55,18 @@ const STRING_SHELL_SWITCH: Readonly<Record<string, (word: string) => boolean>> =
 
 const SEPARATORS = new Set([';', '&&', '||', '|', '&']);
 
-/** `Remove-Item` and the names `rm`, `del`, `rd` take in either shell. */
-const REMOVE_VERBS = new Set(['rm', 'del', 'erase', 'rd', 'rmdir', 'ri', 'remove-item']);
+/** `Remove-Item` and the names `rm`, `del`, `rd` take in either shell, and `unlink`, `shred`. */
+const REMOVE_VERBS = new Set([
+  'rm',
+  'del',
+  'erase',
+  'rd',
+  'rmdir',
+  'ri',
+  'remove-item',
+  'unlink',
+  'shred',
+]);
 const FORMAT_VERBS = new Set([
   'format',
   'mkfs',
@@ -73,17 +84,6 @@ function unquote(word: string): string {
 function verbOf(word: string): string {
   const name = word.split(/[\\/]/).pop() ?? word;
   return name.toLowerCase().replace(/\.(?:exe|com|cmd|bat)$/, '');
-}
-
-/** `-rf`, `-R`, `--recursive`, `-Recurse`, `-r:$true`, cmd's `/s`. */
-function recursiveSwitch(word: string): boolean {
-  const lower = word.toLowerCase();
-  if (lower === '--recursive') return true;
-  if (/^\/s(?:\/|$)/.test(lower)) return true;
-  const name = lower.split(':')[0];
-  // Short clusters (`-rf`, `-fR`) and PowerShell's abbreviations of `-Recurse`.
-  if (/^-[a-z]{1,4}$/.test(name) && name.includes('r')) return true;
-  return name.length >= 2 && '-recurse'.startsWith(name);
 }
 
 /** A git option before the subcommand that takes the next word as its value. */
@@ -136,6 +136,9 @@ function dangerousGit(args: readonly string[]): boolean {
       );
     case 'stash':
       return operands[0] === 'drop' || operands[0] === 'clear';
+    case 'rm':
+      // Deletes the files from the work tree, unless it only untracks them.
+      return !flags.includes('--cached');
     default:
       return false;
   }
@@ -193,7 +196,8 @@ function dangerousWords(input: readonly string[], depth: number): boolean {
   const [head, ...args] = words;
   if (!head) return false;
   const verb = verbOf(head);
-  if (REMOVE_VERBS.has(verb)) return args.some(recursiveSwitch);
+  // Decision 191 §6: any delete, a single file as much as a tree.
+  if (REMOVE_VERBS.has(verb)) return true;
   if (verb === 'git') return dangerousGit(args);
   if (verb === 'find') return dangerousFind(args, depth);
   return FORMAT_VERBS.has(verb) || verb.startsWith('mkfs.');

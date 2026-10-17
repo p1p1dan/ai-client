@@ -3005,8 +3005,8 @@ export const zhTranslations: Record<string, string> = {
   'Resending...': '重发中…',
   'Restore the directory at its original path and retry, or archive this chat and start a new one.':
     '请把该目录恢复到原路径后重试，或归档该会话并新建一个继续工作。',
-  'Runs tools without asking. Dangerous commands such as recursive deletes and force pushes, and commands that name a path outside the workspace, still ask; explicit deny rules still apply.':
-    '工具调用基本不再询问。递归删除、强推等危险命令，以及明确指向工作区外路径的命令仍会先问你；显式拒绝规则仍生效。',
+  'Runs tools without asking. Dangerous commands such as deletes and force pushes, and anything that names a path outside the workspace, still ask; explicit deny rules still apply.':
+    '工具调用基本不再询问。删除、强推等危险命令，以及涉及工作区外路径的操作仍会先问你；显式拒绝规则仍生效。',
   'Select all in this project': '全选当前项目',
   'Send code': '发送验证码',
   'Sending may or may not still work; if it fails, start a new chat to carry on.':
@@ -3776,6 +3776,10 @@ Object.assign(zhTranslations, {
     '这条命令含变量、命令替换或解释器，无法静态判断会碰哪些文件，所以需要你确认',
   'The files this call touches cannot be determined in advance: please confirm it':
     '无法静态判断这次调用会碰哪些文件，所以需要你确认',
+  'This command deletes files or throws work away, so it is confirmed every time and cannot be allowed for the session':
+    '这条命令会删除文件或丢弃改动，每次都要你确认，不能按本会话允许',
+  'This call touches a path outside the workspace: please confirm it':
+    '这次调用涉及工作区外的路径，所以需要你确认',
 });
 
 // dsh-rebase P1-7e e2b (decision 140): how a reopened turn that saved no reply
@@ -4007,10 +4011,10 @@ Object.assign(zhTranslations, {
   'Plan mode': '计划模式',
   'Confirm before changes': '改动前确认',
   'Auto edit': '自动编辑',
-  'Edits and commands inside the workspace run without asking; paths outside it, web access and other tools still ask.':
-    '工作区内的改动和命令直接执行；工作区外的路径、联网和其他工具仍会询问。',
-  'Runs tools without asking, including commands whose arguments cannot be read. Dangerous commands such as recursive deletes, force pushes and hard resets, and commands that name a path outside the workspace, still ask; explicit deny rules still apply.':
-    '工具调用基本不再询问，包括参数解析不了的命令。递归删除、强推、硬重置等危险命令，以及明确指向工作区外路径的命令仍会先问你；显式拒绝规则仍生效。',
+  'Edits and commands inside the workspace run without asking; dangerous commands such as deletes and force pushes, paths outside it, web access and other tools still ask.':
+    '工作区内的改动和命令直接执行；删除、强推等危险命令，工作区外的路径、联网和其他工具仍会询问。',
+  'Runs tools without asking, including commands whose arguments cannot be read. Dangerous commands such as deletes, force pushes and hard resets ask every time, and so does anything that names a path outside the workspace; explicit deny rules still apply.':
+    '工具调用基本不再询问，包括参数解析不了的命令。删除、强推、硬重置等危险命令每次都会先问你，涉及工作区外路径的操作也会先问；显式拒绝规则仍生效。',
   'Read-only tools keep the earlier approval level: {{gear}}.':
     '只读工具沿用之前的确认方式：{{gear}}。',
   'Plan mode cannot be turned on or off while this turn runs.':

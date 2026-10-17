@@ -25,6 +25,7 @@ import type {
   RuntimeEventDraft,
 } from '../types/runtimeEvents.ts';
 import {
+  isDangerousShellRequest,
   PERMISSION_TIMEOUT_MS,
   PERMISSION_TIMEOUT_REASON,
   type PermissionConfig,
@@ -35,7 +36,10 @@ import { isShellTool } from './shellTools.ts';
 
 /** The three answers this runtime can act on; `cancel` is not modelled. */
 const OFFERED: PermissionDecisionId[] = ['allow', 'allow_session', 'deny'];
-/** A DSH host's own ask (`hostAsk`) grants one call: nothing to remember for the session. */
+/**
+ * A DSH host's own ask (`hostAsk`) grants one call: nothing to remember for the
+ * session. Nor does a dangerous command (decision 191 §6): it is confirmed every time.
+ */
 const OFFERED_ONCE: PermissionDecisionId[] = ['allow', 'deny'];
 
 /**
@@ -189,7 +193,7 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
         const permissionId = request.toolCallId;
         const detail = detailOf(request, options.cwd);
         const action = actionOf(request);
-        const once = request.hostAsk !== undefined;
+        const once = request.hostAsk !== undefined || isDangerousShellRequest(request);
         // What the "Allow for session" button would actually write down. The
         // matcher lives in the runtime, so the runtime is the only side that
         // can describe it without guessing — see `PermissionGrantScope`.

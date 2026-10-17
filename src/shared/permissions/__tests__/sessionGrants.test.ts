@@ -181,10 +181,10 @@ describe('a bash grant covers a command prefix', () => {
     const { permissions, asked, reply } = await gate();
     expect(await ask(permissions, shell('1', 'npm test'))).toBe('allowed');
 
-    // Half the line is covered, so the line is not.
-    const chained = shell('2', 'npm test && rm -rf build', {
-      commands: ['npm test', 'rm -rf build'],
-      paths: [join(dir, 'build')],
+    // Half the line is covered, so the line is not. (Not a delete: since
+    // decision 191 §6 a delete is never remembered.)
+    const chained = shell('2', 'npm test && npm run lint', {
+      commands: ['npm test', 'npm run lint'],
     });
     reply.with = 'allow-once';
     expect(await ask(permissions, chained)).toBe('allowed');

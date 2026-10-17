@@ -76,13 +76,25 @@ describe('pwsh session grants (P1-6d)', () => {
     await g.authorize(pwsh('dir src/sub'));
     await g.authorize(pwsh('Get-ChildItem -Recurse'));
     await g.authorize(pwsh('GCI'));
-    await g.authorize(pwsh('Remove-Item x'));
-    await g.authorize(pwsh('ls; rm x'));
-    expect(asked).toEqual(['ls src', 'Remove-Item x']);
+    await g.authorize(pwsh('Get-Content x'));
+    await g.authorize(pwsh('ls; cat x'));
+    expect(asked).toEqual(['ls src', 'Get-Content x']);
     expect(persisted.at(-1)?.grants).toEqual([
       { kind: 'command', prefix: 'Get-ChildItem', root: ROOT },
-      { kind: 'command', prefix: 'Remove-Item', root: ROOT },
+      { kind: 'command', prefix: 'Get-Content', root: ROOT },
     ]);
+  });
+
+  it('never remembers a delete: it asks every time, alias or cmdlet (decision 191 §6)', async () => {
+    const { gate: g, asked, persisted } = gate();
+    await g.authorize(pwsh('Remove-Item x'));
+    await g.authorize(pwsh('Remove-Item x'));
+    await g.authorize(pwsh('ls; rm x'));
+    expect(asked).toEqual(['Remove-Item x', 'Remove-Item x', 'ls; rm x']);
+    // `ls` from the chained line is remembered; the delete never is.
+    expect(persisted.flatMap((record) => record.grants)).not.toContainEqual(
+      expect.objectContaining({ prefix: 'Remove-Item' })
+    );
   });
 
   it('works the other way round: the cmdlet granted covers its aliases', async () => {
@@ -175,11 +187,20 @@ describe('why the card is up (askReason, P1-6d)', () => {
     expect(asked).toEqual([]);
   });
 
-  it('is `unresolved` under accept-edits for a workspace command, and absent once the path is outside', async () => {
+  it('is `unresolved` under accept-edits for a workspace command, and `outside_workspace` once the path is outside', async () => {
     const { gate: g, contexts } = gate({ gear: 'accept-edits', answer: 'allow-once' });
-    await g.authorize(pwsh('Remove-Item $x'));
-    await g.authorize(pwsh('Remove-Item /etc/x $y'));
-    expect(contexts).toEqual([{ askReason: 'unresolved' }, undefined]);
+    await g.authorize(pwsh('Copy-Item $x out.txt'));
+    await g.authorize(pwsh('Copy-Item /etc/x $y'));
+    expect(contexts).toEqual([{ askReason: 'unresolved' }, { askReason: 'outside_workspace' }]);
+  });
+
+  it('is `dangerous` for a delete under every gear that asks, `ask` included (decision 191 §6)', async () => {
+    for (const gear of ['ask', 'accept-edits', 'auto'] as const) {
+      const { gate: g, contexts } = gate({ gear, answer: 'allow-once' });
+      await g.authorize(pwsh('Remove-Item notes.txt'));
+      await g.authorize(pwsh('Remove-Item $x'));
+      expect(contexts).toEqual([{ askReason: 'dangerous' }, { askReason: 'dangerous' }]);
+    }
   });
 
   it('is absent under ask, where every command asks anyway, and for a host ask', async () => {
@@ -240,6 +261,32 @@ describe('why the card is up (askReason, P1-6d)', () => {
     expect(requested[1]?.payload).toMatchObject({
       sessionGrantScope: { kind: 'command', value: 'Get-ChildItem' },
     });
+  });
+
+  it('offers no "for session" on a dangerous command, and takes that answer as once (decision 191 §6)', async () => {
+    const events: RuntimeEventDraft[] = [];
+    const prompt = createPermissionPrompt({
+      sessionId: 's',
+      cwd: ROOT,
+      emit: (e) => events.push(e),
+    });
+    const answer = prompt.approve(
+      pwsh('Remove-Item notes.txt'),
+      new AbortController().signal,
+      undefined,
+      {
+        askReason: 'dangerous',
+      }
+    );
+    const requested = events.find((event) => event.type === 'permission.requested');
+    expect(requested?.payload).toMatchObject({
+      decisions: ['allow', 'deny'],
+      askReason: 'dangerous',
+    });
+    expect(requested?.payload).not.toHaveProperty('sessionGrantScope');
+    const permissionId = (requested?.payload as { permissionId: string }).permissionId;
+    expect(prompt.respond({ permissionId, decision: 'allow_session' })).toBe(true);
+    await expect(answer).resolves.toBe('allow-once');
   });
 });
 

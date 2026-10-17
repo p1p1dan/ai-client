@@ -126,10 +126,14 @@ describe('the gate judges the workspace by every spelling (decision 134)', () =>
       ...workspaceSpellings(SHORT, expand),
       answer: 'allow-session',
     });
-    await g.authorize(pwsh('Remove-Item a.txt'));
-    await g.authorize(pwsh(`Remove-Item ${path.join(SHORT, 'b.txt')}`));
-    await g.authorize(pwsh(`Remove-Item ${path.resolve('/etc/passwd')}`));
-    expect(asked).toEqual(['Remove-Item a.txt', `Remove-Item ${path.resolve('/etc/passwd')}`]);
+    // Not a delete: since decision 191 §6 a delete is never remembered.
+    await g.authorize(pwsh('Copy-Item a.txt a.bak'));
+    await g.authorize(pwsh(`Copy-Item ${path.join(SHORT, 'b.txt')} b.bak`));
+    await g.authorize(pwsh(`Copy-Item ${path.resolve('/etc/passwd')} p.bak`));
+    expect(asked).toEqual([
+      'Copy-Item a.txt a.bak',
+      `Copy-Item ${path.resolve('/etc/passwd')} p.bak`,
+    ]);
   });
 
   it('[8dot3-external] external_directory rules apply only outside every spelling', async () => {

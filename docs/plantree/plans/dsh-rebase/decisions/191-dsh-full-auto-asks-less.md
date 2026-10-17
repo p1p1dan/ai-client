@@ -1,6 +1,6 @@
 # 决策 191：DSH 全自动档少问人：解析不了的参数放行，只问危险命令和写明了工作区外路径的命令
 
-日期：2026-10-17（UTC+8）。**状态：第 1 节是用户裁决（[路线 B README 裁决 27](../../claude-sdk-engine/README.md)，[S-6 反馈清单](../../claude-sdk-engine/topics/s6-feedback.md)第 11c 条，GitHub issue #19）；第 2 节起是按裁决落地时的自主决定，待用户审批，第 5 节列出要用户定的事。** 分支 `ccv/s6-parallel`。
+日期：2026-10-17（UTC+8）。**第 6 节是用户对第 5 节的裁决与落地（同日，分支 `claude/s6-feedback`）。** **状态：第 1 节是用户裁决（[路线 B README 裁决 27](../../claude-sdk-engine/README.md)，[S-6 反馈清单](../../claude-sdk-engine/topics/s6-feedback.md)第 11c 条，GitHub issue #19）；第 2 节起是按裁决落地时的自主决定，待用户审批，第 5 节列出要用户定的事。** 分支 `ccv/s6-parallel`。
 
 ## 1 用户裁决（2026-10-17）
 
@@ -51,7 +51,7 @@ DSH 引擎的「全自动」档改进，不去掉：**工作区内解析不了�
   - `src/dsh-host/permissions` 2 条（`workdir` 存在性检查、审批期间目标被换），改动前同样失败；
   - `src/dsh-host/bridge/__tests__/sessionGc.test.ts` 3 条，在本分支提交态单独跑同样失败。
 
-## 5 待用户定
+## 5 待用户定（已由第 6 节裁决）
 
 1. 文件工具（`read`、`write`、`edit`）在全自动下碰工作区外，是否也要问？现在不问，本次没改。
 2. 单个文件的删除（`rm a.txt`、`Remove-Item a.txt`、`del a.txt`）要不要也算危险命令？
@@ -61,3 +61,112 @@ DSH 引擎的「全自动」档改进，不去掉：**工作区内解析不了�
 6. 模型看到的权限说明（`promptText.ts` 里 auto 那一句）没改：这段文字在录制的 DSH 样本（`src/shared/__tests__/fixtures/dsh/log.*.json`）里，改了要重录。建议之后补一句「危险命令和写明工作区外路径的命令仍会询问」，让模型少碰这两类。
 7. 卡片上还说不出「为什么全自动还在问」：危险命令和工作区外这两种原因没有对应的 `askReason`。可以另做。
 8. 进一步向 Claude Code 的自动模式看齐，可以对剩下的询问加一道模型安全检查（Claude Code 的自动模式就这么做），代价是每次多一个经网关的请求。本次没做。
+
+## 6 用户裁决（2026-10-17）与落地
+
+用户逐条答复第 5 节：
+
+| 第 5 节 | 用户原话 | 结果 |
+|---|---|---|
+| 1 文件工具碰工作区外 | "工作区外要询问" | 已做 |
+| 2 单个文件的删除 | "任何删除都是危险动作，要问" | 已做 |
+| 3 危险命令的会话授权 | "危险命令还是要问" | 已做 |
+| 4 两档松紧 | "两档松紧的问题要修复" | 已做 |
+| 5 看不进去的程序工具 | "能让宿主看到里面会做什么么？如果不行就照旧问" | 照旧问，理由见下 |
+| 6 告诉模型的权限说明 | "可以做，需要什么，还是说留到最后我去linux开发机做？" | 留到 Linux 开发机，见下 |
+| 7 卡片上说明为什么问 | "可以简单标注一下，给我看看效果再决定加不加" | 已做，截图待用户看 |
+| 8 模型安全检查 | "这个后面做，可以调用一个便宜模型来做审核，同时还得改onboarding侧，再管理员设置模型页面就可以设置用什么模型做审核" | 记为后续任务，本次不做 |
+
+### 6.1 改法（`src/shared/permissions/`）
+
+1. **任何删除都是危险命令**（`dangerousCommands.ts`）：`rm`、`rmdir`、`del`、`erase`、`rd`、`ri`、`Remove-Item` 不论带不带递归开关都算，另加 `unlink`、`shred` 和 `git rm`（只带 `--cached`、只取消跟踪的不算）。`find -delete` 与转手执行的前缀照旧。
+2. **危险命令在除完全放行外的所有档位都每次询问**（`gate.ts` 的 `evaluate`）：判定放在所有 deny 之后、档位之前，所以会话授权、配置的 allow 范围、「自动编辑」都放不过它。新导出的 `isDangerousShellRequest` 供门与卡片共用。
+   - 会话授权：`granted` 对危险命令一律不认，`remember` 也不记。
+   - 卡片：`cardEmitter.ts` 对危险命令只给「直接允许」和「直接拒绝」，不给「本会话内允许」；万一收到「本会话」的回答，按「允许一次」处理。
+   - 「自动编辑」从此也问危险命令，四档重新严格由紧到松：每次询问 ⊇ 自动编辑 ⊇ 全自动 ⊇ 完全放行（就危险命令而言前三档一样，都问）。
+3. **全自动下文件工具碰工作区外也问**（`autoStillAsks`）：`read`、`write`、`edit`、`glob`、`grep` 和插件的文件工具，路径在工作区外（任何一种写法，决策 134）就问。宿主自己产生的文件（`trustedPath`，溢出文件、附件）和设备路径不算。shell 命令的口径不变：写明了工作区外路径的才问，只经环境变量得到的不问。
+4. **卡片上标出原因**（`askReason`）：新增两种取值，渲染层各配一句话（`questionCardModel.ts` 与 `i18n.ts`）：
+   - `dangerous`：「这条命令会删除文件或丢弃改动，每次都要你确认，不能按本会话允许」，在每次询问、自动编辑、全自动三档都标；
+   - `outside_workspace`：「这次调用涉及工作区外的路径，所以需要你确认」，只在全自动与自动编辑下标（这两档在工作区内本来不问，所以工作区外就是原因；每次询问档本来就问，不标）。
+   - 原有的 `unresolved` 不变。DSH 自己的询问（`hostAsk`）不标。
+5. **界面文案**（`ComposerPermissionTrigger.tsx`，`i18n.ts`）：「全自动」的说明与开启确认框改为「删除、强推等危险命令每次都会先问你，涉及工作区外路径的操作也会先问」；「自动编辑」的说明加上「删除、强推等危险命令……仍会询问」。
+
+### 6.2 看不进去的程序工具：照旧问
+
+`run_code`（以及 `workflow`）跑的是一整段 TypeScript 或 Python 程序，宿主看得到程序原文（卡片上就显示「程序」），但看不出它会做什么：
+
+- 程序在一个独立的子进程里运行。产品里每个会话的 DSH 沙箱都是 `danger-full-access`（决策 044），这个子进程不受限制，可以直接用 Node 或 Python 的文件和网络接口删改文件，不必经过任何会被门检查的工具。
+- 要静态判断一段任意程序碰哪些文件，需要分析动态拼出来的路径、`eval`、动态导入等，做不到可靠；漏判一次就是一次没问就执行的删除。
+- 真要放行，可行的路是让程序在 DSH 自己的沙箱（`workspace-write` 一类模式、Windows 上的 ACL 沙箱）里跑，宿主只管沙箱边界。这是另一项较大的工作：要接 DSH 的沙箱模式、在 Windows 与 Linux 上分别验证沙箱确实拦得住，测试也要在两种系统上各跑一套。
+- `plugin_manager` 会安装插件，同样照旧问。
+
+结论：本次照旧问，不改。
+
+### 6.3 告诉模型的权限说明：留到 Linux 开发机
+
+要改的只有 `promptText.ts` 里 `auto` 那一句，建议改成：
+
+> Permission gear: auto. Available tools may execute without ordinary approval. Dangerous commands (any delete, force pushes, hard resets and the like) and anything that names a path outside the workspace still ask every time. Explicit deny rules and the tool whitelist remain enforced.
+
+这句话会进到录制的 DSH 样本里，Build 流水线的 Linux 门（`bridge-record.ts --check`）会比对，所以改文字必须同时重录样本：
+
+- 受影响的样本只有 3 个：`perm-gear`、`plan-dismiss`、`plan-review`（`src/shared/__tests__/fixtures/dsh/log.*.json` 里含 `Permission gear: auto` 的只有这三个）。
+- 在 Linux 开发机上改完这句后运行下面的命令，逐个看差异，只应有这一句话变：
+
+  ```bash
+  node src/dsh-host/tools/bridge-record.ts --update --only perm-gear,plan-dismiss,plan-review
+  ```
+
+- 这台 Windows 机器上录不了：
+  - `bridge-record.ts` 原来在 Windows 上一启动宿主就报 `ERR_UNSUPPORTED_ESM_URL_SCHEME`（`--import` 收到的是 `F:\…` 这种路径而不是 URL），本次改成 `pathToFileURL(...)`，现在能跑了。
+  - 但 Windows 上录出来的与 Linux 样本不同：路径分隔符是反斜杠，DSH 在 Windows 上没有 `bash` 工具（报 `unknown tool "bash"`）。样本按 Linux 录，所以重录只能在 Linux 上做。
+
+### 6.4 已改的录制样本
+
+`stream.perm-grants.json` 第三张卡（`echo perm-grant-c && rm -f perm-grant-missing.txt`）按新规则手改了 3 处，与重录应得的结果一致：
+
+- `decisions` 从三项变成 `["allow", "deny"]`；
+- 去掉 `sessionGrantScope`；
+- 加上 `askReason: "dangerous"`。
+
+这张卡在场景里本来就被拒绝，之后的事件不变。没在 Linux 上跑 `--check` 验证，下次在 Linux 开发机上跑一次确认。
+
+### 6.5 后续任务：剩下的询问交给便宜模型审核
+
+用户 2026-10-17 定为后面做：
+
+- 全自动剩下的询问先交给一个便宜的模型做安全审核（Claude Code 的自动模式就是这样做的），审核通过就不打扰用户；
+- 要同时改登录引导（onboarding）一侧，并在管理员的模型设置页面增加一项，指定审核用哪个模型；
+- 代价是每次多一个经网关的请求。
+
+### 6.6 验证
+
+- 单测：
+  - `dangerousCommands.test.ts`：单个文件的删除、`unlink`、`shred`、`git rm` 改进「要问」；`git rm --cached` 不问。
+  - `autoGear.test.ts`：
+    - 全自动下 `Remove-Item notes.txt`、`rm`、`del`、`git rm` 要问；
+    - 危险命令「本会话允许」后仍每次问；
+    - 五种文件工具与插件文件工具在工作区内放行、工作区外要问；宿主自己产生的文件不问；
+    - 卡片原因是 `outside_workspace`；
+    - 危险命令在每次询问、自动编辑、全自动都问，只有完全放行放行；
+    - 自动编辑对普通的工作区命令照旧放行。
+  - `pwshGate.test.ts`：
+    - 删除命令永远不记会话授权；
+    - 三档下删除的原因都是 `dangerous`；
+    - 自动编辑下工作区外的原因是 `outside_workspace`；
+    - 卡片对危险命令只给两个选项，「本会话」的回答按一次处理。
+  - `bashGate.test.ts`：真实 bash 语法下 `rm stale.lock`、`rm -f "$TMPFILE"` 要问。
+  - `questionCardModel.test.ts`：两种新原因的中英文案。
+  - 按旧规则写的 4 条用例改了命令，不再用删除：`sessionGrants`、`pwshGate` 的别名授权、`workspaceSpellings` 的 `8dot3-grant`，以及 `pwshGate` 的原因用例。
+- 根与宿主 tsc 0 错。`src/shared/permissions`、`src/dsh-host/permissions`、`src/dsh-host/bridge`、`src/renderer/components/chat` 的 vitest 只剩改动前就有的失败：
+  - 建符号链接 EPERM 8 条；
+  - `8dot3-*` 3 条；
+  - `shellWorkdir` 存在性检查 1 条；
+  - `sessionGc` 3 条。
+  - `8dot3-*` 与 `shellWorkdir` 已在提交态核对过，同样失败。
+- 开发版实测（本机假网关，全自动档，DSH 引擎）：
+  - `Remove-Item notes.txt` 弹卡，只有「直接允许 / 直接拒绝」，带删除的说明一行（截图）。
+  - 写工作区外的文件弹卡，带工作区外的说明一行（截图）。
+  - 改前同一条 `Remove-Item notes.txt` 在全自动下不问就删了。
+  - 两张截图里有本机用户目录的路径，没有入库，只留在开发机工作树的 `bugOutput/s6-cards/`（已被 .gitignore 忽略）。
+  - 注意：宿主进程启动时加载权限代码，改代码后要重启宿主才生效。

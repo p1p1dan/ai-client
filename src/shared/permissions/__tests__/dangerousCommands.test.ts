@@ -3,7 +3,8 @@ import { isDangerousShellCommand } from '../dangerousCommands.ts';
 
 /**
  * claude-sdk-engine README ruling 27 (S-6 feedback 11c, dsh-rebase decision
- * 191): the commands full auto still stops to confirm. Segments are written
+ * 191): the commands every gear but bypass stops to confirm (since decision 191
+ * §6 any delete, a single file included). Segments are written
  * the way the analyses hand them over: one command each, a `pwsh` alias
  * already folded to its cmdlet, an unreadable `pwsh` segment as its raw text.
  */
@@ -38,6 +39,20 @@ describe('the commands full auto still confirms', () => {
     'pwsh -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Recurse x"',
     'echo ok; rm -rf build',
     'npm test && rm -rf coverage',
+    // Decision 191 §6 (user, 2026-10-17): any delete, a single file as much as a tree.
+    'rm file.txt',
+    'rm -f stale.lock',
+    'rmdir empty',
+    'Remove-Item notes.txt',
+    'Remove-Item notes.txt -Force',
+    'Remove-Item -Path x -Filter *.tmp -ErrorAction SilentlyContinue',
+    'del notes.txt',
+    'erase notes.txt',
+    'unlink notes.txt',
+    'shred -u secret.txt',
+    'xargs rm',
+    'git rm notes.txt',
+    'git rm -r --force src/old',
     // Force pushes and the git commands that throw work away.
     'git push --force',
     'git push -f origin main',
@@ -75,13 +90,6 @@ describe('the commands full auto still confirms', () => {
   });
 
   it.each([
-    'rm file.txt',
-    'rm -f stale.lock',
-    'rmdir empty',
-    'Remove-Item notes.txt',
-    'Remove-Item notes.txt -Force',
-    'Remove-Item -Path x -Filter *.tmp -ErrorAction SilentlyContinue',
-    'del notes.txt',
     'echo $HOME',
     'npm test $FLAGS',
     'npm run format',
@@ -100,6 +108,7 @@ describe('the commands full auto still confirms', () => {
     'git branch -d merged',
     'git stash',
     'git stash pop',
+    'git rm --cached notes.txt',
     'find . -name "*.ts"',
     'Format-Table -AutoSize',
     'clang-format -i a.cc',

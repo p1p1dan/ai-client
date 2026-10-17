@@ -586,11 +586,18 @@ export type PermissionAutoReason = 'unsupported' | 'session_closed' | 'aborted' 
 
 /**
  * dsh-rebase P1-6d: why a card is up, when the posture alone would not have
- * raised it. `unresolved`: the gear allows calls like this one, but part of it
- * could not be read statically (a variable, a script block, a call operator,
- * a program's own body), so the gate asks. An id, worded by the renderer.
+ * raised it. An id, worded by the renderer.
+ *
+ * - `unresolved`: the gear allows calls like this one, but part of it could not
+ *   be read statically (a variable, a script block, a call operator, a
+ *   program's own body), so the gate asks.
+ * - `dangerous` (DSH decision 191 §6): a command on the dangerous list (any
+ *   delete, a force push, a hard reset…), confirmed every time and never
+ *   remembered for the session.
+ * - `outside_workspace` (decision 191 §6): the gear allows what stays in the
+ *   workspace, and the call names a path outside it.
  */
-export type PermissionAskReason = 'unresolved';
+export type PermissionAskReason = 'unresolved' | 'dangerous' | 'outside_workspace';
 
 /**
  * What "Allow for session" on THIS card would remember.

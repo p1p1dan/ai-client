@@ -81,14 +81,14 @@ const PRESET_OPTIONS: readonly {
   {
     id: 'accept-edits',
     description:
-      'Edits and commands inside the workspace run without asking; paths outside it, web access and other tools still ask.',
+      'Edits and commands inside the workspace run without asking; dangerous commands such as deletes and force pushes, paths outside it, web access and other tools still ask.',
     icon: ShieldOff,
   },
   {
     id: 'auto',
     // Decision 191: what full auto still stops to confirm (gate.ts `autoStillAsks`).
     description:
-      'Runs tools without asking. Dangerous commands such as recursive deletes and force pushes, and commands that name a path outside the workspace, still ask; explicit deny rules still apply.',
+      'Runs tools without asking. Dangerous commands such as deletes and force pushes, and anything that names a path outside the workspace, still ask; explicit deny rules still apply.',
     icon: ShieldAlert,
   },
   {
@@ -340,7 +340,7 @@ export function ComposerPermissionTrigger({
                 : t(
                     sdk
                       ? SDK_AUTO_CONFIRMATION
-                      : 'Runs tools without asking, including commands whose arguments cannot be read. Dangerous commands such as recursive deletes, force pushes and hard resets, and commands that name a path outside the workspace, still ask; explicit deny rules still apply.'
+                      : 'Runs tools without asking, including commands whose arguments cannot be read. Dangerous commands such as deletes, force pushes and hard resets ask every time, and so does anything that names a path outside the workspace; explicit deny rules still apply.'
                   )}
               {confirming === 'bypass' ? bypassScope : scope}
             </p>

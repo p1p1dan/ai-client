@@ -697,11 +697,22 @@ export const PERMISSION_ASK_REASON_SHELL =
   'This command contains variables, substitutions or interpreters, so the files it touches cannot be determined in advance: please confirm it';
 export const PERMISSION_ASK_REASON_CALL =
   'The files this call touches cannot be determined in advance: please confirm it';
+/**
+ * DSH decision 191 §6 (user, 2026-10-17): a dangerous command (any delete, a force
+ * push, a hard reset…) asks under every gear, and its card offers no "for session".
+ */
+export const PERMISSION_ASK_REASON_DANGEROUS =
+  'This command deletes files or throws work away, so it is confirmed every time and cannot be allowed for the session';
+/** Decision 191 §6: the gear allows what stays in the workspace; this call reaches outside it. */
+export const PERMISSION_ASK_REASON_OUTSIDE =
+  'This call touches a path outside the workspace: please confirm it';
 
 export function derivePermissionAskReasonNote(
   block: ChatBlock,
   t: Translate = englishTranslate
 ): string | null {
+  if (block.permissionAskReason === 'dangerous') return t(PERMISSION_ASK_REASON_DANGEROUS);
+  if (block.permissionAskReason === 'outside_workspace') return t(PERMISSION_ASK_REASON_OUTSIDE);
   if (block.permissionAskReason !== 'unresolved') return null;
   const tool = block.toolName ?? '';
   if (tool === 'pwsh') return t(PERMISSION_ASK_REASON_PWSH);

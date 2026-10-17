@@ -215,7 +215,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { compactInstructionsPrompt } from '../bridge/compactInstructions.ts';
 import { grantsSidecarFor } from '../bridge/stub.ts';
 import { comparePrefix, prefixUnitsOf, verdictLogFields } from '../lib/requestPrefix.ts';
@@ -244,6 +244,8 @@ const repoRoot = resolve(hostDir, '..', '..');
 const hostEntry = join(hostDir, 'host.ts');
 const gatewayEntry = join(here, 'fake-gateway.mjs');
 const hooksEntry = join(here, 'lib', 'probe-hooks.mjs');
+// `--import` takes a URL: a bare Windows path (`F:…`) reads as the scheme `f:`.
+const hooksImport = pathToFileURL(hooksEntry).href;
 const FIXTURE_DIR = join(repoRoot, 'src', 'shared', '__tests__', 'fixtures', 'dsh');
 const MIN_AVAILABLE_MB = 900;
 
@@ -2237,7 +2239,7 @@ async function main(): Promise<number> {
   const context: RecordContext = {
     box,
     async startHost(label) {
-      const child = spawn(nodeBin, ['--expose-internals', '--import', hooksEntry, hostEntry], {
+      const child = spawn(nodeBin, ['--expose-internals', '--import', hooksImport, hostEntry], {
         cwd: hostCwd,
         env,
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],

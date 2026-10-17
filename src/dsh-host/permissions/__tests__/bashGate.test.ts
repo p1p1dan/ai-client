@@ -454,7 +454,6 @@ describe('full auto (decision 191)', () => {
     'cat "$HOME/notes.txt"',
     'python build.py',
     'bash deploy.sh',
-    'rm stale.lock',
   ])('runs %s without a card', async (command) => {
     await auto();
     await expect(bash(command), command).resolves.toBeDefined();
@@ -464,6 +463,9 @@ describe('full auto (decision 191)', () => {
   it.each([
     'rm -rf build',
     'rm -r "$DIR"',
+    // Decision 191 §6 (user, 2026-10-17): any delete, a single file as much as a tree.
+    'rm stale.lock',
+    'rm -f "$TMPFILE"',
     'git push --force',
     'git push -f origin main',
     'git reset --hard HEAD~1',

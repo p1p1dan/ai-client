@@ -429,7 +429,7 @@
         "workspace": "<workspace>/perm-grants"
       },
       "kind": "exec",
-      "decisions": ["allow", "allow_session", "deny"],
+      "decisions": ["allow", "deny"],
       "timeoutMs": 120000,
       "queuePosition": 1,
       "queueDepth": 1,
@@ -438,10 +438,7 @@
         "command": "echo perm-grant-c && rm -f perm-grant-missing.txt",
         "cwd": "<workspace>/perm-grants"
       },
-      "sessionGrantScope": {
-        "kind": "command",
-        "value": "echo, rm"
-      }
+      "askReason": "dangerous"
     }
   },
   {

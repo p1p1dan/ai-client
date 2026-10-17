@@ -68,7 +68,6 @@ describe('full auto runs a workspace command it cannot fully read', () => {
     'Write-Output $X > out.txt',
     'python build.py',
     'npm run build 2>$null',
-    'Remove-Item notes.txt',
   ])('%s', async (command) => {
     const { gate: g, asked } = gate('auto');
     expect(g.evaluate(pwsh(command))).toBe('allow');
@@ -89,6 +88,11 @@ describe('full auto still asks', () => {
     'npm test; Remove-Item -Recurse dist',
     // Even when the rest of the line cannot be read.
     'Remove-Item $dir -Recurse',
+    // Decision 191 §6: any delete, a single file as much as a tree.
+    'Remove-Item notes.txt',
+    'rm notes.txt',
+    'del notes.txt',
+    'git rm notes.txt',
   ])('for the dangerous command %s', (command) => {
     expect(gate('auto').gate.evaluate(pwsh(command))).toBe('ask');
   });
@@ -139,11 +143,93 @@ describe('full auto still asks', () => {
     ).toBe('ask');
   });
 
-  it('lets a session grant the user gave cover the same command again, inside the workspace', async () => {
+  it('never lets a session grant cover a dangerous command: it asks every time (decision 191 §6)', async () => {
     const { gate: g, asked } = gate('auto', 'allow-session');
     await g.authorize(pwsh('git push --force'));
     await g.authorize(pwsh('git push --force'));
-    expect(asked).toEqual(['git push --force']);
+    expect(asked).toEqual(['git push --force', 'git push --force']);
+  });
+
+  it('lets a session grant cover a command that asked for a path outside the workspace', async () => {
+    const { gate: g, asked } = gate('auto', 'allow-session');
+    // Under auto a granted shell prefix never reaches outside the workspace.
+    await g.authorize(pwsh('Get-Content /etc/hosts'));
+    await g.authorize(pwsh('Get-Content /etc/hosts'));
+    expect(asked).toEqual(['Get-Content /etc/hosts', 'Get-Content /etc/hosts']);
+  });
+});
+
+/**
+ * Decision 191 §6 (user, 2026-10-17): "工作区外要询问" — the file tools ask
+ * outside the workspace under full auto too; inside it they still run.
+ */
+describe('full auto and the file tools', () => {
+  const file = (tool: string, target: string, extra: Partial<ToolPermissionRequest> = {}) =>
+    ({ tool, toolCallId: `f-${++ids}`, path: target, ...extra }) as ToolPermissionRequest;
+
+  it.each([
+    'read',
+    'write',
+    'edit',
+    'glob',
+    'grep',
+  ])('%s runs inside the workspace and asks outside it', (tool) => {
+    const g = gate('auto').gate;
+    expect(g.evaluate(file(tool, path.join(ROOT, 'src/a.ts')))).toBe('allow');
+    expect(g.evaluate(file(tool, path.resolve('/etc/hosts')))).toBe('ask');
+    expect(g.evaluate(file(tool, path.resolve('/home/me/notes.md')))).toBe('ask');
+  });
+
+  it('asks for a plugin file tool outside the workspace too', () => {
+    const g = gate('auto').gate;
+    const word = (target: string) =>
+      file('word_create', target, { policySurface: 'write', fileWrite: true });
+    expect(g.evaluate(word(path.join(ROOT, 'out.docx')))).toBe('allow');
+    expect(g.evaluate(word(path.resolve('/home/me/out.docx')))).toBe('ask');
+  });
+
+  it('reads a file the host produced itself without a card, wherever it is', () => {
+    const g = gate('auto').gate;
+    expect(
+      g.evaluate(file('read', path.resolve('/tmp/dsh-spill/1.txt'), { trustedPath: true }))
+    ).toBe('allow');
+  });
+
+  it('says why: the path is outside the workspace', async () => {
+    const contexts: unknown[] = [];
+    const g = new PermissionGate({
+      cwd: ROOT,
+      gear: 'auto',
+      approve: async (_request, _signal, _queue, context) => {
+        contexts.push(context);
+        return 'allow-once';
+      },
+    });
+    await g.authorize(file('write', path.resolve('/home/me/notes.md')));
+    expect(contexts).toEqual([{ askReason: 'outside_workspace' }]);
+  });
+});
+
+/**
+ * Decision 191 §6 (user, 2026-10-17): "两档松紧的问题要修复" — accept-edits asks
+ * a dangerous command too, so the gears tighten in order again; bypass alone
+ * runs it.
+ */
+describe('a dangerous command under every gear', () => {
+  it.each([
+    'rm -rf build',
+    'Remove-Item notes.txt',
+    'git reset --hard',
+  ])('%s asks under ask, accept-edits and auto, and only bypass runs it', (command) => {
+    expect(gate('ask').gate.evaluate(pwsh(command))).toBe('ask');
+    expect(gate('accept-edits').gate.evaluate(pwsh(command))).toBe('ask');
+    expect(gate('auto').gate.evaluate(pwsh(command))).toBe('ask');
+    expect(gate('bypass').gate.evaluate(pwsh(command))).toBe('allow');
+  });
+
+  it('leaves accept-edits running an ordinary workspace command', () => {
+    expect(gate('accept-edits').gate.evaluate(pwsh('npm run build'))).toBe('allow');
+    expect(gate('accept-edits').gate.evaluate(pwsh('Copy-Item a.txt b.txt'))).toBe('allow');
   });
 });
 
