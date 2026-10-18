@@ -180,6 +180,16 @@
   .dialog h3 { margin: 0 0 6px; font-size: 15px; }
   .dialog p { margin: 0 0 10px; font-size: var(--text-meta); color: var(--muted-foreground); }
   .dialog .acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .done { margin-left: 6px; font-size: var(--text-meta); font-weight: 500; color: var(--success); }
+  .menu.wide { width: 560px; }
+  .row.toggle { cursor: pointer; }
+  .row .chev { flex: 0 0 auto; margin-left: 2px; transition: transform 120ms; }
+  .row.toggle.open .chev { transform: rotate(90deg); }
+  .expand {
+    margin: 0 0 4px 20px; padding: 6px 10px; border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--muted) 60%, transparent);
+    font-size: var(--text-chat-process); color: var(--muted-foreground);
+  }
   .hide { display: none !important; }
   .caption { font-size: var(--text-meta); color: var(--muted-foreground); margin: 10px 0 0; }
 </style>
@@ -195,7 +205,7 @@
     <h1>预览：DSH 全自动档的审核模型，各状态在界面上的样子</h1>
     <p>对应 <b>决策 192</b>。管理员在登录服务里指定了审核模型后，全自动档下原本要弹卡的调用（删除、强推、工作区外路径、run_code 这类程序工具）先交给审核模型：放行就执行；不放行或审核失败就拒绝，并把理由告诉模型，让它换办法；连续 3 次或累计 20 次没放行后，下一次改为弹卡问你。</p>
     <ul>
-      <li>每一节上方的单选切换方案，<span class="rec">推荐</span>的标在名字后面；切换后下面的界面和取舍说明一起变。</li>
+      <li>第 2、3、4 节按你的选择定了；第 1 节按「只在一处转圈计时」重做了三个方案，第 5、6 节按你的意见改了。</li>
       <li>用的是应用里的真实颜色、字号和圆角；对话内容是举例。看完告诉我每节选哪个（或要改哪里）。</li>
     </ul>
   </div>
@@ -204,49 +214,39 @@
   <section id="s1">
     <div class="section-head">
       <h2>1　审核中（通常几秒，最长 120 秒）</h2>
-      <p>场景：你让模型「修一下打包脚本」，它要运行 <span class="mono">rm -rf dist/</span>。这条命令先交给审核模型，审核期间还没有执行。</p>
+      <p>场景：你让模型「修一下打包脚本」，它要运行 <span class="mono">rm -rf dist/</span>。这条命令先交给审核模型，审核期间还没有执行。按你的意见，转圈和计时只出现在一处。</p>
       <div class="variants">
-        <label><input type="radio" name="v1" value="a" checked /> A 顶部与工具行都写「审核中」<span class="rec">（推荐）</span></label>
-        <label><input type="radio" name="v1" value="b" /> B 只有顶部写「审核中」</label>
-        <label><input type="radio" name="v1" value="c" /> C 不区分，照常显示「运行中」</label>
+        <label><input type="radio" name="v1" value="a" checked /> A 顶部转圈计时，工具行只写「审核中」<span class="rec">（推荐）</span></label>
+        <label><input type="radio" name="v1" value="b" /> B 工具行转圈计时，顶部照旧「思考中」</label>
+        <label><input type="radio" name="v1" value="c" /> C 只有顶部写「审核中」，工具行审核完才出现</label>
       </div>
       <div class="tradeoff">
-        <span data-for="a">A：看得出这条命令在等审核、还没执行，也看得出等了多久；代价是工具行多一种状态。</span>
-        <span data-for="b">B：工具行等审核完才出现，界面更干净；但几秒到两分钟里只看到顶部一行，看不出在审哪条命令。</span>
-        <span data-for="c">C：完全不用改界面；但「运行中」是错的——命令其实还没执行，审核不放行时会显得像「跑了又被拒」。</span>
+        <span data-for="a">A：和现在命令运行时一样——顶部那一行负责转圈和计时，工具行只说在干什么；看得出在审哪条命令。</span>
+        <span data-for="b">B：计时贴着被审的命令；但顶部「思考中」与实际不符，模型此时没在思考。</span>
+        <span data-for="c">C：最安静；但审核慢的时候只看到「审核中」，看不出审的是哪条命令。</span>
       </div>
     </div>
     <div class="chat"><div class="col">
       <div class="user-msg">修一下打包脚本，输出目录不对</div>
       <p class="prose">输出目录写成了 <code>dist/</code>，应当是 <code>out/</code>。我先把旧的产物清掉再改脚本。</p>
       <ul class="rows">
-        <li class="row" data-show="a"><svg class="ic spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><span class="verb">审核中</span><span class="arg">rm -rf dist/</span><span class="tail tabnum">· <span class="tick">3</span>s</span></li>
-        <li class="row" data-show="c"><svg class="ic spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><span class="verb">运行中</span><span class="arg">rm -rf dist/</span><span class="tail tabnum">· <span class="tick">3</span>s</span></li>
+        <li class="row" data-show="a"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/></svg><span class="verb">审核中</span><span class="arg">rm -rf dist/</span></li>
+        <li class="row" data-show="b"><svg class="ic spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><span class="verb">审核中</span><span class="arg">rm -rf dist/</span><span class="tail tabnum">· <span class="tick">3</span>s</span></li>
       </ul>
-      <div class="head" data-show="a b"><svg class="ic spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><span>✻ 审核中 <span class="tick">3</span> 秒</span></div>
-      <div class="head" data-show="c"><svg class="ic spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><span>✻ 运行中 <span class="tick">3</span> 秒</span></div>
+      <div class="head" data-show="a c"><svg class="ic spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><span>✻ 审核中 <span class="tick">3</span> 秒</span></div>
+      <div class="head" data-show="b"><span>✻ 思考中 <span class="tick">3</span> 秒</span></div>
     </div></div>
   </section>
 
   <!-- 2 放行 -->
   <section id="s2">
     <div class="section-head">
-      <h2>2　审核放行</h2>
-      <p>场景：模型删的是本回合自己刚建的临时文件 <span class="mono">tmp-build.log</span>，审核放行，命令照常执行。</p>
-      <div class="variants">
-        <label><input type="radio" name="v2" value="a" checked /> A 行尾标「自动：审核放行」<span class="rec">（推荐）</span></label>
-        <label><input type="radio" name="v2" value="b" /> B 不标，和普通放行一样</label>
-        <label><input type="radio" name="v2" value="c" /> C 行尾标，并带审核模型名</label>
-      </div>
-      <div class="tradeoff">
-        <span data-for="a">A：沿用现有「· 自动：本会话已授权」那个位置和灰色，一眼看出「这条本来要问，是审核替你放的」；事后翻记录能找到。</span>
-        <span data-for="b">B：最安静，Claude Code 也是放行时不标；但删了东西事后翻记录，分不出是普通放行还是审核放的。</span>
-        <span data-for="c">C：多带模型名，排查审核误放时有用；但行尾更长，模型名对日常没意义。</span>
-      </div>
+      <h2>2　审核放行 <span class="done">已定：A</span></h2>
+      <p>模型删的是本回合自己刚建的临时文件，审核放行，命令照常执行。行尾标「· 自动：审核放行」，沿用现有「· 自动：本会话已授权」的位置和灰色。</p>
     </div>
     <div class="chat"><div class="col">
       <ul class="rows">
-        <li class="row"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/></svg><span class="verb">已运行</span><span class="arg">rm tmp-build.log</span><span class="tail" data-show="a">· 自动：审核放行</span><span class="tail" data-show="c">· 自动：审核放行（deepseek-v4-flash）</span></li>
+        <li class="row"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/></svg><span class="verb">已运行</span><span class="arg">rm tmp-build.log</span><span class="tail">· 自动：审核放行</span></li>
         <li class="row"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.4 3.6a2 2 0 0 1 2.8 2.8L7 18.6 3 20l1.4-4z"/></svg><span class="verb">已编辑</span><span class="arg">package.mjs  scripts/</span><span class="tail tabnum">+3 −3</span></li>
       </ul>
       <p class="prose">脚本已改成输出到 <code>out/</code>，临时日志也清掉了。</p>
@@ -256,47 +256,28 @@
   <!-- 3 不放行 -->
   <section id="s3">
     <div class="section-head">
-      <h2>3　审核不放行</h2>
-      <p>场景：接第 1 节，<span class="mono">dist/</span> 是本会话之前就有的目录，你也没说要删它，审核不放行。命令没有执行，模型收到理由后换了办法。</p>
-      <div class="variants">
-        <label><input type="radio" name="v3" value="a" checked /> A 红行，理由在下一行<span class="rec">（推荐）</span></label>
-        <label><input type="radio" name="v3" value="b" /> B 理由接在行尾（太长截断，悬停看全文）</label>
-        <label><input type="radio" name="v3" value="c" /> C 只写「审核没放行」，理由要点开行才看到</label>
-      </div>
-      <div class="tradeoff">
-        <span data-for="a">A：理由完整可读，你能马上判断要不要明确授权；代价是每次被拒多占一行。</span>
-        <span data-for="b">B：一行搞定；但理由通常一句话十几到几十个字，窄窗口下基本只剩前几个字。</span>
-        <span data-for="c">C：最省地方；但被拒正是你最想知道原因的时候，多点一下。模型自己的回复通常也会转述理由。</span>
-      </div>
+      <h2>3　审核不放行 <span class="done">已定：C</span></h2>
+      <p>行上只写「已拒绝 · 自动：审核没放行」，<b>点一下这一行</b>才展开审核的理由（灰字）。模型收到理由后换了办法。</p>
     </div>
     <div class="chat"><div class="col">
       <ul class="rows">
-        <li class="row failed"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/></svg><span class="verb">运行</span><span class="arg">rm -rf dist/</span><span class="tail">· 已拒绝</span><span class="tail" data-show="a c">· 自动：审核没放行</span><span class="tail note" data-show="b" title="审核没放行：要删除本会话之前就有的 dist/，你没有点名要删它">· 审核没放行：要删除本会话之前就有的 dist/，你没有点名要删它</span></li>
-        <li class="sub" data-show="a">要删除本会话之前就有的 <span class="mono">dist/</span>，你没有点名要删它</li>
+        <li class="row failed toggle" title="点击展开"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/></svg><span class="verb">运行</span><span class="arg">rm -rf dist/</span><span class="tail">· 已拒绝</span><span class="tail">· 自动：审核没放行</span><span class="chev">›</span></li>
+        <li class="expand hide">审核没放行：要删除本会话之前就有的 <span class="mono">dist/</span>，你没有点名要删它</li>
         <li class="row"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.4 3.6a2 2 0 0 1 2.8 2.8L7 18.6 3 20l1.4-4z"/></svg><span class="verb">已编辑</span><span class="arg">package.mjs  scripts/</span><span class="tail tabnum">+3 −3</span></li>
       </ul>
-      <p class="prose">删除 <code>dist/</code> 没有通过自动审核，我没有删它，只把脚本改成输出到 <code>out/</code>。旧的 <code>dist/</code> 还在；如果要清掉，请直接告诉我「删掉 dist/」。</p>
+      <p class="prose">删除 <code>dist/</code> 没有通过自动审核，我没有删它，只把脚本改成输出到 <code>out/</code>。如果要清掉旧的 <code>dist/</code>，请直接告诉我「删掉 dist/」。</p>
     </div></div>
   </section>
 
   <!-- 4 审核没能完成 -->
   <section id="s4">
     <div class="section-head">
-      <h2>4　审核没能完成（超时、网关报错、审核模型回了看不懂的话）</h2>
-      <p>场景：模型要运行 <span class="mono">git reset --hard</span>，审核请求超时。这不是判定不安全，命令同样没有执行，模型被告知可以稍后照原样重试。这类失败不计入「连续 3 次」。</p>
-      <div class="variants">
-        <label><input type="radio" name="v4" value="a" checked /> A 灰色，写明「审核没能完成」与原因<span class="rec">（推荐）</span></label>
-        <label><input type="radio" name="v4" value="b" /> B 和不放行一样，红色「已拒绝」</label>
-      </div>
-      <div class="tradeoff">
-        <span data-for="a">A：分得清「审核说不行」和「审核没跑成」，后者往往是网关或审核模型的问题，该找管理员；灰色与「未执行」这类结果同一个调子。</span>
-        <span data-for="b">B：少一种样式；但红色会让人以为命令有危险，管理员的审核模型挂了也看不出来。</span>
-      </div>
+      <h2>4　审核没能完成 <span class="done">已定：A</span></h2>
+      <p>审核超时、网关报错或回了看不懂的话：命令没有执行，灰色（不是红色），不计入连续被拒的次数。</p>
     </div>
     <div class="chat"><div class="col">
       <ul class="rows">
-        <li class="row" data-show="a"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/></svg><span class="verb">运行</span><span class="arg">git reset --hard</span><span class="tail">· 未执行</span><span class="tail">· 自动：审核没能完成（超时）</span></li>
-        <li class="row failed" data-show="b"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/></svg><span class="verb">运行</span><span class="arg">git reset --hard</span><span class="tail">· 已拒绝</span><span class="tail">· 自动：审核没能完成（超时）</span></li>
+        <li class="row"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/></svg><span class="verb">运行</span><span class="arg">git reset --hard</span><span class="tail">· 未执行</span><span class="tail">· 自动：审核没能完成（超时）</span></li>
       </ul>
       <p class="prose">自动审核这次没能完成（超时），命令没有执行。我先做不依赖它的部分，稍后再试一次。</p>
     </div></div>
@@ -305,22 +286,13 @@
   <!-- 5 连拒到上限后弹卡 -->
   <section id="s5">
     <div class="section-head">
-      <h2>5　连续 3 次没放行后，改为弹卡问你</h2>
-      <p>场景：审核已连续 3 次没放行，这一次不再直接拒绝，而是在输入框位置弹出权限卡，带上审核的理由，由你决定。危险命令（删除、强推等）只给「直接允许 / 直接拒绝」，工作区外路径这类还有「本会话内允许」。</p>
-      <div class="variants">
-        <label><input type="radio" name="v5" value="a" checked /> A 审核理由与「为什么问你」分两行<span class="rec">（推荐）</span></label>
-        <label><input type="radio" name="v5" value="b" /> B 合成一行</label>
-      </div>
+      <h2>5　连续 3 次没放行后弹卡 <span class="done">已改</span></h2>
+      <p>卡上只多一行灰字，写审核的理由；「审核已连续 3 次没放行……」那句去掉。前面「审核没放行：」五个字留着，用来和卡上其他说明区分来源；也嫌多就去掉。</p>
       <div class="variants">
         <span>调用类型：</span>
         <label><input type="radio" name="k5" value="danger" checked /> 删除（危险命令）</label>
         <label><input type="radio" name="k5" value="outside" /> 写工作区外的文件</label>
       </div>
-      <div class="tradeoff">
-        <span data-for="a">A：先看审核为什么不放行，再看为什么轮到你决定，两件事各一行；卡片高一行。</span>
-        <span data-for="b">B：卡片矮一行；但理由被挤到一句长话的后半段，窄窗口要折两三行。</span>
-      </div>
-      <p class="caption">卡片里原来那行「这条命令会删除文件或丢弃改动，每次都要你确认，不能按本会话允许」在配了审核模型时不再成立（全自动下删除先交给审核），由下面的审核说明取代。</p>
     </div>
     <div class="chat"><div class="col">
       <div class="card high">
@@ -334,9 +306,7 @@
             <div class="content" data-kind="danger">rm -rf node_modules/.cache build/ coverage/</div>
             <div class="content" data-kind="outside">~/.npmrc</div>
           </div>
-          <p class="note review" data-show="a"><span data-kind="danger">审核没有放行：要删除本会话之前就有的 build/ 和 coverage/，你没有点名要删它们</span><span data-kind="outside">审核没有放行：要改写工作区外的 npm 全局配置，你没有提到它</span></p>
-          <p class="note" data-show="a">审核已连续 3 次没放行，这一次交给你决定</p>
-          <p class="note review" data-show="b"><span data-kind="danger">审核已连续 3 次没放行，这一次交给你决定：要删除本会话之前就有的 build/ 和 coverage/，你没有点名要删它们</span><span data-kind="outside">审核已连续 3 次没放行，这一次交给你决定：要改写工作区外的 npm 全局配置，你没有提到它</span></p>
+          <p class="note"><span data-kind="danger">审核没放行：要删除本会话之前就有的 build/ 和 coverage/，你没有点名要删它们</span><span data-kind="outside">审核没放行：要改写工作区外的 npm 全局配置，你没有提到它</span></p>
           <div class="meta"><span>项目：workspace</span><span class="timer">若 <span class="cd">117</span> 秒内未响应将自动拒绝</span></div>
         </div>
         <div class="card-foot">
@@ -352,40 +322,32 @@
   <!-- 6 菜单说明 -->
   <section id="s6">
     <div class="section-head">
-      <h2>6　权限菜单与开启确认框里「全自动」的说明</h2>
-      <p>说明随管理员有没有配审核模型而变。下面切换「有没有审核模型」看两种文字；另一个开关决定要不要在说明里写出审核模型的名字。</p>
+      <h2>6　权限菜单与开启确认框 <span class="done">已改</span></h2>
+      <p>菜单加宽，五项说明都压到一行左右；「显式拒绝规则仍生效」这类补充只留在确认框里。切换「有没有审核模型」看两种文字。</p>
       <div class="variants">
         <span>管理员：</span>
         <label><input type="radio" name="k6" value="on" checked /> 配了审核模型</label>
-        <label><input type="radio" name="k6" value="off" /> 没配（与现在一样）</label>
-      </div>
-      <div class="variants">
-        <label><input type="radio" name="v6" value="a" checked /> A 不写模型名<span class="rec">（推荐）</span></label>
-        <label><input type="radio" name="v6" value="b" /> B 写出模型名</label>
-      </div>
-      <div class="tradeoff">
-        <span data-for="a">A：说明只讲行为，模型名对用户没有用，换模型时也不用改说明。</span>
-        <span data-for="b">B：能看出审核走的是哪个模型（关系到每次审核的耗时和费用）；但菜单项更长。</span>
+        <label><input type="radio" name="k6" value="off" /> 没配</label>
       </div>
     </div>
     <div class="chat"><div class="col">
-      <div class="menu">
-        <div class="item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg><span class="t"><span>计划模式</span><span class="d">只读：勘察时不再询问，完成后把计划交给你审阅。改文件、其他命令和联网工具都会被拒绝。</span></span></div>
-        <div class="item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg><span class="t"><span>改动前确认</span><span class="d">写入、编辑和命令逐条询问。</span></span></div>
-        <div class="item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m2 2 20 20"/></svg><span class="t"><span>自动编辑</span><span class="d">工作区内的改动和命令直接执行；删除、强推等危险命令，工作区外的路径、联网和其他工具仍会询问。</span></span></div>
+      <div class="menu wide">
+        <div class="item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg><span class="t"><span>计划模式</span><span class="d">只读勘察，完成后把计划交给你审阅</span></span></div>
+        <div class="item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg><span class="t"><span>改动前确认</span><span class="d">写入、编辑和命令逐条询问</span></span></div>
+        <div class="item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m2 2 20 20"/></svg><span class="t"><span>自动编辑</span><span class="d">工作区内的改动和命令直接执行；删除、工作区外和联网仍会询问</span></span></div>
         <div class="item on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg><span class="t"><span>全自动</span>
-          <span class="d" data-k6="off">工具调用基本不再询问。删除、强推等危险命令，以及涉及工作区外路径的操作仍会先问你；显式拒绝规则仍生效。</span>
-          <span class="d" data-k6="on">工具调用基本不再询问。删除、强推等危险命令和涉及工作区外路径的操作，先交给审核模型检查<span data-show="b">（deepseek-v4-flash）</span>：没放行的直接拒绝，并把原因告诉模型；连续多次没放行时才问你。显式拒绝规则仍生效。</span>
+          <span class="d" data-k6="on">基本不再询问；删除、强推和工作区外的操作先由审核模型把关</span>
+          <span class="d" data-k6="off">基本不再询问；删除、强推和工作区外的操作仍会询问</span>
         </span><span class="dot"></span></div>
         <div class="item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m4.243 5.21 14.39 12.472"/></svg><span class="t"><span>完全放行</span>
-          <span class="d" data-k6="off">完全不再询问。连「全自动」都会停下来确认的命令也直接执行；明确的拒绝规则依然生效。</span>
-          <span class="d" data-k6="on">完全不再询问，也不审核。「全自动」要交给审核的命令也直接执行；明确的拒绝规则依然生效。</span>
+          <span class="d" data-k6="on">不询问也不审核，全部直接执行</span>
+          <span class="d" data-k6="off">不再询问，全部直接执行</span>
         </span></div>
       </div>
       <div class="dialog">
         <h3>切换到「全自动」？</h3>
-        <p data-k6="off">工具调用基本不再询问。删除、强推等危险命令每次都会先问你，涉及工作区外路径的操作也会先问。</p>
-        <p data-k6="on">工具调用基本不再询问。删除、强推等危险命令和涉及工作区外路径的操作，先由审核模型<span data-show="b">（deepseek-v4-flash）</span>检查，没放行的会被拒绝；连续多次没放行时才问你。</p>
+        <p data-k6="on">删除、强推和工作区外的操作先由审核模型把关，没放行的会被拒绝。显式拒绝规则仍生效。</p>
+        <p data-k6="off">删除、强推和工作区外的操作每次都会先问你。显式拒绝规则仍生效。</p>
         <div class="acts"><button class="btn ghost" type="button">取消</button><button class="btn default" type="button">切换</button></div>
       </div>
       <div class="composer">
@@ -409,8 +371,7 @@
   function refresh(section) {
     const v = section.querySelector('input[name^="v"]');
     if (v) {
-      const group = v.name;
-      const value = section.querySelector(`input[name="${group}"]:checked`).value;
+      const value = section.querySelector(`input[name="${v.name}"]:checked`).value;
       section.querySelectorAll('[data-show]').forEach((el) => {
         el.classList.toggle('hide', !el.dataset.show.split(/\s+/).includes(value));
       });
@@ -421,6 +382,12 @@
     if (section.querySelector('input[name="k5"]')) apply(section, 'k5', 'data-kind');
     if (section.querySelector('input[name="k6"]')) apply(section, 'k6', 'data-k6');
   }
+  document.querySelectorAll('.row.toggle').forEach((row) =>
+    row.addEventListener('click', () => {
+      row.classList.toggle('open');
+      row.nextElementSibling.classList.toggle('hide');
+    })
+  );
   document.querySelectorAll('section').forEach((section) => {
     section.querySelectorAll('input[type="radio"]').forEach((input) =>
       input.addEventListener('change', () => refresh(section))
