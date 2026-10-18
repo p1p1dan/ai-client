@@ -226,3 +226,78 @@ describe('the two-stage review', () => {
     expect(await pending).toMatchObject({ kind: 'failed', failure: 'error' });
   });
 });
+
+describe('what a review costs (decision 193 §10)', () => {
+  const signal = new AbortController().signal;
+
+  /** A review model that bills each request: a provisional sample, then the settled one. */
+  function billedLlm(answers: string[], failSecond = false): ReviewLlm {
+    let call = 0;
+    return {
+      stream() {
+        call += 1;
+        const index = call;
+        const text = answers.shift() ?? '';
+        return (async function* () {
+          yield { type: 'usage', usage: { inputTokens: 20_000, outputTokens: 0 } };
+          yield { type: 'text-delta', text };
+          yield {
+            type: 'usage',
+            usage: {
+              inputTokens: 1_000 * index,
+              outputTokens: 10 * index,
+              cacheReadTokens: 19_000,
+            },
+          };
+          yield failSecond && index === 2
+            ? { type: 'finish', reason: { kind: 'error', failure: { message: 'HTTP 502' } } }
+            : { type: 'finish', reason: { kind: 'stop' } };
+        })() as AsyncIterable<CompletionChunk>;
+      },
+    };
+  }
+
+  function reviewerWith(llm: ReviewLlm, onUsage: (usage: unknown) => void): AutoReviewer {
+    return new AutoReviewer({
+      llm: () => llm,
+      route: () => ({
+        modelId: 'p/cheap',
+        selection: { provider: 'route-p', model: 'cheap' },
+        image: false,
+      }),
+      contextWindow: () => undefined,
+      rules: async () => RULE_SET,
+      transcript: () => [{ kind: 'user', text: 'clean up' }],
+      cwd: '/ws',
+      onUsage,
+    });
+  }
+
+  it('reports each request’s settled usage once, the failed one included', async () => {
+    const one: unknown[] = [];
+    const allow = reviewerWith(billedLlm(['<block>no']), (usage) => one.push(usage));
+    expect(await allow.review(REQUEST, {}, signal)).toEqual({ kind: 'allow' });
+    expect(one).toEqual([{ inputTokens: 1_000, outputTokens: 10, cacheReadTokens: 19_000 }]);
+
+    const two: unknown[] = [];
+    const failing = reviewerWith(billedLlm(['<block>yes', ''], true), (usage) => two.push(usage));
+    expect(await failing.review(REQUEST, {}, signal)).toMatchObject({ kind: 'failed' });
+    expect(two).toEqual([
+      { inputTokens: 1_000, outputTokens: 10, cacheReadTokens: 19_000 },
+      { inputTokens: 2_000, outputTokens: 20, cacheReadTokens: 19_000 },
+    ]);
+  });
+
+  it('reports nothing for a request that reported nothing, and survives a failing listener', async () => {
+    const reported: unknown[] = [];
+    const quiet = reviewerWith({ stream: () => stream('<block>no') }, (usage) =>
+      reported.push(usage)
+    );
+    expect(await quiet.review(REQUEST, {}, signal)).toEqual({ kind: 'allow' });
+    expect(reported).toEqual([]);
+    const throwing = reviewerWith(billedLlm(['<block>no']), () => {
+      throw new Error('bookkeeping broke');
+    });
+    expect(await throwing.review(REQUEST, {}, signal)).toEqual({ kind: 'allow' });
+  });
+});

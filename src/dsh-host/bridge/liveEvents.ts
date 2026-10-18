@@ -14,7 +14,10 @@
  *   `assistant/message.usage`           usage.updated, settled, with the context
  *                                       occupancy (`contextPressure`) and the
  *                                       session total (`tokenUsage`) of
- *                                       dsh-token-meter; no cost (rule 1); a
+ *                                       dsh-token-meter, plus the requests
+ *                                       outside the loop (decision 193 §10:
+ *                                       compaction summaries, reviews); no
+ *                                       cost (rule 1); a
  *                                       notable step's or a first write's cache
  *                                       verdict as `cache`, and the
  *                                       `cache-chain:` log lines of an
@@ -69,6 +72,7 @@ import {
   CONTEXT_WINDOW_NOTICE_KIND,
   contextWindowNotice,
 } from '../../shared/contextWindowMismatch.ts';
+import type { AuxiliaryUsage } from '../../shared/dshAuxiliaryUsage.ts';
 import { dshFailureErrorCode } from '../../shared/dshFailureCodes.ts';
 import { dshFileReview } from '../../shared/dshFileReview.ts';
 import {
@@ -196,6 +200,12 @@ export interface DshLiveEventsHost {
   usageView(): DshUsageView | undefined;
   /** Model steps of the log with reported usage (the session total's turn count). */
   usageSteps(): number;
+  /**
+   * Decision 193 §10: the session's requests outside the agent loop, which
+   * the token meter's total leaves out (`dshAuxiliaryUsage.ts`). Absent: the
+   * total is the token meter's alone.
+   */
+  auxiliaryUsage?(): AuxiliaryUsage | undefined;
   /** The goal's round budget, as the log last recorded it. */
   goalMaxRounds(): number | undefined;
   /**
@@ -363,16 +373,26 @@ function contextOf(
   };
 }
 
-/** The session's running total: `tokenUsage` over the whole log, counted in reported steps. */
-function sessionOf(totals: DshUsageView['tokenUsage'], steps: number): PiSessionUsage | null {
+/**
+ * The session's running total: `tokenUsage` over the whole log, counted in
+ * reported steps, plus the requests outside the agent loop (decision 193
+ * §10), counted apart in `auxiliary`.
+ */
+function sessionOf(
+  totals: DshUsageView['tokenUsage'],
+  steps: number,
+  auxiliary?: AuxiliaryUsage
+): PiSessionUsage | null {
   if (!totals || steps <= 0) return null;
-  const input = numberOf(totals.uncachedInputTokens) ?? 0;
-  const output = numberOf(totals.outputTokens) ?? 0;
-  const cacheRead = numberOf(totals.cacheReadTokens) ?? 0;
-  const cacheWrite = numberOf(totals.cacheWriteTokens) ?? 0;
+  const extra = auxiliary && auxiliary.requests > 0 ? auxiliary : undefined;
+  const input = (numberOf(totals.uncachedInputTokens) ?? 0) + (extra?.input ?? 0);
+  const output = (numberOf(totals.outputTokens) ?? 0) + (extra?.output ?? 0);
+  const cacheRead = (numberOf(totals.cacheReadTokens) ?? 0) + (extra?.cacheRead ?? 0);
+  const cacheWrite = (numberOf(totals.cacheWriteTokens) ?? 0) + (extra?.cacheWrite ?? 0);
   return {
     turns: steps,
     toolResults: 0,
+    ...(extra ? { auxiliary: extra.requests } : {}),
     input,
     output,
     cacheRead,
@@ -1259,11 +1279,20 @@ export class DshLiveEvents {
     const payload = buildPiUsagePayload(
       step,
       contextOf(view?.contextPressure, usage ? step : undefined),
-      sessionOf(view?.tokenUsage, this.host.usageSteps()),
+      sessionOf(view?.tokenUsage, this.host.usageSteps(), this.auxiliaryUsage()),
       null,
       { unreported: !usage, cache: usage ? this.cacheStep(event) : null }
     );
     if (payload) this.emit({ type: 'usage.updated', payload });
+  }
+
+  /** Decision 193 §10: the host's auxiliary usage; a failed read costs the total its extras only. */
+  private auxiliaryUsage(): AuxiliaryUsage | undefined {
+    try {
+      return this.host.auxiliaryUsage?.();
+    } catch {
+      return undefined;
+    }
   }
 
   /**

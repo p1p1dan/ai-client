@@ -28,10 +28,13 @@ export type DshBridgeModelPlan = Pick<
   readonly autoModeCli?: string;
   /**
    * The routes, by the name DSH gives a step's `provider`, as far as decision
-   * 173 reads them (`cacheChainReport.ts`): protocol and cache retention.
-   * Routing never reads them.
+   * 173 reads them (`cacheChainReport.ts`): protocol, cache retention and the
+   * compat that can refuse a long one (decision 193 §9). Routing never reads
+   * them.
    */
-  readonly routes?: Readonly<Record<string, Partial<Pick<DshPlanRoute, 'api' | 'cacheRetention'>>>>;
+  readonly routes?: Readonly<
+    Record<string, Partial<Pick<DshPlanRoute, 'api' | 'cacheRetention' | 'compat' | 'models'>>>
+  >;
 };
 
 /** What `installModelSelection` routes a request to (`@deepseek-ai/dsh-agent`). */

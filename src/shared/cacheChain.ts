@@ -9,6 +9,14 @@
  * kept rebuilding, or read what some older step had cached, and nothing on our
  * side said why.
  *
+ * Decision 193 §9 adds OpenAI's prompt cache (openai-responses routes), an
+ * implicit one (`CacheChainOptions.implicitCache`): the provider caches every
+ * prompt of at least `IMPLICIT_CACHE_MIN` tokens by itself, in blocks of
+ * `IMPLICIT_CACHE_BLOCK`, and reports only what it read (`cached_tokens`,
+ * which pi-ai turns into `cacheReadTokens`, with `inputTokens` the rest and no
+ * write). What such a step leaves cached is its prompt in whole blocks
+ * (`cachedOf`), so the next step should read about all of it.
+ *
  * This fold reads the usage DSH records on each `assistant/message` and gives
  * every step a verdict (`CacheStepKind`): did it reuse the step before's
  * cache, and if not, did a local event since then explain it (`CacheCause`)?
@@ -48,13 +56,19 @@ export const MATCH_RATIO = 0.0005;
 export const MATCH_WINDOW = 32;
 /** Cache lifetime of a route `ttlMsFor` does not know: Anthropic's default entry. */
 export const DEFAULT_TTL_MS = 5 * 60_000;
+/** An implicit cache keeps nothing of a prompt shorter than this (OpenAI: 1,024)... */
+export const IMPLICIT_CACHE_MIN = 1024;
+/** ...and a longer one in whole blocks of this many tokens (OpenAI: 128). */
+export const IMPLICIT_CACHE_BLOCK = 128;
 /** Verdicts the state keeps (the newest); the totals count every step. */
 export const MAX_KEPT_VERDICTS = 500;
 /**
  * The state's format; `restoreCacheChain` refuses any other, and the caller
  * folds afresh. 2: the totals count the unexplained rebuilds and their rewrite.
+ * 3 (decision 193 §9): implicit caches; a recorded step keeps what it left
+ * cached (`cached`), and a verdict says when its route caches implicitly.
  */
-export const CACHE_CHAIN_STATE_VERSION = 2;
+export const CACHE_CHAIN_STATE_VERSION = 3;
 
 // ---- vocabulary ------------------------------------------------------------------
 
@@ -128,6 +142,12 @@ export interface CacheChainOptions {
   ttlMsFor(provider?: string, model?: string): number | undefined;
   /** Whether the route reports a prefix cache this fold can follow; false records the step unjudged. */
   cacheAware(provider?: string, model?: string): boolean;
+  /**
+   * Whether a followed route's provider caches implicitly (OpenAI's prompt
+   * caching): every prompt, in blocks, reporting reads only. Absent or false:
+   * it caches what it reports written (Anthropic's `cache_control`).
+   */
+  implicitCache?(provider?: string, model?: string): boolean;
 }
 
 /** A step by DSH's coordinates. */
@@ -146,6 +166,8 @@ export interface CacheStepVerdict extends CacheStepRef {
   readonly write: number;
   /** Uncached input. */
   readonly input: number;
+  /** The route caches implicitly (`CacheChainOptions.implicitCache`): see `cachedOf`, `rewriteOf`. */
+  readonly implicit?: true;
   /** The step before's prompt, on a judged step. */
   readonly prevPrompt?: number;
   /** max(0, prevPrompt - read): cached tokens processed again; 0 on an unjudged step. */
@@ -200,11 +222,13 @@ interface ChainStep {
   prompt: number;
   read: number;
   write: number;
+  /** What it left cached (`cachedOf`); 0 on a route not followed. */
+  cached: number;
   aware: boolean;
   startedAt?: number;
 }
 
-/** A cache-active step's cached size (prompt less input), for `matched`. */
+/** A cache-active step's cached size (`cachedOf`), for `matched`. */
 interface CachedSize {
   turn: number;
   step: number;
@@ -452,7 +476,7 @@ function matchOf(
   if (read <= 0) return undefined;
   const tolerance = Math.max(MATCH_ABS, MATCH_RATIO * read);
   const near = (cached: number) => Math.abs(cached - read) <= tolerance;
-  if (near(before.read + before.write)) return undefined;
+  if (near(before.cached)) return undefined;
   for (let index = window.length - 1; index >= 0; index -= 1) {
     const entry = window[index];
     if (entry.turn === before.turn && entry.step === before.step) continue;
@@ -480,6 +504,8 @@ function recordStep(
   const write = countOf(usage.cacheWriteTokens);
   const prompt = input + read + write;
   const aware = options.cacheAware(provider, model) === true;
+  const implicit = aware && options.implicitCache?.(provider, model) === true;
+  const cached = aware ? cachedOf({ prompt, read, write, ...(implicit ? { implicit } : {}) }) : 0;
   const request = state.request;
   const startedAt =
     request?.turn === turn && request.step === step && request.startedAt !== undefined
@@ -494,7 +520,7 @@ function recordStep(
   state.causes = [];
 
   // Judged only against a followed step that cached something.
-  const baseline = aware && before?.aware && before.read + before.write > 0 ? before : undefined;
+  const baseline = aware && before?.aware && before.cached > 0 ? before : undefined;
   let kind: CacheStepKind = aware ? 'cold' : 'untracked';
   let lost = 0;
   let matched: CacheStepRef | undefined;
@@ -523,6 +549,7 @@ function recordStep(
     read,
     write,
     input,
+    ...(implicit ? { implicit: true as const } : {}),
     ...(baseline ? { prevPrompt: baseline.prompt } : {}),
     lost,
     kind,
@@ -532,8 +559,8 @@ function recordStep(
     ...(gapMs !== undefined ? { gapMs } : {}),
   };
 
-  if (aware && read + write > 0) {
-    state.window.push({ turn, step, cached: read + write });
+  if (cached > 0) {
+    state.window.push({ turn, step, cached });
     if (state.window.length > MATCH_WINDOW)
       state.window.splice(0, state.window.length - MATCH_WINDOW);
   }
@@ -543,6 +570,7 @@ function recordStep(
     prompt,
     read,
     write,
+    cached,
     aware,
     ...(startedAt !== undefined ? { startedAt } : {}),
   };
@@ -608,14 +636,33 @@ export function isUnexplainedVerdict(verdict: CacheStepVerdict): boolean {
 }
 
 /**
- * What a rebuild or a shrink wrote again: tokens the step before had cached
- * that this one wrote anew, min(`lost`, `write`). 0 for any other kind, a
- * warm step that read another chain's cache included: what it lost is under
- * the rebuild threshold.
+ * What a step left cached, for the next one to read: what it read and wrote,
+ * or, on an implicit cache that reported no write, its whole prompt in
+ * blocks (`IMPLICIT_CACHE_BLOCK`), nothing below `IMPLICIT_CACHE_MIN`.
  */
-export function rewriteOf(verdict: Pick<CacheStepVerdict, 'kind' | 'lost' | 'write'>): number {
+export function cachedOf(
+  step: Pick<CacheStepVerdict, 'prompt' | 'read' | 'write' | 'implicit'>
+): number {
+  if (step.implicit !== true || step.write > 0) return step.read + step.write;
+  if (step.prompt < IMPLICIT_CACHE_MIN) return 0;
+  return step.prompt - (step.prompt % IMPLICIT_CACHE_BLOCK);
+}
+
+/**
+ * What a rebuild or a shrink wrote again: tokens the step before had cached
+ * that this one wrote anew, min(`lost`, `write`). An implicit cache caches
+ * again whatever was not read, so there it is min(`lost`, `input` + `write`):
+ * what was billed uncached instead of read. 0 for any other kind, a warm step
+ * that read another chain's cache included: what it lost is under the rebuild
+ * threshold.
+ */
+export function rewriteOf(
+  verdict: Pick<CacheStepVerdict, 'kind' | 'lost' | 'write'> &
+    Partial<Pick<CacheStepVerdict, 'input' | 'implicit'>>
+): number {
   if (verdict.kind !== 'rebuild' && verdict.kind !== 'shrink') return 0;
-  return Math.max(0, Math.min(verdict.lost, verdict.write));
+  const written = verdict.implicit === true ? (verdict.input ?? 0) + verdict.write : verdict.write;
+  return Math.max(0, Math.min(verdict.lost, written));
 }
 
 // ---- restore -----------------------------------------------------------------------
@@ -658,6 +705,7 @@ function isVerdict(value: unknown): boolean {
     (CACHE_STEP_KINDS as readonly unknown[]).includes(row.kind) &&
     typeof row.explained === 'boolean' &&
     isCauseList(row.causes) &&
+    (row.implicit === undefined || row.implicit === true) &&
     (row.matched === undefined || isRef(row.matched))
   );
 }
@@ -671,7 +719,7 @@ function isChainStep(value: unknown): boolean {
   return (
     !!row &&
     isRef(row) &&
-    ['prompt', 'read', 'write'].every((key) => isCount(row[key])) &&
+    ['prompt', 'read', 'write', 'cached'].every((key) => isCount(row[key])) &&
     typeof row.aware === 'boolean' &&
     isTime(row.startedAt)
   );

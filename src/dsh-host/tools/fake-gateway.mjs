@@ -328,7 +328,10 @@
  * On the openai-responses wire, whatever the plan, a latest user message carrying
  * `GPT-LOOP {"tag":"x","steps":3,"tool":"read","file":"README.md","claim":0}` runs a tool
  * loop (P1-14 usage check, 2026-10-18): one function call per step (`read` of `file`, or
- * `pwsh` / `bash` echoing `gpt-loop-<tag>-<i>`), then one text line. Steps are counted here
+ * `pwsh` / `bash` echoing `gpt-loop-<tag>-<i>`), then one text line. `"evict": k`
+ * (decision 193 §9) forgets the key's simulated cache just before the loop's call k (from
+ * 0; k = steps is the closing text), so that request reads nothing: a rebuild nothing local
+ * explains; its log line says `evicted: true`. Steps are counted here
  * per cache key and tag, so a loop goes on after DSH compacts the conversation; give each
  * loop its own tag. Every reply is billed from a simulated
  * prompt cache keyed by the request's `prompt_cache_key`: the longest run of leading input
@@ -852,12 +855,20 @@ function decideResponsesLoop(parsed) {
   const tool = typeof params.tool === 'string' ? params.tool : 'read';
   const file = typeof params.file === 'string' ? params.file : 'README.md';
   const claim = Number.isInteger(params.claim) ? params.claim : 0;
-  const bill = billResponses(parsed, claim);
+  const evict = Number.isInteger(params.evict) ? params.evict : -1;
   const lastText = responsesItemText(input[input.length - 1]);
-  if (
+  const compaction =
     COMPACTION_INSTRUCTION.test(lastText) ||
-    COMPACTION_INSTRUCTION.test(String(parsed?.instructions ?? ''))
-  ) {
+    COMPACTION_INSTRUCTION.test(String(parsed?.instructions ?? ''));
+  // Decision 193 §9: `evict` drops the key's simulated cache just before the
+  // loop's call of that number, as an upstream that lost it would.
+  const cacheKey = typeof parsed?.prompt_cache_key === 'string' ? parsed.prompt_cache_key : '';
+  const evicted =
+    !compaction && cacheKey !== '' && (responsesLoopCalls.get(`${cacheKey}:${tag}`) ?? 0) === evict;
+  if (evicted) responsesCache.delete(cacheKey);
+  const bill = billResponses(parsed, claim);
+  if (evicted) bill.log.evicted = true;
+  if (compaction) {
     const summary = [
       '## Primary Request and Intent',
       `- ${GPT_LOOP_MARKER} ${json}`,

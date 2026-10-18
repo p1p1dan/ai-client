@@ -377,6 +377,28 @@ export function deriveRunPanelView(input: RunPanelInput): RunPanelView {
   };
 }
 
+/**
+ * The 「步数（本会话）」 figure: the settled steps, then what else the session
+ * figures take in — delegated results (decision 005) and, since decision 193
+ * §10, requests outside the loop (`auxiliary`: compaction summaries, reviews).
+ */
+export function formatSessionSteps(
+  session: PiSessionUsage,
+  t: Translate = englishTranslate
+): string {
+  let text = String(session.turns);
+  if (session.toolResults > 0) {
+    text = t('{{turns}} + {{delegated}} delegated', {
+      turns: text,
+      delegated: session.toolResults,
+    });
+  }
+  if (session.auxiliary) {
+    text = t('{{turns}} + {{auxiliary}} auxiliary', { turns: text, auxiliary: session.auxiliary });
+  }
+  return text;
+}
+
 // ---- issue #9: the per-step cache view ---------------------------------------------
 
 /** A DSH step's message id (`liveEvents.ts`): `dsh-<session>-t<turn>-s<step>`. */
@@ -459,8 +481,14 @@ export interface RunCacheRow {
   read: number;
   write: number;
   badge: RunCacheBadge | null;
-  /** Nothing local explains the step: its badge and its write figure are orange. */
+  /**
+   * Nothing local explains the step: its badge is orange, and its write
+   * figure, or on an implicit cache (`implicit`) its read, which is the
+   * figure that fell.
+   */
   warning: boolean;
+  /** Decision 193 §9: the step's route caches implicitly (OpenAI) and reports no writes. */
+  implicit: boolean;
   /** Exact figures, for the hover on the numbers. */
   title: string;
   /** Plain text for the copied diagnostics; '' when the step reused the cache. */
@@ -697,11 +725,23 @@ function cacheBadgeOf(step: RunSettledStep, t: Translate): RunCacheBadge | null 
   // A first write is grey unless a local event (a model or route switch, a
   // resume) explains why there was nothing to build on: then it is blue.
   if (cache.kind === 'cold' && !cache.causes?.length) {
-    return {
-      tone: 'secondary',
-      text: t('First write'),
-      tips: [t('No cache to build on yet, so this step’s whole prompt is written to the cache.')],
-    };
+    return cache.implicit
+      ? {
+          tone: 'secondary',
+          text: t('First cached'),
+          tips: [
+            t(
+              'No cache to build on yet. The provider caches this step’s prompt by itself and bills no cache write.'
+            ),
+          ],
+        }
+      : {
+          tone: 'secondary',
+          text: t('First write'),
+          tips: [
+            t('No cache to build on yet, so this step’s whole prompt is written to the cache.'),
+          ],
+        };
   }
   if (cache.explained || cache.kind === 'cold') {
     const causes = orderCacheCauses(cache.causes ?? []);
@@ -724,18 +764,34 @@ function cacheBadgeOf(step: RunSettledStep, t: Translate): RunCacheBadge | null 
       read: formatExactTokens(cache.read),
       rewrite: formatApproxTokens(rewrite),
     };
-    text = t('Unexplained · about {{tokens}} rewritten', { tokens: formatApproxTokens(rewrite) });
-    tips.push(
-      diverged
-        ? t(
-            'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is written again.',
-            params
-          )
-        : t(
-            'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is written again. Nothing local explains it: most likely the request went to another upstream.',
-            params
-          )
-    );
+    if (cache.implicit) {
+      // Decision 193 §9: OpenAI bills no write; what was not read is billed uncached.
+      text = t('Unexplained · about {{tokens}} missed', { tokens: formatApproxTokens(rewrite) });
+      tips.push(
+        diverged
+          ? t(
+              'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is billed uncached.',
+              params
+            )
+          : t(
+              'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is billed uncached. Nothing local explains it: most likely the request went to another upstream.',
+              params
+            )
+      );
+    } else {
+      text = t('Unexplained · about {{tokens}} rewritten', { tokens: formatApproxTokens(rewrite) });
+      tips.push(
+        diverged
+          ? t(
+              'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is written again.',
+              params
+            )
+          : t(
+              'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is written again. Nothing local explains it: most likely the request went to another upstream.',
+              params
+            )
+      );
+    }
   } else if (cache.kind === 'shrink') {
     const shorter = shrinkOf(cache);
     const params = { tokens: formatExactTokens(shorter) };
@@ -773,7 +829,9 @@ function cacheBadgeOf(step: RunSettledStep, t: Translate): RunCacheBadge | null 
 function cacheVerdictOf(step: RunSettledStep, t: Translate): string {
   const cache = step.usage.cache;
   if (!cache) return '';
-  if (cache.kind === 'cold' && !cache.causes?.length) return t('First write');
+  if (cache.kind === 'cold' && !cache.causes?.length) {
+    return cache.implicit ? t('First cached') : t('First write');
+  }
   if (cache.explained || cache.kind === 'cold') {
     return joinCacheList(
       orderCacheCauses(cache.causes ?? []).map((cause) => causeLabel(cause, step.gapMs, t)),
@@ -782,7 +840,11 @@ function cacheVerdictOf(step: RunSettledStep, t: Translate): string {
   }
   const parts: string[] = [];
   if (cache.kind === 'rebuild') {
-    parts.push(t('Unexplained, rewrote {{tokens}}', { tokens: rewriteOfCache(cache) }));
+    parts.push(
+      cache.implicit
+        ? t('Unexplained, missed {{tokens}}', { tokens: rewriteOfCache(cache) })
+        : t('Unexplained, rewrote {{tokens}}', { tokens: rewriteOfCache(cache) })
+    );
   } else if (cache.kind === 'shrink') {
     parts.push(t('Prompt shorter −{{tokens}}', { tokens: shrinkOf(cache) }));
   }
@@ -821,6 +883,7 @@ export function buildCacheRows(
         write: cacheWrite,
         badge,
         warning: badge?.tone === 'warning',
+        implicit: step.usage.cache?.implicit === true,
         title: t('Step {{step}}: prompt {{prompt}} · read {{read}} · written {{write}}', {
           step: step.step,
           prompt: formatExactTokens(prompt),

@@ -5,7 +5,8 @@
  *
  * Tool-free one-shot requests through the host's LLM service (the same
  * adapter, routes and per-request keys as a chat turn; nothing written to a
- * session), to the plan's `reviewModel`.
+ * session), to the plan's `reviewModel`. Each request's usage goes to
+ * `onUsage` (decision 193 §10: the session total counts it).
  */
 
 import {
@@ -56,6 +57,12 @@ export interface AutoReviewerOptions {
   transcript(): ReviewTranscriptEntry[];
   cwd: string;
   log?: (...args: unknown[]) => void;
+  /**
+   * Decision 193 §10: the provider-reported usage of one review request (the
+   * stream's last `usage` chunk, a `TokenUsage`), once the request settles,
+   * failed or not; never called for a request that reported none.
+   */
+  onUsage?: (usage: unknown) => void;
 }
 
 const TIMEOUT = 'auto_review_timed_out';
@@ -168,6 +175,7 @@ export class AutoReviewer {
     const timer = setTimeout(() => controller.abort(TIMEOUT), limits.timeoutMs);
     timer.unref?.();
     const timedOut = () => controller.signal.reason === TIMEOUT;
+    let usage: unknown;
     try {
       let text = '';
       const stream = llm.stream({
@@ -186,6 +194,10 @@ export class AutoReviewer {
           text += chunk.text;
           continue;
         }
+        if (chunk.type === 'usage') {
+          usage = chunk.usage ?? usage;
+          continue;
+        }
         if (chunk.type !== 'finish') continue;
         const kind = chunk.reason?.kind;
         if (kind === 'aborted') return timedOut() ? failed('timeout') : failed('error', 'aborted');
@@ -202,6 +214,16 @@ export class AutoReviewer {
     } finally {
       clearTimeout(timer);
       limits.signal.removeEventListener('abort', onAbort);
+      if (usage !== undefined) this.reportUsage(usage);
+    }
+  }
+
+  /** `onUsage`, which may not cost the review its verdict. */
+  private reportUsage(usage: unknown): void {
+    try {
+      this.options.onUsage?.(usage);
+    } catch {
+      // Bookkeeping only.
     }
   }
 }

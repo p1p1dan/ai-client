@@ -115,6 +115,12 @@ import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { readCompactInstructions } from '../../shared/compactInstructions.ts';
+import {
+  type AuxiliaryUsage,
+  addAuxiliaryUsage,
+  emptyAuxiliaryUsage,
+  sumAuxiliaryUsage,
+} from '../../shared/dshAuxiliaryUsage.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import {
   type DshHistoryFoldOptions,
@@ -672,6 +678,12 @@ export interface DshBridgeDeps {
    */
   cacheChain?: boolean;
   /**
+   * Decision 193 §9: with `cacheChain`, follow openai-responses routes too
+   * (OpenAI's implicit prompt cache). plugin.ts turns it on unless
+   * `AICLIENT_RUNTIME_RESPONSES_CACHE_WATCH=0`; absent counts as on.
+   */
+  cacheChainResponses?: boolean;
+  /**
    * Decision 173 D: the host's request tap names this chat's gateway session
    * in each anthropic-messages request (`metadata.user_id`), so a step's
    * `cache` names it too (`gatewaySessionUuid`), for the copied diagnostics.
@@ -857,6 +869,11 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
    */
   private grantsFile = '';
   private readonly historyCache: DshHistoryCache;
+  /**
+   * Decision 193 §10: the usage of the auto-gear reviews this runtime ran.
+   * Reviews write nothing to the log, so this counts from the runtime's start.
+   */
+  private readonly reviewUsage: AuxiliaryUsage = emptyAuxiliaryUsage();
   /** The sessions earlier rewinds retired, for the tree (P1-4b). */
   private readonly retired: DshRetiredHistory;
   private readonly query: DshSessionQuery;
@@ -942,7 +959,11 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       this.query,
       options.log,
       presentCall,
-      deps.cacheChain ? dshCacheChainOptions(() => deps.modelPlan?.()) : undefined,
+      deps.cacheChain
+        ? dshCacheChainOptions(() => deps.modelPlan?.(), {
+            responses: deps.cacheChainResponses !== false,
+          })
+        : undefined,
       // Decision 179: a `/compact` summary with the instructions it was written with.
       (compactionId) => this.compactInstructionsOf(compactionId),
       // Decision 180: and its command line with what was typed.
@@ -999,6 +1020,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       },
       usageView: () => this.usageView(),
       usageSteps: () => this.historyCache.usageSteps(),
+      // Decision 193 §10: the compaction summaries the log records, and the reviews this runtime ran.
+      auxiliaryUsage: () => sumAuxiliaryUsage(this.historyCache.auxiliaryUsage(), this.reviewUsage),
       goalMaxRounds: () => this.historyCache.goalMaxRounds(),
       claimCommand: (commandId) => {
         const send = this.pendingCommand;
@@ -1306,6 +1329,10 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       transcript: () => reviewTranscriptFromHistory(this.historyCache.messages(), isDshSummaryRow),
       cwd,
       log: this.options.log,
+      // Decision 193 §10: a review is a request this chat is billed for.
+      onUsage: (usage) => {
+        addAuxiliaryUsage(this.reviewUsage, usage);
+      },
     });
     return {
       review: async (request, context, signal) => {

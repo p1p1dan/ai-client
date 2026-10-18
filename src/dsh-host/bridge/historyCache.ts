@@ -20,6 +20,9 @@
  * whole log. The chain is the plain JSON state `restoreCacheChain` reads; it
  * is rebuilt from the log at every read, never restored, and leaves the
  * timeline untouched.
+ *
+ * Decision 193 §10: the same way, the usage of the session's compaction
+ * summaries (`dshAuxiliaryUsage.ts`), which the token meter's total leaves out.
  */
 
 import {
@@ -33,6 +36,12 @@ import {
   initCacheChain,
   viewCacheChain,
 } from '../../shared/cacheChain.ts';
+import {
+  type AuxiliaryUsage,
+  applyAuxiliaryUsage,
+  emptyAuxiliaryUsage,
+  foldAuxiliaryUsage,
+} from '../../shared/dshAuxiliaryUsage.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { DshHistoryFold } from '../../shared/dshHistory/projection.ts';
 import { buildDshSessionTree, dshLeafCheckpoint } from '../../shared/dshHistory/tree.ts';
@@ -88,6 +97,8 @@ export class DshHistoryCache {
   private chain: CacheChainState | undefined;
   /** The step the last appended event recorded, by that event's seq. */
   private lastStep: { seq: number; verdict: CacheStepVerdict } | undefined;
+  /** Decision 193 §10: the logged usage of requests outside the agent loop, at the fold's cursor. */
+  private auxiliary: AuxiliaryUsage = emptyAuxiliaryUsage();
   private state: CacheState = 'empty';
   /** Events delivered while an observation is in flight. */
   private pending: DshLogEvent[] = [];
@@ -117,6 +128,7 @@ export class DshHistoryCache {
     this.fold = this.newFold();
     this.chain = this.chainOptions ? initCacheChain() : undefined;
     this.lastStep = undefined;
+    this.auxiliary = emptyAuxiliaryUsage();
     this.state = 'empty';
     this.pending = [];
     this.loading = null;
@@ -175,6 +187,14 @@ export class DshHistoryCache {
   /** Model steps with provider-reported usage so far (P1-4d1: the session total's turn count). */
   usageSteps(): number {
     return this.fold.usageSteps;
+  }
+
+  /**
+   * Decision 193 §10: what the log records of the session's requests outside
+   * the agent loop (its compaction summaries), as a copy.
+   */
+  auxiliaryUsage(): AuxiliaryUsage {
+    return { ...this.auxiliary };
   }
 
   /** The current goal's round budget, when the log recorded one (P1-4d1: a goal head's origin). */
@@ -251,6 +271,7 @@ export class DshHistoryCache {
       this.fold = fold;
       this.chain = this.foldChain(observation.events);
       this.lastStep = undefined;
+      this.auxiliary = foldAuxiliaryUsage(observation.events);
       this.state = 'ready';
       const pending = this.pending;
       this.pending = [];
@@ -278,6 +299,7 @@ export class DshHistoryCache {
     }
     this.fold.push(event);
     this.applyChain(event);
+    applyAuxiliaryUsage(this.auxiliary, event);
     return true;
   }
 

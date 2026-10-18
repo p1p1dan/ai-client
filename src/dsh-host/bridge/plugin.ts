@@ -22,6 +22,7 @@ import type { DshHostToMainMessage } from '../../shared/types/dshHostProtocol.ts
 import {
   CACHE_CHAIN_ENV,
   isSwitchedOff,
+  RESPONSES_CACHE_WATCH_ENV,
   SESSION_METADATA_ENV,
 } from '../../shared/types/requestScope.ts';
 import { AutoModeRulesSource } from './autoModeRules.ts';
@@ -151,6 +152,8 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
     permissionAgentDir: process.env[PERMISSION_AGENT_DIR_ENV]?.trim() || null,
     // Decision 173 B2: each step's prompt-cache reuse, unless switched off.
     cacheChain: !isSwitchedOff(process.env, CACHE_CHAIN_ENV),
+    // Decision 193 §9: openai-responses routes too, unless switched off.
+    cacheChainResponses: !isSwitchedOff(process.env, RESPONSES_CACHE_WATCH_ENV),
     // Decision 173 D: host.ts's request tap names each chat's gateway session
     // in `metadata.user_id` by the same switch; the cache verdicts name it too.
     sessionMetadata: !isSwitchedOff(process.env, SESSION_METADATA_ENV),

@@ -1,7 +1,9 @@
 /**
  * Decision 173 (GitHub issue #9), B1: an anthropic-messages request's prefix,
  * unit by unit, and whether a request only extends the previous request of
- * the same session.
+ * the same session. Decision 193 §9: an openai-responses request's too
+ * (`responsesPrefixUnitsOf`), into the same units: OpenAI's prompt cache is a
+ * prefix cache over the tools, the instructions and the input items.
  *
  * A prompt cache serves the longest prefix it has seen (tools, then system,
  * then messages), so a request that is the previous one with messages
@@ -70,6 +72,20 @@ const NOT_CONFIG: ReadonlySet<string> = new Set([
 
 /** The config unit of the `anthropic-beta` request header. */
 const BETA_UNIT = 'anthropic-beta';
+
+/**
+ * The same for an openai-responses body: `instructions` is its system unit,
+ * `input` its messages, and these do not reach the prompt either.
+ */
+const RESPONSES_NOT_CONFIG: ReadonlySet<string> = new Set([
+  'input',
+  'instructions',
+  'tools',
+  'metadata',
+  'max_output_tokens',
+  'stream',
+  'temperature',
+]);
 
 const CACHE_CONTROL = 'cache_control';
 /** How a `cache_control` key shows in JSON text. */
@@ -161,6 +177,69 @@ export function prefixUnitsOf(body: unknown, betas?: string | null): PrefixUnits
     return { config, tools, system, systemForm: formOf(body.system), messages, roles, forms };
   } catch {
     // A value JSON cannot write (a cycle, a BigInt): nothing to compare.
+    return undefined;
+  }
+}
+
+/**
+ * A string `content` of a Responses item as the one part it stands for: the
+ * model's own text is `output_text`, anything else `input_text`.
+ */
+function asResponsesParts(role: unknown, text: string): Array<{ type: string; text: string }> {
+  return [{ type: role === 'assistant' ? 'output_text' : 'input_text', text }];
+}
+
+/**
+ * The prefix units of an openai-responses body (`JSON.parse` of what pi-ai's
+ * OpenAI client sends): the config as for Messages, less
+ * `RESPONSES_NOT_CONFIG`; each tool; `instructions` as the system unit (an
+ * absent one is empty, and it has only one form); each `input` item as a
+ * message, its `role` (else its `type`, `function_call` and the like) for the
+ * log line. A string `content` hashes as the part it stands for, so the same
+ * text in another form is a form change; a string `input` is the one user
+ * message it stands for. Undefined unless the body is an object with a
+ * string or array `input`, or when it cannot be hashed.
+ */
+export function responsesPrefixUnitsOf(body: unknown): PrefixUnits | undefined {
+  if (!isPlainObject(body)) return undefined;
+  const input =
+    typeof body.input === 'string' ? [{ role: 'user', content: body.input }] : body.input;
+  if (!Array.isArray(input)) return undefined;
+  try {
+    const config: Record<string, string> = {};
+    for (const [key, value] of Object.entries(body)) {
+      if (!RESPONSES_NOT_CONFIG.has(key)) config[key] = hashOf(value);
+    }
+    const tools = Array.isArray(body.tools)
+      ? body.tools.map(hashOf)
+      : body.tools === undefined
+        ? []
+        : [hashOf(body.tools)];
+    const system = hashOf(body.instructions === undefined ? '' : body.instructions);
+
+    const messages: string[] = [];
+    const roles: string[] = [];
+    const forms: ContentForm[] = [];
+    for (const item of input as unknown[]) {
+      if (isPlainObject(item)) {
+        messages.push(
+          hashOf(
+            typeof item.content === 'string'
+              ? { ...item, content: asResponsesParts(item.role, item.content) }
+              : item
+          )
+        );
+        const role = typeof item.role === 'string' ? item.role : item.type;
+        roles.push(typeof role === 'string' ? role : '');
+        forms.push(formOf(item.content));
+      } else {
+        messages.push(hashOf(item));
+        roles.push('');
+        forms.push('blocks');
+      }
+    }
+    return { config, tools, system, systemForm: 'string', messages, roles, forms };
+  } catch {
     return undefined;
   }
 }

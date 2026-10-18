@@ -34,6 +34,7 @@ import {
   type CacheStepKind,
   type CacheStepRef,
   type CacheStepVerdict,
+  cachedOf,
   isNotableVerdict,
   rewriteOf,
 } from './cacheChain.ts';
@@ -165,9 +166,10 @@ export type PiUsageCacheSession = Pick<
  * Decision 173 (issue #9) — one step's prompt-cache verdict (`cacheChain.ts`),
  * beside its bill.
  *
- * Sent for a step of a route the bridge follows (anthropic-messages) that is
- * notable (`isNotableVerdict`: a rebuild, a shrink, or a warm read of an older
- * step's cache), or cold and wrote the cache (the first write). A plain warm,
+ * Sent for a step of a route the bridge follows (anthropic-messages, and
+ * since decision 193 §9 openai-responses) that is notable
+ * (`isNotableVerdict`: a rebuild, a shrink, or a warm read of an older step's
+ * cache), or cold and wrote the cache (the first write). A plain warm,
  * a turn-shrink (information only, whatever it read), an untracked step and a
  * cold one that wrote nothing carry no `cache`, and nothing does while the
  * check is switched off (`AICLIENT_RUNTIME_CACHE_CHAIN=0`). Numbers and ids
@@ -190,6 +192,12 @@ export type PiUsageCacheStep = {
   prompt: number;
   read: number;
   write: number;
+  /**
+   * Decision 193 §9: the route caches implicitly (OpenAI): `write` stays 0, a
+   * cold step's first write is its prompt in blocks (`cachedOf`), and
+   * `rewrite` is what was billed uncached instead of read.
+   */
+  implicit?: true;
   /** The step before's prompt. */
   prevPrompt?: number;
   /** The older step whose cached size this read reproduces: requests alternate between caches. */
@@ -452,11 +460,14 @@ export function buildPiUsagePayload(
 /**
  * The kind a verdict is sent as, or null when it is not sent: a notable step
  * (`isNotableVerdict`: a rebuild, a shrink, a warm read of an older step's
- * cache) or a cold one that wrote the cache. A cold step that wrote nothing
- * has no first write to show; a turn-shrink is information only.
+ * cache) or a cold one that wrote the cache (on an implicit cache: left
+ * something cached, `cachedOf`). A cold step that wrote nothing has no first
+ * write to show; a turn-shrink is information only.
  */
 function sentKind(verdict: CacheStepVerdict): PiUsageCacheKind | null {
-  if (verdict.kind === 'cold') return verdict.write > 0 ? 'cold' : null;
+  if (verdict.kind === 'cold') {
+    return (verdict.implicit ? cachedOf(verdict) : verdict.write) > 0 ? 'cold' : null;
+  }
   if (!isNotableVerdict(verdict)) return null;
   switch (verdict.kind) {
     case 'rebuild':
@@ -496,6 +507,7 @@ export function buildPiUsageCacheStep(
     prompt: verdict.prompt,
     read: verdict.read,
     write: verdict.write,
+    ...(verdict.implicit ? { implicit: true as const } : {}),
     ...(verdict.prevPrompt !== undefined ? { prevPrompt: verdict.prevPrompt } : {}),
     ...(verdict.matched
       ? { matched: { turn: verdict.matched.turn, step: verdict.matched.step } }
@@ -606,6 +618,7 @@ function readCacheStep(value: unknown): PiUsageCacheStep | null {
     prompt,
     read,
     write,
+    ...(source.implicit === true ? { implicit: true as const } : {}),
     ...(prevPrompt !== null ? { prevPrompt } : {}),
     ...(matched ? { matched } : {}),
     ...(PREFIX_KINDS.has(source.prefix)

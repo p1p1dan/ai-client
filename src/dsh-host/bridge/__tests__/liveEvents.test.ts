@@ -10,6 +10,7 @@ import {
   CONTEXT_WINDOW_NOTICE_KEY,
   CONTEXT_WINDOW_NOTICE_KIND,
 } from '../../../shared/contextWindowMismatch.ts';
+import type { AuxiliaryUsage } from '../../../shared/dshAuxiliaryUsage.ts';
 import { projectDshHistory } from '../../../shared/dshHistory/projection.ts';
 import {
   AICLIENT_COMPACT_CANCELLED_REASON,
@@ -85,6 +86,8 @@ function harness(
     manual?: () => ManualCompactionView | undefined;
     /** Decisions 179, 180: the instructions a `/compact`'s summary was written with. */
     compactInstructions?: (compactionId: string) => string | undefined;
+    /** Decision 193 §10: the session's requests outside the agent loop. */
+    auxiliary?: () => AuxiliaryUsage | undefined;
   } = {}
 ) {
   const events: Emitted[] = [];
@@ -121,6 +124,7 @@ function harness(
     },
     usageView: () => options.usage,
     usageSteps: () => options.steps ?? 0,
+    ...(options.auxiliary ? { auxiliaryUsage: options.auxiliary } : {}),
     goalMaxRounds: () => options.rounds,
     claimCommand: (commandId) => {
       const send = pendingCommand;
@@ -538,6 +542,83 @@ describe('DshLiveEvents — usage (decision 099 rule 1)', () => {
         totalTokens: 170,
         costUsd: 0,
       },
+    });
+  });
+
+  it('[D1-USAGE-3] adds the requests outside the loop to the total, counted apart (decision 193 §10)', () => {
+    const tokenUsage = {
+      uncachedInputTokens: 100,
+      outputTokens: 20,
+      cacheReadTokens: 50,
+      cacheWriteTokens: 4,
+    };
+    let auxiliary: AuxiliaryUsage | undefined = {
+      requests: 2,
+      input: 500,
+      output: 300,
+      cacheRead: 39_700,
+      cacheWrite: 0,
+    };
+    const h = harness({ usage: { tokenUsage }, steps: 3, auxiliary: () => auxiliary });
+    const settle = (step: number) =>
+      h.durable('assistant/message', {
+        turn: 1,
+        step,
+        message: { id: `a${step}`, role: 'assistant', content: [] },
+        usage: { inputTokens: 1, outputTokens: 2 },
+      });
+    settle(1);
+    expect(readPiUsagePayload(h.of('usage.updated').at(-1)?.payload)?.session).toEqual({
+      turns: 3,
+      toolResults: 0,
+      auxiliary: 2,
+      input: 600,
+      output: 320,
+      cacheRead: 39_750,
+      cacheWrite: 4,
+      totalTokens: 40_674,
+      costUsd: 0,
+    });
+    // None counted: the token meter's total as it was, and no auxiliary count.
+    auxiliary = { requests: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    settle(2);
+    expect(readPiUsagePayload(h.of('usage.updated').at(-1)?.payload)?.session).toEqual({
+      turns: 3,
+      toolResults: 0,
+      input: 100,
+      output: 20,
+      cacheRead: 50,
+      cacheWrite: 4,
+      totalTokens: 174,
+      costUsd: 0,
+    });
+  });
+
+  it('[D1-USAGE-4] keeps the total when the auxiliary usage cannot be read', () => {
+    const h = harness({
+      usage: {
+        tokenUsage: {
+          uncachedInputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
+      },
+      steps: 1,
+      auxiliary: () => {
+        throw new Error('gone');
+      },
+    });
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: 'a1', role: 'assistant', content: [] },
+      usage: { inputTokens: 1, outputTokens: 2 },
+    });
+    expect(readPiUsagePayload(h.of('usage.updated')[0]?.payload)?.session).toMatchObject({
+      turns: 1,
+      input: 100,
+      output: 20,
     });
   });
 
