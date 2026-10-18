@@ -1,7 +1,11 @@
 import type { ChatEngine } from '@shared/claudeSdkEngine';
 import { readCompactInstructions } from '@shared/compactInstructions';
 import { dshCompactCommandText } from '@shared/dshHistory/types';
-import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentDefaults';
+import {
+  agentDefaultEffort,
+  agentDefaultModel,
+  withAgentPreference,
+} from '@shared/models/chatAgentDefaults';
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { DEFAULT_RUNTIME_PERMISSION } from '@shared/types/runtimePermission';
 import type { FileSearchResult } from '@shared/types/search';
@@ -57,6 +61,7 @@ import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { type HomeTargetPick, openHome, useHomeDraftStore } from '@/stores/homeDraft';
 import { selectIsMigrating, useLegacyMigrationStore } from '@/stores/legacyMigration';
 import { useMessageQueueStore } from '@/stores/messageQueue';
+import { useModelMenuIntentStore } from '@/stores/modelMenuIntent';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
@@ -134,7 +139,12 @@ import {
   isLegacyMigrationRefusal,
 } from './historyError';
 import { runHomeBranchSwitch } from './homeBranchSwitch';
-import { homeSlashMenu, homeSlashRefusal, homeSlashRefusalToast } from './homeSlashCommands';
+import {
+  homeSlashMenu,
+  homeSlashRefusal,
+  homeSlashRefusalToast,
+  sdkBlockedCommandHint,
+} from './homeSlashCommands';
 import { planHomeBranchSwitch } from './homeTarget';
 import { ModelMissingNotice } from './ModelMissingNotice';
 import {
@@ -229,6 +239,7 @@ import {
   slashCatalogRequest,
   slashRowsForDisplay,
 } from './slashCommands';
+import { carriedGenerationPreferences } from './slashModelCommand';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useComposerPopupPlacement } from './useComposerPopupPlacement';
 import { readHomeTarget, useHomeTarget } from './useHomeTarget';
@@ -1327,6 +1338,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         return true;
       }
     }
+    // Decision 194 Q2: the SDK CLI's settings commands PiLab does not send.
+    const blocked = sdkBlockedCommandHint(parsed.name, source, chatEngine);
+    if (blocked) {
+      toastManager.add({
+        type: 'info',
+        title: t('PiLab does not send /{{command}}', { command: parsed.name }),
+        description: t(blocked),
+      });
+      return true;
+    }
     const action = resolveSlashAction(parsed.name, parsed.args, source);
     if (action.type === 'runtime') return false;
 
@@ -1347,9 +1368,31 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             ? { kind: 'path', path: workspace.path }
             : { kind: 'unbound' }
           : undefined;
+        // Decision 194 Q2: `/new` and `/clear` typed here start from this conversation's
+        // model and effort too. The home page sends with the template, so they go there,
+        // as a pick in this chat's menu would have put them.
+        if (current) {
+          const carried = carriedGenerationPreferences(
+            getSessionModel(current.id),
+            getSessionEffort(current.id)
+          );
+          if (carried) {
+            const settings = useSettingsStore.getState();
+            settings.setChatAgentDefaults(withAgentPreference(settings.chatAgentDefaults, carried));
+          }
+        }
         openHome(preselect);
         break;
       }
+      case 'model':
+      case 'effort':
+        // Decision 194 Q2: through this composer's own model menu.
+        useModelMenuIntentStore.getState().request({
+          sessionId: activeSessionId ?? null,
+          kind: action.type,
+          query: action.query,
+        });
+        break;
       case 'settings':
         useSettingsIntentStore.getState().requestSettings();
         break;

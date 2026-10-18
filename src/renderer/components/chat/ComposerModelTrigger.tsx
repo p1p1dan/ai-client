@@ -5,7 +5,7 @@ import {
   withAgentPreference,
 } from '@shared/models/chatAgentDefaults';
 import { Check, ChevronDown, Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import {
   Menu,
@@ -17,10 +17,12 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from '@/components/ui/menu';
+import { toastManager } from '@/components/ui/toast';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { formatAbsoluteDateTime } from '@/lib/relativeTime';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { type ModelMenuRequest, useModelMenuIntentStore } from '@/stores/modelMenuIntent';
 import { useSettingsHydrated, useSettingsStore } from '@/stores/settings';
 import {
   type ComposerMenuItem,
@@ -60,6 +62,7 @@ import {
 } from './models';
 import { catalogModels, unavailableModelsNotice } from './piModelCatalog';
 import { captureSessionGenerationPreferences } from './sessionGenerationPreferences';
+import { resolveEffortCommand, resolveModelCommand } from './slashModelCommand';
 import { usePiModelCatalog } from './usePiModelCatalog';
 import { useSessionEffort } from './useSessionEffort';
 import { useSessionModel } from './useSessionModel';
@@ -438,6 +441,70 @@ function SessionModelTrigger({
     setOpen(false);
     setModelQuery('');
   };
+
+  // Decision 194 Q2: `/model` and `/effort` typed in this composer go through the menu
+  // itself, so the pick follows the same rules (locked rows, effort fallback, template).
+  const handleMenuRequest = (request: ModelMenuRequest) => {
+    if (request.kind === 'model') {
+      const resolution = resolveModelCommand(request.query, options);
+      if (resolution.kind === 'pick') {
+        handleSelect('model', resolution.id);
+        const label = options.find((option) => option.id === resolution.id)?.label ?? resolution.id;
+        toastManager.add({ type: 'info', title: t('Model: {{model}}', { model: label }) });
+        return;
+      }
+      if (resolution.kind === 'locked') {
+        toastManager.add({ type: 'info', title: t(LOCKED_MODEL_HINT) });
+        return;
+      }
+      if (resolution.kind === 'unknown') {
+        setModelQuery(resolution.query);
+        toastManager.add({
+          type: 'info',
+          title: t('No model is called {{query}}. Pick one from the menu.', {
+            query: resolution.query,
+          }),
+        });
+      }
+      setOpen(true);
+      return;
+    }
+    const resolution = resolveEffortCommand(
+      request.query,
+      [{ id: EFFORT_DEFAULT_ID, label: 'Default' }, ...availableEfforts],
+      t
+    );
+    if (resolution.kind === 'pick') {
+      handleSelect('effort', resolution.id);
+      const label =
+        resolution.id === EFFORT_DEFAULT_ID
+          ? 'Default'
+          : (availableEfforts.find((effort) => effort.id === resolution.id)?.label ??
+            resolution.id);
+      toastManager.add({
+        type: 'info',
+        title: t('Reasoning effort: {{effort}}', { effort: t(label) }),
+      });
+      return;
+    }
+    if (resolution.kind === 'unknown') {
+      toastManager.add({
+        type: 'info',
+        title: t('This model has no reasoning effort {{query}}. Pick one from the menu.', {
+          query: resolution.query,
+        }),
+      });
+    }
+    setOpen(true);
+  };
+  const handleMenuRequestRef = useRef(handleMenuRequest);
+  handleMenuRequestRef.current = handleMenuRequest;
+  const pendingMenuRequest = useModelMenuIntentStore((state) => state.pending);
+  useEffect(() => {
+    if (!pendingMenuRequest || pendingMenuRequest.sessionId !== sessionId) return;
+    useModelMenuIntentStore.getState().clear(pendingMenuRequest.seq);
+    handleMenuRequestRef.current(pendingMenuRequest);
+  }, [pendingMenuRequest, sessionId]);
 
   // §4.6 防线 ① 连带口径: the two axes do NOT share this sentence. A Codex pick
   // rewrites the thread's standing model until it is changed again [实测

@@ -25,13 +25,16 @@ describe('the home page menu', () => {
       [row('goal', 'command', 'Set or view the goal'), row('plan-tree', 'skill', 'Plans')],
       (key) => key
     );
+    // Decision 194: `/model` and `/effort` work here too; `/clear` has nothing to clear.
     expect(homeSlashMenu(catalog).map((item) => item.name)).toEqual([
+      'effort',
       'goal',
+      'model',
       'new',
       'plan-tree',
       'settings',
     ]);
-    expect([...CONVERSATION_BUILTINS].sort()).toEqual(['archive', 'compact']);
+    expect([...CONVERSATION_BUILTINS].sort()).toEqual(['archive', 'clear', 'compact']);
   });
 
   it('keeps a plugin’s or skill’s command that took one of those names', () => {

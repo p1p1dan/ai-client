@@ -87,6 +87,7 @@ vi.mock('../useHostStatus', () => {
 import { type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
 import { resetComposerDraftsForTests } from '@/stores/composerDrafts';
 import { resetHomeDraftForTests, useHomeDraftStore } from '@/stores/homeDraft';
+import { useModelMenuIntentStore } from '@/stores/modelMenuIntent';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { ChatComposer } from '../ChatComposer';
 
@@ -211,7 +212,7 @@ describe('the slash menu before a session runs', () => {
       workspacePath: '/repo/alpha',
       engine: 'dsh',
     });
-    expect(menuRows()).toEqual(['/goal', '/new', '/plan-tree', '/settings']);
+    expect(menuRows()).toEqual(['/effort', '/goal', '/model', '/new', '/plan-tree', '/settings']);
   });
 
   it('「不选仓库」 names no folder: Main lists the user’s skills only', async () => {
@@ -235,8 +236,11 @@ describe('the slash menu before a session runs', () => {
     });
     expect(menuRows()).toEqual([
       '/archive',
+      '/clear',
       '/compact',
+      '/effort',
       '/goal',
+      '/model',
       '/new',
       '/plan-tree',
       '/settings',
@@ -309,5 +313,51 @@ describe('what goes out from the home page as the first message', () => {
     expect(mocks.toast).not.toHaveBeenCalledWith(
       expect.objectContaining({ title: 'This command needs an open conversation' })
     );
+  });
+});
+
+describe('decision 194 Q2: /model, /effort and the SDK CLI’s settings commands', () => {
+  it.each([
+    ['/model glm-fake-1', 'model', 'glm-fake-1'],
+    ['/model ', 'model', ''],
+    ['/effort high', 'effort', 'high'],
+  ] as const)('%s goes to this composer’s model menu; nothing is sent', async (line, kind, query) => {
+    useModelMenuIntentStore.setState({ pending: null });
+    await mountComposer();
+    await type(line);
+    await pressEnter();
+
+    expect(useModelMenuIntentStore.getState().pending).toMatchObject({
+      sessionId: null,
+      kind,
+      query,
+    });
+    expect(createdSessions()).toEqual([]);
+    expect(mocks.api.createSession).not.toHaveBeenCalled();
+    expect(sentTexts).toEqual([]);
+    expect(box().value).toBe('');
+  });
+
+  it.each([
+    '/config theme=dark',
+    '/autocompact 200000',
+  ])('%s in an SDK chat is not sent: a hint, and the text stays', async (line) => {
+    useChatSessionsStore.setState((state) => ({
+      activeSessionId: 'known-1',
+      hostBoundSessionIds: ['known-1'],
+      sessions: state.sessions.map((session) =>
+        session.id === 'known-1' ? { ...session, engine: 'claude-sdk' as const } : session
+      ),
+    }));
+    await mountComposer();
+    await type(line);
+    await pressEnter();
+
+    const command = line.split(' ')[0]?.slice(1);
+    expect(mocks.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'info', title: `PiLab does not send /${command}` })
+    );
+    expect(sentTexts).toEqual([]);
+    expect(box().value).toBe(line);
   });
 });

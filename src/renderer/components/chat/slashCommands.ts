@@ -41,6 +41,8 @@ export interface SlashCatalogItem {
  */
 export type SlashAction =
   | { type: 'new' }
+  | { type: 'model'; query: string }
+  | { type: 'effort'; query: string }
   | { type: 'settings' }
   | { type: 'archive' }
   | { type: 'compact'; instructions?: string }
@@ -49,6 +51,19 @@ export type SlashAction =
 /** Commands that are actions in this window; pi has no idea these exist. */
 export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<{ name: string; descriptionKey: string }> = [
   { name: 'new', descriptionKey: 'Start a new conversation' },
+  // Decision 194 Q2 (user, 2026-10-18): the CLI's `/clear`, `/model` and `/effort` run
+  // here instead, so the window and the engine never disagree. `/clear` is `/new` from
+  // this conversation's folder and model; the conversation itself is kept.
+  {
+    name: 'clear',
+    descriptionKey:
+      'Start over with an empty context: a new conversation in this folder with this model; this one is kept',
+  },
+  { name: 'model', descriptionKey: 'Switch the model; with no name, open the model menu' },
+  {
+    name: 'effort',
+    descriptionKey: 'Set the reasoning effort; with no level, open the model menu',
+  },
   { name: 'settings', descriptionKey: 'Open settings' },
   { name: 'archive', descriptionKey: 'Archive this conversation' },
   // Decision 179: instructions may follow (`/compact keep the open tasks`).
@@ -210,7 +225,14 @@ export function resolveSlashAction(name: string, args: string, source?: string):
   if (source && source !== 'builtin') return { type: 'runtime' };
   switch (name) {
     case 'new':
+    // Decision 194 Q2: the CLI's `/clear` and its alias `/reset`.
+    case 'clear':
+    case 'reset':
       return { type: 'new' };
+    case 'model':
+      return { type: 'model', query: args };
+    case 'effort':
+      return { type: 'effort', query: args };
     case 'settings':
       return { type: 'settings' };
     case 'archive':

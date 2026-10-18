@@ -4740,3 +4740,27 @@ Object.assign(zhTranslations, {
   'Configure settings.json: hooks for automated behaviour, permissions and environment variables':
     '配置 settings.json：自动化行为的 hooks、权限与环境变量',
 });
+
+// This window's /clear, /model, /effort; the SDK CLI's settings commands (dsh-rebase decision 194 Q2)
+/**
+ * `slashCommands.ts`'s builtins, `ComposerModelTrigger`'s answers to `/model` and
+ * `/effort`, and `homeSlashCommands.ts`'s hints for the CLI commands PiLab does not send.
+ */
+Object.assign(zhTranslations, {
+  'Start over with an empty context: a new conversation in this folder with this model; this one is kept':
+    '清空上下文重新开始：在这个文件夹用这个模型开一个新对话，原对话保留',
+  'Switch the model; with no name, open the model menu': '切换模型；不写模型名则打开模型菜单',
+  'Set the reasoning effort; with no level, open the model menu':
+    '设置思考强度；不写档位则打开模型菜单',
+  'Model: {{model}}': '模型：{{model}}',
+  'No model is called {{query}}. Pick one from the menu.':
+    '没有叫 {{query}} 的模型，请在菜单里选择。',
+  'Reasoning effort: {{effort}}': '思考强度：{{effort}}',
+  'This model has no reasoning effort {{query}}. Pick one from the menu.':
+    '这个模型没有「{{query}}」这一档思考强度，请在菜单里选择。',
+  'PiLab does not send /{{command}}': 'PiLab 不发送 /{{command}}',
+  'PiLab keeps its settings in Settings: type /settings or use the gear at the bottom left.':
+    'PiLab 的设置在「设置」里：输入 /settings，或点左下角的齿轮。',
+  'PiLab compacts automatically from the model’s context window. Change the window in Settings, under the model’s service.':
+    'PiLab 按模型的上下文窗口自动压缩。要改窗口，请在「设置」里该模型所属的服务中修改。',
+});

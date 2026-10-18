@@ -2,6 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useModelMenuIntentStore } from '@/stores/modelMenuIntent';
 import { useSettingsStore } from '@/stores/settings';
 import { ComposerModelTrigger } from '../ComposerModelTrigger';
 import { AUTOMATIC_MODEL_ID, resolveResumeModel } from '../models';
@@ -32,6 +33,8 @@ vi.mock('@/stores/settings', async () => {
   };
 });
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+const toasts = vi.hoisted(() => ({ add: vi.fn() }));
+vi.mock('@/components/ui/toast', () => ({ toastManager: toasts }));
 vi.mock('../usePiModelCatalog', () => ({
   usePiModelCatalog: () => ({
     catalog: {
@@ -220,5 +223,48 @@ describe('composer model selection', () => {
     expect(container.querySelector('button')?.getAttribute('aria-expanded')).toBe('false');
     expect(readSessionModel('a')).toBe('china/glm5.2');
     expect(readSessionEffort('a')).toBe('high');
+  });
+});
+
+describe('decision 194 Q2: /model and /effort typed in the composer', () => {
+  async function typed(sessionId: string | null, kind: 'model' | 'effort', query: string) {
+    await act(async () => {
+      useModelMenuIntentStore.getState().request({ sessionId, kind, query });
+    });
+  }
+
+  it('/model <name> picks the model as its row would, for this chat only', async () => {
+    toasts.add.mockClear();
+    await render('typed-model');
+    await typed('another-chat', 'model', 'plain');
+    expect(readSessionModel('typed-model')).not.toBe('other/plain');
+    // Another composer's request is left for it.
+    expect(useModelMenuIntentStore.getState().pending?.sessionId).toBe('another-chat');
+    await typed('typed-model', 'model', 'plain');
+    expect(readSessionModel('typed-model')).toBe('other/plain');
+    expect(useSettingsStore.getState().chatAgentDefaults.model).toBe('other/plain');
+    expect(toasts.add).toHaveBeenCalledWith({ type: 'info', title: 'Model: {{model}}' });
+    expect(useModelMenuIntentStore.getState().pending).toBeNull();
+  });
+
+  it('/effort <level> picks the level; an unknown one opens the menu with a hint', async () => {
+    toasts.add.mockClear();
+    await render('typed-effort');
+    await typed('typed-effort', 'effort', 'low');
+    expect(readSessionEffort('typed-effort')).toBe('low');
+    await typed('typed-effort', 'effort', 'ultra');
+    expect(toasts.add).toHaveBeenLastCalledWith({
+      type: 'info',
+      title: 'This model has no reasoning effort {{query}}. Pick one from the menu.',
+    });
+    expect(row('Default')).toBeTruthy();
+  });
+
+  it('/model with no name, or a name no row has, opens the menu', async () => {
+    await render('typed-open');
+    const before = readSessionModel('typed-open');
+    await typed('typed-open', 'model', 'gpt-9');
+    expect(row('Default')).toBeTruthy();
+    expect(readSessionModel('typed-open')).toBe(before);
   });
 });

@@ -78,9 +78,11 @@ function menuDescription(command: CliSlashCommand): string | undefined {
 
 /**
  * Not listed: PiLab's own controls do these, and the CLI's copy would leave the window
- * showing something else (decision 194 §4 Q2). `/clear` starts another CLI session the
- * chat's record does not follow; `/model` and `/effort` bypass the pickers; `/config` and
- * `/autocompact` change settings the host pins.
+ * showing something else (decision 194 Q2, user 2026-10-18). `/clear` would start another
+ * CLI session the chat's record does not follow, and `/model` and `/effort` would bypass
+ * the pickers: the window's own `/clear`, `/model` and `/effort` take their place (a CLI
+ * row of the name would win over them in the menu). `/config` and `/autocompact` change
+ * settings PiLab sets: the window does not send them.
  */
 export const SDK_PILAB_OWNED_COMMANDS: ReadonlySet<string> = new Set([
   'clear',
