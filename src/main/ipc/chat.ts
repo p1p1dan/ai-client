@@ -918,20 +918,24 @@ export function registerChatHandlers(): void {
    * page's draft target, or the chat's own). With no worker of that workspace
    * up, its skills are read from disk by DSH's rules (`composerSlashCommands`).
    * Only a local absolute path is read; anything else lists the user's skills.
+   * Decision 194: `engine` is the chat's (or the next send's); with no worker
+   * up, the DSH host lists a DSH menu, plugin skills included, before the disk.
    */
   ipcMain.handle(
     IPC_CHANNELS.CHAT_GET_SLASH_COMMANDS,
     async (
       _e,
-      payload: { sessionId?: string; workspacePath?: string } = {}
+      payload: { sessionId?: string; workspacePath?: string; engine?: unknown } = {}
     ): Promise<WorkerCommandsResult> =>
       composerSlashCommands(
         {
           ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
           workspacePath: usableWorkspace(payload.workspacePath),
+          engine: payload.engine === 'claude-sdk' ? 'claude-sdk' : 'dsh',
         },
         {
           workers: workerManager,
+          dshHost: dshHostSupervisor,
           listSkills: (workspacePath) =>
             listDshSkillsFromDisk(workspacePath, currentDshSkillHomes()),
           log: (message, error) => console.warn(message, error),

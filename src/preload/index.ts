@@ -1138,11 +1138,13 @@ const electronAPI = {
      * R02-b — commands for the composer menu; `sessionId` is a hint, not a
      * requirement. Decision 175: `workspacePath` is the folder the menu is for
      * (the home page's draft target, or the chat's own), whose skills Main
-     * reads from disk while no session runs there.
+     * reads from disk while no session runs there. Decision 194: `engine` is
+     * the chat's engine (or the next send's), whose commands are listed.
      */
     getSlashCommands: (payload?: {
       sessionId?: string;
       workspacePath?: string;
+      engine?: 'dsh' | 'claude-sdk';
     }): Promise<{ commands: WorkerSlashCommandInfo[]; truncated: boolean }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_SLASH_COMMANDS, payload ?? {}),
     /**

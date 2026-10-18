@@ -27,6 +27,7 @@ import {
 import { AutoModeRulesSource } from './autoModeRules.ts';
 import type { ReviewLlm } from './autoReviewer.ts';
 import { DshChannelMux } from './channelMux.ts';
+import { type DshCommandsView, type DshSkillsView, globalSlashCommandRows } from './commands.ts';
 import { type CompletionLlm, DshCompletions } from './completions.ts';
 import {
   type DshBridgeContext,
@@ -107,6 +108,9 @@ interface BridgeRowContext extends DshBridgeContext {
   get(name: 'aiclientModelPlan'): DshBridgeModelPlan | undefined;
   /** Decision 131: the tool registry a preview asks a plugin call's title of. */
   get(name: 'tools'): DshToolRegistryView | undefined;
+  /** Decision 194: the registries the host's `slashCommands` answer reads, with no agent. */
+  get(name: 'commands'): DshCommandsView | undefined;
+  get(name: 'skills'): DshSkillsView | undefined;
   /** P1-15: DSH's model-call service (injected), as far as a completion uses it. */
   llm: CompletionLlm;
 }
@@ -236,6 +240,13 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
       );
     },
     completions,
+    // Decision 194: the home page's menu, and a chat's before it starts.
+    slashCommands: ({ cwd }) =>
+      globalSlashCommandRows(
+        { commands: ctx.get('commands'), skills: ctx.get('skills') },
+        cwd,
+        (...args) => console.error('[aiclient-bridge]', ...args)
+      ),
     log: (...args) => console.error('[aiclient-bridge]', ...args),
   });
   ctx.effect(() => {

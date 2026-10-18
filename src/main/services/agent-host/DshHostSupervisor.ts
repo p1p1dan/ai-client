@@ -85,6 +85,7 @@ import {
   type DshHostPage,
   type DshHostPong,
   type DshHostSeeded,
+  type DshHostSlashCommands,
   type DshMainToHostMessage,
   type DshRouteDiagnostic,
   type DshSeedImportResult,
@@ -106,9 +107,11 @@ import {
   isDshHostPong,
   isDshHostReady,
   isDshHostSeeded,
+  isDshHostSlashCommands,
   isDshHostStopped,
 } from '@shared/types/dshHostProtocol';
 import type { SessionHistoryPage } from '@shared/types/sessionHistory';
+import type { WorkerCommandsResult } from '@shared/types/workerRpc';
 import { powerMonitor as electronPowerMonitor } from 'electron';
 import { type DshChannelLink, DshChannelTransport } from './DshChannelTransport';
 import {
@@ -163,6 +166,12 @@ export const DSH_HOST_TIMINGS = {
    * a timeout reuses what the late migration made.
    */
   seedSessionTimeoutMs: 120_000,
+  /**
+   * Decision 194: a slash menu listing (`slashCommands`) waits this long, a
+   * host still starting included; the composer then lists skills from disk.
+   * A ready host answers in milliseconds; a cold boot takes about 1.6 s.
+   */
+  slashCommandsTimeoutMs: 5_000,
 } as const;
 
 /**
@@ -406,6 +415,13 @@ export interface DshHostReadPageInput {
   limit?: number;
 }
 
+interface PendingSlashCommands {
+  readonly host: HostRecord;
+  readonly resolve: (result: WorkerCommandsResult) => void;
+  readonly reject: (error: Error) => void;
+  readonly timer: NodeJS.Timeout;
+}
+
 interface PendingRead {
   readonly host: HostRecord;
   readonly resolve: (page: SessionHistoryPage) => void;
@@ -571,6 +587,9 @@ export class DshHostSupervisor {
   private readonly pendingReadPages = new Map<number, PendingRead>();
   /** `readPage` calls in flight, host start included: a host about to be read is not idle. */
   private pendingReads = 0;
+  private slashSequence = 0;
+  /** Decision 194: `slashCommands` answers awaited, by id. Reads only: they keep no host up. */
+  private readonly pendingSlashCommands = new Map<number, PendingSlashCommands>();
   private seedSequence = 0;
   private readonly pendingSeedSessions = new Map<number, PendingSeed>();
   /** `seedSession` calls in flight, host start included: a host migrating a chat is not idle. */
@@ -809,6 +828,65 @@ export class DshHostSupervisor {
       this.pendingReads -= 1;
       this.armIdleStop();
     }
+  }
+
+  /**
+   * Decision 194 (ruling 193 item 29): the composer's slash menu for a folder
+   * no session of this host runs in, DSH's commands and the skills a person
+   * may call there, a plugin's included (`slashCommands`). Never starts a
+   * host: the composer warms one while the user types (S-6 feedback 11c), and
+   * a menu is no reason for a cold boot. A host already starting is waited
+   * for. Rejects with `DSH_HOST_UNAVAILABLE` when no host is ready in
+   * `slashCommandsTimeoutMs`, it goes away, or the listing failed; the caller
+   * then reads the skills from disk.
+   */
+  async listSlashCommands(cwd: string | null): Promise<WorkerCommandsResult> {
+    const deadline = Date.now() + DSH_HOST_TIMINGS.slashCommandsTimeoutMs;
+    const starting = this.state === 'starting' || this.state === 'restarting';
+    const pendingStart = this.restartTask ?? this.startTask;
+    if (starting && pendingStart) {
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        pendingStart.catch(() => undefined),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, DSH_HOST_TIMINGS.slashCommandsTimeoutMs);
+          timer.unref?.();
+        }),
+      ]);
+      if (timer) clearTimeout(timer);
+    }
+    const host = this.host;
+    if (this.state !== 'ready' || !host || host.exitInfo || !host.connected) {
+      throw new DshHostSupervisorError(
+        'DSH_HOST_UNAVAILABLE',
+        `no ready DSH host to list slash commands (${this.state})`
+      );
+    }
+    const id = ++this.slashSequence;
+    return new Promise<WorkerCommandsResult>((resolve, reject) => {
+      const timer = setTimeout(
+        () => {
+          this.pendingSlashCommands.delete(id);
+          reject(
+            new DshHostSupervisorError(
+              'DSH_HOST_UNAVAILABLE',
+              `slashCommands ${id} was not answered in time`
+            )
+          );
+        },
+        Math.max(0, deadline - Date.now())
+      );
+      timer.unref?.();
+      this.pendingSlashCommands.set(id, { host, resolve, reject, timer });
+      if (!this.sendControl(host, { host: 'slashCommands', id, cwd })) {
+        this.settleSlashCommands(id)?.reject(
+          new DshHostSupervisorError(
+            'DSH_HOST_UNAVAILABLE',
+            'the slashCommands request could not be sent'
+          )
+        );
+      }
+    });
   }
 
   private sendReadPage(
@@ -1440,6 +1518,10 @@ export class DshHostSupervisor {
       this.onPage(host, message);
       return;
     }
+    if (isDshHostSlashCommands(message)) {
+      this.onSlashCommands(host, message);
+      return;
+    }
     if (isDshHostSeeded(message)) {
       this.onSeeded(host, message);
       return;
@@ -1579,6 +1661,7 @@ export class DshHostSupervisor {
     }
     this.rejectGc(host);
     this.rejectReads(host);
+    this.rejectSlashCommands(host);
     this.rejectSeeds(host);
     this.rejectCompletions(host);
     host.resolveExited();
@@ -1960,6 +2043,47 @@ export class DshHostSupervisor {
         new DshHostSupervisorError(
           'DSH_HOST_UNAVAILABLE',
           `the DSH host exited during readPage ${id}`
+        )
+      );
+    }
+  }
+
+  // ---- slashCommands (decision 194) ----------------------------------------------
+
+  private onSlashCommands(host: HostRecord, message: DshHostSlashCommands): void {
+    const pending = this.pendingSlashCommands.get(message.id);
+    if (pending?.host !== host) {
+      this.warnRateLimited('stale-slash', `[dsh-host] dropped slash-commands ${message.id}`);
+      return;
+    }
+    const settled = this.settleSlashCommands(message.id);
+    if (message.ok && message.result) {
+      settled?.resolve(message.result);
+      return;
+    }
+    settled?.reject(
+      new DshHostSupervisorError(
+        'DSH_HOST_UNAVAILABLE',
+        `${message.error?.code ?? 'unknown'}: ${message.error?.message ?? 'no reason given'}`
+      )
+    );
+  }
+
+  private settleSlashCommands(id: number): PendingSlashCommands | undefined {
+    const pending = this.pendingSlashCommands.get(id);
+    if (!pending) return undefined;
+    this.pendingSlashCommands.delete(id);
+    clearTimeout(pending.timer);
+    return pending;
+  }
+
+  private rejectSlashCommands(host: HostRecord): void {
+    for (const [id, pending] of [...this.pendingSlashCommands]) {
+      if (pending.host !== host) continue;
+      this.settleSlashCommands(id)?.reject(
+        new DshHostSupervisorError(
+          'DSH_HOST_UNAVAILABLE',
+          `the DSH host exited during slashCommands ${id}`
         )
       );
     }

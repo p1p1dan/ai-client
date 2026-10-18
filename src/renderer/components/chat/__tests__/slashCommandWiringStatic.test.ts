@@ -43,10 +43,11 @@ describe('R02-c the slash menu works without a workspace', () => {
     // Decision 175: the folder the menu is for goes with it, so Main can list
     // that workspace's skills before any session runs there.
     expect(COMPOSER).toContain(
-      '.getSlashCommands(slashCatalogRequest(activeSessionId, effectiveCwd))'
+      '.getSlashCommands(slashCatalogRequest(activeSessionId, effectiveCwd, chatEngine))'
     );
-    // A new folder (the home page's draft target changing) asks again.
-    expect(COMPOSER).toContain('}, [slashMenuActive, activeSessionId, effectiveCwd]);');
+    // A new folder (the home page's draft target changing) or engine (decision 194:
+    // another model on the home page) asks again.
+    expect(COMPOSER).toContain('}, [slashMenuActive, activeSessionId, effectiveCwd, chatEngine]);');
   });
 });
 
@@ -60,7 +61,9 @@ describe('decision 175: the home page has no conversation for some commands', ()
   it('answers a refused command before a DSH command could leave as a message', () => {
     const run = COMPOSER.slice(COMPOSER.indexOf('const runBuiltinSlash'));
     const body = run.slice(0, run.indexOf('const handleSend'));
-    const refusalAt = body.indexOf('homeSlashRefusal(parsed.name, parsed.args, source)');
+    const refusalAt = body.indexOf(
+      'homeSlashRefusal(parsed.name, parsed.args, source, chatEngine)'
+    );
     expect(refusalAt).toBeGreaterThan(-1);
     // Only with no conversation open, and ahead of the `runtime` exit: `/goal` is DSH's.
     expect(body.lastIndexOf('if (!activeSessionId) {', refusalAt)).toBeGreaterThan(-1);

@@ -16,6 +16,7 @@
  * as prose too.
  */
 
+import type { ChatEngine } from '@shared/claudeSdkEngine';
 import { englishTranslate, type Translate } from '@shared/i18n';
 
 /** A command as it will be shown in the menu, whatever its origin. */
@@ -61,14 +62,18 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<{ name: string; descriptionKe
  * Decision 175: what the menu asks Main for — the chat when there is one, and
  * the folder the menu is for (the home page's draft target, the chat's own),
  * so a workspace with no session up on the host still gets its skills.
+ * Decision 194: and the engine the chat runs on, or the next send would go to
+ * (`chatEngineForDisplay`), so the menu lists that engine's commands.
  */
 export function slashCatalogRequest(
   sessionId: string | null,
-  workspacePath: string | null
-): { sessionId?: string; workspacePath?: string } {
+  workspacePath: string | null,
+  engine: ChatEngine = 'dsh'
+): { sessionId?: string; workspacePath?: string; engine: ChatEngine } {
   return {
     ...(sessionId ? { sessionId } : {}),
     ...(workspacePath ? { workspacePath } : {}),
+    engine,
   };
 }
 

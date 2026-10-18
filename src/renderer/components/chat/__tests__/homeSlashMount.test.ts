@@ -207,7 +207,10 @@ describe('the slash menu before a session runs', () => {
     await mountComposer();
     await type('/');
 
-    expect(mocks.api.getSlashCommands).toHaveBeenLastCalledWith({ workspacePath: '/repo/alpha' });
+    expect(mocks.api.getSlashCommands).toHaveBeenLastCalledWith({
+      workspacePath: '/repo/alpha',
+      engine: 'dsh',
+    });
     expect(menuRows()).toEqual(['/goal', '/new', '/plan-tree', '/settings']);
   });
 
@@ -216,7 +219,7 @@ describe('the slash menu before a session runs', () => {
     await mountComposer();
     await type('/pl');
 
-    expect(mocks.api.getSlashCommands).toHaveBeenLastCalledWith({});
+    expect(mocks.api.getSlashCommands).toHaveBeenLastCalledWith({ engine: 'dsh' });
     expect(menuRows()).toEqual(['/plan-tree']);
   });
 
@@ -228,6 +231,7 @@ describe('the slash menu before a session runs', () => {
     expect(mocks.api.getSlashCommands).toHaveBeenLastCalledWith({
       sessionId: 'known-1',
       workspacePath: '/repo/alpha',
+      engine: 'dsh',
     });
     expect(menuRows()).toEqual([
       '/archive',

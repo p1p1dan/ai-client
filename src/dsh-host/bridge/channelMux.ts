@@ -41,6 +41,12 @@
  *                       with its id; a request with a usable id and bad fields
  *                       is answered `completion_request_invalid`, and a host
  *                       without completions `completion_unavailable`.
+ *   {host:'slashCommands', id, cwd}
+ *                       the composer's slash menu for a folder no session
+ *                       runs in (decision 194): DSH's commands and the skills
+ *                       a person may call there, a plugin's included. No
+ *                       channel, no lock, no write; answered `slash-commands`
+ *                       with its id.
  *
  * A channel's own `worker.dispose` closes that channel only: its ACK goes out,
  * then `closed`, and nothing more for that channel after it. Messages that are
@@ -62,6 +68,8 @@ import {
   type DshHostReadPageRequest,
   type DshHostSeeded,
   type DshHostSeedSessionRequest,
+  type DshHostSlashCommands,
+  type DshHostSlashCommandsRequest,
   type DshHostToMainMessage,
   type DshSeedImportResult,
   type DshSeedSessionResult,
@@ -75,12 +83,14 @@ import {
   isDshHostPing,
   isDshHostReadPageRequest,
   isDshHostSeedSessionRequest,
+  isDshHostSlashCommandsRequest,
   isDshSeedStage,
   opensDshChannel,
 } from '../../shared/types/dshHostProtocol.ts';
 import type { SessionHistoryPage } from '../../shared/types/sessionHistory.ts';
 import {
   WORKER_RPC_PROTOCOL_VERSION,
+  type WorkerCommandsResult,
   type WorkerRpcErrorResponse,
   type WorkerRpcMessage,
   type WorkerRpcRequest,
@@ -131,11 +141,18 @@ export interface DshChannelMuxOptions {
     start(request: DshHostCompleteRequest): void;
     cancel(id: number): void;
   };
+  /**
+   * Decision 194: the slash menu for a folder with no session (`slashCommands`);
+   * without it the request is answered `ok: false`.
+   */
+  slashCommands?(request: { cwd: string | null }): Promise<WorkerCommandsResult>;
   log(...args: unknown[]): void;
 }
 
 /** The code of a `page` answer whose read failed without one of its own. */
 export const DSH_READ_FAILED = 'dsh_read_failed';
+/** The code of a `slash-commands` answer whose listing failed. */
+export const DSH_SLASH_COMMANDS_FAILED = 'dsh_slash_commands_failed';
 
 /** Closed channel ids remembered so a late opening request cannot revive one. */
 const CLOSED_IDS_KEPT = 4096;
@@ -225,6 +242,10 @@ export class DshChannelMux {
       this.options.completions?.cancel(message.id);
       return true;
     }
+    if (isDshHostSlashCommandsRequest(message)) {
+      this.slashCommands(message);
+      return true;
+    }
     const kind = dshHostControlKind(message);
     if (kind === 'seedSession') {
       const id = (message as { id?: unknown }).id;
@@ -263,7 +284,8 @@ export class DshChannelMux {
           kind === 'readPage' ||
           kind === 'seedSession' ||
           kind === 'complete' ||
-          kind === 'complete-cancel'
+          kind === 'complete-cancel' ||
+          kind === 'slashCommands'
           ? `dropped a malformed ${kind} request`
           : `dropped host control message "${kind}"`
       );
@@ -401,6 +423,46 @@ export class DshChannelMux {
       .then(run)
       .then((result) => this.options.send(result))
       .catch((error: unknown) => this.options.log('gc answer failed', error));
+  }
+
+  /**
+   * Decision 194: like `readPage`, not queued and never rejecting; a listing
+   * takes no lock and writes nothing.
+   */
+  private slashCommands(request: DshHostSlashCommandsRequest): void {
+    const started = performance.now();
+    const answer = (outcome: Pick<DshHostSlashCommands, 'ok' | 'result' | 'error'>): void =>
+      this.options.send({
+        host: 'slash-commands',
+        id: request.id,
+        ...outcome,
+        ms: Math.round((performance.now() - started) * 10) / 10,
+      });
+    const list = this.options.slashCommands;
+    if (!list) {
+      answer({
+        ok: false,
+        error: {
+          code: DSH_SLASH_COMMANDS_FAILED,
+          message: 'slash command listing is not available on this host',
+        },
+      });
+      return;
+    }
+    Promise.resolve()
+      .then(() => list({ cwd: request.cwd }))
+      .then(
+        (result) => answer({ ok: true, result }),
+        (error: unknown) =>
+          answer({
+            ok: false,
+            error: {
+              code: DSH_SLASH_COMMANDS_FAILED,
+              message: error instanceof Error ? error.message : String(error),
+            },
+          })
+      )
+      .catch((error: unknown) => this.options.log('slashCommands answer failed', error));
   }
 
   /**

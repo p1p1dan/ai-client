@@ -20,6 +20,7 @@
  * as the first message, where DSH runs them as it would in any conversation.
  */
 
+import type { ChatEngine } from '@shared/claudeSdkEngine';
 import type { Translate } from '@shared/i18n';
 import { isGoalCreatingLine } from './goalStart';
 import { resolveSlashAction, type SlashCatalogItem } from './slashCommands';
@@ -43,16 +44,24 @@ export type HomeSlashRefusal = 'conversation' | 'goal';
  *
  * `/goal` is DSH's command whatever the catalog says: a `/name` at the start
  * of a line runs the command, never a skill of the same name, and DSH always
- * has `goal`.
+ * has `goal`. Decision 194: on the Claude Agent SDK engine `/goal` is the
+ * CLI's own command, with its own usage; it goes out as typed.
  */
 export function homeSlashRefusal(
   name: string,
   args: string,
-  source: string | undefined
+  source: string | undefined,
+  engine: ChatEngine = 'dsh'
 ): HomeSlashRefusal | null {
   const action = resolveSlashAction(name, args, source);
   if (action.type === 'archive' || action.type === 'compact') return 'conversation';
-  if (name === 'goal' && !isGoalCreatingLine(args ? `/goal ${args}` : '/goal')) return 'goal';
+  if (
+    engine === 'dsh' &&
+    name === 'goal' &&
+    !isGoalCreatingLine(args ? `/goal ${args}` : '/goal')
+  ) {
+    return 'goal';
+  }
   return null;
 }
 
