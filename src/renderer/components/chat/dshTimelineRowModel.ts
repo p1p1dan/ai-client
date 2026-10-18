@@ -1,3 +1,4 @@
+import { CONTEXT_WINDOW_NOTICE_KIND } from '@shared/contextWindowMismatch';
 import {
   CONTEXT_SUMMARY_TITLE,
   DSH_COMPACTION_RUNNING_PART,
@@ -48,6 +49,10 @@ export interface DshNoticeRowView {
    * the engine's text, shown as it came.
    */
   translatable?: true;
+  /** The key's params, for a notice that carried them (user 2026-10-18: a model's real window). */
+  params?: Record<string, string>;
+  /** Something for the user to act on: drawn whole, with a warning icon. */
+  warning?: true;
 }
 
 /** Past this, or with a line break, a notice line offers to open in full. */
@@ -74,6 +79,19 @@ export function dshNoticeRowView(message: ChatMessage): DshNoticeRowView | null 
     kind = 'notice';
   } else {
     return null;
+  }
+  // User 2026-10-18: a notice in the app's own words, its key and params (a
+  // model's real window); one sentence, shown whole.
+  const notice = message.blocks[0]?.notice;
+  if (kind === 'notice' && notice?.key) {
+    return {
+      kind,
+      text: notice.key,
+      expandable: false,
+      translatable: true,
+      ...(notice.params && Object.keys(notice.params).length > 0 ? { params: notice.params } : {}),
+      ...(message.noticeKind === CONTEXT_WINDOW_NOTICE_KIND ? { warning: true as const } : {}),
+    };
   }
   const text = textOf(message);
   return {

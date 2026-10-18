@@ -10,6 +10,7 @@ import type { AgentWireName } from './agentWire';
 import type { RuntimePermissionSettings } from './runtimePermission.ts';
 import type {
   HistoryMessage,
+  HistoryNotice,
   HistoryParseStats,
   HistoryReadError,
   SubagentHistorySummary,
@@ -505,6 +506,11 @@ interface CustomTimelinePayload {
   messageId: string;
   customType: string;
   content: string;
+  /**
+   * The app's own sentence (`content` is its English rendering): a dictionary
+   * key and its params, which a surface translates. Absent for engine text.
+   */
+  notice?: HistoryNotice;
 }
 
 /** Generic serializable fallback for a Pi extension custom message. */

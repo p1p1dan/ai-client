@@ -15,6 +15,7 @@ import {
   Layers,
   SquareSlash,
   Target,
+  TriangleAlert,
   Users,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -164,6 +165,23 @@ export function DshNoticeRow({ view }: { view: DshNoticeRowView }) {
       </div>
     );
   }
+  if (view.warning) {
+    // User 2026-10-18: something to act on (a model's real window is smaller
+    // than its setting), so the whole sentence shows, not one truncated line.
+    return (
+      <div
+        className="flex min-w-0 items-start gap-2 text-meta text-muted-foreground"
+        data-testid="dsh-notice-row"
+        data-kind={view.kind}
+        data-warning="true"
+      >
+        <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />
+        <p className="min-w-0 flex-1 select-text whitespace-pre-wrap break-words">
+          {view.translatable ? t(view.text, view.params) : view.text}
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="flex min-w-0 flex-col gap-1" data-testid="dsh-notice-row" data-kind={view.kind}>
       <div className={dshLightRowClass()}>
@@ -187,9 +205,9 @@ export function DshNoticeRow({ view }: { view: DshNoticeRowView }) {
         ) : (
           <span
             className="min-w-0 flex-1 select-text truncate"
-            title={view.translatable ? t(view.text) : view.text}
+            title={view.translatable ? t(view.text, view.params) : view.text}
           >
-            {view.translatable ? t(view.text) : view.text}
+            {view.translatable ? t(view.text, view.params) : view.text}
           </span>
         )}
       </div>

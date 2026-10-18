@@ -10,6 +10,10 @@ import {
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  CONTEXT_WINDOW_NOTICE_KEY,
+  CONTEXT_WINDOW_NOTICE_KIND,
+} from '../../shared/contextWindowMismatch.ts';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import type { ResolvePath } from '../sdkSessionRuntime.ts';
 
@@ -1046,7 +1050,14 @@ describe('catalog context windows (user 2026-10-18)', () => {
         cliEnv: { ANTHROPIC_API_KEY: KEY, ANTHROPIC_BASE_URL: PINS.ANTHROPIC_BASE_URL },
         settingsEnv: PINS,
         secrets: [KEY],
-        modelWindows: { 'claude-opus-5-5': 200_000, 'glm-5': 128_000 },
+        modelWindows: {
+          'claude-opus-5-5': 200_000,
+          'glm-5': 128_000,
+          // Under the CLI's floor: the nearest value it accepts.
+          'glm-small': 64_000,
+          // 1M and up: the CLI's own default stays.
+          'claude-sonnet-5-5': 1_000_000,
+        },
       },
       () => {}
     );
@@ -1055,15 +1066,17 @@ describe('catalog context windows (user 2026-10-18)', () => {
     expect(settings.modelSettings).toEqual({
       'claude-opus-5-5': { autoCompactWindow: 200_000 },
       'glm-5': { autoCompactWindow: 128_000 },
+      'glm-small': { autoCompactWindow: 100_000 },
     });
     // The pins stay as they were.
     expect(settings.env).toEqual(PINS);
     await rt.dispose();
   });
 
-  it('adds nothing without catalog windows', () => {
+  it('adds nothing without catalog windows under 1,000,000', () => {
     expect(catalogModelSettings(undefined)).toEqual({});
     expect(catalogModelSettings({})).toEqual({});
+    expect(catalogModelSettings({ 'claude-opus-5-5': 1_000_000 })).toEqual({});
   });
 
   it('shows the catalog window when it is the smaller one, the CLI’s otherwise', () => {
@@ -1074,6 +1087,104 @@ describe('catalog context windows (user 2026-10-18)', () => {
     expect(cappedContextWindow(150_000, windows, 'claude-opus-5-5')).toBe(150_000);
     expect(cappedContextWindow(1_000_000, undefined, 'claude-opus-5-5')).toBe(1_000_000);
     expect(cappedContextWindow(1_000_000, windows, 'constructor')).toBe(1_000_000);
+  });
+});
+
+describe('a model’s real window, read from the service’s refusal (user 2026-10-18)', () => {
+  function windowed(modelWindows?: Record<string, number>) {
+    return new ClaudeSdkSessionRuntime(
+      {
+        logicalSessionId: 'chat-1',
+        cwd: configDir,
+        model: 'gw/claude-opus-5-5',
+        projectTrusted: true,
+        emit: (event) => events.push(event),
+      },
+      {
+        configDir,
+        settingSources: ['project'],
+        cliEnv: { ANTHROPIC_API_KEY: KEY, ANTHROPIC_BASE_URL: PINS.ANTHROPIC_BASE_URL },
+        settingsEnv: PINS,
+        secrets: [KEY],
+        ...(modelWindows ? { modelWindows } : {}),
+      },
+      () => {}
+    );
+  }
+  const notices = () => events.filter((e) => e.type === 'custom.message');
+  const refusal = (result: string) => ({
+    type: 'result',
+    subtype: 'success',
+    is_error: true,
+    api_error_status: 400,
+    result,
+    modelUsage: { 'claude-opus-5-5': { contextWindow: 1_000_000 } },
+  });
+
+  it('says once, in the turn, that the service takes less than the catalog’s window', async () => {
+    const rt = windowed({ 'claude-opus-5-5': 1_000_000 });
+    await rt.bootstrap();
+    const q = sdk.queries[0] as FakeQuery;
+    await send(rt);
+    q.push({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      error: 'invalid_request',
+      message: {
+        content: [
+          {
+            type: 'text',
+            text: 'API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 250000 tokens > 200000 maximum"}}',
+          },
+        ],
+      },
+    });
+    q.push(refusal('Prompt is too long — the request is ~250000 tokens (limit 200000)'));
+    await flush();
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toMatchObject({
+      type: 'custom.message',
+      requestId: 'req-1',
+      payload: {
+        customType: `dsh:${CONTEXT_WINDOW_NOTICE_KIND}`,
+        content: expect.stringContaining('at most 200,000 tokens for claude-opus-5-5'),
+        notice: {
+          key: CONTEXT_WINDOW_NOTICE_KEY,
+          params: { model: 'claude-opus-5-5', limit: '200,000', configured: '1,000,000' },
+        },
+      },
+    });
+    q.end();
+    await rt.dispose();
+  });
+
+  it('falls back to the CLI’s own window when the catalog names none', async () => {
+    const rt = windowed();
+    await rt.bootstrap();
+    const q = sdk.queries[0] as FakeQuery;
+    await send(rt);
+    q.push(refusal('Prompt is too long — the request is ~250000 tokens (limit 200000)'));
+    await flush();
+    expect(notices()).toHaveLength(1);
+    expect((notices()[0]?.payload as { notice: { params: unknown } }).notice.params).toEqual({
+      model: 'claude-opus-5-5',
+      limit: '200,000',
+      configured: '1,000,000',
+    });
+    q.end();
+    await rt.dispose();
+  });
+
+  it('says nothing when the catalog’s window is what the service takes', async () => {
+    const rt = windowed({ 'claude-opus-5-5': 200_000 });
+    await rt.bootstrap();
+    const q = sdk.queries[0] as FakeQuery;
+    await send(rt);
+    q.push(refusal('API Error: 400 prompt is too long: 250000 tokens > 200000 maximum'));
+    await flush();
+    expect(notices()).toEqual([]);
+    q.end();
+    await rt.dispose();
   });
 });
 

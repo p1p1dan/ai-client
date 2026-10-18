@@ -4565,6 +4565,9 @@ Object.assign(zhTranslations, {
   // DA-2 (2026-10-11 acceptance): the summary request itself failed at the model service.
   'The model service did not complete the summary request ({{reason}}), so nothing was compacted. The attempt is recorded in the session log.':
     '模型服务没有完成生成摘要的请求（{{reason}}），对话没有压缩。这次尝试已记录在会话日志里。',
+  // User 2026-10-18: the service refused a request with a limit below the model's setting.
+  'The service accepts at most {{limit}} tokens for {{model}}, less than the {{configured}} it is set to. Ask your administrator to correct this model’s context window, or fix it in the service settings if you added the service yourself.':
+    '服务端对 {{model}} 最多只接受 {{limit}} token，比设置的 {{configured}} 小。请让管理员改正这个模型的上下文窗口；如果是你自己添加的服务，请在服务设置里改。',
   'Compacting the context… {{seconds}}s': '正在压缩上下文… {{seconds}} 秒',
   'Compacting the context… {{minutes}}m {{seconds}}s':
     '正在压缩上下文… {{minutes}} 分 {{seconds}} 秒',

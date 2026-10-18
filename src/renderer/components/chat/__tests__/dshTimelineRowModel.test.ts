@@ -1,3 +1,9 @@
+import {
+  CONTEXT_WINDOW_NOTICE_KEY,
+  CONTEXT_WINDOW_NOTICE_KIND,
+  contextWindowNotice,
+} from '@shared/contextWindowMismatch';
+import { translate } from '@shared/i18n';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import { applyRuntimeEvent, type ChatMessage, type ChatSessionsState } from '@/stores/chatSessions';
@@ -141,5 +147,59 @@ describe('a plan review’s approval notice (decision 169)', () => {
     });
     const job = reduced(customMessage('dsh:tool-jobs', 'background job bash-3 finished'));
     expect(dshNoticeRowView(job)).not.toHaveProperty('translatable');
+  });
+});
+
+describe('a model’s real window notice (user 2026-10-18)', () => {
+  it('carries its key and params to the row, which draws it whole as a warning', () => {
+    const notice = contextWindowNotice({
+      errorText: 'prompt is too long: 213462 tokens > 200000 maximum',
+      configured: 1_000_000,
+      model: 'claude/claude-opus-5-5',
+    });
+    if (!notice) throw new Error('no notice');
+    const message = reduced({
+      type: 'custom.message',
+      sessionId: SESSION,
+      seq: 1,
+      timestamp: 1,
+      payload: {
+        messageId: 'dsh-notice-context-window-9',
+        customType: `dsh:${CONTEXT_WINDOW_NOTICE_KIND}`,
+        content: notice.text,
+        notice: { key: notice.key, params: notice.params },
+      },
+    } as RuntimeEvent);
+    expect(message.blocks[0]).toMatchObject({
+      text: notice.text,
+      notice: { key: CONTEXT_WINDOW_NOTICE_KEY, params: notice.params },
+    });
+    expect(dshNoticeRowView(message)).toEqual({
+      kind: 'notice',
+      text: CONTEXT_WINDOW_NOTICE_KEY,
+      expandable: false,
+      translatable: true,
+      params: { model: 'claude-opus-5-5', limit: '200,000', configured: '1,000,000' },
+      warning: true,
+    });
+    expect(translate('zh', CONTEXT_WINDOW_NOTICE_KEY, notice.params)).toBe(
+      '服务端对 claude-opus-5-5 最多只接受 200,000 token，比设置的 1,000,000 小。请让管理员改正这个模型的上下文窗口；如果是你自己添加的服务，请在服务设置里改。'
+    );
+  });
+
+  it('keeps a notice key only on a dsh:<kind> notice', () => {
+    const message = reduced({
+      type: 'custom.message',
+      sessionId: SESSION,
+      seq: 1,
+      timestamp: 1,
+      payload: {
+        messageId: 'x-1',
+        customType: 'other',
+        content: 'text',
+        notice: { key: CONTEXT_WINDOW_NOTICE_KEY },
+      },
+    } as RuntimeEvent);
+    expect(message.blocks[0]).not.toHaveProperty('notice');
   });
 });

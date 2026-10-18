@@ -6,6 +6,10 @@ import {
   initCacheChain,
   viewCacheChain,
 } from '../../../shared/cacheChain.ts';
+import {
+  CONTEXT_WINDOW_NOTICE_KEY,
+  CONTEXT_WINDOW_NOTICE_KIND,
+} from '../../../shared/contextWindowMismatch.ts';
 import { projectDshHistory } from '../../../shared/dshHistory/projection.ts';
 import {
   AICLIENT_COMPACT_CANCELLED_REASON,
@@ -1507,5 +1511,54 @@ describe('DshLiveEvents — /compact without a summary (decision 180)', () => {
     // Reopened, the same row.
     const rows = projectDshHistory(h.log, { liveSessionId: SID });
     expect(rows[1]?.blocks[0]).toMatchObject({ notice: note });
+  });
+});
+
+describe('a model’s real window, read from the service’s refusal (user 2026-10-18)', () => {
+  const refused = (message: string) => ({
+    turn: 1,
+    step: 1,
+    stream: [
+      { type: 'chunk', chunk: { type: 'text-delta', index: 0, text: '' } },
+      {
+        type: 'chunk',
+        chunk: {
+          type: 'finish',
+          reason: { kind: 'error', failure: { code: 'CONTEXT_WINDOW_EXCEEDED', message } },
+        },
+      },
+    ],
+  });
+  const TOO_LONG =
+    '400 {"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 250000 tokens > 200000 maximum"}}';
+
+  it('says once that the service takes less than the window the model is set to', () => {
+    const h = harness({ usage: { contextPressure: { contextWindow: 1_000_000 } } });
+    h.durable('assistant/attempt', refused(TOO_LONG));
+    h.durable('assistant/attempt', refused(TOO_LONG));
+    const notices = h.of('custom.message');
+    expect(notices).toHaveLength(1);
+    expect(notices[0]?.payload).toEqual({
+      messageId: 'dsh-notice-context-window-1',
+      customType: `dsh:${CONTEXT_WINDOW_NOTICE_KIND}`,
+      content: expect.stringContaining('at most 200,000 tokens for fake-1'),
+      notice: {
+        key: CONTEXT_WINDOW_NOTICE_KEY,
+        params: { model: 'fake-1', limit: '200,000', configured: '1,000,000' },
+      },
+    });
+    expect(h.lines).toContain(
+      '[dsh-bridge] context window: the service takes 200000 tokens for aiclient-gateway/fake-1, set to 1000000'
+    );
+  });
+
+  it('says nothing for a model set to what the service takes, or for other failures', () => {
+    const right = harness({ usage: { contextPressure: { contextWindow: 200_000 } } });
+    right.durable('assistant/attempt', refused(TOO_LONG));
+    expect(right.of('custom.message')).toEqual([]);
+    const other = harness({ usage: { contextPressure: { contextWindow: 1_000_000 } } });
+    other.durable('assistant/attempt', refused('500 upstream failed'));
+    other.durable('assistant/attempt', { turn: 1, step: 2 });
+    expect(other.of('custom.message')).toEqual([]);
   });
 });

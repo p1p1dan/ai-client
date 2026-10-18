@@ -2135,11 +2135,20 @@ function applyRuntimeEventCore(
           : event.payload.content
             ? `${event.payload.customType}\n${event.payload.content}`
             : event.payload.customType;
+      // User 2026-10-18: a notice in the app's own words carries its key to translate.
+      const notice = noticeKind !== undefined ? event.payload.notice : undefined;
       const message: ChatMessage = {
         id: event.payload.messageId,
         sessionId,
         role: 'system',
-        blocks: [{ id: `${event.payload.messageId}-text`, type: 'text', text: content }],
+        blocks: [
+          {
+            id: `${event.payload.messageId}-text`,
+            type: 'text',
+            text: content,
+            ...(notice ? { notice } : {}),
+          },
+        ],
         ...(noticeKind !== undefined ? { noticeKind } : {}),
       };
       const bucket = state.messages[sessionId] ?? [];

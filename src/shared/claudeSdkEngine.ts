@@ -152,14 +152,11 @@ export const CLAUDE_SDK_MODEL_WINDOWS_ENV = 'AICLIENT_CLAUDE_SDK_MODEL_WINDOWS';
  *
  * The CLI sizes a model from its own table and never reads the catalog: a
  * Claude 5 model is 1,000,000 there, so a catalog that set claude-opus-5-5 to
- * 200,000 still ran to about 967k before compacting. The host hands these to
- * the CLI as per-model auto-compact windows, which do hold it to the catalog
- * (measured on 2.1.300: 200,000 → threshold 167,000).
- *
- * Only windows below the CLI's ceiling are carried. A larger value cannot
- * widen a model the CLI holds to 200k (that takes the `[1m]` model suffix),
- * and leaving 1M rows out keeps the CLI's own tuned default for them. A window
- * under the CLI's floor is raised to it: the nearest the CLI accepts.
+ * 200,000 still ran to about 967k before compacting. The host hands the CLI
+ * the smaller ones as per-model auto-compact windows (`catalogModelSettings`),
+ * which do hold it to the catalog (measured on 2.1.300: 200,000 → threshold
+ * 167,000), and compares a refusal's limit with all of them (the service took
+ * less than the model is set to).
  */
 export function claudeSdkModelWindows(
   plan: Pick<DshModelPlan, 'routes'> | null,
@@ -169,9 +166,9 @@ export function claudeSdkModelWindows(
   const windows: Record<string, number> = {};
   for (const model of route?.models ?? []) {
     const declared = model.contextWindow;
-    if (typeof declared !== 'number' || !Number.isInteger(declared) || declared <= 0) continue;
-    if (declared >= CLAUDE_SDK_AUTO_COMPACT_WINDOW_MAX) continue;
-    windows[model.id] = Math.max(CLAUDE_SDK_AUTO_COMPACT_WINDOW_MIN, declared);
+    if (typeof declared === 'number' && Number.isSafeInteger(declared) && declared > 0) {
+      windows[model.id] = declared;
+    }
   }
   return windows;
 }
@@ -188,13 +185,7 @@ export function parseClaudeSdkModelWindows(raw: string | undefined): Record<stri
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
   const windows: Record<string, number> = {};
   for (const [model, value] of Object.entries(parsed)) {
-    if (
-      model !== '' &&
-      typeof value === 'number' &&
-      Number.isInteger(value) &&
-      value >= CLAUDE_SDK_AUTO_COMPACT_WINDOW_MIN &&
-      value <= CLAUDE_SDK_AUTO_COMPACT_WINDOW_MAX
-    ) {
+    if (model !== '' && typeof value === 'number' && Number.isSafeInteger(value) && value > 0) {
       windows[model] = value;
     }
   }

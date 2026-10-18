@@ -65,6 +65,10 @@
  * `dsh-command-<seq>`; the history does not project commands yet (decision 113).
  */
 
+import {
+  CONTEXT_WINDOW_NOTICE_KIND,
+  contextWindowNotice,
+} from '../../shared/contextWindowMismatch.ts';
 import { dshFailureErrorCode } from '../../shared/dshFailureCodes.ts';
 import { dshFileReview } from '../../shared/dshFileReview.ts';
 import {
@@ -379,6 +383,24 @@ function sessionOf(totals: DshUsageView['tokenUsage'], steps: number): PiSession
 }
 
 /** `session.failed.error`: DSH's own sentence (`LlmFailure.message`), not the reason as JSON. */
+/**
+ * The provider's sentence of a failed `assistant/attempt`: its stream's
+ * `finish` chunk with an `error` reason (DSH keeps compact records,
+ * `{type: 'chunk', chunk}`); undefined for an attempt that did not fail.
+ */
+function attemptFailureText(data: Row): string | undefined {
+  const stream = Array.isArray(data.stream) ? data.stream : [];
+  for (let index = stream.length - 1; index >= 0; index -= 1) {
+    const record = recordOf(stream[index]);
+    const chunk = record?.type === 'chunk' ? recordOf(record.chunk) : record;
+    if (chunk?.type !== 'finish') continue;
+    const reason = recordOf(chunk.reason);
+    if (reason?.kind !== 'error') return undefined;
+    return stringOf(recordOf(reason.failure)?.message);
+  }
+  return undefined;
+}
+
 function failureText(reason: Row): string {
   const failure = recordOf(reason.error);
   return (
@@ -441,6 +463,8 @@ const COMPACTION_ERROR_LOG_CHARS = 4500;
 
 export class DshLiveEvents {
   private readonly host: DshLiveEventsHost;
+  /** `<model>:<limit>` of each real-window notice said in this session: once is enough. */
+  private readonly windowNotices = new Set<string>();
   private readonly steps = new Map<string, StepMessage>();
   /** Tool call id -> the live message of the step that asked for it. */
   private readonly toolStep = new Map<string, string>();
@@ -843,6 +867,7 @@ export class DshLiveEvents {
         return;
       case 'assistant/attempt':
         this.batch.first = false;
+        this.onFailedAttempt(event);
         return;
       case 'tool/call':
         this.onToolCall(data);
@@ -1346,6 +1371,38 @@ export class DshLiveEvents {
             ? {}
             : { output: text }),
         ...(failed ? { error: text || 'Tool call failed' } : {}),
+      },
+    });
+  }
+
+  /**
+   * User 2026-10-18: a request the service refused for its size names the
+   * service's limit; below the window the session runs the model at (the
+   * newest `request/context`'s), the setting is wrong, and the timeline says
+   * so once. DSH's overflow recovery (decision 178) still compacts and retries.
+   */
+  private onFailedAttempt(event: DshSessionEvent): void {
+    const errorText = attemptFailureText(event.data);
+    if (!errorText) return;
+    const notice = contextWindowNotice({
+      errorText,
+      configured: numberOf(this.host.usageView()?.contextPressure?.contextWindow),
+      model: this.host.route(),
+    });
+    if (!notice) return;
+    const said = `${notice.params.model}:${notice.limit}`;
+    if (this.windowNotices.has(said)) return;
+    this.windowNotices.add(said);
+    this.host.log?.(
+      `[dsh-bridge] context window: the service takes ${notice.limit} tokens for ${this.host.route()}, set to ${notice.configured}`
+    );
+    this.emit({
+      type: 'custom.message',
+      payload: {
+        messageId: `dsh-notice-${CONTEXT_WINDOW_NOTICE_KIND}-${event.seq}`,
+        customType: `${DSH_NOTICE_CUSTOM_TYPE_PREFIX}${CONTEXT_WINDOW_NOTICE_KIND}`,
+        content: notice.text,
+        notice: { key: notice.key, params: notice.params },
       },
     });
   }

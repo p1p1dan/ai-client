@@ -46,7 +46,17 @@ import type {
   BridgeSessionRuntime,
   BridgeSessionRuntimeOptions,
 } from '../dsh-host/bridge/bridgeRpcServer.ts';
-import { PERMISSION_MODE_REFUSED, permissionModeRefusalReason } from '../shared/claudeSdkEngine.ts';
+import {
+  CLAUDE_SDK_AUTO_COMPACT_WINDOW_MAX,
+  CLAUDE_SDK_AUTO_COMPACT_WINDOW_MIN,
+  PERMISSION_MODE_REFUSED,
+  permissionModeRefusalReason,
+} from '../shared/claudeSdkEngine.ts';
+import {
+  CONTEXT_WINDOW_NOTICE_KIND,
+  contextWindowNotice,
+} from '../shared/contextWindowMismatch.ts';
+import { DSH_NOTICE_CUSTOM_TYPE_PREFIX } from '../shared/dshNotices.ts';
 import { buildPiInterimUsagePayload, buildPiUsagePayload } from '../shared/piUsage.ts';
 import {
   decodePlanReviewResponse,
@@ -300,15 +310,25 @@ export function bareModelId(ref: string | undefined): string | undefined {
  * each model's auto-compact window, which the CLI clamps to the model's own
  * (2.1.300, measured: claude-opus-5-5 at 200,000 compacts at 167,000 instead of
  * 967,000). Nothing when there are none, so the settings stay as they were.
+ *
+ * Only windows below the CLI's ceiling are told. A larger value cannot widen a
+ * model the CLI holds to 200k (that takes the `[1m]` model suffix), and leaving
+ * 1M rows out keeps the CLI's own tuned default for them. A window under the
+ * CLI's floor is raised to it: the nearest the CLI accepts.
  */
 export function catalogModelSettings(windows: Readonly<Record<string, number>> | undefined): {
   modelSettings?: Record<string, { autoCompactWindow: number }>;
 } {
-  const entries = Object.entries(windows ?? {});
+  const entries = Object.entries(windows ?? {}).filter(
+    ([, window]) => window < CLAUDE_SDK_AUTO_COMPACT_WINDOW_MAX
+  );
   if (entries.length === 0) return {};
   return {
     modelSettings: Object.fromEntries(
-      entries.map(([model, window]) => [model, { autoCompactWindow: window }])
+      entries.map(([model, window]) => [
+        model,
+        { autoCompactWindow: Math.max(CLAUDE_SDK_AUTO_COMPACT_WINDOW_MIN, window) },
+      ])
     ),
   };
 }
@@ -575,6 +595,18 @@ function num(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+/** The text blocks of an assistant frame, joined. */
+function assistantText(message: { content?: unknown }): string {
+  const content = Array.isArray(message.content) ? message.content : [];
+  return content
+    .map((block) => {
+      const b = record(block);
+      return b?.type === 'text' && typeof b.text === 'string' ? b.text : '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
 /** What a subagent said, in order: the text blocks of its transcript's assistant messages. */
 export function subagentText(transcriptFile: string): string {
   let raw = '';
@@ -682,6 +714,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private readonly backgroundEdges = new Set<string>();
   private failureSignals: FailureSignals = {};
   private contextWindow = 0;
+  /** The window the CLI reported per model, before the catalog's cap. */
+  private readonly cliWindows = new Map<string, number>();
+  /** `<model>:<limit>` of each real-window notice said in this chat: once is enough. */
+  private readonly windowNotices = new Set<string>();
   private lastCostUsd = 0;
   private readonly session = {
     turns: 0,
@@ -1578,7 +1614,11 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
    * reply (decision 7; its text is the CLI's hint and is never shown).
    */
   private ingestAssistant(message: Extract<SDKMessage, { type: 'assistant' }>): void {
-    if (message.error) this.failureSignals.assistantError = message.error;
+    if (message.error) {
+      this.failureSignals.assistantError = message.error;
+      // User 2026-10-18: the reply quotes the service's refusal, its limit included.
+      this.noticeContextWindow(assistantText(message.message as { content?: unknown }));
+    }
     const turn = this.turn;
     const step = turn?.step;
     if (!turn || !step) return;
@@ -1657,6 +1697,39 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     }
   }
 
+  /**
+   * User 2026-10-18: a refusal for size that names the service's limit, below
+   * the window the chat's model is set to (the catalog's, else the CLI's own):
+   * the setting is wrong, and the timeline says so once. The CLI still
+   * compacts and retries by itself where it can.
+   */
+  private noticeContextWindow(errorText: string): void {
+    if (!errorText) return;
+    const model = bareModelId(this.modelRef) ?? '';
+    const declared =
+      this.config.modelWindows && Object.hasOwn(this.config.modelWindows, model)
+        ? this.config.modelWindows[model]
+        : undefined;
+    const configured = declared ?? this.cliWindows.get(model);
+    const notice = contextWindowNotice({ errorText, configured, model });
+    if (!notice) return;
+    const said = `${notice.params.model}:${notice.limit}`;
+    if (this.windowNotices.has(said)) return;
+    this.windowNotices.add(said);
+    this.log(
+      `context window: the service takes ${notice.limit} tokens for ${model}, set to ${notice.configured}`
+    );
+    this.emit({
+      type: 'custom.message',
+      payload: {
+        messageId: `ccsdk-notice-${CONTEXT_WINDOW_NOTICE_KIND}-${randomUUID()}`,
+        customType: `${DSH_NOTICE_CUSTOM_TYPE_PREFIX}${CONTEXT_WINDOW_NOTICE_KIND}`,
+        content: notice.text,
+        notice: { key: notice.key, params: notice.params },
+      },
+    });
+  }
+
   private ingestResult(message: Record<string, unknown>): void {
     const cost = num(message.total_cost_usd);
     const costDelta = Math.max(0, cost - this.lastCostUsd);
@@ -1664,13 +1737,17 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const modelUsage = record(message.modelUsage);
     if (modelUsage) {
       for (const [model, entry] of Object.entries(modelUsage)) {
-        const window = cappedContextWindow(
-          num(record(entry)?.contextWindow),
-          this.config.modelWindows,
-          model
-        );
+        const reported = num(record(entry)?.contextWindow);
+        if (reported > 0) this.cliWindows.set(model, reported);
+        const window = cappedContextWindow(reported, this.config.modelWindows, model);
         if (window > this.contextWindow) this.contextWindow = window;
       }
+    }
+    if (message.is_error === true) {
+      const errors = Array.isArray(message.errors) ? message.errors : [];
+      this.noticeContextWindow(
+        [message.result, ...errors].filter((part) => typeof part === 'string').join('\n')
+      );
     }
     this.session.costUsd += costDelta;
     if (this.compacting) {

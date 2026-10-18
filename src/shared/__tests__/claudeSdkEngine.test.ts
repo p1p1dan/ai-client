@@ -89,24 +89,22 @@ describe('claudeSdkModelWindows (catalog windows the CLI never reads, user 2026-
         models: [
           // The administrator holds a 1M Claude 5 model to 200k.
           { id: 'claude-opus-5-5', contextWindow: 200_000, reasoningEfforts: false },
-          // 1M rows keep the CLI's own default.
           { id: 'claude-sonnet-5-5', contextWindow: 1_000_000, reasoningEfforts: false },
           { id: 'claude-opus-5', contextWindow: 1_050_000, reasoningEfforts: false },
           // No declared window: nothing to carry.
           { id: 'claude-haiku-5-5', reasoningEfforts: false },
-          // Under the CLI's floor: the nearest value it accepts.
           { id: 'glm-small', contextWindow: 64_000, reasoningEfforts: false },
-          { id: 'glm-5', contextWindow: 128_000, reasoningEfforts: false },
         ],
       } as DshPlanRoute,
     },
   };
 
-  it('carries every declared window under 1,000,000, raised to the 100,000 floor', () => {
+  it('carries every declared window as declared (the host decides what the CLI is told)', () => {
     expect(claudeSdkModelWindows(windowed, 'claude')).toEqual({
       'claude-opus-5-5': 200_000,
-      'glm-small': 100_000,
-      'glm-5': 128_000,
+      'claude-sonnet-5-5': 1_000_000,
+      'claude-opus-5': 1_050_000,
+      'glm-small': 64_000,
     });
   });
 
@@ -127,13 +125,13 @@ describe('claudeSdkModelWindows (catalog windows the CLI never reads, user 2026-
         JSON.stringify({
           a: 200_000.5,
           b: '200000',
-          c: 50_000,
-          d: 2_000_000,
+          c: -5,
+          d: 0,
           '': 200_000,
-          e: 150_000,
+          e: 2_000_000,
         })
       )
-    ).toEqual({ e: 150_000 });
+    ).toEqual({ e: 2_000_000 });
   });
 });
 
