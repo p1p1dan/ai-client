@@ -74,3 +74,73 @@ describe('buildHostConfig', () => {
     expect(windowed.cliEnv).not.toHaveProperty('AICLIENT_CLAUDE_SDK_MODEL_WINDOWS');
   });
 });
+
+/**
+ * Dsh-rebase decision 196 rule 7: the CLI and its children see the product
+ * proxy for the schemes the launch environment did not name, as a DSH tool
+ * does; with it off, exactly what they saw before.
+ */
+describe('buildHostConfig with the product proxy (decision 196)', () => {
+  const PRODUCT = 'http://pi%20lab:pr0xy-secret-word@proxy.corp:8080';
+  const base = {
+    configDir: 'D:stateclaude-sdk-home',
+    settingSources: ['project'] as const,
+    apiKey: KEY,
+    proxy: { url: 'http://127.0.0.1:50123', token: TOKEN },
+  };
+  const build = (
+    inherited: NodeJS.ProcessEnv,
+    outboundProxy?: { url: string; noProxy: string } | null
+  ) =>
+    buildHostConfig({
+      ...base,
+      settingSources: [...base.settingSources],
+      inherited: { Path: 'C:Windows', ...inherited },
+      ...(outboundProxy !== undefined ? { outboundProxy } : {}),
+    });
+
+  it('on: the CLI gets the product proxy, loopback bypassed, and Node children honour it', () => {
+    const { config, credentialedProxies } = build({}, { url: PRODUCT, noProxy: '.corp' });
+    expect(config.cliEnv.HTTPS_PROXY).toBe(PRODUCT);
+    expect(config.cliEnv.http_proxy).toBe(PRODUCT);
+    expect(config.cliEnv.NO_PROXY).toBe('.corp,localhost,127.0.0.1,::1,[::1]');
+    expect(config.cliEnv.NODE_USE_ENV_PROXY).toBe('1');
+    // Credentials never go on the CLI's command line (the flag tier): left unpinned, named.
+    expect(credentialedProxies).toEqual(['HTTP_PROXY', 'HTTPS_PROXY']);
+    expect(JSON.stringify(config.settingsEnv)).not.toContain('pr0xy-secret-word');
+    expect(config.settingsEnv.NO_PROXY).toBe('.corp,localhost,127.0.0.1,::1,[::1]');
+    // And the password is blanked out of whatever the CLI prints.
+    expect(config.secrets).toEqual([KEY, TOKEN, PRODUCT, 'pr0xy-secret-word']);
+  });
+
+  it('on, without credentials: pinned in the flag tier like any proxy', () => {
+    const { config, credentialedProxies } = build(
+      {},
+      { url: 'http://proxy.corp:8080', noProxy: '' }
+    );
+    expect(credentialedProxies).toEqual([]);
+    expect(config.settingsEnv.HTTPS_PROXY).toBe('http://proxy.corp:8080');
+    expect(config.settingsEnv.http_proxy).toBe('http://proxy.corp:8080');
+  });
+
+  it('keeps a scheme the launch environment named, and its NO_PROXY entries', () => {
+    const { config } = build(
+      { HTTPS_PROXY: 'http://own:3128', NO_PROXY: '.intra' },
+      { url: 'http://proxy.corp:8080', noProxy: '' }
+    );
+    expect(config.cliEnv.HTTPS_PROXY).toBe('http://own:3128');
+    expect(config.cliEnv.HTTP_PROXY).toBe('http://proxy.corp:8080');
+    expect(config.cliEnv.NO_PROXY).toBe('.intra,localhost,127.0.0.1,::1,[::1]');
+  });
+
+  it('off, SOCKS, or Main keeping the engines off it: the CLI sees only what it inherited', () => {
+    const inherited = { HTTPS_PROXY: 'http://own:3128' };
+    const before = build(inherited).config.cliEnv;
+    expect(build(inherited, null).config.cliEnv).toEqual(before);
+    expect(build(inherited, { url: 'socks5://127.0.0.1:1080', noProxy: '' }).config.cliEnv).toEqual(
+      before
+    );
+    expect(before).not.toHaveProperty('NODE_USE_ENV_PROXY');
+    expect(before.HTTP_PROXY).toBeUndefined();
+  });
+});

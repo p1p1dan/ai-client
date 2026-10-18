@@ -139,7 +139,9 @@ export interface ServedPlan {
 export function serveModelPlan(
   child: ChildProcess,
   plan: DshModelPlan,
-  keys: Readonly<Record<string, string>> | string
+  keys: Readonly<Record<string, string>> | string,
+  /** Further `configure` fields, e.g. decision 196's `proxy`. */
+  extra: Readonly<Record<string, unknown>> = {}
 ): ServedPlan {
   const nonce = randomBytes(18).toString('base64url');
   const values = new Map<string, string | undefined>();
@@ -177,6 +179,7 @@ export function serveModelPlan(
     ...((plan as { autoModeCli?: string }).autoModeCli
       ? { autoModeCli: (plan as { autoModeCli?: string }).autoModeCli }
       : {}),
+    ...extra,
   });
   return {
     plan,
@@ -229,8 +232,12 @@ export class HostClient {
   }
 
   /** Plays Main's model source for this host (see `serveModelPlan`). */
-  configure(plan: DshModelPlan, keys: Readonly<Record<string, string>> | string): ServedPlan {
-    return serveModelPlan(this.child, plan, keys);
+  configure(
+    plan: DshModelPlan,
+    keys: Readonly<Record<string, string>> | string,
+    extra: Readonly<Record<string, unknown>> = {}
+  ): ServedPlan {
+    return serveModelPlan(this.child, plan, keys, extra);
   }
 
   /** A fresh channel id: `c<host generation>-<sequence>`, never reused. */

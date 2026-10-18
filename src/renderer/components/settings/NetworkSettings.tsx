@@ -7,6 +7,9 @@ import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
+/** Decision 196: the engines cannot route through a SOCKS proxy; their requests then go direct. */
+const SOCKS_PROXY = /^\s*socks/i;
+
 // Parse shell arguments string, supporting single/double quotes for paths with spaces
 
 export function NetworkSettings() {
@@ -63,7 +66,9 @@ export function NetworkSettings() {
           <span className="text-sm font-medium">{t('Enable proxy')}</span>
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {t('Route all network requests through proxy')}
+              {t(
+                'Sign-in, model requests, git, the terminal and commands run in chats go through the proxy'
+              )}
             </p>
             <Switch
               checked={proxySettings.enabled}
@@ -120,8 +125,17 @@ export function NetworkSettings() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {t('e.g., 127.0.0.1:7897 or http://proxy:8080')}
+              {t(
+                'e.g., 127.0.0.1:7897 or http://proxy:8080. Model requests cannot use a SOCKS proxy.'
+              )}
             </p>
+            {proxySettings.enabled && SOCKS_PROXY.test(proxySettings.server) && (
+              <p className="text-xs text-warning">
+                {t(
+                  'Model requests and commands run in chats cannot use a SOCKS proxy and connect directly. Use an http:// proxy for them.'
+                )}
+              </p>
+            )}
           </div>
         </SettingsRow>
         <SettingsRow>

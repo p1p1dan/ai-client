@@ -11,6 +11,7 @@
  *                                      gc / gc-result (P1-3d, decision 024),
  *                                      readPage / page (P1-4a, decision 030),
  *                                      configure (P1-5a, decision 033),
+ *                                      proxy (decision 196),
  *                                      credential / credential-result
  *                                      (P1-5b, decision 034),
  *                                      seedSession / seeded (P1-9c,
@@ -48,6 +49,7 @@
  */
 
 import type { DshModelPlan } from '../dshModelPlan/types';
+import type { HostProxySetting } from '../hostProxy';
 import type { SeedReport } from '../legacyPiSession/convert/types';
 import type { ImportedConversation } from './legacyImport';
 import type { RuntimePermissionSettings } from './runtimePermission';
@@ -282,7 +284,22 @@ export type DshHostConfigure = {
    * from; sent only with a `reviewModel`.
    */
   autoModeCli?: string;
+  /**
+   * Decision 196: the product proxy (`null`: off), installed before anything
+   * is composed. Absent when Main keeps the engines off it (rule 10). Never
+   * logged: the URL may carry credentials.
+   */
+  proxy?: HostProxySetting | null;
 } & Pick<DshModelPlan, 'revision' | 'routes' | 'defaultModel' | 'index' | 'refs' | 'reviewModel'>;
+
+/**
+ * Decision 196: the product proxy changed; the host swaps its outbound route
+ * at once (requests already sent finish on the old one). Never logged.
+ */
+export interface DshHostProxyUpdate {
+  host: 'proxy';
+  proxy: HostProxySetting | null;
+}
 
 /** Why Main answered a `credential` request without a key. */
 export type DshCredentialFailure =
@@ -351,7 +368,8 @@ export type DshMainToHostMessage =
   | DshHostConfigure
   | DshHostCredentialResult
   | DshHostCompleteRequest
-  | DshHostCompleteCancel;
+  | DshHostCompleteCancel
+  | DshHostProxyUpdate;
 
 // ---- host -> Main -----------------------------------------------------------
 
@@ -912,7 +930,8 @@ export function isDshHostConfigure(value: unknown): value is DshHostConfigure {
     typeof defaultModel.model === 'string' &&
     defaultModel.model.length > 0 &&
     (value.reviewModel === undefined || typeof value.reviewModel === 'string') &&
-    (value.autoModeCli === undefined || typeof value.autoModeCli === 'string')
+    (value.autoModeCli === undefined || typeof value.autoModeCli === 'string') &&
+    (value.proxy === undefined || value.proxy === null || isRecord(value.proxy))
   );
 }
 

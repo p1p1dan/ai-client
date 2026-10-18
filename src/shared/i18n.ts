@@ -1053,9 +1053,14 @@ export const zhTranslations: Record<string, string> = {
   Proxy: '代理',
   'Network proxy settings': '网络代理设置',
   'Enable proxy': '启用代理',
-  'Route all network requests through proxy': '通过代理路由所有网络请求',
+  // Decision 196: what the proxy really covers, model requests included.
+  'Sign-in, model requests, git, the terminal and commands run in chats go through the proxy':
+    '登录、模型请求、git、终端，以及对话里运行的命令都经代理',
   'Proxy server': '代理服务器',
-  'e.g., 127.0.0.1:7897 or http://proxy:8080': '例如 127.0.0.1:7897 或 http://proxy:8080',
+  'e.g., 127.0.0.1:7897 or http://proxy:8080. Model requests cannot use a SOCKS proxy.':
+    '例如 127.0.0.1:7897 或 http://proxy:8080；模型请求不能用 SOCKS 代理',
+  'Model requests and commands run in chats cannot use a SOCKS proxy and connect directly. Use an http:// proxy for them.':
+    'SOCKS 代理不作用于模型请求和对话里运行的命令，它们直连；要让它们经代理，请填 http:// 代理',
   Test: '测试',
   'Testing...': '测试中...',
   Failed: '失败',

@@ -709,6 +709,7 @@ describe('the host bundle (P1-3a)', () => {
     // they share with the bridge and Main.
     // Decision 177: the per-model compaction policies and the shared rules.
     // Decision 182: the tap's user content blocks.
+    // Decision 196: the outbound proxy installer and the rules it shares with Main.
     expect(verdict.inputs.sort()).toEqual([
       'src/dsh-host/host.ts',
       'src/dsh-host/lib/anonymousId.ts',
@@ -717,6 +718,7 @@ describe('the host bundle (P1-3a)', () => {
       'src/dsh-host/lib/hostModelPlan.ts',
       'src/dsh-host/lib/hostPlugins.ts',
       'src/dsh-host/lib/hostProfile.ts',
+      'src/dsh-host/lib/hostProxy.ts',
       'src/dsh-host/lib/requestPrefix.ts',
       'src/dsh-host/lib/requestScope.ts',
       'src/dsh-host/lib/requestTap.ts',
@@ -726,11 +728,13 @@ describe('the host bundle (P1-3a)', () => {
       'src/shared/dshAutoCompaction.ts',
       'src/shared/dshPluginAllowlist.ts',
       'src/shared/dshPlugins.ts',
+      'src/shared/hostProxy.ts',
       'src/shared/types/requestScope.ts',
       'src/shared/types/requestUserAgent.ts',
     ]);
     expect(verdict.externals.filter((name) => !name.startsWith('node:'))).toEqual([
       '@deepseek-ai/dsh-app-boot',
+      '@deepseek-ai/dsh-http-proxy',
       '@deepseek-ai/dsh-launch-environment',
     ]);
     const text = fs.readFileSync(path.join(outDir, 'host.js'), 'utf8');

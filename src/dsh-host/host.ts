@@ -27,8 +27,9 @@
  *   parent -> host: { host: 'configure' } first: the model plan (P1-5a,
  *                   decision 033). Nothing is composed before it, and a host
  *                   that gets none within 10 s refuses to boot. Then
- *                   { type: 'shutdown' }, and { host: 'credential-result' }
- *                   for the credential relay. Everything else is the
+ *                   { type: 'shutdown' }, { host: 'credential-result' }
+ *                   for the credential relay, and { host: 'proxy' } when the
+ *                   product proxy changes (decision 196). Everything else is the
  *                   aiclient-bridge row's (bridge/plugin.ts): every chat
  *                   session's channel envelopes and the host controls (ping,
  *                   close, and P1-15's one-shot `complete`, streamed through
@@ -65,6 +66,12 @@
  * registers before any row loads; the rows read what the tap found through
  * the `aiclientRequestScope` service.
  *
+ * Outbound proxy (decision 196, revising "minus the proxy" above): the
+ * product proxy comes with `configure` and with every `proxy` message after
+ * it, never from the launch environment, and is installed with DSH's own
+ * `installProxyFromEnvironment` before anything is composed
+ * (lib/hostProxy.ts). A change applies at once, without a restart.
+ *
  * Automatic compaction (decision 177): once the patches are composed, each
  * model of the plan whose compaction DSH's defaults do not serve (a window
  * they leave no useful threshold in, an output limit under the summary's
@@ -79,6 +86,7 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { format } from 'node:util';
+import { inheritedNoProxy } from '../shared/hostProxy.ts';
 import { REQUEST_SCOPE_SERVICE } from '../shared/types/requestScope.ts';
 import { dshHomeFrom, readOrCreateAnonymousId } from './lib/anonymousId.ts';
 import { CredentialRelay } from './lib/credentialRelay.ts';
@@ -130,6 +138,7 @@ import {
   requiredEnabledOverlays,
   sameBundles,
 } from './lib/hostProfile.ts';
+import { HostProxyInstaller, isHostProxyMessage } from './lib/hostProxy.ts';
 import { installRequestScope, RequestScope } from './lib/requestScope.ts';
 import { describeRequestTap, installRequestTap } from './lib/requestTap.ts';
 import { deviceIdFrom } from './lib/sessionMetadata.ts';
@@ -189,6 +198,16 @@ const configure: {
 } = {};
 /** Decision 034: set once the plan is known; answers go to it, never to the bridge. */
 let credentialRelay: CredentialRelay | undefined;
+/**
+ * Decision 196: the product proxy, from `configure` and every `proxy` message.
+ * The launch environment's NO_PROXY is read now, before an install rewrites it.
+ */
+const hostProxy = new HostProxyInstaller({
+  install: async () => (await import('@deepseek-ai/dsh-http-proxy')).installProxyFromEnvironment,
+  inheritedNoProxy: inheritedNoProxy(process.env),
+  log: (line) => process.stderr.write(`[dsh-host] ${line}\n`),
+  warn: (line) => warn(line),
+});
 if (bridgeInbox) {
   (globalThis as Record<symbol, unknown>)[Symbol.for('aiclient.dsh.bridge')] = bridgeInbox;
   process.on('message', (message: unknown) => {
@@ -196,8 +215,14 @@ if (bridgeInbox) {
       if (configure.received) warn('a second configure was ignored; the plan is fixed at boot');
       else {
         configure.received = readConfigure(message);
+        // No `proxy` field: Main keeps the engines off the product proxy (decision 196 rule 10).
+        void hostProxy.update((message as { proxy?: unknown }).proxy ?? null);
         configure.wake?.();
       }
+      return;
+    }
+    if (isHostProxyMessage(message)) {
+      void hostProxy.update(message.proxy);
       return;
     }
     if (credentialRelay?.receive(message)) return;
@@ -489,6 +514,8 @@ if (existsSync(homePatch)) {
 // Decision 033: nothing is composed before Main's plan. A host run by hand
 // without IPC gets an empty one: no route, so no model request can go out.
 const modelPlan = ipc ? await awaitConfigure() : emptyHostModelPlan();
+// Decision 196: the proxy that came with the plan is in place before anything is composed.
+await hostProxy.settled();
 marks.configured = performance.now();
 // Decision 034: keys are asked for per request, with this host's nonce.
 credentialRelay = ipc

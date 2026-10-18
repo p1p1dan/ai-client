@@ -6,6 +6,7 @@
  */
 
 import type { DshModelPlan } from './dshModelPlan/types.ts';
+import type { HostProxySetting } from './hostProxy.ts';
 
 /** The engine a chat runs on, fixed when it is created. Absent anywhere means DSH. */
 export type ChatEngine = 'dsh' | 'claude-sdk';
@@ -244,6 +245,14 @@ export const CLAUDE_SDK_HOST_SECRET = 'host.secret';
 export interface ClaudeSdkHostSecret {
   type: typeof CLAUDE_SDK_HOST_SECRET;
   apiKey: string;
+  /**
+   * Dsh-rebase decision 196: the product proxy the auth proxy's upstream leg
+   * goes through (`null`: off, direct). Absent when Main keeps the engines off
+   * it (rule 10): the host then follows its launch environment, as S-3 K-3
+   * had it. Here rather than in the environment for the same reason as the
+   * key: the URL may carry credentials.
+   */
+  proxy?: HostProxySetting | null;
 }
 export function isClaudeSdkHostSecret(value: unknown): value is ClaudeSdkHostSecret {
   const record = value as { type?: unknown; apiKey?: unknown } | null;
@@ -254,4 +263,19 @@ export function isClaudeSdkHostSecret(value: unknown): value is ClaudeSdkHostSec
     typeof record.apiKey === 'string' &&
     record.apiKey.trim() !== ''
   );
+}
+
+/**
+ * Dsh-rebase decision 196: the product proxy changed while the chat is open.
+ * The host's auth proxy swaps its upstream route at once; the CLI keeps the
+ * environment it started with. Never logged.
+ */
+export const CLAUDE_SDK_HOST_PROXY = 'host.proxy';
+export interface ClaudeSdkHostProxyUpdate {
+  type: typeof CLAUDE_SDK_HOST_PROXY;
+  proxy: HostProxySetting | null;
+}
+export function isClaudeSdkHostProxyUpdate(value: unknown): value is ClaudeSdkHostProxyUpdate {
+  const record = value as { type?: unknown } | null;
+  return typeof record === 'object' && record !== null && record.type === CLAUDE_SDK_HOST_PROXY;
 }

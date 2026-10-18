@@ -218,6 +218,8 @@ describe('DSH host package dependency boundary', () => {
       '@deepseek-ai/dsh-app-boot',
       '@deepseek-ai/dsh-base',
       '@deepseek-ai/dsh-home-paths',
+      // Decision 196: the product proxy, installed by host.ts.
+      '@deepseek-ai/dsh-http-proxy',
       '@deepseek-ai/dsh-launch-environment',
       '@deepseek-ai/dsh-system-prompt',
       // P1-4d3 (decision 114): a plain DSH plugin the product bundle mounts as a row.

@@ -28,7 +28,7 @@ Role: topic（S-3 方案，2026-10-16）。上位：[README](../README.md) §1 �
 |---|---|---|
 | K-1 | **本机鉴权代理**：宿主在 `127.0.0.1` 上开一个只对本会话的 HTTP 代理；CLI 拿到的 `ANTHROPIC_BASE_URL` 是代理地址，`ANTHROPIC_API_KEY` 是每个 CLI 进程一个的随机令牌（`sk-pilab-session-<48 位十六进制>`）；代理核对令牌（常数时间比较）后换成真 key 转发给网关，流式原样回传。两者都钉在 flag 层，仓库换不掉 | 文件描述符一路在 Windows 上不通：2.1.300 只读 `/proc/self/fd/N`，没有 Windows 分支（§4.1）；代理在实测里 Bash、PowerShell、hooks、会话记录、配置目录都看不到真 key，长会话、`/compact`、子代理、中途打断都正常 |
 | K-2 | **代理只放行 CLI 用到的接口**：`POST /v1/messages` 与 `POST /v1/messages/count_tokens`（带查询串），其他一律 404；令牌不对回 401（`x-should-retry: false`） | 子进程拿到令牌也只能在本会话存活期间调同一个网关的对话接口（实测 curl 可以），收窄面 |
-| K-3 | **代理的上游自己守代理与证书设置**：上游请求用 `proxyEnv` 的 Agent（继承到的 `HTTP(S)_PROXY`、`NO_PROXY`），证书用宿主继承到的 `NODE_EXTRA_CA_CERTS`；连不上网关时回 502（Anthropic 格式的错误体），交给现有的失败映射 | 原来这些由 CLI 自己按钉住的变量做；改走代理后由宿主做 |
+| K-3 | **代理的上游自己守代理与证书设置**：上游请求用 `proxyEnv` 的 Agent（继承到的 `HTTP(S)_PROXY`、`NO_PROXY`），证书用宿主继承到的 `NODE_EXTRA_CA_CERTS`；连不上网关时回 502（Anthropic 格式的错误体），交给现有的失败映射。**2026-10-18 修订（dsh-rebase [决策 196](../../dsh-rebase/decisions/196-engine-outbound-proxy.md)，用户批准）**：上游一段改为只看「设置 · 网络」的产品代理（Main 经 IPC 交来），关着就直连，不再跟随继承到的 `HTTP(S)_PROXY`；只有应急开关 `AICLIENT_RUNTIME_ENGINE_PROXY=0` 时 Main 不交代理，才按本行原来的做法 | 原来这些由 CLI 自己按钉住的变量做；改走代理后由宿主做 |
 | K-4 | **`NO_PROXY` 必含回环**：CLI 的环境与 flag 层都在继承到的值后补 `127.0.0.1,localhost,::1` | 实测 CLI 对回环地址不自动绕过代理：没有这一条，公司代理会收到明文令牌，回合失败（§4.1） |
 | K-5 | **Main 交 key 改走 IPC**：宿主启动后由 Main 发第一条 IPC 消息 `{ type: 'host.secret', apiKey }`，宿主收到前不处理 RPC；去掉 `AICLIENT_CLAUDE_SDK_API_KEY` 环境变量 | Linux 上 `/proc/<pid>/environ` 一直留着进程的初始环境（宿主与 CLI 都是），子进程同用户可读；IPC 通道 Main 本来就开着 |
 | K-6 | 令牌加进宿主的脱敏名单；每个宿主进程（即每个对话的一次运行）一个令牌，宿主退出代理随之关闭 | 令牌虽不是 key，但能在会话存活期间花 key；初稿想在 CLI 每次重启时换令牌，收益小（同一对话内）而要让 CLI 环境随启动重算，未做 |
