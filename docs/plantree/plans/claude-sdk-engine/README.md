@@ -45,6 +45,8 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 | 26 | 开发人员模式（S-6 反馈 10） | 设置里明着放开关，默认关；关着时"缓存工具定义"、"Agent SDK 引擎"开关、User-Agent 隐藏并一律按默认值生效；Web Inspector 不收 |
 | 27 | DSH 全自动（S-6 反馈 11c，issue #19） | **改进**：工作区内解析不了参数的命令也放行，只有删除、强推这类危险命令和明确碰到工作区外的路径才问 |
 
+**2026-10-18 用户裁决**（选择题，全文见 dsh-rebase [决策 193](../dsh-rebase/decisions/193-user-rulings-2026-10-18.md)）：随包分发 SDK 与 CLI 的条款确认可以接受（#47 结案）；「测试模型」按钮先不做（#30）；`assert-no-webfonts` 的 Windows 路径问题修（#49）；S-2 A-1～A-22、S-3 K-1～K-6 与 P-1～P-11、S-5 的自主决定（含 C-11）整体批准；这一版测试包在 Windows 与加密机上实测通过后合入 main，发 1.2.0；老型号加 `[1m]` 不做；SDK 引擎的斜杠命令、skill 等要支持并在界面上显示（另开任务）。
+
 ## 2 硬约束
 
 1. **宿主跑在随包 `node.exe` 上，`claude.exe` 由宿主经 SDK 拉起**（`pathToClaudeCodeExecutable` 指向随包路径）。加密机上放行是给 `node.exe` 的，并会传给它的子进程；`claude.exe` 和 `PiLabAi.exe` 自己不在白名单。不能改成由 Electron 主进程或别的载体直接拉起 CLI。

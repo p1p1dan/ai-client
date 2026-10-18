@@ -1,5 +1,7 @@
 # DSH 二开：第四批待审批决策与需授权动作（131～157）
 
+> **2026-10-18 已裁决**：用户在选择题上整体追认，并逐题定了仍开着的选择，见[决策 193](decisions/193-user-rulings-2026-10-18.md)。下文保留原样，仅作索引。
+
 Role: review-summary。生成日期：2026-10-07。前三批已裁决：005～089 见[决策 090](decisions/090-user-rulings-2026-09-28.md)（[decision-review.md](decision-review.md)），091～108 见[决策 109](decisions/109-user-rulings-p1-7-prototype-2026-09-28.md)、[110](decisions/110-user-rulings-2026-09-28-batch2.md)（[decision-review-2.md](decision-review-2.md)），111～129 见[决策 130](decisions/130-user-rulings-2026-09-29-batch3.md)（[decision-review-3.md](decision-review-3.md)）。
 
 ## 这是什么
