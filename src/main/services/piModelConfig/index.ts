@@ -189,8 +189,13 @@ export function resolveDshModelPlan(): DshModelPlan {
 
 function dshModelPlanFor(native: NativeModelCatalog | undefined): DshModelPlan {
   const { promptCacheTtl } = promptCacheTtlSettings();
+  // Decision 192: an unpackaged checkout may name the review model itself
+  // (the GUI point-check has no login service to send one).
+  const devReviewModel = app.isPackaged
+    ? undefined
+    : process.env.AICLIENT_DEV_AUTO_REVIEW_MODEL?.trim() || undefined;
   return resolveDshModelPlanWith({
-    native,
+    native: native && devReviewModel ? { ...native, reviewModel: devReviewModel } : native,
     env: process.env,
     settings: {
       ...(promptCacheTtl ? { promptCacheTtl } : {}),
@@ -369,9 +374,11 @@ export function readPiModelCatalog(): AgentModelCatalog {
   const menu = service.readCatalog(managed ? undefined : 'local', native);
   // Route B, S-2: the renderer names a new chat's modes after the engine it will
   // get, which needs the host as much as an Anthropic-protocol route.
+  const plan = dshModelPlanFor(native);
   return {
-    ...applyDshPlanToCatalog(menu, dshModelPlanFor(native)),
+    ...applyDshPlanToCatalog(menu, plan),
     claudeSdkHostAvailable: claudeSdkHostAvailable(),
+    ...(plan.reviewModel ? { autoReview: true } : {}),
   };
 }
 

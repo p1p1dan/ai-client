@@ -216,6 +216,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import type { DshModelPlan } from '../../shared/dshModelPlan/types.ts';
 import { compactInstructionsPrompt } from '../bridge/compactInstructions.ts';
 import { grantsSidecarFor } from '../bridge/stub.ts';
 import { comparePrefix, prefixUnitsOf, verdictLogFields } from '../lib/requestPrefix.ts';
@@ -548,7 +549,11 @@ interface Recording {
 
 interface RecordContext {
   box: Sandbox;
-  startHost(label: string): Promise<Host>;
+  /** `adjust` changes the recorder's plan for this host (decision 192's review model). */
+  startHost(
+    label: string,
+    adjust?: (plan: DshModelPlan) => DshModelPlan & { autoModeCli?: string }
+  ): Promise<Host>;
   stopHost(host: Host): Promise<void>;
   kill(host: Host): Promise<void>;
   /** `options.permissions` defaults to bypass; `options.cwd` to the run's workspace. */
@@ -783,7 +788,76 @@ const SCENARIOS: Record<string, Scenario> = {
   'compact-instructions': compactInstructionsScenario,
   // Decision 180: `/compact` cancelled while it summarizes, on its own host, last.
   'compact-cancel': compactCancelScenario,
+  // Decision 192: the auto gear's review model, on its own host, last.
+  'auto-review': autoReviewScenario,
 };
+
+// ---- the auto gear's review model (decision 192) ------------------------------------
+
+/**
+ * What the stand-in CLI prints for `auto-mode defaults`: the shape of Claude
+ * Code's rules, in a few lines of our own.
+ */
+const AUTO_REVIEW_RULES = {
+  allow: ['Local Operations: deleting files the agent created in this session.'],
+  soft_deny: [
+    'Irreversible Local Destruction [must name the exact target]: deleting files that existed before this session.',
+  ],
+  hard_deny: ['Data Exfiltration: sending credentials or sensitive data out of this machine.'],
+  environment: [],
+};
+
+/**
+ * Full auto with a review model: one call allowed, one blocked, one whose
+ * review fails (not counted), then two more blocks — the third in a row is a
+ * card, carrying the reason, which the recorder denies. The fake gateway plays
+ * the review model (`REVIEW-*` in the call under review).
+ */
+async function autoReviewScenario(context: RecordContext, _host: Host): Promise<Recording> {
+  const cli = join(context.box.root, 'auto-mode-cli.mjs');
+  writeFileSync(
+    cli,
+    `if (process.argv.slice(2).join(' ') === 'auto-mode defaults') console.log(${JSON.stringify(
+      JSON.stringify(AUTO_REVIEW_RULES)
+    )}); else process.exit(2);\n`
+  );
+  const reviewHost = await context.startHost('auto-review', (plan) => ({
+    ...plan,
+    reviewModel: `${FAKE_ROUTE}/${FAKE_MODEL}`,
+    autoModeCli: cli,
+  }));
+  try {
+    const cwd = scenarioWorkspace(context.box, 'auto-review', {
+      'REVIEW-ALLOW-a.txt': 'a\n',
+      'REVIEW-BLOCK-b.txt': 'b\n',
+      'REVIEW-BLOCK-d.txt': 'd\n',
+      'REVIEW-BLOCK-e.txt': 'e\n',
+      'REVIEW-ERROR-c.txt': 'c\n',
+    });
+    const { session, boot } = await context.openSession(reviewHost, 'auto-review', undefined, {
+      cwd,
+      permissions: { mode: 'agent', gear: 'auto' },
+    });
+    const turn = await context.turn(
+      session,
+      'AUTO-REVIEW',
+      'P1-AUTO-REVIEW: clean up the review files.',
+      answering(session, 'AUTO-REVIEW', () => 'deny')
+    );
+    return await finish(context, session, [boot], [turn], {
+      files: Object.fromEntries(
+        [
+          'REVIEW-ALLOW-a.txt',
+          'REVIEW-BLOCK-b.txt',
+          'REVIEW-ERROR-c.txt',
+          'REVIEW-BLOCK-e.txt',
+        ].map((name) => [name, existsSync(join(cwd, name))])
+      ),
+    });
+  } finally {
+    await context.stopHost(reviewHost);
+  }
+}
 
 // ---- /compact with instructions (decision 179) --------------------------------------
 
@@ -2238,7 +2312,7 @@ async function main(): Promise<number> {
   const live: Host[] = [];
   const context: RecordContext = {
     box,
-    async startHost(label) {
+    async startHost(label, adjust) {
       const child = spawn(nodeBin, ['--expose-internals', '--import', hooksImport, hostEntry], {
         cwd: hostCwd,
         env,
@@ -2251,7 +2325,7 @@ async function main(): Promise<number> {
         stderr: captureStderr(child),
         exited: exitOf(child),
       };
-      host.client.configure(plan, 'p1-4-fake-key');
+      host.client.configure(adjust ? adjust(plan) : plan, 'p1-4-fake-key');
       live.push(host);
       const ready = await host.client.control(
         (message) => message.type === 'ready' || message.type === 'fatal',

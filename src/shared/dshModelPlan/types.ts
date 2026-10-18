@@ -118,6 +118,8 @@ export type DshSettingDropReason =
   'invalid_user_agent';
 
 export type DshPlanDrop =
+  /** Decision 192: the catalog's review model is not a model this plan can serve. */
+  | { kind: 'reviewModel'; model: string; reason: 'not_in_plan' }
   | {
       kind: 'model';
       providerId: string;
@@ -141,7 +143,10 @@ export type DshPlanDrop =
     };
 
 export interface DshModelPlan {
-  /** sha256 of the canonical JSON of `routes`, `defaultModel` and `index`. */
+  /**
+   * sha256 of the canonical JSON of `routes`, `defaultModel` and `index`, and
+   * of `reviewModel` when there is one (so a plan without it keeps its hash).
+   */
   revision: string;
   routes: Record<string, DshPlanRoute>;
   defaultModel: { provider: string; model: string };
@@ -150,6 +155,11 @@ export interface DshModelPlan {
   /** Reference name → our provider id. */
   refs: Record<string, string>;
   dropped: DshPlanDrop[];
+  /**
+   * Decision 192: the model (our `provider/modelId`, a key of `index`) that
+   * reviews the auto gear's asks. Absent: no review, every ask is a card.
+   */
+  reviewModel?: string;
 }
 
 export interface DshModelPlanInput {
@@ -165,4 +175,6 @@ export interface DshModelPlanInput {
    * and the version of the default User-Agent (decision 171).
    */
   clientVersion?: string;
+  /** Decision 192: the catalog's `autoReview.model`, kept only if the plan serves it. */
+  reviewModel?: string;
 }

@@ -172,6 +172,11 @@ export function serveModelPlan(
     defaultModel: plan.defaultModel,
     index: plan.index,
     refs: plan.refs,
+    // Decision 192: a review model, and the CLI (or a stand-in) its rules come from.
+    ...(plan.reviewModel ? { reviewModel: plan.reviewModel } : {}),
+    ...((plan as { autoModeCli?: string }).autoModeCli
+      ? { autoModeCli: (plan as { autoModeCli?: string }).autoModeCli }
+      : {}),
   });
   return {
     plan,

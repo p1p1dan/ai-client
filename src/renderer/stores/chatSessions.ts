@@ -346,6 +346,8 @@ export interface ChatBlock {
    * the card words it. Absent when the posture asks anyway.
    */
   permissionAskReason?: PermissionAskReason;
+  /** Decision 192: the review model's reason, on a card raised after repeated review blocks. */
+  permissionReviewReason?: string;
   /** S2 (c): which button settled it, when richer than the `allowed` boolean. */
   permissionDecision?: PermissionDecisionId;
   /** S2 (c): set when the client answered without asking anyone. */
@@ -2276,6 +2278,9 @@ function applyRuntimeEventCore(
                   : {}),
                 ...(event.payload.askReason
                   ? { permissionAskReason: event.payload.askReason }
+                  : {}),
+                ...(event.payload.reviewReason
+                  ? { permissionReviewReason: event.payload.reviewReason }
                   : {}),
                 ...(event.payload.timeoutMs !== undefined
                   ? { permissionExpiresAt: event.timestamp + event.payload.timeoutMs }

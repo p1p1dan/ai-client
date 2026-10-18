@@ -149,6 +149,11 @@ export interface AgentModelCatalog {
    * (an older Main), read as available.
    */
   claudeSdkHostAvailable?: boolean;
+  /**
+   * Decision 192: the administrator named a review model the DSH plan serves,
+   * so the auto gear's asks go to it first. Absent: no review.
+   */
+  autoReview?: boolean;
 }
 
 /** Pi-only catalog request. `force` skips the TTL, never the single-flight. */

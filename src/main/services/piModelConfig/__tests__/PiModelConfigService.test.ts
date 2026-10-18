@@ -983,6 +983,19 @@ describe('PiModelConfigService', () => {
 });
 
 describe('validatePiManagedModelsConfig', () => {
+  it('keeps the administrator’s review model (decision 192) and drops a malformed one', () => {
+    expect(validatePiManagedModelsConfig(REMOTE_CONFIG).autoReview).toBeUndefined();
+    expect(
+      validatePiManagedModelsConfig({ ...REMOTE_CONFIG, autoReview: { model: 'dan/a/b' } })
+        .autoReview
+    ).toEqual({ model: 'dan/a/b' });
+    for (const autoReview of [{ model: 'no-slash' }, { model: 3 }, 'dan/x', null]) {
+      const validated = validatePiManagedModelsConfig({ ...REMOTE_CONFIG, autoReview });
+      expect(validated.autoReview).toBeUndefined();
+      expect(Object.keys(validated)).not.toContain('autoReview');
+    }
+  });
+
   it('accepts ordered tags and remains compatible when tags are absent', () => {
     const validated = validatePiManagedModelsConfig(REMOTE_CONFIG);
     expect(validated.providers.dan.models[0]?.tags).toEqual(['国产', 'reasoning']);
@@ -1559,6 +1572,36 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
       service([userProvider]).buildNativeModelCatalog({ inheritedApiKey: '', inheritedBaseUrl: '' })
         .auth
     ).toEqual({ 'my-deepseek': { type: 'api_key', key: userProvider.apiKey } });
+  });
+
+  it('hands on the managed review model unless a user service took its provider id (decision 192)', () => {
+    const managed = {
+      version: 1 as const,
+      providers: {
+        'my-deepseek': {
+          api: 'openai-completions' as const,
+          credentials: { baseUrl: 'onboarding' as const, apiKey: 'onboarding' as const },
+          models: [{ id: 'flash' }],
+        },
+        gw: {
+          api: 'openai-completions' as const,
+          credentials: { baseUrl: 'onboarding' as const, apiKey: 'onboarding' as const },
+          models: [{ id: 'flash' }],
+        },
+      },
+    };
+    const withReview = (model: string) =>
+      new PiModelConfigService({
+        agentDir: dir,
+        fetchFn: async () => {
+          throw new Error('offline');
+        },
+        now: () => 1234,
+        readBundledCatalog: () => ({ ...managed, autoReview: { model } }),
+        userProviders: () => [userProvider],
+      }).buildNativeModelCatalog({ inheritedApiKey: 'k', inheritedBaseUrl: 'https://gw.test' });
+    expect(withReview('gw/flash').reviewModel).toBe('gw/flash');
+    expect(withReview('my-deepseek/flash').reviewModel).toBeUndefined();
   });
 
   it('accepts an API style the managed allowlist does not contain', () => {

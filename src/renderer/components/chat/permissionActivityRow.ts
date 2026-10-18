@@ -35,6 +35,7 @@
  * `mcp__server__tool` here and as `server · tool` one row above.
  */
 import { englishTranslate, type Translate } from '@shared/i18n';
+import type { AutoReviewFailure } from '@shared/permissions/autoReview/types';
 import { permissionActivityToolLabel } from './piToolNames';
 
 /** One gate, as the plugin described it. Mirrors `PermissionActivityEvent.payload`. */
@@ -46,7 +47,7 @@ export interface PermissionActivityRecord {
    * can find. The row's own wording keys off `result`, not this: a `decision`
    * that somehow carried no result is still an unresolved gate.
    */
-  phase?: 'prompt' | 'decision';
+  phase?: 'prompt' | 'decision' | 'review';
   /**
    * What the gate was raised over, in whatever vocabulary its producer uses.
    *
@@ -80,6 +81,10 @@ export interface PermissionActivityRecord {
   result?: 'allow' | 'deny';
   /** The plugin's own vocabulary — `user_approved`, `policy_allow`, `gate_error`, … */
   resolution?: string;
+  /** Decision 192: the review model's reason (`review_denied`), verbatim. */
+  reviewReason?: string;
+  /** Decision 192: why the review could not decide (`review_failed`). */
+  reviewFailure?: AutoReviewFailure;
   origin?: string;
   matchedPattern?: string;
   /** Legacy backend's attribution pair — see `delegationId` / `agentName` above. */
@@ -97,11 +102,20 @@ export interface PermissionActivityRecord {
  * grant") is the only thing on screen saying it was gated, and by what.
  */
 export function isQuietPermissionActivity(record: PermissionActivityRecord | undefined): boolean {
+  if (isReviewActivity(record)) return false;
   return (
     record?.result === 'allow' &&
     !record.resolution?.includes('error') &&
     record.resolution !== 'session_grant'
   );
+}
+
+/**
+ * Decision 192: a review model's record (its start, or its outcome). It joins
+ * the tool row it was about (`joinReviewActivity`) instead of a row of its own.
+ */
+export function isReviewActivity(record: PermissionActivityRecord | undefined): boolean {
+  return record?.phase === 'review' || record?.resolution?.startsWith('review_') === true;
 }
 
 /**

@@ -152,7 +152,8 @@ describe('the model picker and the worker are handed the same catalog', () => {
 
   it('[P1-5a] the menu is filtered by a plan built from that same assembly', () => {
     // decision 033: menu and host routes come out of one computation.
-    expect(WIRING).toContain('...applyDshPlanToCatalog(menu, dshModelPlanFor(native)),');
+    expect(WIRING).toContain('const plan = dshModelPlanFor(native);');
+    expect(WIRING).toContain('...applyDshPlanToCatalog(menu, plan),');
     // Route B, S-2: the menu also says whether this build can start the SDK host.
     expect(WIRING).toContain('claudeSdkHostAvailable: claudeSdkHostAvailable(),');
     expect(WIRING).toContain('return dshModelPlanFor(resolveNativeModelCatalog());');

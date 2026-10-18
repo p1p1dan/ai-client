@@ -2812,6 +2812,24 @@ export const zhTranslations: Record<string, string> = {
   'cwd: {{path}}': '工作目录：{{path}}',
   'Network: {{target}}': '网络：{{target}}',
   'auto: {{reason}}': '自动：{{reason}}',
+  // Decision 192: the auto gear's review model, on the tool row, the card and the menu.
+  Reviewing: '审核中',
+  'review allowed': '审核放行',
+  'review did not allow': '审核没放行',
+  'review could not complete ({{failure}})': '审核没能完成（{{failure}}）',
+  'review timeout': '超时',
+  'review error': '出错',
+  'unreadable answer': '回复看不懂',
+  'conversation too long': '对话太长',
+  'review unavailable': '审核不可用',
+  'review denied': '审核没放行',
+  'review failed': '审核没能完成',
+  'Not allowed by review: {{reason}}': '审核没放行：{{reason}}',
+  'Rarely asks; deletes, force pushes and anything outside the workspace go to the review model first':
+    '基本不再询问；删除、强推和工作区外的操作先由审核模型把关',
+  'Never asks and never reviews; everything runs straight through': '不询问也不审核，全部直接执行',
+  'Deletes, force pushes and anything outside the workspace go to the review model first; what it does not allow is refused. Explicit deny rules still apply.':
+    '删除、强推和工作区外的操作先由审核模型把关，没放行的会被拒绝。显式拒绝规则仍生效。',
   // chat-event-07: wording for the worker-side PermissionAutoReason enum
   // (questionCardModel's PERMISSION_AUTO_REASONS emits the English keys; the
   // Chinese copy lives here).
@@ -2925,12 +2943,11 @@ export const zhTranslations: Record<string, string> = {
   // 渲染那一层统一翻一次。这样切到英文界面时它们才会跟着变。
   '(no preview)': '（无预览）',
   'Open model settings': '打开模型设置',
-  'Asks before each write, edit and command.': '写入、编辑和命令逐条询问。',
+  'Asks before each write, edit and command': '写入、编辑和命令逐条询问',
   'Auto-accept edits': '自动接受编辑',
   // D14 第四档：完全放行（bypass）。它不会成为新会话默认，所以只在已有会话里可选。
   'Bypass all prompts': '完全放行',
-  'Never asks. Even commands full auto would stop to confirm run straight through; explicit deny rules still apply.':
-    '完全不再询问。连「全自动」都会停下来确认的命令也直接执行；明确的拒绝规则依然生效。',
+  'Never asks; everything runs straight through': '不再询问，全部直接执行',
   'Turn off every approval prompt?': '关闭全部授权询问？',
   'Every tool call runs without asking, including the commands full auto still stops to confirm. Explicit deny rules still apply. This is never saved as the default for new chats.':
     '所有工具调用都不再询问，包括「全自动」仍会停下确认的那些命令。明确的拒绝规则依然生效。该档位不会被保存为新对话的默认。',
@@ -3023,8 +3040,8 @@ export const zhTranslations: Record<string, string> = {
   'Resending...': '重发中…',
   'Restore the directory at its original path and retry, or archive this chat and start a new one.':
     '请把该目录恢复到原路径后重试，或归档该会话并新建一个继续工作。',
-  'Runs tools without asking. Dangerous commands such as deletes and force pushes, and anything that names a path outside the workspace, still ask; explicit deny rules still apply.':
-    '工具调用基本不再询问。删除、强推等危险命令，以及涉及工作区外路径的操作仍会先问你；显式拒绝规则仍生效。',
+  'Rarely asks; deletes, force pushes and anything outside the workspace still ask':
+    '基本不再询问；删除、强推和工作区外的操作仍会询问',
   'Select all in this project': '全选当前项目',
   'Send code': '发送验证码',
   'Sending may or may not still work; if it fails, start a new chat to carry on.':
@@ -4029,10 +4046,10 @@ Object.assign(zhTranslations, {
   'Plan mode': '计划模式',
   'Confirm before changes': '改动前确认',
   'Auto edit': '自动编辑',
-  'Edits and commands inside the workspace run without asking; dangerous commands such as deletes and force pushes, paths outside it, web access and other tools still ask.':
-    '工作区内的改动和命令直接执行；删除、强推等危险命令，工作区外的路径、联网和其他工具仍会询问。',
-  'Runs tools without asking, including commands whose arguments cannot be read. Dangerous commands such as deletes, force pushes and hard resets ask every time, and so does anything that names a path outside the workspace; explicit deny rules still apply.':
-    '工具调用基本不再询问，包括参数解析不了的命令。删除、强推、硬重置等危险命令每次都会先问你，涉及工作区外路径的操作也会先问；显式拒绝规则仍生效。',
+  'Workspace edits and commands run without asking; deletes, paths outside it and web access still ask':
+    '工作区内的改动和命令直接执行；删除、工作区外和联网仍会询问',
+  'Deletes, force pushes and anything outside the workspace ask you first every time. Explicit deny rules still apply.':
+    '删除、强推和工作区外的操作每次都会先问你。显式拒绝规则仍生效。',
   'Read-only tools keep the earlier approval level: {{gear}}.':
     '只读工具沿用之前的确认方式：{{gear}}。',
   'Plan mode cannot be turned on or off while this turn runs.':
@@ -4142,8 +4159,8 @@ Object.assign(zhTranslations, {
  * (replacing decision 166's neutral one).
  */
 Object.assign(zhTranslations, {
-  'Read-only: explores without asking, then presents its plan for your review. Edits, other commands and web tools are refused.':
-    '只读：勘察时不再询问，完成后把计划交给你审阅。改文件、其他命令和联网工具都会被拒绝。',
+  'Read-only exploration, then the plan comes to you for review':
+    '只读勘察，完成后把计划交给你审阅',
   'Plan ready for review': '计划待审阅',
   'Goal proposed for review': '目标待审阅',
   'Expand the plan review': '展开计划审阅',

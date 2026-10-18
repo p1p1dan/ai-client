@@ -64,40 +64,50 @@ function readPermissionsFor(
  * `PERMISSION_PRESETS` order. `description` is a dictionary key; the menu item
  * translates it.
  */
-const PRESET_OPTIONS: readonly {
+type PresetOption = {
   id: PermissionPreset;
   description: string;
   icon: typeof Shield;
-}[] = [
-  {
-    id: 'plan',
-    // Plan mode on full auto: reads, searches and read-only commands run
-    // without a card; plan mode refuses the rest at call time (gate.ts).
-    description:
-      'Read-only: explores without asking, then presents its plan for your review. Edits, other commands and web tools are refused.',
-    icon: ClipboardList,
-  },
-  { id: 'ask', description: 'Asks before each write, edit and command.', icon: Shield },
-  {
-    id: 'accept-edits',
-    description:
-      'Edits and commands inside the workspace run without asking; dangerous commands such as deletes and force pushes, paths outside it, web access and other tools still ask.',
-    icon: ShieldOff,
-  },
-  {
-    id: 'auto',
-    // Decision 191: what full auto still stops to confirm (gate.ts `autoStillAsks`).
-    description:
-      'Runs tools without asking. Dangerous commands such as deletes and force pushes, and anything that names a path outside the workspace, still ask; explicit deny rules still apply.',
-    icon: ShieldAlert,
-  },
-  {
-    id: 'bypass',
-    description:
-      'Never asks. Even commands full auto would stop to confirm run straight through; explicit deny rules still apply.',
-    icon: ShieldBan,
-  },
-];
+};
+
+/**
+ * Decision 192 (user, 2026-10-18): one short line each, the details left to
+ * the confirmation; `auto` and `bypass` read differently when a review model
+ * checks what full auto would otherwise ask.
+ */
+function presetOptions(autoReview: boolean): readonly PresetOption[] {
+  return [
+    {
+      id: 'plan',
+      // Plan mode on full auto: reads, searches and read-only commands run
+      // without a card; plan mode refuses the rest at call time (gate.ts).
+      description: 'Read-only exploration, then the plan comes to you for review',
+      icon: ClipboardList,
+    },
+    { id: 'ask', description: 'Asks before each write, edit and command', icon: Shield },
+    {
+      id: 'accept-edits',
+      description:
+        'Workspace edits and commands run without asking; deletes, paths outside it and web access still ask',
+      icon: ShieldOff,
+    },
+    {
+      id: 'auto',
+      // Decision 191: what full auto still stops to confirm (gate.ts `autoStillAsks`).
+      description: autoReview
+        ? 'Rarely asks; deletes, force pushes and anything outside the workspace go to the review model first'
+        : 'Rarely asks; deletes, force pushes and anything outside the workspace still ask',
+      icon: ShieldAlert,
+    },
+    {
+      id: 'bypass',
+      description: autoReview
+        ? 'Never asks and never reviews; everything runs straight through'
+        : 'Never asks; everything runs straight through',
+      icon: ShieldBan,
+    },
+  ];
+}
 
 /**
  * Route B, S-2 (rulings 6, 13, 14): a chat on the Claude Agent SDK engine
@@ -105,7 +115,7 @@ const PRESET_OPTIONS: readonly {
  * described as the engine behaves. The engine keeps no deny list of PiLab's,
  * so nothing here says one applies.
  */
-const SDK_PRESET_OPTIONS: typeof PRESET_OPTIONS = [
+const SDK_PRESET_OPTIONS: readonly PresetOption[] = [
   { id: 'ask', description: SDK_MODE_DESCRIPTIONS.ask, icon: Shield },
   { id: 'accept-edits', description: SDK_MODE_DESCRIPTIONS['accept-edits'], icon: ShieldOff },
   { id: 'plan', description: SDK_MODE_DESCRIPTIONS.plan, icon: ClipboardList },
@@ -153,6 +163,8 @@ interface ComposerPermissionTriggerProps {
    * The Claude Agent SDK engine switches mode at any time, plan mode included.
    */
   engine?: ChatEngine;
+  /** Decision 192: a review model checks what full auto would otherwise ask (DSH only). */
+  autoReview?: boolean;
 }
 
 export function ComposerPermissionTrigger({
@@ -163,10 +175,11 @@ export function ComposerPermissionTrigger({
   turnActive,
   goalEntry,
   engine,
+  autoReview = false,
 }: ComposerPermissionTriggerProps) {
   const { t } = useI18n();
   const sdk = engine === 'claude-sdk';
-  const options = sdk ? SDK_PRESET_OPTIONS : PRESET_OPTIONS;
+  const options = sdk ? SDK_PRESET_OPTIONS : presetOptions(autoReview);
   const presetLabels = permissionPresetLabelsFor(engine);
   const [settings, setSettings] = useState(() => readPermissionsFor(sessionId, engine));
   /** Which dangerous gear is waiting on its confirmation, if any. */
@@ -313,7 +326,7 @@ export function ComposerPermissionTrigger({
       </MenuPrimitive.Trigger>
       <MenuPopup
         align="start"
-        className="min-w-52 rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
+        className="min-w-52 max-w-xl rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
         side={composerPopupSide(mode)}
         finalFocus={() => {
           const picked = goalPicked.current;
@@ -340,7 +353,9 @@ export function ComposerPermissionTrigger({
                 : t(
                     sdk
                       ? SDK_AUTO_CONFIRMATION
-                      : 'Runs tools without asking, including commands whose arguments cannot be read. Dangerous commands such as deletes, force pushes and hard resets ask every time, and so does anything that names a path outside the workspace; explicit deny rules still apply.'
+                      : autoReview
+                        ? 'Deletes, force pushes and anything outside the workspace go to the review model first; what it does not allow is refused. Explicit deny rules still apply.'
+                        : 'Deletes, force pushes and anything outside the workspace ask you first every time. Explicit deny rules still apply.'
                   )}
               {confirming === 'bypass' ? bypassScope : scope}
             </p>

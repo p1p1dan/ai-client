@@ -1775,6 +1775,69 @@ scenario('perm-grants', (events, id) => {
   });
 });
 
+scenario('auto-review', (events, id) => {
+  it('words each review on its row, and turns the third block in a row into a card', () => {
+    const state = replay(events);
+    const rows = turnsOf(state, id).flatMap((turn) => turn.rows);
+    expect(
+      rows.map((row) => ({
+        command: row.arg,
+        outcome: row.outcome ?? null,
+        review: row.reviewNote ?? null,
+        red: row.reviewDenied === true,
+        permission: row.permissionVerb ?? null,
+      }))
+    ).toEqual([
+      {
+        command: 'rm -f REVIEW-ALLOW-a.txt',
+        outcome: null,
+        review: 'auto: review allowed',
+        red: false,
+        permission: null,
+      },
+      {
+        command: 'rm -f REVIEW-BLOCK-b.txt',
+        outcome: 'refused',
+        review: 'auto: review did not allow',
+        red: true,
+        permission: null,
+      },
+      {
+        command: 'rm -f REVIEW-ERROR-c.txt',
+        outcome: 'notStarted',
+        review: 'auto: review could not complete (review error)',
+        red: false,
+        permission: null,
+      },
+      {
+        command: 'rm -f REVIEW-BLOCK-d.txt',
+        outcome: 'refused',
+        review: 'auto: review did not allow',
+        red: true,
+        permission: null,
+      },
+      // The third block in a row went to the card, which the recorder denied.
+      {
+        command: 'rm -f REVIEW-BLOCK-e.txt',
+        outcome: 'refused',
+        review: null,
+        red: false,
+        permission: 'Denied',
+      },
+    ]);
+    expect(rows[1]?.output).toBe(
+      'Not allowed by review: REVIEW-BLOCK: the user did not name this file for deletion'
+    );
+    const card = bucket(state, id)
+      .flatMap((message) => message.blocks)
+      .find((block) => block.type === 'permission_request');
+    expect(card?.permissionReviewReason).toBe(
+      'REVIEW-BLOCK: the user did not name this file for deletion'
+    );
+    expect(card?.permissionDecisions).toEqual(['allow', 'deny']);
+  });
+});
+
 scenario('perm-deny', (events, id) => {
   it('refuses the protected read without a card', () => {
     const state = replay(events);
@@ -1899,6 +1962,8 @@ const REOPEN_DIFFERS: Readonly<Record<string, string>> = {
   fork: 'the source page is the one the fork left behind (asserted above)',
   rewind: 'the page after a rewind drops the retired turn (asserted above)',
   'perm-grants': 'the session-grant activity row is live only (decision 143)',
+  'auto-review':
+    'the review records are live only, like a session grant (decision 192): reopened, a call the review could not judge reads as refused',
   'perm-restart': 'the session-grant activity row is live only (decision 143)',
   'perm-subagent': 'a child’s approval card is live only',
   question: 'the question card is live only; the answer stays in the ask_user_question row',

@@ -1150,3 +1150,29 @@ describe('MN-01 the menu keeps what the plan routes (decision 033 rule 3)', () =
     );
   });
 });
+
+describe('decision 192: the review model', () => {
+  const providers = {
+    p: provider('openai-completions', [{ id: 'chat' }, { id: 'cheap' }]),
+  };
+
+  it('keeps a review model the plan serves, and folds it into the revision', () => {
+    const without = plan(providers);
+    const withReview = plan(providers, { reviewModel: 'p/cheap' });
+    expect(withReview.reviewModel).toBe('p/cheap');
+    expect(withReview.revision).not.toBe(without.revision);
+    expect(without.reviewModel).toBeUndefined();
+  });
+
+  it('drops one the plan cannot serve, and says so, without changing the revision', () => {
+    const without = plan(providers);
+    const missing = plan(providers, { reviewModel: 'p/gone' });
+    expect(missing.reviewModel).toBeUndefined();
+    expect(missing.revision).toBe(without.revision);
+    expect(missing.dropped).toContainEqual({
+      kind: 'reviewModel',
+      model: 'p/gone',
+      reason: 'not_in_plan',
+    });
+  });
+});

@@ -20,7 +20,12 @@ import type {
 import { BridgeSessionError } from './bridgeErrors.ts';
 
 /** The plan as the host provides it (`aiclientModelPlan`): no nonce, nothing secret. */
-export type DshBridgeModelPlan = Pick<DshModelPlan, 'revision' | 'defaultModel' | 'index'> & {
+export type DshBridgeModelPlan = Pick<
+  DshModelPlan,
+  'revision' | 'defaultModel' | 'index' | 'reviewModel'
+> & {
+  /** Decision 192: the bundled Claude CLI the auto-mode rules are read from. */
+  readonly autoModeCli?: string;
   /**
    * The routes, by the name DSH gives a step's `provider`, as far as decision
    * 173 reads them (`cacheChainReport.ts`): protocol and cache retention.

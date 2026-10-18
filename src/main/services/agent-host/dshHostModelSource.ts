@@ -30,6 +30,7 @@ import {
   resolveNativeModelCatalog,
 } from '../piModelConfig';
 import { watchCacheControlOnTools } from './cacheControlOnToolsSetting';
+import { claudeSdkCliPath, claudeSdkHostLayout } from './claudeSdkEngine';
 import { claudeSdkEngineEnabled } from './claudeSdkEngineSetting';
 import { claudeSdkHostAvailable } from './claudeSdkHostAvailability';
 import { DshCredentialBroker } from './DshCredentialBroker';
@@ -47,7 +48,19 @@ export function installDshHostModelSource(): void {
     onVaultChange: (listener) => getCredentialVault().onChange(() => listener()),
     log: (...args) => console.info(...args),
   });
-  dshHostSupervisor.setModelSource({ plan: () => resolveDshModelPlan(), credentials: broker });
+  dshHostSupervisor.setModelSource({
+    plan: () => resolveDshModelPlan(),
+    credentials: broker,
+    // Decision 192: the same CLI binary the SDK engine runs, for its auto-mode rules.
+    autoModeCli: () =>
+      claudeSdkCliPath(
+        claudeSdkHostLayout({
+          isPackaged: app.isPackaged,
+          appPath: app.getAppPath(),
+          resourcesPath: process.resourcesPath,
+        })
+      ),
+  });
   let lastPlan: DshModelPlan | null = null;
   onDshModelPlanBuilt((plan) => {
     lastPlan = plan;

@@ -15,9 +15,11 @@ import {
   groupTimeline,
   isDelegationTool,
   joinResolvedPermissions,
+  joinReviewActivity,
   normalizeToolOutput,
   type PermissionJoinable,
   pairToolBlocks,
+  REVIEWING_VERB,
   runningElapsedMs,
   shortPath,
   TOOL_RUN_OUTCOME_LABEL,
@@ -1665,5 +1667,107 @@ describe('T101 · a tool row whose arguments are still streaming', () => {
     );
     expect(view.arg).toBe('npm run bui');
     expect(view.verb).toBe('Running');
+  });
+});
+
+describe('decision 192: the review model on the tool row', () => {
+  function review(
+    id: string,
+    record: Partial<NonNullable<ChatBlock['permissionActivity']>>
+  ): ChatBlock {
+    return {
+      id: `perm-activity-${id}`,
+      type: 'permission_activity',
+      permissionActivity: { requestId: id, surface: 'bash', ...record },
+    };
+  }
+  const refused = {
+    toolOk: false,
+    toolOutput: { content: [{ type: 'text', text: 'refused' }], details: { refused: true } },
+  };
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+
+  function view(blocks: ChatBlock[]) {
+    const items = joinReviewActivity(turnItems(message(blocks)));
+    expect(items.some((item) => item.kind === 'permissionActivity')).toBe(false);
+    return deriveToolRowView(runFor(items, 'a'), { t: zh });
+  }
+
+  it('says 「审核中」 while the call waits on the review, with no clock of its own', () => {
+    const row = view([
+      call('a', 'bash', { command: 'rm -rf dist' }),
+      review('a', { phase: 'review' }),
+    ]);
+    expect(row.verb).toBe(REVIEWING_VERB);
+    expect(row.runningStartedAtMs).toBeUndefined();
+  });
+
+  it('a call the review allowed reads 「自动：审核放行」', () => {
+    const row = view([
+      call('a', 'bash', { command: 'rm tmp.log' }),
+      review('a', { phase: 'decision', result: 'allow', resolution: 'review_allowed' }),
+      result('a'),
+    ]);
+    expect(row.reviewNote).toBe('自动：审核放行');
+    expect(row.reviewDenied).toBeUndefined();
+  });
+
+  it('a call the review blocked is a refusal, its reason only in the body', () => {
+    const row = view([
+      call('a', 'bash', { command: 'rm -rf dist' }),
+      review('a', {
+        phase: 'decision',
+        result: 'deny',
+        resolution: 'review_denied',
+        reviewReason: '要删除之前就有的 dist/',
+      }),
+      result('a', { ...refused, text: 'The automatic safety review did not allow this call' }),
+    ]);
+    expect(row.outcome).toBe('refused');
+    expect(row.reviewNote).toBe('自动：审核没放行');
+    expect(row.reviewDenied).toBe(true);
+    expect(row.output).toBe('审核没放行：要删除之前就有的 dist/');
+    // Click to open, never opened for the reader (user, 2026-10-18).
+    expect(row.failed).toBe(false);
+  });
+
+  it('a call the review could not judge did not run, in the ordinary tone', () => {
+    const row = view([
+      call('a', 'bash', { command: 'git reset --hard' }),
+      review('a', {
+        phase: 'decision',
+        result: 'deny',
+        resolution: 'review_failed',
+        reviewFailure: 'timeout',
+      }),
+      result('a', refused),
+    ]);
+    expect(row.outcome).toBe('notStarted');
+    expect(row.reviewNote).toBe('自动：审核没能完成（超时）');
+    expect(row.reviewDenied).toBeUndefined();
+    expect(row.output).toBeUndefined();
+  });
+
+  it('stops saying 「审核中」 once the review hands the call to a card', () => {
+    const items = joinReviewActivity(
+      turnItems(
+        message([
+          call('a', 'bash', { command: 'rm e.txt' }),
+          review('a', { phase: 'review' }),
+          permission('a', { resolved: false, allowed: undefined }),
+        ])
+      )
+    );
+    expect(deriveToolRowView(runFor(items, 'a')).verb).not.toBe(REVIEWING_VERB);
+  });
+
+  it('keeps the latest record when a review is followed by its outcome', () => {
+    const row = view([
+      call('a', 'bash', { command: 'rm x' }),
+      review('a', { phase: 'review' }),
+      result('a'),
+    ]);
+    expect(row.verb).not.toBe(REVIEWING_VERB);
   });
 });

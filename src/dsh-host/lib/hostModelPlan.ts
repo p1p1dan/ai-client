@@ -23,8 +23,13 @@ export const CONFIGURE_TIMEOUT_MS = 10_000;
 
 /** What `configure` carries, validated. */
 export interface HostModelPlan
-  extends Pick<DshModelPlan, 'revision' | 'routes' | 'defaultModel' | 'index' | 'refs'> {
+  extends Pick<
+    DshModelPlan,
+    'revision' | 'routes' | 'defaultModel' | 'index' | 'refs' | 'reviewModel'
+  > {
   nonce: string;
+  /** Decision 192: the bundled Claude CLI the auto-mode rules are read from. */
+  autoModeCli?: string;
 }
 
 /** Placeholder route of a host that received no plan (no IPC): nothing can be served. */
@@ -67,7 +72,7 @@ export function readConfigure(
   if (!isRecord(message) || message.host !== 'configure') {
     return { ok: false, reason: 'not a configure message' };
   }
-  const { nonce, revision, routes, index, refs, defaultModel } = message;
+  const { nonce, revision, routes, index, refs, defaultModel, reviewModel, autoModeCli } = message;
   if (!isNonEmptyString(nonce)) return { ok: false, reason: 'no nonce' };
   if (!isNonEmptyString(revision)) return { ok: false, reason: 'no revision' };
   if (!isRecord(routes) || !isRecord(index)) return { ok: false, reason: 'no routes or index' };
@@ -90,6 +95,9 @@ export function readConfigure(
   if (routeCount > 0 && !Object.hasOwn(routes, defaultModel.provider)) {
     return { ok: false, reason: 'the default model names no route of the plan' };
   }
+  // Decision 192: a review model the index cannot serve reviews nothing.
+  const review =
+    isNonEmptyString(reviewModel) && Object.hasOwn(index, reviewModel) ? reviewModel : undefined;
   return {
     ok: true,
     plan: {
@@ -99,6 +107,8 @@ export function readConfigure(
       defaultModel: { provider: defaultModel.provider, model: defaultModel.model },
       index: index as DshModelPlan['index'],
       refs: refs as DshModelPlan['refs'],
+      ...(review ? { reviewModel: review } : {}),
+      ...(review && isNonEmptyString(autoModeCli) ? { autoModeCli } : {}),
     },
   };
 }

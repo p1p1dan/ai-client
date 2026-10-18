@@ -17,6 +17,8 @@ import type { UserProvider } from '../auth/CredentialVault';
 export interface NativeModelCatalog {
   models: Record<string, unknown>;
   auth: Record<string, unknown>;
+  /** Decision 192: the managed catalog's review model, unless a user service took its provider id. */
+  reviewModel?: string;
 }
 
 export interface NativeModelCatalogDeps {

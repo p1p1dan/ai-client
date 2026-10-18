@@ -670,7 +670,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN)/;
+  /P1-(AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -686,6 +686,49 @@ function carriesCompletionSystem(parsed) {
   }
   return texts.some((text) => COMPLETION_SYSTEM.test(text));
 }
+/** Decision 192: the auto gear's review model (src/shared/permissions/autoReview/prompt.ts). */
+const REVIEW_SYSTEM = /You are a security monitor for an autonomous AI coding agent/;
+
+/**
+ * Decision 192: plays the review model, by the marker in the call under review
+ * (never in the conversation before it, which repeats earlier calls):
+ * REVIEW-ALLOW passes the fast stage, REVIEW-BLOCK is blocked by both stages
+ * with a reason, REVIEW-ERROR fails upstream. Null for any other request.
+ */
+function decideReview(parsed) {
+  const system = parsed?.system;
+  const texts =
+    typeof system === 'string'
+      ? [system]
+      : Array.isArray(system)
+        ? system.map((block) => String(block?.text ?? ''))
+        : [];
+  if (!texts.some((text) => REVIEW_SYSTEM.test(text))) return null;
+  const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
+  const prompt = ownText(messages[messages.length - 1]);
+  const action = prompt.slice(prompt.indexOf('<action_under_review>'));
+  const stage2 = /Think it through first/.test(prompt);
+  if (action.includes('REVIEW-ERROR')) {
+    return {
+      kind: 'error',
+      status: 502,
+      message: 'fake review upstream failed',
+      label: 'review-error',
+    };
+  }
+  if (action.includes('REVIEW-BLOCK')) {
+    return {
+      ...say(
+        stage2
+          ? '<thinking>The user asked to clean up, but named no file.</thinking><block>yes</block><reason>REVIEW-BLOCK: the user did not name this file for deletion</reason>'
+          : '<block>yes'
+      ),
+      label: stage2 ? 'review-block' : 'review-flag',
+    };
+  }
+  return { ...say('<block>no'), label: 'review-allow' };
+}
+
 /** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
 const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
@@ -1955,6 +1998,21 @@ const DSH_P0_2_SCRIPTS = {
     }
     return say('P1-PERM-WRITES finished.');
   },
+  // Decision 192: tools/bridge-record.ts `auto-review` (the review model is `decideReview`).
+  'P1-AUTO-REVIEW'(_round, step) {
+    const files = [
+      'REVIEW-ALLOW-a.txt',
+      'REVIEW-BLOCK-b.txt',
+      'REVIEW-ERROR-c.txt',
+      'REVIEW-BLOCK-d.txt',
+      'REVIEW-BLOCK-e.txt',
+    ];
+    const file = files[step];
+    if (file) {
+      return tool('bash', { command: `rm -f ${file}`, description: `Remove ${file}` });
+    }
+    return say('P1-AUTO-REVIEW finished.');
+  },
   'P1-PERM-GRANTS'(_round, step) {
     if (step === 0) {
       return tool('bash', { command: 'echo perm-grant-a', description: 'First echo' });
@@ -2102,6 +2160,8 @@ function histProse(i, token) {
 
 /** dsh-p0-2: decide from the request's own messages (`seq` only names P1-CHAIN's signatures). */
 function decideDshP02(parsed, seq) {
+  const review = decideReview(parsed);
+  if (review) return review;
   const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
   const lastText = ownText(messages[messages.length - 1]);
   if (/<goal_(complete|blocked)>/.test(lastText)) {
@@ -3620,6 +3680,9 @@ function decideClaudeSdkClassifier(parsed) {
 }
 
 function decideClaudeSdk(parsed, req) {
+  // Decision 192: a DSH chat's review model, in the GUI point-check.
+  const review = decideReview(parsed);
+  if (review) return review;
   const classifier = decideClaudeSdkClassifier(parsed);
   if (classifier) return classifier;
   const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];

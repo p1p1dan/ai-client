@@ -245,6 +245,7 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
             ...(sessionGrantScope ? { sessionGrantScope } : {}),
             // P1-6d: why this card is up when the gear would not have asked.
             ...(context?.askReason ? { askReason: context.askReason } : {}),
+            ...(context?.reviewReason ? { reviewReason: context.reviewReason } : {}),
           },
         });
 

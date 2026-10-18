@@ -84,7 +84,7 @@ export type AttachableGate = Pick<
   PermissionGateService,
   'authorize' | 'canTraverse' | 'onActivity'
 > &
-  Partial<Pick<PermissionGateService, 'mode' | 'gear'>>;
+  Partial<Pick<PermissionGateService, 'mode' | 'gear' | 'autoReview'>>;
 
 export interface AttachGateOptions {
   /** The chat session's root DSH session id; its delegates join it from `session/created`. */
@@ -360,7 +360,7 @@ export class PermissionHost {
   promptContext(agent: DshAgentView | undefined): string {
     const gate = this.routeOf(agent)?.gate.gate;
     if (!gate?.mode || !gate.gear) return '';
-    return permissionPromptText(gate.mode, gate.gear);
+    return permissionPromptText(gate.mode, gate.gear, gate.autoReview === true);
   }
 
   // ---- tools ------------------------------------------------------------------------

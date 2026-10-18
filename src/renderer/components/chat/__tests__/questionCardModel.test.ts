@@ -1779,6 +1779,21 @@ describe('the PowerShell card: aliases and the reason it asks (P1-6d)', () => {
     expect(PERMISSION_ASK_REASON_CALL).not.toBe(zh(PERMISSION_ASK_REASON_CALL));
   });
 
+  it('shows only the review model’s reason on a card raised after repeated blocks (decision 192)', () => {
+    const block = permissionBlock({
+      toolName: 'bash',
+      permissionKind: 'exec',
+      permissionAskReason: 'dangerous',
+      permissionReviewReason: '要删除之前就有的 build/',
+    });
+    expect(derivePermissionCardView(block, true, zh).askReasonNote).toBe(
+      '审核没放行：要删除之前就有的 build/'
+    );
+    expect(derivePermissionCardView(block, true).askReasonNote).toBe(
+      'Not allowed by review: 要删除之前就有的 build/'
+    );
+  });
+
   it('says a dangerous command is confirmed every time, and names a path outside the workspace (DSH decision 191 §6)', () => {
     for (const toolName of ['bash', 'pwsh']) {
       const block = permissionBlock({

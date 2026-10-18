@@ -123,7 +123,7 @@ describe('the five presets', () => {
     await open();
     const text = document.body.textContent ?? '';
     expect(choice('计划模式')?.textContent).toContain('只读');
-    expect(choice('自动编辑')?.textContent).toContain('工作区外的路径、联网和其他工具仍会询问');
+    expect(choice('自动编辑')?.textContent).toContain('删除、工作区外和联网仍会询问');
     expect(text).not.toContain('批准');
   });
 

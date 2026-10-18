@@ -711,6 +711,11 @@ export function derivePermissionAskReasonNote(
   block: ChatBlock,
   t: Translate = englishTranslate
 ): string | null {
+  // Decision 192 (user, 2026-10-18): the review's reason is the one line; the
+  // dangerous-command line no longer holds once a review model is in charge.
+  if (block.permissionReviewReason) {
+    return t('Not allowed by review: {{reason}}', { reason: block.permissionReviewReason });
+  }
   if (block.permissionAskReason === 'dangerous') return t(PERMISSION_ASK_REASON_DANGEROUS);
   if (block.permissionAskReason === 'outside_workspace') return t(PERMISSION_ASK_REASON_OUTSIDE);
   if (block.permissionAskReason !== 'unresolved') return null;
@@ -784,6 +789,14 @@ export function derivePermissionAutoNote(
   const reason = block.permissionAutoReason;
   if (!reason) return null;
   return t('auto: {{reason}}', { reason: t(PERMISSION_AUTO_REASONS[reason] ?? reason) });
+}
+
+/**
+ * Decision 192: the same `auto: <reason>` tail, for a call the review model
+ * decided; `reason` is already worded (`toolCard.ts` picks it).
+ */
+export function deriveAutoReviewNote(reason: string, t: Translate = englishTranslate): string {
+  return t('auto: {{reason}}', { reason });
 }
 
 /** Provenance always goes at the tail, whichever string carries it. */

@@ -5,6 +5,7 @@
  */
 
 import type { ToolCallPresentation } from '../dshToolPresentation.ts';
+import type { AutoReviewFailure } from '../permissions/autoReview/types.ts';
 import type { PlanReviewChoice, PlanReviewGoalOutcome } from '../planReview.ts';
 import type { AgentWireName } from './agentWire';
 import type { RuntimePermissionSettings } from './runtimePermission.ts';
@@ -756,6 +757,12 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
      * every time.
      */
     askReason?: PermissionAskReason;
+    /**
+     * Decision 192: the review model's reason, on a card raised because the
+     * review blocked this call once too often to keep refusing on its own.
+     * The model's prose, shown verbatim.
+     */
+    reviewReason?: string;
     /** S2: the agent's own justification, when it sent one. */
     reason?: string;
     /**
@@ -1581,7 +1588,7 @@ export interface SessionCompactionEvent extends RuntimeEventBase {
  * policy decided it without asking at all. `policy_allow` never raises a dialog,
  * so this is the ONLY evidence that a tool call was gated rather than unchecked.
  */
-export type PermissionActivityPhase = 'prompt' | 'decision';
+export type PermissionActivityPhase = 'prompt' | 'decision' | 'review';
 
 /**
  * How a decision was reached, verbatim from the plugin's own vocabulary.
@@ -1624,6 +1631,13 @@ export interface PermissionActivityEvent extends RuntimeEventBase {
     result?: 'allow' | 'deny';
     /** `decision` phase only — e.g. `user_approved`, `policy_allow`, `gate_error`. */
     resolution?: string;
+    /**
+     * Decision 192, `review_denied` only: the review model's reason, its own
+     * prose (shown verbatim, never translated).
+     */
+    reviewReason?: string;
+    /** Decision 192, `review_failed` only: what kept the review from deciding. */
+    reviewFailure?: AutoReviewFailure;
     /** `decision` phase only — which config scope supplied the winning rule. */
     origin?: string;
     /** The rule pattern, when the plugin exposes it for this phase. */

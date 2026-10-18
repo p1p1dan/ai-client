@@ -4637,6 +4637,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // longer locks the tier picker on the one the user is looking at.
         turnActive={busy || sendingHere}
         engine={chatEngine}
+        autoReview={modelCatalog?.autoReview === true}
         // Route B, S-2 (A-8): no goals on the Claude Agent SDK engine.
         {...(chatEngine === 'claude-sdk'
           ? {}

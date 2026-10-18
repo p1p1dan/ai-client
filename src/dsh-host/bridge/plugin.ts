@@ -14,6 +14,7 @@
  * re-export, with every npm package left external.
  */
 
+import { join } from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { installModelSelection } from '@deepseek-ai/dsh-agent';
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
@@ -23,6 +24,8 @@ import {
   isSwitchedOff,
   SESSION_METADATA_ENV,
 } from '../../shared/types/requestScope.ts';
+import { AutoModeRulesSource } from './autoModeRules.ts';
+import type { ReviewLlm } from './autoReviewer.ts';
 import { DshChannelMux } from './channelMux.ts';
 import { type CompletionLlm, DshCompletions } from './completions.ts';
 import {
@@ -152,6 +155,21 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
     // in `metadata.user_id` by the same switch; the cache verdicts name it too.
     sessionMetadata: !isSwitchedOff(process.env, SESSION_METADATA_ENV),
   };
+  // Decision 192: the auto gear's review, when Main's plan names a review
+  // model and the CLI its rules come from. One rules source per host.
+  const plan = ctx.get('aiclientModelPlan');
+  const home = process.env.DSH_HOME;
+  if (plan?.reviewModel && plan.autoModeCli && home) {
+    const rules = new AutoModeRulesSource({
+      cli: plan.autoModeCli,
+      cacheDir: join(home, 'aiclient', 'auto-review'),
+      log: (...args) => console.error('[aiclient-bridge]', ...args),
+    });
+    deps.autoReview = {
+      rules: () => rules.rules(),
+      llm: () => ctx.llm as unknown as ReviewLlm,
+    };
+  }
   // P1-15 (decisions 039, 125): one-shot completions, routed by the same plan
   // as every chat turn, as completions (no effort unless one was chosen).
   const completionRouter = new DshModelRouter(
