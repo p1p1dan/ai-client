@@ -4751,13 +4751,13 @@ Object.assign(zhTranslations, {
     '清空上下文重新开始：在这个文件夹用这个模型开一个新对话，原对话保留',
   'Switch the model; with no name, open the model menu': '切换模型；不写模型名则打开模型菜单',
   'Set the reasoning effort; with no level, open the model menu':
-    '设置思考强度；不写档位则打开模型菜单',
+    '设置推理强度；不写档位则打开模型菜单',
   'Model: {{model}}': '模型：{{model}}',
   'No model is called {{query}}. Pick one from the menu.':
     '没有叫 {{query}} 的模型，请在菜单里选择。',
-  'Reasoning effort: {{effort}}': '思考强度：{{effort}}',
+  'Reasoning effort: {{effort}}': '推理强度：{{effort}}',
   'This model has no reasoning effort {{query}}. Pick one from the menu.':
-    '这个模型没有「{{query}}」这一档思考强度，请在菜单里选择。',
+    '这个模型没有「{{query}}」这一档推理强度，请在菜单里选择。',
   'PiLab does not send /{{command}}': 'PiLab 不发送 /{{command}}',
   'PiLab keeps its settings in Settings: type /settings or use the gear at the bottom left.':
     'PiLab 的设置在「设置」里：输入 /settings，或点左下角的齿轮。',

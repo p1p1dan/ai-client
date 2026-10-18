@@ -45,7 +45,7 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 | 26 | 开发人员模式（S-6 反馈 10） | 设置里明着放开关，默认关；关着时"缓存工具定义"、"Agent SDK 引擎"开关、User-Agent 隐藏并一律按默认值生效；Web Inspector 不收 |
 | 27 | DSH 全自动（S-6 反馈 11c，issue #19） | **改进**：工作区内解析不了参数的命令也放行，只有删除、强推这类危险命令和明确碰到工作区外的路径才问 |
 
-**2026-10-18 用户裁决**（选择题，全文见 dsh-rebase [决策 193](../dsh-rebase/decisions/193-user-rulings-2026-10-18.md)）：随包分发 SDK 与 CLI 的条款确认可以接受（#47 结案）；「测试模型」按钮先不做（#30）；`assert-no-webfonts` 的 Windows 路径问题修（#49）；S-2 A-1～A-22、S-3 K-1～K-6 与 P-1～P-11、S-5 的自主决定（含 C-11）整体批准；这一版测试包在 Windows 与加密机上实测通过后合入 main，发 1.2.0；老型号加 `[1m]` 不做；SDK 引擎的斜杠命令、skill 等要支持并在界面上显示（另开任务）。
+**2026-10-18 用户裁决**（选择题，全文见 dsh-rebase [决策 193](../dsh-rebase/decisions/193-user-rulings-2026-10-18.md)）：随包分发 SDK 与 CLI 的条款确认可以接受（#47 结案）；「测试模型」按钮先不做（#30）；`assert-no-webfonts` 的 Windows 路径问题修（#49）；S-2 A-1～A-22、S-3 K-1～K-6 与 P-1～P-11、S-5 的自主决定（含 C-11）整体批准；这一版测试包在 Windows 与加密机上实测通过后合入 main，发 1.2.0；老型号加 `[1m]` 不做；SDK 引擎的斜杠命令、skill 等要支持并在界面上显示（另开任务，已做：dsh-rebase [决策 194](../dsh-rebase/decisions/194-slash-menu-plugin-skills-and-sdk-commands.md)，分支 `feat/slash-skills-193-29`，未推送）。
 
 ## 2 硬约束
 
@@ -99,6 +99,7 @@ Role: plan（立项方案，2026-10-16 用户裁决后起草）。分支 `feat/c
 - **计划模式照官方行为**（裁决 20）：CLI 让模型只做规划，但不强制；模型仍要改动时，命令与工作区外的读取交给自动模式的安全检查（缺省 `useAutoModeDuringPlan`），写文件出卡由用户决定，allow 规则照样放行。计划模式因此也会往网关发安全检查请求，检查不可用时这类调用被拒、不转问人。模型写的计划文件在应用私有目录里。
 - **项目设置照 CLI 生效**（裁决 5，S-3）：绑定项目的会话读项目的 `.claude/settings.json`、`.claude/settings.local.json`、CLAUDE.md（含 `.claude/CLAUDE.md`、`.claude/rules`、CLAUDE.local.md，以及项目外各级祖先目录的 CLAUDE.md）。仓库的 hooks 会执行仓库里的命令（会话开始、每次调用工具前后等），allow 规则放行的调用不出卡；仓库还能禁用自动模式或跳过权限确认。临时会话、绑定到主目录本身的会话都不读项目层。打开项目即视为信任它（信任记在应用私有目录）。
 - **用户级配置在软件目录**（裁决 19）：读 `~/.pilab/<配置名>/claude`（正式版 `~/.pilab/PiLabAi/claude`）里的 `CLAUDE.md`、`settings.json`、`skills/`、`agents/`、`commands/`，所有会话都读；用户自己的 `~/.claude` 一律不读。这个目录同时放着 CLI 自己的会话记录与缓存。
+- **斜杠菜单**（决策 194）：SDK 对话的菜单是 CLI 自己的清单（内置命令、随 CLI 的 skill、用户层、项目与插件的 skill 和命令）；对话启动前（首页选了 Anthropic 协议的模型、没启动的对话）由一个只列清单的宿主临时起 CLI 给出，首次约 1～4 秒、期间多占约 250 MB，按文件夹缓存。`/clear`、`/model`、`/effort` 由 PiLab 执行（回首页 / 模型菜单），`/config`、`/autocompact` 不发出；CLI 标为只适合终端的、只对远程会话有用的、在 SDK 里不可用的命令不列。`/usage` 显示的费用是 CLI 按官方价目算的，可能与网关计费不同。
 - **仓库声明的插件市场与插件照官方行为拉取、加载**（裁决 18）：受信任的项目从第二次启动起去拉（git、ssh 或下载，直连外网、不经网关）。实测拉不到时（地址不通）不拖慢首轮回复，也不留下进程。`.mcp.json` 不读。
 
 ## 6 风险
