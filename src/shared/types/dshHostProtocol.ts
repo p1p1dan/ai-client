@@ -18,7 +18,9 @@
  *                                      decision 054),
  *                                      complete / complete-cancel /
  *                                      completion-delta / completed
- *                                      (P1-15, decisions 039 and 125)
+ *                                      (P1-15, decisions 039 and 125),
+ *                                      slashCommands / slash-commands
+ *                                      (decision 194)
  *   lifecycle      {type: <kind>, ...} host.ts's own boot and stop messages
  *
  * Channel ids are minted by Main, one per virtual slot, and never reused. Only
@@ -54,7 +56,7 @@ import type { SeedReport } from '../legacyPiSession/convert/types';
 import type { ImportedConversation } from './legacyImport';
 import type { RuntimePermissionSettings } from './runtimePermission';
 import type { SessionHistoryPage } from './sessionHistory';
-import type { WorkerRpcMessage, WorkerRpcRequest } from './workerRpc';
+import type { WorkerCommandsResult, WorkerRpcMessage, WorkerRpcRequest } from './workerRpc';
 
 /** `c<host generation>-<sequence>`; the sequence never restarts, so an id is never reused. */
 export type DshChannelId = string;
@@ -135,6 +137,21 @@ export interface DshHostReadPageRequest {
   offset?: number;
   /** At most `HISTORY_PAGE_MAX_LIMIT`; the default page when absent. */
   limit?: number;
+}
+
+/**
+ * Decision 194 (ruling 193 item 29): the composer's slash menu for a folder no
+ * session of this host runs in (the home page's draft target, a chat not
+ * started yet). The host lists DSH's commands (the global view) and the
+ * skills a person may call in `cwd`, every provider's (a plugin's too), by
+ * the rules of `worker.commands`. No channel, no agent, no write. Answered
+ * with `slash-commands`.
+ */
+export interface DshHostSlashCommandsRequest {
+  host: 'slashCommands';
+  id: number;
+  /** The folder whose project skills count; null lists the user's alone. */
+  cwd: string | null;
 }
 
 /**
@@ -369,7 +386,8 @@ export type DshMainToHostMessage =
   | DshHostCredentialResult
   | DshHostCompleteRequest
   | DshHostCompleteCancel
-  | DshHostProxyUpdate;
+  | DshHostProxyUpdate
+  | DshHostSlashCommandsRequest;
 
 // ---- host -> Main -----------------------------------------------------------
 
@@ -497,6 +515,19 @@ export interface DshHostPage {
   ms: number;
 }
 
+/** Answer to `slashCommands`, echoing its id: the menu rows, or why there are none. */
+export interface DshHostSlashCommands {
+  host: 'slash-commands';
+  id: number;
+  ok: boolean;
+  /** Present exactly when `ok`; Main sanitizes the rows as it does `worker.commands`'s. */
+  result?: WorkerCommandsResult;
+  /** Present exactly when not `ok`. */
+  error?: { code: string; message: string };
+  /** Time the host spent on the listing. */
+  ms: number;
+}
+
 /**
  * Answer to `seedSession`, echoing its id: what the migration or import made,
  * or where it stopped. `R` is the result of the request's kind; the message
@@ -582,7 +613,8 @@ export type DshHostToMainMessage =
   | DshHostSeeded<DshSeedSessionResult | DshSeedImportResult>
   | DshHostCredentialRequest
   | DshHostCompletionDelta
-  | DshHostCompleted;
+  | DshHostCompleted
+  | DshHostSlashCommands;
 
 /** How long a host waits for `configure` before it refuses to boot. */
 export const DSH_CONFIGURE_TIMEOUT_MS = 10_000;
@@ -786,6 +818,43 @@ export function isDshHostPage(value: unknown): value is DshHostPage {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
+}
+
+export function isDshHostSlashCommandsRequest(
+  value: unknown
+): value is DshHostSlashCommandsRequest {
+  return (
+    isRecord(value) &&
+    value.host === 'slashCommands' &&
+    isPositiveSafeInteger(value.id) &&
+    (value.cwd === null || (typeof value.cwd === 'string' && value.cwd.length > 0))
+  );
+}
+
+/** The shape `isWorkerCommandsResult` accepts, restated: no value imports here. */
+function isCommandsResult(value: unknown): value is WorkerCommandsResult {
+  return isRecord(value) && Array.isArray(value.commands) && typeof value.truncated === 'boolean';
+}
+
+export function isDshHostSlashCommands(value: unknown): value is DshHostSlashCommands {
+  if (
+    !isRecord(value) ||
+    value.host !== 'slash-commands' ||
+    !isPositiveSafeInteger(value.id) ||
+    typeof value.ok !== 'boolean' ||
+    !isNonNegativeFinite(value.ms)
+  ) {
+    return false;
+  }
+  if (value.ok) return isCommandsResult(value.result) && value.error === undefined;
+  const error = value.error;
+  return (
+    value.result === undefined &&
+    isRecord(error) &&
+    typeof error.code === 'string' &&
+    error.code.length > 0 &&
+    typeof error.message === 'string'
+  );
 }
 
 export function isDshSeedStage(value: unknown): value is DshSeedStage {

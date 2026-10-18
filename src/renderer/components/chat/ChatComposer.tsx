@@ -1,7 +1,11 @@
 import type { ChatEngine } from '@shared/claudeSdkEngine';
 import { readCompactInstructions } from '@shared/compactInstructions';
 import { dshCompactCommandText } from '@shared/dshHistory/types';
-import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentDefaults';
+import {
+  agentDefaultEffort,
+  agentDefaultModel,
+  withAgentPreference,
+} from '@shared/models/chatAgentDefaults';
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { DEFAULT_RUNTIME_PERMISSION } from '@shared/types/runtimePermission';
 import type { FileSearchResult } from '@shared/types/search';
@@ -57,6 +61,7 @@ import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { type HomeTargetPick, openHome, useHomeDraftStore } from '@/stores/homeDraft';
 import { selectIsMigrating, useLegacyMigrationStore } from '@/stores/legacyMigration';
 import { useMessageQueueStore } from '@/stores/messageQueue';
+import { useModelMenuIntentStore } from '@/stores/modelMenuIntent';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
@@ -134,7 +139,12 @@ import {
   isLegacyMigrationRefusal,
 } from './historyError';
 import { runHomeBranchSwitch } from './homeBranchSwitch';
-import { homeSlashMenu, homeSlashRefusal, homeSlashRefusalToast } from './homeSlashCommands';
+import {
+  homeSlashMenu,
+  homeSlashRefusal,
+  homeSlashRefusalToast,
+  sdkBlockedCommandHint,
+} from './homeSlashCommands';
 import { planHomeBranchSwitch } from './homeTarget';
 import { ModelMissingNotice } from './ModelMissingNotice';
 import {
@@ -229,6 +239,7 @@ import {
   slashCatalogRequest,
   slashRowsForDisplay,
 } from './slashCommands';
+import { carriedGenerationPreferences } from './slashModelCommand';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useComposerPopupPlacement } from './useComposerPopupPlacement';
 import { readHomeTarget, useHomeTarget } from './useHomeTarget';
@@ -870,7 +881,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     const catalog = buildSlashCatalog(slashCatalog, t);
     return filterSlashCommands(onHome ? homeSlashMenu(catalog) : catalog, slashQuery);
   }, [slashCatalog, slashQuery, t, onHome]);
-  const slashOpen = slashQuery !== null && slashResults.length > 0;
+  // Decision 194 point-check: a send by the button clears the box without a
+  // keystroke, so the query of the line just sent must not keep the menu open.
+  const slashOpen = slashQuery !== null && value.startsWith('/') && slashResults.length > 0;
   // F11: both popups are absolutely positioned inside this card and cannot flip
   // themselves, so the card is the anchor and one measurement serves both — a
   // second, independently-resolved placement would let `@` and `/` open toward
@@ -943,6 +956,25 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // T3: the same renderer-wide catalog cache the model trigger reads; used
   // only to read the selected model's declared input kinds below.
   const { catalog: modelCatalog } = usePiModelCatalog(hostStatus.state);
+  // The model the next send carries (same resolution as `runSend`, or the
+  // global template before the chat exists), and the engine it goes to.
+  // T3: a model that cannot see images gets a hint below; decision 194: the
+  // slash menu lists the commands of that engine.
+  const nextSendModel = activeSessionId
+    ? resolveResumeModel(getSessionModel, activeSessionId, agentDefaultModel(chatAgentDefaults))
+    : toWireModel(agentDefaultModel(chatAgentDefaults));
+  const chatEngine = chatEngineForDisplay({
+    bound: activeEngineBound,
+    ...(activeEngineReport ? { engine: activeEngineReport } : {}),
+    ...(activeRuntimeIdentity ? { runtimeIdentity: activeRuntimeIdentity } : {}),
+    predicted: predictNewChatEngine({
+      enabled: claudeSdkEngineEnabled,
+      hostAvailable: modelCatalog?.claudeSdkHostAvailable !== false,
+      catalog: catalogModels(modelCatalog),
+      model: nextSendModel,
+    }),
+  });
+  chatEngineRef.current = chatEngine;
   // T-18 paste attachments. Reads/encoding stay in the hook; every threshold
   // and format decision is a pure function under __tests__.
   // T-19 decision 2.1: paste unlocks whenever the textarea does. A
@@ -1298,13 +1330,23 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // Decision 175: on the home page there is no conversation for these to act
     // on. They used to go out as the first message of a new one; now the hint
     // says so and the text stays in the box. Ahead of the `runtime` exit below:
-    // `/goal` is DSH's.
+    // `/goal` is DSH's (decision 194: on the SDK engine it is the CLI's, and goes out).
     if (!activeSessionId) {
-      const refusal = homeSlashRefusal(parsed.name, parsed.args, source);
+      const refusal = homeSlashRefusal(parsed.name, parsed.args, source, chatEngine);
       if (refusal) {
         toastManager.add({ type: 'info', ...homeSlashRefusalToast(refusal, parsed.name, t) });
         return true;
       }
+    }
+    // Decision 194 Q2: the SDK CLI's settings commands PiLab does not send.
+    const blocked = sdkBlockedCommandHint(parsed.name, source, chatEngine);
+    if (blocked) {
+      toastManager.add({
+        type: 'info',
+        title: t('PiLab does not send /{{command}}', { command: parsed.name }),
+        description: t(blocked),
+      });
+      return true;
     }
     const action = resolveSlashAction(parsed.name, parsed.args, source);
     if (action.type === 'runtime') return false;
@@ -1326,9 +1368,31 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             ? { kind: 'path', path: workspace.path }
             : { kind: 'unbound' }
           : undefined;
+        // Decision 194 Q2: `/new` and `/clear` typed here start from this conversation's
+        // model and effort too. The home page sends with the template, so they go there,
+        // as a pick in this chat's menu would have put them.
+        if (current) {
+          const carried = carriedGenerationPreferences(
+            getSessionModel(current.id),
+            getSessionEffort(current.id)
+          );
+          if (carried) {
+            const settings = useSettingsStore.getState();
+            settings.setChatAgentDefaults(withAgentPreference(settings.chatAgentDefaults, carried));
+          }
+        }
         openHome(preselect);
         break;
       }
+      case 'model':
+      case 'effort':
+        // Decision 194 Q2: through this composer's own model menu.
+        useModelMenuIntentStore.getState().request({
+          sessionId: activeSessionId ?? null,
+          kind: action.type,
+          query: action.query,
+        });
+        break;
       case 'settings':
         useSettingsIntentStore.getState().requestSettings();
         break;
@@ -1835,7 +1899,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (!slashMenuActive) return;
     let cancelled = false;
     window.electronAPI.chat
-      .getSlashCommands(slashCatalogRequest(activeSessionId, effectiveCwd))
+      .getSlashCommands(slashCatalogRequest(activeSessionId, effectiveCwd, chatEngine))
       .then((result) => {
         // pi reports `description` as optional; the menu always renders a row,
         // so it is normalised here rather than defended against in every pure
@@ -1857,7 +1921,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     return () => {
       cancelled = true;
     };
-  }, [slashMenuActive, activeSessionId, effectiveCwd]);
+  }, [slashMenuActive, activeSessionId, effectiveCwd, chatEngine]);
 
   /**
    * Re-read the command prefix after the DOM has the new value.
@@ -4190,25 +4254,6 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     </Alert>
   ) : null;
 
-  // T3: the model the next send carries (same resolution as `runSend`, or the
-  // global template before the chat exists) cannot see images, and the runtime
-  // would drop each one for a placeholder AFTER the send. Say so while the
-  // image is still a chip. Informational only: nothing here gates the send.
-  const nextSendModel = activeSessionId
-    ? resolveResumeModel(getSessionModel, activeSessionId, agentDefaultModel(chatAgentDefaults))
-    : toWireModel(agentDefaultModel(chatAgentDefaults));
-  const chatEngine = chatEngineForDisplay({
-    bound: activeEngineBound,
-    ...(activeEngineReport ? { engine: activeEngineReport } : {}),
-    ...(activeRuntimeIdentity ? { runtimeIdentity: activeRuntimeIdentity } : {}),
-    predicted: predictNewChatEngine({
-      enabled: claudeSdkEngineEnabled,
-      hostAvailable: modelCatalog?.claudeSdkHostAvailable !== false,
-      catalog: catalogModels(modelCatalog),
-      model: nextSendModel,
-    }),
-  });
-  chatEngineRef.current = chatEngine;
   const imageInputHintBlock = modelLacksImageInput({
     drafts: attachments.drafts,
     model: nextSendModel,

@@ -140,7 +140,7 @@ describe('chat engines: DSH, and the Claude Agent SDK engine for Anthropic-proto
     expect(engine).not.toContain('AICLIENT_CLAUDE_SDK_API_KEY');
     // Dsh-rebase decision 196: the product proxy goes by IPC with the key, never in `env`.
     expect(engine.replace(/\s+/g, ' ')).toContain(
-      'new ClaudeSdkProcessTransport({ command: node, args: [entry], cwd: configDir, env, apiKey, proxy: { current: () => getEngineProxySetting(), subscribe: onEngineProxyChange }, })'
+      'new ClaudeSdkProcessTransport({ command: launch.node, args: [launch.entry], cwd: launch.configDir, env: launch.env, apiKey, proxy: { current: () => getEngineProxySetting(), subscribe: onEngineProxyChange }, })'
     );
     const transport = code(path.join(AGENT_HOST, 'ClaudeSdkProcessTransport.ts'));
     expect(transport).toContain('this.child.send(secret);');

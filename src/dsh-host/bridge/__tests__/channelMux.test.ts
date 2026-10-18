@@ -9,12 +9,14 @@ import {
   isDshHostCompleted,
   isDshHostPage,
   isDshHostSeeded,
+  isDshHostSlashCommands,
 } from '../../../shared/types/dshHostProtocol.ts';
 import { WORKER_RPC_PROTOCOL_VERSION } from '../../../shared/types/workerRpc.ts';
 import type { BridgeSessionRuntimeOptions } from '../bridgeRpcServer.ts';
 import {
   type ChannelRuntime,
   DSH_READ_FAILED,
+  DSH_SLASH_COMMANDS_FAILED,
   DshChannelMux,
   type DshChannelMuxOptions,
 } from '../channelMux.ts';
@@ -278,6 +280,90 @@ describe('DshChannelMux — gc (P1-3d, decision 024)', () => {
       ok: false,
       error: 'list failed',
     });
+  });
+});
+
+describe('DshChannelMux — slashCommands (decision 194)', () => {
+  const result = {
+    commands: [
+      { name: 'goal', description: 'Set a goal', source: 'command' },
+      { name: 'plugin-skill', source: 'skill', scope: 'plugin' },
+    ],
+    truncated: false,
+  };
+
+  function lister(slashCommands: DshChannelMuxOptions['slashCommands'] | undefined) {
+    const sent: DshHostToMainMessage[] = [];
+    const log = vi.fn();
+    const createRuntime = vi.fn(() => {
+      throw new Error('a listing opens no channel');
+    });
+    const mux = new DshChannelMux({
+      send: (message) => sent.push(message),
+      createRuntime,
+      sample: () => ({ eldMaxMs: 0, rssMb: 0 }),
+      ...(slashCommands ? { slashCommands } : {}),
+      log,
+    });
+    return { mux, sent, log, createRuntime };
+  }
+
+  it('hands the folder over and answers slash-commands with its id and the rows; no channel', async () => {
+    const slashCommands = vi.fn(async () => structuredClone(result));
+    const h = lister(slashCommands);
+    expect(h.mux.receive({ host: 'slashCommands', id: 7, cwd: '/work/alpha' })).toBe(true);
+    expect(h.mux.receive({ host: 'slashCommands', id: 8, cwd: null })).toBe(true);
+    await settle();
+    expect(slashCommands.mock.calls).toEqual([[{ cwd: '/work/alpha' }], [{ cwd: null }]]);
+    expect(h.sent).toEqual([
+      { host: 'slash-commands', id: 7, ok: true, result, ms: expect.any(Number) },
+      { host: 'slash-commands', id: 8, ok: true, result, ms: expect.any(Number) },
+    ]);
+    expect(h.sent.every(isDshHostSlashCommands)).toBe(true);
+    expect(h.createRuntime).not.toHaveBeenCalled();
+    expect(h.mux.status()).toEqual([]);
+  });
+
+  it('answers ok: false when the listing fails or the host has none, and never throws', async () => {
+    const failing = lister(async () => {
+      throw new Error('registry gone');
+    });
+    failing.mux.receive({ host: 'slashCommands', id: 1, cwd: '/w' });
+    await settle();
+    expect(failing.sent).toEqual([
+      {
+        host: 'slash-commands',
+        id: 1,
+        ok: false,
+        error: { code: DSH_SLASH_COMMANDS_FAILED, message: 'registry gone' },
+        ms: expect.any(Number),
+      },
+    ]);
+
+    const none = lister(undefined);
+    none.mux.receive({ host: 'slashCommands', id: 2, cwd: null });
+    await settle();
+    expect(none.sent).toEqual([
+      expect.objectContaining({
+        host: 'slash-commands',
+        id: 2,
+        ok: false,
+        error: expect.objectContaining({ code: DSH_SLASH_COMMANDS_FAILED }),
+      }),
+    ]);
+    expect(none.sent.every(isDshHostSlashCommands)).toBe(true);
+  });
+
+  it('drops a malformed request with a warning, unanswered', async () => {
+    const slashCommands = vi.fn(async () => result);
+    const h = lister(slashCommands);
+    expect(h.mux.receive({ host: 'slashCommands', id: 3, cwd: '' })).toBe(true);
+    await settle();
+    expect(slashCommands).not.toHaveBeenCalled();
+    expect(h.sent).toEqual([]);
+    expect(h.log).toHaveBeenCalledWith(
+      expect.stringContaining('dropped a malformed slashCommands request')
+    );
   });
 });
 

@@ -143,6 +143,35 @@ export function slashCommandRows(
   };
 }
 
+/**
+ * Decision 194 (ruling 193 item 29): the host's `slashCommands` answer, for a
+ * folder no session runs in. The same rows as `worker.commands`, read with no
+ * agent: `commands.list(undefined)` is DSH's global view (no agent-scoped
+ * shadows, and the host composes none), and `skills.list` without a scope
+ * reads the global layer, every provider's skills (a plugin's included) with
+ * `cwd`'s project roots added. An unreadable registry costs its rows only, as
+ * in a session.
+ */
+export async function globalSlashCommandRows(
+  services: { commands?: DshCommandsView | undefined; skills?: DshSkillsView | undefined },
+  cwd: string | null,
+  log: (...args: unknown[]) => void
+): Promise<WorkerCommandsResult> {
+  let commands: readonly DshCommandDescriptor[] = [];
+  try {
+    commands = services.commands?.list(undefined) ?? [];
+  } catch (error) {
+    log('[dsh-bridge] command registry unreadable', error);
+  }
+  let skills: readonly DshSkillSummary[] = [];
+  try {
+    skills = (await services.skills?.list(cwd ? { cwd } : {})) ?? [];
+  } catch (error) {
+    log('[dsh-bridge] skill catalog unreadable', error);
+  }
+  return slashCommandRows(commands, skills);
+}
+
 /** `worker.compact`'s refusals (the native runtime's codes, plus DSH's own failures). */
 export const WORKER_COMPACT_UNAVAILABLE = 'WORKER_COMPACT_UNAVAILABLE';
 export const WORKER_COMPACT_TIMEOUT = 'WORKER_COMPACT_TIMEOUT';

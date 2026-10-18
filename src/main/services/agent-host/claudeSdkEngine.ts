@@ -387,6 +387,37 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
       true
     );
   }
+  const launch = claudeSdkHostLaunch(input.generation);
+  Object.assign(launch.env, {
+    // From the plan (decision 3); the key goes by IPC, never here (S-3 K-5).
+    AICLIENT_CLAUDE_SDK_BASE_URL: baseURL,
+    // The catalog's windows the CLI would not know (user 2026-10-18); numbers only.
+    ...(input.modelWindows && Object.keys(input.modelWindows).length > 0
+      ? { [CLAUDE_SDK_MODEL_WINDOWS_ENV]: JSON.stringify(input.modelWindows) }
+      : {}),
+  });
+  return new ClaudeSdkProcessTransport({
+    command: launch.node,
+    args: [launch.entry],
+    cwd: launch.configDir,
+    env: launch.env,
+    apiKey,
+    // Dsh-rebase decision 196: the product proxy goes with the key, never in `env`.
+    proxy: { current: () => getEngineProxySetting(), subscribe: onEngineProxyChange },
+  });
+}
+
+/**
+ * What every SDK host process starts with, a chat's or a catalog's: the Node the DSH host
+ * runs on, the host entry, the app's config dir and the launch environment without a
+ * gateway. Throws `CLAUDE_SDK_HOST_UNAVAILABLE` when this build cannot start one.
+ */
+export function claudeSdkHostLaunch(generation: number): {
+  node: string;
+  entry: string;
+  configDir: string;
+  env: Record<string, string>;
+} {
   let node: string;
   try {
     ({ node } = resolveDshHostLayout({
@@ -431,10 +462,8 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
     if (value !== undefined && HOST_INHERITED.has(name.toUpperCase())) env[name] = value;
   }
   Object.assign(env, {
-    AICLIENT_CLAUDE_SDK_GENERATION: String(input.generation),
+    AICLIENT_CLAUDE_SDK_GENERATION: String(generation),
     AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
-    // From the plan (decision 3); the key goes by IPC, never here (S-3 K-5).
-    AICLIENT_CLAUDE_SDK_BASE_URL: baseURL,
     // Ruling 19: the user layer is this app's config dir (`configDir`), never ~/.claude;
     // S-3 P-1 (ruling 5): the project's settings and CLAUDE.md, and the user's private
     // project settings (`.claude/settings.local.json`, CLAUDE.local.md). A scratch chat
@@ -446,18 +475,6 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
     AICLIENT_CLAUDE_SDK_CLI: cli,
     // Dev override: PiLab's bundled `rg` (@vscode/ripgrep) instead of the CLI's built-in one.
     ...(dev.rgDir ? { AICLIENT_CLAUDE_SDK_RG_DIR: dev.rgDir } : {}),
-    // The catalog's windows the CLI would not know (user 2026-10-18); numbers only.
-    ...(input.modelWindows && Object.keys(input.modelWindows).length > 0
-      ? { [CLAUDE_SDK_MODEL_WINDOWS_ENV]: JSON.stringify(input.modelWindows) }
-      : {}),
   });
-  return new ClaudeSdkProcessTransport({
-    command: node,
-    args: [entry],
-    cwd: configDir,
-    env,
-    apiKey,
-    // Dsh-rebase decision 196: the product proxy goes with the key, never in `env`.
-    proxy: { current: () => getEngineProxySetting(), subscribe: onEngineProxyChange },
-  });
+  return { node, entry, configDir, env };
 }

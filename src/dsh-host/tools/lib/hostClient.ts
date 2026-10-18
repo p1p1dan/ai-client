@@ -332,6 +332,21 @@ export class HostClient {
   }
 
   /**
+   * Decision 194's slash menu for a folder with no session (`{host:'slashCommands'}`),
+   * answered with the host's `slash-commands` message as it came (ok or not).
+   */
+  async slashCommands(cwd: string | null, timeoutMs = 60_000): Promise<Message> {
+    const id = 1_000_000 + ++this.requestSeq;
+    this.child.send({ host: 'slashCommands', id, cwd });
+    const reply = await this.control(
+      (message) => message.host === 'slash-commands' && message.id === id,
+      timeoutMs
+    );
+    if (!reply) throw new Error(`slashCommands ${id} timed out`);
+    return reply;
+  }
+
+  /**
    * Decision 054's migration (`{host:'seedSession'}`, P1-9c), answered with
    * the host's `seeded` message as it came (ok or not), plus the round trip.
    */

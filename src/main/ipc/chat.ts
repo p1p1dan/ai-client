@@ -36,6 +36,10 @@ import {
   type WorkerInterjectWithdrawResult,
 } from '@shared/types/workerRpc';
 import { app, BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
+import {
+  ClaudeSdkCommandCatalog,
+  runClaudeSdkCatalogHost,
+} from '../services/agent-host/claudeSdkCatalog';
 import { CLAUDE_SDK_HOME_DIR_NAME } from '../services/agent-host/claudeSdkEngine';
 import { currentDshSkillHomes, resolveDshHome } from '../services/agent-host/DshHostProcess';
 import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
@@ -906,6 +910,18 @@ export function registerChatHandlers(): void {
   );
 
   /**
+   * Decision 194 Q1: the Agent SDK CLI's list for a folder no SDK chat runs in, kept per
+   * folder. A listing starts a process, so only once the spawn gate allows an agent.
+   */
+  const claudeSdkCommandCatalog = new ClaudeSdkCommandCatalog({
+    run: (input) => {
+      assertAgentSpawnAllowed();
+      return runClaudeSdkCatalogHost(input, (message) => console.warn(message));
+    },
+    log: (message, error) => console.warn(message, error),
+  });
+
+  /**
    * R02-b — the composer's command menu.
    *
    * No `requireLiveSession` and no `claimSessionForSender`, unlike every
@@ -918,20 +934,25 @@ export function registerChatHandlers(): void {
    * page's draft target, or the chat's own). With no worker of that workspace
    * up, its skills are read from disk by DSH's rules (`composerSlashCommands`).
    * Only a local absolute path is read; anything else lists the user's skills.
+   * Decision 194: `engine` is the chat's (or the next send's); with no worker
+   * up, the DSH host lists a DSH menu, plugin skills included, before the disk.
    */
   ipcMain.handle(
     IPC_CHANNELS.CHAT_GET_SLASH_COMMANDS,
     async (
       _e,
-      payload: { sessionId?: string; workspacePath?: string } = {}
+      payload: { sessionId?: string; workspacePath?: string; engine?: unknown } = {}
     ): Promise<WorkerCommandsResult> =>
       composerSlashCommands(
         {
           ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
           workspacePath: usableWorkspace(payload.workspacePath),
+          engine: payload.engine === 'claude-sdk' ? 'claude-sdk' : 'dsh',
         },
         {
           workers: workerManager,
+          dshHost: dshHostSupervisor,
+          sdkCatalog: claudeSdkCommandCatalog,
           listSkills: (workspacePath) =>
             listDshSkillsFromDisk(workspacePath, currentDshSkillHomes()),
           log: (message, error) => console.warn(message, error),

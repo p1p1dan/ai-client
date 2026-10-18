@@ -31,6 +31,8 @@ import {
   isDshHostSeeded,
   isDshHostSeedSessionRequest,
   isDshHostShutdown,
+  isDshHostSlashCommands,
+  isDshHostSlashCommandsRequest,
   isDshHostStopped,
   isDshSeedStage,
   opensDshChannel,
@@ -234,6 +236,68 @@ describe('dshHostProtocol readPage (P1-4a, decision 030)', () => {
       },
     ]) {
       expect(isDshHostPage(bad), JSON.stringify(bad)).toBe(false);
+    }
+  });
+});
+
+describe('dshHostProtocol slashCommands (decision 194)', () => {
+  const request = { host: 'slashCommands', id: 9, cwd: '/work/alpha' };
+
+  it('accepts a listing for a folder, or for none (the user’s skills alone)', () => {
+    expect(isDshHostSlashCommandsRequest(request)).toBe(true);
+    expect(isDshHostSlashCommandsRequest({ ...request, cwd: null })).toBe(true);
+    for (const bad of [
+      { ...request, id: 0 },
+      { ...request, id: 1.5 },
+      { ...request, cwd: '' },
+      { ...request, cwd: undefined },
+      { ...request, cwd: 7 },
+      { ...request, host: 'slash-commands' },
+    ]) {
+      expect(isDshHostSlashCommandsRequest(bad), JSON.stringify(bad)).toBe(false);
+    }
+    expect(dshHostControlKind(request)).toBe('slashCommands');
+  });
+
+  const result = { commands: [{ name: 'goal', source: 'command' }], truncated: false };
+
+  it('accepts an answer: ok with the rows, or not ok with a coded error, never both', () => {
+    expect(
+      isDshHostSlashCommands({ host: 'slash-commands', id: 9, ok: true, result, ms: 1.2 })
+    ).toBe(true);
+    expect(
+      isDshHostSlashCommands({
+        host: 'slash-commands',
+        id: 9,
+        ok: false,
+        error: { code: 'dsh_slash_commands_failed', message: 'no registry' },
+        ms: 0,
+      })
+    ).toBe(true);
+    for (const bad of [
+      { host: 'slash-commands', id: 9, ok: true, ms: 1 },
+      {
+        host: 'slash-commands',
+        id: 9,
+        ok: true,
+        result: { commands: 'x', truncated: false },
+        ms: 1,
+      },
+      { host: 'slash-commands', id: 9, ok: true, result: { commands: [] }, ms: 1 },
+      { host: 'slash-commands', id: 9, ok: true, result, error: { code: 'x', message: '' }, ms: 1 },
+      {
+        host: 'slash-commands',
+        id: 9,
+        ok: false,
+        result,
+        error: { code: 'x', message: '' },
+        ms: 1,
+      },
+      { host: 'slash-commands', id: 9, ok: false, error: { code: '', message: 'm' }, ms: 1 },
+      { host: 'slash-commands', id: 9, ok: true, result, ms: -1 },
+      { host: 'slash-commands', ok: true, result, ms: 1 },
+    ]) {
+      expect(isDshHostSlashCommands(bad), JSON.stringify(bad)).toBe(false);
     }
   });
 });

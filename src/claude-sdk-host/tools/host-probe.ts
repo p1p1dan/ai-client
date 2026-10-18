@@ -79,6 +79,12 @@
  * proxy; switched on again, a turn completes through it with no restart; the host's stderr
  * never quotes the proxy password.
  *
+ * dsh-rebase decision 194: `slash`, in its own workspace (it writes a project skill and a
+ * command of the user layer). The menu lists the CLI's commands before any message, less
+ * the window's `/compact` and the ones PiLab owns or hides; `/context`'s output is the
+ * turn's reply; a skill's and a command's bodies reach the model; the history shows each
+ * line as typed and `/context`'s output after it.
+ *
  * The key is a fake one unless PROBE_API_KEY is set in the shell; nothing here reads a
  * stored credential.
  */
@@ -1035,6 +1041,73 @@ function writeProjectFixture(): void {
   }
 }
 
+/**
+ * dsh-rebase decision 194 `slash`: a project skill and a command of the user layer (the
+ * app's config dir, ruling 19), each telling the model a canary the gateway echoes back.
+ */
+function writeSlashFixture(): void {
+  writeText(
+    join(workspace, '.claude', 'skills', 'probe-skill', 'SKILL.md'),
+    '---\nname: probe-skill\ndescription: Probe skill\n---\n\nSay CANARY-SLASH-SKILL.\n'
+  );
+  writeText(
+    join(configDir, 'commands', 'probe-user-cmd.md'),
+    '---\ndescription: Probe command\n---\n\nSay CANARY-SLASH-CMD and $ARGUMENTS.\n'
+  );
+  // Decision 194 Q1: a SessionStart hook a catalog listing must not run.
+  const hook = `node -e "require('fs').writeFileSync(process.argv[1], 'x')" ${JSON.stringify(slashHookMarker())}`;
+  writeText(
+    join(workspace, '.claude', 'settings.json'),
+    JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: hook }] }] } })
+  );
+}
+
+/** The file the `slash` fixture's SessionStart hook writes. */
+function slashHookMarker(): string {
+  return join(workspace, 'session-start-hook-ran');
+}
+
+/** Decision 194 Q1: this host's entry in catalog mode for `cwd`, and its one answer. */
+function catalogListing(cwd: string): Promise<{
+  ok?: boolean;
+  error?: string;
+  ms?: number;
+  result?: { commands: Array<{ name: string; source: string }> };
+}> {
+  return new Promise((resolve, reject) => {
+    const catalog = fork(hostEntry, [], {
+      env: {
+        ...inheritedEnv(),
+        AICLIENT_CLAUDE_SDK_GENERATION: '0',
+        AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
+        AICLIENT_CLAUDE_SDK_SETTING_SOURCES:
+          process.env.PROBE_SETTING_SOURCES ?? 'user,project,local',
+        AICLIENT_CLAUDE_SDK_CATALOG_CWD: cwd,
+        AICLIENT_CLAUDE_SDK_CATALOG_TRUSTED: '1',
+        ...(process.env.AICLIENT_CLAUDE_SDK_CLI
+          ? { AICLIENT_CLAUDE_SDK_CLI: process.env.AICLIENT_CLAUDE_SDK_CLI }
+          : {}),
+      },
+      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+    });
+    let answer: Record<string, unknown> | undefined;
+    const timer = setTimeout(() => {
+      catalog.kill();
+      reject(new Error('the catalog host did not answer in 40 s'));
+    }, 40_000);
+    catalog.on('message', (message) => {
+      if ((message as { type?: unknown })?.type === 'claude-sdk.catalog') {
+        answer = message as Record<string, unknown>;
+      }
+    });
+    catalog.on('exit', () => {
+      clearTimeout(timer);
+      if (answer) resolve(answer);
+      else reject(new Error('the catalog host exited without an answer'));
+    });
+  });
+}
+
 /** `projcfg-home` on Windows: the cwd as the user might have typed it, drive letter flipped. */
 function bootstrapCwd(): string {
   if (!scenarios.includes('projcfg-home') || process.platform !== 'win32') return workspace;
@@ -1197,6 +1270,7 @@ async function main(): Promise<void> {
       credentials: { username: 'pilab probe', password: OUTBOUND_PROXY_PASSWORD },
     });
   }
+  if (scenarios.includes('slash')) writeSlashFixture();
   startHost();
   await bootstrap();
 
@@ -2860,6 +2934,114 @@ async function main(): Promise<void> {
         console.log(`  compact → ${JSON.stringify(r)} in ${Date.now() - t} ms`);
         show('compact');
         check('compact', 'compacts', r.compacted === true);
+        break;
+      }
+      case 'slash': {
+        // Decision 194: the CLI's own list, before any message of this chat.
+        const menu = await request<{
+          commands: Array<{ name: string; source: string; description?: string }>;
+        }>('worker.commands', { logicalSessionId });
+        const row = (name: string) => menu.commands.find((c) => c.name === name);
+        console.log(`  menu: ${menu.commands.map((c) => `${c.name}:${c.source}`).join(' ')}`);
+        check(
+          'slash',
+          'lists the CLI commands before any message, with their descriptions',
+          row('context')?.source === 'command' && Boolean(row('context')?.description)
+        );
+        check(
+          'slash',
+          'lists the project skill and the user-layer command as skills',
+          row('probe-skill')?.source === 'skill' && row('probe-user-cmd')?.source === 'skill'
+        );
+        check(
+          'slash',
+          'leaves out the window’s /compact and the CLI commands PiLab owns or hides',
+          [
+            'compact',
+            'clear',
+            'model',
+            'effort',
+            'config',
+            'autocompact',
+            'heapdump',
+            'doctor',
+          ].every((name) => !row(name))
+        );
+        check('slash', 'never names the CLI product', !/claude code/i.test(JSON.stringify(menu)));
+        await send('/context');
+        const local = await waitFor(terminal, '/context turn end');
+        check('slash', '/context ends in session.completed', local.type === 'session.completed');
+        check(
+          'slash',
+          '/context shows its output as the reply',
+          assistantText().includes('Context Usage')
+        );
+        await send('/probe-skill CC-ECHO');
+        await waitFor(terminal, 'skill turn end');
+        check(
+          'slash',
+          'the skill’s body reaches the model',
+          assistantText().includes('CANARY-SLASH-SKILL')
+        );
+        await send('/probe-user-cmd CC-ECHO');
+        await waitFor(terminal, 'command turn end');
+        check(
+          'slash',
+          'the user-layer command’s body reaches the model',
+          assistantText().includes('CANARY-SLASH-CMD')
+        );
+        const h = await request<{
+          page: {
+            messages: Array<{ role: string; blocks: Array<{ type: string; text?: string }> }>;
+          };
+        }>('worker.history', { logicalSessionId, offset: 0, limit: 50 });
+        const lines = h.page.messages.map(
+          (m) => `${m.role}: ${m.blocks.map((b) => b.text ?? `[${b.type}]`).join(' ')}`
+        );
+        for (const line of lines) console.log(`  history ${line.slice(0, 100)}`);
+        const at = lines.indexOf('user: /context');
+        check(
+          'slash',
+          'history shows /context as typed, then its output',
+          at >= 0 &&
+            (lines[at + 1] ?? '').startsWith('assistant: ') &&
+            (lines[at + 1] ?? '').includes('Context Usage')
+        );
+        check(
+          'slash',
+          'history shows the skill and command lines as typed',
+          lines.includes('user: /probe-skill CC-ECHO') &&
+            lines.includes('user: /probe-user-cmd CC-ECHO')
+        );
+        check(
+          'slash',
+          'history shows no command tags',
+          !lines.some((line) => line.includes('<command-'))
+        );
+        // Decision 194 Q1: a folder no chat runs in, listed by a catalog host. The chat's
+        // own CLI ran the project's hook, so its absence below means something.
+        check(
+          'slash',
+          'the chat’s CLI ran the project’s SessionStart hook',
+          existsSync(slashHookMarker())
+        );
+        rmSync(slashHookMarker(), { force: true });
+        const listed = await catalogListing(workspace);
+        const listedRow = (name: string) => listed.result?.commands.find((c) => c.name === name);
+        console.log(
+          `  catalog: ok=${listed.ok} ${listed.ms} ms, ${listed.result?.commands.length} rows`
+        );
+        check('slash', 'the catalog host answers', listed.ok === true);
+        check(
+          'slash',
+          'the catalog lists the CLI commands, the project skill and the user-layer command',
+          listedRow('context')?.source === 'command' &&
+            listedRow('probe-skill')?.source === 'skill' &&
+            listedRow('probe-user-cmd')?.source === 'skill' &&
+            !listedRow('compact') &&
+            !listedRow('clear')
+        );
+        check('slash', 'the catalog runs no hook of the project', !existsSync(slashHookMarker()));
         break;
       }
       case 'history': {

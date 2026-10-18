@@ -3080,6 +3080,7 @@ describe('WorkerManager slash commands', () => {
       truncated: false,
       origin: 'session',
       workspacePath: '/repo',
+      engine: 'dsh',
     });
   });
 
@@ -3101,12 +3102,14 @@ describe('WorkerManager slash commands', () => {
       truncated: false,
       origin: 'none',
       workspacePath: null,
+      engine: 'dsh',
     });
     await expect(h.manager.getSlashCommands({ workspacePath: '/repo' })).resolves.toEqual({
       commands: [],
       truncated: false,
       origin: 'none',
       workspacePath: '/repo',
+      engine: 'dsh',
     });
   });
 
@@ -3119,6 +3122,7 @@ describe('WorkerManager slash commands', () => {
       truncated: false,
       origin: 'workspace',
       workspacePath: '/repo',
+      engine: 'dsh',
     });
     // The composer's spelling of the same directory still finds it.
     await expect(h.manager.getSlashCommands({ workspacePath: '/repo/' })).resolves.toMatchObject({
@@ -3128,24 +3132,48 @@ describe('WorkerManager slash commands', () => {
 
   // Decision 175 replaced "still answers from the nearest worker when no
   // session is named": that answer carried the other repository's skills.
-  it('another workspace’s worker gives its commands, never its skills', async () => {
+  // Decision 194 replaced 175's "another workspace's worker gives its
+  // commands": that worker may be a Claude Agent SDK session, and the DSH host
+  // now lists DSH's commands itself (`composerSlashCommands`).
+  it('another workspace’s worker gives nothing, its commands included', async () => {
     const h = createHarness();
     await create(h.manager, 's1', 11);
     commandAndSkill(h.records.find((entry) => entry.sessionId === 's1'));
 
     await expect(h.manager.getSlashCommands({ workspacePath: '/elsewhere' })).resolves.toEqual({
-      commands: [{ name: 'goal', source: 'command' }],
+      commands: [],
       truncated: false,
       origin: 'none',
       workspacePath: '/elsewhere',
+      engine: 'dsh',
     });
     // A temporary chat on the home page names no folder at all.
     await expect(h.manager.getSlashCommands()).resolves.toEqual({
-      commands: [{ name: 'goal', source: 'command' }],
+      commands: [],
       truncated: false,
       origin: 'none',
       workspacePath: null,
+      engine: 'dsh',
     });
+  });
+
+  it('decision 194: a workspace stand-in is for a DSH menu only', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+
+    await expect(
+      h.manager.getSlashCommands({ workspacePath: '/repo', engine: 'claude-sdk' })
+    ).resolves.toEqual({
+      commands: [],
+      truncated: false,
+      origin: 'none',
+      workspacePath: '/repo',
+      engine: 'claude-sdk',
+    });
+    // A session the pool has answers with its own engine, whatever the composer said.
+    await expect(
+      h.manager.getSlashCommands({ sessionId: 's1', engine: 'claude-sdk' })
+    ).resolves.toMatchObject({ origin: 'session', engine: 'dsh' });
   });
 
   // main-host-01 — the fallback used to take the first ready worker in the
@@ -3171,6 +3199,7 @@ describe('WorkerManager slash commands', () => {
       truncated: false,
       origin: 'workspace',
       workspacePath: '/work/alpha',
+      engine: 'dsh',
     });
   });
 
@@ -3186,12 +3215,13 @@ describe('WorkerManager slash commands', () => {
       ).toMatchObject({ state: 'error' })
     );
 
-    // Beta's own folder, for the caller to read its skills from.
+    // Beta's own folder, for the caller to list (the host, or the disk).
     await expect(h.manager.getSlashCommands({ sessionId: 'beta' })).resolves.toEqual({
-      commands: [{ name: 'goal', source: 'command' }],
+      commands: [],
       truncated: false,
       origin: 'none',
       workspacePath: '/work/beta',
+      engine: 'dsh',
     });
   });
 
@@ -3208,6 +3238,7 @@ describe('WorkerManager slash commands', () => {
       truncated: false,
       origin: 'workspace',
       workspacePath: '/work/alpha',
+      engine: 'dsh',
     });
     await expect(
       h.manager.getSlashCommands({ sessionId: 'never-started', workspacePath: '/work/beta' })
@@ -3216,12 +3247,14 @@ describe('WorkerManager slash commands', () => {
       truncated: false,
       origin: 'none',
       workspacePath: '/work/beta',
+      engine: 'dsh',
     });
     await expect(h.manager.getSlashCommands({ sessionId: 'never-started' })).resolves.toEqual({
       commands: [],
       truncated: false,
       origin: 'none',
       workspacePath: null,
+      engine: 'dsh',
     });
   });
 
@@ -3259,6 +3292,7 @@ describe('WorkerManager slash commands', () => {
       truncated: false,
       origin: 'session',
       workspacePath: '/repo',
+      engine: 'dsh',
     });
   });
 });

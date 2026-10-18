@@ -992,6 +992,10 @@ async function main() {
     };
     live.push(h);
     await ready(h);
+    // Decision 194: the menu the home page gets before any session of this
+    // workspace runs — the host's own answer, with no channel.
+    report.hostMenu = await h.client.slashCommands(insSklWorkspace);
+    report.hostMenuNoFolder = await h.client.slashCommands(null);
     const chH = h.client.openChannel();
     const INS_SKL_SESSION = 'bridge-smoke-ins-skl';
     const bootH = await bootstrap(h, chH, {
@@ -1567,6 +1571,13 @@ async function main() {
   const menuNames = (((report.menu as Message | undefined)?.commands as Message[]) ?? []).map(
     (row) => `${String(row.source)}:${String(row.name)}`
   );
+  // Decision 194: the host's menu for a folder, and for none, the same way.
+  const hostMenuNames = (answer: unknown) =>
+    (
+      (((answer as Message | undefined)?.result as Message | undefined)?.commands as
+        | Message[]
+        | undefined) ?? []
+    ).map((row) => `${String(row.source)}:${String(row.name)}`);
   const bootHCapabilities = (hosts.INS_SKL?.bootstrap as Message | undefined)?.capabilities as
     | Message
     | undefined;
@@ -1866,6 +1877,14 @@ async function main() {
       menuNames.includes('skill:ins-skl-smoke') &&
       !menuNames.some((name) => /:(plan|permission|feedback|compact)$/.test(name)) &&
       !menuNames.some((name) => name.includes('skill:skill:')),
+    // Decision 194: before any session, the host answers the menu a session of
+    // the workspace gives; with no folder, the user-level skills still come.
+    hostMenuMatchesSessionMenu:
+      (report.hostMenu as Message | undefined)?.ok === true &&
+      JSON.stringify(hostMenuNames(report.hostMenu)) === JSON.stringify(menuNames) &&
+      (report.hostMenuNoFolder as Message | undefined)?.ok === true &&
+      hostMenuNames(report.hostMenuNoFolder).includes('command:goal') &&
+      hostMenuNames(report.hostMenuNoFolder).includes('skill:ins-skl-smoke'),
     capabilitiesReportSkillsOnly:
       JSON.stringify(Object.keys(bootHCapabilities ?? {})) === '["skills"]' &&
       Number(bootHCapabilities?.skills) >= 1,

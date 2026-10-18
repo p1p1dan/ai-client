@@ -376,6 +376,7 @@ describe('the menu before a session is up', () => {
         truncated: false,
         origin: 'none' as const,
         workspacePath: null,
+        engine: 'dsh' as const,
         ...answer,
       })),
     };
@@ -383,26 +384,66 @@ describe('the menu before a session is up', () => {
 
   it('a worker of the workspace answers alone', async () => {
     const listSkills = vi.fn(async () => [row('from-disk')]);
+    const dshHost = { listSlashCommands: vi.fn(async () => ({ commands: [], truncated: false })) };
     for (const origin of ['session', 'workspace'] as const) {
       const result = await composerSlashCommands(
         { sessionId: 's1', workspacePath: '/repo' },
-        { workers: workers({ origin, commands: [row('from-worker')] }), listSkills }
+        { workers: workers({ origin, commands: [row('from-worker')] }), dshHost, listSkills }
       );
       expect(result).toEqual({ commands: [row('from-worker')], truncated: false });
     }
     expect(listSkills).not.toHaveBeenCalled();
+    expect(dshHost.listSlashCommands).not.toHaveBeenCalled();
   });
 
-  it('with none, lists the workspace the pool matched against from disk', async () => {
+  it('decision 194: with none, the DSH host lists the folder the pool matched, sanitized', async () => {
+    const listSkills = vi.fn(async () => [row('from-disk')]);
+    const dshHost = {
+      listSlashCommands: vi.fn(async () => ({
+        commands: [
+          row('goal', 'command'),
+          row('plugin-skill'),
+          { name: '', source: 'skill' } as WorkerSlashCommandInfo,
+        ],
+        truncated: false,
+      })),
+    };
+    const pool = workers({ workspacePath: '/repo/alpha' });
+    const result = await composerSlashCommands(
+      { workspacePath: '/repo/alpha', engine: 'dsh' },
+      { workers: pool, dshHost, listSkills }
+    );
+    expect(pool.getSlashCommands).toHaveBeenCalledWith({
+      workspacePath: '/repo/alpha',
+      engine: 'dsh',
+    });
+    expect(dshHost.listSlashCommands).toHaveBeenCalledWith('/repo/alpha');
+    expect(listSkills).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      commands: [row('goal', 'command'), row('plugin-skill')],
+      truncated: false,
+    });
+  });
+
+  it('a host that cannot answer falls back to the skills on disk', async () => {
+    const log = vi.fn();
     const listSkills = vi.fn(async () => [row('plan-tree')]);
-    const pool = workers({ commands: [row('goal', 'command')], workspacePath: '/repo/alpha' });
     const result = await composerSlashCommands(
       { workspacePath: '/repo/alpha' },
-      { workers: pool, listSkills }
+      {
+        workers: workers({ workspacePath: '/repo/alpha' }),
+        dshHost: {
+          listSlashCommands: async () => {
+            throw new Error('no ready DSH host');
+          },
+        },
+        listSkills,
+        log,
+      }
     );
-    expect(pool.getSlashCommands).toHaveBeenCalledWith({ workspacePath: '/repo/alpha' });
     expect(listSkills).toHaveBeenCalledWith('/repo/alpha');
-    expect(result.commands).toEqual([row('goal', 'command'), row('plan-tree')]);
+    expect(result).toEqual({ commands: [row('plan-tree')], truncated: false });
+    expect(log).toHaveBeenCalledTimes(1);
   });
 
   it('a disk that cannot be read costs the skills, not the menu', async () => {
@@ -410,15 +451,43 @@ describe('the menu before a session is up', () => {
     const result = await composerSlashCommands(
       { workspacePath: null },
       {
-        workers: workers({ commands: [row('goal', 'command')] }),
+        workers: workers({}),
         listSkills: async () => {
           throw new Error('EIO');
         },
         log,
       }
     );
-    expect(result).toEqual({ commands: [row('goal', 'command')], truncated: false });
+    expect(result).toEqual({ commands: [], truncated: false });
     expect(log).toHaveBeenCalledTimes(1);
+  });
+
+  it('decision 194: an SDK chat that is not up gets the CLI’s list, never DSH’s skills', async () => {
+    const listSkills = vi.fn(async () => [row('from-disk')]);
+    const dshHost = { listSlashCommands: vi.fn(async () => ({ commands: [], truncated: false })) };
+    const sdkCatalog = {
+      list: vi.fn(async () => ({ commands: [row('cli-skill')], truncated: false })),
+    };
+    const result = await composerSlashCommands(
+      { workspacePath: '/repo', engine: 'claude-sdk' },
+      {
+        workers: workers({ engine: 'claude-sdk', workspacePath: '/repo' }),
+        dshHost,
+        sdkCatalog,
+        listSkills,
+      }
+    );
+    expect(result).toEqual({ commands: [row('cli-skill')], truncated: false });
+    expect(sdkCatalog.list).toHaveBeenCalledWith('/repo');
+    expect(listSkills).not.toHaveBeenCalled();
+    expect(dshHost.listSlashCommands).not.toHaveBeenCalled();
+    // Without a catalog (a build with no SDK host), nothing.
+    expect(
+      await composerSlashCommands(
+        { workspacePath: '/repo', engine: 'claude-sdk' },
+        { workers: workers({ engine: 'claude-sdk' }), listSkills }
+      )
+    ).toEqual({ commands: [], truncated: false });
   });
 });
 
@@ -430,7 +499,10 @@ describe('the IPC handler wiring', () => {
   it('answers through composerSlashCommands, with a checked workspace and the host’s homes', () => {
     expect(body).toContain('composerSlashCommands(');
     expect(body).toContain('workspacePath: usableWorkspace(payload.workspacePath)');
+    expect(body).toContain("engine: payload.engine === 'claude-sdk' ? 'claude-sdk' : 'dsh'");
     expect(body).toContain('workers: workerManager');
+    expect(body).toContain('dshHost: dshHostSupervisor');
+    expect(body).toContain('sdkCatalog: claudeSdkCommandCatalog');
     expect(body).toContain('listDshSkillsFromDisk(workspacePath, currentDshSkillHomes())');
   });
 });

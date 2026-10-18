@@ -20,12 +20,39 @@
  * as the first message, where DSH runs them as it would in any conversation.
  */
 
+import type { ChatEngine } from '@shared/claudeSdkEngine';
 import type { Translate } from '@shared/i18n';
 import { isGoalCreatingLine } from './goalStart';
 import { resolveSlashAction, type SlashCatalogItem } from './slashCommands';
 
-/** This window's commands that act on the conversation on screen. */
-export const CONVERSATION_BUILTINS: ReadonlySet<string> = new Set(['archive', 'compact']);
+/**
+ * This window's commands that act on the conversation on screen. Decision 194: `/clear`
+ * starts over from one; typed on the home page it is `/new` (the menu leaves it out).
+ */
+export const CONVERSATION_BUILTINS: ReadonlySet<string> = new Set(['archive', 'compact', 'clear']);
+
+/**
+ * Decision 194 Q2 (user, 2026-10-18): the Claude Agent SDK CLI's commands that would
+ * change settings PiLab sets itself. Not listed (the SDK host leaves them out), and not
+ * sent when typed: the hint says where PiLab has it. A skill or plugin command that took
+ * the name keeps it, as everywhere.
+ */
+const SDK_BLOCKED_COMMANDS: Readonly<Record<string, string>> = {
+  config:
+    'PiLab keeps its settings in Settings: type /settings or use the gear at the bottom left.',
+  autocompact:
+    'PiLab compacts automatically from the model’s context window. Change the window in Settings, under the model’s service.',
+};
+
+/** The hint for an SDK CLI command PiLab does not send, or null when it goes out. */
+export function sdkBlockedCommandHint(
+  name: string,
+  source: string | undefined,
+  engine: ChatEngine
+): string | null {
+  if (engine !== 'claude-sdk' || source !== undefined) return null;
+  return SDK_BLOCKED_COMMANDS[name] ?? null;
+}
 
 /** The home page's menu: the catalog without this window's commands that need a conversation. */
 export function homeSlashMenu(catalog: readonly SlashCatalogItem[]): SlashCatalogItem[] {
@@ -43,16 +70,24 @@ export type HomeSlashRefusal = 'conversation' | 'goal';
  *
  * `/goal` is DSH's command whatever the catalog says: a `/name` at the start
  * of a line runs the command, never a skill of the same name, and DSH always
- * has `goal`.
+ * has `goal`. Decision 194: on the Claude Agent SDK engine `/goal` is the
+ * CLI's own command, with its own usage; it goes out as typed.
  */
 export function homeSlashRefusal(
   name: string,
   args: string,
-  source: string | undefined
+  source: string | undefined,
+  engine: ChatEngine = 'dsh'
 ): HomeSlashRefusal | null {
   const action = resolveSlashAction(name, args, source);
   if (action.type === 'archive' || action.type === 'compact') return 'conversation';
-  if (name === 'goal' && !isGoalCreatingLine(args ? `/goal ${args}` : '/goal')) return 'goal';
+  if (
+    engine === 'dsh' &&
+    name === 'goal' &&
+    !isGoalCreatingLine(args ? `/goal ${args}` : '/goal')
+  ) {
+    return 'goal';
+  }
   return null;
 }
 

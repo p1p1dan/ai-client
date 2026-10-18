@@ -68,6 +68,11 @@ Role: implementation-status。更新日期：2026-10-14。只放当前阶段、�
 
 ## Last Landed
 
+- 2026-10-18 斜杠菜单：首页列插件 skill、SDK 引擎的命令与 skill（[决策 194](decisions/194-slash-menu-plugin-skills-and-sdk-commands.md)，决策 193 第 29 条；分支 `feat/slash-skills-193-29`，从 `claude/s6-feedback` 开出，**未推送**）：`02d8fa54`、`6ad3ccb3`、`ca4d7e9d`、`742fd2e1`、`7de6e1ca`、`975a4954`。
+  - DSH：宿主新增 `slashCommands` 控制消息，首页与没启动的对话由宿主列出命令与 skill（含插件提供的），宿主不在时退回决策 175 的读盘；菜单请求带引擎，`WorkerManager` 不再跨引擎借清单（池里的 SDK 会话曾可能把 CLI 命令借给首页）。
+  - SDK：菜单取 CLI 的 `initializationResult` / `commands_changed`（发消息前就有、带说明、内置命令有中文说明），去掉窗口自管、PiLab 自管、只适合终端与提到产品名的行；`/context` 等本地命令的输出显示为回复（以前看不到）；重开后命令与 skill 那一行按用户打的显示（以前是一串标签或整行消失）。点发送按钮后菜单残留也修了。
+  - 用户 2026-10-18 定 Q1 = A：SDK 对话启动前，由一个只列清单的 SDK 宿主问 CLI（关 hook，网关指向本机桩，按文件夹缓存）。Q2：`/new`、`/clear`（含 `/reset`）回首页并带上本对话的仓库、模型与推理强度；`/model`、`/effort` 经输入框的模型菜单执行；SDK 对话里 `/config`、`/autocompact` 不发出、就地提示。列清单的 CLI 留给新对话用没做（启动条件不同，见决策 §4）。
+  - 验证：三套 tsc；相关 vitest（失败的都是本机环境问题，与本次无关，见决策 §7）；`probe-suite` 全部 10 组 215 项（`slash` 组 15 项）；开发版假网关点验首页（DSH / SDK 模型）、DSH 对话、SDK 对话的菜单、`/context`、`/model`、`/effort`、`/config`、`/clear` 与重开后的历史。`bridge-smoke` 的新项只能在 Linux 上跑。
 - 2026-10-14 **合入 main 并发布 1.1.0**（用户在 dsh.14 实测后裁决：这一项不再单独出测试包，直接合入发版）：
   - 欢迎页隐藏「使用本机已有配置」按钮（`39530fe7`，新开关 `LOCAL_SETUP_BUTTON_HIDDEN`，不复用 `LOCAL_SETUP_ENTRY_DISABLED`，以免关掉启动时的 CC / Codex 历史引导）；欢迎页加 JYW 水印（`c5afcc83`，稀疏斜向「JYW · SECURE CLIENT」5%、中心径向淡出，右下角两行署名；只在欢迎页，预览 [`docs/design/2026-10-14-welcome-watermark-preview.html`](../../../design/2026-10-14-welcome-watermark-preview.html)）。用户试过中心内容收窄、黄金分割、只移 logo 三种调位，都还原为原版。
   - `feat/dsh-p0-probe` 快进合入 `main`（main 自分叉后无新提交）；版本升 `1.1.0`、release notes 重写（`7824e1da`）；tag `v1.1.0`；Build run 38506100417 全部通过（macOS 按计划跳过）。

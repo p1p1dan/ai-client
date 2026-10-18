@@ -25,13 +25,16 @@ describe('the home page menu', () => {
       [row('goal', 'command', 'Set or view the goal'), row('plan-tree', 'skill', 'Plans')],
       (key) => key
     );
+    // Decision 194: `/model` and `/effort` work here too; `/clear` has nothing to clear.
     expect(homeSlashMenu(catalog).map((item) => item.name)).toEqual([
+      'effort',
       'goal',
+      'model',
       'new',
       'plan-tree',
       'settings',
     ]);
-    expect([...CONVERSATION_BUILTINS].sort()).toEqual(['archive', 'compact']);
+    expect([...CONVERSATION_BUILTINS].sort()).toEqual(['archive', 'clear', 'compact']);
   });
 
   it('keeps a plugin’s or skill’s command that took one of those names', () => {
@@ -74,6 +77,15 @@ describe('homeSlashRefusal', () => {
   ] as const)('lets /%s %s (source %s) go out', (name, args, source) => {
     expect(homeSlashRefusal(name, args, source)).toBeNull();
   });
+
+  it('decision 194: on the SDK engine /goal is the CLI’s and goes out; the window’s two stay refused', () => {
+    for (const args of ['', 'pause', 'clear']) {
+      expect(homeSlashRefusal('goal', args, 'command', 'claude-sdk')).toBeNull();
+    }
+    expect(homeSlashRefusal('goal', '', 'command', 'dsh')).toBe('goal');
+    expect(homeSlashRefusal('compact', '', 'builtin', 'claude-sdk')).toBe('conversation');
+    expect(homeSlashRefusal('archive', '', undefined, 'claude-sdk')).toBe('conversation');
+  });
 });
 
 describe('the hint', () => {
@@ -107,11 +119,22 @@ describe('slashCatalogRequest', () => {
     expect(slashCatalogRequest('s1', '/repo/alpha')).toEqual({
       sessionId: 's1',
       workspacePath: '/repo/alpha',
+      engine: 'dsh',
     });
     // The home page: the draft target's folder.
-    expect(slashCatalogRequest(null, '/repo/beta')).toEqual({ workspacePath: '/repo/beta' });
+    expect(slashCatalogRequest(null, '/repo/beta')).toEqual({
+      workspacePath: '/repo/beta',
+      engine: 'dsh',
+    });
     // A temporary chat before its first send, or 「不选仓库」 on the home page.
-    expect(slashCatalogRequest('s2', null)).toEqual({ sessionId: 's2' });
-    expect(slashCatalogRequest(null, null)).toEqual({});
+    expect(slashCatalogRequest('s2', null)).toEqual({ sessionId: 's2', engine: 'dsh' });
+    expect(slashCatalogRequest(null, null)).toEqual({ engine: 'dsh' });
+  });
+
+  it('decision 194: names the engine the menu is for', () => {
+    expect(slashCatalogRequest(null, '/repo', 'claude-sdk')).toEqual({
+      workspacePath: '/repo',
+      engine: 'claude-sdk',
+    });
   });
 });

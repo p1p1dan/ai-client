@@ -1065,6 +1065,82 @@ describe('DshHostSupervisor gc (P1-3d, decision 024)', () => {
   });
 });
 
+describe('DshHostSupervisor listSlashCommands (decision 194)', () => {
+  const result = { commands: [{ name: 'goal', source: 'command' }], truncated: false };
+  const listings = (child: FakeChild) =>
+    child
+      .controls()
+      .filter((message) => (message as { host?: unknown }).host === 'slashCommands') as Array<{
+      id: number;
+      cwd: string | null;
+    }>;
+
+  it('asks a ready host for the folder and resolves with the matching answer', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const listed = h.supervisor.listSlashCommands('/work/alpha');
+    await flushMicrotasks();
+    expect(listings(child)).toEqual([{ host: 'slashCommands', id: 1, cwd: '/work/alpha' }]);
+    // Another id, or a malformed answer, is not this listing's.
+    child.post({ host: 'slash-commands', id: 9, ok: true, result, ms: 1 });
+    child.post({ host: 'slash-commands', id: 1, ok: true, ms: 1 });
+    await flushMicrotasks();
+    child.post({ host: 'slash-commands', id: 1, ok: true, result, ms: 1 });
+    await expect(listed).resolves.toEqual(result);
+  });
+
+  it('never starts a host for a menu; a host already starting is waited for', async () => {
+    const h = createFakeHostHarness();
+    await expect(h.supervisor.listSlashCommands(null)).rejects.toMatchObject({
+      code: 'DSH_HOST_UNAVAILABLE',
+    });
+    expect(h.spawn).not.toHaveBeenCalled();
+
+    const starting = h.supervisor.ensureHost();
+    const listed = h.supervisor.listSlashCommands(null);
+    const child = h.child();
+    child.ready();
+    await starting;
+    await flushMicrotasks();
+    const [sent] = listings(child);
+    expect(sent).toEqual({ host: 'slashCommands', id: 1, cwd: null });
+    child.post({ host: 'slash-commands', id: sent?.id ?? 0, ok: true, result, ms: 1 });
+    await expect(listed).resolves.toEqual(result);
+    expect(h.spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects when the listing failed there, the host exits, or it never answers', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const failed = h.supervisor.listSlashCommands('/w');
+    await flushMicrotasks();
+    child.post({
+      host: 'slash-commands',
+      id: listings(child)[0]?.id ?? 0,
+      ok: false,
+      error: { code: 'dsh_slash_commands_failed', message: 'no registry' },
+      ms: 0,
+    });
+    await expect(failed).rejects.toMatchObject({
+      code: 'DSH_HOST_UNAVAILABLE',
+      message: expect.stringContaining('dsh_slash_commands_failed'),
+    });
+
+    const dying = h.supervisor.listSlashCommands('/w');
+    await flushMicrotasks();
+    child.die(null, 'SIGKILL');
+    await expect(dying).rejects.toMatchObject({ code: 'DSH_HOST_UNAVAILABLE' });
+
+    const replacement = await startReadyHost(h);
+    const slow = settlement(h.supervisor.listSlashCommands('/w'));
+    replacement.post(pong(replacement.pings().length));
+    await vi.advanceTimersByTimeAsync(T.slashCommandsTimeoutMs);
+    await flushMicrotasks();
+    expect(slow.value()).toMatchObject({ code: 'DSH_HOST_UNAVAILABLE' });
+    expect(String((slow.value() as Error).message)).toContain('not answered');
+  });
+});
+
 describe('DshHostSupervisor readPage (P1-4a, decision 030)', () => {
   const page = {
     messages: [

@@ -20,7 +20,11 @@ import {
   WORKER_COMPACT_SETTLE_MS,
 } from '../../../shared/types/workerRpc.ts';
 import type { BridgeSessionRuntimeOptions } from '../bridgeRpcServer.ts';
-import type { DshCommandResult, DshSkillSummary } from '../commands.ts';
+import {
+  type DshCommandResult,
+  type DshSkillSummary,
+  globalSlashCommandRows,
+} from '../commands.ts';
 import { compactInstructionsPrompt, installSummaryHook } from '../compactInstructions.ts';
 import {
   type DshBridgeContext,
@@ -328,6 +332,75 @@ describe('DshSessionRuntime — the slash menu (P1-4d2, decisions 047, 099 rule 
     expect((await bridge.commands({ logicalSessionId: LOGICAL })).commands).toEqual([
       { name: 'goal', description: 'Set or view the goal', source: 'command' },
     ]);
+  });
+});
+
+describe('globalSlashCommandRows — the host’s slashCommands answer (decision 194)', () => {
+  const summary = (name: string, userInvocable = true, source = 'plugin'): DshSkillSummary => ({
+    name,
+    description: `${name} skill`,
+    source,
+    invocation: { userInvocable },
+  });
+
+  it('reads the global commands with no agent and the skills of the folder with no scope, by the session’s rules', async () => {
+    const commandList = vi.fn(() => [
+      { name: 'compact', description: 'Compact older conversation history' },
+      { name: 'goal', description: 'Set or view the goal' },
+      { name: 'plan', description: 'Enter plan mode' },
+    ]);
+    const skillList = vi.fn(async () => [
+      summary('goal'),
+      summary('office-report'),
+      summary('model-only', false),
+    ]);
+    const log = vi.fn();
+    const result = await globalSlashCommandRows(
+      {
+        commands: { list: commandList, find: () => undefined, execute: async () => undefined },
+        skills: { list: skillList },
+      },
+      '/work/alpha',
+      log
+    );
+    expect(commandList).toHaveBeenCalledWith(undefined);
+    expect(skillList).toHaveBeenCalledWith({ cwd: '/work/alpha' });
+    expect(result).toEqual({
+      commands: [
+        { name: 'goal', description: 'Set or view the goal', source: 'command' },
+        {
+          name: 'office-report',
+          description: 'office-report skill',
+          source: 'skill',
+          scope: 'plugin',
+        },
+      ],
+      truncated: false,
+    });
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('with no folder reads the user’s skills alone; an unreadable registry costs its rows only', async () => {
+    const skillList = vi.fn(async () => [summary('mine', true, 'user-agents')]);
+    const log = vi.fn();
+    const result = await globalSlashCommandRows(
+      {
+        commands: {
+          list: () => {
+            throw new Error('registry gone');
+          },
+          find: () => undefined,
+          execute: async () => undefined,
+        },
+        skills: { list: skillList },
+      },
+      null,
+      log
+    );
+    expect(skillList).toHaveBeenCalledWith({});
+    expect(result.commands.map((row) => row.name)).toEqual(['mine']);
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(await globalSlashCommandRows({}, '/w', log)).toEqual({ commands: [], truncated: false });
   });
 });
 

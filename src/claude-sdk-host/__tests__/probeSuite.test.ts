@@ -60,6 +60,7 @@ describe('the probe-suite runner', () => {
       'repoenv',
       'projcfg',
       'projcfg-home',
+      'slash',
     ]) {
       expect(scenarios).toContain(name);
     }

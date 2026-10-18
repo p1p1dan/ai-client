@@ -30,9 +30,12 @@
  */
 
 import { dirname, join, resolve } from 'node:path';
+import type { ChatEngine } from '@shared/claudeSdkEngine';
 import { MAX_SCAN_BYTES, skillSource } from '@shared/skills/catalog';
 import type { SkillFileKind, SkillSource } from '@shared/skills/loader';
 import {
+  isWorkerCommandsResult,
+  sanitizeWorkerCommandRows,
   WORKER_COMMAND_INVENTORY_MAX,
   type WorkerCommandsResult,
   type WorkerSlashCommandInfo,
@@ -770,25 +773,60 @@ export interface ComposerSlashCommandsDeps {
     getSlashCommands(input: {
       sessionId?: string;
       workspacePath?: string | null;
+      engine?: ChatEngine;
     }): Promise<WorkerSlashCommandsAnswer>;
   };
-  /** The workspace's skills from disk (`listDshSkillsFromDisk`). */
+  /**
+   * Decision 194: the DSH host's own listing for a folder no session runs in
+   * (`DshHostSupervisor.listSlashCommands`): its commands and every skill, a
+   * plugin's included. Rejects when no host is ready.
+   */
+  dshHost?: { listSlashCommands(cwd: string | null): Promise<WorkerCommandsResult> };
+  /**
+   * Decision 194 Q1: the Agent SDK CLI's own list for a folder no SDK chat runs in
+   * (`ClaudeSdkCommandCatalog`); never rejects.
+   */
+  sdkCatalog?: { list(cwd: string | null): Promise<WorkerCommandsResult> };
+  /** The workspace's skills from disk (`listDshSkillsFromDisk`), when the host cannot answer. */
   listSkills(workspacePath: string | null): Promise<WorkerSlashCommandInfo[]>;
   log?: (message: string, error: unknown) => void;
 }
 
 /**
- * `chat:getSlashCommands`: a worker of the workspace answers when one is up
- * (the session's own, or another in the same workspace); otherwise the
- * workspace's skills are read from disk and put after whatever host-wide
- * commands a worker of another workspace could give.
+ * `chat:getSlashCommands`: a worker of the chat (or, for DSH, of its workspace)
+ * answers when one is up. Otherwise, for DSH, the host lists the folder's
+ * commands and skills (decision 194), and when it cannot, the skills are read
+ * from disk (decision 175). For a Claude Agent SDK chat that is not up, a
+ * catalog CLI lists the folder (decision 194 Q1); DSH's skill roots are never
+ * the CLI's.
  */
 export async function composerSlashCommands(
-  input: { sessionId?: string; workspacePath: string | null },
+  input: { sessionId?: string; workspacePath: string | null; engine?: ChatEngine },
   deps: ComposerSlashCommandsDeps
 ): Promise<WorkerCommandsResult> {
   const answer = await deps.workers.getSlashCommands(input);
   if (answer.origin !== 'none') return { commands: answer.commands, truncated: answer.truncated };
+  if (answer.engine !== 'dsh') {
+    return deps.sdkCatalog
+      ? deps.sdkCatalog.list(answer.workspacePath)
+      : { commands: [], truncated: false };
+  }
+  if (deps.dshHost) {
+    try {
+      const listed = await deps.dshHost.listSlashCommands(answer.workspacePath);
+      if (isWorkerCommandsResult(listed)) {
+        return {
+          commands: sanitizeWorkerCommandRows(listed.commands),
+          truncated: listed.truncated === true,
+        };
+      }
+    } catch (error) {
+      deps.log?.(
+        '[slash-menu] the DSH host could not list the menu; reading skills from disk',
+        error
+      );
+    }
+  }
   let skills: WorkerSlashCommandInfo[] = [];
   try {
     skills = await deps.listSkills(answer.workspacePath);
