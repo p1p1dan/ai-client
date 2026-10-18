@@ -325,6 +325,22 @@
  *                       (sorted; `none` if there is none), so the host probe sees which
  *                       instruction files (CLAUDE.md, rules, CLAUDE.local.md) the CLI sent.
  *
+ * On the openai-responses wire, whatever the plan, a latest user message carrying
+ * `GPT-LOOP {"tag":"x","steps":3,"tool":"read","file":"README.md","claim":0}` runs a tool
+ * loop (P1-14 usage check, 2026-10-18): one function call per step (`read` of `file`, or
+ * `pwsh` / `bash` echoing `gpt-loop-<tag>-<i>`), then one text line. Steps are counted here
+ * per cache key and tag, so a loop goes on after DSH compacts the conversation; give each
+ * loop its own tag. Every reply is billed from a simulated
+ * prompt cache keyed by the request's `prompt_cache_key`: the longest run of leading input
+ * units (instructions, tools, each input item) equal to the previous request's counts as
+ * cached, OpenAI style (`input_tokens` is the whole prompt, `cached_tokens` the cached part,
+ * multiples of 128 from 1,024 up). `claim` bills that many prompt tokens instead of the
+ * estimate, to push DSH's compaction. Its log line adds `responsesLoop`: the cache key,
+ * `prompt_cache_retention`, `store`, the item count, and whether the input only appended to
+ * the previous request's (`appendOnly`, `divergeAt`). DSH's compaction request in such a
+ * conversation is answered with a short summary that keeps the `GPT-LOOP` line, so the
+ * loop's trigger survives the checkpoint.
+ *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
  * last message in the request body, a <=200 char snippet of that message's content, and whether
@@ -544,7 +560,7 @@ function reasoningNoneRefusal(parsed) {
 }
 
 /** Decision 171: one plain text answer in an OpenAI wire's own stream format. */
-function sendOpenAiText(res, wire, model, text) {
+function sendOpenAiText(res, wire, model, text, usage) {
   res.writeHead(200, {
     'content-type': 'text/event-stream',
     'cache-control': 'no-cache',
@@ -611,7 +627,7 @@ function sendOpenAiText(res, wire, model, text) {
           id: 'resp_fake',
           status: 'completed',
           output: [item],
-          usage: {
+          usage: usage ?? {
             input_tokens: 24,
             output_tokens: 4,
             total_tokens: 28,
@@ -692,6 +708,194 @@ const COMPACT_SLOW = 'P1-COMPACT-SLOW';
 const COMPACT_USER_INSTRUCTIONS = /<user-instructions>\n([\s\S]*?)\n<\/user-instructions>/;
 /** The close of a compaction checkpoint's summary (dsh-compaction-basic `SUMMARY_CLOSE_TAG`). */
 const CHECKPOINT_CLOSE = '</compacted-summary>';
+
+// ---- openai-responses tool loop with a simulated prompt cache (P1-14 usage check) ----
+
+const GPT_LOOP_MARKER = 'GPT-LOOP';
+/** Per `prompt_cache_key`: the previous request's input units. */
+const responsesCache = new Map();
+/** Per `prompt_cache_key` and tag: the function calls a loop has made. */
+const responsesLoopCalls = new Map();
+const GPT_LOOP_TRIGGER = /GPT-LOOP\s+(\{[^}]*\})/;
+
+/** Rough tokens of a string, the usual four characters a token. */
+function estimateTokens(text) {
+  return Math.ceil(text.length / 4);
+}
+
+/** The text of one Responses input item, for marker and instruction searches. */
+function responsesItemText(item) {
+  if (!item || typeof item !== 'object') return '';
+  if (typeof item.content === 'string') return item.content;
+  if (Array.isArray(item.content)) {
+    return item.content.map((part) => (typeof part?.text === 'string' ? part.text : '')).join('');
+  }
+  if (typeof item.output === 'string') return item.output;
+  return '';
+}
+
+/** The leading units a provider cache would compare: instructions, tools, then each input item. */
+function responsesUnits(parsed) {
+  const input = Array.isArray(parsed?.input) ? parsed.input : [];
+  return [
+    JSON.stringify(parsed?.instructions ?? ''),
+    JSON.stringify(parsed?.tools ?? []),
+    ...input.map((item) => JSON.stringify(item)),
+  ];
+}
+
+/** Bill one request against the simulated cache and remember it for the next. */
+function billResponses(parsed, claim) {
+  const units = responsesUnits(parsed);
+  const key = typeof parsed?.prompt_cache_key === 'string' ? parsed.prompt_cache_key : '';
+  const previous = key ? responsesCache.get(key) : undefined;
+  let same = 0;
+  if (previous) {
+    while (same < units.length && same < previous.length && units[same] === previous[same])
+      same += 1;
+  }
+  if (key) responsesCache.set(key, units);
+  const total = units.reduce((sum, unit) => sum + estimateTokens(unit), 0);
+  const prefix = units.slice(0, same).reduce((sum, unit) => sum + estimateTokens(unit), 0);
+  const inputTokens = claim > 0 ? Math.max(claim, total) : total;
+  // OpenAI caches in 128-token blocks from 1,024 tokens up.
+  const scaled = claim > 0 && total > 0 ? Math.floor((prefix / total) * inputTokens) : prefix;
+  const cached = scaled >= 1024 ? Math.floor(scaled / 128) * 128 : 0;
+  return {
+    usage: {
+      input_tokens: inputTokens,
+      output_tokens: 12,
+      total_tokens: inputTokens + 12,
+      input_tokens_details: { cached_tokens: cached },
+      output_tokens_details: { reasoning_tokens: 0 },
+    },
+    log: {
+      promptCacheKey: key || null,
+      retention: parsed?.prompt_cache_retention ?? null,
+      store: parsed?.store ?? null,
+      previousResponseId: parsed?.previous_response_id ?? null,
+      items: units.length - 2,
+      appendOnly: previous ? same === previous.length : null,
+      divergeAt: previous && same < previous.length ? same : null,
+      estTokens: total,
+      billedInput: inputTokens,
+      cached,
+    },
+  };
+}
+
+/**
+ * A GPT-LOOP request's reply, or undefined when the request is not one. The trigger is the
+ * latest non-assistant item carrying `GPT-LOOP {...}` (the user's message, or the summary
+ * that replaced it); the step is the number of calls this loop has made so far.
+ */
+function decideResponsesLoop(parsed) {
+  const input = Array.isArray(parsed?.input) ? parsed.input : [];
+  let json;
+  for (let index = input.length - 1; index >= 0 && json === undefined; index -= 1) {
+    const item = input[index];
+    if (item?.role === 'assistant' || item?.type === 'function_call_output') continue;
+    json = GPT_LOOP_TRIGGER.exec(responsesItemText(item))?.[1];
+  }
+  if (json === undefined) return undefined;
+  let params = {};
+  try {
+    params = JSON.parse(json);
+  } catch {
+    params = {};
+  }
+  const tag = typeof params.tag === 'string' ? params.tag : 'gpt';
+  const steps = Number.isInteger(params.steps) ? params.steps : 3;
+  const tool = typeof params.tool === 'string' ? params.tool : 'read';
+  const file = typeof params.file === 'string' ? params.file : 'README.md';
+  const claim = Number.isInteger(params.claim) ? params.claim : 0;
+  const bill = billResponses(parsed, claim);
+  const lastText = responsesItemText(input[input.length - 1]);
+  if (
+    COMPACTION_INSTRUCTION.test(lastText) ||
+    COMPACTION_INSTRUCTION.test(String(parsed?.instructions ?? ''))
+  ) {
+    const summary = [
+      '## Primary Request and Intent',
+      `- ${GPT_LOOP_MARKER} ${json}`,
+      '',
+      '## Current Work',
+      '- (none)',
+    ].join('\n');
+    return { kind: 'responses-text', text: summary, ...bill, tag, step: null };
+  }
+  const loopKey = `${bill.log.promptCacheKey ?? ''}:${tag}`;
+  const step = responsesLoopCalls.get(loopKey) ?? 0;
+  if (step >= steps) {
+    return {
+      kind: 'responses-text',
+      text: `GPT-LOOP done ${tag} (${step} calls).`,
+      ...bill,
+      tag,
+      step,
+    };
+  }
+  responsesLoopCalls.set(loopKey, step + 1);
+  const args =
+    tool === 'read'
+      ? { file_path: file }
+      : { command: `echo gpt-loop-${tag}-${step}`, description: `GPT-LOOP step ${step}` };
+  return {
+    kind: 'responses-call',
+    call: {
+      name: tool,
+      arguments: JSON.stringify(args),
+      id: `fc_${tag}_${step}`,
+      callId: `call_${tag}_${step}`,
+    },
+    ...bill,
+    tag,
+    step,
+  };
+}
+
+/** One function call on the Responses wire, as the official API streams it. */
+function sendResponsesCall(res, call, usage) {
+  res.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+  const item = {
+    type: 'function_call',
+    id: call.id,
+    call_id: call.callId,
+    name: call.name,
+    arguments: call.arguments,
+    status: 'completed',
+  };
+  const event = (type, data) => sseFrame(type, { type, ...data });
+  res.end(
+    [
+      event('response.created', {
+        response: { id: 'resp_loop', status: 'in_progress', output: [] },
+      }),
+      event('response.output_item.added', {
+        output_index: 0,
+        item: { ...item, arguments: '', status: 'in_progress' },
+      }),
+      event('response.function_call_arguments.delta', {
+        item_id: item.id,
+        output_index: 0,
+        delta: call.arguments,
+      }),
+      event('response.function_call_arguments.done', {
+        item_id: item.id,
+        output_index: 0,
+        arguments: call.arguments,
+      }),
+      event('response.output_item.done', { output_index: 0, item }),
+      event('response.completed', {
+        response: { id: 'resp_loop', status: 'completed', output: [item], usage },
+      }),
+    ].join('')
+  );
+}
 
 /** Decision 178: an Anthropic-style HTTP 400 (a request the model refuses as it stands). */
 function invalidRequest(message) {
@@ -3796,6 +4000,34 @@ function main() {
       // Decision 173: the session a gateway would read off the body.
       const session = userIdOf(parsed);
 
+      if (wire === 'openai-responses') {
+        const loop = decideResponsesLoop(parsed);
+        if (loop) {
+          logRequest({
+            seq,
+            status: 200,
+            wire,
+            role: 'user',
+            contentSummary: `GPT-LOOP:${loop.tag} step ${loop.step ?? 'compaction'}`,
+            plan: args.plan,
+            auth: keyDigest(receivedKey(req)),
+            userAgent: req.headers['user-agent'] ?? null,
+            ...identity,
+            clientHeader: req.headers['x-pilab-client'] ?? null,
+            ...session,
+            model: typeof parsed?.model === 'string' ? parsed.model : null,
+            path: req.url,
+            reasoning: reasoningOf(parsed),
+            decision: loop.kind,
+            responsesLoop: loop.log,
+            sessionHeader: req.headers.session_id ?? req.headers['session-id'] ?? null,
+          });
+          saveState(args.state, state);
+          if (loop.kind === 'responses-call') sendResponsesCall(res, loop.call, loop.usage);
+          else sendOpenAiText(res, wire, model, loop.text, loop.usage);
+          return;
+        }
+      }
       if (wire !== 'anthropic-messages') {
         // Decision 181: a `-sol` model refuses `reasoning.effort: 'none'` as GPT 6.1 Sol does.
         const refusal = wire === 'openai-responses' ? reasoningNoneRefusal(parsed) : undefined;
