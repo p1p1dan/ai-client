@@ -1204,6 +1204,11 @@ function withCompactionEvent(
  * which the composer may already show under ids of its own (renamed here to
  * the live ones); then the summary in its place, or the note the bridge
  * worded. A late `started` never reopens a row that has settled.
+ *
+ * The answer's summary row may already stand for it, under the history's id
+ * and naming the live one (`liveMessageId`): the composer shows it as soon as
+ * the answer comes, and the events of the same compaction can land after it.
+ * They change nothing then; it is the summary the history keeps.
  */
 function withManualCompactionEvent(
   state: ChatSessionsState,
@@ -1211,8 +1216,9 @@ function withManualCompactionEvent(
   payload: SessionCompactionEvent['payload']
 ): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
   const bucket = state.messages[sessionId] ?? [];
+  const answered = bucket.some((message) => message.liveMessageId === payload.messageId);
   if (payload.phase === 'started') {
-    if (bucket.some((message) => message.id === payload.messageId)) return {};
+    if (answered || bucket.some((message) => message.id === payload.messageId)) return {};
     return {
       messages: withBucket(
         state,
@@ -1235,6 +1241,7 @@ function withManualCompactionEvent(
           payload.note ?? { key: DSH_COMPACTION_INTERRUPTED_KEY }
         );
   const index = bucket.findIndex((message) => message.id === payload.messageId);
+  if (index < 0 && answered) return {};
   const next = bucket.slice();
   if (index >= 0) next[index] = row;
   else next.push(row);
@@ -2512,6 +2519,21 @@ const RUNTIME_EVENT_FLUSH_MS = 16;
 /** Hidden-window timer throttling can delay the flush; cap the backlog. */
 const RUNTIME_EVENT_MAX_QUEUE = 256;
 
+/** The running `initRuntime`'s flush, while one runs. */
+let flushQueuedRuntimeEvents: (() => void) | null = null;
+
+/**
+ * Applies the events `initRuntime` is holding for its next batch now. Main
+ * relays a worker's events before the answer that follows them, but the
+ * answer reaches its caller at once while the events wait out the batch (a
+ * second, in a hidden window): a caller about to write the outcome of an
+ * answer into the store calls this first, so the events land before it, as
+ * they were sent (decision 180: `/compact`'s settle, `settleCompactRun`).
+ */
+export function flushRuntimeEvents(): void {
+  flushQueuedRuntimeEvents?.();
+}
+
 /**
  * R5 round-2 (A5): TOCTOU check for `sendMessage`'s post-await guards. Both
  * halves matter — the row can be gone from `sessions` (Close / Archive removed
@@ -2746,6 +2768,14 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       }
     };
 
+    const flushNow = () => {
+      if (flushTimer !== null) {
+        clearTimeout(flushTimer);
+      }
+      flush();
+    };
+    flushQueuedRuntimeEvents = flushNow;
+
     const unsubscribe = subscribeRuntimeEvent((event) => {
       // Drop frames that arrive after repository/session removal. The queue is
       // filtered again at flush time to close the inverse race: a frame queued
@@ -2790,11 +2820,9 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
     });
 
     return () => {
-      if (flushTimer !== null) {
-        clearTimeout(flushTimer);
-      }
+      if (flushQueuedRuntimeEvents === flushNow) flushQueuedRuntimeEvents = null;
       // Drain rather than drop: late events must still land in the store.
-      flush();
+      flushNow();
       unsubscribe();
     };
   },
