@@ -69,6 +69,12 @@
  * automatically, plan, Auto, Bypass): never a card, the input whole on `tool.updated` and
  * in the history.
  *
+ * dsh-rebase decision 194: `slash`, in its own workspace (it writes a project skill and a
+ * command of the user layer). The menu lists the CLI's commands before any message, less
+ * the window's `/compact` and the ones PiLab owns or hides; `/context`'s output is the
+ * turn's reply; a skill's and a command's bodies reach the model; the history shows each
+ * line as typed and `/context`'s output after it.
+ *
  * The key is a fake one unless PROBE_API_KEY is set in the shell; nothing here reads a
  * stored credential.
  */
@@ -992,6 +998,21 @@ function writeProjectFixture(): void {
   }
 }
 
+/**
+ * dsh-rebase decision 194 `slash`: a project skill and a command of the user layer (the
+ * app's config dir, ruling 19), each telling the model a canary the gateway echoes back.
+ */
+function writeSlashFixture(): void {
+  writeText(
+    join(workspace, '.claude', 'skills', 'probe-skill', 'SKILL.md'),
+    '---\nname: probe-skill\ndescription: Probe skill\n---\n\nSay CANARY-SLASH-SKILL.\n'
+  );
+  writeText(
+    join(configDir, 'commands', 'probe-user-cmd.md'),
+    '---\ndescription: Probe command\n---\n\nSay CANARY-SLASH-CMD and $ARGUMENTS.\n'
+  );
+}
+
 /** `projcfg-home` on Windows: the cwd as the user might have typed it, drive letter flipped. */
 function bootstrapCwd(): string {
   if (!scenarios.includes('projcfg-home') || process.platform !== 'win32') return workspace;
@@ -1148,6 +1169,7 @@ async function main(): Promise<void> {
     writeRepoSettings();
   }
   if (scenarios.includes('webfetch')) await startFetchProxy();
+  if (scenarios.includes('slash')) writeSlashFixture();
   startHost();
   await bootstrap();
 
@@ -2737,6 +2759,90 @@ async function main(): Promise<void> {
         console.log(`  compact → ${JSON.stringify(r)} in ${Date.now() - t} ms`);
         show('compact');
         check('compact', 'compacts', r.compacted === true);
+        break;
+      }
+      case 'slash': {
+        // Decision 194: the CLI's own list, before any message of this chat.
+        const menu = await request<{
+          commands: Array<{ name: string; source: string; description?: string }>;
+        }>('worker.commands', { logicalSessionId });
+        const row = (name: string) => menu.commands.find((c) => c.name === name);
+        console.log(`  menu: ${menu.commands.map((c) => `${c.name}:${c.source}`).join(' ')}`);
+        check(
+          'slash',
+          'lists the CLI commands before any message, with their descriptions',
+          row('context')?.source === 'command' && Boolean(row('context')?.description)
+        );
+        check(
+          'slash',
+          'lists the project skill and the user-layer command as skills',
+          row('probe-skill')?.source === 'skill' && row('probe-user-cmd')?.source === 'skill'
+        );
+        check(
+          'slash',
+          'leaves out the window’s /compact and the CLI commands PiLab owns or hides',
+          [
+            'compact',
+            'clear',
+            'model',
+            'effort',
+            'config',
+            'autocompact',
+            'heapdump',
+            'doctor',
+          ].every((name) => !row(name))
+        );
+        check('slash', 'never names the CLI product', !/claude code/i.test(JSON.stringify(menu)));
+        await send('/context');
+        const local = await waitFor(terminal, '/context turn end');
+        check('slash', '/context ends in session.completed', local.type === 'session.completed');
+        check(
+          'slash',
+          '/context shows its output as the reply',
+          assistantText().includes('Context Usage')
+        );
+        await send('/probe-skill CC-ECHO');
+        await waitFor(terminal, 'skill turn end');
+        check(
+          'slash',
+          'the skill’s body reaches the model',
+          assistantText().includes('CANARY-SLASH-SKILL')
+        );
+        await send('/probe-user-cmd CC-ECHO');
+        await waitFor(terminal, 'command turn end');
+        check(
+          'slash',
+          'the user-layer command’s body reaches the model',
+          assistantText().includes('CANARY-SLASH-CMD')
+        );
+        const h = await request<{
+          page: {
+            messages: Array<{ role: string; blocks: Array<{ type: string; text?: string }> }>;
+          };
+        }>('worker.history', { logicalSessionId, offset: 0, limit: 50 });
+        const lines = h.page.messages.map(
+          (m) => `${m.role}: ${m.blocks.map((b) => b.text ?? `[${b.type}]`).join(' ')}`
+        );
+        for (const line of lines) console.log(`  history ${line.slice(0, 100)}`);
+        const at = lines.indexOf('user: /context');
+        check(
+          'slash',
+          'history shows /context as typed, then its output',
+          at >= 0 &&
+            (lines[at + 1] ?? '').startsWith('assistant: ') &&
+            (lines[at + 1] ?? '').includes('Context Usage')
+        );
+        check(
+          'slash',
+          'history shows the skill and command lines as typed',
+          lines.includes('user: /probe-skill CC-ECHO') &&
+            lines.includes('user: /probe-user-cmd CC-ECHO')
+        );
+        check(
+          'slash',
+          'history shows no command tags',
+          !lines.some((line) => line.includes('<command-'))
+        );
         break;
       }
       case 'history': {

@@ -84,6 +84,9 @@ export const GROUPS: readonly Group[] = [
   // S-6 feedback 1/9 (ruling 24): the worktree tools (a git workspace of its own), a
   // ScheduleWakeup coming due (a minute at least) and ReportFindings in every posture.
   { name: 'hosttools', scenarios: ['worktree', 'wakeup', 'findings'] },
+  // dsh-rebase decision 194: the slash menu, a local command's output and command rows in
+  // history; its own workspace, since it writes a project skill.
+  { name: 'slash', scenarios: ['slash'] },
 ];
 
 /** What one group's probe output says: its checks, the failed ones, and its verdict line. */

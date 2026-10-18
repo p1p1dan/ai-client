@@ -4701,3 +4701,42 @@ Object.assign(zhTranslations, {
   'An Agent SDK chat can only switch to models of the same service. Start a new chat to use another model.':
     'Agent SDK 对话只能换同一服务的模型，换其他模型请新建对话',
 });
+
+// Agent SDK slash commands (dsh-rebase decision 194)
+/**
+ * The descriptions the Claude Agent SDK engine's CLI (2.1.300) gives its own commands
+ * and the skills it ships, as the slash menu shows them (`buildSlashCatalog` looks a
+ * command row's description up here). A CLI that words one differently shows its own
+ * English sentence. Long skill descriptions keep their own words.
+ */
+Object.assign(zhTranslations, {
+  'Teach auto mode about your environment, plus optional rule tweaks':
+    '让自动模式了解你的环境，并可微调规则',
+  'List output styles or switch to one': '列出输出风格，或切换到其中一种',
+  'Show current context usage': '查看当前上下文用量',
+  'Initialize a new CLAUDE.md file with codebase documentation': '新建 CLAUDE.md，写入代码库说明',
+  'Manage MCP servers': '管理 MCP 服务器',
+  'Pick up skills added or changed on disk during this session':
+    '重新读取本会话期间在磁盘上新增或改动的技能',
+  'Rename the current conversation': '重命名当前对话',
+  'Complete a security review of the pending changes on the current branch':
+    '对当前分支未合并的改动做一次安全审查',
+  "Show session cost, plan usage, and what's contributing to your limits":
+    '查看本会话费用、套餐用量，以及哪些部分占用了额度',
+  'Generate a one-line session recap now': '立即生成一句话的会话回顾',
+  'Set a goal — keep working until the condition is met': '设定目标，持续工作直到条件满足',
+  'Enable debug logging for this session and help diagnose issues':
+    '为本会话开启调试日志，协助诊断问题',
+  'Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Omit the interval to let the model self-pace.':
+    '按固定间隔重复运行一段提示词或斜杠命令（例如 /loop 5m /foo）；不写间隔则由模型自己掌握节奏。',
+  'Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.':
+    '检查改动的代码能否复用、简化、提效或调整抽象层级，并直接改好。只管质量，不找 bug（找 bug 用 /code-review）。',
+  'Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.':
+    '调研并规划大规模改动，再分给 5～30 个各自独立 worktree 的代理并行执行，每个代理各开一个 PR。',
+  'Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)':
+    '深度调研：并行搜索网页、抓取来源、对结论做对抗式核实，汇总成带引用的报告（动态工作流）。',
+  'Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.':
+    '扫描会话记录里常见的只读 Bash 与 MCP 调用，把按优先级排好的放行清单写进项目的 .claude/settings.json，减少权限询问。',
+  'Configure settings.json: hooks for automated behaviour, permissions and environment variables':
+    '配置 settings.json：自动化行为的 hooks、权限与环境变量',
+});

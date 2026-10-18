@@ -225,7 +225,7 @@ function rows(commands: unknown): CommandRow[] {
     return {
       name: String(r.name),
       builtin: r.builtin === true,
-      description: String(r.description ?? '').slice(0, 160),
+      description: String(r.description ?? ''),
       argumentHint: String(r.argumentHint ?? ''),
       ...(Array.isArray(r.aliases) && r.aliases.length > 0
         ? { aliases: r.aliases as string[] }

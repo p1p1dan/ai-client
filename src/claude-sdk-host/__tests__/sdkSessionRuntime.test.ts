@@ -114,12 +114,14 @@ function runtime(
     projectTrusted?: boolean;
     settingSources?: Array<'user' | 'project' | 'local'>;
     homeDir?: string;
+    sessionFile?: string;
   } = {}
 ) {
   return new ClaudeSdkSessionRuntime(
     {
       logicalSessionId: 'chat-1',
       cwd: launch.cwd ?? configDir,
+      ...(launch.sessionFile ? { sessionFile: launch.sessionFile } : {}),
       model,
       projectTrusted: launch.projectTrusted ?? true,
       emit: (event) => events.push(event),
@@ -1736,6 +1738,193 @@ describe('a wake-up whose own row the SDK reader drops (S-6, measured)', () => {
       { id: 'h:u0', origin: undefined },
       { id: 'h:a1-scheduled', origin: { kind: 'scheduled' } },
       { id: 'h:a1', origin: undefined },
+    ]);
+    await rt.dispose();
+  });
+});
+
+describe('slash commands (dsh-rebase decision 194, measured on 2.1.300)', () => {
+  const listed = {
+    commands: [
+      {
+        name: 'context',
+        description: 'Show current context usage',
+        argumentHint: '',
+        builtin: true,
+      },
+      { name: 'compact', description: 'Free up context', argumentHint: '', builtin: true },
+      { name: 'clear', description: 'Start a new session', argumentHint: '', builtin: true },
+      { name: 'doctor', description: 'Health-check', argumentHint: '', builtin: true },
+      { name: 'proj-skill', description: 'A project skill', argumentHint: '' },
+    ],
+  };
+
+  it('lists the CLI’s commands before any message, less the window’s and PiLab’s own', async () => {
+    sdk.init = Promise.resolve(listed);
+    const { rt } = await started();
+    await flush();
+    expect(await rt.commands()).toEqual({
+      commands: [
+        { name: 'context', description: 'Show current context usage', source: 'command' },
+        { name: 'proj-skill', description: 'A project skill', source: 'skill' },
+      ],
+      truncated: false,
+    });
+    await rt.dispose();
+  });
+
+  it('follows commands_changed, and the terminal rows the CLI names in its init', async () => {
+    sdk.init = Promise.resolve(listed);
+    const { rt, q } = await started();
+    await flush();
+    q.push({
+      type: 'system',
+      subtype: 'init',
+      permissionMode: 'default',
+      slash_commands: [],
+      terminal_slash_commands: ['context'],
+    });
+    q.push({
+      type: 'system',
+      subtype: 'commands_changed',
+      commands: [...listed.commands, { name: 'new-skill', description: 'Found later' }],
+    });
+    await flush();
+    expect((await rt.commands()).commands).toEqual([
+      // `doctor` is back: the CLI's own list of terminal rows replaced 2.1.300's.
+      { name: 'doctor', description: 'Health-check', source: 'command' },
+      { name: 'proj-skill', description: 'A project skill', source: 'skill' },
+      { name: 'new-skill', description: 'Found later', source: 'skill' },
+    ]);
+    await rt.dispose();
+  });
+
+  it('a reopened chat starts its CLI for the menu', async () => {
+    const first = runtime();
+    const boot = await first.bootstrap();
+    await first.dispose();
+    sdk.queries.length = 0;
+    sdk.init = Promise.resolve(listed);
+    const rt = runtime('gw/claude-opus-5-5', { sessionFile: boot.sessionFile });
+    await rt.bootstrap();
+    expect(sdk.queries).toHaveLength(0);
+    const menu = await rt.commands();
+    expect(sdk.queries).toHaveLength(1);
+    expect(menu.commands.map((row) => row.name)).toEqual(['context', 'proj-skill']);
+    await rt.dispose();
+  });
+
+  it('a local command’s output is the turn’s reply; the CLI’s error text never is', async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    events.length = 0;
+    q.push({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: {
+        id: 'c999ee4f',
+        model: '<synthetic>',
+        role: 'assistant',
+        content: [{ type: 'text', text: '## Context Usage' }],
+      },
+    });
+    q.push({ type: 'result', subtype: 'success', is_error: false, result: '## Context Usage' });
+    await flush();
+    const shown = events.filter((event) => event.type.startsWith('message.'));
+    expect(shown.map((event) => event.type)).toEqual([
+      'message.started',
+      'message.delta',
+      'message.completed',
+    ]);
+    expect((shown[1]?.payload as { text: string }).text).toBe('## Context Usage');
+    expect(events.some((event) => event.type === 'session.completed')).toBe(true);
+
+    await rt.startSend({
+      logicalSessionId: 'chat-1',
+      requestId: 'req-2',
+      attemptId: 'a-2',
+      text: 'hi again',
+    });
+    events.length = 0;
+    q.push({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      error: 'invalid_request',
+      message: {
+        id: 'x',
+        model: '<synthetic>',
+        content: [{ type: 'text', text: 'API Error: 400' }],
+      },
+    });
+    await flush();
+    expect(events.filter((event) => event.type === 'message.delta')).toEqual([]);
+    await rt.dispose();
+  });
+
+  it('history reads a command as it was typed, with a local command’s output after it', async () => {
+    const { rt } = await started();
+    const stub = (rt as unknown as { stub: { ccSessionId: string; started: boolean } }).stub;
+    stub.started = true;
+    const id = stub.ccSessionId;
+    const dir = join(configDir, 'projects', 'C--repo');
+    mkdirSync(dir, { recursive: true });
+    const raw = [
+      { type: 'user', uuid: 'cav', isMeta: true },
+      { type: 'user', uuid: 'c1', parentUuid: 'cav' },
+      {
+        type: 'system',
+        subtype: 'local_command',
+        uuid: 'o1',
+        parentUuid: 'c1',
+        content: '<local-command-stdout>## Context Usage</local-command-stdout>',
+      },
+      { type: 'user', uuid: 'k1', parentUuid: 'o1' },
+      {
+        type: 'system',
+        subtype: 'local_command',
+        uuid: 'k2',
+        parentUuid: 'k1',
+        content: '<local-command-stdout>Compacted</local-command-stdout>',
+      },
+    ];
+    writeFileSync(join(dir, `${id}.jsonl`), raw.map((row) => JSON.stringify(row)).join('\n'));
+    const user = (uuid: string, text: string) => ({
+      type: 'user' as const,
+      uuid,
+      session_id: id,
+      parent_tool_use_id: null,
+      parent_agent_id: null,
+      message: { role: 'user', content: text },
+    });
+    const sdkModule = await import('@anthropic-ai/claude-agent-sdk');
+    vi.mocked(sdkModule.getSessionMessages).mockResolvedValueOnce([
+      user(
+        'c1',
+        '<command-name>/context</command-name>\n            <command-message>context</command-message>\n            <command-args></command-args>'
+      ),
+      user(
+        'k1',
+        '<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args></command-args>'
+      ),
+      user(
+        's1',
+        '<command-message>proj-skill</command-message>\n<command-name>/proj-skill</command-name>\n<command-args>do it</command-args>'
+      ),
+      user('l1', '<local-command-stdout>an older CLI’s output row</local-command-stdout>'),
+      user('cv', '<local-command-caveat>The command below was run directly</local-command-caveat>'),
+    ]);
+    const page = (await rt.history({ logicalSessionId: 'chat-1' })).page;
+    expect(
+      page.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        text: (m.blocks[0] as { text?: string } | undefined)?.text,
+      }))
+    ).toEqual([
+      { id: 'h:c1', role: 'user', text: '/context' },
+      { id: 'h:o1', role: 'assistant', text: '## Context Usage' },
+      { id: 'h:s1', role: 'user', text: '/proj-skill do it' },
+      { id: 'h:l1', role: 'assistant', text: 'an older CLI’s output row' },
     ]);
     await rt.dispose();
   });

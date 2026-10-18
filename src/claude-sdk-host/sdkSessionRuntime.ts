@@ -120,6 +120,15 @@ import {
   sampleProcesses,
 } from './processTree.ts';
 import { type ClaudeSdkSessionStub, createStub, readStub, writeStub } from './sessionStub.ts';
+import {
+  type CliSlashCommand,
+  cliSlashCommands,
+  commandRowLine,
+  localCommandOutput,
+  SDK_TERMINAL_COMMANDS_DEFAULT,
+  SDK_WINDOW_OWNED_COMMANDS,
+  sdkSlashCommandRows,
+} from './slashCommands.ts';
 import { type BoardChange, TaskBoard } from './taskBoard.ts';
 import { ToolProcessTracker } from './toolProcessTracker.ts';
 
@@ -180,9 +189,14 @@ export const PILAB_PROMPT_APPEND = [
  */
 export const HOST_ONLY_TOOLS = ['RemoteTrigger', 'ListAgents', 'SendMessage', 'Workflow'];
 
-/** User rows of the CLI transcript that are bookkeeping, not something typed. */
-const CLI_MARKER_TEXT =
-  /^(\[Request interrupted by user|<local-command-stdout>|<command-name>|<local-command-caveat>)/;
+/**
+ * User rows of the CLI transcript that are bookkeeping, not something typed. A command's
+ * own row (`<command-name>`, `<command-message>`) and a local command's output are read
+ * before this (decision 194, `slashCommands.ts`).
+ */
+const CLI_MARKER_TEXT = /^(\[Request interrupted by user|<local-command-caveat>)/;
+/** The model of a message the CLI wrote itself (a local command's output, decision 194). */
+const SYNTHETIC_MODEL = '<synthetic>';
 const COMPACT_SUMMARY_PREFIX = 'This session is being continued from a previous conversation';
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const FILE_CHANGE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
@@ -197,6 +211,11 @@ const STOP_SETTLE_MS = 5_000;
 const STOP_SAMPLE_WAIT_MS = 1_000;
 /** How long a mode switch waits for the CLI's answer; under Main's 10 s RPC timeout. */
 const MODE_SWITCH_TIMEOUT_MS = 8_000;
+/**
+ * How long the menu waits for a CLI it started to list its commands (decision 194): a
+ * cold start took up to 3.8 s on the dev box (2.1.300); under Main's 10 s RPC timeout.
+ */
+const COMMANDS_TIMEOUT_MS = 8_000;
 
 type Log = (...args: unknown[]) => void;
 
@@ -595,6 +614,16 @@ function num(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+/** A local command's output as a history reply (decision 194). */
+function localReply(uuid: string, text: string): HistoryMessage {
+  return {
+    id: `h:${uuid}`,
+    entryId: uuid,
+    role: 'assistant',
+    blocks: [{ type: 'text', id: `${uuid}-text`, text }],
+  };
+}
+
 /** The text blocks of an assistant frame, joined. */
 function assistantText(message: { content?: unknown }): string {
   const content = Array.isArray(message.content) ? message.content : [];
@@ -682,7 +711,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private userMessageCount = 0;
   private readonly pendingPermissions = new Map<string, PendingPermission>();
   private readonly pendingQuestions = new Map<string, PendingQuestion>();
-  private slashCommands: string[] = [];
+  /** Decision 194: the CLI's command list (`initializationResult`, then `commands_changed`). */
+  private cliCommands: CliSlashCommand[] | null = null;
+  /** The rows the CLI binds to a terminal; 2.1.300's set until its `system/init` says. */
+  private terminalCommands: string[] = [...SDK_TERMINAL_COMMANDS_DEFAULT];
   /** The last task notification was a subagent's (an engine turn it wakes is the subagent's). */
   private lastTaskWasAgent = false;
   /**
@@ -886,9 +918,11 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     this.cliMode = cliPermissionMode(this.permissions);
     this.cliReady = false;
     q.initializationResult().then(
-      () => {
+      (init) => {
         if (this.query !== q || this.disposed) return;
         this.cliReady = true;
+        // Decision 194: the menu, before any message is sent.
+        this.cliCommands = cliSlashCommands((init as { commands?: unknown } | undefined)?.commands);
         void this.sendDeferredMode(q);
       },
       () => {
@@ -1382,8 +1416,9 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     }
     switch (message.subtype) {
       case 'init': {
-        if (Array.isArray(message.slash_commands)) {
-          this.slashCommands = message.slash_commands.filter(
+        // Decision 194: the CLI names the rows bound to a terminal here only.
+        if (Array.isArray(message.terminal_slash_commands)) {
+          this.terminalCommands = message.terminal_slash_commands.filter(
             (c): c is string => typeof c === 'string'
           );
         }
@@ -1400,6 +1435,11 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       case 'status': {
         // S-2 A-6: every mode change, the CLI's own included (plan mode entered or left).
         this.noteCliMode(message.permissionMode);
+        return;
+      }
+      case 'commands_changed': {
+        // Decision 194: the whole list again (skills found mid-session, `/reload-skills`).
+        this.cliCommands = cliSlashCommands(message.commands);
         return;
       }
       case 'permission_denied': {
@@ -1620,6 +1660,16 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       this.noticeContextWindow(assistantText(message.message as { content?: unknown }));
     }
     const turn = this.turn;
+    // Decision 194: a local command's output (`/context`, `/usage`, …) comes as one
+    // message of the CLI's own, with no stream frames: shown as the turn's reply.
+    if (turn && !turn.step && !message.error) {
+      const apiMessage = message.message as { model?: unknown; content?: unknown };
+      const text = apiMessage.model === SYNTHETIC_MODEL ? assistantText(apiMessage) : '';
+      if (text.trim()) {
+        this.emitLocalReply(turn, text);
+        return;
+      }
+    }
     const step = turn?.step;
     if (!turn || !step) return;
     const content = (message.message as { content?: unknown }).content;
@@ -1642,6 +1692,23 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         });
       }
     }
+  }
+
+  /** One whole reply of the CLI's own, as a model step would stream it (decision 194). */
+  private emitLocalReply(turn: Turn, text: string): void {
+    const messageId = `cc-${this.requireStub().ccSessionId.slice(0, 8)}-t${this.turnCount}-s${this.nextStepNo()}`;
+    turn.step = {
+      messageId,
+      apiMessageId: messageId,
+      blocks: new Map([[0, { kind: 'text', blockId: `${messageId}-b0` }]]),
+      promptTokens: { input: 0, cacheRead: 0, cacheWrite: 0 },
+      output: 0,
+    };
+    this.emit({ type: 'message.started', payload: { messageId, role: 'assistant' } });
+    this.emit({
+      type: 'message.delta',
+      payload: { messageId, blockId: `${messageId}-b0`, text },
+    });
   }
 
   private ingestUser(message: Record<string, unknown>): void {
@@ -2426,23 +2493,33 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   }
 
   /**
-   * S-6: the transcript rows the CLI wrote for a schedule that came due
-   * (`turnOrigin: "scheduled"`, `isMeta`), read from the file itself: the SDK's reader
-   * drops those rows altogether (measured, 0.3.300), so the reply that follows one
-   * (`heads`: the assistant row whose parent it is) is where the turn's head goes.
+   * Rows of the CLI's transcript the SDK's reader leaves out, read from the file itself.
+   *
+   * - S-6: the rows the CLI wrote for a schedule that came due (`turnOrigin: "scheduled"`,
+   *   `isMeta`): the SDK's reader drops those rows altogether (measured, 0.3.300), so the
+   *   reply that follows one (`heads`: the assistant row whose parent it is) is where the
+   *   turn's head goes.
+   * - Decision 194: a local command's output, a `system` `local_command` row whose parent
+   *   is the command's own row (`localOutputs`, by that parent; measured, 2.1.300).
+   *
    * Every copy is read: a chat that entered a worktree has its file under that worktree's
    * project directory.
    */
-  private scheduledPrompts(ccSessionId: string): { rows: Set<string>; heads: Set<string> } {
+  private transcriptExtras(ccSessionId: string): {
+    rows: Set<string>;
+    heads: Set<string>;
+    localOutputs: Map<string, { uuid: string; text: string }>;
+  } {
     const rows = new Set<string>();
     const heads = new Set<string>();
-    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return { rows, heads };
+    const localOutputs = new Map<string, { uuid: string; text: string }>();
+    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return { rows, heads, localOutputs };
     const root = path.join(this.config.configDir, 'projects');
     let dirs: string[] = [];
     try {
       dirs = readdirSync(root);
     } catch {
-      return { rows, heads };
+      return { rows, heads, localOutputs };
     }
     for (const dir of dirs) {
       let raw: string;
@@ -2459,10 +2536,22 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             uuid?: unknown;
             parentUuid?: unknown;
             type?: unknown;
+            subtype?: unknown;
+            content?: unknown;
             turnOrigin?: unknown;
           };
           parsed.push(row);
           if (row.turnOrigin === 'scheduled' && typeof row.uuid === 'string') rows.add(row.uuid);
+          if (
+            row.type === 'system' &&
+            row.subtype === 'local_command' &&
+            typeof row.uuid === 'string' &&
+            typeof row.parentUuid === 'string' &&
+            typeof row.content === 'string'
+          ) {
+            const text = localCommandOutput(row.content);
+            if (text) localOutputs.set(row.parentUuid, { uuid: row.uuid, text });
+          }
         } catch {
           // a torn line
         }
@@ -2478,7 +2567,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         }
       }
     }
-    return { rows, heads };
+    return { rows, heads, localOutputs };
   }
 
   /** The CLI's own transcript, projected onto history messages (tool results folded into their call's message). */
@@ -2494,7 +2583,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const byApiId = new Map<string, HistoryMessage>();
     const toolOwner = new Map<string, HistoryMessage>();
     // S-6: rows the CLI wrote for itself, which the SDK's reader does not mark (or drops).
-    const scheduled = this.scheduledPrompts(ccSessionId);
+    const scheduled = this.transcriptExtras(ccSessionId);
     for (const entry of entries) {
       if (entry.parent_tool_use_id) continue;
       const message = record(entry.message) ?? {};
@@ -2521,7 +2610,28 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         }
         const text = textOf(content);
         const trimmed = text.trim();
-        // The CLI's own bookkeeping rows: an interrupt marker, local command echoes.
+        // Decision 194: a command reads as the user typed it, and a local command's output
+        // as its reply. The window's `/compact` has its own row (the summary), as live.
+        const command = commandRowLine(trimmed);
+        if (command) {
+          if (SDK_WINDOW_OWNED_COMMANDS.has(command.name)) continue;
+          out.push({
+            id: `h:${entry.uuid}`,
+            entryId: entry.uuid,
+            role: 'user',
+            blocks: [{ type: 'text', id: `${entry.uuid}-text`, text: command.line }],
+          });
+          const output = scheduled.localOutputs.get(entry.uuid);
+          if (output) out.push(localReply(output.uuid, output.text));
+          continue;
+        }
+        // An older CLI wrote a local command's output as a user row.
+        const output = localCommandOutput(trimmed);
+        if (output) {
+          out.push(localReply(entry.uuid, output));
+          continue;
+        }
+        // The CLI's own bookkeeping rows: an interrupt marker, a local command's caveat.
         if (!trimmed || CLI_MARKER_TEXT.test(trimmed)) continue;
         // S-6: a turn the CLI started by itself reads as it did live, as an engine turn's
         // head, never as something the user typed: a schedule that came due, or a
@@ -2618,11 +2728,38 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     } as WorkerTreeResult;
   }
 
+  /**
+   * Decision 194: the CLI's own list (`slashCommands.ts`), with descriptions, before any
+   * message. A reopened chat starts its CLI on the first send; the menu starts it now, as
+   * that send would (the cold start is then behind the user when they send).
+   */
   async commands(): Promise<WorkerCommandsResult> {
-    return {
-      commands: this.slashCommands.map((name) => ({ name, source: 'command' })),
-      truncated: false,
-    };
+    if (this.disposed) return { commands: [], truncated: false };
+    if (!this.cliCommands && this.bootstrapResult) {
+      const q = this.ensureQuery();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const init = await Promise.race([
+          q.initializationResult(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error('timeout: the CLI did not list its commands')),
+              COMMANDS_TIMEOUT_MS
+            );
+          }),
+        ]);
+        if (this.query === q && !this.cliCommands) {
+          this.cliCommands = cliSlashCommands(
+            (init as { commands?: unknown } | undefined)?.commands
+          );
+        }
+      } catch (error) {
+        this.log('slash commands unavailable', error);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    return sdkSlashCommandRows(this.cliCommands ?? [], this.terminalCommands);
   }
 
   async panels(): Promise<WorkerPanelsResult> {
