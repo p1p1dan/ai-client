@@ -695,6 +695,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // DSH host warm-up in `handleContentChange` (set where `chatEngine` is derived).
   const chatEngineRef = useRef<ChatEngine>('dsh');
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
+  // P1-14 GUI recheck finding 1: the attachments of the send in flight. The drafts
+  // leave the box at the send's commit point (T-19), so the placeholder reads the
+  // count off the send's own snapshot instead of the now empty draft list.
+  const inFlightAttachmentCount = useTurnSendStatusStore((state) =>
+    state.status && state.status.sessionId === activeSessionId ? state.status.attachmentCount : 0
+  );
   /**
    * P1-7e (problem 33, decision 139): the chat whose draft the composer holds.
    * It trails `activeSessionId` by the render in which a switch lands: the
@@ -4355,7 +4361,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // send makes an unbound one, so none of the folder-shaped placeholders
           // apply to it.
           unbound: isUnboundSession || !activeSessionId,
-          attachmentCount: attachments.drafts.length,
+          attachmentCount: sendingHere ? inFlightAttachmentCount : attachments.drafts.length,
           pendingQuestion: pendingQuestionHere,
           queuedCount,
           isCreatingSession,

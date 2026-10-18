@@ -1760,12 +1760,29 @@ describe('a turn whose request failed before any reply (decision 156)', () => {
     expect(last).not.toHaveProperty('stopReason');
   });
 
-  it('[E156-12-AFTER-REPLY] a failure after part of the reply arrived marks nothing', () => {
+  it('[E156-12-AFTER-REPLY] a failure after part of the reply arrived marks that message too, while the turn runs', () => {
+    // P1-14 GUI recheck finding 2: the turn did not finish, so it says no 「完成于」.
     const { state } = applyAll(baseState({ sessions: [makeSession({ status: 'running' })] }), [
       ...liveTurn.slice(0, 4),
       event('message.delta', { messageId: STEP_1, blockId: `${STEP_1}-b0`, text: 'half' }),
       event('session.failed', { error: '500 upstream' }),
     ]);
+    const last = state.messages[SESSION_ID]?.at(-1);
+    expect(last).toMatchObject({ role: 'assistant', stopReason: 'error' });
+    expect(last?.blocks.length).toBeGreaterThan(0);
+  });
+
+  it('[E156-12-IDLE] with no turn running, a reply that already has blocks is not marked', () => {
+    // The newest assistant message may then be a finished turn's reply.
+    const running = applyAll(baseState({ sessions: [makeSession({ status: 'running' })] }), [
+      ...liveTurn.slice(0, 4),
+      event('message.delta', { messageId: STEP_1, blockId: `${STEP_1}-b0`, text: 'done' }),
+    ]).state;
+    const idle = {
+      ...running,
+      sessions: running.sessions.map((session) => ({ ...session, status: 'idle' as const })),
+    };
+    const { state } = applyAll(idle, [event('session.failed', { error: '500 upstream' })]);
     expect(state.messages[SESSION_ID]?.at(-1)).not.toHaveProperty('stopReason');
   });
 });

@@ -1,3 +1,4 @@
+import { INTERRUPTED_TURN_NOTICE_KEY } from '@shared/dshHistory/types';
 import type { ChatTurnEnd } from '@/stores/chatSessions';
 import { deriveSessionFailure, toSessionFailureCode } from './sessionFailure';
 
@@ -73,17 +74,36 @@ export function deriveTurnEndNotice(
 /**
  * Whether a turn's body ends on such a note: it then has no completion time
  * to report (「完成于」 is for a turn that finished).
+ *
+ * P1-14 GUI recheck finding 2: the engine's interrupted-turn note counts too
+ * (`INTERRUPTED_TURN_NOTICE_KEY`, a system row the history adds after a host
+ * crash). A turn the engine stopped while a tool ran used to end on that note
+ * and still say 「完成于 13:05 · 1 次工具调用」 under it.
  */
-export function turnEndsWithoutReply(body: readonly { turnEnd?: ChatTurnEnd }[]): boolean {
-  return body.at(-1)?.turnEnd !== undefined;
+export function turnEndsWithoutReply(
+  body: readonly {
+    turnEnd?: ChatTurnEnd;
+    role?: string;
+    blocks?: readonly { notice?: { key?: string } }[];
+  }[]
+): boolean {
+  const last = body.at(-1);
+  if (!last) return false;
+  if (last.turnEnd !== undefined) return true;
+  return last.role === 'system' && last.blocks?.[0]?.notice?.key === INTERRUPTED_TURN_NOTICE_KEY;
 }
 
 /**
  * Decision 156 (decision 145 rule 17): live, whether the turn's last request
- * failed before any of its reply arrived — its newest assistant message is the
- * empty one `session.failed` stamped `stopReason: 'error'`. Such a turn did not
- * finish either; the failure card says so while it is the last turn, and this
- * keeps 「完成于」 off it after a later turn takes the card's place.
+ * failed — its newest assistant message is the one `session.failed` stamped
+ * `stopReason: 'error'`. Such a turn did not finish either; the failure card
+ * says so while it is the last turn, and this keeps 「完成于」 off it, then and
+ * after a later turn takes the card's place.
+ *
+ * P1-14 GUI recheck finding 2: the stamp no longer needs an empty message. A
+ * request that fails after the turn's earlier steps ran tools (a reply the
+ * loop guard cut, a host crash mid-tool) leaves a message with blocks, and the
+ * turn used to say 「完成于」 beside its failure card.
  */
 export function turnEndsOnFailedRequest(
   body: readonly { role: string; blocks: readonly unknown[]; stopReason?: string }[]
@@ -91,7 +111,7 @@ export function turnEndsOnFailedRequest(
   for (let index = body.length - 1; index >= 0; index -= 1) {
     const message = body[index];
     if (message?.role !== 'assistant') continue;
-    return message.stopReason === 'error' && message.blocks.length === 0;
+    return message.stopReason === 'error';
   }
   return false;
 }

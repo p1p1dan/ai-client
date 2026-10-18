@@ -1,3 +1,4 @@
+import { INTERRUPTED_TURN_NOTICE_KEY } from '@shared/dshHistory/types';
 import { translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
@@ -110,6 +111,16 @@ describe('turnEndsWithoutReply', () => {
     expect(turnEndsWithoutReply([{}, { turnEnd: { kind: 'failed' } }])).toBe(true);
     expect(turnEndsWithoutReply([{ turnEnd: { kind: 'failed' } }, {}])).toBe(false);
     expect(turnEndsWithoutReply([])).toBe(false);
+    // P1-14 GUI recheck finding 2: the engine's interrupted-turn note ends a turn too.
+    const interrupted = {
+      role: 'system',
+      blocks: [{ notice: { key: INTERRUPTED_TURN_NOTICE_KEY } }],
+    };
+    expect(turnEndsWithoutReply([{}, interrupted])).toBe(true);
+    expect(turnEndsWithoutReply([interrupted, {}])).toBe(false);
+    expect(turnEndsWithoutReply([{ role: 'system', blocks: [{ notice: { key: 'other' } }] }])).toBe(
+      false
+    );
   });
 });
 
@@ -119,7 +130,7 @@ describe('turnEndsOnFailedRequest (decision 156)', () => {
     blocks: extra.blocks ?? [],
     ...(extra.stopReason ? { stopReason: extra.stopReason } : {}),
   });
-  it('is true only when the newest assistant message is the empty failed request', () => {
+  it('is true only when the newest assistant message is the failed request', () => {
     expect(turnEndsOnFailedRequest([assistant({ stopReason: 'error' })])).toBe(true);
     expect(
       turnEndsOnFailedRequest([
@@ -132,7 +143,8 @@ describe('turnEndsOnFailedRequest (decision 156)', () => {
     expect(
       turnEndsOnFailedRequest([assistant({ stopReason: 'error' }), assistant({ blocks: [{}] })])
     ).toBe(false);
-    expect(turnEndsOnFailedRequest([assistant({ stopReason: 'error', blocks: [{}] })])).toBe(false);
+    // P1-14 GUI recheck finding 2: a failed request that had blocks counts too.
+    expect(turnEndsOnFailedRequest([assistant({ stopReason: 'error', blocks: [{}] })])).toBe(true);
     expect(turnEndsOnFailedRequest([assistant()])).toBe(false);
     expect(turnEndsOnFailedRequest([])).toBe(false);
   });

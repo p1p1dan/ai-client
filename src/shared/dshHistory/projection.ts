@@ -92,6 +92,7 @@ import {
   dshCompactionNoteBlockId,
   dshCompactNote,
   dshCompactNoteText,
+  INTERRUPTED_TURN_NOTICE_KEY,
   isDshSummaryRow,
   PI_BRANCH_SUMMARY_PREFIX,
   PI_BRANCH_SUMMARY_SUFFIX,
@@ -105,14 +106,8 @@ const NOT_STARTED_ERROR = 'The run ended before this call started.';
 /** What a result carrying only images reads as. */
 const IMAGE_ONLY_OUTPUT = '(image)';
 
-/**
- * The system note of a turn the engine never closed itself (decision 032):
- * DSH appends `turn/end {kind:'interrupted'}` when it resumes or cold-reads a
- * log whose last turn was open. English here, translated by the renderer
- * through `notice.key`.
- */
-export const INTERRUPTED_TURN_NOTICE_KEY =
-  'This turn was interrupted when the engine stopped unexpectedly.';
+/** The interrupted-turn note's key; declared in `types.ts`, re-exported for the existing imports. */
+export { INTERRUPTED_TURN_NOTICE_KEY };
 
 /**
  * The imported-history banner of a migrated session (P1-9 `aiclient/legacy-provenance`).

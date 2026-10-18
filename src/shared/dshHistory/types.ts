@@ -14,6 +14,17 @@
 import { redactCredentials } from '../stderrRedaction.ts';
 import type { HistoryBlock } from '../types/sessionHistory.ts';
 
+/**
+ * The system note of a turn the engine never closed itself (decision 032):
+ * DSH appends `turn/end {kind:'interrupted'}` when it resumes or cold-reads a
+ * log whose last turn was open. English here, translated by the renderer
+ * through `notice.key`. Lives here rather than in `projection.ts` so the
+ * renderer can recognise the note (a turn ending on it did not complete)
+ * without loading the projection.
+ */
+export const INTERRUPTED_TURN_NOTICE_KEY =
+  'This turn was interrupted when the engine stopped unexpectedly.';
+
 /** One event of a DSH session log, as `sessionQuery.observeSession` and `session/event` carry it. */
 export interface DshLogEvent {
   readonly type: string;

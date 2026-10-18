@@ -1070,15 +1070,21 @@ function withStoppedRun(
  * changes on screen (the failure card says what happened). The stamp is what
  * lets the turn say no 「完成于」 once a later turn takes the card's place
  * (`turnEndsOnFailedRequest`), and what lets a replay fold this empty copy
- * into the history's failure note (`nameFailedRequestCopies`).
+ * into the history's failure note (`nameFailedRequestCopies`, empty copies only).
  *
- * Only the turn's newest assistant message, and only when it is empty: a
- * failure with no message of its own (refused before any request) must not
- * mark the previous turn's reply.
+ * Only the turn's newest assistant message: a failure with no message of its
+ * own (refused before any request) must not mark the previous turn's reply.
+ *
+ * P1-14 GUI recheck finding 2: a message with blocks is stamped too, but only
+ * when a turn was running as the session failed (`turnRunning`) — a reply the
+ * loop guard cut, or the last step of a turn the engine crashed in. Without a
+ * running turn the newest assistant message may be a finished turn's reply,
+ * which this failure is not about.
  */
 function withFailedRequest(
   state: ChatSessionsState,
-  sessionId: string
+  sessionId: string,
+  turnRunning: boolean
 ): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
   const bucket = state.messages[sessionId];
   if (!bucket) return {};
@@ -1086,13 +1092,23 @@ function withFailedRequest(
     const message = bucket[index];
     if (!message || message.role === 'user') return {};
     if (message.role !== 'assistant') continue;
-    if (message.blocks.length > 0 || message.stopReason) return {};
+    if (message.stopReason) return {};
+    if (message.blocks.length > 0 && !turnRunning) return {};
     const next = bucket.slice();
     next[index] = { ...message, stopReason: 'error' };
     return { messages: withBucket(state, sessionId, next) };
   }
   return {};
 }
+
+/** Statuses of a session with a turn under way (the run a failure would cut). */
+const TURN_RUNNING_STATUSES: ReadonlySet<SessionRuntimeStatus> = new Set<SessionRuntimeStatus>([
+  'starting',
+  'running',
+  'waiting_permission',
+  'waiting_question',
+  'stopping',
+]);
 
 /**
  * dsh-rebase decision 178: an automatic compaction's row as `session.compaction`
@@ -1908,8 +1924,15 @@ function applyRuntimeEventCore(
         unreadSessionIds: markSessionUnread(state, sessionId),
         ...withoutSessionPermissions(state, sessionId),
         ...(settled === state ? {} : { messages: settled.messages }),
-        // Decision 156: the request that failed before any reply is marked so.
-        ...withFailedRequest(settled, sessionId),
+        // Decision 156: the request that failed is marked so (finding 2: with
+        // blocks too, when a turn was running as it failed).
+        ...withFailedRequest(
+          settled,
+          sessionId,
+          TURN_RUNNING_STATUSES.has(
+            state.sessions.find((session) => session.id === sessionId)?.status ?? 'idle'
+          )
+        ),
       };
     }
 
