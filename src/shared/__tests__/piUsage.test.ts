@@ -186,6 +186,17 @@ describe('the session rollup rides beside the turn totals (A2)', () => {
     expect(readPiUsagePayload({ input: 10, output: 5 })).not.toHaveProperty('session');
   });
 
+  it('carries how many requests outside the loop the totals include (decision 193 §10)', () => {
+    const withAuxiliary = { ...SESSION_USAGE, auxiliary: 2 };
+    const wire = buildPiUsagePayload(SDK_USAGE, SDK_CONTEXT, withAuxiliary);
+    expect(readPiUsagePayload(wire)?.session).toEqual(withAuxiliary);
+    // None, or garbage, reads as none rather than a 0 to print.
+    for (const auxiliary of [0, -1, 'two', undefined]) {
+      const read = readPiUsagePayload({ ...wire, session: { ...SESSION_USAGE, auxiliary } });
+      expect(read?.session).toEqual(SESSION_USAGE);
+    }
+  });
+
   it('reads back only a settled rollup', () => {
     const wire = buildPiUsagePayload(SDK_USAGE, SDK_CONTEXT, SESSION_USAGE);
     expect(readPiUsagePayload(wire)?.session).toEqual(SESSION_USAGE);
@@ -586,6 +597,49 @@ describe('decision 173 · a step carries its cache verdict', () => {
     ],
   ])('says nothing of a %s step', (_kind, step) => {
     expect(buildPiUsageCacheStep(step, TOTALS)).toBeNull();
+  });
+
+  it('sends an implicit cache’s first step by what it left cached, and says it is implicit (decision 193 §9)', () => {
+    const gpt = verdict({
+      step: 1,
+      provider: 'gpt',
+      model: 'gpt-6',
+      prompt: 10_000,
+      read: 0,
+      write: 0,
+      input: 10_000,
+      prevPrompt: undefined,
+      lost: 0,
+      kind: 'cold',
+      implicit: true,
+    });
+    expect(buildPiUsageCacheStep(gpt, TOTALS)).toEqual({
+      turn: 1,
+      step: 1,
+      kind: 'cold',
+      explained: false,
+      prompt: 10_000,
+      read: 0,
+      write: 0,
+      implicit: true,
+      session: TOTALS,
+    });
+    // Under 1,024 tokens nothing was cached, so there is no first write.
+    expect(buildPiUsageCacheStep({ ...gpt, prompt: 900, input: 900 }, TOTALS)).toBeNull();
+    // A rebuild rewrote what was billed uncached.
+    const rebuild = verdict({
+      ...gpt,
+      step: 3,
+      kind: 'rebuild',
+      input: 14_000,
+      prompt: 14_000,
+      prevPrompt: 12_000,
+      lost: 12_000,
+    });
+    const built = buildPiUsageCacheStep(rebuild, TOTALS);
+    expect(built).toMatchObject({ kind: 'rebuild', implicit: true, rewrite: 12_000, write: 0 });
+    const payload = buildPiUsagePayload(SETTLED, undefined, null, null, { cache: built });
+    expect(readPiUsagePayload(payload)?.cache).toEqual(built);
   });
 
   it('rides the settled payload and reads back as built', () => {

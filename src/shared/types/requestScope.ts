@@ -13,7 +13,9 @@
  * merely extend the previous one is logged. Decision 182 (DA-3): it also
  * sends every user message's content as a text-block array, on every request
  * (`src/dsh-host/lib/userContentBlocks.ts`), so that a message never changes
- * form between steps.
+ * form between steps. Decision 193 §9: the prefix comparison also reads
+ * openai-responses requests (`responsesPrefixUnitsOf`), which it never
+ * rewrites.
  *
  * Every part has an emergency switch: its environment variable set to `0`
  * turns it off ({@link isSwitchedOff}).
@@ -33,6 +35,11 @@ export const SESSION_METADATA_ENV = 'AICLIENT_RUNTIME_SESSION_METADATA';
 export const CACHE_CHAIN_ENV = 'AICLIENT_RUNTIME_CACHE_CHAIN';
 /** `0`: user messages go out in the form pi-ai gives them (decision 182). */
 export const USER_CONTENT_BLOCKS_ENV = 'AICLIENT_RUNTIME_USER_CONTENT_BLOCKS';
+/**
+ * `0`: openai-responses routes are left out of the cache chain and the prefix
+ * watch, as before decision 193 §9; anthropic-messages ones are not affected.
+ */
+export const RESPONSES_CACHE_WATCH_ENV = 'AICLIENT_RUNTIME_RESPONSES_CACHE_WATCH';
 
 /** Whether `env` turns the switch `name` off: on unless set to `0`. */
 export function isSwitchedOff(

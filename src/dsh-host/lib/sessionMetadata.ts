@@ -148,3 +148,21 @@ export function isAnthropicMessagesRequest(input: unknown, init: RequestInit | u
     return false;
   }
 }
+
+/**
+ * Decision 193 §9: whether a `fetch` call is an OpenAI Responses request the
+ * prefix watch may read: POST, to a path ending in `/responses` (query
+ * aside), with a string body in `init` and no body of a Request's own, as the
+ * OpenAI SDK pi-ai uses sends it. Never rewritten. Never throws.
+ */
+export function isOpenAIResponsesRequest(input: unknown, init: RequestInit | undefined): boolean {
+  try {
+    if (typeof init !== 'object' || init === null || typeof init.body !== 'string') return false;
+    if (String(init.method ?? 'GET').toUpperCase() !== 'POST') return false;
+    const url = urlOf(input);
+    if (url === undefined) return false;
+    return url.pathname.endsWith('/responses');
+  } catch {
+    return false;
+  }
+}

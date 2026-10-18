@@ -585,3 +585,71 @@ describe('cache figures', () => {
     expect(issue9Specs()).toHaveLength(22);
   });
 });
+
+describe('deriveRunCacheView — an implicit cache (decision 193 §9)', () => {
+  const GPT = 'gpt-6';
+  const gpt = (spec: StepSpec): StepSpec => ({ ...spec, model: GPT, write: 0 });
+
+  it('calls the first step 「首次缓存」 and confirms the reuse after it', () => {
+    const steps = stepsFrom([
+      gpt({
+        turn: 1,
+        step: 1,
+        input: 10_000,
+        read: 0,
+        write: 0,
+        at: TURN_START,
+        cache: { kind: 'cold', explained: false, implicit: true },
+      }),
+      gpt({ turn: 1, step: 2, input: 2_016, read: 9_984, write: 0, at: TURN_START + MINUTE }),
+    ]);
+    const cache = view({ steps });
+    const first = cache.group?.rows[0];
+    expect(first?.badge).toMatchObject({ tone: 'secondary', text: '首次缓存' });
+    expect(first?.badge?.tips[0]).toContain('不单独收缓存写入的费用');
+    expect(first?.verdict).toBe('首次缓存');
+    expect(cache.group?.note).toBe('首次写入之后，每一步都复用了上一步的缓存。');
+  });
+
+  it('says a lost read was billed uncached, and marks the read that fell', () => {
+    const steps = stepsFrom([
+      gpt({ turn: 1, step: 1, input: 10_000, read: 0, write: 0, at: TURN_START }),
+      gpt({
+        turn: 1,
+        step: 2,
+        input: 14_000,
+        read: 0,
+        write: 0,
+        at: TURN_START + MINUTE,
+        cache: {
+          kind: 'rebuild',
+          explained: false,
+          implicit: true,
+          lost: 10_000,
+          rewrite: 10_000,
+          prevPrompt: 10_000,
+          prefix: 'append',
+          session: { unexplained: 1, unexplainedRebuilds: 1, unexplainedRewriteTokens: 10_000 },
+        },
+      }),
+    ]);
+    const row = view({ steps }).group?.rows[1];
+    expect(row).toMatchObject({ warning: true, implicit: true, write: 0 });
+    expect(row?.badge?.text).toBe('无法解释 · 未命中约 10k');
+    expect(row?.badge?.tips[0]).toBe(
+      '上一步提示词 10,000，这一步只读到 0，约 10k 按未命中计费。本地没有能解释的变化，多半是请求被分到了另一个上游。'
+    );
+    expect(row?.verdict).toBe('无法解释，未命中 10000');
+    // An Anthropic rebuild keeps its own words, and its write is the figure marked.
+    const anthropic = stepsFrom([
+      warm(1, 1, 0, 10_000, TURN_START),
+      {
+        ...warm(1, 2, 0, 14_000, TURN_START + MINUTE),
+        cache: { kind: 'rebuild', explained: false, lost: 10_000, prevPrompt: 10_002 },
+      },
+    ]);
+    const written = view({ steps: anthropic }).group?.rows[1];
+    expect(written).toMatchObject({ warning: true, implicit: false });
+    expect(written?.badge?.text).toBe('无法解释 · 重写约 10k');
+  });
+});

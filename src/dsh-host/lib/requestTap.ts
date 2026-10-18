@@ -1,7 +1,7 @@
 /**
  * Decision 173 (GitHub issue #9): the request tap, a wrapper around the
  * process's `fetch` that sees each anthropic-messages request a DSH session
- * makes on its way out.
+ * makes on its way out, and (decision 193 §9) each openai-responses one.
  *
  *   D   A body without `metadata` gets a stable `metadata.user_id` appended
  *       (sessionMetadata.ts), every byte of its own left as it was, so that
@@ -18,6 +18,11 @@
  *       on every anthropic-messages request, in a session or not, so that a
  *       message keeps one form from step to step. Only then are D and B1
  *       applied: B1 compares what is sent.
+ *   R   Decision 193 §9: a session's openai-responses request gets B1 alone
+ *       (`responsesPrefixUnitsOf`), parsed and hashed off the request's path;
+ *       it always goes with its very own arguments (pi-ai already names the
+ *       session in `prompt_cache_key`). One chain per session and purpose
+ *       whatever the protocol, so a switch of protocol shows as a divergence.
  *
  * The session is the request scope's (requestScope.ts). A request outside
  * every scope and a one-shot one get U alone; every other `fetch` (an MCP
@@ -36,8 +41,9 @@
  * Its switches (src/shared/types/requestScope.ts) are read once, at install:
  * AICLIENT_RUNTIME_SESSION_METADATA=0 turns D off,
  * AICLIENT_RUNTIME_PREFIX_WATCH=0 turns B1 off,
- * AICLIENT_RUNTIME_USER_CONTENT_BLOCKS=0 turns U off; with all three off,
- * `fetch` is not wrapped at all. host.ts installs it right after the
+ * AICLIENT_RUNTIME_USER_CONTENT_BLOCKS=0 turns U off,
+ * AICLIENT_RUNTIME_RESPONSES_CACHE_WATCH=0 turns R off; with the first three
+ * off, `fetch` is not wrapped at all. host.ts installs it right after the
  * User-Agent relay, so it wraps the relay: the body is settled here, the
  * headers there.
  *
@@ -48,6 +54,7 @@ import {
   type ClientPrefixVerdict,
   isSwitchedOff,
   PREFIX_WATCH_ENV,
+  RESPONSES_CACHE_WATCH_ENV,
   type RequestPurpose,
   SESSION_METADATA_ENV,
   USER_CONTENT_BLOCKS_ENV,
@@ -56,6 +63,7 @@ import {
   comparePrefix,
   type PrefixUnits,
   prefixUnitsOf,
+  responsesPrefixUnitsOf,
   verdictLogFields,
 } from './requestPrefix.ts';
 import type { RequestScope } from './requestScope.ts';
@@ -64,6 +72,7 @@ import {
   claudeMetadataUserId,
   gatewaySessionUuid,
   isAnthropicMessagesRequest,
+  isOpenAIResponsesRequest,
 } from './sessionMetadata.ts';
 import { withUserContentBlocks } from './userContentBlocks.ts';
 
@@ -122,13 +131,19 @@ export interface RequestTapStatus {
   prefixWatch: boolean;
   /** Decision 182: user messages go out as text blocks. */
   userContentBlocks: boolean;
+  /** Decision 193 §9: the prefix watch reads openai-responses requests too. */
+  responsesWatch: boolean;
 }
 
 /** Which parts of the tap are on. */
 type TapParts = Omit<RequestTapStatus, 'installed'>;
 
-/** What B1 hashes of a request; undefined when there is nothing to compare. */
-type Sample = { body: unknown; betas: string | null } | undefined;
+/**
+ * What B1 hashes of a request: a Messages body as sent, or a Responses body
+ * still as text (parsed off the request's path); undefined when there is
+ * nothing to compare.
+ */
+type Sample = { body: unknown; betas: string | null } | { responses: string } | undefined;
 
 interface Chain {
   /** The previous request's units; undefined after one that could not be hashed. */
@@ -170,6 +185,7 @@ class RequestTap {
   private readonly sessionMetadata: boolean;
   private readonly prefixWatch: boolean;
   private readonly userContentBlocks: boolean;
+  private readonly responsesWatch: boolean;
   private readonly schedule: (fn: () => void) => void;
   private readonly now: () => number;
   private readonly limits: Readonly<RequestTapLimits>;
@@ -184,6 +200,7 @@ class RequestTap {
     this.sessionMetadata = parts.sessionMetadata;
     this.prefixWatch = parts.prefixWatch;
     this.userContentBlocks = parts.userContentBlocks;
+    this.responsesWatch = parts.responsesWatch;
     this.schedule = deps.schedule ?? ((fn) => void setImmediate(fn));
     this.now = deps.now ?? Date.now;
     this.limits = { ...REQUEST_TAP_LIMITS, ...deps.limits };
@@ -204,7 +221,12 @@ class RequestTap {
   }
 
   private tap(input: FetchInput, init: FetchInit): FetchInit | Promise<FetchInit> {
-    if (!isAnthropicMessagesRequest(input, init)) return init;
+    if (!isAnthropicMessagesRequest(input, init)) {
+      if (this.prefixWatch && this.responsesWatch && isOpenAIResponsesRequest(input, init)) {
+        this.watchResponses((init as MessagesInit).body);
+      }
+      return init;
+    }
     const store = this.deps.scope.current();
     if (store === undefined) {
       this.warn(
@@ -277,6 +299,28 @@ class RequestTap {
         return init;
       }
     });
+  }
+
+  /** R: a session's Responses request, for B1 only; never changes what is sent. */
+  private watchResponses(raw: string): void {
+    const store = this.deps.scope.current();
+    if (store === undefined) {
+      this.warn(
+        'no-scope',
+        'request tap: a model request ran outside every request scope; it went without session metadata or prefix watch'
+      );
+      return;
+    }
+    if (store.sessionId === undefined || store.purpose === 'oneshot') return;
+    if (raw.length > this.limits.maxWatchedBody) {
+      this.warn(
+        'watch-size',
+        `request tap: the prefix watch skips model request bodies over ${sizeText(this.limits.maxWatchedBody)}`
+      );
+      this.watch(store.sessionId, store.purpose, undefined);
+      return;
+    }
+    this.watch(store.sessionId, store.purpose, { responses: raw });
   }
 
   private withMetadata(request: MessagesInit, sessionId: string, deviceId: string): FetchInit {
@@ -357,7 +401,7 @@ class RequestTap {
     chain.seq += 1;
     chain.lastAt = at;
 
-    const units = sample === undefined ? undefined : prefixUnitsOf(sample.body, sample.betas);
+    const units = this.unitsOf(sample);
     if (units === undefined) {
       chain.units = undefined;
       return;
@@ -370,6 +414,20 @@ class RequestTap {
         `prefix-watch: session=${logSessionId(sessionId)} purpose=${purpose} req=${chain.seq} ${verdictLogFields(verdict)}`
       );
     }
+  }
+
+  /** A sample's prefix units; a Responses body that is not JSON warns once and has none. */
+  private unitsOf(sample: Sample): PrefixUnits | undefined {
+    if (sample === undefined) return undefined;
+    if (!('responses' in sample)) return prefixUnitsOf(sample.body, sample.betas);
+    let body: unknown;
+    try {
+      body = JSON.parse(sample.responses);
+    } catch {
+      this.warn('parse', 'request tap: a model request body is not JSON; it went as it is');
+      return undefined;
+    }
+    return responsesPrefixUnitsOf(body);
   }
 
   private record(
@@ -407,6 +465,7 @@ export function installRequestTap(
     sessionMetadata: !isSwitchedOff(deps.env, SESSION_METADATA_ENV),
     prefixWatch: !isSwitchedOff(deps.env, PREFIX_WATCH_ENV),
     userContentBlocks: !isSwitchedOff(deps.env, USER_CONTENT_BLOCKS_ENV),
+    responsesWatch: !isSwitchedOff(deps.env, RESPONSES_CACHE_WATCH_ENV),
   };
   const anyOn = parts.sessionMetadata || parts.prefixWatch || parts.userContentBlocks;
   const original = target.fetch;
@@ -427,7 +486,9 @@ export function installRequestTap(
 
 /**
  * The line host.ts logs at start: `request tap: session metadata on, prefix
- * watch on, user content blocks on`, each part `on` or `off` by its switch.
+ * watch on, user content blocks on`, each part `on` or `off` by its switch;
+ * `, openai-responses watch off` after it when the prefix watch is on but
+ * leaves Responses requests out.
  */
 export function describeRequestTap(status: RequestTapStatus): string {
   const state = (on: boolean) => (on ? 'on' : 'off');
@@ -437,5 +498,7 @@ export function describeRequestTap(status: RequestTapStatus): string {
   ) {
     return 'request tap: not installed (no fetch to wrap, or it is wrapped already)';
   }
-  return `request tap: session metadata ${state(status.sessionMetadata)}, prefix watch ${state(status.prefixWatch)}, user content blocks ${state(status.userContentBlocks)}`;
+  const responses =
+    status.prefixWatch && !status.responsesWatch ? ', openai-responses watch off' : '';
+  return `request tap: session metadata ${state(status.sessionMetadata)}, prefix watch ${state(status.prefixWatch)}, user content blocks ${state(status.userContentBlocks)}${responses}`;
 }

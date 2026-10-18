@@ -22,15 +22,31 @@ import type { DshBridgeModelPlan } from './modelRoute.ts';
 
 /** What a `long` cache retention asks the provider for: Anthropic's one-hour entry. */
 export const LONG_CACHE_TTL_MS = 60 * 60_000;
+/**
+ * What a `long` retention asks of an openai-responses route: pi-ai sends
+ * `prompt_cache_retention: '24h'` unless the model's compat says the
+ * provider cannot keep it (`supportsLongCacheRetention: false`).
+ */
+export const LONG_RESPONSES_CACHE_TTL_MS = 24 * 60 * 60_000;
 
-/** The one protocol whose prompt cache the chain follows (decision 173 §4.3). */
-const FOLLOWED_PROTOCOL = 'anthropic-messages';
+/** Anthropic's prompt cache, written where pi-ai puts `cache_control` (decision 173 §4.3). */
+const ANTHROPIC_MESSAGES = 'anthropic-messages';
+/** OpenAI's prompt cache: implicit, every prompt from 1,024 tokens (decision 193 §9). */
+const OPENAI_RESPONSES = 'openai-responses';
+
+/** What the chain reads of a plan route; every field may be missing or malformed. */
+interface RouteProfile {
+  api?: unknown;
+  cacheRetention?: unknown;
+  compat?: unknown;
+  models?: unknown;
+}
 
 /** The plan's profile of route `provider`, when the plan names it. Never throws. */
 function routeOf(
   plan: () => DshBridgeModelPlan | undefined,
   provider: string | undefined
-): { api?: unknown; cacheRetention?: unknown } | undefined {
+): RouteProfile | undefined {
   if (!provider) return undefined;
   try {
     const routes = plan()?.routes;
@@ -44,25 +60,60 @@ function routeOf(
   }
 }
 
+function recordOf(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/**
+ * The compat flag pi-ai reads for `model` on `route`: the model's own, else
+ * the route's; undefined when neither sets it. Never throws.
+ */
+function compatFlag(route: RouteProfile, model: string | undefined, flag: string): unknown {
+  try {
+    const models = Array.isArray(route.models) ? route.models : [];
+    const entry = model ? models.map(recordOf).find((row) => row?.id === model) : undefined;
+    const own = recordOf(entry?.compat)?.[flag];
+    return own !== undefined ? own : recordOf(route.compat)?.[flag];
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The chain's options, read off the host's model plan per step (DSH names a
  * step's route as `provider`, the plan's route key):
- *   cacheAware  the route speaks anthropic-messages. Any other route, and one
- *               the plan does not name (no plan, a host without routes), is
- *               recorded unjudged: it never alerts.
- *   ttlMsFor    1 h for `cacheRetention: 'long'`, 5 min for a named route's
- *               other retention; undefined for an unnamed route (the fold's
- *               default, 5 min).
+ *   cacheAware     the route speaks anthropic-messages, or openai-responses
+ *                  unless `responses` is off (decision 193 §9). Any other
+ *                  route, and one the plan does not name (no plan, a host
+ *                  without routes), is recorded unjudged: it never alerts.
+ *   implicitCache  the route speaks openai-responses: OpenAI caches every
+ *                  prompt by itself and reports reads only.
+ *   ttlMsFor       for `cacheRetention: 'long'`, 1 h on anthropic-messages
+ *                  and 24 h on openai-responses (5 min when the model's
+ *                  compat refuses the long retention, which pi-ai then does
+ *                  not ask for); 5 min for a named route's other retention;
+ *                  undefined for an unnamed route (the fold's default, 5 min).
  */
 export function dshCacheChainOptions(
-  plan: () => DshBridgeModelPlan | undefined
+  plan: () => DshBridgeModelPlan | undefined,
+  { responses = true }: { responses?: boolean } = {}
 ): CacheChainOptions {
   return {
-    cacheAware: (provider) => routeOf(plan, provider)?.api === FOLLOWED_PROTOCOL,
-    ttlMsFor: (provider) => {
+    cacheAware: (provider) => {
+      const api = routeOf(plan, provider)?.api;
+      return api === ANTHROPIC_MESSAGES || (responses && api === OPENAI_RESPONSES);
+    },
+    implicitCache: (provider) => routeOf(plan, provider)?.api === OPENAI_RESPONSES,
+    ttlMsFor: (provider, model) => {
       const route = routeOf(plan, provider);
       if (!route) return undefined;
-      return route.cacheRetention === 'long' ? LONG_CACHE_TTL_MS : DEFAULT_TTL_MS;
+      if (route.cacheRetention !== 'long') return DEFAULT_TTL_MS;
+      if (route.api !== OPENAI_RESPONSES) return LONG_CACHE_TTL_MS;
+      return compatFlag(route, model, 'supportsLongCacheRetention') === false
+        ? DEFAULT_TTL_MS
+        : LONG_RESPONSES_CACHE_TTL_MS;
     },
   };
 }
@@ -84,8 +135,8 @@ export interface StepRequestWindow {
  * is made there, and no other step's is. Not one handed to an earlier step
  * either (`given`, by request number and time: the host restarts the count
  * after a long idle). Evidence from before the window means the watch never
- * saw this step's request (switched off, not an anthropic-messages request,
- * no session in its async context); a window with an unknown end proves
+ * saw this step's request (switched off, a protocol it does not read, no
+ * session in its async context); a window with an unknown end proves
  * nothing. Both give none: a missing `prefix` means "not known", never "fine".
  */
 export function stepPrefixEvidence(

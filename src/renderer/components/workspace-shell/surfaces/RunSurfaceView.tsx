@@ -46,6 +46,7 @@ import {
   collectSettledSteps,
   deriveRunCacheView,
   deriveRunPanelView,
+  formatSessionSteps,
   type RunTone,
 } from './runPanelModel';
 
@@ -447,17 +448,11 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
         {view.sessionUsage && (
           <div className="mt-1 flex flex-col border-t pt-1">
             {/* Issue #9: `turns` counts settled model requests — steps, not
-                the user's turns the 「逐步缓存」 header counts by. */}
+                the user's turns the 「逐步缓存」 header counts by. Decision
+                193 §10: the requests outside the loop the figures include. */}
             <RunMetric
               label={t('Steps (session)')}
-              value={
-                view.sessionUsage.toolResults > 0
-                  ? t('{{turns}} + {{delegated}} delegated', {
-                      turns: view.sessionUsage.turns,
-                      delegated: view.sessionUsage.toolResults,
-                    })
-                  : String(view.sessionUsage.turns)
-              }
+              value={formatSessionSteps(view.sessionUsage, t)}
             />
             <RunMetric
               label={t('Input (session)')}
@@ -507,9 +502,14 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
                 whole prompt, so this is that prompt counted once per turn.
                 Stated where the number is, not in a doc nobody opens. */}
             <p className="px-1 py-1 text-meta text-muted-foreground">
-              {t(
-                'Session figures add up every model request, so the cache read is a running sum, not what is in the context now.'
-              )}
+              {/* Decision 193 §10: say so when the sum takes in requests outside the loop. */}
+              {view.sessionUsage.auxiliary
+                ? t(
+                    'Session figures add up every model request, compaction summaries and other auxiliary ones included, so the cache read is a running sum, not what is in the context now.'
+                  )
+                : t(
+                    'Session figures add up every model request, so the cache read is a running sum, not what is in the context now.'
+                  )}
             </p>
           </div>
         )}

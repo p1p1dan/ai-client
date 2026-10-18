@@ -435,3 +435,59 @@ describe('DshHistoryCache — the cache chain over the recorded logs (decision 1
     }
   });
 });
+
+describe('DshHistoryCache — requests outside the agent loop (decision 193 §10)', () => {
+  function summary(seq: number, usage?: Record<string, number>): DshLogEvent {
+    return {
+      type: 'compaction/summary',
+      seq,
+      time: 1_790_000_000_000 + seq,
+      data: {
+        compactionId: `c${seq}`,
+        summary: [{ type: 'text', text: 'Summary.' }],
+        provider: 'gpt',
+        model: 'gpt-6',
+        ...(usage ? { usage } : {}),
+      },
+    };
+  }
+
+  it('counts each compaction summary that logged usage, on the full read and one at a time', async () => {
+    const { query, release } = fakeQuery([
+      user(0, 'u1'),
+      summary(1, { inputTokens: 500, outputTokens: 300, cacheReadTokens: 39_700 }),
+      summary(2),
+    ]);
+    const cache = new DshHistoryCache(query);
+    cache.reset(SESSION);
+    expect(cache.auxiliaryUsage()).toEqual({
+      requests: 0,
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
+    await loaded(cache, release);
+    expect(cache.auxiliaryUsage()).toEqual({
+      requests: 1,
+      input: 500,
+      output: 300,
+      cacheRead: 39_700,
+      cacheWrite: 0,
+    });
+    cache.push(summary(3, { inputTokens: 20, outputTokens: 10, cacheWriteTokens: 7 }));
+    cache.push(summary(3, { inputTokens: 20, outputTokens: 10, cacheWriteTokens: 7 }));
+    expect(cache.auxiliaryUsage()).toEqual({
+      requests: 2,
+      input: 520,
+      output: 310,
+      cacheRead: 39_700,
+      cacheWrite: 7,
+    });
+    // A copy: what the caller does with it is not the cache's.
+    cache.auxiliaryUsage().requests = 99;
+    expect(cache.auxiliaryUsage().requests).toBe(2);
+    cache.reset(SESSION);
+    expect(cache.auxiliaryUsage().requests).toBe(0);
+  });
+});

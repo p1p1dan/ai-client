@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   PREFIX_WATCH_ENV,
+  RESPONSES_CACHE_WATCH_ENV,
   type RequestScopeStore,
   SESSION_METADATA_ENV,
   USER_CONTENT_BLOCKS_ENV,
@@ -174,6 +175,7 @@ describe('installRequestTap', () => {
       sessionMetadata: true,
       prefixWatch: true,
       userContentBlocks: true,
+      responsesWatch: true,
     });
     expect(h.target.fetch).not.toBe(h.base);
     const tapped = h.target.fetch;
@@ -194,6 +196,7 @@ describe('installRequestTap', () => {
       sessionMetadata: false,
       prefixWatch: false,
       userContentBlocks: false,
+      responsesWatch: true,
     });
     expect(off.target.fetch).toBe(off.base);
     // Any one part on is enough to wrap it.
@@ -211,8 +214,18 @@ describe('installRequestTap', () => {
   });
 
   it('says how it started', () => {
-    const on = { sessionMetadata: true, prefixWatch: true, userContentBlocks: true };
-    const off = { sessionMetadata: false, prefixWatch: false, userContentBlocks: false };
+    const on = {
+      sessionMetadata: true,
+      prefixWatch: true,
+      userContentBlocks: true,
+      responsesWatch: true,
+    };
+    const off = {
+      sessionMetadata: false,
+      prefixWatch: false,
+      userContentBlocks: false,
+      responsesWatch: true,
+    };
     expect(describeRequestTap({ installed: true, ...on })).toBe(
       'request tap: session metadata on, prefix watch on, user content blocks on'
     );
@@ -227,6 +240,13 @@ describe('installRequestTap', () => {
     );
     expect(describeRequestTap({ installed: false, ...off, userContentBlocks: true })).toBe(
       'request tap: not installed (no fetch to wrap, or it is wrapped already)'
+    );
+    // Decision 193 §9: said only when it leaves Responses requests out.
+    expect(describeRequestTap({ installed: true, ...on, responsesWatch: false })).toBe(
+      'request tap: session metadata on, prefix watch on, user content blocks on, openai-responses watch off'
+    );
+    expect(describeRequestTap({ installed: true, ...off, responsesWatch: false })).toBe(
+      'request tap: session metadata off, prefix watch off, user content blocks off'
     );
   });
 });
@@ -395,6 +415,7 @@ describe('D: session metadata', () => {
       sessionMetadata: false,
       prefixWatch: true,
       userContentBlocks: true,
+      responsesWatch: true,
     });
     const { init, sent } = await h.send(requestBody(TURN));
     expect(sent?.init).toBe(init);
@@ -623,6 +644,7 @@ describe('B1: prefix watch', () => {
       sessionMetadata: true,
       prefixWatch: false,
       userContentBlocks: true,
+      responsesWatch: true,
     });
     const { raw, sent } = await h.send(requestBody(TURN));
     await h.send(requestBody(STEP));
@@ -630,6 +652,140 @@ describe('B1: prefix watch', () => {
     expect(h.queue).toEqual([]);
     expect(h.lines).toEqual([]);
     expect(h.scope.evidenceFor(SESSION)).toBeUndefined();
+  });
+});
+
+describe('R: openai-responses requests (decision 193 §9)', () => {
+  const RESPONSES_URL = 'https://gw.example.test/v1/responses';
+  type Item = Record<string, unknown>;
+  const FIRST: readonly Item[] = [
+    { role: 'user', content: [{ type: 'input_text', text: 'Read the README.' }] },
+    {
+      type: 'function_call',
+      id: 'fc_1',
+      call_id: 'call_1',
+      name: 'read',
+      arguments: '{"file_path":"README.md"}',
+    },
+    { type: 'function_call_output', call_id: 'call_1', output: 'Hello.' },
+  ];
+  const NEXT: readonly Item[] = [
+    { role: 'assistant', content: [{ type: 'output_text', text: 'It says hello.' }] },
+    { role: 'user', content: [{ type: 'input_text', text: 'Now run the tests.' }] },
+  ];
+
+  /** A Responses body in pi-ai's shape and key order. */
+  function responsesBody(input: readonly Item[], overrides: Record<string, unknown> = {}) {
+    return {
+      model: 'gpt-6',
+      input: [{ role: 'developer', content: 'You are a coding agent.' }, ...input],
+      stream: true,
+      prompt_cache_key: SESSION,
+      prompt_cache_retention: '24h',
+      store: false,
+      max_output_tokens: 128_000,
+      tools: [{ type: 'function', name: 'read', parameters: { type: 'object' } }],
+      reasoning: { effort: 'high', summary: 'auto' },
+      ...overrides,
+    };
+  }
+
+  /** One OpenAI SDK call to the Responses API inside `store`. */
+  async function sendResponses(
+    h: ReturnType<typeof setup>,
+    body: unknown,
+    store: RequestScopeStore | null = agent()
+  ) {
+    const init: RequestInit = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer fake' },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+      signal: new AbortController().signal,
+    };
+    const call = () => h.target.fetch(RESPONSES_URL, init);
+    await (store === null ? call() : h.scope.run(store, call));
+    h.settle();
+    return { init, sent: h.calls.at(-1) };
+  }
+
+  it("watches a session's request and sends it with its very own arguments", async () => {
+    const h = setup();
+    const evidence = () => h.scope.evidenceFor(SESSION);
+    const first = await sendResponses(h, responsesBody(FIRST));
+    expect(first.sent?.input).toBe(RESPONSES_URL);
+    expect(first.sent?.init).toBe(first.init);
+    expect(evidence()).toMatchObject({ verdict: { kind: 'first' }, requestSeq: 1 });
+
+    const next = await sendResponses(h, responsesBody([...FIRST, ...NEXT]));
+    expect(next.sent?.init).toBe(next.init);
+    expect(evidence()).toMatchObject({ verdict: { kind: 'append', added: 2 }, requestSeq: 2 });
+    expect(h.lines).toEqual([]);
+    // Never metadata, never a rewrite: pi-ai names the session in prompt_cache_key.
+    expect(h.deviceId).not.toHaveBeenCalled();
+    expect(h.warnings).toEqual([]);
+  });
+
+  it('logs where a request diverged: the instructions, a cache key, an item', async () => {
+    const h = setup();
+    await sendResponses(h, responsesBody(FIRST, { instructions: 'Be brief.' }));
+    await sendResponses(h, responsesBody(FIRST, { instructions: 'Be thorough.' }));
+    await sendResponses(
+      h,
+      responsesBody(FIRST, { instructions: 'Be thorough.', prompt_cache_key: 'other' })
+    );
+    const edited = [FIRST[0], FIRST[1], { ...FIRST[2], output: 'Trimmed.' }] as Item[];
+    await sendResponses(
+      h,
+      responsesBody([...edited, ...NEXT], {
+        instructions: 'Be thorough.',
+        prompt_cache_key: 'other',
+      })
+    );
+    expect(h.lines).toEqual([
+      `prefix-watch: session=${SESSION} purpose=agent req=2 verdict=diverged at=system`,
+      `prefix-watch: session=${SESSION} purpose=agent req=3 verdict=diverged at=config field=prompt_cache_key`,
+      `prefix-watch: session=${SESSION} purpose=agent req=4 verdict=diverged at=messages index=3/6 role=function_call_output truncated=false`,
+    ]);
+  });
+
+  it('leaves one-shot requests, requests outside a session and other paths alone', async () => {
+    const h = setup();
+    await sendResponses(h, responsesBody(FIRST), { purpose: 'oneshot' });
+    await sendResponses(h, responsesBody(FIRST), null);
+    await h.scope.run(agent(), () =>
+      h.target.fetch('https://gw.example.test/v1/responses/resp_1/cancel', {
+        method: 'POST',
+        body: '{}',
+      })
+    );
+    expect(h.queue).toEqual([]);
+    expect(h.scope.evidenceFor(SESSION)).toBeUndefined();
+    expect(keysOf(h.warnings)).toEqual(['no-scope']);
+  });
+
+  it('starts the chain over after a body that is not JSON, quoting none of it', async () => {
+    const h = setup();
+    await sendResponses(h, responsesBody(FIRST));
+    const { init, sent } = await sendResponses(h, '{"input": [secret');
+    expect(sent?.init).toBe(init);
+    await sendResponses(h, responsesBody([...FIRST, ...NEXT]));
+    expect(h.scope.evidenceFor(SESSION)).toMatchObject({
+      verdict: { kind: 'first' },
+      requestSeq: 3,
+    });
+    expect(h.warnings).toEqual([
+      { key: 'parse', line: 'request tap: a model request body is not JSON; it went as it is' },
+    ]);
+  });
+
+  it(`watches no Responses request with ${RESPONSES_CACHE_WATCH_ENV}=0, Messages ones still`, async () => {
+    const h = setup({ env: { [RESPONSES_CACHE_WATCH_ENV]: '0' } });
+    expect(h.status.responsesWatch).toBe(false);
+    await sendResponses(h, responsesBody(FIRST));
+    expect(h.queue).toEqual([]);
+    expect(h.scope.evidenceFor(SESSION)).toBeUndefined();
+    await h.send(requestBody(TURN));
+    expect(h.scope.evidenceFor(SESSION)).toMatchObject({ verdict: { kind: 'first' } });
   });
 });
 
@@ -710,6 +866,7 @@ describe('U: user content blocks (decision 182)', () => {
       sessionMetadata: true,
       prefixWatch: true,
       userContentBlocks: false,
+      responsesWatch: true,
     });
     await h.send(requestBody(PI_STEP_ONE));
     const { raw, sent } = await h.send(requestBody(PI_STEP_TWO));

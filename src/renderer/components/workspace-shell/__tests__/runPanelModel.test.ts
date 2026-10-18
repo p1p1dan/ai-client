@@ -1,3 +1,4 @@
+import { translate } from '@shared/i18n';
 import type { PiUsagePayload } from '@shared/piUsage';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
@@ -6,6 +7,7 @@ import {
   deriveRunPanelView,
   deriveRunTools,
   formatRunDuration,
+  formatSessionSteps,
   type RunPanelInput,
 } from '../surfaces/runPanelModel';
 
@@ -508,5 +510,32 @@ describe('formatRunDuration', () => {
     expect(formatRunDuration(59_000)).toBe('59s');
     expect(formatRunDuration(60_000)).toBe('1m 0s');
     expect(formatRunDuration(185_000)).toBe('3m 5s');
+  });
+});
+
+describe('formatSessionSteps — what the session figures take in', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+  const session = {
+    turns: 15,
+    toolResults: 0,
+    input: 1,
+    output: 1,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 2,
+    costUsd: 0,
+  };
+
+  it('counts the steps alone when nothing else is in', () => {
+    expect(formatSessionSteps(session, zh)).toBe('15');
+  });
+
+  it('adds the requests outside the loop (decision 193 §10), and delegated results before them', () => {
+    expect(formatSessionSteps({ ...session, auxiliary: 2 }, zh)).toBe('15 + 2 次辅助请求');
+    expect(formatSessionSteps({ ...session, toolResults: 3, auxiliary: 1 })).toBe(
+      '15 + 3 delegated + 1 auxiliary'
+    );
+    expect(formatSessionSteps({ ...session, toolResults: 3 }, zh)).toBe('15 + 3 次委派');
   });
 });

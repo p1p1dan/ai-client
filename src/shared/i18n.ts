@@ -2413,12 +2413,17 @@ export const zhTranslations: Record<string, string> = {
   'Cache hit rate (last step)': '缓存命中率（最后一步）',
   'Session figures add up every model request, so the cache read is a running sum, not what is in the context now.':
     '本会话的数字是把每一次模型请求累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。',
+  // Decision 193 §10: the session figures take in compaction summaries and reviews too.
+  'Session figures add up every model request, compaction summaries and other auxiliary ones included, so the cache read is a running sum, not what is in the context now.':
+    '本会话的数字是把每一次模型请求（包括压缩摘要等辅助请求）累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。',
   Cost: '费用',
   // A2: the conversation total, deliberately labelled apart from the
   // per-step figures above it — the two are never added together. Issue #9:
   // the count is of model requests, so steps, not turns.
   'Steps (session)': '步数（本会话）',
   '{{turns}} + {{delegated}} delegated': '{{turns}} + {{delegated}} 次委派',
+  // Decision 193 §10: requests outside the loop (compaction summaries, reviews).
+  '{{turns}} + {{auxiliary}} auxiliary': '{{turns}} + {{auxiliary}} 次辅助请求',
   'Input (session)': '输入（本会话累计）',
   'Output (session)': '输出（本会话累计）',
   'Cache read (session)': '缓存读取（本会话累计）',
@@ -4351,6 +4356,10 @@ Object.assign(zhTranslations, {
   'First write': '首次写入',
   'No cache to build on yet, so this step’s whole prompt is written to the cache.':
     '还没有可用的缓存，这一步的提示词全部写入缓存。',
+  // Decision 193 §9: an implicit cache (OpenAI) caches by itself and bills no write.
+  'First cached': '首次缓存',
+  'No cache to build on yet. The provider caches this step’s prompt by itself and bills no cache write.':
+    '还没有可用的缓存。服务商会自动缓存这一步的提示词，不单独收缓存写入的费用。',
   // Badges: local causes (blue), in display order.
   'Plan mode switched': '计划模式切换',
   'Entering or leaving plan mode changes the system prompt, so what follows is written to the cache again.':
@@ -4400,6 +4409,12 @@ Object.assign(zhTranslations, {
     '上一步提示词 {{prev}}，这一步只读到 {{read}}，约 {{rewrite}} 要重写。本地没有能解释的变化，多半是请求被分到了另一个上游。',
   'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is written again.':
     '上一步提示词 {{prev}}，这一步只读到 {{read}}，约 {{rewrite}} 要重写。',
+  // Decision 193 §9: the same on an implicit cache, where a miss is billed as uncached input.
+  'Unexplained · about {{tokens}} missed': '无法解释 · 未命中约 {{tokens}}',
+  'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is billed uncached. Nothing local explains it: most likely the request went to another upstream.':
+    '上一步提示词 {{prev}}，这一步只读到 {{read}}，约 {{rewrite}} 按未命中计费。本地没有能解释的变化，多半是请求被分到了另一个上游。',
+  'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is billed uncached.':
+    '上一步提示词 {{prev}}，这一步只读到 {{read}}，约 {{rewrite}} 按未命中计费。',
   'Prompt shorter · −{{tokens}}': '提示词变短 · −{{tokens}}',
   'This step’s prompt is {{tokens}} shorter than the step before’s. The client only appends (verified), so the upstream dropped part of the history and what follows is written to the cache again.':
     '这一步的提示词比上一步少了 {{tokens}}。客户端只在末尾追加内容（已校验），变短说明上游丢掉了一部分历史，后面的内容要重新写入缓存。',
@@ -4446,6 +4461,7 @@ Object.assign(zhTranslations, {
   Time: '时间',
   Verdict: '判定',
   'Unexplained, rewrote {{tokens}}': '无法解释，重写 {{tokens}}',
+  'Unexplained, missed {{tokens}}': '无法解释，未命中 {{tokens}}',
   'Prompt shorter −{{tokens}}': '提示词变短 −{{tokens}}',
   'Read the prefix of turn {{turn}}, step {{step}}': '读到回合 {{turn}} 第 {{step}} 步的前缀',
   '{{verdict}} (prefix diverged)': '{{verdict}}（前缀不一致）',

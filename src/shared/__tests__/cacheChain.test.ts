@@ -6,6 +6,7 @@ import {
   type CacheChainEvent,
   type CacheChainOptions,
   type CacheStepVerdict,
+  cachedOf,
   foldCacheChain,
   initCacheChain,
   isNotableVerdict,
@@ -629,6 +630,10 @@ describe('the cache chain', () => {
       { ...json, version: CACHE_CHAIN_STATE_VERSION + 1 },
       // Version 1 kept no alert counts: its holder folds the log again.
       { ...json, version: 1 },
+      // Version 2 kept no cached size per step (decision 193 §9).
+      { ...json, version: 2 },
+      { ...json, last: { ...json.last, cached: undefined } },
+      { ...json, verdicts: [{ ...json.verdicts[0], implicit: false }] },
       { ...json, totals: { ...json.totals, unexplainedRewriteTokens: undefined } },
       { ...json, version: undefined },
       undefined,
@@ -644,5 +649,129 @@ describe('the cache chain', () => {
       { ...json, last: { ...json.last, startedAt: 'noon' } },
     ];
     for (const raw of refused) expect(restoreCacheChain(raw)).toBeUndefined();
+  });
+});
+
+// ---- decision 193 §9: an implicit cache (OpenAI) ------------------------------------
+
+describe('an implicit cache', () => {
+  const GPT = { provider: 'openai', model: 'gpt-6' };
+  /** Follows GPT's implicit cache with the default TTL. */
+  const FOLLOW_GPT: CacheChainOptions = {
+    cacheAware: (provider) => provider === 'openai',
+    implicitCache: (provider) => provider === 'openai',
+    ttlMsFor: () => undefined,
+  };
+
+  /** A GPT step as pi-ai reports it: the prompt less what was read, the read, no write. */
+  function gpt(log: Log, turn: number, step: number, prompt: number, read: number, after = 1_000) {
+    return log.step(turn, step, { input: prompt - read, read }, { after, route: GPT });
+  }
+
+  it('leaves a prompt cached in whole blocks from 1,024 tokens up', () => {
+    expect(cachedOf({ prompt: 10_000, read: 0, write: 0, implicit: true })).toBe(9_984);
+    expect(cachedOf({ prompt: 1_024, read: 0, write: 0, implicit: true })).toBe(1_024);
+    expect(cachedOf({ prompt: 1_023, read: 0, write: 0, implicit: true })).toBe(0);
+    // A provider that reports writes caches what it reports, as Anthropic does.
+    expect(cachedOf({ prompt: 10_000, read: 2_048, write: 4_096, implicit: true })).toBe(6_144);
+    expect(cachedOf({ prompt: 10_000, read: 0, write: 0 })).toBe(0);
+  });
+
+  it('judges the second step against the first, which cached without reporting it', () => {
+    const log = new Log();
+    gpt(log, 1, 1, 10_000, 0);
+    gpt(log, 1, 2, 12_000, 9_984);
+    gpt(log, 1, 3, 14_000, 11_904);
+    const { verdicts, totals } = viewCacheChain(log.fold(FOLLOW_GPT));
+    expect(verdicts.map((entry) => entry.kind)).toEqual(['cold', 'warm', 'warm']);
+    expect(verdicts.map((entry) => entry.lost)).toEqual([0, 16, 96]);
+    expect(verdicts.every((entry) => entry.implicit === true && entry.write === 0)).toBe(true);
+    expect(totals).toMatchObject({ steps: 3, evaluated: 2, unexplained: 0 });
+    // Read as an Anthropic cache, the first step cached nothing to judge by.
+    const explicit = { ...FOLLOW_GPT, implicitCache: undefined };
+    const asWritten = viewCacheChain(log.fold(explicit)).verdicts;
+    expect(asWritten.map((entry) => entry.kind)).toEqual(['cold', 'cold', 'warm']);
+    expect(asWritten.some((entry) => entry.implicit)).toBe(false);
+  });
+
+  it('calls a lost read an unexplained rebuild, and counts what was billed uncached', () => {
+    const log = new Log();
+    gpt(log, 1, 1, 10_000, 0);
+    gpt(log, 1, 2, 12_000, 9_984);
+    gpt(log, 1, 3, 14_000, 0);
+    const state = log.fold(FOLLOW_GPT);
+    const step3 = lastStepVerdict(state);
+    expect(step3).toMatchObject({
+      kind: 'rebuild',
+      prevPrompt: 12_000,
+      lost: 12_000,
+      input: 14_000,
+    });
+    if (!step3) throw new Error('no verdict');
+    expect(isUnexplainedVerdict(step3)).toBe(true);
+    expect(rewriteOf(step3)).toBe(12_000);
+    // Without the implicit flag nothing was written, so nothing written again.
+    expect(rewriteOf({ ...step3, implicit: undefined })).toBe(0);
+    expect(viewCacheChain(state).totals).toMatchObject({
+      rebuilds: 1,
+      unexplainedRebuilds: 1,
+      unexplainedLostTokens: 12_000,
+      unexplainedRewriteTokens: 12_000,
+    });
+  });
+
+  it('counts a shrink’s rewrite up to what it was billed uncached', () => {
+    const log = new Log();
+    gpt(log, 1, 1, 20_000, 0);
+    gpt(log, 1, 2, 22_000, 19_968);
+    // Old tool output cut: the prompt shorter, the cache read up to the cut.
+    gpt(log, 1, 3, 8_000, 5_120);
+    const step3 = lastStepVerdict(log.fold(FOLLOW_GPT));
+    expect(step3).toMatchObject({ kind: 'shrink', lost: 16_880, input: 2_880 });
+    if (!step3) throw new Error('no verdict');
+    expect(rewriteOf(step3)).toBe(2_880);
+  });
+
+  it('has nothing to judge by after a prompt under 1,024 tokens', () => {
+    const log = new Log();
+    gpt(log, 1, 1, 900, 0);
+    gpt(log, 1, 2, 1_500, 0);
+    gpt(log, 1, 3, 2_000, 1_408);
+    const kinds = viewCacheChain(log.fold(FOLLOW_GPT)).verdicts.map((entry) => entry.kind);
+    expect(kinds).toEqual(['cold', 'cold', 'warm']);
+  });
+
+  it('sees a read of an older step’s blocks', () => {
+    const log = new Log();
+    gpt(log, 1, 1, 10_000, 0);
+    gpt(log, 1, 2, 12_000, 9_984);
+    // Reads step 1's blocks again: 2,016 lost, under the rebuild threshold.
+    gpt(log, 1, 3, 14_000, 9_984);
+    const step3 = lastStepVerdict(log.fold(FOLLOW_GPT));
+    expect(step3).toMatchObject({ kind: 'warm', lost: 2_016, matched: { turn: 1, step: 1 } });
+    if (!step3) throw new Error('no verdict');
+    expect(isUnexplainedVerdict(step3)).toBe(true);
+  });
+
+  it('explains a rebuild by a lifetime the route states', () => {
+    const DAY = 24 * HOUR;
+    const long: CacheChainOptions = { ...FOLLOW_GPT, ttlMsFor: () => DAY };
+    const rebuiltAfter = (gap: number) => {
+      const log = new Log();
+      gpt(log, 1, 1, 10_000, 0);
+      gpt(log, 2, 1, 12_000, 0, gap);
+      return lastStepVerdict(log.fold(long));
+    };
+    expect(rebuiltAfter(2 * HOUR)).toMatchObject({ kind: 'rebuild', explained: false, causes: [] });
+    expect(rebuiltAfter(25 * HOUR)).toMatchObject({ kind: 'rebuild', causes: ['ttl-expired'] });
+  });
+
+  it('survives a JSON round trip', () => {
+    const log = new Log();
+    gpt(log, 1, 1, 10_000, 0);
+    gpt(log, 1, 2, 12_000, 9_984);
+    const state = log.fold(FOLLOW_GPT);
+    const restored = restoreCacheChain(JSON.parse(JSON.stringify(state)));
+    expect(restored).toStrictEqual(state);
   });
 });

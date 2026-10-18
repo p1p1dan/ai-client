@@ -4,6 +4,7 @@ import {
   comparePrefix,
   type PrefixUnits,
   prefixUnitsOf,
+  responsesPrefixUnitsOf,
   verdictLogFields,
 } from '../requestPrefix.ts';
 
@@ -444,5 +445,140 @@ describe('verdictLogFields', () => {
     expect(verdictLogFields({ ...base, at: 'messages', index: 0, role: '' })).toBe(
       'verdict=diverged at=messages index=0/1 role=? truncated=false'
     );
+  });
+});
+
+/**
+ * Decision 193 §9: an openai-responses body in the same units. The bodies are
+ * shaped the way pi-ai's openai-responses provider builds them (`buildParams`
+ * / `convertResponsesMessages`): the system prompt a developer item, the
+ * session in `prompt_cache_key`, every turn sent in full (`store: false`).
+ */
+describe('responsesPrefixUnitsOf', () => {
+  type Item = Record<string, unknown>;
+  const SYSTEM: Item = { role: 'developer', content: 'You are a coding agent.' };
+  const TURN: Item[] = [
+    SYSTEM,
+    { role: 'user', content: [{ type: 'input_text', text: 'Read the README.' }] },
+    { type: 'function_call', call_id: 'call_1', name: 'read', arguments: '{"path":"a"}' },
+    { type: 'function_call_output', call_id: 'call_1', output: 'Hello.' },
+  ];
+  const STEP: Item[] = [
+    { role: 'assistant', content: [{ type: 'output_text', text: 'It says hello.' }] },
+    { role: 'user', content: [{ type: 'input_text', text: 'Now run the tests.' }] },
+  ];
+
+  function body(input: unknown, overrides: Record<string, unknown> = {}) {
+    return {
+      model: 'gpt-6',
+      input,
+      stream: true,
+      prompt_cache_key: 'aiclient-session-1',
+      prompt_cache_retention: '24h',
+      store: false,
+      max_output_tokens: 128_000,
+      tools: [
+        { type: 'function', name: 'read', parameters: { type: 'object' } },
+        { type: 'function', name: 'bash', parameters: { type: 'object' } },
+      ],
+      reasoning: { effort: 'high', summary: 'auto' },
+      ...overrides,
+    };
+  }
+
+  function units(value: unknown): PrefixUnits {
+    const found = responsesPrefixUnitsOf(value);
+    if (!found) throw new Error('not a Responses body');
+    return found;
+  }
+
+  const compare = (prev: unknown, cur: unknown) => comparePrefix(units(prev), units(cur));
+
+  it('reads the instructions as the system unit and each input item as a message', () => {
+    const read = units(body(TURN, { instructions: 'Be brief.' }));
+    expect(Object.keys(read.config)).toEqual([
+      'model',
+      'prompt_cache_key',
+      'prompt_cache_retention',
+      'store',
+      'reasoning',
+    ]);
+    expect(read.tools).toHaveLength(2);
+    expect(read.messages).toHaveLength(4);
+    expect(read.roles).toEqual(['developer', 'user', 'function_call', 'function_call_output']);
+    expect(read.forms).toEqual(['string', 'blocks', 'blocks', 'blocks']);
+    expect(units(body(TURN)).system).not.toBe(read.system);
+  });
+
+  it('finds a step that appends, a retry, and what a prompt cache does not read', () => {
+    expect(compare(body(TURN), body([...TURN, ...STEP]))).toEqual({ kind: 'append', added: 2 });
+    expect(compare(body(TURN), body(TURN))).toEqual({ kind: 'same' });
+    expect(
+      compare(body(TURN), body(TURN, { max_output_tokens: 4096, stream: false, temperature: 1 }))
+    ).toEqual({ kind: 'same' });
+  });
+
+  it('reports the first change, in prefix order', () => {
+    const counts = { prevMessages: 4, messages: 4 };
+    expect(compare(body(TURN), body(TURN, { prompt_cache_key: 'other' }))).toEqual({
+      kind: 'diverged',
+      at: 'config',
+      field: 'prompt_cache_key',
+      truncated: false,
+      ...counts,
+    });
+    expect(compare(body(TURN), body(TURN, { tools: [body(TURN).tools[0]] }))).toMatchObject({
+      at: 'tools',
+      index: 1,
+    });
+    expect(compare(body(TURN), body(TURN, { instructions: 'Be brief.' }))).toMatchObject({
+      at: 'system',
+    });
+    const pruned = [...TURN.slice(0, 3), { ...TURN[3], output: '[pruned]' }];
+    expect(compare(body([...TURN, ...STEP]), body([...pruned, ...STEP]))).toEqual({
+      kind: 'diverged',
+      at: 'messages',
+      index: 3,
+      role: 'function_call_output',
+      truncated: false,
+      prevMessages: 6,
+      messages: 6,
+    });
+    expect(compare(body([...TURN, ...STEP]), body(TURN))).toMatchObject({
+      at: 'messages',
+      index: 4,
+      truncated: true,
+    });
+  });
+
+  it('tells the same text in another form from a changed text', () => {
+    const asParts = [
+      { role: 'developer', content: [{ type: 'input_text', text: SYSTEM.content }] },
+    ];
+    expect(compare(body([SYSTEM]), body(asParts))).toEqual({
+      kind: 'diverged',
+      at: 'message-form',
+      index: 0,
+      role: 'developer',
+      form: 'blocks',
+      truncated: false,
+      prevMessages: 1,
+      messages: 1,
+    });
+    const said = { role: 'assistant', content: 'It says hello.' };
+    expect(compare(body([STEP[0]]), body([said]))).toMatchObject({ at: 'message-form' });
+    // A string input is the one user message it stands for.
+    expect(
+      compare(body('Hi.'), body([{ role: 'user', content: [{ type: 'input_text', text: 'Hi.' }] }]))
+    ).toMatchObject({ at: 'message-form', index: 0, role: 'user', form: 'blocks' });
+  });
+
+  it('reads nothing that is not a Responses body', () => {
+    for (const value of [null, 'x', [1], { model: 'gpt-6' }, { input: 42 }]) {
+      expect(responsesPrefixUnitsOf(value), JSON.stringify(value)).toBeUndefined();
+    }
+    const cyclic: Record<string, unknown> = { input: [] };
+    cyclic.self = cyclic;
+    expect(responsesPrefixUnitsOf(cyclic)).toBeUndefined();
   });
 });

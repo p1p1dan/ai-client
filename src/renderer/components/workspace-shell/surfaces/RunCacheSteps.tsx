@@ -153,8 +153,12 @@ function CacheStepRow({ row }: { row: RunCacheRow }) {
         title={row.title}
       >
         <span className="w-12 text-right">{formatTokenTotal(row.prompt)}</span>
-        <span className="w-12 text-right">{formatTokenTotal(row.read)}</span>
-        <span className={cn('w-12 text-right', row.warning && 'text-warning')}>
+        {/* Decision 193 §9: an implicit cache writes nothing it reports, so
+            the figure that fell is the read. */}
+        <span className={cn('w-12 text-right', row.warning && row.implicit && 'text-warning')}>
+          {formatTokenTotal(row.read)}
+        </span>
+        <span className={cn('w-12 text-right', row.warning && !row.implicit && 'text-warning')}>
           {formatTokenTotal(row.write)}
         </span>
       </span>

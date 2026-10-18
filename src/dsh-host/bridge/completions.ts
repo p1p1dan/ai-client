@@ -53,10 +53,14 @@ export interface CompletionStreamOptions {
   signal: AbortSignal;
 }
 
-/** One chunk of DSH's stream protocol, read loosely: only text and the finish matter here. */
+/**
+ * One chunk of DSH's stream protocol, read loosely: only text and the finish
+ * matter here; a review also reads `usage` (decision 193 §10).
+ */
 export interface CompletionChunk {
   type: string;
   text?: unknown;
+  usage?: unknown;
   reason?: { kind?: unknown; failure?: { code?: unknown; message?: unknown } };
 }
 

@@ -73,6 +73,13 @@ export interface PiTurnRollup {
 export interface PiSessionUsage {
   turns: number;
   toolResults: number;
+  /**
+   * Decision 193 §10: model requests outside the agent loop (a DSH session's
+   * compaction summaries and auto-gear reviews) whose tokens the figures
+   * below already include. Absent when there were none, or the engine does
+   * not count them.
+   */
+  auxiliary?: number;
   input: number;
   output: number;
   cacheRead: number;
@@ -213,9 +220,11 @@ export function readSessionUsage(value: unknown): PiSessionUsage | null {
   const turns = number('turns');
   const toolResults = number('toolResults');
   if (turns === 0 && toolResults === 0) return null;
+  const auxiliary = number('auxiliary');
   return {
     turns,
     toolResults,
+    ...(auxiliary > 0 ? { auxiliary } : {}),
     input: number('input'),
     output: number('output'),
     cacheRead: number('cacheRead'),

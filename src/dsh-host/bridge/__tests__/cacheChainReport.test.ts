@@ -9,6 +9,7 @@ import {
   cacheChainLogLines,
   dshCacheChainOptions,
   LONG_CACHE_TTL_MS,
+  LONG_RESPONSES_CACHE_TTL_MS,
   stepPrefixEvidence,
 } from '../cacheChainReport.ts';
 import type { DshBridgeModelPlan } from '../modelRoute.ts';
@@ -23,27 +24,59 @@ import { TEST_PLAN } from './testPlan.ts';
 
 const GW = 'https://gw.example.test/v1';
 
-/** A plan by the product's own rules: Claude and a Claude Code relay on anthropic-messages, GLM not. */
+/**
+ * A plan by the product's own rules: Claude on anthropic-messages and GPT on
+ * openai-responses are followed, GLM on openai-completions not. One GPT model
+ * refuses the long retention.
+ */
 function plan(promptCacheTtl: '5m' | '1h'): DshBridgeModelPlan {
   return buildDshModelPlan({
     models: {
       providers: {
         claude: { baseUrl: GW, api: 'anthropic-messages', models: [{ id: 'claude-opus-5-5' }] },
         glm: { baseUrl: GW, api: 'openai-completions', models: [{ id: 'glm-5.3' }] },
+        gpt: {
+          baseUrl: GW,
+          api: 'openai-responses',
+          models: [
+            { id: 'gpt-6' },
+            { id: 'gpt-6-short', compat: { supportsLongCacheRetention: false } },
+          ],
+        },
       },
     },
-    keyed: { claude: true, glm: true },
+    keyed: { claude: true, glm: true, gpt: true },
     settings: { promptCacheTtl },
   });
 }
 
 describe('dshCacheChainOptions', () => {
-  it('follows anthropic-messages routes only, by the name DSH gives a step', () => {
+  it('follows anthropic-messages and openai-responses routes, by the name DSH gives a step', () => {
     const options = dshCacheChainOptions(() => plan('1h'));
     expect(options.cacheAware('claude', 'claude-opus-5-5')).toBe(true);
+    expect(options.cacheAware('gpt', 'gpt-6')).toBe(true);
     expect(options.cacheAware('glm', 'glm-5.3')).toBe(false);
     expect(options.cacheAware('elsewhere')).toBe(false);
     expect(options.cacheAware(undefined)).toBe(false);
+    // Decision 193 §9: only OpenAI's cache is implicit.
+    expect(options.implicitCache?.('gpt', 'gpt-6')).toBe(true);
+    expect(options.implicitCache?.('claude', 'claude-opus-5-5')).toBe(false);
+    expect(options.implicitCache?.('elsewhere')).toBe(false);
+  });
+
+  it('leaves openai-responses routes out when told to', () => {
+    const options = dshCacheChainOptions(() => plan('1h'), { responses: false });
+    expect(options.cacheAware('gpt', 'gpt-6')).toBe(false);
+    expect(options.cacheAware('claude', 'claude-opus-5-5')).toBe(true);
+  });
+
+  it('lives a day on a long openai-responses retention, unless the model refuses it', () => {
+    const long = dshCacheChainOptions(() => plan('1h'));
+    expect(long.ttlMsFor('gpt', 'gpt-6')).toBe(LONG_RESPONSES_CACHE_TTL_MS);
+    expect(LONG_RESPONSES_CACHE_TTL_MS).toBe(86_400_000);
+    expect(long.ttlMsFor('gpt', 'gpt-6-short')).toBe(DEFAULT_TTL_MS);
+    expect(long.ttlMsFor('gpt')).toBe(LONG_RESPONSES_CACHE_TTL_MS);
+    expect(dshCacheChainOptions(() => plan('5m')).ttlMsFor('gpt', 'gpt-6')).toBe(DEFAULT_TTL_MS);
   });
 
   it('lives an hour on a long retention, five minutes on a short one, the default when unnamed', () => {
