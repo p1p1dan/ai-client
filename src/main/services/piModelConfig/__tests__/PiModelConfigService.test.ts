@@ -17,7 +17,11 @@ import {
   validatePiManagedModelsConfig,
 } from '../configValidation';
 import type { ManagedKeyStore } from '../managedKeys';
-import { type PiModelConfigFetch, PiModelConfigService } from '../PiModelConfigService';
+import {
+  PI_MODEL_SYNC_TIMEOUT_MS,
+  type PiModelConfigFetch,
+  PiModelConfigService,
+} from '../PiModelConfigService';
 
 /**
  * P1-5e — the credential vault's administrator-key group, in memory. Shared by
@@ -331,6 +335,25 @@ describe('PiModelConfigService', () => {
 
     expect(seen[0]?.Authorization).toBe('Bearer login-key-1');
     expect(seen[0]?.Accept).toBe('application/json');
+  });
+
+  it('gives the fetch 15 seconds by default (user 2026-10-18; was 5 s)', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      await service(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(REMOTE_CONFIG),
+      })).sync({
+        endpointUrl: 'https://onboard.example/api/v1/models-config',
+        apiKey: 'login-key-1',
+        inheritedBaseUrl: 'https://fallback.example/v1',
+      });
+      expect(PI_MODEL_SYNC_TIMEOUT_MS).toBe(15_000);
+      expect(timeout).toHaveBeenCalledWith(15_000);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 
   // Wire topic §一: all four credential combinations have to work, and which

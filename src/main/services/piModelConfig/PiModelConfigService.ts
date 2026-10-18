@@ -47,7 +47,12 @@ import {
 } from './managedKeys';
 
 const MAX_CONFIG_BYTES = 2 * 1024 * 1024;
-const DEFAULT_TIMEOUT_MS = 5000;
+/**
+ * One sync's fetch budget. 15 s since 2026-10-18 (was 5 s): a slow management
+ * endpoint at startup aborted the only attempt for up to an hour (the next one
+ * waits for a focus or the hourly tick; there is no retry).
+ */
+export const PI_MODEL_SYNC_TIMEOUT_MS = 15_000;
 const PI_THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 export interface PiModelConfigFetchResponse {
@@ -350,7 +355,7 @@ export class PiModelConfigService {
     this.agentDir = options.agentDir;
     this.fetchFn = options.fetchFn;
     this.now = options.now ?? (() => Date.now());
-    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.timeoutMs = options.timeoutMs ?? PI_MODEL_SYNC_TIMEOUT_MS;
     this.log = options.log ?? (() => {});
     this.readBundledCatalog = options.readBundledCatalog ?? createBundledCatalogReader();
   }
