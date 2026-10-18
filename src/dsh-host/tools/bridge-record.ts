@@ -350,6 +350,13 @@ class Normalizer {
       if (rest.type === 'tool.updated' && isRecord(payload.input) && '__streaming' in payload.input)
         continue;
       if (rest.type === 'tool.output') continue;
+      // Decision 198: whether a step's total already counts a subagent running
+      // beside it is the wall clock's (`sub-cont`), and when one is in, which
+      // read of its log landed first; the samples keep the step, not the share.
+      if (rest.type === 'usage.updated' && isRecord(payload) && 'delegated' in payload) {
+        const { delegated: _delegated, ...kept } = payload;
+        rest.payload = kept;
+      }
       if (
         (rest.type === 'message.delta' || rest.type === 'thinking.delta') &&
         previous?.type === rest.type &&

@@ -73,6 +73,7 @@ import {
   contextWindowNotice,
 } from '../../shared/contextWindowMismatch.ts';
 import type { AuxiliaryUsage } from '../../shared/dshAuxiliaryUsage.ts';
+import type { DshDelegatedSpend } from '../../shared/dshDelegatedUsage.ts';
 import { dshFailureErrorCode } from '../../shared/dshFailureCodes.ts';
 import { dshFileReview } from '../../shared/dshFileReview.ts';
 import {
@@ -105,6 +106,7 @@ import {
   buildPiUsageCacheStep,
   buildPiUsagePayload,
   type PiContextUsage,
+  type PiTurnUsage,
   type PiUsageCacheStep,
 } from '../../shared/piUsage.ts';
 import {
@@ -206,6 +208,12 @@ export interface DshLiveEventsHost {
    * total is the token meter's alone.
    */
   auxiliaryUsage?(): AuxiliaryUsage | undefined;
+  /**
+   * Decision 198: what the session's subagents spent, from their own logs
+   * (`delegatedUsage.ts`). Absent, or undefined: no delegate has reported
+   * anything, and the total is the session's own.
+   */
+  delegatedUsage?(): DshDelegatedSpend | undefined;
   /** The goal's round budget, as the log last recorded it. */
   goalMaxRounds(): number | undefined;
   /**
@@ -376,28 +384,48 @@ function contextOf(
 /**
  * The session's running total: `tokenUsage` over the whole log, counted in
  * reported steps, plus the requests outside the agent loop (decision 193
- * §10), counted apart in `auxiliary`.
+ * §10), counted apart in `auxiliary`, plus what its subagents spent
+ * (decision 198), its delegates counted in `toolResults` (decision 005).
  */
 function sessionOf(
   totals: DshUsageView['tokenUsage'],
   steps: number,
-  auxiliary?: AuxiliaryUsage
+  auxiliary?: AuxiliaryUsage,
+  delegated?: DshDelegatedSpend
 ): PiSessionUsage | null {
   if (!totals || steps <= 0) return null;
   const extra = auxiliary && auxiliary.requests > 0 ? auxiliary : undefined;
-  const input = (numberOf(totals.uncachedInputTokens) ?? 0) + (extra?.input ?? 0);
-  const output = (numberOf(totals.outputTokens) ?? 0) + (extra?.output ?? 0);
-  const cacheRead = (numberOf(totals.cacheReadTokens) ?? 0) + (extra?.cacheRead ?? 0);
-  const cacheWrite = (numberOf(totals.cacheWriteTokens) ?? 0) + (extra?.cacheWrite ?? 0);
+  const input =
+    (numberOf(totals.uncachedInputTokens) ?? 0) + (extra?.input ?? 0) + (delegated?.input ?? 0);
+  const output =
+    (numberOf(totals.outputTokens) ?? 0) + (extra?.output ?? 0) + (delegated?.output ?? 0);
+  const cacheRead =
+    (numberOf(totals.cacheReadTokens) ?? 0) + (extra?.cacheRead ?? 0) + (delegated?.cacheRead ?? 0);
+  const cacheWrite =
+    (numberOf(totals.cacheWriteTokens) ?? 0) +
+    (extra?.cacheWrite ?? 0) +
+    (delegated?.cacheWrite ?? 0);
   return {
     turns: steps,
-    toolResults: 0,
+    toolResults: delegated?.delegates ?? 0,
     ...(extra ? { auxiliary: extra.requests } : {}),
     input,
     output,
     cacheRead,
     cacheWrite,
     totalTokens: input + output + cacheRead + cacheWrite,
+    costUsd: 0,
+  };
+}
+
+/** Decision 198: the delegated share as `usage.updated.delegated` carries it; DSH prices nothing. */
+function delegatedOf(delegated: DshDelegatedSpend): PiTurnUsage {
+  return {
+    input: delegated.input,
+    output: delegated.output,
+    cacheRead: delegated.cacheRead,
+    cacheWrite: delegated.cacheWrite,
+    totalTokens: delegated.totalTokens,
     costUsd: 0,
   };
 }
@@ -1270,20 +1298,40 @@ export class DshLiveEvents {
    * step Stop cut mid-stream reports none; it says so (`unreported`, T125)
    * rather than a row of zeros that reads as "free". Decision 173: a notable
    * step, or a first write, also carries its cache verdict (`cache`).
+   * Decision 198: the total takes in what the subagents spent, and
+   * `delegated` says how much of it that is.
    */
   private settledUsage(data: Row, event: DshSessionEvent): void {
     const usage = recordOf(data.usage);
     if (!usage && data.interrupted !== true) return;
     const step = usage ? turnUsageOf(usage) : { input: 0, output: 0 };
     const view = this.host.usageView();
+    const delegated = this.delegatedUsage();
+    const session = sessionOf(
+      view?.tokenUsage,
+      this.host.usageSteps(),
+      this.auxiliaryUsage(),
+      delegated
+    );
     const payload = buildPiUsagePayload(
       step,
       contextOf(view?.contextPressure, usage ? step : undefined),
-      sessionOf(view?.tokenUsage, this.host.usageSteps(), this.auxiliaryUsage()),
-      null,
+      session,
+      // Only beside a total that includes it: a share of nothing is no share.
+      session && delegated ? delegatedOf(delegated) : null,
       { unreported: !usage, cache: usage ? this.cacheStep(event) : null }
     );
     if (payload) this.emit({ type: 'usage.updated', payload });
+  }
+
+  /** Decision 198: the subagents' spend; a failed read costs the total its delegated part only. */
+  private delegatedUsage(): DshDelegatedSpend | undefined {
+    try {
+      const delegated = this.host.delegatedUsage?.();
+      return delegated && delegated.delegates > 0 ? delegated : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Decision 193 §10: the host's auxiliary usage; a failed read costs the total its extras only. */

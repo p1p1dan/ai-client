@@ -7,6 +7,7 @@ import {
   deriveRunPanelView,
   deriveRunTools,
   formatRunDuration,
+  formatSessionFiguresNote,
   formatSessionSteps,
   type RunPanelInput,
 } from '../surfaces/runPanelModel';
@@ -537,5 +538,40 @@ describe('formatSessionSteps — what the session figures take in', () => {
       '15 + 3 delegated + 1 auxiliary'
     );
     expect(formatSessionSteps({ ...session, toolResults: 3 }, zh)).toBe('15 + 3 次委派');
+  });
+});
+
+describe('formatSessionFiguresNote — the line under the session figures (decisions 193 §10, 198)', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+  const session = {
+    turns: 4,
+    toolResults: 0,
+    input: 1,
+    output: 1,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 2,
+    costUsd: 0,
+  };
+
+  it('[D198-NOTE] names the subagents’ requests when a delegated share arrived, and the auxiliary ones', () => {
+    expect(formatSessionFiguresNote(session, false, zh)).toBe(
+      '本会话的数字是把每一次模型请求累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。'
+    );
+    expect(formatSessionFiguresNote({ ...session, auxiliary: 1 }, false, zh)).toBe(
+      '本会话的数字是把每一次模型请求（包括压缩摘要等辅助请求）累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。'
+    );
+    expect(formatSessionFiguresNote({ ...session, toolResults: 2 }, true, zh)).toBe(
+      '本会话的数字是把每一次模型请求（包括子代理的请求）累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。'
+    );
+    expect(formatSessionFiguresNote({ ...session, toolResults: 2, auxiliary: 1 }, true, zh)).toBe(
+      '本会话的数字是把每一次模型请求（包括子代理的请求，以及压缩摘要等辅助请求）累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。'
+    );
+    // A delegated count with no share beside it (an engine that counts tool
+    // results there) names no subagent.
+    expect(formatSessionFiguresNote({ ...session, toolResults: 9 }, false)).toBe(
+      'Session figures add up every model request, so the cache read is a running sum, not what is in the context now.'
+    );
   });
 });

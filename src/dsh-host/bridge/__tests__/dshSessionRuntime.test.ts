@@ -9,9 +9,10 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { INTERRUPTED_TURN_NOTICE_KEY } from '../../../shared/dshHistory/projection.ts';
 import { DSH_RETRY_CONTINUATION_TEXT, type DshLogEvent } from '../../../shared/dshHistory/types.ts';
+import { readPiUsagePayload } from '../../../shared/piUsage.ts';
 import {
   isWorkerBootstrapResult,
   isWorkerHistoryResult,
@@ -68,6 +69,8 @@ interface FakeOptions {
   headerCwd?: string;
   /** The log `sessionQuery.observeSession` answers with. */
   events?: DshLogEvent[];
+  /** Decision 198: other sessions' logs (subagents), by id; `events` for any other id. */
+  logs?: Record<string, { events: DshLogEvent[]; inheritedEventCount?: number }>;
   observeError?: unknown;
   /** P1-4c2: what `attachments.admitPromptContent` throws. */
   admitError?: unknown;
@@ -194,10 +197,18 @@ function fakeDsh(options: FakeOptions = {}) {
       }),
     },
     sessionQuery: {
-      observeSession: vi.fn(async () => {
+      observeSession: vi.fn(async (sessionId: string) => {
         if (options.observeError) throw options.observeError;
-        const events = options.events ?? [];
-        return { events, cursor: events.at(-1)?.seq ?? -1, [Symbol.dispose]: () => undefined };
+        const other = options.logs?.[sessionId];
+        const events = other?.events ?? options.events ?? [];
+        return {
+          events,
+          cursor: events.at(-1)?.seq ?? -1,
+          ...(other?.inheritedEventCount !== undefined
+            ? { inheritedEventCount: other.inheritedEventCount }
+            : {}),
+          [Symbol.dispose]: () => undefined,
+        };
       }),
     },
     aiclientPermissions: testPermissionHost().api,
@@ -205,6 +216,9 @@ function fakeDsh(options: FakeOptions = {}) {
   } as unknown as DshBridgeContext;
   /** One durable event of this session, as DSH's `session/event` delivers it. */
   const append = (event: DshLogEvent) => listeners.get('session/event')?.({ id: DSH_ID }, event);
+  /** Decision 198: one durable event of another session (a subagent's). */
+  const appendTo = (sessionId: string, event: DshLogEvent) =>
+    listeners.get('session/event')?.({ id: sessionId }, event);
   /** P1-4d3: one `user-questions/request` down the row's waterfall, as dsh-user-questions sends it. */
   const ask = (request: Record<string, unknown>, next: () => Promise<unknown>) =>
     listeners.get('user-questions/request')?.(request, next) as Promise<unknown> | undefined;
@@ -221,6 +235,7 @@ function fakeDsh(options: FakeOptions = {}) {
     claim,
     stubFile,
     append,
+    appendTo,
     ask,
     attachments,
   };
@@ -1392,6 +1407,152 @@ describe('DshSessionRuntime — live usage from dsh-token-meter (P1-4d1, decisio
       // One reported step so far, counted by the history fold the event reached first.
       session: { turns: 1, input: 30, output: 7, totalTokens: 37, costUsd: 0 },
     });
+  });
+});
+
+describe('DshSessionRuntime — what its subagents spent (decision 198)', () => {
+  const TOKEN_USAGE = {
+    uncachedInputTokens: 30,
+    outputTokens: 7,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  };
+  const step = (seq: number, turn: number, stepNo: number, input: number, output: number) =>
+    ({
+      type: 'assistant/message',
+      seq,
+      time: 2,
+      data: {
+        turn,
+        step: stepNo,
+        message: { id: `m${seq}`, role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+        usage: { inputTokens: input, outputTokens: output },
+      },
+    }) as DshLogEvent;
+  const catalog = (seq: number, childId: string) =>
+    ({
+      type: 'subagent/catalog',
+      seq,
+      time: 1,
+      data: { version: 0, childId, childCreatedAt: 1, mode: 'one-shot', label: childId },
+    }) as DshLogEvent;
+  /** The parent's own log: one step that delegated to `child-1`. */
+  const parentLog = [
+    { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } } as DshLogEvent,
+    catalog(1, 'child-1'),
+    step(2, 1, 1, 30, 7),
+  ];
+
+  function opened(options: { switchedOn?: boolean; log?: DshLogEvent[] } = {}) {
+    const dsh = fakeDsh({
+      events: options.log ?? parentLog,
+      logs: {
+        // A fork: its first two events are the parent's, already counted there.
+        'child-1': {
+          events: [step(0, 1, 1, 30, 7), catalog(1, 'not-mine'), step(2, 1, 1, 200, 20)],
+          inheritedEventCount: 2,
+        },
+        'child-2': { events: [step(0, 1, 1, 5, 1)] },
+        'not-mine': { events: [step(0, 1, 1, 9_999, 9_999)] },
+      },
+    });
+    const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    const snapshot = vi.fn(() => ({
+      values: {
+        tokenUsage: TOKEN_USAGE,
+        contextPressure: { pressureTokens: 30, projectedTokens: 40, contextWindow: 200 },
+      },
+    }));
+    (dsh.ctx as { get?: unknown }).get = (name: string) =>
+      name === 'sessionProjections' ? { snapshot } : undefined;
+    const bridge = runtime(
+      dsh.ctx,
+      { emit: (event) => events.push(event as (typeof events)[number]) },
+      options.switchedOn === false ? {} : { delegatedUsage: true }
+    );
+    const observe = (dsh.ctx as unknown as { sessionQuery: { observeSession: Mock } }).sessionQuery
+      .observeSession;
+    const settled = () =>
+      readPiUsagePayload(events.filter((event) => event.type === 'usage.updated').at(-1)?.payload);
+    return { dsh, bridge, observe, settled };
+  }
+
+  /** The reads queued by the bridge land (the fake answers at once). */
+  const landed = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+  it('[D198-RUNTIME-1] counts the children its log names, from their own logs, live and on reopen', async () => {
+    const h = opened();
+    await h.bridge.bootstrap();
+    await landed();
+    expect(h.observe).toHaveBeenCalledWith('child-1', { projectionMode: 'none' });
+    h.dsh.append({ type: 'turn/start', seq: 3, time: 1, data: { turn: 2 } });
+    h.dsh.append(step(4, 2, 1, 1, 1));
+    // The parent's own step and total, the fork's own step only, one delegate.
+    expect(h.settled()).toMatchObject({
+      input: 1,
+      output: 1,
+      session: { turns: 2, toolResults: 1, input: 230, output: 27, totalTokens: 257 },
+      delegated: { input: 200, output: 20, totalTokens: 220, costUsd: 0 },
+    });
+    expect(h.observe).not.toHaveBeenCalledWith('not-mine', expect.anything());
+
+    // The child steps on live; a second child appears in the parent's catalog.
+    h.dsh.appendTo('child-1', step(3, 1, 2, 10, 2));
+    h.dsh.append(catalog(5, 'child-2'));
+    await landed();
+    h.dsh.append(step(6, 2, 2, 1, 1));
+    expect(h.settled()).toMatchObject({
+      session: { toolResults: 2, input: 245, output: 30 },
+      delegated: { input: 215, output: 23, totalTokens: 238 },
+    });
+    await h.bridge.dispose();
+
+    // Reopened (a host restart): the same figure, read from the logs alone.
+    const reopened = opened();
+    await reopened.bridge.bootstrap();
+    await landed();
+    reopened.dsh.append({ type: 'turn/start', seq: 3, time: 1, data: { turn: 2 } });
+    reopened.dsh.append(step(4, 2, 1, 1, 1));
+    expect(reopened.settled()).toMatchObject({
+      session: { toolResults: 1, input: 230 },
+      delegated: { input: 200, output: 20 },
+    });
+  });
+
+  it('[D198-RUNTIME-3] follows a child whose catalog event a gap lost, once the history is read again', async () => {
+    const log = [...parentLog];
+    const h = opened({ log });
+    await h.bridge.bootstrap();
+    await landed();
+    // The log goes on; the bridge hears only the step after the catalog entry.
+    log.push(
+      { type: 'turn/start', seq: 3, time: 1, data: { turn: 2 } } as DshLogEvent,
+      catalog(4, 'child-2'),
+      step(5, 2, 1, 1, 1)
+    );
+    h.dsh.append(step(5, 2, 1, 1, 1));
+    expect(h.settled()).toMatchObject({ session: { toolResults: 1 } });
+    // A history read starts over from the log, which names child-2.
+    await h.bridge.history({ logicalSessionId: LOGICAL });
+    h.dsh.append(step(6, 2, 2, 1, 1));
+    await landed();
+    h.dsh.append(step(7, 2, 3, 1, 1));
+    expect(h.settled()).toMatchObject({
+      session: { toolResults: 2 },
+      delegated: { input: 205, output: 21 },
+    });
+  });
+
+  it('[D198-RUNTIME-2] switched off, reads no child log and sends the session’s own total', async () => {
+    const h = opened({ switchedOn: false });
+    await h.bridge.bootstrap();
+    await landed();
+    h.dsh.append({ type: 'turn/start', seq: 3, time: 1, data: { turn: 2 } });
+    h.dsh.append(step(4, 2, 1, 1, 1));
+    expect(h.observe.mock.calls.map((call) => call[0])).toEqual([DSH_ID]);
+    const payload = h.settled();
+    expect(payload).not.toHaveProperty('delegated');
+    expect(payload?.session).toMatchObject({ toolResults: 0, input: 30, output: 7 });
   });
 });
 

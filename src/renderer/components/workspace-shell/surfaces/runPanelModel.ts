@@ -399,6 +399,39 @@ export function formatSessionSteps(
   return text;
 }
 
+/**
+ * The line under the session figures: they are a running sum of every model
+ * request, so the cache read is not what the context holds now. It names
+ * what the sum takes in beyond the session's own steps — its subagents'
+ * requests (decision 198, when `delegated` arrived) and requests outside
+ * the loop (decision 193 §10) — and is the plain sentence when neither is in.
+ */
+export function formatSessionFiguresNote(
+  session: PiSessionUsage,
+  delegated: boolean,
+  t: Translate = englishTranslate
+): string {
+  const auxiliary = (session.auxiliary ?? 0) > 0;
+  if (delegated && auxiliary) {
+    return t(
+      'Session figures add up every model request, subagent requests and auxiliary ones such as compaction summaries included, so the cache read is a running sum, not what is in the context now.'
+    );
+  }
+  if (delegated) {
+    return t(
+      'Session figures add up every model request, subagent requests included, so the cache read is a running sum, not what is in the context now.'
+    );
+  }
+  if (auxiliary) {
+    return t(
+      'Session figures add up every model request, compaction summaries and other auxiliary ones included, so the cache read is a running sum, not what is in the context now.'
+    );
+  }
+  return t(
+    'Session figures add up every model request, so the cache read is a running sum, not what is in the context now.'
+  );
+}
+
 // ---- issue #9: the per-step cache view ---------------------------------------------
 
 /** A DSH step's message id (`liveEvents.ts`): `dsh-<session>-t<turn>-s<step>`. */

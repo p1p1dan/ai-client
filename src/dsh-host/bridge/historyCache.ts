@@ -23,6 +23,8 @@
  *
  * Decision 193 §10: the same way, the usage of the session's compaction
  * summaries (`dshAuxiliaryUsage.ts`), which the token meter's total leaves out.
+ * Decision 198: and the subagents its catalog names (`childSessions`), whose
+ * own logs `delegatedUsage.ts` folds.
  */
 
 import {
@@ -42,6 +44,7 @@ import {
   emptyAuxiliaryUsage,
   foldAuxiliaryUsage,
 } from '../../shared/dshAuxiliaryUsage.ts';
+import { catalogChildOf } from '../../shared/dshDelegatedUsage.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { DshHistoryFold } from '../../shared/dshHistory/projection.ts';
 import { buildDshSessionTree, dshLeafCheckpoint } from '../../shared/dshHistory/tree.ts';
@@ -59,6 +62,8 @@ export interface DshSessionObservation {
   readonly events: readonly DshLogEvent[];
   /** Last observed seq, -1 for an empty log. */
   readonly cursor: number;
+  /** How many of `events` were copied from the session this one was forked from. */
+  readonly inheritedEventCount?: number;
   [Symbol.dispose]?(): void;
 }
 
@@ -99,6 +104,12 @@ export class DshHistoryCache {
   private lastStep: { seq: number; verdict: CacheStepVerdict } | undefined;
   /** Decision 193 §10: the logged usage of requests outside the agent loop, at the fold's cursor. */
   private auxiliary: AuxiliaryUsage = emptyAuxiliaryUsage();
+  /**
+   * Decision 198: the subagents the log's catalog names, in order, inherited
+   * entries included — the token meter's total counts an inherited step too,
+   * so a rewind keeps what was delegated before its cut.
+   */
+  private children: string[] = [];
   private state: CacheState = 'empty';
   /** Events delivered while an observation is in flight. */
   private pending: DshLogEvent[] = [];
@@ -129,6 +140,7 @@ export class DshHistoryCache {
     this.chain = this.chainOptions ? initCacheChain() : undefined;
     this.lastStep = undefined;
     this.auxiliary = emptyAuxiliaryUsage();
+    this.children = [];
     this.state = 'empty';
     this.pending = [];
     this.loading = null;
@@ -195,6 +207,11 @@ export class DshHistoryCache {
    */
   auxiliaryUsage(): AuxiliaryUsage {
     return { ...this.auxiliary };
+  }
+
+  /** Decision 198: the session's subagents its log names, as a copy. */
+  childSessions(): readonly string[] {
+    return [...this.children];
   }
 
   /** The current goal's round budget, when the log recorded one (P1-4d1: a goal head's origin). */
@@ -272,6 +289,8 @@ export class DshHistoryCache {
       this.chain = this.foldChain(observation.events);
       this.lastStep = undefined;
       this.auxiliary = foldAuxiliaryUsage(observation.events);
+      this.children = [];
+      for (const event of observation.events) this.noteChild(event);
       this.state = 'ready';
       const pending = this.pending;
       this.pending = [];
@@ -300,7 +319,13 @@ export class DshHistoryCache {
     this.fold.push(event);
     this.applyChain(event);
     applyAuxiliaryUsage(this.auxiliary, event);
+    this.noteChild(event);
     return true;
+  }
+
+  private noteChild(event: DshLogEvent): void {
+    const childId = catalogChildOf(event);
+    if (childId && !this.children.includes(childId)) this.children.push(childId);
   }
 
   /** Decision 173: the chain of a whole log, or undefined when none is kept or it cannot be folded. */

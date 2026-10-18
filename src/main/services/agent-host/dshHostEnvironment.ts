@@ -38,12 +38,14 @@ const STRIPPED_LIFECYCLE_PREFIX = 'npm_';
  * row's (P1-13d, decision 135; `0` leaves the fs service unwrapped), whose
  * name follows the same family; decision 173's three (GitHub issue #9;
  * `0` turns each off): the request tap's session metadata and prefix watch,
- * and the per-step cache chain check; and decision 182's user content blocks
- * (the tap sends user messages as text blocks). The last four are spelled out
- * here because this file imports nothing; they are `SESSION_METADATA_ENV`,
- * `PREFIX_WATCH_ENV`, `CACHE_CHAIN_ENV` and `USER_CONTENT_BLOCKS_ENV` in
- * src/shared/types/requestScope.ts, and DshHostProcess.test.ts pins the two
- * equal.
+ * and the per-step cache chain check; decision 182's user content blocks
+ * (the tap sends user messages as text blocks); and decision 198's delegated
+ * usage (`0` leaves the subagents out of the session total). The last five
+ * are spelled out here because this file imports nothing; they are
+ * `SESSION_METADATA_ENV`, `PREFIX_WATCH_ENV`, `CACHE_CHAIN_ENV` and
+ * `USER_CONTENT_BLOCKS_ENV` in src/shared/types/requestScope.ts and
+ * `DELEGATED_USAGE_ENV` in src/shared/dshDelegatedUsage.ts, and
+ * DshHostProcess.test.ts pins the two equal.
  */
 const FORWARDED_ENV = [
   'AICLIENT_RUNTIME_LOOP_GUARD',
@@ -52,6 +54,7 @@ const FORWARDED_ENV = [
   'AICLIENT_RUNTIME_PREFIX_WATCH',
   'AICLIENT_RUNTIME_CACHE_CHAIN',
   'AICLIENT_RUNTIME_USER_CONTENT_BLOCKS',
+  'AICLIENT_RUNTIME_DELEGATED_USAGE',
 ];
 
 /**

@@ -888,3 +888,85 @@ describe('fork — a child for the id Main minted (decision 027 rule 4)', () => 
     expect(isWorkerForkPayload({ ...base, targetLogicalSessionId: 7 })).toBe(false);
   });
 });
+
+describe('rewind keeps what was delegated before its cut (decision 198)', () => {
+  const usage = (input: number, output: number) => ({ inputTokens: input, outputTokens: output });
+  /** `turn`, with a delegation in its step: the child's catalog entry, then the step's usage. */
+  function delegatingTurn(
+    start: number,
+    n: number,
+    prompt: string,
+    answer: string,
+    childId: string
+  ): DshLogEvent[] {
+    const events = turn(start, n, prompt, answer, prompt);
+    const step = events[5] as DshLogEvent;
+    events[5] = { ...step, data: { ...(step.data as object), usage: usage(10, 1) } };
+    events.splice(5, 0, at(0, 'subagent/catalog', { version: 0, childId, mode: 'one-shot' }));
+    return events.map((event, index) => ({
+      ...event,
+      seq: start + index,
+      time: T + start + index,
+    }));
+  }
+
+  it('[D198-REWIND] the rewound session counts the children of its own (inherited) log only', async () => {
+    const stubFile = writeRootStub();
+    const log = [
+      at(0, 'permission/preset', { preset: 'workspace-write' }),
+      ...delegatingTurn(1, 1, 'u1', 'a1', 'child-1'),
+      ...delegatingTurn(10, 2, 'u2', 'a2', 'child-2'),
+    ];
+    const dsh = fakeDsh({
+      [ROOT]: log,
+      'child-1': [at(0, 'assistant/message', { turn: 1, step: 1, usage: usage(100, 10) })],
+      'child-2': [at(0, 'assistant/message', { turn: 1, step: 1, usage: usage(3_000, 300) })],
+    });
+    const snapshot = () => ({
+      values: { tokenUsage: { uncachedInputTokens: 20, outputTokens: 2 } },
+    });
+    (dsh.ctx as { get?: unknown }).get = (name: string) =>
+      name === 'jobs'
+        ? { list: () => dsh.jobs }
+        : name === 'sessionProjections'
+          ? { snapshot }
+          : undefined;
+    const emitted: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    const runtime = new DshSessionRuntime(
+      dsh.ctx,
+      {
+        logicalSessionId: LOGICAL,
+        cwd: CWD,
+        projectTrusted: true,
+        sessionFile: stubFile,
+        emit: (event) => emitted.push(event as (typeof emitted)[number]),
+      },
+      {
+        createUserMessage: () => ({ id: 'user-message-1' }),
+        now: () => T + 1_000,
+        home,
+        writeStub: dsh.writeStub,
+        disposeTimeoutMs: 50,
+        modelPlan: () => TEST_PLAN,
+        delegatedUsage: true,
+      }
+    );
+    await runtime.bootstrap();
+    const landed = () => new Promise((resolve) => setTimeout(resolve, 10));
+    const delegated = () =>
+      emitted.filter((event) => event.type === 'usage.updated').at(-1)?.payload?.delegated;
+    await landed();
+    dsh.append(ROOT, at(19, 'assistant/message', { turn: 3, step: 1, usage: usage(1, 1) }));
+    expect(delegated()).toMatchObject({ input: 3_100, output: 310 });
+
+    await rewind(runtime, 'u2');
+    await landed();
+    const child = `${ROOT}_r2`;
+    const seeded = dsh.logs.get(child) ?? [];
+    dsh.append(
+      child,
+      at(seeded.length, 'assistant/message', { turn: 2, step: 1, usage: usage(1, 1) })
+    );
+    expect(delegated()).toMatchObject({ input: 100, output: 10 });
+  });
+});

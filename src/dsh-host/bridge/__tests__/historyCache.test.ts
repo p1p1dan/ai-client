@@ -491,3 +491,39 @@ describe('DshHistoryCache — requests outside the agent loop (decision 193 §10
     expect(cache.auxiliaryUsage().requests).toBe(0);
   });
 });
+
+describe('DshHistoryCache — the subagents its catalog names (decision 198)', () => {
+  function catalog(seq: number, childId: string): DshLogEvent {
+    return {
+      type: 'subagent/catalog',
+      seq,
+      time: 1_790_000_000_000 + seq,
+      data: { version: 0, childId, childCreatedAt: 1, mode: 'one-shot', label: childId },
+    };
+  }
+
+  it('[D198-CACHE] names each child once, inherited ones included, on the full read and one at a time', async () => {
+    const { query, release } = fakeQuery([
+      // A rewind's seed: the catalog entry before the cut is the session's own history.
+      catalog(0, 'child-a'),
+      marker(1),
+      user(2, 'u1'),
+      catalog(3, 'child-b'),
+      catalog(4, 'child-a'),
+    ]);
+    const cache = new DshHistoryCache(query);
+    cache.reset(SESSION);
+    expect(cache.childSessions()).toEqual([]);
+    await loaded(cache, release);
+    expect(cache.childSessions()).toEqual(['child-a', 'child-b']);
+    cache.push(catalog(5, 'child-c'));
+    cache.push(catalog(5, 'child-c'));
+    cache.push({ type: 'subagent/catalog', seq: 6, time: 1_790_000_000_006, data: {} });
+    expect(cache.childSessions()).toEqual(['child-a', 'child-b', 'child-c']);
+    // A copy: what the caller does with it is not the cache's.
+    (cache.childSessions() as string[]).push('child-z');
+    expect(cache.childSessions()).toHaveLength(3);
+    cache.reset(SESSION);
+    expect(cache.childSessions()).toEqual([]);
+  });
+});

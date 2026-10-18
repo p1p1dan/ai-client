@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { installModelSelection } from '@deepseek-ai/dsh-agent';
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
+import { DELEGATED_USAGE_ENV } from '../../shared/dshDelegatedUsage.ts';
 import type { DshHostToMainMessage } from '../../shared/types/dshHostProtocol.ts';
 import {
   CACHE_CHAIN_ENV,
@@ -157,6 +158,8 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
     // Decision 173 D: host.ts's request tap names each chat's gateway session
     // in `metadata.user_id` by the same switch; the cache verdicts name it too.
     sessionMetadata: !isSwitchedOff(process.env, SESSION_METADATA_ENV),
+    // Decision 198: the session total takes in its subagents' spend, unless switched off.
+    delegatedUsage: !isSwitchedOff(process.env, DELEGATED_USAGE_ENV),
   };
   // Decision 192: the auto gear's review, when Main's plan names a review
   // model and the CLI its rules come from. One rules source per host.
