@@ -1,6 +1,7 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { startTestProxy } from '../../dsh-host/tools/lib/testProxy.ts';
 import { mintSessionToken, proxiedRoute, startAuthProxy } from '../authProxy.ts';
 
 /**
@@ -208,5 +209,167 @@ describe('the auth proxy (S-3 K-1, K-2)', () => {
     const b = mintSessionToken();
     expect(a).toMatch(/^sk-pilab-session-[0-9a-f]{48}$/);
     expect(a).not.toBe(b);
+  });
+});
+
+/**
+ * Dsh-rebase decision 195: the leg to the gateway goes through the product
+ * proxy Main hands over, directly when it is off, and follows a change at
+ * once. The gateway is named `gateway.invalid`, which only the test proxy
+ * resolves (to loopback): a request that reaches it was proxied.
+ */
+describe('the leg to the gateway follows the product proxy (decision 195)', () => {
+  const PASSWORD = 'pr0xy-secret-word';
+  const AMBIENT = [
+    'http_proxy',
+    'HTTP_PROXY',
+    'https_proxy',
+    'HTTPS_PROXY',
+    'no_proxy',
+    'NO_PROXY',
+  ];
+  const saved = new Map<string, string | undefined>();
+  beforeEach(() => {
+    for (const name of AMBIENT) saved.set(name, process.env[name]);
+    for (const name of AMBIENT) delete process.env[name];
+  });
+  afterEach(() => {
+    for (const name of AMBIENT) delete process.env[name];
+    for (const [name, value] of saved) if (value !== undefined) process.env[name] = value;
+  });
+
+  async function testProxy(credentials = true) {
+    const proxy = await startTestProxy(
+      credentials ? { credentials: { username: 'pi lab', password: PASSWORD } } : {}
+    );
+    closers.push(() => proxy.close());
+    return proxy;
+  }
+
+  /** The auth proxy in front of `upstream`, with its log lines. */
+  async function authProxy(
+    upstream: string,
+    options: Partial<Parameters<typeof startAuthProxy>[0]>
+  ) {
+    const lines: string[] = [];
+    const proxy = await startAuthProxy({
+      upstream,
+      apiKey: KEY,
+      log: (...args) => lines.push(args.map(String).join(' ')),
+      ...options,
+    });
+    closers.unshift(() => proxy.close());
+    return { proxy, lines };
+  }
+
+  async function ask(proxy: { url: string; token: string }): Promise<number | string> {
+    try {
+      const answer = await call(`${proxy.url}/v1/messages`, {
+        headers: { 'x-api-key': proxy.token },
+        body: '{}',
+        signal: AbortSignal.timeout(5_000),
+      });
+      await answer.text();
+      return answer.status;
+    } catch (error) {
+      return (error as Error).name;
+    }
+  }
+
+  function invalidName(url: string): string {
+    return url.replace('127.0.0.1', 'gateway.invalid');
+  }
+
+  it('on: through the proxy with its credentials; off: direct; on again: through it', async () => {
+    const gw = await gateway();
+    const outbound = await testProxy();
+    const setting = { url: outbound.urlWithCredentials, noProxy: 'localhost,127.0.0.1' };
+    const { proxy, lines } = await authProxy(invalidName(gw.url), { proxy: setting });
+
+    expect(await ask(proxy)).toBe(200);
+    expect(outbound.records).toEqual([
+      expect.objectContaining({ kind: 'forward', authorized: true, status: 200 }),
+    ]);
+    expect(gw.seen[0]?.headers['x-api-key']).toBe(KEY);
+    expect(gw.seen[0]?.headers).not.toHaveProperty('proxy-authorization');
+
+    proxy.setProxy(null);
+    await ask(proxy);
+    expect(outbound.records).toHaveLength(1);
+
+    proxy.setProxy(setting);
+    expect(await ask(proxy)).toBe(200);
+    expect(outbound.records).toHaveLength(2);
+
+    // Between the two switches, the direct attempt at `gateway.invalid` fails (logged).
+    const switches = lines.filter((line) => line.startsWith('auth proxy: outbound proxy'));
+    expect(switches).toEqual([
+      'auth proxy: outbound proxy off',
+      'auth proxy: outbound proxy on (http proxy; 4 bypass entries)',
+    ]);
+    expect(lines.join('\n')).not.toContain(PASSWORD);
+  }, 30_000);
+
+  it('a wrong password: the proxy refuses it, the CLI gets a final error naming the proxy', async () => {
+    const gw = await gateway();
+    const outbound = await testProxy();
+    const { proxy, lines } = await authProxy(invalidName(gw.url), {
+      proxy: { url: outbound.urlWithCredentials.replace(PASSWORD, 'wrong-password'), noProxy: '' },
+    });
+    const answer = await call(`${proxy.url}/v1/messages`, {
+      headers: { 'x-api-key': proxy.token },
+      body: '{}',
+    });
+    // A bare 407 is a network error to fetch, which the CLI would retry.
+    expect(answer.status).toBe(502);
+    expect(answer.headers.get('x-should-retry')).toBe('false');
+    expect(await answer.json()).toMatchObject({
+      type: 'error',
+      error: { type: 'api_error', message: expect.stringContaining('407') },
+    });
+    expect(outbound.records).toEqual([expect.objectContaining({ authorized: false, status: 407 })]);
+    expect(gw.seen).toEqual([]);
+    expect(lines.join('\n')).not.toContain('wrong-password');
+  });
+
+  it('a SOCKS proxy is not used: direct, and the log says so', async () => {
+    const gw = await gateway();
+    const outbound = await testProxy(false);
+    const { proxy, lines } = await authProxy(gw.url, {
+      proxy: { url: 'socks5://127.0.0.1:1', noProxy: '' },
+    });
+    // The constructor logs nothing; the first switch does.
+    proxy.setProxy({ url: `socks5://127.0.0.1:${outbound.port}`, noProxy: '' });
+    expect(await ask(proxy)).toBe(200);
+    expect(outbound.records).toEqual([]);
+    expect(lines[0]).toMatch(/^auth proxy: outbound proxy not used: .*SOCKS/);
+  });
+
+  it('a gateway on loopback is never sent to the proxy, whatever the bypass list says', async () => {
+    const gw = await gateway();
+    const outbound = await testProxy(false);
+    const { proxy } = await authProxy(gw.url, { proxy: { url: outbound.url, noProxy: '' } });
+    expect(await ask(proxy)).toBe(200);
+    expect(outbound.records).toEqual([]);
+  });
+
+  it("keeps the launch environment's NO_PROXY as a bypass", async () => {
+    const gw = await gateway();
+    const outbound = await testProxy(false);
+    const { proxy } = await authProxy(invalidName(gw.url), {
+      proxy: { url: outbound.url, noProxy: '' },
+      inheritedNoProxy: '.invalid',
+    });
+    await ask(proxy);
+    expect(outbound.records).toEqual([]);
+  }, 15_000);
+
+  it('Main keeping the engines off it (no setting at all): the launch environment, as S-3 K-3 had it', async () => {
+    const gw = await gateway();
+    const outbound = await testProxy(false);
+    process.env.HTTP_PROXY = outbound.url;
+    const { proxy } = await authProxy(invalidName(gw.url), {});
+    expect(await ask(proxy)).toBe(200);
+    expect(outbound.records).toHaveLength(1);
   });
 });

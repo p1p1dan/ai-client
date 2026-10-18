@@ -1686,6 +1686,33 @@ describe('DshHostSupervisor model plan and keys (P1-5, decisions 033 and 034)', 
     expect(next.configures()[0]?.nonce).not.toBe(configure?.nonce);
   });
 
+  it('[SH-P1] decision 195: the product proxy rides in configure, and a change reaches the live host', async () => {
+    const credentialed = {
+      url: 'http://pi:pr0xy-secret-word@proxy.corp:8080',
+      noProxy: 'localhost',
+    };
+    let proxy: { url: string; noProxy: string } | null | undefined = credentialed;
+    const h = createFakeHostHarness({ modelSource: { plan: () => plan, proxy: () => proxy } });
+    // No host yet: the next configure reads the source.
+    expect(h.supervisor.updateProxy(null)).toBe(false);
+    const child = await startReadyHost(h);
+    expect(child.configures()[0]?.proxy).toEqual(credentialed);
+    expect(h.supervisor.updateProxy(null)).toBe(true);
+    expect(child.sent.at(-1)).toEqual({ host: 'proxy', proxy: null });
+    for (const [line] of h.logLine.mock.calls) expect(line).not.toContain('pr0xy-secret-word');
+    child.die(0);
+    await flushMicrotasks();
+    expect(h.supervisor.updateProxy(credentialed)).toBe(false);
+    // AICLIENT_RUNTIME_ENGINE_PROXY=0: no field at all, the host keeps its old behaviour.
+    proxy = undefined;
+    const next = await startReadyHost(h);
+    expect(next.configures()[0]).not.toHaveProperty('proxy');
+    proxy = null;
+    next.die(0);
+    await flushMicrotasks();
+    expect((await startReadyHost(h)).configures()[0]?.proxy).toBeNull();
+  });
+
   it('[SH-P1] a supervisor without a model source configures an empty plan', async () => {
     const h = createFakeHostHarness();
     const child = await startReadyHost(h);

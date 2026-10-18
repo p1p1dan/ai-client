@@ -72,6 +72,7 @@ import { type ChildProcess, spawn as nodeSpawn, type SpawnOptions } from 'node:c
 import { randomBytes } from 'node:crypto';
 import { buildDshModelPlan, type DshModelPlan } from '@shared/dshModelPlan';
 import { type DshPluginReport, isDshPluginReport } from '@shared/dshPlugins';
+import type { HostProxySetting } from '@shared/hostProxy';
 import { sanitizeStderrLine } from '@shared/stderrRedaction';
 import {
   type DshChannelId,
@@ -297,6 +298,11 @@ export interface DshHostModelSource {
   plan(): DshModelPlan;
   /** Decision 192: the bundled Claude CLI, for the auto-mode rules; undefined when absent. */
   autoModeCli?(): string | undefined;
+  /**
+   * Decision 195: the product proxy now (`null`: off; `undefined`: the engines
+   * stay off it). Read once per spawn; later changes go through `updateProxy`.
+   */
+  proxy?(): HostProxySetting | null | undefined;
   /** Answers one credential request of a host (`DshCredentialBroker`). */
   credentials?: {
     answer(
@@ -1171,6 +1177,7 @@ export class DshHostSupervisor {
     const plan =
       this.modelSource?.plan() ?? buildDshModelPlan({ models: { providers: {} }, keyed: {} });
     const autoModeCli = plan.reviewModel ? this.modelSource?.autoModeCli?.() : undefined;
+    const proxy = this.modelSource?.proxy?.();
     return {
       host: 'configure',
       nonce: randomBytes(24).toString('base64url'),
@@ -1181,7 +1188,20 @@ export class DshHostSupervisor {
       refs: plan.refs,
       ...(plan.reviewModel ? { reviewModel: plan.reviewModel } : {}),
       ...(autoModeCli ? { autoModeCli } : {}),
+      ...(proxy !== undefined ? { proxy } : {}),
     };
+  }
+
+  /**
+   * Decision 195: the product proxy changed. A live host (starting or ready;
+   * its `configure` already went out) swaps its outbound route at once; a host
+   * that is not running reads the new value in its next `configure`. Whether
+   * a host got it.
+   */
+  updateProxy(proxy: HostProxySetting | null): boolean {
+    const host = this.host;
+    if (!host || host.exitInfo) return false;
+    return this.sendControl(host, { host: 'proxy', proxy });
   }
 
   private attach(

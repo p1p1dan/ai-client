@@ -69,7 +69,7 @@ export async function startFakeGateway(
       'fake-1',
       ...(options.capture ? ['--capture', options.capture] : []),
     ],
-    { stdio: ['ignore', 'pipe', 'pipe'] }
+    { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
   );
   const port = await new Promise<number>((done, fail) => {
     let text = '';
@@ -144,6 +144,8 @@ export function startExperimentHost(options: {
   env: Record<string, string>;
   plan: DshModelPlan;
   key: string;
+  /** Further `configure` fields (decision 195: `proxy`). */
+  configure?: Readonly<Record<string, unknown>>;
 }): ExperimentHost {
   const child = spawn(
     options.nodeBin,
@@ -152,6 +154,7 @@ export function startExperimentHost(options: {
       cwd: options.cwd,
       env: options.env,
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      windowsHide: true,
     }
   );
   const client = new HostClient(child, { requestPrefix: options.label });
@@ -163,7 +166,7 @@ export function startExperimentHost(options: {
     stderr,
     stderrLines: collectStderrLines(child),
     exited: exitOf(child),
-    served: client.configure(options.plan, options.key),
+    served: client.configure(options.plan, options.key, options.configure),
   };
 }
 

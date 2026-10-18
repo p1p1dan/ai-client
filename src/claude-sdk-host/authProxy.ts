@@ -8,12 +8,23 @@
  * the token goes on to the gateway with the real key, streamed both ways. A
  * tool process that reads the token can still reach the gateway through here
  * while the chat lives (measured), so only the paths the CLI uses are open.
+ *
+ * Dsh-rebase decision 195: the leg to the gateway goes through the product
+ * proxy (Settings · Network) when Main hands one over, directly when the
+ * product proxy is off, and switches at once when it changes (`setProxy`);
+ * requests already under way finish on the route they started on.
  */
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
 import type { AddressInfo } from 'node:net';
+import {
+  describeHostProxy,
+  type HostProxySetting,
+  sameHostProxy,
+  upstreamProxyEnv,
+} from '../shared/hostProxy.ts';
 
 type Log = (...args: unknown[]) => void;
 
@@ -22,8 +33,16 @@ export interface AuthProxyOptions {
   upstream: string;
   apiKey: string;
   log?: Log;
-  /** Tests only: the upstream agent. Default: one that honours HTTP(S)_PROXY / NO_PROXY. */
+  /** Tests only: the upstream agent, fixed (`setProxy` leaves it). Default: see `proxy`. */
   agent?: http.Agent;
+  /**
+   * Decision 195: the product proxy for the leg to the gateway (`null`: off,
+   * direct). Undefined when Main keeps the engines off it (rule 10): the leg
+   * then honours this process's HTTP(S)_PROXY / NO_PROXY, as S-3 K-3 had it.
+   */
+  proxy?: HostProxySetting | null;
+  /** The launch environment's NO_PROXY, still a bypass under the product proxy (rule 8). */
+  inheritedNoProxy?: string;
 }
 
 export interface AuthProxy {
@@ -31,6 +50,8 @@ export interface AuthProxy {
   readonly url: string;
   /** What the CLI sends as its key. Never the gateway key. */
   readonly token: string;
+  /** Decision 195: later requests go through `setting` (`null`: direct). */
+  setProxy(setting: HostProxySetting | null): void;
   close(): Promise<void>;
 }
 
@@ -99,17 +120,43 @@ function refuse(
   res.end(JSON.stringify({ type: 'error', error: { type, message } }));
 }
 
-function upstreamAgent(target: URL): http.Agent {
-  // K-3: the CLI used to honour the proxy variables itself; the upstream leg is ours now.
-  const options = { keepAlive: true, proxyEnv: process.env };
+/**
+ * The leg's agent. `proxyEnv` undefined: direct. Node's own proxy support
+ * (24+) reads HTTP(S)_PROXY / NO_PROXY from it, sends a URL's credentials as
+ * `Proxy-Authorization: Basic`, and does not bypass loopback by itself
+ * (measured), which `upstreamProxyEnv` adds.
+ */
+function upstreamAgent(target: URL, proxyEnv: NodeJS.ProcessEnv | undefined): http.Agent {
+  const options = { keepAlive: true, ...(proxyEnv ? { proxyEnv } : {}) };
   return target.protocol === 'https:' ? new https.Agent(options) : new http.Agent(options);
+}
+
+/** The environment the leg reads its proxy from; undefined: direct. */
+function legProxyEnv(
+  setting: HostProxySetting | null | undefined,
+  inheritedNoProxy: string | undefined
+): NodeJS.ProcessEnv | undefined {
+  // K-3: the CLI used to honour the proxy variables itself; the upstream leg is ours now.
+  if (setting === undefined) return process.env;
+  return upstreamProxyEnv(setting, inheritedNoProxy);
+}
+
+/** Drops an agent's idle sockets; the ones carrying a response stay until it ends. */
+function releaseIdle(agent: http.Agent): void {
+  for (const sockets of Object.values(agent.freeSockets)) {
+    for (const socket of sockets ?? []) socket.destroy();
+  }
 }
 
 export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthProxy> {
   const target = new URL(options.upstream);
   const base = target.pathname.replace(/\/+$/, '');
   const transport = target.protocol === 'https:' ? https : http;
-  const agent = options.agent ?? upstreamAgent(target);
+  let agent =
+    options.agent ?? upstreamAgent(target, legProxyEnv(options.proxy, options.inheritedNoProxy));
+  /** Agents a proxy change replaced; destroyed when the proxy closes. */
+  const retired: http.Agent[] = [];
+  let routedBy = options.proxy;
   const token = mintSessionToken();
   const log = options.log ?? (() => undefined);
 
@@ -138,6 +185,20 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
         agent,
       },
       (answer) => {
+        if (answer.statusCode === 407) {
+          // Decision 195: the product proxy refused its credentials. A 407 reaching the
+          // CLI reads as a network error it retries; this one never fixes itself.
+          answer.resume();
+          log('auth proxy: the outbound proxy refused the request (407)');
+          refuse(
+            res,
+            502,
+            'api_error',
+            'The proxy set in PiLab (Settings · Network) refused the request: 407 Proxy Authentication Required',
+            false
+          );
+          return;
+        }
         res.writeHead(answer.statusCode ?? 502, answer.statusMessage, answer.headers);
         answer.pipe(res);
       }
@@ -174,11 +235,21 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
   return {
     url: `http://127.0.0.1:${port}`,
     token,
+    setProxy: (setting) => {
+      if (routedBy !== undefined && sameHostProxy(routedBy, setting)) return;
+      routedBy = setting;
+      log(`auth proxy: outbound proxy ${describeHostProxy(setting, options.inheritedNoProxy)}`);
+      if (options.agent !== undefined) return;
+      const previous = agent;
+      agent = upstreamAgent(target, legProxyEnv(setting, options.inheritedNoProxy));
+      releaseIdle(previous);
+      retired.push(previous);
+    },
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();
         server.close(() => resolve());
-        if (options.agent === undefined) agent.destroy();
+        if (options.agent === undefined) for (const each of [agent, ...retired]) each.destroy();
       }),
   };
 }

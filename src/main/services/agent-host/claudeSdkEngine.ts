@@ -13,6 +13,7 @@ import {
 import type { DshModelPlan } from '@shared/dshModelPlan/types';
 import { app } from 'electron';
 import { getAppStateRoot } from '../appStatePaths';
+import { getEngineProxySetting, onEngineProxyChange } from '../proxy/ProxyConfig';
 import { ClaudeSdkProcessTransport } from './ClaudeSdkProcessTransport';
 import { ensurePrivateDirectory, resolveDshHostLayout } from './DshHostProcess';
 import type { WorkerTransport } from './WorkerTransport';
@@ -456,5 +457,7 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
     cwd: configDir,
     env,
     apiKey,
+    // Dsh-rebase decision 195: the product proxy goes with the key, never in `env`.
+    proxy: { current: () => getEngineProxySetting(), subscribe: onEngineProxyChange },
   });
 }

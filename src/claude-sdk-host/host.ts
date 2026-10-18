@@ -27,13 +27,29 @@
  * `{ type: 'host.secret', apiKey }`; worker requests that arrive before it wait.
  * The CLI never gets it either: it talks to this host's loopback auth proxy
  * with a session token (`authProxy.ts`).
+ *
+ * Dsh-rebase decision 195: the product proxy comes with the key (`proxy` in
+ * `host.secret`) and again as `{ type: 'host.proxy', proxy }` whenever it
+ * changes; the auth proxy's leg to the gateway follows it at once. Never a
+ * launch variable, never logged: the URL may carry credentials.
  */
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { BridgeRpcServer } from '../dsh-host/bridge/bridgeRpcServer.ts';
-import { CLAUDE_SDK_HOST_SECRET, isClaudeSdkHostSecret } from '../shared/claudeSdkEngine.ts';
+import {
+  CLAUDE_SDK_HOST_SECRET,
+  isClaudeSdkHostProxyUpdate,
+  isClaudeSdkHostSecret,
+} from '../shared/claudeSdkEngine.ts';
+import {
+  describeHostProxy,
+  type HostProxySetting,
+  hostProxySecrets,
+  inheritedNoProxy,
+  readHostProxySetting,
+} from '../shared/hostProxy.ts';
 import { type AuthProxy, startAuthProxy } from './authProxy.ts';
 import { findGitBash } from './cliEnvironment.ts';
 import { sanitizeHostLogLine } from './failureMapping.ts';
@@ -87,8 +103,24 @@ if (
 ) {
   log(`warning: no rg in ${ripgrepDir}; the CLI falls back to its built-in one`);
 }
+/** The launch environment's NO_PROXY, still a bypass under the product proxy (decision 195 rule 8). */
+const launchNoProxy = inheritedNoProxy(process.env);
+
+/** A `proxy` value from Main: the setting, or off when it is malformed (said so). */
+function outboundProxyOf(raw: unknown): HostProxySetting | null {
+  const setting = readHostProxySetting(raw);
+  if (setting === undefined) {
+    log('warning: a malformed outbound proxy setting was ignored; model requests connect directly');
+  }
+  return setting ?? null;
+}
+
 /** The host's configuration once the key is in: the CLI reaches the gateway through `proxy`. */
-function hostConfig(proxy: AuthProxy, apiKey: string): SdkHostConfig {
+function hostConfig(
+  proxy: AuthProxy,
+  apiKey: string,
+  outboundProxy: HostProxySetting | null | undefined
+): SdkHostConfig {
   const { config, credentialedProxies } = buildHostConfig({
     inherited: process.env,
     configDir,
@@ -97,13 +129,14 @@ function hostConfig(proxy: AuthProxy, apiKey: string): SdkHostConfig {
     ...(ripgrepDir ? { ripgrepDir } : {}),
     apiKey,
     proxy,
+    ...(outboundProxy !== undefined ? { outboundProxy } : {}),
     // Probes only: a stand-in home directory (S-3 P-5). Main never sets it.
     ...(process.env.AICLIENT_CLAUDE_SDK_HOME?.trim()
       ? { homeDir: process.env.AICLIENT_CLAUDE_SDK_HOME.trim() }
       : {}),
   });
   log(
-    `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} rg=${ripgrepDir ?? '(built-in)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'} pinned=${Object.keys(config.settingsEnv).length} windows=${JSON.stringify(config.modelWindows ?? {})} proxy=${proxy.url}`
+    `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} rg=${ripgrepDir ?? '(built-in)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'} pinned=${Object.keys(config.settingsEnv).length} windows=${JSON.stringify(config.modelWindows ?? {})} proxy=${proxy.url} outbound=${outboundProxy === undefined ? '(launch environment)' : describeHostProxy(outboundProxy, launchNoProxy)}`
   );
   if (credentialedProxies.length > 0) {
     // Their values never reach the CLI's command line; a repository's env can override them.
@@ -117,12 +150,32 @@ let proxy: AuthProxy | null = null;
 let server: BridgeRpcServer | null = null;
 /** Worker requests that came before the secret, answered once the host is up. */
 const early: unknown[] = [];
+/** Decision 195: a proxy change that came while the host was starting. */
+let pendingProxy: { setting: HostProxySetting | null } | undefined;
 
-async function start(apiKey: string): Promise<void> {
+/** Decision 195: the product proxy changed; the leg to the gateway follows it now. */
+function applyOutboundProxy(setting: HostProxySetting | null): void {
+  logSecrets.push(...hostProxySecrets(setting));
+  if (proxy) proxy.setProxy(setting);
+  else pendingProxy = { setting };
+}
+
+async function start(apiKey: string, rawProxy: unknown): Promise<void> {
   logSecrets.push(apiKey);
-  proxy = await startAuthProxy({ upstream: baseUrl, apiKey, log });
+  // Absent: Main keeps the engines off the product proxy (rule 10), and S-3 K-3 applies.
+  const outboundProxy = rawProxy === undefined ? undefined : outboundProxyOf(rawProxy);
+  logSecrets.push(...hostProxySecrets(outboundProxy));
+  proxy = await startAuthProxy({
+    upstream: baseUrl,
+    apiKey,
+    log,
+    ...(outboundProxy !== undefined ? { proxy: outboundProxy } : {}),
+    ...(launchNoProxy !== undefined ? { inheritedNoProxy: launchNoProxy } : {}),
+  });
   logSecrets.push(proxy.token);
-  const config = hostConfig(proxy, apiKey);
+  const config = hostConfig(proxy, apiKey, outboundProxy);
+  if (pendingProxy) proxy.setProxy(pendingProxy.setting);
+  pendingProxy = undefined;
   server = new BridgeRpcServer({
     port: { postMessage: (message) => process.send?.(message) },
     generation,
@@ -147,6 +200,10 @@ const secretTimer = setTimeout(() => {
 }, SECRET_TIMEOUT_MS);
 let starting = false;
 process.on('message', (message) => {
+  if (starting && isClaudeSdkHostProxyUpdate(message)) {
+    applyOutboundProxy(outboundProxyOf(message.proxy));
+    return;
+  }
   if (server) {
     server.receive(message);
     return;
@@ -154,7 +211,7 @@ process.on('message', (message) => {
   if (!starting && isClaudeSdkHostSecret(message)) {
     starting = true;
     clearTimeout(secretTimer);
-    start(message.apiKey).catch((error) => {
+    start(message.apiKey, message.proxy).catch((error) => {
       log('the host could not start', error);
       process.exit(1);
     });

@@ -10,7 +10,9 @@
  *            new plan is built;
  *   drift    every plan Main builds is compared with the one the running host
  *            was spawned with; a different revision restarts the host once no
- *            session is working (`WorkerManager.reconcileModelPlan`).
+ *            session is working (`WorkerManager.reconcileModelPlan`);
+ *   proxy    decision 195: the product proxy goes with every `configure`, and
+ *            a change to it reaches the running host at once (no restart).
  *
  * Route B, S-1 (decision 3): the Claude Agent SDK engine reads the same two
  * sources. Its routes come from the plan Main built last, kept here so a
@@ -29,6 +31,7 @@ import {
   resolveDshModelPlan,
   resolveNativeModelCatalog,
 } from '../piModelConfig';
+import { getEngineProxySetting, onEngineProxyChange } from '../proxy/ProxyConfig';
 import { watchCacheControlOnTools } from './cacheControlOnToolsSetting';
 import { claudeSdkCliPath, claudeSdkHostLayout } from './claudeSdkEngine';
 import { claudeSdkEngineEnabled } from './claudeSdkEngineSetting';
@@ -60,6 +63,17 @@ export function installDshHostModelSource(): void {
           resourcesPath: process.resourcesPath,
         })
       ),
+    // Decision 195: the product proxy, in every `configure`.
+    proxy: () => getEngineProxySetting(),
+  });
+  // Decision 195 rule 4: a change reaches the running host at once (each SDK
+  // chat's transport follows it on its own). Never the address in the log.
+  onEngineProxyChange((setting) => {
+    const sent = dshHostSupervisor.updateProxy(setting);
+    console.info(
+      `[worker-manager] outbound proxy for the engines is now ${setting ? 'on' : 'off'}` +
+        (sent ? '; the DSH host switched' : '; the next DSH host starts with it')
+    );
   });
   let lastPlan: DshModelPlan | null = null;
   onDshModelPlanBuilt((plan) => {

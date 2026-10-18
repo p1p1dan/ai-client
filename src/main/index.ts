@@ -79,6 +79,7 @@ import { gitAutoFetchService } from './services/git/GitAutoFetchService';
 import { setCurrentLocale } from './services/i18n';
 import { buildAppMenu } from './services/MenuBuilder';
 import { importPriorLocalStorage } from './services/priorLocalStorageImport';
+import { seedProxySettings } from './services/proxy/ProxyConfig';
 import {
   getSharedStatePaths,
   isLegacySettingsMigrated,
@@ -422,9 +423,13 @@ async function init(): Promise<void> {
           loggingEnabled?: boolean;
           logLevel?: string;
           logRetentionDays?: number;
+          proxySettings?: ProxySettings;
         };
       }
     | undefined;
+  // Decision 195 rule 6: the engine hosts get the saved proxy even if one starts
+  // before the renderer restores its settings.
+  seedProxySettings(aiclientSettings?.state?.proxySettings);
   const loggingEnabled = (aiclientSettings?.state?.loggingEnabled as boolean) ?? false;
   const logLevel =
     (aiclientSettings?.state?.logLevel as 'error' | 'warn' | 'info' | 'debug') ?? 'info';

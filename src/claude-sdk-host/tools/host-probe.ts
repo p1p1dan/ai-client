@@ -69,6 +69,16 @@
  * automatically, plan, Auto, Bypass): never a card, the input whole on `tool.updated` and
  * in the history.
  *
+ * Dsh-rebase decision 195: `proxy`, on its own. The host is told the gateway is
+ * `gateway.invalid:<port>`, a name only a local test proxy (src/dsh-host/tools/lib/testProxy.ts)
+ * resolves, and gets that proxy, with credentials, beside the key, as Main hands over the
+ * product proxy; no proxy variable is inherited. A CC-TEXT turn completes through it, every
+ * request authorised; the CLI's Bash tool sees it in HTTPS_PROXY with NODE_USE_ENV_PROXY=1;
+ * switched off (`host.proxy`), the next turn's request goes direct (it cannot reach
+ * `gateway.invalid`, so it is stopped once the host logs the failure) and never reaches the
+ * proxy; switched on again, a turn completes through it with no restart; the host's stderr
+ * never quotes the proxy password.
+ *
  * The key is a fake one unless PROBE_API_KEY is set in the shell; nothing here reads a
  * stored credential.
  */
@@ -90,6 +100,7 @@ import { tmpdir as osTmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
+import { startTestProxy, type TestProxy } from '../../dsh-host/tools/lib/testProxy.ts';
 import { CLAUDE_SDK_INHERITED_ENV } from '../../shared/claudeSdkEngine.ts';
 import { WINDOWS_POWERSHELL_ARGS, WINDOWS_PROCESS_QUERY } from '../processTree.ts';
 
@@ -184,6 +195,20 @@ let child: ChildProcess;
  */
 let fetchProxy: { server: TcpServer; url: string; targets: string[] } | null = null;
 
+/** `proxy` (decision 195): the product proxy stand-in, and its password. */
+let outboundProxy: TestProxy | null = null;
+const OUTBOUND_PROXY_PASSWORD = `probe-${createHash('sha256').update(String(Date.now())).digest('hex').slice(0, 16)}`;
+const PROXY_NAMES = /^(http|https|all|no)_proxy$/i;
+/** The gateway as the host is told: `gateway.invalid` under `proxy`, so only the proxy reaches it. */
+const hostGatewayUrl = scenarios.includes('proxy')
+  ? gatewayUrl.replace(/\/\/(127\.0\.0\.1|localhost)(?=[:/]|$)/, '//gateway.invalid')
+  : gatewayUrl;
+function outboundSetting(): { url: string; noProxy: string } | null {
+  return outboundProxy
+    ? { url: outboundProxy.urlWithCredentials, noProxy: 'localhost,127.0.0.1' }
+    : null;
+}
+
 function startFetchProxy(): Promise<void> {
   const targets: string[] = [];
   const server = createTcpServer((socket) => {
@@ -238,9 +263,22 @@ function inheritedEnv(): Record<string, string> {
   const names = new Set([...CLAUDE_SDK_INHERITED_ENV, 'AICLIENT_GIT_BASH_PATH']);
   const env: Record<string, string> = {};
   for (const [name, value] of Object.entries(process.env)) {
-    if (value !== undefined && names.has(name.toUpperCase())) env[name] = value;
+    if (value === undefined || !names.has(name.toUpperCase())) continue;
+    // `proxy`: the product proxy alone decides; this shell's own proxy stays out.
+    if (outboundProxy && PROXY_NAMES.test(name)) continue;
+    env[name] = value;
   }
   return env;
+}
+
+/** Waits until the host wrote more than `already` stderr lines matching `pattern`. */
+async function waitForHostLines(pattern: RegExp, already: number, timeoutMs: number) {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    if (hostStderr.filter((line) => pattern.test(line)).length > already) return true;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return false;
 }
 
 function startHost(): void {
@@ -249,7 +287,7 @@ function startHost(): void {
       ...inheritedEnv(),
       AICLIENT_CLAUDE_SDK_GENERATION: String(generation),
       AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
-      AICLIENT_CLAUDE_SDK_BASE_URL: gatewayUrl,
+      AICLIENT_CLAUDE_SDK_BASE_URL: hostGatewayUrl,
       AICLIENT_CLAUDE_SDK_SETTING_SOURCES:
         process.env.PROBE_SETTING_SOURCES ?? 'user,project,local',
       // S-3 P-5: the fake home directory (`projcfg-home`).
@@ -275,7 +313,12 @@ function startHost(): void {
   });
   // Route B S-3 (K-5): the key goes as the first IPC message, as Main sends it. A real
   // gateway key comes from PROBE_API_KEY in this shell only; never a file.
-  child.send({ type: 'host.secret', apiKey });
+  child.send({
+    type: 'host.secret',
+    apiKey,
+    // Decision 195: the product proxy goes with the key, as Main sends it.
+    ...(outboundProxy ? { proxy: outboundSetting() } : {}),
+  });
   child.stderr?.on('data', (chunk: Buffer) => {
     for (const line of chunk.toString('utf8').split('\n')) {
       if (!line.trim()) continue;
@@ -1148,6 +1191,12 @@ async function main(): Promise<void> {
     writeRepoSettings();
   }
   if (scenarios.includes('webfetch')) await startFetchProxy();
+  if (scenarios.includes('proxy')) {
+    if (scenarios.length !== 1) throw new Error('proxy: run on its own');
+    outboundProxy = await startTestProxy({
+      credentials: { username: 'pilab probe', password: OUTBOUND_PROXY_PASSWORD },
+    });
+  }
   startHost();
   await bootstrap();
 
@@ -1443,6 +1492,80 @@ async function main(): Promise<void> {
           'mode-plan',
           'after approval the chosen mode is in force',
           next.cards.length === 0 && existsSync(after)
+        );
+        break;
+      }
+      case 'proxy': {
+        const proxy = outboundProxy as TestProxy;
+        const setting = outboundSetting() as { url: string; noProxy: string };
+        const gatewayHost = new URL(hostGatewayUrl).host;
+        const viaProxy = () => proxy.records.filter((r) => r.target === gatewayHost);
+        await setPosture('agent', 'bypass');
+        // on
+        await send('CC-TEXT hello');
+        const onEnd = await waitFor(terminal, 'proxy on turn end', 120_000);
+        show('proxy');
+        check('proxy', 'on: the turn completed', onEnd.type === 'session.completed');
+        check(
+          'proxy',
+          'on: every model request went through the proxy, authorised',
+          viaProxy().length > 0 && viaProxy().every((r) => r.authorized && r.status === 200)
+        );
+        check(
+          'proxy',
+          'on: the host logged the product proxy',
+          hostStderr.some((line) => /outbound=on \(http proxy; \d+ bypass entries\)/.test(line))
+        );
+        // The CLI and its tools (rule 7).
+        await runCalls(
+          [{ name: 'Bash', input: { command: 'env', description: 'Print the environment' } }],
+          () => 'allow'
+        );
+        const dump = events
+          .filter((e) => e.type === 'tool.completed')
+          .map((e) => String(e.payload?.output ?? ''))
+          .join('\n');
+        const seen = (name: string) => new RegExp(`^${name}=(.*)$`, 'im').exec(dump)?.[1]?.trim();
+        check(
+          'proxy',
+          "the CLI's Bash tool sees the product proxy and NODE_USE_ENV_PROXY=1",
+          seen('https_proxy') === setting.url && seen('NODE_USE_ENV_PROXY') === '1'
+        );
+        // off: direct, so `gateway.invalid` is unreachable; stopped once the host says so.
+        const failure = /auth proxy: upstream request failed/;
+        const failedBefore = hostStderr.filter((line) => failure.test(line)).length;
+        child.send({ type: 'host.proxy', proxy: null });
+        const beforeOff = viaProxy().length;
+        await send('CC-TEXT hello');
+        const failed = await waitForHostLines(failure, failedBefore, 60_000);
+        await request('worker.stop', { logicalSessionId, reason: 'user' });
+        await waitFor(terminal, 'proxy off turn end', 60_000);
+        check(
+          'proxy',
+          'off: the host logged the switch',
+          hostStderr.some((line) => line.includes('auth proxy: outbound proxy off'))
+        );
+        check('proxy', 'off: the request went direct and failed', failed);
+        check('proxy', 'off: nothing reached the proxy', viaProxy().length === beforeOff);
+        // on again, no restart
+        child.send({ type: 'host.proxy', proxy: setting });
+        const beforeAgain = viaProxy().length;
+        await send('CC-TEXT hello');
+        const againEnd = await waitFor(terminal, 'proxy on-again turn end', 120_000);
+        check(
+          'proxy',
+          'on again: the turn completed through the proxy',
+          againEnd.type === 'session.completed' && viaProxy().length > beforeAgain
+        );
+        check(
+          'proxy',
+          "the host's stderr never quotes the proxy password",
+          hostStderr.every((line) => !line.includes(OUTBOUND_PROXY_PASSWORD))
+        );
+        console.log(
+          `  [proxy] records=${proxy.records.length} lines=${JSON.stringify(
+            hostStderr.filter((l) => /outbound|auth proxy/.test(l)).map((l) => l.slice(0, 200))
+          )}`
         );
         break;
       }

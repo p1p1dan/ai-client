@@ -1,9 +1,28 @@
+import { type HostProxySetting, sameHostProxy } from '@shared/hostProxy';
 import type { ProxySettings } from '@shared/types';
 import type { Session } from 'electron';
 import { session } from 'electron';
 
 let currentProxySettings: ProxySettings | null = null;
 let updaterSession: Session | null = null;
+
+/**
+ * Decision 195 rule 10: `0` keeps both chat engines off the product proxy —
+ * no host is handed it, which is the behaviour before decision 195. Read by
+ * Main only.
+ */
+export const ENGINE_PROXY_SWITCH_ENV = 'AICLIENT_RUNTIME_ENGINE_PROXY';
+
+type EngineProxyListener = (setting: HostProxySetting | null) => void;
+const engineProxyListeners = new Set<EngineProxyListener>();
+/**
+ * The address field calls `applyProxy` per keystroke: a change reaches the
+ * hosts once the setting has been still this long.
+ */
+export const ENGINE_PROXY_SETTLE_MS = 500;
+/** What the listeners were last told (or what the saved settings said at startup). */
+let announcedEngineProxy: HostProxySetting | null = null;
+let announceTimer: NodeJS.Timeout | null = null;
 
 function normalizeProxyUrl(url: string): string {
   if (/^(https?|socks5?h?|socks4a?):\/\//.test(url)) {
@@ -78,8 +97,77 @@ export function getProxyEnvVars(): Record<string, string> {
   };
 }
 
+/**
+ * Decision 195: what the chat engines route model requests through for
+ * `settings` — the product proxy, or `null` when it is off. A pure function
+ * of the settings (the switch is read by `getEngineProxySetting`).
+ */
+export function engineProxyFrom(
+  settings: ProxySettings | null | undefined
+): HostProxySetting | null {
+  const server = settings?.server?.trim();
+  if (!settings?.enabled || !server) return null;
+  return {
+    url: normalizeProxyUrl(server),
+    noProxy: normalizeBypassList(settings.bypassList || 'localhost,127.0.0.1'),
+  };
+}
+
+/**
+ * The setting every engine host is handed now: the product proxy, `null`
+ * when it is off, or `undefined` when `AICLIENT_RUNTIME_ENGINE_PROXY=0` keeps
+ * the engines off it (the hosts then get no `proxy` field at all).
+ */
+export function getEngineProxySetting(
+  env: NodeJS.ProcessEnv = process.env
+): HostProxySetting | null | undefined {
+  if (env[ENGINE_PROXY_SWITCH_ENV]?.trim() === '0') return undefined;
+  return engineProxyFrom(currentProxySettings);
+}
+
+/**
+ * Called when the engines' setting has changed and stayed put for
+ * `ENGINE_PROXY_SETTLE_MS` — not on every settings write (switching
+ * 「代理更新」 changes nothing the engines use). Never while the switch is off.
+ */
+export function onEngineProxyChange(listener: EngineProxyListener): () => void {
+  engineProxyListeners.add(listener);
+  return () => engineProxyListeners.delete(listener);
+}
+
+function scheduleEngineProxyAnnouncement(): void {
+  if (announceTimer) clearTimeout(announceTimer);
+  announceTimer = setTimeout(() => {
+    announceTimer = null;
+    const setting = getEngineProxySetting();
+    if (setting === undefined || sameHostProxy(setting, announcedEngineProxy)) return;
+    announcedEngineProxy = setting;
+    for (const listener of engineProxyListeners) {
+      try {
+        listener(setting);
+      } catch (error) {
+        console.error('[proxy] an engine proxy listener failed:', error);
+      }
+    }
+  }, ENGINE_PROXY_SETTLE_MS);
+  announceTimer.unref?.();
+}
+
+/**
+ * Takes the saved settings before any engine host can start (decision 195
+ * rule 6): the renderer applies them only once its store is restored, and a
+ * host may be prewarmed earlier. Nothing is announced, and the sessions are
+ * left to the renderer's own `applyProxy`.
+ */
+export function seedProxySettings(settings: ProxySettings | null | undefined): void {
+  if (currentProxySettings !== null || !settings) return;
+  currentProxySettings = settings;
+  announcedEngineProxy = engineProxyFrom(settings);
+}
+
 export async function applyProxy(settings: ProxySettings): Promise<void> {
   currentProxySettings = settings;
+  scheduleEngineProxyAnnouncement();
 
   const proxyConfig =
     settings.enabled && settings.server

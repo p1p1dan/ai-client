@@ -1,5 +1,11 @@
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
-import { CLAUDE_SDK_HOST_SECRET, type ClaudeSdkHostSecret } from '@shared/claudeSdkEngine';
+import {
+  CLAUDE_SDK_HOST_PROXY,
+  CLAUDE_SDK_HOST_SECRET,
+  type ClaudeSdkHostProxyUpdate,
+  type ClaudeSdkHostSecret,
+} from '@shared/claudeSdkEngine';
+import type { HostProxySetting } from '@shared/hostProxy';
 import type { WorkerRpcRequest } from '@shared/types/workerRpc';
 import type { WorkerTransport, WorkerTransportExit } from './WorkerTransport';
 
@@ -23,11 +29,21 @@ export interface ClaudeSdkProcessLaunch {
    * put in `env` (a process's initial environment stays readable on Linux).
    */
   apiKey: string;
+  /**
+   * Dsh-rebase decision 195: the product proxy, sent with the key and again on
+   * every change while this host lives. `current()` undefined: the engines stay
+   * off it (rule 10), and nothing is sent.
+   */
+  proxy?: {
+    current(): HostProxySetting | null | undefined;
+    subscribe(listener: (setting: HostProxySetting | null) => void): () => void;
+  };
 }
 
 export class ClaudeSdkProcessTransport implements WorkerTransport {
   private readonly child: ChildProcess;
   private exitInfo: WorkerTransportExit | null = null;
+  private unsubscribeProxy: (() => void) | undefined;
 
   constructor(launch: ClaudeSdkProcessLaunch) {
     this.child = spawn(launch.command, launch.args, {
@@ -38,10 +54,25 @@ export class ClaudeSdkProcessTransport implements WorkerTransport {
     });
     this.child.once('exit', (code, signal) => {
       this.exitInfo = { code, signal, cause: 'host-exit' };
+      this.unsubscribeProxy?.();
     });
     // Before any worker request: the host answers none until it has the key.
-    const secret: ClaudeSdkHostSecret = { type: CLAUDE_SDK_HOST_SECRET, apiKey: launch.apiKey };
+    const proxy = launch.proxy?.current();
+    const secret: ClaudeSdkHostSecret = {
+      type: CLAUDE_SDK_HOST_SECRET,
+      apiKey: launch.apiKey,
+      ...(proxy !== undefined ? { proxy } : {}),
+    };
     this.child.send(secret);
+    if (proxy !== undefined) {
+      this.unsubscribeProxy = launch.proxy?.subscribe((setting) => {
+        if (this.exitInfo || !this.child.connected) return;
+        const update: ClaudeSdkHostProxyUpdate = { type: CLAUDE_SDK_HOST_PROXY, proxy: setting };
+        // A host exiting right now is not a transport error: the callback keeps
+        // a failed send from being emitted as one.
+        this.child.send(update, () => undefined);
+      });
+    }
     // Stdout carries nothing the protocol needs; drain it so the pipe never fills.
     this.child.stdout?.resume();
   }

@@ -62,6 +62,8 @@ export const HOST_DEPENDENCIES = [
   '@deepseek-ai/dsh-app-boot',
   '@deepseek-ai/dsh-base',
   '@deepseek-ai/dsh-home-paths',
+  // Decision 195: host.ts installs the product proxy with DSH's own package.
+  '@deepseek-ai/dsh-http-proxy',
   '@deepseek-ai/dsh-launch-environment',
   '@deepseek-ai/dsh-system-prompt',
   '@deepseek-ai/dsh-tool-ask-user',
@@ -84,7 +86,8 @@ export const HOST_ENTRY = { entry: 'host.ts', out: 'host.js' };
  * at every start; decision 171: the User-Agent check and relay header name
  * the fetch wrapper shares with Main; decision 173: the request scope names
  * and types the fetch wrapper shares with the bridge and Main; decision 177:
- * the per-model compaction rules the settings show); everything else stays
+ * the per-model compaction rules the settings show; decision 195: the
+ * outbound proxy rules Main and both hosts share); everything else stays
  * external.
  */
 export const HOST_INPUTS = [
@@ -93,11 +96,17 @@ export const HOST_INPUTS = [
   'src/shared/dshAutoCompaction.ts',
   'src/shared/dshPluginAllowlist.ts',
   'src/shared/dshPlugins.ts',
+  'src/shared/hostProxy.ts',
   'src/shared/types/requestScope.ts',
   'src/shared/types/requestUserAgent.ts',
 ];
 /** npm packages host.js imports at run time, from the artifact's node_modules. */
-export const HOST_EXTERNALS = ['@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh-launch-environment'];
+export const HOST_EXTERNALS = [
+  '@deepseek-ai/dsh-app-boot',
+  // Decision 195: one copy of the proxy policy, shared with dsh-subprocess and web fetch.
+  '@deepseek-ai/dsh-http-proxy',
+  '@deepseek-ai/dsh-launch-environment',
+];
 /**
  * npm packages the bridge row may import at run time; everything else must be
  * bundled. P1-5a: `installModelSelection` routes each turn (dsh-agent).
@@ -1188,6 +1197,7 @@ export function requiredFiles(target) {
     'node_modules/@aiclient/dsh-app/lib/bridge.js',
     'node_modules/@deepseek-ai/dsh-base/package.json',
     'node_modules/@deepseek-ai/dsh-app-boot/lib/index.js',
+    'node_modules/@deepseek-ai/dsh-http-proxy/lib/index.js',
     'node_modules/@deepseek-ai/dsh-launch-environment/package.json',
     // Loaded by path at run time, so nothing but this list vouches for them.
     'node_modules/@deepseek-ai/dsh-skill-badge/assets/dsh-badge.md',
