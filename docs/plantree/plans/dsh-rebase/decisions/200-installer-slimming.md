@@ -78,8 +78,12 @@
   - 启动打包版，sqlite3 与 watcher 从 `app.asar.unpacked` 加载，日志无找不到模块的错误。缺 `app-update.yml` 是因为只打了目录包（electron-builder 只在有 nsis 目标时写它），与本决策无关。
 - 单测：`runtime-packages`、`packaging-config` 等 4 个文件 92 条通过。
 
+- **CI**（用户同意后推送 `1ab51ffe`，Build run 39124636224）：
+  - Windows、Linux 作业通过，打包后检查与五个入口的加载在两个平台都通过；
+  - Windows 回归套件 10 组全过，DSH 冒烟 44 项通过；
+  - `windows-installer` 产物 283.4 → 234.7 MB（−48.6 MB，比估算多，安装包里重复内容并没有被压掉多少）；`windows-unpacked` 压缩包 403.5 → 331.1 MB。
+
 ## 5 还要做的
 
-- 推送后跑一轮 Build：CI 的打包后检查会在 Windows、Linux 上加载这几个包。
 - 装上新包后点一遍：终端、文件监听、搜索、git、PDF 预览、自动更新检查。
 - **加密机**：开一次终端、改一次文件看监听；第 3a 项删掉的是兜底副本，要在那里确认一次。
