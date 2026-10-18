@@ -83,6 +83,7 @@ vi.mock('../useHostStatus', () => {
   return { useHostStatus: () => snapshot };
 });
 
+import { supersededSummaryIds } from '@shared/dshHistory/types';
 import {
   applyRuntimeEvent,
   type ChatMessage,
@@ -809,6 +810,61 @@ describe('/compact in the timeline, and its cancel (decision 180)', () => {
     await act(async () => compact.resolve({ compacted: true, summary: summaryRow }));
     await settle();
     expect(ids()).toEqual(['dsh-compact-command-k1', 'h:cp1']);
+  });
+
+  // Found in the dev app on 2026-10-18: the bridge's events wait for their batch (a
+  // second, in a hidden window) while the answer settles the run at once.
+  // Its summary row names the live id; the late events are that row's.
+  const started = {
+    type: 'session.compaction',
+    payload: {
+      messageId: 'dsh-compaction-k1',
+      phase: 'started',
+      trigger: 'manual',
+      commandMessageId: 'dsh-compact-command-k1',
+      command: '/compact',
+    },
+  };
+  const completed = {
+    type: 'session.compaction',
+    payload: {
+      messageId: 'dsh-compaction-k1',
+      phase: 'completed',
+      trigger: 'manual',
+      summary: 'Context summary\n\n- x',
+    },
+  };
+
+  it('[180-C-06] the answer lands before the bridge’s live rows: they add no second command line or summary', async () => {
+    mocks.api.compactSession.mockResolvedValue({ compacted: true, summary: summaryRow });
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+    expect(ids()).toEqual(['dsh-compact-command-k1', 'h:cp1']);
+
+    await event(started);
+    await event(completed);
+    expect(ids()).toEqual(['dsh-compact-command-k1', 'h:cp1']);
+    expect(timeline()).toEqual(['command /compact', 'summary h:cp1']);
+    expect(supersededSummaryIds(useChatSessionsStore.getState().messages.c1 ?? []).size).toBe(0);
+  });
+
+  it('[180-C-07] the answer lands between the live rows: the late summary event adds no second summary', async () => {
+    const compact = deferred<unknown>();
+    mocks.api.compactSession.mockReturnValue(compact.promise);
+    setStore({ hostBound: ['c1'] });
+    await mountComposer();
+    await type(COMMAND);
+    await press('Enter');
+    await event(started);
+    await act(async () => compact.resolve({ compacted: true, summary: summaryRow }));
+    await settle();
+    expect(ids()).toEqual(['dsh-compact-command-k1', 'h:cp1']);
+
+    await event(completed);
+    expect(ids()).toEqual(['dsh-compact-command-k1', 'h:cp1']);
+    expect(timeline()).toEqual(['command /compact', 'summary h:cp1']);
   });
 
   it('[180-C-03] Esc while it compacts: Main is asked to cancel, and the row says cancelled', async () => {

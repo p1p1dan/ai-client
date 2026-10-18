@@ -25,6 +25,7 @@ import { renameSessionIndexEntry } from '@/components/chat/sessionIndex/useSessi
 import { uniqueId } from '@/lib/uniqueId';
 import {
   type ChatSession,
+  flushRuntimeEvents,
   mapHistoryMessageToChatMessage,
   useChatSessionsStore,
 } from './chatSessions';
@@ -303,6 +304,10 @@ export function setCompactRunKey(sessionId: string, runId: string, key: string):
  * history row, shown under its own id where the running row was);
  * `note` says why there is none; `remove` takes the composer's rows away
  * (nothing ran). Returns whether the chat now shows a summary row.
+ *
+ * The bridge's `session.compaction` events of the run came before the
+ * answer, and may still be waiting for their batch: they land first, so
+ * its rows have their live ids by the time the answer settles them.
  */
 export function settleCompactRun(
   sessionId: string,
@@ -311,6 +316,7 @@ export function settleCompactRun(
     | { kind: 'summary'; summary: HistoryMessage }
     | Exclude<CompactRunSettle, { kind: 'summary' }>
 ): boolean {
+  flushRuntimeEvents();
   let shown = false;
   useChatSessionsStore.setState((state) => {
     if (!state.sessions.some((session) => session.id === sessionId)) return state;

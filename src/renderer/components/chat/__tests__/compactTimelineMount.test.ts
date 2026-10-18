@@ -39,7 +39,8 @@ vi.mock('../useResolvedSessionModel', () => ({ useResolvedSessionModel: () => ()
 vi.mock('../sessionIndex/useResumeSession', () => ({ useResumeSession: () => () => undefined }));
 
 import { DSH_COMPACT_FAILED_REASON_KEY } from '@shared/dshHistory/types';
-import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
+import { settleCompactRun, showCompactRun } from '@/stores/chatSessionActions';
+import { applyRuntimeEvent, type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
 import { useCompactRunsStore } from '@/stores/compactRuns';
 import {
   compactCommandRow,
@@ -309,5 +310,43 @@ describe('an earlier compaction’s summary (issue #17)', () => {
     await render();
     expect(container.querySelector('[data-testid="superseded-summary"]')).toBeNull();
     expect(container.textContent).toContain('唯一的摘要');
+  });
+
+  // Found in the dev app on 2026-10-18: one /compact showed two command lines and
+  // two summaries, the first folded as superseded. Its answer had settled the
+  // run before the bridge's events of the same compaction left their batch.
+  it('[17-TL-3] one /compact whose answer lands before its live events: one command line, one summary', async () => {
+    setTimeline([]);
+    showCompactRun('s1', 'r1', '/compact', 'Compacting the context…');
+    settleCompactRun('s1', 'r1', {
+      kind: 'summary',
+      summary: {
+        id: 'h:cp1',
+        entryId: 'cp1',
+        role: 'system',
+        liveMessageId: 'dsh-compaction-k1',
+        blocks: [{ id: 'h:cp1:summary:0', type: 'text', text: '上下文摘要\n这一次的摘要' }],
+      },
+    });
+    const live = (payload: Record<string, unknown>) =>
+      useChatSessionsStore.setState((state) =>
+        applyRuntimeEvent(state, {
+          type: 'session.compaction',
+          seq: 1,
+          timestamp: 1,
+          sessionId: 's1',
+          payload: { messageId: 'dsh-compaction-k1', trigger: 'manual', ...payload },
+        } as never)
+      );
+    live({
+      phase: 'started',
+      commandMessageId: 'dsh-compact-command-k1',
+      command: '/compact',
+    });
+    live({ phase: 'completed', summary: '上下文摘要\n这一次的摘要' });
+    await render();
+    expect(container.querySelectorAll('[data-testid="compact-command-row"]')).toHaveLength(1);
+    expect(container.querySelector('[data-testid="superseded-summary"]')).toBeNull();
+    expect(container.textContent?.match(/这一次的摘要/g)).toHaveLength(1);
   });
 });
