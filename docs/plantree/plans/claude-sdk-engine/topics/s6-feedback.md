@@ -267,7 +267,7 @@
 - **验证**：
   - 单测：`shared/__tests__/contextWindowMismatch.test.ts`（14 条）、`liveEvents.test.ts`、`sdkSessionRuntime.test.ts`、`dshTimelineRowModel.test.ts`。
   - 三套 tsc 0 错；相关目录 vitest 8012 条通过，15 条失败都是本机改动前就有的（sessionGc、8.3 短名、符号链接、dshHostScopes 等）。
-  - `bridge-record.ts --check` 在本机跑不完：Windows 上没有 bash 工具、路径分隔符不同，样本本来就对不上。只看 `overflow-compact` 一组，除了序号偏移没有新事件（样本模型窗口 200,000，等于上限，不提示）。要在 Linux 上跑一遍。
+  - `bridge-record.ts --check` 在本机跑不完：Windows 上没有 bash 工具、路径分隔符不同，样本本来就对不上。只看 `overflow-compact` 一组，除了序号偏移没有新事件（样本模型窗口 200,000，等于上限，不提示）。合并 Linux 的审核模型后推送 72ddf916，Build run 39100860877 的 gate（Linux，含 `bridge-record.ts --check`）通过；Windows 作业通过，回归套件 9 组全过，`windows-installer` 已上传（到 2026-11-01）。
 
 ### 开发版界面复核（2026-10-17）
 
