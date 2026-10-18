@@ -1749,6 +1749,19 @@ describe('decision 192: the review model on the tool row', () => {
     expect(row.output).toBeUndefined();
   });
 
+  it('stops saying 「审核中」 once the review hands the call to a card', () => {
+    const items = joinReviewActivity(
+      turnItems(
+        message([
+          call('a', 'bash', { command: 'rm e.txt' }),
+          review('a', { phase: 'review' }),
+          permission('a', { resolved: false, allowed: undefined }),
+        ])
+      )
+    );
+    expect(deriveToolRowView(runFor(items, 'a')).verb).not.toBe(REVIEWING_VERB);
+  });
+
   it('keeps the latest record when a review is followed by its outcome', () => {
     const row = view([
       call('a', 'bash', { command: 'rm x' }),

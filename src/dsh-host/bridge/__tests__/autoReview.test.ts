@@ -126,13 +126,12 @@ function reviewer(
   answers: Array<string | 'error' | 'hang'>,
   options: { contextWindow?: number; rules?: AutoModeRules | undefined } = {}
 ) {
-  const sent: Array<{ maxTokens?: number; stop?: string[]; prompt: string }> = [];
+  const sent: Array<{ maxTokens?: number; prompt: string }> = [];
   const llm: ReviewLlm = {
     stream(request) {
       const answer = answers.shift() ?? '';
       sent.push({
         maxTokens: request.maxTokens,
-        stop: request.stop,
         prompt: request.messages[0]?.content[0]?.text ?? '',
       });
       if (answer === 'hang') {
@@ -166,7 +165,7 @@ describe('the two-stage review', () => {
     const r = reviewer(['<block>no']);
     expect(await r.instance.review(REQUEST, {}, signal)).toEqual({ kind: 'allow' });
     expect(r.sent).toHaveLength(1);
-    expect(r.sent[0]).toMatchObject({ maxTokens: 64, stop: ['</block>'] });
+    expect(r.sent[0]).toMatchObject({ maxTokens: 64 });
   });
 
   it('lets the reasoned second stage clear a fast block', async () => {

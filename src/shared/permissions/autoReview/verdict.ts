@@ -5,7 +5,7 @@ const MAX_REASON_CHARS = 300;
 export type ParsedReviewAnswer = { block: false } | { block: true; reason?: string } | null;
 
 /**
- * `<block>yes|no` (the closing tag may be cut by the stop sequence), with an
+ * `<block>yes|no` (the closing tag may be cut by the token cap), with an
  * optional `<reason>`. Thinking is ignored. Both verdicts, or neither, is null:
  * Claude Code counts that as no verdict at all.
  */

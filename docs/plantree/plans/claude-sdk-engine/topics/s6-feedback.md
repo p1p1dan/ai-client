@@ -198,7 +198,7 @@
     - 全量 `bridge-record.ts --check`：36 个场景一致。Windows 上手改的 `perm-grants` 第三张卡与 Linux 上的录制结果一致，不用重录。
     - 三套 tsc 都是 0 错。`pnpm test` 全量：11934 条通过、65 条跳过、0 条失败。Windows 上因环境失败的几组（建符号链接、`8dot3-*`、`sessionGc`、`shellWorkdir`、`legacyShellAbsence`、`dshHostScopes`）在 Linux 上都通过。`bridge-smoke.ts` 也通过。详见[决策 191 第 6.3、6.4、6.6 节](../../dsh-rebase/decisions/191-dsh-full-auto-asks-less.md)。
   - 后续任务：剩下的询问交给便宜模型审核，配套改登录引导和管理员的模型设置页。
-    - 2026-10-18 用户确认范围，方案写成 [DSH 决策 192](../../dsh-rebase/decisions/192-dsh-auto-review-model.md)（只做 DSH；危险命令也交给审核；不放行直接拒绝；没配置审核模型时不审核；登录服务仓库一起改）。待用户看方案与 HTML 预览后动工。
+    - 2026-10-18 用户确认范围，方案写成 [DSH 决策 192](../../dsh-rebase/decisions/192-dsh-auto-review-model.md)（只做 DSH；危险命令也交给审核；不放行直接拒绝；没配置审核模型时不审核；登录服务仓库一起改）。用户看过 HTML 预览定了界面，**已做**（两个仓库都只在本地提交），用户在开发版上看过效果；落地与验证见决策 192 第 8 节。
   - 开发版截图两张（删除命令的卡、工作区外的卡），含本机用户目录路径，没有入库，留在开发机工作树的 `bugOutput/s6-cards/`。用户看图后定为保留（2026-10-17："卡片上的原因说明保留。"）。
 
 ### 12 侧栏「按工作目录」时最新目录在最下面

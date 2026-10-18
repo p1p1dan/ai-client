@@ -159,6 +159,8 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     // Decision 178: automatic compaction, live.
     'auto-compact',
     'auto-compact-fail',
+    // Decision 192: the auto gear's review model.
+    'auto-review',
     'compact',
     // Decision 180: `/compact` cancelled while it summarizes.
     'compact-cancel',

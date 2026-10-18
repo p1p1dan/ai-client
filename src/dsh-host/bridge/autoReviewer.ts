@@ -13,7 +13,6 @@ import {
   buildReviewTranscript,
   REVIEW_STAGE1_INSTRUCTION,
   REVIEW_STAGE1_MAX_TOKENS,
-  REVIEW_STAGE1_STOP,
   REVIEW_STAGE2_INSTRUCTION,
   REVIEW_STAGE2_MAX_TOKENS,
   type ReviewAction,
@@ -42,7 +41,6 @@ export interface ReviewLlm {
     system: string;
     messages: Array<{ role: 'user'; content: Array<{ type: 'text'; text: string }> }>;
     maxTokens?: number;
-    stop?: string[];
     signal: AbortSignal;
   }): AsyncIterable<CompletionChunk>;
 }
@@ -130,8 +128,8 @@ export class AutoReviewer {
       system,
       `${transcript}\n\n${REVIEW_STAGE1_INSTRUCTION}`,
       {
+        // No stop sequence: DSH's pi-ai adapter refuses `stop`; the cap keeps it fast.
         maxTokens: REVIEW_STAGE1_MAX_TOKENS,
-        stop: REVIEW_STAGE1_STOP,
         timeoutMs,
         signal,
       }
@@ -161,7 +159,7 @@ export class AutoReviewer {
     routed: DshRoutedModel,
     system: string,
     prompt: string,
-    limits: { maxTokens: number; stop?: string[]; timeoutMs: number; signal: AbortSignal }
+    limits: { maxTokens: number; timeoutMs: number; signal: AbortSignal }
   ): Promise<Answer> {
     if (limits.signal.aborted) return failed('error', 'aborted');
     const controller = new AbortController();
@@ -181,7 +179,6 @@ export class AutoReviewer {
         system,
         messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
         maxTokens: limits.maxTokens,
-        ...(limits.stop ? { stop: limits.stop } : {}),
         signal: controller.signal,
       });
       for await (const chunk of stream) {

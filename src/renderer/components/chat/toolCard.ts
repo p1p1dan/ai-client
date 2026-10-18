@@ -451,12 +451,21 @@ type PermissionActivityItem = Extract<TimelineItem, { kind: 'permissionActivity'
  */
 export function joinReviewActivity<T extends PermissionJoinable>(items: readonly T[]): T[] {
   const reviews = new Map<string, PermissionActivityRecord>();
+  // A review that handed its call to a card is over; the card speaks for it.
+  const carded = new Set<string>();
   for (const item of items) {
+    if (item.kind === 'permission') {
+      const id = (item as PermissionItem).block.permissionId;
+      if (id) carded.add(id);
+    }
     if (item.kind !== 'permissionActivity') continue;
     for (const block of (item as PermissionActivityItem).blocks) {
       const record = block.permissionActivity;
       if (record && isReviewActivity(record)) reviews.set(record.requestId, record);
     }
+  }
+  for (const [id, record] of reviews) {
+    if (record.result === undefined && carded.has(id)) reviews.delete(id);
   }
   if (reviews.size === 0) return [...items];
   const joined: T[] = [];

@@ -1,6 +1,6 @@
 # 决策 192：DSH 全自动档剩下的询问先交给审核模型，审核模型由管理员在登录服务的管理页指定
 
-日期：2026-10-18（UTC+8）。**状态：第 1 节是用户裁决；第 3 节起是按裁决写的方案，其中标「自主」的是自主决定，待用户审批。尚未动代码。** 来源：[决策 191](191-dsh-full-auto-asks-less.md) 第 6.5 节，[S-6 反馈清单](../../claude-sdk-engine/topics/s6-feedback.md)第 11c 条。
+日期：2026-10-18（UTC+8）。**状态：第 1 节是用户裁决；第 3 节起是按裁决写的方案，其中标「自主」的是自主决定，待用户审批。已实现，落地与验证见第 8 节。** 来源：[决策 191](191-dsh-full-auto-asks-less.md) 第 6.5 节，[S-6 反馈清单](../../claude-sdk-engine/topics/s6-feedback.md)第 11c 条。
 
 ## 1 用户裁决（2026-10-18）
 
@@ -72,7 +72,7 @@ Claude Code 的规则（`claude auto-mode defaults` 打出来的，17 条放行�
   - **不截断**。对话超出审核模型的上下文时，这次不放行，告诉模型"没审，不是判定不安全"（Claude Code 新版还会先压缩对话再让模型重试；DSH 宿主能不能代为触发压缩，动工时再查，查不到就只拒）。
 - **输出**：`<block>no</block>` 或 `<block>yes</block><reason>一句话理由</reason>`。两个都出现、或都没有，算审核失败。
 - **两段**：
-  - 快审：最多 64 个 token、遇到 `</block>` 就停，要求偏向拦；判为放行就直接放行。
+  - 快审：最多 64 个 token，要求偏向拦；判为放行就直接放行。（Claude Code 还用了遇到 `</block>` 就停的停止符；DSH 的 pi-ai 模型适配器不接受停止符，实测报 `llm-pi-ai does not support GenerateOptions.stop`，所以只靠 64 个 token 的上限。）
   - 细审：只在快审判为拦时做，先想清楚再给结论，此时才考虑用户的原话授权。
 
 ### 3.3 结果
@@ -186,3 +186,34 @@ Claude Code 的规则（`claude auto-mode defaults` 打出来的，17 条放行�
 2. HTML 预览（`docs/design/2026-10-18-auto-review-states-preview.html`）：审核中、已由审核放行、审核不放行、审核没能完成、连拒到上限后的卡片、全自动的两种说明。**用户已定**（第 3.7 节）。
 3. A、B、C 三组同时做（C 的界面部分在第 2 步之后）。
 4. 合起来验证，推送两个仓库前各自先问用户；登录服务的部署由用户安排。
+
+## 8 落地（2026-10-18）
+
+两个仓库都只在本地提交，没有推送。
+
+### 8.1 登录服务（`jyw-cch-onboarding`，本地分支 `feat/auto-review-model`，`0b9c7ac`）
+
+- 存储：单行的 `model_config_meta` 加两列 `auto_review_provider_id`、`auto_review_model_id`（可空，不加外键：模型被停用或删除时保留选择，重新启用就恢复）。老库启动时按 `PRAGMA table_info` 补列，可重复执行。
+- 管理接口：`GET /api/admin/model-config` 多返回 `autoReview: { model, effective }`；`PUT /api/admin/model-config/auto-review` 设或清（`{ "model": null }`），校验 provider 与模型存在，记改动记录、推进 `updatedAt`。鉴权同其他模型管理接口（`MODEL_ADMIN_TOKEN`）。
+- 下发：只有选中的模型在同一份清单里（provider 与模型都启用、凭据齐全）才带 `autoReview`，键序 `version, updatedAt, providers, autoReview`。
+- 管理页：「渠道与模型」顶部一张「全自动审核模型」卡片：下拉（「不审核」+ 当前下发的模型）、保存；选中的模型没下发时显示红色提示。
+- 验证：`bun test` 231 条全过（新增 26 条）；两套 typecheck 通过；`biome check src tests web README.md` 通过（`bun run lint` 只在未跟踪的 `pelican-bike/` 报错，改动前就有）；`bun run build:web` 通过；本机起服务（临时库、仓库自带的 mock）实测设置、停用、改动记录都对。
+- 留给用户定：管理员改了模型 id 或把模型挪到别的 provider 后，保存的选择仍指向旧 id，审核关闭并提示，直到重新选择；没有跟着改名。
+
+### 8.2 PiLab（本地分支 `claude/claude-sdk-engine-mvp-162021`）
+
+- 门（`src/shared/permissions/gate.ts`）：`PermissionConfig.review` 钩子，在 `evaluate` 判为要问之后、排队弹卡之前调用，只在全自动档；新的决定来源 `review-allowed`、`review-denied`、`review-failed`，活动记录新增 `review` 阶段与 `reviewReason`、`reviewFailure`；`unavailable`（没有规则或审核模型不可用）按没配置处理，照旧弹卡。
+- 纯函数（`src/shared/permissions/autoReview/`）：规则解析、提示词与对话整理、答复解析、超时计算。
+- 宿主：`bridge/autoModeRules.ts`（从 CLI 读规则、按版本缓存在 `$DSH_HOME/aiclient/auto-review/`、失败后 60 秒内不重试）；`bridge/autoReviewer.ts`（两段审核，经 DSH 的 `ctx.llm`，一次性请求、不写会话）；`DshSessionRuntime` 在建门时按模型计划接上钩子，审核的开始与结果以 `permission.activity` 发给界面。
+- 主进程：清单校验保留 `autoReview`（格式不对就丢掉）；用户服务占了同名 provider 时不用；模型计划加 `reviewModel`（只在计划能服务时保留，否则记入 `dropped`；有它时计入 `revision`）；`configure` 带上 `reviewModel` 与 CLI 路径（`claudeSdkCliPath`）；模型目录响应带 `autoReview` 给菜单。
+- 界面：按第 3.7 节；另外，审核把调用交给卡片后，工具行不再显示「审核中」。
+- 录制：新场景 `auto-review`（单独的宿主，计划带审核模型，CLI 用一个打印规则的替身脚本，假网关按调用里的 `REVIEW-*` 标记扮演审核模型）：放行的删除执行了；两次不放行带理由；一次审核出错不计数；第三次连续不放行弹卡，卡上带理由、只有允许与拒绝，录制器拒绝。连录两次 `--check` 一致。
+- 开发版：没有本机登录服务时，未打包的开发版可用环境变量 `AICLIENT_DEV_AUTO_REVIEW_MODEL=<provider/modelId>` 指定审核模型（打包版不读）；假网关在 `--plan claude-sdk` 下同样扮演审核模型，GUI 点验可用 `CC-RUN` 删带 `REVIEW-*` 标记的文件。用户 2026-10-18 在开发版上看过效果。
+- 已知限制：审核的记录只在当场显示，和「本会话允许」的记录一样（决策 143）。重新打开对话后，工具行没有「自动：审核放行」这类尾注，审核没能完成的调用显示为「已拒绝」；点开是发给模型的英文说明。录制回放测试把 `auto-review` 记为「重新打开与当场不同」，并写明原因。
+
+### 8.3 验证（2026-10-18，Linux 开发机，模型只用本机假网关）
+
+- 三套 tsc 都是 0 错；`biome check src scripts` 只有一条改动前就有的提示（`scripts/run-f3-dev-probe.mjs` 未用的导入）。
+- `pnpm test` 全量：694 个文件通过、6 个跳过；12009 条通过、65 条跳过、0 条失败。新增单测：门 12 条、提示词与答复解析 18 条、宿主读规则与两段审核 13 条、模型计划 2 条、清单校验与交接 2 条、工具行 6 条、卡片 1 条、录制回放 1 条。
+- `bridge-record.ts --check` 全量 37 个场景一致（含新场景 `auto-review`；它单独又连录两次一致）。
+

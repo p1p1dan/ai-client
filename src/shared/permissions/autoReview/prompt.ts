@@ -161,4 +161,3 @@ export const REVIEW_STAGE2_INSTRUCTION =
 
 export const REVIEW_STAGE1_MAX_TOKENS = 64;
 export const REVIEW_STAGE2_MAX_TOKENS = 8_192;
-export const REVIEW_STAGE1_STOP = ['</block>'];
