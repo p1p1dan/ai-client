@@ -16,18 +16,31 @@
  * the archive is read (its own header, `asar-inspect.mjs`) and fails when it
  * still carries one of the retired packages, or when Main's bundle still
  * holds one of the runtime's marker identifiers.
+ *
+ * Decision 200: app.asar ships only the node_modules packages Main loads at
+ * run time (`runtime-packages.mjs`). The archive must carry all of them and
+ * nothing else, Main's bundles may load nothing beyond them, and each one is
+ * loaded inside the packaged executable run as Node (`runtime-load-probe.cjs`).
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { builtinModules } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { findAsarPackages, readAsarFile, readAsarHeader } from './asar-inspect.mjs';
+import { asarEntry, findAsarPackages, readAsarFile, readAsarHeader } from './asar-inspect.mjs';
 import { verifyClaudeSdkHostArtifact } from './claude-sdk-host-build-lib.mjs';
 import { verifyDshArtifact } from './dsh-host-build-lib.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
 import { evaluateDshHostArtifact, formatBytes, topDirectories } from './packaging-budget.mjs';
+import {
+  isRuntimePackage,
+  MAIN_RUNTIME_ENTRIES,
+  RUNTIME_PACKAGES,
+  runtimeSpecifiers,
+} from './runtime-packages.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -189,6 +202,119 @@ function checkAppAsar(resourceDir, failures) {
   }
 }
 
+const BUILTINS = new Set(builtinModules);
+
+/** Every package directory under any `node_modules` in the archive, nested ones included. */
+function asarPackageNames(header) {
+  const names = new Set();
+  const visit = (node) => {
+    for (const [name, child] of Object.entries(node?.files ?? {})) {
+      if (name !== 'node_modules') {
+        visit(child);
+        continue;
+      }
+      for (const [pkg, pkgNode] of Object.entries(child?.files ?? {})) {
+        if (pkg.startsWith('.')) continue;
+        const scoped = pkg.startsWith('@') ? Object.entries(pkgNode?.files ?? {}) : null;
+        for (const [inner, innerNode] of scoped ?? [[null, pkgNode]]) {
+          names.add(inner ? `${pkg}/${inner}` : pkg);
+          visit(innerNode);
+        }
+      }
+    }
+  };
+  visit(header);
+  return names;
+}
+
+/** Built JS files under a directory of the archive, as `/`-separated paths. */
+function asarScripts(header, dir) {
+  const files = [];
+  const visit = (node, at) => {
+    for (const [name, child] of Object.entries(node?.files ?? {})) {
+      const here = `${at}/${name}`;
+      if (child.files) visit(child, here);
+      else if (/\.(c|m)?js$/.test(name)) files.push(here);
+    }
+  };
+  visit(asarEntry(header, dir), dir);
+  return files;
+}
+
+/**
+ * Decision 200: app.asar carries only the packages Main loads at run time
+ * (scripts/runtime-packages.mjs), all of them, and Main's bundles load
+ * nothing else from node_modules.
+ */
+function checkRuntimePackages(resourceDir, failures) {
+  const asarPath = path.join(resourceDir, 'app.asar');
+  if (!fs.existsSync(asarPath)) return;
+  try {
+    const { header } = readAsarHeader(asarPath);
+    const shipped = asarPackageNames(header);
+    for (const name of [...shipped].sort()) {
+      if (!isRuntimePackage(name)) {
+        failures.push(`app.asar carries node_modules/${name}, which Main never loads`);
+      }
+    }
+    for (const name of RUNTIME_PACKAGES) {
+      if (!shipped.has(name)) failures.push(`app.asar is missing runtime package ${name}`);
+    }
+    for (const file of [
+      ...asarScripts(header, 'out/main'),
+      ...asarScripts(header, 'out/preload'),
+    ]) {
+      const source = readAsarFile(asarPath, file)?.toString('utf8') ?? '';
+      for (const name of runtimeSpecifiers(source)) {
+        if (BUILTINS.has(name) || MAIN_RUNTIME_ENTRIES.includes(name)) continue;
+        failures.push(`${file} loads ${name} at run time; list it in scripts/runtime-packages.mjs`);
+      }
+    }
+  } catch (error) {
+    failures.push(
+      `cannot check app.asar packages: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
+ * Decision 200: each runtime entry loads inside the packaged executable, run
+ * as Node, from where Main resolves it (native addons included), so a package
+ * the archive dropped fails here and not on a user's first terminal.
+ */
+function checkRuntimeLoads(executable, resourceDir, failures) {
+  if (!executable || !fs.existsSync(executable)) {
+    console.log(
+      '[verify-packaged-app] runtime load check skipped (no executable for this platform)'
+    );
+    return;
+  }
+  const probe = path.join(repoRoot, 'scripts', 'runtime-load-probe.cjs');
+  const result = spawnSync(executable, [probe, resourceDir, ...MAIN_RUNTIME_ENTRIES], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    encoding: 'utf8',
+    timeout: 60_000,
+    windowsHide: true,
+  });
+  const last = result.stdout?.trim().split(/\r?\n/).at(-1) ?? '';
+  let report;
+  try {
+    report = JSON.parse(last);
+  } catch {
+    failures.push(
+      `runtime load check failed (exit ${result.status}): ${(result.stderr ?? '').trim().split(/\r?\n/).slice(-3).join(' | ')}`
+    );
+    return;
+  }
+  for (const name of MAIN_RUNTIME_ENTRIES) {
+    const outcome = report[name];
+    if (!outcome?.ok) {
+      failures.push(`runtime package ${name} does not load in the packaged app: ${outcome?.error}`);
+    }
+  }
+  console.log(`[verify-packaged-app] runtime packages load: ${MAIN_RUNTIME_ENTRIES.join(', ')}`);
+}
+
 /** The DSH host artifact under resources/dsh-host: structure, budget, TSD header. */
 function checkDshHost(resourceDir, failures) {
   const dshDir = path.join(resourceDir, 'dsh-host');
@@ -313,6 +439,14 @@ function main() {
   if (process.platform === 'win32' && !fs.existsSync(path.join(args.appDir, windowsExecutable))) {
     failures.push(`missing ${windowsExecutable}`);
   }
+  // `linux.executableName`, bound the same way; runs the runtime load check.
+  const linuxExecutable = 'aiclient';
+  const executable =
+    process.platform === 'win32'
+      ? path.join(args.appDir, windowsExecutable)
+      : process.platform === 'linux'
+        ? path.join(args.appDir, linuxExecutable)
+        : null;
 
   const resourceDir =
     process.platform === 'darwin' && args.appDir.endsWith('.app')
@@ -326,6 +460,8 @@ function main() {
 
   checkNoRetiredResources(resourceDir, failures);
   checkAppAsar(resourceDir, failures);
+  checkRuntimePackages(resourceDir, failures);
+  checkRuntimeLoads(executable, resourceDir, failures);
   checkDshHost(resourceDir, failures);
   checkClaudeSdkHost(resourceDir, failures);
   checkNodeRuntime(resourceDir, failures);
@@ -351,7 +487,7 @@ function main() {
     process.exit(1);
   }
   console.log(
-    '[verify-packaged-app] PASS — legal notices + no native worker or runtime + DSH host artifact + Claude SDK host artifact + the smokes that ran'
+    '[verify-packaged-app] PASS — legal notices + no native worker or runtime + runtime packages + DSH host artifact + Claude SDK host artifact + the smokes that ran'
   );
 }
 

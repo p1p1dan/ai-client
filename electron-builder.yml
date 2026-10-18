@@ -8,7 +8,16 @@ directories:
 
 files:
   - "out/**/*"
-  - "node_modules/**/*"
+  # Decision 200: node_modules ships only the packages Main loads at run time.
+  # Main, preload and the renderer are bundled into out/, so every other
+  # dependency is already there. electron-builder copies every production
+  # dependency and applies only exclusions to node_modules, hence "exclude all
+  # but": the patterns are scripts/runtime-packages.mjs `runtimeFilePatterns()`
+  # (runtime-packages test); verify-packaged-app checks the archive and loads
+  # each package.
+  - "!node_modules/!(node-pty|sqlite3|@parcel|@vscode|isbinaryfile|bindings|file-uri-to-path|detect-libc|picomatch|is-glob|is-extglob){,/**}"
+  - "!node_modules/@parcel/!(watcher|watcher-*){,/**}"
+  - "!node_modules/@vscode/!(ripgrep){,/**}"
   - "!node_modules/**/README.md"
   - "!node_modules/**/CHANGELOG.md"
   - "!node_modules/**/LICENSE*"
@@ -21,49 +30,18 @@ files:
   - "!node_modules/**/docs/**"
   - "!node_modules/**/example/**"
   - "!node_modules/**/examples/**"
-  # Exclude build tools that shouldn't be in production
-  - "!node_modules/lightningcss-*/**"
-  - "!node_modules/@tailwindcss/**"
-  - "!node_modules/tailwindcss/**"
-  - "!node_modules/jiti/**"
   # Exclude native module build artifacts (source not needed at runtime)
   - "!node_modules/node-pty/src/**"
   - "!node_modules/node-pty/deps/**"
-  # Exclude lucide-react source maps and types
-  - "!node_modules/lucide-react/dist/*.mjs.map"
-  - "!node_modules/lucide-react/dist/*.d.ts"
-  - "!node_modules/lucide-react/dist/*.d.mts"
-  # Exclude lucide-react unused formats (keep esm only)
-  - "!node_modules/lucide-react/dist/cjs/**"
-  - "!node_modules/lucide-react/dist/umd/**"
-  # Exclude monaco-editor dev and min versions (keep esm only, saves ~42MB)
-  - "!node_modules/monaco-editor/dev/**"
-  - "!node_modules/monaco-editor/min/**"
-  # Exclude shiki unused themes and languages
-  - "!node_modules/shiki/dist/langs/**"
-  - "!node_modules/shiki/dist/themes/**"
-  - "!node_modules/@shikijs/langs/**"
-  - "!node_modules/@shikijs/themes/**"
-  # Mermaid and its heavy dependencies (~60MB total) - loaded from CDN at runtime
-  - "!node_modules/mermaid/**"
-  - "!node_modules/@mermaid-js/**"
-  - "!node_modules/cytoscape/**"
-  - "!node_modules/cytoscape-*/**"
-  - "!node_modules/@chevrotain/**"
-  - "!node_modules/chevrotain/**"
-  - "!node_modules/langium/**"
-  - "!node_modules/katex/**"
-  - "!node_modules/lodash-es/**"
-  - "!node_modules/d3/**"
-  - "!node_modules/d3-*/**"
-  - "!node_modules/dagre-d3-es/**"
-  - "!node_modules/elkjs/**"
-  - "!node_modules/web-tree-sitter/**"
-  - "!node_modules/khroma/**"
-  - "!node_modules/dompurify/**"
-  # PDF.js (~5MB) - loaded from CDN at runtime
-  - "!node_modules/pdfjs-dist/**"
-  - "!node_modules/react-pdf/**"
+  # Decision 200: native build leftovers that are never loaded — MSVC link and
+  # debug files and logs, sources, Windows ARM64 builds, and @parcel/watcher's
+  # own build (its platform package, e.g. @parcel/watcher-win32-x64, loads).
+  - "!node_modules/**/*.{iobj,ipdb,obj,tlog,lastbuildstate,recipe,vcxproj,filters,lib,exp,ilk}"
+  - "!node_modules/node-pty/build/{Release/obj,deps}/**"
+  - "!node_modules/node-pty/prebuilds/win32-arm64/**"
+  - "!node_modules/node-pty/third_party/conpty/*/win10-arm64/**"
+  - "!node_modules/sqlite3/{deps,src}/**"
+  - "!node_modules/@parcel/watcher/{build,src}/**"
 
 asar: true
 asarUnpack:
@@ -87,69 +65,8 @@ extraResources:
     to: licenses/LICENSE
   - from: THIRD_PARTY_NOTICES.md
     to: licenses/THIRD_PARTY_NOTICES.md
-  - from: node_modules/node-pty
-    to: node_modules/node-pty
-    filter:
-      - "package.json"
-      - "lib/**/*"
-      - "prebuilds/win32-x64/**/*"
-  - from: node_modules/sqlite3
-    to: node_modules/sqlite3
-    filter:
-      - "package.json"
-      - "lib/**/*"
-      - "build/Release/**/*"
-  - from: node_modules/bindings
-    to: node_modules/bindings
-    filter:
-      - "package.json"
-      - "bindings.js"
-  - from: node_modules/file-uri-to-path
-    to: node_modules/file-uri-to-path
-    filter:
-      - "package.json"
-      - "index.js"
-  # Keep @parcel/watcher and its runtime dependencies in sync here.
-  - from: node_modules/@parcel/watcher
-    to: node_modules/@parcel/watcher
-    filter:
-      - "package.json"
-      - "index.js"
-      - "wrapper.js"
-      - "build/Release/**/*"
-  - from: node_modules/picomatch
-    to: node_modules/picomatch
-    filter:
-      - "package.json"
-      - "index.js"
-      - "lib/**/*"
-  - from: node_modules/is-glob
-    to: node_modules/is-glob
-    filter:
-      - "package.json"
-      - "index.js"
-  - from: node_modules/is-extglob
-    to: node_modules/is-extglob
-    filter:
-      - "package.json"
-      - "index.js"
-  - from: node_modules/ws
-    to: node_modules/ws
-    filter:
-      - "package.json"
-      - "index.js"
-      - "lib/**/*"
-  - from: node_modules/@vscode/ripgrep
-    to: node_modules/@vscode/ripgrep
-    filter:
-      - "package.json"
-      - "lib/index.js"
-      - "bin/**/*"
-  - from: node_modules/isbinaryfile
-    to: node_modules/isbinaryfile
-    filter:
-      - "package.json"
-      - "lib/**/*"
+  # Decision 200: no second copy of the native modules in resources/node_modules.
+  # Main resolves them from app.asar (unpacked), so that copy was never loaded.
 compression: maximum
 
 mac:
@@ -186,6 +103,15 @@ win:
   # No space, unlike `productName`: this is the file every shortcut, registry
   # entry and `installer.nsh` line spells out by hand.
   executableName: PiLabAi
+  # Decision 200: Chromium's own UI strings in Chinese and English only.
+  # zh-TW stays so a Traditional Chinese system keeps navigator.language on
+  # `zh` (the app's default locale) instead of falling back to en-US.
+  electronLanguages:
+    - zh-CN
+    - zh-TW
+    - en-US
+  # No `files` here: with a platform `files` list, electron-builder 26 dropped
+  # the top-level patterns for the app directory and packed the whole repo.
   target:
     # NSIS supports delta updates automatically. The portable target was
     # dropped (user decision, 2026-09-23 — 「就生产个 linux window macos 的

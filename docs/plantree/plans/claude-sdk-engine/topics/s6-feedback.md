@@ -269,6 +269,18 @@
   - 三套 tsc 0 错；相关目录 vitest 8012 条通过，15 条失败都是本机改动前就有的（sessionGc、8.3 短名、符号链接、dshHostScopes 等）。
   - `bridge-record.ts --check` 在本机跑不完：Windows 上没有 bash 工具、路径分隔符不同，样本本来就对不上。只看 `overflow-compact` 一组，除了序号偏移没有新事件（样本模型窗口 200,000，等于上限，不提示）。合并 Linux 的审核模型后推送 72ddf916，Build run 39100860877 的 gate（Linux，含 `bridge-record.ts --check`）通过；Windows 作业通过，回归套件 9 组全过，`windows-installer` 已上传（到 2026-11-01）。
 
+### 16 安装包瘦身（决策 200）
+
+- **要求**（用户 2026-10-18）：按实际产物测量，先列清单（功能、影响），用户逐项拍板。单独的 Node 和 Claude CLI 不动；DSH 宿主先不改（决策 199 只留在分支上）。
+- **批准的五项**（详见 [决策 200](../../dsh-rebase/decisions/200-installer-slimming.md)），合计安装后约 −261 MiB、安装包约 −35～40 MB（估）：
+  - Windows 只留 zh-CN、zh-TW、en-US 语言包；
+  - app.asar 只带主进程运行时加载的 12 个包；
+  - 去掉 `resources/node_modules` 副本；
+  - 去掉 `@napi-rs/canvas`；
+  - 去掉原生模块的编译杂物。
+- **验证**：本机目录包 app.asar 105 → 41 MiB，打包版能启动；`verify-packaged-app` 新增清单检查与用打包版可执行文件加载运行时包。
+- **待办**：推送后 CI 验证；装新包点一遍终端、文件监听、搜索、PDF 预览；加密机上确认终端和文件监听。
+
 ### 开发版界面复核（2026-10-17）
 
 用 `src/claude-sdk-host/tools/gui-probe.mjs` 起开发版（隔离的临时 home，只用本机假网关），逐项点过：
