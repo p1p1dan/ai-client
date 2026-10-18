@@ -128,6 +128,12 @@ export interface SdkHostConfig {
   /** Values blanked out of any text the host quotes to the UI (the gateway key). */
   secrets?: readonly string[];
   /**
+   * The catalog's context windows by CLI model id, where they are below what
+   * the CLI assumes (`claudeSdkModelWindows`). Handed to the CLI as per-model
+   * auto-compact windows and capping the window the UI is told.
+   */
+  modelWindows?: Readonly<Record<string, number>>;
+  /**
    * Probes only: a stand-in home directory whose `.claude` the CLI's walk up from
    * the cwd must not read either, besides `os.homedir()`'s (S-3 P-5, P-11).
    */
@@ -287,6 +293,38 @@ export function bareModelId(ref: string | undefined): string | undefined {
   if (!ref) return undefined;
   const slash = ref.indexOf('/');
   return slash >= 0 ? ref.slice(slash + 1) : ref;
+}
+
+/**
+ * The catalog's windows as the CLI's flag-tier `modelSettings` (user 2026-10-18):
+ * each model's auto-compact window, which the CLI clamps to the model's own
+ * (2.1.300, measured: claude-opus-5-5 at 200,000 compacts at 167,000 instead of
+ * 967,000). Nothing when there are none, so the settings stay as they were.
+ */
+export function catalogModelSettings(windows: Readonly<Record<string, number>> | undefined): {
+  modelSettings?: Record<string, { autoCompactWindow: number }>;
+} {
+  const entries = Object.entries(windows ?? {});
+  if (entries.length === 0) return {};
+  return {
+    modelSettings: Object.fromEntries(
+      entries.map(([model, window]) => [model, { autoCompactWindow: window }])
+    ),
+  };
+}
+
+/**
+ * The window the CLI reports for `model`, held to the catalog's when that is
+ * smaller: the CLI keeps reporting its own table's (1M) after it was told to
+ * compact earlier, and the context meter should show the window that applies.
+ */
+export function cappedContextWindow(
+  reported: number,
+  windows: Readonly<Record<string, number>> | undefined,
+  model: string
+): number {
+  const declared = windows && Object.hasOwn(windows, model) ? windows[model] : undefined;
+  return declared !== undefined && declared > 0 && declared < reported ? declared : reported;
 }
 
 /**
@@ -769,6 +807,9 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         // the user's own `~/.claude` included; PiLab's user layer is its own config dir
         // (ruling 19), never `~/.claude`.
         claudeMdExcludes: userClaudeDirExcludes(this.options.cwd, homes),
+        // User 2026-10-18: the CLI sizes a model from its own table (a Claude 5 model is 1M
+        // there) and never reads the catalog; an administrator's smaller window holds here.
+        ...catalogModelSettings(this.config.modelWindows),
       } as Options['settings'],
       // S-3 P-1, ruling 19: the user layer (the app's own config dir, `~/.pilab/<profile>/
       // claude`), and the project's and the user's private project settings (ruling 5);
@@ -1622,8 +1663,12 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     this.lastCostUsd = cost;
     const modelUsage = record(message.modelUsage);
     if (modelUsage) {
-      for (const entry of Object.values(modelUsage)) {
-        const window = num(record(entry)?.contextWindow);
+      for (const [model, entry] of Object.entries(modelUsage)) {
+        const window = cappedContextWindow(
+          num(record(entry)?.contextWindow),
+          this.config.modelWindows,
+          model
+        );
         if (window > this.contextWindow) this.contextWindow = window;
       }
     }

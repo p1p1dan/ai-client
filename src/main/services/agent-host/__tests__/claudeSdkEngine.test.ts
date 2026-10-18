@@ -656,6 +656,8 @@ describe('openClaudeSdkTransport refusals (no process is started)', () => {
       expect(launch.env.AICLIENT_CLAUDE_SDK_SETTING_SOURCES).toBe('user,project,local');
       expect(launch.env).not.toHaveProperty('AICLIENT_CLAUDE_SDK_RG_DIR');
       expect(launch.env).not.toHaveProperty('AICLIENT_CLAUDE_SDK_HOME');
+      // No catalog windows given: no variable.
+      expect(launch.env).not.toHaveProperty('AICLIENT_CLAUDE_SDK_MODEL_WINDOWS');
       expect(launch.env.AICLIENT_CLAUDE_SDK_GENERATION).toBe('3');
       // The key goes by IPC only (S-3 K-5).
       expect(JSON.stringify(launch.env)).not.toContain('sk-1');
@@ -676,8 +678,13 @@ describe('openClaudeSdkTransport refusals (no process is started)', () => {
         cwd: dir,
         baseURL: 'https://gw.example',
         apiKey: 'sk-1',
+        modelWindows: { 'claude-opus-5-5': 200_000 },
       });
       const launch = launches.at(-1) as { args: string[]; env: Record<string, string> };
+      // The catalog's windows, as JSON numbers (user 2026-10-18).
+      expect(JSON.parse(launch.env.AICLIENT_CLAUDE_SDK_MODEL_WINDOWS as string)).toEqual({
+        'claude-opus-5-5': 200_000,
+      });
       expect(launch.args).toEqual([
         path.join(electron.appPath, 'src', 'claude-sdk-host', 'host.ts'),
       ]);

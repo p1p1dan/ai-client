@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   type ChatEngine,
   CLAUDE_SDK_INHERITED_ENV,
+  CLAUDE_SDK_MODEL_WINDOWS_ENV,
   CLAUDE_SDK_STUB_SUFFIX,
   type ClaudeSdkRoute,
   claudeSdkRouteFor,
@@ -362,6 +363,8 @@ export interface ClaudeSdkTransportInput {
   baseURL: string;
   /** The route's key, held in memory for this launch only. */
   apiKey: string;
+  /** The catalog's windows for the route's models (`claudeSdkModelWindows`); empty or absent: none. */
+  modelWindows?: Record<string, number>;
 }
 
 /**
@@ -442,6 +445,10 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
     AICLIENT_CLAUDE_SDK_CLI: cli,
     // Dev override: PiLab's bundled `rg` (@vscode/ripgrep) instead of the CLI's built-in one.
     ...(dev.rgDir ? { AICLIENT_CLAUDE_SDK_RG_DIR: dev.rgDir } : {}),
+    // The catalog's windows the CLI would not know (user 2026-10-18); numbers only.
+    ...(input.modelWindows && Object.keys(input.modelWindows).length > 0
+      ? { [CLAUDE_SDK_MODEL_WINDOWS_ENV]: JSON.stringify(input.modelWindows) }
+      : {}),
   });
   return new ClaudeSdkProcessTransport({
     command: node,

@@ -137,6 +137,71 @@ export function claudeSdkRouteFor(
 }
 
 /**
+ * The CLI's per-model auto-compact window bounds (`modelSettings.<model>.autoCompactWindow`,
+ * 2.1.300: "100000 to 1000000"). The CLI clamps the value to the model's own window.
+ */
+export const CLAUDE_SDK_AUTO_COMPACT_WINDOW_MIN = 100_000;
+export const CLAUDE_SDK_AUTO_COMPACT_WINDOW_MAX = 1_000_000;
+
+/** The SDK host's launch variable for {@link claudeSdkModelWindows}: JSON `{model: tokens}`, never a secret. */
+export const CLAUDE_SDK_MODEL_WINDOWS_ENV = 'AICLIENT_CLAUDE_SDK_MODEL_WINDOWS';
+
+/**
+ * Route B (GPT usage check, user 2026-10-18): the context windows the catalog
+ * declares on SDK route `routeName`, by the model id the CLI is asked for.
+ *
+ * The CLI sizes a model from its own table and never reads the catalog: a
+ * Claude 5 model is 1,000,000 there, so a catalog that set claude-opus-5-5 to
+ * 200,000 still ran to about 967k before compacting. The host hands these to
+ * the CLI as per-model auto-compact windows, which do hold it to the catalog
+ * (measured on 2.1.300: 200,000 → threshold 167,000).
+ *
+ * Only windows below the CLI's ceiling are carried. A larger value cannot
+ * widen a model the CLI holds to 200k (that takes the `[1m]` model suffix),
+ * and leaving 1M rows out keeps the CLI's own tuned default for them. A window
+ * under the CLI's floor is raised to it: the nearest the CLI accepts.
+ */
+export function claudeSdkModelWindows(
+  plan: Pick<DshModelPlan, 'routes'> | null,
+  routeName: string
+): Record<string, number> {
+  const route = plan && Object.hasOwn(plan.routes, routeName) ? plan.routes[routeName] : undefined;
+  const windows: Record<string, number> = {};
+  for (const model of route?.models ?? []) {
+    const declared = model.contextWindow;
+    if (typeof declared !== 'number' || !Number.isInteger(declared) || declared <= 0) continue;
+    if (declared >= CLAUDE_SDK_AUTO_COMPACT_WINDOW_MAX) continue;
+    windows[model.id] = Math.max(CLAUDE_SDK_AUTO_COMPACT_WINDOW_MIN, declared);
+  }
+  return windows;
+}
+
+/** {@link CLAUDE_SDK_MODEL_WINDOWS_ENV} read back; anything malformed is left out, never thrown. */
+export function parseClaudeSdkModelWindows(raw: string | undefined): Record<string, number> {
+  if (!raw?.trim()) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+  const windows: Record<string, number> = {};
+  for (const [model, value] of Object.entries(parsed)) {
+    if (
+      model !== '' &&
+      typeof value === 'number' &&
+      Number.isInteger(value) &&
+      value >= CLAUDE_SDK_AUTO_COMPACT_WINDOW_MIN &&
+      value <= CLAUDE_SDK_AUTO_COMPACT_WINDOW_MAX
+    ) {
+      windows[model] = value;
+    }
+  }
+  return windows;
+}
+
+/**
  * `WorkerManagerError` code: a model of another engine, or of another route,
  * asked of a running SDK chat. The renderer hands the message back and says why.
  */

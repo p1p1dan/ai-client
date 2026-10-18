@@ -54,4 +54,23 @@ describe('buildHostConfig', () => {
     expect(withHome.settingSources).toEqual(['project', 'local']);
     expect(withHome.homeDir).toBe('D:fakehome');
   });
+
+  it('reads the catalog windows Main passed, and has none when Main passed none (user 2026-10-18)', () => {
+    expect(config).not.toHaveProperty('modelWindows');
+    const windowed = buildHostConfig({
+      inherited: {
+        AICLIENT_CLAUDE_SDK_MODEL_WINDOWS: JSON.stringify({
+          'claude-opus-5-5': 200_000,
+          broken: 'x',
+        }),
+      },
+      configDir: 'D:stateclaude-sdk-home',
+      settingSources: ['project'],
+      apiKey: KEY,
+      proxy: { url: 'http://127.0.0.1:50123', token: TOKEN },
+    }).config;
+    expect(windowed.modelWindows).toEqual({ 'claude-opus-5-5': 200_000 });
+    // The CLI's environment does not carry Main's variable.
+    expect(windowed.cliEnv).not.toHaveProperty('AICLIENT_CLAUDE_SDK_MODEL_WINDOWS');
+  });
 });

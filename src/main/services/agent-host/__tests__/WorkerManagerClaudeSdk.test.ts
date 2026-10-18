@@ -422,6 +422,38 @@ describe('WorkerManager on the Claude Agent SDK engine (route B, S-1)', () => {
       expect(record.options.model).toBe('claude/claude-opus-5');
     });
 
+    it('hands the host the catalog windows of its route’s models (user 2026-10-18)', async () => {
+      const h = createHarness();
+      h.sdk.plan = {
+        ...PLAN,
+        routes: {
+          ...PLAN.routes,
+          claude: {
+            ...route('anthropic-messages', 'https://gw.example', 'AICLIENT_KEY_CLAUDE'),
+            models: [
+              { id: 'claude-opus-5', contextWindow: 200_000, reasoningEfforts: false },
+              { id: 'claude-sonnet-5', contextWindow: 1_000_000, reasoningEfforts: false },
+            ],
+          } as DshPlanRoute,
+          // Another route's limits are not this host's.
+          other: {
+            ...route('anthropic-messages', 'https://other.example', 'AICLIENT_KEY_OTHER'),
+            models: [{ id: 'claude-haiku-5', contextWindow: 150_000, reasoningEfforts: false }],
+          } as DshPlanRoute,
+        },
+      };
+      await createSdk(h, 's1');
+      expect(h.opened).toEqual([
+        {
+          generation: 1,
+          cwd: norm('/repo'),
+          baseURL: 'https://gw.example',
+          apiKey: 'sk-claude-1',
+          modelWindows: { 'claude-opus-5': 200_000 },
+        },
+      ]);
+    });
+
     it('a GLM on the Anthropic protocol runs on the SDK engine too', async () => {
       const h = createHarness();
       const record = await createSdk(h, 'glma', 'zaia/glm-5');

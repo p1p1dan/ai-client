@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import {
   type ChatEngine,
   CLAUDE_ENGINE_EXITED,
+  claudeSdkModelWindows,
   claudeSdkRouteFor,
   MODEL_ENGINE_MISMATCH,
   PERMISSION_MODE_REFUSED,
@@ -3344,10 +3345,18 @@ export class WorkerManager {
     }
     entry.sdkRoute = route.route;
     entry.sdkModel = launch.model;
+    // The catalog's windows for this route, which the CLI would not read (user 2026-10-18).
+    const modelWindows = claudeSdkModelWindows(readClaudeSdkPlan(source), route.route);
     const open = this.openClaudeSdkTransport;
     return {
       createTransport: ({ generation, cwd }) =>
-        open({ generation, cwd, baseURL: route.baseURL, apiKey }),
+        open({
+          generation,
+          cwd,
+          baseURL: route.baseURL,
+          apiKey,
+          ...(Object.keys(modelWindows).length > 0 ? { modelWindows } : {}),
+        }),
       fingerprint: claudeSdkGatewayFingerprint(route, apiKey),
     };
   }

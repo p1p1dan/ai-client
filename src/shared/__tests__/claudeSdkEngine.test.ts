@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   CLAUDE_SDK_ENGINE_SETTING_KEY,
   CLAUDE_SDK_INHERITED_ENV,
+  claudeSdkModelWindows,
   claudeSdkRouteFor,
   DEFAULT_CLAUDE_SDK_ENGINE_ENABLED,
   effectiveModelRef,
+  parseClaudeSdkModelWindows,
   resolveClaudeSdkEngineEnabled,
 } from '../claudeSdkEngine';
 import type { DshModelPlan, DshPlanRoute } from '../dshModelPlan/types';
@@ -76,6 +78,62 @@ describe('claudeSdkRouteFor', () => {
   it('does not read inherited properties as plan entries', () => {
     expect(claudeSdkRouteFor(plan, 'constructor')).toBeNull();
     expect(claudeSdkRouteFor(plan, '__proto__')).toBeNull();
+  });
+});
+
+describe('claudeSdkModelWindows (catalog windows the CLI never reads, user 2026-10-18)', () => {
+  const windowed = {
+    routes: {
+      claude: {
+        ...route('anthropic-messages', 'https://gw.example', 'AICLIENT_KEY_CLAUDE'),
+        models: [
+          // The administrator holds a 1M Claude 5 model to 200k.
+          { id: 'claude-opus-5-5', contextWindow: 200_000, reasoningEfforts: false },
+          // 1M rows keep the CLI's own default.
+          { id: 'claude-sonnet-5-5', contextWindow: 1_000_000, reasoningEfforts: false },
+          { id: 'claude-opus-5', contextWindow: 1_050_000, reasoningEfforts: false },
+          // No declared window: nothing to carry.
+          { id: 'claude-haiku-5-5', reasoningEfforts: false },
+          // Under the CLI's floor: the nearest value it accepts.
+          { id: 'glm-small', contextWindow: 64_000, reasoningEfforts: false },
+          { id: 'glm-5', contextWindow: 128_000, reasoningEfforts: false },
+        ],
+      } as DshPlanRoute,
+    },
+  };
+
+  it('carries every declared window under 1,000,000, raised to the 100,000 floor', () => {
+    expect(claudeSdkModelWindows(windowed, 'claude')).toEqual({
+      'claude-opus-5-5': 200_000,
+      'glm-small': 100_000,
+      'glm-5': 128_000,
+    });
+  });
+
+  it('is empty for an unknown route, an inherited key, or no plan', () => {
+    expect(claudeSdkModelWindows(windowed, 'zai')).toEqual({});
+    expect(claudeSdkModelWindows(windowed, 'constructor')).toEqual({});
+    expect(claudeSdkModelWindows(null, 'claude')).toEqual({});
+  });
+
+  it('round-trips through the launch variable and drops anything malformed', () => {
+    const windows = claudeSdkModelWindows(windowed, 'claude');
+    expect(parseClaudeSdkModelWindows(JSON.stringify(windows))).toEqual(windows);
+    expect(parseClaudeSdkModelWindows(undefined)).toEqual({});
+    expect(parseClaudeSdkModelWindows('not json')).toEqual({});
+    expect(parseClaudeSdkModelWindows('[200000]')).toEqual({});
+    expect(
+      parseClaudeSdkModelWindows(
+        JSON.stringify({
+          a: 200_000.5,
+          b: '200000',
+          c: 50_000,
+          d: 2_000_000,
+          '': 200_000,
+          e: 150_000,
+        })
+      )
+    ).toEqual({ e: 150_000 });
   });
 });
 

@@ -5,6 +5,10 @@
  * wiring is tested without starting a host (`hostConfig.test.ts`).
  */
 
+import {
+  CLAUDE_SDK_MODEL_WINDOWS_ENV,
+  parseClaudeSdkModelWindows,
+} from '../shared/claudeSdkEngine.ts';
 import { buildCliEnvironment, buildPinnedSettingsEnv } from './cliEnvironment.ts';
 import type { SdkHostConfig } from './sdkSessionRuntime.ts';
 
@@ -34,8 +38,11 @@ export function buildHostConfig(input: HostConfigInput): {
     sessionToken: input.proxy.token,
     ...(input.gitBashPath ? { gitBashPath: input.gitBashPath } : {}),
   });
+  // Main's catalog windows for this route (user 2026-10-18); malformed ones are dropped.
+  const modelWindows = parseClaudeSdkModelWindows(input.inherited[CLAUDE_SDK_MODEL_WINDOWS_ENV]);
   return {
     config: {
+      ...(Object.keys(modelWindows).length > 0 ? { modelWindows } : {}),
       configDir: input.configDir,
       settingSources: input.settingSources,
       cliPath: input.inherited.AICLIENT_CLAUDE_SDK_CLI?.trim() || undefined,

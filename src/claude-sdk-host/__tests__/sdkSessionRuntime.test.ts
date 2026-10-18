@@ -1028,6 +1028,55 @@ describe('the plan review on this engine (S-2 A-7)', () => {
 
 // ---- Route B, S-2 review fixes ----
 
+const { catalogModelSettings, cappedContextWindow } = await import('../sdkSessionRuntime.ts');
+
+describe('catalog context windows (user 2026-10-18)', () => {
+  it('hands the CLI each catalog window as that model’s auto-compact window', async () => {
+    const rt = new ClaudeSdkSessionRuntime(
+      {
+        logicalSessionId: 'chat-1',
+        cwd: configDir,
+        model: 'gw/claude-opus-5-5',
+        projectTrusted: true,
+        emit: (event) => events.push(event),
+      },
+      {
+        configDir,
+        settingSources: ['project'],
+        cliEnv: { ANTHROPIC_API_KEY: KEY, ANTHROPIC_BASE_URL: PINS.ANTHROPIC_BASE_URL },
+        settingsEnv: PINS,
+        secrets: [KEY],
+        modelWindows: { 'claude-opus-5-5': 200_000, 'glm-5': 128_000 },
+      },
+      () => {}
+    );
+    await rt.bootstrap();
+    const settings = sdk.queries[0]?.options.settings as Record<string, unknown>;
+    expect(settings.modelSettings).toEqual({
+      'claude-opus-5-5': { autoCompactWindow: 200_000 },
+      'glm-5': { autoCompactWindow: 128_000 },
+    });
+    // The pins stay as they were.
+    expect(settings.env).toEqual(PINS);
+    await rt.dispose();
+  });
+
+  it('adds nothing without catalog windows', () => {
+    expect(catalogModelSettings(undefined)).toEqual({});
+    expect(catalogModelSettings({})).toEqual({});
+  });
+
+  it('shows the catalog window when it is the smaller one, the CLI’s otherwise', () => {
+    const windows = { 'claude-opus-5-5': 200_000 };
+    expect(cappedContextWindow(1_000_000, windows, 'claude-opus-5-5')).toBe(200_000);
+    // A model the catalog did not limit, or a window already smaller, is left alone.
+    expect(cappedContextWindow(1_000_000, windows, 'claude-haiku-5-5')).toBe(1_000_000);
+    expect(cappedContextWindow(150_000, windows, 'claude-opus-5-5')).toBe(150_000);
+    expect(cappedContextWindow(1_000_000, undefined, 'claude-opus-5-5')).toBe(1_000_000);
+    expect(cappedContextWindow(1_000_000, windows, 'constructor')).toBe(1_000_000);
+  });
+});
+
 const { cliRefusalText } = await import('../sdkSessionRuntime.ts');
 
 describe('plan mode is the CLI own (ruling 20, official behaviour)', () => {

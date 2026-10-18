@@ -103,7 +103,7 @@ function hostConfig(proxy: AuthProxy, apiKey: string): SdkHostConfig {
       : {}),
   });
   log(
-    `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} rg=${ripgrepDir ?? '(built-in)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'} pinned=${Object.keys(config.settingsEnv).length} proxy=${proxy.url}`
+    `start pid=${process.pid} generation=${generation} gitBash=${gitBashPath ?? '(none)'} rg=${ripgrepDir ?? '(built-in)'} settingSources=[${settingSources.join(',')}] cli=${config.cliPath ?? '(bundled native)'} pinned=${Object.keys(config.settingsEnv).length} windows=${JSON.stringify(config.modelWindows ?? {})} proxy=${proxy.url}`
   );
   if (credentialedProxies.length > 0) {
     // Their values never reach the CLI's command line; a repository's env can override them.
