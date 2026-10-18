@@ -2421,6 +2421,11 @@ export const zhTranslations: Record<string, string> = {
   // Decision 193 §10: the session figures take in compaction summaries and reviews too.
   'Session figures add up every model request, compaction summaries and other auxiliary ones included, so the cache read is a running sum, not what is in the context now.':
     '本会话的数字是把每一次模型请求（包括压缩摘要等辅助请求）累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。',
+  // Decision 198: the session figures take in the subagents' requests as well.
+  'Session figures add up every model request, subagent requests included, so the cache read is a running sum, not what is in the context now.':
+    '本会话的数字是把每一次模型请求（包括子代理的请求）累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。',
+  'Session figures add up every model request, subagent requests and auxiliary ones such as compaction summaries included, so the cache read is a running sum, not what is in the context now.':
+    '本会话的数字是把每一次模型请求（包括子代理的请求，以及压缩摘要等辅助请求）累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。',
   Cost: '费用',
   // A2: the conversation total, deliberately labelled apart from the
   // per-step figures above it — the two are never added together. Issue #9:

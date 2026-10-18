@@ -46,6 +46,7 @@ import {
   collectSettledSteps,
   deriveRunCacheView,
   deriveRunPanelView,
+  formatSessionFiguresNote,
   formatSessionSteps,
   type RunTone,
 } from './runPanelModel';
@@ -502,14 +503,9 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
                 whole prompt, so this is that prompt counted once per turn.
                 Stated where the number is, not in a doc nobody opens. */}
             <p className="px-1 py-1 text-meta text-muted-foreground">
-              {/* Decision 193 §10: say so when the sum takes in requests outside the loop. */}
-              {view.sessionUsage.auxiliary
-                ? t(
-                    'Session figures add up every model request, compaction summaries and other auxiliary ones included, so the cache read is a running sum, not what is in the context now.'
-                  )
-                : t(
-                    'Session figures add up every model request, so the cache read is a running sum, not what is in the context now.'
-                  )}
+              {/* Decisions 193 §10 and 198: say so when the sum takes in
+                  requests outside the loop, or the subagents'. */}
+              {formatSessionFiguresNote(view.sessionUsage, view.delegatedUsage !== null, t)}
             </p>
           </div>
         )}

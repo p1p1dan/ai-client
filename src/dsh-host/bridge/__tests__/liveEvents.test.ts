@@ -11,6 +11,7 @@ import {
   CONTEXT_WINDOW_NOTICE_KIND,
 } from '../../../shared/contextWindowMismatch.ts';
 import type { AuxiliaryUsage } from '../../../shared/dshAuxiliaryUsage.ts';
+import type { DshDelegatedSpend } from '../../../shared/dshDelegatedUsage.ts';
 import { projectDshHistory } from '../../../shared/dshHistory/projection.ts';
 import {
   AICLIENT_COMPACT_CANCELLED_REASON,
@@ -88,6 +89,8 @@ function harness(
     compactInstructions?: (compactionId: string) => string | undefined;
     /** Decision 193 §10: the session's requests outside the agent loop. */
     auxiliary?: () => AuxiliaryUsage | undefined;
+    /** Decision 198: what the session's subagents spent. */
+    delegated?: () => DshDelegatedSpend | undefined;
   } = {}
 ) {
   const events: Emitted[] = [];
@@ -125,6 +128,7 @@ function harness(
     usageView: () => options.usage,
     usageSteps: () => options.steps ?? 0,
     ...(options.auxiliary ? { auxiliaryUsage: options.auxiliary } : {}),
+    ...(options.delegated ? { delegatedUsage: options.delegated } : {}),
     goalMaxRounds: () => options.rounds,
     claimCommand: (commandId) => {
       const send = pendingCommand;
@@ -591,6 +595,104 @@ describe('DshLiveEvents — usage (decision 099 rule 1)', () => {
       cacheWrite: 4,
       totalTokens: 174,
       costUsd: 0,
+    });
+  });
+
+  it('[D1-USAGE-5] adds what the subagents spent, and says how much of the total it is (decision 198)', () => {
+    let delegated: DshDelegatedSpend | undefined = {
+      delegates: 2,
+      input: 40,
+      output: 8,
+      cacheRead: 1_000,
+      cacheWrite: 2,
+      totalTokens: 1_050,
+    };
+    const h = harness({
+      usage: {
+        tokenUsage: {
+          uncachedInputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 50,
+          cacheWriteTokens: 4,
+        },
+      },
+      steps: 3,
+      auxiliary: () => ({ requests: 1, input: 500, output: 300, cacheRead: 0, cacheWrite: 0 }),
+      delegated: () => delegated,
+    });
+    const settle = (step: number) =>
+      h.durable('assistant/message', {
+        turn: 1,
+        step,
+        message: { id: `a${step}`, role: 'assistant', content: [] },
+        usage: { inputTokens: 1, outputTokens: 2 },
+      });
+    settle(1);
+    const first = readPiUsagePayload(h.of('usage.updated').at(-1)?.payload);
+    // The step's own bill stays the provider's.
+    expect(first).toMatchObject({ input: 1, output: 2, totalTokens: 3 });
+    expect(first?.session).toEqual({
+      turns: 3,
+      toolResults: 2,
+      auxiliary: 1,
+      input: 640,
+      output: 328,
+      cacheRead: 1_050,
+      cacheWrite: 6,
+      totalTokens: 2_024,
+      costUsd: 0,
+    });
+    expect(first?.delegated).toEqual({
+      input: 40,
+      output: 8,
+      cacheRead: 1_000,
+      cacheWrite: 2,
+      totalTokens: 1_050,
+      costUsd: 0,
+    });
+    // No delegate has reported anything: no share, and the total is the session's own.
+    delegated = { ...delegated, delegates: 0 };
+    settle(2);
+    const second = h.of('usage.updated').at(-1)?.payload as Record<string, unknown>;
+    expect(second).not.toHaveProperty('delegated');
+    expect(readPiUsagePayload(second)?.session).toMatchObject({
+      toolResults: 0,
+      input: 600,
+      totalTokens: 974,
+    });
+    delegated = undefined;
+    settle(3);
+    expect(h.of('usage.updated').at(-1)?.payload).not.toHaveProperty('delegated');
+  });
+
+  it('[D1-USAGE-6] keeps the session’s own total when the delegated usage cannot be read', () => {
+    const h = harness({
+      usage: {
+        tokenUsage: {
+          uncachedInputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
+      },
+      steps: 1,
+      delegated: () => {
+        throw new Error('gone');
+      },
+    });
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: 'a1', role: 'assistant', content: [] },
+      usage: { inputTokens: 1, outputTokens: 2 },
+    });
+    const payload = h.of('usage.updated')[0]?.payload as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('delegated');
+    expect(readPiUsagePayload(payload)?.session).toMatchObject({
+      turns: 1,
+      toolResults: 0,
+      input: 100,
+      output: 20,
     });
   });
 

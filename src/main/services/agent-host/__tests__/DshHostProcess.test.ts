@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { DELEGATED_USAGE_ENV } from '../../../../shared/dshDelegatedUsage';
 import {
   CACHE_CHAIN_ENV,
   PREFIX_WATCH_ENV,
@@ -332,18 +333,20 @@ describe('buildDshHostEnvironment (decision 022)', () => {
     expect(isStrippedDshHostEnvName('AICLIENT_RUNTIME_ENCRYPTED_READ')).toBe(true);
   });
 
-  it("forwards decision 173's request tap and cache chain switches and decision 182's, by the host's own names", () => {
+  it("forwards decision 173's request tap and cache chain switches, decision 182's and 198's, by the host's own names", () => {
     const names = [
       SESSION_METADATA_ENV,
       PREFIX_WATCH_ENV,
       CACHE_CHAIN_ENV,
       USER_CONTENT_BLOCKS_ENV,
+      DELEGATED_USAGE_ENV,
     ];
     expect(names).toEqual([
       'AICLIENT_RUNTIME_SESSION_METADATA',
       'AICLIENT_RUNTIME_PREFIX_WATCH',
       'AICLIENT_RUNTIME_CACHE_CHAIN',
       'AICLIENT_RUNTIME_USER_CONTENT_BLOCKS',
+      'AICLIENT_RUNTIME_DELEGATED_USAGE',
     ]);
     for (const isPackaged of [true, false]) {
       const env = build({

@@ -334,16 +334,19 @@
  * 0; k = steps is the closing text), so that request reads nothing: a rebuild nothing local
  * explains; its log line says `evicted: true`. Steps are counted here
  * per cache key and tag, so a loop goes on after DSH compacts the conversation; give each
- * loop its own tag. Every reply is billed from a simulated
- * prompt cache keyed by the request's `prompt_cache_key`: the longest run of leading input
- * units (instructions, tools, each input item) equal to the previous request's counts as
- * cached, OpenAI style (`input_tokens` is the whole prompt, `cached_tokens` the cached part,
- * multiples of 128 from 1,024 up). `claim` bills that many prompt tokens instead of the
- * estimate, to push DSH's compaction. Its log line adds `responsesLoop`: the cache key,
- * `prompt_cache_retention`, `store`, the item count, and whether the input only appended to
- * the previous request's (`appendOnly`, `divergeAt`). DSH's compaction request in such a
- * conversation is answered with a short summary that keeps the `GPT-LOOP` line, so the
- * loop's trigger survives the checkpoint.
+ * loop its own tag. `"tool": "subagent"` or `"subagent_fork"` (decision 198) makes each
+ * step a delegation whose child runs `GPT-LOOP {"tag":"<tag>-c<i>","steps":<childSteps>,
+ * "tool":"read","file":<file>}` (`childSteps` defaults to 2), so a parent's and its
+ * children's requests can be added up against the session total. Every reply is billed
+ * from a simulated prompt cache keyed by the request's `prompt_cache_key`: the longest run
+ * of leading input units (instructions, tools, each input item) equal to the previous
+ * request's counts as cached, OpenAI style (`input_tokens` is the whole prompt,
+ * `cached_tokens` the cached part, multiples of 128 from 1,024 up). `claim` bills that
+ * many prompt tokens instead of the estimate, to push DSH's compaction. Its log line adds
+ * `responsesLoop`: the cache key, `prompt_cache_retention`, `store`, the item count, and
+ * whether the input only appended to the previous request's (`appendOnly`, `divergeAt`).
+ * DSH's compaction request in such a conversation is answered with a short summary that
+ * keeps the `GPT-LOOP` line, so the loop's trigger survives the checkpoint.
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
@@ -831,6 +834,25 @@ function billResponses(parsed, claim) {
   };
 }
 
+/** Decision 198: the delegation tools a GPT-LOOP step may call (DSH's own names). */
+const DELEGATION_TOOLS = new Set(['subagent', 'subagent_fork']);
+
+/**
+ * Decision 198: a delegating step's arguments. The child runs a GPT-LOOP of
+ * its own (`<tag>-c<step>`, `childSteps` reads of `file`, default 2), billed
+ * from the simulated cache under its own session's key; `subagent` waits for
+ * it (`run_in_background: false`), `subagent_fork` is one-shot and waits anyway.
+ */
+function delegatedLoop(tag, step, params, file) {
+  const childSteps = Number.isInteger(params.childSteps) ? params.childSteps : 2;
+  const child = { tag: `${tag}-c${step}`, steps: childSteps, tool: 'read', file };
+  return {
+    description: `GPT-LOOP child ${child.tag}`,
+    prompt: `${GPT_LOOP_MARKER} ${JSON.stringify(child)}`,
+    ...(params.tool === 'subagent' ? { run_in_background: false } : {}),
+  };
+}
+
 /**
  * A GPT-LOOP request's reply, or undefined when the request is not one. The trigger is the
  * latest non-assistant item carrying `GPT-LOOP {...}` (the user's message, or the summary
@@ -894,7 +916,9 @@ function decideResponsesLoop(parsed) {
   const args =
     tool === 'read'
       ? { file_path: file }
-      : { command: `echo gpt-loop-${tag}-${step}`, description: `GPT-LOOP step ${step}` };
+      : DELEGATION_TOOLS.has(tool)
+        ? delegatedLoop(tag, step, params, file)
+        : { command: `echo gpt-loop-${tag}-${step}`, description: `GPT-LOOP step ${step}` };
   return {
     kind: 'responses-call',
     call: {

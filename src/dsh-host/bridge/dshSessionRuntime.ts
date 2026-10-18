@@ -121,6 +121,7 @@ import {
   emptyAuxiliaryUsage,
   sumAuxiliaryUsage,
 } from '../../shared/dshAuxiliaryUsage.ts';
+import { catalogChildOf, type DshDelegatedSpend } from '../../shared/dshDelegatedUsage.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import {
   type DshHistoryFoldOptions,
@@ -264,6 +265,7 @@ import {
   type CompactInstructionsLease,
   installSummaryHook,
 } from './compactInstructions.ts';
+import { DshDelegatedUsage } from './delegatedUsage.ts';
 import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
 import { copyGrantSidecar, readGrantSidecar, writeGrantSidecar } from './grantStore.ts';
 import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
@@ -692,6 +694,13 @@ export interface DshBridgeDeps {
    */
   sessionMetadata?: boolean;
   /**
+   * Decision 198: count what the session's subagents spend in its settled
+   * usage (`delegatedUsage.ts` reads their logs). plugin.ts turns it on
+   * unless `AICLIENT_RUNTIME_DELEGATED_USAGE=0`; absent or false, no child
+   * log is read and the total is the session's own.
+   */
+  delegatedUsage?: boolean;
+  /**
    * Decision 192: what the auto gear's review needs besides the plan's
    * `reviewModel` — the CLI's rules and DSH's model-call service. Absent, or
    * a plan without a review model: no review, every ask is a card.
@@ -919,6 +928,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   private readonly jobs: DshJobsTracker;
   /** P1-7b: the session's children on the timeline (`subagents.ts`). */
   private readonly children: DshSubagentsTracker;
+  /** Decision 198: what its subagents spent, from their logs; undefined while switched off. */
+  private readonly delegated: DshDelegatedUsage | undefined;
   /**
    * Decision 169: a plan was approved in the agent's current step. Until its
    * next step (the next `assistant/message`) or the turn's end, the agent's
@@ -1022,6 +1033,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       usageSteps: () => this.historyCache.usageSteps(),
       // Decision 193 §10: the compaction summaries the log records, and the reviews this runtime ran.
       auxiliaryUsage: () => sumAuxiliaryUsage(this.historyCache.auxiliaryUsage(), this.reviewUsage),
+      // Decision 198: the subagents the log names, read from their own logs.
+      delegatedUsage: () => this.delegatedUsage(),
       goalMaxRounds: () => this.historyCache.goalMaxRounds(),
       claimCommand: (commandId) => {
         const send = this.pendingCommand;
@@ -1070,6 +1083,9 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       log: options.log,
       now: this.now,
     });
+    this.delegated = deps.delegatedUsage
+      ? new DshDelegatedUsage(this.query, options.log)
+      : undefined;
     this.children = new DshSubagentsTracker({
       owner: () => this.dshSessionId,
       subagents: () => this.ctx.get?.('subagents'),
@@ -1100,6 +1116,18 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       this.options.log?.('[dsh-bridge] usage projections unreadable', error);
       return undefined;
     }
+  }
+
+  /**
+   * Decision 198: what the subagents the log names (and theirs) spent so
+   * far. The children are adopted here as well as on their catalog event, so
+   * one whose event a gap lost is followed once the history is read again.
+   */
+  private delegatedUsage(): DshDelegatedSpend | undefined {
+    const delegated = this.delegated;
+    if (!delegated) return undefined;
+    delegated.adopt(this.historyCache.childSessions());
+    return delegated.view();
   }
 
   /**
@@ -1200,7 +1228,10 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     // Folded once from the open session, then kept current from session/event.
     // A failed read leaves an empty, legal page and is retried by the next one.
     this.historyCache.reset(this.dshSessionId);
+    this.delegated?.reset(this.dshSessionId);
     await this.historyCache.load();
+    // Decision 198: the subagents' logs are read now, so the first settled step counts them.
+    this.delegated?.adopt(this.historyCache.childSessions());
     const skills = await this.skillCount();
     this.result = {
       bootstrapped: true,
@@ -1604,6 +1635,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.projectionBaseline = null;
     this.jobs.dispose();
     this.children.reset();
+    this.delegated?.reset('');
     for (const dispose of this.disposers.splice(0)) dispose();
     try {
       await this.handle?.dispose();
@@ -2851,7 +2883,10 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.projectionBaseline = this.readProjections({ jobs: true });
     this.flushProjectionBaseline();
     this.historyCache.reset(switched.id);
+    // Decision 198: the child's delegates are those of its own log, the inherited part included.
+    this.delegated?.reset(switched.id);
     await this.historyCache.load();
+    this.delegated?.adopt(this.historyCache.childSessions());
     const leaf = this.historyCache.leaf();
     const history = this.historyResult(this.stubFile, 0, INITIAL_HISTORY_LIMIT);
     if (this.result) {
@@ -3367,6 +3402,12 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
           } catch (error) {
             this.options.log?.('[dsh-bridge] subagent event failed', event.type, error);
           }
+          // Decision 198: a delegate's spend, at any depth.
+          try {
+            this.delegated?.onSessionEvent(session.id, event as DshLogEvent);
+          } catch (error) {
+            this.options.log?.('[dsh-bridge] delegated usage event failed', event.type, error);
+          }
           return;
         }
         // Decision 169: the agent's next step (or the turn's end) lifts an approval's hold.
@@ -3386,6 +3427,10 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
         } catch (error) {
           this.options.log?.('[dsh-bridge] history fold failed', event.type, error);
         }
+        // Decision 198: a new child's log is read from its catalog entry on, not
+        // from the next step; named by the event, whatever state the fold is in.
+        const childId = this.delegated ? catalogChildOf(event) : undefined;
+        if (childId) this.delegated?.adopt([childId]);
         try {
           this.live.onSessionEvent(event);
         } catch (error) {
