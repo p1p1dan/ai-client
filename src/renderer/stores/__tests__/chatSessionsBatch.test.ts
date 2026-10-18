@@ -516,6 +516,37 @@ describe('applyRuntimeEvents — fold semantics', () => {
     expect(session?.status).toBe('failed');
   });
 
+  // Decision 193 rule 2 (decision 149 §16, 156 doubt ①): an engine restart and
+  // a host crash (a disconnect with no reason) keep it too, and the resumed
+  // chat's closing idle settles it rather than replacing it.
+  it.each([
+    ['an engine restart', { disconnectReason: 'engine_restarted' as const }],
+    ['a host crash', {}],
+  ])('E193-2: %s leaves a failure on screen as it was', (_name, extra) => {
+    const base = baseState({
+      sessions: [makeSession({ status: 'failed' })],
+      hostBoundSessionIds: [SESSION_ID],
+    });
+    const patch = applyRuntimeEvents(base, [
+      {
+        type: 'session.status',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { status: 'disconnected', ...extra },
+      },
+      {
+        type: 'session.status',
+        seq: 2,
+        sessionId: SESSION_ID,
+        timestamp: 2,
+        payload: { status: 'idle' },
+      },
+    ]);
+    const session = (patch.sessions ?? base.sessions).find((item) => item.id === SESSION_ID);
+    expect(session?.status).toBe('failed');
+  });
+
   it('D12: an ordinary status change leaves the host binding alone', () => {
     const base = baseState({
       sessions: [makeSession({ status: 'running' })],

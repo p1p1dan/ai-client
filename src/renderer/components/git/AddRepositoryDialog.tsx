@@ -693,6 +693,7 @@ export function AddRepositoryDialog({
                         placeholder={t('Type a path or select from recent projects...')}
                         className="min-w-0 flex-1"
                         showClear={!!localPath}
+                        clearLabel={t('Clear')}
                         showTrigger
                       />
                       <Button

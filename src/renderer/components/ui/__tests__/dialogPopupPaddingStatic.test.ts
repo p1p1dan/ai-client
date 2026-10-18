@@ -279,11 +279,6 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
       'dsh-rebase P1-16e: the one-time legacy asset notice lists what no longer applies in a standard DialogPanel body between header and footer.',
   },
   {
-    file: 'components/worktree/CreateWorktreeDialog.tsx',
-    category: 'panel',
-    reason: 'Standard DialogPanel body (the worktree creation form) between header and footer.',
-  },
-  {
     file: 'components/worktree/MergeWorktreeDialog.tsx',
     category: 'panel',
     reason: 'Standard DialogPanel body (branch and merge options) between header and footer.',

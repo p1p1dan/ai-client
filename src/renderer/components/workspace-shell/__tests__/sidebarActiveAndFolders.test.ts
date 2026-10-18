@@ -1082,6 +1082,27 @@ describe('the rename editor keeps its focus (point-check issue 26)', () => {
     expect(mocks.rename).not.toHaveBeenCalled();
   });
 
+  // Decision 193 rule 5 (decision 156 doubt ②): Enter commits and, like Escape,
+  // hands focus back to the row; a click elsewhere keeps focus where it went.
+  it('E193-5: Enter commits the new name and hands focus back to the row', async () => {
+    await render();
+    await act(async () => {
+      rows('Chat a')[0]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+    const input = editor() as HTMLInputElement;
+    expect(document.activeElement).toBe(input);
+    await typeInto(input, 'Kept name');
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    await flush();
+    expect(mocks.rename).toHaveBeenCalledWith('a', 'Kept name');
+    expect(editor()).toBeNull();
+    const row = rows('Chat a')[0];
+    expect(row, 'the row is back').toBeTruthy();
+    expect(document.activeElement).toBe(row);
+  });
+
   it('E6-36: Escape inside the dock cancels the rename instead of folding the sidebar', async () => {
     // The dock's own capture-phase rule, as `LeftDock` applies it to the panel
     // that hosts this list (point-check issue 36: it took the key first).

@@ -176,6 +176,7 @@ import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import { turnEndedByUser } from './turnEndCause';
 import {
+  failedEndNoteCoveredByCard,
   turnEndNotesAfterWork,
   turnEndsOnFailedRequest,
   turnEndsWithoutReply,
@@ -2582,6 +2583,12 @@ const ChatTurn = memo(function ChatTurn({
   // P1-7e (problem 7): an end note that follows saved work does not claim
   // that nothing was saved.
   const endNotesAfterWork = useMemo(() => turnEndNotesAfterWork(turn.body), [turn.body]);
+  // Decision 193 rule 2: the failure card says it; the history's note of the
+  // same failure waits until the card goes.
+  const coveredEndNoteId = useMemo(
+    () => failedEndNoteCoveredByCard(turn.body, isLastTurn && sessionStatus === 'failed'),
+    [turn.body, isLastTurn, sessionStatus]
+  );
 
   const renderItem = (item: TurnItem) => (
     <TurnItemView
@@ -2594,6 +2601,7 @@ const ChatTurn = memo(function ChatTurn({
       getThinkingDurationMs={getThinkingDurationMs}
       getToolStartedAtMs={rowToolStartedAtMs}
       endNoteAfterWork={item.kind === 'notice' && endNotesAfterWork.has(item.messageId)}
+      endNoteCovered={item.kind === 'notice' && item.messageId === coveredEndNoteId}
     />
   );
 
@@ -3177,6 +3185,8 @@ interface TurnItemViewProps {
   getToolStartedAtMs: (toolCallId: string) => number | null | undefined;
   /** P1-7e (problem 7): a turn-end note after saved work (`turnEndNotesAfterWork`). */
   endNoteAfterWork?: boolean;
+  /** Decision 193 rule 2: the failure card already says this end note. */
+  endNoteCovered?: boolean;
 }
 
 /**
@@ -3286,6 +3296,7 @@ function TurnItemView({
   getThinkingDurationMs,
   getToolStartedAtMs,
   endNoteAfterWork = false,
+  endNoteCovered = false,
 }: TurnItemViewProps) {
   switch (item.kind) {
     /**
@@ -3375,6 +3386,7 @@ function TurnItemView({
       // P1-7e (problem 7): a reopened turn that saved no reply ends on a note
       // in the reader's language, not on an English sentence posing as a reply.
       if (item.message.turnEnd) {
+        if (endNoteCovered) return null;
         return <TurnEndNotice turnEnd={item.message.turnEnd} afterWork={endNoteAfterWork} />;
       }
       // Decision 180: a `/compact`'s command line, drawn as the user's own.

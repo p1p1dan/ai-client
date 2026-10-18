@@ -3,6 +3,7 @@ import { translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
   deriveTurnEndNotice,
+  failedEndNoteCoveredByCard,
   turnEndNotesAfterWork,
   turnEndsOnFailedRequest,
   turnEndsWithoutReply,
@@ -147,5 +148,22 @@ describe('turnEndsOnFailedRequest (decision 156)', () => {
     expect(turnEndsOnFailedRequest([assistant({ stopReason: 'error', blocks: [{}] })])).toBe(true);
     expect(turnEndsOnFailedRequest([assistant()])).toBe(false);
     expect(turnEndsOnFailedRequest([])).toBe(false);
+  });
+});
+
+describe('failedEndNoteCoveredByCard (decision 193 rule 2)', () => {
+  const failedNote = { id: 'note', turnEnd: { kind: 'failed' as const, error: '500 upstream' } };
+
+  it('names the turn-closing failed note while the failure card is up', () => {
+    expect(failedEndNoteCoveredByCard([{ id: 'a' }, failedNote], true)).toBe('note');
+  });
+
+  it('covers nothing once the card is gone, or for a note that is not a failure, or not last', () => {
+    expect(failedEndNoteCoveredByCard([{ id: 'a' }, failedNote], false)).toBeNull();
+    expect(
+      failedEndNoteCoveredByCard([{ id: 'stop', turnEnd: { kind: 'stopped' as const } }], true)
+    ).toBeNull();
+    expect(failedEndNoteCoveredByCard([failedNote, { id: 'after' }], true)).toBeNull();
+    expect(failedEndNoteCoveredByCard([], true)).toBeNull();
   });
 });

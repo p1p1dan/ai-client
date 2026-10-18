@@ -1935,8 +1935,13 @@ function SessionRow({
     setEditing(false);
   };
 
-  const commitRename = () => {
+  /**
+   * `refocus`: Enter committed it, so focus goes back to the row as Esc does
+   * (decision 193 rule 5). A blur commit leaves focus where the user moved it.
+   */
+  const commitRename = (refocus = false) => {
     if (!renamingRef.current) return;
+    if (refocus) refocusRowRef.current = true;
     const trimmed = draft.trim();
     if (trimmed && trimmed !== row.title) {
       onRename(trimmed);
@@ -2032,7 +2037,7 @@ function SessionRow({
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
-              commitRename();
+              commitRename(true);
             } else if (event.key === 'Escape') {
               event.preventDefault();
               cancelRename();

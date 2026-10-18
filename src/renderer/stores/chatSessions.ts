@@ -1850,8 +1850,10 @@ function applyRuntimeEventCore(
       // switch or login would wipe both from every failed chat at once.
       // Decision 149 §10 / 156: a capacity reclaim likewise only unbinds — the
       // failed chat keeps its card and its 「失败」 badge (problem 44).
-      const keepsFailure =
-        (reason === 'released' || reason === 'capacity_reclaimed') && previousStatus === 'failed';
+      // Decision 193 rule 2 (decision 149 §16, 156 doubt ①): every disconnect
+      // does — an engine restart and a host crash (no reason) as well. The
+      // failure stays until the user sends in this chat again.
+      const keepsFailure = event.payload.status === 'disconnected' && previousStatus === 'failed';
       const status = keepsFailure
         ? state.sessions
         : closesFailure

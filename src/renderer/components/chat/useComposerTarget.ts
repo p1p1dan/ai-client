@@ -5,9 +5,8 @@
  * store read/write and query lives here so those components stay
  * presentational.
  *
- * Batch 3 adds the pending-target flow: `createTempTarget` (New Folder) and
- * `awaitWorkspaceAtPath` (New worktree success) both stash the path they're
- * waiting for, and a `workspaces`-driven effect below applies it once the
+ * Batch 3 adds the pending-target flow: `createTempTarget` (New Folder)
+ * stashes the path it is waiting for, and a `workspaces`-driven effect below applies it once the
  * tree sync (`useSyncChatWorkspaceTree`) has re-derived the new workspace —
  * see T-27 design §2.3 point 4-5 and risk R2 (must not race
  * `rebindSessionsToTree`'s own `activeSessionId` recompute).
@@ -62,17 +61,11 @@ export interface UseComposerTargetResult {
    * renders the footer entry when this is defined.
    */
   createTempTarget?: () => Promise<void>;
-  /** New worktree success handler: waits for the path to land in `workspaces`, then auto-switches. */
-  awaitWorkspaceAtPath: (path: string) => void;
-  /** workdir for the controlled CreateWorktreeDialog (project's main/remote workspace path). */
-  worktreeRepoPath: string | null;
-  /** projectName for the controlled CreateWorktreeDialog. */
-  worktreeProjectName: string;
 }
 
 interface PendingTarget {
   path: string;
-  kind: 'worktree' | 'temp';
+  kind: 'temp';
   /** activeSessionId at the moment the pending target was set, or null. */
   sourceSessionId: string | null;
 }
@@ -294,10 +287,7 @@ export function useComposerTarget(input: {
   }, [input.disabled, input.sending]);
   const selectUnbound = onHome ? selectUnboundImpl : undefined;
 
-  // ---- Pending target flow (batch 3): temp workspace / new worktree creation ----
-
-  const worktreeRepoPath = repoPath;
-  const worktreeProjectName = target.project?.name ?? '';
+  // ---- Pending target flow (batch 3): temp workspace creation ----
 
   const queryClient = useQueryClient();
   const defaultTemporaryPath = useSettingsStore((state) => state.defaultTemporaryPath);
@@ -343,11 +333,7 @@ export function useComposerTarget(input: {
       setPendingTarget(null);
       toastManager.add({
         type: 'info',
-        title: t(
-          pendingTarget.kind === 'worktree'
-            ? 'Worktree created — pick it from the branch list'
-            : 'Temp workspace created — pick it from the folder list'
-        ),
+        title: t('Temp workspace created — pick it from the folder list'),
       });
     }, 5000);
     return () => {
@@ -355,14 +341,6 @@ export function useComposerTarget(input: {
       window.clearTimeout(giveUpTimer);
     };
   }, [pendingTarget, queryClient, t]);
-
-  const awaitWorkspaceAtPath = useCallback((path: string) => {
-    setPendingTarget({
-      path,
-      kind: 'worktree',
-      sourceSessionId: useChatSessionsStore.getState().activeSessionId,
-    });
-  }, []);
 
   const createTempTargetImpl = useCallback(async () => {
     // Defense-in-depth: the footer entry that calls this is already hidden
@@ -412,8 +390,5 @@ export function useComposerTarget(input: {
     selectTarget,
     selectUnbound,
     createTempTarget,
-    awaitWorkspaceAtPath,
-    worktreeRepoPath,
-    worktreeProjectName,
   };
 }

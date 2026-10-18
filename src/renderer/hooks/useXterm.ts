@@ -1,3 +1,4 @@
+import { normalizeLocale, translate } from '@shared/i18n';
 import type { SessionRuntimeState } from '@shared/types';
 import { isRemoteVirtualPath } from '@shared/utils/remotePath';
 import { FitAddon } from '@xterm/addon-fit';
@@ -303,6 +304,15 @@ export function useXterm({
 
     setIsLoading(true);
     setStartupError(null);
+
+    // Decision 193 rule 4: xterm's own screen-reader labels, in the app's language.
+    // Static on purpose (xterm reads them when a terminal opens), so set before each one.
+    const locale = normalizeLocale(useSettingsStore.getState().language);
+    Terminal.strings.promptLabel = translate(locale, 'Terminal input');
+    Terminal.strings.tooMuchOutput = translate(
+      locale,
+      'Too much output to announce, navigate to rows manually to read'
+    );
 
     const terminal = new Terminal({
       cursorBlink: true,

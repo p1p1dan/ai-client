@@ -136,3 +136,21 @@ export function turnEndNotesAfterWork(
   }
   return ids;
 }
+
+/**
+ * Decision 193 rule 2: the id of the failed end note the session's failure
+ * card already says, or null. After an engine restart the chat keeps its
+ * failure card (and badge) and is reopened from the history, which closes the
+ * same turn with its own note of the same failure; drawing both printed it
+ * twice. While the card is up — the session failed and this is its last
+ * turn — the note at the very end of the turn is left out; once the user sends
+ * again the card goes and the note is drawn as the record.
+ */
+export function failedEndNoteCoveredByCard(
+  body: readonly { id: string; turnEnd?: ChatTurnEnd }[],
+  cardShown: boolean
+): string | null {
+  if (!cardShown) return null;
+  const last = body.at(-1);
+  return last?.turnEnd?.kind === 'failed' ? last.id : null;
+}
