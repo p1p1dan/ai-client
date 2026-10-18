@@ -258,6 +258,7 @@
       "session": {
         "turns": 0,
         "toolResults": 0,
+        "auxiliary": 0,
         "input": 0,
         "output": 0,
         "cacheRead": 0,
@@ -378,6 +379,7 @@
       "session": {
         "turns": 0,
         "toolResults": 0,
+        "auxiliary": 0,
         "input": 0,
         "output": 0,
         "cacheRead": 0,
