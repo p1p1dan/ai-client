@@ -17,8 +17,10 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// fileURLToPath, not `.pathname`: on Windows the latter is `/F:/...` (route B README #49).
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const TARGET = join(ROOT, 'out', 'renderer');
 const FONT_EXTENSIONS = ['.woff2', '.woff', '.ttf', '.otf', '.eot'];
 

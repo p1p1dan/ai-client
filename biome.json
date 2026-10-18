@@ -52,7 +52,6 @@
       "!**/node_modules",
       "!**/out",
       "!**/dist",
-      "!**/out-agent-host",
       "!**/out-dsh-host",
       "!**/out-claude-sdk-host",
       "!**/out-node-runtime",
