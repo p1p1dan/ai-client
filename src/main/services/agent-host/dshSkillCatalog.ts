@@ -782,6 +782,11 @@ export interface ComposerSlashCommandsDeps {
    * plugin's included. Rejects when no host is ready.
    */
   dshHost?: { listSlashCommands(cwd: string | null): Promise<WorkerCommandsResult> };
+  /**
+   * Decision 194 Q1: the Agent SDK CLI's own list for a folder no SDK chat runs in
+   * (`ClaudeSdkCommandCatalog`); never rejects.
+   */
+  sdkCatalog?: { list(cwd: string | null): Promise<WorkerCommandsResult> };
   /** The workspace's skills from disk (`listDshSkillsFromDisk`), when the host cannot answer. */
   listSkills(workspacePath: string | null): Promise<WorkerSlashCommandInfo[]>;
   log?: (message: string, error: unknown) => void;
@@ -791,8 +796,9 @@ export interface ComposerSlashCommandsDeps {
  * `chat:getSlashCommands`: a worker of the chat (or, for DSH, of its workspace)
  * answers when one is up. Otherwise, for DSH, the host lists the folder's
  * commands and skills (decision 194), and when it cannot, the skills are read
- * from disk (decision 175). A Claude Agent SDK chat that is not up lists
- * nothing here: DSH's skill roots are not the CLI's.
+ * from disk (decision 175). For a Claude Agent SDK chat that is not up, a
+ * catalog CLI lists the folder (decision 194 Q1); DSH's skill roots are never
+ * the CLI's.
  */
 export async function composerSlashCommands(
   input: { sessionId?: string; workspacePath: string | null; engine?: ChatEngine },
@@ -800,7 +806,11 @@ export async function composerSlashCommands(
 ): Promise<WorkerCommandsResult> {
   const answer = await deps.workers.getSlashCommands(input);
   if (answer.origin !== 'none') return { commands: answer.commands, truncated: answer.truncated };
-  if (answer.engine !== 'dsh') return { commands: [], truncated: false };
+  if (answer.engine !== 'dsh') {
+    return deps.sdkCatalog
+      ? deps.sdkCatalog.list(answer.workspacePath)
+      : { commands: [], truncated: false };
+  }
   if (deps.dshHost) {
     try {
       const listed = await deps.dshHost.listSlashCommands(answer.workspacePath);

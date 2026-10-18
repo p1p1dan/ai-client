@@ -1011,6 +1011,58 @@ function writeSlashFixture(): void {
     join(configDir, 'commands', 'probe-user-cmd.md'),
     '---\ndescription: Probe command\n---\n\nSay CANARY-SLASH-CMD and $ARGUMENTS.\n'
   );
+  // Decision 194 Q1: a SessionStart hook a catalog listing must not run.
+  const hook = `node -e "require('fs').writeFileSync(process.argv[1], 'x')" ${JSON.stringify(slashHookMarker())}`;
+  writeText(
+    join(workspace, '.claude', 'settings.json'),
+    JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: hook }] }] } })
+  );
+}
+
+/** The file the `slash` fixture's SessionStart hook writes. */
+function slashHookMarker(): string {
+  return join(workspace, 'session-start-hook-ran');
+}
+
+/** Decision 194 Q1: this host's entry in catalog mode for `cwd`, and its one answer. */
+function catalogListing(cwd: string): Promise<{
+  ok?: boolean;
+  error?: string;
+  ms?: number;
+  result?: { commands: Array<{ name: string; source: string }> };
+}> {
+  return new Promise((resolve, reject) => {
+    const catalog = fork(hostEntry, [], {
+      env: {
+        ...inheritedEnv(),
+        AICLIENT_CLAUDE_SDK_GENERATION: '0',
+        AICLIENT_CLAUDE_SDK_CONFIG_DIR: configDir,
+        AICLIENT_CLAUDE_SDK_SETTING_SOURCES:
+          process.env.PROBE_SETTING_SOURCES ?? 'user,project,local',
+        AICLIENT_CLAUDE_SDK_CATALOG_CWD: cwd,
+        AICLIENT_CLAUDE_SDK_CATALOG_TRUSTED: '1',
+        ...(process.env.AICLIENT_CLAUDE_SDK_CLI
+          ? { AICLIENT_CLAUDE_SDK_CLI: process.env.AICLIENT_CLAUDE_SDK_CLI }
+          : {}),
+      },
+      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+    });
+    let answer: Record<string, unknown> | undefined;
+    const timer = setTimeout(() => {
+      catalog.kill();
+      reject(new Error('the catalog host did not answer in 40 s'));
+    }, 40_000);
+    catalog.on('message', (message) => {
+      if ((message as { type?: unknown })?.type === 'claude-sdk.catalog') {
+        answer = message as Record<string, unknown>;
+      }
+    });
+    catalog.on('exit', () => {
+      clearTimeout(timer);
+      if (answer) resolve(answer);
+      else reject(new Error('the catalog host exited without an answer'));
+    });
+  });
 }
 
 /** `projcfg-home` on Windows: the cwd as the user might have typed it, drive letter flipped. */
@@ -2843,6 +2895,30 @@ async function main(): Promise<void> {
           'history shows no command tags',
           !lines.some((line) => line.includes('<command-'))
         );
+        // Decision 194 Q1: a folder no chat runs in, listed by a catalog host. The chat's
+        // own CLI ran the project's hook, so its absence below means something.
+        check(
+          'slash',
+          'the chat’s CLI ran the project’s SessionStart hook',
+          existsSync(slashHookMarker())
+        );
+        rmSync(slashHookMarker(), { force: true });
+        const listed = await catalogListing(workspace);
+        const listedRow = (name: string) => listed.result?.commands.find((c) => c.name === name);
+        console.log(
+          `  catalog: ok=${listed.ok} ${listed.ms} ms, ${listed.result?.commands.length} rows`
+        );
+        check('slash', 'the catalog host answers', listed.ok === true);
+        check(
+          'slash',
+          'the catalog lists the CLI commands, the project skill and the user-layer command',
+          listedRow('context')?.source === 'command' &&
+            listedRow('probe-skill')?.source === 'skill' &&
+            listedRow('probe-user-cmd')?.source === 'skill' &&
+            !listedRow('compact') &&
+            !listedRow('clear')
+        );
+        check('slash', 'the catalog runs no hook of the project', !existsSync(slashHookMarker()));
         break;
       }
       case 'history': {

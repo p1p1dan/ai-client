@@ -462,16 +462,32 @@ describe('the menu before a session is up', () => {
     expect(log).toHaveBeenCalledTimes(1);
   });
 
-  it('decision 194: an SDK chat that is not up never gets DSH’s skills', async () => {
+  it('decision 194: an SDK chat that is not up gets the CLI’s list, never DSH’s skills', async () => {
     const listSkills = vi.fn(async () => [row('from-disk')]);
     const dshHost = { listSlashCommands: vi.fn(async () => ({ commands: [], truncated: false })) };
+    const sdkCatalog = {
+      list: vi.fn(async () => ({ commands: [row('cli-skill')], truncated: false })),
+    };
     const result = await composerSlashCommands(
       { workspacePath: '/repo', engine: 'claude-sdk' },
-      { workers: workers({ engine: 'claude-sdk', workspacePath: '/repo' }), dshHost, listSkills }
+      {
+        workers: workers({ engine: 'claude-sdk', workspacePath: '/repo' }),
+        dshHost,
+        sdkCatalog,
+        listSkills,
+      }
     );
-    expect(result).toEqual({ commands: [], truncated: false });
+    expect(result).toEqual({ commands: [row('cli-skill')], truncated: false });
+    expect(sdkCatalog.list).toHaveBeenCalledWith('/repo');
     expect(listSkills).not.toHaveBeenCalled();
     expect(dshHost.listSlashCommands).not.toHaveBeenCalled();
+    // Without a catalog (a build with no SDK host), nothing.
+    expect(
+      await composerSlashCommands(
+        { workspacePath: '/repo', engine: 'claude-sdk' },
+        { workers: workers({ engine: 'claude-sdk' }), listSkills }
+      )
+    ).toEqual({ commands: [], truncated: false });
   });
 });
 
@@ -486,6 +502,7 @@ describe('the IPC handler wiring', () => {
     expect(body).toContain("engine: payload.engine === 'claude-sdk' ? 'claude-sdk' : 'dsh'");
     expect(body).toContain('workers: workerManager');
     expect(body).toContain('dshHost: dshHostSupervisor');
+    expect(body).toContain('sdkCatalog: claudeSdkCommandCatalog');
     expect(body).toContain('listDshSkillsFromDisk(workspacePath, currentDshSkillHomes())');
   });
 });

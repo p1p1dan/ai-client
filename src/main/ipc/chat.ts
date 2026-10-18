@@ -36,6 +36,10 @@ import {
   type WorkerInterjectWithdrawResult,
 } from '@shared/types/workerRpc';
 import { app, BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
+import {
+  ClaudeSdkCommandCatalog,
+  runClaudeSdkCatalogHost,
+} from '../services/agent-host/claudeSdkCatalog';
 import { CLAUDE_SDK_HOME_DIR_NAME } from '../services/agent-host/claudeSdkEngine';
 import { currentDshSkillHomes, resolveDshHome } from '../services/agent-host/DshHostProcess';
 import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
@@ -906,6 +910,18 @@ export function registerChatHandlers(): void {
   );
 
   /**
+   * Decision 194 Q1: the Agent SDK CLI's list for a folder no SDK chat runs in, kept per
+   * folder. A listing starts a process, so only once the spawn gate allows an agent.
+   */
+  const claudeSdkCommandCatalog = new ClaudeSdkCommandCatalog({
+    run: (input) => {
+      assertAgentSpawnAllowed();
+      return runClaudeSdkCatalogHost(input, (message) => console.warn(message));
+    },
+    log: (message, error) => console.warn(message, error),
+  });
+
+  /**
    * R02-b — the composer's command menu.
    *
    * No `requireLiveSession` and no `claimSessionForSender`, unlike every
@@ -936,6 +952,7 @@ export function registerChatHandlers(): void {
         {
           workers: workerManager,
           dshHost: dshHostSupervisor,
+          sdkCatalog: claudeSdkCommandCatalog,
           listSkills: (workspacePath) =>
             listDshSkillsFromDisk(workspacePath, currentDshSkillHomes()),
           log: (message, error) => console.warn(message, error),
