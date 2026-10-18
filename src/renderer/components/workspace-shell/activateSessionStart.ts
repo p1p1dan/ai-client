@@ -6,7 +6,8 @@
  * the resume hook and the model resolver, none of which this decision needs, and
  * the repo's vitest environment is `node` and collects `.ts` only — a rule
  * buried in a React callback is a rule no test can state. This module therefore
- * imports NOTHING; every input is a plain field the caller already has.
+ * imports nothing but one pure shared constant; every input is a plain field
+ * the caller already has.
  *
  * The rule is unchanged from the inline version it replaces:
  *
@@ -28,8 +29,10 @@
  * Main reads its transcript off the file and publishes one `session.history`
  * event — and the worker is left for the first send. Resume stays as the
  * fallback, for a session that already has a worker and for a file that cannot
- * be replayed.
+ * be replayed; an Agent SDK chat resumes straight away (decision 197).
  */
+
+import { CLAUDE_SDK_STUB_SUFFIX } from '@shared/claudeSdkEngine';
 
 export interface SessionActivation {
   /** The session file this row can be resumed from, if it has one yet. */
@@ -134,6 +137,11 @@ export async function runSessionActivation(
     return 'resumed';
   };
   if (input.hostBound) return resume();
+  // Decision 197: an Agent SDK chat's transcript is the CLI's own and only its
+  // host reads it, so Main refuses that preview every time; asking would cost
+  // a round trip and an error in Main's log. The stub's suffix is the rule
+  // Main reopens on.
+  if (runtimeIdentity.endsWith(CLAUDE_SDK_STUB_SUFFIX)) return resume();
   try {
     await effects.preview({ sessionId: input.sessionId, runtimeIdentity });
     return 'previewed';

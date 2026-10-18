@@ -9,6 +9,7 @@ import {
  */
 
 import path from 'node:path';
+import { CLAUDE_SDK_STUB_SUFFIX } from '@shared/claudeSdkEngine';
 import { IPC_CHANNELS } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import {
@@ -1221,6 +1222,15 @@ export function registerChatHandlers(): void {
       ) {
         throw new Error(
           `worker_active: Session ${payload.sessionId} has a live worker; read its history from there`
+        );
+      }
+      // Decision 197: an Agent SDK chat's transcript is the CLI's own, read by
+      // that chat's host once it runs. The DSH host refuses its stub
+      // (`session_invalid`) and may have to boot just to say so, so the answer
+      // is the refusal the renderer already meets with a resume.
+      if (row.runtimeIdentity.endsWith(CLAUDE_SDK_STUB_SUFFIX)) {
+        throw new Error(
+          `${SESSION_REPLAY_UNAVAILABLE}: Session ${payload.sessionId} runs on the Claude Agent SDK engine; its history is read by resuming it`
         );
       }
       // No `claimSessionForSender` on purpose: claiming marks a worker slot as
