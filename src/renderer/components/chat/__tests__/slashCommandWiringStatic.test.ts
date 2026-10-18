@@ -61,9 +61,8 @@ describe('R02-c the slash menu works without a workspace', () => {
 
 describe('decision 175: the home page has no conversation for some commands', () => {
   it('filters the menu on the home page only', () => {
-    expect(COMPOSER).toContain(
-      'return filterSlashCommands(onHome ? homeSlashMenu(catalog) : catalog, slashQuery);'
-    );
+    expect(COMPOSER).toContain('return onHome ? homeSlashMenu(catalog) : catalog;');
+    expect(COMPOSER).toContain('filterSlashCommands(slashMenuCatalog, slashQuery)');
   });
 
   it('answers a refused command before a DSH command could leave as a message', () => {

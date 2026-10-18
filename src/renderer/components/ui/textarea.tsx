@@ -9,9 +9,17 @@ import { cn } from '@/lib/utils';
 type TextareaProps = React.ComponentProps<'textarea'> & {
   size?: 'sm' | 'default' | 'lg' | number;
   unstyled?: boolean;
+  /** Rendered inside the control's wrapper, after the textarea (a layer laid over it). */
+  overlay?: React.ReactNode;
 };
 
-function Textarea({ className, size = 'default', unstyled = false, ...props }: TextareaProps) {
+function Textarea({
+  className,
+  size = 'default',
+  unstyled = false,
+  overlay,
+  ...props
+}: TextareaProps) {
   return (
     <span
       className={
@@ -38,6 +46,7 @@ function Textarea({ className, size = 'default', unstyled = false, ...props }: T
           />
         )}
       />
+      {overlay}
     </span>
   );
 }

@@ -4790,3 +4790,8 @@ Object.assign(zhTranslations, {
   'PiLab compacts automatically from the model’s context window. Change the window in Settings, under the model’s service.':
     'PiLab 按模型的上下文窗口自动压缩。要改窗口，请在「设置」里该模型所属的服务中修改。',
 });
+
+/** Composer input history (Up/Down through this chat's sent lines). */
+Object.assign(zhTranslations, {
+  'History {{index}}/{{total}}': '历史 {{index}}/{{total}}',
+});

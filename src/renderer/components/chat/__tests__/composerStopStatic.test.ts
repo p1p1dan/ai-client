@@ -946,12 +946,12 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
    * no-op path: an Esc with nothing to stop is nobody's business.
    */
   it('[E-1] Escape in the composer textarea stops the running turn', () => {
-    // Three Escape consumers in this keydown, and the stopper is the LAST:
-    // the slash and @ popups above it return first, so an open popup's Esc
-    // still closes only the popup.
+    // Four Escape consumers in this keydown, and the stopper is the LAST: a
+    // typed command's open description, then the slash and @ popups, return
+    // first, so an open popup's Esc still closes only the popup.
     const escapes = offsets("if (event.key === 'Escape') {");
-    expect(escapes).toHaveLength(3);
-    const escAt = escapes[2];
+    expect(escapes).toHaveLength(4);
+    const escAt = escapes[3];
     // The very next Enter handler is the one that sends: the stopper sits
     // between the popups and the send, not after it.
     const sendEnterAt = source.indexOf("if (event.key === 'Enter' && !event.shiftKey) {", escAt);

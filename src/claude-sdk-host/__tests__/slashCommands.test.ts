@@ -154,3 +154,22 @@ describe('the transcript’s command rows', () => {
     expect(localCommandOutput('plain text')).toBeNull();
   });
 });
+
+describe('decision 194 follow-up (field test 2026-10-18)', () => {
+  it('leaves /auto-mode-setup out: its SDK form is a host wizard PiLab does not drive', () => {
+    expect(SDK_HIDDEN_COMMANDS.has('auto-mode-setup')).toBe(true);
+    expect(sdkSlashCommandRows([{ name: 'auto-mode-setup', builtin: true }]).commands).toEqual([]);
+  });
+
+  it('passes the CLI’s argument hint on, trimmed, and leaves a blank one out', () => {
+    expect(
+      sdkSlashCommandRows([
+        { name: 'fork', description: 'Fork', argumentHint: ' [prompt] ', builtin: true },
+        { name: 'context', description: 'Context', argumentHint: '', builtin: true },
+      ]).commands
+    ).toEqual([
+      { name: 'fork', description: 'Fork', argumentHint: '[prompt]', source: 'command' },
+      { name: 'context', description: 'Context', source: 'command' },
+    ]);
+  });
+});

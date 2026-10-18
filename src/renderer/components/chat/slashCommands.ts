@@ -29,6 +29,8 @@ export interface SlashCatalogItem {
   /** Absolute path pi resolved it from. Absent for builtins. */
   path?: string;
   scope?: string;
+  /** What it takes after its name (`[prompt]`); the composer greys it in after the name. */
+  argumentHint?: string;
 }
 
 /**
@@ -102,6 +104,22 @@ export function parseSlashLine(value: string): { name: string; args: string } | 
   const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(value.trim());
   if (!match?.[1]) return null;
   return { name: match[1], args: (match[2] ?? '').trim() };
+}
+
+/**
+ * The command a draft starts with, when the menu knows it: the composer paints
+ * its name (`end` is where the name stops) and greys in its argument hint. The
+ * name must sit at the first byte and be followed by whitespace or the end, the
+ * same first token `extractSlashQuery` completes.
+ */
+export function typedSlashCommand(
+  value: string,
+  catalog: readonly SlashCatalogItem[]
+): { item: SlashCatalogItem; end: number } | null {
+  const name = /^\/(\S+)(?=$|\s)/u.exec(value)?.[1];
+  if (!name) return null;
+  const item = catalog.find((entry) => entry.name === name);
+  return item ? { item, end: 1 + name.length } : null;
 }
 
 /**

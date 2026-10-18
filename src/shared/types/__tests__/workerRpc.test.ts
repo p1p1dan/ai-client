@@ -621,3 +621,22 @@ describe('normalizeWorkerCapabilities', () => {
     expect(isWorkerBootstrapResult(bootstrap)).toBe(true);
   });
 });
+
+describe('sanitizeWorkerCommandRows: argument hints', () => {
+  it('keeps a usable hint trimmed and drops a blank, a non-string or an overlong one', async () => {
+    const { sanitizeWorkerCommandRows, WORKER_ARGUMENT_HINT_MAX } = await import('../workerRpc.ts');
+    expect(
+      sanitizeWorkerCommandRows([
+        { name: 'fork', source: 'command', argumentHint: ' [prompt] ' },
+        { name: 'a', source: 'command', argumentHint: '  ' },
+        { name: 'b', source: 'command', argumentHint: 3 },
+        { name: 'c', source: 'command', argumentHint: 'x'.repeat(WORKER_ARGUMENT_HINT_MAX + 1) },
+      ])
+    ).toEqual([
+      { name: 'fork', source: 'command', argumentHint: '[prompt]' },
+      { name: 'a', source: 'command' },
+      { name: 'b', source: 'command' },
+      { name: 'c', source: 'command' },
+    ]);
+  });
+});

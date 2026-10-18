@@ -224,6 +224,8 @@ export interface WorkerSlashCommandInfo {
   path?: string;
   /** `sourceInfo.scope` — user / project / temporary. */
   scope?: string;
+  /** What the command takes after its name (`[prompt]`), shown greyed after it in the composer. */
+  argumentHint?: string;
 }
 
 /**
@@ -1141,12 +1143,15 @@ export function isWorkerCommandsResult(value: unknown): value is WorkerCommandsR
   return isRecord(value) && Array.isArray(value.commands) && typeof value.truncated === 'boolean';
 }
 
+/** Longer hints are dropped: the composer shows one on the input line. */
+export const WORKER_ARGUMENT_HINT_MAX = 120;
+
 export function sanitizeWorkerCommandRows(value: unknown): WorkerSlashCommandInfo[] {
   if (!Array.isArray(value)) return [];
   const rows: WorkerSlashCommandInfo[] = [];
   for (const entry of value) {
     if (!isRecord(entry)) continue;
-    const { name, source, description, path, scope } = entry;
+    const { name, source, description, path, scope, argumentHint } = entry;
     if (typeof name !== 'string' || name.trim().length === 0) continue;
     if (typeof source !== 'string' || source.trim().length === 0) continue;
     rows.push({
@@ -1155,6 +1160,11 @@ export function sanitizeWorkerCommandRows(value: unknown): WorkerSlashCommandInf
       ...(typeof description === 'string' && description.length > 0 ? { description } : {}),
       ...(typeof path === 'string' && path.length > 0 ? { path } : {}),
       ...(typeof scope === 'string' && scope.length > 0 ? { scope } : {}),
+      ...(typeof argumentHint === 'string' &&
+      argumentHint.trim().length > 0 &&
+      argumentHint.length <= WORKER_ARGUMENT_HINT_MAX
+        ? { argumentHint: argumentHint.trim() }
+        : {}),
     });
   }
   return rows.slice(0, WORKER_COMMAND_INVENTORY_MAX);

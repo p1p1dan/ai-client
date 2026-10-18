@@ -34,6 +34,7 @@ import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { toastManager } from '@/components/ui/toast';
+import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import { cn } from '@/lib/utils';
@@ -100,6 +101,7 @@ import {
   toWireAttachments,
 } from './attachments';
 import { ComposerAttachMenu } from './ComposerAttachMenu';
+import { ComposerCommandMirror } from './ComposerCommandMirror';
 import { ComposerModelTrigger } from './ComposerModelTrigger';
 import { ComposerPermissionTrigger } from './ComposerPermissionTrigger';
 import { ComposerRoundButton } from './ComposerRoundButton';
@@ -116,6 +118,14 @@ import {
 import { cancelCompactRun, nextCompactRunId, runCompactWhenRunning } from './compactRun';
 import { buildBranchColumn } from './composerColumns';
 import { onComposerFocusRequest, onComposerStopRequest } from './composerFocus';
+import {
+  type ComposerHistoryCursor,
+  type ComposerHistoryStep,
+  caretOnFirstLine,
+  caretOnLastLine,
+  composerHistoryEntries,
+  composerHistoryStep,
+} from './composerHistory';
 import { isTargetableWorkspace, resolveActiveTarget } from './composerTarget';
 import { warmDshHostWhileTyping } from './dshHostWarmup';
 import { resolveEffortSelection, toWireEffort } from './efforts';
@@ -238,6 +248,7 @@ import {
   type SlashCatalogItem,
   slashCatalogRequest,
   slashRowsForDisplay,
+  typedSlashCommand,
 } from './slashCommands';
 import { carriedGenerationPreferences } from './slashModelCommand';
 import { useComposerAttachments } from './useComposerAttachments';
@@ -767,6 +778,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const activeMessages = useChatSessionsStore((state) =>
     state.activeSessionId ? state.messages[state.activeSessionId] : undefined
   );
+  // Up/Down through this chat's sent lines (`composerHistory.ts`). The cursor
+  // only counts while the box still shows its entry: an edit, a send or a
+  // restored draft ends browsing without having to clear it everywhere.
+  const historyEntries = useMemo(() => composerHistoryEntries(activeMessages), [activeMessages]);
+  const [historyCursor, setHistoryCursor] = useState<ComposerHistoryCursor | null>(null);
   // T-05: this session has a pending question dock showing (drives the
   // "Add more optional details…" placeholder, A07 screen 6 group E).
   const pendingQuestionHere = useChatSessionsStore((state) =>
@@ -876,14 +892,47 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // pi's commands merged with this window's own. `t` is passed in rather than
   // read inside, so `buildSlashCatalog` stays pure and testable. Decision 175:
   // the home page has no conversation for `/archive` or `/compact` to act on.
-  const slashResults = useMemo(() => {
-    if (slashQuery === null) return [];
+  const slashMenuCatalog = useMemo(() => {
     const catalog = buildSlashCatalog(slashCatalog, t);
-    return filterSlashCommands(onHome ? homeSlashMenu(catalog) : catalog, slashQuery);
-  }, [slashCatalog, slashQuery, t, onHome]);
+    return onHome ? homeSlashMenu(catalog) : catalog;
+  }, [slashCatalog, t, onHome]);
+  const slashResults = useMemo(
+    () => (slashQuery === null ? [] : filterSlashCommands(slashMenuCatalog, slashQuery)),
+    [slashMenuCatalog, slashQuery]
+  );
+  // A draft that starts with a command the menu knows: the composer paints its
+  // name and greys in its argument hint (`ComposerCommandMirror`), and a click
+  // on the name shows its description.
+  const typedCommand = useMemo(
+    () => typedSlashCommand(value, slashMenuCatalog),
+    [value, slashMenuCatalog]
+  );
+  const [commandInfoOpen, setCommandInfoOpen] = useState(false);
+  const showCommandInfo = commandInfoOpen && typedCommand !== null;
+  const browsingHistory =
+    historyCursor !== null && historyEntries[historyCursor.index] === value ? historyCursor : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: another chat's history starts afresh.
+  useEffect(() => {
+    setHistoryCursor(null);
+  }, [activeSessionId]);
   // Decision 194 point-check: a send by the button clears the box without a
   // keystroke, so the query of the line just sent must not keep the menu open.
   const slashOpen = slashQuery !== null && value.startsWith('/') && slashResults.length > 0;
+  const slashDisplayRows = useMemo(
+    () => (slashOpen ? slashRowsForDisplay(slashResults, t) : []),
+    [slashOpen, slashResults, t]
+  );
+  // The row the keys pick stays in view: past the popup's cap it was reachable
+  // but hidden. Its full description shows beside it (the row keeps one line),
+  // as the official client's menu does.
+  const slashListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!slashOpen) return;
+    const row = slashListRef.current?.querySelector<HTMLElement>(
+      `[data-slash-index="${slashIndex}"]`
+    );
+    row?.scrollIntoView?.({ block: 'nearest' });
+  }, [slashOpen, slashIndex]);
   // F11: both popups are absolutely positioned inside this card and cannot flip
   // themselves, so the card is the anchor and one measurement serves both — a
   // second, independently-resolved placement would let `@` and `/` open toward
@@ -1894,7 +1943,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // the moment `/` is typed. Decision 175: it names the folder too — the home
   // page's draft target, or the chat's own — so a workspace no session runs in
   // yet gets its skills, read by Main.
-  const slashMenuActive = slashQuery !== null;
+  // Also while the draft starts with `/` and the menu is closed (a picked row,
+  // a restored draft): the composer needs the list to recognise the command.
+  const slashMenuActive = slashQuery !== null || value.startsWith('/');
   useEffect(() => {
     if (!slashMenuActive) return;
     let cancelled = false;
@@ -1967,6 +2018,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       }
       setMentionQuery(extractMentionQuery(next, ta.selectionStart));
       setMentionIndex(0);
+    }, 0);
+  };
+
+  /** Show a history entry (or the draft back) with the caret where the next key expects it. */
+  const showHistoryStep = (step: ComposerHistoryStep) => {
+    setHistoryCursor(step.cursor);
+    updateValue(step.value);
+    warmDshHostWhileTyping({ text: step.value, engine: chatEngineRef.current });
+    setSlashQuery(null);
+    setMentionQuery(null);
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      const at = step.caret === 'start' ? 0 : step.value.length;
+      ta.setSelectionRange(at, at);
     }, 0);
   };
 
@@ -4344,7 +4410,20 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       mentionChipsBlock
   );
 
-  const textareaEl = (
+  // The official client's "History 2/3": which sent line the box shows, oldest first.
+  const historyLabel = browsingHistory ? (
+    <div
+      className="px-1 text-meta text-muted-foreground tabular-nums"
+      data-testid="composer-history-label"
+    >
+      {t('History {{index}}/{{total}}', {
+        index: String(browsingHistory.index + 1),
+        total: String(historyEntries.length),
+      })}
+    </div>
+  ) : null;
+
+  const textareaControl = (
     <Textarea
       ref={textareaRef}
       unstyled
@@ -4363,7 +4442,33 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // line so the empty/placeholder state matches the typed-content state.
       rows={1}
       value={value}
-      onChange={(event) => handleContentChange(event.target.value)}
+      onChange={(event) => {
+        setCommandInfoOpen(false);
+        setHistoryCursor(null);
+        handleContentChange(event.target.value);
+      }}
+      overlay={
+        typedCommand ? (
+          <ComposerCommandMirror
+            textareaRef={textareaRef}
+            value={value}
+            end={typedCommand.end}
+            name={typedCommand.item.name}
+            description={typedCommand.item.description}
+            argumentHint={typedCommand.item.argumentHint}
+            infoOpen={showCommandInfo}
+          />
+        ) : null
+      }
+      // A click on the painted name shows its description; anywhere else hides it.
+      onClick={(event) => {
+        const ta = event.currentTarget;
+        setCommandInfoOpen(
+          typedCommand !== null &&
+            ta.selectionStart === ta.selectionEnd &&
+            ta.selectionStart <= typedCommand.end
+        );
+      }}
       // B9 (round-4 point-check fix): tracks whether THIS node currently
       // holds focus, so the mode-switch effect below knows whether to
       // restore it onto the remounted node — see `hadFocusRef`'s own
@@ -4373,6 +4478,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       }}
       onBlur={() => {
         hadFocusRef.current = false;
+        setCommandInfoOpen(false);
       }}
       onCompositionStart={() => {
         composingRef.current = true;
@@ -4417,7 +4523,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         },
         t
       )}
-      className={composerTextareaClass(mode)}
+      className={cn(
+        composerTextareaClass(mode),
+        // The overlay is placed against this wrapper, and while it paints the
+        // command the textarea's own glyphs step aside (it keeps the caret).
+        'relative',
+        typedCommand && '[&_textarea]:text-transparent [&_textarea]:caret-foreground'
+      )}
       // T-19 decision 2.1: only "nowhere to put this draft" still locks the
       // textarea — a running/sending turn no longer does (decision 2's
       // unlock matrix). Model/Effort selects below keep the OLD gate: they
@@ -4431,6 +4543,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // textarea.
       disabled={disabled}
       onKeyDown={(event) => {
+        if (commandInfoOpen) {
+          setCommandInfoOpen(false);
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            return;
+          }
+        }
         // R02-c: checked before the @ popup. The two cannot both be open — a
         // slash query only exists inside the first token of a message starting
         // with `/`, where an `@` has no whitespace before it — but the narrower
@@ -4447,7 +4566,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             setSlashIndex((i) => (i - 1 + slashResults.length) % slashResults.length);
             return;
           }
-          if (event.key === 'Enter' && !event.shiftKey) {
+          // Tab completes the row, as in the official client; Enter still does.
+          if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) {
             event.preventDefault();
             const picked = slashResults[slashIndex];
             if (picked) insertSlash(picked);
@@ -4480,6 +4600,32 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             event.preventDefault();
             setMentionQuery(null);
             setMentionResults([]);
+            return;
+          }
+        }
+        // Up on the first line / Down on the last walks this chat's sent lines,
+        // as the official client's composer does. Not mid-composition (an IME
+        // candidate list owns the arrows) and not with a modifier.
+        if (
+          (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.shiftKey &&
+          !composingRef.current &&
+          !event.nativeEvent.isComposing
+        ) {
+          const ta = event.currentTarget;
+          const up = event.key === 'ArrowUp';
+          const atEdge = up
+            ? caretOnFirstLine(value, ta.selectionStart, ta.selectionEnd)
+            : caretOnLastLine(value, ta.selectionStart, ta.selectionEnd);
+          const step = atEdge
+            ? composerHistoryStep(historyEntries, browsingHistory, up ? 'up' : 'down', value)
+            : null;
+          if (step) {
+            event.preventDefault();
+            showHistoryStep(step);
             return;
           }
         }
@@ -4519,6 +4665,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         }
       }}
     />
+  );
+
+  // The history label rides with the textarea, so both layouts keep the
+  // textarea as one slot (`composerFormStatic.test.ts`).
+  const textareaEl = (
+    <>
+      {historyLabel}
+      {textareaControl}
+    </>
   );
 
   // T-30b2: one merged model + effort control where T-08/T-20 had two selects.
@@ -4801,33 +4956,44 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             )}
             style={{ maxHeight: popupPlacement.maxHeight }}
           >
-            <div className="min-h-0 flex-1 overflow-y-auto py-1">
+            <div ref={slashListRef} className="min-h-0 flex-1 overflow-y-auto py-1">
               {/* Decision 144: painted rows, `source` in words. */}
-              {slashRowsForDisplay(slashResults, t).map((item, i) => (
-                <button
-                  type="button"
-                  key={`${item.source}:${item.name}`}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    insertSlash(item);
-                  }}
-                  onMouseEnter={() => setSlashIndex(i)}
-                  className={cn(
-                    'flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm transition-colors',
-                    i === slashIndex
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-foreground hover:bg-accent/50'
-                  )}
-                >
-                  <span className="shrink-0 font-mono">/{item.name}</span>
-                  <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-                    {item.description}
-                  </span>
-                  {/* Three kinds share this list — a skill, a prompt template
-                      and a plugin command look identical without this. */}
-                  <span className="shrink-0 text-meta text-muted-foreground">{item.source}</span>
-                </button>
-              ))}
+              {slashDisplayRows.map((item, i) => {
+                const row = (
+                  <button
+                    type="button"
+                    data-slash-index={i}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      insertSlash(item);
+                    }}
+                    onMouseEnter={() => setSlashIndex(i)}
+                    className={cn(
+                      'flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm transition-colors',
+                      i === slashIndex
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-foreground hover:bg-accent/50'
+                    )}
+                  >
+                    <span className="shrink-0 font-mono">/{item.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                      {item.description}
+                    </span>
+                    {/* Three kinds share this list — a skill, a prompt template
+                        and a plugin command look identical without this. */}
+                    <span className="shrink-0 text-meta text-muted-foreground">{item.source}</span>
+                  </button>
+                );
+                if (!item.description) return <div key={`${item.source}:${item.name}`}>{row}</div>;
+                return (
+                  <Tooltip key={`${item.source}:${item.name}`} open={i === slashIndex}>
+                    <TooltipTrigger render={<div />}>{row}</TooltipTrigger>
+                    <TooltipPopup side="right" align="start" className="max-w-80 text-meta">
+                      {item.description}
+                    </TooltipPopup>
+                  </Tooltip>
+                );
+              })}
             </div>
             <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
               <span className="flex items-center gap-1">

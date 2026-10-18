@@ -9,6 +9,7 @@ import {
   replaceSlashCommand,
   resolveSlashAction,
   type SlashCatalogItem,
+  typedSlashCommand,
 } from '../slashCommands.ts';
 
 /**
@@ -199,5 +200,25 @@ describe('replaceSlashCommand', () => {
       text: '/compact keep this',
       cursor: 9,
     });
+  });
+});
+
+describe('typedSlashCommand', () => {
+  const catalog: SlashCatalogItem[] = [
+    { name: 'fork', description: 'Fork this session', source: 'command', argumentHint: '[prompt]' },
+    { name: 'inv-plugin:skill', description: 'A plugin skill', source: 'skill' },
+  ];
+
+  it('knows a listed command at the first byte, followed by whitespace or the end', () => {
+    expect(typedSlashCommand('/fork', catalog)).toMatchObject({ end: 5, item: { name: 'fork' } });
+    expect(typedSlashCommand('/fork do it', catalog)?.end).toBe(5);
+    expect(typedSlashCommand('/inv-plugin:skill\nmore', catalog)?.end).toBe(17);
+  });
+
+  it('is null for an unlisted name, a partial one, or a slash past the first byte', () => {
+    expect(typedSlashCommand('/for', catalog)).toBeNull();
+    expect(typedSlashCommand('/forked', catalog)).toBeNull();
+    expect(typedSlashCommand(' /fork', catalog)).toBeNull();
+    expect(typedSlashCommand('see /fork', catalog)).toBeNull();
   });
 });

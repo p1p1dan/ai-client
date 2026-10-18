@@ -41,8 +41,10 @@ export const SDK_TERMINAL_COMMANDS_DEFAULT: readonly string[] = [
 
 /**
  * Never listed: of use to a remote session or a debugger only, removed, unavailable in the
- * Agent SDK (the CLI says so), a peer list whose tools are off (issue #22), or a report on
- * the CLI product's own use (the product UI never names it, plan §2 rule 4).
+ * Agent SDK (the CLI says so), a peer list whose tools are off (issue #22), a report on
+ * the CLI product's own use (the product UI never names it, plan §2 rule 4), or a wizard
+ * whose SDK form is a host protocol PiLab does not drive (`auto-mode-setup` answers a bare
+ * line with its usage JSON only).
  */
 export const SDK_HIDDEN_COMMANDS: ReadonlySet<string> = new Set([
   '__remote-workflow',
@@ -53,6 +55,7 @@ export const SDK_HIDDEN_COMMANDS: ReadonlySet<string> = new Set([
   'list-agents',
   'insights',
   'team-onboarding',
+  'auto-mode-setup',
 ]);
 
 /**
@@ -140,9 +143,11 @@ export function sdkSlashCommandRows(
     seen.add(command.name);
     const builtin = command.builtin === true;
     const description = menuDescription(command);
+    const hint = command.argumentHint?.trim();
     rows.push({
       name: command.name,
       ...(description ? { description } : {}),
+      ...(hint ? { argumentHint: hint } : {}),
       source: builtin ? SDK_COMMAND_SOURCE : SDK_SKILL_SOURCE,
       ...(!builtin && command.name.includes(':') ? { scope: 'plugin' } : {}),
     });

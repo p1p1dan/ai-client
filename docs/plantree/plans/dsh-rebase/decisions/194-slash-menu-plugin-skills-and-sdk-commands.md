@@ -94,9 +94,10 @@
    - CLI 标为只适合终端的（`terminal_slash_commands`，2.1.300 是 doctor、color、focus、reload-plugins），以及 CLI 在 SDK 里明说用不了的 fast（「Agent SDK 里不可用」）；
    - 只对远程会话或调试有用的：`__remote-workflow`、workflow-launch-exec、heapdump；已移除的 agents；ListAgents 已禁（issue #22）对应的 list-agents；
    - 说明与用途都是 CLI 产品自身用量的：insights（「分析你的 Claude Code 会话」）、team-onboarding（「帮队友上手 Claude Code」）。产品界面不叫 Claude Code（路线 B §2 第 4 条）；手打照样发出；
+   - 在 SDK 里是给宿主程序调用的两步向导、PiLab 没有接的：auto-mode-setup（先 `--wizard … --propose` 出提案，用户看过后 `--apply-file … --expect-sha256 …` 写入）。不带参数手打只回一段用法 JSON（`code: "usage"`），加密机实测（2026-10-18，用户）；手打照样发出；
    - `compact`：归窗口（与 DSH 相同），窗口的 `/compact` 走 `worker.compact`，SDK 宿主的 `compact()` 再发给 CLI；
    - 与 PiLab 自己的入口冲突的：见第 4 节 Q2。
-   - 其余照官方全列（context、usage、init、rename、recap、goal、mcp、output-style、reload-skills、security-review、auto-mode-setup，以及所有 skill）。
+   - 其余照官方全列（context、usage、init、rename、recap、goal、mcp、output-style、reload-skills、security-review，以及所有 skill）。
 5. **说明里出现产品名的**：update-config 的说明（「配置 Claude Code harness…」）换成宿主自己的一句（「配置 settings.json：自动化行为的 hooks、权限与环境变量」）；其他 CLI 行的说明若含「Claude Code」，这一行不带说明。
 
 ### 3.4 SDK：执行与显示
@@ -197,6 +198,16 @@
   - SDK 对话里 `/config theme=dark`：提示「PiLab 不发送 /config」，字留在输入框；`/model glm-fake-1`（另一个服务）：提示只能换同一服务的模型，模型不变。
   - SDK 对话里 `/clear`：回首页，仓库预选这个对话的，模型是这个对话的 claude-opus-5-5（首页之前是 claude-sonnet-5-5），原对话留在侧栏。
 
+## 7a 加密机实测反馈（2026-10-18，用户）与落实
+
+用户在加密机上试了 SDK 引擎的终端与 git 对话，大部分正常，提了下面几点（参照官方客户端的截图）。
+
+1. **`/auto-mode-setup` 只回一段用法 JSON。** 属官方行为：它在 Agent SDK 里是给宿主程序调用的两步向导（先 `--wizard … --propose` 出提案，用户看过后 `--apply-file … --expect-sha256 …` 写入），不带参数只答 `code: "usage"`。PiLab 没有接这套向导，用户定：放进「菜单不列」（§3.3 第 4 条已改），手打照样发出。
+2. **菜单里的说明看不全。** 行仍是一行（名字、截断的说明、来源），键盘或鼠标停在哪一行，右侧就用提示框显示这一行的完整说明（参照官方）。顺带修了一个问题：方向键移到菜单可见区以外时列表不跟着滚，现在会滚到选中行。
+3. **Tab 选中补全**（参照官方），Enter 照旧也能选。
+4. **选中的命令要有效果。** 草稿以菜单认得的命令开头（名字从第一个字符起、后面是空白或结尾）时：命令名用主色显示；后面还没写内容时，灰色显示命令的参数提示（CLI 给的 `argumentHint`，如 `[prompt]`，经 `worker.commands` 新增的可选字段 `argumentHint` 传到界面；DSH 的 skill 摘要没有这一项，就不显示）；点命令名，在它上方显示名字与说明，打字、失焦或 Esc 关掉。实现：`<textarea>` 不能给部分文字上色，所以这时输入框自己的字透明（保留光标），背后叠一层逐项复制输入框字体、内边距与换行规则的镜像文字（`ComposerCommandMirror.tsx`），不接收鼠标事件。为了让手打或恢复的草稿也能认出命令，草稿以 `/` 开头时就去取一次清单。
+5. **输入框里上下键翻历史**（参照官方的「History 2/3」）。历史是这个对话发过的消息，从旧到新编号，空的不算、与上一条相同的合并。光标在第一行时按上键开始翻（先存下草稿），在最后一行时按下键往新的翻，翻过最新一条就还原草稿；一改字就不再算在翻历史。输入法选词时与带修饰键时不接管方向键。首页（还没有对话）没有历史。
+
 ## 8 用户审批
 
 - [x] 第 1 节（决策 193 第 29 条）
@@ -204,3 +215,4 @@
 - [x] Q2：`/new`、`/clear` 与 PiLab 同步，`/model`、`/effort` 走 PiLab 的入口，`/config`、`/autocompact` 先屏蔽（2026-10-18）
 - [ ] 第 4 节两点的落实方式
 - [ ] 第 3 节其余自主决定
+- [ ] 第 7a 节的落实方式（第 1 点用户已定）

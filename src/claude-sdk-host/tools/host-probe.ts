@@ -2964,6 +2964,7 @@ async function main(): Promise<void> {
             'config',
             'autocompact',
             'heapdump',
+            'auto-mode-setup',
             'doctor',
           ].every((name) => !row(name))
         );
