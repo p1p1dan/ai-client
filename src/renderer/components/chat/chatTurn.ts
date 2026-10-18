@@ -5,6 +5,7 @@ import { isReviewFindingsGroup } from './reviewFindings';
 import {
   groupTimeline,
   joinResolvedPermissions,
+  joinReviewActivity,
   type TimelineItem,
   type ToolGroupEntry,
 } from './toolCard';
@@ -221,7 +222,7 @@ export function flattenTurnItems(turn: Turn): TurnItem[] {
     }
     items.push({ kind: 'notice', message, messageId: message.id });
   }
-  return mergeAdjacentToolGroups(joinResolvedPermissions(items));
+  return mergeAdjacentToolGroups(joinResolvedPermissions(joinReviewActivity(items)));
 }
 
 /**

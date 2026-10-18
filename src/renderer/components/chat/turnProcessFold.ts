@@ -27,7 +27,7 @@
  */
 
 import type { TurnItem, TurnSegment } from './chatTurn';
-import { type ToolRun, type ToolVerbState, toolVerb } from './toolCard';
+import { REVIEWING_VERB, type ToolRun, type ToolVerbState, toolVerb } from './toolCard';
 import { splitWorkedForDuration, type WorkedForParts } from './turnTiming';
 
 /**
@@ -317,7 +317,14 @@ export function deriveTurnCurrentAction(items: readonly TurnItem[]): TurnCurrent
 }
 
 function actionOf(run: ToolRun, state: Extract<ToolVerbState, 'running' | 'refused'>) {
-  return { run, verb: toolVerb(run.toolName, state, run.input), state };
+  // Decision 192: a call the review model is judging has not started running.
+  const reviewing =
+    state === 'running' && run.review?.phase === 'review' && run.review.result === undefined;
+  return {
+    run,
+    verb: reviewing ? REVIEWING_VERB : toolVerb(run.toolName, state, run.input),
+    state,
+  };
 }
 
 /*

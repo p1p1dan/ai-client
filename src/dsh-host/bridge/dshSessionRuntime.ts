@@ -131,11 +131,17 @@ import {
   isDshSummaryRow,
 } from '../../shared/dshHistory/types.ts';
 import { permissionActivityEvent } from '../../shared/permissions/activity.ts';
+import { reviewTranscriptFromHistory } from '../../shared/permissions/autoReview/prompt.ts';
+import type { AutoModeRules } from '../../shared/permissions/autoReview/rules.ts';
 import {
   createPermissionPrompt,
   type PermissionPrompt,
 } from '../../shared/permissions/cardEmitter.ts';
-import { type PermissionActivityRecord, PermissionGate } from '../../shared/permissions/gate.ts';
+import {
+  type PermissionActivityRecord,
+  type PermissionConfig,
+  PermissionGate,
+} from '../../shared/permissions/gate.ts';
 import type { PersistedGrants } from '../../shared/permissions/grants.ts';
 import {
   loadPermissionPolicy,
@@ -227,6 +233,7 @@ import {
 import { gatewaySessionUuid } from '../lib/sessionMetadata.ts';
 import type { AttachedGate, DshPermissionHost } from '../permissions/permissionHost.ts';
 import { admitUserContent, type DshAttachmentStore, type DshUserContent } from './attachments.ts';
+import { AutoReviewer, type ReviewLlm } from './autoReviewer.ts';
 import { BridgeSessionError } from './bridgeErrors.ts';
 import type { BridgeSessionRuntime, BridgeSessionRuntimeOptions } from './bridgeRpcServer.ts';
 import { dshCacheChainOptions } from './cacheChainReport.ts';
@@ -672,6 +679,15 @@ export interface DshBridgeDeps {
    * tap's own switch; absent or false, no `cache` names one.
    */
   sessionMetadata?: boolean;
+  /**
+   * Decision 192: what the auto gear's review needs besides the plan's
+   * `reviewModel` — the CLI's rules and DSH's model-call service. Absent, or
+   * a plan without a review model: no review, every ask is a card.
+   */
+  autoReview?: {
+    rules(): Promise<AutoModeRules | undefined>;
+    llm(): ReviewLlm | undefined;
+  };
 }
 
 /**
@@ -1259,9 +1275,49 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
         grants: this.grantsFile ? readGrantSidecar(this.grantsFile, this.options.log) : [],
         approve: this.prompt.approve,
         autoAllow: this.prompt.autoAllow,
+        ...this.autoReviewHook(cwd),
       },
       { persistGrants: (record) => this.persistGrants(record) }
     );
+  }
+
+  /**
+   * Decision 192: the gate's `review`, when the plan names a review model and
+   * the host can reach it. The plan is the host's for its whole life (a new
+   * one restarts the host), so this is decided once, at the gate's build.
+   */
+  private autoReviewHook(cwd: string): Pick<PermissionConfig, 'review'> {
+    const auto = this.deps.autoReview;
+    const plan = this.deps.modelPlan?.();
+    const reviewModel = plan?.reviewModel;
+    if (!auto || !plan || !reviewModel) return {};
+    const entry = plan.index[reviewModel];
+    const effort = entry?.efforts.includes('low') ? 'low' : undefined;
+    const reviewer = new AutoReviewer({
+      llm: () => auto.llm(),
+      route: () => this.router.completion(reviewModel, effort),
+      contextWindow: () => {
+        const route = entry ? plan.routes?.[entry.route] : undefined;
+        const models = (route as { models?: Array<{ id: string; contextWindow?: number }> })
+          ?.models;
+        return models?.find((model) => model.id === entry?.model)?.contextWindow;
+      },
+      rules: () => auto.rules(),
+      transcript: () => reviewTranscriptFromHistory(this.historyCache.messages(), isDshSummaryRow),
+      cwd,
+      log: this.options.log,
+    });
+    return {
+      review: async (request, context, signal) => {
+        const verdict = await reviewer.review(request, context, signal);
+        if (verdict.kind === 'failed') {
+          this.options.log?.(
+            `[auto-review] ${request.tool} ${request.toolCallId}: ${verdict.failure}${verdict.detail ? ` (${verdict.detail})` : ''}`
+          );
+        }
+        return verdict;
+      },
+    };
   }
 
   /**
@@ -1277,7 +1333,12 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
    */
   private onGateActivity(record: PermissionActivityRecord): void {
     if (this.disposed) return;
-    if (record.phase !== 'decision' || record.source !== 'session-grant') return;
+    // Decision 192: a review raises no card either, so its start and its
+    // outcome are the record of it on the call's row.
+    const reviewed =
+      record.phase === 'review' ||
+      (record.phase === 'decision' && record.source.startsWith('review-'));
+    if (!reviewed && (record.phase !== 'decision' || record.source !== 'session-grant')) return;
     const { sessionId: _sessionId, ...draft } = permissionActivityEvent(
       this.logicalSessionId,
       record

@@ -24,6 +24,10 @@ export const PERMISSION_PROMPT_CONTEXT = 'aiclient:permission';
 export const PERMISSION_PROMPT_CONTEXT_AFTER = 'APPROVAL_POLICY';
 
 /** The mode's sentence, then the gear's: 1.0.x's two slots, in 1.0.x's words. */
-export function permissionPromptText(mode: RuntimeMode, gear: PermissionGear): string {
-  return `${modeSegment(mode).text}\n${permissionGearSegment(gear).text}`;
+export function permissionPromptText(
+  mode: RuntimeMode,
+  gear: PermissionGear,
+  autoReview = false
+): string {
+  return `${modeSegment(mode).text}\n${permissionGearSegment(gear, { autoReview }).text}`;
 }

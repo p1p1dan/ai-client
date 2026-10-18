@@ -5,7 +5,11 @@ import { readStreamingToolArgs } from '@shared/streamingToolArgs';
 import type { DshTodoItem, ToolOutcomeDetails } from '@shared/types/runtimeEvents';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
-import { isQuietPermissionActivity } from './permissionActivityRow';
+import {
+  isQuietPermissionActivity,
+  isReviewActivity,
+  type PermissionActivityRecord,
+} from './permissionActivityRow';
 import {
   DSH_TOOL_NAMES,
   MCP_TOOL_PREFIX,
@@ -16,7 +20,11 @@ import {
   RUNTIME_TOOL_NAMES,
 } from './piToolNames';
 import { type PlanReviewWord, planReviewRowWord } from './planReviewRowWord';
-import { derivePermissionAutoNote, derivePermissionVerb } from './questionCardModel';
+import {
+  deriveAutoReviewNote,
+  derivePermissionAutoNote,
+  derivePermissionVerb,
+} from './questionCardModel';
 import {
   isReviewFindingsRun,
   REPORT_FINDINGS_TOOL,
@@ -97,6 +105,12 @@ export interface ToolRun {
    * timeline item instead (spec §6.3).
    */
   permission?: ChatBlock;
+  /**
+   * Decision 192: the review model's record for this call, attached by
+   * `joinReviewActivity`. `phase: 'review'` with no `result` while it is
+   * being reviewed; then `review_allowed`, `review_denied` or `review_failed`.
+   */
+  review?: PermissionActivityRecord;
 }
 
 /**
@@ -247,6 +261,12 @@ export function groupTimeline(message: ChatMessage): TimelineItem[] {
         break;
       case 'permission_activity': {
         if (isQuietPermissionActivity(block.permissionActivity)) break;
+        // Decision 192: its own item, never coalesced, for `joinReviewActivity`.
+        if (isReviewActivity(block.permissionActivity)) {
+          flush();
+          items.push({ kind: 'permissionActivity', blocks: [block], blockIndex });
+          break;
+        }
         // Coalesced with the immediately preceding activity item rather than
         // pushed as its own: the gate fires once per surface, so a bash call
         // with a path check produces two records back to back and two rows
@@ -419,6 +439,60 @@ export function joinResolvedPermissions<T extends PermissionJoinable>(items: rea
   return joined;
 }
 
+/** The `permissionActivity` arm of `TimelineItem`. */
+type PermissionActivityItem = Extract<TimelineItem, { kind: 'permissionActivity' }>;
+
+/**
+ * Decision 192: fold each review record into the tool row of the call it
+ * reviewed (`requestId` is the tool call id), the turn's whole list being the
+ * search domain for the same reason as `joinResolvedPermissions`. A record no
+ * row claims is dropped: it has nothing to say without its call. The later
+ * record of a call wins, so a finished review replaces "reviewing".
+ */
+export function joinReviewActivity<T extends PermissionJoinable>(items: readonly T[]): T[] {
+  const reviews = new Map<string, PermissionActivityRecord>();
+  for (const item of items) {
+    if (item.kind !== 'permissionActivity') continue;
+    for (const block of (item as PermissionActivityItem).blocks) {
+      const record = block.permissionActivity;
+      if (record && isReviewActivity(record)) reviews.set(record.requestId, record);
+    }
+  }
+  if (reviews.size === 0) return [...items];
+  const joined: T[] = [];
+  for (const item of items) {
+    if (item.kind === 'permissionActivity') {
+      const blocks = (item as PermissionActivityItem).blocks.filter(
+        (block) => !isReviewActivity(block.permissionActivity)
+      );
+      if (blocks.length > 0) {
+        joined.push(
+          blocks.length === (item as PermissionActivityItem).blocks.length
+            ? item
+            : ({ ...item, blocks } as T)
+        );
+      }
+      continue;
+    }
+    if (item.kind !== 'toolGroup') {
+      joined.push(item);
+      continue;
+    }
+    const group = item as T & ToolGroupItem;
+    if (!group.entries.some((entry) => entry.kind === 'run' && reviews.has(entry.run.toolCallId))) {
+      joined.push(item);
+      continue;
+    }
+    const entries = group.entries.map((entry) => {
+      if (entry.kind !== 'run') return entry;
+      const review = reviews.get(entry.run.toolCallId);
+      return review ? { ...entry, run: { ...entry.run, review } } : entry;
+    });
+    joined.push({ ...group, entries } as T);
+  }
+  return joined;
+}
+
 /** How many authorization records a joined item list carries — `[FB7-4]`'s conservation law. */
 export function countPermissionRecords(items: readonly PermissionJoinable[]): number {
   let count = 0;
@@ -534,6 +608,13 @@ export interface ToolRowView {
    * whatever came back.
    */
   outcome?: ToolRunOutcome;
+  /**
+   * Decision 192: what the review model did with this call, already worded
+   * (「自动：审核放行」); painted after the outcome word.
+   */
+  reviewNote?: string;
+  /** Decision 192: the review blocked it — the row takes the refusal tone without auto-expanding. */
+  reviewDenied?: boolean;
   /**
    * dsh-rebase decision 169: how a plan review the call raised ended
    * (`exit_plan_mode`, or `create_goal` in plan mode) — approved, keep
@@ -688,9 +769,49 @@ interface ThinkingRowOptions {
   t?: Translate;
 }
 
+/**
+ * Decision 192: the row's review state. `reviewing` while the review model
+ * judges the call (no result yet); `reason` is the model's own prose, shown
+ * verbatim in the row's body.
+ */
+function reviewStateOf(
+  run: ToolRun
+):
+  | { kind: 'reviewing' }
+  | { kind: 'allowed' }
+  | { kind: 'denied'; reason?: string }
+  | { kind: 'failed'; failure: string }
+  | null {
+  const review = run.review;
+  if (!review) return null;
+  if (review.resolution === 'review_allowed') return { kind: 'allowed' };
+  if (review.resolution === 'review_denied') {
+    return { kind: 'denied', ...(review.reviewReason ? { reason: review.reviewReason } : {}) };
+  }
+  if (review.resolution === 'review_failed') {
+    return { kind: 'failed', failure: review.reviewFailure ?? 'error' };
+  }
+  return review.phase === 'review' && run.status === 'running' ? { kind: 'reviewing' } : null;
+}
+
+/** Keys of the review's failure words (`AutoReviewFailure`), translated at paint. */
+const REVIEW_FAILURE_LABEL: Readonly<Record<string, string>> = {
+  timeout: 'review timeout',
+  error: 'review error',
+  unparseable: 'unreadable answer',
+  too_long: 'conversation too long',
+  unavailable: 'review unavailable',
+};
+
 /** Single call row. A failed run always forces `body: 'output'` (sign-off ②: failures auto-expand). */
 export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): ToolRowView {
-  const outcome = toolRunOutcome(run) ?? undefined;
+  const review = reviewStateOf(run);
+  const reviewT = options.t ?? englishTranslate;
+  // Decision 192: a call the review could not judge never ran, and says so
+  // in the row's ordinary tone, apart from a refusal.
+  const recordedOutcome = toolRunOutcome(run) ?? undefined;
+  const outcome =
+    review?.kind === 'failed' && recordedOutcome === 'refused' ? 'notStarted' : recordedOutcome;
   const running = run.status === 'running';
   // Decision 169: a plan review's answer, read off the row (live and replayed alike).
   const planReview = outcome ? undefined : planReviewRowWord(run.toolName, run.status, run.output);
@@ -709,9 +830,11 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // Decision 131: a plugin call that declared its own title reads by it.
   const presentation = pluginToolPresentation(run);
   const verb =
-    presentation?.card === 'terminal'
-      ? PRESENTED_COMMAND_VERBS[verbState]
-      : toolVerb(run.toolName, verbState, run.input);
+    review?.kind === 'reviewing'
+      ? REVIEWING_VERB
+      : presentation?.card === 'terminal'
+        ? PRESENTED_COMMAND_VERBS[verbState]
+        : toolVerb(run.toolName, verbState, run.input);
   const argDetail = presentation
     ? presentedArgDetail(presentation)
     : formatToolArgDetail(run, options);
@@ -723,8 +846,18 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // (「已停止」) already says in the reader's language. What the command printed
   // before the stop, when this window still holds it, is laid in by the row
   // (`withStoppedOutput`).
+  // Decision 192: what the model was told is English for the model; the row
+  // shows the review's own reason, or nothing when it could not judge.
   const recordedOutput =
-    outcome === 'stopped' && isDshAbortedText(run.output) ? undefined : run.output;
+    review?.kind === 'denied'
+      ? review.reason
+        ? reviewT('Not allowed by review: {{reason}}', { reason: review.reason })
+        : undefined
+      : review?.kind === 'failed'
+        ? undefined
+        : outcome === 'stopped' && isDshAbortedText(run.output)
+          ? undefined
+          : run.output;
 
   // dsh-rebase P1-7c (decision 118's handoff): a `todo_write` row opens onto
   // the list it wrote, drawn by the todo card's own component — never the
@@ -786,7 +919,9 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // Keyed by `toolCallId`, the registry's own key. Undefined whenever no stamp
   // is on record, so a turn that is not running (the caller passes no lookup)
   // and un-timestamped history simply omit the readout.
-  const startedAtMs = running ? options.toolStartedAtMs?.(run.toolCallId) : undefined;
+  // Decision 192: the review's clock is the turn head's, not the row's.
+  const startedAtMs =
+    running && review?.kind !== 'reviewing' ? options.toolStartedAtMs?.(run.toolCallId) : undefined;
   // T146 — `run.execStartedAtMs` is the instant `bash` actually handed the
   // command to `runtimeExec.run`, i.e. the runtime's own timeout origin.
   // Prefer it once known: showing "elapsed / limit" against the earlier
@@ -826,6 +961,23 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     running,
     failed,
     ...(outcome ? { outcome } : {}),
+    ...(review?.kind === 'allowed'
+      ? { reviewNote: deriveAutoReviewNote(reviewT('review allowed'), reviewT) }
+      : review?.kind === 'denied'
+        ? {
+            reviewNote: deriveAutoReviewNote(reviewT('review did not allow'), reviewT),
+            reviewDenied: true,
+          }
+        : review?.kind === 'failed'
+          ? {
+              reviewNote: deriveAutoReviewNote(
+                reviewT('review could not complete ({{failure}})', {
+                  failure: reviewT(REVIEW_FAILURE_LABEL[review.failure] ?? review.failure),
+                }),
+                reviewT
+              ),
+            }
+          : {}),
     ...(planReview ? { planReview } : {}),
     ...(backgroundJob ? { backgroundJob } : {}),
     ...(exitCode !== undefined ? { exitCode } : {}),
@@ -1645,6 +1797,8 @@ export function pluginToolPresentation(
 
 /** A plugin's command (a `terminal` card) reads as a shell row: 「终端」 + the command. */
 const PRESENTED_COMMAND_VERBS: ToolVerbs = { done: 'Ran', running: 'Running', refused: 'Run' };
+/** Decision 192: a call waiting on the review model — a catalog key, like every verb. */
+export const REVIEWING_VERB = 'Reviewing';
 
 /**
  * Decision 131: which icon a presented call wears — its card, then its

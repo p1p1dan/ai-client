@@ -503,12 +503,20 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
   const defaultModel = first
     ? { provider: first.route, model: first.model }
     : { ...EMPTY_PLAN_DEFAULT_MODEL };
+  const reviewModel =
+    input.reviewModel && Object.hasOwn(index, input.reviewModel) ? input.reviewModel : undefined;
+  if (input.reviewModel && !reviewModel) {
+    drops.push({ kind: 'reviewModel', model: input.reviewModel, reason: 'not_in_plan' });
+  }
   return {
-    revision: sha256Hex(canonicalJson({ routes, defaultModel, index })),
+    revision: sha256Hex(
+      canonicalJson({ routes, defaultModel, index, ...(reviewModel ? { reviewModel } : {}) })
+    ),
     routes,
     defaultModel,
     index,
     refs,
     dropped: drops,
+    ...(reviewModel ? { reviewModel } : {}),
   };
 }

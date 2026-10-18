@@ -295,6 +295,8 @@ export interface DshHostCredentialContext {
 export interface DshHostModelSource {
   /** Main's plan now (`resolveDshModelPlan()`); read once per spawn. */
   plan(): DshModelPlan;
+  /** Decision 192: the bundled Claude CLI, for the auto-mode rules; undefined when absent. */
+  autoModeCli?(): string | undefined;
   /** Answers one credential request of a host (`DshCredentialBroker`). */
   credentials?: {
     answer(
@@ -1168,6 +1170,7 @@ export class DshHostSupervisor {
   private configureMessage(): DshHostConfigure {
     const plan =
       this.modelSource?.plan() ?? buildDshModelPlan({ models: { providers: {} }, keyed: {} });
+    const autoModeCli = plan.reviewModel ? this.modelSource?.autoModeCli?.() : undefined;
     return {
       host: 'configure',
       nonce: randomBytes(24).toString('base64url'),
@@ -1176,6 +1179,8 @@ export class DshHostSupervisor {
       defaultModel: plan.defaultModel,
       index: plan.index,
       refs: plan.refs,
+      ...(plan.reviewModel ? { reviewModel: plan.reviewModel } : {}),
+      ...(autoModeCli ? { autoModeCli } : {}),
     };
   }
 

@@ -298,7 +298,7 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
   // size setting.
   const rowClass = cn(
     'group/row flex w-full items-baseline gap-1.5 text-left text-chat-process leading-normal',
-    view.failed ? 'text-destructive' : turnProcessToneClass()
+    view.failed || view.reviewDenied ? 'text-destructive' : turnProcessToneClass()
   );
   const verbClass = cn('shrink-0', !view.failed && 'group-hover/row:text-foreground');
 
@@ -333,6 +333,12 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
       {view.outcome && !(view.outcome === 'refused' && view.permissionVerb) && (
         <span data-slot="tool-row-outcome" className={toolRowPermissionClass()}>
           · {t(TOOL_RUN_OUTCOME_LABEL[view.outcome])}
+        </span>
+      )}
+      {/* Decision 192: what the review model did with the call, already worded. */}
+      {view.reviewNote && (
+        <span data-slot="tool-row-review" className={toolRowPermissionNoteClass()}>
+          · {view.reviewNote}
         </span>
       )}
       {/* Decision 169: how the plan review the call raised ended — an answer,

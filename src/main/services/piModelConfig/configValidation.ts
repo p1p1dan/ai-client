@@ -7,6 +7,7 @@ import {
   type PiManagedProviderCredentials,
   type PiManagedProviderDefinition,
   type PiModelApi,
+  parsePiModelRef,
 } from '@shared/piModelConfig';
 
 const PROVIDER_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
@@ -316,11 +317,24 @@ export function validatePiManagedModelsConfig(
       resolved
     );
   }
+  const autoReview = readAutoReview(value.autoReview);
   return {
     version: 1,
     ...(typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}),
     providers,
+    ...(autoReview ? { autoReview } : {}),
   };
+}
+
+/**
+ * Decision 192: kept when it names a model the way the menu does; a malformed
+ * value is dropped (no review) rather than failing the whole catalog. Whether
+ * the model exists is the plan's call, which logs it when it does not.
+ */
+function readAutoReview(value: unknown): { model: string } | undefined {
+  if (!isRecord(value) || typeof value.model !== 'string') return undefined;
+  const ref = parsePiModelRef(value.model);
+  return ref ? { model: `${ref.provider}/${ref.modelId}` } : undefined;
 }
 
 /**

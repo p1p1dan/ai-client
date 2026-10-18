@@ -129,6 +129,11 @@ export interface PiManagedModelsConfig {
   version: 1;
   updatedAt?: string;
   providers: Record<string, PiManagedProviderDefinition>;
+  /**
+   * Decision 192: the model (`provider/modelId` of this catalog) the
+   * administrator chose to review the DSH auto gear's asks. Absent: no review.
+   */
+  autoReview?: { model: string };
 }
 
 /**

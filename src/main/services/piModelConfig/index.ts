@@ -369,9 +369,11 @@ export function readPiModelCatalog(): AgentModelCatalog {
   const menu = service.readCatalog(managed ? undefined : 'local', native);
   // Route B, S-2: the renderer names a new chat's modes after the engine it will
   // get, which needs the host as much as an Anthropic-protocol route.
+  const plan = dshModelPlanFor(native);
   return {
-    ...applyDshPlanToCatalog(menu, dshModelPlanFor(native)),
+    ...applyDshPlanToCatalog(menu, plan),
     claudeSdkHostAvailable: claudeSdkHostAvailable(),
+    ...(plan.reviewModel ? { autoReview: true } : {}),
   };
 }
 

@@ -277,7 +277,12 @@ export type DshHostConfigure = {
   host: 'configure';
   /** Fresh per spawn; every `credential` request of this host must echo it (decision 034). */
   nonce: string;
-} & Pick<DshModelPlan, 'revision' | 'routes' | 'defaultModel' | 'index' | 'refs'>;
+  /**
+   * Decision 192: the bundled Claude CLI the host reads the auto-mode rules
+   * from; sent only with a `reviewModel`.
+   */
+  autoModeCli?: string;
+} & Pick<DshModelPlan, 'revision' | 'routes' | 'defaultModel' | 'index' | 'refs' | 'reviewModel'>;
 
 /** Why Main answered a `credential` request without a key. */
 export type DshCredentialFailure =
@@ -905,7 +910,9 @@ export function isDshHostConfigure(value: unknown): value is DshHostConfigure {
     typeof defaultModel.provider === 'string' &&
     defaultModel.provider.length > 0 &&
     typeof defaultModel.model === 'string' &&
-    defaultModel.model.length > 0
+    defaultModel.model.length > 0 &&
+    (value.reviewModel === undefined || typeof value.reviewModel === 'string') &&
+    (value.autoModeCli === undefined || typeof value.autoModeCli === 'string')
   );
 }
 

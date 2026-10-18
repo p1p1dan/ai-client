@@ -42,6 +42,9 @@ const RESOLUTION: Record<PermissionDecisionSource, string> = {
   'timed-out': 'timed_out',
   cancelled: 'cancelled',
   error: 'gate_error',
+  'review-allowed': 'review_allowed',
+  'review-denied': 'review_denied',
+  'review-failed': 'review_failed',
 };
 
 export function permissionActivityEvent(
@@ -75,7 +78,12 @@ export function permissionActivityEvent(
         ? { delegationId: delegation.delegationId, agentName: delegation.agentName }
         : {}),
       ...(record.phase === 'decision'
-        ? { result: record.decision, resolution: RESOLUTION[record.source] }
+        ? {
+            result: record.decision,
+            resolution: RESOLUTION[record.source],
+            ...(record.reviewReason ? { reviewReason: record.reviewReason } : {}),
+            ...(record.reviewFailure ? { reviewFailure: record.reviewFailure } : {}),
+          }
         : {}),
     },
   };

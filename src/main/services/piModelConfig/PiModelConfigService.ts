@@ -20,6 +20,7 @@ import {
   type PiModelSyncFailureKind,
   type PiModelSyncResult,
   type PiModelSyncState,
+  parsePiModelRef,
   piModelOption,
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog, AgentModelCatalogError } from '@shared/types/agentCatalog';
@@ -902,6 +903,7 @@ export class PiModelConfigService {
   }): {
     models: Record<string, unknown>;
     auth: Record<string, unknown>;
+    reviewModel?: string;
   } {
     return buildRuntimeConfig(
       this.managedHalf(),
@@ -929,7 +931,7 @@ function buildRuntimeConfig(
   inheritedApiKey: string,
   inheritedBaseUrl: string,
   userProviders: readonly UserProvider[]
-): { models: Record<string, unknown>; auth: Record<string, unknown> } {
+): { models: Record<string, unknown>; auth: Record<string, unknown>; reviewModel?: string } {
   const models = toPiModelsJson(config, {
     inheritedBaseUrl: inheritedBaseUrl.trim().replace(/\/+$/, ''),
   }) as { providers: Record<string, unknown> };
@@ -950,7 +952,14 @@ function buildRuntimeConfig(
     // would silently bill the gateway for a request the user aimed elsewhere.
     auth[id] = { type: 'api_key', key: provider.apiKey };
   }
-  return { models, auth };
+  // Decision 192: the administrator chose a managed model; a user service
+  // that took over its provider id is not that model.
+  const reviewModel = config.autoReview?.model;
+  const reviewProvider = reviewModel ? parsePiModelRef(reviewModel)?.provider : undefined;
+  const shadowed = userProviders.some(
+    (provider) => provider.enabled && userProviderId(provider) === reviewProvider
+  );
+  return { models, auth, ...(reviewModel && !shadowed ? { reviewModel } : {}) };
 }
 
 /**

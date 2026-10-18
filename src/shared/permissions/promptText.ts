@@ -16,10 +16,18 @@ const GEAR_TEXT: Record<PermissionGear, string> = {
   bypass:
     'Permission gear: bypass. The user has turned off approval prompts entirely: available tools execute without approval, including shell commands whose operands cannot be resolved statically. Explicit deny rules and the tool whitelist remain enforced, and a denied call is still denied.',
 };
-export function permissionGearSegment(gear: PermissionGear): PermissionPromptSegment {
+/** Decision 192: `auto` when a review model checks what would otherwise ask. */
+const AUTO_REVIEWED_TEXT =
+  'Permission gear: auto. Available tools may execute without ordinary approval. Calls that would otherwise ask (dangerous commands such as deletes, force pushes and hard resets, anything that names a path outside the workspace, and program tools) are checked by an automatic safety review first; a call it does not allow fails with the reason, and must not be retried in another form. Explicit deny rules and the tool whitelist remain enforced.';
+
+export function permissionGearSegment(
+  gear: PermissionGear,
+  options: { autoReview?: boolean } = {}
+): PermissionPromptSegment {
+  const text = gear === 'auto' && options.autoReview ? AUTO_REVIEWED_TEXT : GEAR_TEXT[gear];
   return {
     slot: 'permission-gear',
-    text: `${GEAR_TEXT[gear]} Never bypass a denied tool or path by switching tools.`,
+    text: `${text} Never bypass a denied tool or path by switching tools.`,
   };
 }
 export function modeSegment(mode: RuntimeMode): PermissionPromptSegment {

@@ -74,6 +74,7 @@ export function resolveDshModelPlanWith(deps: DshModelPlanDeps): DshModelPlan {
     env: deps.env,
     settings: deps.settings,
     ...(deps.clientVersion ? { clientVersion: deps.clientVersion } : {}),
+    ...(deps.native?.reviewModel ? { reviewModel: deps.native.reviewModel } : {}),
   });
   // Once per revision, not per menu open.
   if (plan.revision !== lastLoggedRevision) {
@@ -97,6 +98,7 @@ export function resolveDshModelPlanWith(deps: DshModelPlanDeps): DshModelPlan {
       deps.log?.('[dsh-model-plan] left out of the plan', {
         revision: plan.revision.slice(0, 12),
         dropped: plan.dropped.map((drop) => {
+          if (drop.kind === 'reviewModel') return `review model ${drop.model}: ${drop.reason}`;
           const detail = drop.detail ? ` (${drop.detail})` : '';
           if (drop.kind === 'model')
             return `${drop.providerId}/${drop.modelId}: ${drop.reason}${detail}`;

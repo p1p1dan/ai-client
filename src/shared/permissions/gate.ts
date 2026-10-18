@@ -8,6 +8,12 @@ import {
   type RuntimePermissionSettings,
   resolveRuntimePermission,
 } from '../types/runtimePermission.ts';
+import {
+  AUTO_REVIEW_MAX_CONSECUTIVE_DENIALS,
+  AUTO_REVIEW_MAX_TOTAL_DENIALS,
+  type AutoReviewFailure,
+  type AutoReviewVerdict,
+} from './autoReview/types.ts';
 import { isDangerousShellCommand } from './dangerousCommands.ts';
 import { PermissionError } from './errors.ts';
 import {
@@ -176,6 +182,8 @@ export interface PermissionQueueSlot {
  */
 export interface PermissionAskContext {
   askReason?: PermissionAskReason;
+  /** Decision 192: the review model's reason, on a card raised after repeated review blocks. */
+  reviewReason?: string;
 }
 export interface PermissionConfig {
   /** The workspace, canonicalized the way the host canonicalizes targets. */
@@ -234,6 +242,15 @@ export interface PermissionConfig {
    */
   autoAllow?: (toolCallId: string) => boolean;
   timeoutMs?: number;
+  /**
+   * Decision 192: under `auto`, a call that would ask goes here first. Absent
+   * when no review model is configured, and every ask is a card as before.
+   */
+  review?: (
+    request: ToolPermissionRequest,
+    context: PermissionAskContext,
+    signal: AbortSignal
+  ) => Promise<AutoReviewVerdict>;
 }
 /**
  * How a gate resolved, in the vocabulary the timeline row already speaks.
@@ -255,7 +272,11 @@ export type PermissionDecisionSource =
    * because the audit row is the only place that difference survives. */
   | 'timed-out'
   | 'cancelled'
-  | 'error';
+  | 'error'
+  /** Decision 192: the review model allowed it, refused it, or could not decide. */
+  | 'review-allowed'
+  | 'review-denied'
+  | 'review-failed';
 
 /**
  * One observation about a gate, for observers that record rather than decide.
@@ -268,6 +289,8 @@ export type PermissionDecisionSource =
  */
 export type PermissionActivityRecord =
   | { phase: 'prompt'; request: ToolPermissionRequest; mode: RuntimeMode; gear: PermissionGear }
+  /** Decision 192: the call went to the review model; a `decision` follows. */
+  | { phase: 'review'; request: ToolPermissionRequest; mode: RuntimeMode; gear: PermissionGear }
   | {
       phase: 'decision';
       request: ToolPermissionRequest;
@@ -275,6 +298,10 @@ export type PermissionActivityRecord =
       source: PermissionDecisionSource;
       mode: RuntimeMode;
       gear: PermissionGear;
+      /** `review-denied`: the review model's reason. */
+      reviewReason?: string;
+      /** `review-failed`: what kept the review from deciding. */
+      reviewFailure?: AutoReviewFailure;
     };
 
 /** The gate's API; the 1.0.x runtime publishes it as `RuntimePermissionsService`. */
@@ -322,6 +349,8 @@ export interface PermissionGateService {
   scopeToolCall(toolCallId: string, scope: DelegateCallScope): () => void;
   readonly mode: RuntimeMode;
   readonly gear: PermissionGear;
+  /** Decision 192: whether `auto` asks go to a review model before a card. */
+  readonly autoReview: boolean;
   readonly policy: RuntimePermissionPolicy | undefined;
   canTraverse(request: ToolPermissionRequest): boolean;
 }
@@ -438,6 +467,8 @@ export class PermissionGate implements PermissionGateService {
   private live: LivePrompt | null = null;
   /** Cards shown since the queue was last empty; see `PermissionQueueSlot`. */
   private served = 0;
+  /** Decision 192 §3.4: review blocks, as Claude Code counts them. */
+  private reviewDenials = { consecutive: 0, total: 0 };
 
   constructor(config: PermissionConfig, hooks: PermissionGateHooks = {}) {
     this.config = config;
@@ -464,6 +495,9 @@ export class PermissionGate implements PermissionGateService {
   }
   get gear(): PermissionGear {
     return this.settings.gear;
+  }
+  get autoReview(): boolean {
+    return this.config.review !== undefined;
   }
   configure(settings: Partial<RuntimePermissionSettings>): void {
     this.settings = { ...this.settings, ...settings };
@@ -800,6 +834,7 @@ export class PermissionGate implements PermissionGateService {
     try {
       source = await this.check(request, signal);
     } catch (error) {
+      const review = typeof error === 'object' && error ? REVIEW_DENIALS.get(error) : undefined;
       this.notify({
         phase: 'decision',
         request,
@@ -810,9 +845,12 @@ export class PermissionGate implements PermissionGateService {
         // audit line that named the session gear for a delegate call would
         // describe a decision nobody made.
         gear: this.gearFor(request),
+        ...review,
       });
       throw error;
     }
+    // Claude Code resets the consecutive count on any call auto mode lets through.
+    if (this.gearFor(request) === 'auto') this.reviewDenials.consecutive = 0;
     this.notify({
       phase: 'decision',
       request,
@@ -896,6 +934,62 @@ export class PermissionGate implements PermissionGateService {
       if (next.wake()) return;
     }
   }
+  /**
+   * Decision 192: ask the review model. Allowed goes through; a failure is a
+   * refusal that does not count (`unavailable` is the ordinary card instead);
+   * a block is a refusal that counts, until the count reaches Claude Code's
+   * limits, when this one goes to the user's card with the reason on it
+   * (`card`). Throws the refusals.
+   */
+  private async review(
+    review: NonNullable<PermissionConfig['review']>,
+    request: ToolPermissionRequest,
+    signal: AbortSignal,
+    epoch: number
+  ): Promise<{ kind: 'allowed' } | { kind: 'card'; reason?: string }> {
+    const askReason = this.askReasonFor(request);
+    this.notify({ phase: 'review', request, mode: this.mode, gear: this.gearFor(request) });
+    let verdict: AutoReviewVerdict;
+    try {
+      verdict = await review(request, askReason ? { askReason } : {}, signal);
+    } catch (error) {
+      verdict = {
+        kind: 'failed',
+        failure: 'error',
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
+    if (signal.aborted) throw this.denied('cancelled', 'permission request cancelled');
+    if (epoch !== this.epoch) throw this.denied('cancelled', 'permission request expired');
+    if (verdict.kind === 'allow') return { kind: 'allowed' };
+    // No rules or no reachable review model: as if review were not configured.
+    if (verdict.kind === 'failed' && verdict.failure === 'unavailable') return { kind: 'card' };
+    if (verdict.kind === 'failed') {
+      throw this.reviewDenial('review-failed', reviewFailureMessage(verdict.failure), {
+        reviewFailure: verdict.failure,
+      });
+    }
+    const counts = this.reviewDenials;
+    counts.consecutive += 1;
+    counts.total += 1;
+    const totalReached = counts.total >= AUTO_REVIEW_MAX_TOTAL_DENIALS;
+    if (totalReached || counts.consecutive >= AUTO_REVIEW_MAX_CONSECUTIVE_DENIALS) {
+      if (totalReached) this.reviewDenials = { consecutive: 0, total: 0 };
+      return { kind: 'card', reason: verdict.reason };
+    }
+    throw this.reviewDenial('review-denied', reviewBlockMessage(verdict.reason), {
+      reviewReason: verdict.reason,
+    });
+  }
+  private reviewDenial(
+    source: 'review-denied' | 'review-failed',
+    message: string,
+    info: { reviewReason?: string; reviewFailure?: AutoReviewFailure }
+  ): Error {
+    const error = this.denied(source, message);
+    REVIEW_DENIALS.set(error, info);
+    return error;
+  }
   private async check(
     request: ToolPermissionRequest,
     signal?: AbortSignal
@@ -911,6 +1005,12 @@ export class PermissionGate implements PermissionGateService {
     const approve = this.config.approve;
     if (!approve) throw this.denied('error', 'approval UI is not connected');
     const epoch = this.epoch;
+    let reviewReason: string | undefined;
+    if (this.config.review && this.gearFor(request) === 'auto') {
+      const reviewed = await this.review(this.config.review, request, combined, epoch);
+      if (reviewed.kind === 'allowed') return 'review-allowed';
+      reviewReason = reviewed.reason;
+    }
     const gearAtEntry = this.gearFor(request);
     // One card at a time, from here to the `finally` at the bottom. Everything
     // that announces the gate or counts against its deadline lives inside.
@@ -951,9 +1051,13 @@ export class PermissionGate implements PermissionGateService {
           abort = () => resolve('deny');
           approvalSignal.addEventListener('abort', abort, { once: true });
         });
+        const context: PermissionAskContext = {
+          ...(askReason ? { askReason } : {}),
+          ...(reviewReason ? { reviewReason } : {}),
+        };
         const decision = await Promise.race([
-          askReason
-            ? approve(request, approvalSignal, queue, { askReason })
+          Object.keys(context).length > 0
+            ? approve(request, approvalSignal, queue, context)
             : approve(request, approvalSignal, queue),
           cancelled,
         ]);
@@ -1047,6 +1151,22 @@ export class PermissionDenial extends PermissionError {
 }
 /** Every refusal any gate built, with its reason. Weak, so errors are still collected. */
 const DENIAL_SOURCES = new WeakMap<object, PermissionDecisionSource>();
+/** What a review refusal adds to its audit record. */
+const REVIEW_DENIALS = new WeakMap<
+  object,
+  { reviewReason?: string; reviewFailure?: AutoReviewFailure }
+>();
+/** What the model reads when the review blocked its call (decision 192 §3.3). */
+function reviewBlockMessage(reason: string): string {
+  return `The automatic safety review did not allow this call${reason ? `: ${reason}` : '.'} It did not run. Do not retry it in another form. Continue with work that does not depend on it; if it is needed, ask the user to authorize it explicitly.`;
+}
+/** What the model reads when the review could not decide; Claude Code's guidance. */
+function reviewFailureMessage(failure: AutoReviewFailure): string {
+  if (failure === 'too_long') {
+    return 'This call was not reviewed and did not run: the conversation is too long for the automatic safety review. This is not a judgment that the action is unsafe. Continue with other work, or ask the user to compact the conversation (/compact) and then issue it again.';
+  }
+  return `The automatic safety review could not be completed (${failure}), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review.`;
+}
 /**
  * Why a gate refused, when `error` is one of its refusals; `undefined` for
  * anything else (an approver that threw, a host fault). Works whichever
