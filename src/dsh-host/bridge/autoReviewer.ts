@@ -13,6 +13,7 @@ import {
   buildReviewTranscript,
   REVIEW_STAGE1_INSTRUCTION,
   REVIEW_STAGE1_MAX_TOKENS,
+  REVIEW_STAGE1_THINKING_EXTRA_TOKENS,
   REVIEW_STAGE2_INSTRUCTION,
   REVIEW_STAGE2_MAX_TOKENS,
   type ReviewAction,
@@ -55,6 +56,13 @@ export interface AutoReviewerOptions {
   /** The session's conversation as the reviewer reads it. */
   transcript(): ReviewTranscriptEntry[];
   cwd: string;
+  /**
+   * The review model thinks (a reasoning model: an effort level, or adaptive
+   * thinking it cannot turn off). Stage 1 then gets
+   * `REVIEW_STAGE1_THINKING_EXTRA_TOKENS` more, so the thought does not use up
+   * the room the verdict needs.
+   */
+  thinks?: boolean;
   log?: (...args: unknown[]) => void;
 }
 
@@ -129,7 +137,9 @@ export class AutoReviewer {
       `${transcript}\n\n${REVIEW_STAGE1_INSTRUCTION}`,
       {
         // No stop sequence: DSH's pi-ai adapter refuses `stop`; the cap keeps it fast.
-        maxTokens: REVIEW_STAGE1_MAX_TOKENS,
+        maxTokens:
+          REVIEW_STAGE1_MAX_TOKENS +
+          (this.options.thinks ? REVIEW_STAGE1_THINKING_EXTRA_TOKENS : 0),
         timeoutMs,
         signal,
       }

@@ -1305,6 +1305,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       rules: () => auto.rules(),
       transcript: () => reviewTranscriptFromHistory(this.historyCache.messages(), isDshSummaryRow),
       cwd,
+      // A model with effort levels thinks (adaptive ones cannot be told not to).
+      thinks: (entry?.efforts.length ?? 0) > 0,
       log: this.options.log,
     });
     return {

@@ -124,7 +124,7 @@ const RULE_SET: AutoModeRules = {
 
 function reviewer(
   answers: Array<string | 'error' | 'hang'>,
-  options: { contextWindow?: number; rules?: AutoModeRules | undefined } = {}
+  options: { contextWindow?: number; rules?: AutoModeRules | undefined; thinks?: boolean } = {}
 ) {
   const sent: Array<{ maxTokens?: number; prompt: string }> = [];
   const llm: ReviewLlm = {
@@ -154,6 +154,7 @@ function reviewer(
     rules: async () => ('rules' in options ? options.rules : RULE_SET),
     transcript: () => [{ kind: 'user', text: 'clean up' }],
     cwd: '/ws',
+    ...(options.thinks ? { thinks: true } : {}),
   });
   return { instance, sent };
 }
@@ -166,6 +167,22 @@ describe('the two-stage review', () => {
     expect(await r.instance.review(REQUEST, {}, signal)).toEqual({ kind: 'allow' });
     expect(r.sent).toHaveLength(1);
     expect(r.sent[0]).toMatchObject({ maxTokens: 64 });
+  });
+
+  // User 2026-10-18: a thinking review model (Sonnet 5.5's adaptive thinking)
+  // spent the 64 tokens on its thought; like Claude Code, stage 1 gets 2048 more.
+  it('gives a thinking review model room to think before its fast verdict', async () => {
+    const r = reviewer(['<block>no'], { thinks: true });
+    expect(await r.instance.review(REQUEST, {}, signal)).toEqual({ kind: 'allow' });
+    expect(r.sent[0]).toMatchObject({ maxTokens: 64 + 2048 });
+  });
+
+  it('a fast stage cut off before its verdict falls through to the reasoned stage', async () => {
+    // What a thought that used up the cap looks like: no verdict in the text.
+    const r = reviewer(['', '<block>no</block>'], { thinks: true });
+    expect(await r.instance.review(REQUEST, {}, signal)).toEqual({ kind: 'allow' });
+    expect(r.sent).toHaveLength(2);
+    expect(r.sent[1]?.maxTokens).toBe(8192);
   });
 
   it('lets the reasoned second stage clear a fast block', async () => {

@@ -217,3 +217,8 @@ Claude Code 的规则（`claude auto-mode defaults` 打出来的，17 条放行�
 - `pnpm test` 全量：694 个文件通过、6 个跳过；12009 条通过、65 条跳过、0 条失败。新增单测：门 12 条、提示词与答复解析 18 条、宿主读规则与两段审核 13 条、模型计划 2 条、清单校验与交接 2 条、工具行 6 条、卡片 1 条、录制回放 1 条。
 - `bridge-record.ts --check` 全量 37 个场景一致（含新场景 `auto-review`；它单独又连录两次一致）。
 
+## 补记（2026-10-18，用户提出）
+
+- **快审在思考模型上 64 个 token 不够**：用户在管理页把审核模型设为 Sonnet 5.5。云端目录给它的是自适应思考（`compat.forceAdaptiveThinking`、有 low 档），审核时带 low 档，发出去是「自适应思考 + effort low + max_tokens 64」。模型一思考，64 就先被思考用掉，快审写不出判定，每次都转细审，多一次带约 2 万 token 规则的请求。不会判错，但快审形同虚设。
+- **照 Claude Code 改**：随包 CLI 2.1.300 的快审对能关思考的模型关掉思考、上限 64；对关不掉思考的（Sonnet / Opus / Haiku 5.5）不带思考参数、上限加 2048。PiLab 改为：审核模型有思考档（会思考）时，快审上限 64 + 2048 = 2112；不思考的仍是 64。细审 8192 不变。上限只是封顶，判定仍只有十来个 token，按实际输出计费。
+- 代码：`shared/permissions/autoReview/prompt.ts` 的 `REVIEW_STAGE1_THINKING_EXTRA_TOKENS`，`autoReviewer.ts` 的 `thinks`，`dshSessionRuntime.ts` 按计划里该模型有没有思考档设它。单测 `autoReview.test.ts` 加两条。真实网关上用 Sonnet 5.5 实测待测试包。

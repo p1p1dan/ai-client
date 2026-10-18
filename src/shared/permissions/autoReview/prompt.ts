@@ -160,4 +160,13 @@ export const REVIEW_STAGE2_INSTRUCTION =
   "Think it through first inside <thinking>…</thinking>: which rule could apply, whether an ALLOW exception covers the action, and whether the user's own words explicitly (not suggestively or implicitly) asked for this exact operation on this exact target. Then answer with exactly <block>no</block>, or <block>yes</block><reason>one short sentence naming what would be destroyed or exposed and what the user did not authorize</reason>. Write the reason in the language the user writes in.";
 
 export const REVIEW_STAGE1_MAX_TOKENS = 64;
+/**
+ * Stage 1's extra room when the review model thinks (user 2026-10-18). A
+ * thinking model spends its output on the thought first, and 64 tokens ran out
+ * before the verdict: the fast stage then said nothing and every review paid
+ * for both stages. Claude Code 2.1.300 does the same for the models whose
+ * thinking cannot be turned off (Sonnet / Opus / Haiku 5.5): 64 + 2048. The cap
+ * is a ceiling, not a target; a verdict still stops at a few tokens.
+ */
+export const REVIEW_STAGE1_THINKING_EXTRA_TOKENS = 2_048;
 export const REVIEW_STAGE2_MAX_TOKENS = 8_192;
