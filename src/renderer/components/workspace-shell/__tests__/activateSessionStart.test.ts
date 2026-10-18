@@ -129,6 +129,27 @@ describe('runSessionActivation', () => {
     expect(run.preview).not.toHaveBeenCalled();
   });
 
+  it('resumes an Agent SDK chat straight away, with no preview to be refused (decision 197)', async () => {
+    // Main refuses every SDK preview (only the chat's own host reads the CLI's
+    // transcript), so asking would only add a round trip and an error in its log.
+    const stub = 'C:\\app-state\\claude\\aiclient-sessions\\cc1.ccsdk.json';
+    const run = effects();
+    await expect(runSessionActivation({ ...ACTIVATION, runtimeIdentity: stub }, run)).resolves.toBe(
+      'resumed'
+    );
+    expect(run.preview).not.toHaveBeenCalled();
+    expect(run.resume).toHaveBeenCalledWith({ sessionId: 's1', runtimeIdentity: stub });
+  });
+
+  it('still previews a DSH chat, whose stub the shared host reads (decision 030)', async () => {
+    const stub = 'C:\\dsh-home\\aiclient-sessions\\aiclient-s1.dsh.json';
+    const run = effects();
+    await expect(runSessionActivation({ ...ACTIVATION, runtimeIdentity: stub }, run)).resolves.toBe(
+      'previewed'
+    );
+    expect(run.resume).not.toHaveBeenCalled();
+  });
+
   it('does neither when the three-part rule says this click starts nothing', async () => {
     const run = effects();
     await expect(runSessionActivation({ ...ACTIVATION, hasTimeline: true }, run)).resolves.toBe(

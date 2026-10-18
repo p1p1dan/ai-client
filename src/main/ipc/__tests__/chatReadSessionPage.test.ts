@@ -328,4 +328,53 @@ describe('chat:readSessionPage — read-only history (T102)', () => {
       expect(published).toEqual([]);
     });
   });
+
+  /**
+   * Decision 197: an Agent SDK chat's index row is a DSH-agent row whose
+   * identity is the SDK host's stub. The DSH host refuses that stub with
+   * `session_invalid` (and might boot just to say so), so it is never asked;
+   * the refusal is the one the renderer meets with a resume.
+   */
+  describe('an Agent SDK row (decision 197)', () => {
+    const SDK_STUB =
+      '/app-state/claude/aiclient-sessions/0b5c3c1e-0000-4000-8000-000000000000.ccsdk.json';
+
+    beforeEach(async () => {
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+        sessionId: 's1',
+        agent: 'dsh',
+        workspacePath: '/repo',
+        runtimeIdentity: SDK_STUB,
+        title: 'Claude',
+        updatedAt: 1,
+        archived: false,
+      });
+    });
+
+    it('answers session_replay_unavailable without asking the DSH host or the legacy reader', async () => {
+      await expect(
+        invoke(IPC_CHANNELS.CHAT_READ_SESSION_PAGE, { sessionId: 's1', limit: 80 })
+      ).rejects.toThrow(/^session_replay_unavailable: .*Claude Agent SDK engine/);
+      expect(dshReadPage).not.toHaveBeenCalled();
+      expect(readSessionReplayPage).not.toHaveBeenCalled();
+      expect(published).toEqual([]);
+      expect(claimSession).not.toHaveBeenCalled();
+    });
+
+    it('refuses an older page the same way', async () => {
+      await expect(
+        invoke(IPC_CHANNELS.CHAT_READ_SESSION_PAGE, { sessionId: 's1', offset: 80, limit: 40 })
+      ).rejects.toThrow(/^session_replay_unavailable: /);
+      expect(dshReadPage).not.toHaveBeenCalled();
+    });
+
+    it('still answers worker_active while its host runs, so paging asks the worker', async () => {
+      slots = [{ logicalSessionId: 's1', state: 'ready' }];
+      await expect(
+        invoke(IPC_CHANNELS.CHAT_READ_SESSION_PAGE, { sessionId: 's1', offset: 80 })
+      ).rejects.toThrow(/^worker_active/);
+      expect(dshReadPage).not.toHaveBeenCalled();
+    });
+  });
 });
