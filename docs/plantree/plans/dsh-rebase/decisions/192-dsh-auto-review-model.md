@@ -11,7 +11,7 @@
 | 管理员还没指定审核模型 | 「不审核，照现在弹卡」 | 没配置时行为与现在完全一样 |
 | 登录服务那个仓库谁来改 | 「两个仓库都由我改」 | 本仓库与 `jyw-cch-onboarding` 都由本会话改，推送前各自先问用户 |
 | 方案里自己定的几处 | "为什么不跟claude对齐" | 能对齐的都照 Claude Code 2.1.302 的代码对齐（第 3.2～3.4 节），对不齐的列在第 3.6 节 |
-| 审核规则怎么对齐 | 选「自己改写相关的条目」 | 只挑与本机开发相关的条目，照它的分类和放行条件改写，不放原文；CLI 升级时手动跟 |
+| 审核规则怎么对齐 | 先选「自己改写相关的条目」；问过从 claude.exe 怎么读之后改为「改第三种」 | 运行时从随包的 claude.exe 读规则，按 CLI 版本缓存，每个版本只读一次（第 3.2 节）；规则与 Claude Code 完全一致，仓库里不放原文 |
 
 范围（2026-10-18 确认）：**只做 DSH 引擎**。SDK 引擎的 Auto 已经在用 Claude CLI 自带的审核（`sdkSessionRuntime.ts` 的 `cliPermissionMode` 把全自动映射为 CLI 的 `auto`），审核模型由 CLI 自己定（默认 Sonnet，路线 B `s2-permission-modes.md` 第 4.3 节），`CLAUDE_CODE_AUTO_MODE_MODEL` 在 2.1.300 实测无效，所以管理员的设置管不到 SDK 引擎。
 
@@ -59,19 +59,14 @@ Claude Code 的规则（`claude auto-mode defaults` 打出来的，17 条放行�
 
 照 Claude Code 2.1.302（2026-10-18 核对 CLI 代码与 `claude auto-mode defaults`）：
 
-- **规则**（用户裁决：自己改写相关的条目，不放原文）：照它的三档和放行条件，只挑与本机开发相关的条目：
-  - 默认放行：工作区内的普通操作、删本会话自己建的文件、推送到本仓库的分支、工作区外的普通读（系统头文件、文档）、网络或锁冲突后照原样重试。
-  - 默认拦，用户原话点名了操作和目标才放行（通配符不算点名，"继续""可以"什么也没点名，授权只管那一次）：
-    - 不可逆地删除或覆盖本会话之前就有的文件，以及丢弃改动的 git 命令（`reset --hard`、`clean -fd`、`checkout -- .`、`restore .`、`stash drop`、截断文件）；
-    - 删除目标是对话里看不到取值的变量；
-    - 强推、删远端分支或 tag、改写别人的提交（共享分支默认有别人的提交）；`amend`、`rebase`、强推只含自己提交的个人分支不算；
-    - 读凭据所在的位置（`~/.ssh`、`~/.aws`、`~/.pilab`、浏览器配置、钥匙串）；
-    - 写开机启动、计划任务、shell 配置这类常驻位置；
-    - 运行从网上下载的代码、装插件、装来路不明的包；
-    - 降低安全设置（关防火墙、关证书校验、放宽目录权限）；
-    - 改 PiLab 自己的权限配置、或设法绕开审核。
-  - 永远拦：把凭据或敏感数据送到外面。
-  - 改写的条目逐条注明对应的 Claude Code 规则名，CLI 升级时比对 `claude auto-mode defaults` 手动跟进。
+- **规则**（用户裁决：运行时从随包的 claude.exe 读，每个 CLI 版本读一次）：
+  - 读法：运行随包 CLI 的 `auto-mode defaults`，它在标准输出打出一段 JSON（`allow`、`soft_deny`、`hard_deny`、`environment` 四组，2.1.302 约 83 KB、2 万 token），然后退出。规则原文不进仓库，也不在打包时写进安装包。
+  - 本机实测（2.1.302，2026-10-18）：不用登录、不用网络，断网时输出逐字节相同；联网时会顺带连 Anthropic 约 0.6 秒，带上 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` 就不连，约 0.13 秒；会在配置目录写 `.claude.json`，所以 `CLAUDE_CONFIG_DIR` 指到 PiLab 自己的目录，不碰用户的 `~/.claude`。
+  - 缓存：按 CLI 所在平台包（`claude-agent-sdk-<平台>-<架构>`）的版本号存一份到本机，版本没变直接用存的，只在升级后的第一次读。
+  - 由 DSH 宿主自己读和存（随包 node 拉起 claude.exe，与 SDK 宿主拉起它是同一种进程宿主，加密机上已验证过 SDK 宿主这条路）；CLI 路径由 Main 经 `configure` 交给宿主（Main 已有 `claudeSdkCliPath`）。缓存文件只由宿主读写，不让 Electron 主进程读，免得加密机上读到密文。宿主拉起 claude.exe 这一步要在加密机上复核。
+  - 读不到（CLI 缺失、运行失败、输出不是这四组）就当作没配置审核，回到弹卡，并记日志。
+  - 我们自己写的只有外层提示词：说明这四组规则的用法（"默认拦"的条目标着要点名什么才能放行，"永远拦"的用户也放不过，默认放行），以及第 2 节的两段式与输出格式。
+  - 代价：每次审核多带约 2 万 token 的规则（快审、细审各一次）。走 Anthropic 协议的模型可以用提示缓存（Claude Code 也给规则加了 `cache_control`）；其他协议看网关与模型自己的缓存。
 - **对话**：用户自己的话和之前的工具调用（工具名与参数，不含结果），**不放助手的话**；最后一条是待审的这次调用：工具名、命令或参数、程序原文、工作目录、为什么要问（`askReason`）。
   - 子代理的调用：带上主会话里用户的话；子代理的任务说明标明是模型写的，**不算用户授权**（自主：没在 CLI 代码里查到 Claude Code 的确切做法）。
   - **不截断**。对话超出审核模型的上下文时，这次不放行，告诉模型"没审，不是判定不安全"（Claude Code 新版还会先压缩对话再让模型重试；DSH 宿主能不能代为触发压缩，动工时再查，查不到就只拒）。
@@ -104,7 +99,7 @@ Claude Code 的规则（`claude auto-mode defaults` 打出来的，17 条放行�
 - 审核模型：Claude Code 默认 Sonnet（中档，不是最便宜的）；我们按用户裁决由管理员选，建议也选中档模型。
 - 网关上的审核：Claude Code 先请网关在主请求里顺带审（网关支持时），我们没有这条路，只单独发请求。
 - 自定义规则：Claude Code 允许用户在设置里加放行、拦截规则和环境说明（信任哪些域名、仓库等），本次不做。
-- 规则措辞：按用户裁决只改写相关条目，与原文不完全一样。
+- 规则外层的提示词：Claude Code 的外层提示词（审核员的身份、两段的说明、输出格式）不在 `auto-mode defaults` 的输出里，由我们照第 2 节观察到的行为自己写。
 - 子代理：见第 3.2 节。
 
 ### 3.5 告诉模型的权限说明
@@ -137,7 +132,7 @@ Claude Code 的规则（`claude auto-mode defaults` 打出来的，17 条放行�
 | 组 | 负责的文件 | 内容 |
 |---|---|---|
 | A 登录服务 | `jyw-cch-onboarding` 整个仓库 | 存审核模型（`model_config_meta` 加列或新表，组内定）；管理接口读写它并记改动记录；`toClientCatalog` 按第 4 节下发；管理页「渠道与模型」顶部加「全自动审核模型」下拉（启用的模型 +「不审核」），所选模型被停用或删除时提示；bun 测试 |
-| B PiLab 宿主侧 | `src/shared/permissions/**`、`src/dsh-host/**`、`src/shared/types/runtimeEvents.ts`（只追加）、`src/dsh-host/tools/fake-gateway.mjs`、`bridge-record.ts` 与新样本 | 门上的审核钩子与上限计数、新的拒绝来源；审核提示词、对话整理、结果解析（纯函数，放 `src/shared/permissions/autoReview/`）；宿主里调审核模型（从 `bridge/completions.ts` 抽出一次性请求）；第 3.5 节的提示词；假网关按标记回放行、不放行、出错、乱码；新录制场景 |
+| B PiLab 宿主侧 | `src/shared/permissions/**`、`src/dsh-host/**`、`src/shared/types/runtimeEvents.ts`（只追加）、`src/shared/types/dshHostProtocol.ts` 与 `DshHostSupervisor.ts` 的 `configure`（加 CLI 路径）、`src/dsh-host/tools/fake-gateway.mjs`、`bridge-record.ts` 与新样本 | 门上的审核钩子与上限计数、新的拒绝来源；从 claude.exe 读规则并按版本缓存；外层提示词、对话整理、结果解析（纯函数，放 `src/shared/permissions/autoReview/`）；宿主里调审核模型（从 `bridge/completions.ts` 抽出一次性请求）；第 3.5 节的提示词；假网关按标记回放行、不放行、出错、乱码；新录制场景 |
 | C PiLab 主进程与界面 | `src/shared/piModelConfig.ts`、`src/main/services/piModelConfig/**`、`src/shared/dshModelPlan/**`、`resources/model-catalog/`、`src/renderer/**`、`src/shared/i18n.ts` | 清单字段的校验与快照；模型计划的 `reviewModel`；工具行与卡片上的审核状态；全自动说明分两种 |
 
 接缝：
@@ -154,6 +149,8 @@ Claude Code 的规则（`claude auto-mode defaults` 打出来的，17 条放行�
   - 单测：审核钩子只在全自动档、配置了审核模型时生效；deny 规则先于审核；放行、不放行、失败三种结果；快审放行不做细审、快审拦才细审；连续 3 次与累计 20 次后弹卡（卡上带理由）、累计弹卡后两个计数清零、审核失败不计数；超时随提示长度增加、最多 120 秒；Stop 中止审核；对话整理不含助手的话与工具结果；结果解析的各种乱码。
   - 现有 `autoGear`、`pwshGate`、`bashGate`、`approvalQueue` 等用例在没有审核钩子时不变。
   - 新录制场景 `auto-review`（计划里带审核模型）：放行后执行、不放行后模型收到理由、审核出错、连拒 3 次后弹卡。全量 `bridge-record.ts --check` 其余 36 个场景不变。
+- B 另加：读规则的单测（缓存命中与版本变化后重读、CLI 缺失、运行失败、输出不对时不审核、配置目录与环境变量）；本机用随包的 CLI 实读一次。
+- 加密机复核：DSH 宿主拉起 claude.exe 读规则（与 CI 结果分开记）。
 - C：清单校验的单测（字段缺失、格式错、指向不存在的模型）；模型计划的单测；界面的挂载测试。
 - 合起来：三套 tsc、`pnpm test` 全量、`bridge-smoke.ts`；本机起登录服务，开发版 PiLab 指向它（`PILAB_MODEL_CONFIG_URL`），在 DSH 全自动会话里用假网关走一遍。
 - 模型只用本机假网关，不用真实网关或密钥。
