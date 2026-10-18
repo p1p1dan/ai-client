@@ -870,7 +870,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     const catalog = buildSlashCatalog(slashCatalog, t);
     return filterSlashCommands(onHome ? homeSlashMenu(catalog) : catalog, slashQuery);
   }, [slashCatalog, slashQuery, t, onHome]);
-  const slashOpen = slashQuery !== null && slashResults.length > 0;
+  // Decision 194 point-check: a send by the button clears the box without a
+  // keystroke, so the query of the line just sent must not keep the menu open.
+  const slashOpen = slashQuery !== null && value.startsWith('/') && slashResults.length > 0;
   // F11: both popups are absolutely positioned inside this card and cannot flip
   // themselves, so the card is the anchor and one measurement serves both — a
   // second, independently-resolved placement would let `@` and `/` open toward

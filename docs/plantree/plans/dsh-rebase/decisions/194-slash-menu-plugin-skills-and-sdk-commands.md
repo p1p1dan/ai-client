@@ -92,17 +92,20 @@
 4. **菜单里不列**的（宿主侧过滤，渲染层不再判断）：
    - CLI 标为只适合终端的（`terminal_slash_commands`，2.1.300 是 doctor、color、focus、reload-plugins），以及 CLI 在 SDK 里明说用不了的 fast（「Agent SDK 里不可用」）；
    - 只对远程会话或调试有用的：`__remote-workflow`、workflow-launch-exec、heapdump；已移除的 agents；ListAgents 已禁（issue #22）对应的 list-agents；
+   - 说明与用途都是 CLI 产品自身用量的：insights（「分析你的 Claude Code 会话」）、team-onboarding（「帮队友上手 Claude Code」）。产品界面不叫 Claude Code（路线 B §2 第 4 条）；手打照样发出；
    - `compact`：归窗口（与 DSH 相同），窗口的 `/compact` 走 `worker.compact`，SDK 宿主的 `compact()` 再发给 CLI；
    - 与 PiLab 自己的入口冲突的：见第 4 节 Q2。
-   - 其余照官方全列（context、usage、init、rename、recap、goal、mcp、output-style、reload-skills、security-review、insights、team-onboarding、auto-mode-setup，以及所有 skill）。
+   - 其余照官方全列（context、usage、init、rename、recap、goal、mcp、output-style、reload-skills、security-review、auto-mode-setup，以及所有 skill）。
+5. **说明里出现产品名的**：update-config 的说明（「配置 Claude Code harness…」）换成宿主自己的一句（「配置 settings.json：自动化行为的 hooks、权限与环境变量」）；其他 CLI 行的说明若含「Claude Code」，这一行不带说明。
 
 ### 3.4 SDK：执行与显示
 
 1. **发出**：照旧，原文作为用户消息发给 CLI（官方行为）；窗口自己的四个仍在窗口执行。
 2. **本地命令的输出**：`<synthetic>` 的 assistant 消息在没有流式步骤时，宿主按一条完整的回复发出（开始、正文、结束），时间线上就是一条普通回复；`result.result` 不再另外显示。
-3. **重开后的历史**：读 `getSessionMessages(…, { includeSystemMessages: true })`。`<command-name>` / `<command-message>` 行还原成用户当时打的 `/名字 参数`；`system/local_command` 行的 `<local-command-stdout>` 去掉标签作为一条回复，`<local-command-stderr>` 同样显示；`isMeta` 的 skill 正文行不显示（与直播一致）。
+3. **重开后的历史**：`<command-name>` / `<command-message>` 行还原成用户当时打的 `/名字 参数`；本地命令的输出在 `system/local_command` 行（父行是命令那一行），`<local-command-stdout>` / `<local-command-stderr>` 去掉标签作为紧跟其后的一条回复；`isMeta` 的 skill 正文行不显示（SDK 的读取器本来就不给，与直播一致）。实测 `getSessionMessages` 即使带 `includeSystemMessages` 也不给 `local_command` 行，所以与 S-6 的定时唤醒行一样，直接读会话文件（`transcriptExtras`）。窗口的 `/compact` 那一行与输出不显示（压缩有自己的摘要行，与直播一致）。
 4. **首页手打**：`/archive`、`/compact` 两个引擎都拦（照 175）；`/goal` 的拦截只对 DSH（SDK 下是 CLI 的命令，原文发出，CLI 自己答用法）。
-5. **说明的语言**：CLI 内置命令的说明是英文；照 DSH 命令的做法查词典，词典里加上第 3.3 第 4 条列出、会显示的那些内置命令的中文说明；skill 的说明保持作者原文（与 DSH 的 skill 相同）。CLI 升级改了说法时，查不到就显示英文原文。
+5. **说明的语言**：CLI 内置命令的说明是英文；照 DSH 命令的做法查词典，词典里加了会显示的 11 条内置命令、6 条较短的随 CLI skill 与 update-config 替换说明的中文（dataviz、claude-api、code-review 等长段说明不译，保持原文）；用户、项目、插件的 skill 保持作者原文。CLI 升级改了说法时，查不到就显示英文原文。
+6. **按发送按钮后菜单不再残留**（点验时发现，两个引擎都有）：输入 `/context` 后用鼠标点发送，输入框清空了，菜单还按上一句的前缀开着，再按 Enter 会把那一行填回去。改为输入框不以 `/` 开头时菜单不显示。
 
 ### 3.5 界面
 
@@ -137,9 +140,30 @@
 1. CLI 的清单随版本变：过滤表按名字写，CLI 改名或加命令时新命令照官方显示，旧名字的过滤失效（只多显示，不会少）；`probe-suite` 的 `slash` 组钉住 2.1.300 的过滤结果，升级 CLI 时会报。
 2. 只列清单的进程（Q1-A）在加密机上：与会话的宿主同一种起法（随包 node 起宿主、宿主经 SDK 起 `claude.exe`），放行规则相同；未上机验证。
 3. 重开的 SDK 对话一打开菜单就起 CLI（3.3 第 1 条）：多占内存直到闲置回收，与发一条消息后相同。
-4. DSH 宿主没起来时首页菜单没有插件 skill 与 DSH 命令（退回读盘）；宿主随应用启动，通常不会遇到。
+4. DSH 宿主没起来时首页菜单没有插件 skill 与 DSH 命令（退回读盘）。宿主闲置 10 分钟会停（决策 025）；首页输入 `/` 这一下会触发打字预热（S-6 11c），菜单请求等启动中的宿主（最多 5 秒），开发版点验里首页菜单拿到了宿主的答复（有 `/goal`）。
+5. `/usage` 显示 CLI 按官方价目算的费用，可能与网关实际计费不一致（官方行为，照列；决策 193 第 10 条的「费用不显示」说的是 Run 面板）。
 
-## 7 用户审批
+## 7 实现与验证（2026-10-18，Windows 开发机）
+
+提交：`02d8fa54`（本决策与 `tools/slash-inventory.ts`）、`6ad3ccb3`（§3.1、§3.2）、`ca4d7e9d`（§3.3、§3.4）；之后的提交见看板。Q1、Q2 待定期间：SDK 对话启动前菜单只有窗口的内置项（即 Q1-C 的表现）；冲突的五个命令菜单里不列，手打照官方发出（即 Q2-B 的表现）。
+
+- 两套 tsc 与 `typecheck:claude-sdk-host`：0 错。
+- vitest：
+  - `src/claude-sdk-host`：12 个文件 167 项过（新 `slashCommands.test.ts` 9 项，`sdkSessionRuntime` 新增 5 项）。
+  - `src/dsh-host/bridge`、`src/shared/types`、`src/shared/__tests__`、`src/main/services/agent-host`、`src/main/ipc`：143 个文件，2476 项过、12 项失败。12 项都在本次没碰的测试里，是本机环境问题：Linux 专用（`dshHostScopes`）、Windows 下的符号链接与路径（`sessionGc`、`tempWorkspaceRecovery`、`ScratchWorkspaceService`、`settingsTemporaryPath`、`dshSkillCatalog` 的根目录表那一项用 POSIX 路径写的期望）。
+  - `src/renderer/components/chat` 与 Static / Scan / Wiring：240 个文件，4083 项过、2 项失败（Windows 符号链接 EPERM、shiki 负载下 5 秒超时，与本次无关）。
+- `probe-suite.ts --only slash`（假网关，CLI 2.1.300）：11 项全过。
+- `bridge-smoke.ts` 加了宿主 `slashCommands` 一项（`hostMenuMatchesSessionMenu`），但它读 `/proc`，只能在 Linux 上跑，本机未跑。
+- 开发版（`gui-probe.mjs`，隔离 HOME，假网关 `claude-sdk` 计划；DSH 模型走同一网关的 OpenAI 接口）：
+  - 首页选 DSH 模型输入 `/`：`/goal`（只有宿主答得出）、项目与用户的 DSH skill、`/new`、`/settings`；没有 `/archive`、`/compact`，没有 SDK 的 skill。
+  - 首页选 SDK 模型：只有 `/new`、`/settings`（待 Q1）。
+  - DSH 对话：DSH 命令与 skill 加窗口的四个。
+  - SDK 对话：CLI 的命令与 skill（带中文说明），项目 skill 标「技能」；没有 clear、model、compact 的 CLI 行（`/compact` 是窗口的）。
+  - SDK 对话里 `/context`（表格）、`/usage`、`/reload-skills` 的输出都显示为回复；重启应用后重开这个对话，这几行按用户打的显示，输出跟在后面。
+  - 用户层 skill 放进 `~/.pilab/<配置名>/claude/skills` 后，`/reload-skills` 说「1 added」，再发一条消息后菜单里才出现（CLI 下一条消息才推 `commands_changed`，官方行为）。
+  - 另见（与本次无关）：重开 SDK 对话时，Main 先试 DSH 宿主的预览读取（`chat:readSessionPage`），报 `session_invalid` 后才走恢复，控制台留两条错误。
+
+## 8 用户审批
 
 - [x] 第 1 节（决策 193 第 29 条）
 - [ ] Q1

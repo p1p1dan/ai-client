@@ -18,6 +18,14 @@ const read = (relative: string) => {
 const COMPOSER = read('src/renderer/components/chat/ChatComposer.tsx');
 const APP = read('src/renderer/App.tsx');
 
+describe('decision 194: the menu follows the box', () => {
+  it('closes once the box no longer starts with a slash (a send by the button clears it)', () => {
+    expect(COMPOSER).toContain(
+      "const slashOpen = slashQuery !== null && value.startsWith('/') && slashResults.length > 0;"
+    );
+  });
+});
+
 describe('R02-c the slash menu works without a workspace', () => {
   it('tracks the command prefix before the cwd guard, not after', () => {
     // The @ popup needs a directory to search. Slash commands come from the
