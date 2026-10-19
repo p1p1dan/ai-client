@@ -213,6 +213,31 @@ export function decideAdmittedTimeoutOutcome(input: {
 }
 
 /**
+ * Whether `runSend` should stop waiting on an admitted turn that the engine is
+ * retrying upstream, and hand it to the pending-reply watch.
+ *
+ * The composer has ONE send slot for every conversation (`sendingSessionId` /
+ * `inFlightRef`), and the wait holds it until the first assistant block. An
+ * upstream retry loop sends a liveness frame per attempt, so the silence
+ * budget never runs out and the slot stays held for up to
+ * `SEND_WAIT_LOOP_BOUND_MS` — while every other conversation's send is queued
+ * behind it and its queue cannot release (2026-10-19 report: a new chat's
+ * first message sat in the queue while another chat showed the retry
+ * countdown). Once the Host has admitted the turn there is nothing left that
+ * only the wait can do: the pending-reply watch keeps the turn head and Stop,
+ * and restores the payload if the turn later fails.
+ *
+ * Admission is required: a turn with no echo may still be refused, and then
+ * its payload belongs back in the composer or the queue.
+ */
+export function shouldHandOffRetryingTurn(input: {
+  sawUserEcho: boolean;
+  sawNetworkRetry: boolean;
+}): boolean {
+  return input.sawUserEcho && input.sawNetworkRetry;
+}
+
+/**
  * F2 (§4.3, consumption points 5 and 6): the Host took this turn — either
  * `'committed'` (it finished, however it finished) or `'pending'` (it is still
  * running and only this renderer walked away). Anything else means the turn
