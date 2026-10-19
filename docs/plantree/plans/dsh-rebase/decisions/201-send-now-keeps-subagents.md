@@ -2,7 +2,7 @@
 
 日期：2026-10-19（北京时间）。**状态：用户 2026-10-19 批准方案 A（「立即发送」只停主回合、不动子代理，停止按钮维持全停）；标「自主」的是实现时的自主决定，待用户审批（第 6 节汇总）。** 分支 `claude/sub-agent-delegation-blocking-3a8feb`，从 `main` 的 `19f6f5ef` 切出，本地提交，未推送。修订[决策 069](069-stop-and-background-lifecycle.md) 第 1 条的适用范围。编号已登记在会话组共享笔记的 `decision-number-claims.md`。
 
-修订注记（2026-10-19，[决策 203](203-stop-main-turn-background-and-subagent-page.md)）：停止按钮与 Esc 也改为只停主回合，第 3 节中"停止按钮维持全停"不再适用于 DSH。第 6 节第 4 条的能力判断移到消息进入 CLI 队列时：插话那一刻 CLI 可能还没发出 `system/init`。
+修订注记（2026-10-19，[决策 203](203-stop-main-turn-background-and-subagent-page.md)）：停止按钮与 Esc 也改为只停主回合，第 3 节中"停止按钮维持全停"不再适用于 DSH。第 6 节第 4 条的能力判断移到消息进入 CLI 队列时：插话那一刻 CLI 可能还没发出 `system/init`。第 4 节表中 `stopChatSession` 的缺省 `all`、`handleStop` 与 `stopForSendNow` 的拆分，以及第 5 节 `[STOP-SCOPE]` 的说法，都是 201 当时的状态：203 之后 `stopChatSession` 缺省为 `turn`，渲染端所有停止都传 `turn`。
 
 ## 1 起因
 
