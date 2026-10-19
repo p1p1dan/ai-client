@@ -68,7 +68,7 @@ beforeEach(() => {
     pendingPermissions: [],
     pendingQuestions: [],
   });
-  useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReply: null });
+  useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReplies: {} });
 });
 
 /**

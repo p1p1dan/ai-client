@@ -198,7 +198,7 @@ describe('endSessionRuntime resets the ended session (decision 046)', () => {
         promptChars: 10,
       },
       baseline: { sessionId: 's1', messageId: 'm-2' },
-      pendingReply: { sessionId: 's1', turnStartedAtMs: 1 },
+      pendingReplies: { s1: { sessionId: 's1', turnStartedAtMs: 1 } },
     });
     usePendingUserMessagesStore.setState({
       bySession: {
@@ -210,7 +210,7 @@ describe('endSessionRuntime resets the ended session (decision 046)', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReply: null });
+    useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReplies: {} });
     usePendingUserMessagesStore.setState({ bySession: {} });
     useMessageQueueStore.setState({ state: { bySession: {} } });
   });
@@ -231,7 +231,7 @@ describe('endSessionRuntime resets the ended session (decision 046)', () => {
     expect(ended).toHaveBeenCalledWith('s1');
     const turn = useTurnSendStatusStore.getState();
     expect(turn.status).toBeNull();
-    expect(turn.pendingReply).toBeNull();
+    expect(turn.pendingReplies).toEqual({});
     // The baseline only tells a later send's turn from this one; it runs nothing.
     expect(turn.baseline).toEqual({ sessionId: 's1', messageId: 'm-2' });
     // The bubble that was waiting for an echo that will not come is gone; a
@@ -247,7 +247,7 @@ describe('endSessionRuntime resets the ended session (decision 046)', () => {
     await endSessionRuntime('s2');
     const turn = useTurnSendStatusStore.getState();
     expect(turn.status?.sessionId).toBe('s1');
-    expect(turn.pendingReply?.sessionId).toBe('s1');
+    expect(turn.pendingReplies.s1?.sessionId).toBe('s1');
   });
 
   it('resets in bounded time even when the detach never answers', async () => {

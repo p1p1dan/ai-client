@@ -11,7 +11,7 @@ import { useSessionSubwindowsStore } from './sessionSubwindows';
 import { useSubagentActivityStore } from './subagentActivity';
 import { useToolExpansionStore } from './toolExpansion';
 import { useToolLiveOutputStore } from './toolLiveOutput';
-import { useTurnSendStatusStore } from './turnSendStatus';
+import { prunePendingReplies, useTurnSendStatusStore, withoutPendingReply } from './turnSendStatus';
 import { useTurnTimingStore } from './turnTimingRegistry';
 
 export function pruneRecordBySession<T>(
@@ -60,7 +60,7 @@ export function resetSessionScopedRendererState(sessionId: string): void {
   useTurnSendStatusStore.setState((state) => ({
     status: state.status?.sessionId === sessionId ? null : state.status,
     baseline: state.baseline?.sessionId === sessionId ? null : state.baseline,
-    pendingReply: state.pendingReply?.sessionId === sessionId ? null : state.pendingReply,
+    pendingReplies: withoutPendingReply(state.pendingReplies, sessionId),
   }));
   useSessionRuntimeFactsStore.setState((state) => ({
     factsBySession: omitSession(state.factsBySession, sessionId),
@@ -94,8 +94,7 @@ export function pruneSessionScopedRendererState(sessionIds: readonly string[]): 
   useTurnSendStatusStore.setState((state) => ({
     status: state.status && live.has(state.status.sessionId) ? state.status : null,
     baseline: state.baseline && live.has(state.baseline.sessionId) ? state.baseline : null,
-    pendingReply:
-      state.pendingReply && live.has(state.pendingReply.sessionId) ? state.pendingReply : null,
+    pendingReplies: prunePendingReplies(state.pendingReplies, live),
   }));
   useSessionRuntimeFactsStore.setState((state) => ({
     factsBySession: pruneRecordBySession(

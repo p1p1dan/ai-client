@@ -19,7 +19,7 @@
 import { announceSessionEnded } from '@/components/chat/sessionEndSignal';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
-import { useTurnSendStatusStore } from '@/stores/turnSendStatus';
+import { useTurnSendStatusStore, withoutPendingReply } from '@/stores/turnSendStatus';
 
 function withoutKey<T>(map: Record<string, T> | undefined, key: string): Record<string, T> {
   if (!map || !(key in map)) return map ?? {};
@@ -131,7 +131,7 @@ function resetEndedTurnState(sessionId: string): void {
   announceSessionEnded(sessionId);
   useTurnSendStatusStore.setState((state) => ({
     status: state.status?.sessionId === sessionId ? null : state.status,
-    pendingReply: state.pendingReply?.sessionId === sessionId ? null : state.pendingReply,
+    pendingReplies: withoutPendingReply(state.pendingReplies, sessionId),
   }));
   usePendingUserMessagesStore.setState((state) => ({
     bySession: withoutKey(state.bySession, sessionId),

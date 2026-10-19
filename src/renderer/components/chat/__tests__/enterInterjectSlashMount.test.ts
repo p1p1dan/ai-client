@@ -145,7 +145,7 @@ beforeEach(() => {
   mocks.toast.mockClear();
   localStorage.clear();
   useMessageQueueStore.setState({ state: createEmptyState() });
-  useTurnSendStatusStore.setState({ status: null, pendingReply: null });
+  useTurnSendStatusStore.setState({ status: null, pendingReplies: {} });
   setStore();
 });
 

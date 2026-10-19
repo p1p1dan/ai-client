@@ -169,8 +169,13 @@ interface TurnSendStatusStore {
    * exactly when `status` is being torn down (`runSend`'s `finally` clears the
    * snapshot the instant the renderer stops waiting), so sharing one slot would
    * make the two cancel each other out.
+   *
+   * One watch per session (decision 205 follow-up): a turn handed off while it
+   * retries upstream frees the send slot, so another chat's send can be handed
+   * off too while the first still runs; one shared watch let the second take
+   * the first's turn head away.
    */
-  pendingReply: PendingReplyWatch | null;
+  pendingReplies: Readonly<Record<string, PendingReplyWatch>>;
   /**
    * Publish a fresh snapshot at the send's commit point, taking ownership of
    * the slot. Replaces any stale one and returns the token every later call
@@ -185,9 +190,9 @@ interface TurnSendStatusStore {
   update: (owner: TurnSendOwner, patch: Partial<Omit<TurnSendStatus, 'sessionId'>>) => void;
   /** Clear the snapshot — the send is no longer in flight, whatever its outcome. No-op unless `owner` still holds the slot. */
   end: (owner: TurnSendOwner) => void;
-  /** Arm the pending-reply watch. Replaces any previous one — one composer, one send at a time. */
+  /** Arm the pending-reply watch of `watch.sessionId`, replacing that session's previous one only. */
   armPendingReply: (watch: PendingReplyWatch) => void;
-  /** Clear it, idempotently and only for the matching session (a late clear for a session the user already left must not blank the current one). */
+  /** Clear one session's watch, idempotently; other sessions' watches stay. */
   clearPendingReply: (sessionId: string) => void;
 }
 
@@ -201,7 +206,7 @@ let nextOwner = 0;
 export const useTurnSendStatusStore = create<TurnSendStatusStore>()((set) => ({
   status: null,
   baseline: null,
-  pendingReply: null,
+  pendingReplies: {},
   begin: (status, baselineMessageId) => {
     nextOwner += 1;
     const owner = nextOwner;
@@ -221,10 +226,42 @@ export const useTurnSendStatusStore = create<TurnSendStatusStore>()((set) => ({
         : state
     ),
   end: (owner) => set((state) => (state.status?.owner === owner ? { status: null } : state)),
-  armPendingReply: (watch) => set({ pendingReply: watch }),
+  armPendingReply: (watch) =>
+    set((state) => ({ pendingReplies: { ...state.pendingReplies, [watch.sessionId]: watch } })),
   clearPendingReply: (sessionId) =>
-    set((state) => (state.pendingReply?.sessionId === sessionId ? { pendingReply: null } : state)),
+    set((state) =>
+      sessionId in state.pendingReplies
+        ? { pendingReplies: withoutPendingReply(state.pendingReplies, sessionId) }
+        : state
+    ),
 }));
+
+/** `sessionId`'s pending-reply watch, or null. */
+export function selectPendingReply(
+  state: Pick<TurnSendStatusStore, 'pendingReplies'>,
+  sessionId: string | null | undefined
+): PendingReplyWatch | null {
+  return sessionId ? (state.pendingReplies[sessionId] ?? null) : null;
+}
+
+/** `watches` without `sessionId`'s; the same object when it has none. */
+export function withoutPendingReply(
+  watches: Readonly<Record<string, PendingReplyWatch>>,
+  sessionId: string
+): Readonly<Record<string, PendingReplyWatch>> {
+  if (!(sessionId in watches)) return watches;
+  const { [sessionId]: _dropped, ...rest } = watches;
+  return rest;
+}
+
+/** `watches` restricted to the sessions in `live`; the same object when nothing goes. */
+export function prunePendingReplies(
+  watches: Readonly<Record<string, PendingReplyWatch>>,
+  live: ReadonlySet<string>
+): Readonly<Record<string, PendingReplyWatch>> {
+  const kept = Object.entries(watches).filter(([sessionId]) => live.has(sessionId));
+  return kept.length === Object.keys(watches).length ? watches : Object.fromEntries(kept);
+}
 
 /**
  * T091 — which session has a send in flight RIGHT NOW, or `null`.

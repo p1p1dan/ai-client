@@ -16,7 +16,7 @@ describe('session lifecycle pruning', () => {
   beforeEach(() => {
     useMessageQueueStore.setState({ state: { bySession: {} } });
     usePendingUserMessagesStore.setState({ bySession: {} });
-    useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReply: null });
+    useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReplies: {} });
   });
 
   it('gates every adjacent runtime listener against the retirement tombstone', () => {
@@ -85,7 +85,7 @@ describe('session lifecycle pruning', () => {
     expect(useTurnSendStatusStore.getState()).toMatchObject({
       status: null,
       baseline: null,
-      pendingReply: null,
+      pendingReplies: {},
     });
   });
 

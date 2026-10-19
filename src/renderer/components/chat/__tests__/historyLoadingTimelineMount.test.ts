@@ -120,7 +120,7 @@ function row(id: string) {
 beforeEach(async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   resetHistoryLoadingForTests();
-  useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReply: null });
+  useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReplies: {} });
   usePendingUserMessagesStore.setState({ bySession: {} });
   useLegacyMigrationStore.setState({ migrating: {}, postureRevisions: {} });
   useChatSessionsStore.setState({

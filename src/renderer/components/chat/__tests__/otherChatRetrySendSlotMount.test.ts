@@ -182,7 +182,7 @@ beforeEach(() => {
   mocks.toast.mockClear();
   localStorage.clear();
   useMessageQueueStore.setState({ state: createEmptyState() });
-  useTurnSendStatusStore.setState({ status: null, pendingReply: null });
+  useTurnSendStatusStore.setState({ status: null, pendingReplies: {} });
   setStore();
 });
 
@@ -219,7 +219,57 @@ describe('another chat retrying upstream does not hold the send slot (2026-10-19
     expect(mocks.api.send.mock.calls[1]?.[0]).toMatchObject({ sessionId: 'b', text: '你好' });
     // A's turn is still running: the turn head keeps it (and its Stop), and
     // B's send does not take A's watch away.
-    expect(useTurnSendStatusStore.getState().pendingReply?.sessionId).toBe('a');
+    expect(useTurnSendStatusStore.getState().pendingReplies.a?.sessionId).toBe('a');
+  });
+
+  // Decision 205 follow-up: B, handed off in the same outage, used to take
+  // A's watch (one slot for the app): A's turn head went, and A's later
+  // failure gave its input back to nobody.
+  it("keeps A's watch when B is handed off too, and A's failure gives A's input back", async () => {
+    await mountComposer();
+    const sent = await sendInA();
+    emit({
+      type: 'message.started',
+      sessionId: 'a',
+      payload: { messageId: 'u-a', role: 'user', attemptId: sent.attemptId },
+    });
+    emit({
+      type: 'session.status',
+      sessionId: 'a',
+      payload: { status: 'running', retry: retryFrame },
+    });
+    await settle(20);
+
+    await openChatB();
+    await type('你好');
+    await pressEnter();
+    const sentB = mocks.api.send.mock.calls[1]?.[0] as SendInput;
+    emit({
+      type: 'message.started',
+      sessionId: 'b',
+      payload: { messageId: 'u-b', role: 'user', attemptId: sentB.attemptId },
+    });
+    emit({
+      type: 'session.status',
+      sessionId: 'b',
+      payload: { status: 'running', retry: retryFrame },
+    });
+    await settle(20);
+
+    expect(Object.keys(useTurnSendStatusStore.getState().pendingReplies).sort()).toEqual([
+      'a',
+      'b',
+    ]);
+
+    emit({ type: 'session.failed', sessionId: 'a', payload: { error: 'upstream 500' } });
+    await settle();
+    expect(Object.keys(useTurnSendStatusStore.getState().pendingReplies)).toEqual(['b']);
+
+    await act(async () => {
+      useChatSessionsStore.setState({ activeSessionId: 'a' });
+    });
+    await settle();
+    expect(box().value).toBe('first question');
   });
 
   it('keeps holding the slot for a turn the engine has not admitted', async () => {

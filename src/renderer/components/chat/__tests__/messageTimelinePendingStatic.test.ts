@@ -84,7 +84,7 @@ describe('MessageTimeline pending turn head (F2 S3 §4.5)', () => {
     // The selector is session-scoped at its source, like `sendStatus` and
     // `baseline` next to it — a session switch mid-wait must not paint this
     // timeline's head with another session's clock.
-    expect(source).toContain('state.pendingReply.sessionId === sessionId');
+    expect(source).toContain('selectPendingReply(state, sessionId)');
   });
 
   /**

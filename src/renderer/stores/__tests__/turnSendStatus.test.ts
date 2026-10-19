@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useTurnSendStatusStore } from '../turnSendStatus';
+import {
+  prunePendingReplies,
+  selectPendingReply,
+  useTurnSendStatusStore,
+  withoutPendingReply,
+} from '../turnSendStatus';
 
 /**
  * T-31 review batch, F3: the in-flight status slot is global and its writers
@@ -176,41 +181,57 @@ describe('turnSendStatus pendingReply (F2 §4.5)', () => {
   const { begin, end, armPendingReply, clearPendingReply } = useTurnSendStatusStore.getState();
 
   beforeEach(() => {
-    useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReply: null });
+    useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReplies: {} });
   });
 
-  it('[PR-1] armPendingReply publishes the watch, and a later arm replaces it', () => {
+  it('[PR-1] armPendingReply publishes one watch per session; a later arm replaces only its own', () => {
     armPendingReply({ sessionId: 's1', turnStartedAtMs: 1000 });
-    expect(useTurnSendStatusStore.getState().pendingReply).toEqual({
-      sessionId: 's1',
-      turnStartedAtMs: 1000,
-    });
-
     armPendingReply({ sessionId: 's2', turnStartedAtMs: 2000 });
-    expect(useTurnSendStatusStore.getState().pendingReply).toEqual({
-      sessionId: 's2',
-      turnStartedAtMs: 2000,
+    // Decision 205 follow-up: s2's watch no longer takes s1's away.
+    expect(useTurnSendStatusStore.getState().pendingReplies).toEqual({
+      s1: { sessionId: 's1', turnStartedAtMs: 1000 },
+      s2: { sessionId: 's2', turnStartedAtMs: 2000 },
     });
+
+    armPendingReply({ sessionId: 's1', turnStartedAtMs: 3000 });
+    expect(selectPendingReply(useTurnSendStatusStore.getState(), 's1')).toEqual({
+      sessionId: 's1',
+      turnStartedAtMs: 3000,
+    });
+    expect(selectPendingReply(useTurnSendStatusStore.getState(), 's2')?.turnStartedAtMs).toBe(2000);
   });
 
-  it('[PR-2] clearPendingReply with the matching sessionId clears it to null', () => {
+  it('[PR-2] clearPendingReply clears that session only', () => {
     armPendingReply({ sessionId: 's1', turnStartedAtMs: 1000 });
+    armPendingReply({ sessionId: 's2', turnStartedAtMs: 2000 });
     clearPendingReply('s1');
-    expect(useTurnSendStatusStore.getState().pendingReply).toBeNull();
+    expect(selectPendingReply(useTurnSendStatusStore.getState(), 's1')).toBeNull();
+    expect(selectPendingReply(useTurnSendStatusStore.getState(), 's2')).not.toBeNull();
   });
 
-  it('[PR-3] clearPendingReply is a no-op unless the sessionId matches, and on an already-null slot', () => {
-    const watch = { sessionId: 's1', turnStartedAtMs: 1000 };
-    armPendingReply(watch);
-    const before = useTurnSendStatusStore.getState().pendingReply;
+  it('[PR-3] clearPendingReply for a session with no watch changes nothing', () => {
+    armPendingReply({ sessionId: 's1', turnStartedAtMs: 1000 });
+    const before = useTurnSendStatusStore.getState().pendingReplies;
 
     clearPendingReply('s2');
-    expect(useTurnSendStatusStore.getState().pendingReply).toBe(before);
+    expect(useTurnSendStatusStore.getState().pendingReplies).toBe(before);
 
-    // Also a no-op against the initial, already-null slot — must not throw.
-    useTurnSendStatusStore.setState({ pendingReply: null });
+    // Also a no-op against the initial, empty map — must not throw.
+    useTurnSendStatusStore.setState({ pendingReplies: {} });
     expect(() => clearPendingReply('s1')).not.toThrow();
-    expect(useTurnSendStatusStore.getState().pendingReply).toBeNull();
+    expect(useTurnSendStatusStore.getState().pendingReplies).toEqual({});
+    expect(selectPendingReply(useTurnSendStatusStore.getState(), null)).toBeNull();
+  });
+
+  it('[PR-5] the lifecycle helpers drop or prune watches by session', () => {
+    const watches = {
+      s1: { sessionId: 's1', turnStartedAtMs: 1 },
+      s2: { sessionId: 's2', turnStartedAtMs: 2 },
+    };
+    expect(withoutPendingReply(watches, 's1')).toEqual({ s2: watches.s2 });
+    expect(withoutPendingReply(watches, 's9')).toBe(watches);
+    expect(prunePendingReplies(watches, new Set(['s2']))).toEqual({ s2: watches.s2 });
+    expect(prunePendingReplies(watches, new Set(['s1', 's2']))).toBe(watches);
   });
 
   // `runSend`'s `finally` arms the watch and calls `end` right after, in the
@@ -222,7 +243,7 @@ describe('turnSendStatus pendingReply (F2 §4.5)', () => {
     armPendingReply({ sessionId: 's1', turnStartedAtMs: 500 });
     end(owner);
     expect(useTurnSendStatusStore.getState().status).toBeNull();
-    expect(useTurnSendStatusStore.getState().pendingReply).toEqual({
+    expect(selectPendingReply(useTurnSendStatusStore.getState(), 's1')).toEqual({
       sessionId: 's1',
       turnStartedAtMs: 500,
     });

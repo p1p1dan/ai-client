@@ -775,7 +775,7 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     const body = ceilingBranchBody();
     expect(body).toContain('armPendingReply(');
     // And keeps the found-material for the one case that may still replay it.
-    expect(body).toContain('pendingReplyRef.current = {');
+    expect(body).toContain('pendingRepliesRef.current.set(sessionId, {');
   });
 
   /**
@@ -842,7 +842,7 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     // The watch is frozen before it is dropped (§5.4 step 2), or the payload
     // would be gone by the time the restore runs.
     const freeze = only(
-      'const committed = watch?.sessionId === watchedSessionId ? watch.committed : null;'
+      'const committed = pendingRepliesRef.current.get(watchedSessionId)?.committed ?? null;'
     );
     const drop = only(
       'resolvePendingReplyLanded(watchedSessionId);\n        if (committed) restoreDraft'
@@ -862,16 +862,18 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     // Step 1 (scope) precedes every step that touches state.
     const scope = only('if (isSessionFailedForSend(event, watchedSessionId)) {');
     const freeze = only(
-      'const committed = watch?.sessionId === watchedSessionId ? watch.committed : null;'
+      'const committed = pendingRepliesRef.current.get(watchedSessionId)?.committed ?? null;'
     );
     expect(scope).toBeLessThan(freeze);
     // Steps 4 and 8 for the watch, then step 7 for the draft — inside the one
     // function both callers go through, so neither can do half the chain.
     const chain = source.slice(
       only('const resolvePendingReplyLanded = useCallback('),
-      only('  useEffect(() => {\n    const watch = pendingReplyRef.current;')
+      only(
+        '  useEffect(() => {\n    const watch = activeSessionId ? pendingRepliesRef.current.get('
+      )
     );
-    const dropRef = chain.indexOf('pendingReplyRef.current = null;');
+    const dropRef = chain.indexOf('pendingRepliesRef.current.delete(sessionId);');
     const dropSlot = chain.indexOf('clearPendingReply(sessionId);');
     const revoke = chain.indexOf('revokeRestoredDraftIfUntouched(sessionId);');
     expect(dropRef).toBeGreaterThanOrEqual(0);
@@ -912,19 +914,22 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
   });
 
   /**
-   * `[D-6]` — decision 046 (T145 item 3). The chain is keyed on the STORE slot
+   * `[D-6]` — decision 046 (T145 item 3). The chain is keyed on the STORE watch
    * the turn head renders, and only falls back to this instance's ref. Keyed
    * on the ref, a watch armed by an earlier composer instance (remount), or a
-   * slot left behind after the ref moved on, was never cleared by any terminal
-   * event and the head kept counting.
+   * watch left behind after the ref moved on, was never cleared by any
+   * terminal event and the head kept counting. Decision 205 follow-up: one
+   * watch per session, so the event's own session is the key.
    */
-  it('[D-6] the terminal chain reads the store slot before the instance ref', () => {
+  it('[D-6] the terminal chain reads the store watch before the instance ref', () => {
     const chain = source.slice(
       only('const unsubscribe = subscribeRuntimeEvent((event) => {'),
       only('  }, [resolvePendingReplyLanded, restoreDraftIfComposerEmpty]);')
     );
-    const slot = chain.indexOf('useTurnSendStatusStore.getState().pendingReply?.sessionId');
-    const ref = chain.indexOf('pendingReplyRef.current?.sessionId');
+    const slot = chain.indexOf(
+      'watchedSessionId in useTurnSendStatusStore.getState().pendingReplies'
+    );
+    const ref = chain.indexOf('pendingRepliesRef.current.has(watchedSessionId)');
     expect(slot).toBeGreaterThan(-1);
     expect(ref).toBeGreaterThan(slot);
     // The old ref-only early exit must not come back.
@@ -933,11 +938,11 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     // one session cannot drop another session's payload.
     const land = source.slice(
       only('const resolvePendingReplyLanded = useCallback('),
-      only('  useEffect(() => {\n    const watch = pendingReplyRef.current;')
+      only(
+        '  useEffect(() => {\n    const watch = activeSessionId ? pendingRepliesRef.current.get('
+      )
     );
-    expect(land).toContain(
-      'if (pendingReplyRef.current?.sessionId === sessionId) pendingReplyRef.current = null;'
-    );
+    expect(land).toContain('pendingRepliesRef.current.delete(sessionId);');
   });
 
   /**

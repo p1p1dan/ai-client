@@ -647,11 +647,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // session's REPLAYED history already satisfies that unconditional check,
   // so ANY unrelated status/message change used to wipe this marker (and the
   // user's payload with it) the instant it fired.
-  const pendingReplyRef = useRef<{
-    sessionId: string;
-    committed: { text: string; drafts: readonly AttachmentDraft[] };
-    assistantCursor: number;
-  } | null>(null);
+  //
+  // One per session, like the store's watches (decision 205 follow-up).
+  const pendingRepliesRef = useRef(
+    new Map<
+      string,
+      {
+        committed: { text: string; drafts: readonly AttachmentDraft[] };
+        assistantCursor: number;
+      }
+    >()
+  );
   // §5.3 (D1 connected): provenance for a draft this component restored BY
   // ITSELF, and the only thing a late event is ever allowed to take back out.
   const restoredDraftRef = useRef<RestoredDraftMarker | null>(null);
@@ -2496,7 +2502,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // Scoped to this session like the store slot: another conversation's watch
     // (e.g. a turn handed off mid-retry) still owns the payload its failure
     // would restore.
-    if (pendingReplyRef.current?.sessionId === sessionId) pendingReplyRef.current = null;
+    pendingRepliesRef.current.delete(sessionId);
     clearPendingReply(sessionId);
     // A skip warning belongs to the paste that produced it, not to the next
     // turn. Sending is one of the three clear triggers (next attach / Send / x).
@@ -3793,13 +3799,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             // Two things it does instead: remember the found-material in case a
             // REAL `session.failed` arrives later (D1 restores it then, when it
             // is a fact), and keep the turn head — with its Stop button — alive.
-            pendingReplyRef.current = {
-              sessionId,
+            pendingRepliesRef.current.set(sessionId, {
               committed,
               assistantCursor: countAssistantMessagesWithBlocks(
                 useChatSessionsStore.getState().messages[sessionId] ?? []
               ),
-            };
+            });
             armPendingReply({ sessionId, turnStartedAtMs });
             return 'pending';
           }
@@ -3935,7 +3940,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     (sessionId: string) => {
       // Steps 4 and 8 for the watch. Idempotent by session, so a late clear for
       // a session the user has already left cannot blank the current one.
-      if (pendingReplyRef.current?.sessionId === sessionId) pendingReplyRef.current = null;
+      pendingRepliesRef.current.delete(sessionId);
       clearPendingReply(sessionId);
       // Step 7 (+ step 8 for the draft marker, which it drops either way).
       revokeRestoredDraftIfUntouched(sessionId);
@@ -3950,8 +3955,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // unconditional: those statuses are only ever set by a LIVE host event, so
   // they cannot be spuriously "already true" the way accumulated history can.
   useEffect(() => {
-    const watch = pendingReplyRef.current;
-    if (!watch || watch.sessionId !== activeSessionId) return;
+    const watch = activeSessionId ? pendingRepliesRef.current.get(activeSessionId) : undefined;
+    if (!watch || !activeSessionId) return;
     // Round-6 review B2: one pure step — see `resolveAbandonProgress`.
     const step = resolveAbandonProgress({
       armedCursor: watch.assistantCursor,
@@ -3962,7 +3967,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     });
     watch.assistantCursor = step.nextArmedCursor;
     if (!step.landed) return;
-    resolvePendingReplyLanded(watch.sessionId);
+    resolvePendingReplyLanded(activeSessionId);
   }, [activeSessionId, activeSession?.status, activeMessages, resolvePendingReplyLanded]);
 
   // The OTHER three wire endings, all read straight off the event stream:
@@ -3989,15 +3994,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // Mount-once: every identifier closed over is stable.
   useEffect(() => {
     const unsubscribe = subscribeRuntimeEvent((event) => {
-      const watchedSessionId =
-        useTurnSendStatusStore.getState().pendingReply?.sessionId ??
-        pendingReplyRef.current?.sessionId;
-      if (!watchedSessionId) return;
+      // One watch per session (decision 205 follow-up): the event's own.
+      const watchedSessionId = 'sessionId' in event ? event.sessionId : undefined;
+      if (
+        !watchedSessionId ||
+        !(
+          watchedSessionId in useTurnSendStatusStore.getState().pendingReplies ||
+          pendingRepliesRef.current.has(watchedSessionId)
+        )
+      ) {
+        return;
+      }
       // Step 1: scope first, always.
       if (isSessionFailedForSend(event, watchedSessionId)) {
         // Step 2: freeze the payload before step 4 drops the watch.
-        const watch = pendingReplyRef.current;
-        const committed = watch?.sessionId === watchedSessionId ? watch.committed : null;
+        const committed = pendingRepliesRef.current.get(watchedSessionId)?.committed ?? null;
         resolvePendingReplyLanded(watchedSessionId);
         if (committed) restoreDraftIfComposerEmpty(watchedSessionId, committed);
         return;
@@ -4152,7 +4163,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // touches a restored draft.
   const dropPendingReplyWatch = useCallback(
     (sessionId: string) => {
-      if (pendingReplyRef.current?.sessionId === sessionId) pendingReplyRef.current = null;
+      pendingRepliesRef.current.delete(sessionId);
       clearPendingReply(sessionId);
     },
     [clearPendingReply]

@@ -62,6 +62,7 @@ import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import {
   type PendingReplyWatch,
+  selectPendingReply,
   type TurnSendStatus,
   useTurnSendStatusStore,
 } from '@/stores/turnSendStatus';
@@ -476,9 +477,8 @@ export function MessageTimeline({
   // button living inside it) would vanish at the ceiling, on a turn that is
   // demonstrably still going. Deliberately NOT folded into `status` — the two
   // are armed and cleared in the same breath, so one slot would cancel out.
-  const pendingReply = useTurnSendStatusStore((state) =>
-    state.pendingReply && state.pendingReply.sessionId === sessionId ? state.pendingReply : null
-  );
+  // One per session (decision 205 follow-up); this timeline reads its own.
+  const pendingReply = useTurnSendStatusStore((state) => selectPendingReply(state, sessionId));
   // The CLI's own transport-retry loop, read straight off the red-line store —
   // `deriveTurnStatus` appends it to the same copy the composer used to show.
   const sessionRetry = useChatSessionsStore(
