@@ -229,6 +229,11 @@
  *                       which sends it one more message; the second settlement wakes
  *                       it again) and P1-SUBCHILD (the child: one paced answer, 1 s,
  *                       so the parent's own step is over before the child speaks).
+ *                       dsh-rebase decisions 201/203 add two for the stop-scope
+ *                       integration test: P1-SUBSTOP (a background subagent, then a
+ *                       30 s foreground sleep to stop; the settlement wakes the agent)
+ *                       and P1-SUBSTOPCHILD (the child: a 6 s command that writes
+ *                       substop-<tag>.txt once it ran to the end).
  *                       dsh-rebase P1-15 adds four for one-shot completions (decision
  *                       125; the shared-host integration test's completion phase and
  *                       tools/bridge-smoke.ts): P1-COMPLETE-COMMIT (a commit message
@@ -677,7 +682,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS)/;
+  /P1-(AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -1784,6 +1789,40 @@ const DSH_P0_2_SCRIPTS = {
       chunkMs: 100,
       tag: 'subchild',
     };
+  },
+  // dsh-rebase decisions 201/203 (`stopScope.integration.test.ts`): a background
+  // subagent runs a long command while its parent sleeps in the foreground, so
+  // a Stop lands mid-turn. `tag=<word>` names the file the child writes once
+  // its command ran to the end; the settlement notice wakes the parent.
+  'P1-SUBSTOP'(_round, step, _calls, triggerText, _history, recent) {
+    if (/Background subagent \S+ finished/.test(recent ?? '')) {
+      return say('The stop-scope subagent reported back.');
+    }
+    const tag = /tag=(\w+)/.exec(triggerText)?.[1] ?? 'none';
+    if (step === 0) {
+      return tool('subagent', {
+        description: 'Stop-scope probe',
+        prompt: `P1-SUBSTOPCHILD tag=${tag}: run the long command, then answer.`,
+        run_in_background: true,
+      });
+    }
+    if (step === 1) {
+      return tool('bash', {
+        command: 'sleep 30; echo parent-sleep-done',
+        description: 'Parent sleeper',
+      });
+    }
+    return say('The parent turn ran to its end.');
+  },
+  'P1-SUBSTOPCHILD'(_round, step, _calls, triggerText) {
+    const tag = /tag=(\w+)/.exec(triggerText)?.[1] ?? 'none';
+    if (step === 0) {
+      return tool('bash', {
+        command: `sleep 6; echo substop-child-done > substop-${tag}.txt`,
+        description: 'Child sleeper',
+      });
+    }
+    return say('Child finished its long command.');
   },
   // dsh-rebase P1-4c1 (decision 095, tools/bridge-record.ts `fail-retry`): the
   // first request fails upstream; once the bridge's hidden retry continuation
