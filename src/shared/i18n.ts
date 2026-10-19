@@ -2566,6 +2566,11 @@ export const zhTranslations: Record<string, string> = {
   // T-28: Composer round action button (D23) — aria-label/title (batch 3).
   'Send message': '发送消息',
   'Stop the running turn': '停止当前回合',
+  // Decision 203: a running call of a Claude engine chat moves to the background.
+  'Move to background': '转到后台',
+  'Move to background — the turn goes on and this keeps running as a background task':
+    '转到后台 — 回合继续往下走，这一项作为后台任务继续运行',
+  'This call cannot move to the background': '这一项没能转到后台',
   // Decision 203: what Stop leaves running, per engine.
   'Stop the running turn — background subagents keep running': '停止当前回合 — 后台子代理继续运行',
   'Stop the running turn — on the Claude engine this also ends background subagents':
@@ -3648,6 +3653,12 @@ Object.assign(zhTranslations, {
   'Stop all background tasks?': '停止全部后台任务？',
   // Decision 203: Stop leaves background subagents running; their window stops them.
   'Stop all subagents': '停止全部子代理',
+  // Decision 203: a subagent's own conversation, read-only.
+  'View conversation': '查看对话',
+  'Subagent conversation': '子代理对话',
+  'Subagent conversation · running': '子代理对话 · 运行中',
+  'Earlier messages are left out': '更早的消息未显示',
+  'Nothing recorded yet': '还没有记录',
   'Stop all subagents?': '停止全部子代理？',
   'Every running subagent stops; a continuable one is interrupted and can be continued. The main conversation is not affected.':
     '运行中的子代理都会停止；可续聊的子代理会被打断，之后还能续聊。主对话不受影响。',

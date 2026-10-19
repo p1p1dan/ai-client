@@ -113,6 +113,48 @@ describe('TaskBoard', () => {
     expect(b.subagentCatalog().map((e) => e.id)).toEqual(['afg']);
   });
 
+  it('a foreground subagent moved to the background becomes a job (decision 203)', () => {
+    const start = (b: TaskBoard) =>
+      b.ingestSystem({
+        type: 'system',
+        subtype: 'task_started',
+        task_id: 'afg',
+        task_type: 'local_agent',
+        description: 'inline',
+        tool_use_id: 'toolu_fg',
+        is_backgrounded: false,
+      });
+    // Its own patch says so.
+    const patched = board();
+    start(patched);
+    const change = patched.ingestSystem({
+      type: 'system',
+      subtype: 'task_updated',
+      task_id: 'afg',
+      patch: { is_backgrounded: true },
+    });
+    expect(change.jobs).toBe(true);
+    expect(patched.jobs().map((job) => [job.id, job.kind, job.status])).toEqual([
+      ['afg', 'subagent', 'running'],
+    ]);
+    // Or the live set lists it.
+    const listed = board();
+    start(listed);
+    expect(
+      listed.ingestSystem({
+        type: 'system',
+        subtype: 'background_tasks_changed',
+        tasks: [{ task_id: 'afg', task_type: 'local_agent' }],
+      }).jobs
+    ).toBe(true);
+    expect(listed.jobs().map((job) => job.id)).toEqual(['afg']);
+    // Another patch changes nothing.
+    expect(
+      listed.ingestSystem({ type: 'system', subtype: 'task_updated', task_id: 'afg', patch: {} })
+        .jobs
+    ).toBe(false);
+  });
+
   it('leaves ambient housekeeping out', () => {
     const b = board();
     const change = b.ingestSystem({

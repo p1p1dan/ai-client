@@ -184,6 +184,12 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
       'Caps the announcement list at max-h-[50vh], narrower than DialogPanel’s own full-growth ScrollArea would allow — the bug’s first occurrence (2026-09-10), documented inline where the manual px-6 lives.',
   },
   {
+    file: 'components/chat/SubagentConversationDialog.tsx',
+    category: 'manual',
+    reason:
+      'Decision 203: a subagent’s conversation scrolls inside a ScrollArea capped at max-h-[70vh] with px-6 pb-6 by hand, as AnnouncementDialog does — DialogPanel’s full-growth ScrollArea cannot be capped.',
+  },
+  {
     file: 'components/chat/SessionTreeDialog.tsx',
     category: 'panel',
     reason: 'Standard DialogPanel body (the session tree list) between header and footer.',

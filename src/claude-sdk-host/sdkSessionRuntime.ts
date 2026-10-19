@@ -82,6 +82,7 @@ import {
 import type { HistoryBlock, HistoryMessage, TurnOrigin } from '../shared/types/sessionHistory.ts';
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 import {
+  subagentHistoryOf,
   WORKER_JOB_READ_DEFAULT_BYTES,
   type WorkerAcceptForkResult,
   type WorkerBootstrapResult,
@@ -106,6 +107,8 @@ import {
   type WorkerSendResult,
   type WorkerStopPayload,
   type WorkerStopResult,
+  type WorkerSubagentHistoryPayload,
+  type WorkerSubagentHistoryResult,
   type WorkerSubagentInterruptResult,
   type WorkerToolBackgroundPayload,
   type WorkerToolBackgroundResult,
@@ -131,6 +134,7 @@ import {
   SDK_WINDOW_OWNED_COMMANDS,
   sdkSlashCommandRows,
 } from './slashCommands.ts';
+import { projectSubagentTranscript } from './subagentTranscript.ts';
 import { type BoardChange, TaskBoard } from './taskBoard.ts';
 import { ToolProcessTracker } from './toolProcessTracker.ts';
 
@@ -1192,15 +1196,11 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       return { interjected: false, turnActive: Boolean(turn) };
     }
     const uuid = randomUUID();
-    const sendNow = input.sendNow === true && this.cliSendNow;
-    if (input.sendNow === true && !sendNow) {
-      this.log(`send now: the CLI has no ${SEND_NOW_CAPABILITY}; delivered as Ctrl+Enter`);
-    }
     turn.interjections.set(uuid, {
       attemptId: input.attemptId,
       text: input.text,
       ...(input.attachments ? { attachments: input.attachments } : {}),
-      ...(sendNow ? { sendNow: 'pending' as const } : {}),
+      ...(input.sendNow === true ? { sendNow: 'pending' as const } : {}),
     });
     // `next`: folded into the running turn at its next step boundary.
     this.input.push({
@@ -1219,7 +1219,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
    * reaches the model at once; background agents and commands keep running.
    * A CLI that does not advertise it would take the request as a plain
    * interrupt, which ends them: there the message waits for the next step
-   * boundary, as Ctrl+Enter's does (`interject` never asks it then).
+   * boundary, as Ctrl+Enter's does (the lifecycle handler never asks it then).
    */
   private deliverNow(uuid: string): void {
     const request = (
@@ -1400,9 +1400,12 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     if (state === 'queued' || state === 'started') {
       pending.cliState = state;
       // Decision 201: waiting in the CLI's queue now, so its Send now finds it.
+      // Asked then, not at the interjection: a first send can be interjected into before
+      // the CLI's `system/init` named its capabilities (measured: the probe's did).
       if (state === 'queued' && pending.sendNow === 'pending') {
         pending.sendNow = 'sent';
-        this.deliverNow(uuid);
+        if (this.cliSendNow) this.deliverNow(uuid);
+        else this.log(`send now: the CLI has no ${SEND_NOW_CAPABILITY}; delivered as Ctrl+Enter`);
       }
       return;
     }
@@ -3030,24 +3033,43 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   }
 
   /**
+   * Decision 203: a subagent's own conversation, from the CLI's transcript of it
+   * under this session's directory (so only this session's subagents are found).
+   */
+  async subagentHistory(input: WorkerSubagentHistoryPayload): Promise<WorkerSubagentHistoryResult> {
+    const file = this.findSubagentTranscript(input.childId);
+    if (!file) return { messages: [], truncated: false };
+    let raw = '';
+    try {
+      raw = readFileSync(file, 'utf8');
+    } catch (error) {
+      this.log('subagent transcript unreadable', error);
+    }
+    return subagentHistoryOf(projectSubagentTranscript(raw));
+  }
+
+  /**
    * Decision 203: the CLI's own Ctrl+B for one call (`background_tasks` with
    * its `tool_use_id`): a running foreground command or subagent goes on as a
-   * background task and the call returns at once. A call that has already
-   * ended, or that the CLI did not register as a task, is refused by the CLI.
+   * background task and the call returns at once. The CLI answers whether it
+   * found the call (`backgrounded`): one that ended, or that it has not
+   * registered as a task yet (a command's first moment), is not moved.
    */
   async backgroundTool(input: WorkerToolBackgroundPayload): Promise<WorkerToolBackgroundResult> {
     const request = (
       this.query as unknown as {
-        request?: (body: Record<string, unknown>) => Promise<unknown>;
+        request?: (
+          body: Record<string, unknown>
+        ) => Promise<{ response?: Record<string, unknown> } | undefined>;
       } | null
     )?.request;
     if (!this.turn || !request) return { backgrounded: false };
     try {
-      await request.call(this.query, {
+      const answer = await request.call(this.query, {
         subtype: 'background_tasks',
         tool_use_id: input.toolCallId,
       });
-      return { backgrounded: true };
+      return { backgrounded: answer?.response?.backgrounded === true };
     } catch (error) {
       this.log(`background ${input.toolCallId} refused`, error);
       return { backgrounded: false };

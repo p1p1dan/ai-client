@@ -1208,6 +1208,12 @@ const electronAPI = {
       toolCallId: string;
     }): Promise<import('@shared/types/workerRpc').WorkerToolBackgroundResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_BACKGROUND_TOOL, payload),
+    /** Decision 203 — one subagent's own conversation, read-only. */
+    subagentHistory: (payload: {
+      sessionId: string;
+      childId: string;
+    }): Promise<import('@shared/types/workerRpc').WorkerSubagentHistoryResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SUBAGENT_HISTORY, payload),
     getSessionTree: (payload: {
       sessionId: string;
       requestSequence: number;

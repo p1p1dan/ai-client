@@ -247,6 +247,11 @@ export class DshSubagentsTracker {
     this.earlyStarts.clear();
   }
 
+  /** Decision 203: a direct child this tracker has seen (its sub-conversation may be read). */
+  knows(childId: string): boolean {
+    return this.children.has(childId);
+  }
+
   /** A run of a child is going on: the session is busy (Main must not reclaim it). */
   hasRunning(): boolean {
     for (const child of this.children.values()) if (child.running) return true;

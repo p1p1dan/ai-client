@@ -37,6 +37,7 @@ import {
   isWorkerSetPermissionsPayload,
   isWorkerSetPermissionTierPayload,
   isWorkerStopPayload,
+  isWorkerSubagentHistoryPayload,
   isWorkerSubagentInterruptPayload,
   isWorkerToolBackgroundPayload,
   isWorkerTreePayload,
@@ -86,6 +87,8 @@ import {
   type WorkerSetPermissionTierResult,
   type WorkerStopPayload,
   type WorkerStopResult,
+  type WorkerSubagentHistoryPayload,
+  type WorkerSubagentHistoryResult,
   type WorkerSubagentInterruptPayload,
   type WorkerSubagentInterruptResult,
   type WorkerToolBackgroundPayload,
@@ -137,6 +140,8 @@ export interface BridgeSessionRuntime {
   interruptSubagent(input: WorkerSubagentInterruptPayload): Promise<WorkerSubagentInterruptResult>;
   /** Decision 203: a running foreground call to the background (Claude engine only). */
   backgroundTool(input: WorkerToolBackgroundPayload): Promise<WorkerToolBackgroundResult>;
+  /** Decision 203: one subagent's own conversation, read-only. */
+  subagentHistory(input: WorkerSubagentHistoryPayload): Promise<WorkerSubagentHistoryResult>;
   rewind(input: WorkerRewindPayload): Promise<WorkerRewindResult>;
   fork(input: WorkerForkPayload): Promise<WorkerForkResult>;
   discardFork(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
@@ -412,6 +417,9 @@ export class BridgeRpcServer {
           break;
         case 'worker.tool.background':
           await this.handleToolBackground(request);
+          break;
+        case 'worker.subagent.history':
+          await this.handleSubagentHistory(request);
           break;
         case 'worker.rewind':
           await this.handleRewind(request);
@@ -707,6 +715,21 @@ export class BridgeRpcServer {
       throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.readJob(request.payload));
+  }
+
+  private async handleSubagentHistory(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerSubagentHistoryPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.subagent.history requires logicalSessionId and childId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    this.respondSuccess(request, await this.runtime.subagentHistory(request.payload));
   }
 
   private async handleToolBackground(request: WorkerRpcRequest): Promise<void> {

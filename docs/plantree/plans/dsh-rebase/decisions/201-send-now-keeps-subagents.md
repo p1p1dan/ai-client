@@ -2,6 +2,8 @@
 
 日期：2026-10-19（北京时间）。**状态：用户 2026-10-19 批准方案 A（「立即发送」只停主回合、不动子代理，停止按钮维持全停）；标「自主」的是实现时的自主决定，待用户审批（第 6 节汇总）。** 分支 `claude/sub-agent-delegation-blocking-3a8feb`，从 `main` 的 `19f6f5ef` 切出，本地提交，未推送。修订[决策 069](069-stop-and-background-lifecycle.md) 第 1 条的适用范围。编号已登记在会话组共享笔记的 `decision-number-claims.md`。
 
+修订注记（2026-10-19，[决策 203](203-stop-main-turn-background-and-subagent-page.md)）：停止按钮与 Esc 也改为只停主回合，第 3 节中"停止按钮维持全停"不再适用于 DSH。第 6 节第 4 条的能力判断移到消息进入 CLI 队列时：插话那一刻 CLI 可能还没发出 `system/init`。
+
 ## 1 起因
 
 用户在 1.1.1 测试包上用 Claude Opus 5.5（SDK 引擎，路线 B）让模型委派子代理，子代理运行期间在输入框点了「立即发送」，委派随即中止。用户的预期与官方 Claude Code 一致：子代理与主对话并行，拉起后可以照常跟主对话交流。

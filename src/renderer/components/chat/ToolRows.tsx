@@ -1,4 +1,5 @@
 import {
+  ArrowDownToLine,
   Braces,
   ChevronDown,
   ChevronRight,
@@ -29,10 +30,14 @@ import {
   useState,
 } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Ident } from '@/components/ui/ident';
+import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
+import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import { cn } from '@/lib/utils';
+import { useChatSessionsStore } from '@/stores/chatSessions';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
@@ -62,6 +67,7 @@ import {
 } from './reviewFindings';
 import { deriveSubagentPanelRows } from './subagentActivityModel';
 import { TodoList } from './TodoCard';
+import { canMoveToBackground } from './toolBackground';
 import {
   composeRefArg,
   type FileLinkTarget,
@@ -282,6 +288,11 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
       : undefined
   );
   const view = useMemo(() => withStoppedOutput(derived, kept), [derived, kept]);
+  // Decision 203: the Claude engine can move this running call to the background.
+  const engine = useChatSessionsStore((state) =>
+    sessionId ? state.sessions.find((item) => item.id === sessionId)?.engine : undefined
+  );
+  const backgroundable = canMoveToBackground(view, engine);
   // The dim rung of the 2026-09-18 reading ladder (see
   // `chatTimelineLayout.ts`). It used to be `text-muted-foreground`, which is
   // the same tier the work-group head above these rows now uses — so the head
@@ -433,7 +444,64 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
     </ToolRowCollapsible>
   );
 
-  return row;
+  if (!backgroundable || !sessionId || !view.toolCallId) return row;
+  // A sibling of the row, never inside its disclosure trigger (a button).
+  return (
+    <div className="flex min-w-0 items-start gap-1">
+      <div className="min-w-0 flex-1">{row}</div>
+      <MoveToBackgroundButton sessionId={sessionId} toolCallId={view.toolCallId} />
+    </div>
+  );
+}
+
+/**
+ * Decision 203: 「转到后台」 on a running call of a Claude engine chat — the
+ * CLI's Ctrl+B for this one call. The call returns at once and its work goes
+ * on as a background task (the jobs window lists it); the row then reads
+ * 「后台」 and the button goes with the running state.
+ */
+function MoveToBackgroundButton({
+  sessionId,
+  toolCallId,
+}: {
+  sessionId: string;
+  toolCallId: string;
+}) {
+  const { t } = useI18n();
+  const [pending, setPending] = useState(false);
+  const move = async (): Promise<void> => {
+    setPending(true);
+    try {
+      const { backgrounded } = await window.electronAPI.chat.backgroundTool({
+        sessionId,
+        toolCallId,
+      });
+      if (!backgrounded) {
+        toastManager.add({ type: 'error', title: t('This call cannot move to the background') });
+      }
+    } catch (error) {
+      toastManager.add({
+        type: 'error',
+        title: t('This call cannot move to the background'),
+        description: unwrapIpcErrorMessage(error),
+      });
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <Button
+      size="xs"
+      variant="ghost"
+      className="h-6 shrink-0 gap-1 px-1.5 text-meta text-muted-foreground"
+      disabled={pending}
+      title={t('Move to background — the turn goes on and this keeps running as a background task')}
+      onClick={() => void move()}
+    >
+      <ArrowDownToLine className="size-3.5" />
+      {t('Move to background')}
+    </Button>
+  );
 }
 
 /**

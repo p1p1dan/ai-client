@@ -1507,6 +1507,37 @@ describe('Send now (decision 201)', () => {
   });
 });
 
+describe('Move to background (decision 203)', () => {
+  it('asks the CLI for its Ctrl+B on the one call, and reports what it found', async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    q.request.mockResolvedValueOnce({ response: { backgrounded: true } });
+    await expect(
+      rt.backgroundTool({ logicalSessionId: 'chat-1', toolCallId: 'toolu_1' })
+    ).resolves.toEqual({ backgrounded: true });
+    expect(q.request).toHaveBeenCalledWith({ subtype: 'background_tasks', tool_use_id: 'toolu_1' });
+    // Not registered yet, or ended: the CLI found nothing to move.
+    q.request.mockResolvedValueOnce({ response: { backgrounded: false } });
+    await expect(
+      rt.backgroundTool({ logicalSessionId: 'chat-1', toolCallId: 'toolu_2' })
+    ).resolves.toEqual({ backgrounded: false });
+    q.request.mockRejectedValueOnce(new Error('background_tasks is not supported'));
+    await expect(
+      rt.backgroundTool({ logicalSessionId: 'chat-1', toolCallId: 'toolu_3' })
+    ).resolves.toEqual({ backgrounded: false });
+    await rt.dispose();
+  });
+
+  it('with no turn running there is nothing to move', async () => {
+    const { rt, q } = await started();
+    await expect(
+      rt.backgroundTool({ logicalSessionId: 'chat-1', toolCallId: 'toolu_1' })
+    ).resolves.toEqual({ backgrounded: false });
+    expect(q.request).not.toHaveBeenCalled();
+    await rt.dispose();
+  });
+});
+
 describe('Ctrl+Enter after the last step (S-6 feedback 13)', () => {
   const pendingUuid = (rt: InstanceType<typeof ClaudeSdkSessionRuntime>) =>
     [

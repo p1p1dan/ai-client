@@ -22,6 +22,7 @@ import {
   Hand,
   LoaderCircle,
   LocateFixed,
+  MessagesSquare,
   Square,
   Users,
 } from 'lucide-react';
@@ -44,6 +45,7 @@ import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import type { SubwindowPosition } from '@/stores/sessionSubwindows';
 import { useSessionLanes } from './BackgroundJobsWindow';
 import { locateToolRow } from './locateToolRow';
+import { SubagentConversationDialog } from './SubagentConversationDialog';
 import { SubwindowEmpty, SubwindowFrame } from './SubwindowFrame';
 import { panelStripActionClass, panelStripIconButtonClass } from './sessionPanelsLayout';
 import { isSessionNotRunningError, SESSION_TASKS_ENDED } from './sessionStart';
@@ -132,6 +134,9 @@ export function SubagentsWindow({
     [panels, lanes]
   );
   const [confirming, setConfirming] = useState(false);
+  // Decision 203: the child whose sub-conversation page is open.
+  const [viewing, setViewing] = useState<string | null>(null);
+  const viewingRow = viewing ? view.rows.find((row) => row.childId === viewing) : undefined;
 
   const stopRow = async (row: JobRowView): Promise<void> => {
     try {
@@ -233,6 +238,17 @@ export function SubagentsWindow({
                     {t('Interrupt')}
                   </Button>
                 )}
+                {row.childId && (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className={panelStripActionClass()}
+                    onClick={() => setViewing(row.childId)}
+                  >
+                    <MessagesSquare className="size-3.5" />
+                    {t('View conversation')}
+                  </Button>
+                )}
                 {row.locatable && row.parentToolCallId && (
                   <Button
                     size="xs"
@@ -250,6 +266,15 @@ export function SubagentsWindow({
             </div>
           );
         })
+      )}
+      {viewing && (
+        <SubagentConversationDialog
+          sessionId={sessionId}
+          childId={viewing}
+          title={viewingRow?.description || t('Delegated subagent')}
+          running={viewingRow?.status === 'running'}
+          onClose={() => setViewing(null)}
+        />
       )}
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogPopup className="max-w-md">

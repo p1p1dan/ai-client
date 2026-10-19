@@ -205,6 +205,22 @@ export class TaskBoard {
         this.trim();
         return change;
       }
+      case 'task_updated': {
+        // Decision 203: a foreground subagent moved to the background (「转到后台」, the
+        // CLI's Ctrl+B) is background work from then on: the jobs window lists it.
+        const record = id ? this.tasks.get(id) : undefined;
+        const patch = message.patch && typeof message.patch === 'object' ? message.patch : null;
+        if (
+          !record ||
+          record.job ||
+          (patch as { is_backgrounded?: unknown })?.is_backgrounded !== true
+        ) {
+          return change;
+        }
+        record.job = true;
+        change.jobs = true;
+        return change;
+      }
       case 'background_tasks_changed': {
         // Replace semantics for the live set: a task listed here that we never saw start
         // (the host came up mid-run) still gets its row.
@@ -213,7 +229,16 @@ export class TaskBoard {
           if (!task || typeof task !== 'object') continue;
           const raw = task as Record<string, unknown>;
           const taskId = str(raw.task_id);
-          if (!taskId || raw.ambient === true || this.tasks.has(taskId)) continue;
+          if (!taskId || raw.ambient === true) continue;
+          // Decision 203: one known as a foreground subagent is in the background now.
+          const known = this.tasks.get(taskId);
+          if (known) {
+            if (!known.job && known.status === 'running') {
+              known.job = true;
+              change.jobs = true;
+            }
+            continue;
+          }
           const agent =
             /agent/i.test(str(raw.task_type) ?? '') || typeof raw.subagent_type === 'string';
           this.tasks.set(taskId, {

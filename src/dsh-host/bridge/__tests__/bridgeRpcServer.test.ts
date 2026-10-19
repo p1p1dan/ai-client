@@ -83,6 +83,7 @@ function runtime(overrides: Partial<BridgeSessionRuntime> = {}): BridgeSessionRu
     readJob: notCalled('readJob') as BridgeSessionRuntime['readJob'],
     interruptSubagent: notCalled('interruptSubagent') as BridgeSessionRuntime['interruptSubagent'],
     backgroundTool: notCalled('backgroundTool') as BridgeSessionRuntime['backgroundTool'],
+    subagentHistory: notCalled('subagentHistory') as BridgeSessionRuntime['subagentHistory'],
     rewind: notCalled('rewind') as BridgeSessionRuntime['rewind'],
     fork: notCalled('fork') as BridgeSessionRuntime['fork'],
     discardFork: notCalled('discardFork') as BridgeSessionRuntime['discardFork'],

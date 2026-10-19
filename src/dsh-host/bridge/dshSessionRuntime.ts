@@ -190,6 +190,7 @@ import type { HistoryMessage, SessionTreeSnapshot } from '../../shared/types/ses
 import type { SessionPermissionTier } from '../../shared/types/sessionPermissionTier.ts';
 import {
   STAGED_FORK_MARKER_SUFFIX,
+  subagentHistoryOf,
   WORKER_COMMAND_BUDGET_MS,
   WORKER_COMMAND_TIMEOUT,
   WORKER_COMMAND_UNKNOWN,
@@ -233,6 +234,8 @@ import {
   type WorkerSendResult,
   type WorkerStopPayload,
   type WorkerStopResult,
+  type WorkerSubagentHistoryPayload,
+  type WorkerSubagentHistoryResult,
   type WorkerSubagentInterruptPayload,
   type WorkerSubagentInterruptResult,
   type WorkerToolBackgroundPayload,
@@ -2266,6 +2269,26 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   async backgroundTool(input: WorkerToolBackgroundPayload): Promise<WorkerToolBackgroundResult> {
     this.assertLogicalSession(input.logicalSessionId);
     return { backgrounded: false };
+  }
+
+  /**
+   * Decision 203: a direct child's own conversation, read-only — its session
+   * log projected as a history is. A child neither this session's log names
+   * nor this run has seen is refused.
+   */
+  async subagentHistory(input: WorkerSubagentHistoryPayload): Promise<WorkerSubagentHistoryResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.requireOpen();
+    await this.historyCache.ready();
+    const childId = input.childId;
+    if (!this.children.knows(childId) && !this.historyCache.childSessions().includes(childId)) {
+      throw new BridgeSessionError(
+        'WORKER_SUBAGENT_UNAUTHORIZED',
+        `Subagent ${childId} is not a child of this session`
+      );
+    }
+    const events = await readSessionEvents(this.query, childId);
+    return subagentHistoryOf(projectDshHistory(events, this.compactLookups()));
   }
 
   /** A bootstrapped, live session: what the windows' controls act on. */

@@ -6,6 +6,8 @@
 
 修订注记（2026-10-19，[决策 201](201-send-now-keeps-subagents.md)）：第 1 条只管停止按钮与 Esc。「立即发送」不再停子代理：DSH 发 `scope: 'turn'` 的停止，只取消父回合；SDK 引擎改用 CLI 自己的 Send now，不停止。
 
+修订注记（2026-10-19，[决策 203](203-stop-main-turn-background-and-subagent-page.md)）：第 1 条不再适用于 DSH，停止按钮与 Esc 也只停主回合，后台子代理在子代理窗口里停（「全部停止」）。Claude 引擎的 CLI 打断时一定结束后台子代理，那里仍是全停。
+
 ## 规则
 
 1. 用户按 Stop 时：

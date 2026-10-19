@@ -494,6 +494,28 @@ export interface WorkerToolBackgroundResult {
   backgrounded: boolean;
 }
 
+/**
+ * Decision 203: one subagent's own conversation, read-only, for its
+ * sub-conversation page — its prompt, what it thought and said, and every
+ * call with its result, unclamped (the lane under the delegating row keeps
+ * a clamped tail). DSH reads the child's session log; the Claude engine the
+ * CLI's `subagents/agent-<id>.jsonl`. Only a direct child of the session.
+ */
+export interface WorkerSubagentHistoryPayload {
+  logicalSessionId: string;
+  /** DSH: the child's session id; Claude engine: the subagent's task id. */
+  childId: string;
+}
+
+export interface WorkerSubagentHistoryResult {
+  /** The newest {@link SUBAGENT_HISTORY_MAX_MESSAGES} messages, oldest first. */
+  messages: HistoryMessage[];
+  /** Older messages were left out. */
+  truncated: boolean;
+}
+
+export const SUBAGENT_HISTORY_MAX_MESSAGES = 500;
+
 /** `worker.job.kill` / `worker.job.read`: no job of this session has the id. */
 export const WORKER_JOB_UNKNOWN = 'WORKER_JOB_UNKNOWN';
 /** `worker.job.*` / `worker.subagent.interrupt`: the host composes no job registry or subagent service. */
@@ -882,6 +904,10 @@ export type WorkerSubagentInterruptRequest = WorkerRpcRequest<
 export type WorkerToolBackgroundRequest = WorkerRpcRequest<
   'worker.tool.background',
   WorkerToolBackgroundPayload
+>;
+export type WorkerSubagentHistoryRequest = WorkerRpcRequest<
+  'worker.subagent.history',
+  WorkerSubagentHistoryPayload
 >;
 export type WorkerRewindRequest = WorkerRpcRequest<'worker.rewind', WorkerRewindPayload>;
 export type WorkerForkRequest = WorkerRpcRequest<'worker.fork', WorkerForkPayload>;
@@ -1367,6 +1393,29 @@ export function isWorkerToolBackgroundPayload(
     value.toolCallId.trim().length > 0 &&
     value.toolCallId.length <= 256
   );
+}
+
+export function isWorkerSubagentHistoryPayload(
+  value: unknown
+): value is WorkerSubagentHistoryPayload {
+  return isWorkerSubagentInterruptPayload(value);
+}
+
+export function isWorkerSubagentHistoryResult(
+  value: unknown
+): value is WorkerSubagentHistoryResult {
+  return isRecord(value) && Array.isArray(value.messages) && typeof value.truncated === 'boolean';
+}
+
+/** The newest messages within {@link SUBAGENT_HISTORY_MAX_MESSAGES}. */
+export function subagentHistoryOf(
+  messages: readonly HistoryMessage[]
+): WorkerSubagentHistoryResult {
+  const truncated = messages.length > SUBAGENT_HISTORY_MAX_MESSAGES;
+  return {
+    messages: truncated ? messages.slice(-SUBAGENT_HISTORY_MAX_MESSAGES) : [...messages],
+    truncated,
+  };
 }
 
 export function isWorkerToolBackgroundResult(value: unknown): value is WorkerToolBackgroundResult {

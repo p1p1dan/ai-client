@@ -1100,6 +1100,28 @@ export function registerChatHandlers(): void {
   );
 
   /**
+   * Decision 203 — one subagent's own conversation, read-only (its
+   * sub-conversation page). A read of a live session: nothing is claimed.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_SUBAGENT_HISTORY,
+    async (
+      _e,
+      payload: { sessionId: string; childId: string }
+    ): Promise<Awaited<ReturnType<typeof workerManager.subagentHistory>>> => {
+      await requireLiveSession(payload.sessionId);
+      try {
+        return await workerManager.subagentHistory({
+          sessionId: payload.sessionId,
+          childId: payload.childId,
+        });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
+    }
+  );
+
+  /**
    * Decision 203 — move one running foreground call of the turn to the
    * background (the Claude engine's Ctrl+B). Claimed for the sender.
    */

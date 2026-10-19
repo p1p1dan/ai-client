@@ -429,6 +429,41 @@ describe('DshSessionRuntime — P1-7b wiring (decisions 069, 099 rule 15, 119)',
     expect(bridge.busy).toBe(true);
   });
 
+  it('[SUB-HISTORY] a direct child’s conversation is read from its log; another session’s is refused (203)', async () => {
+    const host = fakeHost();
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+    host.append('subagent/catalog', {
+      childId: 'aiclient-kid',
+      label: 'Probe',
+      mode: 'continuable',
+    });
+    const observe = host.ctx.sessionQuery.observeSession as ReturnType<typeof vi.fn>;
+    observe.mockClear();
+
+    await expect(
+      bridge.subagentHistory({ logicalSessionId: LOGICAL, childId: 'aiclient-kid' })
+    ).resolves.toEqual({ messages: [], truncated: false });
+    expect(observe).toHaveBeenCalledWith('aiclient-kid', expect.anything());
+
+    observe.mockClear();
+    expect(
+      await refusalCode(
+        bridge.subagentHistory({ logicalSessionId: LOGICAL, childId: 'someone-else' })
+      )
+    ).toBe('WORKER_SUBAGENT_UNAUTHORIZED');
+    expect(observe).not.toHaveBeenCalled();
+  });
+
+  it('[BG-TOOL] DSH has no hand-over to the background: nothing moves (203)', async () => {
+    const host = fakeHost();
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+    await expect(
+      bridge.backgroundTool({ logicalSessionId: LOGICAL, toolCallId: 'call-1' })
+    ).resolves.toEqual({ backgrounded: false });
+  });
+
   it('[P7B-BUSY-CHILD] a child’s run keeps the session busy after its turn; its end frees it', async () => {
     const host = fakeHost();
     const bridge = runtime(host.ctx, []);

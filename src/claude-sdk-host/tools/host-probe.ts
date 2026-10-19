@@ -2292,6 +2292,98 @@ async function main(): Promise<void> {
         await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
         break;
       }
+      case 'tool-background-bash':
+      case 'tool-background-agent': {
+        // Decision 203: 「转到后台」 — a running foreground call moves to the background
+        // (`worker.tool.background`, the CLI's `background_tasks`): the call returns, the
+        // turn goes on to its end, and the work keeps running as a background task.
+        const viaAgent = scenario === 'tool-background-agent';
+        const seconds = 41 + (process.pid % 300) + (viaAgent ? 2_000 : 3_000);
+        const sleep = { command: `sleep ${seconds}`, description: 'Foreground sleep' };
+        const call = viaAgent
+          ? {
+              name: 'Agent',
+              input: {
+                description: 'Foreground child',
+                prompt: `CC-RUN ${JSON.stringify({ calls: [{ name: 'Bash', input: sleep }] })}`,
+                subagent_type: 'general-purpose',
+                run_in_background: false,
+              },
+            }
+          : { name: 'Bash', input: sleep };
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'bypass' });
+        await send(
+          `CC-RUN ${JSON.stringify({ calls: [call] }).replace('"CC-RUN', '"CC-\\u0052UN')}`
+        );
+        const started = await waitFor(
+          (e) =>
+            e.type === 'tool.started' &&
+            e.payload?.name === (viaAgent ? 'Agent' : 'Bash') &&
+            typeof e.payload?.toolCallId === 'string',
+          `${scenario}: call started`
+        );
+        const toolCallId = String(started.payload?.toolCallId);
+        const waitStart = Date.now();
+        while (sleepers(seconds) < 1 && Date.now() - waitStart < 90_000) {
+          await new Promise((r) => setTimeout(r, 1_000));
+        }
+        const before = sleepers(seconds);
+        await new Promise((r) => setTimeout(r, 1_500));
+        // A command the CLI has not registered as a task yet is not moved (it answers
+        // `backgrounded: false`); ask again, as a user would press the button again.
+        let answer: unknown = {};
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          answer = await request('worker.tool.background', { logicalSessionId, toolCallId });
+          if ((answer as { backgrounded?: boolean }).backgrounded === true) break;
+          await new Promise((r) => setTimeout(r, 1_000));
+        }
+        const end = await waitFor(terminal, `${scenario}: turn end`, 60_000).catch((error) => {
+          console.log(`  ${scenario}: ${String(error)}`);
+          return { type: 'none', payload: {} } as Event;
+        });
+        const completed = events.find(
+          (e) => e.type === 'tool.completed' && e.payload?.toolCallId === toolCallId
+        );
+        await new Promise((r) => setTimeout(r, 3_000));
+        const after = sleepers(seconds);
+        const jobs = (events
+          .filter((e) => e.type === 'session.projection' && e.payload?.key === 'jobs')
+          .at(-1)?.payload?.view ?? []) as Array<Record<string, unknown>>;
+        show(scenario);
+        console.log(
+          `  ${scenario}: background → ${JSON.stringify(answer)}; terminal ${end.type}; sleeps ${before}→${after}; completion ${JSON.stringify(completed?.payload ?? null).slice(0, 300)}; jobs ${JSON.stringify(jobs)}`
+        );
+        check(scenario, 'the call was running in the foreground', before > 0);
+        check(
+          scenario,
+          'the engine took the request',
+          (answer as { backgrounded?: boolean }).backgrounded === true
+        );
+        check(scenario, 'the call returned', completed !== undefined);
+        check(scenario, 'the turn goes on to its end', end.type === 'session.completed');
+        check(scenario, 'the work keeps running after the turn', after > 0);
+        check(
+          scenario,
+          'the jobs window lists it running',
+          jobs.some(
+            (job) => job.kind === (viaAgent ? 'subagent' : 'bash') && job.status === 'running'
+          )
+        );
+        // The background work ends with this group's probe: stop it, so no notification
+        // turn races the next scenario.
+        for (const job of jobs.filter((j) => j.status === 'running')) {
+          await request('worker.job.kill', { logicalSessionId, jobId: String(job.id) }).catch(
+            () => undefined
+          );
+        }
+        await waitFor(
+          (e) => terminal(e) && events.indexOf(e) > events.indexOf(end),
+          `${scenario}: notification turn end`,
+          60_000
+        ).catch(() => undefined);
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
+        break;
+      }
       case 'agent-sendnow':
       case 'agent-stop-all': {
         // Decision 201: a background subagent is running while the parent turn runs a
@@ -2416,6 +2508,25 @@ async function main(): Promise<void> {
             scenario,
             'the child ran its script to the end',
             String(childJob?.detail ?? '').includes('(2 calls)')
+          );
+          // Decision 203: its sub-conversation page reads the CLI's transcript of it.
+          const history = (await request('worker.subagent.history', {
+            logicalSessionId,
+            childId: String(childJob?.id ?? ''),
+          }).catch(() => ({}))) as {
+            messages?: Array<{ role: string; blocks: Array<{ type: string; name?: string }> }>;
+          };
+          const blocks = (history.messages ?? []).flatMap((m) => m.blocks);
+          console.log(
+            `  ${scenario}: sub-conversation ${(history.messages ?? []).map((m) => `${m.role}[${m.blocks.map((b) => b.type).join(',')}]`).join(' ')}`
+          );
+          check(
+            scenario,
+            'its sub-conversation shows the prompt, both calls with results, and the answer',
+            history.messages?.[0]?.role === 'user' &&
+              blocks.filter((b) => b.type === 'tool_call' && b.name === 'Bash').length === 2 &&
+              blocks.filter((b) => b.type === 'tool_result').length === 2 &&
+              blocks.some((b) => b.type === 'text')
           );
           // Windows: the CLI ends the parent's Git Bash, not the MSYS `sleep` it started
           // (README §11.2 #52). Stop reaps those; "Send now" cannot tell them from the

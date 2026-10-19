@@ -74,8 +74,12 @@ export const GROUPS: readonly Group[] = [
       'mode-auto',
     ],
   },
-  // Decision 201: "Send now" leaves a background subagent running; Stop ends it.
-  { name: 'agentstop', scenarios: ['agent-sendnow', 'agent-stop-all'] },
+  // Decisions 201, 203: "Send now" leaves a background subagent running, Stop ends
+  // it, and a running foreground call moves to the background on request.
+  {
+    name: 'agentstop',
+    scenarios: ['agent-sendnow', 'agent-stop-all', 'tool-background-bash', 'tool-background-agent'],
+  },
   { name: 'refused', scenarios: ['mode-plan-refused'] },
   { name: 'errors', scenarios: ['errors', 'repoenv'] },
   { name: 'projcfg', scenarios: ['projcfg'] },

@@ -74,6 +74,7 @@ Role: implementation-status。更新日期：2026-10-14。只放当前阶段、�
 
 ## Last Landed
 
+- 2026-10-19 停止只停主对话、运行中回车改插话、转到后台、子代理子对话页（[决策 203](decisions/203-stop-main-turn-background-and-subagent-page.md)，用户选定方向；分支 `claude/sub-agent-delegation-blocking-3a8feb`，**未推送**）：DSH 的停止按钮与 Esc 只停主回合，子代理窗口加「全部停止」（Claude 引擎的 CLI 打断时一定结束后台子代理，那里仍全停，提示写明）；运行中回车并入当前回合，Ctrl+Enter 排队；被停掉的子代理的工具行收尾为「已停止」；Claude 引擎正在运行的 Bash、Agent 可「转到后台」（CLI 的 `background_tasks`）；子代理窗口「查看对话」打开只读子对话页（新 RPC `worker.subagent.history`）。路线 B 探针 `agentstop` 组全过。
 - 2026-10-19 「立即发送」不再连带停掉子代理（[决策 201](decisions/201-send-now-keeps-subagents.md)，用户批准方案 A；分支 `claude/sub-agent-delegation-blocking-3a8feb`，**未推送**）。起因：1.1.1 测试包上 SDK 引擎的委派在「立即发送」后被中止。DSH 发 `scope: 'turn'` 的停止，只取消父回合；SDK 引擎改为插话加 CLI 自己的 Send now（`interrupt` 带 `send_now`，`interrupt_send_now_v1`）。停止按钮与 Esc 照旧全停。路线 B 探针新组 `agentstop` 11 项通过；已知限制：Windows 上被打断的父命令的 MSYS 子进程会残留。
 
 - 2026-10-18 斜杠菜单：首页列插件 skill、SDK 引擎的命令与 skill（[决策 194](decisions/194-slash-menu-plugin-skills-and-sdk-commands.md)，决策 193 第 29 条；分支 `feat/slash-skills-193-29`，从 `claude/s6-feedback` 开出，**未推送**）：`02d8fa54`、`6ad3ccb3`、`ca4d7e9d`、`742fd2e1`、`7de6e1ca`、`975a4954`。

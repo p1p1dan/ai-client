@@ -60,6 +60,7 @@ import {
   isWorkerSendResult,
   isWorkerSetPermissionTierResult,
   isWorkerStopResult,
+  isWorkerSubagentHistoryResult,
   isWorkerSubagentInterruptResult,
   isWorkerToolBackgroundResult,
   isWorkerTreeResult,
@@ -117,6 +118,8 @@ import {
   type WorkerStopPayload,
   type WorkerStopResult,
   type WorkerStopScope,
+  type WorkerSubagentHistoryPayload,
+  type WorkerSubagentHistoryResult,
   type WorkerSubagentInterruptPayload,
   type WorkerSubagentInterruptResult,
   type WorkerToolBackgroundPayload,
@@ -1957,6 +1960,31 @@ export class WorkerManager {
       throw new WorkerManagerError(
         'worker_subagent_failed',
         'The worker could not interrupt the subagent'
+      );
+    }
+    return result;
+  }
+
+  /**
+   * Decision 203 — one subagent's own conversation, read-only (its
+   * sub-conversation page). A read: ready, not claimed.
+   */
+  async subagentHistory(input: {
+    sessionId: string;
+    childId: string;
+  }): Promise<WorkerSubagentHistoryResult> {
+    const entry = this.requireReadySession(input.sessionId);
+    const result = await entry.slot?.request<
+      WorkerSubagentHistoryResult,
+      WorkerSubagentHistoryPayload
+    >('worker.subagent.history', {
+      logicalSessionId: entry.logicalSessionId,
+      childId: input.childId,
+    });
+    if (!isWorkerSubagentHistoryResult(result)) {
+      throw new WorkerManagerError(
+        'worker_subagent_failed',
+        'The worker could not read the subagent conversation'
       );
     }
     return result;
