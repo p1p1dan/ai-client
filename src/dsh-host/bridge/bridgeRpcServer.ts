@@ -38,6 +38,7 @@ import {
   isWorkerSetPermissionTierPayload,
   isWorkerStopPayload,
   isWorkerSubagentInterruptPayload,
+  isWorkerToolBackgroundPayload,
   isWorkerTreePayload,
   WORKER_COMPACT_CANCELLED,
   WORKER_RPC_PROTOCOL_VERSION,
@@ -87,6 +88,8 @@ import {
   type WorkerStopResult,
   type WorkerSubagentInterruptPayload,
   type WorkerSubagentInterruptResult,
+  type WorkerToolBackgroundPayload,
+  type WorkerToolBackgroundResult,
   type WorkerTreePayload,
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
@@ -132,6 +135,8 @@ export interface BridgeSessionRuntime {
   readJob(input: WorkerJobReadPayload): Promise<WorkerJobReadResult>;
   /** dsh-rebase P1-7b — interrupt one continuable subagent's current run. */
   interruptSubagent(input: WorkerSubagentInterruptPayload): Promise<WorkerSubagentInterruptResult>;
+  /** Decision 203: a running foreground call to the background (Claude engine only). */
+  backgroundTool(input: WorkerToolBackgroundPayload): Promise<WorkerToolBackgroundResult>;
   rewind(input: WorkerRewindPayload): Promise<WorkerRewindResult>;
   fork(input: WorkerForkPayload): Promise<WorkerForkResult>;
   discardFork(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
@@ -404,6 +409,9 @@ export class BridgeRpcServer {
           break;
         case 'worker.subagent.interrupt':
           await this.handleSubagentInterrupt(request);
+          break;
+        case 'worker.tool.background':
+          await this.handleToolBackground(request);
           break;
         case 'worker.rewind':
           await this.handleRewind(request);
@@ -699,6 +707,21 @@ export class BridgeRpcServer {
       throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.readJob(request.payload));
+  }
+
+  private async handleToolBackground(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerToolBackgroundPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.tool.background requires logicalSessionId and toolCallId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    this.respondSuccess(request, await this.runtime.backgroundTool(request.payload));
   }
 
   private async handleSubagentInterrupt(request: WorkerRpcRequest): Promise<void> {

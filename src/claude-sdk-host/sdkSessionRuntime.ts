@@ -107,6 +107,8 @@ import {
   type WorkerStopPayload,
   type WorkerStopResult,
   type WorkerSubagentInterruptResult,
+  type WorkerToolBackgroundPayload,
+  type WorkerToolBackgroundResult,
   type WorkerTreeResult,
 } from '../shared/types/workerRpc.ts';
 import { mapSdkFailure, redactSecrets, type SdkFailureSignals } from './failureMapping.ts';
@@ -3025,6 +3027,31 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
 
   async interruptSubagent(): Promise<WorkerSubagentInterruptResult> {
     return { interrupted: false };
+  }
+
+  /**
+   * Decision 203: the CLI's own Ctrl+B for one call (`background_tasks` with
+   * its `tool_use_id`): a running foreground command or subagent goes on as a
+   * background task and the call returns at once. A call that has already
+   * ended, or that the CLI did not register as a task, is refused by the CLI.
+   */
+  async backgroundTool(input: WorkerToolBackgroundPayload): Promise<WorkerToolBackgroundResult> {
+    const request = (
+      this.query as unknown as {
+        request?: (body: Record<string, unknown>) => Promise<unknown>;
+      } | null
+    )?.request;
+    if (!this.turn || !request) return { backgrounded: false };
+    try {
+      await request.call(this.query, {
+        subtype: 'background_tasks',
+        tool_use_id: input.toolCallId,
+      });
+      return { backgrounded: true };
+    } catch (error) {
+      this.log(`background ${input.toolCallId} refused`, error);
+      return { backgrounded: false };
+    }
   }
 
   async rewind(): Promise<WorkerRewindResult> {

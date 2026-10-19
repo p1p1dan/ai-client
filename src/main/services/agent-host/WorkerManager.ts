@@ -61,6 +61,7 @@ import {
   isWorkerSetPermissionTierResult,
   isWorkerStopResult,
   isWorkerSubagentInterruptResult,
+  isWorkerToolBackgroundResult,
   isWorkerTreeResult,
   normalizeWorkerCapabilities,
   STAGED_FORK_MARKER_SUFFIX,
@@ -118,6 +119,8 @@ import {
   type WorkerStopScope,
   type WorkerSubagentInterruptPayload,
   type WorkerSubagentInterruptResult,
+  type WorkerToolBackgroundPayload,
+  type WorkerToolBackgroundResult,
   type WorkerTreePayload,
   type WorkerTreeResult,
 } from '@shared/types/workerRpc';
@@ -1954,6 +1957,34 @@ export class WorkerManager {
       throw new WorkerManagerError(
         'worker_subagent_failed',
         'The worker could not interrupt the subagent'
+      );
+    }
+    return result;
+  }
+
+  /**
+   * Decision 203 — move one running foreground call of the turn to the
+   * background (the Claude engine's Ctrl+B; DSH answers `false`). A mutation:
+   * ready and claimed.
+   */
+  async backgroundTool(input: {
+    sessionId: string;
+    toolCallId: string;
+    ownerWebContentsId?: number;
+  }): Promise<WorkerToolBackgroundResult> {
+    const entry = this.requireReadySession(input.sessionId);
+    this.claimEntry(entry, input.ownerWebContentsId);
+    const result = await entry.slot?.request<
+      WorkerToolBackgroundResult,
+      WorkerToolBackgroundPayload
+    >('worker.tool.background', {
+      logicalSessionId: entry.logicalSessionId,
+      toolCallId: input.toolCallId,
+    });
+    if (!isWorkerToolBackgroundResult(result)) {
+      throw new WorkerManagerError(
+        'worker_background_failed',
+        'The worker could not move the call to the background'
       );
     }
     return result;

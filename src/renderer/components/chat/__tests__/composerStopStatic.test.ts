@@ -45,8 +45,8 @@ const COMPOSER_PATH = path.resolve(__dirname, '../ChatComposer.tsx');
  */
 const source = stripComments(readFileSync(COMPOSER_PATH, 'utf8'), 'ChatComposer.tsx');
 
-/** Where the Stop path starts: `handleStop` and "Send now" both go through it (decision 201). */
-const STOP_START = "const stopSession = (scope: 'all' | 'turn') => {";
+/** Where the Stop path starts: Stop, Esc and "Send now" all go through it (decisions 201, 203). */
+const STOP_START = 'const handleStop = () => {';
 
 /** All start offsets of `needle` in the stripped source. */
 function offsets(needle: string): number[] {
@@ -144,7 +144,7 @@ describe('runSend cancellation-token ordering (F6 + 2026-08-10 stop-hang fix)', 
     expect(stopBump).toBeGreaterThan(cancelAt);
     const stopStart = only(STOP_START);
     const cancelCall = source.indexOf('cancelInFlightSend(stopTarget);', stopStart);
-    const stopCall = only('void stopChatSession(stopTarget, scope)');
+    const stopCall = only('void stopChatSession(stopTarget)');
     expect(cancelCall).toBeGreaterThan(stopStart);
     expect(cancelCall).toBeLessThan(stopCall);
   });
@@ -189,7 +189,7 @@ describe('handleStop targets one session for both the pause and the abort (T091)
     // moves `sendingHere` to false and the new chat's `busy` to false, so
     // there is no Stop to click on the wrong session in the first place.
     expect(body).toContain('const stopTarget = activeSessionId;');
-    expect(body).toContain('void stopChatSession(stopTarget, scope)');
+    expect(body).toContain('void stopChatSession(stopTarget)');
     // Stop cancels the turn, not the queued follow-ups: nothing here may pause.
     expect(body).not.toContain('pauseSession');
     // The generation bump is scoped to the send this component owns — a
@@ -1220,19 +1220,18 @@ describe('decision 046 — Stop always settles the composer', () => {
     expect(sendNow).not.toContain('stoppingRef');
   });
 
-  it('[STOP-SCOPE] Stop and Esc stop everything; "Send now" stops the turn only (decision 201)', () => {
-    expect(source).toContain("const handleStop = () => stopSession('all');");
-    expect(source).toContain("const stopForSendNow = () => stopSession('turn');");
+  it('[STOP-SCOPE] Stop, Esc and "Send now" share one Stop: the main turn only (decisions 201, 203)', () => {
+    // The scope is `stopChatSession`'s default (`turn`); nothing here asks for `all`.
+    expect(source).toContain('void stopChatSession(stopTarget)');
+    expect(source).not.toContain("stopChatSession(stopTarget, 'all')");
     const queueSendNow = source.slice(
       only('const handleQueueSendNow = (entryId: string) => {'),
       source.indexOf('\n  };', only('const handleQueueSendNow = (entryId: string) => {'))
     );
-    expect(queueSendNow).toContain('if (canStop) stopForSendNow();');
-    expect(queueSendNow).not.toContain('handleStop');
-    // The composer's own "Send now" (`mode === 'sendNow'`) takes the same path.
+    expect(queueSendNow).toContain('if (canStop) handleStop();');
     const composerSendNow = source.slice(only("if (mode === 'sendNow') {"));
     expect(composerSendNow.slice(0, composerSendNow.indexOf('}'))).toContain(
-      'if (canStop) stopForSendNow();'
+      'if (canStop) handleStop();'
     );
   });
 
@@ -1255,15 +1254,17 @@ describe('decision 046 — Stop always settles the composer', () => {
     expect(block).toContain('disabled={disabled || spec.disabled}');
     expect(block).not.toContain('stopping');
     // Decision 180: a Stop that cancels a `/compact` says so, and does that.
+    // Decision 203: otherwise it says what it leaves running, per engine.
     expect(block.replace(/\s+/g, ' ')).toContain(
-      'title={ spec.compaction ? t(CANCEL_COMPACTION_TITLE) : spec.force ? t(FORCE_STOP_TITLE) : undefined }'
+      "title={ spec.compaction ? t(CANCEL_COMPACTION_TITLE) : spec.force ? t(FORCE_STOP_TITLE) : t(chatEngine === 'claude-sdk' ? STOP_TITLE_CLAUDE_SDK : STOP_TITLE_DSH) }"
     );
     expect(block).toContain('onClick={spec.compaction ? handleCancelCompact : handleStop}');
     // `busy` is `isStoppable(status)`, which now admits `stopping`, so Esc
-    // (gated on `canStop`, pinned by [E-1]) and the Ctrl+Enter interjection
-    // stay live in that state too.
+    // (gated on `canStop`, pinned by [E-1]) stays live in that state too.
+    // Decision 203: Enter interjects into a running turn, not one being
+    // stopped (that takes nothing in); there, and on Ctrl+Enter, it queues.
     expect(source).toContain('return status != null && isStoppableStatus(status);');
-    expect(source).toContain('if (event.ctrlKey && canStop) {');
+    expect(source).toContain('if (canStop && !stopping && !event.ctrlKey) {');
   });
 
   /**

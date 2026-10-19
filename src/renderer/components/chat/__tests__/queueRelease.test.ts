@@ -469,7 +469,7 @@ describe('deriveActionButtons', () => {
     ]);
   });
 
-  it('running with draft content -> [stop, send-now, enqueue]', () => {
+  it('running with draft content -> [stop, send-now, interject] (decision 203)', () => {
     expect(
       deriveActionButtons({
         status: 'running',
@@ -481,11 +481,11 @@ describe('deriveActionButtons', () => {
     ).toEqual([
       { kind: 'stop', disabled: false },
       { kind: 'send-now', disabled: false },
-      { kind: 'enqueue', disabled: false },
+      { kind: 'interject', disabled: false },
     ]);
   });
 
-  it('running with an empty draft -> [stop, enqueue(disabled)]', () => {
+  it('running with an empty draft -> [stop, interject(disabled)]', () => {
     expect(
       deriveActionButtons({
         status: 'running',
@@ -496,7 +496,7 @@ describe('deriveActionButtons', () => {
       })
     ).toEqual([
       { kind: 'stop', disabled: false },
-      { kind: 'enqueue', disabled: true },
+      { kind: 'interject', disabled: true },
     ]);
   });
 
@@ -512,7 +512,7 @@ describe('deriveActionButtons', () => {
     ).toEqual([
       { kind: 'stop', disabled: false },
       { kind: 'send-now', disabled: false },
-      { kind: 'enqueue', disabled: false },
+      { kind: 'interject', disabled: false },
     ]);
   });
 
@@ -590,7 +590,7 @@ describe('deriveActionButtons', () => {
    * Stop. These two inputs are mutually exclusive in production (one latch, one
    * session id), but the ordering is what guarantees it here.
    */
-  it('the session actually in flight still gets Stop + enqueue', () => {
+  it('the session actually in flight still gets Stop + interject', () => {
     expect(
       deriveActionButtons({
         status: 'idle',
@@ -603,7 +603,7 @@ describe('deriveActionButtons', () => {
     ).toEqual([
       { kind: 'stop', disabled: false },
       { kind: 'send-now', disabled: false },
-      { kind: 'enqueue', disabled: false },
+      { kind: 'interject', disabled: false },
     ]);
   });
 

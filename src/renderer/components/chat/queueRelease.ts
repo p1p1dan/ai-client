@@ -668,7 +668,7 @@ export function decidePendingResolution(input: DecidePendingResolutionInput): Pe
 
 // ---- deriveActionButtons (decision 2.5) ----
 
-export type ActionButtonKind = 'send' | 'retry' | 'stop' | 'enqueue' | 'send-now';
+export type ActionButtonKind = 'send' | 'retry' | 'stop' | 'enqueue' | 'interject' | 'send-now';
 
 export interface ActionButtonSpec {
   kind: ActionButtonKind;
@@ -689,6 +689,15 @@ export interface ActionButtonSpec {
 
 /** Title (i18n key) of the round Stop while it cancels a `/compact` (decision 180). */
 export const CANCEL_COMPACTION_TITLE = 'Cancel the compaction';
+
+/**
+ * Titles (i18n keys) of the round Stop (decision 203): on DSH it stops the main
+ * turn and leaves background subagents running; the Claude engine's CLI ends
+ * them on any interrupt, so there it says so.
+ */
+export const STOP_TITLE_DSH = 'Stop the running turn — background subagents keep running';
+export const STOP_TITLE_CLAUDE_SDK =
+  'Stop the running turn — on the Claude engine this also ends background subagents';
 
 /** Title (i18n key) of the round Stop while a spec carries `force`. */
 export const FORCE_STOP_TITLE =
@@ -788,7 +797,10 @@ export function deriveActionButtons(input: DeriveActionButtonsInput): readonly A
     return [
       { kind: 'stop', disabled: false, ...(force ? { force: true as const } : {}) },
       ...(input.hasDraftContent ? [{ kind: 'send-now' as const, disabled: false }] : []),
-      { kind: 'enqueue', disabled: !input.hasDraftContent },
+      // Decision 203: the running turn's send joins it at its next step;
+      // queueing for the turn's end is Ctrl+Enter's. A turn being stopped
+      // takes nothing in, so there the send still queues.
+      { kind: force ? 'enqueue' : 'interject', disabled: !input.hasDraftContent },
     ];
   }
   // Decision 180: no turn, but a `/compact` to cancel; what is typed meanwhile is queued.

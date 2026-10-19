@@ -9,10 +9,32 @@
  * be continued, decision 069) and 「定位」, which scrolls the timeline to the
  * row that delegated it. The same child may show in the background jobs
  * window and in its lane at the same time (decision 109 rule 3).
+ *
+ * Decision 203: Stop leaves background subagents running, so this window
+ * offers 「全部停止」 for them: each stoppable subagent row of the jobs view
+ * is interrupted or killed, as the jobs window stops it.
  */
 
-import { Circle, CircleCheck, CircleX, Hand, LoaderCircle, LocateFixed, Users } from 'lucide-react';
-import { useMemo } from 'react';
+import {
+  Circle,
+  CircleCheck,
+  CircleX,
+  Hand,
+  LoaderCircle,
+  LocateFixed,
+  Square,
+  Users,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { toastManager } from '@/components/ui/toast';
 import { type TFunction, useI18n } from '@/i18n';
@@ -23,12 +45,14 @@ import type { SubwindowPosition } from '@/stores/sessionSubwindows';
 import { useSessionLanes } from './BackgroundJobsWindow';
 import { locateToolRow } from './locateToolRow';
 import { SubwindowEmpty, SubwindowFrame } from './SubwindowFrame';
-import { panelStripActionClass } from './sessionPanelsLayout';
+import { panelStripActionClass, panelStripIconButtonClass } from './sessionPanelsLayout';
 import { isSessionNotRunningError, SESSION_TASKS_ENDED } from './sessionStart';
 import {
+  deriveJobsWindowView,
   deriveSubagentsWindowView,
   formatElapsed,
   formatTokens,
+  type JobRowView,
   type SubagentRowView,
 } from './subwindowsModel';
 import { useSubwindowClock } from './useSubwindowClock';
@@ -99,6 +123,46 @@ export function SubagentsWindow({
   const lanes = useSessionLanes(sessionId);
   const view = useMemo(() => deriveSubagentsWindowView({ panels, lanes }), [panels, lanes]);
   const now = useSubwindowClock(view.running > 0);
+  // Decision 203: the subagents a 「全部停止」 reaches, as the jobs window stops them.
+  const stoppable = useMemo(
+    () =>
+      deriveJobsWindowView({ panels, lanes, hidden: [] }).rows.filter(
+        (row) => row.kind === 'subagent' && row.stop !== null
+      ),
+    [panels, lanes]
+  );
+  const [confirming, setConfirming] = useState(false);
+
+  const stopRow = async (row: JobRowView): Promise<void> => {
+    try {
+      if (row.stop === 'interrupt' && row.childId) {
+        await window.electronAPI.chat.interruptSubagent({ sessionId, childId: row.childId });
+      } else if (row.jobId) {
+        await window.electronAPI.chat.killSessionJob({ sessionId, jobId: row.jobId });
+      }
+    } catch (error) {
+      toastManager.add({
+        type: 'error',
+        title: t('The subagent was not interrupted'),
+        description: isSessionNotRunningError(error)
+          ? t(SESSION_TASKS_ENDED)
+          : unwrapIpcErrorMessage(error),
+      });
+    }
+  };
+
+  const stopAll =
+    stoppable.length > 0 ? (
+      <button
+        type="button"
+        className={panelStripIconButtonClass()}
+        aria-label={t('Stop all subagents')}
+        title={t('Stop all subagents')}
+        onClick={() => setConfirming(true)}
+      >
+        <Square className="size-3.5" />
+      </button>
+    ) : null;
 
   const interrupt = async (childId: string): Promise<void> => {
     try {
@@ -122,6 +186,7 @@ export function SubagentsWindow({
       icon={<Users className="size-3.5" />}
       title={t('Subagents')}
       count={view.rows.length > 0 ? t('{{count}} in all', { count: view.rows.length }) : ''}
+      actions={stopAll}
       layer={layer}
       maxHeight={maxHeight}
       position={position}
@@ -186,6 +251,30 @@ export function SubagentsWindow({
           );
         })
       )}
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogPopup className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Stop all subagents?')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'Every running subagent stops; a continuable one is interrupted and can be continued. The main conversation is not affected.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline">{t('Cancel')}</Button>} />
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setConfirming(false);
+                for (const row of stoppable) void stopRow(row);
+              }}
+            >
+              {t('Stop all')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </SubwindowFrame>
   );
 }

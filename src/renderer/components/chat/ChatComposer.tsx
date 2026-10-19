@@ -205,6 +205,8 @@ import {
   type RestoredDraftMarker,
   type RunEntryOutcome,
   type RunSendOrigin,
+  STOP_TITLE_CLAUDE_SDK,
+  STOP_TITLE_DSH,
   shouldClearPauseOnSend,
   shouldClearRetryableOnOutcome,
   shouldPauseQueueOnRejection,
@@ -1673,7 +1675,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     }
     if (mode === 'sendNow') {
       useMessageQueueStore.getState().prioritizeEntry(activeSessionId, queued.id);
-      if (canStop) stopForSendNow();
+      if (canStop) handleStop();
     }
     setQueueNotice(null);
     // T26: enqueue is itself an explicit user Send and should return the
@@ -4119,10 +4121,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (activeSessionId) cancelCompactRun(activeSessionId);
   };
 
-  // Decision 201: the Stop button (and Esc) stops the turn and the session's
-  // subagents (`all`); "Send now" stops the turn only (`turn`), so the
-  // delegated work keeps running beside the message it lets through.
-  const stopSession = (scope: 'all' | 'turn') => {
+  // Decisions 201, 203: Stop, Esc and "Send now" all stop the main turn only
+  // (`stopChatSession`'s `turn`); background subagents keep running and stop
+  // from the subagents window. The Claude engine's CLI ends them regardless.
+  const handleStop = () => {
     const stopTarget = activeSessionId;
     if (!stopTarget) return;
     // Decision 046 rule 2: never swallowed. A press while an earlier Stop is
@@ -4145,13 +4147,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // settling, the session's terminal event (see the effect below), or the
     // ceiling — so a stop IPC that never answers can no longer hold it forever.
     const ceiling = window.setTimeout(() => releaseStopLatch(token), STOP_LATCH_CEILING_MS);
-    void stopChatSession(stopTarget, scope).finally(() => {
+    void stopChatSession(stopTarget).finally(() => {
       window.clearTimeout(ceiling);
       releaseStopLatch(token);
     });
   };
-  const handleStop = () => stopSession('all');
-  const stopForSendNow = () => stopSession('turn');
 
   // Decision 046 rule 2: the stop latch also opens on the stopped session's
   // terminal event. Any `session.stopped` counts, whatever its `stopCause` —
@@ -4228,7 +4228,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       return;
     }
     queue.prioritizeEntry(activeSessionId, entryId);
-    if (canStop) stopForSendNow();
+    if (canStop) handleStop();
   };
 
   // T12-e: one derivation, two readers. `emptySurface` decides WHICH surface
@@ -4696,7 +4696,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // message, and with attachments that is an expensive mistake.
           if (composingRef.current) return;
           event.preventDefault();
-          if (event.ctrlKey && canStop) {
+          // Decision 203: while a turn runs, Enter joins it at its next step
+          // (as in Claude Code) and Ctrl+Enter queues for the turn's end.
+          if (canStop && !stopping && !event.ctrlKey) {
             void handleInterject();
           } else {
             void handleSend();
@@ -4802,7 +4804,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                   ? t(CANCEL_COMPACTION_TITLE)
                   : spec.force
                     ? t(FORCE_STOP_TITLE)
-                    : undefined
+                    : // Decision 203: what Stop leaves running, per engine.
+                      t(chatEngine === 'claude-sdk' ? STOP_TITLE_CLAUDE_SDK : STOP_TITLE_DSH)
               }
               disabled={disabled || spec.disabled}
               onClick={spec.compaction ? handleCancelCompact : handleStop}
@@ -4816,6 +4819,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               kind="send-now"
               disabled={disabled || stopping || !hasSendTarget || attachments.reading > 0}
               onClick={() => void handleSend('sendNow')}
+            />
+          );
+        }
+        if (spec.kind === 'interject') {
+          return (
+            <ComposerRoundButton
+              key="interject"
+              kind="interject"
+              disabled={disabled || spec.disabled || !hasSendTarget || attachments.reading > 0}
+              onClick={() => void handleInterject()}
             />
           );
         }

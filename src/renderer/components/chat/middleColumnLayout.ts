@@ -1091,7 +1091,13 @@ export function roundActionButtonClass(): string {
   return 'size-6 sm:size-6 rounded-full [corner-shape:round] supports-[corner-shape:squircle]:rounded-full before:rounded-full supports-[corner-shape:squircle]:before:rounded-full';
 }
 
-export type RoundActionButtonKind = 'send' | 'stop' | 'retry' | 'enqueue' | 'send-now';
+export type RoundActionButtonKind =
+  | 'send'
+  | 'stop'
+  | 'retry'
+  | 'enqueue'
+  | 'interject'
+  | 'send-now';
 
 /**
  * Per-kind fill for the round action button.
@@ -1115,6 +1121,7 @@ export function roundActionButtonKindClass(kind: RoundActionButtonKind): string 
   switch (kind) {
     case 'send':
     case 'enqueue':
+    case 'interject':
       return 'border-foreground bg-foreground text-background shadow-none not-disabled:inset-shadow-none hover:border-foreground hover:bg-foreground/90';
     case 'stop':
       return 'border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90';
@@ -1141,13 +1148,14 @@ export const MOVES_ON_SEND_PLACEHOLDER =
 export const MIGRATING_SESSION_PLACEHOLDER = 'Moving this chat to the current engine…';
 
 /**
- * A turn is running, so Enter queues and Ctrl+Enter joins this turn. P1-7e e6
+ * A turn is running, so Enter joins this turn and Ctrl+Enter queues (decision
+ * 203; it was the other way round until then). P1-7e e6
  * (problem 40, decision 145): it used to open with 「Agent Host 正在运行」,
  * the development name of the engine process, the same leftover as the
  * `Live Agent Host` decision 144 removed.
  */
 export const TURN_RUNNING_PLACEHOLDER =
-  'Turn in progress — Enter queues, Ctrl+Enter adds to this turn…';
+  'Turn in progress — Enter adds to this turn, Ctrl+Enter queues for after it…';
 
 /**
  * Composer placeholder text. Sending/busy/no-session/no-workspace states are

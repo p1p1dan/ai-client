@@ -442,6 +442,8 @@ export const IPC_CHANNELS = {
   CHAT_READ_SESSION_JOB: 'chat:readSessionJob',
   /** dsh-rebase P1-7b — interrupt one continuable subagent's current run. */
   CHAT_INTERRUPT_SUBAGENT: 'chat:interruptSubagent',
+  /** Decision 203 — move one running foreground call to the background (Claude engine). */
+  CHAT_BACKGROUND_TOOL: 'chat:backgroundTool',
   CHAT_REWIND_SESSION: 'chat:rewindSession',
   CHAT_FORK_SESSION: 'chat:forkSession',
   /** Pi-only model catalog; no provider credential or base URL crosses IPC. */

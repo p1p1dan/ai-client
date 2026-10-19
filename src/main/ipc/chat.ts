@@ -1100,6 +1100,30 @@ export function registerChatHandlers(): void {
   );
 
   /**
+   * Decision 203 — move one running foreground call of the turn to the
+   * background (the Claude engine's Ctrl+B). Claimed for the sender.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_BACKGROUND_TOOL,
+    async (
+      e,
+      payload: { sessionId: string; toolCallId: string }
+    ): Promise<Awaited<ReturnType<typeof workerManager.backgroundTool>>> => {
+      await requireLiveSession(payload.sessionId);
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      try {
+        return await workerManager.backgroundTool({
+          sessionId: payload.sessionId,
+          toolCallId: payload.toolCallId,
+          ownerWebContentsId,
+        });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
+    }
+  );
+
+  /**
    * dsh-rebase P1-7b — interrupt one continuable subagent's current run, as
    * its human parent. A mutation of a live session, claimed for the sender.
    */

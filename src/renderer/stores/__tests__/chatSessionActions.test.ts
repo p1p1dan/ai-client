@@ -927,7 +927,8 @@ describe('stopChatSession (T091)', () => {
     await stopChatSession('in-flight');
 
     expect(stop).toHaveBeenCalledTimes(1);
-    expect(stop).toHaveBeenCalledWith({ sessionId: 'in-flight' });
+    // Decision 203: the main turn only; background subagents keep running.
+    expect(stop).toHaveBeenCalledWith({ sessionId: 'in-flight', scope: 'turn' });
     expect(useChatSessionsStore.getState().lastError).toBeNull();
   });
 

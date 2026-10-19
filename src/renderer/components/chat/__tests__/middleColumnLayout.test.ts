@@ -1291,7 +1291,7 @@ describe('composerPlaceholder', () => {
           hasWorkspace: true,
           attachmentCount: 0,
         })
-      ).toBe('Turn in progress — Enter queues, Ctrl+Enter adds to this turn…');
+      ).toBe('Turn in progress — Enter adds to this turn, Ctrl+Enter queues for after it…');
 
       // U28: no session is no longer a blocker with its own copy — the first
       // send creates one. With `unbound` set (which is what ChatComposer passes
@@ -1386,7 +1386,7 @@ describe('composerPlaceholder', () => {
         attachmentCount: 0,
         queuedCount: 0,
       })
-    ).toBe('Turn in progress — Enter queues, Ctrl+Enter adds to this turn…');
+    ).toBe('Turn in progress — Enter adds to this turn, Ctrl+Enter queues for after it…');
   });
 
   it('T-19: a non-empty queue reports its count instead of the busy copy', () => {
@@ -1689,7 +1689,7 @@ describe('the running placeholder names the turn (P1-7e e6, problem 40, decision
       },
       zh
     );
-    expect(busy).toBe('回合进行中 —— Enter 排队，Ctrl+Enter 并入当前回合…');
+    expect(busy).toBe('回合进行中 —— Enter 并入当前回合，Ctrl+Enter 排到回合结束后…');
     expect(TURN_RUNNING_PLACEHOLDER).not.toContain('Agent Host');
     expect(
       zhTranslations['Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…']

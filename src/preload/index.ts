@@ -1202,6 +1202,12 @@ const electronAPI = {
       childId: string;
     }): Promise<import('@shared/types/workerRpc').WorkerSubagentInterruptResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_INTERRUPT_SUBAGENT, payload),
+    /** Decision 203 — move one running foreground call to the background (Claude engine). */
+    backgroundTool: (payload: {
+      sessionId: string;
+      toolCallId: string;
+    }): Promise<import('@shared/types/workerRpc').WorkerToolBackgroundResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_BACKGROUND_TOOL, payload),
     getSessionTree: (payload: {
       sessionId: string;
       requestSequence: number;

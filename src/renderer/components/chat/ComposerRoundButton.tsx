@@ -1,5 +1,5 @@
 import type { VariantProps } from 'class-variance-authority';
-import { ListPlus, RotateCcw, SendHorizonal, Square, Zap } from 'lucide-react';
+import { ListPlus, MessageSquarePlus, RotateCcw, SendHorizonal, Square, Zap } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Button, type buttonVariants } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
@@ -37,6 +37,13 @@ const KIND_CONFIG: Record<RoundButtonKind, RoundButtonKindConfig> = {
   // 'default'` on purpose (not a demoted 'secondary'): it IS the send action
   // for this turn, not an optional extra.
   enqueue: { variant: 'default', Icon: ListPlus, label: 'Queue message' },
+  // Decision 203: Enter while a turn runs — the message joins the running turn
+  // at its next step, as in Claude Code; Ctrl+Enter queues it for the turn's end.
+  interject: {
+    variant: 'default',
+    Icon: MessageSquarePlus,
+    label: 'Send into the running turn (next step) — Ctrl+Enter queues it for after the turn',
+  },
   'send-now': { variant: 'outline', Icon: Zap, label: 'Send now — interrupt the running turn' },
 };
 

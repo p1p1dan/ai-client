@@ -235,6 +235,8 @@ import {
   type WorkerStopResult,
   type WorkerSubagentInterruptPayload,
   type WorkerSubagentInterruptResult,
+  type WorkerToolBackgroundPayload,
+  type WorkerToolBackgroundResult,
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
 import { gatewaySessionUuid } from '../lib/sessionMetadata.ts';
@@ -2254,6 +2256,16 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.assertLogicalSession(input.logicalSessionId);
     this.requireOpen();
     return this.children.interrupt(input.childId);
+  }
+
+  /**
+   * Decision 203: DSH moves a foreground command to the background only when
+   * its timeout expires (`promoteOnTimeout`), and a foreground subagent never;
+   * there is no hand-over to ask for, so nothing moves.
+   */
+  async backgroundTool(input: WorkerToolBackgroundPayload): Promise<WorkerToolBackgroundResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    return { backgrounded: false };
   }
 
   /** A bootstrapped, live session: what the windows' controls act on. */

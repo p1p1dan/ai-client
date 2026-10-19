@@ -2566,9 +2566,16 @@ export const zhTranslations: Record<string, string> = {
   // T-28: Composer round action button (D23) — aria-label/title (batch 3).
   'Send message': '发送消息',
   'Stop the running turn': '停止当前回合',
+  // Decision 203: what Stop leaves running, per engine.
+  'Stop the running turn — background subagents keep running': '停止当前回合 — 后台子代理继续运行',
+  'Stop the running turn — on the Claude engine this also ends background subagents':
+    '停止当前回合 — Claude 引擎会同时结束后台子代理',
   'Retry last message': '重试上一条消息',
   // T-19: fourth round-button kind — "send, only delayed" while a turn runs.
   'Queue message': '加入队列',
+  // Decision 203: Enter while a turn runs joins it at its next step.
+  'Send into the running turn (next step) — Ctrl+Enter queues it for after the turn':
+    '发送到当前回合（下一步送达）— Ctrl+Enter 排到本回合结束后发送',
   'Send now': '立刻发送',
   'Send now — interrupt the running turn': '立刻发送 — 打断当前回复',
   // dsh-rebase decision 093: Ctrl+Enter joins the running turn at its next step.
@@ -3639,6 +3646,11 @@ Object.assign(zhTranslations, {
   'No subagents yet': '当前没有子代理',
   'Stop all': '全部停止',
   'Stop all background tasks?': '停止全部后台任务？',
+  // Decision 203: Stop leaves background subagents running; their window stops them.
+  'Stop all subagents': '停止全部子代理',
+  'Stop all subagents?': '停止全部子代理？',
+  'Every running subagent stops; a continuable one is interrupted and can be continued. The main conversation is not affected.':
+    '运行中的子代理都会停止；可续聊的子代理会被打断，之后还能续聊。主对话不受影响。',
   'Every running command and one-shot subagent stops; running subagents are interrupted and can be continued.':
     '运行中的命令与一次性子代理都会停止；运行中的子代理会被打断，之后还能续聊。',
   'Engine restarted; the task ended': '引擎重启，任务已结束',
@@ -3962,8 +3974,8 @@ Object.assign(zhTranslations, {
  */
 Object.assign(zhTranslations, {
   // Composer placeholder while a turn runs (`middleColumnLayout.ts`).
-  'Turn in progress — Enter queues, Ctrl+Enter adds to this turn…':
-    '回合进行中 —— Enter 排队，Ctrl+Enter 并入当前回合…',
+  'Turn in progress — Enter adds to this turn, Ctrl+Enter queues for after it…':
+    '回合进行中 —— Enter 并入当前回合，Ctrl+Enter 排到回合结束后…',
   // A forked chat's title, written by Main when the fork is created (`sessionTitles.ts`).
   '{{title}} (fork)': '{{title}}（分叉）',
   // Terminal search bar (`TerminalSearchBar.tsx`).

@@ -125,6 +125,34 @@ describe('reduceSubagentActivity — rows', () => {
     ]);
   });
 
+  it('a lane that ends takes its running calls with it: they read stopped (decision 203)', () => {
+    const state = fold([
+      started(),
+      activity({ kind: 'tool.started', toolCallId: 'tc1', name: 'Bash', input: { command: 'x' } }),
+      activity({ kind: 'tool.started', toolCallId: 'tc2', name: 'Read' }),
+      activity({ kind: 'tool.completed', toolCallId: 'tc2', ok: true }),
+      activity({ kind: 'status', status: 'stopped' }),
+    ]);
+    const rows = state.lanes[PARENT].rows;
+    expect(rows.map((row) => (row.kind === 'tool' ? row.status : row.kind))).toEqual([
+      'stopped',
+      'ok',
+    ]);
+    const panel = deriveSubagentPanelRows(state.lanes[PARENT], { parentRunning: false })[0]?.detail;
+    const bash = panel?.find((row) => row.key.includes('tc1'));
+    expect(bash?.running).toBe(false);
+    expect(bash?.failed).toBe(false);
+  });
+
+  it('the engine going away settles running calls too (decision 203)', () => {
+    const state = fold([
+      started(),
+      activity({ kind: 'tool.started', toolCallId: 'tc1', name: 'Bash' }),
+      { type: 'session.status', sessionId: SESSION, payload: { status: 'disconnected' } },
+    ]);
+    expect(state.lanes[PARENT].rows[0]).toMatchObject({ kind: 'tool', status: 'stopped' });
+  });
+
   it('a failed completion carries errorText; a completion for an unseen id appends a settled row', () => {
     const state = fold([
       started(),

@@ -42,7 +42,11 @@ export type SubagentLaneRow =
       toolCallId: string;
       name: string;
       input?: Record<string, string | number>;
-      status: 'running' | 'ok' | 'failed';
+      /**
+       * `stopped` (decision 203): the lane ended while the call was still
+       * running, so no `tool.completed` will come for it.
+       */
+      status: 'running' | 'ok' | 'failed' | 'stopped';
       errorText?: string;
     }
   | { kind: 'text' | 'thinking'; id: string; text: string }
@@ -233,6 +237,17 @@ function appendRow(
   const next = rows.filter((_, i) => i !== dropIndex);
   next.push(row);
   return { rows: next, dropped: 1 };
+}
+
+/**
+ * Decision 203: a lane that ended takes its unfinished calls with it — a row
+ * still `running` then would spin under a stopped subagent for good.
+ */
+function settleRunningRows(rows: readonly SubagentLaneRow[]): readonly SubagentLaneRow[] {
+  if (!rows.some((row) => row.kind === 'tool' && row.status === 'running')) return rows;
+  return rows.map((row) =>
+    row.kind === 'tool' && row.status === 'running' ? { ...row, status: 'stopped' } : row
+  );
 }
 
 /** Pick the eviction victim: oldest non-running lane, else oldest outright. */
@@ -464,6 +479,7 @@ function reduceActivity(
       return withLane(state, {
         ...lane,
         status: finalStatus,
+        ...(isTerminal(finalStatus) ? { rows: settleRunningRows(lane.rows) } : {}),
         usage: mergeUsage(lane.usage, readUsage(payload.usage)),
         pendingPermission: isTerminal(finalStatus) ? null : lane.pendingPermission,
         ...(isTerminal(finalStatus) && !isTerminal(lane.status)
@@ -731,6 +747,7 @@ function reduceEngineLost(
     lanes[key] = {
       ...lane,
       status: needsStatus ? 'cancelled' : lane.status,
+      rows: settleRunningRows(lane.rows),
       pendingPermission: null,
     };
   }
@@ -841,7 +858,9 @@ export function deriveSubagentPanelRows(
             blockId: `sub-${row.toolCallId}`,
             toolName: row.name,
             input: row.input,
-            status: row.status,
+            // Decision 203: a call its stopped lane took with it reads 「已停止」.
+            status: row.status === 'stopped' ? 'failed' : row.status,
+            ...(row.status === 'stopped' ? { result: { details: { stopped: true } } } : {}),
             output: row.status === 'failed' ? row.errorText : undefined,
             errorText: row.status === 'failed' ? row.errorText : undefined,
           },

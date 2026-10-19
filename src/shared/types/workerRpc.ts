@@ -475,6 +475,25 @@ export interface WorkerSubagentInterruptResult {
   interrupted: boolean;
 }
 
+/**
+ * Decision 203: move one running foreground call (a shell command, a
+ * subagent) of the session's turn to the background, as Claude Code's Ctrl+B
+ * does: the call returns at once and the work goes on as a background task.
+ * The Claude Agent SDK engine does it through the CLI's `background_tasks`
+ * control; DSH has no such hand-over (only a timeout promotes a command), so
+ * it answers `backgrounded: false`.
+ */
+export interface WorkerToolBackgroundPayload {
+  logicalSessionId: string;
+  /** The running call's id, as its `tool.started` named it. */
+  toolCallId: string;
+}
+
+export interface WorkerToolBackgroundResult {
+  /** The engine took the request; false when it cannot move this call. */
+  backgrounded: boolean;
+}
+
 /** `worker.job.kill` / `worker.job.read`: no job of this session has the id. */
 export const WORKER_JOB_UNKNOWN = 'WORKER_JOB_UNKNOWN';
 /** `worker.job.*` / `worker.subagent.interrupt`: the host composes no job registry or subagent service. */
@@ -859,6 +878,10 @@ export type WorkerJobReadRequest = WorkerRpcRequest<'worker.job.read', WorkerJob
 export type WorkerSubagentInterruptRequest = WorkerRpcRequest<
   'worker.subagent.interrupt',
   WorkerSubagentInterruptPayload
+>;
+export type WorkerToolBackgroundRequest = WorkerRpcRequest<
+  'worker.tool.background',
+  WorkerToolBackgroundPayload
 >;
 export type WorkerRewindRequest = WorkerRpcRequest<'worker.rewind', WorkerRewindPayload>;
 export type WorkerForkRequest = WorkerRpcRequest<'worker.fork', WorkerForkPayload>;
@@ -1333,6 +1356,21 @@ export function isWorkerSubagentInterruptPayload(
     value.childId.trim().length > 0 &&
     value.childId.length <= 256
   );
+}
+
+export function isWorkerToolBackgroundPayload(
+  value: unknown
+): value is WorkerToolBackgroundPayload {
+  return (
+    isLogicalSessionPayload(value) &&
+    typeof value.toolCallId === 'string' &&
+    value.toolCallId.trim().length > 0 &&
+    value.toolCallId.length <= 256
+  );
+}
+
+export function isWorkerToolBackgroundResult(value: unknown): value is WorkerToolBackgroundResult {
+  return isRecord(value) && typeof value.backgrounded === 'boolean';
 }
 
 export function isWorkerSubagentInterruptResult(

@@ -569,13 +569,15 @@ function reopenDraft(sessionId: string): string {
  */
 export async function stopChatSession(
   sessionId: string | null | undefined,
-  scope: 'all' | 'turn' = 'all'
+  scope: 'all' | 'turn' = 'turn'
 ): Promise<void> {
   if (!sessionId) {
     return;
   }
   try {
-    // Decision 201: "Send now" stops the turn only (`turn`); the Stop button everything.
+    // Decisions 201, 203: every Stop in the app stops the main turn only; the
+    // session's background subagents keep running and stop from their window.
+    // The Claude engine cannot: its CLI ends them on any interrupt.
     await window.electronAPI.chat.stop(scope === 'turn' ? { sessionId, scope } : { sessionId });
     useChatSessionsStore.setState({ lastError: null });
   } catch (err) {
