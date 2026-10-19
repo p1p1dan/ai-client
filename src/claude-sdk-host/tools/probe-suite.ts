@@ -59,6 +59,8 @@ export const GROUPS: readonly Group[] = [
       'search',
       'compact',
       'history',
+      // Decision 204: released while idle, reopened on a new host, sent to again.
+      'reopen',
     ],
   },
   {

@@ -2033,3 +2033,57 @@ describe('slash commands (dsh-rebase decision 194, measured on 2.1.300)', () => 
     await rt.dispose();
   });
 });
+
+describe('ids across hosts of one chat (decision 204)', () => {
+  /** One sent turn and one turn the CLI started itself: the ids they opened, and the engine turn's request id. */
+  async function twoTurns(rt: InstanceType<typeof ClaudeSdkSessionRuntime>) {
+    const from = events.length;
+    await send(rt);
+    // A reopened chat starts its CLI on the first send.
+    const q = sdk.queries.at(-1) as FakeQuery;
+    q.push({
+      type: 'stream_event',
+      parent_tool_use_id: null,
+      event: { type: 'message_start', message: { id: 'm1', usage: {} } },
+    });
+    q.push({ type: 'result', subtype: 'success', is_error: false, result: 'ok' });
+    q.push({
+      type: 'stream_event',
+      parent_tool_use_id: null,
+      event: { type: 'message_start', message: { id: 'm2', usage: {} } },
+    });
+    q.push({ type: 'result', subtype: 'success', is_error: false, result: 'ok' });
+    await flush();
+    const mine = events.slice(from) as Array<{
+      type: string;
+      requestId?: string;
+      payload: { messageId?: string };
+    }>;
+    return {
+      opened: mine.filter((e) => e.type === 'message.started').map((e) => e.payload.messageId),
+      engineRequest: mine.find((e) => e.requestId?.startsWith('cc-turn-'))?.requestId,
+    };
+  }
+
+  it('a reopened chat’s new host mints no message or request id the previous host did', async () => {
+    const first = runtime();
+    const boot = await first.bootstrap();
+    const before = await twoTurns(first);
+    // Released while idle: the host goes, the window keeps the rows it drew.
+    sdk.queries[0]?.end();
+    await first.dispose();
+    const rt = runtime('gw/claude-opus-5-5', { sessionFile: boot.sessionFile });
+    await rt.bootstrap();
+    const after = await twoTurns(rt);
+    // Each host: the user's echo, its reply, an engine-turn head and that turn's reply.
+    expect(before.opened).toHaveLength(4);
+    expect(after.opened).toHaveLength(4);
+    expect(after.opened.filter((id) => before.opened.includes(id))).toEqual([]);
+    expect(after.opened[0]).toMatch(/^cc-user-[0-9a-f]{6}-1$/);
+    expect(after.opened[1]).toMatch(/^cc-[0-9a-f]{8}-[0-9a-f]{6}-t1-s1$/);
+    expect(after.engineRequest).toMatch(/^cc-turn-[0-9a-f]{8}-[0-9a-f]{6}-2$/);
+    expect(after.engineRequest).not.toBe(before.engineRequest);
+    sdk.queries[1]?.end();
+    await rt.dispose();
+  });
+});

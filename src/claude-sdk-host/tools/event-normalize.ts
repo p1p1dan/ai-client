@@ -35,8 +35,9 @@ export interface NormalizedRecording {
 const ID_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   [/cc-question-toolu_[0-9A-Za-z]+/g, 'question'],
   [/toolu_[0-9A-Za-z]+/g, 'call'],
-  [/cc-[0-9a-f]{8}-t\d+-s\d+(?:-[a-z]+\d*)?/g, 'msg'],
-  [/cc-user-\d+(?:-text)?/g, 'user'],
+  // Decision 204: a host's six-hex mark sits between the session and the counters.
+  [/cc-[0-9a-f]{8}-(?:[0-9a-f]{6}-)?t\d+-s\d+(?:-[a-z]+\d*)?/g, 'msg'],
+  [/cc-user-(?:[0-9a-f]{6}-)?\d+(?:-text)?/g, 'user'],
   [/attempt-\d+/g, 'attempt'],
   [/send-probe-\d+/g, 'request'],
   [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, 'uuid'],
