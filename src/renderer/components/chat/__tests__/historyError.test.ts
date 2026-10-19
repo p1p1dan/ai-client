@@ -795,7 +795,6 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       historyErrors: {},
       selectSession: () => {},
       sendMessage: async () => {},
-      stopActiveSession: async () => {},
       respondQuestion: async () => false,
       closePlanReview: async () => {},
       initRuntime: () => () => {},

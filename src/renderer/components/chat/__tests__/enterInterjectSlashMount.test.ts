@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => {
     interject: vi.fn(async (_input: { sessionId: string; text: string }) => ({
       interjected: true,
     })),
+    // A Stop that has not settled yet.
+    stop: vi.fn(() => new Promise<void>(() => undefined)),
   };
   window.electronAPI = {
     env: { platform: 'linux', HOME: '/home/test' },
@@ -36,6 +38,7 @@ const mocks = vi.hoisted(() => {
       ensureHost: api.ensureHost,
       send: api.send,
       interject: api.interject,
+      stop: api.stop,
     },
   } as unknown as typeof window.electronAPI;
   return { api, listeners, toast: vi.fn() };
@@ -88,11 +91,12 @@ function setStore() {
     activeSessionId: 'a',
     sessions: [
       { id: 'a', projectId: 'p', workspaceId: 'w', title: 'a', status: 'running', updatedAt: 1 },
+      { id: 'b', projectId: 'p', workspaceId: 'w', title: 'b', status: 'running', updatedAt: 1 },
     ],
     projects: [{ id: 'p', name: 'repo' }],
     workspaces: [{ id: 'w', projectId: 'p', name: 'Main', kind: 'main', path: '/repo' }],
     messages: {},
-    hostBoundSessionIds: ['a'],
+    hostBoundSessionIds: ['a', 'b'],
     historyErrors: {},
     pendingPermissions: [],
     pendingQuestions: [],
@@ -178,5 +182,29 @@ describe('Enter while a turn runs (decision 203)', () => {
     expect(mocks.api.interject).not.toHaveBeenCalled();
     expect(mocks.api.send).not.toHaveBeenCalled();
     expect(queuedTexts()).toEqual(['/goal ship the release']);
+  });
+
+  it("interjects while another chat's Stop is still settling", async () => {
+    await mountComposer();
+    await act(async () => {
+      useChatSessionsStore.setState({ activeSessionId: 'b' });
+    });
+    await settle();
+    await act(async () => {
+      box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await settle();
+    expect(mocks.api.stop).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      useChatSessionsStore.setState({ activeSessionId: 'a' });
+    });
+    await settle();
+    await type('note for a');
+    await pressEnter();
+
+    expect(mocks.api.interject).toHaveBeenCalledTimes(1);
+    expect(mocks.api.interject.mock.calls[0]?.[0]).toMatchObject({ sessionId: 'a' });
+    expect(queuedTexts()).toEqual([]);
   });
 });

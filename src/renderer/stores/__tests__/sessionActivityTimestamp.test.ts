@@ -44,7 +44,6 @@ function baseState(sessions: ChatSession[], hostBound: string[] = []): ChatSessi
     historyErrors: {},
     selectSession: () => {},
     sendMessage: async () => {},
-    stopActiveSession: async () => {},
     respondQuestion: async () => false,
     closePlanReview: async () => {},
     initRuntime: () => () => {},

@@ -139,8 +139,9 @@ export function SubagentsWindow({
   const viewingRow = viewing ? view.rows.find((row) => row.childId === viewing) : undefined;
 
   const stopRow = async (row: JobRowView): Promise<void> => {
+    const interrupting = row.stop === 'interrupt' && row.childId !== undefined;
     try {
-      if (row.stop === 'interrupt' && row.childId) {
+      if (interrupting && row.childId) {
         await window.electronAPI.chat.interruptSubagent({ sessionId, childId: row.childId });
       } else if (row.jobId) {
         await window.electronAPI.chat.killSessionJob({ sessionId, jobId: row.jobId });
@@ -148,7 +149,10 @@ export function SubagentsWindow({
     } catch (error) {
       toastManager.add({
         type: 'error',
-        title: t('The subagent was not interrupted'),
+        // An interrupted child can be continued; a one-shot one's job is ended.
+        title: t(
+          interrupting ? 'The subagent was not interrupted' : 'The subagent was not stopped'
+        ),
         description: isSessionNotRunningError(error)
           ? t(SESSION_TASKS_ENDED)
           : unwrapIpcErrorMessage(error),

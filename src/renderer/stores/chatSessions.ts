@@ -620,7 +620,6 @@ export interface ChatSessionsState {
    * it to become a second default in.
    */
   sendMessage: (text: string, attachments?: ChatSendAttachment[]) => Promise<void>;
-  stopActiveSession: () => Promise<void>;
   /**
    * F5 — answer one parked question.
    *
@@ -2679,21 +2678,6 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
             },
           ],
         },
-      });
-    }
-  },
-
-  stopActiveSession: async () => {
-    const { activeSessionId } = get();
-    if (!activeSessionId) {
-      return;
-    }
-    try {
-      await window.electronAPI.chat.stop({ sessionId: activeSessionId });
-      set({ lastError: null });
-    } catch (err) {
-      set({
-        lastError: err instanceof Error ? err.message : String(err),
       });
     }
   },

@@ -548,9 +548,10 @@ function reopenDraft(sessionId: string): string {
 /**
  * T091 — stop a NAMED session's turn.
  *
- * Body is `chatSessions.ts`'s `stopActiveSession` with one substitution: the
- * session comes from the caller instead of from `activeSessionId`. That single
- * difference is the whole bug it closes. Every Stop affordance in the app knows
+ * It replaced `chatSessions.ts`'s `stopActiveSession` (since removed, decision
+ * 203 follow-up) with one substitution: the session comes from the caller
+ * instead of from `activeSessionId`. That single difference is the whole bug it
+ * closes. Every Stop affordance in the app knows
  * exactly which turn it is stopping — the composer holds it in
  * `inFlightSessionIdRef` (and already uses it to pause the right queue), the
  * timeline's failed-session card has it as a prop — and all of them then threw
@@ -560,12 +561,10 @@ function reopenDraft(sessionId: string): string {
  *
  * Lives here rather than in `chatSessions.ts` for the standing reason this whole
  * module exists: that store is a red-line file, extended only through external
- * `setState`. `stopActiveSession` is left untouched beside it — the store's own
- * interface still offers it, and nothing in this change needs it removed.
+ * `setState`.
  *
- * Accepts `null`/`undefined` and no-ops, mirroring `stopActiveSession`'s own
- * `if (!activeSessionId) return`, so a caller holding a nullable session id does
- * not have to grow a guard that can drift from this one.
+ * Accepts `null`/`undefined` and no-ops, so a caller holding a nullable session
+ * id does not have to grow a guard that can drift from this one.
  */
 export async function stopChatSession(
   sessionId: string | null | undefined,

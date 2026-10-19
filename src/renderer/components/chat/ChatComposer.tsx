@@ -4752,8 +4752,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           if (composingRef.current) return;
           event.preventDefault();
           // Decision 203: while a turn runs, Enter joins it at its next step
-          // (as in Claude Code) and Ctrl+Enter queues for the turn's end.
-          if (canStop && !stopping && !event.ctrlKey) {
+          // (as in Claude Code) and Ctrl+Enter queues for the turn's end. A
+          // turn being stopped takes nothing in, so there Enter queues; another
+          // chat's Stop does not count (an interjection takes no send slot),
+          // as the round button reads it.
+          const stoppingHere =
+            stoppingSessionId === activeSessionId || activeSession?.status === 'stopping';
+          if (canStop && !stoppingHere && !event.ctrlKey) {
             void handleInterject();
           } else {
             void handleSend();

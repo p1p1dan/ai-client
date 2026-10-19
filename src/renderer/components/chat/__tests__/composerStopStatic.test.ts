@@ -1269,7 +1269,7 @@ describe('decision 046 — Stop always settles the composer', () => {
     // Decision 203: Enter interjects into a running turn, not one being
     // stopped (that takes nothing in); there, and on Ctrl+Enter, it queues.
     expect(source).toContain('return status != null && isStoppableStatus(status);');
-    expect(source).toContain('if (canStop && !stopping && !event.ctrlKey) {');
+    expect(source).toContain('if (canStop && !stoppingHere && !event.ctrlKey) {');
   });
 
   /**

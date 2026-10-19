@@ -3683,6 +3683,7 @@ Object.assign(zhTranslations, {
   'Earlier run': '此前运行',
   'The task was not stopped': '任务没有停下',
   'The subagent was not interrupted': '子代理没有被打断',
+  'The subagent was not stopped': '子代理没有停下',
   'Recent activity': '最近活动',
   'No output yet': '还没有输出',
   'Earlier {{size}} not shown': '已省略前 {{size}}',
