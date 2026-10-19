@@ -1375,6 +1375,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     useComposerDraftsStore.getState().fillIfEmpty(typedIn, { text: command, attachments: [] });
   };
 
+  /** Whether `trimmed` names a command the engine runs (not a builtin, no attachments). */
+  const namesEngineCommand = (trimmed: string): boolean => {
+    const parsed = parseSlashLine(trimmed);
+    if (!parsed || attachments.drafts.length > 0) return false;
+    const source = buildSlashCatalog(slashCatalog, t).find(
+      (item) => item.name === parsed.name
+    )?.source;
+    return source !== undefined && source !== 'builtin';
+  };
+
   const runBuiltinSlash = async (trimmed: string): Promise<boolean> => {
     const parsed = parseSlashLine(trimmed);
     if (!parsed || attachments.drafts.length > 0) return false;
@@ -1655,7 +1665,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // turn at all sends the message on to the queue, as Enter would.
       // Decisions 178, 179: a `/compact` — starting or compacting — is no
       // turn to steer into; it queues.
-      if (!compactingNow && (await interjectIntoTurn(activeSessionId, trimmed)) !== 'no-turn') {
+      // Decision 203: an engine command (DSH `/goal`, a skill, a CLI command)
+      // runs only as a send; steered, it would reach the model as plain text.
+      // It queues for the turn's end, as Enter did before.
+      if (
+        !compactingNow &&
+        !namesEngineCommand(trimmed) &&
+        (await interjectIntoTurn(activeSessionId, trimmed)) !== 'no-turn'
+      ) {
         return;
       }
     }
@@ -4245,8 +4262,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       void interjectIntoTurn(sessionId, head.text, { sendNow: true, queued: head }).then(
         (outcome) => {
           if (outcome === 'interjected') return;
+          // `restoreHead`, not `enqueue`: the queue's caps must not drop a
+          // message the user already queued (decision 3.3).
           const store = useMessageQueueStore.getState();
-          if (!store.enqueue(head).ok) return;
+          store.restoreHead(head);
           store.prioritizeEntry(sessionId, head.id);
         }
       );
