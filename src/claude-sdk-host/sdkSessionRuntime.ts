@@ -709,6 +709,13 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private turn: Turn | null = null;
   private turnCount = 0;
   private userMessageCount = 0;
+  /**
+   * Decision 204: this host's mark in every id it mints. A chat released while idle and
+   * reopened gets a new host whose counters start at 1 again, while the window keeps the
+   * rows it drew; without the mark the first reply reused an old row's id and was drawn
+   * into that row, far up the timeline.
+   */
+  private readonly idTag = randomUUID().slice(0, 6);
   private readonly pendingPermissions = new Map<string, PendingPermission>();
   private readonly pendingQuestions = new Map<string, PendingQuestion>();
   /** Decision 194: the CLI's command list (`initializationResult`, then `commands_changed`). */
@@ -1275,7 +1282,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     attachments?: SessionAttachment[]
   ): void {
     this.userMessageCount += 1;
-    const messageId = `cc-user-${this.userMessageCount}`;
+    const messageId = `cc-user-${this.idTag}-${this.userMessageCount}`;
     this.emit({
       type: 'message.started',
       payload: {
@@ -1520,7 +1527,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         const apiMessage = record(event.message) ?? {};
         const usage = record(apiMessage.usage) ?? {};
         const stepNo = this.nextStepNo();
-        const messageId = `cc-${this.requireStub().ccSessionId.slice(0, 8)}-t${this.turnCount}-s${stepNo}`;
+        const messageId = `${this.stepIdPrefix()}-s${stepNo}`;
         turn.step = {
           messageId,
           apiMessageId: String(apiMessage.id ?? messageId),
@@ -1696,7 +1703,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
 
   /** One whole reply of the CLI's own, as a model step would stream it (decision 194). */
   private emitLocalReply(turn: Turn, text: string): void {
-    const messageId = `cc-${this.requireStub().ccSessionId.slice(0, 8)}-t${this.turnCount}-s${this.nextStepNo()}`;
+    const messageId = `${this.stepIdPrefix()}-s${this.nextStepNo()}`;
     turn.step = {
       messageId,
       apiMessageId: messageId,
@@ -1878,7 +1885,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private openEngineTurn(): void {
     this.turnCount += 1;
     this.turn = {
-      requestId: `cc-turn-${this.requireStub().ccSessionId.slice(0, 8)}-${this.turnCount}`,
+      requestId: `cc-turn-${this.requireStub().ccSessionId.slice(0, 8)}-${this.idTag}-${this.turnCount}`,
       stopRequested: false,
       step: null,
       toolMessage: new Map(),
@@ -1889,7 +1896,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     };
     this.emitStatus('running');
     this.userMessageCount += 1;
-    const messageId = `cc-user-${this.userMessageCount}`;
+    const messageId = `cc-user-${this.idTag}-${this.userMessageCount}`;
     this.emit({
       type: 'message.started',
       payload: {
@@ -1903,6 +1910,11 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       },
     });
     this.emit({ type: 'message.completed', payload: { messageId } });
+  }
+
+  /** A model step's id up to its step number (decision 204: with this host's mark). */
+  private stepIdPrefix(): string {
+    return `cc-${this.requireStub().ccSessionId.slice(0, 8)}-${this.idTag}-t${this.turnCount}`;
   }
 
   private nextStepNo(): number {

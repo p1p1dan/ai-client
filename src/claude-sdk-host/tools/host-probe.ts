@@ -5,7 +5,7 @@
  *
  *   node tools/host-probe.ts <gatewayUrl> <workspace> [scenario ...]
  *
- * Scenarios: text tools ask stop plan steer agent search enc compact history errors repoenv.
+ * Scenarios: text tools ask stop plan steer agent search enc compact history reopen errors repoenv.
  * Default: text tools ask stop plan steer. Resume: run again with PROBE_CONFIG_DIR and
  * PROBE_SESSION_FILE pointing at the first run's config dir and stub.
  * Every scenario ends with deterministic `[check]` lines (terminal event, tools that ran,
@@ -248,6 +248,8 @@ const pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Err
 let events: Event[] = [];
 /** S-5 R-3: every event of the running scenario, dumped when PROBE_RECORD_DIR is set. */
 let scenarioEvents: Event[] = [];
+/** Decision 204: every message id any host of this run opened. */
+const openedIds = new Set<string>();
 const waiters: Array<{
   test: (e: Event) => boolean;
   resolve: (e: Event) => void;
@@ -349,6 +351,7 @@ function startHost(): void {
       const event = message.payload as Event;
       events.push(event);
       scenarioEvents.push(event);
+      if (event.type === 'message.started') openedIds.add(String(event.payload?.messageId));
       if (
         process.env.PROBE_VERBOSE &&
         !event.type.endsWith('.delta') &&
@@ -1214,19 +1217,20 @@ const ERROR_CASES: Array<{ status: number; code: string; message?: string; echoK
   },
 ];
 
-/** `worker.bootstrap` for the probe's chat, on the host just started. */
-async function bootstrap(): Promise<void> {
+/** `worker.bootstrap` for the probe's chat, on the host just started; `resume` reopens that stub. */
+async function bootstrap(resume?: string): Promise<void> {
   const t0 = Date.now();
+  const reopened = resume ?? process.env.PROBE_SESSION_FILE;
   const boot = await request<Record<string, unknown>>('worker.bootstrap', {
     logicalSessionId,
     cwd: bootstrapCwd(),
     // S-3: a chat not bound to a project (Main sends this for a scratch chat).
     ...(scenarios.includes('projcfg-scratch') ? { unbound: true } : {}),
     model: 'probe-gw/claude-opus-5-5',
-    ...(process.env.PROBE_SESSION_FILE ? { sessionFile: process.env.PROBE_SESSION_FILE } : {}),
+    ...(reopened ? { sessionFile: reopened } : {}),
   });
   sessionFile = String(boot.sessionFile);
-  if (process.env.PROBE_SESSION_FILE) {
+  if (reopened) {
     const initial = boot.initialHistory as { page?: { messages?: unknown[] } } | undefined;
     check(
       'bootstrap',
@@ -1239,8 +1243,11 @@ async function bootstrap(): Promise<void> {
   );
 }
 
-/** S-3: dispose the host, wait for it to exit, and start and bootstrap a new one. */
-async function restartHost(): Promise<void> {
+/**
+ * S-3: dispose the host, wait for it to exit, and start and bootstrap a new one;
+ * `resume` reopens the same chat on it, as Main does after an idle release (decision 204).
+ */
+async function restartHost(resume?: string): Promise<void> {
   const previous = child;
   const exited = new Promise<void>((resolve) => {
     if (previous.exitCode !== null || previous.signalCode !== null) resolve();
@@ -1250,8 +1257,12 @@ async function restartHost(): Promise<void> {
   await exited;
   hostGone = undefined;
   startHost();
-  await bootstrap();
+  await bootstrap(resume);
 }
+
+/** The ids of the messages the events opened. */
+const startedIds = (list: readonly Event[]) =>
+  list.filter((e) => e.type === 'message.started').map((e) => String(e.payload?.messageId));
 
 async function main(): Promise<void> {
   const projcfg = scenarios.filter((s) => PROJCFG_SCENARIOS.includes(s));
@@ -3043,6 +3054,40 @@ async function main(): Promise<void> {
             !listedRow('clear')
         );
         check('slash', 'the catalog runs no hook of the project', !existsSync(slashHookMarker()));
+        break;
+      }
+      case 'reopen': {
+        // Decision 204: the chat is released while idle and reopened on a new host (Main's
+        // idle sweep, then the next send). The window keeps the rows it drew, so the new
+        // host must mint no id an earlier one did, or its reply is drawn into an old row.
+        await send('CC-TEXT before the release');
+        const first = await waitFor(terminal, 'reopen first turn end');
+        const before = new Set(openedIds);
+        const file = sessionFile;
+        if (!file) throw new Error('reopen: no session file');
+        await restartHost(file);
+        await send('CC-TEXT after the release');
+        const end = await waitFor(terminal, 'reopen turn end');
+        show('reopen');
+        const after = startedIds(events);
+        const reused = after.filter((id) => before.has(id));
+        console.log(`  ids before: ${before.size}; after: ${after.join(',')}`);
+        check(
+          'reopen',
+          'the turn before the release completes',
+          first.type === 'session.completed'
+        );
+        check(
+          'reopen',
+          'the turn on the reopened host completes',
+          end.type === 'session.completed'
+        );
+        check('reopen', 'it streams its reply', assistantText().length > 0);
+        check(
+          'reopen',
+          `the reopened host mints no id the first one did (${reused.join(',') || 'none'})`,
+          after.length > 0 && reused.length === 0
+        );
         break;
       }
       case 'history': {
