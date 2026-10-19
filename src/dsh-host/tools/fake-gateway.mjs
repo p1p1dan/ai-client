@@ -231,8 +231,8 @@
  *                       so the parent's own step is over before the child speaks).
  *                       dsh-rebase decisions 201/203 add two for the stop-scope
  *                       integration test: P1-SUBSTOP (a background subagent, then a
- *                       30 s foreground sleep to stop; the settlement wakes the agent)
- *                       and P1-SUBSTOPCHILD (the child: a 6 s command that writes
+ *                       foreground sleep to stop; the settlement wakes the agent)
+ *                       and P1-SUBSTOPCHILD (the child: a command, 6 s by default, that writes
  *                       substop-<tag>.txt once it ran to the end).
  *                       dsh-rebase P1-15 adds four for one-shot completions (decision
  *                       125; the shared-host integration test's completion phase and
@@ -313,7 +313,8 @@
  *                       Route B S-1 adds two: `CC-ERR {"status":401}` (any status; optional
  *                       "message", and "echoKey": true to quote the request's key back) answers that HTTP status with an Anthropic-format error body
  *                       and `x-should-retry: false`, so the CLI fails the turn at once instead of
- *                       retrying for minutes; `CC-ENV` answers one text line saying how the
+ *                       retrying for minutes ("retry": true leaves the header out, so it retries);
+ *                       `CC-ENV` answers one text line saying how the
  *                       request identified itself (`key=` / `bearer=` digests, `headers=` the
  *                       header names), for the host probe's repository-env checks.
  *                       Route B S-2 adds `CC-RUN {"calls":[{"name":"Write","input":{...}}, ...]}`:
@@ -1793,22 +1794,24 @@ const DSH_P0_2_SCRIPTS = {
   // dsh-rebase decisions 201/203 (`stopScope.integration.test.ts`): a background
   // subagent runs a long command while its parent sleeps in the foreground, so
   // a Stop lands mid-turn. `tag=<word>` names the file the child writes once
-  // its command ran to the end; the settlement notice wakes the parent.
+  // its command ran to the end; `secs=<n>` how long that command sleeps (6 by
+  // default; the parent sleeps 24 s longer). The settlement notice wakes the parent.
   'P1-SUBSTOP'(_round, step, _calls, triggerText, _history, recent) {
     if (/Background subagent \S+ finished/.test(recent ?? '')) {
       return say('The stop-scope subagent reported back.');
     }
     const tag = /tag=(\w+)/.exec(triggerText)?.[1] ?? 'none';
+    const secs = Number(/secs=(\d+)/.exec(triggerText)?.[1] ?? 6);
     if (step === 0) {
       return tool('subagent', {
         description: 'Stop-scope probe',
-        prompt: `P1-SUBSTOPCHILD tag=${tag}: run the long command, then answer.`,
+        prompt: `P1-SUBSTOPCHILD tag=${tag} secs=${secs}: run the long command, then answer.`,
         run_in_background: true,
       });
     }
     if (step === 1) {
       return tool('bash', {
-        command: 'sleep 30; echo parent-sleep-done',
+        command: `sleep ${secs + 24}; echo parent-sleep-done`,
         description: 'Parent sleeper',
       });
     }
@@ -1816,9 +1819,10 @@ const DSH_P0_2_SCRIPTS = {
   },
   'P1-SUBSTOPCHILD'(_round, step, _calls, triggerText) {
     const tag = /tag=(\w+)/.exec(triggerText)?.[1] ?? 'none';
+    const secs = Number(/secs=(\d+)/.exec(triggerText)?.[1] ?? 6);
     if (step === 0) {
       return tool('bash', {
-        command: `sleep 6; echo substop-child-done > substop-${tag}.txt`,
+        command: `sleep ${secs}; echo substop-child-done > substop-${tag}.txt`,
         description: 'Child sleeper',
       });
     }
@@ -3838,7 +3842,9 @@ function decideClaudeSdk(parsed, req) {
       // `echoKey`: a gateway that quotes the key it was sent back in its error (§7.4 #3).
       const message =
         params.echoKey === true ? `${base} (key ${receivedKey(req) ?? '(none)'})` : base;
-      return { kind: 'cc-error', status, label, errorType, message };
+      // `retry`: no `x-should-retry: false`, so the CLI retries as from a real upstream
+      // (decision 205: a turn in an upstream retry loop).
+      return { kind: 'cc-error', status, label, errorType, message, retry: params.retry === true };
     }
     case 'ENV':
       return reply({ text: ccEnvReport(req) }, label);
@@ -4343,7 +4349,7 @@ function main() {
         // `x-should-retry: false`: the CLI's retry loop honours it, so the turn fails now.
         res.writeHead(decision.status, {
           'content-type': 'application/json',
-          'x-should-retry': 'false',
+          ...(decision.retry ? {} : { 'x-should-retry': 'false' }),
         });
         res.end(
           JSON.stringify({
