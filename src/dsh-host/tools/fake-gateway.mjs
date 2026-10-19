@@ -1548,7 +1548,14 @@ const DSH_P0_2_SCRIPTS = {
       tool('read', { file_path: f('edit-target.txt') }),
       tool('write', { file_path: written, content: `${p.marker} WRITTEN-${p.token}\n` }),
       tool('read', { file_path: written }),
-      tool('grep', { pattern: p.marker, path: p.dir }),
+      // Decision 190: our grep lists files by default, so ask for the matching
+      // lines (the marker itself). DSH's own grep refuses the key: the control
+      // group that drives DSH Desktop passes `dshGrep: true`.
+      tool('grep', {
+        pattern: p.marker,
+        path: p.dir,
+        ...(p.dshGrep === true ? {} : { output_mode: 'content' }),
+      }),
       tool('glob', { pattern: '*.txt', path: p.dir }),
       ...p04ShellSteps(p, f),
       tool('read', { file_path: f(`shell-written-${p.token}.txt`) }),

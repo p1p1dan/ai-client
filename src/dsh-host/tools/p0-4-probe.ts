@@ -1164,7 +1164,8 @@ async function controlMain() {
     calls: [],
     finished: false,
   };
-  const prompt = `P0-FS ${JSON.stringify({ tag: 'ctrl', dir, marker, token: run.token, shell })}`;
+  // DSH Desktop runs DSH's own grep, which refuses decision 190's `output_mode`.
+  const prompt = `P0-FS ${JSON.stringify({ tag: 'ctrl', dir, marker, token: run.token, shell, dshGrep: true })}`;
   const promptFile = join(dirname(outFile), 'control-prompt.txt');
   writeFileSync(promptFile, `${prompt}\n`);
   report.controlPrompt = prompt;
