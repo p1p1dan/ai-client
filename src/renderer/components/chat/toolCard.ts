@@ -664,6 +664,12 @@ export interface ToolRowView {
    */
   backgroundJob?: { id?: string; promoted: boolean };
   /**
+   * Decision 202: a delegation header whose delegate is still running after
+   * the delegation call settled (「后台运行中」). Drawn as a word in the
+   * outcome slot instead of the foreground running state.
+   */
+  backgroundRunning?: boolean;
+  /**
    * dsh-rebase P1-7c: a shell command's non-zero exit code, read off DSH's
    * own `[exit code: N]` marker (`dsh-shell` `parseExitStatus`). A neutral
    * 「退出码 N」 tail, never red: whether a non-zero exit is a failure is the

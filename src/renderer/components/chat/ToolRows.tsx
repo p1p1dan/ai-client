@@ -60,7 +60,7 @@ import {
   type ReviewFinding,
   type ReviewFindings,
 } from './reviewFindings';
-import { deriveSubagentPanelRows } from './subagentActivityModel';
+import { deriveSubagentPanelRows, subagentHeaderLiveness } from './subagentActivityModel';
 import { TodoList } from './TodoCard';
 import {
   composeRefArg,
@@ -359,6 +359,14 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
           {view.backgroundJob.id ? ` · ${view.backgroundJob.id}` : null}
         </span>
       )}
+      {/* Decision 202: a delegate still working after its call settled runs
+          in the background; it does not hold the conversation, so it never
+          takes the foreground running state. */}
+      {view.backgroundRunning && (
+        <span data-slot="tool-row-background" className={toolRowPermissionClass()}>
+          · {t('Running in background')}
+        </span>
+      )}
       {typeof view.exitCode === 'number' && (
         <span data-slot="tool-row-exit" className={cn(toolRowPermissionClass(), 'tabular-nums')}>
           · {t('Exit code {{code}}', { code: view.exitCode })}
@@ -541,12 +549,14 @@ function SubagentActivity({
     () => deriveSubagentPanelRows(lane, { parentRunning, t })[0],
     [lane, parentRunning, t]
   );
+  const liveness = subagentHeaderLiveness(lane?.status, parentRunning);
   const merged = panel
     ? {
         ...view,
         arg: [lane?.agentType, view.arg ?? lane?.description].filter(Boolean).join(' '),
         argKind: 'prose' as const,
-        running: lane?.status === 'running' || (lane?.status === null && parentRunning),
+        running: liveness === 'running',
+        backgroundRunning: liveness === 'background',
         failed: view.failed || panel.failed,
         expandable: true,
         body: 'detail' as const,

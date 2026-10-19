@@ -75,7 +75,9 @@
  * Turn semantics (P1-4c1, decisions 093-095): Ctrl+Enter steers the running
  * turn (`agent.steer`): the message waits in DSH's inbox and the turn takes it
  * in at its next step boundary, echoed with the renderer's attempt id; with no
- * turn running the bridge answers `turnActive: false` and sends nothing. Stop
+ * turn running the bridge answers `turnActive: false` and sends nothing. An
+ * ordinary send that lands while DSH runs a turn of its own is steered the
+ * same way (decision 202), so that turn never settles the send. Stop
  * is DSH's stop button, `cancel({kind:'user'}, {keepInbox:true})`: input the
  * turn has not taken in yet stays for the next one. The failure card's
  * Continue follows up a hidden continuation prompt (`aiclient-retry`), only
@@ -1679,6 +1681,16 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.assertNoOwnTurn();
     const agent = this.requireAgent();
     this.applyRoute(routed);
+    // Decision 202: a turn DSH started itself (a goal round, a job or subagent
+    // wake-up) is running, or about to log its `turn/start`. A followup would
+    // take that turn over: its `turn/end` would settle this send, and the
+    // message would come back as a turn nobody sent, its echo unpaired. The
+    // message joins the running turn instead, as Ctrl+Enter's does; the turn
+    // settles under its own id, which also frees Main's latch on this send.
+    if (this.steerable()) {
+      this.steer(input.attemptId, content);
+      return { accepted: true, requestId: input.requestId };
+    }
     const message = this.deps.createUserMessage({ content, source: { kind: 'user' } });
     this.turn = {
       requestId: input.requestId,
