@@ -4795,3 +4795,27 @@ Object.assign(zhTranslations, {
 Object.assign(zhTranslations, {
   'History {{index}}/{{total}}': '历史 {{index}}/{{total}}',
 });
+
+// Tool gaps (decision 190)
+/**
+ * dsh-rebase decision 190: the custom service's output limit when it is left
+ * empty (`ModelSettingsPanel.tsx`), the web_fetch approval card and its tool
+ * row, and the enhanced grep's tool row (`toolCard.ts`).
+ */
+Object.assign(zhTranslations, {
+  "Left empty, {{value}} tokens are reserved, shared by thinking and the reply. Fill in the output limit from the provider's documentation: a number above what the model allows is refused on every request, and one too small cuts long replies short.":
+    '留空时按 {{value}} 预留，思考和回复共用。请按服务商文档填写输出上限：超过模型允许的值，每次请求都会被拒绝；太小，长回复会被截断。',
+  // web_fetch's approval card (questionCardModel.ts): its action, its body's
+  // label (the runtime's word for it), and what Allow for session remembers.
+  'Fetch a web page': '获取网页',
+  URL: '网址',
+  'Allow for session remembers {{tool}} for every page on {{host}}':
+    '「本会话内允许」会记住 {{tool}} 可访问 {{host}} 的所有页面',
+  // A settled grep / web_fetch row's tail (toolCard.ts toolResultNote).
+  'No matches': '无匹配',
+  '1 file': '1 个文件',
+  '1 matching line': '1 处匹配',
+  '{{count}} matching lines': '{{count}} 处匹配',
+  'HTTP {{status}}': 'HTTP {{status}}',
+  Truncated: '已截断',
+});

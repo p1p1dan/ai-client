@@ -155,14 +155,15 @@ describe('catalogFromAllowlist (checkout)', () => {
     const { plugins, error } = catalogFromAllowlist(raw, (name) => `about ${name}`);
     expect(error).toBeNull();
     const office = plugins.find((plugin) => plugin.name === 'dsh-office-tools');
+    // Decision 189: the DSH 0.2.0-rc.2 pilot is 1.0.6, reviewed 2026-10-14.
     expect(office).toMatchObject({
-      version: '1.0.4',
+      version: '1.0.6',
       kind: 'internal',
       defaultEnabled: false,
       description: 'about dsh-office-tools',
       readTools: ['excel_read', 'ppt_read', 'word_read'],
       writeTools: ['excel_create', 'excel_update', 'ppt_create', 'word_create', 'word_update'],
-      review: { date: '2026-09-28', verdict: 'conditional' },
+      review: { date: '2026-10-14', verdict: 'conditional' },
     });
   });
 

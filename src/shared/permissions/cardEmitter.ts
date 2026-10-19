@@ -118,6 +118,8 @@ function kindOf(tool: string): PermissionRequestKind {
  */
 function actionOf(request: ToolPermissionRequest): PermissionRequestAction | undefined {
   if (request.hostAsk?.sandbox) return 'escalate_sandbox';
+  // Decision 190: the URL itself is the card's body (`preview`).
+  if (request.network === true) return 'fetch_url';
   const tool = request.tool;
   if (isShellTool(tool)) return 'run_command';
   switch (tool) {

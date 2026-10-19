@@ -11,8 +11,10 @@
  *                                `next()` cannot bypass the gate (E2)
  *   tools/post-execute (prepend) drop denied entries from glob / grep values;
  *                                returns without `next()` when it filtered,
- *                                because tool-fs-search, which runs after this
- *                                row (E3), would spill the unfiltered list
+ *                                because glob's spill (tool-fs-search's, which
+ *                                aiclient-fs-search registers since decision
+ *                                190), running after this row (E3), would
+ *                                write the unfiltered list
  *   approval/request             answer DSH's own asks for attached sessions:
  *                                at most one card per call id; the card
  *                                offers allow / deny, and an escalation says
@@ -472,7 +474,8 @@ export class PermissionHost {
     const filtered = filterSearchValue(exec.name, exec.callId, result.value, cwd, route.gate.gate);
     if (!filtered) return next();
     // Deliberately no next(): the listeners after this one include
-    // tool-fs-search's spill, which would write the unfiltered list to disk.
+    // glob's spill (aiclient-fs-search registers tool-fs-search's, decision
+    // 190), which would write the unfiltered list to disk.
     return { kind: 'accept', value: filtered.value };
   }
 

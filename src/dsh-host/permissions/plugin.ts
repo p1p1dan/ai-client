@@ -173,7 +173,8 @@ export function apply(ctx: PermissionRowContext): void {
   );
   ctx.tools.guard((exec) => host.guard(exec));
   // Prepend on purpose (experiment E3): a filtered result must not reach
-  // tool-fs-search's spill, which runs after every earlier-activated row.
+  // glob's spill (tool-fs-search's, registered by aiclient-fs-search since
+  // decision 190), which runs after every earlier-activated row.
   ctx.on(
     'tools/post-execute',
     (exec: DshToolCall, result: DshToolResult, next: () => Promise<DshPostToolDecision>) =>

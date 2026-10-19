@@ -50,20 +50,53 @@
 - id: session-title-llm
   disabled: true
 
-# web_search is the official DeepSeek search endpoint and web_fetch reaches the
-# public internet; neither belongs in the probe. P1 routes search through the
-# ai-client gateway instead.
-- id: tool-web
-  disabled: true
+# ---- Decision 190: tool gaps (web_fetch, grep) --------------------------------
+# One switch per item, read by name (src/dsh-host/lib/toolSwitches.ts; Main
+# forwards both): only the exact value `0` restores the composition as it
+# was before decision 190.
 
+# web_fetch: DSH's anonymous HTTP(S) fetch, public destinations only (every
+# resolved address checked and the connection pinned to it, same-origin
+# redirects, capped bodies). Every call reaches ai-client's permission gate
+# as a network access: asked under ask / accept-edits, allowed under auto /
+# bypass, remembered per host for the session (decision 190 §2). There is no
+# web_search: its DSH backend is the official DeepSeek endpoint, which stays
+# off (P0-2, hostProfile.ts REQUIRED_DISABLED), and choosing another backend
+# is not decided yet. An id patch replaces a row's whole config, so `web`
+# states its one provider and `tool-web` both of its switches.
 - id: web
-  disabled: true
+  disabled: !!js "process.env.AICLIENT_RUNTIME_WEB_FETCH === '0'"
+  config:
+    fetchProvider: http
+
+- id: web-fetch-http
+  disabled: !!js "process.env.AICLIENT_RUNTIME_WEB_FETCH === '0'"
+
+- id: tool-web
+  disabled: !!js "process.env.AICLIENT_RUNTIME_WEB_FETCH === '0'"
+  config:
+    search: false
+    fetch: true
 
 - id: web-search-deepseek
   disabled: true
 
-- id: web-fetch-http
+# grep: dsh-tool-fs-search registers glob and grep as one row and cannot
+# leave grep out, so aiclient-fs-search takes the row's place: DSH's glob
+# unchanged, and our grep (output modes, context lines, case folding, file
+# types, multiline, paging). With AICLIENT_RUNTIME_RICH_GREP=0 the row
+# registers DSH's grep instead. The config is tool-fs-search's, as dsh-base
+# set it.
+- id: tool-fs-search
   disabled: true
+
+- insert:
+    - id: aiclient-fs-search
+      name: '@aiclient/dsh-app/fs-search'
+      config:
+        sampleOverCapGlobResults: false
+
+# ---- end of decision 190 ------------------------------------------------------
 
 # Every model request goes through llm-pi-ai. Its routes and the default model
 # are not here: Main's model plan brings them at every start (`configure`, P1-5a,

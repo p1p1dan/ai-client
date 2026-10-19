@@ -45,7 +45,10 @@ const STRIPPED_LIFECYCLE_PREFIX = 'npm_';
  * `SESSION_METADATA_ENV`, `PREFIX_WATCH_ENV`, `CACHE_CHAIN_ENV` and
  * `USER_CONTENT_BLOCKS_ENV` in src/shared/types/requestScope.ts and
  * `DELEGATED_USAGE_ENV` in src/shared/dshDelegatedUsage.ts, and
- * DshHostProcess.test.ts pins the two equal.
+ * DshHostProcess.test.ts pins the two equal. Decision 190's two tool switches
+ * (`0` turns each gap back on: no web_fetch, DSH's own grep) follow,
+ * `WEB_FETCH_ENV` and `RICH_GREP_ENV` in src/dsh-host/lib/toolSwitches.ts,
+ * pinned the same way.
  */
 const FORWARDED_ENV = [
   'AICLIENT_RUNTIME_LOOP_GUARD',
@@ -55,6 +58,8 @@ const FORWARDED_ENV = [
   'AICLIENT_RUNTIME_CACHE_CHAIN',
   'AICLIENT_RUNTIME_USER_CONTENT_BLOCKS',
   'AICLIENT_RUNTIME_DELEGATED_USAGE',
+  'AICLIENT_RUNTIME_WEB_FETCH',
+  'AICLIENT_RUNTIME_RICH_GREP',
 ];
 
 /**

@@ -269,7 +269,7 @@
       "messageId": "dsh-aiclient-rec-perm-search-t1-s2",
       "toolCallId": "toolu_id-8",
       "ok": true,
-      "output": "Found 1 match\n\nnotes.txt\nLine 1: PERM-SECRET in plain notes"
+      "output": "Found 1 file\n\nnotes.txt"
     }
   },
   {

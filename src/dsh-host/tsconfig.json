@@ -35,6 +35,7 @@
   // P1-8: the aiclient-loop-guard row and its tests.
   // P1-5b: the aiclient-credentials row and its tests.
   // P1-13c/13d: the aiclient-encrypted-read row and its tests.
+  // Decision 190: the aiclient-fs-search row and its tests.
   "include": [
     "*.ts",
     "__tests__/*.ts",
@@ -50,6 +51,8 @@
     "credentials/__tests__/*.ts",
     "encryptedRead/*.ts",
     "encryptedRead/__tests__/*.ts",
+    "fsSearch/*.ts",
+    "fsSearch/__tests__/*.ts",
     "tools/**/*.ts"
   ],
   "exclude": ["node_modules", "bundle", "tools/probe-bundle"]

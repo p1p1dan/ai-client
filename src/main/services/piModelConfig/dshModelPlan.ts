@@ -12,6 +12,7 @@ import {
   buildDshModelPlan,
   type DshModelPlan,
   type DshRouteSettingsInput,
+  describeDefaultMaxTokens,
 } from '@shared/dshModelPlan';
 import {
   describeCacheControlOnTools,
@@ -92,6 +93,12 @@ export function resolveDshModelPlanWith(deps: DshModelPlanDeps): DshModelPlan {
           { mode: deps.settings.userAgentMode, custom: deps.settings.userAgentCustom },
           deps.clientVersion ?? ''
         )
+      )}, plan ${plan.revision.slice(0, 12)}`
+    );
+    // Decision 190: how rows that declare no output limit were sized.
+    deps.log?.(
+      `[dsh-plan] ${describeDefaultMaxTokens(
+        deps.settings.defaultMaxTokens === 'flat' ? 'flat' : 'protocol'
       )}, plan ${plan.revision.slice(0, 12)}`
     );
     if (plan.dropped.length > 0) {

@@ -8,7 +8,7 @@
  */
 
 import { SESSION_EFFORT_LEVELS } from '../types/agentHost.ts';
-import type { DshEffortLevel, DshProtocol } from './types.ts';
+import type { DefaultMaxTokensMode, DshEffortLevel, DshProtocol } from './types.ts';
 
 /** `PROTOCOLS` / `supportedProtocols()` (`dsh-llm-pi-ai` lib/index.js:802-817). */
 export const DSH_PROTOCOLS: readonly DshProtocol[] = [
@@ -106,6 +106,58 @@ export function plannedMaxTokens(
   if (maxTokens === undefined || contextWindow === undefined) return maxTokens;
   if (maxTokens <= Math.floor(contextWindow * MAX_TOKENS_WINDOW_SHARE_LIMIT)) return maxTokens;
   return Math.max(1, Math.floor(contextWindow * MAX_TOKENS_WINDOW_SHARE_FALLBACK));
+}
+
+/**
+ * Decision 190: the output limit a reasoning row that declares none is
+ * planned with, by protocol. Thinking and the reply share the limit, so
+ * {@link DEFAULT_MAX_TOKENS} cuts a long reply (a whole-file write) short.
+ * Every current model of each protocol's own vendor accepts these: Anthropic
+ * since Claude 3.7 (Opus 4 / 4.1 top out at exactly 32000), OpenAI's
+ * Responses models since GPT-4.1 and the o-series. OpenAI-compatible services
+ * vary the most, so they get the smaller raise.
+ */
+export const REASONING_DEFAULT_MAX_TOKENS: Readonly<Record<DshProtocol, number>> = {
+  'anthropic-messages': 32_000,
+  'openai-responses': 32_000,
+  'openai-completions': 16_384,
+};
+
+/** Decision 190's switch, read by Main: `0` selects `flat` (`DefaultMaxTokensMode`). */
+export const PROTOCOL_MAX_TOKENS_ENV = 'AICLIENT_RUNTIME_PROTOCOL_MAX_TOKENS';
+
+/** The mode a value of {@link PROTOCOL_MAX_TOKENS_ENV} selects; anything but `0` is `protocol`. */
+export function resolveDefaultMaxTokensMode(value: unknown): DefaultMaxTokensMode {
+  return value === '0' ? 'flat' : 'protocol';
+}
+
+/** The mode as Main's plan log states it, e.g. `default output limit: flat 8192`. */
+export function describeDefaultMaxTokens(mode: DefaultMaxTokensMode): string {
+  if (mode === 'flat') return `default output limit: flat ${DEFAULT_MAX_TOKENS}`;
+  const raises = Object.entries(REASONING_DEFAULT_MAX_TOKENS)
+    .map(([api, tokens]) => `${api} ${tokens}`)
+    .join(', ');
+  return `default output limit: reasoning rows by protocol (${raises}; at most a quarter of the window), ${DEFAULT_MAX_TOKENS} otherwise`;
+}
+
+/**
+ * Decision 190: the output limit of a row that declares none. A reasoning row
+ * gets its protocol's raise, but no more than a quarter of its window
+ * (decision 146's share; the default window when it declares none) and never
+ * less than {@link DEFAULT_MAX_TOKENS}; anything else gets
+ * {@link DEFAULT_MAX_TOKENS}. The plan (`build.ts`) and the model settings
+ * panel share it.
+ */
+export function defaultMaxTokensFor(input: {
+  api: DshProtocol;
+  reasoning: boolean;
+  contextWindow?: number;
+  mode?: DefaultMaxTokensMode;
+}): number {
+  if (input.mode === 'flat' || !input.reasoning) return DEFAULT_MAX_TOKENS;
+  const window = input.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+  const share = Math.floor(window * MAX_TOKENS_WINDOW_SHARE_FALLBACK);
+  return Math.max(DEFAULT_MAX_TOKENS, Math.min(REASONING_DEFAULT_MAX_TOKENS[input.api], share));
 }
 
 /** Retry budget of the native loop: 3 retries, 3 s rising to 30 s (`providerRetry.ts`). */

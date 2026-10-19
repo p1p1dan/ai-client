@@ -542,6 +542,12 @@ export interface ToolArgRef {
   format: 'id-label' | 'to-label' | 'label';
 }
 
+/** dsh-rebase decision 190: a row's result tail, translated where it is painted. */
+export interface ToolResultNote {
+  key: string;
+  params?: Record<string, number>;
+}
+
 export interface ToolRowView {
   /** React key: block id (aggregate rows use `${firstBlockId}~agg`). */
   key: string;
@@ -664,6 +670,13 @@ export interface ToolRowView {
    * model's call, as it was in 1.0.x.
    */
   exitCode?: number;
+  /**
+   * dsh-rebase decision 190: what a settled call came back with, as a
+   * translation key and its numbers — `grep`'s totals (「3 个文件」, 「无匹配」),
+   * `web_fetch`'s non-2xx status (「HTTP 404」) or its cut page (「已截断」).
+   * Same neutral tail as the exit code: none of these is a failure.
+   */
+  resultNote?: ToolResultNote;
   /** dsh-rebase P1-7c: `todo_write`'s list, for the `todos` body (the todo card's `TodoList`). */
   todos?: readonly DshTodoItem[];
   /**
@@ -907,6 +920,8 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     settledClean && !backgroundJob && SHELL_EXIT_TOOL_NAMES.has(run.toolName)
       ? shellExitCode(run.output)
       : undefined;
+  // Decision 190: what grep found, or how a fetched page came back.
+  const resultNote = settledClean ? toolResultNote(run) : undefined;
   // 2026-09-23 (user report: a running command could not be expanded and its
   // full text was nowhere to be seen): a running call's input is now
   // expandable as a live preview. `tool.updated` rewrites
@@ -990,6 +1005,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     ...(planReview ? { planReview } : {}),
     ...(backgroundJob ? { backgroundJob } : {}),
     ...(exitCode !== undefined ? { exitCode } : {}),
+    ...(resultNote ? { resultNote } : {}),
     runningStartedAtMs,
     runningTimeoutMs,
     expandable,
@@ -1076,7 +1092,9 @@ export const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   [RUNTIME_TOOL_NAMES.write]: ['file_path', 'path'],
   [RUNTIME_TOOL_NAMES.edit]: ['file_path', 'path'],
   [RUNTIME_TOOL_NAMES.glob]: ['pattern'],
-  [RUNTIME_TOOL_NAMES.grep]: ['pattern'],
+  // Decision 190: the summary names the file filter too; the path, the mode,
+  // context and paging stay in the body.
+  [RUNTIME_TOOL_NAMES.grep]: ['pattern', 'glob', 'include', 'type'],
   // Decision 033 D6, applied to the pi-native spelling on 2026-09-23: the
   // one-line summary HARD-TRUNCATES the command at 40 characters
   // (`COMMAND_SUMMARY_MAX_CHARS`), so listing `command` as covered made every
@@ -1248,6 +1266,45 @@ function bashTimeoutMsFromInput(run: ToolRun): number | undefined {
   const ms = rec.timeoutMs;
   if (typeof ms === 'number' && ms > 0) return Math.min(ms, MAX_SHELL_TIMEOUT_MS);
   return DEFAULT_BASH_TIMEOUT_MS;
+}
+
+/**
+ * dsh-rebase decision 190: a settled call's result tail, off the first line
+ * the tool writes. `grep`: its totals, in either dialect — ours (`Found 3
+ * files`, `Found 12 matching lines in 3 files`, decision 190's `grep.ts`) and
+ * DSH's (`Found 12 matches`, `Found 250 of 900 matches`). `web_fetch`
+ * (dsh-tool-web): a status outside 2xx from `Fetched <url> (HTTP <code>)`,
+ * else a page cut at the size cap. Undefined for anything else.
+ */
+export function toolResultNote(
+  run: Pick<ToolRun, 'toolName' | 'output'>
+): ToolResultNote | undefined {
+  const output = run.output;
+  if (!output) return undefined;
+  const newline = output.indexOf('\n');
+  const head = (newline < 0 ? output : output.slice(0, newline)).trim();
+  if (run.toolName === RUNTIME_TOOL_NAMES.grep) {
+    if (/^No (?:matches|files) found\b/.test(head)) return { key: 'No matches' };
+    const files = /^Found (\d+) files?$/.exec(head);
+    if (files) return countNote(Number(files[1]), '1 file', '{{count}} files');
+    const lines =
+      /^Found (\d+) matching lines? in \d+ files?$/.exec(head) ??
+      /^Found (?:\d+ of )?(\d+) match(?:es)?$/.exec(head);
+    if (lines) return countNote(Number(lines[1]), '1 matching line', '{{count}} matching lines');
+    return undefined;
+  }
+  if (run.toolName === DSH_TOOL_NAMES.webFetch) {
+    const status = /^Fetched \S+ \(HTTP (\d{3})\)$/.exec(head);
+    if (!status) return undefined;
+    const code = Number(status[1]);
+    if (code < 200 || code > 299) return { key: 'HTTP {{status}}', params: { status: code } };
+    if (output.includes('(Content truncated.')) return { key: 'Truncated' };
+  }
+  return undefined;
+}
+
+function countNote(count: number, one: string, many: string): ToolResultNote {
+  return count === 1 ? { key: one } : { key: many, params: { count } };
 }
 
 /** The shells whose settled output ends in DSH's exit marker (`dsh-shell` `parseExitStatus`). */
@@ -2472,7 +2529,16 @@ function formatToolArgDetail(
       raw = stringField(first, 'question') ?? stringField(first, 'header');
       break;
     }
-    case PI_TOOL_NAMES.grep:
+    case RUNTIME_TOOL_NAMES.grep: {
+      // The pattern is the point of the call; decision 190's grep also says
+      // which files it looked in (`glob`, DSH's `include`, or a `type`).
+      const searched = stringField(rec, 'pattern');
+      const filter =
+        stringField(rec, 'glob') ?? stringField(rec, 'include') ?? stringField(rec, 'type');
+      raw = searched ? inRepo(filter ? `${searched} · ${filter}` : searched) : searched;
+      isPattern = Boolean(searched);
+      break;
+    }
     case PI_TOOL_NAMES.find:
     // subagent-data-06: our own `glob`, which the SDK calls `find`. Same
     // treatment — the pattern is what the call is about, and without this case

@@ -21,6 +21,12 @@ export type DshToolClass =
   | 'shell'
   /** Programs whose effects cannot be read statically: always asks below bypass. */
   | 'opaque'
+  /**
+   * Decision 190: a request to a URL the model chose. Judged per host (policy
+   * rules and session grants), by the gear like any call with no file target:
+   * asks under ask / accept-edits, allowed under auto / bypass.
+   */
+  | 'network'
   /** Skill loads: matched on the skill name, trusted path. */
   | 'skill'
   /** Bookkeeping and delegation: never gated; delegated calls are gated themselves. */
@@ -65,8 +71,10 @@ export const DSH_TOOL_CLASSES: Readonly<Record<string, DshToolClass>> = Object.f
   list_mcp_resources: 'generic',
   list_mcp_resource_templates: 'generic',
   read_mcp_resource: 'generic',
+  // Not composed: its only DSH backend is the official DeepSeek endpoint (P0-2).
   web_search: 'generic',
-  web_fetch: 'generic',
+  // Decision 190: composed, gated as a network access.
+  web_fetch: 'network',
 });
 
 /**

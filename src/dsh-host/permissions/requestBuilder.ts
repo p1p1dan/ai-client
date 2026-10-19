@@ -83,6 +83,19 @@ function escalationOf(args: unknown): EscalationRequest | undefined {
   return { mode, ...(justification ? { justification } : {}) };
 }
 
+/**
+ * Decision 190: the host a fetch would reach, lower case and without its
+ * port, or undefined when `url` is not an absolute URL with one.
+ */
+export function hostOf(url: string): string | undefined {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host.length > 0 ? host : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function argumentsPreview(args: unknown): string {
   let text: string;
   try {
@@ -198,6 +211,20 @@ export async function authorizeCall(
     case 'skill': {
       const name = stringArg(args, 'name') ?? '';
       await target('skill', '.', { policySurface: 'skill', policyValue: name, trustedPath: true });
+      break;
+    }
+    case 'network': {
+      // Decision 190: the subject is the host. Policy rules match it
+      // (`"web_fetch": {"*.python.org": "allow"}`) and "Allow for session"
+      // remembers it, so approving one page of a site does not approve every
+      // site. A URL that does not parse is its own subject; the fetch refuses it.
+      const url = stringArg(args, 'url') ?? '';
+      await target(call.name, '.', {
+        policySurface: call.name,
+        policyValue: hostOf(url) ?? url,
+        network: true,
+        preview: { label: 'URL', text: url },
+      });
       break;
     }
     case 'opaque': {

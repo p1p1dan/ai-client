@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { RICH_GREP_ENV, WEB_FETCH_ENV } from '../../../../dsh-host/lib/toolSwitches.ts';
 import { DELEGATED_USAGE_ENV } from '../../../../shared/dshDelegatedUsage';
 import {
   CACHE_CHAIN_ENV,
@@ -362,6 +363,28 @@ describe('buildDshHostEnvironment (decision 022)', () => {
     }
     for (const name of names) {
       // Absent stays absent: each part is on by default.
+      expect(build()[name], name).toBeUndefined();
+      expect(isStrippedDshHostEnvName(name), name).toBe(true);
+    }
+  });
+
+  it("forwards decision 190's tool switches, by the host's own names", () => {
+    const names = [WEB_FETCH_ENV, RICH_GREP_ENV];
+    expect(names).toEqual(['AICLIENT_RUNTIME_WEB_FETCH', 'AICLIENT_RUNTIME_RICH_GREP']);
+    for (const isPackaged of [true, false]) {
+      const env = build({
+        isPackaged,
+        env: {
+          ...SHELL_ENV,
+          ...Object.fromEntries(names.map((name) => [name, '0'])),
+          AICLIENT_RUNTIME_OTHER: '1',
+        },
+      });
+      for (const name of names) expect(env[name], `${name} ${isPackaged}`).toBe('0');
+      expect(env.AICLIENT_RUNTIME_OTHER, String(isPackaged)).toBeUndefined();
+    }
+    for (const name of names) {
+      // Absent stays absent: each gap is closed by default.
       expect(build()[name], name).toBeUndefined();
       expect(isStrippedDshHostEnvName(name), name).toBe(true);
     }

@@ -64,11 +64,31 @@ const PATH_ONLY_RE = /^(?:[A-Za-z]:)?[^\n:]*[\\/][^\\/]+$/;
 const BARE_FILENAME_RE = /^[A-Za-z0-9_.-]+$/;
 /** ② ripgrep content mode: `path:line:content`. */
 const CONTENT_LINE_RE = /^((?:[A-Za-z]:)?[^:]+):(\d+):(.*)$/;
-/** ③ noise: summary/status lines and blanks — excluded from the parse-ratio denominator. */
-const NOISE_RE = /^(--)?$|^Found\s+\d+\s+files?\b|^No matches found\b/i;
+/** ②b ripgrep count mode (decision 190's grep): `path:count`. */
+const COUNT_LINE_RE = /^((?:[A-Za-z]:)?[^:]+):(\d+)$/;
+/**
+ * ③ noise: summary/status lines and blanks — excluded from the parse-ratio
+ * denominator. Decision 190's grep adds its totals (`Found 12 matching lines
+ * in 3 files`) and its closing notes in parentheses (the page, an offset past
+ * the end, paths it could not read).
+ */
+const NOISE_RE =
+  /^(--)?$|^Found\s+\d+\s+(?:files?|matching\s+lines?)\b|^No matches found\b|^\((?:Showing|offset|Some paths could not be searched)\b/i;
 
 function isNoiseLine(line: string): boolean {
   return NOISE_RE.test(line.trim());
+}
+
+/**
+ * ②c a context line around a match (`path-line-text`), recognised only for a
+ * path the output's own match lines name: on its own the shape is ambiguous
+ * (`a-1-b.ts` could be a file name).
+ */
+function isContextLine(line: string, matchedPaths: ReadonlySet<string>): boolean {
+  for (const path of matchedPaths) {
+    if (line.startsWith(`${path}-`) && /^\d+-/.test(line.slice(path.length + 1))) return true;
+  }
+  return false;
 }
 
 function splitPathSegments(path: string): string[] {
@@ -109,9 +129,17 @@ export function parseHitList(
   let parseableCount = 0;
   const order: string[] = [];
   const byPath = new Map<string, ToolHit>();
+  // Context lines can come before a file's first match, so the match lines
+  // are read once up front.
+  const matchedPaths = new Set<string>();
+  for (const line of lines) {
+    const contentMatch = CONTENT_LINE_RE.exec(line);
+    if (contentMatch) matchedPaths.add(contentMatch[1].trim());
+  }
 
   lines.forEach((line, index) => {
     if (isNoiseLine(line)) return;
+    if (matchedPaths.size > 0 && isContextLine(line, matchedPaths)) return;
 
     const contentMatch = CONTENT_LINE_RE.exec(line);
     if (contentMatch) {
@@ -121,6 +149,18 @@ export function parseHitList(
       const lineNo = Number(contentMatch[2]);
       if (!byPath.has(path)) {
         byPath.set(path, { path, name: baseName(path), dir: dirName(path), line: lineNo });
+        order.push(path);
+      }
+      return;
+    }
+
+    const countMatch = COUNT_LINE_RE.exec(line);
+    if (countMatch) {
+      denominator += 1;
+      parseableCount += 1;
+      const path = countMatch[1].trim();
+      if (!byPath.has(path)) {
+        byPath.set(path, { path, name: baseName(path), dir: dirName(path) });
         order.push(path);
       }
       return;

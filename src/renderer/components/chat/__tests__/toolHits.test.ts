@@ -147,3 +147,47 @@ describe('parseHitList', () => {
     expect(parseHitList('')).toBeNull();
   });
 });
+
+describe('parseHitList over decision 190’s grep', () => {
+  it('reads content with context lines and separators, header and paging note aside', () => {
+    const output = [
+      'Found 3 matching lines in 2 files',
+      '',
+      'src/a-1.ts-1-before',
+      'src/a-1.ts:2:foo()',
+      '--',
+      'src/a-1.ts:9:foo again',
+      'src/a-1.ts-10-after',
+      '--',
+      'lib/b.ts:3:foo',
+      '',
+      '(Showing lines 1-6 of 40. Call grep again with the same arguments and offset: 6 for the next page, or narrow the search.)',
+    ].join('\n');
+    const result = parseHitList(output);
+    expect(result?.hits).toEqual([
+      { path: 'src/a-1.ts', name: 'a-1.ts', dir: 'src', line: 2 },
+      { path: 'lib/b.ts', name: 'b.ts', dir: 'lib', line: 3 },
+    ]);
+    expect(result?.truncated).toBe(false);
+  });
+
+  it('reads count lines as one hit per file', () => {
+    const output = 'Found 4 matching lines in 2 files\n\nsrc/a.ts:3\nREADME.md:1';
+    expect(parseHitList(output)?.hits).toEqual([
+      { path: 'src/a.ts', name: 'a.ts', dir: 'src' },
+      { path: 'README.md', name: 'README.md', dir: '' },
+    ]);
+  });
+
+  it('reads a file list with its unreadable-path note as noise', () => {
+    const output = [
+      'Found 2 files',
+      '',
+      'src\\a.ts',
+      'src\\b.ts',
+      '',
+      '(Some paths could not be searched: rg: ./locked: Permission denied (os error 13))',
+    ].join('\n');
+    expect(parseHitList(output)?.hits.map((hit) => hit.path)).toEqual(['src\\a.ts', 'src\\b.ts']);
+  });
+});

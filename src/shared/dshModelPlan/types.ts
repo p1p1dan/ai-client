@@ -36,6 +36,14 @@ export interface DshRetryPolicy {
   backoff: { initialDelayMs: number; maxDelayMs: number };
 }
 
+/**
+ * Decision 190: how a row that declares no `maxTokens` is sized. `protocol`
+ * (the default) plans a reasoning row with `defaultMaxTokensFor`
+ * (`tables.ts`); `flat` leaves every such row to the route's
+ * `defaultMaxTokens`, the plan byte for byte as before decision 190.
+ */
+export type DefaultMaxTokensMode = 'protocol' | 'flat';
+
 /** The route-level knobs mapped from our settings (decision 040 rule 3). */
 export interface DshRouteSettings {
   cacheRetention: 'short' | 'long';
@@ -60,6 +68,11 @@ export interface DshRouteSettingsInput {
   userAgentMode?: RequestUserAgentMode;
   /** Decision 171: the custom value as stored; read in `custom` mode only, and checked here. */
   userAgentCustom?: string;
+  /**
+   * Decision 190: how a row that declares no `maxTokens` is sized (Main reads
+   * `AICLIENT_RUNTIME_PROTOCOL_MAX_TOKENS`). Absent means `protocol`.
+   */
+  defaultMaxTokens?: DefaultMaxTokensMode;
 }
 
 /** One `llm-pi-ai` provider profile, keyed in `routes` by the route name. */

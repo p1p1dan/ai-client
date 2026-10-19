@@ -142,6 +142,7 @@ import { HostProxyInstaller, isHostProxyMessage } from './lib/hostProxy.ts';
 import { installRequestScope, RequestScope } from './lib/requestScope.ts';
 import { describeRequestTap, installRequestTap } from './lib/requestTap.ts';
 import { deviceIdFrom } from './lib/sessionMetadata.ts';
+import { describeToolSwitches } from './lib/toolSwitches.ts';
 import { installUserAgentRelay } from './lib/userAgentRelay.ts';
 
 const PROFILE_NAME = 'aiclient';
@@ -183,6 +184,8 @@ const requestTap = installRequestTap(globalThis, {
   },
 });
 process.stderr.write(`[dsh-host] ${describeRequestTap(requestTap)}\n`);
+// Decision 190: which tool gaps this start closes (an evaluation reads it back).
+process.stderr.write(`[dsh-host] ${describeToolSwitches(process.env)}\n`);
 
 /** Shared with the aiclient-bridge row through a global symbol. */
 interface BridgeInbox {

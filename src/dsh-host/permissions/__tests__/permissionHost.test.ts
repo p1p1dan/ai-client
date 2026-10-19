@@ -34,7 +34,7 @@ import {
 } from '../permissionHost.ts';
 import { apply, HIDDEN_SANDBOX_SKILLS, hideSandboxSkills, inject, name } from '../plugin.ts';
 import { PERMISSION_PROMPT_CONTEXT } from '../promptContext.ts';
-import { authorizeCall } from '../requestBuilder.ts';
+import { authorizeCall, hostOf } from '../requestBuilder.ts';
 import { SHELL_WORKDIR_DENIAL } from '../shellWorkdir.ts';
 import { loadBashParser } from '../treeSitter.ts';
 import { agent, call, createFakeDsh, type FakeDsh } from './fakeDsh.ts';
@@ -593,6 +593,28 @@ describe('request construction (design shard 03 §2)', () => {
     });
   });
 
+  it('asks about a fetch by its host, with the URL on the card (decision 190)', async () => {
+    const url = 'https://Docs.Example.com:8443/guide?q=1';
+    const fetch = (await requestFor('web_fetch', { url })).seen[0];
+    expect(fetch).toMatchObject({
+      tool: 'web_fetch',
+      path: ws,
+      policySurface: 'web_fetch',
+      policyValue: 'docs.example.com',
+      network: true,
+      preview: { label: 'URL', text: url },
+    });
+    expect(fetch?.unresolvedPaths).toBeUndefined();
+    expect(fetch?.trustedPath).toBeUndefined();
+    // A URL that does not parse is its own subject; the fetch itself refuses it.
+    expect((await requestFor('web_fetch', { url: 'not a url' })).seen[0]).toMatchObject({
+      policyValue: 'not a url',
+      network: true,
+    });
+    expect(hostOf('http://[::1]:3000/x')).toBe('[::1]');
+    expect(hostOf('file:///etc/passwd')).toBeUndefined();
+  });
+
   it('matches skills on their name at a trusted path', async () => {
     expect((await requestFor('skill', { name: 'librarian' })).seen[0]).toMatchObject({
       tool: 'skill',
@@ -1012,6 +1034,51 @@ describe('search results (decision 048)', () => {
       kind: 'accept',
       value: { matches: [{ path: 'notes.txt', lineNumber: 1, line: 'x' }] },
     });
+  });
+
+  it("drops denied files from decision 190's grep in every output mode", async () => {
+    const { fake, downstream } = attached();
+    const content = await fake.postExecute(
+      call('grep', { pattern: 'x', output_mode: 'content' }, root(), { callId: 'g6' }),
+      {
+        isError: false,
+        value: {
+          mode: 'content',
+          entries: [
+            { path: 'notes.txt', line: 1, text: 'x' },
+            { path: '.env', line: 1, text: 'SECRET=x' },
+            { path: '.env', line: 2, text: 'near', context: true },
+            { path: 'keys/server.key', line: 3, text: 'x' },
+          ],
+          notes: [],
+        },
+      }
+    );
+    expect(content).toEqual({
+      kind: 'accept',
+      value: { mode: 'content', entries: [{ path: 'notes.txt', line: 1, text: 'x' }], notes: [] },
+    });
+    const count = await fake.postExecute(call('grep', { pattern: 'x' }, root(), { callId: 'g7' }), {
+      isError: false,
+      value: {
+        mode: 'count',
+        entries: [
+          { path: 'a/id_rsa', count: 2 },
+          { path: 'notes.txt', count: 1 },
+        ],
+        notes: [],
+      },
+    });
+    expect(count).toEqual({
+      kind: 'accept',
+      value: { mode: 'count', entries: [{ path: 'notes.txt', count: 1 }], notes: [] },
+    });
+    // Nothing denied: the value goes down the chain as it was.
+    await fake.postExecute(call('grep', { pattern: 'x' }, root(), { callId: 'g8' }), {
+      isError: false,
+      value: { mode: 'files_with_matches', entries: [{ path: 'notes.txt' }], notes: [] },
+    });
+    expect(downstream).toEqual(['g8']);
   });
 
   it('passes clean, failed and non-search results down the chain untouched', async () => {

@@ -677,7 +677,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN)/;
+  /P1-(AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -2004,6 +2004,15 @@ const DSH_P0_2_SCRIPTS = {
     if (step === 0) return tool('glob', { pattern: '**/*' });
     if (step === 1) return tool('grep', { pattern: 'PERM-SECRET' });
     return say('P1-PERM-SEARCH finished.');
+  },
+  // dsh-rebase decision 190 (src/dsh-host/__tests__/toolGaps.integration.test.ts):
+  // the enhanced grep in content mode with context, a case-folded file list
+  // whose `.env` hit the permission row drops, then web_fetch at the gate.
+  'P1-TOOLGAPS'(_round, step) {
+    if (step === 0) return tool('grep', { pattern: 'GAP-MARK', output_mode: 'content', '-C': 1 });
+    if (step === 1) return tool('grep', { pattern: 'gap-secret', '-i': true });
+    if (step === 2) return tool('web_fetch', { url: 'https://example.com/tool-gaps' });
+    return say('P1-TOOLGAPS finished.');
   },
   // dsh-rebase P1-6b part 2: the gate for real (tools/bridge-smoke.ts).
   'P1-PERM-DENY'(_round, step) {
