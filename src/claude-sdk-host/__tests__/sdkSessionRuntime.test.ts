@@ -1491,6 +1491,23 @@ describe('Send now (decision 201)', () => {
     await rt.dispose();
   });
 
+  it('a Stop between the interjection and its queueing sends no Send now on top', async () => {
+    const { rt, q } = await started();
+    q.push(init(['interrupt_send_now_v1']));
+    await send(rt);
+    await flush();
+    rt.interject({ logicalSessionId: 'chat-1', attemptId: 'now-4', text: 'now', sendNow: true });
+    await flush();
+    const turn = (rt as unknown as { turn: { interjections: Map<string, unknown> } }).turn;
+    const [uuid] = [...turn.interjections.keys()];
+    void rt.stop({ logicalSessionId: 'chat-1', reason: 'user' });
+    await flush();
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'queued' });
+    await flush();
+    expect(q.request).not.toHaveBeenCalled();
+    await rt.dispose();
+  });
+
   it('Ctrl+Enter itself sends no interrupt', async () => {
     const { rt, q } = await started();
     q.push(init(['interrupt_send_now_v1']));

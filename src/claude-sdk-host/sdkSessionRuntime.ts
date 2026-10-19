@@ -1411,7 +1411,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       // the CLI's `system/init` named its capabilities (measured: the probe's did).
       if (state === 'queued' && pending.sendNow === 'pending') {
         pending.sendNow = 'sent';
-        if (this.cliSendNow) this.deliverNow(uuid);
+        // A Stop pressed meanwhile already interrupted the turn; a Send now on top
+        // would only cut short whatever runs next. The message waits as a Ctrl+Enter's.
+        if (turn.stopRequested) this.log(`send now ${uuid}: skipped, the turn is stopping`);
+        else if (this.cliSendNow) this.deliverNow(uuid);
         else this.log(`send now: the CLI has no ${SEND_NOW_CAPABILITY}; delivered as Ctrl+Enter`);
       }
       return;
