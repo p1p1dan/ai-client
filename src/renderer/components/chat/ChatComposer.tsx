@@ -1650,6 +1650,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         return;
       }
     }
+    if (mode === 'sendNow' && chatEngine === 'claude-sdk' && !compactingNow) {
+      // Decision 201: the CLI's own Send now delivers the message into the
+      // running turn at once and leaves its background agents running; a Stop
+      // would end them. No turn after all: queued and released as below.
+      const outcome = await interjectIntoTurn(activeSessionId, trimmed, { sendNow: true });
+      if (outcome !== 'no-turn') return;
+    }
     const queued: QueuedMessage = {
       id: nextQueuedMessageId(),
       sessionId: activeSessionId,
@@ -1666,7 +1673,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     }
     if (mode === 'sendNow') {
       useMessageQueueStore.getState().prioritizeEntry(activeSessionId, queued.id);
-      if (canStop) handleStop();
+      if (canStop) stopForSendNow();
     }
     setQueueNotice(null);
     // T26: enqueue is itself an explicit user Send and should return the
@@ -1843,11 +1850,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
    */
   const interjectIntoTurn = async (
     sessionId: string,
-    text: string
+    text: string,
+    // Decision 201: `sendNow` asks the engine to deliver at once (SDK engine);
+    // `queued` names a queue entry that carries the message instead of the draft.
+    options: { sendNow?: boolean; queued?: QueuedMessage } = {}
   ): Promise<'interjected' | 'no-turn' | 'failed'> => {
     if (interjectingRef.current) return 'failed';
     interjectingRef.current = true;
-    const drafts = attachments.drafts;
+    const drafts = options.queued ? [...options.queued.attachments] : attachments.drafts;
     const attemptId = nextInterjectionAttemptId(sessionId);
     const pending = usePendingUserMessagesStore.getState();
     pending.publish({
@@ -1871,6 +1881,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         attemptId,
         text,
         ...(wireAttachments ? { attachments: wireAttachments } : {}),
+        ...(options.sendNow ? { sendNow: true } : {}),
       });
       if (!interjected) {
         usePendingUserMessagesStore.getState().clear(attemptId);
@@ -1879,8 +1890,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       setQueueNotice(null);
       onSendStart?.('direct');
       // Committed: the running turn has it. Only what was sent is cleared —
-      // anything typed while the IPC was in flight stays.
-      if (draftOwnerRef.current === sessionId) {
+      // anything typed while the IPC was in flight stays. A queue entry's
+      // message was never the draft: its caller has taken it off the queue.
+      if (options.queued) {
+        // Nothing of the composer's to clear.
+      } else if (draftOwnerRef.current === sessionId) {
         if (valueRef.current.trim() === text) updateValue('');
         attachments.removeDrafts(drafts.map((draft) => draft.id));
       } else {
@@ -4105,7 +4119,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (activeSessionId) cancelCompactRun(activeSessionId);
   };
 
-  const handleStop = () => {
+  // Decision 201: the Stop button (and Esc) stops the turn and the session's
+  // subagents (`all`); "Send now" stops the turn only (`turn`), so the
+  // delegated work keeps running beside the message it lets through.
+  const stopSession = (scope: 'all' | 'turn') => {
     const stopTarget = activeSessionId;
     if (!stopTarget) return;
     // Decision 046 rule 2: never swallowed. A press while an earlier Stop is
@@ -4128,11 +4145,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // settling, the session's terminal event (see the effect below), or the
     // ceiling — so a stop IPC that never answers can no longer hold it forever.
     const ceiling = window.setTimeout(() => releaseStopLatch(token), STOP_LATCH_CEILING_MS);
-    void stopChatSession(stopTarget).finally(() => {
+    void stopChatSession(stopTarget, scope).finally(() => {
       window.clearTimeout(ceiling);
       releaseStopLatch(token);
     });
   };
+  const handleStop = () => stopSession('all');
+  const stopForSendNow = () => stopSession('turn');
 
   // Decision 046 rule 2: the stop latch also opens on the stopped session's
   // terminal event. Any `session.stopped` counts, whatever its `stopCause` —
@@ -4187,9 +4206,29 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // every other row, and promoting a middle entry past the ones in front of
     // it is Move up/down's job. A stale render must not be able to reorder the
     // queue behind the user's back.
-    if (selectSessionQueue(queue.state, activeSessionId).entries[0]?.id !== entryId) return;
+    const head = selectSessionQueue(queue.state, activeSessionId).entries[0];
+    if (head?.id !== entryId) return;
+    const compactingNow =
+      selectCompactPhase(useCompactRunsStore.getState(), activeSessionId) !== undefined;
+    if (chatEngine === 'claude-sdk' && canStop && !compactingNow) {
+      // Decision 201: delivered into the running turn by the CLI's own Send
+      // now, its background agents left running. Off the queue while the IPC
+      // runs, so a turn ending meanwhile cannot release it a second time;
+      // back at the head, released as below, if it did not go.
+      const sessionId = activeSessionId;
+      queue.removeEntry(sessionId, entryId);
+      void interjectIntoTurn(sessionId, head.text, { sendNow: true, queued: head }).then(
+        (outcome) => {
+          if (outcome === 'interjected') return;
+          const store = useMessageQueueStore.getState();
+          if (!store.enqueue(head).ok) return;
+          store.prioritizeEntry(sessionId, head.id);
+        }
+      );
+      return;
+    }
     queue.prioritizeEntry(activeSessionId, entryId);
-    if (canStop) handleStop();
+    if (canStop) stopForSendNow();
   };
 
   // T12-e: one derivation, two readers. `emptySurface` decides WHICH surface

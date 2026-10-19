@@ -27,6 +27,8 @@ interface FakeQuery {
   setModel: ReturnType<typeof vi.fn>;
   applyFlagSettings: ReturnType<typeof vi.fn>;
   setPermissionMode: ReturnType<typeof vi.fn>;
+  /** The SDK's generic control request (decision 201's `send_now` interrupt goes through it). */
+  request: ReturnType<typeof vi.fn>;
 }
 /** `init`: what the next CLI's `initializationResult()` waits on (S-5 H-4); ready at once if unset. */
 const sdk = vi.hoisted(() => ({
@@ -53,6 +55,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       setModel: vi.fn(async () => {}),
       applyFlagSettings: vi.fn(async () => {}),
       setPermissionMode: vi.fn(async () => {}),
+      request: vi.fn(async () => ({ response: { send_now: 'delivering' } })),
     };
     sdk.queries.push(fake);
     return {
@@ -71,6 +74,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       setModel: fake.setModel,
       applyFlagSettings: fake.applyFlagSettings,
       setPermissionMode: fake.setPermissionMode,
+      request: fake.request,
       initializationResult: () => sdk.init ?? Promise.resolve({}),
     };
   },
@@ -1430,6 +1434,75 @@ describe('the card offers what the CLI will remember (review)', () => {
       ['allow', 'deny'],
       ['allow', 'allow_session', 'deny'],
     ]);
+    await rt.dispose();
+  });
+});
+
+describe('Send now (decision 201)', () => {
+  const init = (capabilities: string[]) => ({
+    type: 'system',
+    subtype: 'init',
+    session_id: 'cli-1',
+    permissionMode: 'default',
+    capabilities,
+  });
+
+  it('delivers the message with the CLI Send now: an interrupt with send_now, not a Stop', async () => {
+    const { rt, q } = await started();
+    q.push(init(['interrupt_receipt_v1', 'interrupt_send_now_v1']));
+    await send(rt);
+    await flush();
+    expect(
+      rt.interject({ logicalSessionId: 'chat-1', attemptId: 'now-1', text: 'now', sendNow: true })
+    ).toEqual({ interjected: true, turnActive: true });
+    await flush();
+    const turn = (rt as unknown as { turn: { interjections: Map<string, unknown> } }).turn;
+    const [uuid] = [...turn.interjections.keys()];
+    // Only once the message waits in the CLI's queue: sent before, it finds nothing.
+    expect(q.request).not.toHaveBeenCalled();
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'queued' });
+    await flush();
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'queued' });
+    await flush();
+    expect(q.request).toHaveBeenCalledTimes(1);
+    expect(q.request).toHaveBeenCalledWith({
+      subtype: 'interrupt',
+      send_now: true,
+      message_uuid: uuid,
+    });
+    // Not the Stop's interrupt, which ends background agents.
+    const query = (rt as unknown as { query: { interrupt: ReturnType<typeof vi.fn> } }).query;
+    expect(query.interrupt).not.toHaveBeenCalled();
+    await rt.dispose();
+  });
+
+  it('a CLI that does not advertise it gets a plain Ctrl+Enter: no interrupt at all', async () => {
+    const { rt, q } = await started();
+    q.push(init(['interrupt_receipt_v1']));
+    await send(rt);
+    await flush();
+    rt.interject({ logicalSessionId: 'chat-1', attemptId: 'now-2', text: 'now', sendNow: true });
+    await flush();
+    const turn = (rt as unknown as { turn: { interjections: Map<string, unknown> } }).turn;
+    const [uuid] = [...turn.interjections.keys()];
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'queued' });
+    await flush();
+    expect(q.request).not.toHaveBeenCalled();
+    await rt.dispose();
+  });
+
+  it('Ctrl+Enter itself sends no interrupt', async () => {
+    const { rt, q } = await started();
+    q.push(init(['interrupt_send_now_v1']));
+    await send(rt);
+    await flush();
+    rt.interject({ logicalSessionId: 'chat-1', attemptId: 'late-3', text: 'late' });
+    await flush();
+    const turn = (rt as unknown as { turn: { interjections: Map<string, unknown> } }).turn;
+    const [uuid] = [...turn.interjections.keys()];
+    q.push({ type: 'command_lifecycle', command_uuid: uuid, state: 'queued' });
+    await flush();
+    expect(q.request).not.toHaveBeenCalled();
     await rt.dispose();
   });
 });

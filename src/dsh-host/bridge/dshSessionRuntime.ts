@@ -2321,7 +2321,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
    * A command send (P1-4d2) has no turn: Stop cancels the wait on it, and
    * DSH settles it as cancelled; the send then completes as any command does.
    */
-  async stop(_input: WorkerStopPayload): Promise<WorkerStopResult> {
+  async stop(input: WorkerStopPayload): Promise<WorkerStopResult> {
     if (!this.turn && this.commandSends.size > 0) {
       // The reason is what the command's error notice reads.
       for (const send of this.commandSends.values()) {
@@ -2338,8 +2338,13 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     // Before the turn's own cancel: a child's settlement notice that lands
     // while the turn still runs waits in the inbox (`keepInbox`) instead of
     // waking the session after the Stop (it may still wake it; decision 119).
-    this.children.interruptAll();
-    this.jobs.stopSubagentJobs('the user pressed Stop');
+    // Decision 201: "Send now" (`scope: 'turn'`) stops the parent turn only;
+    // its background subagents keep running and report back as usual. A
+    // foreground delegation is part of the cancelled turn and ends with it.
+    if (input.scope !== 'turn') {
+      this.children.interruptAll();
+      this.jobs.stopSubagentJobs('the user pressed Stop');
+    }
     // Decision 178: an automatic compaction the Stop cuts short did not fail.
     this.live.noteStopRequested();
     this.handle.agent.cancel({ kind: 'user' }, { keepInbox: true });

@@ -993,8 +993,14 @@ describe('Pi WorkerSlot chat routing', () => {
       effort: 'xhigh',
       ownerWebContentsId: 7,
     });
-    expect(stop).toHaveBeenCalledWith('s1');
+    // Decision 201: the Stop button's request stops everything.
+    expect(stop).toHaveBeenCalledWith('s1', 'all');
     expect(closeSession).toHaveBeenCalledWith('s1');
+    // "Send now" stops the turn only; anything else reads as the Stop button's.
+    await invoke('chat:stop', { sessionId: 's1', scope: 'turn' });
+    expect(stop).toHaveBeenLastCalledWith('s1', 'turn');
+    await invoke('chat:stop', { sessionId: 's1', scope: 'children' });
+    expect(stop).toHaveBeenLastCalledWith('s1', 'all');
   });
 
   it('refuses a renderer workspace that disagrees with the indexed row', async () => {

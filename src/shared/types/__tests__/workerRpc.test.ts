@@ -298,6 +298,16 @@ describe('worker RPC boundary guards', () => {
     expect(isWorkerSendResult({ accepted: true, requestId: 'turn-1' })).toBe(true);
     expect(isWorkerStopPayload({ logicalSessionId: 'logical-1', reason: 'user' })).toBe(true);
     expect(isWorkerStopPayload({ logicalSessionId: 'logical-1', reason: 'later' })).toBe(false);
+    // decision 201: `scope` is optional; only `all` and `turn` pass.
+    expect(
+      isWorkerStopPayload({ logicalSessionId: 'logical-1', reason: 'user', scope: 'turn' })
+    ).toBe(true);
+    expect(
+      isWorkerStopPayload({ logicalSessionId: 'logical-1', reason: 'user', scope: 'all' })
+    ).toBe(true);
+    expect(
+      isWorkerStopPayload({ logicalSessionId: 'logical-1', reason: 'user', scope: 'children' })
+    ).toBe(false);
     expect(isWorkerStopResult({ stopped: false })).toBe(true);
     // decision 046: `turnActive` is optional (absent = not reported) but typed.
     expect(isWorkerInterjectResult({ interjected: false })).toBe(true);

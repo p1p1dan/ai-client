@@ -115,6 +115,7 @@ import {
   type WorkerSlashCommandInfo,
   type WorkerStopPayload,
   type WorkerStopResult,
+  type WorkerStopScope,
   type WorkerSubagentInterruptPayload,
   type WorkerSubagentInterruptResult,
   type WorkerTreePayload,
@@ -2460,7 +2461,7 @@ export class WorkerManager {
    *  - a worker that took the stop: the turn's own terminal answers, and the
    *    watchdog restarts the worker (`stopCause: 'forced'`) if it never comes.
    */
-  async stop(sessionId: string): Promise<string> {
+  async stop(sessionId: string, scope: WorkerStopScope = 'all'): Promise<string> {
     const requestId = nextRequestId('stop');
     const entry = this.entriesBySession.get(sessionId);
     if (!entry?.slot || entry.state !== 'ready') {
@@ -2474,7 +2475,12 @@ export class WorkerManager {
     // Armed before the request, not on the ACK: a worker too wedged to answer
     // `worker.stop` at all is exactly the case the watchdog is for.
     this.armStopWatchdog(entry, slot);
-    const payload: WorkerStopPayload = { logicalSessionId: sessionId, reason: 'user' };
+    // Decision 201: `turn` ("Send now") leaves the session's subagents running.
+    const payload: WorkerStopPayload = {
+      logicalSessionId: sessionId,
+      reason: 'user',
+      ...(scope === 'turn' ? { scope } : {}),
+    };
     const result = await slot.request<WorkerStopResult, WorkerStopPayload>('worker.stop', payload);
     if (!isWorkerStopResult(result)) {
       throw new WorkerManagerError(
@@ -2501,7 +2507,12 @@ export class WorkerManager {
    */
   async interject(
     sessionId: string,
-    input: { attemptId: string; text: string; attachments?: SessionAttachment[] }
+    input: {
+      attemptId: string;
+      text: string;
+      attachments?: SessionAttachment[];
+      sendNow?: boolean;
+    }
   ): Promise<WorkerInterjectResult> {
     const entry = this.entriesBySession.get(sessionId);
     if (!entry?.slot || entry.state !== 'ready') return { interjected: false };
@@ -2512,6 +2523,7 @@ export class WorkerManager {
       attemptId: input.attemptId,
       text: input.text,
       ...(input.attachments ? { attachments: input.attachments } : {}),
+      ...(input.sendNow === true ? { sendNow: true } : {}),
     };
     const result = await slot.request<WorkerInterjectResult, WorkerInterjectPayload>(
       'worker.interject',

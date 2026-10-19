@@ -403,6 +403,32 @@ describe('DshSessionRuntime — P1-7b wiring (decisions 069, 099 rule 15, 119)',
     expect(host.agent.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true });
   });
 
+  it('[STOP-TURN] "Send now" stops the turn only: children and subagent jobs keep running (201)', async () => {
+    const host = fakeHost();
+    const jobs = fakeJobs([job('bash-1', 'bash'), job('subagent-1', 'subagent')]);
+    host.services.jobs = jobs.registry;
+    const interrupt = vi.fn();
+    host.services.subagents = { interrupt };
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+    await bridge.startSend(send('turn-1', 'delegate'));
+    host.append('subagent/catalog', {
+      childId: 'aiclient-kid',
+      label: 'Probe',
+      mode: 'continuable',
+    });
+    host.fire('subagent/start', { runId: 'run-1', id: 'aiclient-kid' });
+
+    expect(await bridge.stop({ logicalSessionId: LOGICAL, reason: 'user', scope: 'turn' })).toEqual(
+      { stopped: true }
+    );
+    expect(interrupt).not.toHaveBeenCalled();
+    expect(jobs.registry.kill).not.toHaveBeenCalled();
+    expect(host.agent.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true });
+    // The child's run is still the session's work after the turn.
+    expect(bridge.busy).toBe(true);
+  });
+
   it('[P7B-BUSY-CHILD] a child’s run keeps the session busy after its turn; its end frees it', async () => {
     const host = fakeHost();
     const bridge = runtime(host.ctx, []);

@@ -202,6 +202,8 @@ const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const FILE_CHANGE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 /** How long Stop waits for the CLI to close the turn itself before closing it here. */
 const STOP_SETTLE_MS = 5_000;
+/** Decision 201: `system/init`'s capability for an `interrupt` that is a Send now, not a Stop. */
+const SEND_NOW_CAPABILITY = 'interrupt_send_now_v1';
 /**
  * How long Stop (and dispose) waits for a process sample already in flight before it
  * interrupts (README §11.2 #52): the sample is taken in the background from the moment a
@@ -252,6 +254,12 @@ interface Interjection {
    * first frame (an older CLI sends none).
    */
   cliState?: 'queued' | 'started';
+  /**
+   * Decision 201: "Send now" asked for it. The CLI's Send now names a message waiting
+   * in its queue, so the request goes once `command_lifecycle` says `queued`; sent before,
+   * it finds nothing waiting (measured on 2.1.300: `nothing_waiting`).
+   */
+  sendNow?: 'pending' | 'sent';
 }
 
 interface Turn {
@@ -715,6 +723,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private cliCommands: CliSlashCommand[] | null = null;
   /** The rows the CLI binds to a terminal; 2.1.300's set until its `system/init` says. */
   private terminalCommands: string[] = [...SDK_TERMINAL_COMMANDS_DEFAULT];
+  /** Decision 201: the CLI's `system/init` advertised `interrupt_send_now_v1`. */
+  private cliSendNow = false;
   /** The last task notification was a subagent's (an engine turn it wakes is the subagent's). */
   private lastTaskWasAgent = false;
   /**
@@ -1180,10 +1190,15 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       return { interjected: false, turnActive: Boolean(turn) };
     }
     const uuid = randomUUID();
+    const sendNow = input.sendNow === true && this.cliSendNow;
+    if (input.sendNow === true && !sendNow) {
+      this.log(`send now: the CLI has no ${SEND_NOW_CAPABILITY}; delivered as Ctrl+Enter`);
+    }
     turn.interjections.set(uuid, {
       attemptId: input.attemptId,
       text: input.text,
       ...(input.attachments ? { attachments: input.attachments } : {}),
+      ...(sendNow ? { sendNow: 'pending' as const } : {}),
     });
     // `next`: folded into the running turn at its next step boundary.
     this.input.push({
@@ -1194,6 +1209,28 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       priority: 'next',
     });
     return { interjected: true, turnActive: true };
+  }
+
+  /**
+   * Decision 201, "Send now": the CLI's own Send now (an `interrupt` with
+   * `send_now`), not a Stop. The running step is cut short and the message
+   * reaches the model at once; background agents and commands keep running.
+   * A CLI that does not advertise it would take the request as a plain
+   * interrupt, which ends them: there the message waits for the next step
+   * boundary, as Ctrl+Enter's does (`interject` never asks it then).
+   */
+  private deliverNow(uuid: string): void {
+    const request = (
+      this.query as unknown as {
+        request?: (
+          body: Record<string, unknown>
+        ) => Promise<{ response?: Record<string, unknown> }>;
+      } | null
+    )?.request;
+    void request
+      ?.call(this.query, { subtype: 'interrupt', send_now: true, message_uuid: uuid })
+      .then((answer) => this.log(`send now ${uuid}: ${String(answer?.response?.send_now ?? '-')}`))
+      .catch((error) => this.log('send now failed', error));
   }
 
   /**
@@ -1360,6 +1397,11 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const state = message.state;
     if (state === 'queued' || state === 'started') {
       pending.cliState = state;
+      // Decision 201: waiting in the CLI's queue now, so its Send now finds it.
+      if (state === 'queued' && pending.sendNow === 'pending') {
+        pending.sendNow = 'sent';
+        this.deliverNow(uuid);
+      }
       return;
     }
     if (state === 'cancelled') {
@@ -1421,6 +1463,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           this.terminalCommands = message.terminal_slash_commands.filter(
             (c): c is string => typeof c === 'string'
           );
+        }
+        // Decision 201: re-emitted inits carry the current list; the newest wins.
+        if (Array.isArray(message.capabilities)) {
+          this.cliSendNow = message.capabilities.includes(SEND_NOW_CAPABILITY);
         }
         const stub = this.stub;
         if (stub && !stub.started) {

@@ -4,6 +4,8 @@
 
 修订注记（2026-09-28，P1-7b）：已落地。Stop 先打断正在跑的可续子代理、停掉一次性后台子代理的 job，再取消父回合；后台命令不停。`maxConsecutiveWakes: 3` 写在包 overlay 的 `tool-jobs` 行，只管 job 的完成通知；可续子代理的结算通知由 dsh-subagent 发出，DSH 没有上限开关，不设上限；被 Stop 打断的子代理若在父回合结束后才发出结算通知，仍会唤醒一轮（E5 留给 P1-7d）。见[决策 119](119-p1-7b-jobs-subagents-choices.md) 第 15～17 条（待审批）。
 
+修订注记（2026-10-19，[决策 201](201-send-now-keeps-subagents.md)）：第 1 条只管停止按钮与 Esc。「立即发送」不再停子代理：DSH 发 `scope: 'turn'` 的停止，只取消父回合；SDK 引擎改用 CLI 自己的 Send now，不停止。
+
 ## 规则
 
 1. 用户按 Stop 时：

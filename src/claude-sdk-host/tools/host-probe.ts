@@ -2292,6 +2292,152 @@ async function main(): Promise<void> {
         await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
         break;
       }
+      case 'agent-sendnow':
+      case 'agent-stop-all': {
+        // Decision 201: a background subagent is running while the parent turn runs a
+        // foreground command. "Send now" is the CLI's own (an interjection with
+        // `sendNow`, which the host sends on as an `interrupt` with `send_now`): the
+        // parent's command ends, the message is answered in the same turn, and the child
+        // finishes its own work. The Stop button ends the child too.
+        const sendNow = scenario === 'agent-sendnow';
+        // Per scenario: a sleep the other one left behind must not count here.
+        const childSeconds = 31 + (process.pid % 300) + (sendNow ? 0 : 1_000);
+        const parentSeconds = childSeconds + 400;
+        const marker = `child-done-${process.pid}`;
+        // Two steps: a child the Stop ends never reaches the second; after "Send now" it
+        // does (2.1.300 moves the child's running command to the background, measured).
+        const childPrompt = `CC-RUN ${JSON.stringify({
+          calls: [
+            {
+              name: 'Bash',
+              input: { command: `sleep ${childSeconds}`, description: 'Child sleep' },
+            },
+            {
+              name: 'Bash',
+              input: { command: `echo ${marker}`, description: 'Child marker' },
+            },
+          ],
+        })}`;
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'bypass' });
+        // The gateway keys on a message's last marker: the child's `CC-RUN` is spelled
+        // `CC-\u0052UN` in the parent's JSON, which the call's input decodes back.
+        const parentScript = JSON.stringify({
+          calls: [
+            {
+              name: 'Agent',
+              input: {
+                description: 'Background child',
+                prompt: childPrompt,
+                subagent_type: 'general-purpose',
+                run_in_background: true,
+              },
+            },
+            {
+              name: 'Bash',
+              input: { command: `sleep ${parentSeconds}`, description: 'Parent sleep' },
+            },
+          ],
+        }).replace('"CC-RUN', '"CC-\\u0052UN');
+        await send(`CC-RUN ${parentScript}`);
+        const waitStart = Date.now();
+        while (
+          (sleepers(childSeconds) < 1 || sleepers(parentSeconds) < 1) &&
+          Date.now() - waitStart < 90_000
+        ) {
+          await new Promise((r) => setTimeout(r, 1_000));
+        }
+        const childBefore = sleepers(childSeconds);
+        const parentBefore = sleepers(parentSeconds);
+        await new Promise((r) => setTimeout(r, 1_500));
+        const answer = sendNow
+          ? await request('worker.interject', {
+              logicalSessionId,
+              attemptId: 'attempt-sendnow',
+              text: 'CC-TEXT sent with Send now',
+              sendNow: true,
+            })
+          : await request('worker.stop', { logicalSessionId, reason: 'user' });
+        const end = await waitFor(terminal, `${scenario}: turn end`, 60_000).catch((error) => {
+          console.log(`  ${scenario}: ${String(error)}`);
+          return { type: 'none', payload: {} } as Event;
+        });
+        for (const line of hostStderr.filter((l) => /send now|interrupt/i.test(l))) {
+          console.log(`  [host] ${line.slice(0, 400)}`);
+        }
+        await new Promise((r) => setTimeout(r, 5_000));
+        const childAfter = sleepers(childSeconds);
+        const parentAfter = sleepers(parentSeconds);
+        // This scenario's child: the newest subagent job (an earlier scenario's stays listed).
+        const childJobNow = () => {
+          const views = events.filter(
+            (e) => e.type === 'session.projection' && e.payload?.key === 'jobs'
+          );
+          const jobs = (views.at(-1)?.payload?.view ?? []) as Array<Record<string, unknown>>;
+          return jobs
+            .filter((job) => job.kind === 'subagent')
+            .sort((a, b) => Number(b.startedAt ?? 0) - Number(a.startedAt ?? 0))[0];
+        };
+        // It settles on its own after "Send now", or as stopped after the Stop.
+        const settledBy = Date.now() + (childSeconds + 60) * 1_000;
+        let childJob = childJobNow();
+        while (childJob?.status === 'running' && Date.now() < settledBy) {
+          await new Promise((r) => setTimeout(r, 1_000));
+          childJob = childJobNow();
+        }
+        const sendNowEcho = events.some(
+          (e) => e.type === 'message.started' && e.payload?.attemptId === 'attempt-sendnow'
+        );
+        const replied = assistantText().includes('PiLab × Claude Agent SDK');
+        const lastJobs = events.filter(
+          (e) => e.type === 'session.projection' && e.payload?.key === 'jobs'
+        );
+        console.log(`  ${scenario}: jobs ${JSON.stringify(lastJobs.at(-1)?.payload?.view ?? [])}`);
+        const out = (await request('worker.job.read', {
+          logicalSessionId,
+          jobId: String(childJob?.id ?? ''),
+        }).catch(() => ({}))) as { text?: string };
+        // A notification turn the child's end may open: let it finish before the next scenario.
+        await waitFor(
+          (e) => terminal(e) && events.indexOf(e) > events.indexOf(end),
+          `${scenario}: notification turn end`,
+          60_000
+        ).catch(() => undefined);
+        show(scenario);
+        console.log(
+          `  ${scenario}: ${sendNow ? 'interject' : 'stop'} → ${JSON.stringify(answer)}; terminal ${end.type}; child sleeps ${childBefore}→${childAfter}, parent sleeps ${parentBefore}→${parentAfter}; child job ${JSON.stringify(childJob)}; output ${JSON.stringify(String(out.text ?? '').slice(-160))}`
+        );
+        check(scenario, 'both sleeps ran before', childBefore > 0 && parentBefore > 0);
+        if (sendNow) {
+          check(scenario, 'the turn ends in session.completed', end.type === 'session.completed');
+          check(scenario, 'the message echoes under its attempt id', sendNowEcho);
+          check(scenario, 'and is answered', replied);
+          check(scenario, 'the child job completes on its own', childJob?.status === 'completed');
+          check(
+            scenario,
+            'the child ran its script to the end',
+            String(childJob?.detail ?? '').includes('(2 calls)')
+          );
+          // Windows: the CLI ends the parent's Git Bash, not the MSYS `sleep` it started
+          // (README §11.2 #52). Stop reaps those; "Send now" cannot tell them from the
+          // child's own commands, so they run out (decision 201, known limitation).
+          check(scenario, "the parent's command is gone after", parentAfter === 0, {
+            reportOnly: process.platform === 'win32',
+          });
+        } else {
+          check(scenario, "the parent's command is gone after", parentAfter === 0);
+          check(scenario, 'the turn ends in session.stopped', end.type === 'session.stopped');
+          check(scenario, "the child's command is gone after the Stop", childAfter === 0);
+          check(
+            scenario,
+            'the child job ends stopped',
+            childJob !== undefined &&
+              childJob.status !== 'running' &&
+              childJob.status !== 'completed'
+          );
+        }
+        await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
+        break;
+      }
       case 'webfetch': {
         // S-6 feedback 5 (ruling 6): WebFetch must not ask claude.ai's domain check first; an
         // encrypted machine's network cannot reach it, and the tool then refused every URL.

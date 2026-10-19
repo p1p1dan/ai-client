@@ -35,6 +35,7 @@ import {
   type WorkerCapabilityInventory,
   type WorkerCommandsResult,
   type WorkerInterjectWithdrawResult,
+  type WorkerStopScope,
 } from '@shared/types/workerRpc';
 import { app, BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import {
@@ -708,9 +709,14 @@ export function registerChatHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.CHAT_STOP,
-    async (e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
+    async (
+      e,
+      payload: { sessionId: string; scope?: WorkerStopScope }
+    ): Promise<{ requestId: string }> => {
       claimSessionForSender(e, payload.sessionId);
-      const requestId = await workerManager.stop(payload.sessionId);
+      // Decision 201: anything but an explicit `turn` is the Stop button's `all`.
+      const scope = payload.scope === 'turn' ? 'turn' : 'all';
+      const requestId = await workerManager.stop(payload.sessionId, scope);
       return { requestId };
     }
   );
@@ -729,6 +735,8 @@ export function registerChatHandlers(): void {
           data: string;
           name?: string;
         }>;
+        /** Decision 201: "Send now" on an engine that delivers without a Stop. */
+        sendNow?: boolean;
       }
     ): Promise<{ interjected: boolean; turnActive?: boolean }> => {
       // Same claim CHAT_STOP makes above. It is NOT an ownership check — any
@@ -743,6 +751,7 @@ export function registerChatHandlers(): void {
           attemptId: payload.attemptId,
           text: payload.text,
           ...(payload.attachments ? { attachments: payload.attachments } : {}),
+          ...(payload.sendNow === true ? { sendNow: true } : {}),
         });
       } catch (error) {
         throw withWorkerErrorCode(error);

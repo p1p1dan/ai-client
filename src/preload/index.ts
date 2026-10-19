@@ -1040,8 +1040,11 @@ const electronAPI = {
       model?: string;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RETRY_LAST_TURN, payload),
-    stop: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),
+    /** Decision 201: `scope: 'turn'` ("Send now") leaves the subagents running. */
+    stop: (payload: {
+      sessionId: string;
+      scope?: 'all' | 'turn';
+    }): Promise<{ requestId: string }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),
     /**
      * dsh-rebase decision 093 — Ctrl+Enter while a turn runs: the message
      * joins the running turn at its next step boundary. `interjected: false`
@@ -1057,6 +1060,8 @@ const electronAPI = {
         data: string;
         name?: string;
       }>;
+      /** Decision 201: "Send now" on an engine that delivers without a Stop. */
+      sendNow?: boolean;
     }): Promise<{ interjected: boolean; turnActive?: boolean }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_INTERJECT, payload),
     /**

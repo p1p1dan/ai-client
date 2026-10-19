@@ -45,6 +45,9 @@ const COMPOSER_PATH = path.resolve(__dirname, '../ChatComposer.tsx');
  */
 const source = stripComments(readFileSync(COMPOSER_PATH, 'utf8'), 'ChatComposer.tsx');
 
+/** Where the Stop path starts: `handleStop` and "Send now" both go through it (decision 201). */
+const STOP_START = "const stopSession = (scope: 'all' | 'turn') => {";
+
 /** All start offsets of `needle` in the stripped source. */
 function offsets(needle: string): number[] {
   const found: number[] = [];
@@ -139,9 +142,9 @@ describe('runSend cancellation-token ordering (F6 + 2026-08-10 stop-hang fix)', 
     const cancelAt = only('const cancelInFlightSend = useCallback(');
     const stopBump = offsets('sendGenerationRef.current += 1;')[1];
     expect(stopBump).toBeGreaterThan(cancelAt);
-    const stopStart = only('const handleStop = () => {');
+    const stopStart = only(STOP_START);
     const cancelCall = source.indexOf('cancelInFlightSend(stopTarget);', stopStart);
-    const stopCall = only('void stopChatSession(stopTarget)');
+    const stopCall = only('void stopChatSession(stopTarget, scope)');
     expect(cancelCall).toBeGreaterThan(stopStart);
     expect(cancelCall).toBeLessThan(stopCall);
   });
@@ -167,7 +170,7 @@ describe('runSend cancellation-token ordering (F6 + 2026-08-10 stop-hang fix)', 
 describe('handleStop targets one session for both the pause and the abort (T091)', () => {
   /** `handleStop`'s body: its declaration to the next top-level `const`. */
   function handleStopBody(): string {
-    const start = only('const handleStop = () => {');
+    const start = only(STOP_START);
     const end = source.indexOf('\n  };', start);
     expect(end).toBeGreaterThan(start);
     return source.slice(start, end);
@@ -186,7 +189,7 @@ describe('handleStop targets one session for both the pause and the abort (T091)
     // moves `sendingHere` to false and the new chat's `busy` to false, so
     // there is no Stop to click on the wrong session in the first place.
     expect(body).toContain('const stopTarget = activeSessionId;');
-    expect(body).toContain('void stopChatSession(stopTarget)');
+    expect(body).toContain('void stopChatSession(stopTarget, scope)');
     // Stop cancels the turn, not the queued follow-ups: nothing here may pause.
     expect(body).not.toContain('pauseSession');
     // The generation bump is scoped to the send this component owns — a
@@ -1030,10 +1033,15 @@ describe('Ctrl+Enter shares the Enter pre-send gate ([I-1])', () => {
   it('[I-1] the only Ctrl+Enter hand-off happens after every pre-send check', () => {
     const sendAt = only('const handleSend = async (');
     const body = source.slice(sendAt, matchingBraceEnd(source, source.indexOf('=>', sendAt)));
-    // One caller, and it is inside handleSend.
-    const writerAt = only('await interjectIntoTurn(');
-    expect(writerAt).toBeGreaterThan(sendAt);
-    expect(writerAt).toBeLessThan(sendAt + body.length);
+    // Its callers in handleSend sit inside it: Ctrl+Enter, and decision 201's
+    // "Send now" on the SDK engine. The queue strip's "Send now" hands off an
+    // entry that passed these checks when it was queued.
+    const writers = offsets('await interjectIntoTurn(');
+    expect(writers).toHaveLength(2);
+    for (const writerAt of writers) {
+      expect(writerAt).toBeGreaterThan(sendAt);
+      expect(writerAt).toBeLessThan(sendAt + body.length);
+    }
     // Decision 093: nothing writes a Ctrl+Enter message into the queue any more.
     expect(source).not.toContain('.interject(queued)');
     expect(source).not.toContain('signalInterjection');
@@ -1189,7 +1197,7 @@ describe('decision 046 — Stop always settles the composer', () => {
    * press that armed it.
    */
   it('[K-1] a pending Stop never swallows the next press, and its latch is bounded', () => {
-    const start = only('const handleStop = () => {');
+    const start = only(STOP_START);
     const body = source.slice(start, source.indexOf('\n  };', start));
     expect(body).toContain('if (!stopTarget) return;');
     expect(body).not.toContain('stoppingRef.current) return');
@@ -1210,6 +1218,22 @@ describe('decision 046 — Stop always settles the composer', () => {
       source.indexOf('\n  };', only('const handleQueueSendNow = (entryId: string) => {'))
     );
     expect(sendNow).not.toContain('stoppingRef');
+  });
+
+  it('[STOP-SCOPE] Stop and Esc stop everything; "Send now" stops the turn only (decision 201)', () => {
+    expect(source).toContain("const handleStop = () => stopSession('all');");
+    expect(source).toContain("const stopForSendNow = () => stopSession('turn');");
+    const queueSendNow = source.slice(
+      only('const handleQueueSendNow = (entryId: string) => {'),
+      source.indexOf('\n  };', only('const handleQueueSendNow = (entryId: string) => {'))
+    );
+    expect(queueSendNow).toContain('if (canStop) stopForSendNow();');
+    expect(queueSendNow).not.toContain('handleStop');
+    // The composer's own "Send now" (`mode === 'sendNow'`) takes the same path.
+    const composerSendNow = source.slice(only("if (mode === 'sendNow') {"));
+    expect(composerSendNow.slice(0, composerSendNow.indexOf('}'))).toContain(
+      'if (canStop) stopForSendNow();'
+    );
   });
 
   it('[K-2] the stop latch also opens on the target session’s terminal event', () => {

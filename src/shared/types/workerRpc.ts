@@ -675,9 +675,18 @@ export interface WorkerAcceptForkResult {
  */
 export const STAGED_FORK_MARKER_SUFFIX = '.staged' as const;
 
+/**
+ * What a Stop reaches (decision 201). `all`, the Stop button's: the turn and
+ * the session's background subagents. `turn`, "Send now"'s: the parent turn
+ * only, so the next message goes out while the subagents keep working.
+ */
+export type WorkerStopScope = 'all' | 'turn';
+
 export interface WorkerStopPayload {
   logicalSessionId: string;
   reason: 'user' | 'dispose';
+  /** Absent reads `all`. */
+  scope?: WorkerStopScope;
 }
 
 export interface WorkerStopResult {
@@ -702,6 +711,14 @@ export interface WorkerInterjectPayload {
    * and nothing is steered.
    */
   attachments?: SessionAttachment[];
+  /**
+   * Decision 201, the queue's "Send now": the message is to reach the model
+   * now, not at the next step boundary. An engine that can do that without a
+   * Stop (the Claude Agent SDK engine: an `interrupt` with `send_now`) cuts
+   * the running step short and leaves background work alone; any other takes
+   * it as a plain interjection.
+   */
+  sendNow?: boolean;
 }
 
 export interface WorkerInterjectResult {
@@ -1415,8 +1432,13 @@ export function isWorkerStopPayload(value: unknown): value is WorkerStopPayload 
     isRecord(value) &&
     typeof value.logicalSessionId === 'string' &&
     value.logicalSessionId.trim().length > 0 &&
-    (value.reason === 'user' || value.reason === 'dispose')
+    (value.reason === 'user' || value.reason === 'dispose') &&
+    (value.scope === undefined || isWorkerStopScope(value.scope))
   );
+}
+
+export function isWorkerStopScope(value: unknown): value is WorkerStopScope {
+  return value === 'all' || value === 'turn';
 }
 
 export function isWorkerStopResult(value: unknown): value is WorkerStopResult {
@@ -1437,6 +1459,7 @@ export function isWorkerInterjectPayload(value: unknown): value is WorkerInterje
   if (value.attachments !== undefined) {
     if (!Array.isArray(value.attachments) || !value.attachments.every(isAttachment)) return false;
   }
+  if (value.sendNow !== undefined && typeof value.sendNow !== 'boolean') return false;
   // Something to say: the text, or at least one attachment.
   return value.text.trim().length > 0 || (value.attachments?.length ?? 0) > 0;
 }

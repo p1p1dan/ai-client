@@ -74,6 +74,8 @@ Role: implementation-status。更新日期：2026-10-14。只放当前阶段、�
 
 ## Last Landed
 
+- 2026-10-19 「立即发送」不再连带停掉子代理（[决策 201](decisions/201-send-now-keeps-subagents.md)，用户批准方案 A；分支 `claude/sub-agent-delegation-blocking-3a8feb`，**未推送**）。起因：1.1.1 测试包上 SDK 引擎的委派在「立即发送」后被中止。DSH 发 `scope: 'turn'` 的停止，只取消父回合；SDK 引擎改为插话加 CLI 自己的 Send now（`interrupt` 带 `send_now`，`interrupt_send_now_v1`）。停止按钮与 Esc 照旧全停。路线 B 探针新组 `agentstop` 11 项通过；已知限制：Windows 上被打断的父命令的 MSYS 子进程会残留。
+
 - 2026-10-18 斜杠菜单：首页列插件 skill、SDK 引擎的命令与 skill（[决策 194](decisions/194-slash-menu-plugin-skills-and-sdk-commands.md)，决策 193 第 29 条；分支 `feat/slash-skills-193-29`，从 `claude/s6-feedback` 开出，**未推送**）：`02d8fa54`、`6ad3ccb3`、`ca4d7e9d`、`742fd2e1`、`7de6e1ca`、`975a4954`。
   - DSH：宿主新增 `slashCommands` 控制消息，首页与没启动的对话由宿主列出命令与 skill（含插件提供的），宿主不在时退回决策 175 的读盘；菜单请求带引擎，`WorkerManager` 不再跨引擎借清单（池里的 SDK 会话曾可能把 CLI 命令借给首页）。
   - SDK：菜单取 CLI 的 `initializationResult` / `commands_changed`（发消息前就有、带说明、内置命令有中文说明），去掉窗口自管、PiLab 自管、只适合终端与提到产品名的行；`/context` 等本地命令的输出显示为回复（以前看不到）；重开后命令与 skill 那一行按用户打的显示（以前是一串标签或整行消失）。点发送按钮后菜单残留也修了。

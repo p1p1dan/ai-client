@@ -567,12 +567,16 @@ function reopenDraft(sessionId: string): string {
  * `if (!activeSessionId) return`, so a caller holding a nullable session id does
  * not have to grow a guard that can drift from this one.
  */
-export async function stopChatSession(sessionId: string | null | undefined): Promise<void> {
+export async function stopChatSession(
+  sessionId: string | null | undefined,
+  scope: 'all' | 'turn' = 'all'
+): Promise<void> {
   if (!sessionId) {
     return;
   }
   try {
-    await window.electronAPI.chat.stop({ sessionId });
+    // Decision 201: "Send now" stops the turn only (`turn`); the Stop button everything.
+    await window.electronAPI.chat.stop(scope === 'turn' ? { sessionId, scope } : { sessionId });
     useChatSessionsStore.setState({ lastError: null });
   } catch (err) {
     useChatSessionsStore.setState({
