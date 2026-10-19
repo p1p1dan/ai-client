@@ -41,3 +41,10 @@
 - `vitest run src/renderer/components/chat src/renderer/stores`：237 个文件、4490 个测试全过，其中包括 `composerStopStatic.test.ts` 对等待条件与 `'ceiling'` 分支的源码守卫。
 - 新增：`queueRelease.test.ts` 里 `shouldHandOffRetryingTurn` 的真值表；挂载测试两条（已接下的重试回合放开发送位，B 直接发出、A 的看守还在；没有回显的重试帧照旧占位，B 进队列）。
 - 未在开发版或打包版上机复现，只在挂载测试里复现。
+
+## 6 后续：每个对话一份看守（2026-10-19，用户选定）
+
+- 问题：等待回复的看守（`pendingReply`）原来全应用只有一份。A 交出发送位后，B 在同一次故障里也被交出，就把 A 的看守盖掉：A 的「工作中」计时行连同停止按钮消失，A 最后失败时原文也不回输入框。
+- 改法：store 的 `pendingReply` 改为按对话的 `pendingReplies`（`selectPendingReply` 取单个），输入框的 `pendingReplyRef` 改为按对话的 Map；结束事件按事件自己的对话找看守。
+- 测试：`otherChatRetrySendSlotMount.test.ts` 新增一条（A、B 先后交出，两份看守都在；A 失败只清 A 的，切回 A 时原文回到输入框）；`turnSendStatus.test.ts` 的 `[PR-1]`～`[PR-5]` 改按对话断言。
+
