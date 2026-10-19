@@ -758,6 +758,25 @@ function reduceEngineLost(
 // Panel derivation
 // ---------------------------------------------------------------------------
 
+/**
+ * Decision 202: how a delegation's header row reads its liveness.
+ *
+ * `background` is a lane still running after the delegation call itself has
+ * settled (an async delegate whose tool call returned an ack, possibly after
+ * the main turn ended). It must not reuse the foreground `running` state: that
+ * reads as the delegate holding the conversation, which it does not.
+ */
+export type SubagentHeaderLiveness = 'running' | 'background' | 'settled';
+
+export function subagentHeaderLiveness(
+  laneStatus: SubagentRunStatus | null | undefined,
+  parentRunning: boolean
+): SubagentHeaderLiveness {
+  if (laneStatus === 'running') return parentRunning ? 'running' : 'background';
+  if (laneStatus === null && parentRunning) return 'running';
+  return 'settled';
+}
+
 export interface SubagentPanelOptions {
   /** The parent delegation row's own running state — the fallback liveness signal. */
   parentRunning: boolean;

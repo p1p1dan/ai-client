@@ -3766,6 +3766,7 @@ Object.assign(zhTranslations, {
   'no goal': '没有目标',
   'In background': '后台',
   'Moved to background': '已转后台',
+  'Running in background': '后台运行中',
   'to background at {{limit}}': '{{limit}} 后转后台',
   'Applies to this one call only': '只对这一次调用有效',
   'The model service refused the key': '模型服务不接受密钥',
