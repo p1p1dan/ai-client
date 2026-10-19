@@ -41,6 +41,7 @@ import {
   shouldArmRetryable,
   shouldClearPauseOnSend,
   shouldClearRetryableOnOutcome,
+  shouldHandOffRetryingTurn,
   shouldPauseQueueOnRejection,
   shouldRetryBusySend,
   shouldRevokeRestoredDraft,
@@ -1890,5 +1891,23 @@ describe('decision 046 — stoppable stopping, releasable disconnected', () => {
     for (const key of [FORCE_STOP_TITLE, ...Object.values(QUEUED_SEND_NOW_BLOCKER_COPY)]) {
       expect(zhTranslations[key], key).toBeTruthy();
     }
+  });
+});
+
+describe('shouldHandOffRetryingTurn (2026-10-19: a retrying turn held the one send slot)', () => {
+  it('hands off only an admitted turn the engine is retrying', () => {
+    expect(shouldHandOffRetryingTurn({ sawUserEcho: true, sawNetworkRetry: true })).toBe(true);
+    expect(shouldHandOffRetryingTurn({ sawUserEcho: true, sawNetworkRetry: false })).toBe(false);
+    // No echo: the Host may still refuse the turn, and its payload is still ours.
+    expect(shouldHandOffRetryingTurn({ sawUserEcho: false, sawNetworkRetry: true })).toBe(false);
+    expect(shouldHandOffRetryingTurn({ sawUserEcho: false, sawNetworkRetry: false })).toBe(false);
+  });
+
+  it('lands on the pending-reply exit, never on the unadmitted abandon', () => {
+    // The hand-off requires the echo, and the echo is what makes the
+    // ceiling case arm the watch instead of abandoning the turn.
+    expect(decideAdmittedTimeoutOutcome({ sawUserEcho: true, sawAssistantProgress: false })).toBe(
+      'pending'
+    );
   });
 });

@@ -209,6 +209,7 @@ import {
   STOP_TITLE_DSH,
   shouldClearPauseOnSend,
   shouldClearRetryableOnOutcome,
+  shouldHandOffRetryingTurn,
   shouldPauseQueueOnRejection,
   shouldRetryBusySend,
   shouldRevokeRestoredDraft,
@@ -481,7 +482,13 @@ type WaitResult =
   /** A newer generation superseded this attempt (Stop, or a fresh send). */
   | 'cancelled'
   /** The silence ceiling (or the absolute loop bound) elapsed. NOT a verdict. */
-  | 'ceiling';
+  | 'ceiling'
+  /**
+   * The Host admitted this turn and the engine is retrying upstream; the wait
+   * hands the turn to the pending-reply watch so the composer's one send slot
+   * is free for other conversations (`shouldHandOffRetryingTurn`).
+   */
+  | 'retrying';
 
 /**
  * What a draft does once `handleSend`'s shared gate says a turn is running:
@@ -2468,7 +2475,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // F2: the store slot goes with it. A new turn on this session makes the
     // previous turn's head moot — whatever the Host is still doing with it, the
     // head the user is now watching belongs to THIS send.
-    pendingReplyRef.current = null;
+    //
+    // Scoped to this session like the store slot: another conversation's watch
+    // (e.g. a turn handed off mid-retry) still owns the payload its failure
+    // would restore.
+    if (pendingReplyRef.current?.sessionId === sessionId) pendingReplyRef.current = null;
     clearPendingReply(sessionId);
     // A skip warning belongs to the paste that produced it, not to the next
     // turn. Sending is one of the three clear triggers (next attach / Send / x).
@@ -3123,6 +3134,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       turnStartedAtMs = phaseStartedAtRef.current;
       updateTurnSend(sendOwner, { elapsedSeconds: 0, phase: 'awaiting' });
 
+      // Set by the predicate when its only reason to release is the retry
+      // hand-off, so the classification below can tell it from progress.
+      let handedOffForRetry = false;
       // Running alone is not success — wait for assistant / tool / permission / terminal.
       const released = await waitUntil(
         () => {
@@ -3170,7 +3184,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // Round-6 review N1 + verify major: only an assistant id that did
           // not exist at dispatch time counts — `h:*` replay rows and the
           // previous turn's reply are both excluded by the baseline.
-          return hasNewAssistantMessage(state.messages[sessionId] ?? [], assistantBaseline);
+          if (hasNewAssistantMessage(state.messages[sessionId] ?? [], assistantBaseline)) {
+            return true;
+          }
+          // Last, so any real verdict above wins over the hand-off.
+          if (shouldHandOffRetryingTurn({ sawUserEcho, sawNetworkRetry })) {
+            handedOffForRetry = true;
+            return true;
+          }
+          return false;
           // F2 (2026-08-18): expiry is now "this session has been SILENT for
           // SEND_SILENCE_CEILING_MS", not "N ms have passed since dispatch".
           // Reaching it is not a verdict about the turn — the Host owns that,
@@ -3187,6 +3209,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // may also carry a stale `fatalHostError` and must still read as a Stop.
       if (sawSessionStopped || sawSessionCompleted) return 'terminal';
       if (sendGenerationRef.current !== myGeneration) return 'cancelled';
+      if (released && handedOffForRetry && !sawAssistantProgress) return 'retrying';
       return released ? 'progress' : 'ceiling';
     };
 
@@ -3719,6 +3742,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // side, the same event as a silence expiry: we stopped waiting and the
       // Host has said nothing. Normalised here so the switch has exactly ONE
       // "we stopped waiting" exit instead of two that must be kept in step.
+      // A `'retrying'` hand-off is that exit too: the echo it requires makes
+      // the ceiling case below arm the pending-reply watch.
       const settled: WaitResult =
         waitResult === 'terminal' || waitResult === 'cancelled'
           ? waitResult
