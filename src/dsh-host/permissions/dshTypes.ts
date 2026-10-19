@@ -1,6 +1,6 @@
 /**
  * Narrow structural views of the DSH shapes the `aiclient-permissions` row
- * reads (DSH 0.1.7-rc.2: dsh-tools, dsh-session, dsh-user-approval).
+ * reads (DSH 0.2.0-rc.2: dsh-tools, dsh-session, dsh-user-approval).
  *
  * Declared here instead of imported so the row's bundle takes in no DSH
  * package and its unit tests can build these objects by hand.

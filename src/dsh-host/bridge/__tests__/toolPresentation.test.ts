@@ -17,7 +17,7 @@ import { type DshToolRegistryView, dshToolPresenter } from '../toolPresentation.
  * (host I); here the registry is a fake shaped like `ctx.tools.get`.
  */
 
-/** `dsh-office-tools@1.0.4`'s own `presentCall` (lib/index.js: `word_create`, `word_read`). */
+/** `dsh-office-tools`' own `presentCall` (lib/index.js: `word_create`, `word_read`; 1.0.4, unchanged in 1.0.6). */
 const officeCreate = (args: { path: string }) => ({
   card: 'generic',
   title: `Create ${args.path}`,

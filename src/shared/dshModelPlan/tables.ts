@@ -1,6 +1,6 @@
 // New in dsh-rebase P1-5a
 /**
- * Static copies of what `@deepseek-ai/dsh-llm-pi-ai` 0.1.7-rc.2 accepts on a
+ * Static copies of what `@deepseek-ai/dsh-llm-pi-ai` 0.2.0-rc.2 accepts on a
  * hand-declared route. Copied, not imported: this module is loaded where DSH
  * is not installed (Main, root Vitest). A DSH upgrade that changes either
  * table is caught by the drift gate in the dsh-host package, which loads a
@@ -10,7 +10,7 @@
 import { SESSION_EFFORT_LEVELS } from '../types/agentHost.ts';
 import type { DshEffortLevel, DshProtocol } from './types.ts';
 
-/** `PROTOCOLS` / `supportedProtocols()` (`dsh-llm-pi-ai` lib/index.js:798-812). */
+/** `PROTOCOLS` / `supportedProtocols()` (`dsh-llm-pi-ai` lib/index.js:802-817). */
 export const DSH_PROTOCOLS: readonly DshProtocol[] = [
   'openai-completions',
   'openai-responses',
@@ -18,7 +18,7 @@ export const DSH_PROTOCOLS: readonly DshProtocol[] = [
 ];
 
 /**
- * The compat keys each protocol offers (`COMPAT_GATES`, lib/index.js:377-447).
+ * The compat keys each protocol offers (`COMPAT_GATES`, lib/index.js:379-451).
  * Withheld keys are left out: setting one rejects the whole profile.
  */
 export const DSH_OFFERED_COMPAT: Readonly<Record<DshProtocol, readonly string[]>> = {
@@ -60,7 +60,7 @@ export const DSH_OFFERED_COMPAT: Readonly<Record<DshProtocol, readonly string[]>
   ],
 };
 
-/** `THINKING_LEVELS`, escalation order (lib/index.js:297-305); identical to ours. */
+/** `THINKING_LEVELS`, escalation order (lib/index.js:296-304); identical to ours. */
 export const DSH_EFFORT_LEVELS: readonly DshEffortLevel[] = SESSION_EFFORT_LEVELS;
 
 /**

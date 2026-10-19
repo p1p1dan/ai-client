@@ -1146,11 +1146,25 @@ describe('DshSessionRuntime — session.projection (P1-4d2, decisions 031, 099 r
 describe('DshSessionRuntime — capabilities (P1-4d2, decisions 099 rule 12, 113)', () => {
   it('[D2-CAPS] reports every skill the agent sees, and nothing else', async () => {
     const host = fakeHost();
+    // Decision 189: an entry neither the model nor a person can call (the
+    // permission row's shadow of DSH's sandbox skill) is not counted.
+    const hidden: DshSkillSummary = {
+      ...skill('diagnose-windows-sandbox-acl', false, 'runtime'),
+      invocation: { modelInvocable: false, userInvocable: false },
+    };
+    // A summary without a policy is invocable by both, DSH's default.
+    const unruled: DshSkillSummary = { name: 'unruled', description: 'x', source: 'custom' };
     host.services.skills = {
-      list: vi.fn(async () => [skill('review'), skill('model-only', false), skill('plan')]),
+      list: vi.fn(async () => [
+        skill('review'),
+        skill('model-only', false),
+        hidden,
+        skill('plan'),
+        unruled,
+      ]),
     };
     const result = await runtime(host.ctx, []).bootstrap();
-    expect(result.capabilities).toEqual({ skills: 3 });
+    expect(result.capabilities).toEqual({ skills: 4 });
   });
 
   it('[D2-CAPS-NONE] no registry, or a failed read, is "not reported" and never a failed bootstrap', async () => {

@@ -96,7 +96,9 @@ function writePlugin({ manifest = {}, patch = GOOD_PATCH, license = true, source
     peerDependencies: {
       '@deepseek-ai/cordis': '^4.0.1',
       // What DSH accepts and npm does not (experiment E2): prereleases take part.
-      '@deepseek-ai/dsh-llm': '^0.1.0-rc.6',
+      // Open-ended, so the pin can move past 0.1.x (decision 189) and npm
+      // still rejects it: its prerelease is on another major.minor.patch.
+      '@deepseek-ai/dsh-llm': '>=0.1.0-rc.6',
     },
     ...manifest,
   });
@@ -409,7 +411,7 @@ describe('preflight: the allowlist against the committed host package', () => {
     const { allowlist, closures } = preflightDshHost(sourceDir);
     // P1-10d (decision 115): dsh-office-tools, with no run-time closure of its own.
     expect(allowlist.plugins.map((item) => `${item.name}@${item.version}`)).toEqual([
-      'dsh-office-tools@1.0.4',
+      'dsh-office-tools@1.0.6',
     ]);
     expect(closures).toEqual({ 'dsh-office-tools': [] });
     const manifest = JSON.parse(fs.readFileSync(path.join(sourceDir, 'package.json'), 'utf8'));
@@ -479,7 +481,7 @@ describe('preflight: the allowlist against the committed host package', () => {
       manifest.overrides['dsh-office-tools']['@deepseek-ai/dsh-fs'] = '0.1.5-rc.3';
     });
     expect(() => preflightDshHost(copy)).toThrow(
-      /dsh-office-tools@1\.0\.4: lockfile integrity differs[\s\S]*overrides\.dsh-office-tools\.@deepseek-ai\/dsh-fs is "0\.1\.5-rc\.3"/
+      /dsh-office-tools@1\.0\.6: lockfile integrity differs[\s\S]*overrides\.dsh-office-tools\.@deepseek-ai\/dsh-fs is "0\.1\.5-rc\.3"/
     );
   });
 });

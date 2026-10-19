@@ -4,8 +4,8 @@
   "plugins": [
     {
       "name": "dsh-office-tools",
-      "version": "1.0.4",
-      "integrity": "sha512-Q1jvlhjKDHjoZBX54WkT0zCblUGACPwiCQJfS/cgU5jVLzI3q66bU/MR5QEsERd9QJQhtgOdH89opZtvga6uxA==",
+      "version": "1.0.6",
+      "integrity": "sha512-o48Ddpy7AqTLXTIvsTXkN0VST7EaXaNL7VnBQfHqa9/Hu2cGa+gBWpoJDxDMPFXlkUKalKkvLv8d7xV4ZzN67A==",
       "kind": "internal",
       "defaultEnabled": false,
       "rows": ["dsh-office-tools"],
@@ -20,9 +20,9 @@
         "ppt_create": { "class": "write", "path": "path" }
       },
       "review": {
-        "record": "reviews/dsh-office-tools-1.0.4.md",
-        "date": "2026-09-28",
-        "reviewer": "dsh-rebase P1-10d agent review, pending user approval (decision 115)",
+        "record": "reviews/dsh-office-tools-1.0.6.md",
+        "date": "2026-10-14",
+        "reviewer": "DSH 0.2.0-rc.2 upgrade agent review (delta over 1.0.4), pending user approval (decision 189)",
         "verdict": "conditional"
       }
     }

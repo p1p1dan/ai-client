@@ -69,7 +69,7 @@ export const RUNTIME_TOOL_NAMES = {
 } as const;
 
 /**
- * dsh-rebase P1-7c: the DSH tools (pinned 0.1.7-rc.2) whose names neither
+ * dsh-rebase P1-7c: the DSH tools (pinned 0.2.0-rc.2) whose names neither
  * table above carries, by the `name:` literal of each tool's own definition.
  * The shared names (`read`, `write`, `edit`, `glob`, `grep`, `bash`, `skill`)
  * stay in {@link RUNTIME_TOOL_NAMES}: one name, one row treatment. Argument

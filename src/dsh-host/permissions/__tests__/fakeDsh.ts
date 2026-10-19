@@ -4,8 +4,9 @@
  * dsh-tools runs it (only after an `allow`), `provide`, and `inject` of a
  * `systemPrompt` that records the runtime contexts and prompt variables
  * registered on it (DSH's `SANDBOX_POLICY` / `APPROVAL_POLICY` sit at 110 /
- * 115, as in dsh-system-prompt). It does not interpolate: tests that render
- * text with variables use dsh-system-prompt's own `renderContextSections`.
+ * 115, as in dsh-system-prompt), or of `skills` that records the runtime
+ * skills registered on it. It does not interpolate: tests that render text
+ * with variables use dsh-system-prompt's own `renderContextSections`.
  */
 
 import type {
@@ -17,7 +18,7 @@ import type {
   DshToolCall,
   DshToolResult,
 } from '../dshTypes.ts';
-import type { PermissionRowContext } from '../plugin.ts';
+import type { PermissionRowContext, RowScope } from '../plugin.ts';
 
 type Listener = (...args: never[]) => unknown;
 type AnyListener = (...args: unknown[]) => unknown;
@@ -32,6 +33,9 @@ export interface FakePromptContext {
 /** One `systemPrompt.variable` provider. */
 export type FakePromptVariable = (assembly: { agent?: DshAgentView }) => string | undefined;
 
+/** One `skills.register` registration. */
+export type FakeRuntimeSkill = Parameters<RowScope['skills']['register']>[0];
+
 export interface FakeDsh {
   ctx: PermissionRowContext;
   services: Map<string, unknown>;
@@ -39,6 +43,8 @@ export interface FakeDsh {
   contexts: FakePromptContext[];
   /** Prompt variables registered through `inject(['systemPrompt'])`, by name. */
   variables: Map<string, FakePromptVariable>;
+  /** Runtime skills registered through `inject(['skills'])`, in order. */
+  skills: FakeRuntimeSkill[];
   hooks(name: string): Array<{ listener: AnyListener; prepend: boolean }>;
   /** `tools/pre-execute` + guards, as dsh-tools' prepare stage runs them. */
   prepare(exec: DshToolCall): Promise<DshPreToolDecision>;
@@ -55,6 +61,7 @@ export function createFakeDsh(): FakeDsh {
   const services = new Map<string, unknown>();
   const contexts: FakePromptContext[] = [];
   const variables = new Map<string, FakePromptVariable>();
+  const skills: FakeRuntimeSkill[] = [];
   const contextOrders: Record<string, number> = {
     SANDBOX_POLICY: 110,
     APPROVAL_POLICY: 115,
@@ -98,10 +105,22 @@ export function createFakeDsh(): FakeDsh {
     },
     get: (name) => services.get(name),
     inject: (deps, callback) => {
-      if (deps.length !== 1 || deps[0] !== 'systemPrompt') {
-        throw new Error(`the fake injects systemPrompt only, not ${deps.join(', ')}`);
+      if (deps.length !== 1 || (deps[0] !== 'systemPrompt' && deps[0] !== 'skills')) {
+        throw new Error(`the fake injects systemPrompt or skills alone, not ${deps.join(', ')}`);
       }
       callback({
+        skills: {
+          register: (skill) => {
+            if (deps[0] !== 'skills') throw new Error('skills used without injecting it');
+            if (skills.some((known) => known.name === skill.name)) {
+              throw new Error(`duplicate runtime skill ${skill.name}`);
+            }
+            skills.push(skill);
+            return () => {
+              skills.splice(skills.indexOf(skill), 1);
+            };
+          },
+        },
         systemPrompt: {
           context: (context) => {
             if (contexts.some((known) => known.name === context.name)) {
@@ -130,6 +149,7 @@ export function createFakeDsh(): FakeDsh {
     services,
     contexts,
     variables,
+    skills,
     hooks: (name) => lists.get(name) ?? [],
     async prepare(exec) {
       const decision = await waterfall<DshPreToolDecision>(

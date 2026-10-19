@@ -8,7 +8,7 @@ Q002（DSH 沙箱能否作为兜底层叠加）已于 2026-10-18 关闭：加密
 
 Q003（内嵌终端）已于 2026-09-28 裁决：去掉 pi TUI 与 GUI / TUI 开关，原位置加一个普通终端按钮，见[决策 090](decisions/090-user-rulings-2026-09-28.md)。
 
-Q004（版本通道）已于 2026-09-26 定为钉 `next` 的精确版本 `0.1.7-rc.2`，见[决策 003](decisions/003-p0-closeout-enter-p1.md)。
+Q004（版本通道）已于 2026-09-26 定为钉 `next` 的精确版本 `0.1.7-rc.2`，见[决策 003](decisions/003-p0-closeout-enter-p1.md)；2026-10-14 按同一流程升到 `0.2.0-rc.2`，见[决策 189](decisions/189-dsh-0-2-0-rc-2-upgrade.md)（待审批）。
 
 Q005（Windows 上 ACL 沙箱默认开不开）已于 2026-10-18 关闭，由[决策 045](decisions/045-windows-acl-sandbox-default-off.md) 承接（默认不开、不预检），见[决策 193](decisions/193-user-rulings-2026-10-18.md) 第 25 条。
 

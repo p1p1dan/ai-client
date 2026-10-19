@@ -1,7 +1,7 @@
 /**
  * Decision 177: each model's automatic compaction, handed to DSH's
  * `compaction-basic` row as its `modelPolicies` (dsh-compaction-basic
- * 0.1.7-rc.2: one exact provider/model override per entry).
+ * 0.2.0-rc.2: one exact provider/model override per entry).
  *
  * The policies come from the model plan Main sent (`configure`), sized the way
  * `llm-pi-ai` is (`llmPiAiProviders`), through the shared rules

@@ -68,7 +68,7 @@ export type DshMappedFailureCode =
   | typeof MODEL_SETTING_UNSUPPORTED;
 
 /**
- * DSH 0.1.7-rc.2's failure codes (`LlmFailure.code` on `turn/end`): the
+ * DSH 0.2.0-rc.2's failure codes (`LlmFailure.code` on `turn/end`): the
  * provider-neutral classes of `dsh-llm` and `dsh-llm-pi-ai`, `resolveRoute`'s
  * refusals, and the loop guard's cut. Left out on purpose, so the renderer
  * shows its generic card with DSH's own sentence: `UNKNOWN` (an error with no

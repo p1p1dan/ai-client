@@ -32,7 +32,7 @@ import {
   PermissionHost,
   spillRootOf,
 } from '../permissionHost.ts';
-import { apply, inject, name } from '../plugin.ts';
+import { apply, HIDDEN_SANDBOX_SKILLS, hideSandboxSkills, inject, name } from '../plugin.ts';
 import { PERMISSION_PROMPT_CONTEXT } from '../promptContext.ts';
 import { authorizeCall } from '../requestBuilder.ts';
 import { SHELL_WORKDIR_DENIAL } from '../shellWorkdir.ts';
@@ -134,6 +134,38 @@ describe('the aiclient-permissions row', () => {
     expect(
       typeof (fake.services.get(PERMISSION_HOST_SERVICE) as DshPermissionHost).attachGate
     ).toBe('function');
+  });
+});
+
+describe("the DSH sandbox's skills (decision 189)", () => {
+  it('shadows the Windows ACL repair skill with one nobody can invoke', () => {
+    const fake = createFakeDsh();
+    hideSandboxSkills(fake.ctx, 'win32');
+    expect(HIDDEN_SANDBOX_SKILLS).toEqual(['diagnose-windows-sandbox-acl']);
+    expect(fake.skills).toEqual([
+      {
+        name: 'diagnose-windows-sandbox-acl',
+        description: expect.stringMatching(/sandbox .* is off/),
+        content: '',
+        source: 'runtime',
+        invocation: { modelInvocable: false, userInvocable: false },
+      },
+    ]);
+  });
+
+  it('registers nothing where DSH brings no such skill', () => {
+    for (const platform of ['linux', 'darwin']) {
+      const fake = createFakeDsh();
+      hideSandboxSkills(fake.ctx, platform);
+      expect(fake.skills, platform).toEqual([]);
+    }
+  });
+
+  it('is part of the row on this platform, and only on Windows', () => {
+    const { fake } = setup();
+    expect(fake.skills.map((skill) => skill.name)).toEqual(
+      process.platform === 'win32' ? ['diagnose-windows-sandbox-acl'] : []
+    );
   });
 });
 

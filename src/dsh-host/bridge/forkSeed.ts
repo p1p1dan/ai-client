@@ -6,8 +6,9 @@
  * no DSH package, because the bundled bridge may import none but
  * `@deepseek-ai/dsh-llm` (scripts/dsh-host-build-lib.mjs `BRIDGE_EXTERNALS`).
  * `buildDshForkSeed` is therefore a copy of `buildForkSeed` and its
- * `openTurnClosers` from `@deepseek-ai/dsh-session` 0.1.7-rc.2: the prefix,
- * the inherited marker, and `forked` closers for an open tail.
+ * `openTurnClosers` / `ToolCallRecovery` from `@deepseek-ai/dsh-session`
+ * 0.2.0-rc.2: the prefix, the inherited marker, and `forked` closers for an
+ * open tail.
  * `forkSeed.test.ts` compares the two whenever the DSH package is installed,
  * and `agents.create` validates every seed it is handed.
  *
@@ -72,12 +73,13 @@ export class DshForkBoundaryError extends Error {
  * The synthetic events that close an open tail turn with the `forked` cause:
  * an error result per call its open step never answered, `step/end`, then
  * `turn/end`. Empty when the log is balanced. `openTurnClosers(events,
- * {kind: 'forked'})` of dsh-session.
+ * {kind: 'forked'})` of dsh-session: a request is answered only by an
+ * appended `tool/result` of its own turn and step (`ToolCallRecovery`, 0.2.0).
  */
 export function forkedTurnClosers(events: readonly DshLogEvent[]): DshLogEvent[] {
   let openTurn: unknown = null;
   let openStep: unknown = null;
-  const pending = new Map<string, { step: unknown; callSeq?: number }>();
+  const pending = new Map<string, { turn: unknown; step: unknown; callSeq?: number }>();
   for (const event of events) {
     const data = recordOf(event.data);
     switch (event.type) {
@@ -103,7 +105,7 @@ export function forkedTurnClosers(events: readonly DshLogEvent[]): DshLogEvent[]
         if (!Array.isArray(content)) break;
         for (const block of content.map(recordOf)) {
           const id = block?.type === 'tool-call' ? stringOf(block.id) : undefined;
-          if (id) pending.set(id, { step: data?.step });
+          if (id) pending.set(id, { turn: data?.turn, step: data?.step });
         }
         break;
       }
@@ -112,9 +114,19 @@ export function forkedTurnClosers(events: readonly DshLogEvent[]): DshLogEvent[]
         if (entry) entry.callSeq = event.seq;
         break;
       }
-      case 'tool/result':
-        pending.delete(String(recordOf(recordOf(data?.message)?.source)?.callId));
+      case 'tool/result': {
+        const callId = String(recordOf(recordOf(data?.message)?.source)?.callId);
+        const entry = pending.get(callId);
+        if (
+          event.surfaceOp === 'append' &&
+          entry !== undefined &&
+          entry.turn === data?.turn &&
+          entry.step === data?.step
+        ) {
+          pending.delete(callId);
+        }
         break;
+      }
       default:
         break;
     }
@@ -124,14 +136,14 @@ export function forkedTurnClosers(events: readonly DshLogEvent[]): DshLogEvent[]
   let seq = last.seq + 1;
   const time = last.time;
   const closers: DshLogEvent[] = [];
-  for (const [callId, { step, callSeq }] of pending) {
+  for (const [callId, { turn, step, callSeq }] of pending) {
     const started = callSeq !== undefined;
     closers.push({
       type: 'tool/result',
       seq: seq,
       time,
       data: {
-        turn: openTurn,
+        turn,
         step,
         message: {
           id: `forked-tool-result-${callId}-${seq}`,

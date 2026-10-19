@@ -50,7 +50,7 @@ export interface ToolCallPresentation {
 export const TOOL_PRESENTATION_TEXT_MAX = 200;
 
 /**
- * Every tool the pinned DSH (0.1.7-rc.2) defines, and the DSH packages the
+ * Every tool the pinned DSH (0.2.0-rc.2) defines, and the DSH packages the
  * host installs beside dsh-base — the keys of the permission gate's
  * `DSH_TOOL_CLASSES` (`src/dsh-host/permissions/classification.ts`), which the
  * bridge bundle may not import (decision 106 rule 3). A test pins the two

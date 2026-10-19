@@ -35,6 +35,47 @@ const at = (seq: number, type: string, data: unknown = {}): DshLogEvent => ({
   data,
 });
 
+const resultFor = (seq: number, callId: string, step: number, surfaceOp: string): DshLogEvent => ({
+  ...at(seq, 'tool/result', {
+    turn: 1,
+    step,
+    message: {
+      id: `result-${callId}`,
+      role: 'tool',
+      toolCallId: callId,
+      isError: false,
+      source: { kind: 'tool', callId },
+      content: [{ type: 'text', text: 'ok' }],
+    },
+  }),
+  surfaceOp,
+});
+
+/**
+ * An open step whose two requests have results that do not answer them in
+ * place: a replacement surface op for c1, another step's result for c2.
+ */
+const UNANSWERED_IN_PLACE: DshLogEvent[] = [
+  at(0, 'session/start'),
+  at(1, 'turn/start', { turn: 1 }),
+  at(2, 'step/start', { turn: 1, step: 0 }),
+  at(3, 'assistant/message', {
+    turn: 1,
+    step: 0,
+    message: {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: [
+        { type: 'tool-call', id: 'c1', name: 'read', arguments: '{}' },
+        { type: 'tool-call', id: 'c2', name: 'read', arguments: '{}' },
+      ],
+    },
+  }),
+  at(4, 'tool/call', { turn: 1, step: 0, callId: 'c1' }),
+  resultFor(5, 'c1', 0, 'replace'),
+  resultFor(6, 'c2', 1, 'append'),
+];
+
 describe('planDshCut — rewind', () => {
   it('cuts before the turn of a prompt, and hands the prompt back', () => {
     // The second turn's prompt: its turn starts at 14, queued at 13.
@@ -193,6 +234,36 @@ describe('buildDshForkSeed', () => {
     expect(forkedTurnClosers([])).toEqual([]);
   });
 
+  it('counts only an appended result of the same turn and step as an answer (dsh-session 0.2.0)', () => {
+    const closers = forkedTurnClosers(UNANSWERED_IN_PLACE);
+    expect(closers.map((event) => [event.seq, event.type])).toEqual([
+      [7, 'tool/result'],
+      [8, 'tool/result'],
+      [9, 'step/end'],
+      [10, 'turn/end'],
+    ]);
+    // c1 started (its tool/call is seq 4); only a replacement of a result followed.
+    expect(closers[0]).toMatchObject({
+      data: {
+        turn: 1,
+        step: 0,
+        message: { toolCallId: 'c1' },
+        error: { code: 'TOOL_OUTCOME_UNKNOWN' },
+      },
+      sourceEventSeqs: [4],
+    });
+    // c2 never started; the result naming it belongs to another step.
+    expect(closers[1]).toMatchObject({
+      data: {
+        turn: 1,
+        step: 0,
+        message: { toolCallId: 'c2' },
+        error: { code: 'TOOL_NOT_STARTED' },
+      },
+    });
+    expect(closers[1]).not.toHaveProperty('sourceEventSeqs');
+  });
+
   it('refuses a boundary that names no event', () => {
     const events = log('tool');
     expect(() => buildDshForkSeed(events, -1)).toThrow(DshForkBoundaryError);
@@ -230,5 +301,17 @@ describe.skipIf(!existsSync(DSH_SESSION))('buildDshForkSeed against dsh-session'
       }
     }
     expect(compared).toBeGreaterThan(100);
+  });
+
+  it('equals buildForkSeed where a result does not answer its request in place', async () => {
+    const dsh = (await import(pathToFileURL(DSH_SESSION).href)) as {
+      buildForkSeed(events: readonly DshLogEvent[], boundary: number): DshLogEvent[];
+    };
+    for (let boundary = 0; boundary < UNANSWERED_IN_PLACE.length; boundary += 1) {
+      expect(
+        JSON.stringify(buildDshForkSeed(UNANSWERED_IN_PLACE, boundary)),
+        `unanswered@${boundary}`
+      ).toBe(JSON.stringify(dsh.buildForkSeed(UNANSWERED_IN_PLACE, boundary)));
+    }
   });
 });

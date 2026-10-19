@@ -144,7 +144,9 @@
     # it (hostProfile.ts REQUIRED_ENABLED, RESTATED_ENABLED). Also registers
     # the `aiclient:permission` and `aiclient:environment` runtime contexts
     # (decision 164: OS, shell, workspace, home, date) and checks a shell
-    # call's `workdir` before it runs.
+    # call's `workdir` before it runs. On Windows it hides the sandbox's ACL
+    # repair skill, `diagnose-windows-sandbox-acl` (DSH 0.2.0, decision 189):
+    # the sandbox it repairs is off here.
     - id: aiclient-permissions
       name: '@aiclient/dsh-app/permissions'
 

@@ -1,0 +1,2 @@
+# Git Bash runs these on Windows; a CRLF checkout (core.autocrlf=true) breaks them.
+*.sh text eol=lf
