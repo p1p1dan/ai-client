@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  mergeOlderHistoryPage,
   mergeReplayedHistory,
   type ReplayMergeMessage,
   type ResumeSnapshot,
@@ -1374,5 +1375,93 @@ describe('mergeReplayedHistory — transcript ids and leftover placement (decisi
     ];
     const merged = mergeReplayedHistory(bucket, history, resumeOf(bucket));
     expect(ids(merged)).toEqual(['h:u1', 'h:a1', 'h:o1', 'h:a2']);
+  });
+});
+
+/**
+ * Decision 206: scrolling up after a reopen. The replay left the live rows
+ * older than its page in front of it; the older page is where their rows are.
+ */
+describe('mergeOlderHistoryPage — the live rows in front of the page (decision 206)', () => {
+  const user = (id: string, text: string, transcriptId?: string): ReplayMergeMessage => ({
+    ...msg(id, 'user', text),
+    ...(transcriptId ? { transcriptId } : {}),
+  });
+  const say = (id: string, text: string, transcriptId?: string): ReplayMergeMessage => ({
+    ...msg(id, 'assistant', text),
+    ...(transcriptId ? { transcriptId } : {}),
+  });
+  const head = (id: string): ReplayMergeMessage => ({
+    id,
+    role: 'user',
+    blocks: [],
+    origin: { kind: 'subagent' },
+  });
+
+  it('without live rows in front it only prepends what the timeline lacks', () => {
+    const current = [say('h:a2', 'newest')];
+    const older = [user('h:u1', 'oldest'), say('h:a2', 'newest')];
+    expect(ids(mergeOlderHistoryPage(current, older))).toEqual(['h:u1', 'h:a2']);
+  });
+
+  it('takes back the live rows it names; older ones stay in front, the rest in their turn', () => {
+    const current = [
+      user('cc-user-a-1', '很早的问题', 'u-1'),
+      say('cc-s-a-t1-s1', '很早的回答', 'msg_1'),
+      user('cc-user-a-2', '做 X', 'u-2'),
+      say('cc-s-a-t2-s1', '我先看一', 'msg_cut'),
+      say('cc-s-a-t2-s2', '完成 X', 'msg_2'),
+      head('cc-user-a-3'),
+      say('cc-s-a-t3-s1', '子代理完成', 'msg_3'),
+      user('h:u4', '做 Y', 'u-4'),
+      say('h:a4', '完成 Y', 'msg_4'),
+    ];
+    // The page before h:u4 starts at turn 2.
+    const older = [
+      user('h:u2', '做 X', 'u-2'),
+      say('h:a2', '完成 X', 'msg_2'),
+      head('h:o3'),
+      say('h:a3', '子代理完成', 'msg_3'),
+    ];
+    expect(ids(mergeOlderHistoryPage(current, older))).toEqual([
+      'cc-user-a-1',
+      'cc-s-a-t1-s1',
+      'h:u2',
+      'cc-s-a-t2-s1',
+      'h:a2',
+      'h:o3',
+      'h:a3',
+      'h:u4',
+      'h:a4',
+    ]);
+  });
+
+  it('names none of them: they are older than this page too and stay in front of it', () => {
+    // Rows from before a compaction: no page of the chain after it has them.
+    const current = [
+      user('cc-user-a-1', '压缩前', 'u-1'),
+      say('cc-s-a-t1-s1', '压缩前的回答', 'msg_1'),
+      user('h:u3', '做 Y', 'u-3'),
+    ];
+    const older = [msg('h:sum', 'system', 'summary'), user('h:u2', '做 X', 'u-2')];
+    expect(ids(mergeOlderHistoryPage(current, older))).toEqual([
+      'cc-user-a-1',
+      'cc-s-a-t1-s1',
+      'h:sum',
+      'h:u2',
+      'h:u3',
+    ]);
+  });
+
+  it('a live copy with attachments stands for its row, chips and all', () => {
+    const live = {
+      ...user('cc-user-a-1', '看图', 'u-1'),
+      attachments: [att('image', 'image/png')],
+    };
+    const current = [live, user('h:u2', '下一个', 'u-2')];
+    const older = [user('h:u1', '看图', 'u-1')];
+    const merged = mergeOlderHistoryPage(current, older);
+    expect(ids(merged)).toEqual(['cc-user-a-1', 'h:u2']);
+    expect(merged[0]?.attachments).toEqual([att('image', 'image/png')]);
   });
 });

@@ -1868,4 +1868,40 @@ describe('applyRuntimeEvent — a Claude SDK chat reopened past one page (decisi
     ]);
     expect(reopened.messages[SESSION_ID]?.[3]).toMatchObject({ transcriptId: 'u-2' });
   });
+
+  it('scrolling up then takes the older turn back from its page, once', () => {
+    const live = applyAll(baseState({ sessions: [makeSession()] }), [
+      ...turn(1, '继续', '旧回答'),
+      ...turn(2, '做 X', '完成 X'),
+    ]).state;
+    const reopened = applyAll(live, [
+      makeResumedEvent('req-2'),
+      makeHistoryEvent(
+        { messages: rows(2, '做 X', '完成 X'), offset: 0, totalCount: 6, hasMore: true },
+        'req-2'
+      ),
+    ]).state;
+    expect(reopened.historyPagination?.[SESSION_ID]?.nextOffset).toBe(3);
+
+    const scrolled = applyAll(reopened, [
+      makeHistoryEvent(
+        {
+          mode: 'older',
+          messages: rows(1, '继续', '旧回答'),
+          offset: 3,
+          totalCount: 6,
+          hasMore: false,
+        },
+        'older-1'
+      ),
+    ]).state;
+    expect(scrolled.messages[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:u1',
+      'h:a1',
+      'h:b1',
+      'h:u2',
+      'h:a2',
+      'h:b2',
+    ]);
+  });
 });

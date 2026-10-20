@@ -780,14 +780,16 @@ function foldByText<T extends ReplayMergeMessage>(
  *   (not a candidate): after the page, as before.
  *
  * With no anchor at all the page and the bucket share nothing to place by:
- * the leftovers follow the page (duplication beats misplacement).
+ * the leftovers follow the page (duplication beats misplacement), or precede
+ * it when the caller knows they are older (`unanchored: 'before'`).
  */
 function placeLeftovers<T extends ReplayMergeMessage>(
   bucket: readonly T[],
   page: readonly T[],
   left: readonly T[],
   candidateIds: ReadonlySet<string>,
-  foldedAt: ReadonlyMap<string, number>
+  foldedAt: ReadonlyMap<string, number>,
+  unanchored: 'before' | 'after' = 'after'
 ): T[] {
   if (left.length === 0) return [...page];
   const pageIndex = new Map(page.map((row, index) => [row.id, index]));
@@ -795,7 +797,9 @@ function placeLeftovers<T extends ReplayMergeMessage>(
     foldedAt.get(message.id) ??
     (message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX) ? pageIndex.get(message.id) : undefined);
   const anchors = bucket.map(anchorOf);
-  if (anchors.every((at) => at === undefined)) return [...page, ...left];
+  if (anchors.every((at) => at === undefined)) {
+    return unanchored === 'before' ? [...left, ...page] : [...page, ...left];
+  }
 
   const nextAnchor: Array<number | undefined> = new Array(bucket.length);
   let next: number | undefined;
@@ -826,4 +830,37 @@ function placeLeftovers<T extends ReplayMergeMessage>(
     out.push(...(before.get(index) ?? []), row);
   });
   return [...out, ...after, ...newer];
+}
+
+/**
+ * An older history page (scrolling up) goes in front of the timeline, minus
+ * the rows already in it. Decision 206: a replay leaves the live rows older
+ * than its page in front of it (`placeLeftovers`), and this page is where
+ * their rows are. It takes back the ones it names exactly — by
+ * `liveMessageId` or transcript id, and an engine head with the step after
+ * it — and the rest keep their places around them. None named: they are older
+ * than this page too, and stay in front of it.
+ */
+export function mergeOlderHistoryPage<T extends ReplayMergeMessage>(
+  current: readonly T[],
+  older: readonly T[]
+): T[] {
+  const existingIds = new Set(current.map((message) => message.id));
+  const page = older.filter((message) => !existingIds.has(message.id));
+  if (page.length === 0) return [...current];
+  const firstHistory = current.findIndex((message) =>
+    message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
+  );
+  const front = firstHistory < 0 ? [...current] : current.slice(0, firstHistory);
+  const rest = current.slice(front.length);
+  if (front.length === 0) return [...page, ...rest];
+  const frontIds = new Set(front.map((message) => message.id));
+  const foldedAt = new Map<string, number>();
+  const exact = foldExactLiveIds(front, page, frontIds, false, foldedAt);
+  const left = foldOriginHeads(exact.remaining, front, page, frontIds, exact.claimed, foldedAt);
+  const merged =
+    exact.replacements.size > 0
+      ? page.map((row, index) => exact.replacements.get(index) ?? row)
+      : page;
+  return [...placeLeftovers(front, merged, left, frontIds, foldedAt, 'before'), ...rest];
 }

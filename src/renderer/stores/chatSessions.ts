@@ -67,6 +67,7 @@ import { uniqueId } from '@/lib/uniqueId';
 // the resume snapshot registry that bounds which messages a replay may fold.
 import {
   hasMatchingResumeSnapshot,
+  mergeOlderHistoryPage,
   mergeReplayedHistory,
   snapshotResumeCandidates,
   takeResumeSnapshot,
@@ -1579,15 +1580,6 @@ export function mapHistoryMessageToChatMessage(
     ...(historyMessage.liveMessageId ? { liveMessageId: historyMessage.liveMessageId } : {}),
     ...(historyMessage.transcriptId ? { transcriptId: historyMessage.transcriptId } : {}),
   };
-}
-
-function mergeOlderHistoryPage(
-  current: readonly ChatMessage[],
-  older: readonly ChatMessage[]
-): ChatMessage[] {
-  const existingIds = new Set(current.map((message) => message.id));
-  const prepend = older.filter((message) => !existingIds.has(message.id));
-  return prepend.length === 0 ? [...current] : [...prepend, ...current];
 }
 
 function appendTextBlock(
