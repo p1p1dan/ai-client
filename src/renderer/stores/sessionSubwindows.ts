@@ -30,6 +30,8 @@ interface SessionSubwindowsState {
   close: (key: SubwindowKey) => void;
   setPosition: (key: SubwindowKey, position: SubwindowPosition | null) => void;
   hideJob: (sessionId: string, jobId: string) => void;
+  /** 「清除已结束」: put several ended jobs away at once. */
+  hideJobs: (sessionId: string, jobIds: readonly string[]) => void;
   toggleExpanded: (rowKey: string) => void;
   pruneSessions: (sessionIds: readonly string[]) => void;
 }
@@ -55,14 +57,19 @@ export const useSessionSubwindowsStore = create<SessionSubwindowsState>()((set) 
       return { positions };
     }),
 
-  hideJob: (sessionId, jobId) =>
+  hideJob: (sessionId, jobId) => useSessionSubwindowsStore.getState().hideJobs(sessionId, [jobId]),
+
+  hideJobs: (sessionId, jobIds) =>
     set((state) => {
       const current = state.hiddenJobs[sessionId] ?? [];
-      if (current.includes(jobId)) return state;
+      const added = jobIds.filter(
+        (id, index) => !current.includes(id) && jobIds.indexOf(id) === index
+      );
+      if (added.length === 0) return state;
       return {
         hiddenJobs: {
           ...state.hiddenJobs,
-          [sessionId]: [...current, jobId].slice(-HIDDEN_JOBS_KEPT),
+          [sessionId]: [...current, ...added].slice(-HIDDEN_JOBS_KEPT),
         },
       };
     }),

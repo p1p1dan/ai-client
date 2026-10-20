@@ -759,8 +759,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
       "turnWorkGroupOpen({ forcedOpen, userOpen, settled: zone.kind === 'worked', endedByUser, })"
     );
     expectWired('const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);');
-    expectCalled('endedByUser={endedByUser}');
+    // 2026-10-19 (user): a turn that failed or was cut off opens the same way.
+    expectCalled('endedByUser={endedAbnormally}');
     expectCalled('turnEndedByUser(turn.body)');
+    expectCalled('liveTurnEnd(turn.body)');
     expectUnwired('interruptedWithoutAnswer');
 
     const group = nodeSource(topLevelFunction('TurnProgressHead'));

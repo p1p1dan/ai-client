@@ -694,6 +694,25 @@ describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
     payload: { line: `stderr line ${n}` },
   });
 
+  it('folds a line that repeats back to back into one row with a count (2026-10-19)', () => {
+    let state = initialSessionRuntimeFacts;
+    for (const n of [1, 1, 1, 2, 1]) state = reduceSessionRuntimeFacts(state, line(n));
+    expect(state.s1.stderr).toEqual({
+      lines: ['stderr line 1', 'stderr line 2', 'stderr line 1'],
+      total: 3,
+      repeats: [3, 1, 1],
+    });
+    const rows =
+      deriveContextGroups(baseInput({ stderr: state.s1.stderr ?? null })).find(
+        (group) => group.id === 'stderr'
+      )?.rows ?? [];
+    expect(rows.map((row) => row.value)).toEqual([
+      'stderr line 1 (×3)',
+      'stderr line 2',
+      'stderr line 1',
+    ]);
+  });
+
   it('appends lines in arrival order and counts the total', () => {
     let state = initialSessionRuntimeFacts;
     state = reduceSessionRuntimeFacts(state, line(1));

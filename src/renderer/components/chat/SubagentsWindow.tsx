@@ -2,13 +2,14 @@
  * dsh-rebase P1-7b: the subagents sub-window (prototype scene D; decisions
  * 068 as revised by 109, 069, 090, 119; plan P1-7 shard 03 §5.2).
  *
- * Every direct child the session has: a status icon, 子代理 or 分叉 and the
+ * The direct children running now (user, 2026-10-19: an ended one leaves the
+ * list, and background subagents are no longer repeated in the jobs window):
+ * a status icon, 子代理 or 分叉 and the
  * description the delegation gave it (DSH's subagents have no names of their
  * own, decision 090), how long it ran, its tokens and calls; then 「打断」 for
  * a running continuable child (its current run stops, the child stays and can
- * be continued, decision 069) and 「定位」, which scrolls the timeline to the
- * row that delegated it. The same child may show in the background jobs
- * window and in its lane at the same time (decision 109 rule 3).
+ * be continued, decision 069), 「停止」 for a background one-shot child, and
+ * 「定位」, which scrolls the timeline to the row that delegated it.
  *
  * Decision 203: Stop leaves background subagents running, so this window
  * offers 「全部停止」 for them: each stoppable subagent row of the jobs view
@@ -50,12 +51,13 @@ import { SubwindowEmpty, SubwindowFrame } from './SubwindowFrame';
 import { panelStripActionClass, panelStripIconButtonClass } from './sessionPanelsLayout';
 import { isSessionNotRunningError, SESSION_TASKS_ENDED } from './sessionStart';
 import {
-  deriveJobsWindowView,
+  deriveStoppableSubagentRows,
   deriveSubagentsWindowView,
   formatElapsed,
   formatTokens,
   type JobRowView,
   type SubagentRowView,
+  stoppableRowFor,
 } from './subwindowsModel';
 import { useSubwindowClock } from './useSubwindowClock';
 
@@ -126,13 +128,7 @@ export function SubagentsWindow({
   const view = useMemo(() => deriveSubagentsWindowView({ panels, lanes }), [panels, lanes]);
   const now = useSubwindowClock(view.running > 0);
   // Decision 203: the subagents a 「全部停止」 reaches, as the jobs window stops them.
-  const stoppable = useMemo(
-    () =>
-      deriveJobsWindowView({ panels, lanes, hidden: [] }).rows.filter(
-        (row) => row.kind === 'subagent' && row.stop !== null
-      ),
-    [panels, lanes]
-  );
+  const stoppable = useMemo(() => deriveStoppableSubagentRows({ panels, lanes }), [panels, lanes]);
   const [confirming, setConfirming] = useState(false);
   // Decision 203: the child whose sub-conversation page is open.
   const [viewing, setViewing] = useState<string | null>(null);
@@ -194,14 +190,14 @@ export function SubagentsWindow({
       windowKey="agents"
       icon={<Users className="size-3.5" />}
       title={t('Subagents')}
-      count={view.rows.length > 0 ? t('{{count}} in all', { count: view.rows.length }) : ''}
+      count={view.running > 0 ? t('{{running}} running', { running: view.running }) : ''}
       actions={stopAll}
       layer={layer}
       maxHeight={maxHeight}
       position={position}
     >
       {view.rows.length === 0 ? (
-        <SubwindowEmpty>{t('No subagents yet')}</SubwindowEmpty>
+        <SubwindowEmpty>{t('No subagents running')}</SubwindowEmpty>
       ) : (
         view.rows.map((row) => {
           const elapsed = formatElapsed(
@@ -209,6 +205,10 @@ export function SubagentsWindow({
             row.status === 'running' ? now : row.endedAt
           );
           const name = row.agentName ?? (row.name === 'fork' ? t('Fork') : t('Delegated subagent'));
+          // A background one-shot child is stopped through its job.
+          const stopTarget = row.interruptible
+            ? undefined
+            : stoppableRowFor(stoppable, row.childId);
           return (
             <div
               key={row.key}
@@ -240,6 +240,17 @@ export function SubagentsWindow({
                   >
                     <Hand className="size-3.5" />
                     {t('Interrupt')}
+                  </Button>
+                )}
+                {stopTarget && (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className={panelStripActionClass()}
+                    onClick={() => void stopRow(stopTarget)}
+                  >
+                    <Square className="size-3.5" />
+                    {t('Stop')}
                   </Button>
                 )}
                 {row.childId && (

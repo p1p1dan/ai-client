@@ -15,15 +15,26 @@ import { deriveTurnEndNotice } from './turnEndNoticeModel';
 export function TurnEndNotice({
   turnEnd,
   afterWork = false,
+  live = false,
 }: {
   turnEnd: ChatTurnEnd;
   /** The turn saved something before this note (`turnEndNotesAfterWork`). */
   afterWork?: boolean;
+  /**
+   * Drawn at the end of a turn that just failed in this window (`liveTurnEnd`):
+   * a failure is tinted as one there, since nothing else on the turn says it
+   * once the session's card goes.
+   */
+  live?: boolean;
 }) {
   const { t } = useI18n();
   const view = useMemo(() => deriveTurnEndNotice(turnEnd, { afterWork }), [turnEnd, afterWork]);
   return (
-    <Alert variant="default" role="status" data-testid="turn-end-notice">
+    <Alert
+      variant={live && turnEnd.kind === 'failed' ? 'error' : 'default'}
+      role="status"
+      data-testid="turn-end-notice"
+    >
       <AlertDescription>
         <p className="select-text whitespace-pre-wrap text-chat-body text-foreground">
           {t(view.key, view.reasonKey ? { reason: t(view.reasonKey) } : undefined)}

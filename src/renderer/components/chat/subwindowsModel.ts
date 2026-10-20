@@ -13,14 +13,13 @@ import type { SubagentLane } from './subagentActivityModel';
  *
  * **Background jobs** — the session's jobs as the bridge's `jobs` projection
  * lists them (background commands, commands their timeout moved to the
- * background, one-shot background subagents, workflows), plus every
- * continuable subagent that is running now: DSH counts both as the session's
- * work in the background, and the user decided the same subagent may show
- * here, in the subagents window and in its lane at once (decision 109 rule 3).
+ * background, workflows). Subagents are not listed here (user, 2026-10-19,
+ * revising decision 109 rule 3): a background subagent showed in both windows,
+ * so it lives in the subagents window only, which stops it the same way.
  *
- * **Subagents** — every direct child the session has: its lane when this
- * window saw it run (status, time, tokens, calls), otherwise just its catalog
- * entry (a child from before the app opened the chat).
+ * **Subagents** — the direct children running now (user, 2026-10-19): one that
+ * completed, failed or was stopped leaves the list; its record stays in the
+ * timeline and its lane.
  *
  * No React, no store: node-env tests assert the rows.
  */
@@ -134,12 +133,47 @@ function continuableIds(catalog: readonly DshSubagentCatalogEntry[] | undefined)
   return new Set((catalog ?? []).filter((e) => e.mode === 'continuable').map((e) => e.id));
 }
 
-export function deriveJobsWindowView(input: {
+interface JobRowsInput {
   panels: SessionPanels | undefined;
   /** The session's lanes (the subagent-activity store's, filtered to the session). */
   lanes: readonly SubagentLane[];
   hidden: readonly string[];
-}): JobsWindowView {
+}
+
+export function deriveJobsWindowView(input: JobRowsInput): JobsWindowView {
+  const rows = deriveJobRows(input).filter((row) => row.kind !== 'subagent');
+  const running = rows.filter((row) => isRunningStatus(row.status)).length;
+  return {
+    rows,
+    running,
+    ended: rows.length - running,
+    canStopAll: rows.filter((row) => row.stop !== null).length > 1,
+  };
+}
+
+/**
+ * The subagent rows the jobs projection can stop — a one-shot background
+ * subagent's job (killed) or a running continuable child (interrupted). The
+ * subagents window stops them with these, one by one or all at once.
+ */
+export function deriveStoppableSubagentRows(
+  input: Pick<JobRowsInput, 'panels' | 'lanes'>
+): JobRowView[] {
+  return deriveJobRows({ ...input, hidden: [] }).filter(
+    (row) => row.kind === 'subagent' && row.stop !== null
+  );
+}
+
+/** The stop row for one child: by its id, or by its job's (the SDK names both by the task id). */
+export function stoppableRowFor(
+  rows: readonly JobRowView[],
+  childId: string | null
+): JobRowView | undefined {
+  if (!childId) return undefined;
+  return rows.find((row) => row.childId === childId || row.jobId === childId);
+}
+
+function deriveJobRows(input: JobRowsInput): JobRowView[] {
   const live = input.panels?.live === true;
   const hidden = new Set(input.hidden);
   const epoch = input.panels?.workerEpoch ?? 0;
@@ -171,13 +205,7 @@ export function deriveJobsWindowView(input: {
       removable: false,
     });
   }
-  const running = rows.filter((row) => isRunningStatus(row.status)).length;
-  return {
-    rows,
-    running,
-    ended: rows.length - running,
-    canStopAll: rows.filter((row) => row.stop !== null).length > 1,
-  };
+  return rows;
 }
 
 // ---- subagents ------------------------------------------------------------------------------
@@ -222,52 +250,35 @@ export function deriveSubagentsWindowView(input: {
   const catalog = input.panels?.subagentCatalog ?? [];
   const continuable = continuableIds(catalog);
   const lanes = [...input.lanes].sort((a, b) => a.ordinal - b.ordinal);
-  const seen = new Set<string>();
-  const rows: SubagentRowView[] = lanes.map((lane) => {
-    if (lane.agentId) seen.add(lane.agentId);
-    const running = lane.status === 'running';
+  const rows: SubagentRowView[] = lanes.flatMap((lane): SubagentRowView[] => {
+    if (lane.status !== 'running') return [];
     const usage = lane.usage;
     const tokens = lane.report?.totalTokens ?? usage?.totalTokens;
     const toolUses = lane.report?.totalToolUseCount ?? usage?.toolUses;
-    return {
-      key: `lane:${lane.parentToolCallId}`,
-      childId: lane.agentId,
-      parentToolCallId: lane.parentToolCallId,
-      name: lane.taskType === 'subagent_fork' ? 'fork' : 'subagent',
-      agentName: lane.agentType,
-      description:
-        lane.description ??
-        catalog.find((entry) => entry.id === lane.agentId)?.label ??
-        lane.agentId ??
-        '',
-      status: lane.status ?? 'unknown',
-      refused: lane.report?.stopReason === 'refusal',
-      startedAt: lane.startedAt,
-      endedAt: running ? null : lane.endedAt,
-      ...(tokens !== undefined ? { tokens } : {}),
-      ...(toolUses !== undefined ? { toolUses } : {}),
-      interruptible: running && live && lane.agentId !== null && continuable.has(lane.agentId),
-      locatable: true,
-    };
+    return [
+      {
+        key: `lane:${lane.parentToolCallId}`,
+        childId: lane.agentId,
+        parentToolCallId: lane.parentToolCallId,
+        name: lane.taskType === 'subagent_fork' ? 'fork' : 'subagent',
+        agentName: lane.agentType,
+        description:
+          lane.description ??
+          catalog.find((entry) => entry.id === lane.agentId)?.label ??
+          lane.agentId ??
+          '',
+        status: 'running',
+        refused: false,
+        startedAt: lane.startedAt,
+        endedAt: null,
+        ...(tokens !== undefined ? { tokens } : {}),
+        ...(toolUses !== undefined ? { toolUses } : {}),
+        interruptible: live && lane.agentId !== null && continuable.has(lane.agentId),
+        locatable: true,
+      },
+    ];
   });
-  for (const entry of catalog) {
-    if (seen.has(entry.id)) continue;
-    rows.push({
-      key: `child:${entry.id}`,
-      childId: entry.id,
-      parentToolCallId: null,
-      name: 'subagent',
-      agentName: null,
-      description: entry.label ?? entry.id,
-      status: 'unknown',
-      refused: false,
-      startedAt: entry.createdAt,
-      endedAt: null,
-      interruptible: false,
-      locatable: false,
-    });
-  }
-  return { rows, running: rows.filter((row) => row.status === 'running').length };
+  return { rows, running: rows.length };
 }
 
 // ---- shared ---------------------------------------------------------------------------------

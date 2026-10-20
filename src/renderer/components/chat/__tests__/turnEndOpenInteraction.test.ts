@@ -182,7 +182,7 @@ it('[END-OPEN-2] a turn the user stopped opens by default, and one click closes 
   }
 });
 
-it('[END-OPEN-3] a turn that ended on its own folds, even when it ends on a tool call or fails', async () => {
+it('[END-OPEN-3] a turn that ended on its own folds; one that failed stays open (2026-10-19)', async () => {
   // Ended on a tool call, naturally: `answer → tool → end`.
   const endsOnTool = await renderSession([
     user('u1', 'Fix the build'),
@@ -208,7 +208,11 @@ it('[END-OPEN-3] a turn that ended on its own folds, even when it ends on a tool
     ],
     'failed'
   );
-  expect(failed.group('u1').open, 'a failed turn').toBe(false);
+  // User, 2026-10-19: a failed turn (a retry that gave up included) keeps its
+  // output where it stopped, like a turn the user stopped.
+  expect(failed.group('u1').open, 'a failed turn').toBe(true);
+  await failed.clickHead('u1');
+  expect(failed.group('u1').open, 'and a click still folds it').toBe(false);
 });
 
 it('[END-OPEN-4] an unanswered authorization still pins the group open against a click', async () => {

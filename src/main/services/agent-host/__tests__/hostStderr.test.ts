@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   drainStderrLines,
   flushStderrPending,
+  isRoutineHostLine,
   MAX_STDERR_LINE_CHARS,
   pushRecentStderr,
   RECENT_STDERR_LIMIT,
@@ -175,5 +176,27 @@ describe('pushRecentStderr', () => {
     expect(next).toHaveLength(RECENT_STDERR_LIMIT);
     expect(next.at(-1)).toBe('newest');
     expect(next[0]).toBe('line-1');
+  });
+});
+
+describe('isRoutineHostLine (user, 2026-10-19: no boot banners in the Context panel)', () => {
+  it('matches the Claude SDK host lifecycle and trace lines', () => {
+    expect(
+      isRoutineHostLine(
+        '[claude-sdk-host] start pid=44148 generation=1 gitBash=/usr/bin/bash rg=(built-in) settingSources=[user]'
+      )
+    ).toBe(true);
+    expect(isRoutineHostLine('[claude-sdk-host] disposed; exiting')).toBe(true);
+    expect(isRoutineHostLine('[claude-sdk-host] IPC channel closed; exiting')).toBe(true);
+    expect(isRoutineHostLine('[claude-sdk-host] send now 1f2e-3a: true')).toBe(true);
+    expect(isRoutineHostLine('[claude-sdk-host] task a12: Git Bash #812, MSYS group 3')).toBe(true);
+  });
+  it('keeps warnings, failures and the CLI’s own lines', () => {
+    expect(isRoutineHostLine('[claude-sdk-host] warning: no rg in /opt/rg')).toBe(false);
+    expect(isRoutineHostLine('[claude-sdk-host] query ended with an error Error: boom')).toBe(
+      false
+    );
+    expect(isRoutineHostLine('[claude-sdk-host] [cli] start pid=1 something')).toBe(false);
+    expect(isRoutineHostLine('[claude-sdk-host] send now failed Error: x')).toBe(false);
   });
 });

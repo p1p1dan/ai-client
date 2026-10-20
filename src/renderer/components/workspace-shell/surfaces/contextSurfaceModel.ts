@@ -280,13 +280,16 @@ function buildSessionRows(facts: ContextSessionFacts | null): ContextRow[] {
 function buildStderrRows(stderr: SessionStderrFacts | null): ContextRow[] {
   if (!stderr || stderr.lines.length === 0) return [];
   const firstOrdinal = stderr.total - stderr.lines.length + 1;
-  return stderr.lines.map((line, index) => ({
-    id: `stderr-${firstOrdinal + index}`,
-    label: `#${firstOrdinal + index}`,
-    value: line,
-    title: line,
-    copyable: true,
-  }));
+  return stderr.lines.map((line, index) => {
+    const repeats = stderr.repeats?.[index] ?? 1;
+    return {
+      id: `stderr-${firstOrdinal + index}`,
+      label: `#${firstOrdinal + index}`,
+      value: repeats > 1 ? `${line} (×${repeats})` : line,
+      title: line,
+      copyable: true,
+    };
+  });
 }
 
 /**
@@ -441,8 +444,13 @@ export function deriveSessionReferences(input: SessionReferencesInput): SessionR
 export interface SessionStderrFacts {
   /** Last N sanitized lines, oldest first. */
   lines: readonly string[];
-  /** Lines seen this session (>= lines.length). */
+  /** Lines seen this session (>= lines.length); a folded repeat does not count. */
   total: number;
+  /**
+   * How many times each kept line arrived back to back, aligned with `lines`
+   * (absent = once each). A host stuck on one message folds into one row.
+   */
+  repeats?: readonly number[];
 }
 
 /** Context-panel ring size for forwarded stderr lines. */
@@ -597,8 +605,25 @@ function foldStderrLine(
 
   const existing = prev[sessionId];
   const previous = existing?.stderr;
-  const lines = [...(previous?.lines ?? []), line].slice(-STDERR_CONTEXT_KEEP_LINES);
-  const stderr: SessionStderrFacts = { lines, total: (previous?.total ?? 0) + 1 };
+  const previousLines = previous?.lines ?? [];
+  const previousRepeats = previousLines.map((_, index) => previous?.repeats?.[index] ?? 1);
+  let lines: readonly string[];
+  let repeats: number[];
+  let total: number;
+  if (previousLines.length > 0 && previousLines[previousLines.length - 1] === line) {
+    // The same line again, back to back: count it on the row it already has.
+    lines = previousLines;
+    repeats = [...previousRepeats];
+    repeats[repeats.length - 1] += 1;
+    total = previous?.total ?? previousLines.length;
+  } else {
+    lines = [...previousLines, line].slice(-STDERR_CONTEXT_KEEP_LINES);
+    repeats = [...previousRepeats, 1].slice(-STDERR_CONTEXT_KEEP_LINES);
+    total = (previous?.total ?? 0) + 1;
+  }
+  const stderr: SessionStderrFacts = repeats.some((count) => count > 1)
+    ? { lines, total, repeats }
+    : { lines, total };
   if (previous) {
     // Existing carrier: in-place update, key position (= first-arrival order,
     // see below) unchanged, never any eviction churn.

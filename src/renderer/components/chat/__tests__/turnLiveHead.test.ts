@@ -82,16 +82,16 @@ describe('deriveTurnLivePhase', () => {
 describe('formatTurnLiveLine', () => {
   const clock = { minutes: 0, seconds: 3 };
 
-  it('puts the verb first, then the clock, then the counts', () => {
+  it('puts the verb first, then the clock, and no ↑/↓ counts (2026-10-19)', () => {
     expect(formatTurnLiveLine(englishTranslate, { kind: 'connecting' }, clock)).toBe(
       '✻ Connecting to the chat engine… 3s'
     );
     expect(formatTurnLiveLine(englishTranslate, { kind: 'thinking', promptChars: 15 }, clock)).toBe(
-      '✻ Thinking 3s · ↑ 15 chars'
+      '✻ Thinking 3s'
     );
     expect(
       formatTurnLiveLine(englishTranslate, { kind: 'replying', replyChars: 1234 }, clock)
-    ).toBe('✻ Replying 3s · ↓ 1.2k chars');
+    ).toBe('✻ Replying 3s');
     expect(formatTurnLiveLine(englishTranslate, { kind: 'tool', verb: 'Running' }, clock)).toBe(
       '✻ Running 3s'
     );
@@ -102,11 +102,11 @@ describe('formatTurnLiveLine', () => {
       '✻ 正在连接对话引擎… 1 秒'
     );
     expect(formatTurnLiveLine(zh, { kind: 'thinking', promptChars: 15 }, clock)).toBe(
-      '✻ 思考中 3 秒 · ↑ 15 字符'
+      '✻ 思考中 3 秒'
     );
     expect(
       formatTurnLiveLine(zh, { kind: 'replying', replyChars: 1234 }, { minutes: 1, seconds: 5 })
-    ).toBe('✻ 回复中 1 分 5 秒 · ↓ 1.2k 字符');
+    ).toBe('✻ 回复中 1 分 5 秒');
     expect(
       formatTurnLiveLine(zh, { kind: 'tool', verb: 'Running' }, { minutes: 2, seconds: 0 })
     ).toBe('✻ 运行中 2 分');

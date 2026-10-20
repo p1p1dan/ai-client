@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveTurnEndNotice,
   failedEndNoteCoveredByCard,
+  liveTurnEnd,
   turnEndNotesAfterWork,
   turnEndsOnFailedRequest,
   turnEndsWithoutReply,
@@ -165,5 +166,37 @@ describe('failedEndNoteCoveredByCard (decision 193 rule 2)', () => {
     ).toBeNull();
     expect(failedEndNoteCoveredByCard([failedNote, { id: 'after' }], true)).toBeNull();
     expect(failedEndNoteCoveredByCard([], true)).toBeNull();
+  });
+});
+
+describe('liveTurnEnd (user, 2026-10-19: a stop or a failure stays readable on its turn)', () => {
+  const reply = { role: 'assistant', blocks: [{}] };
+  it('names a failed request with the reason session.failed gave', () => {
+    expect(
+      liveTurnEnd([
+        reply,
+        {
+          role: 'assistant',
+          blocks: [],
+          stopReason: 'error',
+          failure: { errorCode: 'RATE_LIMITED', error: 'HTTP 429' },
+        },
+      ])
+    ).toEqual({ kind: 'failed', errorCode: 'RATE_LIMITED', error: 'HTTP 429' });
+  });
+  it('names a stopped turn', () => {
+    expect(liveTurnEnd([{ ...reply, stopCause: 'user_stop' }])).toEqual({ kind: 'stopped' });
+    expect(liveTurnEnd([{ ...reply, stopReason: 'aborted' }])).toEqual({ kind: 'stopped' });
+  });
+  it('says nothing for a finished turn, an interjection, or one that already ends on a note', () => {
+    expect(liveTurnEnd([{ ...reply, stopReason: 'stop' }])).toBeNull();
+    expect(liveTurnEnd([{ ...reply, stopCause: 'interjected' }])).toBeNull();
+    expect(
+      liveTurnEnd([
+        { ...reply, stopReason: 'error' },
+        { role: 'system', blocks: [], turnEnd: { kind: 'failed' as const } },
+      ])
+    ).toBeNull();
+    expect(liveTurnEnd([])).toBeNull();
   });
 });

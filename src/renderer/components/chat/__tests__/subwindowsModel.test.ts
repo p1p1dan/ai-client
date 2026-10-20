@@ -5,11 +5,13 @@ import type { SubagentLane } from '../subagentActivityModel';
 import {
   clampSubwindowPosition,
   deriveJobsWindowView,
+  deriveStoppableSubagentRows,
   deriveSubagentsWindowView,
   formatElapsed,
   formatTokens,
   SUBWINDOW_MAX_HEIGHT_PX,
   SUBWINDOW_MIN_HEIGHT_PX,
+  stoppableRowFor,
   subwindowMaxHeight,
 } from '../subwindowsModel';
 
@@ -57,8 +59,8 @@ function panels(extra: Partial<SessionPanels> = {}): SessionPanels {
 }
 
 describe('deriveJobsWindowView — the background jobs window (prototype scene C)', () => {
-  it('[P7B-JW-ROWS] commands, a promoted one, a failed one, a one-shot subagent, a workflow, and a running continuable child', () => {
-    const view = deriveJobsWindowView({
+  it('[P7B-JW-ROWS] commands, a promoted one, a failed one and a workflow; subagents live in the subagents window', () => {
+    const input = {
       panels: panels({
         jobs: [
           jobSummary({ id: 'bash-2' }),
@@ -84,21 +86,31 @@ describe('deriveJobsWindowView — the background jobs window (prototype scene C
         lane({ parentToolCallId: 'call-2', agentId: 'kid-2', description: 'Fork' }),
       ],
       hidden: [],
-    });
+    };
+    const view = deriveJobsWindowView(input);
     expect(
       view.rows.map((row) => [row.key, row.kind, row.status, row.stop, row.expand, row.removable])
     ).toEqual([
       ['bash-2', 'command', 'running', 'stop', 'output', false],
       ['bash-6', 'command', 'running', 'stop', 'output', false],
       ['bash-4', 'command', 'failed', null, 'output', true],
-      ['subagent-1', 'subagent', 'running', 'stop', 'output', false],
       ['workflow-1', 'workflow', 'running', 'stop', 'stages', false],
-      ['subagent:kid-1', 'subagent', 'running', 'interrupt', 'activity', false],
     ]);
     expect(view.rows[1]?.promoted).toBe(true);
     expect(view.rows[2]?.exitCode).toBe(1);
-    expect(view.rows[5]).toMatchObject({ childId: 'kid-1', label: 'Probe', startedAt: 2_000 });
-    expect(view).toMatchObject({ running: 5, ended: 1, canStopAll: true });
+    expect(view).toMatchObject({ running: 3, ended: 1, canStopAll: true });
+    // User, 2026-10-19: the background subagent and the running continuable
+    // child are stopped from the subagents window instead.
+    const stoppable = deriveStoppableSubagentRows(input);
+    expect(stoppable.map((row) => [row.key, row.stop])).toEqual([
+      ['subagent-1', 'stop'],
+      ['subagent:kid-1', 'interrupt'],
+    ]);
+    expect(stoppable[1]).toMatchObject({ childId: 'kid-1', label: 'Probe', startedAt: 2_000 });
+    // The SDK names a background subagent's lane and job by the same task id.
+    expect(stoppableRowFor(stoppable, 'subagent-1')?.jobId).toBe('subagent-1');
+    expect(stoppableRowFor(stoppable, 'kid-1')?.key).toBe('subagent:kid-1');
+    expect(stoppableRowFor(stoppable, null)).toBeUndefined();
   });
 
   it('[P7B-JW-LOST] a session with no live worker: running items read as ended with the engine, nothing to stop', () => {
@@ -170,7 +182,7 @@ describe('deriveJobsWindowView — the background jobs window (prototype scene C
 });
 
 describe('deriveSubagentsWindowView — the subagents window (prototype scene D)', () => {
-  it('[P7B-SW-ROWS] every lane in order, named by its tool (decision 090), then catalog children never seen run', () => {
+  it('[P7B-SW-ROWS] only running children, named by their tool (decision 090); ended and never-seen ones are left out (2026-10-19)', () => {
     const view = deriveSubagentsWindowView({
       panels: panels({
         subagentCatalog: [
@@ -201,8 +213,6 @@ describe('deriveSubagentsWindowView — the subagents window (prototype scene D)
     });
     expect(view.rows.map((row) => [row.name, row.description, row.status])).toEqual([
       ['subagent', 'Probe', 'running'],
-      ['fork', 'Review', 'completed'],
-      ['subagent', 'From before', 'unknown'],
     ]);
     expect(view.rows[0]).toMatchObject({
       interruptible: true,
@@ -212,13 +222,10 @@ describe('deriveSubagentsWindowView — the subagents window (prototype scene D)
       toolUses: 12,
       endedAt: null,
     });
-    // A one-shot child cannot be interrupted as a human parent (DSH: a no-op).
-    expect(view.rows[1]?.interruptible).toBe(false);
-    expect(view.rows[2]).toMatchObject({ locatable: false, interruptible: false });
     expect(view.running).toBe(1);
   });
 
-  it('[P7B-SW-REFUSED] a child that declined is told apart from one that broke; no live worker, no interrupt', () => {
+  it('[P7B-SW-ENDED] a child that ended leaves the list; no live worker, no interrupt', () => {
     const view = deriveSubagentsWindowView({
       panels: panels({
         live: false,
@@ -234,8 +241,8 @@ describe('deriveSubagentsWindowView — the subagents window (prototype scene D)
         lane({ parentToolCallId: 'call-2', agentId: 'kid-1', status: 'running', ordinal: 1 }),
       ],
     });
-    expect(view.rows[0]?.refused).toBe(true);
-    expect(view.rows[1]?.interruptible).toBe(false);
+    expect(view.rows.map((row) => row.parentToolCallId)).toEqual(['call-2']);
+    expect(view.rows[0]?.interruptible).toBe(false);
   });
 });
 

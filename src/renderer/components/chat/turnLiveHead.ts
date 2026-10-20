@@ -3,8 +3,8 @@
  * ONE line, verb first, the way the Claude Code status line does:
  *
  *   ✻ 正在连接对话引擎… 1 秒
- *   ✻ 思考中 3 秒 · ↑ 15 字符        (waiting for the first byte, or thinking)
- *   ✻ 回复中 12 秒 · ↓ 1.2k 字符     (the reply streaming)
+ *   ✻ 思考中 3 秒                    (waiting for the first byte, or thinking)
+ *   ✻ 回复中 12 秒                    (the reply streaming)
  *   ✻ 运行中 20 秒                    (a tool running: its own verb)
  *   ✻ 工作中 30 秒                    (nothing more specific is known)
  *
@@ -13,13 +13,14 @@
  * something this line cannot: the slow and stalled hints and a failure (`ChatTurn`).
  * 「工作中」 stays as the fallback, so the line never reads as a bare stopwatch.
  *
+ * User, 2026-10-19: no ↑/↓ counts on this line. They read as token figures that
+ * did not match the Claude client's and never moved after the send.
+ *
  * Pure: the clock line (`useTurnClockLine`) derives the phase and words it.
  */
 
 import type { TurnItem } from './chatTurn';
-import { formatCharCount, replyCharsLabel } from './countFormat';
 import type { TurnCurrentAction } from './turnProcessFold';
-import { joinTurnProgressLine } from './turnProgress';
 import type { WorkedForParts } from './turnTiming';
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
@@ -99,11 +100,5 @@ export function formatTurnLiveLine(
   elapsed: WorkedForParts | null
 ): string {
   const clock = turnElapsedText(t, elapsed);
-  const head = `✻ ${phaseVerb(t, phase)}${clock ? ` ${clock}` : ''}`;
-  const sent =
-    phase.kind === 'thinking' && phase.promptChars > 0
-      ? `↑ ${formatCharCount(phase.promptChars)} ${t('chars')}`
-      : null;
-  const received = phase.kind === 'replying' ? replyCharsLabel(phase.replyChars, t) || null : null;
-  return joinTurnProgressLine(head, [sent, received]);
+  return `✻ ${phaseVerb(t, phase)}${clock ? ` ${clock}` : ''}`;
 }

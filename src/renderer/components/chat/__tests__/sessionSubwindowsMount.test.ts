@@ -170,36 +170,42 @@ describe('the background jobs and subagents windows (P1-7b)', () => {
     expect(container.querySelector('[data-testid="session-subwindows"]')).toBeNull();
   });
 
-  it('[P7B-MOUNT-C] scene C: commands, the promoted tag, the exit code, and the running continuable child', async () => {
+  it('[P7B-MOUNT-C] scene C: commands, the promoted tag and the exit code; subagents are not repeated here', async () => {
     seed({ jobs: true, agents: false });
     await render();
     const window = container.querySelector('[data-testid="subwindow-jobs"]') as HTMLElement;
     expect(window).not.toBeNull();
     expect(window.textContent).toContain('Background tasks');
-    expect(window.textContent).toContain('3 running · 1 ended');
+    expect(window.textContent).toContain('2 running · 1 ended');
     const rows = [...window.querySelectorAll('[data-testid="job-row"]')];
     expect(rows.map((row) => row.getAttribute('data-status'))).toEqual([
       'running',
       'running',
       'failed',
-      'running',
     ]);
     expect(rows[1]?.textContent).toContain('Timed out into the background');
     expect(rows[2]?.textContent).toContain('Exit code 1');
-    expect(rows[3]?.textContent).toContain('Probe the goal projection');
+    expect(window.textContent).not.toContain('Probe the goal projection');
 
-    // A command is killed; the continuable child is interrupted (decision 069).
     const kill = vi.spyOn(api.chat, 'killSessionJob');
-    const interrupt = vi.spyOn(api.chat, 'interruptSubagent');
     await act(async () => buttonNamed(rows[0] as HTMLElement, 'Stop')?.click());
     expect(kill).toHaveBeenCalledWith({ sessionId: 's1', jobId: 'bash-2' });
-    await act(async () => buttonNamed(rows[3] as HTMLElement, 'Interrupt')?.click());
-    expect(interrupt).toHaveBeenCalledWith({ sessionId: 's1', childId: 'kid-1' });
 
     // An ended row is put away, in this window only.
     await act(async () => buttonNamed(rows[2] as HTMLElement, 'Remove')?.click());
     expect(useSessionSubwindowsStore.getState().hiddenJobs.s1).toEqual(['bash-4']);
-    expect(window.querySelectorAll('[data-testid="job-row"]')).toHaveLength(3);
+    expect(window.querySelectorAll('[data-testid="job-row"]')).toHaveLength(2);
+  });
+
+  it('[P7B-MOUNT-CLEAR] 「清除已结束」 puts every ended row away at once', async () => {
+    seed({ jobs: true, agents: false });
+    await render();
+    const window = container.querySelector('[data-testid="subwindow-jobs"]') as HTMLElement;
+    await act(async () => buttonNamed(window, 'Clear ended')?.click());
+    expect(useSessionSubwindowsStore.getState().hiddenJobs.s1).toEqual(['bash-4']);
+    expect(window.querySelectorAll('[data-testid="job-row"]')).toHaveLength(2);
+    // Nothing ended is left, so the action goes.
+    expect(buttonNamed(window, 'Clear ended')).toBeUndefined();
   });
 
   it('[P7B-MOUNT-OUTPUT] opening a command’s output reads it through the window’s IPC', async () => {
@@ -216,21 +222,23 @@ describe('the background jobs and subagents windows (P1-7b)', () => {
     expect(read).toHaveBeenCalledWith({ sessionId: 's1', jobId: 'bash-2' });
   });
 
-  it('[P7B-MOUNT-D] scene D: each child with its tool’s name, its time and counts; interrupt only the running continuable one', async () => {
+  it('[P7B-MOUNT-D] scene D: only the running child, with its tool’s name, time and counts, and its interrupt', async () => {
     seed({ jobs: false, agents: true });
     await render();
     const window = container.querySelector('[data-testid="subwindow-agents"]') as HTMLElement;
-    expect(window.textContent).toContain('2 in all');
+    expect(window.textContent).toContain('1 running');
     const rows = [...window.querySelectorAll('[data-testid="subagent-row"]')];
+    // User, 2026-10-19: the completed fork has left the list.
+    expect(rows).toHaveLength(1);
+    expect(window.textContent).not.toContain('Review the plan');
     expect(rows[0]?.textContent).toContain('Delegated subagent');
     expect(rows[0]?.textContent).toContain('45k tokens');
     expect(rows[0]?.textContent).toContain('12 calls');
     expect(rows[0]?.textContent).toMatch(/2:3\d/);
-    expect(rows[1]?.textContent).toContain('Fork');
-    expect(rows[1]?.textContent).toContain('0:48');
-    expect(buttonNamed(rows[0] as HTMLElement, 'Interrupt')).toBeDefined();
-    expect(buttonNamed(rows[1] as HTMLElement, 'Interrupt')).toBeUndefined();
-    expect(buttonNamed(rows[1] as HTMLElement, 'Locate')).toBeDefined();
+    expect(buttonNamed(rows[0] as HTMLElement, 'Locate')).toBeDefined();
+    const interrupt = vi.spyOn(api.chat, 'interruptSubagent');
+    await act(async () => buttonNamed(rows[0] as HTMLElement, 'Interrupt')?.click());
+    expect(interrupt).toHaveBeenCalledWith({ sessionId: 's1', childId: 'kid-1' });
 
     // Close hides it.
     await act(async () => buttonNamed(window, 'Close')?.click());

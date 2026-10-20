@@ -482,6 +482,13 @@ export interface ChatMessage {
    * ends reports no completion time. Set once by the replay, never mutated.
    */
   turnEnd?: ChatTurnEnd;
+  /**
+   * Live only: why the request this message stands for failed, as
+   * `session.failed` said it. Set with `stopReason: 'error'`; the turn's end
+   * note prints it, so the reason stays with the turn after the session's
+   * failure card goes.
+   */
+  failure?: { errorCode?: string; error?: string };
 }
 
 /** See {@link ChatMessage.turnEnd}. */
@@ -1085,7 +1092,8 @@ function withStoppedRun(
 function withFailedRequest(
   state: ChatSessionsState,
   sessionId: string,
-  turnRunning: boolean
+  turnRunning: boolean,
+  failure: ChatMessage['failure'] = {}
 ): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
   const bucket = state.messages[sessionId];
   if (!bucket) return {};
@@ -1096,7 +1104,7 @@ function withFailedRequest(
     if (message.stopReason) return {};
     if (message.blocks.length > 0 && !turnRunning) return {};
     const next = bucket.slice();
-    next[index] = { ...message, stopReason: 'error' };
+    next[index] = { ...message, stopReason: 'error', failure };
     return { messages: withBucket(state, sessionId, next) };
   }
   return {};
@@ -1941,7 +1949,11 @@ function applyRuntimeEventCore(
           sessionId,
           TURN_RUNNING_STATUSES.has(
             state.sessions.find((session) => session.id === sessionId)?.status ?? 'idle'
-          )
+          ),
+          {
+            ...(event.payload?.errorCode ? { errorCode: event.payload.errorCode } : {}),
+            ...(event.payload?.error ? { error: event.payload.error } : {}),
+          }
         ),
       };
     }

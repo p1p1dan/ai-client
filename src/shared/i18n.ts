@@ -3649,7 +3649,9 @@ Object.assign(zhTranslations, {
   '{{count}} in all': '共 {{count}} 个',
   'No background tasks right now': '当前没有后台任务',
   'No subagents yet': '当前没有子代理',
+  'No subagents running': '当前没有运行中的子代理',
   'Stop all': '全部停止',
+  'Clear ended': '清除已结束',
   'Stop all background tasks?': '停止全部后台任务？',
   // Decision 203: Stop leaves background subagents running; their window stops them.
   'Stop all subagents': '停止全部子代理',

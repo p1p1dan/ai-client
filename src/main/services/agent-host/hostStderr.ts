@@ -139,3 +139,23 @@ export function pushRecentStderr(
   const merged = [...recent, ...lines];
   return merged.length <= limit ? merged : merged.slice(merged.length - limit);
 }
+
+/**
+ * The Claude SDK host's routine lifecycle and trace lines: a boot banner per
+ * host process (one per idle reclaim, reopen, gateway change), clean exits,
+ * send-now / withdraw acks, Git Bash lookups. They are diagnostics for the log
+ * and the crash replay; in the Context panel they only repeated themselves.
+ * Warnings, failures and the CLI's own `[cli]` lines are never matched.
+ */
+const ROUTINE_HOST_LINES: readonly RegExp[] = [
+  /^\[claude-sdk-host\] start pid=\d+ /,
+  /^\[claude-sdk-host\] (disposed|IPC channel closed); exiting$/,
+  /^\[claude-sdk-host\] auth proxy: outbound proxy /,
+  /^\[claude-sdk-host\] (send now|withdraw) [\w-]+: /,
+  /^\[claude-sdk-host\] task [\w-]+: (looking for its Git Bash|Git Bash #\d+)/,
+];
+
+/** True for a line that stays in the log and is not shown in the Context panel. */
+export function isRoutineHostLine(line: string): boolean {
+  return ROUTINE_HOST_LINES.some((pattern) => pattern.test(line));
+}

@@ -154,3 +154,42 @@ export function failedEndNoteCoveredByCard(
   const last = body.at(-1);
   return last?.turnEnd?.kind === 'failed' ? last.id : null;
 }
+
+/**
+ * How a live turn ended when it did not finish and its body carries no end note
+ * of its own (the history adds those on replay): the user stopped it, or its
+ * last request failed (`session.failed` stamped `stopReason: 'error'` and the
+ * reason). Null for a turn that finished, is still running, or already ends on
+ * a note. The timeline draws the result as the turn's closing note, so a stop
+ * or a failure stays readable where it happened instead of only on the
+ * session's card, which goes with the next send.
+ */
+export function liveTurnEnd(
+  body: readonly {
+    role: string;
+    turnEnd?: ChatTurnEnd;
+    stopReason?: string;
+    stopCause?: string;
+    failure?: { errorCode?: string; error?: string };
+    blocks?: readonly { notice?: { key?: string } }[];
+  }[]
+): ChatTurnEnd | null {
+  if (turnEndsWithoutReply(body)) return null;
+  for (let index = body.length - 1; index >= 0; index -= 1) {
+    const message = body[index];
+    if (message?.role !== 'assistant') continue;
+    if (message.stopReason === 'error') {
+      const { errorCode, error } = message.failure ?? {};
+      return {
+        kind: 'failed',
+        ...(errorCode ? { errorCode } : {}),
+        ...(error ? { error } : {}),
+      };
+    }
+    if (message.stopCause === 'user_stop' || message.stopReason === 'aborted') {
+      return { kind: 'stopped' };
+    }
+    return null;
+  }
+  return null;
+}

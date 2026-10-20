@@ -14,6 +14,7 @@
  */
 
 import {
+  BrushCleaning,
   EyeOff,
   Hand,
   Layers,
@@ -127,6 +128,11 @@ export function BackgroundJobsWindow({
   );
   const now = useSubwindowClock(view.running > 0);
   const [confirming, setConfirming] = useState(false);
+  const hideJobs = useSessionSubwindowsStore((state) => state.hideJobs);
+  const endedKeys = useMemo(
+    () => view.rows.flatMap((row) => (row.removable && row.hideKey ? [row.hideKey] : [])),
+    [view.rows]
+  );
 
   const stop = async (row: JobRowView): Promise<void> => {
     try {
@@ -169,6 +175,19 @@ export function BackgroundJobsWindow({
       <Square className="size-3.5" />
     </button>
   ) : null;
+  // Put every ended row away in one go (this window only, like each row's Remove).
+  const clearEnded =
+    endedKeys.length > 0 ? (
+      <button
+        type="button"
+        className={panelStripIconButtonClass()}
+        aria-label={t('Clear ended')}
+        title={t('Clear ended')}
+        onClick={() => hideJobs(sessionId, endedKeys)}
+      >
+        <BrushCleaning className="size-3.5" />
+      </button>
+    ) : null;
 
   return (
     <SubwindowFrame
@@ -176,7 +195,14 @@ export function BackgroundJobsWindow({
       icon={<Layers className="size-3.5" />}
       title={t('Background tasks')}
       count={count}
-      actions={stopAll}
+      actions={
+        clearEnded || stopAll ? (
+          <>
+            {clearEnded}
+            {stopAll}
+          </>
+        ) : null
+      }
       layer={layer}
       maxHeight={maxHeight}
       position={position}

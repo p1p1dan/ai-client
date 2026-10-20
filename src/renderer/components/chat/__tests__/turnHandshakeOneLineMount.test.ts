@@ -164,28 +164,30 @@ describe('a send still connecting, in the timeline', () => {
     expect(text()).not.toContain(`${CONNECTING} · `);
   });
 
-  it('[THS-02] once connected, it says it is thinking and what was sent, on the same one line', async () => {
+  it('[THS-02] once connected, it says it is thinking on the same one line (no ↑ count since 2026-10-19)', async () => {
     await sent('awaiting');
     expect(text()).not.toContain(CONNECTING);
     const lines = [...container.querySelectorAll('span[title]')]
       .map((node) => node.getAttribute('title') ?? '')
       .filter((title) => title.startsWith('✻ '));
-    expect(lines).toEqual([expect.stringMatching(/^✻ Thinking \d+s · ↑ 5 chars$/)]);
+    expect(lines).toEqual([expect.stringMatching(/^✻ Thinking \d+s$/)]);
     // The status row that repeated the sent count and its own seconds is gone.
-    expect(count('↑ 5 chars')).toBe(1);
+    // 2026-10-19 (user): the one line carries no ↑ count.
+    expect(count('↑ 5 chars')).toBe(0);
   });
 
   it('[THS-03] a slow wait keeps its second row: the hint the one line cannot carry', async () => {
     await sent('awaiting', 50);
-    expect(text()).toMatch(/✻ Thinking \d+s · ↑ 5 chars/);
+    expect(text()).toMatch(/✻ Thinking \d+s/);
     expect(text()).toContain('Still waiting · 50s');
     expect(text()).toContain('gateway latency varies');
   });
 
   it('[THS-04] the pending head of a first send says the same one line', async () => {
     await sent('awaiting', 2, false);
-    expect(text()).toMatch(/✻ Thinking \d+s · ↑ 5 chars/);
-    expect(count('↑ 5 chars')).toBe(1);
+    expect(text()).toMatch(/✻ Thinking \d+s/);
+    // 2026-10-19 (user): the one line carries no ↑ count.
+    expect(count('↑ 5 chars')).toBe(0);
     expect(text()).not.toMatch(/ · \d+s$/);
   });
 });

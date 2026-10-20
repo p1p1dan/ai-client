@@ -154,7 +154,12 @@ import {
   isPlannedHostRestart,
 } from './DshHostSupervisor';
 import { claimedDshSessionIds, DSH_SESSION_GC_GRACE_MS, readDshSessionStub } from './dshSessionGc';
-import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
+import {
+  drainStderrLines,
+  flushStderrPending,
+  isRoutineHostLine,
+  pushRecentStderr,
+} from './hostStderr';
 import { type WorkerSlot, WorkerSlotError, type WorkerSlotLifecycleEvent } from './WorkerSlot';
 import type { WorkerTransport, WorkerTransportExit } from './WorkerTransport';
 import { WorkerManagerError } from './workerManagerError';
@@ -3616,7 +3621,7 @@ export class WorkerManager {
     const prefix = `[dsh-chat:${entry.logicalSessionId}:g${generation}:stderr]`;
     for (const line of lines) {
       this.log(prefix, line);
-      this.forwardStderr(entry, line);
+      if (!isRoutineHostLine(line)) this.forwardStderr(entry, line);
     }
   }
 

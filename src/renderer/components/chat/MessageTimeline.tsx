@@ -178,6 +178,7 @@ import { buildTurnCopyTextFromItems } from './turnCopy';
 import { turnEndedByUser } from './turnEndCause';
 import {
   failedEndNoteCoveredByCard,
+  liveTurnEnd,
   turnEndNotesAfterWork,
   turnEndsOnFailedRequest,
   turnEndsWithoutReply,
@@ -2031,7 +2032,7 @@ function TurnProgressHead({
   clock: boolean;
   /** An unanswered permission/question is inside: the group may not close. */
   forcedOpen: boolean;
-  /** The user ended the turn (Ctrl+Enter / Stop): open once settled, until clicked. */
+  /** The turn did not finish (Stop, Ctrl+Enter, a failure): open once settled, until clicked. */
   endedByUser: boolean;
   userOpen: boolean | null;
   onUserOpenChange: (open: boolean) => void;
@@ -2641,6 +2642,20 @@ const ChatTurn = memo(function ChatTurn({
   // click closes it. Every other settled turn folds as usual, including one
   // that ends on a tool call or fails.
   const endedByUser = useMemo(() => turnEndedByUser(turn.body), [turn.body]);
+  // A turn that did not finish — stopped, failed (a retry that gave up
+  // included) or cut off — keeps its process open too, so the output stays
+  // where it stopped, and it closes on a note saying how it ended.
+  const liveEnd = useMemo(() => liveTurnEnd(turn.body), [turn.body]);
+  const endedAbnormally = endedByUser || liveEnd !== null || turnEndsWithoutReply(turn.body);
+  // The session's failure card says this turn's failure while it is up.
+  const showLiveEnd =
+    liveEnd !== null &&
+    processSettled &&
+    !(liveEnd.kind === 'failed' && isLastTurn && sessionStatus === 'failed');
+  const liveEndAfterWork = useMemo(
+    () => turn.body.some((message) => message.role === 'assistant' && message.blocks.length > 0),
+    [turn.body]
+  );
   // Only a running turn's rows read the tool-start registry: a settled turn's
   // leftover `running` row (a call a Stop cut off) must show no clock.
   const rowToolStartedAtMs = processSettled ? NO_TOOL_STARTS : getToolStartedAtMs;
@@ -2904,7 +2919,7 @@ const ChatTurn = memo(function ChatTurn({
               zone={workZone}
               clock={headClock}
               forcedOpen={groupForcedOpen}
-              endedByUser={endedByUser}
+              endedByUser={endedAbnormally}
               userOpen={workGroupUserOpen[groupStateKey] ?? null}
               onUserOpenChange={(open) =>
                 setWorkGroupUserOpen((previous) => ({
@@ -2922,6 +2937,9 @@ const ChatTurn = memo(function ChatTurn({
             user asked for — the duration stops moving from group to group as a
             turn grows. */}
         <TurnWorkZoneRow zone={workZone} />
+        {showLiveEnd && liveEnd && (
+          <TurnEndNotice turnEnd={liveEnd} afterWork={liveEndAfterWork} live />
+        )}
         {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —
