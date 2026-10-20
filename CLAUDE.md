@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**`main` 已是 DSH 主线（2026-10-14 合入并发布 `v1.1.0`）**。聊天引擎是 DeepSeek Harness 宿主（`src/dsh-host/`），所有会话共用一个宿主进程；1.0.x 线不再维护（决策 160）。原开发分支 `feat/dsh-p0-probe` 已快进合入 main，此后直接在 main 上工作。推送与发版前需用户确认。
+**`main` 已是 DSH 主线（2026-10-14 合入并发布 `v1.1.0`）**。聊天引擎是 DeepSeek Harness 宿主（`src/dsh-host/`），所有会话共用一个宿主进程；1.0.x 线不再维护（决策 160）。**2026-10-20 发布 `v1.2.0`**：路线 B（Anthropic 协议的模型走 Claude Agent SDK 宿主 `src/claude-sdk-host/`，计划见 `docs/plantree/plans/claude-sdk-engine/`）与决策 189～206 一并合入 main；1.1.1-test.* 测试包流程结束。原开发分支 `feat/dsh-p0-probe` 已快进合入 main，此后直接在 main 上工作。推送与发版前需用户确认。
 
 - **新会话先读** `docs/plantree/plans/dsh-rebase/implementation-status.md` 的 Current Phase 与 Next Target（当前状态与下一步：P1-14 发版后的收尾项），再看 `decision-review-4.md`（待审批决策）。`handoff-2026-09-28.md` 已过期，只有其中的工作规则仍可参考。
 - **进度与计划**：`docs/plantree/plans/dsh-rebase/`，看 `implementation-status.md`（进度看板）、`roadmap.md`（任务 P1-0～P1-16）、`topics/`（各任务方案）、`decisions/`（005 起是自主决定、待用户审批）。
