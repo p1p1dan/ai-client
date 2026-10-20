@@ -535,18 +535,20 @@ describe('mergeReplayedHistory — F11 positional hole claim + tiered identity',
       ok(snap(ids(bucket), 'h:a4', ids(bucket)))
     );
 
+    // Decision 206: the kept echoes stay where they were, before the next row
+    // the bucket shares with the page (found by id, so drift does not move it).
     expect(ids(merged)).toEqual([
       'h:u1',
       'h:a1',
       'h:u2',
+      'E1003',
       'h:a2',
       'h:u3',
+      'E1005',
       'h:a3',
       'h:branch',
       'h:u4',
       'h:a4',
-      'E1003',
-      'E1005',
     ]);
     expect(merged).toHaveLength(11);
     // Nothing was replaced: history row 2 is still the history row.
@@ -758,10 +760,11 @@ describe('mergeReplayedHistory — F11 positional hole claim + tiered identity',
       ok(snap(ids(bucket), 'h:anchor', ids(bucket)))
     );
 
-    expect(ids(merged)).toEqual(['h:anchor', 'E1', 'E2', 'W']);
+    // Decision 206: the unmatched W keeps its place before E1.
+    expect(ids(merged)).toEqual(['h:anchor', 'W', 'E1', 'E2']);
     // Two replacements, two distinct keys, in scan order.
-    expect(merged[1]?.id).toBe('E1');
-    expect(merged[2]?.id).toBe('E2');
+    expect(merged[2]?.id).toBe('E1');
+    expect(merged[3]?.id).toBe('E2');
   });
 
   it('N19: the attachment tier still requires equal roles', () => {
@@ -797,7 +800,8 @@ describe('mergeReplayedHistory — F11 positional hole claim + tiered identity',
       ok(snap(ids(holeBucket), 'h:anchor', ids(holeBucket)))
     );
 
-    expect(ids(hole)).toEqual(['h:settled', 'h:free', 'h:anchor', 'E1']);
+    // Decision 206: kept, in its place before the first row the page still has.
+    expect(ids(hole)).toEqual(['E1', 'h:settled', 'h:free', 'h:anchor']);
 
     // Scan arm (guard 3b, defence in depth): an already-hydrated row that
     // ends up AFTER the anchor in file order is still settled.
@@ -1124,5 +1128,251 @@ describe('mergeReplayedHistory — SDK reopen without live ids (decision 206)', 
     const history = [tool('h:a1', 'toolu_1')];
     const merged = mergeReplayedHistory(bucket, history, ok(snap(['cc-s-a-t1-s1'])));
     expect(ids(merged)).toEqual(['h:a1', 'cc-user-b-1']);
+  });
+});
+
+/**
+ * Decision 206, second pass (review of 6b645ac1, 2026-10-20): the Claude SDK
+ * engine names each message by the id the CLI's transcript gives it — the
+ * uuid a user message was sent with, an assistant step's API message id — on
+ * the live copy and on the replayed row alike (`transcriptId`, measured on
+ * SDK 0.3.300: 3/3 sends, a Ctrl+Enter message, 8/8 steps). And whatever the
+ * replay does not take back keeps its place between its neighbours.
+ */
+describe('mergeReplayedHistory — transcript ids and leftover placement (decision 206)', () => {
+  const user = (id: string, text: string, transcriptId?: string): ReplayMergeMessage => ({
+    ...msg(id, 'user', text),
+    ...(transcriptId ? { transcriptId } : {}),
+  });
+  const say = (id: string, text: string, transcriptId?: string): ReplayMergeMessage => ({
+    ...msg(id, 'assistant', text),
+    ...(transcriptId ? { transcriptId } : {}),
+  });
+  const step = (id: string, callId: string, transcriptId?: string): ReplayMergeMessage => ({
+    id,
+    role: 'assistant',
+    blocks: [
+      { type: 'tool_call', toolCallId: callId },
+      { type: 'tool_result', toolCallId: callId },
+    ],
+    ...(transcriptId ? { transcriptId } : {}),
+  });
+  /** The snapshot `session.resumed` takes of this bucket (anchor: its last `h:*` row). */
+  const resumeOf = (bucket: readonly ReplayMergeMessage[]) => {
+    const order = ids(bucket);
+    const anchor = [...order].reverse().find((id) => id.startsWith('h:')) ?? null;
+    return ok(snap(order, anchor, order));
+  };
+
+  it('folds every message of a turn by its transcript id, whatever its blocks', () => {
+    const bucket = [
+      user('cc-user-a-1', '做 X', 'u-1'),
+      { ...step('cc-s-a-t1-s1', 'toolu_1', 'msg_1'), blocks: [{ type: 'thinking' }] },
+      say('cc-s-a-t1-s2', '完成 X', 'msg_2'),
+    ];
+    const history = [
+      user('h:u1', '做 X', 'u-1'),
+      // The transcript kept the step's thinking only: still the same message.
+      { ...step('h:a1', 'toolu_1', 'msg_1'), blocks: [{ type: 'thinking', text: '…' }] },
+      say('h:a2', '完成 X', 'msg_2'),
+    ];
+    const merged = mergeReplayedHistory(bucket, history, resumeOf(bucket));
+    expect(ids(merged)).toEqual(['h:u1', 'h:a1', 'h:a2']);
+  });
+
+  it('P2: a 「继续」 older than the page is not taken for the one inside it', () => {
+    const bucket = [
+      user('cc-user-a-1', '继续', 'u-1'),
+      step('cc-s-a-t1-s1', 'toolu_old', 'msg_1'),
+      say('cc-s-a-t1-s2', '旧回答', 'msg_2'),
+      user('cc-user-a-2', '做 X', 'u-2'),
+      step('cc-s-a-t2-s1', 'toolu_1', 'msg_3'),
+      say('cc-s-a-t2-s2', '完成 X', 'msg_4'),
+      user('cc-user-a-3', '继续', 'u-3'),
+      step('cc-s-a-t3-s1', 'toolu_2', 'msg_5'),
+      say('cc-s-a-t3-s2', '完成 Y', 'msg_6'),
+    ];
+    // The read window starts at the second turn.
+    const history = [
+      user('h:u2', '做 X', 'u-2'),
+      step('h:a1', 'toolu_1', 'msg_3'),
+      say('h:a2', '完成 X', 'msg_4'),
+      user('h:u3', '继续', 'u-3'),
+      step('h:a3', 'toolu_2', 'msg_5'),
+      say('h:a4', '完成 Y', 'msg_6'),
+    ];
+    const merged = mergeReplayedHistory(bucket, history, resumeOf(bucket));
+    expect(ids(merged)).toEqual([
+      'cc-user-a-1',
+      'cc-s-a-t1-s1',
+      'cc-s-a-t1-s2',
+      'h:u2',
+      'h:a1',
+      'h:a2',
+      'h:u3',
+      'h:a3',
+      'h:a4',
+    ]);
+  });
+
+  it('a keyed message still folds by text onto a row the projection could not key', () => {
+    // A typed command's row, say: the projection names it by text only.
+    const bucket = [user('cc-user-a-1', '/context', 'u-1')];
+    const history = [user('h:c1', '/context')];
+    const merged = mergeReplayedHistory(bucket, history, resumeOf(bucket));
+    expect(ids(merged)).toEqual(['h:c1']);
+  });
+
+  it('P1: a second reopen keeps the rows the first one put in front of the page', () => {
+    // What the first reopen left (older turn in front), then one more live turn.
+    const bucket = [
+      user('cc-user-a-1', '很早的问题', 'u-1'),
+      step('cc-s-a-t1-s1', 'toolu_old', 'msg_1'),
+      say('cc-s-a-t1-s2', '很早的回答', 'msg_2'),
+      user('h:u2', '做 X', 'u-2'),
+      step('h:a1', 'toolu_1', 'msg_3'),
+      say('h:a2', '完成 X', 'msg_4'),
+      user('cc-user-b-1', '做 Z', 'u-3'),
+      step('cc-s-b-t1-s1', 'toolu_3', 'msg_5'),
+      say('cc-s-b-t1-s2', '完成 Z', 'msg_6'),
+    ];
+    const history = [
+      user('h:u2', '做 X', 'u-2'),
+      step('h:a1', 'toolu_1', 'msg_3'),
+      say('h:a2', '完成 X', 'msg_4'),
+      user('h:u3', '做 Z', 'u-3'),
+      step('h:a3', 'toolu_3', 'msg_5'),
+      say('h:a4', '完成 Z', 'msg_6'),
+    ];
+    const merged = mergeReplayedHistory(bucket, history, resumeOf(bucket));
+    expect(ids(merged)).toEqual([
+      'cc-user-a-1',
+      'cc-s-a-t1-s1',
+      'cc-s-a-t1-s2',
+      'h:u2',
+      'h:a1',
+      'h:a2',
+      'h:u3',
+      'h:a3',
+      'h:a4',
+    ]);
+  });
+
+  it('P3: past an evicted anchor the transcript ids still fold, the text tiers do not', () => {
+    // Opened from disk (h:o1, h:o2), then more than a page of live rows.
+    const bucket = [
+      user('h:o1', '旧问题', 'u-0'),
+      say('h:o2', '旧回答', 'msg_0'),
+      user('cc-user-a-1', '做 X', 'u-1'),
+      step('cc-s-a-t1-s1', 'toolu_1', 'msg_1'),
+      say('cc-s-a-t1-s2', '完成 X', 'msg_2'),
+      user('cc-user-a-2', '做 Y', 'u-2'),
+      step('cc-s-a-t2-s1', 'toolu_2', 'msg_3'),
+      say('cc-s-a-t2-s2', '完成 Y', 'msg_4'),
+      // No transcript id (an older host): the anchor is gone, so no text fold.
+      say('cc-s-a-t2-s3', '附注'),
+    ];
+    const history = [
+      user('h:u1', '做 X', 'u-1'),
+      step('h:a1', 'toolu_1', 'msg_1'),
+      say('h:a2', '完成 X', 'msg_2'),
+      user('h:u2', '做 Y', 'u-2'),
+      step('h:a3', 'toolu_2', 'msg_3'),
+      say('h:a4', '完成 Y', 'msg_4'),
+      say('h:a5', '附注'),
+    ];
+    const merged = mergeReplayedHistory(bucket, history, resumeOf(bucket));
+    expect(ids(merged)).toEqual([
+      'h:u1',
+      'h:a1',
+      'h:a2',
+      'h:u2',
+      'h:a3',
+      'h:a4',
+      'h:a5',
+      'cc-s-a-t2-s3',
+    ]);
+  });
+
+  it('after a compaction the turns before it stay in front of its summary', () => {
+    // The CLI's reader returns the chain from the compaction on (host-probe flow, 2026-10-20).
+    const bucket = [
+      user('cc-user-a-1', '做 X', 'u-1'),
+      say('cc-s-a-t1-s1', '完成 X', 'msg_1'),
+      user('cc-user-a-2', '做 Y', 'u-2'),
+      say('cc-s-a-t2-s1', '完成 Y', 'msg_2'),
+    ];
+    const history = [
+      { ...msg('h:sum', 'system', 'This session is being continued…') },
+      user('h:u2', '做 Y', 'u-2'),
+      say('h:a2', '完成 Y', 'msg_2'),
+    ];
+    const merged = mergeReplayedHistory(bucket, history, resumeOf(bucket));
+    expect(ids(merged)).toEqual(['cc-user-a-1', 'cc-s-a-t1-s1', 'h:sum', 'h:u2', 'h:a2']);
+  });
+
+  it('P4: a step the transcript never kept stays inside its own turn', () => {
+    const bucket = [
+      user('cc-user-a-1', '做 X', 'u-1'),
+      say('cc-s-a-t1-s1', '我先看一', 'msg_cut'),
+      step('cc-s-a-t1-s2', 'toolu_1', 'msg_1'),
+      say('cc-s-a-t1-s3', '完成 X', 'msg_2'),
+    ];
+    const history = [
+      user('h:u1', '做 X', 'u-1'),
+      step('h:a1', 'toolu_1', 'msg_1'),
+      say('h:a2', '完成 X', 'msg_2'),
+    ];
+    const merged = mergeReplayedHistory(bucket, history, resumeOf(bucket));
+    expect(ids(merged)).toEqual(['h:u1', 'cc-s-a-t1-s1', 'h:a1', 'h:a2']);
+  });
+
+  it('a transcript id two messages share names neither: other tiers decide, nothing is lost', () => {
+    // A gateway that answers every request with the same message id.
+    const bucket = [
+      user('cc-user-a-1', '做 X', 'u-1'),
+      step('cc-s-a-t1-s1', 'toolu_1', 'msg_same'),
+      say('cc-s-a-t1-s2', '完成 X', 'msg_same'),
+    ];
+    const history = [
+      user('h:u1', '做 X', 'u-1'),
+      // The projection merges a repeated id's rows into one.
+      {
+        id: 'h:a1',
+        role: 'assistant',
+        transcriptId: 'msg_same',
+        blocks: [
+          { type: 'tool_call', toolCallId: 'toolu_1' },
+          { type: 'tool_result', toolCallId: 'toolu_1' },
+          { type: 'text', text: '完成 X' },
+        ],
+      },
+    ];
+    const merged = mergeReplayedHistory(bucket, history, resumeOf(bucket));
+    // The step folds by its call id; the answer, now the row's, has nothing left to fold onto.
+    expect(ids(merged)).toEqual(['h:u1', 'h:a1', 'cc-s-a-t1-s2']);
+  });
+
+  it('an engine head folds with the step after it, keyed or not', () => {
+    const head = (id: string): ReplayMergeMessage => ({
+      id,
+      role: 'user',
+      blocks: [],
+      origin: { kind: 'subagent' },
+    });
+    const bucket = [
+      user('cc-user-a-1', '做 X', 'u-1'),
+      say('cc-s-a-t1-s1', '先派子代理', 'msg_1'),
+      head('cc-user-a-2'),
+      say('cc-s-a-t2-s1', '子代理完成', 'msg_2'),
+    ];
+    const history = [
+      user('h:u1', '做 X', 'u-1'),
+      say('h:a1', '先派子代理', 'msg_1'),
+      head('h:o1'),
+      say('h:a2', '子代理完成', 'msg_2'),
+    ];
+    const merged = mergeReplayedHistory(bucket, history, resumeOf(bucket));
+    expect(ids(merged)).toEqual(['h:u1', 'h:a1', 'h:o1', 'h:a2']);
   });
 });

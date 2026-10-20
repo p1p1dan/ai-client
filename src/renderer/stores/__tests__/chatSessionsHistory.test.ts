@@ -1785,3 +1785,87 @@ describe('a turn whose request failed before any reply (decision 156)', () => {
     expect(state.messages[SESSION_ID]?.at(-1)).not.toHaveProperty('stopReason');
   });
 });
+
+/**
+ * Decision 206 (review of 6b645ac1): a Claude SDK chat reopened on a new host
+ * after a long run. The page holds only the last turns; every live message
+ * names its transcript row (`transcriptId`), so the page takes back exactly
+ * those, and the older turn stays in front of it with its reply.
+ */
+describe('applyRuntimeEvent — a Claude SDK chat reopened past one page (decision 206)', () => {
+  const event = (type: string, payload: Record<string, unknown>, requestId = 'turn-1') =>
+    ({ type, seq: 0, sessionId: SESSION_ID, requestId, timestamp: 2000, payload }) as RuntimeEvent;
+  const turn = (n: number, text: string, reply: string): RuntimeEvent[] => {
+    const user = `cc-user-a-${n}`;
+    const tool = `cc-s-a-t${n}-s1`;
+    const answer = `cc-s-a-t${n}-s2`;
+    return [
+      event('message.started', { messageId: user, role: 'user', transcriptId: `u-${n}` }),
+      event('message.delta', { messageId: user, blockId: `${user}-text`, text }),
+      event('message.completed', { messageId: user }),
+      event('message.started', { messageId: tool, role: 'assistant', transcriptId: `msg_${n}a` }),
+      event('tool.started', { messageId: tool, toolCallId: `toolu_${n}`, name: 'Bash', input: {} }),
+      event('tool.completed', { messageId: tool, toolCallId: `toolu_${n}`, ok: true, output: '' }),
+      event('message.completed', { messageId: tool }),
+      event('message.started', {
+        messageId: answer,
+        role: 'assistant',
+        transcriptId: `msg_${n}b`,
+      }),
+      event('message.delta', { messageId: answer, blockId: `${answer}-b0`, text: reply }),
+      event('message.completed', { messageId: answer }),
+    ];
+  };
+  const rows = (n: number, text: string, reply: string): HistoryMessage[] => [
+    {
+      id: `h:u${n}`,
+      role: 'user',
+      transcriptId: `u-${n}`,
+      blocks: [{ type: 'text', id: `u${n}-text`, text }],
+    },
+    {
+      id: `h:a${n}`,
+      role: 'assistant',
+      transcriptId: `msg_${n}a`,
+      blocks: [
+        { type: 'tool_call', id: `toolu_${n}`, toolCallId: `toolu_${n}`, name: 'Bash', input: {} },
+        { type: 'tool_result', id: `toolu_${n}-result`, toolCallId: `toolu_${n}`, ok: true },
+      ],
+    },
+    {
+      id: `h:b${n}`,
+      role: 'assistant',
+      transcriptId: `msg_${n}b`,
+      blocks: [{ type: 'text', id: `b${n}-text`, text: reply }],
+    },
+  ];
+
+  it('keeps the older turn in front of the page and nothing twice', () => {
+    const live = applyAll(baseState({ sessions: [makeSession()] }), [
+      ...turn(1, '继续', '旧回答'),
+      ...turn(2, '做 X', '完成 X'),
+      ...turn(3, '继续', '完成 Y'),
+    ]).state;
+    expect(live.messages[SESSION_ID]?.[0]).toMatchObject({ transcriptId: 'u-1' });
+
+    const reopened = applyAll(live, [
+      makeResumedEvent('req-2'),
+      makeHistoryEvent(
+        { messages: [...rows(2, '做 X', '完成 X'), ...rows(3, '继续', '完成 Y')], hasMore: true },
+        'req-2'
+      ),
+    ]).state;
+    expect(reopened.messages[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'cc-user-a-1',
+      'cc-s-a-t1-s1',
+      'cc-s-a-t1-s2',
+      'h:u2',
+      'h:a2',
+      'h:b2',
+      'h:u3',
+      'h:a3',
+      'h:b3',
+    ]);
+    expect(reopened.messages[SESSION_ID]?.[3]).toMatchObject({ transcriptId: 'u-2' });
+  });
+});

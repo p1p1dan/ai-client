@@ -470,6 +470,12 @@ export interface ChatMessage {
    */
   liveMessageId?: string;
   /**
+   * Decision 206 (Claude SDK engine): the id the CLI's transcript gives this
+   * message, on the live copy (`message.started`) and on the replayed row
+   * alike. `historyReplayMerge.ts` folds a live message onto its row by it.
+   */
+  transcriptId?: string;
+  /**
    * dsh-rebase P1-7a (decision 118; optional-field addition, same discipline
    * as `origin`): live only, on the system row of a DSH notice — the source
    * kind its `custom.message` named (`dsh:<kind>`: `tool-jobs`,
@@ -1571,6 +1577,7 @@ export function mapHistoryMessageToChatMessage(
     // or names its live copy (a DSH session's own history).
     ...(historyMessage.origin ? { origin: historyMessage.origin } : {}),
     ...(historyMessage.liveMessageId ? { liveMessageId: historyMessage.liveMessageId } : {}),
+    ...(historyMessage.transcriptId ? { transcriptId: historyMessage.transcriptId } : {}),
   };
 }
 
@@ -2065,6 +2072,8 @@ function applyRuntimeEventCore(
         ...(event.payload.attachments ? { attachments: event.payload.attachments } : {}),
         // P1-4d1 (decision 072 rule 3): same optional-field rule.
         ...(event.payload.origin ? { origin: event.payload.origin } : {}),
+        // Decision 206: same rule.
+        ...(event.payload.transcriptId ? { transcriptId: event.payload.transcriptId } : {}),
       };
       const bucket = state.messages[sessionId] ?? [];
       const messages = withBucket(state, sessionId, upsertMessage(bucket, message));

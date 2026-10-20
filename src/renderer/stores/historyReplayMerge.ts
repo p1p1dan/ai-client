@@ -130,6 +130,21 @@
  * restart (`sourceGone`): the engine that would have answered them is dead,
  * and the row (an outcome-unknown result, say) is the only truth left.
  *
+ * TRANSCRIPT IDENTITY (decision 206) is the same exact fold for the Claude SDK
+ * engine, whose reopened host never knew the earlier one's live ids. Both
+ * copies carry the id the CLI's transcript gives the message (`transcriptId`:
+ * the uuid a user message was sent with, an assistant step's API message id).
+ * Two copies carrying different ones are two messages, so the text tiers never
+ * pair them (the user sent 「继续」 twice). A tool step with no usable id still
+ * folds by its tool call ids, and an engine turn's head with the step after it.
+ *
+ * PLACEMENT (decision 206): the page's rows stand in file order, and whatever
+ * the replay did not take back keeps its place between its neighbours — rows
+ * the page still has, found by fold or by id. Before the first one it is older
+ * than the page and goes in front of it; after the last one, or sent after the
+ * resume, it follows the page. Appending every leftover after the page used to
+ * glue old steps onto the page's last turn, which then read as no reply at all.
+ *
  * Zero store imports on purpose (same leaf-module rule as
  * `sessionIndex/dismissedSessions.ts`): `chatSessions.ts` calls this from
  * its reducer, so this file must never import back into store/hook land.
@@ -158,6 +173,8 @@ export interface ReplayMergeMessage {
   attachments?: readonly unknown[];
   /** History rows of a DSH session: the id the row's live copy carried (P1-4d1). */
   liveMessageId?: string;
+  /** Claude SDK engine, both sides: the id the CLI's transcript gives the message (decision 206). */
+  transcriptId?: string;
   /** An engine-started turn's head (a subagent's or a job's wake-up, a schedule). */
   origin?: { kind: string };
 }
@@ -388,45 +405,83 @@ function isSettled(message: ReplayMergeMessage): boolean {
   });
 }
 
+/** Role and transcript id: the key both sides of decision 206's exact fold are read under. */
+function transcriptKey(message: ReplayMergeMessage): string | undefined {
+  return message.transcriptId ? `${message.role}\n${message.transcriptId}` : undefined;
+}
+
 /**
  * P1-4d1 — exact live identity (see the header): the candidates a history row
- * names by `liveMessageId`, which give way to that row. Returns the runtime
- * messages left for the text tiers, the history indexes already taken, and
- * the rows whose live copy replaces them (the copy has attachment metadata a
- * replayed row may lack, as in the replacement fold).
+ * names by `liveMessageId`, or (decision 206) by the transcript id both copies
+ * carry, which give way to that row. Returns the runtime messages left for
+ * the text tiers, the history indexes already taken, and the rows whose live
+ * copy replaces them (the copy has attachment metadata a replayed row may
+ * lack, as in the replacement fold). Where each folded message went is
+ * recorded in `foldedAt`.
+ *
+ * A transcript id that two runtime messages or two rows share (a gateway that
+ * repeats its message ids) names nothing: neither side folds by it.
  */
 function foldExactLiveIds<T extends ReplayMergeMessage>(
   runtime: readonly T[],
   historyMessages: readonly T[],
   candidateIds: ReadonlySet<string>,
-  sourceGone: boolean
+  sourceGone: boolean,
+  foldedAt: Map<string, number>
 ): { remaining: T[]; claimed: Set<number>; replacements: Map<number, T> } {
   const rowOf = new Map<string, number>();
+  const rowOfKey = new Map<string, number | null>();
   historyMessages.forEach((row, index) => {
     if (row.liveMessageId) rowOf.set(row.liveMessageId, index);
+    const key = transcriptKey(row);
+    if (key) rowOfKey.set(key, rowOfKey.has(key) ? null : index);
   });
   const claimed = new Set<number>();
   const replacements = new Map<number, T>();
-  if (rowOf.size === 0) return { remaining: [...runtime], claimed, replacements };
+  if (rowOf.size === 0 && rowOfKey.size === 0) {
+    return { remaining: [...runtime], claimed, replacements };
+  }
+  const liveKeys = new Map<string, number>();
+  for (const message of runtime) {
+    const key = transcriptKey(message);
+    if (key) liveKeys.set(key, (liveKeys.get(key) ?? 0) + 1);
+  }
   const remaining: T[] = [];
   for (const message of runtime) {
-    const at = candidateIds.has(message.id) ? rowOf.get(message.id) : undefined;
+    const key = transcriptKey(message);
+    const at = !candidateIds.has(message.id)
+      ? undefined
+      : (rowOf.get(message.id) ??
+        (key && liveKeys.get(key) === 1 ? (rowOfKey.get(key) ?? undefined) : undefined));
     // A dead engine's message will never settle: its row is all there is to it.
     if (at === undefined || claimed.has(at) || (!sourceGone && !isSettled(message))) {
       remaining.push(message);
       continue;
     }
     claimed.add(at);
+    foldedAt.set(message.id, at);
     if (message.attachments && message.attachments.length > 0) replacements.set(at, message);
   }
   return { remaining, claimed, replacements };
 }
 
 /**
+ * Decision 206: two copies that each carry a transcript id, and not the same
+ * one, are two messages — a text match between them is a coincidence (the
+ * user sent 「继续」 twice), never the same message.
+ */
+function transcriptIdsDiffer(message: ReplayMergeMessage, row: ReplayMergeMessage): boolean {
+  return Boolean(
+    message.transcriptId && row.transcriptId && message.transcriptId !== row.transcriptId
+  );
+}
+
+/**
  * Decision 206: a tool step by its calls' ids. The model's call ids are the same
  * on the live step and on the transcript row it was saved as, so they identify
- * the row exactly where the Claude SDK replay carries no `liveMessageId`. A step
- * folds onto the one unclaimed row that holds every one of its calls.
+ * the row exactly where no transcript id could (a host that sent none, a gateway
+ * that repeats its message ids). A step folds onto the one unclaimed row that
+ * holds every one of its calls.
  */
 function foldByToolCallIds<T extends ReplayMergeMessage>(
   runtime: readonly T[],
@@ -549,23 +604,20 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
     // fold, so fold nothing (guard 1). Duplication beats loss.
     return [...historyMessages, ...runtime];
   }
-  const { candidateIds, anchorHistoryId, orderedIds } = snapshot;
+  const { candidateIds, anchorHistoryId } = snapshot;
 
+  // Where each runtime message the replay took back went (decision 206): the
+  // engine heads fold by it, and every message left over is placed by it.
+  const foldedAt = new Map<string, number>();
   // P1-4d1: exact live identity first. An id is no text guess, so it needs
   // neither the anchor nor the cursor below.
   const exact = foldExactLiveIds(
     runtime,
     historyMessages,
     candidateIds,
-    options.sourceGone === true
+    options.sourceGone === true,
+    foldedAt
   );
-  const withExact = (rows: readonly T[]): T[] =>
-    exact.replacements.size > 0
-      ? rows.map((row, index) => exact.replacements.get(index) ?? row)
-      : [...rows];
-  // Decision 206: where each folded runtime message went, for the engine heads
-  // and for keeping live rows older than the page in front of it.
-  const foldedAt = new Map<string, number>();
   const exactRemaining = foldByToolCallIds(
     exact.remaining,
     historyMessages,
@@ -574,20 +626,54 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
     options.sourceGone === true,
     foldedAt
   );
+  // Every index claimed by any channel, so the replacement map can never
+  // receive two writers for one key (INV-P1). The exact folds' rows are taken.
+  const claimed = exact.claimed;
+  // Replacement folds: runtime messages with attachments that matched a
+  // history row. The history row is swapped for the runtime copy so the
+  // attachment metadata (thumbnails, names) survives the merge.
+  const historyReplacements = exact.replacements;
 
   // Guard 3a: the anchor's PRESENCE proves `h:<jsonl-uuid>` id continuity
   // across re-reads. When the anchor row is GONE from this replay (head
   // eviction under the read caps — a protocol-legal success with
-  // `truncated: true` — or a rewritten JSONL) every id is suspect. No
-  // continuity proof → no folding at all. A snapshot that never had an anchor
+  // `truncated: true` — or a rewritten JSONL) every id is suspect: the text
+  // tiers fold nothing. The exact folds above stand (an id the message itself
+  // carries is no guess about the file). A snapshot that never had an anchor
   // (first resume) is exempt: nothing was hydrated, nothing drifted.
   const anchorIndex = anchorHistoryId
     ? historyMessages.findIndex((history) => history.id === anchorHistoryId)
     : -1;
-  if (anchorHistoryId && anchorIndex < 0) {
-    return [...withExact(historyMessages), ...exactRemaining];
-  }
+  const kept =
+    anchorHistoryId && anchorIndex < 0
+      ? exactRemaining
+      : foldByText(exactRemaining, historyMessages, snapshot, anchorIndex, claimed, {
+          historyReplacements,
+          foldedAt,
+        });
 
+  const mergedHistory =
+    historyReplacements.size > 0
+      ? historyMessages.map((h, i) => historyReplacements.get(i) ?? h)
+      : historyMessages;
+
+  const left = foldOriginHeads(kept, runtime, historyMessages, candidateIds, claimed, foldedAt);
+  return placeLeftovers(bucket, mergedHistory, left, candidateIds, foldedAt);
+}
+
+/**
+ * The text tiers (guards 3b-3e and the attachment tier, see the header) over
+ * what the exact folds left. Returns the messages nothing claimed.
+ */
+function foldByText<T extends ReplayMergeMessage>(
+  remaining: readonly T[],
+  historyMessages: readonly T[],
+  snapshot: ResumeSnapshot,
+  anchorIndex: number,
+  claimed: Set<number>,
+  out: { historyReplacements: Map<number, T>; foldedAt: Map<string, number> }
+): T[] {
+  const { candidateIds, anchorHistoryId, orderedIds } = snapshot;
   // Guard 3d (alignment probe): the snapshot's bucket order IS the previous
   // merge's output order, so up to the anchor it is also the history file
   // order. If the anchor sits at a different index on the two sides, the read
@@ -603,21 +689,13 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
   // AND the id-drift counterexample. The only way into the pre-anchor region
   // is guard 3e below, one exact index at a time.
   let cursor = anchorIndex + 1;
-  // Every index claimed by either channel, so the replacement map can never
-  // receive two writers for one key (INV-P1). The exact fold's rows are taken.
-  const claimed = exact.claimed;
   // Attachment-tier precondition 1, hoisted: an anchorless replay must never
   // fold the attachment tier (identity collapses and the scan covers the whole
   // file, so an unattributable hit would DELETE a real turn).
   const tailSite: MatchSite = anchorHistoryId === null ? 'no-anchor' : 'tail';
 
   const kept: T[] = [];
-  // Replacement folds: runtime messages with attachments that matched a
-  // history row. The history row is swapped for the runtime copy so the
-  // attachment metadata (thumbnails, names) survives the merge.
-  const historyReplacements = exact.replacements;
-
-  for (const message of exactRemaining) {
+  for (const message of remaining) {
     if (!candidateIds.has(message.id)) {
       kept.push(message);
       continue;
@@ -648,6 +726,7 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
           row &&
           row.role === message.role &&
           !candidateIds.has(row.id) &&
+          !transcriptIdsDiffer(message, row) &&
           identityMatches(identity, row, 'hole')
         ) {
           matchedAt = hole;
@@ -663,6 +742,7 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
         // Guard 3b (defence in depth): a settled history row never absorbs an
         // echo. The bound that actually stops P1 is `cursor` above.
         if (candidateIds.has(candidate.id)) continue;
+        if (transcriptIdsDiffer(message, candidate)) continue;
         if (!identityMatches(identity, candidate, tailSite)) continue;
         matchedAt = i;
         break;
@@ -677,27 +757,73 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
       continue;
     }
     claimed.add(matchedAt);
-    foldedAt.set(message.id, matchedAt);
+    out.foldedAt.set(message.id, matchedAt);
     if (replaceFold) {
-      historyReplacements.set(matchedAt, message);
+      out.historyReplacements.set(matchedAt, message);
     }
   }
+  return kept;
+}
 
-  const mergedHistory =
-    historyReplacements.size > 0
-      ? historyMessages.map((h, i) => historyReplacements.get(i) ?? h)
-      : historyMessages;
+/**
+ * Decision 206: where the messages the replay did not take back go. The
+ * page's rows stand in file order; a leftover keeps its place between its
+ * neighbours. Its anchors are the bucket rows the page still has: a runtime
+ * message folded onto a row (`foldedAt`), or a previously hydrated row the
+ * page reads again under its own id.
+ *
+ * - Before the first anchor: older than everything the page took back, so
+ *   older than the page itself (the read window starts after it). In front.
+ * - Between two anchors: right before the next one, inside its own turn
+ *   (a step the transcript never kept, say).
+ * - After the last anchor, and every message that arrived after the resume
+ *   (not a candidate): after the page, as before.
+ *
+ * With no anchor at all the page and the bucket share nothing to place by:
+ * the leftovers follow the page (duplication beats misplacement).
+ */
+function placeLeftovers<T extends ReplayMergeMessage>(
+  bucket: readonly T[],
+  page: readonly T[],
+  left: readonly T[],
+  candidateIds: ReadonlySet<string>,
+  foldedAt: ReadonlyMap<string, number>
+): T[] {
+  if (left.length === 0) return [...page];
+  const pageIndex = new Map(page.map((row, index) => [row.id, index]));
+  const anchorOf = (message: T): number | undefined =>
+    foldedAt.get(message.id) ??
+    (message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX) ? pageIndex.get(message.id) : undefined);
+  const anchors = bucket.map(anchorOf);
+  if (anchors.every((at) => at === undefined)) return [...page, ...left];
 
-  const left = foldOriginHeads(kept, runtime, historyMessages, candidateIds, claimed, foldedAt);
-  // Decision 206: live rows older than everything the page took back are older
-  // than the page itself (the read window starts after them): they go in front
-  // of it, so they keep their turns. Everything else stays after the page.
-  // Only without an anchor: with one, every live row came after the hydrated page.
-  const firstFolded = runtime.findIndex((message) => foldedAt.has(message.id));
-  if (anchorHistoryId !== null || firstFolded <= 0) return [...mergedHistory, ...left];
-  const older = left.filter(
-    (message) => candidateIds.has(message.id) && runtime.indexOf(message) < firstFolded
-  );
-  const newer = left.filter((message) => !older.includes(message));
-  return [...older, ...mergedHistory, ...newer];
+  const nextAnchor: Array<number | undefined> = new Array(bucket.length);
+  let next: number | undefined;
+  for (let i = bucket.length - 1; i >= 0; i -= 1) {
+    nextAnchor[i] = next;
+    if (anchors[i] !== undefined) next = anchors[i];
+  }
+  const leftIds = new Set(left.map((message) => message.id));
+  const front: T[] = [];
+  const before = new Map<number, T[]>();
+  const after: T[] = [];
+  const newer: T[] = [];
+  let seenAnchor = false;
+  bucket.forEach((message, i) => {
+    if (anchors[i] !== undefined) {
+      seenAnchor = true;
+      return;
+    }
+    if (!leftIds.has(message.id)) return;
+    const at = nextAnchor[i];
+    if (!candidateIds.has(message.id)) newer.push(message);
+    else if (!seenAnchor) front.push(message);
+    else if (at === undefined) after.push(message);
+    else before.set(at, [...(before.get(at) ?? []), message]);
+  });
+  const out: T[] = [...front];
+  page.forEach((row, index) => {
+    out.push(...(before.get(index) ?? []), row);
+  });
+  return [...out, ...after, ...newer];
 }
