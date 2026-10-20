@@ -2645,12 +2645,14 @@ const ChatTurn = memo(function ChatTurn({
   // A turn that did not finish — stopped, failed (a retry that gave up
   // included) or cut off — keeps its process open too, so the output stays
   // where it stopped, and it closes on a note saying how it ended.
-  const liveEnd = useMemo(() => liveTurnEnd(turn.body), [turn.body]);
+  const liveEnd = useMemo(() => liveTurnEnd(turn.body, turn.user), [turn.body, turn.user]);
   const endedAbnormally = endedByUser || liveEnd !== null || turnEndsWithoutReply(turn.body);
   // The session's failure card says this turn's failure while it is up.
   const showLiveEnd =
     liveEnd !== null &&
-    processSettled &&
+    // Not `processSettled`: a turn stopped before any reply can leave the send
+    // guard armed, and the stamp itself already says the turn is over.
+    !(isLastTurn && inFlightSession) &&
     !(liveEnd.kind === 'failed' && isLastTurn && sessionStatus === 'failed');
   const liveEndAfterWork = useMemo(
     () => turn.body.some((message) => message.role === 'assistant' && message.blocks.length > 0),

@@ -57,7 +57,10 @@ export function deriveTurnEndNotice(
   options: TurnEndNoticeOptions = {}
 ): TurnEndNoticeView {
   const form = options.afterWork ? 'afterWork' : 'alone';
-  if (turnEnd.kind === 'stopped') return { key: NOTE_KEYS.stopped[form] };
+  if (turnEnd.kind === 'stopped') {
+    // Decision 206: a retry given up on keeps the upstream error it was fighting.
+    return { key: NOTE_KEYS.stopped[form], ...(turnEnd.error ? { detail: turnEnd.error } : {}) };
+  }
   if (turnEnd.kind === 'interrupted') return { key: NOTE_KEYS.interrupted[form] };
   const known = toSessionFailureCode(turnEnd.errorCode) !== 'unknown';
   const view = deriveSessionFailure({ error: turnEnd.error, errorCode: turnEnd.errorCode });
@@ -171,23 +174,36 @@ export function liveTurnEnd(
     stopReason?: string;
     stopCause?: string;
     failure?: { errorCode?: string; error?: string };
+    stopped?: { error?: string };
     blocks?: readonly { notice?: { key?: string } }[];
-  }[]
+  }[],
+  /** The turn's user message: says how the turn ended when no reply message ever opened. */
+  user?: {
+    failure?: { errorCode?: string; error?: string };
+    stopped?: { error?: string };
+  } | null
 ): ChatTurnEnd | null {
   if (turnEndsWithoutReply(body)) return null;
+  const failed = (failure: { errorCode?: string; error?: string } | undefined): ChatTurnEnd => ({
+    kind: 'failed',
+    ...(failure?.errorCode ? { errorCode: failure.errorCode } : {}),
+    ...(failure?.error ? { error: failure.error } : {}),
+  });
+  if (!body.some((message) => message.role === 'assistant')) {
+    if (user?.failure) return failed(user.failure);
+    if (user?.stopped) {
+      return { kind: 'stopped', ...(user.stopped.error ? { error: user.stopped.error } : {}) };
+    }
+  }
   for (let index = body.length - 1; index >= 0; index -= 1) {
     const message = body[index];
     if (message?.role !== 'assistant') continue;
-    if (message.stopReason === 'error') {
-      const { errorCode, error } = message.failure ?? {};
-      return {
-        kind: 'failed',
-        ...(errorCode ? { errorCode } : {}),
-        ...(error ? { error } : {}),
-      };
-    }
+    if (message.stopReason === 'error') return failed(message.failure);
     if (message.stopCause === 'user_stop' || message.stopReason === 'aborted') {
-      return { kind: 'stopped' };
+      return {
+        kind: 'stopped',
+        ...(message.stopped?.error ? { error: message.stopped.error } : {}),
+      };
     }
     return null;
   }

@@ -184,6 +184,25 @@ describe('liveTurnEnd (user, 2026-10-19: a stop or a failure stays readable on i
       ])
     ).toEqual({ kind: 'failed', errorCode: 'RATE_LIMITED', error: 'HTTP 429' });
   });
+  it('names a turn that failed before any reply, from its user message (decision 206)', () => {
+    const failure = { errorCode: 'UPSTREAM_ERROR', error: 'HTTP 500' };
+    expect(liveTurnEnd([], { failure })).toEqual({ kind: 'failed', ...failure });
+    // A reply message, once there is one, says how the turn ended instead.
+    expect(liveTurnEnd([{ role: 'assistant', blocks: [{}] }], { failure })).toBeNull();
+  });
+  it('names a turn stopped before any reply, with the error a given-up retry was fighting', () => {
+    expect(liveTurnEnd([], { stopped: {} })).toEqual({ kind: 'stopped' });
+    expect(liveTurnEnd([], { stopped: { error: 'HTTP 503: overloaded' } })).toEqual({
+      kind: 'stopped',
+      error: 'HTTP 503: overloaded',
+    });
+    expect(
+      liveTurnEnd([
+        { role: 'assistant', blocks: [{}], stopCause: 'user_stop', stopped: { error: 'HTTP 503' } },
+      ])
+    ).toEqual({ kind: 'stopped', error: 'HTTP 503' });
+    expect(deriveTurnEndNotice({ kind: 'stopped', error: 'HTTP 503' }).detail).toBe('HTTP 503');
+  });
   it('names a stopped turn', () => {
     expect(liveTurnEnd([{ ...reply, stopCause: 'user_stop' }])).toEqual({ kind: 'stopped' });
     expect(liveTurnEnd([{ ...reply, stopReason: 'aborted' }])).toEqual({ kind: 'stopped' });

@@ -1436,7 +1436,11 @@ describe('applyRuntimeEvent — session.stopped (stop freeze)', () => {
       sessionId: SESSION_ID,
       timestamp: 1,
     });
-    expect(patch.messages).toBeUndefined();
+    // The previous turn's reply is untouched; decision 206 marks the new
+    // turn's own user message as stopped, so that turn can say so.
+    expect(patch.messages?.[SESSION_ID]?.[0]).toEqual(state.messages[SESSION_ID]?.[0]);
+    expect(patch.messages?.[SESSION_ID]?.[0]?.stopCause).toBeUndefined();
+    expect(patch.messages?.[SESSION_ID]?.[1]?.stopped).toEqual({});
   });
 
   it('does not guard message.delta after session.stopped — deltas still append (current tolerance)', () => {

@@ -224,6 +224,12 @@ export interface ChatSession {
    */
   retry?: SessionRetryInfo;
   /**
+   * Decision 206: the upstream error the running turn's retries last reported,
+   * kept while the turn runs even after `retry` clears (a Stop first sends a
+   * status without one). A Stop that gives the retries up prints it.
+   */
+  lastRetryError?: string;
+  /**
    * T034 (session-02, optional-field addition): the session file was repaired
    * when this session was opened, and these lines were dropped from it.
    *
@@ -486,9 +492,17 @@ export interface ChatMessage {
    * Live only: why the request this message stands for failed, as
    * `session.failed` said it. Set with `stopReason: 'error'`; the turn's end
    * note prints it, so the reason stays with the turn after the session's
-   * failure card goes.
+   * failure card goes. On a user message: the turn failed before any reply
+   * opened an assistant message (decision 206).
    */
   failure?: { errorCode?: string; error?: string };
+  /**
+   * Live only (decision 206): on a user message, the turn was stopped before
+   * any reply opened a message — nothing else of the turn could carry that; on
+   * the stopped assistant message, only to carry `error`, the upstream error a
+   * retry was fighting when the user gave up.
+   */
+  stopped?: { error?: string };
 }
 
 /** See {@link ChatMessage.turnEnd}. */
@@ -496,7 +510,7 @@ export interface ChatTurnEnd {
   kind: 'failed' | 'stopped' | 'interrupted';
   /** `failed` only: our code for the failure, as the live card had it. */
   errorCode?: string;
-  /** `failed` only: the engine's own sentence, the card's detail. */
+  /** `failed`: the engine's own sentence, the card's detail; `stopped`: the error a retry given up on was fighting. */
   error?: string;
 }
 
@@ -751,9 +765,16 @@ function upsertSessionStatus(
   // session's current state.
   retry?: SessionRetryInfo
 ): ChatSession[] {
-  return sessions.map((session) =>
-    session.id === sessionId ? { ...withoutFailureSettled(session), status, retry } : session
-  );
+  return sessions.map((session) => {
+    if (session.id !== sessionId) return session;
+    const lastRetryError = retry
+      ? retryErrorText(retry)
+      : TURN_RUNNING_STATUSES.has(status)
+        ? session.lastRetryError
+        : undefined;
+    const { lastRetryError: _previous, ...rest } = withoutFailureSettled(session);
+    return { ...rest, status, retry, ...(lastRetryError ? { lastRetryError } : {}) };
+  });
 }
 
 /**
@@ -1008,7 +1029,8 @@ function withBucket(
 function withRunStopCause(
   state: ChatSessionsState,
   sessionId: string,
-  cause: TurnStopCause
+  cause: TurnStopCause,
+  retryError?: string
 ): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
   const bucket = state.messages[sessionId];
   if (!bucket) return {};
@@ -1018,7 +1040,12 @@ function withRunStopCause(
     if (message.role !== 'assistant') continue;
     if (message.stopCause === cause) return {};
     const next = bucket.slice();
-    next[index] = { ...message, stopCause: cause };
+    next[index] = {
+      ...message,
+      stopCause: cause,
+      // Decision 206: the upstream error a retry was fighting when given up.
+      ...(retryError ? { stopped: { error: retryError } } : {}),
+    };
     return { messages: withBucket(state, sessionId, next) };
   }
   return {};
@@ -1043,26 +1070,43 @@ function withRunStopCause(
  */
 function withStoppedRun(
   state: ChatSessionsState,
-  sessionId: string
+  sessionId: string,
+  retryError?: string
 ): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
   const bucket = state.messages[sessionId];
   if (!bucket) return {};
   let lastEmpty = -1;
+  let userIndex = -1;
   for (let index = bucket.length - 1; index >= 0; index -= 1) {
     const message = bucket[index];
-    if (!message || message.role === 'user') break;
+    if (!message) break;
+    if (message.role === 'user') {
+      userIndex = index;
+      break;
+    }
     if (message.role !== 'assistant') continue;
-    if (message.blocks.length > 0) return withRunStopCause(state, sessionId, 'user_stop');
+    if (message.blocks.length > 0)
+      return withRunStopCause(state, sessionId, 'user_stop', retryError);
     if (lastEmpty < 0) lastEmpty = index;
   }
   const empty = lastEmpty >= 0 ? bucket[lastEmpty] : undefined;
-  if (!empty) return {};
+  if (!empty) {
+    // Decision 206: stopped before any reply message opened (a retry given up
+    // included). The turn's user message records it, so the turn can say so.
+    const user = userIndex >= 0 ? bucket[userIndex] : undefined;
+    if (!user || user.stopped) return {};
+    // A turn that already ends on a note (an earlier stop) or has a reply says so itself.
+    if (bucket.slice(userIndex + 1).some((m) => m.turnEnd || m.role === 'assistant')) return {};
+    const next = bucket.slice();
+    next[userIndex] = { ...user, stopped: retryError ? { error: retryError } : {} };
+    return { messages: withBucket(state, sessionId, next) };
+  }
   const next = bucket.slice();
   next[lastEmpty] = {
     ...empty,
     role: 'system',
     blocks: [{ id: `${empty.id}:interrupted`, type: 'text', text: TURN_END_TEXT.stopped }],
-    turnEnd: { kind: 'stopped' },
+    turnEnd: { kind: 'stopped', ...(retryError ? { error: retryError } : {}) },
     incomplete: true,
     stopReason: 'aborted',
     stopCause: 'user_stop',
@@ -1099,7 +1143,16 @@ function withFailedRequest(
   if (!bucket) return {};
   for (let index = bucket.length - 1; index >= 0; index -= 1) {
     const message = bucket[index];
-    if (!message || message.role === 'user') return {};
+    if (!message) return {};
+    if (message.role === 'user') {
+      // Decision 206: the turn failed before any reply opened a message. Its
+      // reason goes on the turn's own user message, so the turn can still say
+      // why once the session's card goes.
+      if (!turnRunning || message.failure) return {};
+      const next = bucket.slice();
+      next[index] = { ...message, failure };
+      return { messages: withBucket(state, sessionId, next) };
+    }
     if (message.role !== 'assistant') continue;
     if (message.stopReason) return {};
     if (message.blocks.length > 0 && !turnRunning) return {};
@@ -1108,6 +1161,14 @@ function withFailedRequest(
     return { messages: withBucket(state, sessionId, next) };
   }
   return {};
+}
+
+/** The upstream error a retry was fighting, in one line; undefined when none was. */
+function retryErrorText(retry: SessionRetryInfo | undefined): string | undefined {
+  if (!retry) return undefined;
+  const status = retry.errorStatus ? `HTTP ${retry.errorStatus}` : '';
+  const text = [status, retry.error].filter(Boolean).join(': ');
+  return text || undefined;
 }
 
 /** Statuses of a session with a turn under way (the run a failure would cut). */
@@ -1976,7 +2037,15 @@ function applyRuntimeEventCore(
         ...withoutSessionPermissions(state, sessionId),
         ...(settled === state ? {} : { messages: settled.messages }),
         // Decision 146: a turn stopped before any reply ends on the history's note.
-        ...withStoppedRun(settled, sessionId),
+        // Decision 206: a retry the user gave up on keeps its last upstream error.
+        ...withStoppedRun(
+          settled,
+          sessionId,
+          (() => {
+            const session = state.sessions.find((entry) => entry.id === sessionId);
+            return retryErrorText(session?.retry) ?? session?.lastRetryError;
+          })()
+        ),
       };
     }
 
