@@ -25,6 +25,9 @@
 - `session.failed` 给失败请求打 `stopReason: 'error'` 时，把错误码和原文一起记在消息的新字段 `ChatMessage.failure` 上（只在实时会话里有）。
 - 新纯函数 `liveTurnEnd`（`turnEndNoticeModel.ts`）：回合末尾没有历史回放生成的结束说明时，从最后一条助手消息推出「已停止」或「失败 + 原因」。时间线在回合末尾用 `TurnEndNotice` 画成一个气泡；失败的气泡用 `error` 底色。
 - 会话失败卡片还在时（最后一个回合、会话状态是 `failed`），同一条失败只由卡片说，不重复画气泡。等下次发送、卡片消失后，气泡留在那个回合上作为记录。
+- 补充（dev 应用里实测后发现）：模型还没回复就失败或停止的回合（比如上游一开始就报错，或在重试中点「立即放弃」），本来没有任何助手消息可以记录原因，下次发送后原因就没了。现在记在这个回合的**用户消息**上：失败记 `failure`，停止记 `stopped`。`liveTurnEnd` 在回合里没有助手消息时读这两个字段。
+- 「立即放弃」走的是停止。停止时如果会话正在重试，就把最后一次上游错误（如 `HTTP 503: server_error`）写进停止气泡的细节。宿主在停止前会先发一帧不带重试的状态，所以会话上另记 `lastRetryError`：回合进行中一直保留，回合结束才清掉。
+- 气泡的显示条件不看「回合已结束」（`processSettled`），只看会话当前有没有回合在跑。没有回复就停止的回合，发送看守可能还挂着，会被误判成仍在进行。
 
 ### 2.3 后台任务（第 3 项）
 
@@ -44,10 +47,27 @@
 - 停止能力搬到子代理窗：可续跑的照旧是「打断」；一次性后台子代理新增逐行「停止」，通过它的作业停掉（`deriveStoppableSubagentRows` + `stoppableRowFor`；SDK 引擎里泳道的 `agentId` 就是作业 id）。「全部停止」不变。
 - 时间线泳道不受影响。
 
+### 2.6 SDK 对话冷重开后，历史回合只剩「已工作」（用户同日补报）
+
+- 现象：长对话 09:30 输出完，一切正常；10:20 以后再发消息，之前的回合都变成光秃秃的「已工作」，最终输出不见了，「子代理已完成，自动继续」后面各跟一个空回合。
+- 触发：SDK 对话的宿主被释放后，下次发送会冷重开，新宿主读 CLI transcript 回放最近 80 条（`session.history`，`initial`）。释放的原因可能是闲置回收、网关或密钥指纹变化（`checkClaudeSdkGateways`，登录凭据刷新也会触发），也可能是崩溃。注意：窗口开着的对话有归属窗口，不会被闲置回收。
+- 根因（`historyReplayMerge.ts`）：SDK 的历史行不带 `liveMessageId`，精确折叠一行也对不上，只剩按文本折叠，而它只认纯文本行。于是用户提问和最终输出被折掉了，带工具的步骤行和引擎回合头（没有文本）却留了下来，被追加到历史页**后面**。这些行并进历史页最后一个回合后，最终输出后面又出现工具步骤，`splitTurnWorkGroup` 就认定这个回合没有最终回复，把整个回合折成「已工作」。每个引擎回合头也各自开出一个空回合。
+- 改法（只改渲染端，不改宿主 id，因为录制回放的归一化规则和 CI 门禁依赖现在的 id 格式）：
+  - 新增按**工具调用 id** 精确折叠：模型给的 `toolu_…` 在实时步骤和 transcript 行上相同。一个步骤的所有调用都落在同一条未被占用的历史行上时，就折到那一行（同样要求已结算，引擎已死时除外）。
+  - 新增**引擎回合头**折叠：没有文本的回合头（`origin` 是 subagent / job / scheduled），在它后面那条实时消息已折叠的前提下，折到对应历史行之前、中间没有隔着用户行的同类历史回合头上。
+  - 回放没有锚点时（第一次重开，之前没有灌过历史），比所有已折叠行都早、又没对上的实时行，属于比历史页更早的部分，放到历史页**前面**；其余没对上的行照旧放在后面（比如重开后才发的消息）。
+- 已知差别：折叠后显示的是历史行，SDK 的历史投影不带时间戳，所以旧回合不再显示「已工作 N 秒 · 完成于」的时长和时刻，最终输出都在。这一点没在这次改动里处理。
+
 ## 3 验证
 
 - 根 `pnpm typecheck` 通过。
 - 更新了按旧行为写的断言：`turnLiveHead`、`turnHandshakeOneLineMount`、`attachments`、`turnStatus`、`messageTimelinePendingStatic`、`turnEndOpenInteraction`（END-OPEN-3：失败的回合现在展开，点一下能折起）、`messageTimelineWiring`、`subwindowsModel`、`sessionSubwindowsMount`。
 - 新增：`liveTurnEnd`（turnEndNotice.test.ts）、`isRoutineHostLine`（hostStderr.test.ts）、stderr 连续行合并（contextSurfaceModel.test.ts）、「清除已结束」挂载测试（P7B-MOUNT-CLEAR）。
 - `src/renderer` 全部 390 个测试文件里只有 `legacyShellAbsence` 一项失败，它扫描的是这次没改的 `stores/settings/migration.ts`，与本次改动无关。WorkerManager / WorkerManagerClaudeSdk 测试通过。
+- 2.2 的补充与 2.6：`historyReplayMerge.test.ts` 新增三条（按调用 id 和回合头折叠、比历史页更早的行放在前面、重开后才发的消息放在后面），`[D1-RESUME-2]` 改为没有 id 时按调用 id 折叠；`chatSessionsCore` 里「停止不改上一回合」那条改为断言新回合的用户消息记上停止。`src/renderer/stores` 与 `components/chat` 共 240 个文件、4516 项通过。
+- dev 应用实测（隔离实例 + 本地假网关）：
+  - 主动停止：输出保持展开，末尾出现「这一轮已停止。」。
+  - 上游 500：先显示失败卡片；再发一条后，那个回合留下红色气泡和原始错误。
+  - 503 重试中点「立即放弃」：气泡写「这一轮已停止，没有保存任何回复。」，细节 `HTTP 503: server_error`。
+  - 冷重开（改假服务的密钥触发释放）：旧回合的实时行全部折进历史，没有残留，最终输出都在。
 - 还没在打包应用或加密机上验证。

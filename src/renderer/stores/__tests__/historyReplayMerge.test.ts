@@ -927,13 +927,29 @@ describe('mergeReplayedHistory — exact live identity (dsh-rebase P1-4d1)', () 
     expect(ids(merged)).toEqual(['h:u0', 'h:a0', 'h:m7', 'h:m8', 'h:m9', 'h:m12', 'h:m15']);
   });
 
-  it('[D1-RESUME-2] the same live messages without the ids stay the L6 behaviour: kept and appended', () => {
+  it('[D1-RESUME-2] without the ids a tool step folds by its call ids (decision 206); other calls stay kept and appended', () => {
     const bucket: ReplayMergeMessage[] = [msg('h:a0', 'assistant', 'earlier'), toolStep(STEP)];
     const history = [msg('h:a0', 'assistant', 'earlier'), toolStep('h:m8')];
 
     const merged = mergeReplayedHistory(bucket, history, ok(snap(ids(bucket), 'h:a0')));
 
-    expect(ids(merged)).toEqual(['h:a0', 'h:m8', STEP]);
+    expect(ids(merged)).toEqual(['h:a0', 'h:m8']);
+
+    // A row with other calls names nothing: the L6 behaviour.
+    const other: ReplayMergeMessage = {
+      id: 'h:m9',
+      role: 'assistant',
+      blocks: [
+        { type: 'tool_call', toolCallId: 'c-other' },
+        { type: 'tool_result', toolCallId: 'c-other' },
+      ],
+    };
+    const unmatched = mergeReplayedHistory(
+      bucket,
+      [msg('h:a0', 'assistant', 'earlier'), other],
+      ok(snap(ids(bucket), 'h:a0'))
+    );
+    expect(ids(unmatched)).toEqual(['h:a0', 'h:m9', STEP]);
   });
 
   it('[D1-RESUME-3] a message still waiting on the user or a tool is never folded by id', () => {
@@ -1024,5 +1040,89 @@ describe('mergeReplayedHistory — exact live identity (dsh-rebase P1-4d1)', () 
 
     expect(ids(merged)).toEqual(['h:a0', 'dsh-user-3', 'h:m4']);
     expect(merged[1]?.attachments).toEqual([att('image', 'image/png', 'a.png')]);
+  });
+});
+
+/**
+ * Decision 206 follow-up (user, 2026-10-19): a Claude SDK chat reopened after an
+ * idle reclaim replays its transcript with no `liveMessageId`. Only the
+ * plain-text rows folded by text; every tool step and every engine-turn head
+ * (「子代理已完成，自动继续」) stayed and was appended AFTER the history page, so
+ * the page's last turn got old tool steps after its final answer and folded to a
+ * bare 「已工作」, and each head opened an empty turn.
+ */
+describe('mergeReplayedHistory — SDK reopen without live ids (decision 206)', () => {
+  const tool = (
+    id: string,
+    callId: string,
+    extra: Partial<ReplayMergeMessage> = {}
+  ): ReplayMergeMessage => ({
+    id,
+    role: 'assistant',
+    blocks: [
+      { type: 'tool_call', toolCallId: callId },
+      { type: 'tool_result', toolCallId: callId },
+    ],
+    ...extra,
+  });
+  const head = (id: string, kind: string): ReplayMergeMessage => ({
+    id,
+    role: 'user',
+    blocks: [],
+    origin: { kind },
+  });
+
+  it('folds tool steps by their call ids and engine heads with the step after them', () => {
+    const bucket = [
+      msg('cc-user-a-1', 'user', '做 X'),
+      tool('cc-s-a-t1-s1', 'toolu_1'),
+      msg('cc-s-a-t1-s2', 'assistant', '完成 X'),
+      head('cc-user-a-2', 'subagent'),
+      tool('cc-s-a-t2-s1', 'toolu_2'),
+      msg('cc-s-a-t2-s2', 'assistant', '完成 Y'),
+    ];
+    const history = [
+      msg('h:u1', 'user', '做 X'),
+      tool('h:a1', 'toolu_1'),
+      msg('h:a2', 'assistant', '完成 X'),
+      head('h:o1', 'subagent'),
+      tool('h:a3', 'toolu_2'),
+      msg('h:a4', 'assistant', '完成 Y'),
+    ];
+    const merged = mergeReplayedHistory(bucket, history, ok(snap(ids(bucket))));
+    expect(ids(merged)).toEqual(['h:u1', 'h:a1', 'h:a2', 'h:o1', 'h:a3', 'h:a4']);
+  });
+
+  it('keeps live rows older than the history page BEFORE the page, not after it', () => {
+    const bucket = [
+      msg('cc-user-a-1', 'user', '很早的问题'),
+      tool('cc-s-a-t1-s1', 'toolu_old'),
+      msg('cc-s-a-t1-s2', 'assistant', '很早的回答'),
+      msg('cc-user-a-2', 'user', '做 X'),
+      tool('cc-s-a-t2-s1', 'toolu_1'),
+      msg('cc-s-a-t2-s2', 'assistant', '完成 X'),
+    ];
+    // The page starts at the second turn: the first one is older than the read window.
+    const history = [
+      msg('h:u2', 'user', '做 X'),
+      tool('h:a1', 'toolu_1'),
+      msg('h:a2', 'assistant', '完成 X'),
+    ];
+    const merged = mergeReplayedHistory(bucket, history, ok(snap(ids(bucket))));
+    expect(ids(merged)).toEqual([
+      'cc-user-a-1',
+      'cc-s-a-t1-s1',
+      'cc-s-a-t1-s2',
+      'h:u2',
+      'h:a1',
+      'h:a2',
+    ]);
+  });
+
+  it('a message sent after the resume still goes after the page', () => {
+    const bucket = [tool('cc-s-a-t1-s1', 'toolu_1'), msg('cc-user-b-1', 'user', '新消息')];
+    const history = [tool('h:a1', 'toolu_1')];
+    const merged = mergeReplayedHistory(bucket, history, ok(snap(['cc-s-a-t1-s1'])));
+    expect(ids(merged)).toEqual(['h:a1', 'cc-user-b-1']);
   });
 });

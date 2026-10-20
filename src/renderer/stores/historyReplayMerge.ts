@@ -158,6 +158,8 @@ export interface ReplayMergeMessage {
   attachments?: readonly unknown[];
   /** History rows of a DSH session: the id the row's live copy carried (P1-4d1). */
   liveMessageId?: string;
+  /** An engine-started turn's head (a subagent's or a job's wake-up, a schedule). */
+  origin?: { kind: string };
 }
 
 export interface ResumeSnapshot {
@@ -421,6 +423,85 @@ function foldExactLiveIds<T extends ReplayMergeMessage>(
 }
 
 /**
+ * Decision 206: a tool step by its calls' ids. The model's call ids are the same
+ * on the live step and on the transcript row it was saved as, so they identify
+ * the row exactly where the Claude SDK replay carries no `liveMessageId`. A step
+ * folds onto the one unclaimed row that holds every one of its calls.
+ */
+function foldByToolCallIds<T extends ReplayMergeMessage>(
+  runtime: readonly T[],
+  historyMessages: readonly T[],
+  candidateIds: ReadonlySet<string>,
+  claimed: Set<number>,
+  sourceGone: boolean,
+  foldedAt: Map<string, number>
+): T[] {
+  const rowOfCall = new Map<string, number>();
+  historyMessages.forEach((row, index) => {
+    for (const block of row.blocks) {
+      if (block.type === 'tool_call' && block.toolCallId) rowOfCall.set(block.toolCallId, index);
+    }
+  });
+  if (rowOfCall.size === 0) return [...runtime];
+  const remaining: T[] = [];
+  for (const message of runtime) {
+    const calls = message.blocks
+      .filter((block) => block.type === 'tool_call' && block.toolCallId)
+      .map((block) => block.toolCallId as string);
+    const rows = new Set(calls.map((call) => rowOfCall.get(call)));
+    const at = rows.size === 1 ? [...rows][0] : undefined;
+    if (
+      !candidateIds.has(message.id) ||
+      calls.length === 0 ||
+      at === undefined ||
+      claimed.has(at) ||
+      historyMessages[at]?.role !== message.role ||
+      (message.attachments?.length ?? 0) > 0 ||
+      (!sourceGone && !isSettled(message))
+    ) {
+      remaining.push(message);
+      continue;
+    }
+    claimed.add(at);
+    foldedAt.set(message.id, at);
+  }
+  return remaining;
+}
+
+/**
+ * Decision 206: an engine turn's head carries no text to match. It folds onto
+ * the history head of the same kind that stands right before the row its next
+ * live message folded onto, with no user row in between.
+ */
+function foldOriginHeads<T extends ReplayMergeMessage>(
+  kept: readonly T[],
+  runtime: readonly T[],
+  historyMessages: readonly T[],
+  candidateIds: ReadonlySet<string>,
+  claimed: Set<number>,
+  foldedAt: Map<string, number>
+): T[] {
+  return kept.filter((message) => {
+    if (!candidateIds.has(message.id) || message.role !== 'user' || !message.origin) return true;
+    if (message.blocks.length > 0) return true;
+    const next = runtime[runtime.indexOf(message) + 1];
+    const nextAt = next ? foldedAt.get(next.id) : undefined;
+    if (nextAt === undefined) return true;
+    for (let i = nextAt - 1; i >= 0; i -= 1) {
+      const row = historyMessages[i];
+      if (!row || row.role !== 'user') continue;
+      if (claimed.has(i) || row.origin?.kind !== message.origin.kind || row.blocks.length > 0) {
+        return true;
+      }
+      claimed.add(i);
+      foldedAt.set(message.id, i);
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
  * True when the message would be foldable except for attachments. These are
  * "replacement foldable": when matched against a history row, the history
  * copy is REPLACED by the runtime copy (preserving attachment metadata)
@@ -482,6 +563,17 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
     exact.replacements.size > 0
       ? rows.map((row, index) => exact.replacements.get(index) ?? row)
       : [...rows];
+  // Decision 206: where each folded runtime message went, for the engine heads
+  // and for keeping live rows older than the page in front of it.
+  const foldedAt = new Map<string, number>();
+  const exactRemaining = foldByToolCallIds(
+    exact.remaining,
+    historyMessages,
+    candidateIds,
+    exact.claimed,
+    options.sourceGone === true,
+    foldedAt
+  );
 
   // Guard 3a: the anchor's PRESENCE proves `h:<jsonl-uuid>` id continuity
   // across re-reads. When the anchor row is GONE from this replay (head
@@ -493,7 +585,7 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
     ? historyMessages.findIndex((history) => history.id === anchorHistoryId)
     : -1;
   if (anchorHistoryId && anchorIndex < 0) {
-    return [...withExact(historyMessages), ...exact.remaining];
+    return [...withExact(historyMessages), ...exactRemaining];
   }
 
   // Guard 3d (alignment probe): the snapshot's bucket order IS the previous
@@ -525,7 +617,7 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
   // attachment metadata (thumbnails, names) survives the merge.
   const historyReplacements = exact.replacements;
 
-  for (const message of exact.remaining) {
+  for (const message of exactRemaining) {
     if (!candidateIds.has(message.id)) {
       kept.push(message);
       continue;
@@ -585,6 +677,7 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
       continue;
     }
     claimed.add(matchedAt);
+    foldedAt.set(message.id, matchedAt);
     if (replaceFold) {
       historyReplacements.set(matchedAt, message);
     }
@@ -595,5 +688,16 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
       ? historyMessages.map((h, i) => historyReplacements.get(i) ?? h)
       : historyMessages;
 
-  return [...mergedHistory, ...kept];
+  const left = foldOriginHeads(kept, runtime, historyMessages, candidateIds, claimed, foldedAt);
+  // Decision 206: live rows older than everything the page took back are older
+  // than the page itself (the read window starts after them): they go in front
+  // of it, so they keep their turns. Everything else stays after the page.
+  // Only without an anchor: with one, every live row came after the hydrated page.
+  const firstFolded = runtime.findIndex((message) => foldedAt.has(message.id));
+  if (anchorHistoryId !== null || firstFolded <= 0) return [...mergedHistory, ...left];
+  const older = left.filter(
+    (message) => candidateIds.has(message.id) && runtime.indexOf(message) < firstFolded
+  );
+  const newer = left.filter((message) => !older.includes(message));
+  return [...older, ...mergedHistory, ...newer];
 }
