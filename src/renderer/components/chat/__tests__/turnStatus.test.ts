@@ -357,10 +357,10 @@ describe('[TS-1] the slow/stalled split keeps kind and copy same-sourced (F456 �
  * measured data, and this repo does not estimate one from characters.
  */
 describe('[F4-3] deriveTurnStatus feeds the prompt counter into the waiting copy', () => {
-  it('[F4-3] the awaiting tier carries the ↑ prompt size from the send snapshot', () => {
+  it('[F4-3] the awaiting tier no longer prints the ↑ prompt size (user, 2026-10-19)', () => {
     const status = deriveTurnStatus({ ...base, hasBlocks: false, promptChars: 428 });
     expect(status?.kind).toBe('awaiting');
-    expect(status?.text).toContain('↑ 428 chars');
+    expect(status?.text).not.toContain('↑');
   });
 
   it('[F4-3] a turn with no snapshot shows no arrow at all', () => {
@@ -373,8 +373,8 @@ describe('[F4-3] deriveTurnStatus feeds the prompt counter into the waiting copy
   });
 });
 
-describe('F06 reply count on the turn head', () => {
-  it('shows the ↓ on the streaming turn head and nothing before text arrives', () => {
+describe('F06 reply count on the turn head (retired 2026-10-19: the clock alone)', () => {
+  it('prints no ↓ on the streaming turn head', () => {
     const base = {
       active: true,
       phase: 'awaiting' as const,
@@ -392,10 +392,10 @@ describe('F06 reply count on the turn head', () => {
     // `hasBlocks` is what makes this `streaming`; the count is what the head
     // now says about it.
     expect(streaming?.kind).toBe('streaming');
-    expect(streaming?.text).toContain('↓ 128 chars');
+    expect(streaming?.text).toBe('6s');
   });
 
-  it('grows with the stream and keeps the clock beside it', () => {
+  it('keeps the bare clock as the stream grows', () => {
     const head = (replyChars: number, elapsedSeconds: number) =>
       deriveTurnStatus({
         active: true,
@@ -410,7 +410,7 @@ describe('F06 reply count on the turn head', () => {
     // Blocks are arriving but no prose yet (thinking / a tool call): the head
     // is the bare clock it has always been.
     expect(head(0, 3)).toBe('3s');
-    expect(head(128, 6)).toBe('↓ 128 chars · 6s');
-    expect(head(1200, 9)).toBe('↓ 1.2k chars · 9s');
+    expect(head(128, 6)).toBe('6s');
+    expect(head(1200, 9)).toBe('9s');
   });
 });

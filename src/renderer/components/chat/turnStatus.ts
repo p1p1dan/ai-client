@@ -5,7 +5,6 @@ import {
   SLOW_WAIT_HINT_SECONDS,
   STALLED_HINT_SECONDS,
 } from './attachments';
-import { replyCharsLabel } from './countFormat';
 
 /**
  * T-31 turn-head status (reply-anatomy spec §3 / §4.7).
@@ -164,9 +163,8 @@ export function deriveTurnStatus(
     // therefore be a count that is never on screen while the thing it counts is
     // happening. `replyCharsLabel` keeps it the same clause the waiting line
     // uses, so the two cannot word it differently.
-    const replyLabel = replyCharsLabel(input.replyChars ?? 0, t);
-    const clock = formatElapsedClock(elapsed);
-    return { kind: 'streaming', text: replyLabel ? `${replyLabel} · ${clock}` : clock };
+    // User, 2026-10-19: the clock alone, no `↓` count.
+    return { kind: 'streaming', text: formatElapsedClock(elapsed) };
   }
 
   // Both thresholds are imported, never re-declared, and tested in the SAME

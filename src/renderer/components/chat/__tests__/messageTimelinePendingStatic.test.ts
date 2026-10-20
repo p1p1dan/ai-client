@@ -176,7 +176,7 @@ describe('[F4-9] the pending turn head carries the ↑ prompt count (F456 §7.4)
     expect(body).not.toContain('sendStatus?.promptChars');
   });
 
-  it('[F4-9] those inputs produce a waiting line reading `↑ 428 chars`', () => {
+  it('[F4-9] those inputs produce a waiting line with no ↑ count (user, 2026-10-19)', () => {
     const status = deriveTurnStatus({
       active: true,
       phase: 'awaiting',
@@ -189,6 +189,6 @@ describe('[F4-9] the pending turn head carries the ↑ prompt count (F456 §7.4)
       hasBlocks: false,
     });
     expect(status?.kind).toBe('awaiting');
-    expect(status?.text).toContain('↑ 428 chars');
+    expect(status?.text).not.toContain('↑');
   });
 });

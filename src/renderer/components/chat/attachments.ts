@@ -9,7 +9,6 @@
  */
 import { englishTranslate, type Translate } from '@shared/i18n';
 import type { ChatSendAttachment } from '@/stores/chatSessions';
-import { formatCharCount, replyCharsLabel } from './countFormat';
 // T093: the retry countdown's vocabulary lives with the banner that introduced
 // it (`Next attempt in Ns` / `Retrying now…`), and this line borrows it rather
 // than growing a second copy — the two render eight pixels apart.
@@ -518,31 +517,17 @@ export function composerSendingLine(
       'gateway latency varies. Stop to abort.'
     )}`;
   }
-  const promptChars = Math.max(0, Math.floor(input.promptChars ?? 0));
-  const replyChars = Math.max(0, Math.floor(input.replyChars ?? 0));
-  // Both arrows carry their unit word because both are exact figures the
-  // renderer counted from text it holds.
-  //
-  // F06 narrowed a rule that used to be written here as an absolute: "there is
-  // no `↓` counterpart, Pi reports usage only at `turn_end`". That holds for
-  // TOKENS and cost — the Host is the only thing that can compute them, and it
-  // does so once, at the end — so this line still states neither while a turn
-  // runs. It never held for CHARACTERS: assistant prose arrives block by block
-  // and the renderer already has it, so `↓` is as countable mid-turn as `↑` was
-  // at the commit point. The Run surface keeps the settled per-turn totals.
-  const sentCount = promptChars > 0 ? ` · ↑ ${formatCharCount(promptChars)} ${t('chars')}` : '';
-  // Ordered `↑` then `↓`, question before answer — the same order the turn
-  // itself happened in, and the order that lets the two be read as a pair.
-  const replyLabel = replyCharsLabel(replyChars, t);
-  const replyCount = replyLabel ? ` · ${replyLabel}` : '';
+  // User, 2026-10-19: no ↑/↓ counts on the turn's status lines any more; they
+  // read as token figures that matched nothing. `promptChars` / `replyChars`
+  // are accepted and ignored.
   const verb = t(waitingVerb(elapsed));
   if (input.attachmentCount > 0) {
     const size = formatAttachmentSize(input.attachmentBytes);
-    return `${verb}…${sentCount}${replyCount} · ${t('Sent {{size}}', {
+    return `${verb}… · ${t('Sent {{size}}', {
       size,
     })}${retrySuffix} · ${elapsed}s`;
   }
-  return `${verb}…${sentCount}${replyCount}${retrySuffix} · ${elapsed}s`;
+  return `${verb}…${retrySuffix} · ${elapsed}s`;
 }
 
 /**

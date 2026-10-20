@@ -377,7 +377,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
   // NOT promise a finish time (`:309-312` here says a fake number is worse than
   // none). The proposition this replaces it with is the SHAPE of the line, so
   // the verb is free to rotate without churning an assertion every 6 seconds.
-  it('leads the text-only waiting line with a verb, counts the prompt, and predicts nothing', () => {
+  it('leads the text-only waiting line with a verb, no ↑ count (2026-10-19), and predicts nothing', () => {
     const line = composerSendingLine({
       phase: 'awaiting',
       elapsedSeconds: 12,
@@ -387,14 +387,13 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
       promptChars: 428,
     });
     expect(VERBS).toContain(verbOf(line));
-    expect(line).toContain('↑ 428 chars');
+    expect(line).not.toContain('↑');
     expect(line).toContain('· 12s');
     expect(line).not.toContain('up to');
   });
 
-  // F06. The `↓` is the ONE new fact on this line, so its wording, its unit
-  // word and its position relative to `↑` are pinned; the verb still rotates.
-  it('counts the reply once assistant text starts arriving', () => {
+  // User, 2026-10-19: the line no longer counts the prompt or the reply.
+  it('prints no ↑/↓ count even once assistant text is arriving', () => {
     const line = composerSendingLine({
       phase: 'awaiting',
       elapsedSeconds: 6,
@@ -405,7 +404,8 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
       replyChars: 128,
     });
     expect(VERBS).toContain(verbOf(line));
-    expect(line).toContain('↑ 2 chars · ↓ 128 chars');
+    expect(line).not.toContain('↑');
+    expect(line).not.toContain('↓');
     expect(line).toContain('· 6s');
   });
 
@@ -424,7 +424,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
     expect(composerSendingLine({ ...base, replyChars: 0 })).not.toContain('↓');
   });
 
-  it('keeps the attachment clause after both counts', () => {
+  it('keeps the attachment clause right after the verb', () => {
     const line = composerSendingLine({
       phase: 'awaiting',
       elapsedSeconds: 31,
@@ -434,7 +434,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
       promptChars: 428,
       replyChars: 1200,
     });
-    expect(line).toContain('↑ 428 chars · ↓ 1.2k chars · Sent 152.0 KB');
+    expect(line).toMatch(/… · Sent 152\.0 KB · 31s$/);
   });
 
   // Retired for the same reason; the attachment fact itself is unchanged and
@@ -450,7 +450,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
       promptChars: 428,
     });
     expect(line).toContain('Sent 152.0 KB');
-    expect(line).toContain('↑ 428 chars');
+    expect(line).not.toContain('↑');
     expect(line).toContain('· 31s');
     expect(line).not.toContain('up to');
     expect(VERBS).toContain(verbOf(line));
@@ -541,7 +541,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
     });
     expect(line).toContain('· Retry 3/10');
     expect(VERBS).toContain(verbOf(line));
-    expect(line).toContain('↑ 428 chars');
+    expect(line).not.toContain('↑');
     expect(line).toContain('· 12s');
   });
 
@@ -749,58 +749,27 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
   });
 
   /**
-   * `[F4-3]` The prompt counter: presence, omission and the actual value.
-   *
-   * The value half is what makes this load-bearing — an implementation that
-   * hard-coded `↑ 1 chars` would satisfy every presence check.
-   *
-   * There is no `↓` reply counter to assert: it was retired with the Claude
-   * host's interim usage channel (T35). Pi reports usage only at `turn_end`,
-   * and this repo does not estimate tokens from character counts, so the line
-   * can state nothing about a reply that is still arriving. The negative
-   * assertions below hold that line.
+   * `[F4-3]` User, 2026-10-19: the prompt counter is gone. Whatever
+   * `promptChars` / `replyChars` say, the line prints no `↑` and no `↓`.
    */
-  it('[F4-3] the prompt counter appears, omits and formats by its own input', () => {
+  it('[F4-3] no prompt or reply counter, whatever the inputs', () => {
     const bare = waitingAt(12);
     expect(bare).not.toContain('↑');
     expect(bare).not.toContain('↓');
-
-    const withPrompt = composerSendingLine({
-      phase: 'awaiting',
-      elapsedSeconds: 12,
-      budgetMs: 45_000,
-      attachmentCount: 0,
-      attachmentBytes: 0,
-      promptChars: 428,
-    });
-    expect(withPrompt).toContain('↑ 428 chars');
-    expect(withPrompt).not.toContain('↓');
-
-    // Above the 1000 boundary, still carrying its unit word (§7.4).
-    expect(
-      composerSendingLine({
+    for (const promptChars of [0, 428, 1800]) {
+      const line = composerSendingLine({
         phase: 'awaiting',
         elapsedSeconds: 12,
         budgetMs: 45_000,
         attachmentCount: 0,
         attachmentBytes: 0,
-        promptChars: 1800,
-      })
-    ).toContain('↑ 1.8k chars');
-
-    // A session already running when this window opened has no snapshot, so
-    // `promptChars` falls back to 0 — which must read as "unknown", not as a
-    // user who sent an empty prompt.
-    expect(
-      composerSendingLine({
-        phase: 'awaiting',
-        elapsedSeconds: 12,
-        budgetMs: 45_000,
-        attachmentCount: 0,
-        attachmentBytes: 0,
-        promptChars: 0,
-      })
-    ).not.toContain('↑');
+        promptChars,
+        replyChars: 64,
+      });
+      expect(line).not.toContain('↑');
+      expect(line).not.toContain('↓');
+      expect(line).toContain('· 12s');
+    }
   });
 
   /**
@@ -833,7 +802,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
     expect(cheap).toContain('· 31s');
     expect(cheap).toContain('Sent 152.0 KB');
     expect(cheap).toContain('· Retry 3/10');
-    expect(cheap).toContain('↑ 428 chars');
+    expect(cheap).not.toContain('↑');
   });
 
   /**
@@ -846,9 +815,8 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
    */
   it('[F4-5] neither attachments.ts nor anything it imports locally can read a clock or a die', () => {
     const closure = localImportClosure('attachments.ts');
-    // The new helper is genuinely inside the scanned set — otherwise this test
-    // passes by scanning nothing that changed.
-    expect(closure).toContain('countFormat.ts');
+    // The scan reaches past this file — otherwise it passes by scanning one file.
+    expect(closure.length).toBeGreaterThan(1);
     for (const file of closure) {
       const code = stripComments(readFileSync(path.join(CHAT_DIR, file), 'utf8'), file);
       for (const source of [
