@@ -334,6 +334,13 @@ export interface MessageStartedEvent extends RuntimeEventBase {
      * message is then not something the user typed; see `TurnOrigin`.
      */
     origin?: TurnOrigin;
+    /**
+     * Decision 206 (Claude SDK engine; optional-field addition): the id the
+     * CLI's transcript will give this message — a user message's uuid, an
+     * assistant step's API message id. The replayed row carries the same
+     * value (`HistoryMessage.transcriptId`).
+     */
+    transcriptId?: string;
   };
 }
 

@@ -2104,3 +2104,101 @@ describe('ids across hosts of one chat (decision 204)', () => {
     await rt.dispose();
   });
 });
+
+// ---- Decision 206: the transcript id a reopened chat folds its live rows by ----
+
+describe('transcript ids (decision 206)', () => {
+  type Pushed = { uuid: string; priority?: string };
+  const pushed = (rt: InstanceType<typeof ClaudeSdkSessionRuntime>) =>
+    (rt as unknown as { input: { items: Pushed[] } }).input.items;
+  const started_ = (role: string) =>
+    events
+      .filter((e) => e.type === 'message.started' && e.payload.role === role)
+      .map((e) => (e as Extract<RuntimeEventDraft, { type: 'message.started' }>).payload);
+
+  it('a sent message is echoed with the uuid it went to the CLI with', async () => {
+    const { rt } = await started();
+    await send(rt);
+    const [sent] = pushed(rt);
+    expect(sent?.uuid).toMatch(/^[0-9a-f-]{36}$/);
+    expect(started_('user')).toEqual([expect.objectContaining({ transcriptId: sent?.uuid })]);
+    await rt.dispose();
+  });
+
+  it('a Ctrl+Enter message is echoed, once taken, with its own uuid', async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    rt.interject({ logicalSessionId: 'chat-1', attemptId: 'late-1', text: 'late' });
+    const uuid = pushed(rt).find((item) => item.priority === 'next')?.uuid;
+    q.push({
+      type: 'stream_event',
+      parent_tool_use_id: null,
+      user_message_uuids: [uuid],
+      event: { type: 'message_start', message: { id: 'msg_2', usage: {} } },
+    });
+    await flush();
+    expect(started_('user').map((p) => p.transcriptId)).toEqual([pushed(rt)[0]?.uuid, uuid]);
+    await rt.dispose();
+  });
+
+  it('a step carries its API message id, and none when the gateway sent none', async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    q.push({
+      type: 'stream_event',
+      parent_tool_use_id: null,
+      event: { type: 'message_start', message: { id: 'msg_1', usage: {} } },
+    });
+    q.push({
+      type: 'stream_event',
+      parent_tool_use_id: null,
+      event: { type: 'message_start', message: { usage: {} } },
+    });
+    await flush();
+    const steps = started_('assistant');
+    expect(steps[0]).toMatchObject({ transcriptId: 'msg_1' });
+    expect(steps[1]).not.toHaveProperty('transcriptId');
+    q.end();
+    await rt.dispose();
+  });
+
+  it('the replayed rows carry the same ids: the entry uuid, the API message id', async () => {
+    const { getSessionMessages } = await import('@anthropic-ai/claude-agent-sdk');
+    const rt = runtime();
+    await rt.bootstrap();
+    (rt as unknown as { stub: { started: boolean } }).stub.started = true;
+    vi.mocked(getSessionMessages).mockResolvedValueOnce([
+      { type: 'user', uuid: 'u-1', message: { role: 'user', content: '做 X' } },
+      {
+        type: 'assistant',
+        uuid: 'e-1',
+        message: { id: 'msg_1', content: [{ type: 'text', text: '先看一下。' }] },
+      },
+      {
+        type: 'assistant',
+        uuid: 'e-2',
+        message: {
+          id: 'msg_1',
+          content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: {} }],
+        },
+      },
+      {
+        type: 'user',
+        uuid: 'u-2',
+        message: { role: 'user', content: '<task-notification><summary>Agent done</summary>' },
+      },
+      { type: 'assistant', uuid: 'e-3', message: { content: [{ type: 'text', text: '好' }] } },
+    ] as never);
+    const { page } = await rt.history({ logicalSessionId: 'chat-1' });
+    expect(page.messages.map((m) => [m.id, m.transcriptId])).toEqual([
+      ['h:u-1', 'u-1'],
+      // One row per API message, under the id its live step carried.
+      ['h:e-1', 'msg_1'],
+      // An engine turn's head: the CLI minted it, nothing live names it.
+      ['h:u-2', undefined],
+      // No API message id: nothing to vouch for.
+      ['h:e-3', undefined],
+    ]);
+    await rt.dispose();
+  });
+});

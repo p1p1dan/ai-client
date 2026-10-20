@@ -1045,12 +1045,13 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       });
     }
     this.emitStatus('running');
-    this.echoUser(input.attemptId, input.text, input.attachments);
+    const uuid = randomUUID();
+    this.echoUser(input.attemptId, input.text, input.attachments, uuid);
     this.input?.push({
       type: 'user',
       message: { role: 'user', content: userContent(input.text, input.attachments) },
       parent_tool_use_id: null,
-      uuid: randomUUID(),
+      uuid,
     });
     return { accepted: true, requestId: input.requestId };
   }
@@ -1315,10 +1316,12 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     this.backgroundEdges.clear();
   }
 
+  /** `uuid`: the one the message went to the CLI with, which its transcript row keeps (decision 206). */
   private echoUser(
     attemptId: string | undefined,
     text: string,
-    attachments?: SessionAttachment[]
+    attachments: SessionAttachment[] | undefined,
+    uuid: string
   ): void {
     this.userMessageCount += 1;
     const messageId = `cc-user-${this.idTag}-${this.userMessageCount}`;
@@ -1327,6 +1330,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       payload: {
         messageId,
         role: 'user',
+        transcriptId: uuid,
         ...(attemptId ? { attemptId } : {}),
         ...(attachments?.length
           ? {
@@ -1598,6 +1602,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           payload: {
             messageId,
             role: 'assistant',
+            // Decision 206: the transcript keeps this id on every row of the step.
+            ...(typeof apiMessage.id === 'string' ? { transcriptId: apiMessage.id } : {}),
             ...(this.modelRef ? { model: this.modelRef } : {}),
           },
         });
@@ -2015,7 +2021,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       const pending = turn.interjections.get(uuid);
       if (!pending) continue;
       turn.interjections.delete(uuid);
-      this.echoUser(pending.attemptId, pending.text, pending.attachments);
+      this.echoUser(pending.attemptId, pending.text, pending.attachments, uuid);
     }
   }
 
@@ -2725,6 +2731,9 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           id: `h:${entry.uuid}`,
           entryId: entry.uuid,
           role,
+          // Decision 206: a message sent from here keeps the uuid it went to the CLI with
+          // (a Ctrl+Enter one too: the SDK's reader names it by its `source_uuid`).
+          ...(role === 'user' ? { transcriptId: entry.uuid } : {}),
           blocks: [{ type: 'text', id: `${entry.uuid}-text`, text }],
         });
         continue;
@@ -2747,6 +2756,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           id: `h:${entry.uuid}`,
           entryId: entry.uuid,
           role: 'assistant',
+          // Decision 206: the API message id its live step carried.
+          ...(typeof message.id === 'string' ? { transcriptId: message.id } : {}),
           ...(typeof message.model === 'string' ? { model: message.model } : {}),
           blocks: [],
         };

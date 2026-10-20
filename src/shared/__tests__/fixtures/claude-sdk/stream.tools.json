@@ -13,6 +13,7 @@
       "payload": {
         "messageId": "<user#1>",
         "role": "user",
+        "transcriptId": "<uuid#1>",
         "attemptId": "<attempt#1>"
       }
     },
@@ -35,6 +36,7 @@
       "payload": {
         "messageId": "<msg#1>",
         "role": "assistant",
+        "transcriptId": "msg_<uuid#2>",
         "model": "probe-gw/claude-opus-5-5"
       }
     },
@@ -113,6 +115,7 @@
       "payload": {
         "messageId": "<msg#4>",
         "role": "assistant",
+        "transcriptId": "msg_<uuid#3>",
         "model": "probe-gw/claude-opus-5-5"
       }
     },
@@ -202,6 +205,7 @@
       "payload": {
         "messageId": "<msg#6>",
         "role": "assistant",
+        "transcriptId": "msg_<uuid#4>",
         "model": "probe-gw/claude-opus-5-5"
       }
     },
@@ -249,6 +253,7 @@
       "payload": {
         "messageId": "<msg#7>",
         "role": "assistant",
+        "transcriptId": "msg_<uuid#5>",
         "model": "probe-gw/claude-opus-5-5"
       }
     },

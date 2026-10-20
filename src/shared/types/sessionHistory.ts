@@ -315,6 +315,15 @@ export interface HistoryMessage {
    */
   liveMessageId?: string;
   /**
+   * Decision 206 (Claude SDK engine): the id the CLI's transcript gives the
+   * message — a user message's entry uuid (the one it was sent with), an
+   * assistant step's API message id. The live copy carries the same value on
+   * `message.started`, so a replay names it exactly where `liveMessageId`
+   * cannot (a reopened host never knew the earlier one's live ids). Absent
+   * where the projection cannot vouch for it. Optional-field addition.
+   */
+  transcriptId?: string;
+  /**
    * dsh-rebase P1-7e (decision 140): on the placeholder row of a turn that
    * FAILED, what the log recorded about the failure — our code for it (the
    * one the live `session.failed` carried, `dshFailureErrorCode`) and the

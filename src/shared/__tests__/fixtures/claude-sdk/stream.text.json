@@ -34,6 +34,7 @@
       "payload": {
         "messageId": "<user#1>",
         "role": "user",
+        "transcriptId": "<uuid#1>",
         "attemptId": "<attempt#1>"
       }
     },
@@ -56,6 +57,7 @@
       "payload": {
         "messageId": "<msg#1>",
         "role": "assistant",
+        "transcriptId": "msg_<uuid#2>",
         "model": "probe-gw/claude-opus-5-5"
       }
     },

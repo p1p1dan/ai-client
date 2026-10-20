@@ -250,6 +250,12 @@ let events: Event[] = [];
 let scenarioEvents: Event[] = [];
 /** Decision 204: every message id any host of this run opened. */
 const openedIds = new Set<string>();
+/** Decision 206: `role` + transcript id of every message any host of this run opened with one. */
+const openedTranscriptIds = new Set<string>();
+const transcriptKeys = (list: readonly Event[]) =>
+  list
+    .filter((e) => e.type === 'message.started' && typeof e.payload?.transcriptId === 'string')
+    .map((e) => `${String(e.payload?.role)} ${String(e.payload?.transcriptId)}`);
 const waiters: Array<{
   test: (e: Event) => boolean;
   resolve: (e: Event) => void;
@@ -352,6 +358,7 @@ function startHost(): void {
       events.push(event);
       scenarioEvents.push(event);
       if (event.type === 'message.started') openedIds.add(String(event.payload?.messageId));
+      for (const key of transcriptKeys([event])) openedTranscriptIds.add(key);
       if (
         process.env.PROBE_VERBOSE &&
         !event.type.endsWith('.delta') &&
@@ -3320,6 +3327,8 @@ async function main(): Promise<void> {
         await send('CC-TEXT before the release');
         const first = await waitFor(terminal, 'reopen first turn end');
         const before = new Set(openedIds);
+        const firstKeys = transcriptKeys(events);
+        const earlierKeys = new Set(openedTranscriptIds);
         const file = sessionFile;
         if (!file) throw new Error('reopen: no session file');
         await restartHost(file);
@@ -3329,6 +3338,34 @@ async function main(): Promise<void> {
         const after = startedIds(events);
         const reused = after.filter((id) => before.has(id));
         console.log(`  ids before: ${before.size}; after: ${after.join(',')}`);
+        // Decision 206: the window folds the earlier host's rows into the reopened host's
+        // history by these ids, so its history must name every one of them.
+        const replay = await request<{
+          page: { messages: Array<{ role: string; transcriptId?: string }> };
+        }>('worker.history', { logicalSessionId, offset: 0, limit: 500 });
+        const named = new Set(
+          replay.page.messages
+            .filter((m) => m.transcriptId)
+            .map((m) => `${m.role} ${String(m.transcriptId)}`)
+        );
+        const missing = firstKeys.filter((key) => !named.has(key));
+        console.log(
+          `  transcript ids: last turn ${firstKeys.length} (missing ${missing.join(',') || 'none'}); ` +
+            `whole run ${[...earlierKeys].filter((key) => named.has(key)).length}/${earlierKeys.size} named`
+        );
+        check(
+          'reopen',
+          'the reopened history names the last turn by the ids its live rows carried',
+          firstKeys.some((key) => key.startsWith('user ')) &&
+            firstKeys.some((key) => key.startsWith('assistant ')) &&
+            missing.length === 0
+        );
+        check(
+          'reopen',
+          'the reopened history names every message of the run by its transcript id',
+          [...earlierKeys].every((key) => named.has(key)),
+          { reportOnly: true }
+        );
         check(
           'reopen',
           'the turn before the release completes',
