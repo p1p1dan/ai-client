@@ -45,7 +45,7 @@ function PopoverPopup({
       >
         <PopoverPrimitive.Popup
           className={cn(
-            'relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-lg border bg-popover bg-clip-padding text-popover-foreground shadow-lg transition-[width,height,scale,opacity] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-starting-style:scale-98 data-starting-style:opacity-0 dark:bg-clip-border dark:before:shadow-[0_-1px_--theme(--color-white/8%)]',
+            'relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-md bg-popover text-popover-foreground elev-popover transition-[width,height,scale,opacity] duration-150 ease-out data-starting-style:scale-98 data-starting-style:opacity-0',
             tooltipStyle &&
               'w-fit text-balance rounded-md text-xs shadow-black/5 shadow-md before:rounded-[calc(var(--radius-md)-1px)]',
             className
@@ -77,7 +77,7 @@ function PopoverClose({ ...props }: PopoverPrimitive.Close.Props) {
 function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
   return (
     <PopoverPrimitive.Title
-      className={cn('font-semibold text-lg leading-none', className)}
+      className={cn('font-semibold text-heading', className)}
       data-slot="popover-title"
       {...props}
     />
@@ -87,7 +87,7 @@ function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
 function PopoverDescription({ className, ...props }: PopoverPrimitive.Description.Props) {
   return (
     <PopoverPrimitive.Description
-      className={cn('text-muted-foreground text-sm', className)}
+      className={cn('text-muted-foreground text-ui', className)}
       data-slot="popover-description"
       {...props}
     />

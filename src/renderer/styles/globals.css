@@ -197,10 +197,21 @@
 
   --animate-skeleton: skeleton 2s -1s infinite linear;
   --animate-marquee: marquee 4s linear infinite alternate;
+  /* Design system v2 §6: the "waiting on you" dot. */
+  --animate-breathe: breathe 2.4s ease-in-out infinite;
 
   @keyframes skeleton {
     to {
       background-position: -200% 0;
+    }
+  }
+
+  @keyframes breathe {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
     }
   }
 
@@ -536,6 +547,18 @@
  * (This also fixes the previous three-rule stack, where the .dark override was
  * dead: `:root .current-diff-highlight` had equal specificity and came later.)
  */
+/*
+ * Design system v2 §1, §2.2: the one focus ring for hand-rolled controls -- a
+ * canvas-coloured gap, then the clay ring. coss components carry their own
+ * `focus-visible:ring-*`, which resolves to the same --ring.
+ */
+@utility focus-ring {
+  outline: none;
+  &:focus-visible {
+    box-shadow: 0 0 0 1px var(--surface-1), 0 0 0 2.5px var(--ring);
+  }
+}
+
 /* Design system v2 §5.1: elevation tiers. Buttons never take one. */
 @utility elev-sm {
   box-shadow: var(--elev-sm);
