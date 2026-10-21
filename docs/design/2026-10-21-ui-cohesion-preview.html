@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PiLab 界面风格迁移预览（issue #26，2026-10-21）</title>
+<!--
+  Throwaway preview for docs/plantree/plans/ui-cohesion/design-language.md.
+  "现状" reproduces today's chat surface from the real Flexoki tokens in
+  src/renderer/styles/globals.css; "新规范" applies the v2 rules. Values marked
+  as reference values follow open-claude-ui (MIT, Caho1).
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI Variable Text","Segoe UI","Ubuntu","Noto Sans",Arial,"PingFang SC","Microsoft YaHei UI","Noto Sans CJK SC",sans-serif;
+  background:var(--s0);color:var(--fg);font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:ui-monospace,"SF Mono","Cascadia Mono",Consolas,"Liberation Mono","Noto Sans CJK SC",monospace}
+.tnum{font-variant-numeric:tabular-nums}
+svg.i{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg.i16{width:16px;height:16px}
+
+/* ---------- control bar ---------- */
+.bar{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:8px 14px;
+  background:#1d1d1b;color:#e8e6e1;font-size:13px;border-bottom:1px solid #000}
+.bar b{font-weight:600;margin-right:4px}
+.seg{display:inline-flex;background:#333330;border-radius:6px;padding:2px}
+.seg button{all:unset;cursor:pointer;padding:2px 9px;border-radius:4px;color:#bdbab3}
+.seg button[aria-pressed=true]{background:#5a5853;color:#fff}
+.bar input[type=range]{width:110px;vertical-align:middle}
+.bar .note{opacity:.65}
+
+/* ---------- page ---------- */
+.page{padding:18px;display:flex;flex-direction:column;gap:18px;align-items:center}
+.tabs{display:flex;gap:6px}
+.tabs button{all:unset;cursor:pointer;padding:4px 12px;border-radius:6px;color:var(--fg2);font-size:14px}
+.tabs button[aria-pressed=true]{background:var(--ghost-sel);color:var(--fg)}
+.window{width:min(1240px,100%);height:760px;display:grid;grid-template-columns:52px 260px 1fr;
+  border-radius:12px;overflow:hidden;box-shadow:0 0 0 1px var(--bd),0 12px 40px rgba(0,0,0,.18);background:var(--s1)}
+.view{display:none}.view.on{display:block}
+.explain{width:min(1240px,100%);font-size:13px;color:var(--fg2);background:var(--s2);border-radius:10px;padding:12px 16px;box-shadow:0 0 0 1px var(--bd)}
+.explain h3{font-size:14px;color:var(--fg);margin-bottom:6px;font-weight:600}
+.explain li{margin-left:18px}
+
+/* rail + sidebar = surface 0 */
+.rail{background:var(--s0);border-right:1px solid var(--bd);display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:12px;color:var(--fg2)}
+.rail .r{width:32px;height:32px;display:grid;place-items:center;border-radius:6px}
+.rail .r.on{background:var(--ghost-sel);color:var(--fg)}
+.side{background:var(--s0);border-right:1px solid var(--bd);padding:10px 8px;overflow:hidden;display:flex;flex-direction:column;gap:2px}
+.side .search{height:30px;border-radius:6px;background:var(--fill);display:flex;align-items:center;gap:6px;padding:0 10px;color:var(--fg3);font-size:14px;margin-bottom:10px}
+.side .grp{font-size:12px;font-weight:500;color:var(--fg3);padding:10px 8px 4px}
+.side .row{height:30px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:4px;font-size:15px;color:var(--fg-soft);white-space:nowrap;overflow:hidden}
+.side .row span{overflow:hidden;text-overflow:ellipsis}
+.side .row:hover{background:var(--ghost-hover)}
+.side .row.on{background:var(--ghost-sel);color:var(--fg)}
+.side .dot{width:7px;height:7px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1.5px var(--fg3)}
+.side .dot.run{box-shadow:none;background:var(--brand);animation:breathe 2.4s ease-in-out infinite}
+
+/* center */
+.center{display:flex;flex-direction:column;min-width:0;background:var(--s1)}
+.chead{height:40px;flex:none;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid var(--bd);font-size:15px;font-weight:500}
+.chead .sub{color:var(--fg3);font-weight:400;font-size:14px}
+.scroll{flex:1;overflow:auto;padding:24px 0 12px}
+.col{max-width:760px;margin:0 auto;padding:0 28px}
+.turn{display:flex;flex-direction:column;gap:var(--item-gap);margin-bottom:var(--turn-gap)}
+.body{font-size:var(--chat-body);line-height:var(--lh)}
+.body p{text-wrap:pretty}
+.body code{font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:.86em;padding:1px 5px;border-radius:4px;background:var(--fill)}
+.proc{font-size:var(--chat-proc);line-height:1.5}
+
+/* user message */
+.u{align-self:flex-end;max-width:80%;font-size:var(--chat-body);line-height:var(--lh);background:var(--user-bg);padding:12px 16px;border-radius:var(--r-bubble)}
+.uwrap{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.uacts{display:flex;gap:2px;opacity:0;transition:opacity .15s}
+.uwrap:hover .uacts{opacity:1}
+
+/* ghost button */
+.gb{all:unset;cursor:pointer;height:26px;min-width:26px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:var(--fg2);font-size:13px;transition:background .15s,color .15s}
+.gb:hover{background:var(--ghost-hover);color:var(--fg)}
+
+/* thinking + tool rows: no frame */
+.think{display:flex;align-items:center;gap:6px;color:var(--fg2);font-size:var(--chat-proc);font-weight:500;cursor:pointer;width:fit-content}
+.think .t{color:var(--fg3);font-weight:400}
+.trow{display:flex;align-items:center;gap:8px;font-size:var(--chat-proc);color:var(--fg2);min-height:24px}
+.trow .name{color:var(--fg2);font-weight:500}
+.trow .arg{color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.trow .time{color:var(--fg3);font-size:12px}
+.trow .why{color:var(--danger)}
+
+/* status icon */
+.st{width:14px;height:14px;flex:none;display:inline-grid;place-items:center}
+.st.run::before{content:"";width:11px;height:11px;border-radius:50%;border:1.6px solid var(--fg3);border-top-color:transparent;animation:spin .8s linear infinite}
+.st.wait::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--brand);animation:breathe 2.4s ease-in-out infinite}
+.st.ok{color:var(--success)}.st.fail{color:var(--danger)}.st.stop{color:var(--fg2)}
+.st.stop::before{content:"";width:8px;height:8px;border-radius:2px;border:1.5px solid currentColor}
+.st.todo::before{content:"";width:9px;height:9px;border-radius:50%;border:1.5px solid var(--fg3)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* framed objects: code / diff */
+.block{border-radius:var(--r-lg);background:var(--s2);box-shadow:0 0 0 1px var(--bd);overflow:hidden}
+.block .bh{height:32px;display:flex;align-items:center;gap:8px;padding:0 6px 0 12px;border-bottom:1px solid var(--bd);font-size:13px;color:var(--fg2)}
+.block .bh .lang{font-family:ui-monospace,monospace;font-size:12px;letter-spacing:.03em}
+.block .bh .sp{flex:1}
+.block pre{font-family:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;font-size:13px;line-height:1.6;padding:10px 14px;overflow:auto;color:var(--fg)}
+.diff{font-family:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;font-size:13px;line-height:1.6}
+.diff .l{display:grid;grid-template-columns:34px 34px 16px 1fr;padding-right:12px}
+.diff .l>span:last-child{white-space:pre}
+.diff .n{color:var(--fg3);text-align:right;padding-right:8px;user-select:none}
+.diff .add{background:color-mix(in oklab,var(--success) 12%,transparent)}
+.diff .del{background:color-mix(in oklab,var(--danger) 12%,transparent)}
+.diff .fold{padding:3px 12px 3px 84px;color:var(--fg3);font-family:inherit;background:var(--fill);font-size:12px}
+.plus{color:var(--success)}.minus{color:var(--danger)}
+
+/* turn status line */
+.tstat{display:flex;align-items:center;gap:6px;font-size:var(--chat-proc);color:var(--fg3)}
+
+/* notice (Alert) */
+.alert{border-radius:var(--r-md);padding:8px 12px;font-size:14px;display:flex;gap:10px;align-items:flex-start;
+  background:color-mix(in oklab,var(--tone) 6%,var(--s2));box-shadow:0 0 0 1px color-mix(in oklab,var(--tone) 28%,var(--s2))}
+.alert .at{font-weight:500;color:var(--fg)}
+.alert .ab{color:var(--fg2)}
+.alert svg{color:var(--tone);margin-top:3px}
+.tone-err{--tone:var(--danger)}.tone-warn{--tone:var(--warn)}.tone-info{--tone:var(--info)}
+.lite{display:flex;align-items:center;gap:8px;font-size:var(--chat-proc);color:var(--fg3)}
+.lite::before,.lite::after{content:"";height:1px;flex:1;background:var(--bd)}
+
+/* dock card */
+.dock{border-radius:var(--r-md);background:var(--s2);box-shadow:0 0 0 1px var(--dock-bd,var(--bd)),var(--sh-sm);overflow:hidden}
+.dock.pending{--dock-bd:color-mix(in oklab,var(--brand) 45%,var(--s2))}
+.dock.risk{--dock-bd:color-mix(in oklab,var(--danger) 45%,var(--s2))}
+.dh{height:32px;display:flex;align-items:center;gap:8px;padding:0 12px;font-size:15px;font-weight:500}
+.dh .sp{flex:1}
+.tag{font-size:12px;font-weight:500;padding:1px 6px;border-radius:4px;background:var(--fill);color:var(--fg2)}
+.tag.risk{background:color-mix(in oklab,var(--danger) 12%,var(--s2));color:var(--danger)}
+.db{padding:4px 16px 12px;font-size:14px;color:var(--fg2)}
+.db .cmd{margin-top:6px;font-family:ui-monospace,monospace;font-size:13px;color:var(--fg);background:var(--fill);border-radius:6px;padding:6px 10px}
+.df{display:flex;justify-content:flex-end;gap:6px;padding:8px 10px;border-top:1px solid var(--bd)}
+.btn{all:unset;cursor:pointer;height:28px;padding:0 12px;border-radius:6px;font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:6px;transition:background .15s}
+.btn.ghost{color:var(--fg2)}.btn.ghost:hover{background:var(--ghost-hover);color:var(--fg)}
+.btn.sec{background:var(--fill);color:var(--fg)}.btn.sec:hover{background:var(--ghost-sel)}
+.btn.pri{background:var(--brand);color:var(--on-brand)}.btn.pri:hover{filter:brightness(1.07)}
+.opt{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:6px;margin:0 -10px}
+.opt:hover{background:var(--ghost-hover)}
+.opt .k{font-family:ui-monospace,monospace;font-size:12px;min-width:20px;height:20px;border-radius:4px;display:grid;place-items:center;background:var(--fill);color:var(--fg2)}
+.opt b{font-weight:500;color:var(--fg)}
+
+/* strips */
+.strip{border-radius:var(--r-md);background:var(--s2);box-shadow:0 0 0 1px var(--bd)}
+.strip .dh{font-size:14px}
+
+/* composer */
+.cwrap{padding:0 28px 18px;max-width:816px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:8px}
+.composer{background:var(--s3);border-radius:var(--r-composer);box-shadow:var(--sh-composer);transition:box-shadow .15s}
+.composer:hover{box-shadow:var(--sh-composer-hover)}
+.composer:focus-within{box-shadow:var(--sh-composer-focus)}
+.composer textarea{all:unset;display:block;width:100%;box-sizing:border-box;padding:14px 16px 4px;font-size:var(--chat-body);line-height:var(--lh);min-height:calc(var(--chat-body)*var(--lh-n)*2 + 18px);color:var(--fg)}
+.composer textarea::placeholder{color:var(--fg3)}
+.ctool{display:flex;align-items:center;gap:2px;padding:6px 8px 8px}
+.ctool .sp{flex:1}
+.chip{all:unset;cursor:pointer;height:28px;padding:0 8px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;font-size:15px;color:var(--fg2)}
+.chip:hover{background:var(--ghost-hover);color:var(--fg)}
+.send{all:unset;cursor:pointer;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--brand);color:var(--on-brand)}
+
+/* home */
+.home{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:28px;padding:0 28px 12vh}
+.home h1{font-family:var(--display-font);font-size:30px;font-weight:400;color:var(--fg2);text-align:center;text-wrap:balance;letter-spacing:.01em}
+.home h1 b{color:var(--fg);font-weight:500}
+.home .cwrap{padding:0}
+.recent{width:100%;max-width:760px}
+.recent .grp{font-size:12px;font-weight:500;color:var(--fg3);padding:0 8px 4px}
+.recent .row{height:32px;display:flex;align-items:center;gap:10px;padding:0 8px;border-radius:6px;font-size:15px;color:var(--fg-soft)}
+.recent .row:hover{background:var(--ghost-hover)}
+.recent .row .t{margin-left:auto;color:var(--fg3);font-size:13px}
+
+/* gallery */
+.gallery{padding:24px 28px;display:grid;grid-template-columns:1fr 1fr;gap:20px;overflow:auto;height:100%}
+.gallery section{display:flex;flex-direction:column;gap:10px}
+.gallery h4{font-size:12px;font-weight:500;color:var(--fg3)}
+.srow{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--fg2)}
+.srow span{display:inline-flex;align-items:center;gap:6px}
+.subw{border-radius:var(--r-lg);background:var(--s3);box-shadow:var(--sh-popover);overflow:hidden}
+.subw .row{height:30px;display:flex;align-items:center;gap:8px;padding:0 12px;font-size:14px;color:var(--fg2)}
+.subw .row:hover{background:var(--ghost-hover)}
+.subw .row .t{margin-left:auto;color:var(--fg3);font-size:12px}
+.menu{border-radius:var(--r-md);background:var(--s3);box-shadow:var(--sh-popover);padding:4px;width:300px}
+.menu .mi{height:30px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:4px;font-size:15px;color:var(--fg)}
+.menu .mi .d{color:var(--fg3);font-size:13px;margin-left:auto}
+.menu .mi.on{background:var(--ghost-hover)}
+.menu .sep{height:1px;background:var(--bd);margin:4px -4px}
+kbd{font-family:ui-monospace,monospace;font-size:11px;padding:0 4px;border-radius:4px;background:var(--fill);color:var(--fg2);box-shadow:inset 0 -1px 0 var(--bd)}
+
+/* =====================================================================
+   "现状": today's composition, reproduced from the current classes.
+   ===================================================================== */
+[data-style=old] .u{border-radius:10px;border-top-right-radius:4px;box-shadow:0 0 0 1px var(--input);padding:8px 14px}
+[data-style=old] .uacts{display:none}
+[data-style=old] .composer{border-radius:12px;box-shadow:0 0 0 1px var(--bd)}
+[data-style=old] .composer:hover,[data-style=old] .composer:focus-within{box-shadow:0 0 0 1px var(--input)}
+[data-style=old] .send{border-radius:50%}
+[data-style=old] .block{border-radius:6px;background:var(--s2)}
+[data-style=old] .block .bh{height:26px}
+[data-style=old] .diff .n{display:none}
+[data-style=old] .diff .l{grid-template-columns:16px 1fr;padding-left:8px}
+[data-style=old] .diff .fold{display:none}
+[data-style=old] .diff .ctx-hidden{display:grid}
+.diff .ctx-hidden{display:none}
+[data-style=old] .trow.failed,[data-style=old] .trow.failed .name,[data-style=old] .trow.failed .arg{color:var(--danger)}
+[data-style=old] .trow .st.fail{display:none}
+[data-style=old] .trow .why{display:none}
+[data-style=old] .st.run::before{border-color:var(--info);border-top-color:transparent}
+[data-style=old] .alert.custom{border-radius:10px;box-shadow:0 0 0 1px color-mix(in oklab,var(--danger) 40%,transparent);background:color-mix(in oklab,var(--danger) 10%,var(--s1));padding:8px 12px}
+[data-style=old] .alert.custom2{border-radius:4px;box-shadow:0 0 0 1px color-mix(in oklab,var(--danger) 30%,transparent);background:color-mix(in oklab,var(--danger) 5%,var(--s1));padding:6px 8px;font-size:14px}
+[data-style=old] .alert{border-radius:10px;padding:12px 14px;font-size:15px;box-shadow:0 0 0 1px color-mix(in oklab,var(--tone) 32%,transparent);background:color-mix(in oklab,var(--tone) 4%,var(--s1))}
+[data-style=old] .lite.sys{display:none}
+.alert.sys{display:none}
+[data-style=old] .alert.sys{display:flex}
+[data-style=old] .dock{box-shadow:0 0 0 1px var(--bd)}
+[data-style=old] .dock.q{border-radius:12px;box-shadow:0 0 0 1px color-mix(in oklab,var(--brand) 60%,transparent)}
+[data-style=old] .dock.q .dh{height:30px;font-weight:600}
+[data-style=old] .dock.q .df{justify-content:flex-start;padding:4px;height:34px}
+[data-style=old] .dock.p .dh{min-height:36px;font-weight:600}
+[data-style=old] .dock.p .dh .st{display:none}
+[data-style=old] .dock.plan .dh{color:var(--fg2);font-weight:600}
+[data-style=old] .dock.plan .df{justify-content:space-between;border-top:0;padding:8px 12px}
+[data-style=old] .dock.pending{--dock-bd:var(--bd)}
+[data-style=old] .dock.q.pending{--dock-bd:color-mix(in oklab,var(--brand) 60%,transparent)}
+[data-style=old] .tag{border-radius:2px}
+[data-style=old] .tag.risk{border-radius:4px}
+[data-style=old] .strip{border-radius:6px;background:color-mix(in oklab,var(--accent) 50%,transparent);box-shadow:0 0 0 1px var(--bd)}
+[data-style=old] .strip .dh{height:26px;font-size:14px;font-weight:400}
+[data-style=old] .subw{border-radius:12px}
+[data-style=old] .subw .st.run::before{border-color:var(--info);border-top-color:transparent}
+[data-style=old] .jobs .st{display:none}
+[data-style=old] .todo .st{color:var(--fg3)!important}
+[data-style=old] .todo .st.run::before{border-color:var(--fg3);border-top-color:transparent}
+[data-style=old] .menu.slash{border-radius:6px;padding:0}
+[data-style=old] .menu.slash .mi{border-radius:0;padding:0 12px;font-size:14px}
+[data-style=old] .menu.slash .mi.on{background:color-mix(in oklab,var(--accent) 50%,transparent)}
+[data-style=old] .side .row{border-radius:6px}
+[data-style=old] .side .row.on{background:var(--accent)}
+[data-style=old] .side .search{border-radius:6px;box-shadow:0 0 0 1px var(--bd);background:transparent}
+[data-style=old] .home h1{font-family:inherit;font-size:26px}
+[data-style=old] .welcome-old{display:flex}
+.welcome-old{display:none;flex-direction:column;align-items:center;gap:10px;padding:20px 0}
+.welcome-old .ic{width:48px;height:48px;border-radius:12px;background:color-mix(in oklab,var(--brand) 15%,transparent);color:var(--brand);display:grid;place-items:center}
+.welcome-old h2{font-size:18px;font-weight:600}
+[data-style=old] .new-only{display:none}
+[data-style=new] .old-only{display:none}
+</style>
+</head>
+<body data-style="new">
+
+<div class="bar">
+  <span><b>风格</b><span class="seg" data-k="style"><button data-v="old">现状</button><button data-v="new">新规范</button></span></span>
+  <span><b>配色 Q1</b><span class="seg" data-k="palette"><button data-v="b">B 暖灰＋陶土</button><button data-v="a">A Flexoki</button></span></span>
+  <span><b>亮暗</b><span class="seg" data-k="theme"><button data-v="light">亮</button><button data-v="dark">暗</button></span></span>
+  <span><b>大物件圆角 Q2</b><span class="seg" data-k="round"><button data-v="big">20 / 18</button><button data-v="std">16 / 10</button></span></span>
+  <span><b>首页标题 Q3</b><span class="seg" data-k="display"><button data-v="serif">衬线</button><button data-v="sans">无衬线</button></span></span>
+  <span><b>正文字号 Q5</b><input type="range" min="12" max="24" value="17" id="fs"> <span id="fsv" class="tnum">17 / 14</span></span>
+  <span class="note">「现状」模式下配色与圆角固定为当前代码</span>
+</div>
+
+<div class="page">
+  <div class="tabs" id="tabs">
+    <button data-view="chat" aria-pressed="true">对话页</button>
+    <button data-view="home" aria-pressed="false">首页</button>
+    <button data-view="gallery" aria-pressed="false">组件对照</button>
+  </div>
+
+  <div class="window">
+    <nav class="rail">
+      <div class="r on"><svg class="i i16" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+      <div class="r"><svg class="i i16" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
+      <div class="r"><svg class="i i16" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M18 9a9 9 0 0 1-9 9"/><circle cx="18" cy="6" r="3"/></svg></div>
+    </nav>
+    <aside class="side">
+      <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索对话</div>
+      <div class="grp">临时对话</div>
+      <div class="row"><span class="dot"></span><span>整理周报的格式</span></div>
+      <div class="grp">ai-client</div>
+      <div class="row on"><span class="dot run"></span><span>修复 /compact 出两条摘要</span></div>
+      <div class="row"><span class="dot"></span><span>SSH 运行时打进安装包</span></div>
+      <div class="row"><span class="dot"></span><span>调研网关供应商切换</span></div>
+      <div class="grp">ChipTestMachine</div>
+      <div class="row"><span class="dot"></span><span>DIE 算法清理与单测</span></div>
+      <div class="row"><span class="dot"></span><span>报表导出改成 xlsx</span></div>
+    </aside>
+
+    <main class="center">
+      <!-- ================= chat view ================= -->
+      <div id="v-chat" style="display:flex;flex-direction:column;height:100%;min-height:0">
+        <div class="chead">修复 /compact 出两条摘要 <span class="sub">ai-client · main</span></div>
+        <div class="scroll"><div class="col">
+          <div class="turn">
+            <div class="uwrap">
+              <div class="u">压缩完成后时间线里有两条「上下文摘要」，旧的那条应该被取代。帮我查一下原因并修掉。</div>
+              <div class="uacts new-only">
+                <button class="gb" title="复制"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                <button class="gb" title="编辑重发"><svg class="i" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+                <button class="gb" title="从这里分叉"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M6 9v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9M12 12v3"/></svg></button>
+              </div>
+            </div>
+            <div class="think"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>思考了 <span class="tnum">12</span> 秒</div>
+            <div class="trow"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="name">读取</span><span class="arg mono">src/shared/dshHistory/projectTimeline.ts</span></div>
+            <div class="trow"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="name">搜索</span><span class="arg mono">"surface_summary" in src/</span><span class="time tnum">7 处</span></div>
+            <div class="trow"><svg class="i" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="name">编辑</span><span class="arg mono">projectTimeline.ts</span><span class="time tnum"><span class="plus">+6</span> <span class="minus">−2</span></span></div>
+            <div class="block">
+              <div class="bh"><span class="lang">projectTimeline.ts</span><span class="tnum"><span class="plus">+6</span> <span class="minus">−2</span></span><span class="sp"></span><button class="gb" title="复制"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+              <div class="diff">
+                <div class="l ctx-hidden"><span class="n">40</span><span class="n">40</span><span> </span><span>import { surfaceNodes } from './surface';</span></div>
+                <div class="l ctx-hidden"><span class="n">41</span><span class="n">41</span><span> </span><span></span></div>
+                <div class="fold">⋯ 18 行未改动</div>
+                <div class="l"><span class="n">60</span><span class="n">60</span><span> </span><span>export function projectSummaries(nodes) {</span></div>
+                <div class="l del"><span class="n">61</span><span class="n"></span><span class="minus">−</span><span>  return nodes.filter(isSummary);</span></div>
+                <div class="l del"><span class="n">62</span><span class="n"></span><span class="minus">−</span><span>}</span></div>
+                <div class="l add"><span class="n"></span><span class="n">61</span><span class="plus">+</span><span>  const all = nodes.filter(isSummary);</span></div>
+                <div class="l add"><span class="n"></span><span class="n">62</span><span class="plus">+</span><span>  // Only the latest compaction is live.</span></div>
+                <div class="l add"><span class="n"></span><span class="n">63</span><span class="plus">+</span><span>  return all.map((n, i) =&gt; ({</span></div>
+                <div class="l add"><span class="n"></span><span class="n">64</span><span class="plus">+</span><span>    ...n, superseded: i &lt; all.length - 1,</span></div>
+                <div class="l add"><span class="n"></span><span class="n">65</span><span class="plus">+</span><span>  }));</span></div>
+                <div class="l add"><span class="n"></span><span class="n">66</span><span class="plus">+</span><span>}</span></div>
+              </div>
+            </div>
+            <div class="trow failed"><span class="st fail"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span><svg class="i old-only" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></svg><span class="name">运行</span><span class="arg mono">pnpm vitest projectTimeline</span><span class="why">退出码 1</span></div>
+            <div class="trow"><span class="st run"></span><span class="name">运行</span><span class="arg mono">pnpm vitest projectTimeline --update</span><span class="time tnum">0:07</span></div>
+            <div class="body">
+              <p>原因在历史投影：每次压缩都会写一个新的摘要节点，但投影时没有标出哪一个是<b>当前生效</b>的，所以旧摘要原样留在时间线里。改成只把最后一条当作生效，前面的标为 <code>superseded</code>，界面上折叠显示。</p>
+            </div>
+            <div class="block">
+              <div class="bh"><span class="lang">TSX</span><span class="sp"></span><button class="gb"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</button></div>
+              <pre>{block.superseded
+  ? &lt;SupersededSummary block={block} /&gt;
+  : &lt;CompactionSummary block={block} /&gt;}</pre>
+            </div>
+            <div class="lite sys">已压缩上下文 · 节省 61%</div>
+            <div class="alert sys tone-info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><div><div class="at">上下文已压缩</div><div class="ab">节省 61%</div></div></div>
+            <div class="tstat"><span class="st ok"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>完成于 14:47 · 用时 <span class="tnum">1:52</span></div>
+          </div>
+
+          <div class="turn">
+            <div class="uwrap"><div class="u">顺手把测试也补上，然后提交。</div></div>
+            <div class="alert custom tone-err"><svg class="i new-only" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div><div class="at">回合失败</div><div class="ab">网关返回 529：服务暂时过载。原文已放回输入框，可以直接重发。</div></div></div>
+          </div>
+        </div></div>
+
+        <div class="cwrap">
+          <div class="dock p pending">
+            <div class="dh"><span class="st wait"></span>要运行这条命令吗？<span class="sp"></span><span class="tag tnum">1 / 2</span><span class="tag risk">会改写历史</span></div>
+            <div class="db">在工作区内运行，会改动 git 历史。<div class="cmd">git commit --amend --no-edit</div></div>
+            <div class="df"><button class="btn ghost">拒绝</button><button class="btn sec">本会话都允许</button><button class="btn pri">允许一次</button></div>
+          </div>
+          <div class="composer">
+            <textarea placeholder="回复，或用 / 调出命令、@ 引用文件"></textarea>
+            <div class="ctool">
+              <button class="chip" title="附件"><svg class="i i16" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+              <button class="chip">Opus 5.5 · 高</button>
+              <button class="chip">自动编辑</button>
+              <span class="sp"></span>
+              <button class="chip tnum" style="font-size:var(--chip-fs)">38%</button>
+              <button class="send"><svg class="i i16" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= home view ================= -->
+      <div id="v-home" style="display:none;height:100%">
+        <div class="home">
+          <h1>在 <b>ai-client</b> 与 PiLab 一起进行创造吧</h1>
+          <div class="cwrap" style="max-width:760px">
+            <div class="composer">
+              <textarea placeholder="描述你要做的事"></textarea>
+              <div class="ctool">
+                <button class="chip"><svg class="i i16" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+                <button class="chip">ai-client</button><button class="chip">main</button>
+                <span class="sp"></span>
+                <button class="chip">Opus 5.5 · 高</button>
+                <button class="send"><svg class="i i16" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+              </div>
+            </div>
+          </div>
+          <div class="recent">
+            <div class="grp">最近对话</div>
+            <div class="row">修复 /compact 出两条摘要<span class="t">2 分钟前</span></div>
+            <div class="row">SSH 运行时打进安装包<span class="t">昨天</span></div>
+            <div class="row">调研网关供应商切换<span class="t">10-18</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= gallery view ================= -->
+      <div id="v-gallery" style="display:none;height:100%">
+        <div class="gallery">
+          <section>
+            <h4>三张停靠卡（权限 / 提问 / 计划）</h4>
+            <div class="dock p pending">
+              <div class="dh"><span class="st wait"></span>要运行这条命令吗？<span class="sp"></span><span class="tag tnum">1 / 2</span><span class="tag risk">删除文件</span></div>
+              <div class="db"><div class="cmd">rm -rf out-agent-host</div></div>
+              <div class="df"><button class="btn ghost">拒绝</button><button class="btn sec">本会话都允许</button><button class="btn pri">允许一次</button></div>
+            </div>
+            <div class="dock q pending">
+              <div class="dh"><span class="st wait"></span>先修哪一项？<span class="sp"></span><span class="tag tnum">1 / 3</span></div>
+              <div class="db">
+                <div class="opt"><span class="k">1</span><div><b>SSH 先能连上</b><br>运行时打进安装包，改动小</div></div>
+                <div class="opt"><span class="k">2</span><div><b>界面风格迁移</b><br>先出规范与预览</div></div>
+              </div>
+              <div class="df"><button class="btn ghost">跳过</button><button class="btn pri">提交</button></div>
+            </div>
+            <div class="dock plan pending">
+              <div class="dh"><span class="st wait"></span>计划待审阅<span class="sp"></span></div>
+              <div class="db">1. 新 token 层替换 Flexoki　2. 基础组件　3. 四队迁移各区域</div>
+              <div class="df"><button class="btn ghost">继续修改</button><button class="btn pri">按计划执行</button></div>
+            </div>
+          </section>
+          <section>
+            <h4>通知框（错误 / 警告 / 提示）</h4>
+            <div class="alert tone-err"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div><div class="at">模型不可用</div><div class="ab">当前目录里没有这个模型，请换一个。</div></div></div>
+            <div class="alert custom tone-err"><svg class="i new-only" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div><div class="at">会话失败</div><div class="ab">宿主已重启，请重发。</div></div></div>
+            <div class="alert custom2 tone-err"><svg class="i new-only" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div><div class="at">读取会话树失败</div></div></div>
+            <div class="alert tone-warn"><svg class="i" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg><div><div class="at">上下文快满了</div><div class="ab">已用 92%，下一轮前会自动压缩。</div></div></div>
+            <h4>状态图标（一个组件）</h4>
+            <div class="srow">
+              <span><span class="st run"></span>运行中</span><span><span class="st wait"></span>等你处理</span>
+              <span><span class="st ok"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>成功</span>
+              <span><span class="st fail"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span>失败</span>
+              <span><span class="st stop"></span>已停止</span><span><span class="st todo"></span>未开始</span>
+            </div>
+            <h4>条带（待办 / 排队）</h4>
+            <div class="strip todo"><div class="dh"><span class="st run"></span>待办 2 / 5 · 补测试<span class="sp"></span><span class="tag">展开</span></div></div>
+            <div class="strip"><div class="dh"><span class="st todo"></span>排队 1 条：顺手把测试也补上<span class="sp"></span><span class="tag">撤回</span></div></div>
+          </section>
+          <section>
+            <h4>子代理窗 / 后台任务窗</h4>
+            <div class="subw">
+              <div class="row"><span class="st run"></span>探索：查找 surface 节点的写入点<span class="t tnum">0:42</span></div>
+              <div class="row"><span class="st ok"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>审查：projectTimeline 的改动<span class="t">完成</span></div>
+              <div class="row"><span class="st fail"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span>测试：跑整套 vitest<span class="t">失败</span></div>
+            </div>
+            <div class="subw jobs">
+              <div class="row"><span class="st run"></span><span class="mono">pnpm dev</span><span class="t">运行中</span></div>
+              <div class="row"><span class="st stop"></span><span class="mono">tail -f host.log</span><span class="t">已停止</span></div>
+            </div>
+          </section>
+          <section>
+            <h4>斜杠菜单</h4>
+            <div class="menu slash">
+              <div class="mi on">/compact<span class="d">压缩上下文</span></div>
+              <div class="mi">/model<span class="d">换模型</span></div>
+              <div class="mi">/review<span class="d">审查改动</span></div>
+              <div class="sep"></div>
+              <div class="mi" style="color:var(--fg2)">↑↓ 选择 <kbd>Enter</kbd> 确认 <kbd>Esc</kbd> 关闭</div>
+            </div>
+            <h4>空对话页</h4>
+            <div class="welcome-old"><div class="ic"><svg class="i" style="width:24px;height:24px" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><h2>开始新对话</h2></div>
+            <div class="new-only" style="font-family:var(--display-font);font-size:24px;color:var(--fg2);padding:20px 0;text-align:center">有什么要一起做的？</div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="explain">
+    <h3>看什么</h3>
+    <ul>
+      <li><b>现状 ↔ 新规范</b>：对话页看用户消息、失败的工具行、diff（行号与折叠）、时间线里的通知、输入框的阴影；「组件对照」看三张停靠卡、四种错误框、状态图标、条带、子窗、斜杠菜单是不是变成了同一种语言。</li>
+      <li><b>Q1 配色</b>：B 是参考的暖灰四层加陶土色；A 是保留 Flexoki、只按新规则收拾（卡片改成比画布亮一级）。</li>
+      <li><b>Q2 大物件圆角</b>：只影响输入框与用户消息，其余圆角不变。</li>
+      <li><b>Q3 首页标题</b>：切到「首页」看。衬线用系统自带字体，在 Windows 上中文会落到 SimSun。</li>
+      <li><b>Q5 字号</b>：对话正文与过程两档一起调（过程档 = 正文 − 3），间距跟着行高走。</li>
+      <li>代价：B 要重核终端配色、Monaco 主题、「跟随终端配色」模式和源码管理里的 134 处写死颜色；A 改动小，但「编辑器配色」的观感还在。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const P = {
+  // Today's Flexoki tokens (src/renderer/styles/globals.css).
+  flexLight:{s0:'color-mix(in oklab, oklch(0.97 0.0106 100.82) 40%, oklch(0.9931 0.012 96.42))',s1:'oklch(0.9931 0.012 96.42)',s2:'oklch(0.97 0.0106 100.82)',s3:'oklch(0.97 0.0106 100.82)',
+    fg:'oklch(0.1696 0.0017 17.32)',fg2:'oklch(0.4531 0.005 91.5)',fg3:'color-mix(in oklab, oklch(0.4531 0.005 91.5) 62%, oklch(0.9931 0.012 96.42))',
+    bd:'oklch(0.875 0.0137 97.46)',input:'oklch(0.8463 0.0137 102.05)',accent:'oklch(0.935 0.0122 96.43)',
+    brand:'oklch(0.5665 0.1523 45.02)',onBrand:'oklch(0.9931 0.012 96.42)',danger:'oklch(0.5042 0.1648 27.84)',success:'oklch(0.5593 0.1335 122.92)',warn:'oklch(0.5665 0.1523 45.02)',info:'oklch(0.4818 0.1315 254.79)'},
+  flexDark:{s0:'color-mix(in oklab, oklch(0.262 0.0037 48.55) 40%, oklch(0.1981 0.0032 17.43))',s1:'oklch(0.1981 0.0032 17.43)',s2:'oklch(0.262 0.0037 48.55)',s3:'oklch(0.262 0.0037 48.55)',
+    fg:'oklch(0.8463 0.0137 102.05)',fg2:'oklch(0.6956 0.0103 93.62)',fg3:'color-mix(in oklab, oklch(0.6956 0.0103 93.62) 62%, oklch(0.1981 0.0032 17.43))',
+    bd:'oklch(0.34 0.0038 84.58)',input:'oklch(0.3651 0.0044 67.69)',accent:'oklch(0.305 0.0029 17.32)',
+    brand:'oklch(0.6576 0.1539 49.3)',onBrand:'oklch(0.1981 0.0032 17.43)',danger:'oklch(0.597 0.1692 28.38)',success:'oklch(0.7227 0.1178 117.2)',warn:'oklch(0.6576 0.1539 49.3)',info:'oklch(0.5988 0.1104 247)'},
+  // Option B: neutral warm gray + clay (reference values; semantic colours retuned).
+  bLight:{s0:'#f9f9f7',s1:'#fcfcfb',s2:'#ffffff',s3:'#ffffff',fg:'#151515',fg2:'#525252',fg3:'#8a8a8a',
+    brand:'#c6613f',onBrand:'#ffffff',danger:'#b5452f',success:'#3f7d4e',warn:'#b07a1e',info:'#3a6ea5'},
+  bDark:{s0:'#0b0b0b',s1:'#151515',s2:'#1a1a19',s3:'#20201f',fg:'#f5f5f5',fg2:'#a3a3a3',fg3:'#666666',
+    brand:'#d97757',onBrand:'#151515',danger:'#e5735c',success:'#73b585',warn:'#d9a441',info:'#7aa5d6'},
+};
+const state={style:'new',palette:'b',theme:'light',round:'big',display:'serif',fs:17};
+const root=document.documentElement;
+function set(k,v){root.style.setProperty('--'+k,v)}
+function apply(){
+  document.body.dataset.style=state.style;
+  const dark=state.theme==='dark', old=state.style==='old';
+  let p;
+  if(old) p=dark?P.flexDark:P.flexLight;
+  else if(state.palette==='b') p=dark?P.bDark:P.bLight;
+  else { const f=dark?P.flexDark:P.flexLight;
+    // Option A: Flexoki kept, card lifted one step above the canvas.
+    p={...f,s2:dark?'oklch(0.235 0.0035 40)':'oklch(0.998 0.004 96)',s3:dark?'oklch(0.262 0.0037 48.55)':'oklch(1 0 0)'}; }
+  for(const k of ['s0','s1','s2','s3','fg','fg2','fg3','brand','danger','success','warn','info']) set(k,p[k]);
+  set('on-brand',p.onBrand);
+  set('fg-soft',`color-mix(in oklab, ${p.fg} 50%, ${p.fg2})`);
+  if(old){ set('bd',p.bd); set('input',p.input); set('accent',p.accent);
+    set('fill',p.accent); set('user-bg',p.accent);
+    set('ghost-hover',`color-mix(in oklab, ${p.accent} 50%, transparent)`); set('ghost-sel',p.accent);
+    set('sh-sm','0 0 #0000');
+  } else {
+    const mix=n=>`color-mix(in oklab, ${p.fg} ${n}%, ${p.s1})`;
+    set('bd',mix(10)); set('bd-strong',mix(20)); set('input',mix(20)); set('accent',mix(6));
+    set('fill',mix(6)); set('user-bg',mix(6)); set('ghost-hover',mix(5)); set('ghost-sel',mix(10));
+    set('sh-sm',dark?'0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.4)':'0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.08)');
+  }
+  set('sh-popover',dark?'inset 0 0 0 1px rgba(255,255,255,.10), 0 8px 28px rgba(0,0,0,.65), 0 2px 8px rgba(0,0,0,.45)'
+                       :'0 0 0 1px var(--bd), 0 8px 24px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.08)');
+  set('sh-composer',dark?'0 4px 20px rgba(0,0,0,.4), inset 0 0 0 1px var(--bd)':'0 4px 20px rgba(0,0,0,.035), inset 0 0 0 1px var(--bd)');
+  set('sh-composer-hover',dark?'0 4px 24px rgba(0,0,0,.55), inset 0 0 0 1px var(--bd-strong)':'0 4px 24px rgba(0,0,0,.06), inset 0 0 0 1px var(--bd-strong)');
+  set('sh-composer-focus',dark?'0 4px 24px rgba(0,0,0,.65), inset 0 0 0 1px var(--bd-strong), 0 0 0 1px var(--bd-strong)':'0 4px 24px rgba(0,0,0,.08), inset 0 0 0 1px var(--bd-strong), 0 0 0 1px var(--bd-strong)');
+  set('r-md','10px'); set('r-lg','12px');
+  const big=state.round==='big';
+  set('r-composer',big?'20px':'16px'); set('r-bubble',big?'18px':'10px');
+  set('display-font',state.display==='serif'
+    ? 'Georgia,"Times New Roman",ui-serif,"Songti SC","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif'
+    : 'inherit');
+  const b=state.fs, pr=Math.max(12,b-3), lh=old?1.5:1.6;
+  set('chat-body',b+'px'); set('chat-proc',pr+'px'); set('lh',lh); set('lh-n',lh);
+  set('turn-gap',(b*lh*(old?1.4:0.75)).toFixed(1)+'px');
+  set('item-gap',(b*lh*(old?0.35:0.5)).toFixed(1)+'px');
+  set('chip-fs',old?'14px':'15px');
+  document.getElementById('fsv').textContent=`${b} / ${pr}`;
+  document.querySelectorAll('.seg').forEach(s=>s.querySelectorAll('button').forEach(btn=>btn.setAttribute('aria-pressed',state[s.dataset.k]===btn.dataset.v)));
+}
+document.querySelectorAll('.seg').forEach(s=>s.addEventListener('click',e=>{const v=e.target.dataset.v;if(v){state[s.dataset.k]=v;apply()}}));
+document.getElementById('fs').addEventListener('input',e=>{state.fs=+e.target.value;apply()});
+document.getElementById('tabs').addEventListener('click',e=>{
+  const v=e.target.dataset.view;if(!v)return;
+  for(const n of ['chat','home','gallery']) document.getElementById('v-'+n).style.display=n===v?(n==='chat'?'flex':'block'):'none';
+  document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===v));
+});
+apply();
+</script>
+</body>
+</html>
