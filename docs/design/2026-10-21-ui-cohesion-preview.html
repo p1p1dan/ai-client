@@ -165,7 +165,7 @@ svg.i16{width:16px;height:16px}
 
 /* home */
 .home{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:28px;padding:0 28px 12vh}
-.home h1{font-family:var(--display-font);font-size:30px;font-weight:400;color:var(--fg2);text-align:center;text-wrap:balance;letter-spacing:.01em}
+.home h1{font-family:var(--display-font);font-size:var(--f-display);font-weight:400;color:var(--fg2);text-align:center;text-wrap:balance;letter-spacing:.01em}
 .home h1 b{color:var(--fg);font-weight:500}
 .home .cwrap{padding:0}
 .recent{width:100%;max-width:760px}
@@ -258,7 +258,7 @@ kbd{font-family:ui-monospace,monospace;font-size:var(--f-2xs);padding:0 4px;bord
   <span><b>亮暗</b><span class="seg" data-k="theme"><button data-v="light">亮</button><button data-v="dark">暗</button></span></span>
   <span><b>大物件圆角 Q2</b><span class="seg" data-k="round"><button data-v="big">20 / 18</button><button data-v="std">16 / 10</button></span></span>
   <span><b>首页标题 Q3</b><span class="seg" data-k="display"><button data-v="serif">衬线</button><button data-v="sans">无衬线</button></span></span>
-  <span><b>字号 Q5</b><span class="seg" data-k="density"><button data-v="pilab">PiLab 17/14</button><button data-v="ref">参考 14/12</button></span> <input type="range" min="12" max="24" value="17" id="fs"> <span id="fsv" class="tnum">17 / 14</span></span>
+  <span><b>字号 Q5</b><span class="seg" data-k="density"><button data-v="pilab">PiLab 17/14</button><button data-v="ref">参考 14/12</button></span> <input type="range" min="12" max="24" value="14" id="fs"> <span id="fsv" class="tnum">14 / 12</span></span>
   <span class="note">「现状」模式下配色与圆角固定为当前代码</span>
 </div>
 
@@ -491,7 +491,7 @@ const P = {
   bDark:{s0:'#0b0b0b',s1:'#151515',s2:'#1a1a19',s3:'#20201f',fg:'#f5f5f5',fg2:'#a3a3a3',fg3:'#666666',
     brand:'#d97757',onBrand:'#151515',danger:'#e5735c',success:'#73b585',warn:'#d9a441',info:'#7aa5d6'},
 };
-const state={style:'new',palette:'b',theme:'light',round:'big',display:'serif',density:'pilab',fs:17};
+const state={style:'new',palette:'b',theme:'light',round:'big',display:'serif',density:'ref',fs:14};
 // Fixed UI tiers: PiLab today vs the reference's denser scale (body 14, meta 12, caption 11).
 const TIERS={pilab:{ui:15,meta:14,sm:13,xs:12,x2:11,procGap:3,lh:1.6},ref:{ui:13,meta:12,sm:12,xs:11,x2:10,procGap:2,lh:1.43}};
 const root=document.documentElement;
@@ -530,6 +530,7 @@ function apply(){
     ? 'Georgia,"Times New Roman",ui-serif,"Songti SC","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif'
     : 'inherit');
   const T=TIERS[old?'pilab':state.density];
+  set('f-display',(old?26:state.density==='ref'?38:30)+'px');
   set('f-ui',T.ui+'px'); set('f-meta',T.meta+'px'); set('f-sm',T.sm+'px'); set('f-xs',T.xs+'px'); set('f-2xs',T.x2+'px');
   const b=state.fs, pr=Math.max(12,b-T.procGap), lh=old?1.5:T.lh;
   set('chat-body',b+'px'); set('chat-proc',pr+'px'); set('lh',lh); set('lh-n',lh);
