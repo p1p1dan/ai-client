@@ -1,0 +1,1464 @@
+> **已归档（2026-10-21）**：本文件不再生效。用户裁决重立规范，现行规范是 [`docs/design-system.md`](../design-system.md)（设计规范 v2）。这里只作历史查阅：各条旧决策的来历、逐项实测记录。文内的相对链接按原位置 `docs/` 写，归档后可能失效。
+
+# AiClient Design System
+
+> ⚠️ **时效警示（2026-07-28 更新，D18 / D19 连带）**
+>
+> **已撤销（T-21 已改写并与代码对齐，可直接作为施工依据）**：
+> **Color System** / **Border Radius** / **根字号结论** 三节，
+> 与 `src/renderer/styles/globals.css` 的 `@theme` + `:root` + `.dark` 逐条对得上。
+>
+> **已撤销（T-30 批 2 · D25 / D26 已改写并与代码对齐）**：**字体族（分域）** / **CJK 级联规则** /
+> **Typography（字号）** / **Font Weight** / **Letter-spacing（字距梯度）** / **数字对齐（tabular-nums）** /
+> **Border Radius → 钳制硬规则** / **表单控件 vs 文字 chip** / **Ghost chip 悬停显壳** 九节。
+> 其中 **字体族** 一节原先列在上面 T-21 的已撤销清单里，现已随 **D25 撤销 D18③** 整节重写为
+> **分域口径（UI 比例 / 代码等宽）**——旧的「三键统一等宽」一律以新节为准。
+> ⚠️ `docs/design/a07-cursor-composer-alignment.html` 与 `phase0a-openchamber-alignment.html`
+> 两份基线的**原型画面仍是全等宽的**（渲染层刻意冻结，用作验收凭证），**不要拿它们的画面当字体施工依据**；
+> 逐条对照见 A07 文末「v4 追记」。
+>
+> **已撤销（T-22 已写入并与代码对齐）**：**Spacing & Sizing → 新壳布局档位**一节与
+> `components/workspace-shell/shellLayoutModel.ts` 的常量逐条对得上；**T-32 追加的中列与降级梯常量在 `centerLayoutModel.ts`**，同表同步。
+>
+> **仍未撤销**：
+>
+> - **字号 / 字族的全仓调用点迁移**：token 层已落齐（`@theme` 现有 `--text-2xs` / `--text-code` /
+>   `--text-meta` / `--text-ui` / `--text-markdown` / `--text-section` / `--text-title` / `--text-display` 八个固定字号 token
+>   与两条字族栈；`--text-section` 是 2026-10-10 决策 170 加的 16px 档（决策 183 起只剩中栏会话栏标题在用），`--text-display` 是决策 174 加的 26px 首页标题档），
+>   调用点迁移**已覆盖 `chat/` 与 `workspace-shell/`**（含 D25 的 mono 白名单、tracking 梯度、`tabular-nums`）；
+>   **`source-control/` / `files/` / `git/` / `sessions/` 等其余目录的逐屏复核尚未完成**（D25 §5.5 工序 ④）。
+>   写新代码按本节；改旧代码不要单纯为了对齐档位而重排布局。
+> - **旧模块彩色硬编码**：`source-control/` 整目录、`layout/`、`ui/activity-indicator.tsx` 等 47 个文件
+>   共 134 处 `text-red-500` 类硬编码尚未迁移到语义 token。**归 T-25。**
+>
+> **本文件不生效的场景（未裁定的边界）**：主题选 `sync-terminal` 时，`src/renderer/lib/ghosttyTheme.ts:238-312`
+> 会把**全部 25 个旧语义变量**以 hex 覆盖到 `documentElement`，Flexoki 调色板被 100% 顶掉，且**不覆盖**
+> T-21 新增的 5 个 token → 该模式下会出现「终端色 + Flexoki 色」混色。见 plantree open-questions #12。
+>
+> 遇冲突以 [ARD §7](./plans/2026-07-23-openchamber-chat-refactor-ard.md) 与
+> [总台账 D18/D19](./plans/openchamber-chat-refactor-ledger.md) 为准。
+
+## Tech Stack
+
+- **Framework**: Electron + React 19 + TypeScript
+- **Styling**: Tailwind CSS 4
+- **UI Components**: [coss ui](https://coss.com/ui) (基于 Base UI，copy-paste 模式)
+- **Icons**: Lucide React
+- **Editor**: Monaco Editor (local workers, no CDN)
+
+## 组件使用原则
+
+**优先使用 @coss/ui 组件**，避免手动实现：
+
+1. 新增 UI 需求时，先查看 [coss.com/ui](https://coss.com/ui) 是否有现成组件
+2. 使用 CLI 添加组件：`npx shadcn@latest add @coss/<component>`
+3. 组件存放于 `src/renderer/components/ui/`
+4. 仅在 @coss/ui 无法满足时才手动实现
+
+## Color System
+
+**调色板 = Flexoki**（来源：`openchamber@v1.17.0-6-ga3519141` 的
+`packages/ui/src/lib/theme/themes/flexoki-{light,dark}.json`）。
+sRGB hex → OKLCH(D65) 转换后写入 `src/renderer/styles/globals.css` 的 `:root` / `.dark`。
+**下表 hex 仅为可读性**，权威值以 `globals.css` 的 OKLCH 字面量为准。
+
+### Theme Variables
+
+| 变量 | Light | Dark | 用途 / 约束 |
+|------|-------|------|------------|
+| `background` | `#fffdf4` | `#171515` | 页面底色（参与 `--panel-bg-opacity`） |
+| `foreground` | `#100F0F` | `#CECDC3` | **正文/标题的默认色**（对底 18.78:1 / 11.39:1） |
+| `card` / `popover` | `#fbfaf2` | `#1c1a19` | 抬升表面（参与 `--panel-bg-opacity`） |
+| `card-foreground` / `popover-foreground` | `#100F0F` | `#CECDC3` | 同 `foreground` |
+| `primary` | `#BC5215` | `#DA702C` | **品牌橙**：主操作、激活态、选中指示条、拖放目标、链接、焦点 |
+| `primary-foreground` | `#fffdf4` | `#171515` | 品牌橙实底上的文字（4.73:1 / 5.49:1） |
+| `secondary` | `#f7f4ec` | `#1e1d1c` | secondary 按钮/徽章底（`surface.subtle`） |
+| `secondary-foreground` | `#100F0F` | `#CECDC3` | — |
+| `muted` | `#f6f5ee` | `#1C1B1A` | 次要面板底（参与 `--panel-bg-opacity`） |
+| `muted-foreground` | `#575653` | `#9F9D96` | 次要文字（亮 7.20:1；暗 6.70:1，2026-08-18 D2-b 提档） |
+| `foreground-soft` | 派生 ≈ `#31302F` | 派生 ≈ `#B6B5AC` | **侧栏对话标题**，比正文低一级（决策 170，issue #6）；决策 183 起也是侧栏分组标签的悬停色。派生式 `color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground))`，只在 `:root` 声明一次，跟随亮 / 暗 / 同步终端主题；≈ Flexoki base-850 / base-300（ΔE 0.012 / 0.001）。对底 12.93:1 / 8.83:1，选中行改回正文色 |
+| `muted-foreground-faint` | 派生 ≈ `#AEACA6` | 派生 ≈ `#53514E` | **侧栏「未启动」的淡空心圈**（决策 183），比「后台已挂上」的 `muted-foreground` 实心点淡一级（决策 186，issue #16：对侧从描边改为实心）。派生式 `color-mix(in oklab, var(--muted-foreground) 45%, color-mix(in oklab, var(--card) 40%, var(--background)))`——`muted-foreground` 向侧栏实际底色（`LeftDock` 的 `bg-card/40` 叠在 `bg-background` 上）混 55%；只在 `:root` 声明一次，跟随亮 / 暗 / 同步终端主题。对侧栏底约 2.2:1（`muted-foreground` 约 6.3–7.0:1）：刻意低于 3:1 的非文本对比线，因为它是装饰性标记（`aria-hidden`，含义在悬停提示「未启动」里）。只做描边色 `border-muted-foreground-faint`，不承载文字 |
+| `accent` | `#eeece3` | `#2d2b2b` | **交互覆盖底**（hover / 选中行）。`interactive.hover` 预乘实色 |
+| `accent-foreground` | `#100F0F` | `#CECDC3` | — |
+| `accent-primary` | `#F9AE77` | `#F9AE77` | 品牌强调（`primary.emphasis`）。**亮色有可读性红线，见下** |
+| `selection` | `#e5e3db` | `#323030` | **树节点/列表项选中态底**（不是文本选区） |
+| `hover` | `#eeece3` | `#2d2b2b` | hover 底的语义别名，值与 `accent` 逐位相同 |
+| `status-running` | `#205EA6` | `#4385BE` | **运行中/活动指示**（`status.info`）。实色，可配 `animate-pulse` |
+| `destructive` | `#AF3029` | `#D14D41` | 危险操作 |
+| `success` | `#66800B` | `#A0AF54` | 成功 / diff 新增 |
+| `warning` | `#BC5215` | `#DA702C` | 警告。**与 `primary` 逐位同色** |
+| `info` | `#205EA6` | `#4385BE` | 信息。与 `status-running` 同值 |
+| `*-foreground`（destructive/success/warning/info） | `#fffdf4` | `#171515` | 对应实底上的文字 |
+| `folder` | `#AD8301` | `#D0A215` | 目录/文件夹语义色（`syntax.base.type`） |
+| `border` | `#DAD8CE` | `#343331` | 描边、分割线 |
+| `input` | `#CECDC3` | `#403E3C` | **填充语义**：滑块/进度/switch 轨道、`dark:bg-input/32`；兼作输入框描边 |
+| `ring` | `#BC5215` | `#DA702C` | 焦点环（`interactive.focus`，**无 alpha**） |
+| `editor-current-diff` | `oklch(0 0 0 / .06)` | `oklch(1 0 0 / .08)` | Monaco 当前 diff 行叠加。**刻意不用调色板色**，见下 |
+
+### `secondary` 与 `muted` 近乎同色（Flexoki 固有属性，不要拿它们做层次）
+
+`secondary`（`surface.subtle`）与 `muted`（`surface.muted`）在两套主题下的 ΔE_ok 分别只有
+**0.0031**（亮）与 **0.0086**（暗），互相对比度 ≈ **1.005:1**——都远低于 OKLab 可辨阈（≈0.02）。
+它们**不同值**（满足「secondary ≠ muted」的验收口径，也避免了上游把两者一并映到 `surface.muted` 的退化），
+但**在视觉上读不出差别**。
+
+- **禁止**用 `bg-secondary` vs `bg-muted` 表达「两层面板」——渲染出来就是一整片平面。
+- 需要层次时一律靠 `--border`（与 `card` / `background` 近同色的处理方式相同）。
+- 需要真正拉开的第三级底色时，用 `--accent` / `--selection`（交互层）或 `--input`（填充层）。
+
+### `*-foreground` 只配实底，不配色调底
+
+`destructive/success/warning/info` 的 `-foreground` 取自 Flexoki `status.*Foreground`，
+它们是**实底上的反色**（亮 `#fffdf4` 近白 / 暗 `#171515` 近黑）。
+
+- ✅ `bg-success text-success-foreground`（实底）
+- ❌ `bg-success/8 text-success-foreground`（色调底）——亮色 warning 徽章实测 **1.19:1**、
+  暗色 success 徽章 **1.39:1**，字直接消失。
+- 色调底上的字用**同族实色**：`bg-success/8 text-success dark:bg-success/16`（实测 3.6:1–5.8:1）。
+  `components/ui/badge.tsx` 的 `error` / `info` / `success` / `warning` 四个 variant 即按此写法。
+
+### ⚠️ `dark:` 前缀**不跟随** `.dark` 调色板（既存问题，未裁定）
+
+本仓从未声明 `@custom-variant dark`，所以 Tailwind v4 的 `dark:` 仍是
+`@media (prefers-color-scheme: dark)`（**系统偏好**），而调色板切换靠 `documentElement` 上的
+`.dark` 类（**应用设置**）。用户显式选 Light/Dark 而系统相反时，两者会各走各的。
+
+- **新代码不得用 `dark:` 表达关键可读性差异**（字色、对比度）——用**同族语义 token**，
+  它们本身就随 `.dark` 换值。
+- `dark:` 只可用于「两边都成立、只是浓淡不同」的微调（如把色调底从 `/8` 抬到 `/16`）。
+- 详见 `docs/plantree/plans/openchamber-chat-refactor/open-questions.md` 第 13 条。
+
+### Alpha 纪律（本节最重要的一条）
+
+Tailwind 的 `/N` 修饰符编译成 `color-mix(in oklab, X N%, transparent)`，
+**结果 alpha = N × alpha(X)**。所以 `:root` / `.dark` 里的语义变量**一律不带 alpha**：
+
+- Flexoki 原值带 alpha 的（`interactive.hover` / `interactive.selection` / `focusRing`），
+  要么取同族无 alpha 值（`--ring` 取 `interactive.focus` 而非 `focusRing`），
+  要么按其在对应底色上的视觉等效**预乘成实色**（`--accent` / `--hover` / `--selection`）。
+- 透明度**全部**交给 `/N` 修饰符表达。**新增/修改 token 时不得再引入自带 alpha 的值**
+  （唯一例外是 `--editor-current-diff`，它本来就是「中性叠加层」语义）。
+
+**逐 token 的 `/N` 许可**：
+
+| token | 可否加 `/N` | 说明 |
+|-------|------------|------|
+| `accent` | ✅ | `hover:bg-accent/50` 是全仓既定的 hover 强度（145 处），不要改成 `bg-accent` |
+| `hover` | ❌ | 它已经是「满强度 hover」；加 `/N` 就退化成 `bg-accent/N`，语义自相冲突 |
+| `selection` | ❌ | 预乘实色，直接当选中底用 |
+| `foreground-soft` | ❌ | 派生的文字色（决策 170）；加 `/N` 就成了半透明字，在 hover / 选中底上对比度不可控 |
+| `muted-foreground-faint` | ❌ | 派生的描边色（决策 183），本身已是「淡一级」；再加 `/N` 在 hover / 选中底上就看不见了 |
+| `status-running` | ✅ | 高饱和状态色，`bg-status-running/10` + `border-status-running/30` 是既定横幅写法 |
+| `accent-primary` | ✅ | 但亮色下用法受限，见下 |
+
+### `--accent-primary` 的亮色红线
+
+`#F9AE77` 对亮色底 `#fffdf4` 只有 **1.82:1**、对 `--primary` 实底 2.60:1；暗色下 9.83:1。因此：
+
+- **暗色**：可作链接 / 强调文字。
+- **亮色**：**只能**作填充 / 边框 / 下划线 / hover-on-primary，**禁止**作正文或链接色。
+- 需要「两套主题都清楚的强调」时用 `--primary`（4.73:1 / 5.49:1）。
+
+### 面板半透明（背景图）
+
+只有 **4 个**面板表面参与半透明：`--background` / `--card` / `--popover` / `--muted`，
+写法是 `oklch(L C H / var(--panel-bg-opacity, 1))`。
+
+- 唯一开关 `--panel-bg-opacity` 由 `src/renderer/App/hooks/useBackgroundImage.ts` 写在
+  **`documentElement`**（**不能写 `body`**：自定义属性的 `var()` 代换发生在**声明所在元素**的
+  computed-value 阶段，而这 4 个变量声明在 `:root` / `.dark`）。
+- `--accent` / `--hover` / `--border` / `--input` **刻意不参与**：accent 半透明会让 hover 在背景图上消失；
+  亮色下 `card` 与 `background` 的 ΔE_ok 只有 0.0096，面板层次全靠 `border` 撑，淡化 border 等于丢层次。
+- **禁止**再在别处重复声明调色板（历史上曾有 `.bg-image-enabled` 与 JS inline 两份副本，已删）。
+- **唯一合法的第二处声明**是 `theme = 'sync-terminal'`：`lib/ghosttyTheme.ts` 把这 4 个面板表面以
+  inline style 写在**同一个 `documentElement`** 上，特异度上直接压过 `:root`。因此那条路径必须走
+  `withPanelBgOpacity()`（`color-mix(in srgb, <色> calc(var(--panel-bg-opacity, 1) * 100%), transparent)`），
+  否则一开背景图就整屏不透明、壁纸完全看不见。默认值 1 时该包装是恒等变换，不改变
+  sync-terminal 下「谁覆盖谁」的既有边界（仍属 open-questions #12）。
+
+### Monaco 内部的例外
+
+`.current-diff-highlight` / `.current-diff-gutter` 作用在 Monaco 内部，而 **Monaco 底色来自终端主题**
+（`EditorArea.tsx` 用 `terminalTheme` 构建 `monacoTheme`），不是 Flexoki。所以：
+
+- 行高亮只能是「黑/白 + alpha」的**宿主无关中性叠加** → `--editor-current-diff`。
+- gutter 竖条靠**色相**取胜而非明度 → `var(--accent-primary)`。选它而不是 `--primary` 的理由：
+  `--accent-primary` 亮暗同值（`#F9AE77`），且**不在** `ghosttyTheme.ts` 覆盖的 25 个变量里；
+  `sync-terminal` 下 `--primary` 会被改写成编辑器正文色，竖条就和正文同色、不再是高亮。
+
+### 使用规范
+
+```tsx
+// 正文 / 标题 / 图标可读性 —— 默认用 foreground，不要用 primary
+className="text-foreground"
+className="text-muted-foreground"          // 次要文字
+
+// 品牌 / 主操作 / 激活 / 选中 / 焦点 / 拖放
+className="bg-primary text-primary-foreground"
+className="border-primary"                  // 激活卡片 / tab 下划线
+
+// hover 与选中底
+className="hover:bg-accent/50"              // 旧代码沿用（既定强度）
+className="bg-selection"                    // 树节点/列表项选中（禁止加 /N）
+
+// 状态
+className="text-success"                    // diff 新增
+className="text-destructive"                // diff 删除 / 危险
+className="bg-status-running"               // 运行中指示点（配 animate-pulse）
+variant="destructive"
+```
+
+### `*-primary` 语义判据（`--primary` 已从中性反色变为品牌橙）
+
+改造前 `text-primary` / `bg-primary` / `border-primary` 渲染成近黑/近白，改造后是橙。逐处判断用下面 4 条：
+
+1. 该处承载的是**正文/标题/图标的可读性** → 改中性 token（`text-foreground` / `text-muted-foreground`）。
+2. 该处表达**品牌、主操作、激活态、选中态、焦点、拖放目标、链接** → 保留 `*-primary`。
+3. 低透明度底色（`/5`–`/20`）+ 文字是 `text-muted-foreground` → 是「中性提示框」，
+   改 `bg-muted` + `border-border`。
+4. 低透明度底色 + 文字是 `text-primary` → 是「品牌 pill / 激活 chip」，保留。
+
+**禁止全局正则替换**：`text-primary` 会误伤 `text-primary-foreground`；
+`accent-primary` 在 `AppearanceSettings.tsx` 里是 **Tailwind 的 `accent-color` 工具类**（4 处 range 滑块），
+与新 token 生成的 `bg-accent-primary` / `text-accent-primary` 只差一个前缀，任何批量正则必须显式排除。
+
+### 硬编码色禁令
+
+组件里**不得**出现 `bg-amber-500` / `text-green-500` / `text-[#dcb67a]` /
+`shadow-[0_2px_8px_rgba(0,0,0,0.12)]` 这类字面量。对照表：
+
+| 场景 | ❌ 旧写法 | ✅ 语义 token |
+|------|----------|--------------|
+| 运行中指示点 | `bg-amber-500` | `bg-status-running` |
+| 运行中横幅 | `border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500` | `border-status-running/30 bg-status-running/10 text-status-running`（**`dark:` 前缀一并删掉**，token 已亮暗自适应） |
+| diff 新增 / 删除 | `text-green-500` / `text-red-500` | `text-success` / `text-destructive` |
+| 文件夹图标 | `text-[#dcb67a]` | `text-folder` |
+| 任意阴影 | `shadow-[0_2px_8px_rgba(0,0,0,0.12)]` | `shadow-md` / `shadow-lg`（见 Shadow 分档） |
+
+**注意：不要用 `warning` 代替 amber** —— Flexoki 的 `status.warning` 与 `primary.base` 逐位同色，
+用了会跟品牌橙撞。「运行中」语义一律走 `status-running`。
+
+### 新增 token 的强制动作
+
+新增语义变量必须**同时**在 `globals.css:3-34` 的 `@theme` 补 `--color-*: var(--*)` 桥接，
+否则 Tailwind v4 不会生成对应工具类。
+（现成反例：`components/ui/sidebar.tsx` 整套 `bg-sidebar-*` 因为从未注册，至今是死件。）
+
+### 已知偏差（Flexoki 原值，默认不私自调色；偏离须逐条留痕）
+
+以下两处不满足 WCAG AA（4.5:1）小字要求，属沿用上游取值的**已知偏差**，改动需另立决策：
+
+| 位置 | 对比度 |
+|------|--------|
+| `--success` 亮色（对 `background`） | 4.42:1 |
+| `--destructive` 暗色 | 4.20:1 |
+
+> 2026-08-18 · F5 批 D2-b：`--muted-foreground` 亮/暗双档提至 Flexoki base-700 / base-400（7.20 / 6.70），
+> 该行偏差消灭；`--tool-arg` 派生比 78%→85%（5.09 / 5.02）。**已刻意偏离上游 Flexoki 原值**，
+> 理由与实测见 `docs/plans/2026-08-18-f456-readability-composer-spec.md` §2。
+
+另有两条**本次改造引入**的退化，记录待后续处理：
+
+- `text-primary` 叠在 `bg-primary/20` 上，亮色仅 **3.61:1**（改造前是「近黑字 + 近黑 20% 底」，对比更高）。
+  这套 pill/chip 组合全仓保留 20 处；新写这类 pill 建议文字用 `text-foreground` 或把底降到 `/10`。
+- `ring-ring/24`（input / select / textarea / combobox / number-field / input-group 共 6 处）叠底后
+  亮色仅 1.39:1。`--ring` 取无 alpha 值已避免归零，但这 6 处建议后续提到 `/40`。
+
+## Design Tokens
+
+设计 Token 统一在 `src/renderer/styles/globals.css` 的 `@theme` 中定义（CSS 变量），组件样式应优先使用这些层级化的 Token，而不是写任意值。
+
+### Border Radius（圆角）
+
+**根字号是 16px**（见下方「根字号结论」），所以下表的 px 就是**真实渲染值**，不再有 ×14/16 的折算。
+
+| Level | Token | 声明值 | 真实值 | 典型场景 |
+|------|------|-------|-------|---------|
+| xs | `--radius-xs` | `0.25rem` | 4px | checkbox、badge、kbd 等内嵌元素 |
+| sm | `--radius-sm`（= `--radius`） | `0.375rem` | **6px** | input、tab、tooltip 等交互元素 |
+| md | `--radius-md` | `0.625rem` | 10px | card、alert、toolbar 等容器 |
+| lg | `--radius-lg` | `0.75rem` | 12px | dialog、sheet 等顶层容器 |
+
+> **U01-a（2026-09-03）把 sm/md/lg 从 8/12/16 收到 6/10/12**，对齐 pix 的三档圆角。
+> `xs` 是本仓独有的一档，pix 没有对应物，保持 4px 不变。
+> 依据：[evidence-u01](./plantree/plans/pix-ui-alignment/topics/evidence-u01-numeric-scale.md)。
+
+**使用建议**：
+- 小内嵌元素：优先 `rounded-xs`
+- 交互元素：优先 `rounded-sm` / `rounded-md`
+- 顶层覆盖层：优先 `rounded-lg` / `rounded-2xl`
+
+**钳制硬规则（T-30 批 2 / D26）**：**`border-radius` 一旦 ≥ 元素高度的一半，CSS 会把它钳成满圆。**
+所以在 `h-6`(24px) 上写 `rounded-md`(12) 或 `rounded-lg`(16)，与写 `rounded-full` **渲染完全相同**——
+类名读起来是「中等圆角」，屏幕上却是一枚胶囊。据此三条：
+
+1. **小控件（`h-6` / `h-7`）一律 `rounded-xs` / `rounded-sm`。**
+2. **`rounded-md` 及以上只给高度 ≥32px 的容器。**
+3. 满圆只在**刻意选择**时写 `rounded-full`，不要靠钳制「顺便」得到——
+   靠钳制得到的满圆，会在元素高度变化的那天悄悄变回圆角矩形，而类名一个字都没改。
+
+> 实测来历：Composer 的 Model / Effort 触发器写的是 `rounded-lg` 挂在 `h-6` 上，渲染成两枚满圆胶囊，
+> 是第三轮点验「过于圆润、AI 化」归因里占比最大的一项。
+
+#### Squircle（按钮原语，A05 基线）
+
+按钮走**超椭圆**而非普通圆角，对齐
+`openchamber/packages/ui/src/components/ui/button.tsx`。
+`corner-shape: squircle` 下 `border-radius` 的语义从「圆弧半径」变成「超椭圆控制量」，
+**需要远大于普通圆角的值**，所以必须写成**三件套**：
+
+```
+rounded-[10px]                                   ← 兜底：不支持 corner-shape 时的普通圆角
+[corner-shape:squircle]                          ← 无条件下发
+supports-[corner-shape:squircle]:rounded-[50px]  ← 支持时半径顶到 50px
+```
+
+**两条强制规则**：
+
+1. **每个覆盖圆角的 size 变体都要成对重写这两行**。只写 `rounded-[9px]` 而漏掉 `supports-` 行，
+   在支持 squircle 的浏览器上会渲染成几乎直角。
+2. **`before:` 伪元素（内描边）必须同步下发**——`corner-shape` **不可继承**，
+   漏了会出现「外框超椭圆 + 内描边普通圆角」的双轮廓：
+   ```
+   before:rounded-[9px] before:[corner-shape:squircle] supports-[corner-shape:squircle]:before:rounded-[49px]
+   ```
+
+**边界**：只改 `buttonVariants` 的 cva 类名，**不要换组件实现**——
+本仓用 Base UI 的 `useRender` + `render` prop（23 处调用），与 OpenChamber 的 Slot / `asChild` **API 不兼容**。
+同时**保留本仓独有**的：每个 size 的 `sm:` 响应式降档（删了桌面端会整体变高）、
+`pointer-coarse` 44px 触控靶、10 个 size（含 5 个 icon 变体）、`active:scale-[0.97]`。
+
+**按钮文案强制小写**（基类含 `lowercase`）。中文是 no-op；以下两类**必须加 `normal-case` 豁免**：
+
+1. **中英混排的硬编码文案**，否则「一键安装 CLI」会变成「一键安装 cli」；
+2. **按钮里渲染的动态标识符**——文件名、路径、分支名、模型名、hash。
+   `lowercase` 是 `text-transform`，会继承到按钮的所有后代，把 `README.md` 显示成 `readme.md`、
+   把大小写敏感的远端路径 `/home/Dan/Projects` 显示成 `/home/dan/projects`（**只影响显示，不影响回调取值**，
+   所以不会报错，只会误导）。路径类**是否加 `font-mono` 不再是单点建议**——
+   按「字体族（分域）」一节的域映射判定：出现在**内容**里的路径走 mono，
+   出现在**控件**（按钮 / 下拉触发器 / chip）上的路径走 sans。完整映射见 D25 §2。
+
+现有豁免共 6 处，清单见 `docs/plantree/plans/openchamber-chat-refactor/open-questions.md` 第 10 条补记。
+
+### Shadow（阴影）
+
+> **适用范围**：本表覆盖**覆盖层与容器**（popover / dialog / sheet / toast / 浮起工具栏）。
+> **交互控件（按钮）不适用**——参考实现 OpenChamber 的按钮是**完全扁平**的
+> （零 shadow 类，只过渡 `background-color,border-color,color,opacity`）；
+> 本仓按钮当前保留 `shadow-xs` + `inset-shadow` 作为过渡态，**不得再往按钮上加 `shadow-md` / `shadow-lg`**。
+> 需要「浮起感」时优先靠 `border` + `bg-card` 而不是阴影。
+
+阴影遵循 5 级层次，层级越高，阴影越强：
+
+| Level | Tailwind | 典型场景 |
+|------|---------|---------|
+| none | `shadow-none` | 平面内嵌元素、按钮（目标态） |
+| xs | `shadow-xs` | input、card（紧贴背景） |
+| sm | `shadow-sm` | 浮起工具栏、轻量下拉菜单 |
+| md | `shadow-md` | popover、tooltip、浮动按钮 |
+| lg | `shadow-lg` | dialog、sheet、command palette |
+
+**禁止任意值阴影**：`shadow-[0_2px_8px_rgba(0,0,0,0.12)]` 这类写法会把黑色写死、亮暗共用，
+一律换成上表分档。
+
+**实测脚注（T-30 批 2）**：上面「需要浮起感时优先靠 `border` + `bg-card`」这条现在有实测背书——
+**参照实现 Cursor 的输入卡是零阴影的**：卡边框外相邻 8 行像素恒等于背景值，无阴影、无渐变。
+它读起来「浮起」只靠两件事：**卡填充比页面亮约 0.012 L** + **一条 L ≈ 0.94 的发丝边**。
+本仓的对应组合就是 `bg-card` + `border-border`，**不需要也不应该补阴影**。
+
+### 表单控件 vs 文字 chip（T-30 批 2 / D26）
+
+**`SelectTrigger` / `Input` 是输入控件原语，不是「可点文字」的通用外壳。** 它们自带
+`border` + `shadow-xs` + `before:` 内高光 + `min-w-*`，这套形制是为**表单页**设计的：
+在一屏十几个字段的表单里，边框是在告诉用户「这里可以填」。
+
+**工具条上的下拉不是表单字段。** 模型选择、分支选择、目标目录这类控件挂在信息密集的工具条上，
+每一枚都带一圈边框加一层阴影时，容器与控件会争夺同一份「圆润 / 浮起」预算，读感立刻变成「控件堆」。
+
+| 场景 | 用什么 | 形制 |
+|------|-------|------|
+| 表单页字段（设置页、对话框里的输入） | `Input` / `SelectTrigger` 原语 | 有边框、有 `shadow-xs`、有 `min-w` |
+| 工具条 / 卡内的下拉（模型、档位、分支、目标目录） | **ghost chip** | 文字 + chevron + hover 底；**无边框、无阴影、无 `min-w`** |
+
+参考实现：`composerModelTriggerClass()` / `targetTriggerClass()`（`chat/middleColumnLayout.ts`）。
+两者的**高度类与横内距类必须一致**（可交叉断言）——同一条工具条上只允许存在**一种** ghost chip 形制。
+
+**ghost chip 上的四条硬性禁止**：任何 `border*`；任何 `shadow*`（含 `before:` 内高光）；
+任何 `min-w-*`（固定下限制造死空间，是「文字看起来没居中」这类误诊的常见真因——
+居中的其实是一个比内容宽几十像素的盒子）；`rounded-md` 及以上（见 Border Radius 的钳制硬规则）。
+
+### Ghost chip 悬停显壳（T-30 批 2 / D26）
+
+ghost chip 静息态**没有任何外框**，「壳」只在交互时浮出。三条规则：
+
+1. **壳用 `hover:bg-hover` 填充实现。**
+2. **禁止用 `hover:border` 做壳。** 静息无边框、悬停加 1px 边框，会在悬停瞬间把元素撑高 2px，
+   造成整行抖动；填充式壳的盒模型恒定。
+3. **`hover:` 与 `focus-visible:` 必须成对给同一层底色。** 只挂 `hover` 的话，键盘用户 Tab 到该控件时
+   屏幕上除了一圈 outline 没有任何形状变化，**完全失去控件边界**——
+   「默认无框」是设计，「键盘用户看不见控件」是缺陷。outline 与底色两者**叠加**，不互相替代。
+
+弹层打开时保持显壳并加重一档：`data-[popup-open]:bg-selection`。
+`--hover` 与 `--selection` 在本仓已是预合成实色，**不要再叠 `/N` alpha**（见 Color System）。
+
+### Typography（字号）
+
+> **档位表已全部落成 `@theme` token（D25）。** 八个固定字号 token 均在 `globals.css` 的 `@theme` 中，
+> 直接写 `text-code` / `text-meta` / `text-ui` / `text-markdown` / `text-section` / `text-title` / `text-display` 即可，不要写任意值。
+> 调用点迁移状态见文首时效警示。
+
+**四档语义体系保留**（对齐 OpenChamber `packages/ui/src/styles/design-system.css:21-27` 的桌面基线值），
+D25 在其上做两件事：**补齐 token**、**给每一档标明字族**——分域之后「13px」与「mono」不再是同一件事。
+
+| 语义档 | Size | Token | **字族** | 覆盖的用途 |
+|-------|------|-------|---------|-----------|
+| 2xs | **10px** | `--text-2xs` | **mono only** | `kbd` 快捷键 chip。**禁止承载 CJK**——中文 10px 不可读，见「CJK 级联规则」 |
+| code | **13px**（0.8125rem） | `--text-code` | **mono** | 行内代码、代码块、工具行 ident 型参数、路径、hash、diff |
+| meta | **14px**（0.875rem） | `--text-meta` | sans | 时间戳、statusLine、meta 行、footer、次级说明 |
+| ui | **15px**（0.9375rem） | `--text-ui` | sans | 侧栏行、按钮、label、段头、tab、下拉触发器 |
+| markdown | **15px**（0.9375rem） | `--text-markdown` | sans | 聊天正文、工具行动词、Markdown 全部内容、**以及所有标题 h1–h6** |
+| section | **16px**（1rem） | `--text-section` | sans | 中栏会话栏标题（决策 170，issue #6；行高 1.5）。决策 183 删掉了面板标题（`DockTitle`）与侧栏板块标题（L1），**侧栏里不再有 16px** |
+| title | **18px**（1.125rem） | `--text-title` | sans | 设置页 L1 与对话框 / 抽屉标题 |
+| display | **26px**（1.625rem） | `--text-display` | sans | **只用于首页标题**（决策 174，issue #6；行高 1.3，句子 400、仓库名 600，字距 `-0.01em`）。见「首页」 |
+
+> **U01-a（2026-09-03）把 markdown 15→14、code 13→12**，对齐 pix 的正文与代码档
+> （[evidence-u01](./plantree/plans/pix-ui-alignment/topics/evidence-u01-numeric-scale.md)）。
+> 同时给 `body` 补上 **14px / 行高 1.45**——此前 body 既没有字号也没有行高，未显式标注的文本会掉回
+> 16px 与 UA 的 `normal` 行距。`html` 的 `--font-size-base: 16px` **不动**：它是整套 token 的 rem 基准，
+> 改它等于把全仓每个 rem 值一起缩放。Markdown 正文的 `leading-relaxed`（1.625）也**不动**，
+> 那是 F5 D1-b 针对长文阅读单独定的，与 UI 外壳的默认行距不是同一个问题。
+>
+> ⚠️ **2026-09-24（`a86cefa4`，style(theme): 全站字号分级整体上调一档）在 U01-a 基础上再上调一档**：
+> code 12→13px、meta 13→14px、ui/markdown 14→15px，并为 code/markdown/meta/ui 补上各自的
+> `--line-height`（1.5 / 1.55）；`body` 选择器的字号仍跟随 `--text-ui`（因此随之变为 15px），
+> 行高 1.45→1.55。**上表已是这次调整后的当前值**；`--text-title` 保持 18px 不变。聊天区两档默认值同步上调（16→17px / 13→14px），见下方「已记录偏离」一节；
+> **已保存的旧对话字号设置不做迁移**（用户决定，2026-09-24）。
+>
+> 2026-10-10（决策 170，issue #6）新增 `--text-section` 16px：以前「`--text-title` 是唯一高于 15px 的档」的说法不再成立
+> （聊天区 `--text-chat-body` 默认 17px 也早已高于 15px）。
+>
+> 2026-10-10（决策 174，issue #6 第二波）新增 `--text-display` 26px，只给首页标题用：最大的固定字号档从 18px 变为 26px，
+> 但**界面里的标题层级仍以 18px（`--text-title`）为上限**，26px 是首页那一句话独有的，不要拿它做别处的标题。
+> 与其他字号 token 一样已注册进 tailwind-merge 的 `font-size` 组（`cn('text-muted-foreground', 'text-display')` 不会吞掉颜色）。
+
+**`--text-markdown` 与 `--text-ui` 现在同为 15px，但仍是两个 token**——理由与下面 meta/code 那条
+完全一样：**值相同，变更理由不同**（U01-a / 2026-09-24 之前，两者曾同为 pix 对齐后的 14px）。
+
+**为什么 `--text-meta` 与 `--text-code` 必须是两个 token**：两者**变更理由不同**。
+`--text-code` 是「对 sans 正文的**光学补偿值**」——同 px 下 mono 的视觉体量比 sans 大 8~12%
+（平均 advance 0.6em vs 0.5em）。U01-a 把正文从 15 降到 14 时，它跟着从 13 降到 12，档比由 0.867 变 0.857，
+仍落在行业推荐带内——**这正是「跟着正文动」这条规则第一次真的生效**。2026-09-24 全站整体上调一档时，
+正文（sans body，即 `--text-markdown` / `--text-ui`）从 14 回升到 15，code 跟着从 12 回升到 13，
+档比回到 0.867——**同一条规则第二次生效**。
+`--text-meta` 现在是 **14px**（从 13px 上调）——但这次上调的理由依旧不是「跟着正文比例走」，
+而是与 code/ui/markdown 同批的整体分级上调；原则未变：两者各自的变更理由依旧不同，只是这次恰好同批发生。
+合成一个 token 的后果很具体：**未来一次 mono 调参会静默改掉全部时间戳字号。**
+
+**关键特征（照抄时最容易漏的一条）**：
+**OpenChamber 的标题层级不靠字号区分。** `packages/ui/src/styles/typography.css:143` 的注释即
+「Heading typography - all use markdown size, differentiated by weight/color」——
+`typography-h1/h2/h3` 与 `typography-markdown-h1..h6` 的 `font-size` **全部**是 `var(--text-markdown)`（15px），
+层级差异只来自三样：
+
+1. **font-weight**
+2. **letter-spacing**：h1 `-0.025em` → h2 `-0.02em` → h3 `-0.015em` → h4 `-0.01em` → h5 `0` → h6 `+0.01em`
+   （`packages/ui/src/lib/theme/cssGenerator.ts:577-582`）
+3. **color**：`markdown.heading1` / `heading2` … 各档取不同灰阶（flexoki-dark.json:132-133）
+
+**比例字体下缩字号确实省宽，但仍然不用字号做标题层级。**
+~~唯一的例外是侧栏「聊天」面板：板块 / 文件夹 / 对话按 16 / 15 / 14 逐级变小（决策 170）~~——**已被决策 183 推翻**
+（2026-10-11 用户看预览后裁决）：侧栏的分组标签与对话标题同为 14px，靠颜色（`muted-foreground` 对 `foreground-soft`）、
+留白与小三角区分，见「侧栏层级（聊天面板）」。这条规则现在没有例外。
+本文件旧版这里写的是「在全等宽 UI 里这条尤其重要：等宽字体放大后横向占位增长很快……」——
+该理由**随 D25 作废**（比例字体下缩字号是真省宽的）。结论不变，理由换成两条：
+
+1. 本项目界面里最大的标题只有 18px（首页标题的 26px 是唯一例外，只此一句），**字号维度本来就只剩一档余量**；把它花在标题上，正文与标题会挤在 15/18
+   之间读不出差别，而 10~12px 的小字在 CJK 下不可读，向下也没有空间。
+2. D25 之后 **weight（400/600 全平台可靠）+ letter-spacing 梯度 + color** 三件套**全部可用**，
+   层级不再只能靠 color 一维硬撑。用三件套比动字号更稳、也更可回归（字号一动就牵连布局，权重和字距不会）。
+
+**现有 6 级 → 4 档的过渡映射**（迁移归 T-22）：
+
+| 现有 | Tailwind | 归入 | 备注 |
+|------|---------|------|------|
+| 2xs 10px | `text-2xs` | **保留**（仅 mono 拉丁） | D25 修正原「→ ui 14px」：10px 档在等宽时代只是装饰，比例字体下它是**唯一能装 `kbd` 的档**；但**任何可能承载 CJK 的 10px 一律升到 `--text-meta`(14px，2026-09-24 从 13px 上调)** |
+| xs 12px | `text-xs` | → meta 14px / ui 15px / code 13px | 路径 / hash 类归 code，时间戳与次级说明归 meta，其余归 ui。**`text-xs` 在 `chat/` 与 `workspace-shell/` 已清零**（`chat/__tests__/fontDomainScan.test.ts` 有静态扫描断言守住） |
+| sm 14px | `text-sm` | → ui 15px | 曾在 ui 14px 时代等值对齐，2026-09-24 ui 上调到 15px 后不再等值，仍归 ui 档 |
+| md 16px | `text-base` | → markdown 15px | 正文/次级标题 |
+| lg 18px | `text-lg` | → settings-title 18px | 仅设置页 L1 保留 |
+| xl 22px | `text-xl` | → markdown 15px + weight | **上游无此档**，标题不靠字号 |
+
+`--text-2xs` 继续可用，写法：`text-2xs`（token 已注册，不要再写 `text-[10px]` 或 `text-[var(--text-2xs)]`）。
+
+> **新增字号 token 的强制动作（工程注记，本仓踩过）**：任何新增的自定义字号 token
+> **必须同步注册**进 `tailwind-merge` 的 `font-size` 类组（`src/renderer/lib/utils.ts` 的 `extendTailwindMerge`）。
+> 不注册的话 `twMerge` 会把 `text-ui` 这种形状判成**颜色**类组，于是
+> `cn('text-muted-foreground', 'text-ui')` **静默吞掉颜色**——不报错、不告警，只是颜色没了。
+> （`text-2xs` 恰好匹配 tailwind-merge 默认的 t-shirt 尺寸正则，那是**巧合**，不能当先例；
+> `text-tool-arg` 是颜色 token 而非字号，**刻意不注册**，它就该落在 `text-color` 组里。）
+
+### 已记录偏离：回合状态行用 `text-ui`（T097，2026-09-19）
+
+上表把 statusLine 归在 **meta（14px）**。聊天时间线的**回合状态行**不照这一格走，用 **`text-ui`（15px）**——两个形状一起改：`chatTimelineLayout.turnWorkGroupSummaryClass()`（工作组 `<summary>`：「工作中 47 秒 · ↑ 12.0k tokens · ↓ 1.3k tokens · 思考 20 秒」）与 `turnHeadClass()`（同一条线的非折叠形状）。
+
+**理由**（完整版在 `turnWorkGroupSummaryClass()` 的注释里）：meta 档描述的是**被动陪衬**——时间戳、页脚、应用状态栏，看一眼或根本不看。这一行不是：一次等待里它经常是**屏幕上唯一在动的东西**，读者要盯着它看 20 秒，13px 被实测反馈为「太小，撑不起这个角色」。
+
+**边界，不要顺手扩大**：
+
+- 两个函数**必须同时改**。它们是同一条线的两种形状，回合中途生成工作组时若只改一个，整个回合看起来像换了字号。
+- 仍然是 **token 不是任意值**，字号的话语权留在字号表里。
+- **回合尾部的悬浮操作条不跟着走**（`turnActionsInnerClass()` 保持 `text-meta`）：它装的是墙钟时间 + 复制按钮，正是 meta 档自己的例子，而且必须待在 `h-6` 里——那是按钮档位，不是排版决定。
+- 这条偏离只覆盖**聊天回合状态行**。侧栏、设置页、应用状态栏的 statusLine 仍归 meta。
+
+### 已记录偏离：聊天区两档字号**运行时可变**（D1 / D2，T104，2026-09-19）
+
+上表的八档字号 token 是**固定档位**——值由设计决定，不随用户设置变化。聊天区新增的
+**`--text-chat-body`**（默认 17px）与 **`--text-chat-process`**（默认 14px）**不照这条走**：
+它们是本仓库里**唯一一对运行时可变**的字号 token，由设置在 [12, 24] / [12, 20] 内连续调节。
+完整决策见 [决策 032](plantree/plans/runtime-hardening/decisions/032-chat-typography-configurable-two-tiers.md)。
+
+> ⚠️ **2026-09-24（`a86cefa4`，style(theme): 全站字号分级整体上调一档）**：出厂默认从
+> T104 上线时的 16px / 13px 上调为 **17px / 14px**（`chatTypography.ts` 的
+> `DEFAULT_CHAT_BODY_FONT_SIZE` / `DEFAULT_CHAT_PROCESS_FONT_SIZE` 同步）。
+> **已保存的旧对话字号设置不做迁移**——老用户持久化的 16 / 13 保持不变，
+> 新默认值只对新安装或从未保存过设置的用户生效（用户决定，2026-09-24）。
+
+| Token | 默认 | 范围 | 用途 |
+|---|---|---|---|
+| `--text-chat-body` | **17px** | 12 ~ 24 | 聊天区助手 / 用户正文、Markdown（**含 h1–h6**）、输入框 |
+| `--text-chat-process` | **14px** | 12 ~ 20 | 工具行、思考正文（从 `--text-markdown` 分出来的那一档） |
+
+**为什么这是有据偏离而不是破例**：这两档与六档的性质不同——六档回答「**哪一处 UI 该用哪一档**」，
+而这两档回答「**这一处由读者自己定多大**」。语义位置的切分（正文 / 过程）仍是设计判断，
+只有**取值**开放给了读者；两档之间仍是语义关系（正文档 > 过程档，层级由字号差与颜色共同承担）。
+数值边界也仍受本文件约束：两档下限取 **12px** 而非更低，是照「CJK 级联规则」第 3 条
+（任何可能出现中文的位置最小档是 `--text-meta` 14px）刻意留的一格余量——过程行装的就是中文动词，
+**不得再往下取**。
+
+**四条不要顺手扩大的边界**：
+
+- **回合状态行不参与**。`turnWorkGroupSummaryClass()` 与 `turnHeadClass()` 保持 `text-ui`（15px），
+  见上方「已记录偏离：回合状态行用 `text-ui`（T097，2026-09-19）」。本次只管正文与过程。
+- **`--text-markdown` / `--text-ui` 未动**。本次是**切分与新增**，不是改档；固定档的语义不变。
+- **默认值内部自洽**。17 / 14 这对现行出厂值下，输入框行高仍由正文字号派生
+  （`--text-chat-body * 1.5`，17px 档算出 25.5px），表达式与档位数值保持一致——这条自洽性是本偏离
+  继续成立的底气。T104 上线时的出厂值曾是 16 / 13（那时 16px 档算出的 24px 与旧写死值完全重合），
+  2026-09-24 全站整体上调一档后，由「与旧写死值重合」让位为「与新档位算式自洽」；
+  **已保存的旧设置不受影响**（见上方 2026-09-24 说明）。
+- **仍是 token 不是任意值**，且**新增字号 token 的强制动作照旧**：必须同步注册进
+  `tailwind-merge` 的 `font-size` 组（见上方工程注记），本次两个 token 均已注册。
+
+**红线（比上面所有边界都硬）**：运行时覆盖**只挂在聊天区根节点**
+（`ChatWorkspace.tsx` 的 `<section>`）上，**绝不写 `documentElement`**。
+`documentElement` 的全局覆盖正是 T-21 拆掉的那个 bug（见「分离契约」一节），
+该函数已整体删除，**不得回退**。有静态测试 `chatFontOverrideStatic.test.ts` 钉住这两点
+（注入点是那个 `<section>`、覆盖不落在 `documentElement` 上）。
+
+### Font Weight（字重）
+
+字重是标题层级的**主要**载体（见上），不是可选装饰。但**有几档可用取决于字体栈**——
+等宽栈时代实测 `semibold` / `bold` 全仓 **0 处**、`font-medium` 部分失效，实际可用只有 1 档；
+D25 换到比例栈之后梯度才真正接通：
+
+| Level | Tailwind | 场景 | **平台可靠性** |
+|------|---------|------|--------------|
+| normal | `font-normal` | 正文、描述、占位文本、工具行输出体、全部 muted 文本 | ✅ 全平台 |
+| medium | `font-medium` | button、label、导航项、表头、**软强调** | ⚠️ macOS ✅（SF Pro Medium）· **Win11 ✅**（Segoe UI Variable，可变轴真值；**只对拉丁字成立**）· **Win10 ❌**（Segoe UI 静态族 300/350/400/600/700，**无 500**）· **中文 Win10 / Win11 都 ❌**（回退到 Microsoft YaHei UI，只有 Light / Regular / Bold）· Linux ⚠️（视安装的子族） |
+| semibold | `font-semibold` | 卡片 / 对话框 / 段落标题、正文相对 meta 的强调、顶栏标题 | ✅ 全平台（缺档时升到 700，只会更重，不会消失） |
+| bold | `font-bold` | 仅 Markdown `**粗体**` 内联 | ✅ 全平台；**不用于 UI 层级** |
+
+**两条硬约束**：
+
+1. **500 不得作为任何层级区分的唯一载体。** CSS 字重匹配对目标 500 的规则是「先找 500，找不到就**降到 400**」
+   （CSS Fonts 4 §5.2，注意**不是**升到 600）——所以 Win10 上 `font-medium` 与 `font-normal` **逐像素相同**。
+   任何「必须在 Win10 上也看得出来」的区分，一律用 **400 vs 600**。
+   **CJK 更进一步**：中文回退到的 Microsoft YaHei UI 只有 Light / Regular / Bold 三档，
+   所以**中文在 Win10 和 Win11 上 500 都显示成 400，600 显示成 Bold 700**——上表 Win11 那一格的 ✅ 只对拉丁字成立。
+   侧栏「聊天」面板因此不用 500；决策 183 之后连 600 也不用了，分组标签、对话、辅助行全是 400，
+   层级靠颜色、留白与小三角（见「侧栏层级（聊天面板）」）。
+2. **`font-mono` 元素只用 400 / 700。** 系统等宽族普遍只有这两档，写 500 / 600 会触发**合成加粗**（笔画毛糙）。
+   配套：`@layer base` 已设 `font-synthesis-weight: none`，缺档时走字重匹配而不是合成——
+   对 sans 侧零代价（600 处处为真），对 mono 侧是保护。
+
+### Letter-spacing（字距梯度）
+
+上游 OpenChamber 的六级梯度（h1 `-0.025em` … h6 `+0.01em`）**不能原样搬**，两条硬理由：
+① **负字距在 CJK 上会撞字**——CJK 字形本就满格排布，而我们的标题、侧栏会话标题、user 气泡都可能全是中文；
+② **负字距的收益只在大字号出现**，本项目界面标题最大只有 18px（首页标题 26px 是唯一例外），15px 以下的负字距是纯风险无收益。
+
+D25 的四档 + 一个例外：
+
+| 档 | 值 | 域 |
+|----|----|----|
+| 段头 | `+0.04em` | 大写拉丁分组段头（A07 明文裁定值，D25 后**数值不变**，只换了理由）。~~侧栏 L1 板块标题「正在活动」「仓库列表」「临时对话」~~ 已随决策 183 删除；侧栏分组标签（12px 灰字，决策 186、188）**字距 0**，不用本档 |
+| 微标签 | `+0.02em` | ≤11px 的 badge / 角标 / `kbd` 内文——小号比例字需要开距 |
+| 按钮 | `+0.01em` | `ui/button.tsx` 基类已全局带 `tracking-[0.01em]`（比例字体下这条才开始真的起作用） |
+| 正文 / UI | `0` | 正文、侧栏行、Composer、工具行、meta —— **默认** |
+| 大标题（例外） | `-0.01em` | **仅 ≥18px**：`font-heading` 全仓 8 处，**已全部落地**（dialog / sheet / alert-dialog / empty / SessionManagerView ×2 / OnboardingView / 首页标题 26px，决策 174） |
+
+**两条禁令（可静态断言）**：
+
+- 🚫 **`font-mono` 元素禁止任何非零 `tracking`。** 等宽 + 字距 = 列对齐失效，工具输出 / diff 直接崩。
+  唯一例外是 OTP 输入的 `tracking-[0.5em]`——那是刻意的字符分隔，不是排版微调。
+- 🚫 **任何可能承载 CJK 的元素禁止负 `tracking`**，操作规则 = **「<18px 一律非负」**。
+  ⚠️ 连带：**给共享基类加负字距时，必须同时清点它全部低于 18px 的覆写点，逐个补 `tracking-normal`**，
+  否则负字距会跟着字号一起被带到小字上，漏一个就是一处 CJK 撞字。
+  本仓实例：`EmptyTitle` 基类迁到 `text-title` + `-0.01em` 的同批，
+  `workspace-shell/` 的 2 个 14px 覆写点（`LeftNav` / `SurfacePlaceholder`）与
+  `layout/` 的 8 个 16px 覆写点（`TemporaryWorkspacePanel` · `TreeSidebar` ×2 · `WorktreePanel` ×3 · `RepositorySidebar` ×2）
+  **全部带上 `tracking-normal`**。
+
+### 数字对齐（tabular-nums）
+
+**规则：任何会原地变化的数字，或任何需要跨行竖直对齐的数字，必须 `tabular-nums`。**
+
+这条在等宽字体时代不存在——等宽下所有数字天然同宽。D25 换到比例栈之后它变成必答题：
+比例字体的数字字形宽度不等（`1` 比 `0` 窄一截），一个每秒刷新的计时器会**逐帧左右跳**。
+**这是 D25 引入的回归，不是既存问题**，所以必须与字族改动同批处理。
+
+典型必须加的位置：
+
+- 状态栏 / 状态行的**全部**数值项：百分比、金额、时长、`+N` / `-N` 行数、token 计数、缓存命中、API 耗时、版本号；
+- 消息 meta 行的时间戳与耗时（`1.2s` / `HH:MM`）；
+- 工具行里 prose 型参数中的数字（`Worked for 3s`、`2 files, 3 searches`）；
+- 列表里右对齐的相对时间（`50m` / `3h` / `6d`，如首页「最近对话」）。
+
+判据一句话：**它会不会在原地被换成另一个数？会 ⇒ 加。**
+
+**相对时间统一实现（T-31 / P-18）**：分档判断（`now` / `Nm` / `Nh` / `Nd` / `Nw` / `Nmo` / `Ny`）只落一处——`src/renderer/lib/relativeTime.ts`——chat 回合尾部（`messageMetadata.ts` 的 `formatRelativeTimestamp`）与首页「最近对话」的行共用同一份分档表，不得另起一份格式化逻辑，否则两处的「多久算 1h」会各自漂移。（侧栏会话行决策 183 起不再显示相对时间。）相对时间之外恒配 `title` 悬停给绝对时刻：回合尾部用 `formatAbsoluteTime`（`chat/messageMetadata.ts`，只有 `HH:MM`）；侧栏与首页的会话行用 `formatAbsoluteDateTime`（`lib/relativeTime.ts`，`YYYY-MM-DD HH:MM`，**一律带日期**——这些行跨天跨年，单写 `14:32` 有歧义；格式按界面语言定，不读系统区域设置），写在行悬停提示的第三行（决策 167；侧栏去掉时间后它是那里唯一的时间）。
+
+### Motion（动画时长）
+
+过渡动画统一为 3 档（Progress/Meter 指示器除外）：
+
+| Tier | Duration | 场景 |
+|------|----------|------|
+| Fast | 100ms | 纯颜色变化（hover color、focus ring 出现） |
+| Normal | 150ms | 交互反馈（button press、tooltip enter、toggle） |
+| Slow | 250ms | 布局变化（面板展开/收起、对话框切换） |
+
+**实现规范**：
+- hover / focus：优先 `duration-150`
+- 布局变化：使用 `duration-[250ms]`
+- `Progress` / `Meter`：允许使用 `duration-500` 表达连续变化
+
+## Spacing & Sizing
+
+### 高度规范
+
+| Component | Height | Tailwind |
+|-----------|--------|----------|
+| Tab 栏 | 36px | `h-9` |
+| 侧栏顶部导航项（新建对话 / 添加仓库，决策 183） | 32px | `h-8` |
+| 侧栏「聊天」面板的行（分组标签、对话行、辅助行「查看更多 / 收起」；搜索框与工具条按钮，决策 188） | 32px | `h-8` |
+| 树节点行（文件树等其他树） | 28px | `h-7` |
+| 小按钮 | 24px | `h-6` |
+| 输入框 | 36px | `h-9` |
+
+> 决策 183 删掉了侧栏板块标题（原 `h-8`）与面板标题栏 `DockTitle`（原 `h-9`）；侧栏辅助行随原型从 `h-6` 改为 `h-7`，「新建对话」辅助行删除。
+> 决策 188（2026-10-13，「截图样式」预览）把侧栏「聊天」面板的行整体从 `h-7` 提到 `h-8`，与顶部导航同高；其他树节点不变。
+
+### 间距规范
+
+| Usage | Size | Tailwind |
+|-------|------|----------|
+| 紧凑间距 | 4px | `gap-1` |
+| 标准间距 | 8px | `gap-2` |
+| 宽松间距 | 12px | `gap-3` |
+| 缩进 | 12px/层级 | `depth * 12 + 8px`；**侧栏「聊天」面板例外：对话行不缩进**（决策 183），分组标签文字与行首 `w-4` 状态槽左缘对齐（x=16），对话标题落在 x=38，见「侧栏层级（聊天面板）」 |
+
+### 新壳布局档位（D19 / T-22）
+
+新壳 `components/workspace-shell/` 的三列（+ D34 起 Surface 切换迁入顶栏，不再是独立导轨列）为**硬性档位**，权威常量在
+`components/workspace-shell/shellLayoutModel.ts`，改值必须同步本表：
+
+| 区域 | 值 | Tailwind / 常量 |
+|------|-----|----------------|
+| 顶栏 Surface 切换（D34，原 Rail） | 折叠按钮左侧横排 4 × 32px 图标按钮 | `MainHeader.tsx`（`size="icon"` · `size-4.5`） |
+| Surface 切换变更圆点 | 6px | `h-1.5 w-1.5` + `bg-info`（**仅 `git` surface**） |
+| Sidebar（左列） | 默认 280px，可拖 280–500 | `SIDEBAR_DEFAULT_WIDTH` / `SIDEBAR_MIN_WIDTH` / `SIDEBAR_MAX_WIDTH` |
+| Sidebar 折叠态 | 44px（只剩导轨） | `SIDEBAR_COLLAPSED_WIDTH = DOCK_RAIL_WIDTH` |
+| Sidebar 会话行宽度预算 | 面板 280px **含 1px 右边框**：行内容宽 **247px**（280 − 1 − 列表 px-2 16 − 行 px-2 16），减 `w-4` 状态槽与一个 `gap-1.5` 后**标题 225px**（决策 183：行不缩进、没有时间盒，悬停操作浮在行上不占宽） | 标题 `min-w-20 flex-1`（下限）· 上下文文字（只给 worktree 行，分支最后一段）`min-w-0 max-w-24 shrink`（唯一让位者）· 悬停操作 `absolute inset-y-1 right-1.5`（按钮 `size-5 sm:size-5`） |
+| ContextPanel（右列） | min 250（D34，原 380）/ max 1400，默认 380 | `CONTEXT_PANEL_MIN_WIDTH` / `CONTEXT_PANEL_DEFAULT_WIDTH` / `CONTEXT_PANEL_MAX_WIDTH` |
+| ContextPanel 未测量兜底 | 600px | `CONTEXT_PANEL_FALLBACK_WIDTH` |
+| ContextPanel 收起 | 宽 0（常驻挂载 + `inert`） | — |
+| 阅读栏（中列） | `min(100%, 45rem)` 居中 | `mx-auto w-full max-w-reading`（`--container-reading`） |
+| 阅读栏宽模式 | `min(100%, 60rem)` 居中 | `mx-auto w-full max-w-reading-wide`（`--container-reading-wide`） |
+| 列宽拖拽把手 | 4px | `w-1` + `cursor-col-resize` |
+| **chat 列（中列左半）** | min 400px | `CHAT_MIN_WIDTH`（`centerLayoutModel.ts`） |
+| **editor 列（中列右半）** | min 520px，仅开文件时存在 | `EDITOR_MIN_WIDTH` |
+| **审阅栏（右列，与 editor 互切）** | min 320px，用户主动打开；聊天仍保留 min 400px | `REVIEW_MIN_WIDTH`（2026-09-10 当前对话修改审阅） |
+| **chat/editor 比例** | 默认 0.5，可拖 0.25–0.75 | `DEFAULT_EDITOR_RATIO` / `MIN_EDITOR_RATIO` / `MAX_EDITOR_RATIO`（持久化 `editorRatio`） |
+
+### 画幅降级梯（T-32 / D27，A08 §「画幅降级梯」）
+
+**只在开文件时生效**——没有 editor 就没有 520px 预留要让，纯聊天壳的行为与 T-32 前一致。
+阈值量的是**内容行**（chat + editor + panel/rail），**不含侧栏**：
+
+| 档 | 阈值（内容行） | 行为 | 常量 |
+|---|---|---|---|
+| L0 | ≥ 1300 | chat + editor + panel 全在（**展开态无 Rail**） | `LEVEL_L0_MIN_CONTENT` = 400 + 520 + 380 |
+| L1 | ≥ 964 | 右栏自动收起，Rail 出现（一键唤回） | `LEVEL_L1_MIN_CONTENT` = 400 + 520 + 44 |
+| L2 | < 964 | 再隐 chat，只剩 editor | — |
+
+> **与 A08 原值的差**：A08 写 **1580 / 1244**，是**含 280px 侧栏的整窗**阈值。本仓侧栏可拖
+> 280–500、可收起到 48，整窗阈值会双向误判（宽侧栏时高估、收起时低估）。故改量内容行，
+> 两者**恒差 280**（单测钉死），侧栏为 280 时完全等价。**属适配性偏离，非推翻 A08。**
+
+**手动覆盖**（`manualPanel` / `manualChat`）：会话态、**不持久化**，关文件清零（A08 §06-4）。
+类型是 `boolean | null` 而非 A08 的 bool——两态说不出「已清零」，会让覆盖活过它所属的文件。
+
+**可见性只在 `WorkspaceShell` 合成一次**：`activeSurfaceId !== null` 是**意图**（用户想不想开面板），
+不是**呈现**（此刻可不可见）。降级梯只读不写它，加宽窗口才能自动恢复。
+静态不变量 `panelVisibilityStatic.test.ts` 守着这条线。
+
+**两条实现约束**：
+
+1. 列宽变化统一 `duration-[250ms]`（Motion 的 Slow 档），**拖拽期间以 `data-resizing` 关掉过渡**——
+   否则每帧过渡与指针位置打架，手感发黏。
+2. 提升为全视图时面板宽度用**测量出的 px**、不用 `100%`：px 与百分比之间无法插值，会瞬跳。
+
+> **阅读栏为什么是 45rem（D25 §3.4）**：换比例字体会把行拉长（48rem 下约 102 拉丁字符/行），
+> 正确组合是「比例字体 **+** 收窄栏宽」，不是单纯替换字族。参照实现实测为 **48 CJK 当量/行**，
+> 15px × 48 字 = 720px = **45rem**，逐字对齐；宽模式按同比例（−6.25%）从 64rem 收到 60rem。
+> 两个值落成 `@theme` 的容器 token（`--container-reading{,-wide}`）而不是 `max-w-[45rem]` 任意值。
+>
+> ⚠️ **U01-a 之后这条推导的输入变了，结论暂未跟着改（2026-09-03）**。正文档从 15px 降到 14px 后，
+> 同样的 720px 装的不再是 48 个 CJK 当量，而是约 **51.4 个**。三条路各有道理，属于要单独拍板的取舍：
+> 保住「48 字/行」这条**可读性规则**要收到 42rem（672px）；保住**当前观感**就维持 45rem；
+> 对齐 pix 的 thread-max（760px，约 54 字/行）要放到 47.5rem。
+> **本轮维持 45rem 不动**——栏宽属布局尺寸，不在 [D01](./plantree/plans/pix-ui-alignment/decisions/001-style-depth-and-sequencing.md)
+> 授权的「字号 / 行高 / 间距 / 圆角 / 灰阶」范围内。待 Q11 拍板后再改，见
+> [open-questions](./plantree/plans/pix-ui-alignment/open-questions.md)。
+
+### 侧栏层级（聊天面板）（issue #3 / #6，2026-10，决策 167、170、183）
+
+适用于左栏「聊天」面板（`LeftNav`）；`LeftDock` 的另外四个面板只受「没有标题栏」一条约束。其他面板的列表要套用这里的分组标签 / 对话 / 辅助三级时单独确认。**验收依据是原型** [`plantree/plans/dsh-rebase/evidence/sidebar-claude-style-2026-10/`](./plantree/plans/dsh-rebase/evidence/sidebar-claude-style-2026-10/README.md) 的默认视图（v5 定稿，决策 183；`.vB` 一套样式与工具条是对比项，不施工）。决策 167 的 [`sidebar-hierarchy-2026-10/`](./plantree/plans/dsh-rebase/evidence/sidebar-hierarchy-2026-10/README.md) 与决策 170 的 [`sidebar-regions-2026-10/`](./plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/README.md) 只剩历史参考价值（后者的首页部分仍是「首页」一节的依据）。静态断言在 `workspace-shell/__tests__/sidebarHierarchyStatic.test.ts` 与 `sidebarRowBudgetStatic.test.ts`，挂载测试在 `sidebarActiveAndFolders.test.ts`。
+
+**决策 183 改了什么**（2026-10-11 用户裁决，参考 Claude 桌面版）：
+
+- **五个面板（聊天、Git、文件、终端、运行）都没有标题栏了**：`DockTitle` 删除，面板内容从顶部开始；在哪个面板看导轨高亮，读屏靠面板 `<section aria-label={面板名}>`。导轨顶部的 `h-9` 占位（U27）随之删除，导轨改为 `py-2`，首个图标与面板第一行（「新建对话」）基本齐平（差 2px，照原型）；决策 188 起顶部改为 `pt-3.5`（底部仍 `pb-2`），与「新建对话」同在 14–46，完全齐平。
+- **「正在活动」区删除**；运行状态只看每行行首的状态槽；折叠的分组在名字后显示汇总标记。
+- **三个分区合成一个滚动列表**：没有 L1 板块标题、没有区间分隔线、没有区底渐隐与百分比上限；临时对话成为置顶的固定分组。
+- **三个区域之间各一条通栏细线**（2026-10-12 用户裁决，原型 v6「分隔线 = 通栏细线」`.sep-line`）：顶部（导航 + 搜索行）与列表之间一条，列表与账户栏之间一条，都是 1px `border`、贯穿面板全宽、不内缩。用户反馈三个区域糊在一起、账户栏像又一行对话。**面板里除这两条外不加任何线**（分组之间仍只靠留白）。
+- **账户栏改成原型的 32px 一行，并去掉今日花费**（同日裁决，原型 v6「账户栏 = 原型（32px）」`.foot.proto`）：常驻的花费数字「容易给人压力」；点开的账户卡片（`UserProfileCard`）仍显示用量，不变。
+- **四级**取代决策 167 的五级（L0 面板标题、L1 板块标题删除）：顶部（导航 + 搜索行）/ 分组标签 / 对话 / 辅助。决策 170 的「16 / 15 / 14 逐级变小」被推翻，侧栏里只有 14px 与 15px。（决策 188 之后只剩 14px 与分组标签的 12px，见下。）
+
+**四级**。只用 400 字重（按钮、徽标原语自带的除外）；相邻两级至少两个互相独立的区分载体。500 不作任何一级的载体（Win10 的 Segoe UI 没有 500，中文回退的 Microsoft YaHei UI 只有 Light / Regular / Bold，**中文在 Win10 和 Win11 上 500 都显示成 400**）。
+
+| 级 | 内容 | 字号 | 字重 | 颜色 | 高度 | 其他 |
+|---|---|---|---|---|---|---|
+| 顶部导航 | 「新建对话」「添加仓库」 | `text-meta` 14px（决策 188，原 15px） | 400 | `foreground`；图标 `muted-foreground` | `h-8` | 22px 图标槽（`size-5.5`），「新建对话」的槽是 `rounded-full bg-selection` 圆底 + `Plus size-3.5`，「添加仓库」是 `FolderPlus size-4`；`gap-2.5 px-2 rounded-sm`，悬停与键盘焦点 `bg-hover` |
+| 搜索行 | 搜索框 + 全部折叠 / 全部展开 + 批量归档 | 输入 14px | 400 | 占位 `muted-foreground` | `h-8` | 见下「顶部」 |
+| 分组标签 | 仓库名、「临时对话」 | `text-group-label` 12px | 400 | `muted-foreground`，悬停 / 键盘焦点 `foreground-soft` | `h-8` | 无文件夹图标、无悬停底色；名字后跟小三角；字距 0 |
+| 对话 | 对话标题 | `text-meta` 14px | 400 | `foreground-soft`；**选中行恢复正文色**（`text-accent-foreground`） | `h-8` | 行首 `w-4` 状态槽永远占位且永远有标记；选中 `bg-selection`；**不缩进** |
+| 辅助 | 查看更多（N）/ 收起、分支文字、改动合计、汇总标记里的数字、空状态 | `text-meta` 14px | 400 | `muted-foreground`（改动合计 `success` / `destructive`） | 独立成行 `h-8` | 数字 `tabular-nums` |
+
+**相邻层级的区分载体**：分组标签–对话：字号（12px 对 14px，决策 186、188，issue #14）、颜色（`muted-foreground` 对 `foreground-soft`）、留白（组间 14px）、小三角、对话行首的状态标记、悬停底色（分组标签没有）；对话–辅助：颜色、行首状态标记（辅助行的槽是空的）。分组标签与对话曾同为 14px——那是决策 183 §1.3 的裁决；**决策 186（2026-10-12，issue #14）把分组标签降到 13px**：用户实测后认为「灰色小字标签」与它管着的对话标题同号时偏重，折叠区的字要再轻一档，因此放宽 D25「凡可能承载 CJK 的位置不小于 14px」这条下限，**只对这一级生效**（对话行、辅助行、按钮仍是 14px）。**决策 188（2026-10-13，「截图样式」预览，用户选「截图样式 + 推荐留白」）再降一档到 12px**：行高提到 32px、顶部导航降到 14px 之后，整栏成了「一个字号 + 一档更轻的标签」，13px 在 32px 行里不再读得出是降了一级。同一级、同一理由，只是再往下一格。
+
+**决策 188 改了什么**（2026-10-13 用户裁决，预览 [`docs/design/2026-10-13-sidebar-spacing-preview.html`](./design/2026-10-13-sidebar-spacing-preview.html) 的「截图样式 + 推荐」）：行高 28 → 32（分组标签、对话、辅助行、搜索框、两个工具按钮），顶部导航 15 → 14px，分组标签 13 → 12px，三区之间的 8 处留白依次为 14 / 3 / 16 / 16 / 16 / 16 / 12 / 10（侧栏顶 →「新建对话」、两个导航项之间、「添加仓库」→ 搜索框、搜索框 → 第一道细线、第一道细线 → 第一个分组标题、最后一行 → 第二道细线、第二道细线 → 账户行、账户行 → 窗口底）。结构、颜色、图标、交互、两条通栏细线、账户行本身（32px、22px 圆头像）都不变。
+
+**新 token `--muted-foreground-faint`**（未启动的淡空心圈）：`color-mix(in oklab, var(--muted-foreground) 45%, color-mix(in oklab, var(--card) 40%, var(--background)))`——`muted-foreground` 向侧栏实际底色（`LeftDock` 的 `bg-card/40` 叠在 `bg-background` 上）混合；只在 `:root` 声明一次，`@theme` 桥接 `--color-muted-foreground-faint`，工具类 `border-muted-foreground-faint`。派生式跟着亮 / 暗 / 同步终端主题走。不带 alpha，**不许加 `/N`**；它是颜色，不注册进 tailwind-merge 的 `font-size` 组。值与对比度见 Color System 表。对话标题的 `--foreground-soft` 不变（决策 170，见 Color System）。
+
+**顶部**（列表上方，不随列表滚动；以一条通栏细线收尾）：
+
+- 导航：`flex shrink-0 flex-col gap-0.75 px-2 pt-3.5 pb-1`（决策 188：顶 14、两项间 3、下 4），两项共用 `NAV_ITEM_CLASS`（`flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-meta hover:bg-hover focus-visible:bg-hover`）。「新建对话」= 回首页并预选仓库（决策 174 的 `resolveHomePreselect`，`title` 是「新建对话（回到首页）」）；「添加仓库」打开共用的添加仓库对话框。
+- 搜索行：外层 `TOP_ZONE_END_CLASS` = `shrink-0 border-b px-2 pt-3 pb-4`，里面一行 `flex h-8 items-center gap-0.5`。「添加仓库」→ 搜索框 16px（导航 `pb-1` + 这里 `pt-3`）。**搜索行下方 16px 是顶部区域的通栏细线**（`border-b` 在全宽的外层上，`px-2` 在线内侧，所以线贯穿面板全宽）；多选栏在同一个外层里，线的位置不变。
+  - **搜索框常显**（决策 183 §2.1，「筛选会话」开关与 `searchVisible` 已删除），**外观照原型 `.search`**（2026-10-11 用户裁决，不用 coss `InputGroup` 的默认外观）。仍是 coss 的 `InputGroup` / `InputGroupInput size="sm"` / `InputGroupAddon align="inline-start"`，只在 `LeftNav` 这一处用 `SIDEBAR_SEARCH_CLASS` 覆写，`input-group.tsx` 不动：平时 `h-8 rounded-sm`、透明底（亮 / 暗都是：`bg-transparent dark:bg-transparent`）、1px `--border` 线（`border-border`）、无阴影（`shadow-none`）、无内阴影（`before:hidden` 去掉承载它的 `::before`）；获得焦点（`has-[input:focus-visible,textarea:focus-visible]:`）时底色 `bg-background`、线 `border-muted-foreground`、无焦点环（`ring-0`，也没有品牌橙 `border-ring`）。放大镜 `Search size-3.5 text-muted-foreground opacity-100`（`opacity-100` 让它不吃 addon 的 80% 图标淡化），占位文字 `[&_input]:placeholder:text-muted-foreground`（原语是 `/72`）。**覆写要写成与被替换的基类完全相同的变体链**，tailwind-merge 才会去掉基类（`border-input`、`bg-background`、`dark:bg-input/32`、`shadow-xs`、`has-[…]:border-ring`、`has-[…]:ring-2`）；只写一个 `border-border` 之类并不保证生效。不用 `!important`。最终合并结果由 `sidebarActiveAndFolders.test.ts` 读渲染出的 className 断言。input 在前、addon 在后（`order-first` 把它排到左边，`[data-size=sm]+&` 的内距只在这个顺序下生效）。**禁止「绝对定位的图标 + 后面跟一个 `Input`」**：`Input` 外层是 `relative` 且有底色，按文档顺序画在图标上面，亮色主题下图标完全看不见。模型菜单与分支切换的搜索框同样按此写（它们保留 coss 默认外观）。
+  - **全部折叠 / 全部展开是一个开关**（决策 183 §1.8）：按不搜索时列表里的分组（含临时对话）的折叠状态判断：只要有一个展开，按钮是「全部折叠」（`ChevronsDownUp`），点击把全部分组写成折叠；全部折叠时变成「全部展开」（`ChevronsUpDown`），点击全部展开。`aria-label` 与 `title` 跟着变。**搜索框有内容时按钮禁用、文案不变**（`disabled={queryActive || …}`，文案按存储的折叠状态算）；没有分组时也禁用。清空搜索后按新的折叠状态重新算（命中的分组已展开，所以通常是「全部折叠」）。
+  - 批量归档（`ListChecks`）。两个图标按钮 `Button variant="ghost" size="icon-xs"` + `size-8 shrink-0 text-muted-foreground sm:size-8`（32px，决策 188；图标 `size-4`；只写 `size-8` 会输给 `icon-xs` 的 `sm:size-6`）。
+  - 多选模式下这一行原地换成「已选 N 项 · 归档 · 取消」（`pl-2 text-meta` 文字 + 两个 `Button size="xs"`，`h-6 sm:text-meta`），高度不变，列表不跳。
+
+**列表**（`LIST_AREA_CLASS` = `grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)]`，里面一个 `ScrollArea`，内容 `px-2 pt-1 pb-4`，决策 188）：
+
+- 单行 grid 而不是 flex：`ScrollArea` 根的 `height: 100%` 要解析到一个确定的轨道；`grid-cols-1` 是承重的，不写的话隐式 `auto` 列会被不换行的标题撑到 min-content 宽度，整行冲出面板右边。这条链（`aside` 的 `flex h-full flex-col` → 列表 → `ScrollArea`）上不能插入按内容定高的容器。
+- 从上到下：「无匹配会话」提示（搜索无结果时）→ 各仓库分组 → **临时对话分组**（有临时对话时才渲染，决策 186 起在最底，issue #13）；没有可用仓库时仓库分组换成添加仓库的引导卡片（`Empty`）。
+- **列表空白处右键**是「添加仓库」（整个列表是 `ContextMenuPrimitive.Trigger`）；分组标题、对话行先答自己的右键（Base UI 的 trigger 会 `stopEvent`，内层优先）。
+- 溢出时视口可以聚焦（base-ui 给 `tabIndex=0`），焦点环沿用原语的 `focus-visible:ring-2`。没有吸顶、没有区底渐隐。
+
+**分组**（`<section data-sidebar-group={id}>`，`SIDEBAR_GROUP_CLASS` = `mt-3.5 first:mt-3`；第一道细线 → 第一个分组标题 4 + 12 = 16px）：
+
+- 标题由 `renderGroupHeader()` 统一生成（仓库与临时对话共用；它是返回元素的普通函数而不是组件，因为仓库标题要交给 `ContextMenuPrimitive.Trigger render={…}`，需要一个 DOM 元素来挂 props）：
+  - 外层 `group flex h-8 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover`——**没有 `hover:bg-hover`**；只有键盘焦点给底色。
+  - 折叠按钮 `flex min-w-0 flex-1 items-center gap-1 text-left text-group-label text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft`，`aria-expanded`，`title` 是悬停提示。里面依次是：名字 `min-w-0 truncate`（仓库 `data-slot="sidebar-folder-name"`，临时对话 `data-slot="sidebar-temporary-name"`）→ 小三角（`size-3.5 text-muted-foreground`；折叠时 `ChevronRight` 常显；展开时 `ChevronDown` 带 `opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100`）→ 折叠时的汇总标记。
+  - 右侧改动合计与悬停按钮共用一个 grid 格（`grid shrink-0 justify-items-end`，两者都 `col-start-1 row-start-1`），格宽取两者较宽者，悬停时数字 `group-hover:invisible group-has-focus-visible:invisible` 让位，标题不重排。悬停按钮 `GROUP_ACTION_CLASS` = `size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 sm:size-5`，图标 `size-3.5`；「···」菜单打开时 `data-popup-open:opacity-100`。**只认键盘焦点**：标题外层 div 不可聚焦，用 `group-has-focus-visible`；不用 `group-focus-within`，否则鼠标点过标题后焦点留在按钮上，指针离开了按钮和改动合计还停在悬停态。
+  - **仓库**：「···」仓库菜单（仓库设置 / 在资源管理器中显示 / 移除仓库）+「＋」在此仓库新建（回首页并预选此仓库，决策 174）。标题右键与「···」是同一份菜单（`repoMenuItems`）。悬停提示三行：名称 / 主工作区分支：x / 远程仓库。**标题上不再显示主工作区分支**（决策 183 §2.3）。
+  - **临时对话**：「＋」= 新建临时对话（回首页、「不选仓库」，决策 174）；整组（标题和行间空白）右键「新建临时对话」。悬停提示「不属于任何仓库的对话」。
+- 点标题只折叠 / 展开（决策 137 §3），展开状态只在内存（`expandedProjects`，临时对话的键是 `UNBOUND_FOLDER_ID`），默认展开。
+- **折叠时的汇总标记**（决策 183 §2.2，`deriveGroupSummary` + `GroupSummaryMarks`，`ml-0.5 flex shrink-0 items-center gap-1 text-meta text-muted-foreground tabular-nums`）：组内有在跑的显示转圈（`Spinner size-3 text-status-running`，多于 1 个时后面带数字），有等审批 / 回答的显示橙点（`size-1.5 bg-warning`），有失败未看的显示红点、否则有结果未看的显示绿点。每个对话按它自己行首槽的显示规则计数（在跑的行不计未读），所以汇总不会说出任何一行都没显示的事。展开时不显示。每个标记都有 `aria-label`（「N 个对话在运行」「有对话在等你」「有对话失败了，还没看过」「有对话跑完了，还没看过」）。
+- 行容器 `GROUP_ROWS_CLASS` = `mt-0.5 space-y-0.5`：标题 → 第一行 2px，对话行之间 2px。**不缩进**（决策 167 的 `pl-3` 删除）。**空仓库只有标题**，不显示「＋ 新建对话」辅助行（决策 183 §1.5；悬停标题的「＋」即可新建）。
+- 每组先列 8 条（决策 137 §4，`limitFolderRows`），多的收进「查看更多（N）」，展开后末尾「收起」；选中的对话即使排在 8 条之后也补在末尾。**搜索时**列出全部命中，零命中的分组不渲染，**有命中的分组一律展开**（`groupExpanded = queryActive || isProjectExpanded(id)`），搜索期间不写存储的折叠状态，点标题也不折叠。**清空搜索后，最后一次（非空）查询命中的分组保持展开**（2026-10-11 用户裁决，`handleQueryChange` 在查询由非空变空时把这些分组写成展开）；打字过程中只被中间前缀命中过的分组、以及没被命中的分组，保持搜索前的折叠状态。临时对话分组同样受 8 条与「全部折叠 / 全部展开」约束。
+
+**对话行**（`SessionRow`，所有列表经 `renderSessionRow()` 一个入口渲染）：`group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta`，选中 `bg-selection text-accent-foreground`，否则 `text-foreground-soft hover:bg-hover focus-visible:bg-hover`。重命名编辑框同为 `text-meta`。从左到右：
+
+1. 状态槽 `flex w-4 shrink-0 items-center justify-center`，**永远有一个标记**，按紧迫度取一个：转圈 `size-3`（运行中）→ 橙点（等审批 / 回答）→ 实心绿 / 红点（有结果 / 失败未看，`role="img"` 带文字）→ **实心灰点 `bg-muted-foreground`**（后台已挂上，「正在后台运行」）→ **淡空心圈 `border-muted-foreground-faint`**（未启动，「未启动」，决策 183 §1.7）。圆点与空心圈都是 `h-1.5 w-1.5 rounded-full`。多选模式下槽里是复选框 `size-3.5`。**「已挂上」用实心而不是第二圈描边**（决策 186，issue #16）：它与下面那个淡空心圈原本只差一档颜色、同为一圈描边，用户在真机上看不出区别；实心对描边是按形状区分，换任何配色都成立。
+2. 标题 `min-w-20 flex-1 truncate`（`1.0.x 分支` 后缀整段保留，只截前面）。
+3. 告警徽标：失败、待审批 N、`1.0.x`，统一 `Badge size="lg"`（桌面 14px），`shrink-0`。
+4. 上下文文字：只给非主工作区（`ChatWorkspace.kind === 'worktree'`）上的对话，内容是该工作区分支的**最后一段**，`min-w-0 max-w-24 shrink truncate text-meta text-muted-foreground`，是本行唯一让位者；全名在它的悬停提示里。
+5. **没有时间**（决策 183 §1.4）。悬停或键盘焦点在行上（或行内按钮上）时，操作按钮（归档、从列表移除，临时工作区的行多一个删除；`size-5 sm:size-5`，图标 `size-3.5`）**绝对定位浮在行右侧**：`absolute inset-y-1 right-1.5 hidden items-center group-hover:flex group-focus-visible:flex group-has-focus-visible:flex`（行本身可聚焦用 `group-focus-visible`，行内按钮用 `group-has-focus-visible`；不用 `group-focus-within`，鼠标点过的行不会一直浮着按钮，Tab 仍能走到它们），底色与行当前底色一致——普通行 `bg-hover shadow-[-10px_0_8px_var(--hover)]`，选中行 `bg-selection shadow-[-10px_0_8px_var(--selection)]`（阴影就是向左的渐隐，盖住标题末尾）。不占宽，所以标题不重排。多选模式下不渲染。
+
+**辅助行**（查看更多 / 收起；`SidebarAuxRow`）：`flex h-8 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover`，行首留空的 `w-4` 槽，文字与对话标题对齐。
+
+**账户栏**（`UserFooterPill`，五个面板共用；原型 v6 `.foot.proto`）：外层 `flex shrink-0 items-center gap-1 border-t px-2 pt-3 pb-2.5`——**顶上一条通栏细线**，与列表分开；细线 → 账户行 12px、账户行 → 窗口底 10px（决策 188）。触发器 `flex h-8 min-w-0 flex-1 items-center gap-2 rounded-sm px-2 text-left text-muted-foreground hover:bg-hover`（登录失效时 `text-destructive`），已登录、登录失效、未登录三种状态都是这一行 32px。已登录：头像 `Avatar size-5.5`（22px 圆）+ `AvatarFallback bg-selection font-semibold text-foreground text-meta`——首字母可能是中文，按 CJK 规则不小于 14px，所以用 `text-meta`（14px，行高 21px，放得进 22px 圆）而不是原型的 12px；邮箱 `min-w-0 flex-1 truncate text-meta text-foreground-soft`。行尾 `ChevronsUpDown`（`size-3.5 text-muted-foreground`），表示能展开账户卡片。**不显示今日花费**（`todayCostText`、`useUsageStats` 已从这里删除；用量在账户卡片里）。右侧公告铃不变。整栏高 55px（1 + 12 + 32 + 10）。
+
+**横向坐标**（面板左边框起，任何宽度都一样）：导航图标槽 16、导航文字 48；搜索框左缘 8；分组标签文字 16（与行首状态槽左缘对齐）；对话的状态槽 16、标题与辅助行文字 38。右侧：分组标题右侧格右缘、对话行内容右缘距右边框 16；浮出的操作按钮右缘距右边框 14。
+
+**纵向**（面板顶起，决策 188）：导航第一项 14–46、第二项 49–81；搜索行 97–129；顶部细线 145（搜索行下 16px）；列表从 146 开始，第一个分组标题 162–194；标题 → 第一行 2px，对话行之间 2px，分组之间 14px；列表底部留 16px。导轨首个图标 14–46（`pt-3.5 pb-2`），与「新建对话」完全齐平（2026-10-13 用户看实物后裁决）。
+
+**宽度预算**（280px 面板，含 1px 右边框）：行内容宽 247px（280 − 1 − 列表 `px-2` 16 − 行 `px-2` 16），减状态槽和一个间距后，**标题 225px**（原 167px）。带告警徽标的行约 180px；worktree 行带分支文字（最长 96px）时标题约 123px，再挤才轮到分支让位。14px 下 280 宽能放下的中文：16 字；360 宽 21 字，500 宽 31 字。分组标签在 280 时约 185px（13 字），右侧要给两枚悬停按钮留 40px。
+
+**仓库的顺序**（决策 170 裁决 6，决策 183 §2.11 不变）：
+
+- 仓库**按添加时间（`Repository.addedAt`）降序**——后添加的在最上（决策 186，issue #15；取代决策 170 的按活动时间排序）；没有时间戳的仓库（旧安装、或手改过的存储）按它在数组里的位置排，而数组里靠后就是添加得晚。排序稳定，只改显示顺序，不写回 `aiclient-repositories`。「临时工作区」固定最后，**临时对话分组也固定最后**（决策 186，issue #13），两者都不参与排序。
+- **归档方式开关**（决策 186 第一期，决策 187 第二期；issue #15）：工具行最右一个图标按钮，在「按工作目录」（`FolderTree`，上面这一套）与「按分组」（**`Tag`**）之间切换，状态存 `aiclient-sidebar-archive`，重启后保留。按分组时仓库树整体不渲染，只有用户自己建的分组加一个固定的「未分组」（`UNGROUPED_GROUP_ID`，`buildGroupFolder`）：所有对话（含临时对话与临时工作区里的）都在某一个分组里，**一个对话只在一个分组**（移动即转移，不是多归属标签），组内按最近运行时间降序，行尾的上下文文字从「分支」换成**该对话所属仓库名**（这正是原来由分组标题回答的问题）。标题、折叠、8 条上限、搜索行为与仓库分组完全相同，两边共用 `buildGroupFolder` 与 `renderGroupSection`；没有仓库的对话没有这段上下文文字。
+  - **顺序**：用户分组按创建时间降序（新的在上，与仓库的 `addedAt` 同向），「未分组」**固定最后**——它是最没有指向性的一组，占首位会把用户自己的组往下推。组顺序只在建组 / 删组时变化。
+  - **分组的标记是 2px 竖线**（`bg-border`，`h-3 w-0.5 rounded-full`），「未分组」同一条。它取代了文件夹图标：文件夹说的是「磁盘上的目录」，那正是仓库分组，用户分组不是。竖线不带颜色，层级由标签的 12px 灰字承担。
+  - **重命名与新建都在行内**（决策 187 裁决 2）：菜单项把标题原地换成一个输入框，回车提交、Esc 与失焦取消；输入框用 `text-group-label`，所以标签变输入框时字号不跳。
+  - **空组保留**，标题下显示「暂无对话」——它的重命名、删除与「＋」都挂在标题行上，一个「最后一个对话离开就消失」的组会被读成已被删除。
+  - **搜索时空组隐藏**，与仓库树的 `visibleFolders` 同一规则。
+  - 工具行已有搜索框与两个按钮，所以这里是图标而不是两个中文标签。
+- 活动时间看全部对话（`deriveFolderLastActivity`），不看搜索结果，打字不会重排。
+- **指针或键盘焦点在列表内时冻结顺序，离开后再重排**（`useRegionHold` + `applyHeldFolderOrder`，挂在整个列表上；导航与搜索行不算）：进入时记下当时的顺序；冻结期间新出现的仓库排在已记下的之后，消失的直接去掉。键盘焦点只算 `:focus-visible`；从列表内打开的菜单是 portal，但在 React 树里属于列表，指针移到菜单上不算离开。
+
+**分支与标签**（决策 167 §2，决策 183 §2.3 修订）：主工作区分支只在分组标题的悬停提示里；对话行只在非主工作区时显示分支最后一段；远程在悬停提示里；行上没有「临时」「远程」类别标签。临时会话（Temp Session）项目显示为「临时工作区」（`sidebarFolderNameForDisplay`），派生层仍是标识符 `Temp`。
+
+**悬停提示**：对话行 `title` 三行——标题 / 「文件夹 · 分支」（分支取该对话所在工作区；临时对话写「临时对话」；远程加「（远程）」）/ 「更新于 YYYY-MM-DD HH:MM」（`formatAbsoluteDateTime`，一律带日期；行上没有时间后，这是侧栏里唯一的时间）。读 `title` 的测试取第一行。
+
+**已删除，不要加回来**：`DockTitle`、`SidebarSectionHeader`、「正在活动」（`renderActiveRegion`、`deriveActiveRows`、`limitActiveRows`、5 条上限与收起开关）、「筛选会话」开关与 `searchVisible`、时间 / 操作共用的 `w-10` 定宽盒、空仓库的「新建对话」辅助行、分组标题上的分支文字（`folderBranchLabel`）、文件夹图标、行的 `pl-3` 缩进、旧三区之间的 `border-t` 与区底渐隐（顶部区域与账户栏的两条通栏细线不在此列，见上）、账户栏里的今日花费、`text-section` 在侧栏里的全部用法。
+
+**红线（可静态断言，见上述测试文件）**：
+
+1. 侧栏只出现 `text-meta` / `text-ui` 与 `font-normal`（默认）；`LeftNav` 不出现 `font-medium` / `font-semibold` / `text-section`（按钮、徽标原语自带的除外），`LeftDock` 不出现 `font-semibold`。
+2. 侧栏任何可能出现中文的文字不小于 14px；`Button size="xs"` 的文案必须写 `sm:text-meta`。
+3. `h-6` / `h-7` / `h-8` 的行与输入框只用 `rounded-sm` / `rounded-xs`。
+4. 对话行的 `w-4` 状态槽永远渲染，且永远有标记（未启动是淡空心圈，不是空）。
+5. 渲染层任何地方不得出现「绝对定位图标紧跟 `<Input`」。
+6. 列表只有一个 `ScrollArea`；没有板块标题、没有 `sticky`；`grid-cols-1` 不能省。**分隔线只有两条**：`LeftNav` 里唯一的 `border-b` 在 `TOP_ZONE_END_CLASS`（顶部区域收尾），`UserFooterPill` 外层的 `border-t`（账户栏顶）；`LeftNav` 不出现 `border-t`，分组之间、行之间都没有线。
+7. `text-foreground-soft`、`border-muted-foreground-faint` 不加 `/N`。
+8. 对话行的操作按钮绝对定位、不占宽；行上没有时间盒。
+9. 只在悬停时出现的东西（行的操作按钮、分组标题的「···」「＋」与让位的改动合计、展开时的 ▾）另外只认**键盘焦点**（`group-focus-visible` / `group-has-focus-visible`），`LeftNav` 不出现 `focus-within`。
+10. 账户栏不显示花费（`UserFooterPill` 不出现 `useUsageStats` / `todayCost`）；触发器 `h-8`，三种登录状态同高。
+
+### 首页（中栏没有打开对话时）（issue #6 第二波，2026-10，决策 174）
+
+**验收依据是原型** [`plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/`](./plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/README.md) 的默认视图（v4，输入框 2 行）。模型就是「当前对话为空」（`activeSessionId === null`）：应用启动（凭据选择屏之后）、关掉或归档了当前对话、点导轨最上方「首页」或任何「新建」时都是它。会话栏标题写「首页」，右侧只有「＋」。实现：`workspace-shell/HomeView.tsx`、`homeViewModel.ts`（类名常量与纯函数）。
+
+**只有三样**：标题、最近对话、输入框。输入框不属于首页：`ChatWorkspace` 把同一个 `ChatComposer` 实例放在首页下面，位置、宽度、几何与对话页完全相同，从首页发出第一条后它一动不动。
+
+| 项 | 规格 |
+|---|---|
+| 标题 | `font-heading text-display font-normal tracking-[-0.01em] text-muted-foreground`：26px、行高 1.3、400、次级色，居中。仓库名 `inline-block max-w-[14em] truncate align-bottom font-semibold text-foreground`（悬停显示全名）。不加图标、不用品牌色 |
+| 标题文案 | 「在 {仓库} 与 PiLab 一起进行创造吧」，仓库取输入框工作栏选中的那个，随选择变化。没选仓库时「与 PiLab 一起进行创造吧」（PiLab 强调），下面一行 `text-ui` 灰色说明；一个仓库都没有时说明是刻意断开的两行（中文自由折行会断在词中间） |
+| 位置 | 上区是尺寸容器 `@container-[size]`，标题中心在上区高度的 38.2%（黄金分割）：顶部留白 `h-[calc(38.2cqh_-_var(--text-display)*0.65)] min-h-12`，标题与列表 `shrink-0`，底部 `min-h-8 grow`。列表离输入框不到 32px 时只压缩顶部留白，压到 48px 还放不下时上区自己滚动（`ScrollArea scrollFade="bottom"`），输入框始终贴底。纯 CSS，不用脚本 |
+| 宽度 | 标题、最近对话与输入框同一条阅读栏 `mx-auto w-full max-w-reading`，外层 `px-6` |
+| 最近对话 | 标题下 40px（`mt-10`）。段头 `h-7` 里的 `text-meta font-normal text-muted-foreground`。列全部对话（含临时对话），最后活动时间降序；5 条 +「查看更多（N）」，5 条时不分组；展开后按本地日历日分「今天 / 昨天 / 更早」（`h-6` 14px 灰小标签，组间 `mt-3`），末尾「收起」。对话很多时每按一次多 100 条 |
+| 行 | `h-9 gap-2 rounded-sm px-2 text-ui`，悬停 / 键盘焦点 `bg-hover`。从左到右：`w-4` 状态槽（同侧栏）→ 标题（正文色）→ 告警徽标 → 「文件夹 · 分支」`max-w-[45%]` 14px 灰（先截断它）→ 相对时间 `w-12` 14px 灰 `tabular-nums`。悬停三行提示与侧栏相同；点一行就是打开它 |
+| 输入框 | 空输入框最少 2 行（聊天正文 17px × 1.5 × 2 = 51px，卡片 101px，`COMPOSER_TEXTAREA_MIN_ROWS`），有内容时照旧长到 8 行上限；首页与对话页相同。工作栏（卡片下方 `mt-2 h-6`）在首页、临时对话里也一直在：首页是仓库下拉（没有仓库时写「未选仓库」），临时对话是「临时对话」标签，所以任何对话的卡片都在同一高度 |
+| 发送被锁拦下 | 首页上选的分支在发送时才切；发送时同一检出有对话在跑，就在卡片上方出 coss `Alert` warning（同 `ModelMissingNotice` 的位置 `mb-2`），按钮 `Button size="xs"` + `h-6 sm:text-meta` |
+
+工作栏的两个弹层（仓库菜单、分支菜单）里中文一律 14px：组名 `text-meta font-normal`（coss 原语是 12px 500），「创建新分支...」`text-meta`。
+
+## 字体族（分域：UI 比例 / 代码等宽）
+
+> **D25（2026-07-30）撤销 D18③。** 旧口径「`sans` / `mono` / `heading` 三键统一为同一条等宽栈」
+> **不再有效**。触发是 open-q #10「中英混排风险」实测结项——风险坐实，不是理论洁癖。
+
+### 两条栈
+
+`--font-sans` 是整个 UI 的默认字族；`--font-mono` **只服务白名单域**——代码块、行内 `<code>`、
+工具行的 ident 型参数与原始输出、diff、路径、hash、`kbd`、终端、编辑器。
+
+```css
+/* src/renderer/styles/globals.css 的 @theme —— 完整串与逐段依据见 D25 §1.3 */
+--font-sans:
+  -apple-system, BlinkMacSystemFont,           /* macOS → SF Pro，400/500/600/700 全真 */
+  "Segoe UI Variable Text", "Segoe UI",        /* Win11 可变轴 / Win10 静态族 */
+  "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+  "PingFang SC", "Hiragino Sans GB",           /* ← CJK 段一律排在 Latin 段之后 */
+  "Microsoft YaHei UI", "Microsoft YaHei",     /* UI 版在前：为界面调过 hinting */
+  "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei",
+  "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",  /* ← 必须在通用族之前，否则不可达 */
+  sans-serif;
+
+--font-mono:
+  ui-monospace, "SF Mono", "SFMono-Regular", "Menlo",
+  "Cascadia Mono", "Consolas", "Liberation Mono", "DejaVu Sans Mono",
+  "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC",
+  "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+  monospace;
+
+--font-heading: var(--font-sans);
+```
+
+**为什么是系统栈、不随包任何 webfont**：决定性因素是 **CJK**。Latin 侧随包一个可变字体只要 ~250KB，
+CJK 侧做子集化覆盖常用 3500 字也要 1.5~3MB、全量 8~12MB。而「随包 Latin + 系统 CJK」比全系统栈**更难看**——
+`SF Pro ↔ PingFang SC`、`Segoe UI ↔ Microsoft YaHei UI` 是**厂商成对设计**的（x-height、字重感知、基线、标点位置都对过），
+塞一个第三方 Latin 进去等于把两个互不认识的字体强行混排，正是「不协调」的另一种形态。
+用户 CJK 重度使用 ⇒ 这条压倒「跨平台一致性」。附带：系统栈使本项对产物体积**零增量**。
+
+**为什么改 `--font-sans` 就等于改了整个 UI 的字体**：
+Tailwind 的 `theme.css` 把 `--default-font-family` 定义为 `--theme(--font-sans, initial)`，
+`preflight.css` 再把它挂到 `<html>`；而本仓的 `body` 只有 `@apply bg-background text-foreground`，
+**全仓没有任何 `font-family` 声明**。所以 `--font-sans` 是 UI 字体的**唯一入口**，
+不需要额外给 `body` 加 `font-sans`。
+
+**必须写字面量栈，不要写 `var(--font-family-sans, …fallback…)`**：
+历史上 `--font-family-sans` 被引用却从未定义过，等于把整个 UI 字体交给一个悬空变量的 fallback，
+后来的人去改那个变量会毫无效果。同理仓内**没有** `@font-face`、没有 woff/ttf 资源，
+所以任何非系统字体（Inter / JetBrains Mono）写进栈里都是空头支票，实际会落到系统兜底。
+**D25 把这条从「写法纪律」升格为「选型理由」**：正因为仓内零字体基建，比例栈才只能是系统栈——
+随包字体不是改一行 token，是新建一整套资产 / 打包 / 许可证链路，属独立立项。
+
+### 域怎么划：判据是「内容 vs 控件」，不是「是不是标识符」
+
+同一个字符串 `WorkspaceShell.tsx`，出现在正文里用 mono，出现在下拉按钮 / 文件卡上用 sans。
+一句话测法——**用户会不会去逐字符读它、比对它、复制它？**
+会 ⇒ mono；只是拿它当一个「名字」点一下 ⇒ sans。
+完整域映射表（mono 白名单 12 项 / sans 域 26 项）见 D25 §2：`docs/plans/2026-07-30-d25-font-domain-design.md`。
+
+**落法是「sans 默认 + mono 白名单」（正向），不做反向。** 决定性理由是**失败模式**：
+漏标一处，正向落法只会把它渲染成比例字体（参照实现里文件名 / 分支名本来就是比例，降级后仍在目标态附近）；
+反向落法会把它渲染成等宽——**正是要消灭的那个 bug**。选失败模式良性的那个方向。
+
+**不要裸撒 `font-mono`。** 走三个原语：`ui/ident.tsx` 的 `<Ident>`（`font-mono` + `text-code` + `tracking-normal`）、
+`<CodeInline>`（`<Ident>` + `bg-muted` chip）、以及已有的 `ui/code-block.tsx`。
+收益：光学补偿逻辑只有一处可调；`font-mono` 的出现点可以用一行静态扫描断言锁死在白名单文件内。
+
+⚠️ **`font-mono` 与 `font-sans` 视觉无差别，在 D25 之后是 bug 判据，不是目标。**
+本文件旧版这里写的是「这是『全等宽 UI』的目标，不是 bug」——该句**随 D18③ 一并作废**。
+现在的判据反过来：**若某处 UI 文本渲染成等宽，而它不在 mono 白名单里，那就是一处待修的回归。**
+
+### 分离契约：UI 字体 ≠ 终端/编辑器字体（强制）
+
+这是 T-21 拆掉的一个现存 bug，**不得回退**：
+
+| 消费方 | 字体来源 | 说明 |
+|--------|---------|------|
+| **UI（全部 React 组件）** | `@theme` 的 `--font-sans` / `--font-mono` / `--font-heading` | 唯一入口，见上 |
+| **xterm 终端** | **JS option**（`useXterm` 读 store 的 `terminalFontFamily` / `terminalFontSize`，构造 `new Terminal({ fontFamily, fontSize })`） | **不读任何 CSS 变量** |
+| **Monaco 编辑器** | `editorSettings`（`EditorArea` 直接传 option） | **不读任何 CSS 变量** |
+
+**红线**：
+- **终端 / 编辑器的字体设置，一律不得写入 `documentElement` 的 CSS 变量。**
+  改造前 `stores/settings/index.ts` 的 `applyTerminalFont()` 把终端字体同时写进 `--font-family-mono`
+  （污染 41 处 `font-mono` 的 UI）和 `--font-size-base`（**把整个 UI 按 `terminalFontSize/16` 等比缩放**——
+  用户把终端字号从 16 调到 24，界面就放大 50%）。该函数已整体删除。
+- `globals.css` 的 `.xterm*` 规则只设宽高与 background，**不设 font**，保持现状。
+- `settings` store 里的 `fontFamily`（默认 `'Inter'`）与 `fontSize`（默认 `14`）是**历史死字段**，
+  声明在 `types.ts`、有 setter、但零消费方。**T-21 刻意不接线。**
+  将来若要接：`fontFamily` → 覆盖 `--font-sans`、`fontSize` → 覆盖 `--font-size-base`；
+  届时**必须同步把默认值改成上面的比例栈字面量 / 16**（D25 后不再是等宽栈），
+  否则会二次引入刚消灭的 14→16 跳变，以及 T-21 刚消灭的字体注入 bug。
+
+### CJK 级联规则（open-q #10 已结项 → D25）
+
+原「中英混排风险（未结项）」记的是：全等宽栈里没有 CJK 字形，中文回退系统字体 → 等宽拉丁 + 非等宽 CJK 混排，
+行内节奏 / 基线 / 标点都可能崩。**2026-07-30 实测证实风险坐实，open-q #10 结项，解法就是 D25 的分域。**
+分域之后风险不会自动消失——CJK 混排的正确性由下面四条规则承担：
+
+1. **Latin 段在前，CJK 段在后。** 字体匹配是**逐字符**的：拉丁字符落在第一个有该字形的族上，
+   CJK 字符一路穿到第一个 CJK 族。顺序反了会让拉丁字母落进 CJK 字面里渲染——
+   中文环境「丑拉丁」的经典成因。
+2. **禁止写 `system-ui`。** 在 Chromium / Windows 上它按**系统区域**解析，
+   zh-CN 机器会直接把 Latin 交给 CJK 字面，正好触发规则 1 要防的那个失败。
+   `--font-sans` 里**刻意没有**这一项，不要「顺手补上」。
+3. **10px 禁止承载 CJK。** `--text-2xs`(10px) 只给纯拉丁 / 数字（`kbd` 快捷键 chip）。
+   中文在 10px 下不可读——这不是审美判断，是识别率问题。任何可能出现中文的位置，最小档是 `--text-meta`(14px，2026-09-24 从 13px 上调)。
+4. **负 `tracking` 禁止用于 CJK**，操作规则 = **「<18px 一律非负」**（见「Letter-spacing（字距梯度）」）。
+
+**两条附带纪律**：
+
+- **不设 `-webkit-font-smoothing: antialiased`。** 它只在 macOS 生效、会让 400 视觉变细；
+  本项目 Windows 优先，且三级灰最浅档的对比度本就吃紧，抽细笔画会把刚修好的对比度吃回去。
+- **`--font-mono` 里也带 CJK 段**，为的是代码块 / 工具输出里出现中文注释或中文路径时不落到随机字体。
+
+**验收测点（三处，沿用 open-q #10 原定）**：① 阅读栏中文段落 + 中英混排；
+② 侧栏中文会话标题 +（worktree 行的）分支文字同行 truncate（决策 167 起 agent chip 与逐行分支 chip 都已去掉，决策 183 起行尾不再有相对时间，宽度预算见「新壳布局档位」与「侧栏层级（聊天面板）」）；③ 工具行中文动词 + 拉丁路径同行。
+三测点各出「现状 mono / D25 split / 参照实现」三图并排，视觉凭证见 `docs/design/a09-font-domain-baseline.html`。
+
+## 根字号结论（T-21 已结）
+
+**根字号 = 16px，数值不变，改的是治理。**
+
+改造前 `globals.css` 声明 `--font-size-base: 14px`，但 `stores/settings/index.ts` 的 `applyTerminalFont()`
+把 `terminalFontSize`（默认 **16**）以 **inline style** 写到 `documentElement` 的 `--font-size-base`，
+inline 永远赢 `:root` 声明 → **运行时稳态一直是 16px**。
+所以 `--radius: 0.5rem` 真实就是 **8px**，与 OpenChamber（无 `html` font-size 覆盖，依赖浏览器默认 16px）**天然对齐**。
+
+> ⚠️ 本文件旧版警示里「根字号 14px 使全仓 rem ×14/16、`--radius` 真实 7px」的说法**是错的**，
+> plantree open-questions #11 的同一前提也已更正。
+
+**落地为三行**：
+
+1. `globals.css` 的 `--font-size-base` 声明改成 `16px`。
+2. 删掉 `settings/index.ts` 对 `--font-size-base` 的 inline 注入。
+3. 删掉同处对 `--font-family-mono` 的注入（即整个 `applyTerminalFont`）。
+
+`html { font-size: var(--font-size-base) }` **保留不动**——`--font-size-base` 声明在 `:root`（即 html 自身），
+代换后恒为 16px，同时给未来接线「UI 字号设置」留一个单点开关。
+
+**收益**：
+
+- **消灭首帧跳变**：`electronStorage.getItem` 是 async，persist rehydrate 之前页面按 `:root` 的 14px 渲染，
+  hydrate 后被 inline 16px 顶掉 → 全局 rem 元素跳一次 14.3%。改后无跳变。
+- **消灭「调终端字号 = 缩放整个 UI」** 这个现存 bug。
+
+**「视觉零位移」的边界（须进 release note）**：只对 `terminalFontSize` 保持默认 16 的用户成立。
+改过终端字号的存量用户，UI 目前被按 `terminalFontSize/16` 缩放，改完会回到 100%——
+这是**修 bug 不是回归**，但对他们是可见变化。
+
+## Components
+
+### File Tree Node
+
+```tsx
+<div
+  className={cn(
+    'flex h-7 cursor-pointer select-none items-center gap-1 rounded-sm px-2 text-sm hover:bg-accent/50',
+    // 选中态：新代码用 bg-selection（比 hover 重一档，禁止加 /N）
+    // 旧代码沿用 bg-accent，迁移归 T-25
+    isSelected && 'bg-selection text-accent-foreground'
+  )}
+  style={{ paddingLeft: `${depth * 12 + 8}px` }}
+>
+  {/* 目录展开图标 */}
+  {node.isDirectory ? (
+    <ChevronRight className={cn('h-4 w-4 shrink-0 text-muted-foreground', isExpanded && 'rotate-90')} />
+  ) : (
+    <span className="w-4" />  {/* 占位保持对齐 */}
+  )}
+
+  {/* 文件图标 */}
+  <Icon className={cn('h-4 w-4 shrink-0', iconColor)} />
+
+  {/* 文件名 - min-w-0 确保 truncate 生效 */}
+  <span className="min-w-0 flex-1 truncate">{node.name}</span>
+</div>
+```
+
+### Editor Tabs
+
+```tsx
+<div className="flex h-9 shrink-0 border-b bg-muted/30">
+  {tabs.map((tab) => (
+    <div
+      className={cn(
+        'group relative flex h-9 min-w-[120px] max-w-[180px] items-center gap-2 border-r px-3 text-sm',
+        isActive
+          ? 'bg-background text-foreground'
+          : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+      )}
+    >
+      {/* 激活指示器 - 品牌橙，属"激活态"语义，保留 primary */}
+      {isActive && <div className="absolute inset-x-0 top-0 h-[2px] bg-primary" />}
+
+      {/* 图标 */}
+      <Icon className={cn('h-4 w-4 shrink-0', iconColor)} />
+
+      {/* 标题 */}
+      <span className="flex-1 truncate">{tab.title}</span>
+
+      {/* 关闭按钮 - 次要控件，用中性色；用 primary 会让橙色抢走视觉重心 */}
+      <button className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground">
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  ))}
+</div>
+```
+
+### Context Menu
+
+```tsx
+<Menu open={menuOpen} onOpenChange={setMenuOpen}>
+  <MenuPopup style={{ position: 'fixed', left: x, top: y }}>
+    <MenuItem onClick={handler}>
+      <Icon className="h-4 w-4" />
+      Label
+    </MenuItem>
+    <MenuSeparator />
+    <MenuItem variant="destructive" onClick={deleteHandler}>
+      <Trash2 className="h-4 w-4" />
+      Delete
+    </MenuItem>
+  </MenuPopup>
+</Menu>
+```
+
+### Icon Buttons (工具栏图标按钮)
+
+用于工具栏、搜索框等场景的小型图标按钮。
+
+**基础样式（无状态）**：
+```tsx
+// 普通图标按钮 - 用于关闭、刷新等操作
+<button
+  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+>
+  <X className="h-3.5 w-3.5" />
+</button>
+```
+
+**切换按钮（有选中状态）**：
+```tsx
+// 切换按钮 - 用于大小写敏感、正则等开关
+<button
+  className={cn(
+    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+    isActive && 'bg-primary/20 text-primary'
+  )}
+>
+  <CaseSensitive className="h-4 w-4" />
+</button>
+```
+
+**带文字的切换按钮**：
+```tsx
+// 模式切换 - 用于 Tab 切换等
+<button
+  className={cn(
+    'flex items-center gap-1 rounded px-2 py-1 text-xs',
+    isActive
+      ? 'bg-primary/20 text-primary'
+      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+  )}
+>
+  <FileCode className="h-3.5 w-3.5" />
+  Content
+</button>
+```
+
+**规则总结**：
+| 状态 | 样式 |
+|------|------|
+| 默认 | `text-muted-foreground` |
+| 悬停 | `hover:bg-accent/50 hover:text-foreground` |
+| 选中 | `bg-primary/20 text-primary` |
+| 尺寸 | `h-6 w-6`（图标按钮）或 `px-2 py-1`（带文字）|
+| 图标 | `h-3.5 w-3.5` 或 `h-4 w-4` |
+
+**注意**：
+- 悬停背景使用 `bg-accent/50`（半透明），不要用 `bg-accent`（太强烈）
+- 选中状态使用 `bg-primary/20 text-primary`（品牌 chip），不要用 `bg-accent`
+- ⚠️ **可访问性**：`text-primary` 叠在 `bg-primary/20` 上亮色仅 **3.61:1**，小字不过 AA。
+  文字很小（≤12px）时改用 `text-foreground`，或把底降到 `bg-primary/10`。见 Color System「已知偏差」。
+- **列表/树的行选中态**用 `bg-selection`（不加 `/N`），不要用这套 chip 样式
+
+### Dialog
+
+```tsx
+<Dialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
+  <DialogPopup>
+    <DialogHeader>
+      <DialogTitle>Title</DialogTitle>
+      <DialogDescription>Description text.</DialogDescription>
+    </DialogHeader>
+    <DialogPanel>
+      {/* Content */}
+    </DialogPanel>
+    <DialogFooter variant="bare">
+      <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+      <Button onClick={onConfirm}>Confirm</Button>
+    </DialogFooter>
+  </DialogPopup>
+</Dialog>
+```
+
+### ScrollArea 按边 fade（T-31）
+
+`ui/scroll-area.tsx` 的 `scrollFade` 支持 `boolean | 'top' | 'bottom'`：`true` 是既有的四边渐隐（默认行为不变，三个既有调用点 combobox / sheet / autocomplete 零改动）；`'top'` / `'bottom'` 只在对应一边渲染 mask 渐隐，`--fade-size`（1.5rem）不变。
+
+按边 fade 用于滚动容器某一侧不该再渐隐的场景。例子：聊天时间线顶部原来四边渐隐，是为了把「回合顶部滚出视口」的硬切软化；T-31 给顶部接上 per-turn 的 sticky 用户气泡带之后，视口顶端恒为一条不透明的气泡带，硬切面已经消失，顶部渐隐反而会把钉住的气泡吃掉一截——改传 `scrollFade="bottom"`，只保留底部软边。
+
+### `scroll-state()` 容器查询已退役（T-31 → F10 修正，2026-08-18）
+
+原 `src/renderer/styles/scroll-state.css` 用 `@container scroll-state(stuck: top)` 做钉住态用户气泡的 3 行截断。**F10 点验证实该形态在结构上不可修**：钉住态截断抽走版面高度 → `scrollHeight` 缩小 → 浏览器把 `scrollTop` 钳回 sticky 阈值之下 → 解钉展开 → 贴底跟随器又把偏移推回——逐帧折叠/展开振荡。已改为无条件截断（`chatTimelineLayout.userBubbleTextClass()`，`line-clamp-6`），该 CSS 文件整体删除。
+
+**红线（有测试钉住）**：滚动派生状态永远不得改变版面高度。任何 `@container scroll-state(...)` 块只允许 paint-only 属性（颜色/背景/阴影/透明度等），由 `chat/__tests__/scrollStateCss.test.ts` 扫描 `styles/` 目录强制。
+
+**保留的管线教训**（供未来前沿 CSS 语法复用）：Tailwind v4 的 lightningcss 管线解析不了它不认识的语法时会**静默丢弃规则**——不报错、构建照常过。依赖前沿语法的样式必须放独立文件走 Vite 原生 CSS 管线（postcss + esbuild），且该文件永远不得写入任何 Tailwind 指令（`@import "tailwindcss"` / `@theme` / `@apply`），否则被重新路由回 lightningcss 再次被吞。不要指望构建报错来发现。
+
+### 时间线折叠头吸顶（T096，决策 028）
+
+上一条退役的是**「钉住态改高度」这套机制**，不是 `position: sticky` 本身。T096 在时间线里放回了**唯一一个**吸顶元素：**思考块的折叠头**（`chatTimelineLayout.thoughtFoldHeaderClass()`，由 `chat/ToolRows.tsx` 在 `view.body === 'thinking'` 时挂到 Collapsible 触发器上）。动机是长思考块读到末尾时，收起按钮已经滚出视口。
+
+**它和 F10 的区别只有一条，但这条是决定性的。** F10 的振荡需要一个闭环：
+
+```
+钉住态 → 版面高度 → scrollHeight → 浏览器把 scrollTop 钳回 → 钉住态
+```
+
+退役的用户气泡带用 `scroll-state(stuck: top)` + `line-clamp-3` 接上了第二环。折叠头接不上：它**钉住与不钉住是同一个高度**，身上没有任何属性读取滚动偏移。唯一会变的装饰（下方发丝分隔线）挂在 `data-panel-open` 上——那是**点击**的状态，不是滚动的状态，一帧就收敛。
+
+**红线（有测试钉住，`chat/__tests__/chatTimelineLayout.test.ts` 的 T096 组）**：
+
+1. 时间线里吸顶元素**有且只有一个**，就是思考行触发器。回合级 class 组装函数一律不得带 `sticky` / `fixed`，`MessageTimeline.tsx` / `ReadingColumn.tsx` / `ToolRows.tsx` 的行内 class 字面量也不得带。
+2. 吸顶元素**不得让自身高度随钉住态变化**——禁 `line-clamp` / `max-h-` / `min-h-` / 任意值高度 / `scroll-state()`。
+3. 触发器到滚动视口之间**任何一层都不得引入** `overflow` / `transform` / `filter` / `contain`（这四个属性会让 sticky 静默失效或改挂到别的滚动容器上）。Base UI `Collapsible` 的面板基类带 `overflow-hidden`，所以吸顶头必须是面板的**兄弟**而不是它的后代。
+
+**视觉规格**（用户原话：「做好看点，不要透视效果，吸顶后不得出现内容穿插在折叠按钮后面」）：
+
+| 项 | 取值 | 理由 |
+|----|------|------|
+| 定位 | `sticky top-0` | 视口自身无 padding（`px-6 pt-5 pb-2` 在内层内容 div 上），0 就是可视上沿 |
+| 层级 | `z-10` | 只需压过同级的思考正文；视口带 mask 会形成层叠上下文，这个数字不会外溢到跳转按钮 / 权限坞 / 遮罩 |
+| 底色 | `bg-background`，**不透明** | 与时间线同一表面色（外壳根即 `bg-background`），明暗主题共用一个值 |
+| 禁用 | 半透明 alpha（`bg-*/NN`）、`backdrop-blur`、裸色值 | 模糊仍然透视，等于没解决问题 |
+| 宽度 | 触发器 `w-full`，覆盖整块宽 | 思考正文当前**没有**左侧竖线 / 引用轨；若日后给正文加轨，吸顶头必须同步用负边距盖住它 |
+| 分隔 | `data-panel-open:border-b data-panel-open:border-border` | 展开时才画（收起态不留孤立横线）；挂 open 而非挂 stuck 是红线 2 的要求 |
+
+**已知取舍**：`--background` 是参与 `--panel-bg-opacity` 的四个面板表面之一（见「面板半透明（背景图）」）。开启背景图后折叠头会和全 app 其他面板一样变半透明——那是该功能的既定行为，不是这个元素自己选的 alpha；为它单造一个不透明孪生 token 反而会让它成为唯一无视壁纸的表面。
+
+**收起时的滚动归位**：折叠头处于钉住态时收起，会把滚动容器回滚到该块的自然位置（`messageTimelineScroll.stickyFoldScrollTarget()` 出判断，`ToolRows.tsx` 出测量与写入）。**没被钉住就不动滚动**——读者本来就看得见自己点的那一行，动它才是缺陷。
+
+## Icons
+
+### 文件图标映射
+
+使用 Lucide icons，根据文件扩展名和目录状态选择：
+
+```tsx
+// 目录
+FolderOpen  // 展开状态
+Folder      // 收起状态
+
+// 常见文件类型
+FileCode    // .ts, .tsx, .js, .jsx
+FileJson    // .json
+FileText    // .md, .txt
+FileImage   // .png, .jpg, .svg
+Settings    // 配置文件
+```
+
+### 图标颜色
+
+| Type | Color | 状态 |
+|------|-------|------|
+| 目录 / 文件夹 | **`text-folder`** | ✅ 语义 token（T-21） |
+| TypeScript | `text-blue-500` | ⏳ 待迁移（T-25） |
+| JavaScript | `text-yellow-400` | ⏳ 待迁移（T-25） |
+| JSON | `text-yellow-600` | ⏳ 待迁移（T-25） |
+| Markdown | `text-gray-400` | ⏳ 待迁移（T-25） |
+| 图片 | `text-purple-500` | ⏳ 待迁移（T-25） |
+| 默认 | `text-muted-foreground` | ✅ |
+
+**新代码不得再写 `text-yellow-500` 之类的原色**；文件类型色板的整体语义化归 **T-25**
+（`files/fileIcons.tsx` 等旧调用点在 T-25 前保持原样）。
+
+## Monaco Editor
+
+### Worker 配置
+
+避免 CSP 问题，使用本地 worker：
+
+```tsx
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+// ... 其他 workers
+
+self.MonacoEnvironment = {
+  getWorker(_, label) {
+    if (label === 'typescript' || label === 'javascript') return new tsWorker();
+    // ...
+    return new editorWorker();
+  },
+};
+```
+
+### 主题同步
+
+Monaco 主题从终端主题 (Ghostty) 生成：
+
+```tsx
+monaco.editor.defineTheme('aiclient-theme', {
+  base: isDark ? 'vs-dark' : 'vs',
+  inherit: true,
+  rules: [
+    { token: 'comment', foreground: xtermTheme.brightBlack },
+    { token: 'keyword', foreground: xtermTheme.magenta },
+    { token: 'string', foreground: xtermTheme.green },
+    // ...
+  ],
+  colors: {
+    'editor.background': xtermTheme.background,
+    'editor.foreground': xtermTheme.foreground,
+    // ...
+  },
+});
+```
+
+### 语言检测
+
+使用 `path` prop 自动检测语言：
+
+```tsx
+<Editor
+  path={activeTab.path}  // Monaco 根据路径自动检测语言
+  value={activeTab.content}
+  // ...
+/>
+```
+
+## Interaction Patterns
+
+### 文件树
+
+- **单击文件**: 在编辑器中打开
+- **单击目录**: 展开/收起
+- **右键**: 打开上下文菜单
+
+### Tab 栏
+
+- **单击 Tab**: 切换到该文件
+- **拖拽 Tab**: 重新排序
+- **点击关闭按钮**: 关闭文件
+- **Cmd/Ctrl+S**: 保存当前文件
+
+## Flexbox 技巧
+
+### 文本截断对齐
+
+```tsx
+// 父容器
+className="flex items-center gap-1"
+
+// 固定宽度元素
+className="h-4 w-4 shrink-0"
+
+// 可截断文本
+className="min-w-0 flex-1 truncate"
+```
+
+`min-w-0` 是关键 - 允许 flex 子元素收缩到内容尺寸以下。
+
+## Animation System
+
+本项目使用 **Framer Motion** 作为动画库，配置集中在 `src/renderer/lib/motion.ts`。
+
+### 设计原则
+
+- **时长分档**：过渡动画遵循 100 / 150 / 250ms 三档（见上方 Motion Token），默认使用 `duration-150`
+- **Spring 物理**：使用 Spring 弹性动画，带来自然的物理感
+- **GPU 加速**：优先使用 `transform`、`opacity` 属性，启用硬件加速
+
+### Spring 配置
+
+| 名称 | 参数 | 适用场景 |
+|------|------|----------|
+| `springFast` | stiffness: 500, damping: 30 | Dialog、Menu 等弹出层 |
+| `springStandard` | stiffness: 400, damping: 30 | 面板伸缩、布局动画 |
+| `springGentle` | stiffness: 300, damping: 25 | Tooltip、微交互 |
+
+### 通用 Variants
+
+```tsx
+import {
+  fadeVariants,
+  scaleInVariants,
+  slideUpVariants,
+  heightVariants,
+  springFast
+} from '@/lib/motion';
+
+// 弹出层（Dialog、Menu）
+<motion.div
+  variants={scaleInVariants}
+  initial="initial"
+  animate="animate"
+  exit="exit"
+  transition={springFast}
+>
+
+// 高度展开（Accordion、列表）
+<motion.div
+  variants={heightVariants}
+  initial="initial"
+  animate="animate"
+  exit="exit"
+  transition={springStandard}
+>
+
+// Toast 通知
+<motion.div
+  variants={slideUpVariants}
+  initial="initial"
+  animate="animate"
+  exit="exit"
+>
+```
+
+### 微交互
+
+```tsx
+import { tapScale, hoverScale } from '@/lib/motion';
+import { motion } from 'framer-motion';
+
+// 按钮点击反馈
+<motion.button whileTap={tapScale}>
+  Click me
+</motion.button>
+
+// 悬浮放大
+<motion.div whileHover={hoverScale}>
+  Hover me
+</motion.div>
+```
+
+### AnimatePresence 使用
+
+所有条件渲染的动画元素必须用 `AnimatePresence` 包裹：
+
+```tsx
+import { AnimatePresence, motion } from 'framer-motion';
+
+<AnimatePresence mode="wait">
+  {isOpen && (
+    <motion.div
+      key="content"
+      variants={fadeVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      Content
+    </motion.div>
+  )}
+</AnimatePresence>
+```
+
+### Layout 动画
+
+使用 `layout` 属性实现元素位置/尺寸的平滑过渡：
+
+```tsx
+// Tab 指示器滑动
+<motion.div
+  layoutId="tab-indicator"
+  className="absolute bottom-0 h-0.5 bg-primary"
+/>
+
+// 列表项排序
+<motion.div layout>
+  {item.name}
+</motion.div>
+```
+
+### 列表 Stagger 动画
+
+```tsx
+import { listContainerVariants, listItemVariants } from '@/lib/motion';
+
+<motion.ul variants={listContainerVariants} initial="initial" animate="animate">
+  {items.map((item) => (
+    <motion.li key={item.id} variants={listItemVariants}>
+      {item.name}
+    </motion.li>
+  ))}
+</motion.ul>
+```
+
+### 性能注意事项
+
+1. **避免频繁的 `height: 'auto'`**：对大列表使用虚拟化
+2. **使用 `will-change` 谨慎**：仅在必要时添加
+3. **避免同时动画多个属性**：优先使用 `transform` 系属性

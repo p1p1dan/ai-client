@@ -23,14 +23,14 @@
 
 ## 设计规范
 
-UI 开发必须遵循 `docs/design-system.md`，核心要点：
+UI 开发必须遵循 `docs/design-system.md`（**设计规范 v2，2026-10-21 重立**；旧规范归档在 `docs/archive/design-system-2026-10-21.md`，不再生效）。界面正在按 v2 做整体风格迁移，计划见 `docs/plantree/plans/ui-cohesion/README.md`。核心要点：
 
-- **组件优先**：优先使用 [@coss/ui](https://coss.com/ui) 组件，禁止手动实现已有组件
-- **颜色**：使用 CSS 变量（`text-primary`、`bg-accent`、`text-muted-foreground`）
-- **Design Tokens**：圆角/阴影/字号/字重/动画时长遵循 `docs/design-system.md` 的 Token 分档（避免任意值）
-- **尺寸**：Tab 栏 `h-9`、树节点 `h-7`、小按钮 `h-6`
-- **间距**：紧凑 `gap-1`、标准 `gap-2`、缩进 `depth * 12 + 8px`
-- **图标**：Lucide React，目录黄色、TS 蓝色、JS 黄色
+- **只认一个参考**：open-claude-ui（Claude 桌面版的界面规则），代码可以直接拿来改用
+- **框只包一层**：有外框的东西里面不再套框，分区只用单向细线；助手正文不进容器
+- **底色分四层**（侧栏 → 画布 → 卡片 → 输入框与浮层），配色是中性暖灰加陶土色，品牌色只用在少数几处
+- **同类东西一种画法**：状态用 `StatusIcon`，停靠卡用 `DockCard`，错误用 `Alert`
+- **组件优先**：优先使用 [@coss/ui](https://coss.com/ui) 组件，禁止手动实现已有组件；图标只用 Lucide
+- **Token 分档**：颜色、字号、圆角、阴影、动效只用规范里的档位，不写任意值、不写死颜色
 - **文本截断**：`min-w-0 flex-1 truncate` + 固定元素 `shrink-0`
 - **Monaco**：本地 worker、主题同步终端配色
 
