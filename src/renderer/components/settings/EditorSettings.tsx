@@ -195,7 +195,7 @@ export function EditorSettings() {
     <div className="space-y-6">
       <SettingsSectionBlock title={t('Font')} description={t('Editor font settings')}>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Font family')}</span>
+          <span className="text-ui font-medium">{t('Font family')}</span>
           <Input
             value={localFontFamily}
             onChange={(e) => setLocalFontFamily(e.target.value)}
@@ -210,7 +210,7 @@ export function EditorSettings() {
           />
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Font size')}</span>
+          <span className="text-ui font-medium">{t('Font size')}</span>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -227,11 +227,11 @@ export function EditorSettings() {
               max={32}
               className="w-20"
             />
-            <span className="text-sm text-muted-foreground">px</span>
+            <span className="text-ui text-muted-foreground">px</span>
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Line height')}</span>
+          <span className="text-ui font-medium">{t('Line height')}</span>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -248,13 +248,13 @@ export function EditorSettings() {
               max={60}
               className="w-20"
             />
-            <span className="text-sm text-muted-foreground">px</span>
+            <span className="text-ui text-muted-foreground">px</span>
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Font ligatures')}</span>
+          <span className="text-ui font-medium">{t('Font ligatures')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{t('Enable font ligatures')}</p>
+            <p className="text-ui text-muted-foreground">{t('Enable font ligatures')}</p>
             <Switch
               checked={editorSettings.fontLigatures}
               onCheckedChange={(checked) => setEditorSettings({ fontLigatures: checked })}
@@ -264,7 +264,7 @@ export function EditorSettings() {
       </SettingsSectionBlock>
       <SettingsSectionBlock title={t('Spacing')} description={t('Editor padding settings')}>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Padding top')}</span>
+          <span className="text-ui font-medium">{t('Padding top')}</span>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -281,11 +281,11 @@ export function EditorSettings() {
               max={50}
               className="w-20"
             />
-            <span className="text-sm text-muted-foreground">px</span>
+            <span className="text-ui text-muted-foreground">px</span>
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Padding bottom')}</span>
+          <span className="text-ui font-medium">{t('Padding bottom')}</span>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -302,13 +302,13 @@ export function EditorSettings() {
               max={50}
               className="w-20"
             />
-            <span className="text-sm text-muted-foreground">px</span>
+            <span className="text-ui text-muted-foreground">px</span>
           </div>
         </SettingsRow>
       </SettingsSectionBlock>
       <SettingsSectionBlock title={t('Indentation')} description={t('Tab and space settings')}>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Tab size')}</span>
+          <span className="text-ui font-medium">{t('Tab size')}</span>
           <Select
             value={String(editorSettings.tabSize)}
             onValueChange={(v) => setEditorSettings({ tabSize: Number(v) })}
@@ -326,9 +326,9 @@ export function EditorSettings() {
           </Select>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Insert spaces')}</span>
+          <span className="text-ui font-medium">{t('Insert spaces')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{t('Use spaces instead of tabs')}</p>
+            <p className="text-ui text-muted-foreground">{t('Use spaces instead of tabs')}</p>
             <Switch
               checked={editorSettings.insertSpaces}
               onCheckedChange={(checked) => setEditorSettings({ insertSpaces: checked })}
@@ -338,9 +338,9 @@ export function EditorSettings() {
       </SettingsSectionBlock>
       <SettingsSectionBlock title={t('Display')} description={t('Editor display settings')}>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Minimap')}</span>
+          <span className="text-ui font-medium">{t('Minimap')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{t('Show minimap in editor')}</p>
+            <p className="text-ui text-muted-foreground">{t('Show minimap in editor')}</p>
             <Switch
               checked={editorSettings.minimapEnabled}
               onCheckedChange={(checked) => setEditorSettings({ minimapEnabled: checked })}
@@ -348,9 +348,9 @@ export function EditorSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Git Blame')}</span>
+          <span className="text-ui font-medium">{t('Git Blame')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t('Show inline git blame info at cursor line')}
             </p>
             <Switch
@@ -360,7 +360,7 @@ export function EditorSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Line numbers')}</span>
+          <span className="text-ui font-medium">{t('Line numbers')}</span>
           <Select
             value={editorSettings.lineNumbers}
             onValueChange={(v) => setEditorSettings({ lineNumbers: v as EditorLineNumbers })}
@@ -380,7 +380,7 @@ export function EditorSettings() {
           </Select>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Word wrap')}</span>
+          <span className="text-ui font-medium">{t('Word wrap')}</span>
           <Select
             value={editorSettings.wordWrap}
             onValueChange={(v) => setEditorSettings({ wordWrap: v as EditorWordWrap })}
@@ -400,7 +400,7 @@ export function EditorSettings() {
           </Select>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Whitespace')}</span>
+          <span className="text-ui font-medium">{t('Whitespace')}</span>
           <Select
             value={editorSettings.renderWhitespace}
             onValueChange={(v) =>
@@ -425,7 +425,7 @@ export function EditorSettings() {
           </Select>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Line highlight')}</span>
+          <span className="text-ui font-medium">{t('Line highlight')}</span>
           <Select
             value={editorSettings.renderLineHighlight}
             onValueChange={(v) =>
@@ -451,9 +451,9 @@ export function EditorSettings() {
           </Select>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Code folding')}</span>
+          <span className="text-ui font-medium">{t('Code folding')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{t('Enable code folding')}</p>
+            <p className="text-ui text-muted-foreground">{t('Enable code folding')}</p>
             <Switch
               checked={editorSettings.folding}
               onCheckedChange={(checked) => setEditorSettings({ folding: checked })}
@@ -461,9 +461,9 @@ export function EditorSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Clickable links')}</span>
+          <span className="text-ui font-medium">{t('Clickable links')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{t('Make links clickable')}</p>
+            <p className="text-ui text-muted-foreground">{t('Make links clickable')}</p>
             <Switch
               checked={editorSettings.links}
               onCheckedChange={(checked) => setEditorSettings({ links: checked })}
@@ -471,9 +471,9 @@ export function EditorSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Smooth scrolling')}</span>
+          <span className="text-ui font-medium">{t('Smooth scrolling')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{t('Enable smooth scrolling')}</p>
+            <p className="text-ui text-muted-foreground">{t('Enable smooth scrolling')}</p>
             <Switch
               checked={editorSettings.smoothScrolling}
               onCheckedChange={(checked) => setEditorSettings({ smoothScrolling: checked })}
@@ -483,7 +483,7 @@ export function EditorSettings() {
       </SettingsSectionBlock>
       <SettingsSectionBlock title={t('Cursor')} description={t('Cursor appearance settings')}>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Cursor style')}</span>
+          <span className="text-ui font-medium">{t('Cursor style')}</span>
           <Select
             value={editorSettings.cursorStyle}
             onValueChange={(v) => setEditorSettings({ cursorStyle: v as EditorCursorStyle })}
@@ -503,7 +503,7 @@ export function EditorSettings() {
           </Select>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Cursor blinking')}</span>
+          <span className="text-ui font-medium">{t('Cursor blinking')}</span>
           <Select
             value={editorSettings.cursorBlinking}
             onValueChange={(v) => setEditorSettings({ cursorBlinking: v as EditorCursorBlinking })}
@@ -528,9 +528,9 @@ export function EditorSettings() {
       </SettingsSectionBlock>
       <SettingsSectionBlock title={t('Brackets')} description={t('Bracket matching and guides')}>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Rainbow brackets')}</span>
+          <span className="text-ui font-medium">{t('Rainbow brackets')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{t('Colorize matching bracket pairs')}</p>
+            <p className="text-ui text-muted-foreground">{t('Colorize matching bracket pairs')}</p>
             <Switch
               checked={editorSettings.bracketPairColorization}
               onCheckedChange={(checked) => setEditorSettings({ bracketPairColorization: checked })}
@@ -538,7 +538,7 @@ export function EditorSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Match brackets')}</span>
+          <span className="text-ui font-medium">{t('Match brackets')}</span>
           <Select
             value={editorSettings.matchBrackets}
             onValueChange={(v) =>
@@ -560,9 +560,9 @@ export function EditorSettings() {
           </Select>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Bracket guides')}</span>
+          <span className="text-ui font-medium">{t('Bracket guides')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{t('Show bracket pair guides')}</p>
+            <p className="text-ui text-muted-foreground">{t('Show bracket pair guides')}</p>
             <Switch
               checked={editorSettings.bracketPairGuides}
               onCheckedChange={(checked) => setEditorSettings({ bracketPairGuides: checked })}
@@ -570,9 +570,9 @@ export function EditorSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Indent guides')}</span>
+          <span className="text-ui font-medium">{t('Indent guides')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{t('Show indentation guides')}</p>
+            <p className="text-ui text-muted-foreground">{t('Show indentation guides')}</p>
             <Switch
               checked={editorSettings.indentationGuides}
               onCheckedChange={(checked) => setEditorSettings({ indentationGuides: checked })}
@@ -585,7 +585,7 @@ export function EditorSettings() {
         description={t('Auto-completion settings')}
       >
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Auto brackets')}</span>
+          <span className="text-ui font-medium">{t('Auto brackets')}</span>
           <Select
             value={editorSettings.autoClosingBrackets}
             onValueChange={(v) =>
@@ -610,7 +610,7 @@ export function EditorSettings() {
           </Select>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Auto quotes')}</span>
+          <span className="text-ui font-medium">{t('Auto quotes')}</span>
           <Select
             value={editorSettings.autoClosingQuotes}
             onValueChange={(v) =>
@@ -637,7 +637,7 @@ export function EditorSettings() {
       </SettingsSectionBlock>
       <SettingsSectionBlock title={t('Auto Save')} description={t('Auto save settings')}>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Auto save')}</span>
+          <span className="text-ui font-medium">{t('Auto save')}</span>
           <Select
             value={editorSettings.autoSave}
             onValueChange={(v) => setEditorSettings({ autoSave: v as EditorAutoSave })}
@@ -658,7 +658,7 @@ export function EditorSettings() {
         </SettingsRow>
         {editorSettings.autoSave === 'afterDelay' && (
           <SettingsRow>
-            <span className="text-sm font-medium">{t('Delay')}</span>
+            <span className="text-ui font-medium">{t('Delay')}</span>
             <div className="flex items-center gap-2">
               <Input
                 type="number"
@@ -673,7 +673,7 @@ export function EditorSettings() {
                 }}
                 className="w-20"
               />
-              <span className="text-sm text-muted-foreground">{t('ms')}</span>
+              <span className="text-ui text-muted-foreground">{t('ms')}</span>
             </div>
           </SettingsRow>
         )}

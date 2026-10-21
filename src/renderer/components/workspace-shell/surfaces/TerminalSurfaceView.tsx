@@ -112,7 +112,7 @@ export function TerminalSurfaceView({ surfaceId }: SurfaceViewProps) {
             {/* D25 §3.3: cancel EmptyTitle's 18px-sized negative tracking when
                 overriding to 14px, same as SurfacePlaceholder. */}
             <EmptyTitle className="text-ui tracking-normal">{t('Terminal')}</EmptyTitle>
-            <EmptyDescription className="text-meta">
+            <EmptyDescription className="text-small">
               {t(UNAVAILABLE_DESCRIPTION[resolution.reason])}
             </EmptyDescription>
           </EmptyHeader>

@@ -2,8 +2,17 @@ import type { QuestionItem } from '@shared/types/runtimeEvents';
 import { Check } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DockCard,
+  DockCardBody,
+  DockCardFooter,
+  DockCardHeader,
+  DockCardTitle,
+} from '@/components/ui/dock-card';
 import { Input } from '@/components/ui/input';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -18,6 +27,7 @@ import {
   isQuestionAnswered,
   type OptionRow,
   optionLetter,
+  QUESTION_TITLE,
   type QuestionSelection,
   questionReactKey,
   SKIP_LABEL,
@@ -30,8 +40,8 @@ import {
  * The live question card. It takes the composer's place while the turn waits
  * (`PendingQuestionDock`), so it is laid out to fit a typical question — three
  * options, Other and "Chat about this" — inside the 40% height cap without
- * scrolling: one row of tabs, borderless 28px option rows, descriptions on the
- * option's own line, and a 34px footer.
+ * scrolling: the dock card's 32px head, one row of tabs, borderless 28px
+ * option rows, descriptions on the option's own line, and the dock footer.
  *
  * Picking an option only selects it. The single primary button walks forward —
  * next question, then the confirmation page, then submit — and Enter presses
@@ -151,16 +161,33 @@ export function QuestionPrompt({ block, onSubmit, onChatAbout, onSkip }: Questio
   };
 
   return (
-    <div
+    <DockCard
       ref={cardRef}
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      className="flex max-h-[40vh] min-h-0 flex-col overflow-hidden rounded-lg border border-primary/60 bg-card text-ui outline-none"
+      tone="pending"
+      className="max-h-[40vh] min-h-0 outline-none"
       data-testid="question-prompt"
     >
+      {/* Design system v2 §7.6: the shared 32px head -- waiting dot, title,
+          the answer progress as a tag on the right. */}
+      <DockCardHeader>
+        <StatusIcon status="waiting" />
+        <DockCardTitle>{t(QUESTION_TITLE)}</DockCardTitle>
+        {multi && (
+          <Badge variant="secondary" className="tabular-nums">
+            {t('Answered {{answered}} / {{total}}', {
+              answered: strip.answeredCount,
+              total: strip.total,
+            })}
+          </Badge>
+        )}
+      </DockCardHeader>
       {multi && (
-        <div className="flex h-[30px] shrink-0 items-stretch border-b border-border">
-          <div className="flex min-w-0 overflow-x-auto" role="tablist">
+        // A frameless tab row under the head: one hairline below, no frame of
+        // its own, the selected tab marked by ink and a 2px underline.
+        <div className="flex h-8 shrink-0 items-stretch border-border-soft border-b px-2">
+          <div className="flex min-w-0 gap-0.5 overflow-x-auto" role="tablist">
             {strip.tabs.map((tab) => (
               <PageTab
                 key={tab.index}
@@ -177,15 +204,14 @@ export function QuestionPrompt({ block, onSubmit, onChatAbout, onSkip }: Questio
               {t('Confirm answers')}
             </PageTab>
           </div>
-          <span className="ml-auto flex shrink-0 items-center px-2.5 text-meta tabular-nums text-muted-foreground">
-            {t('Answered {{answered}} / {{total}}', {
-              answered: strip.answeredCount,
-              total: strip.total,
-            })}
-          </span>
         </div>
       )}
-      <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-1.5 pt-1.5 pb-1">
+      {/* `px-2.5` + the rows' own `px-1.5` puts their text on the 16px body
+          inset while their hover fill keeps a 10px margin. */}
+      <DockCardBody
+        ref={bodyRef}
+        className="flex-1 overflow-y-auto px-2.5 pt-1.5 pb-2 text-foreground"
+      >
         {onReview ? (
           <ReviewPage items={items} sel={sel} onJump={setPage} disabled={submitting} />
         ) : (
@@ -202,7 +228,7 @@ export function QuestionPrompt({ block, onSubmit, onChatAbout, onSkip }: Questio
             }}
           />
         )}
-        <div className="mx-1.5 my-[3px] h-px bg-border" />
+        <div className="mx-1.5 my-1 h-px bg-border-soft" />
         <OptionButton
           letter={chatLetter}
           selected={false}
@@ -211,17 +237,24 @@ export function QuestionPrompt({ block, onSubmit, onChatAbout, onSkip }: Questio
           muted
         >
           {t('Chat about this')}
-          <span className="ml-2 text-meta font-normal text-muted-foreground">
+          <span className="ml-2 text-small font-normal text-muted-foreground">
             {t('Answer later and discuss these questions with the AI first')}
           </span>
         </OptionButton>
-      </div>
+      </DockCardBody>
       {submitError && (
-        <p role="alert" className="shrink-0 px-3 pb-1 text-meta text-destructive">
+        <p role="alert" className="shrink-0 px-4 pb-2 text-small text-destructive">
           {t('Could not send your answer. Please try again.')}
         </p>
       )}
-      <div className="flex h-[34px] shrink-0 items-center gap-2 border-t border-border pr-1.5 pl-1">
+      <DockCardFooter>
+        {submitting ? (
+          <span role="status" className="mr-auto text-small text-muted-foreground">
+            {t('Submitting…')}
+          </span>
+        ) : (
+          <span className="mr-auto text-small text-foreground-faint">{t('Esc interrupts')}</span>
+        )}
         <Tooltip>
           <TooltipTrigger
             render={
@@ -229,7 +262,6 @@ export function QuestionPrompt({ block, onSubmit, onChatAbout, onSkip }: Questio
                 size="sm"
                 variant="ghost"
                 type="button"
-                className="h-6 px-2 text-muted-foreground"
                 disabled={submitting}
                 onClick={skip}
               />
@@ -241,26 +273,12 @@ export function QuestionPrompt({ block, onSubmit, onChatAbout, onSkip }: Questio
             {t('Leave every question unanswered; the AI decides on its own and carries on.')}
           </TooltipPopup>
         </Tooltip>
-        <span className="flex-1" />
-        {submitting ? (
-          <span role="status" className="text-meta text-status-running">
-            {t('Submitting…')}
-          </span>
-        ) : (
-          <span className="text-meta text-muted-foreground">{t('Esc interrupts')}</span>
-        )}
-        <Button
-          size="sm"
-          type="button"
-          className="h-6 gap-1.5 px-2.5"
-          disabled={!primaryEnabled}
-          onClick={pressPrimary}
-        >
+        <Button size="sm" type="button" disabled={!primaryEnabled} onClick={pressPrimary}>
           {t(PRIMARY_LABEL[primary.action])}
-          <span className="text-meta opacity-70">↵</span>
+          <span className="text-small opacity-70">↵</span>
         </Button>
-      </div>
-    </div>
+      </DockCardFooter>
+    </DockCard>
   );
 }
 
@@ -287,11 +305,9 @@ function PageTab({
       onClick={onClick}
       title={title}
       className={cn(
-        'flex shrink-0 cursor-pointer items-center gap-1 border-r border-border border-b-2 border-b-transparent px-2.5 text-meta',
-        'hover:bg-hover disabled:pointer-events-none disabled:opacity-64',
-        selected
-          ? 'border-b-primary bg-background font-medium text-foreground'
-          : 'text-muted-foreground'
+        'flex shrink-0 cursor-pointer items-center gap-1 border-b-2 border-transparent px-2 text-small transition-colors duration-150 ease-out',
+        'hover:text-foreground focus-ring disabled:pointer-events-none disabled:opacity-64',
+        selected ? 'border-primary font-medium text-foreground' : 'text-muted-foreground'
       )}
     >
       {children}
@@ -326,18 +342,17 @@ function OptionButton({
       onClick={onClick}
       className={cn(
         'flex min-h-7 w-full items-start gap-2 rounded-sm px-1.5 py-1 text-left leading-5',
-        'hover:bg-hover disabled:pointer-events-none disabled:opacity-64',
-        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
-        selected && 'bg-selection',
+        'transition-colors duration-150 ease-out hover:bg-fill-ghost-hover disabled:pointer-events-none disabled:opacity-64',
+        'focus-ring',
+        selected && 'bg-fill-ghost-selected',
         muted && !selected ? 'text-muted-foreground' : 'text-foreground'
       )}
     >
       <span
         className={cn(
-          'mt-px grid size-[18px] shrink-0 place-items-center rounded-xs border text-2xs leading-none',
-          selected
-            ? 'border-primary bg-primary text-primary-foreground'
-            : 'border-border bg-muted text-muted-foreground'
+          // A frameless key tag (§1 rule 1); selection is ink, not clay (§1 rule 7).
+          'mt-px grid size-4.5 shrink-0 place-items-center rounded-xs text-2xs leading-none',
+          selected ? 'bg-foreground text-background' : 'bg-fill-neutral text-muted-foreground'
         )}
       >
         {letter}
@@ -380,14 +395,14 @@ function QuestionPage({
     <div key={questionReactKey(item, index)}>
       <div className="flex items-baseline gap-1.5 px-1 pt-0.5 pb-1.5 leading-normal">
         {item.header && (
-          <span className="shrink-0 rounded-xs bg-muted px-[5px] text-meta text-muted-foreground">
+          <Badge variant="secondary" className="shrink-0">
             {item.header}
-          </span>
+          </Badge>
         )}
         <span className="min-w-0 whitespace-pre-wrap break-words font-semibold text-foreground">
           {item.question}
           {multiSelect && (
-            <span className="ml-1.5 text-meta font-normal text-muted-foreground">
+            <span className="ml-1.5 text-small font-normal text-muted-foreground">
               {t('Multiple choice')}
             </span>
           )}
@@ -407,7 +422,7 @@ function QuestionPage({
             return (
               <div
                 key={row.letter}
-                className="flex min-h-7 items-start gap-2 rounded-sm bg-selection px-1.5 py-1"
+                className="flex min-h-7 items-start gap-2 rounded-sm bg-fill-ghost-selected px-1.5 py-1"
               >
                 {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: role is dynamic (radio vs checkbox); both take aria-checked */}
                 <button
@@ -418,7 +433,7 @@ function QuestionPage({
                   onClick={() => onPick(row)}
                   className="flex shrink-0 items-start gap-2 leading-5 text-foreground"
                 >
-                  <span className="mt-px grid size-[18px] shrink-0 place-items-center rounded-xs border border-primary bg-primary text-2xs leading-none text-primary-foreground">
+                  <span className="mt-px grid size-4.5 shrink-0 place-items-center rounded-xs bg-foreground text-2xs leading-none text-background">
                     {row.letter}
                   </span>
                   <span>{t('Other:')}</span>
@@ -426,7 +441,7 @@ function QuestionPage({
                 {item.isSecret ? (
                   <Input
                     autoFocus
-                    size="sm"
+                    unstyled
                     type="password"
                     aria-label={t('Your answer')}
                     value={sel.otherText[index] ?? ''}
@@ -437,7 +452,7 @@ function QuestionPage({
                     // A credential must not reach autofill or the spellchecker.
                     autoComplete="off"
                     spellCheck={false}
-                    className="-my-[3px] min-w-0 flex-1 text-ui"
+                    className="-my-0.5 min-w-0 flex-1 text-ui [&_input]:h-6 [&_input]:px-1 [&_input]:leading-6 [&_input]:placeholder:text-foreground-faint"
                   />
                 ) : (
                   <textarea
@@ -452,7 +467,9 @@ function QuestionPage({
                     placeholder={t(
                       'Type your answer (Enter to continue, Shift+Enter for a new line)'
                     )}
-                    className="-my-[3px] field-sizing-content max-h-30 min-h-[26px] min-w-0 flex-1 resize-none overflow-y-auto rounded-sm border border-input bg-background px-2 py-0.5 leading-5 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                    // Frameless inside the card (§1 rule 1): the selected
+                    // row's fill already marks where the answer goes.
+                    className="-my-0.5 field-sizing-content max-h-30 min-h-6 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-0.5 leading-5 text-foreground outline-none placeholder:text-foreground-faint"
                   />
                 )}
               </div>
@@ -472,7 +489,7 @@ function QuestionPage({
               {row.description && (
                 // font-normal: Segoe UI has no 500, so a medium description
                 // would render the same weight as its label on Win10.
-                <span className="ml-2 text-meta font-normal text-muted-foreground">
+                <span className="ml-2 text-small font-normal text-muted-foreground">
                   {row.description}
                 </span>
               )}
@@ -500,7 +517,7 @@ function ReviewPage({
     <div>
       <div className="flex items-baseline gap-1.5 px-1 pt-0.5 pb-1.5 leading-normal">
         <span className="font-semibold text-foreground">{t('Check your answers')}</span>
-        <span className="text-meta text-muted-foreground">{t('Click a row to change it')}</span>
+        <span className="text-small text-muted-foreground">{t('Click a row to change it')}</span>
       </div>
       <div className="flex flex-col gap-px">
         {items.map((item, index) => {
@@ -512,9 +529,9 @@ function ReviewPage({
               disabled={disabled}
               onClick={() => onJump(index)}
               title={item.question}
-              className="grid min-h-7 w-full grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] items-baseline gap-2 rounded-sm px-1.5 py-1 text-left leading-5 hover:bg-hover disabled:pointer-events-none"
+              className="grid min-h-7 w-full grid-cols-[26px_minmax(0,1fr)_minmax(0,1fr)] items-baseline gap-2 rounded-sm px-1.5 py-1 text-left leading-5 transition-colors duration-150 ease-out hover:bg-fill-ghost-hover focus-ring disabled:pointer-events-none"
             >
-              <span className="text-meta text-muted-foreground tabular-nums">Q{index + 1}</span>
+              <span className="text-small text-foreground-faint tabular-nums">Q{index + 1}</span>
               <span className="truncate text-muted-foreground">{item.question}</span>
               {answer ? (
                 <span className="whitespace-pre-wrap break-words text-foreground">{answer}</span>

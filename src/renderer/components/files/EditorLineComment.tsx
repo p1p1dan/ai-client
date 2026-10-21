@@ -62,8 +62,8 @@ export function CommentForm({
       : `${lineNumber}`;
 
   return (
-    <div className="bg-background border rounded-lg shadow-lg p-3 w-[320px]">
-      <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
+    <div className="w-[320px] rounded-lg border border-border-soft bg-surface-3 p-3 elev-lg">
+      <div className="flex items-center gap-2 mb-2 text-ui text-muted-foreground">
         <MessageSquare className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate font-mono text-code">
           {fileName}:{lineDisplay}
@@ -71,7 +71,7 @@ export function CommentForm({
       </div>
       <textarea
         ref={inputRef}
-        className="w-full h-20 rounded border bg-muted/50 p-2 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+        className="h-20 w-full resize-none rounded-sm bg-fill-neutral p-2 text-ui text-foreground focus-ring"
         placeholder={t('Leave a comment...')}
         value={text}
         onChange={(e) => setText(e.target.value)}

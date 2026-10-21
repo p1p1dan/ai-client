@@ -52,13 +52,11 @@ export function ModelMissingNotice({ error, className }: ModelMissingNoticeProps
         )}
       </AlertDescription>
       <AlertAction>
-        {/* Decision 174 (issue #6): `sm:text-meta` — the xs size is 12px on
-            desktop and the label is CJK (the home send's notice beside it
-            carries the same). */}
+        {/* Design system v2: inside the notice's frame the action is
+            frameless (§1 rule 1); `xs` is the 12px CJK floor. */}
         <Button
           size="xs"
-          variant="outline"
-          className="h-6 sm:text-meta"
+          variant="secondary"
           onClick={() => requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)}
         >
           <ArrowRightLeft />

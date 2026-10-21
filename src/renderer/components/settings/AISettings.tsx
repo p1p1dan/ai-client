@@ -164,13 +164,13 @@ export function AISettings() {
           const feature = settings[key] as FeatureSettings;
           const selectedModel = models.find((model) => model.id === feature.model);
           return (
-            <section key={key} className="space-y-4 border-t pt-6">
+            <section key={key} className="space-y-4">
               <div>
-                <h4 className="text-base font-medium">{title}</h4>
-                <p className="text-sm text-muted-foreground">{description}</p>
+                <h4 className="text-ui font-semibold">{title}</h4>
+                <p className="text-ui text-muted-foreground">{description}</p>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{t('Enable Generator')}</span>
+                <span className="text-ui font-medium">{t('Enable Generator')}</span>
                 <Switch
                   checked={feature.enabled}
                   onCheckedChange={(enabled) => setFeature(key, { enabled })}
@@ -179,7 +179,7 @@ export function AISettings() {
               {feature.enabled && (
                 <div className="space-y-4">
                   <SettingsRow>
-                    <span className="text-sm font-medium">{t('Model')}</span>
+                    <span className="text-ui font-medium">{t('Model')}</span>
                     <ModelField
                       value={feature.model ?? ''}
                       onChange={(model) => setFeature(key, { model, effort: undefined })}
@@ -187,7 +187,7 @@ export function AISettings() {
                     />
                   </SettingsRow>
                   <SettingsRow>
-                    <span className="text-sm font-medium">{t('Effort')}</span>
+                    <span className="text-ui font-medium">{t('Effort')}</span>
                     <EffortField
                       value={feature.effort}
                       model={selectedModel}
@@ -196,7 +196,7 @@ export function AISettings() {
                   </SettingsRow>
                   {'maxDiffLines' in feature && (
                     <SettingsRow>
-                      <span className="text-sm font-medium">{t('Max Diff Lines')}</span>
+                      <span className="text-ui font-medium">{t('Max Diff Lines')}</span>
                       <Input
                         type="number"
                         className="w-32"
@@ -209,7 +209,7 @@ export function AISettings() {
                   )}
                   {'timeout' in feature && (
                     <SettingsRow>
-                      <span className="text-sm font-medium">{t('Timeout')}</span>
+                      <span className="text-ui font-medium">{t('Timeout')}</span>
                       <Input
                         type="number"
                         className="w-32"
@@ -222,7 +222,7 @@ export function AISettings() {
                   )}
                   {'language' in feature && (
                     <SettingsRow>
-                      <span className="text-sm font-medium">{t('Language')}</span>
+                      <span className="text-ui font-medium">{t('Language')}</span>
                       <Input
                         className="w-40"
                         value={feature.language}
@@ -231,7 +231,7 @@ export function AISettings() {
                     </SettingsRow>
                   )}
                   <textarea
-                    className="min-h-28 w-full rounded-md border bg-transparent p-2 text-sm"
+                    className="min-h-28 w-full rounded-md border bg-transparent p-2 text-ui"
                     value={feature.prompt || defaults[key].prompt}
                     onChange={(event) => setFeature(key, { prompt: event.target.value })}
                   />

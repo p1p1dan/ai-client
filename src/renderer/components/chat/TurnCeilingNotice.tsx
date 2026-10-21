@@ -24,7 +24,7 @@ export function TurnCeilingNotice({ onContinue }: TurnCeilingNoticeProps) {
     <Alert variant="default" role="status">
       <CirclePause />
       <AlertTitle className="min-w-0 truncate">{t('Paused at the turn ceiling')}</AlertTitle>
-      <AlertDescription className="text-meta">
+      <AlertDescription className="text-small">
         <p className="break-words">
           {t(
             'This run reached the turn ceiling for one request, so the assistant summarised its progress and paused. The work so far is kept.'
@@ -32,7 +32,7 @@ export function TurnCeilingNotice({ onContinue }: TurnCeilingNoticeProps) {
         </p>
       </AlertDescription>
       <AlertAction>
-        <Button size="xs" variant="outline" className="h-6" onClick={onContinue}>
+        <Button size="xs" variant="ghost" onClick={onContinue}>
           <Send />
           {t('Continue')}
         </Button>

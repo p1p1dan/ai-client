@@ -22,7 +22,7 @@ interface HomeSendBlockedNoticeProps {
  * wait.
  *
  * The same coss `Alert` and the same place as `ModelMissingNotice` (above the
- * card, `mb-2`), in its warning form. Its buttons carry `sm:text-meta`: the
+ * card, `mb-2`), in its warning form. Its buttons are `xs` (12px, the CJK floor): the
  * `xs` size is 12px on desktop and both labels are CJK.
  */
 export function HomeSendBlockedNotice({
@@ -45,12 +45,12 @@ export function HomeSendBlockedNotice({
         })}
       </AlertTitle>
       <AlertAction>
-        <Button size="xs" variant="outline" className="h-6 sm:text-meta" onClick={onSendOnCurrent}>
+        <Button size="xs" variant="secondary" onClick={onSendOnCurrent}>
           {currentBranch
             ? t('Send on {{branch}} instead', { branch: currentBranch })
             : t('Send on the current branch instead')}
         </Button>
-        <Button size="xs" variant="ghost" className="h-6 sm:text-meta" onClick={onCancel}>
+        <Button size="xs" variant="ghost" onClick={onCancel}>
           {t('Cancel')}
         </Button>
       </AlertAction>

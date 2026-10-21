@@ -77,7 +77,7 @@ export function UpdateNotification() {
         <Button
           variant="ghost"
           size="sm"
-          className="min-w-0 text-meta tabular-nums"
+          className="min-w-0 text-small tabular-nums"
           onClick={() => setOpen(true)}
         >
           {title}
@@ -112,17 +112,19 @@ export function UpdateNotification() {
           status.info?.releaseNotes ? (
             <DialogPanel className="space-y-3">
               {downloading && status.progress && (
-                <div className="text-meta tabular-nums">{Math.floor(status.progress.percent)}%</div>
+                <div className="text-small tabular-nums">
+                  {Math.floor(status.progress.percent)}%
+                </div>
               )}
               {(actionError || status.error) && (
-                <p role="alert" className="break-words text-meta text-destructive">
+                <p role="alert" className="break-words text-small text-destructive">
                   {actionError || status.error}
                 </p>
               )}
               {status.info?.releaseNotes && (
                 <ReleaseNotes
                   notes={status.info.releaseNotes}
-                  className="max-h-48 overflow-auto break-words text-meta text-muted-foreground"
+                  className="max-h-48 overflow-auto break-words text-small text-muted-foreground"
                 />
               )}
             </DialogPanel>

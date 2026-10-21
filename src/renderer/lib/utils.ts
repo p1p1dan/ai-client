@@ -41,6 +41,9 @@ const twMerge = extendTailwindMerge({
         // hazard as the tokens above, see this block's note.
         'text-chat-body',
         'text-chat-process',
+        // Design system v2 (§3.1): the small (12px) and heading (15px) tiers.
+        'text-small',
+        'text-heading',
       ],
     },
   },

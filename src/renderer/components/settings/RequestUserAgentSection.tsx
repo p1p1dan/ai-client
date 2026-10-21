@@ -89,7 +89,7 @@ export function RequestUserAgentSection() {
                 }}
               />
               {problem && (
-                <FieldError match className="text-destructive text-meta">
+                <FieldError match className="text-destructive text-small">
                   {problemText(problem, t)}
                 </FieldError>
               )}
@@ -97,20 +97,20 @@ export function RequestUserAgentSection() {
           )}
 
           {resolved.userAgent === undefined ? (
-            <p className="text-meta text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t(
                 'The engine sends its own User-Agent (deepseek-harness/…). Fetching a service model list uses the system default.'
               )}
             </p>
           ) : (
-            <p className="min-w-0 break-all text-meta text-muted-foreground">
+            <p className="min-w-0 break-all text-small text-muted-foreground">
               {mode === 'custom' && resolved.problem
                 ? t('Until a value is entered, the default is sent:')
                 : t('Sent as:')}{' '}
               <Ident className="text-foreground">{resolved.userAgent}</Ident>
             </p>
           )}
-          <p className="text-meta text-muted-foreground">
+          <p className="text-small text-muted-foreground">
             {t('Takes effect from the next turn; no restart needed.')}
           </p>
         </div>

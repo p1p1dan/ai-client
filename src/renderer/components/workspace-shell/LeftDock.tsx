@@ -184,10 +184,11 @@ export function LeftDock({
           the panel's first row (the chat panel's 「新建对话」) instead of a row
           that is no longer there. Decision 188: 14px on top (was 8), matching
           the chat panel's new top padding, so both start at y=14; the bottom
-          keeps 8px. */}
+          keeps 8px. Design system v2 §7.12: the rail is the sidebar's own
+          --surface-0, not a lighter card strip. */}
       <nav
         aria-label={t('Primary navigation')}
-        className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card pt-3.5 pb-2"
+        className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r border-border-soft bg-surface-0 pt-3.5 pb-2"
         style={{ width: DOCK_RAIL_WIDTH }}
       >
         {/* Decision 174 (issue #6, user ruling 2026-10-10, entry (a)): the home
@@ -232,7 +233,7 @@ export function LeftDock({
         ref={panelRef}
         data-resizing={panelResizing || undefined}
         className={cn(
-          'relative flex h-full min-w-0 flex-col overflow-hidden border-r',
+          'relative flex h-full min-w-0 flex-col overflow-hidden border-r border-border-soft',
           'transition-[width] duration-[250ms] data-[resizing]:transition-none',
           !isOpen && 'pointer-events-none'
         )}
@@ -360,10 +361,10 @@ function RailButton({ tab, active, onSelect }: RailButtonProps) {
             aria-pressed={active}
             onClick={onSelect}
             className={cn(
-              'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+              'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-sm',
               active
-                ? 'bg-selection text-foreground'
-                : 'text-muted-foreground hover:bg-hover hover:text-foreground'
+                ? 'bg-fill-ghost-selected text-foreground'
+                : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
             )}
           />
         }
@@ -408,7 +409,7 @@ function RailIconButton({
             type="button"
             aria-label={label}
             onClick={onClick}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-hover hover:text-foreground"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
           />
         }
       >
@@ -465,7 +466,7 @@ function CapabilitiesDialog({
           {!view.reported ? (
             // Not "nothing": nothing has been asked yet, because this chat has no
             // running worker to have brought anything up.
-            <p className="py-2 text-meta text-muted-foreground">
+            <p className="py-2 text-small text-muted-foreground">
               {t('Send a message to start this chat and see what it brings up.')}
             </p>
           ) : (
@@ -482,8 +483,8 @@ function CapabilitiesDialog({
 
 function CapabilityRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex h-7 items-center gap-2 rounded-md bg-muted px-2">
-      <span className="shrink-0 text-meta text-muted-foreground">{label}</span>
+    <div className="flex h-7 items-center gap-2 rounded-sm bg-fill-neutral px-2">
+      <span className="shrink-0 text-small text-muted-foreground">{label}</span>
       <span className="min-w-0 flex-1 truncate text-right text-ui tabular-nums">{value}</span>
     </div>
   );

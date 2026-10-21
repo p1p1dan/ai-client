@@ -66,7 +66,7 @@ import {
   MenuTrigger,
 } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Spinner } from '@/components/ui/spinner';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -835,7 +835,7 @@ export function LeftNav({
               {renderFolderLimitToggle(groupId, limited)}
             </div>
           ) : (
-            <p className="px-2 py-0.5 pl-5 text-meta text-muted-foreground">{t('No chats yet')}</p>
+            <p className="px-2 py-0.5 pl-5 text-small text-muted-foreground">{t('No chats yet')}</p>
           ))}
       </section>
     );
@@ -850,14 +850,14 @@ export function LeftNav({
    */
   const renderGroupRename = (folder: SidebarFolder) => (
     <section key={folder.projectId} className={SIDEBAR_GROUP_CLASS}>
-      <div className="flex h-8 w-full items-center gap-1 rounded-sm bg-hover px-2">
+      <div className="flex h-8 w-full items-center gap-1 rounded-xs bg-fill-ghost-hover px-2">
         <GroupMark />
         <input
           // biome-ignore lint/a11y/noAutofocus: the menu item that opened this asked for a name; typing must not need a second click.
           autoFocus
           defaultValue={folder.projectId === UNGROUPED_GROUP_ID ? '' : folder.name}
           aria-label={t('Group name')}
-          className="h-5.5 min-w-0 flex-1 rounded-xs border-0 bg-background px-1 text-group-label text-foreground outline-none ring-2 ring-ring/24"
+          className="h-5.5 min-w-0 flex-1 rounded-xs border-0 bg-surface-1 px-1 text-small font-medium text-foreground outline-none ring-2 ring-ring/24"
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               renameGroup(folder.projectId, event.currentTarget.value);
@@ -910,14 +910,14 @@ export function LeftNav({
    */
   const renderNewGroup = () => (
     <section className={SIDEBAR_GROUP_CLASS}>
-      <div className="flex h-8 w-full items-center gap-1 rounded-sm bg-hover px-2">
+      <div className="flex h-8 w-full items-center gap-1 rounded-xs bg-fill-ghost-hover px-2">
         <GroupMark />
         <input
           // biome-ignore lint/a11y/noAutofocus: the menu item that opened this asked for a name; typing must not need a second click.
           autoFocus
           placeholder={t('Group name')}
           aria-label={t('Group name')}
-          className="h-5.5 min-w-0 flex-1 rounded-xs border-0 bg-background px-1 text-group-label text-foreground outline-none ring-2 ring-ring/24 placeholder:text-muted-foreground"
+          className="h-5.5 min-w-0 flex-1 rounded-xs border-0 bg-surface-1 px-1 text-small font-medium text-foreground outline-none ring-2 ring-ring/24 placeholder:text-muted-foreground"
           onKeyDown={(event) => {
             if (event.key === 'Enter') commitGroupName(event.currentTarget.value);
             else if (event.key === 'Escape') cancelGroupName();
@@ -1015,7 +1015,7 @@ export function LeftNav({
       summary: deriveGroupSummary(folder.rows, unreadSessionIds),
       trailing: diffTotals && (
         <span
-          className="flex items-center gap-1 text-meta tabular-nums"
+          className="flex items-center gap-1 text-small tabular-nums"
           title={t('Folder diff totals', {
             insertions: diffTotals.insertions,
             deletions: diffTotals.deletions,
@@ -1125,7 +1125,7 @@ export function LeftNav({
         >
           <span
             aria-hidden
-            className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-selection text-foreground"
+            className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-fill-ghost-selected text-foreground"
           >
             <Plus className="size-3.5" />
           </span>
@@ -1145,10 +1145,9 @@ export function LeftNav({
       {/* U31: both modes share this one h-8 row. A second row appearing only
           while selecting would push the list down on entry and pull it back on
           exit — the list is the thing being worked on, so it must not move
-          under the pointer. Decision 167: `sm:text-meta` on every xs button
-          here; the variant's desktop size is 12px (`sm:text-xs`), and these
-          labels are CJK in Chinese, which the design system keeps at 14px or
-          more. Decision 183 (user ruling 2026-10-12, prototype v6
+          under the pointer. Decision 167 / design system v2 §3.1: buttons are
+          `text-ui` (13px), so every xs button here overrides the variant's
+          12px `text-small`. Decision 183 (user ruling 2026-10-12, prototype v6
           `.sep-line`): the top zone ends 8px below this row in a full-width
           hairline, the same in both modes, so the list starts at the same
           place either way. */}
@@ -1156,13 +1155,13 @@ export function LeftNav({
         <div className="flex h-8 items-center gap-0.5">
           {selecting ? (
             <>
-              <span className="min-w-0 flex-1 truncate pl-2 text-meta">
+              <span className="min-w-0 flex-1 truncate pl-2 text-small">
                 {t('{{count}} selected', { count: selection.size })}
               </span>
               <Button
                 variant="outline"
                 size="xs"
-                className="h-6 shrink-0 sm:text-meta"
+                className="h-6 shrink-0 text-ui"
                 disabled={selection.size === 0}
                 title={t('Archive selected')}
                 onClick={() => setBulkArchiveOpen(true)}
@@ -1173,7 +1172,7 @@ export function LeftNav({
               <Button
                 variant="ghost"
                 size="xs"
-                className="h-6 shrink-0 sm:text-meta"
+                className="h-6 shrink-0 text-ui"
                 onClick={() => setSelection(null)}
               >
                 {t('Cancel')}
@@ -1234,7 +1233,10 @@ export function LeftNav({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className={cn(TOOL_BUTTON_CLASS, groupingByGroup && 'bg-selection text-foreground')}
+                className={cn(
+                  TOOL_BUTTON_CLASS,
+                  groupingByGroup && 'bg-fill-ghost-selected text-foreground'
+                )}
                 title={archiveModeToggleLabel}
                 aria-label={archiveModeToggleLabel}
                 onClick={() => setArchiveMode(groupingByGroup ? 'workspace' : 'group')}
@@ -1265,7 +1267,7 @@ export function LeftNav({
                 hairline), pb 12 -> 16 above the footer's hairline. */}
             <div className="px-2 pt-1 pb-4">
               {noMatches && (
-                <p className="px-2 py-1 text-meta text-muted-foreground">
+                <p className="px-2 py-1 text-small text-muted-foreground">
                   {t('No matching sessions')}
                 </p>
               )}
@@ -1291,14 +1293,14 @@ export function LeftNav({
                     <EmptyTitle className="text-ui tracking-normal">
                       {t('Add Repository')}
                     </EmptyTitle>
-                    <EmptyDescription className="text-meta">
+                    <EmptyDescription className="text-small">
                       {t('Add a repository to get started.')}
                     </EmptyDescription>
                   </EmptyHeader>
                   <Button
                     variant="outline"
                     size="xs"
-                    className="h-6 sm:text-meta"
+                    className="h-6 text-ui"
                     onClick={onAddRepository}
                   >
                     <Plus className="h-3.5 w-3.5" />
@@ -1489,7 +1491,7 @@ const LIST_AREA_CLASS = 'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr
  * With the nav's own pb of 4 that puts 16px between 「添加仓库」 bottom and the
  * search box top, and 16px between the search box bottom and the hairline.
  */
-const TOP_ZONE_END_CLASS = 'shrink-0 border-b px-2 pt-3 pb-4';
+const TOP_ZONE_END_CLASS = 'shrink-0 border-b border-border-soft px-2 pt-3 pb-4';
 
 /**
  * Decision 183 (prototype `.group`): groups are separated by spacing alone —
@@ -1502,28 +1504,27 @@ const SIDEBAR_GROUP_CLASS = 'mt-3.5 first:mt-3';
 const GROUP_ROWS_CLASS = 'mt-0.5 space-y-0.5';
 
 /**
- * The top nav's two entries (prototype `.nav`): h-8, 14px (decision 188; was 15px), a 22px icon slot
- * (`size-5.5`), the hover step on hover and keyboard focus.
+ * The top nav's two entries (prototype `.nav`): h-8 (decision 188), a 22px icon slot
+ * (`size-5.5`), the hover step on hover and keyboard focus. Design system v2
+ * §7.12: `text-ui` (13px), frameless, an inset `rounded-xs` highlight.
  */
 const NAV_ITEM_CLASS =
-  'flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-meta hover:bg-hover focus-visible:bg-hover';
+  'flex h-8 w-full items-center gap-2.5 rounded-xs px-2 text-left text-ui hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover';
 
 /**
- * The search box (prototype `.search`; user ruling 2026-10-11): coss's
- * InputGroup with its default chrome taken off on this one instance — resting,
- * a transparent fill (light and dark) inside a 1px `--border` line, no drop
- * shadow and no inner shade; focused, the `--background` fill and a
- * `--muted-foreground` line, no ring. `rounded-sm` because the group's
+ * The search box (prototype `.search`; user ruling 2026-10-11), redrawn for
+ * design system v2 §7.12: a FILLED field — `--fill-neutral`, no border line,
+ * no drop shadow, no inner shade — in light and dark alike; focused, a
+ * `--border-strong` line and no ring. `rounded-sm` because the group's
  * `rounded-lg` on an h-8 control breaks the radius clamp rule.
  *
  * Each override names the SAME variant stack as the base class it replaces,
  * so tailwind-merge drops the base one instead of leaving both to a
- * specificity contest (`border-border` / `border-input`, `bg-transparent` /
- * `bg-background`, `dark:bg-transparent` / `dark:bg-input/32`, `shadow-none` /
- * `shadow-xs`, and the `has-[input:focus-visible,…]` trio replacing
- * `border-ring` and `ring-2`). The focused fill is a `has-[…]` variant, whose
- * `:has()` argument outranks `bg-transparent` and `dark:bg-transparent` in
- * specificity. The inner shade lives on the group's `::before` behind two long
+ * specificity contest (`border-transparent` / `border-input`,
+ * `bg-fill-neutral` / `bg-background`, `dark:bg-fill-neutral` /
+ * `dark:bg-input/32`, `shadow-none` / `shadow-xs`, and the
+ * `has-[input:focus-visible,…]` pair replacing `border-ring` and `ring-2`).
+ * The inner shade lives on the group's `::before` behind two long
  * `not-has-[…]` stacks (light and dark); `before:hidden` removes the pseudo
  * element instead, since nothing else sets its `display`. The placeholder is
  * the full muted ink (the input's own is `/72`): the descendant selector
@@ -1531,7 +1532,7 @@ const NAV_ITEM_CLASS =
  * `sidebarActiveAndFolders.test.ts`.
  */
 const SIDEBAR_SEARCH_CLASS =
-  'h-8 min-w-0 flex-1 rounded-sm border-border bg-transparent shadow-none before:hidden dark:bg-transparent has-[input:focus-visible,textarea:focus-visible]:border-muted-foreground has-[input:focus-visible,textarea:focus-visible]:bg-background has-[input:focus-visible,textarea:focus-visible]:ring-0 [&_input]:placeholder:text-muted-foreground';
+  'h-8 min-w-0 flex-1 rounded-sm border-transparent bg-fill-neutral shadow-none before:hidden dark:bg-fill-neutral has-[input:focus-visible,textarea:focus-visible]:border-border-strong has-[input:focus-visible,textarea:focus-visible]:ring-0 [&_input]:placeholder:text-muted-foreground';
 
 /**
  * The tool row's icon buttons (prototype `.tb`): 32px (decision 188), a 16px icon. `sm:size-8`
@@ -1590,10 +1591,10 @@ function renderGroupHeader({
   actions: ReactNode;
 }): ReactElement {
   return (
-    <div className="group flex h-8 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">
+    <div className="group flex h-8 w-full items-center gap-1 rounded-xs px-2 has-focus-visible:bg-fill-ghost-hover">
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-center gap-1 text-left text-group-label text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"
+        className="flex min-w-0 flex-1 items-center gap-1 text-left text-small font-medium text-foreground-faint group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"
         title={tooltip}
         aria-expanded={expanded}
         onClick={onToggle}
@@ -1645,8 +1646,8 @@ function GroupMark() {
 
 /**
  * Decision 183 §2.2: what a folded group is hiding, in the rows' own marks —
- * a spinner for turns running (with the count past one), the orange dot for a
- * chat waiting on the user, then red for an unseen failure or else green for
+ * a spinner for turns running (with the count past one), the clay
+ * waiting-on-you dot (design system v2 §6: both drawn by `StatusIcon`), then red for an unseen failure or else green for
  * an unseen result. Each says itself in words for screen readers.
  */
 function GroupSummaryMarks({ summary }: { summary: SidebarGroupSummary }) {
@@ -1659,20 +1660,19 @@ function GroupSummaryMarks({ summary }: { summary: SidebarGroupSummary }) {
   return (
     <span
       data-slot="sidebar-group-summary"
-      className="ml-0.5 flex shrink-0 items-center gap-1 text-meta text-muted-foreground tabular-nums"
+      className="ml-0.5 flex shrink-0 items-center gap-1 text-small text-muted-foreground tabular-nums"
     >
       {summary.running > 0 && (
         <span className="flex items-center gap-0.5" title={runningLabel}>
-          <Spinner aria-label={runningLabel} className="size-3 shrink-0 text-status-running" />
+          <StatusIcon status="running" label={runningLabel} />
           {summary.running > 1 && summary.running}
         </span>
       )}
       {summary.waiting && (
-        <span
-          role="img"
-          aria-label={t('A chat is waiting for you')}
+        <StatusIcon
+          status="waiting"
+          label={t('A chat is waiting for you')}
           title={t('A chat is waiting for you')}
-          className="size-1.5 shrink-0 rounded-full bg-warning"
         />
       )}
       {summary.unread && (
@@ -1780,7 +1780,7 @@ function SidebarAuxRow({ onClick, children }: { onClick: () => void; children: R
   return (
     <button
       type="button"
-      className="flex h-8 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"
+      className="flex h-8 w-full items-center gap-1.5 rounded-xs px-2 text-small text-muted-foreground tabular-nums hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover"
       onClick={onClick}
     >
       <span aria-hidden className="flex w-4 shrink-0 items-center justify-center" />
@@ -2048,8 +2048,8 @@ function SessionRow({
           }}
           // Decision 167: the radius clamp rule (design system, Border
           // Radius) — the primitive's `rounded-lg` on h-6 renders as a pill.
-          // Decision 170: the row's own 14px, so a rename does not grow the text.
-          className="h-6 flex-1 rounded-sm text-meta before:rounded-[calc(var(--radius-sm)-1px)]"
+          // Decision 170: the row's own size (`text-ui`), so a rename does not grow the text.
+          className="h-6 flex-1 rounded-sm text-ui before:rounded-[calc(var(--radius-sm)-1px)]"
         />
       </div>
     );
@@ -2061,10 +2061,10 @@ function SessionRow({
         <ContextMenuPrimitive.Trigger
           ref={rowRef}
           className={cn(
-            // --hover / --selection are two distinct steps of the same Flexoki
-            // interactive ramp; neither takes a /N modifier.
-            // The two are mutually exclusive on purpose: `hover:bg-hover` compiles to
-            // `.hover\:bg-hover:hover` (0,2,0) and would outrank a plain `.bg-selection`
+            // Design system v2 §7.12: --fill-ghost-hover / --fill-ghost-selected
+            // are two solid steps of one ramp; neither takes a /N modifier.
+            // The two are mutually exclusive on purpose: `hover:bg-fill-ghost-hover` compiles to
+            // `.hover\:bg-fill-ghost-hover:hover` (0,2,0) and would outrank a plain `.bg-fill-ghost-selected`
             // (0,1,0), so pointing at the active row would repaint it as an ordinary
             // hovered row and erase the selection. Keyboard focus (decision 167) lights
             // the same step as hover; the global reset removed the outline.
@@ -2072,14 +2072,14 @@ function SessionRow({
             // makes the row's minimum content size exceed the track at the default
             // sidebar width, and without it the trailing items would spill past the
             // rounded edge instead of the branch text absorbing the deficit.
-            // Decision 170 (issue #6 rulings 3–4): 14px, and the title one step
+            // Decision 170 (issue #6 rulings 3–4): `text-ui`, and the title one step
             // below the body ink — `--foreground-soft`, never with /N — except
             // on the open chat, which keeps the body colour. `relative`
             // anchors the floating actions (decision 183 §1.4).
-            'group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',
+            'group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-xs px-2 text-left text-ui',
             active
-              ? 'bg-selection text-accent-foreground'
-              : 'text-foreground-soft hover:bg-hover focus-visible:bg-hover'
+              ? 'bg-fill-ghost-selected text-foreground'
+              : 'text-foreground-soft hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover'
           )}
           onClick={() => (onToggleSelect ? onToggleSelect(row.sessionId) : onSelect())}
           onDoubleClick={onToggleSelect ? undefined : beginRename}
@@ -2108,7 +2108,9 @@ function SessionRow({
                 aria-hidden
                 className={cn(
                   'flex size-3.5 shrink-0 items-center justify-center rounded-xs border',
-                  selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
+                  selected
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border-soft'
                 )}
               >
                 {selected && <Check className="size-2.5" />}
@@ -2132,18 +2134,11 @@ function SessionRow({
               because the next move is the user's. Both carry their state in
               words for the tooltip and screen readers. */}
             {onToggleSelect ? null : row.busy ? (
+              // Design system v2 §6: run states are drawn by `StatusIcon` only.
               isWaitingSessionStatus(row.status) ? (
-                <span
-                  role="img"
-                  aria-label={waitingLabel}
-                  title={waitingLabel}
-                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
-                />
+                <StatusIcon status="waiting" label={waitingLabel} title={waitingLabel} />
               ) : (
-                <Spinner
-                  aria-label={t('Running')}
-                  className="size-3 shrink-0 text-status-running"
-                />
+                <StatusIcon status="running" label={t('Running')} />
               )
             ) : unread ? (
               // Not `aria-hidden` like its neighbours: the run-state dots restate
@@ -2262,7 +2257,7 @@ function SessionRow({
             // lets flexbox route the deficit here; dropping either sends it
             // back to the title.
             <span
-              className="min-w-0 max-w-24 shrink truncate text-meta text-muted-foreground"
+              className="min-w-0 max-w-24 shrink truncate text-small text-muted-foreground"
               title={branch}
             >
               {lastBranchSegment(branch)}
@@ -2286,8 +2281,8 @@ function SessionRow({
               className={cn(
                 'absolute inset-y-1 right-1.5 hidden items-center group-hover:flex group-focus-visible:flex group-has-focus-visible:flex',
                 active
-                  ? 'bg-selection shadow-[-10px_0_8px_var(--selection)]'
-                  : 'bg-hover shadow-[-10px_0_8px_var(--hover)]'
+                  ? 'bg-fill-ghost-selected shadow-[-10px_0_8px_var(--fill-ghost-selected)]'
+                  : 'bg-fill-ghost-hover shadow-[-10px_0_8px_var(--fill-ghost-hover)]'
               )}
             >
               <Button

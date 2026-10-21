@@ -101,6 +101,9 @@ it('[N5-DOM-1] a refused call reads as the request plus 「已拒绝」, in the 
   expect(row.textContent).toContain('· 已拒绝');
   expect(row.textContent, 'no completed-tense verb').not.toContain('已等待子 Agent');
   expect(row.className).not.toContain('text-destructive');
+  // Design system v2 §6: nothing on the row is red, and no failed mark.
+  expect(row.querySelector('.text-destructive')).toBeNull();
+  expect(row.querySelector('[data-slot="status-icon"][data-status="failed"]')).toBeNull();
 });
 
 it('[N5-DOM-2] a call the run ended before reads 「未执行」, not done and not red', async () => {
@@ -110,6 +113,8 @@ it('[N5-DOM-2] a call the run ended before reads 「未执行」, not done and n
   expect(row.textContent).toContain('· 未执行');
   expect(row.textContent).not.toContain('已列出子 Agent');
   expect(row.className, 'nothing ran, so nothing failed').not.toContain('text-destructive');
+  expect(row.querySelector('.text-destructive'), 'nor any part of it').toBeNull();
+  expect(row.querySelector('[data-slot="status-icon"][data-status="failed"]')).toBeNull();
   expect(row.textContent, 'the English runtime note is not painted').not.toContain(NOT_STARTED);
 });
 
@@ -217,4 +222,37 @@ it('[P1-4d1-REFUSED-DOM] a call refused on the card the user answered says 「�
   expect(row?.querySelector('[data-slot="tool-row-outcome"]')).toBeNull();
   expect(row?.className, 'the user said no; nothing failed').not.toContain('text-destructive');
   expect(row?.textContent, 'what the call asked for, as a preview').toContain('修改预览');
+});
+
+/**
+ * Design system v2 §6 (「失败不再整行变红」): a call that really failed shows the
+ * shared failed mark in the icon slot; the row, its verb and its argument keep
+ * their ordinary ink.
+ */
+it('[V2-FAILED-1] a failed call: the failed mark leads, the row is not red', async () => {
+  const blocks: ChatBlock[] = [
+    call('r1', 'Read', { file_path: 'src/a.ts' }),
+    {
+      id: 'r1-result',
+      type: 'tool_result',
+      toolCallId: 'r1',
+      toolOk: false,
+      toolOutput: 'ENOENT: no such file',
+      text: 'ENOENT: no such file',
+    },
+  ];
+  const rows = deriveToolGroupRows(
+    pairToolBlocks(blocks).map((run) => ({ kind: 'run' as const, run })),
+    { t: zh }
+  );
+  await act(async () => root.render(createElement(ToolGroup, { rows, sessionId: 's' })));
+  const row = container.querySelector<HTMLElement>('.group\\/row');
+  expect(row).not.toBeNull();
+  expect(row?.className).not.toContain('text-destructive');
+  expect(row?.querySelector('[data-slot="status-icon"]')?.getAttribute('data-status')).toBe(
+    'failed'
+  );
+  const arg = row?.querySelector<HTMLElement>('.font-mono');
+  expect(arg, 'the path argument').not.toBeNull();
+  expect(arg?.className ?? '').not.toContain('destructive');
 });

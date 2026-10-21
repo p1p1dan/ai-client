@@ -1071,13 +1071,13 @@ export function FileTree({
   if (tree.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-        <p className="text-sm">{t('No files')}</p>
+        <p className="text-ui">{t('No files')}</p>
         {rootPath && (
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => onCreateFile(rootPath)}
-              className="flex items-center gap-1 text-xs hover:text-foreground"
+              className="flex items-center gap-1 text-small hover:text-foreground"
             >
               <FilePlus className="h-3 w-3" />
               {t('New File')}
@@ -1085,7 +1085,7 @@ export function FileTree({
             <button
               type="button"
               onClick={() => onCreateDirectory(rootPath)}
-              className="flex items-center gap-1 text-xs hover:text-foreground"
+              className="flex items-center gap-1 text-small hover:text-foreground"
             >
               <FolderPlus className="h-3 w-3" />
               {t('New Folder')}
@@ -1118,7 +1118,7 @@ export function FileTree({
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
               title={t('Collapse file tree')}
             >
               <PanelLeftClose className="h-4 w-4" />
@@ -1224,7 +1224,7 @@ export function FileTree({
             <AlertDialogTitle>{t('Confirm Move')}</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDragData && (
-                <span className="block text-sm">
+                <span className="block text-ui">
                   {t('Are you sure you want to move "')}
                   <span className="font-medium">{pendingDragData.draggingNode.name}</span>
                   {t('" to "')}
@@ -1238,7 +1238,7 @@ export function FileTree({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <div className="flex w-full items-center justify-between">
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-ui">
                 <Checkbox
                   checked={dontShowAgain}
                   onCheckedChange={(checked) => setDontShowAgain(checked === true)}
@@ -1312,7 +1312,7 @@ export function FileTree({
               {conflictData && (
                 <>
                   <br />
-                  <span className="font-medium text-sm">
+                  <span className="font-medium text-ui">
                     {conflictData.source === 'paste' && clipboard
                       ? clipboard.name
                       : conflictData.dragNode?.name || ''}
@@ -1323,7 +1323,7 @@ export function FileTree({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <div className="flex w-full flex-col gap-3">
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-ui">
                 <Checkbox
                   checked={dontShowConflictAgain}
                   onCheckedChange={(checked) => setDontShowConflictAgain(checked === true)}
@@ -1675,8 +1675,8 @@ function FileTreeNodeComponent({
         draggable={!isEditing}
         data-node-path={actualNode.path}
         className={cn(
-          'flex h-7 cursor-pointer select-none items-center gap-1 rounded-sm px-2 text-sm hover:bg-accent/50',
-          isSelected && 'bg-accent text-accent-foreground',
+          'flex h-7 cursor-pointer select-none items-center gap-1 rounded-sm px-2 text-ui hover:bg-fill-ghost-hover',
+          isSelected && 'bg-fill-ghost-selected text-foreground',
           actualNode.ignored && 'opacity-50',
           isBeingDragged && 'opacity-40'
         )}
@@ -1718,7 +1718,7 @@ function FileTreeNodeComponent({
             onChange={(e) => onEditValueChange(e.target.value)}
             onBlur={() => onFinishRename(editingPath)}
             onKeyDown={handleKeyDown}
-            className="h-5 min-w-0 flex-1 rounded border border-ring bg-background px-1 py-0 text-sm outline-none"
+            className="h-5 min-w-0 flex-1 rounded border border-ring bg-background px-1 py-0 text-ui outline-none"
             onClick={(e) => e.stopPropagation()}
           />
         ) : (

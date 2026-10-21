@@ -195,7 +195,7 @@ export function ConversationImportSettings({
           {messageOf(projectsQuery.error)}
         </p>
       ) : projects.length === 0 ? (
-        <p className="text-meta text-muted-foreground">
+        <p className="text-small text-muted-foreground">
           {t('No Claude Code or Codex conversations were found on this machine.')}
         </p>
       ) : openProject ? (
@@ -235,7 +235,7 @@ export function ConversationImportSettings({
               <Skeleton className="h-14 w-full" />
             </div>
           ) : sessions.length === 0 ? (
-            <p className="text-meta text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t('This project has no conversations to import.')}
             </p>
           ) : (
@@ -284,11 +284,11 @@ export function ConversationImportSettings({
           )}
         </div>
       ) : (
-        <ul className="divide-y rounded-md border">
+        <ul className="divide-y divide-border-soft rounded-md border border-border-soft bg-surface-2">
           {projects.map((project) => (
             <li key={projectKey(project)}>
               <button
-                className="flex w-full min-w-0 items-center gap-3 p-3 text-left transition-colors hover:bg-accent/50"
+                className="flex w-full min-w-0 items-center gap-3 p-3 text-left transition-colors hover:bg-fill-ghost-hover"
                 onClick={() => chooseProject(project)}
                 type="button"
               >
@@ -300,11 +300,11 @@ export function ConversationImportSettings({
                     </span>
                     <Badge variant="secondary">{sourceLabel(project.sourceKind)}</Badge>
                   </div>
-                  <p className="truncate text-meta text-muted-foreground" title={project.path}>
+                  <p className="truncate text-small text-muted-foreground" title={project.path}>
                     {project.path || t('No working folder was recorded')}
                   </p>
                 </div>
-                <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
+                <span className="shrink-0 text-small text-muted-foreground tabular-nums">
                   {t('{{count}} conversations', { count: project.sessionCount })}
                 </span>
               </button>
@@ -314,7 +314,7 @@ export function ConversationImportSettings({
       )}
 
       {summary && (
-        <div className="space-y-1 rounded-md border bg-card p-3 text-meta">
+        <div className="space-y-1 rounded-md border border-border-soft bg-surface-2 p-3 text-small">
           {describeConversationImport(summary, t).map((line) => (
             <p key={line}>{line}</p>
           ))}

@@ -115,7 +115,7 @@ describe('the repository menu on the home page', () => {
     const labels = groupLabels().map((node) => node.textContent);
     expect(labels).toEqual(['Recents', 'On This PC', 'Add Repository']);
     for (const label of groupLabels()) {
-      expect(label.className).toContain('text-meta');
+      expect(label.className).toContain('text-small'); // design system v2: the 12px label tier
       expect(label.className).toContain('font-normal');
       expect(label.className).not.toContain('text-xs');
     }

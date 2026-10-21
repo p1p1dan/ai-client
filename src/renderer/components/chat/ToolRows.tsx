@@ -3,6 +3,7 @@ import {
   Braces,
   ChevronDown,
   ChevronRight,
+  ClipboardList,
   FileOutput,
   FileText,
   Globe,
@@ -33,6 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Ident } from '@/components/ui/ident';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
@@ -174,9 +176,14 @@ interface ToolRowProps {
  * generic mark rather than rendering nothing, because a missing icon would
  * silently break the column the other rows align to.
  *
- * `size-[13px]` matches the row's own `--text-chat-process` tier, and the icons
- * inherit `currentColor` so they dim with the row instead of needing a second
- * colour decision.
+ * `size-3.5` is the chat area's SM icon tier (design system v2 §4.3), and the
+ * icons inherit `currentColor` so they dim with the row instead of needing a
+ * second colour decision.
+ *
+ * Design system v2 §6 / §7.4: while a row runs, or once it failed, the slot
+ * holds the shared `StatusIcon` instead -- the one spinner, the one red cross.
+ * `plan` wears the plan review card's own mark, so it no longer shares the
+ * directory listing's tree.
  */
 const ROW_ICONS: Record<string, typeof Wrench> = {
   terminal: SquareTerminal,
@@ -186,7 +193,7 @@ const ROW_ICONS: Record<string, typeof Wrench> = {
   list: ListTree,
   web: Globe,
   delegate: Users,
-  plan: ListTree,
+  plan: ClipboardList,
   thinking: Braces,
   tool: Wrench,
   // dsh-rebase P1-7c (plan P1-7 shard 04 §1). `todo`, `goal` and `job` are
@@ -202,9 +209,22 @@ const ROW_ICONS: Record<string, typeof Wrench> = {
   review: ScanSearch,
 };
 
-function ToolRowIcon({ kind }: { kind?: string }) {
-  const Icon = ROW_ICONS[kind ?? 'tool'] ?? Wrench;
+function ToolRowIcon({ view }: { view: ToolRowView }) {
+  if (view.running) return <StatusIcon status="running" className="self-center" />;
+  if (view.failed || view.reviewDenied) {
+    return <StatusIcon status="failed" className="self-center" />;
+  }
+  const Icon = ROW_ICONS[view.iconKind ?? 'tool'] ?? Wrench;
   return <Icon className={toolRowIconClass()} aria-hidden />;
+}
+
+/**
+ * Design system v2 §6: on a failed row only the icon and the one-line reason
+ * are red. The reason is the word that says how the call ended (the
+ * permission word, the outcome word); the name and the argument keep their ink.
+ */
+function failedReasonClass(view: Pick<ToolRowView, 'failed' | 'reviewDenied'>): string | false {
+  return view.failed || view.reviewDenied ? 'text-destructive' : false;
 }
 
 /** One `.ct-row`: verb + arg, optionally expandable into an output/detail/thinking body. */
@@ -226,7 +246,7 @@ export function ToolRow(props: ToolRowProps) {
     return (
       <div
         data-tool-call-id={view.toolCallId}
-        className="rounded-sm transition-colors duration-300 data-[located]:bg-selection"
+        className="rounded-sm transition-colors duration-250 data-[located]:bg-selection"
       >
         <SubagentActivity
           {...props}
@@ -301,23 +321,28 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
   // The row ARG has been on this token since T-05; this aligns the verb with
   // it, which is also what the reference client does.
   //
-  // T104: the whole row moved from `text-markdown` to `text-chat-process`.
+  // T104: the whole row moved from `text-chat-body` to `text-chat-process`.
   // Tool rows used to share the body tier with the prose they interrupt, which
   // is exactly the "process is not distinguishable from content" complaint
   // (the head/arg tier split above only separated them by brightness). This
   // token is runtime-configurable, so the row follows the reader's process
   // size setting.
+  //
+  // Design system v2 §7.4: frameless, one line; the tool name is the muted ink
+  // at 500, everything after it (argument, counts, clock) the faint ink. A
+  // failed row no longer turns red as a whole (§6) -- see `ToolRowIcon` and
+  // `failedReasonClass`.
   const rowClass = cn(
-    'group/row flex w-full items-baseline gap-1.5 text-left text-chat-process leading-normal',
-    view.failed || view.reviewDenied ? 'text-destructive' : turnProcessToneClass()
+    'group/row flex w-full items-baseline gap-1.5 rounded-xs text-left text-chat-process leading-normal focus-ring',
+    turnProcessToneClass()
   );
-  const verbClass = cn('shrink-0', !view.failed && 'group-hover/row:text-foreground');
+  const verbClass = 'shrink-0 font-medium text-muted-foreground group-hover/row:text-foreground';
 
   const rowContent = (
     <>
       {/* Decision 034: the aggregate row is gone, so every row words itself
           from its own closed-vocabulary verb — there is no count branch left. */}
-      <ToolRowIcon kind={view.iconKind} />
+      <ToolRowIcon view={view} />
       {/* dsh-rebase decision 131: a plugin's own title for the call says what
           the verb and the argument would, in the plugin's words (never
           translated, decision 073 rule 1). */}
@@ -342,7 +367,10 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
           dsh-rebase P1-4d1: a call refused by the card the user answered
           already says so in its permission word, and says it once. */}
       {view.outcome && !(view.outcome === 'refused' && view.permissionVerb) && (
-        <span data-slot="tool-row-outcome" className={toolRowPermissionClass()}>
+        <span
+          data-slot="tool-row-outcome"
+          className={cn(toolRowPermissionClass(), failedReasonClass(view))}
+        >
           · {t(TOOL_RUN_OUTCOME_LABEL[view.outcome])}
         </span>
       )}
@@ -403,7 +431,7 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
         <RunningToolClock startedAtMs={view.runningStartedAtMs} timeoutMs={view.runningTimeoutMs} />
       )}
       {showDiff && view.diff && (
-        <span className="shrink-0 text-meta tabular-nums">
+        <span className="shrink-0 tabular-nums">
           {/* Decision 034: the ordinary settled edit prints the NUMBERS only.
               The label 「已修改」 restated the row's own verb one span to the
               right, which is the per-row redundancy the zcode comparison was
@@ -501,7 +529,7 @@ function MoveToBackgroundButton({
     <Button
       size="xs"
       variant="ghost"
-      className="h-6 shrink-0 gap-1 px-1.5 text-meta text-muted-foreground"
+      className="h-6 shrink-0 gap-1 px-1.5 text-muted-foreground"
       disabled={pending}
       title={t('Move to background — the turn goes on and this keeps running as a background task')}
       onClick={() => void move()}
@@ -663,11 +691,13 @@ function SubagentActivity({
   return <ToolRowContent view={merged} onOpenFile={onOpenFile} sessionId={sessionId} />;
 }
 
-const FINDING_OUTCOME_BADGE: Readonly<Record<FindingOutcome, 'success' | 'warning' | 'outline'>> = {
-  fixed: 'success',
-  skipped: 'warning',
-  no_change_needed: 'outline',
-};
+// Design system v2 §1 rule 1: tags inside the card are fills, not frames.
+const FINDING_OUTCOME_BADGE: Readonly<Record<FindingOutcome, 'success' | 'warning' | 'secondary'>> =
+  {
+    fixed: 'success',
+    skipped: 'warning',
+    no_change_needed: 'secondary',
+  };
 
 /**
  * Route B S-6: the card a `ReportFindings` call is drawn as. The head says how many
@@ -693,12 +723,13 @@ function ReviewFindingsCard({
     <section
       data-testid="review-findings-card"
       aria-label={t('Review findings')}
-      className="overflow-hidden rounded-md border border-border bg-card text-ui"
+      className="overflow-hidden rounded-md border border-border-soft bg-surface-2 text-ui"
     >
+      {/* Design system v2 §4.2: a card head is 32px, over one hairline. */}
       <div
         className={cn(
-          'flex min-h-9 items-center gap-2 px-3 py-1.5 text-muted-foreground',
-          total > 0 && 'border-b border-border'
+          'flex h-8 items-center gap-2 px-3 text-muted-foreground',
+          total > 0 && 'border-b border-border-soft'
         )}
       >
         <ScanSearch className="size-3.5 shrink-0" aria-hidden />
@@ -770,7 +801,7 @@ function ReviewFindingRow({
         {/* The label keeps half the row at least: on a narrow column the place and the tags
             go to a line of their own rather than squeezing it to a few words. */}
         <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-0.5">
-          <CollapsibleTrigger className="flex min-w-0 grow basis-1/2 items-center gap-1.5 text-left text-foreground">
+          <CollapsibleTrigger className="flex min-w-0 grow basis-1/2 items-center gap-1.5 rounded-xs text-left text-foreground focus-ring">
             <Chevron className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <span className="min-w-0 flex-1 truncate">{findingLabel(finding)}</span>
           </CollapsibleTrigger>
@@ -779,7 +810,7 @@ function ReviewFindingRow({
               <button
                 type="button"
                 title={target.line ? `${target.path}:${target.line}` : target.path}
-                className="cursor-pointer border-b border-transparent text-tool-arg hover:border-primary hover:text-primary"
+                className="cursor-pointer border-b border-transparent text-foreground-faint hover:border-current hover:text-foreground"
                 onClick={() =>
                   (onOpenFile ?? ((link: FileLinkTarget) => openFileTarget(link, 'tool-row')))(
                     target
@@ -793,12 +824,12 @@ function ReviewFindingRow({
               </button>
             )}
             {finding.category && (
-              <Badge variant="outline" size="lg" className="font-normal">
+              <Badge variant="secondary" size="lg" className="font-normal">
                 {finding.category}
               </Badge>
             )}
             {finding.verdict && (
-              <Badge variant="outline" size="lg" className="font-normal">
+              <Badge variant="secondary" size="lg" className="font-normal">
                 {t(FINDING_VERDICT_LABEL[finding.verdict])}
               </Badge>
             )}
@@ -819,7 +850,7 @@ function ReviewFindingRow({
             {finding.failureScenario && (
               <p
                 data-slot="review-finding-scenario"
-                className="whitespace-pre-wrap break-words text-meta text-muted-foreground"
+                className="whitespace-pre-wrap break-words text-small text-muted-foreground"
               >
                 <span className="font-semibold">{t('Failure scenario')}</span> ·{' '}
                 {finding.failureScenario}
@@ -852,7 +883,9 @@ function ToolRowPermission({ view }: { view: ToolRowView }) {
     return null;
   return (
     <>
-      <span className={toolRowPermissionClass()}>· {t(view.permissionVerb)}</span>
+      <span className={cn(toolRowPermissionClass(), failedReasonClass(view))}>
+        · {t(view.permissionVerb)}
+      </span>
       {view.permissionAutoNote ? (
         <span className={toolRowPermissionNoteClass()}>· {view.permissionAutoNote}</span>
       ) : null}
@@ -925,7 +958,7 @@ function ToolRowArg({
         title={link.path}
         className={cn(
           argClass,
-          'cursor-pointer border-b border-transparent hover:border-primary hover:text-primary'
+          'cursor-pointer border-b border-transparent hover:border-current hover:text-foreground'
         )}
         onClick={(event) => {
           // Keep this click from also toggling the row's own expand/collapse
@@ -1025,7 +1058,7 @@ function ToolRowBody({
   // output-only rows keep their original single-window shapes.
   if (view.input && view.body === 'output') {
     return (
-      <div className="ml-0.5 border-l border-border pl-3.5">
+      <div className="ml-0.5 border-l border-border-soft pl-3.5">
         <div className={cn('overflow-auto', view.outputMaxHeightClass)}>
           <pre className="m-0 select-text whitespace-pre-wrap pt-1 font-mono text-code leading-[1.55] text-muted-foreground">
             {view.input}
@@ -1034,12 +1067,12 @@ function ToolRowBody({
               between input and output sits above the note that says so. */}
           <OutputHeadNote
             omitted={view.outputHeadOmitted}
-            className="mt-1 border-t border-border pt-2"
+            className="mt-1 border-t border-border-soft pt-2"
           />
           <pre
             className={cn(
               'm-0 select-text whitespace-pre-wrap pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
-              view.outputHeadOmitted ? 'pt-1' : 'mt-1 border-t border-border pt-2'
+              view.outputHeadOmitted ? 'pt-1' : 'mt-1 border-t border-border-soft pt-2'
             )}
           >
             {view.output}
@@ -1081,7 +1114,7 @@ function OutputHeadNote({
   if (!omitted) return null;
   return (
     <p
-      className={cn('text-meta text-muted-foreground tabular-nums', className)}
+      className={cn('text-small text-muted-foreground tabular-nums', className)}
       data-testid="tool-output-head-omitted"
     >
       {omitted.bytes
@@ -1100,6 +1133,10 @@ function OutputHeadNote({
  * and the reference implementation's `text-green-600 dark:text-green-400`
  * would have been both a second vocabulary for the same idea and a violation
  * of the design system's "no raw palette" rule.
+ *
+ * Design system v2 §7.5: one closed frame (`lg` radius, the card surface, the
+ * soft edge) with a 32px head -- what the preview is, then the counts -- over
+ * a hairline; added and removed lines at a 12% wash of their colour.
  */
 function ToolRowDiffSegment({
   diff,
@@ -1112,9 +1149,9 @@ function ToolRowDiffSegment({
 }) {
   const { t } = useI18n();
   return (
-    <div className="ml-0.5 border-l border-border pl-3.5">
-      <div className="flex items-center gap-2 pt-1 pb-1 text-meta tabular-nums">
-        <span>
+    <div className="mt-1 overflow-hidden rounded-lg border border-border-soft bg-surface-2">
+      <div className="flex h-8 items-center gap-2 border-b border-border-soft px-3 text-small text-muted-foreground tabular-nums">
+        <span className="min-w-0 truncate">
           {t(
             running
               ? 'Modification preview'
@@ -1130,7 +1167,7 @@ function ToolRowDiffSegment({
         <span className="text-success">+{diff.added}</span>
         <span className="text-destructive">-{diff.removed}</span>
       </div>
-      <div className="max-h-72 overflow-auto pb-2 font-mono text-code leading-[1.55]">
+      <div className="max-h-72 overflow-auto py-1 font-mono text-code leading-[1.55]">
         {diff.rows.map((row, index) => (
           <div
             // Rows are positional and can repeat verbatim (two identical blank
@@ -1138,13 +1175,13 @@ function ToolRowDiffSegment({
             key={`${index}-${row.kind}`}
             className={cn(
               'flex',
-              row.kind === 'add' && 'bg-success/10',
-              row.kind === 'del' && 'bg-destructive/10'
+              row.kind === 'add' && 'bg-success/12',
+              row.kind === 'del' && 'bg-destructive/12'
             )}
           >
             <span
               className={cn(
-                'w-4 shrink-0 select-none text-center',
+                'w-6 shrink-0 select-none text-center',
                 row.kind === 'add' && 'text-success',
                 row.kind === 'del' && 'text-destructive',
                 row.kind === 'same' && 'text-muted-foreground/40'
@@ -1154,7 +1191,7 @@ function ToolRowDiffSegment({
             </span>
             <span
               className={cn(
-                'min-w-0 flex-1 select-text whitespace-pre-wrap break-all px-1',
+                'min-w-0 flex-1 select-text whitespace-pre-wrap break-all pr-3 pl-1',
                 row.kind === 'same' ? 'text-muted-foreground/70' : 'text-foreground'
               )}
             >
@@ -1176,7 +1213,7 @@ function ToolRowInputSegment({
   maxHeightClass?: string;
 }) {
   return (
-    <div className="ml-0.5 border-l border-border pl-3.5">
+    <div className="ml-0.5 border-l border-border-soft pl-3.5">
       <pre
         className={cn(
           'm-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
@@ -1201,7 +1238,7 @@ function ToolRowOutputSegment({
   switch (view.body) {
     case 'output':
       return (
-        <div className="ml-0.5 border-l border-border pl-3.5">
+        <div className="ml-0.5 border-l border-border-soft pl-3.5">
           <OutputHeadNote omitted={view.outputHeadOmitted} className="pt-1" />
           <pre
             className={cn(
@@ -1233,13 +1270,13 @@ function ToolRowOutputSegment({
       // dsh-rebase P1-7c (decision 118's handoff): the list a `todo_write`
       // set, drawn by the todo card's own component.
       return (
-        <div className="ml-0.5 border-l border-border pl-3.5">
+        <div className="ml-0.5 border-l border-border-soft pl-3.5">
           <TodoList items={view.todos ?? []} className="pt-1 pb-2" />
         </div>
       );
     case 'stats':
       return (
-        <div className="mt-1 flex select-text flex-col gap-1.5 text-chat-process leading-[1.55] text-tool-arg">
+        <div className="mt-1 flex select-text flex-col gap-1.5 text-chat-process leading-[1.55] text-foreground-faint">
           <p className={cn('whitespace-pre-wrap', thoughtBodyMaxHeightClass())}>{view.output}</p>
         </div>
       );
@@ -1316,7 +1353,7 @@ function RunningToolClock({ startedAtMs, timeoutMs }: { startedAtMs: number; tim
   const elapsedMs = runningElapsedMs(startedAtMs, nowMs);
   if (elapsedMs === undefined) return null;
   return (
-    <span data-slot="tool-row-clock" className="shrink-0 text-meta tabular-nums">
+    <span data-slot="tool-row-clock" className="shrink-0 tabular-nums">
       · {formatWorkedForDuration(elapsedMs)}
       {/* dsh-rebase P1-7c (plan P1-7 shard 04 §4): DSH does not kill a
           command at its timeout, it moves it to the background, so the limit
@@ -1342,7 +1379,7 @@ function ThinkingBody({ text }: { text: string }) {
   return (
     <p
       data-slot="thinking-text"
-      className="mt-1 select-text whitespace-pre-wrap text-chat-process leading-[1.55] text-tool-arg"
+      className="mt-1 select-text whitespace-pre-wrap text-chat-process leading-[1.55] text-foreground-faint"
     >
       {displayText}
     </p>

@@ -20,9 +20,11 @@ import {
   Target,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Menu, MenuPopup, MenuRadioGroup, MenuSeparator } from '@/components/ui/menu';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
+import { cn } from '@/lib/utils';
 import { useLegacyMigrationStore } from '@/stores/legacyMigration';
 import { isTierControlDegraded, usePermissionGateStore } from '@/stores/permissionGate';
 import { type HostStatus, isHostUsable } from './hostStatus';
@@ -313,20 +315,22 @@ export function ComposerPermissionTrigger({
       }}
     >
       <MenuPrimitive.Trigger
-        className={`${composerPermissionTriggerClass()}${
-          bypassing ? ' bg-destructive/10 text-destructive hover:bg-destructive/20' : ''
-        }`}
+        className={cn(
+          composerPermissionTriggerClass(),
+          bypassing &&
+            'bg-destructive/10 text-destructive hover:bg-destructive/16 hover:text-destructive focus-visible:bg-destructive/16 focus-visible:text-destructive data-[popup-open]:bg-destructive/16 data-[popup-open]:text-destructive'
+        )}
         disabled={isDisabled}
         aria-label={title}
         title={title}
         render={<button type="button" />}
       >
         <Icon className="size-3.5 shrink-0" />
-        <span className={bypassing ? 'font-medium' : 'text-muted-foreground'}>{label}</span>
+        <span className={bypassing ? 'font-medium' : undefined}>{label}</span>
       </MenuPrimitive.Trigger>
       <MenuPopup
         align="start"
-        className="min-w-52 max-w-xl rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
+        className="min-w-52 max-w-xl"
         side={composerPopupSide(mode)}
         finalFocus={() => {
           const picked = goalPicked.current;
@@ -343,7 +347,7 @@ export function ComposerPermissionTrigger({
                 ? t(sdk ? 'Turn on Bypass permissions?' : 'Turn off every approval prompt?')
                 : t(sdk ? 'Turn on Auto mode?' : 'Turn on full auto?')}
             </p>
-            <p className="text-meta text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {confirming === 'bypass'
                 ? t(
                     sdk
@@ -359,23 +363,23 @@ export function ComposerPermissionTrigger({
                   )}
               {confirming === 'bypass' ? bypassScope : scope}
             </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
+            <div className="flex justify-end gap-1.5">
+              <Button
+                size="sm"
+                variant="ghost"
                 disabled={pending}
-                className="rounded-sm px-2 py-1 text-ui hover:bg-hover"
                 onClick={() => setConfirming(null)}
               >
                 {t('Cancel')}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
                 disabled={pending}
-                className="rounded-sm bg-destructive/10 px-2 py-1 text-ui text-destructive hover:bg-destructive/20"
                 onClick={() => void apply(settingsOf(confirming))}
               >
                 {t('Apply')}
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -414,7 +418,7 @@ export function ComposerPermissionTrigger({
                     <OptionIcon className="size-3.5 shrink-0" />
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span>{t(presetLabels[option.id])}</span>
-                      <span className="text-meta text-muted-foreground">
+                      <span className="text-small text-muted-foreground">
                         {locked ? t('Can be changed once this turn ends.') : t(option.description)}
                       </span>
                     </span>
@@ -439,7 +443,7 @@ export function ComposerPermissionTrigger({
                   <Target className="size-3.5 shrink-0" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span>{t('Set a goal…')}</span>
-                    <span className="text-meta text-muted-foreground">
+                    <span className="text-small text-muted-foreground">
                       {goalEntry.hint
                         ? t(goalEntry.hint)
                         : t(
@@ -451,13 +455,13 @@ export function ComposerPermissionTrigger({
               </>
             )}
             <MenuSeparator />
-            <div className="px-2 py-1.5 text-meta text-muted-foreground">
+            <div className="px-2 py-1.5 text-small text-muted-foreground">
               {modeLocked ? turnNote : scope}
             </div>
           </>
         )}
         {error && (
-          <p role="alert" className="max-w-72 px-3 py-2 text-meta text-destructive">
+          <p role="alert" className="max-w-72 px-3 py-2 text-small text-destructive">
             {error}
           </p>
         )}
@@ -471,7 +475,7 @@ function DegradedGateNotice() {
   return (
     <div className="max-w-64 p-3">
       <p className="text-ui font-medium">{t('Permission tiers are off for this chat')}</p>
-      <p className="mt-1 text-meta text-muted-foreground">
+      <p className="mt-1 text-small text-muted-foreground">
         {t('It runs on the permission system in your own agent directory.')}
       </p>
     </div>

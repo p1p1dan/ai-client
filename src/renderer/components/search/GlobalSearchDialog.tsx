@@ -173,7 +173,7 @@ export function GlobalSearchDialog({
                 <input
                   ref={inputRef}
                   type="text"
-                  className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                  className="h-full min-w-0 flex-1 bg-transparent text-ui outline-none placeholder:text-muted-foreground"
                   placeholder={
                     mode === 'files' ? t('Search file name...') : t('Search in files...')
                   }
@@ -183,7 +183,7 @@ export function GlobalSearchDialog({
                 {query && (
                   <button
                     type="button"
-                    className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
                     onClick={() => setQuery('')}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -194,7 +194,7 @@ export function GlobalSearchDialog({
                 <button
                   type="button"
                   className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
                     options.caseSensitive && 'bg-primary/20 text-primary'
                   )}
                   onClick={() => setOptions({ caseSensitive: !options.caseSensitive })}
@@ -205,7 +205,7 @@ export function GlobalSearchDialog({
                 <button
                   type="button"
                   className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
                     options.wholeWord && 'bg-primary/20 text-primary'
                   )}
                   onClick={() => setOptions({ wholeWord: !options.wholeWord })}
@@ -216,7 +216,7 @@ export function GlobalSearchDialog({
                 <button
                   type="button"
                   className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
                     options.regex && 'bg-primary/20 text-primary'
                   )}
                   onClick={() => setOptions({ regex: !options.regex })}
@@ -227,7 +227,7 @@ export function GlobalSearchDialog({
                 <button
                   type="button"
                   className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
                     options.useGitignore && 'bg-primary/20 text-primary'
                   )}
                   onClick={() => setOptions({ useGitignore: !options.useGitignore })}
@@ -238,14 +238,14 @@ export function GlobalSearchDialog({
               </div>
 
               {/* Mode Tabs + Stats */}
-              <div className="flex h-8 items-center gap-2 px-3 text-xs">
+              <div className="flex h-8 items-center gap-2 px-3 text-small">
                 <button
                   type="button"
                   className={cn(
                     'flex items-center gap-1 rounded px-2 py-1',
                     mode === 'files'
                       ? 'bg-primary/20 text-primary'
-                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                      : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
                   )}
                   onClick={() => setMode('files')}
                 >
@@ -258,7 +258,7 @@ export function GlobalSearchDialog({
                     'flex items-center gap-1 rounded px-2 py-1',
                     mode === 'content'
                       ? 'bg-primary/20 text-primary'
-                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                      : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
                   )}
                   onClick={() => setMode('content')}
                 >
@@ -309,7 +309,7 @@ export function GlobalSearchDialog({
             </div>
 
             {/* Footer */}
-            <div className="flex h-8 shrink-0 items-center justify-between border-t px-3 text-xs text-muted-foreground">
+            <div className="flex h-8 shrink-0 items-center justify-between border-t px-3 text-small text-muted-foreground">
               <div className="flex items-center gap-2">
                 <span>↑↓ {t('Navigate')}</span>
                 <span>↵ {t('Open')}</span>
@@ -320,7 +320,7 @@ export function GlobalSearchDialog({
                   <span>{t('File mask')}:</span>
                   <input
                     type="text"
-                    className="h-5 w-20 rounded border bg-background px-1 text-xs outline-none focus:border-primary"
+                    className="h-5 w-20 rounded border bg-background px-1 text-small outline-none focus:border-primary"
                     placeholder="*.ts"
                     value={options.filePattern}
                     onChange={(e) => setOptions({ filePattern: e.target.value })}

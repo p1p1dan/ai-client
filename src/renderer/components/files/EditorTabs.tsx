@@ -6,7 +6,7 @@ import { Menu, MenuItem, MenuPopup, MenuSeparator } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
-import { springFast } from '@/lib/motion';
+import { transitionFast } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type { EditorTab } from '@/stores/editor';
 import { getFileIcon, getFileIconColor } from './fileIcons';
@@ -116,7 +116,10 @@ export function EditorTabs({
   }
 
   return (
-    <div className="h-10 shrink-0 overflow-hidden border-b">
+    // Design system v2 §7.12: the selected tab has no frame, only the body ink
+    // and a 2px clay line. The hairline below belongs to EditorArea's tab row,
+    // so it also runs under the row's trailing buttons.
+    <div className="h-10 shrink-0 overflow-hidden">
       <ScrollArea className="h-full">
         <div className="flex h-9 w-max pb-1">
           {tabs.map((tab, index) => {
@@ -147,18 +150,18 @@ export function EditorTabs({
                 role="button"
                 tabIndex={0}
                 className={cn(
-                  'group relative flex h-9 min-w-[120px] max-w-[180px] cursor-pointer select-none items-center gap-2 border-r px-3 text-sm transition-colors',
+                  'group relative flex h-9 min-w-[120px] max-w-[180px] cursor-pointer select-none items-center gap-2 px-3 text-ui transition-colors duration-150',
                   isActive
                     ? 'text-foreground'
-                    : 'bg-muted/30 text-muted-foreground hover:bg-muted/50'
+                    : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
                 )}
               >
-                {/* Active indicator - 使用 layoutId 实现平滑滑动 */}
+                {/* Active indicator: slides between tabs (layoutId), no spring. */}
                 {isActive && (
                   <motion.div
                     layoutId="editor-tab-indicator"
-                    className="absolute inset-x-0 top-0 h-[2px] bg-primary"
-                    transition={springFast}
+                    className="absolute inset-x-0 bottom-0 h-0.5 bg-primary"
+                    transition={transitionFast}
                   />
                 )}
 
@@ -184,7 +187,7 @@ export function EditorTabs({
                   type="button"
                   onClick={(e) => onTabClose(tab.path, e)}
                   className={cn(
-                    'shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground',
+                    'shrink-0 rounded-xs p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-fill-ghost-hover hover:text-foreground',
                     'group-hover:opacity-100',
                     isActive && 'opacity-60'
                   )}

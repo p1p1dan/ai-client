@@ -56,16 +56,18 @@ import {
 const EMPTY_MESSAGES: readonly ChatMessage[] = [];
 const EMPTY_METADATA: Readonly<Record<string, MessageMetadata>> = {};
 
+// Design system v2 §6: running is neutral (never blue); attention (waiting,
+// disconnected) stays amber, failure red.
 const TONE_BADGE: Record<RunTone, 'secondary' | 'info' | 'warning' | 'error'> = {
   idle: 'secondary',
-  active: 'info',
+  active: 'secondary',
   attention: 'warning',
   error: 'error',
 };
 
 const TONE_BAR: Record<RunTone, string> = {
   idle: 'bg-transparent',
-  active: 'bg-info',
+  active: 'bg-muted-foreground',
   attention: 'bg-warning',
   error: 'bg-destructive',
 };
@@ -123,7 +125,7 @@ function OccupancyRing({ occupancy, label }: { occupancy: ContextOccupancy; labe
 function RunMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex h-7 items-center gap-2 px-1">
-      <span className="shrink-0 text-meta text-muted-foreground">{label}</span>
+      <span className="shrink-0 text-small text-muted-foreground">{label}</span>
       <span className="min-w-0 flex-1 truncate text-right text-ui tabular-nums" title={value}>
         {value}
       </span>
@@ -261,7 +263,7 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
   if (!activeSessionId) {
     return (
       <div className="flex h-full items-center justify-center p-4">
-        <p className="text-meta text-muted-foreground">{t('No active session.')}</p>
+        <p className="text-small text-muted-foreground">{t('No active session.')}</p>
       </div>
     );
   }
@@ -289,7 +291,7 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
             </Badge>
           )}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-meta text-muted-foreground">
+        <div className="mt-0.5 flex items-center gap-1.5 text-small text-muted-foreground">
           {view.model ? (
             <span className="min-w-0 truncate" title={view.model}>
               {view.model}
@@ -303,17 +305,17 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
         </div>
 
         {view.tools.activeTool && (
-          <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-muted px-1.5 py-1">
+          <div className="mt-1.5 flex items-start gap-1.5 rounded-sm bg-fill-neutral px-1.5 py-1">
             <Wrench className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-meta" title={view.tools.activeTool}>
+              <div className="truncate text-small" title={view.tools.activeTool}>
                 {view.tools.activeTool}
               </div>
               {/* Decision 156: the status a tool publishes can be CJK, and the
                   design system keeps CJK off 10px — the meta size, like the line above. */}
               {view.tools.activeToolStatus && (
                 <div
-                  className="truncate text-meta text-muted-foreground"
+                  className="truncate text-small text-muted-foreground"
                   title={view.tools.activeToolStatus}
                 >
                   {view.tools.activeToolStatus}
@@ -328,7 +330,7 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
         <div className="flex shrink-0 items-center gap-3 border-b p-2">
           <OccupancyRing occupancy={view.occupancy} label={t('Context used')} />
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <div className="flex items-center gap-2 text-meta">
+            <div className="flex items-center gap-2 text-small">
               <span
                 aria-hidden
                 className="h-2 w-2 shrink-0 rounded-xs"
@@ -339,7 +341,7 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
                 {formatTokenTotal(view.occupancy.usedTokens)}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-meta">
+            <div className="flex items-center gap-2 text-small">
               <span
                 aria-hidden
                 className="h-2 w-2 shrink-0 rounded-xs"
@@ -350,7 +352,7 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
                 {formatTokenTotal(view.occupancy.freeTokens)}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-meta text-muted-foreground">
+            <div className="flex items-center gap-2 text-small text-muted-foreground">
               <span className="min-w-0 flex-1 truncate">{t('Context window')}</span>
               <span className="shrink-0 tabular-nums">
                 {formatTokenTotal(view.occupancy.contextWindow)}
@@ -362,7 +364,7 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
 
       <div className="flex flex-col p-2">
         {view.empty ? (
-          <p className="px-1 py-2 text-meta text-muted-foreground">{t('Nothing has run yet.')}</p>
+          <p className="px-1 py-2 text-small text-muted-foreground">{t('Nothing has run yet.')}</p>
         ) : (
           <>
             {view.status && <RunMetric label={t('Status')} value={view.status} />}
@@ -432,7 +434,7 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
             rows above give way to one line saying so. */}
         {view.usageUnreported && (
           <div className="mt-1 flex flex-col border-t pt-1">
-            <p className="flex h-7 items-center px-1 text-meta text-muted-foreground">
+            <p className="flex h-7 items-center px-1 text-small text-muted-foreground">
               {t('Usage for this request is unknown')}
             </p>
           </div>
@@ -502,7 +504,7 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
                 think that is what it means. It is not: every turn re-sends the
                 whole prompt, so this is that prompt counted once per turn.
                 Stated where the number is, not in a doc nobody opens. */}
-            <p className="px-1 py-1 text-meta text-muted-foreground">
+            <p className="px-1 py-1 text-small text-muted-foreground">
               {/* Decisions 193 §10 and 198: say so when the sum takes in
                   requests outside the loop, or the subagents'. */}
               {formatSessionFiguresNote(view.sessionUsage, view.delegatedUsage !== null, t)}

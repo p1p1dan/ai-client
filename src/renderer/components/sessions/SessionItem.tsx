@@ -29,8 +29,8 @@ export function SessionItem({
   return (
     <label
       className={cn(
-        'flex min-h-14 w-full min-w-0 items-center gap-3 rounded-sm border border-transparent px-2 py-2 text-left transition-colors hover:bg-accent/50',
-        selected && 'bg-selection',
+        'flex min-h-14 w-full min-w-0 items-center gap-3 rounded-sm border border-transparent px-2 py-2 text-left transition-colors hover:bg-fill-ghost-hover',
+        selected && 'bg-fill-ghost-selected',
         disabled && 'opacity-64'
       )}
     >
@@ -50,7 +50,7 @@ export function SessionItem({
         >
           {message}
         </div>
-        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-meta text-muted-foreground">
+        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-small text-muted-foreground">
           <span className="min-w-0 truncate font-mono text-code tracking-normal">{session.id}</span>
           {session.importedSnapshots > 0 ? (
             <Badge size="sm" variant="outline">
@@ -58,9 +58,9 @@ export function SessionItem({
             </Badge>
           ) : null}
         </div>
-        {error ? <div className="mt-1 text-meta text-destructive">{error}</div> : null}
+        {error ? <div className="mt-1 text-small text-destructive">{error}</div> : null}
       </div>
-      <div className="flex shrink-0 items-center gap-2 text-meta text-muted-foreground tabular-nums">
+      <div className="flex shrink-0 items-center gap-2 text-small text-muted-foreground tabular-nums">
         {result === 'imported' ? <CheckCircle2 className="size-4 text-success" /> : null}
         {result === 'already-imported' ? <CheckCircle2 className="size-4 text-info" /> : null}
         {result === 'failed' ? <XCircle className="size-4 text-destructive" /> : null}

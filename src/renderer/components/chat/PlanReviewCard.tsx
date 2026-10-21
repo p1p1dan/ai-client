@@ -9,7 +9,15 @@ import {
   DialogPopup,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DockCard,
+  DockCardBody,
+  DockCardFooter,
+  DockCardHeader,
+  DockCardTitle,
+} from '@/components/ui/dock-card';
 import { Radio, RadioGroup } from '@/components/ui/radio-group';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { Textarea } from '@/components/ui/textarea';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -49,8 +57,6 @@ import type { GoalBarView } from './sessionPanelsModel';
  *
  * The choices are `planReviewModel.ts`'s; this file only draws them.
  */
-
-const SHELL_CLASS = 'overflow-hidden rounded-md border border-border bg-card';
 
 interface InteractiveProps {
   block: ChatBlock;
@@ -126,24 +132,30 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
     // under a 40% cap shared with every choice. Now the card may take 70% of the window,
     // the choices keep a fixed share and the buttons stay at the bottom, and the plan gets
     // the rest; the whole plan also opens in a larger window.
-    <section
-      className={cn(SHELL_CLASS, 'flex max-h-[70vh] min-h-0 flex-col')}
+    // Design system v2 §7.6: the shared dock card. Waiting on the user, so
+    // `pending`; while full auto is being confirmed the edge turns `risk`.
+    <DockCard
+      tone={confirmingBypass ? 'risk' : 'pending'}
+      className="max-h-[70vh] min-h-0"
+      role="region"
       aria-label={t(title)}
       data-testid="plan-review-card"
       data-source={card.source}
     >
-      <div className="flex min-h-9 shrink-0 items-center gap-2 border-b border-border px-3 py-1.5 text-muted-foreground">
-        <ClipboardList className="size-3.5 shrink-0" aria-hidden />
-        <span className="shrink-0 font-semibold">{t(title)}</span>
+      <DockCardHeader>
+        <StatusIcon status="waiting" />
+        <DockCardTitle className="flex-none">{t(title)}</DockCardTitle>
         {card.title && (
-          <span className="min-w-0 flex-1 truncate text-foreground" title={card.title}>
+          <span className="min-w-0 flex-1 truncate text-muted-foreground" title={card.title}>
             {card.title}
           </span>
         )}
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
+      </DockCardHeader>
+      <DockCardBody className="flex min-h-0 flex-1 flex-col gap-2 pb-2 text-foreground">
+        {/* The plan scrolls between two hairlines, no frame of its own
+            (§1 rule 1: one closed border along any line of sight). */}
         <div
-          className="min-h-24 flex-1 overflow-y-auto rounded-sm border border-border bg-background px-2.5 py-1.5"
+          className="-mx-4 min-h-24 flex-1 overflow-y-auto border-border-soft border-y px-4 py-2"
           data-testid="plan-review-body"
         >
           <p className="select-text whitespace-pre-wrap break-words text-ui text-foreground">
@@ -152,10 +164,10 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button
-            size="sm"
+            size="xs"
             variant="ghost"
             type="button"
-            className="h-6 px-2 text-muted-foreground"
+            className="-ml-2"
             onClick={() => setViewerOpen(true)}
           >
             {t('Open the whole plan in a larger window')}
@@ -166,7 +178,7 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
           data-testid="plan-review-choices"
         >
           {card.source === 'exit_plan_mode' && !ownChoices && (
-            <div className="flex min-w-0 flex-col gap-0.5 text-meta">
+            <div className="flex min-w-0 flex-col gap-0.5 text-small">
               <span className="text-muted-foreground">{t('Goal it would set')}</span>
               <span className="line-clamp-2 min-w-0 whitespace-pre-wrap break-words text-foreground">
                 {card.goalObjective}
@@ -174,20 +186,18 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
             </div>
           )}
           {confirmingBypass ? (
-            <div
-              role="alert"
-              className="flex flex-col gap-2 rounded-sm border border-destructive/40 bg-destructive/5 p-2.5"
-            >
+            // No inner frame (§1 rule 1): the card's own edge turns `risk`, and
+            // only the icon is red (§1 rule 5).
+            <div role="alert" className="flex flex-col gap-2">
               <p className="flex items-start gap-2 text-ui text-foreground">
                 <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden />
                 {t(ownChoices ? SDK_PLAN_REVIEW_BYPASS_WARNING : PLAN_REVIEW_BYPASS_WARNING)}
               </p>
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-1.5">
                 <Button
                   size="sm"
                   variant="ghost"
                   type="button"
-                  className="h-6 px-2"
                   disabled={submitting}
                   onClick={() => setConfirmingBypass(false)}
                 >
@@ -197,7 +207,6 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
                   size="sm"
                   variant="destructive"
                   type="button"
-                  className="h-6 px-2"
                   disabled={submitting}
                   onClick={() => void confirm(true)}
                 >
@@ -237,7 +246,7 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
                         </label>
                         <span
                           id={`${radioId}-description`}
-                          className="text-meta text-muted-foreground"
+                          className="text-small text-muted-foreground"
                         >
                           {t(row.hint ?? row.description)}
                         </span>
@@ -248,7 +257,7 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
               </RadioGroup>
               {effective === 'keep-planning' && (
                 <div className="flex flex-col gap-1 pl-6">
-                  <label htmlFor={`${id}-feedback`} className="text-meta text-muted-foreground">
+                  <label htmlFor={`${id}-feedback`} className="text-small text-muted-foreground">
                     {t(PLAN_REVIEW_FEEDBACK_LABEL)}
                   </label>
                   <Textarea
@@ -264,35 +273,33 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
             </>
           )}
           {failed && (
-            <p role="alert" className="text-meta text-destructive">
+            <p role="alert" className="text-small text-destructive">
               {t('Could not send your answer. Please try again.')}
             </p>
           )}
         </div>
-        {!confirmingBypass && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border pt-2.5">
-            <Button
-              size="sm"
-              variant="ghost"
-              type="button"
-              className="mr-auto h-6 px-2 text-muted-foreground"
-              disabled={submitting}
-              onClick={() => void close()}
-            >
-              {t(PLAN_REVIEW_CLOSE)}
-            </Button>
-            <Button
-              size="sm"
-              type="button"
-              className="h-6 px-2.5"
-              disabled={submitting || (effective === 'keep-planning' && feedback.trim() === '')}
-              onClick={() => void confirm(false)}
-            >
-              {submitting ? t('Submitting…') : t(PLAN_REVIEW_CONFIRM)}
-            </Button>
-          </div>
-        )}
-      </div>
+      </DockCardBody>
+      {!confirmingBypass && (
+        <DockCardFooter className="flex-wrap">
+          <Button
+            size="sm"
+            variant="ghost"
+            type="button"
+            disabled={submitting}
+            onClick={() => void close()}
+          >
+            {t(PLAN_REVIEW_CLOSE)}
+          </Button>
+          <Button
+            size="sm"
+            type="button"
+            disabled={submitting || (effective === 'keep-planning' && feedback.trim() === '')}
+            onClick={() => void confirm(false)}
+          >
+            {submitting ? t('Submitting…') : t(PLAN_REVIEW_CONFIRM)}
+          </Button>
+        </DockCardFooter>
+      )}
       <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
         <DialogPopup className="max-w-3xl" data-testid="plan-review-viewer">
           <DialogHeader>
@@ -305,7 +312,7 @@ export function PlanReviewCard({ block, goal, onRespond, onClosed }: Interactive
           </DialogPanel>
         </DialogPopup>
       </Dialog>
-    </section>
+    </DockCard>
   );
 }
 
@@ -316,7 +323,7 @@ export function FrozenPlanReview({ block }: { block: ChatBlock }) {
   const note = frozenPlanReviewGoalNote(block);
   return (
     <div
-      className="flex min-w-0 flex-col gap-0.5 text-meta text-muted-foreground"
+      className="flex min-w-0 flex-col gap-0.5 text-small text-muted-foreground"
       data-testid="plan-review-frozen"
     >
       <div className="flex min-w-0 items-center gap-2">

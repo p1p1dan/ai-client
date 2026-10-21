@@ -16,17 +16,7 @@
  * is interrupted or killed, as the jobs window stops it.
  */
 
-import {
-  Circle,
-  CircleCheck,
-  CircleX,
-  Hand,
-  LoaderCircle,
-  LocateFixed,
-  MessagesSquare,
-  Square,
-  Users,
-} from 'lucide-react';
+import { Hand, LocateFixed, MessagesSquare, Square, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   AlertDialog,
@@ -38,17 +28,21 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { type RunStatus, StatusIcon } from '@/components/ui/status-icon';
 import { toastManager } from '@/components/ui/toast';
 import { type TFunction, useI18n } from '@/i18n';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
-import { cn } from '@/lib/utils';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import type { SubwindowPosition } from '@/stores/sessionSubwindows';
 import { useSessionLanes } from './BackgroundJobsWindow';
 import { locateToolRow } from './locateToolRow';
 import { SubagentConversationDialog } from './SubagentConversationDialog';
-import { SubwindowEmpty, SubwindowFrame } from './SubwindowFrame';
-import { panelStripActionClass, panelStripIconButtonClass } from './sessionPanelsLayout';
+import {
+  SubwindowEmpty,
+  SubwindowFrame,
+  subwindowRowClass,
+  subwindowRowTimeClass,
+} from './SubwindowFrame';
 import { isSessionNotRunningError, SESSION_TASKS_ENDED } from './sessionStart';
 import {
   deriveStoppableSubagentRows,
@@ -56,28 +50,27 @@ import {
   formatElapsed,
   formatTokens,
   type JobRowView,
+  type SubagentRowStatus,
   type SubagentRowView,
   stoppableRowFor,
 } from './subwindowsModel';
 import { useSubwindowClock } from './useSubwindowClock';
 
-function StatusIcon({ row }: { row: SubagentRowView }) {
-  const className = 'size-3.5 shrink-0';
-  switch (row.status) {
+/** Design system v2 §6: a subagent's state as the one status icon draws it. */
+export function subagentRunStatus(status: SubagentRowStatus): RunStatus {
+  switch (status) {
     case 'running':
-      return (
-        <LoaderCircle className={cn(className, 'animate-spin text-status-running')} aria-hidden />
-      );
+      return 'running';
     case 'completed':
-      return <CircleCheck className={cn(className, 'text-success')} aria-hidden />;
+      return 'success';
     case 'failed':
-      return <CircleX className={cn(className, 'text-destructive')} aria-hidden />;
+      return 'failed';
     case 'stopped':
     case 'truncated':
     case 'cancelled':
-      return <CircleX className={cn(className, 'text-muted-foreground')} aria-hidden />;
+      return 'stopped';
     default:
-      return <Circle className={cn(className, 'text-muted-foreground')} aria-hidden />;
+      return 'idle';
   }
 }
 
@@ -158,15 +151,16 @@ export function SubagentsWindow({
 
   const stopAll =
     stoppable.length > 0 ? (
-      <button
+      <Button
         type="button"
-        className={panelStripIconButtonClass()}
+        size="icon-xs"
+        variant="ghost"
         aria-label={t('Stop all subagents')}
         title={t('Stop all subagents')}
         onClick={() => setConfirming(true)}
       >
         <Square className="size-3.5" />
-      </button>
+      </Button>
     ) : null;
 
   const interrupt = async (childId: string): Promise<void> => {
@@ -212,28 +206,27 @@ export function SubagentsWindow({
           return (
             <div
               key={row.key}
-              className="rounded-sm px-2 py-0.5 hover:bg-hover"
+              className={subwindowRowClass()}
               data-testid="subagent-row"
               data-status={row.status}
             >
-              <div className="flex h-6 min-w-0 items-center gap-1.5 text-ui">
-                <StatusIcon row={row} />
+              <div className="flex h-7 min-w-0 items-center gap-1.5 text-ui">
+                <StatusIcon status={subagentRunStatus(row.status)} />
                 <span className="shrink-0 font-medium text-foreground">{name}</span>
-                <span className="shrink-0 text-muted-foreground">·</span>
+                <span className="shrink-0 text-foreground-faint">·</span>
                 <span className="min-w-0 flex-1 truncate text-foreground" title={row.description}>
                   {row.description}
                 </span>
-                {elapsed && (
-                  <span className="shrink-0 text-muted-foreground tabular-nums">{elapsed}</span>
-                )}
+                {elapsed && <span className={subwindowRowTimeClass()}>{elapsed}</span>}
               </div>
-              <div className="flex h-6 min-w-0 items-center gap-0.5 pl-5 text-muted-foreground">
-                <span className="min-w-0 flex-1 truncate tabular-nums">{subagentMeta(row, t)}</span>
+              <div className="flex h-6 min-w-0 items-center gap-0.5 pl-5 text-small text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate text-foreground-faint tabular-nums">
+                  {subagentMeta(row, t)}
+                </span>
                 {row.interruptible && row.childId && (
                   <Button
                     size="xs"
                     variant="ghost"
-                    className={panelStripActionClass()}
                     onClick={() => {
                       if (row.childId) void interrupt(row.childId);
                     }}
@@ -243,23 +236,13 @@ export function SubagentsWindow({
                   </Button>
                 )}
                 {stopTarget && (
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    className={panelStripActionClass()}
-                    onClick={() => void stopRow(stopTarget)}
-                  >
+                  <Button size="xs" variant="ghost" onClick={() => void stopRow(stopTarget)}>
                     <Square className="size-3.5" />
                     {t('Stop')}
                   </Button>
                 )}
                 {row.childId && (
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    className={panelStripActionClass()}
-                    onClick={() => setViewing(row.childId)}
-                  >
+                  <Button size="xs" variant="ghost" onClick={() => setViewing(row.childId)}>
                     <MessagesSquare className="size-3.5" />
                     {t('View conversation')}
                   </Button>
@@ -268,7 +251,6 @@ export function SubagentsWindow({
                   <Button
                     size="xs"
                     variant="ghost"
-                    className={panelStripActionClass()}
                     onClick={() => {
                       if (row.parentToolCallId) locateToolRow(row.parentToolCallId);
                     }}
@@ -302,7 +284,7 @@ export function SubagentsWindow({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline">{t('Cancel')}</Button>} />
+            <AlertDialogClose render={<Button variant="secondary">{t('Cancel')}</Button>} />
             <Button
               variant="destructive"
               onClick={() => {

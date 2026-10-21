@@ -92,13 +92,13 @@ function ErrorFallback({
         </CardHeader>
 
         <CardPanel className="space-y-4">
-          <div className="rounded-lg border bg-muted/40 p-3 text-left text-xs font-mono text-foreground">
+          <div className="rounded-lg border bg-muted/40 p-3 text-left text-small font-mono text-foreground">
             {errorMessage}
           </div>
 
           {errorStack || componentStack ? (
             <details className="group">
-              <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+              <summary className="cursor-pointer text-ui font-medium text-muted-foreground hover:text-foreground">
                 {t('Error details')}
               </summary>
               <pre className="mt-3 max-h-64 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-code leading-relaxed text-foreground whitespace-pre-wrap break-words">

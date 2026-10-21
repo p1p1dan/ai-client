@@ -500,7 +500,7 @@ export function ProviderSetupDialog({
                 {t('Fetch models')}
               </Button>
               {probe.state === 'ok' && (
-                <span className="flex items-center gap-1.5 text-meta text-success">
+                <span className="flex items-center gap-1.5 text-small text-success">
                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                   {t('{{count}} models available').replace('{{count}}', `${probe.models.length}`)}
                 </span>
@@ -508,7 +508,7 @@ export function ProviderSetupDialog({
             </div>
 
             {probe.state === 'failed' && (
-              <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-meta text-destructive">
+              <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-small text-destructive">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 {/* The service's own words: "refused this key" and "answered
                     500" send the user to different places. */}
@@ -543,7 +543,7 @@ export function ProviderSetupDialog({
                           onClick={() => toggleModel(model, on)}
                           className={cn(
                             'h-auto w-full min-w-0 justify-start gap-2 px-2 py-1.5 text-left font-normal normal-case',
-                            on && 'bg-selection'
+                            on && 'bg-fill-ghost-selected'
                           )}
                         >
                           <Check
@@ -553,7 +553,7 @@ export function ProviderSetupDialog({
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-ui">{name ?? model}</span>
                             {name && (
-                              <span className="block truncate text-meta text-muted-foreground">
+                              <span className="block truncate text-small text-muted-foreground">
                                 {model}
                               </span>
                             )}
@@ -562,7 +562,7 @@ export function ProviderSetupDialog({
                       );
                     })}
                     {visibleModels.length === 0 && (
-                      <p className="p-2 text-meta text-muted-foreground">
+                      <p className="p-2 text-small text-muted-foreground">
                         {t('No matching models')}
                       </p>
                     )}
@@ -572,13 +572,13 @@ export function ProviderSetupDialog({
             )}
 
             {selected.length > 0 && (
-              <p className="text-meta text-muted-foreground">
+              <p className="text-small text-muted-foreground">
                 {t('{{count}} selected').replace('{{count}}', `${selected.length}`)}
               </p>
             )}
 
             {probe.state === 'ok' && selected.length === 0 && (
-              <p className="text-meta text-muted-foreground">
+              <p className="text-small text-muted-foreground">
                 {t('Select models above to configure them here.')}
               </p>
             )}
@@ -640,7 +640,7 @@ export function ProviderSetupDialog({
           )}
 
           {invalidModels.length > 0 && (
-            <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-meta text-destructive">
+            <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-small text-destructive">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               {t(
                 'Some model settings are not valid. Fix the models marked in the list, then save.'
@@ -649,7 +649,7 @@ export function ProviderSetupDialog({
           )}
 
           {saveError && (
-            <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-meta text-destructive">
+            <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-small text-destructive">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               {saveError}
             </p>
@@ -681,10 +681,10 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <span className="text-meta text-muted-foreground">{label}</span>
+      <span className="text-small text-muted-foreground">{label}</span>
       {children}
       {hint && (
-        <p className={cn('text-meta', invalid ? 'text-destructive' : 'text-muted-foreground')}>
+        <p className={cn('text-small', invalid ? 'text-destructive' : 'text-muted-foreground')}>
           {hint}
         </p>
       )}

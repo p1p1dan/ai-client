@@ -41,16 +41,16 @@ export function AdvancedSettings() {
         )}
       >
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Enable Logging')}</span>
+          <span className="text-ui font-medium">{t('Enable Logging')}</span>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
+            <span className="text-ui text-muted-foreground">
               {loggingEnabled ? t('Enabled') : t('Disabled')}
             </span>
             <Switch checked={loggingEnabled} onCheckedChange={setLoggingEnabled} />
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Log Level')}</span>
+          <span className="text-ui font-medium">{t('Log Level')}</span>
           <Select
             value={logLevel}
             onValueChange={(v) => setLogLevel(v as 'error' | 'warn' | 'info' | 'debug')}
@@ -81,14 +81,14 @@ export function AdvancedSettings() {
           </Select>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Log Files')}</span>
+          <span className="text-ui font-medium">{t('Log Files')}</span>
           <Button variant="outline" size="sm" onClick={handleOpenLogFolder} className="w-fit">
             <FileText className="mr-2 h-4 w-4" />
             {t('Open Log Folder')}
           </Button>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Log Retention')}</span>
+          <span className="text-ui font-medium">{t('Log Retention')}</span>
           <div className="flex items-center gap-2">
             <Select
               value={String(logRetentionDays)}
@@ -103,7 +103,7 @@ export function AdvancedSettings() {
                 <SelectItem value="30">{t('30 days')}</SelectItem>
               </SelectPopup>
             </Select>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-small text-muted-foreground">
               {t('Old log files will be automatically deleted')}
             </span>
           </div>

@@ -185,7 +185,7 @@ function SendToSessionButton({ title, description, onClose }: SendToSessionButto
     <button
       type="button"
       onClick={handleClick}
-      className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+      className="flex items-center gap-1 rounded px-1.5 py-0.5 text-small text-muted-foreground hover:bg-muted hover:text-foreground"
       title={t('Send to session')}
     >
       <SendIcon className="h-3.5 w-3.5" />
@@ -301,7 +301,7 @@ function Toasts({ position = 'bottom-right' }: { position: ToastPosition }) {
               }
               toast={toast}
             >
-              <Toast.Content className="pointer-events-auto relative px-3.5 py-3 text-sm transition-opacity duration-250 data-behind:pointer-events-none data-behind:opacity-0 data-expanded:opacity-100">
+              <Toast.Content className="pointer-events-auto relative px-3.5 py-3 text-ui transition-opacity duration-250 data-behind:pointer-events-none data-behind:opacity-0 data-expanded:opacity-100">
                 {/* Close button - top right */}
                 {/* P1-7e e6 (decision 145): read aloud, so in the UI language. */}
                 <Toast.Close
@@ -421,7 +421,7 @@ function AnchoredToasts() {
             >
               <Toast.Root
                 className={cn(
-                  'relative text-balance border bg-popover bg-clip-padding text-popover-foreground text-xs transition-[scale,opacity] before:pointer-events-none before:absolute before:inset-0 before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-starting-style:scale-98 data-ending-style:opacity-0 data-starting-style:opacity-0 dark:bg-clip-border dark:before:shadow-[0_-1px_--theme(--color-white/8%)]',
+                  'relative text-balance border bg-popover bg-clip-padding text-popover-foreground text-small transition-[scale,opacity] before:pointer-events-none before:absolute before:inset-0 before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-starting-style:scale-98 data-ending-style:opacity-0 data-starting-style:opacity-0 dark:bg-clip-border dark:before:shadow-[0_-1px_--theme(--color-white/8%)]',
                   tooltipStyle
                     ? 'rounded-md shadow-black/5 shadow-md before:rounded-[calc(var(--radius-md)-1px)]'
                     : 'rounded-lg shadow-lg before:rounded-[calc(var(--radius-lg)-1px)]'
@@ -434,7 +434,7 @@ function AnchoredToasts() {
                     <Toast.Title data-slot="toast-title" />
                   </Toast.Content>
                 ) : (
-                  <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm">
+                  <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-ui">
                     <div className="flex gap-2">
                       {Icon && (
                         <div

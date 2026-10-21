@@ -15,6 +15,7 @@
 import type { PiResourceSettings } from '@shared/piModelConfig';
 import { FolderOpen, Library, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { useI18n } from '@/i18n';
@@ -39,12 +40,12 @@ function SkillFolder({
 }) {
   const { t } = useI18n();
   return (
-    <div className="space-y-2 rounded-md border p-3">
+    <div className="space-y-2 rounded-md border border-border-soft bg-surface-2 p-3">
       <div className="flex min-w-0 items-center gap-2">
         <Library className="h-4 w-4 shrink-0 text-muted-foreground" />
         <h4 className="min-w-0 flex-1 truncate text-ui font-semibold">{title}</h4>
       </div>
-      <p className="text-meta text-muted-foreground">{description}</p>
+      <p className="text-small text-muted-foreground">{description}</p>
       <Ident className="block min-w-0 break-all">{path}</Ident>
       <Button variant="outline" size="sm" onClick={onOpen} disabled={opening} className="w-fit">
         <FolderOpen className="h-4 w-4" />
@@ -88,19 +89,17 @@ export function PiResourcesSettings() {
 
   return (
     <SettingsSectionBlock
+      bare
       title={t('Skills')}
       description={t(
         'Chats load skills from these two folders, and from .dsh/skills and .agents/skills at the root of the project’s repository.'
       )}
     >
       {error && (
-        <div
-          role="alert"
-          className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive"
-        >
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1">{error}</span>
-        </div>
+        <Alert variant="error">
+          <TriangleAlert />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {!snapshot ? (
@@ -126,7 +125,7 @@ export function PiResourcesSettings() {
 
       <div className="space-y-1">
         <h4 className="text-ui font-semibold">{t('How a skill is found')}</h4>
-        <ul className="list-disc space-y-1 pl-5 text-meta text-muted-foreground">
+        <ul className="list-disc space-y-1 pl-5 text-small text-muted-foreground">
           <li>
             {t(
               'Each skill is one entry directly inside a skills folder: <name>/SKILL.md, or a single <name>.md. Deeper files are not scanned.'

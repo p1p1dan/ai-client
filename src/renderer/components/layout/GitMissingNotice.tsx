@@ -86,7 +86,7 @@ export function GitMissingNotice() {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
-      <Alert className="pointer-events-auto max-w-lg shadow-lg" variant="warning">
+      <Alert className="pointer-events-auto max-w-lg elev-lg" variant="warning">
         <GitBranch />
         <AlertTitle>{t('Git was not found on this computer')}</AlertTitle>
         <AlertDescription>

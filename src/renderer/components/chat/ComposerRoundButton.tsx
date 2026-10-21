@@ -32,7 +32,8 @@ interface RoundButtonKindConfig {
 const KIND_CONFIG: Record<RoundButtonKind, RoundButtonKindConfig> = {
   send: { variant: 'default', Icon: SendHorizonal, label: 'Send message' },
   stop: { variant: 'destructive', Icon: Square, label: 'Stop the running turn' },
-  retry: { variant: 'outline', Icon: RotateCcw, label: 'Retry last message' },
+  // Design system v2 §1 rule 1: no outline inside the composer's frame.
+  retry: { variant: 'secondary', Icon: RotateCcw, label: 'Retry last message' },
   // T-19 decision 2.5: the fourth kind — "send, only delayed". `variant:
   // 'default'` on purpose (not a demoted 'secondary'): it IS the send action
   // for this turn, not an optional extra.
@@ -44,11 +45,12 @@ const KIND_CONFIG: Record<RoundButtonKind, RoundButtonKindConfig> = {
     Icon: MessageSquarePlus,
     label: 'Send into the running turn (next step) — Ctrl+Enter queues it for after the turn',
   },
-  'send-now': { variant: 'outline', Icon: Zap, label: 'Send now — interrupt the running turn' },
+  'send-now': { variant: 'secondary', Icon: Zap, label: 'Send now — interrupt the running turn' },
 };
 
 /**
- * T-28 §3.5 / T-30b2 §4.5: 24px true-circle action button shared by Send /
+ * T-28 §3.5 / T-30b2 §4.5: 24px action button (design system v2: a
+ * small-radius square, the clay primary for Send) shared by Send /
  * Stop / Retry / Enqueue (T-19) — shape from `roundActionButtonClass()`,
  * colour from `roundActionButtonKindClass()`. All kinds occupy the same slot
  * at the same size (D23 decision 5): a running turn's Stop replaces Send in
@@ -79,7 +81,7 @@ export function ComposerRoundButton({
       aria-label={title}
       title={title}
     >
-      {/* 12px glyph inside the 24px circle — the old 14px was proportioned for
+      {/* 12px glyph inside the 24px key — the old 14px was proportioned for
           the 28px box. */}
       <Icon className="size-3" />
     </Button>

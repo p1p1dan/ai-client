@@ -49,27 +49,27 @@ export function WebInspectorSettings() {
         description={t('Inspect web elements and send to agent')}
       >
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Enable')}</span>
+          <span className="text-ui font-medium">{t('Enable')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t('Start Web Inspector server on port {{port}}', { port: WEB_INSPECTOR_PORT })}
             </p>
             <Switch checked={webInspectorEnabled} onCheckedChange={setWebInspectorEnabled} />
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Status')}</span>
+          <span className="text-ui font-medium">{t('Status')}</span>
           <div className="flex items-center gap-2">
             <span
               className={`inline-flex h-2 w-2 rounded-full ${
                 serverStatus === 'running'
-                  ? 'bg-green-500'
+                  ? 'bg-success'
                   : serverStatus === 'stopped'
-                    ? 'bg-gray-400'
-                    : 'bg-yellow-500'
+                    ? 'bg-foreground-faint'
+                    : 'bg-warning'
               }`}
             />
-            <span className="text-sm text-muted-foreground">
+            <span className="text-ui text-muted-foreground">
               {serverStatus === 'running'
                 ? t('Running on port {{port}}', { port: WEB_INSPECTOR_PORT })
                 : serverStatus === 'stopped'
@@ -83,14 +83,14 @@ export function WebInspectorSettings() {
         title={t('Userscript Installation')}
         description={t('Install the userscript to enable element inspection in your browser')}
       >
-        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+        <div className="space-y-3">
           <div className="flex items-start gap-3">
-            <Globe className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+            <Globe className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <div className="space-y-2">
-              <p className="text-sm">
+              <p className="text-ui">
                 {t('To use Web Inspector, you need to install a userscript in your browser.')}
               </p>
-              <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
+              <ol className="text-ui text-muted-foreground list-decimal list-inside space-y-1">
                 <li>
                   {t('Install')}{' '}
                   <button
@@ -126,8 +126,8 @@ export function WebInspectorSettings() {
         </div>
       </SettingsSectionBlock>
       <SettingsSectionBlock title={t('Usage')} description={t('How to use Web Inspector')}>
-        <div className="rounded-lg border bg-muted/30 p-4">
-          <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-2">
+        <div>
+          <ol className="text-ui text-muted-foreground list-decimal list-inside space-y-2">
             <li>{t('Enable Web Inspector above')}</li>
             <li>{t('Open any webpage with the userscript installed')}</li>
             <li>{t('Click the userscript manager icon and select "Enable Web Inspector"')}</li>

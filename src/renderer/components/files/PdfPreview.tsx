@@ -223,8 +223,8 @@ export function PdfPreview({ path }: PdfPreviewProps) {
 
   if (!preview.ok) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-muted/30">
-        <div className="text-sm text-destructive">{t('This path cannot be previewed here.')}</div>
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-surface-0">
+        <div className="text-ui text-destructive">{t('This path cannot be previewed here.')}</div>
         <OpenWithSystemViewerButton path={path} />
       </div>
     );
@@ -232,10 +232,10 @@ export function PdfPreview({ path }: PdfPreviewProps) {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-muted/30">
+      <div className="flex h-full items-center justify-center bg-surface-0">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <div className="text-sm text-muted-foreground">{t('Loading PDF...')}</div>
+          <div className="text-ui text-muted-foreground">{t('Loading PDF...')}</div>
         </div>
       </div>
     );
@@ -243,10 +243,10 @@ export function PdfPreview({ path }: PdfPreviewProps) {
 
   if (error) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-muted/30">
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-surface-0">
         <div className="flex max-w-sm flex-col items-center gap-1 text-center">
-          <div className="text-sm text-destructive">{error}</div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-ui text-destructive">{error}</div>
+          <div className="text-ui text-muted-foreground">
             {t('Files outside the open workspace cannot be previewed here.')}
           </div>
         </div>
@@ -272,7 +272,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
   return (
     <div
       ref={containerRef}
-      className="relative flex h-full flex-col items-center bg-muted/30 overflow-hidden"
+      className="relative flex h-full flex-col items-center bg-surface-0 overflow-hidden"
     >
       {/* Toolbar */}
       <div className="flex h-12 w-full shrink-0 items-center justify-between border-b bg-background px-4">
@@ -287,7 +287,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-ui text-muted-foreground">
             {currentPage} / {pdfDoc.numPages}
           </div>
           <Button
@@ -317,11 +317,11 @@ export function PdfPreview({ path }: PdfPreviewProps) {
             size="sm"
             onClick={handleFitWidth}
             disabled={rendering}
-            className="h-7 text-xs"
+            className="h-7 text-small"
           >
             {t('Fit width')}
           </Button>
-          <div className="text-sm text-muted-foreground">{Math.round(scale * 100)}%</div>
+          <div className="text-ui text-muted-foreground">{Math.round(scale * 100)}%</div>
           <Button
             variant="ghost"
             size="sm"
@@ -339,7 +339,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
         <canvas
           ref={canvasRef}
           className={cn(
-            'mx-auto shadow-lg',
+            'mx-auto elev-md',
             rendering && 'opacity-50 transition-opacity duration-150'
           )}
         />

@@ -64,10 +64,10 @@ export function SessionReviewPanel({
   };
   return (
     <section
-      className="flex h-full min-h-0 min-w-0 flex-col border-l bg-background"
+      className="flex h-full min-h-0 min-w-0 flex-col border-l border-border-soft bg-surface-1"
       aria-label={t('Session review')}
     >
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b px-2">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border-soft bg-surface-1 px-2">
         <ArrowLeftRight className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-ui font-medium">{t('Session review')}</span>
         {filesOpen && (
@@ -100,7 +100,7 @@ export function SessionReviewPanel({
           <X className="size-3.5" />
         </Button>
       </div>
-      <div className="flex items-center gap-2 px-3 py-2 text-meta tabular-nums">
+      <div className="flex items-center gap-2 px-3 py-2 text-small tabular-nums">
         <span className="min-w-0 flex-1 text-muted-foreground">
           {t('Recorded {{count}} changes', { count: entries.length })}
         </span>
@@ -127,21 +127,21 @@ export function SessionReviewPanel({
           </Button>
         )}
         {error && (
-          <p role="alert" className="mb-2 break-words text-meta text-destructive">
+          <p role="alert" className="mb-2 break-words text-small text-destructive">
             {error}
           </p>
         )}
         {!entries.length && (
-          <p className="px-1 py-4 text-meta text-muted-foreground">
+          <p className="px-1 py-4 text-small text-muted-foreground">
             {t('No file changes recorded in this conversation yet.')}
           </p>
         )}
         {entries.map((entry) => (
           <ReviewEntry key={entry.id} entry={entry} defaultOpen={false} onOpenDiff={onClose} />
         ))}
-        {/* P1-7e e6 (problem 42, decision 145): `text-meta`, the smallest size
+        {/* P1-7e e6 (problem 42, decision 145): `text-small`, the smallest size
             the design system lets CJK sit at; it was 10px (`text-2xs`). */}
-        <p className="px-1 pt-3 text-meta text-muted-foreground">
+        <p className="px-1 pt-3 text-small text-muted-foreground">
           {/* Decision 144: DSH's file tools are `edit` and `write` (the list is
               `sessionReview.ts`'s); the sentence names them as tools rather
               than as the capitalised pi / Claude names it used to. */}
@@ -204,7 +204,7 @@ function ReviewEntry({
     <Collapsible open={open} onOpenChange={setOpen} className="mb-2">
       <div className="flex h-7 min-w-0 items-center gap-1">
         <CollapsibleTrigger
-          className="flex h-7 min-w-0 flex-1 items-center gap-1 rounded-sm text-meta hover:bg-accent/50 focus-visible:outline-2 focus-visible:outline-ring"
+          className="flex h-7 min-w-0 flex-1 items-center gap-1 rounded-sm text-small hover:bg-fill-ghost-hover focus-ring"
           title={entry.path}
         >
           <ChevronRight
@@ -241,8 +241,8 @@ function ReviewEntry({
       </div>
       <CollapsiblePanel>
         {entry.preview && (
-          // Decision 145: a Chinese sentence, so `text-meta` rather than 10px.
-          <p className="px-2 py-1 text-meta text-muted-foreground">
+          // Decision 145: a Chinese sentence, so `text-small` rather than 10px.
+          <p className="px-2 py-1 text-small text-muted-foreground">
             {t(
               entry.preview.source === 'sdk'
                 ? 'Historical tool diff'
@@ -253,18 +253,18 @@ function ReviewEntry({
           </p>
         )}
         {entry.unavailable ? (
-          <p className="px-2 py-2 text-meta text-muted-foreground">{t(unavailable)}</p>
+          <p className="px-2 py-2 text-small text-muted-foreground">{t(unavailable)}</p>
         ) : lines.length ? (
-          <div className="max-h-96 overflow-auto rounded-md border bg-card font-mono text-code leading-relaxed">
+          <div className="max-h-96 overflow-auto rounded-lg border border-border-soft bg-surface-2 font-mono text-code leading-relaxed">
             {lines.map((line, index) => (
               <div
                 key={`${index}-${line.kind}`}
                 data-diff-line={line.kind}
                 className={cn(
                   'flex min-w-fit whitespace-pre px-2',
-                  line.kind === 'add' && 'bg-success/10',
-                  line.kind === 'del' && 'bg-destructive/10',
-                  line.text.startsWith('@@') && 'bg-muted text-muted-foreground'
+                  line.kind === 'add' && 'bg-success/12',
+                  line.kind === 'del' && 'bg-destructive/12',
+                  line.text.startsWith('@@') && 'bg-fill-neutral text-muted-foreground'
                 )}
               >
                 <span
@@ -288,7 +288,7 @@ function ReviewEntry({
             ))}
           </div>
         ) : (
-          <p className="px-2 py-2 text-meta text-muted-foreground">{t('No text differences.')}</p>
+          <p className="px-2 py-2 text-small text-muted-foreground">{t('No text differences.')}</p>
         )}
       </CollapsiblePanel>
     </Collapsible>

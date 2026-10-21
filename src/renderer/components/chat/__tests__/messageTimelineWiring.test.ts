@@ -180,6 +180,9 @@ const CALL_SITES = flatten(buildCallSites());
 const SYNTAX = flatten(BLANKED);
 
 /** The token appears in a call expression / JSX attribute / JSX tag position. */
+/** The source spelling of the shared prose leading, as it appears in a template literal. */
+const LEAD = '$' + '{CHAT_PROSE_LEADING}';
+
 function expectCalled(token: string): void {
   expect(
     CALL_SITES.includes(token),
@@ -468,7 +471,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // `userBubbleClass()`; the attachment chip's fill is the nearest surviving
     // class literal that is unambiguously code and not prose.)
     expect(SYNTAX, 'string literals must survive for the negatives to bite').toContain(
-      'bg-muted/50'
+      'bg-fill-ghost-selected'
     );
   });
 
@@ -975,16 +978,16 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     }
     // Unparsed prose still has exactly one spelling, shared by the streaming
     // tail and the pre-gate block.
+    // Design system v2 §3.1: the leading is the shared `CHAT_PROSE_LEADING`.
     expectCalled(
-      'className="text-chat-body leading-relaxed text-foreground whitespace-pre-wrap select-text"'
+      `className={\`text-chat-body ${LEAD} text-foreground whitespace-pre-wrap select-text\`}`
     );
     // The bubble's own prompt echo (`:845`) reads at the same rhythm but is a
     // different element with a different class order, so the count is of THIS
     // string — assistant prose that has not been parsed.
     // (T104 moved all of these from `text-markdown` to the runtime-configurable
     // `text-chat-body`; the DISTINCTIONS they draw are what is under test.)
-    const proseClass =
-      'text-chat-body leading-relaxed text-foreground whitespace-pre-wrap select-text';
+    const proseClass = `text-chat-body ${LEAD} text-foreground whitespace-pre-wrap select-text`;
     expect(
       CALL_SITES.split(proseClass).length - 1,
       'one definition of how unparsed assistant prose reads'
@@ -1082,7 +1085,9 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // The user bubble's `select-text` moved into `userBubbleTextClass()`
     // (asserted in `chatTimelineLayout.test.ts`); the wiring half is the §5
     // call assertion above.
-    expectCalled('className="select-text whitespace-pre-wrap text-chat-body text-foreground"');
+    // Design system v2 §7.7: the notice body's ink is chosen beside the literal
+    // (a frameless system row is muted; an error Alert keeps the body ink).
+    expectCalled("cn('select-text whitespace-pre-wrap text-chat-body', ink)");
   });
 
   // The three surfaces T-29 deliberately does NOT touch. Each is model-adjacent
@@ -1106,13 +1111,16 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // a Ctrl+Enter message awaiting delivery is greyed — so its paragraph is
     // pinned as the literal plus the one ink choice.
     for (const cls of [
-      'whitespace-pre-wrap break-words text-chat-body leading-relaxed',
-      'select-text whitespace-pre-wrap text-chat-body text-foreground',
+      `whitespace-pre-wrap break-words text-chat-body ${LEAD}`,
+      "'select-text whitespace-pre-wrap text-chat-body'",
     ]) {
       expect(countIn(SYNTAX, cls), `paragraph must survive verbatim: ${cls}`).toBe(1);
     }
     expectWired("const ink = awaitingDelivery ? 'text-muted-foreground' : 'text-foreground';");
-    expectWired("cn('whitespace-pre-wrap break-words text-chat-body leading-relaxed', ink)");
+    // Whitespace-normalised: the formatter breaks this call across lines.
+    expect(SYNTAX.replace(/\s+/g, ' ')).toContain(
+      `cn( \`whitespace-pre-wrap break-words text-chat-body ${LEAD}\`, ink )`
+    );
   });
 
   // F13's sibling: the copy payload is the RAW markdown source, so the button
@@ -1155,7 +1163,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
       descendantJsx(jsxNodeAt('UserBubble', ['article', 'div']), 'p')
     );
     expect(body).toContain('break-words');
-    expect(body).toContain('leading-relaxed');
+    expect(body).toContain('CHAT_PROSE_LEADING');
     // …and the hover strip that replaced the meta row is a different element.
     expectCalled('turnActionsSlotClass()');
   });
@@ -1170,12 +1178,14 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // On `bg-card` the chip's `border-border` measured ≈1.36; on `bg-accent` it
   // drops to 1.115 in dark, i.e. effectively invisible. It follows the bubble's
   // own edge onto `--input` (§3.4 ③).
-  it('[D3-3] the attachment chip edge follows the bubble onto --input', () => {
+  // Design system v2 §1 rule 1 supersedes D3-c: the bubble has no edge, so
+  // neither does a tag inside it — it is one fill step deeper instead.
+  it('[D3-3] the attachment chip is a fill inside the bubble, with no edge', () => {
     // Issue #8 (decision 172): a `cn(…)` now — the chip's ink greys with an
     // awaiting bubble's — so the literal is read through the expression.
     const chip = classNameExpressionOf(jsxNodeAt('UserBubble', ['article', 'div', 'div', 'span']));
-    expect(chip).toContain('border border-input');
-    expect(chip).not.toContain('border-border');
+    expect(chip).toContain('bg-fill-ghost-selected');
+    expect(chip).not.toMatch(/(?:^|\s|')border(?:-|\s|')/);
     expect(chip).toContain('ink');
   });
 
@@ -1454,7 +1464,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     const line = nodeSource(topLevelFunction('useTurnClockLine'));
     expect(countIn(line, 'deriveTurnCurrentAction(items)')).toBe(1);
     expect(countIn(SYNTAX, 'deriveTurnCurrentAction(items)')).toBe(1);
-    expect(head).toContain('<Spinner');
+    // Design system v2 §6: the one running icon.
+    expect(head).toContain('<StatusIcon status="running"');
     // Decision 037: when no head is going to carry the clock, the turn draws it
     // itself — at the TOP, as its first line. The user rejected the tail-row
     // fallback on sight (「什么情况都让 已工作 x 分 xx 秒 落在顶部」).
@@ -1796,23 +1807,26 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
     .map((file) => stripComments(readFileSync(file, 'utf8'), file))
     .join('\n');
 
-  it('exactly the three prose surfaces carry the 1.625 tier', () => {
-    expect(
-      countIn(DENSITY_CODE, 'leading-relaxed'),
-      'root + user bubble + streaming fallback'
-    ).toBe(3);
+  // Design system v2 §3.1: D1-b's 1.625 tier is retired for the reference's
+  // ~1.43, spelled once (`CHAT_PROSE_LEADING`) and used by every prose surface.
+  it('the prose surfaces share one leading constant, and the old tier is gone', () => {
+    expect(countIn(DENSITY_CODE, 'leading-relaxed'), 'the 1.625 tier is retired').toBe(0);
+    expect(countIn(DENSITY_CODE, "CHAT_PROSE_LEADING = 'leading-[1.43]'")).toBe(1);
+    expect(countIn(DENSITY_CODE, 'leading-[1.43]'), 'one spelling of the value').toBe(1);
     // Spelled out so a failure names the surface, not just the count.
-    expect(CHAT_CODE).toContain('break-words text-chat-body leading-relaxed text-foreground');
+    expect(CHAT_CODE).toContain(`break-words text-chat-body ${LEAD} text-foreground`);
     // The user bubble: its ink is chosen beside the literal (issue #8).
-    expect(CHAT_CODE).toContain('whitespace-pre-wrap break-words text-chat-body leading-relaxed');
+    expect(CHAT_CODE).toContain(`whitespace-pre-wrap break-words text-chat-body ${LEAD}`);
     expect(CHAT_CODE).toContain(
-      'text-chat-body leading-relaxed text-foreground whitespace-pre-wrap select-text'
+      `text-chat-body ${LEAD} text-foreground whitespace-pre-wrap select-text`
     );
   });
 
-  it('the tool rows, code block and turn skeleton retain the 1.5 tier', () => {
-    expect(countIn(DENSITY_CODE, 'leading-normal')).toBe(3);
-    expect(DENSITY_CODE).toContain('flex flex-col gap-2 text-chat-body leading-normal');
+  // The turn skeleton reads at the prose rhythm too now (§3.1); the tool rows
+  // keep the 1.5 tier, and the code block takes `text-code`'s own line height.
+  it('the tool rows retain the 1.5 tier; the turn skeleton takes the prose leading', () => {
+    expect(countIn(DENSITY_CODE, 'leading-normal')).toBe(1);
+    expect(DENSITY_CODE).toContain(`flex flex-col gap-2.5 text-chat-body ${LEAD}`);
     expect(DENSITY_CODE).toContain('text-left text-chat-process leading-normal');
   });
 });

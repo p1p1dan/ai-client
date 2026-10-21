@@ -94,7 +94,8 @@ describe('U30 the composer chrome stops moving', () => {
 
   it('the model label is width-capped and truncates', () => {
     expect(LAYOUT).toContain('inline-flex h-6 max-w-56 shrink-0 items-center gap-1');
-    expect(LAYOUT).toContain("return 'min-w-0 truncate text-muted-foreground';");
+    // Design system v2: still truncates; the ink brightens with the trigger's hover/open state.
+    expect(LAYOUT).toContain("return 'min-w-0 truncate text-muted-foreground");
   });
 });
 

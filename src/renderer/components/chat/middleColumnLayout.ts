@@ -202,7 +202,7 @@ export function composerCardClass(
     // T-30b2 §4.1: both modes now share one symmetric 8px inset (`p-2`). The
     // old 12/10 split traced back to A07's eyeballed three-value padding, not
     // to a measurement.
-    const base = 'relative rounded-md border border-border bg-card focus-within:border-input p-2';
+    const base = `${COMPOSER_CARD_SURFACE} p-3.5`;
     return opts?.hasProtrusion ? `${base} rounded-t-xs` : base;
   }
   // Resting height contract, T-30b2 §3.3-E1 as re-derived by F6: exactly 74px.
@@ -228,8 +228,24 @@ export function composerCardClass(
   // column (`composerRowsClass()`), so there is nothing to centre cross-axis,
   // and the moment the extras stack appears inside that column, centring it
   // would align the card's contents against an ambiguous reference.
-  return 'relative rounded-md border border-border bg-card focus-within:border-input flex min-h-18.5 gap-2 p-2';
+  //
+  // Design system v2 §7.9: the card has no layout border any more -- its 1px
+  // ring is the inset half of `elev-composer`, so the border term is 0, the
+  // inset is the reference's 14px (`p-3.5`, concentric with the 20px radius
+  // around 6px controls: 20 ≈ 6 + 14), and the floor is 0 + 28 + 24 + 8 + 24
+  // = 84px (`min-h-21`).
+  return `${COMPOSER_CARD_SURFACE} flex min-h-21 gap-2 p-3.5`;
 }
+
+/**
+ * Design system v2 §7.9 / §5.1: the composer's surface -- the nearest layer
+ * (`surface-3`), the 20px composer radius, and the three-state composer shadow
+ * (resting ring + soft shadow, `border-strong` ring on hover, deeper on
+ * focus-within). The ring is an inset box-shadow, so it takes no layout space
+ * and never doubles with a border. No brand-coloured focus edge.
+ */
+const COMPOSER_CARD_SURFACE =
+  'relative rounded-composer bg-surface-3 elev-composer transition-shadow duration-150 ease-out';
 
 /**
  * The resting height of the docked follow-up card, as data.
@@ -269,7 +285,7 @@ export const COMPOSER_TEXTAREA_LINE_SCALE = 1.5;
  * composer's empty textarea rests at two body-tier lines, on the home page and
  * in a conversation alike, so the first send still moves nothing. A draft
  * still grows it to the eight-line cap (`composerTextareaClass('session')`).
- * At the 14px default (design system v2) that is 14 × 1.5 × 2 = 42px and a 92px card.
+ * At the 14px default (design system v2) that is 14 × 1.5 × 2 = 42px and a 102px card.
  */
 export const COMPOSER_TEXTAREA_MIN_ROWS = 2;
 
@@ -294,8 +310,9 @@ export function composerFollowHeightBreakdown(): {
   rowGap: number;
   total: number;
 } {
-  const border = 2; // 1px top + 1px bottom
-  const padding = 16; // p-2 → 8px top + 8px bottom
+  // Design system v2: the ring is `elev-composer`'s inset shadow, not a border.
+  const border = 0;
+  const padding = 28; // p-3.5 → 14px top + 14px bottom
   // The body tier's default lives in `@shared/types/chatTypography` (the store,
   // the settings UI and `globals.css` all key off the same number); this module
   // only multiplies it by the line scale its own class string spells.
@@ -435,6 +452,20 @@ export function composerActionGroupClass(): string {
 }
 
 /**
+ * Design system v2 §1 rule 1 / §7.9: every control inside the composer is a
+ * ghost -- no frame, secondary ink at rest, foreground ink plus the one
+ * ghost-hover fill on hover and keyboard focus (always as a pair), the
+ * selected fill while its menu is open, and the shared focus ring.
+ */
+const COMPOSER_GHOST_STATES = [
+  'transition-colors duration-150 ease-out',
+  'hover:bg-fill-ghost-hover hover:text-foreground',
+  'focus-visible:bg-fill-ghost-hover focus-visible:text-foreground focus-ring',
+  'data-[popup-open]:bg-fill-ghost-selected data-[popup-open]:text-foreground',
+  'disabled:pointer-events-none disabled:opacity-64',
+] as const;
+
+/**
  * The ⊕ button at the far left of the card (T-30b2 §4.6).
  *
  * Same ghost language as the model/target triggers: no border, no shadow, a
@@ -450,12 +481,7 @@ export function composerActionGroupClass(): string {
 export function composerAttachButtonClass(): string {
   return [
     'grid size-6 shrink-0 place-items-center rounded-sm text-muted-foreground',
-    'transition-colors duration-150',
-    'hover:bg-hover',
-    'focus-visible:bg-hover',
-    'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary',
-    'data-[popup-open]:bg-selection',
-    'disabled:pointer-events-none disabled:opacity-64',
+    ...COMPOSER_GHOST_STATES,
   ].join(' ');
 }
 
@@ -467,7 +493,7 @@ export function composerAttachButtonClass(): string {
  *
  *  - **no `border*`** — a permanently visible outline is exactly what the
  *    round-4 point-check asked to remove ("no always-on outer frame; show it
- *    on hover"). The shell is a FILL (`bg-hover`), never a border: a hover
+ *    on hover"). The shell is a FILL (`bg-fill-ghost-hover`), never a border: a hover
  *    border would add 2px to the box on hover and make the whole row jump.
  *  - **no `shadow*`** — including `SelectTrigger`'s `before:shadow` inner
  *    highlight. A07 :1337 (zero shadows on buttons and cards) and the Cursor
@@ -485,14 +511,14 @@ export function composerAttachButtonClass(): string {
  *    on a 24px-tall control renders as a full pill. `rounded-sm` (8px) is
  *    A07 :810-819's own value for this control.
  *
- * `focus-visible:bg-hover` is not optional decoration: with the resting state
+ * `focus-visible:bg-fill-ghost-hover` is not optional decoration: with the resting state
  * having no frame at all, a keyboard user tabbing onto this control would
  * otherwise see no shape appear. It must always ship paired with
- * `hover:bg-hover` (asserted), and the outline sits ON TOP of the fill rather
+ * `hover:bg-fill-ghost-hover` (asserted), and the outline sits ON TOP of the fill rather
  * than replacing it.
  *
  * Note for future edits: this repo's custom font-size tokens (`text-ui`,
- * `text-meta`, `text-code`, …) ARE registered in tailwind-merge's `font-size`
+ * `text-small`, `text-code`, …) ARE registered in tailwind-merge's `font-size`
  * class group in `lib/utils.ts`, so `cn('text-muted-foreground', 'text-ui')`
  * keeps both. It did not always: twMerge's stock config classifies an
  * unrecognised `text-<name>` as a COLOUR, and used to drop the real colour
@@ -508,13 +534,8 @@ export function composerModelTriggerClass(): string {
     // controls move when I pick something". The cap plus the name's own
     // `truncate` bounds that travel; the effort suffix is never truncated,
     // being the short half that changes most often.
-    'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-sm px-2 text-ui',
-    'transition-colors duration-150',
-    'hover:bg-hover',
-    'focus-visible:bg-hover',
-    'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary',
-    'data-[popup-open]:bg-selection',
-    'disabled:pointer-events-none disabled:opacity-64',
+    'group/model inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-sm px-2 text-ui text-muted-foreground',
+    ...COMPOSER_GHOST_STATES,
   ].join(' ');
 }
 
@@ -523,13 +544,8 @@ export function composerModelTriggerClass(): string {
  */
 export function composerPermissionTriggerClass(): string {
   return [
-    'inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-ui',
-    'transition-colors duration-150',
-    'hover:bg-hover',
-    'focus-visible:bg-hover',
-    'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary',
-    'data-[popup-open]:bg-selection',
-    'disabled:pointer-events-none disabled:opacity-64',
+    'inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-ui text-muted-foreground',
+    ...COMPOSER_GHOST_STATES,
   ].join(' ');
 }
 
@@ -541,7 +557,8 @@ export function composerPermissionTriggerClass(): string {
 export function composerModelBaseClass(): string {
   // `min-w-0` is what makes `truncate` engage inside a flex row: a flex item
   // defaults to `min-width: auto` and refuses to shrink below its content.
-  return 'min-w-0 truncate text-muted-foreground';
+  // Design system v2: brightens with the trigger's own hover/open state.
+  return 'min-w-0 truncate text-muted-foreground group-hover/model:text-foreground group-data-[popup-open]/model:text-foreground';
 }
 
 /**
@@ -566,12 +583,12 @@ export function composerModelSuffixClass(): string {
  * different apps.
  *
  * It is deliberately NOT `components/ui/menu.tsx`'s shared `MenuItem`: that
- * one carries `text-base sm:text-sm`, i.e. the app-chrome font size, and using
+ * one carries `text-ui`, i.e. the app-chrome font size, and using
  * it here would put 16px rows inside a card whose whole content is on D25's
  * `text-ui` domain scale. The shared item is right for app menus and wrong for
  * this card; the divergence is the point, not an oversight.
  *
- * Font-size tokens (`text-ui`, `text-meta`) are written as plain concatenated
+ * Font-size tokens (`text-ui`, `text-small`) are written as plain concatenated
  * strings rather than composed through `cn()`. They ARE registered in
  * tailwind-merge's `font-size` class group in `lib/utils.ts` — but twMerge's
  * stock config classifies an unrecognised `text-<name>` as a COLOUR and drops
@@ -579,12 +596,16 @@ export function composerModelSuffixClass(): string {
  * window between a new token landing and someone registering it.
  */
 export function composerMenuItemClass(): string {
-  return 'flex min-h-7 cursor-default select-none items-center gap-2 rounded-sm px-2 text-ui outline-none data-disabled:pointer-events-none data-disabled:opacity-64 data-highlighted:bg-accent data-highlighted:text-accent-foreground';
+  // Design system v2 §7.10: the coss MenuItem's own look (xs highlight block,
+  // the one ghost-hover fill). `sm:` restatements displace MenuSubTrigger's
+  // responsive base so a sub-menu row matches its siblings.
+  return 'flex min-h-7 cursor-default select-none items-center gap-2 rounded-xs px-2 py-1 text-ui outline-none data-disabled:pointer-events-none data-disabled:opacity-64 data-highlighted:bg-fill-ghost-hover data-highlighted:text-foreground data-popup-open:bg-fill-ghost-hover data-popup-open:text-foreground';
 }
 
 /** Section heading inside a Composer popup — same two-menu sharing rule as above. */
 export function composerMenuGroupLabelClass(): string {
-  return 'px-2 py-1.5 text-meta font-medium tracking-[0.04em] text-muted-foreground';
+  // Design system v2 §7.10: the coss MenuGroupLabel's look.
+  return 'px-2 pt-2 pb-1 text-small font-medium text-foreground-faint';
 }
 
 /**
@@ -608,18 +629,23 @@ export function targetTriggerClass(tone: 'default' | 'muted' = 'default'): strin
     // content, so under pressure the row overflowed and pushed its siblings
     // around instead of the label ellipsing (T-32 m8).
     'inline-flex h-6 min-w-0 items-center gap-1.5 rounded-sm px-2 text-ui',
-    'transition-colors duration-150',
-    'hover:bg-hover',
-    'focus-visible:bg-hover',
-    'data-[popup-open]:bg-selection',
+    'transition-colors duration-150 ease-out',
+    'hover:bg-fill-ghost-hover',
+    'focus-visible:bg-fill-ghost-hover focus-ring',
+    'data-[popup-open]:bg-fill-ghost-selected',
     'disabled:opacity-64',
   ].join(' ');
   return tone === 'muted' ? `${base} text-muted-foreground` : base;
 }
 
-/** Queue strip wrapper (T-19), owner of the single 8px gap above the composer card. */
+/**
+ * Queue strip wrapper (T-19), owner of the single 8px gap above the composer
+ * card. Design system v2 §7.8: one strip frame (the `DockCard` strip look),
+ * its 32px rows divided by hairlines rather than each row framing itself;
+ * the cap holds three rows (3 × 32 + 2 dividers + 2 border = 100px).
+ */
 export function queueStripWrapperClass(): string {
-  return 'mb-2 flex max-h-24 flex-col gap-1 overflow-y-auto';
+  return 'mb-2 flex max-h-25 min-w-0 flex-col divide-y divide-border-soft overflow-y-auto rounded-md border border-border-soft bg-surface-2 text-ui';
 }
 
 /**
@@ -800,7 +826,7 @@ export function resolveIdleStatusText(input: {
  * `bg-muted` is the adjacent surface step to the card's `bg-card` in both
  * themes — deliberately a small delta. The tab is distinguished by SHAPE (top
  * radius, narrower, flush join); a loud fill would read as a separate panel,
- * which is the thing being retired. Do not reach for `bg-hover` here: that
+ * which is the thing being retired. Do not reach for `bg-fill-ghost-hover` here: that
  * token means "pointer is over this" and using it as a resting fill would leave
  * the real hover state with nowhere to go.
  *
@@ -1066,10 +1092,8 @@ export function composerPopupSide(mode: MiddleColumnMode): PopupSide {
 // ---- Round action button ----
 
 /**
- * 24px true-circle class for the send/stop/retry/enqueue action button,
- * overriding `Button`'s forced squircle four-piece (`rounded-[10px]
- * [corner-shape:squircle] supports-…:rounded-[50px] before:rounded-[9px]…`).
- * Same for both modes — only the colour differs by kind
+ * 24px small-radius square (design system v2; was a true circle) for the
+ * send/stop/retry/enqueue action button. Same for both modes — only the colour differs by kind
  * (`roundActionButtonKindClass`).
  *
  * T-30b2 §3.3-E2: was `size-7` (28px). A07 :1329 derived 28 from "Cursor's
@@ -1077,7 +1101,7 @@ export function composerPopupSide(mode: MiddleColumnMode): PopupSide {
  * that derivation was 25% off. 24px is A07's own `--h-btn` and is what every
  * other Composer control already uses.
  *
- * `sm:size-6` is NOT redundant. `Button`'s `icon-sm` size is `size-8
+ * `sm:size-6` is belt-and-braces: `Button`'s `icon-sm` used to be `size-8
  * sm:size-7`, and a bare `size-6` only displaces the unprefixed half —
  * tailwind-merge keeps `sm:size-7` because a breakpoint-prefixed class is a
  * different conflict group. At `sm` and wider (i.e. every real window) the
@@ -1088,7 +1112,9 @@ export function composerPopupSide(mode: MiddleColumnMode): PopupSide {
  * flat override onto a responsive variant, not a one-off.
  */
 export function roundActionButtonClass(): string {
-  return 'size-6 sm:size-6 rounded-full [corner-shape:round] supports-[corner-shape:squircle]:rounded-full before:rounded-full supports-[corner-shape:squircle]:before:rounded-full';
+  // Design system v2 §7.9: the reference's send key is a small-radius square,
+  // not a circle; `Button` has no squircle left to override.
+  return 'size-6 sm:size-6 rounded-sm';
 }
 
 export type RoundActionButtonKind =
@@ -1102,16 +1128,15 @@ export type RoundActionButtonKind =
 /**
  * Per-kind fill for the round action button.
  *
- * `send` and `enqueue` are deliberately the SAME near-neutral black: enqueue
- * is not a demoted action, it is this turn's send with a delay, so giving it
- * its own colour would invent a distinction the behaviour does not have. They
- * used to be `--primary` (the brand orange, C = 0.1523); the reference uses a
- * near-zero-chroma dark fill, and orange-plus-red round keys sitting side by
- * side (Retry + Send, or Stop + …) was the last of the four "too AI" sources.
+ * `send` and `enqueue` are deliberately the SAME fill: enqueue is not a
+ * demoted action, it is this turn's send with a delay, so giving it its own
+ * colour would invent a distinction the behaviour does not have. Design system
+ * v2 (§1 rule 7, open-claude-ui's composer) makes that fill the clay primary;
+ * the near-black fill it replaces belonged to the retired Cursor reference.
  *
  * `stop` keeps the saturated red — a destructive-coloured Stop is an
  * established safety signal here and at most one is ever on screen. `retry`
- * keeps the outline treatment.
+ * and `send-now` are secondary: a neutral fill, no frame (§1 rule 1).
  *
  * These strings are applied ON TOP of the `Button` variant each kind already
  * uses, so they only need to restate what actually changes plus enough to be
@@ -1122,12 +1147,14 @@ export function roundActionButtonKindClass(kind: RoundActionButtonKind): string 
     case 'send':
     case 'enqueue':
     case 'interject':
-      return 'border-foreground bg-foreground text-background shadow-none not-disabled:inset-shadow-none hover:border-foreground hover:bg-foreground/90';
+      // Design system v2 §1 rule 7: the send key is the clay primary.
+      return 'bg-primary text-primary-foreground hover:bg-primary/90';
     case 'stop':
-      return 'border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90';
+      return 'bg-destructive text-destructive-foreground hover:bg-destructive/90';
     case 'retry':
     case 'send-now':
-      return 'border-border bg-background text-foreground hover:bg-accent/50';
+      // Frameless inside the composer (§1 rule 1): the neutral secondary fill.
+      return 'bg-fill-neutral text-foreground hover:bg-fill-ghost-selected';
   }
 }
 

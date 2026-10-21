@@ -36,7 +36,8 @@ describe('the home entry on the rail (entry (a))', () => {
     // spacer; decision 188: 8 -> 14), so it sits level with the panel's first row.
     expect(dock).not.toContain('<div aria-hidden className="h-9 shrink-0" />');
     const rail = dock.slice(dock.indexOf('<nav'), entry);
-    expect(rail).toContain('bg-card pt-3.5 pb-2');
+    // Design system v2 §7.12: the rail is --surface-0.
+    expect(rail).toContain('bg-surface-0 pt-3.5 pb-2');
     expect(rail).not.toContain('<RailButton');
   });
 

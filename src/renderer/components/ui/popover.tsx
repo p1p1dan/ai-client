@@ -47,7 +47,7 @@ function PopoverPopup({
           className={cn(
             'relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-md bg-popover text-popover-foreground elev-popover transition-[width,height,scale,opacity] duration-150 ease-out data-starting-style:scale-98 data-starting-style:opacity-0',
             tooltipStyle &&
-              'w-fit text-balance rounded-md text-xs shadow-black/5 shadow-md before:rounded-[calc(var(--radius-md)-1px)]',
+              'w-fit text-balance rounded-md text-small shadow-black/5 shadow-md before:rounded-[calc(var(--radius-md)-1px)]',
             className
           )}
           data-slot="popover-popup"

@@ -4,14 +4,16 @@
  * §3, prototype scene B).
  *
  * Folded, one line: 「待办 3/5 · 正在：…」, with 「… 等 N 项」 when several are in
- * progress and 「待办 5/5 已完成」 once all are done. Open, the list: a circle
- * for what waits, a dotted one for what is in progress, a check (dimmed and
- * struck through) for what is done; past eight rows it scrolls. Only the
+ * progress and 「待办 5/5 已完成」 once all are done. Open, the list, each row
+ * drawn with the one run-state icon (design system v2 §6): idle for what
+ * waits, running for what is in progress, success (text dimmed and struck
+ * through) for what is done; past eight rows it scrolls. Only the
  * session's own list: a subagent keeps its own and it does not come here.
  */
 
 import type { DshTodoItem } from '@shared/types/runtimeEvents';
-import { ChevronDown, ChevronUp, Circle, CircleCheck, CircleDot, ListChecks } from 'lucide-react';
+import { ChevronDown, ChevronUp, ListChecks } from 'lucide-react';
+import { type RunStatus, StatusIcon } from '@/components/ui/status-icon';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
@@ -25,7 +27,7 @@ import {
 } from './sessionPanelsLayout';
 import type { TodoCardView } from './sessionPanelsModel';
 
-/** One list row: 24 px, indented under the head's icon. */
+/** One list row: 24 px, indented to the head's label column. */
 export function todoItemClass(status: 'pending' | 'in_progress' | 'completed'): string {
   return cn(
     'flex h-6 min-w-0 items-center gap-2 pl-5',
@@ -87,9 +89,16 @@ export function TodoCard({ sessionId, view }: { sessionId: string; view: TodoCar
   );
 }
 
+/** A todo's status as the shared run state (design system v2 §6). */
+const TODO_RUN_STATUS: Record<DshTodoItem['status'], RunStatus> = {
+  pending: 'idle',
+  in_progress: 'running',
+  completed: 'success',
+};
+
 /**
- * The list itself: a circle for what waits, a dotted one for what is in
- * progress, a dimmed, struck-through check for what is done. Exported for the
+ * The list itself: `StatusIcon` idle for what waits, running for what is in
+ * progress, success (dimmed, struck-through text) for what is done. Exported for the
  * `todo_write` tool row's expanded body (P1-7c), which draws the list a write
  * set in the same form (plan P1-7 shard 03 §3).
  */
@@ -103,12 +112,6 @@ export function TodoList({
   return (
     <ul className={className}>
       {items.map((item, index) => {
-        const Icon =
-          item.status === 'completed'
-            ? CircleCheck
-            : item.status === 'in_progress'
-              ? CircleDot
-              : Circle;
         return (
           <li
             // Items are replaced whole on every write and may repeat a text.
@@ -117,7 +120,7 @@ export function TodoList({
             className={todoItemClass(item.status)}
             data-status={item.status}
           >
-            <Icon className="size-3.5 shrink-0" aria-hidden />
+            <StatusIcon status={TODO_RUN_STATUS[item.status] ?? 'idle'} />
             <span
               className={cn(panelStripTextClass(), item.status === 'completed' && 'line-through')}
               title={item.content}

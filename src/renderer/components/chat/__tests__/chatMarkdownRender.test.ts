@@ -70,7 +70,7 @@ describe('F-C6: remark-gfm cannot overwrite what the policy sets', () => {
     // The policy half — the same values the pure-function test pins.
     expect(ul).toContain('ml-5');
     expect(ul).toContain('list-disc');
-    expect(ul).toContain('mt-3.5');
+    expect(ul).toContain('mt-2.5');
     // The plugin half, which the marker-suppression rule keys off.
     expect(ul).toContain('contains-task-list');
     expect(html).toContain('task-list-item');
@@ -128,7 +128,8 @@ describe('F-C6: an assistant-authored link cannot lie about where it goes', () =
     const html = render('[x](https://example.com/a)');
     expect(attrOf(html, 'a', 'target')).toBe('_blank');
     expect(attrOf(html, 'a', 'rel')).toBe('noopener noreferrer');
-    expect(classOf(html, 'a')).toContain('text-primary');
+    // Design system v2 §1 rule 7: body ink, not the brand clay.
+    expect(classOf(html, 'a')).toContain('text-foreground');
   });
 
   it('F-C6: a rejected scheme renders as text with no anchor at all', () => {
@@ -176,7 +177,7 @@ describe('F-C6: GFM footnotes degrade to text rather than to broken links', () =
     const html = render('note[^1]\n\n[^1]: body\n');
     const section = classOf(html, 'section');
     expect(section).toContain('footnotes');
-    expect(section).toContain('mt-6');
+    expect(section).toContain('mt-5');
     // `sr-only` is what keeps the "Footnotes" label out of the visual flow.
     expect(classOf(html, 'h2')).toContain('sr-only');
   });
@@ -253,8 +254,8 @@ describe('F-C6: prose blocks carry their policy classes', () => {
 
   it('F-C6: blockquote, hr and paragraph all reach the DOM styled', () => {
     expect(classOf(render('> quoted\n'), 'blockquote')).toContain('border-l-2');
-    expect(classOf(render('---\n'), 'hr')).toContain('border-border');
-    expect(classOf(render('just prose\n'), 'p')).toContain('mt-3.5');
+    expect(classOf(render('---\n'), 'hr')).toContain('border-border-soft');
+    expect(classOf(render('just prose\n'), 'p')).toContain('mt-2.5');
   });
 
   /**
@@ -302,8 +303,10 @@ describe('F-C6: the reading column’s own invariants are asserted, not only its
     // ONLY, so nothing propagates between them — which is why this rendered
     // assertion and `chatMarkdownPolicy.test.ts`'s class-assembly one are two
     // layers of evidence rather than one restated twice.
+    // Design system v2 §3.1 replaced D1-b's 1.625 with the shared ~1.43.
     expect(root).toContain('text-chat-body');
-    expect(root).toContain('leading-relaxed');
+    expect(root).toContain('leading-[1.43]');
+    expect(root).not.toContain('leading-relaxed');
     expect(root).not.toContain('leading-normal');
     expect(root).toContain('text-foreground');
     // `whitespace-pre-wrap` is the PRE-T-29 plain-text renderer's class and must
@@ -390,8 +393,8 @@ describe('F-C6: the hardening pass changed three renderings, and these are they'
   it('F-C6: link hover moves the underline, not the text colour', () => {
     const cls = classOf(render('[x](https://example.com/a)'), 'a');
     expect(cls).toContain('underline');
-    expect(cls).toContain('decoration-primary/40');
-    expect(cls).toContain('hover:decoration-primary');
+    expect(cls).toContain('decoration-foreground-faint');
+    expect(cls).toContain('hover:decoration-foreground');
     // `hover:text-primary/80` measured 3.39:1 on light and 3.93:1 on dark,
     // i.e. under WCAG AA's 4.5:1 for body text in BOTH themes — a hover state
     // nobody can read is not a hover state.

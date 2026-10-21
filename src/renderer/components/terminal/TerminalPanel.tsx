@@ -1120,7 +1120,7 @@ function SplitLockedHint({ hiddenGroups }: { hiddenGroups: number }) {
         }
       >
         <SplitSquareHorizontal className="h-3.5 w-3.5" />
-        {hiddenGroups > 0 && <span className="text-meta">+{hiddenGroups}</span>}
+        {hiddenGroups > 0 && <span className="text-small">+{hiddenGroups}</span>}
       </TooltipTrigger>
       <TooltipPopup side="bottom" sideOffset={4}>
         <p>{label}</p>

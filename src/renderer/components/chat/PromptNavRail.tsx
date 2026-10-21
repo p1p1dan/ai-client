@@ -117,7 +117,7 @@ export function PromptNavRail({ prompts, containerRef }: PromptNavRailProps) {
             />
           </TooltipTrigger>
           <TooltipPopup side="right" sideOffset={10} className="max-w-72">
-            <p className="text-meta text-muted-foreground">#{index + 1}</p>
+            <p className="text-small text-muted-foreground">#{index + 1}</p>
             <p className="line-clamp-4 break-words whitespace-pre-wrap text-ui">
               {/* An empty preview can only mean attachments carried the turn
                   (the composer refuses to send nothing), so that is the label. */}

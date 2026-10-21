@@ -12,7 +12,9 @@
  */
 
 import type { WorkerSubagentHistoryResult } from '@shared/types/workerRpc';
+import { CircleAlertIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogDescription,
@@ -24,6 +26,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/i18n';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import { mapHistoryMessageToChatMessage } from '@/stores/chatSessions';
+import { userBubbleClass, userBubbleRowClass, userBubbleTextClass } from './chatTimelineLayout';
 import { TurnTextItem } from './MessageTimeline';
 import { ToolGroup } from './ToolRows';
 import { deriveToolGroupRows, groupTimeline } from './toolCard';
@@ -93,25 +96,35 @@ export function SubagentConversationDialog({
             AnnouncementDialog does. */}
         <ScrollArea className="max-h-[70vh] px-6 pb-6">
           <div className="flex flex-col gap-3 pr-3" data-testid="subagent-conversation">
-            {error && <p className="text-destructive text-ui">{error}</p>}
+            {error && (
+              <Alert variant="error">
+                <CircleAlertIcon />
+                <AlertDescription className="select-text">{error}</AlertDescription>
+              </Alert>
+            )}
             {history?.truncated && (
-              <p className="text-meta text-muted-foreground">
+              <p className="text-small text-muted-foreground">
                 {t('Earlier messages are left out')}
               </p>
             )}
             {history && messages.length === 0 && !error && (
-              <p className="text-meta text-muted-foreground">{t('Nothing recorded yet')}</p>
+              <p className="text-small text-muted-foreground">{t('Nothing recorded yet')}</p>
             )}
             {messages.map((message) =>
               message.role === 'user' ? (
-                <div
-                  key={message.id}
-                  className="self-end rounded-lg bg-muted px-3 py-2 text-ui whitespace-pre-wrap"
-                >
-                  {message.blocks
-                    .map((block) => (block.type === 'text' ? block.text : ''))
-                    .filter(Boolean)
-                    .join('\n')}
+                // Design system v2 §7.1: the timeline's own user message, from
+                // the same style functions, so the two never drift apart.
+                <div key={message.id} className={userBubbleRowClass()}>
+                  <div className={userBubbleClass()}>
+                    <div className={userBubbleTextClass()}>
+                      <p className="whitespace-pre-wrap break-words text-chat-body">
+                        {message.blocks
+                          .map((block) => (block.type === 'text' ? block.text : ''))
+                          .filter(Boolean)
+                          .join('\n')}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div key={message.id} className="flex min-w-0 flex-col gap-2">

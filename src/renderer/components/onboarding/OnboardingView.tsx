@@ -245,14 +245,14 @@ export function OnboardingView({
                     }
                   }}
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-small text-muted-foreground">
                   {t('Only {{suffixes}} addresses are accepted.', {
                     suffixes: ALLOWED_EMAIL_SUFFIXES.join(' / '),
                   })}
                 </p>
               </div>
               {sendCodeError && (
-                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive">
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-ui text-destructive">
                   <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{sendCodeError}</span>
                 </div>
@@ -309,7 +309,7 @@ export function OnboardingView({
                   }}
                   autoFocus
                 />
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div className="flex items-center justify-between text-small text-muted-foreground">
                   <span>
                     {t('{{count}} digits, valid for 15 minutes.', { count: CODE_LENGTH })}
                   </span>
@@ -329,7 +329,7 @@ export function OnboardingView({
               </div>
 
               {verifyError && (
-                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive">
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-ui text-destructive">
                   <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{verifyError}</span>
                 </div>
@@ -364,7 +364,7 @@ export function OnboardingView({
             title={t('Signed in')}
           />
           <SectionBody>
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-2 text-ui text-muted-foreground">
               {registerResult.data?.user && (
                 <p>{t('Welcome, {{name}}.', { name: registerResult.data.user.name })}</p>
               )}
@@ -399,7 +399,7 @@ function SectionHeader({
         {icon}
         {title}
       </h2>
-      <p className="text-muted-foreground text-sm">{description}</p>
+      <p className="text-muted-foreground text-ui">{description}</p>
     </div>
   );
 }

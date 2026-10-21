@@ -140,7 +140,7 @@ export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
           {/* D25 §3.3: cancel EmptyTitle's 18px-sized negative tracking when
               overriding to 14px, same as the other surfaces. */}
           <EmptyTitle className="text-ui tracking-normal">{t('Files')}</EmptyTitle>
-          <EmptyDescription className="text-meta">
+          <EmptyDescription className="text-small">
             {t('Select a Workspace to browse files')}
           </EmptyDescription>
         </EmptyHeader>

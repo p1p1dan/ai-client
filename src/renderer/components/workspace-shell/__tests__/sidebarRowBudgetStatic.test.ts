@@ -26,17 +26,19 @@ const ROW = CODE.slice(CODE.indexOf('function SessionRow('));
 
 /**
  * The session row's own className, isolated so sibling rows cannot satisfy a
- * scan. 14px (`text-meta`); `relative` anchors the floating actions.
+ * scan. 13px (`text-ui`, design system v2) — smaller than the 14px the budget
+ * below was measured at, so the budget still holds; `relative` anchors the
+ * floating actions.
  */
 const SESSION_ROW_CLASS =
-  /'group relative flex h-8 w-full items-center gap-1\.5 overflow-hidden rounded-sm px-2 text-left text-meta'/;
+  /'group relative flex h-8 w-full items-center gap-1\.5 overflow-hidden rounded-xs px-2 text-left text-ui'/;
 
 describe('sidebar session row width budget', () => {
   it('keeps the row a single h-8 line with a clipping box', () => {
     // h-8 is the sidebar row height since decision 188 (was the h-7 tree-node
     // token); a second line would silently change sidebar density instead of
-    // solving the overflow. rounded-sm: the radius clamp rule keeps small
-    // controls off rounded-md and up.
+    // solving the overflow. rounded-xs (design system v2 §7.12; the radius clamp rule keeps small
+    // controls off rounded-md and up).
     expect(ROW).toMatch(SESSION_ROW_CLASS);
   });
 
@@ -68,7 +70,7 @@ describe('sidebar session row width budget', () => {
     expect(at).toBeGreaterThan(ROW.indexOf('{row.title}</span>'));
     const text = ROW.slice(at, ROW.indexOf('</span>', at));
     expect(text).toContain(
-      'className="min-w-0 max-w-24 shrink truncate text-meta text-muted-foreground"'
+      'className="min-w-0 max-w-24 shrink truncate text-small text-muted-foreground"'
     );
     expect(text).toContain('title={branch}');
     expect(text).toContain('{lastBranchSegment(branch)}');
@@ -96,8 +98,10 @@ describe('sidebar session row width budget', () => {
       "'absolute inset-y-1 right-1.5 hidden items-center group-hover:flex group-focus-visible:flex group-has-focus-visible:flex',"
     );
     // Painted in the row's own fill, fading to the left over the title.
-    expect(ROW).toContain("? 'bg-selection shadow-[-10px_0_8px_var(--selection)]'");
-    expect(ROW).toContain(": 'bg-hover shadow-[-10px_0_8px_var(--hover)]'");
+    expect(ROW).toContain(
+      "? 'bg-fill-ghost-selected shadow-[-10px_0_8px_var(--fill-ghost-selected)]'"
+    );
+    expect(ROW).toContain(": 'bg-fill-ghost-hover shadow-[-10px_0_8px_var(--fill-ghost-hover)]'");
     // Not in selection mode: there a click picks the row.
     const actionsAt = ROW.indexOf('data-slot="sidebar-row-actions"');
     expect(ROW.lastIndexOf('{!onToggleSelect && (', actionsAt)).toBeGreaterThan(-1);

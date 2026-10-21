@@ -154,21 +154,21 @@ export function AppearanceSettings() {
               className={cn(
                 'flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-colors',
                 theme === option.value
-                  ? 'border-primary bg-accent text-accent-foreground'
-                  : 'border-transparent bg-muted/50 hover:bg-muted'
+                  ? 'border-primary bg-fill-ghost-selected text-foreground'
+                  : 'border-transparent bg-fill-neutral hover:bg-fill-neutral'
               )}
             >
               <div
                 className={cn(
                   'flex h-10 w-10 items-center justify-center rounded-full',
                   theme === option.value
-                    ? 'bg-accent-foreground/20 text-accent-foreground'
-                    : 'bg-muted'
+                    ? 'bg-fill-ghost-selected text-foreground'
+                    : 'bg-fill-neutral'
                 )}
               >
                 <option.icon className="h-5 w-5" />
               </div>
-              <span className="text-sm font-medium">{option.label}</span>
+              <span className="text-ui font-medium">{option.label}</span>
             </button>
           ))}
         </div>
@@ -179,12 +179,12 @@ export function AppearanceSettings() {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-fill-neutral">
               <LayoutGrid className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-sm font-medium">{t('Wide reading column')}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-ui font-medium">{t('Wide reading column')}</p>
+              <p className="text-small text-muted-foreground">
                 {t('Let messages use the full column instead of a fixed reading width')}
               </p>
             </div>
@@ -201,12 +201,12 @@ export function AppearanceSettings() {
         <Collapsible open={bgSettingsOpen} onOpenChange={setBgSettingsOpen} className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20">
-                <ImageIcon className="h-4 w-4 text-blue-500" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-fill-neutral">
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-sm font-medium">{t('Background Image')}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-ui font-medium">{t('Background Image')}</p>
+                <p className="text-small text-muted-foreground">
                   {t('Custom background image for the workspace')}
                 </p>
               </div>
@@ -219,7 +219,7 @@ export function AppearanceSettings() {
               <CollapsibleTrigger
                 className={cn(
                   'inline-flex items-center justify-center h-8 w-8 rounded-md',
-                  'hover:bg-accent hover:text-accent-foreground transition-colors'
+                  'hover:bg-fill-ghost-hover hover:text-foreground transition-colors'
                 )}
               >
                 <ChevronDown
@@ -235,7 +235,7 @@ export function AppearanceSettings() {
           <CollapsibleContent className="space-y-4 pl-12">
             {/* Source Type */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('Source Type')}</label>
+              <label className="text-ui font-medium">{t('Source Type')}</label>
               <Select
                 value={backgroundSourceType}
                 onValueChange={(v) => setBackgroundSourceType(v as 'file' | 'folder' | 'url')}
@@ -253,7 +253,7 @@ export function AppearanceSettings() {
 
             {/* Source Path */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('Source Path')}</label>
+              <label className="text-ui font-medium">{t('Source Path')}</label>
               <div className="flex gap-2">
                 <Input
                   value={activePath}
@@ -309,7 +309,7 @@ export function AppearanceSettings() {
                   <CollapsibleTrigger
                     disabled={!canAutoRandom}
                     className={cn(
-                      'flex items-center gap-1 text-sm transition-colors',
+                      'flex items-center gap-1 text-ui transition-colors',
                       canAutoRandom
                         ? 'text-muted-foreground hover:text-foreground cursor-pointer'
                         : 'text-muted-foreground/40 cursor-not-allowed'
@@ -321,7 +321,7 @@ export function AppearanceSettings() {
                   <CollapsibleContent className="space-y-3 pl-5">
                     {/* Enable toggle */}
                     <div className="flex items-center justify-between">
-                      <label className="text-sm">{t('Enable')}</label>
+                      <label className="text-ui">{t('Enable')}</label>
                       <Switch
                         checked={backgroundRandomEnabled}
                         onCheckedChange={setBackgroundRandomEnabled}
@@ -330,7 +330,7 @@ export function AppearanceSettings() {
 
                     {/* Interval */}
                     <div className="flex items-center justify-between gap-4">
-                      <label className="text-sm shrink-0">{t('Interval (seconds)')}</label>
+                      <label className="text-ui shrink-0">{t('Interval (seconds)')}</label>
                       <Input
                         type="number"
                         min={5}
@@ -344,7 +344,7 @@ export function AppearanceSettings() {
                     {/* Source Directory */}
                     {backgroundSourceType === 'folder' && (
                       <div className="space-y-1.5">
-                        <label className="text-sm">{t('Source Directory')}</label>
+                        <label className="text-ui">{t('Source Directory')}</label>
                         <div className="flex gap-2">
                           <Input
                             value={backgroundFolderPath}
@@ -382,8 +382,8 @@ export function AppearanceSettings() {
             {/* Opacity */}
             <div className="space-y-2">
               <div className="flex justify-between">
-                <label className="text-sm font-medium">{t('Opacity')}</label>
-                <span className="text-sm text-muted-foreground">
+                <label className="text-ui font-medium">{t('Opacity')}</label>
+                <span className="text-ui text-muted-foreground">
                   {Math.round(backgroundOpacity * 100)}%
                 </span>
               </div>
@@ -401,8 +401,8 @@ export function AppearanceSettings() {
             {/* Blur */}
             <div className="space-y-2">
               <div className="flex justify-between">
-                <label className="text-sm font-medium">{t('Blur')}</label>
-                <span className="text-sm text-muted-foreground">{backgroundBlur}px</span>
+                <label className="text-ui font-medium">{t('Blur')}</label>
+                <span className="text-ui text-muted-foreground">{backgroundBlur}px</span>
               </div>
               <input
                 type="range"
@@ -417,7 +417,7 @@ export function AppearanceSettings() {
 
             {/* More - Brightness & Saturation */}
             <Collapsible className="space-y-3">
-              <CollapsibleTrigger className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <CollapsibleTrigger className="flex items-center gap-1 text-ui text-muted-foreground hover:text-foreground transition-colors">
                 <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150 [[data-state=open]>&]:rotate-180" />
                 {t('More Options')}
               </CollapsibleTrigger>
@@ -425,8 +425,8 @@ export function AppearanceSettings() {
                 {/* Brightness */}
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <label className="text-sm font-medium">{t('Brightness')}</label>
-                    <span className="text-sm text-muted-foreground">
+                    <label className="text-ui font-medium">{t('Brightness')}</label>
+                    <span className="text-ui text-muted-foreground">
                       {Math.round(backgroundBrightness * 100)}%
                     </span>
                   </div>
@@ -444,8 +444,8 @@ export function AppearanceSettings() {
                 {/* Saturation */}
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <label className="text-sm font-medium">{t('Saturation')}</label>
-                    <span className="text-sm text-muted-foreground">
+                    <label className="text-ui font-medium">{t('Saturation')}</label>
+                    <span className="text-ui text-muted-foreground">
                       {Math.round(backgroundSaturation * 100)}%
                     </span>
                   </div>
@@ -464,7 +464,7 @@ export function AppearanceSettings() {
 
             {/* Size Mode */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('Size Mode')}</label>
+              <label className="text-ui font-medium">{t('Size Mode')}</label>
               <Select
                 value={backgroundSizeMode}
                 onValueChange={(v) =>

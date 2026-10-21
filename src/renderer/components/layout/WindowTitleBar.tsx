@@ -47,7 +47,7 @@ export function WindowTitleBar() {
           not have a click target spanning its whole left side. */}
       <div className="flex h-8 items-center gap-1.5 px-2">
         <img src={logoImage} alt="AI Client" className="h-5 w-5" />
-        <span className="text-xs font-medium text-muted-foreground">{t('AI Client')}</span>
+        <span className="text-small font-medium text-muted-foreground">{t('AI Client')}</span>
       </div>
 
       {/* Right: window controls only. */}

@@ -98,7 +98,8 @@ describe('the five modes of an SDK chat (rulings 6, 13, 14)', () => {
     await open();
     // The description line of each item, not the item (whose text starts with its label).
     const description = (label: string) =>
-      choice(label)?.querySelector('span > span.text-meta')?.textContent;
+      // Design system v2: the description is on the small tier.
+      choice(label)?.querySelector('span > span.text-small')?.textContent;
     expect(description('手动审批')).toBe(zh(SDK_MODE_DESCRIPTIONS.ask));
     expect(description('自动编辑')).toBe(zh(SDK_MODE_DESCRIPTIONS['accept-edits']));
     expect(description('计划模式')).toBe(zh(SDK_MODE_DESCRIPTIONS.plan));

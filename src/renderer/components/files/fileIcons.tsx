@@ -94,9 +94,14 @@ export function getFileIcon(name: string, isDirectory: boolean, isExpanded = fal
   return fileIconMap[ext] || fileIconMap.default;
 }
 
+/**
+ * Directories take the `--folder` token. The per-language hues below are a
+ * file-type identity palette (design system v2 §10.4 keeps it: TS blue, JS
+ * yellow), not UI state colours, so they stay on Tailwind's palette.
+ */
 export function getFileIconColor(name: string, isDirectory: boolean): string {
   if (isDirectory) {
-    return 'text-amber-500';
+    return 'text-folder';
   }
 
   const ext = name.split('.').pop()?.toLowerCase() || '';

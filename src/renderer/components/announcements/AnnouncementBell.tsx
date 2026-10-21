@@ -57,7 +57,7 @@ export function AnnouncementBell() {
         type="button"
         className={cn(
           'relative flex size-6 shrink-0 items-center justify-center rounded-md',
-          'text-muted-foreground transition-colors hover:bg-hover hover:text-foreground'
+          'text-muted-foreground transition-colors hover:bg-fill-ghost-hover hover:text-foreground'
         )}
         aria-label={label}
         title={label}

@@ -1011,7 +1011,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
     widgetRootRef.current.render(
       <button
         type="button"
-        className="flex items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground shadow-md hover:bg-primary/90 transition-colors"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-sm bg-primary px-2.5 py-1.5 text-small font-medium text-primary-foreground elev-md hover:bg-primary/90 transition-colors"
         onClick={showCommentForm}
         onMouseDown={(e) => e.preventDefault()}
       >
@@ -1308,13 +1308,13 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
 
   return (
     <div className="flex h-full flex-col">
-      {/* Tabs */}
-      <div className="flex items-center">
+      {/* Tabs: design system v2 §7.12 — the canvas, one hairline below. */}
+      <div className="flex items-center border-b border-border-soft bg-surface-1">
         {isFileTreeCollapsed && onToggleFileTree && (
           <button
             type="button"
             onClick={onToggleFileTree}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            className="ml-1 flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
             title={t('Show file tree')}
           >
             <ChevronRight className="h-4 w-4" />
@@ -1341,7 +1341,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
           <button
             type="button"
             onClick={cyclePreviewMode}
-            className="flex h-10 w-10 shrink-0 items-center justify-center border-b text-muted-foreground hover:text-foreground transition-colors"
+            className="mr-0.5 flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-fill-ghost-hover hover:text-foreground"
             title={
               previewMode === 'off'
                 ? t('Show split preview')
@@ -1351,11 +1351,11 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
             }
           >
             {previewMode === 'off' ? (
-              <EyeOff className="h-4 w-4" />
+              <EyeOff className="size-3.5" />
             ) : previewMode === 'split' ? (
-              <Eye className="h-4 w-4" />
+              <Eye className="size-3.5" />
             ) : (
-              <Maximize2 className="h-4 w-4" />
+              <Maximize2 className="size-3.5" />
             )}
           </button>
         )}
@@ -1364,9 +1364,9 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
 
       {/* Breadcrumb */}
       {activeTab && breadcrumbSegments.length > 0 && rootPath && (
-        <div className="shrink-0 border-b px-3 py-1">
+        <div className="shrink-0 border-b border-border-soft px-3 py-1">
           <Breadcrumb>
-            <BreadcrumbList className="flex-nowrap text-xs">
+            <BreadcrumbList className="flex-nowrap text-small">
               {breadcrumbSegments.map((segment, index) => (
                 <span key={segment.path} className="contents">
                   {index > 0 && <BreadcrumbSeparator className="[&>svg]:size-3" />}
@@ -1380,7 +1380,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
                     >
                       <button
                         type="button"
-                        className="inline-flex items-center gap-1 rounded-sm hover:bg-accent/50 px-1 py-0.5 -mx-1 transition-colors text-foreground truncate"
+                        className="inline-flex items-center gap-1 rounded-sm hover:bg-fill-ghost-hover px-1 py-0.5 -mx-1 transition-colors text-foreground truncate"
                       >
                         {segment.name}
                       </button>

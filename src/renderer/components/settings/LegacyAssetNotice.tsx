@@ -73,8 +73,12 @@ function Category({
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
         <h4 className="min-w-0 flex-1 truncate text-ui font-semibold">{title}</h4>
       </div>
-      <p className="text-meta text-muted-foreground">{hint}</p>
-      {children && <ul className="divide-y rounded-md border">{children}</ul>}
+      <p className="text-small text-muted-foreground">{hint}</p>
+      {children && (
+        <ul className="divide-y divide-border-soft rounded-md border border-border-soft bg-surface-2">
+          {children}
+        </ul>
+      )}
     </section>
   );
 }
@@ -83,7 +87,7 @@ function Item({ label, detail, path }: { label?: string; detail?: string; path: 
   return (
     <li className="flex min-w-0 flex-col gap-0.5 px-3 py-2">
       {label && <span className="min-w-0 truncate text-ui font-medium">{label}</span>}
-      {detail && <span className="text-meta text-muted-foreground">{detail}</span>}
+      {detail && <span className="text-small text-muted-foreground">{detail}</span>}
       <Ident className="min-w-0 break-all text-muted-foreground">{path}</Ident>
     </li>
   );
@@ -288,10 +292,10 @@ export function LegacyAssetNoticePrompt({ repoPath }: { repoPath?: string }) {
         <DialogPanel>
           <div className="space-y-4">
             <LegacyAssetList report={report} />
-            <p className="text-meta text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t('You can see this list again in Settings > Extensions.')}
             </p>
-            {error && <p className="text-meta text-destructive">{error}</p>}
+            {error && <p className="text-small text-destructive">{error}</p>}
           </div>
         </DialogPanel>
         <DialogFooter variant="bare">

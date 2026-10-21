@@ -246,36 +246,39 @@ describe('middleColumnHostClass', () => {
 });
 
 describe('composerCardClass', () => {
-  // F-A1: the resting edge is --border and focus steps it to --input, a
-  // neutral ΔL with zero chroma. The old pair rested on --input and focused to
-  // --ring (the brand orange) — a 2.5x heavier resting edge plus a fully
-  // chromatic focus state.
-  it('F-A1: rests on --border and focuses to --input, with no brand-orange focus edge in either mode', () => {
+  // F-A1, design system v2 §7.9 / §5.1: the card's edge is the composer's
+  // three-state shadow (`elev-composer`: a `border-soft` ring at rest,
+  // `border-strong` on hover and focus-within) on the nearest surface. The
+  // intent F-A1 protected is unchanged: no brand-orange focus edge, and no
+  // second closed border doubling the ring.
+  it('F-A1: wears the composer surface and three-state ring, with no brand-orange focus edge in either mode', () => {
     for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
       const cls = composerCardClass(mode);
-      expect(cls).toContain('border-border');
-      expect(cls).toContain('focus-within:border-input');
-      // A standalone `border-input` would be the RESTING edge; the
-      // `focus-within:`-prefixed one is the focus edge and must not match.
-      expect(cls).not.toMatch(/(^|\s)border-input(\s|$)/);
+      expect(cls).toContain('bg-surface-3');
+      expect(cls).toContain('elev-composer');
+      // The ring is an inset shadow; a layout border on top of it would be a
+      // second closed frame and would break the height arithmetic below.
+      expect(cls).not.toMatch(/(^|\s)border(-|\s|$)/);
       expect(cls).not.toContain('focus-within:border-ring');
-      expect(cls).toContain('bg-card');
+      expect(cls).not.toContain('ring-primary');
     }
   });
 
-  // F-A7: A07 :1337 (zero shadows on buttons and cards), independently
-  // confirmed by measurement — the reference card's "float" comes from a
-  // slightly brighter fill plus a hairline edge, not from a shadow.
-  it('F-A7: carries no shadow in either mode', () => {
+  // F-A7 (design system v2 §5.1 supersedes "no shadow"): the composer is the
+  // one resident object with its own shadow, and only through the token
+  // utility -- never an ad-hoc `shadow-*`.
+  it('F-A7: carries only the composer elevation, no ad-hoc shadow, in either mode', () => {
     for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
       expect(composerCardClass(mode)).not.toContain('shadow-');
     }
   });
 
-  it('gives both cards one symmetric 8px inset instead of a three-value padding', () => {
+  // Design system v2 §4.1: outer radius ≈ inner radius + inset, so the 20px
+  // card around 6px controls takes the reference's 14px inset.
+  it('gives both cards one symmetric 14px inset instead of a three-value padding', () => {
     for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
       const cls = composerCardClass(mode);
-      expect(cls).toContain('p-2');
+      expect(cls).toContain('p-3.5');
       expect(cls).not.toMatch(/(^|\s)p[xytblrse]-/);
     }
   });
@@ -316,9 +319,15 @@ describe('composerCardClass', () => {
         breakdown.controlRow
     ).toBe(breakdown.total);
     // Decision 174 (issue #6): the empty textarea rests at two body-tier lines
-    // (design system v2's 14px default: 14 × 1.5 × 2 = 42px), so the card is
-    // 2 + 16 + 42 + 8 + 24 = 92px.
-    expect(breakdown.total).toBe(92);
+    // (design system v2's 14px default: 14 × 1.5 × 2 = 42px). Design system v2
+    // §7.9: no layout border (the ring is `elev-composer`'s inset shadow) and
+    // a 14px inset, so the card is 0 + 28 + 42 + 8 + 24 = 102px.
+    expect(breakdown.border).toBe(0);
+    expect(breakdown.total).toBe(102);
+    // The inset term is whatever the class spells, so the two cannot drift.
+    const padStep = stepValue(cls, /(?:^|\s)p-(\d+(?:\.\d+)?)(?:\s|$)/);
+    expect(padStep).not.toBeNull();
+    expect((padStep as number) * 4 * 2).toBe(breakdown.padding);
 
     // The textarea's row is not a free 51 either: it is the body tier times the
     // line scale the session textarea's `min-h`/`leading` calc actually spells,
@@ -336,13 +345,17 @@ describe('composerCardClass', () => {
     expect(gapStep).not.toBeNull();
     expect((gapStep as number) * 4).toBe(breakdown.rowGap);
 
-    // `min-h-18.5` (74px) is the FLOOR, not the height: the card grows with the
-    // body tier. At the 14px default with two resting lines the content (92px)
-    // is above it — that is the deal the breakdown
-    // documents, and why `min-h-*` is the right utility here rather than `h-*`.
+    // `min-h-21` (84px) is the FLOOR, not the height: the card grows with the
+    // body tier. It is the card with ONE resting line box at 16px — border 0 +
+    // inset 28 + 24 + gap 8 + controls 24 — and at the 14px default with two
+    // resting lines the content (102px) is above it: that is the deal the
+    // breakdown documents, and why `min-h-*` is the right utility here rather
+    // than `h-*`.
     const step = stepValue(cls, /(?:^|\s)min-h-(\d+(?:\.\d+)?)(?:\s|$)/);
     expect(step).not.toBeNull();
-    expect((step as number) * 4).toBe(74);
+    expect((step as number) * 4).toBe(
+      breakdown.border + breakdown.padding + 24 + breakdown.rowGap + breakdown.controlRow
+    );
     expect(breakdown.total).toBeGreaterThan((step as number) * 4);
 
     expect(cls).toContain('flex');
@@ -383,10 +396,12 @@ describe('composerCardClass', () => {
   // What replaces it is a stronger fact than "the number is 12": arbitrary-
   // value radii are out of this card entirely. `rounded-[21px]` coming back —
   // or any other `rounded-[…]` — is the regression, whatever its number.
-  it('[F6-1] both composer cards share rounded-md, with no arbitrary-value radius anywhere', () => {
+  // Design system v2 §4.1 (user ruling 2026-10-21): the shared radius is now
+  // the composer tier (20px), still a token, never an arbitrary value.
+  it('[F6-1] both composer cards share rounded-composer, with no arbitrary-value radius anywhere', () => {
     for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
       const cls = composerCardClass(mode);
-      expect(cls).toContain('rounded-md');
+      expect(cls).toContain('rounded-composer');
       expect(cls).not.toMatch(/rounded-\[/);
       expect(cls).not.toContain('rounded-full');
     }
@@ -400,12 +415,12 @@ describe('composerCardClass', () => {
   // U09-1: the tab and the card's top radius are one visual join, so they are
   // asserted against each other rather than each on its own.
   describe('U09-1 protrusion join', () => {
-    it('drops the top corners to 4px when the tab is present, keeping the bottom at 10px', () => {
+    it('drops the top corners to 4px when the tab is present, keeping the bottom at the composer radius', () => {
       const cls = composerCardClass('empty', { hasProtrusion: true });
       expect(cls).toContain('rounded-t-xs');
-      // The base `rounded-md` must survive — it is what the bottom corners
-      // still render at; dropping it would square the whole card.
-      expect(cls).toContain('rounded-md');
+      // The base `rounded-composer` must survive — it is what the bottom
+      // corners still render at; dropping it would square the whole card.
+      expect(cls).toContain('rounded-composer');
       expect(cls).not.toMatch(/rounded-\[/);
     });
 
@@ -1001,29 +1016,34 @@ describe('roundActionButtonClass', () => {
     }
   });
 
-  it('overrides both squircle radius pairs so the shape is a true circle', () => {
+  // Design system v2 §7.9: the reference's send key is a small-radius square,
+  // not a circle; at 24px the clamp rule (§10.3) allows only xs/sm.
+  it('is a small-radius square, never a pill or circle', () => {
     const cls = roundActionButtonClass();
-    expect(cls).toContain('rounded-full');
-    expect(cls).toContain('before:rounded-full');
-  });
-
-  it('neutralises corner-shape so the fallback and supports- radii agree', () => {
-    const cls = roundActionButtonClass();
-    expect(cls).toContain('[corner-shape:round]');
-    expect(cls).toContain('supports-[corner-shape:squircle]:rounded-full');
-    expect(cls).toContain('supports-[corner-shape:squircle]:before:rounded-full');
+    expect(cls).toContain('rounded-sm');
+    expect(cls).not.toContain('rounded-full');
+    expect(cls).not.toMatch(/rounded-(md|lg|xl|\[)/);
   });
 });
 
 // F-A22 (supersedes the earlier F-A14, which was written as conditional on a
 // decision that has since been taken).
 describe('roundActionButtonKindClass', () => {
-  it('F-A22: send and enqueue are the near-neutral dark fill, never the brand primary', () => {
+  // Design system v2 §1 rule 7 supersedes F-A22's "never the brand primary":
+  // the send key is one of the few places the clay appears.
+  it('F-A22: send and enqueue are the clay primary fill', () => {
     for (const kind of ['send', 'enqueue'] as const) {
       const cls = roundActionButtonKindClass(kind);
-      expect(cls).toContain('bg-foreground');
-      expect(cls).toContain('text-background');
-      expect(cls).not.toContain('bg-primary');
+      expect(cls).toContain('bg-primary');
+      expect(cls).toContain('text-primary-foreground');
+      expect(cls).not.toContain('bg-foreground');
+    }
+  });
+
+  // §1 rule 1: inside the composer's frame no key carries a frame of its own.
+  it('no kind draws a border inside the composer', () => {
+    for (const kind of ['send', 'stop', 'retry', 'enqueue', 'interject', 'send-now'] as const) {
+      expect(roundActionButtonKindClass(kind)).not.toMatch(/(^|\s)(hover:)?border(-|\s|$)/);
     }
   });
 
@@ -1061,8 +1081,9 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
 
     expect(cls).toContain('rounded-sm');
     expect(cls).toContain('px-2');
-    expect(cls).toContain('hover:bg-hover');
-    expect(cls).toContain('data-[popup-open]:bg-selection');
+    // Design system v2: the one ghost-hover fill, the selected fill while open.
+    expect(cls).toContain('hover:bg-fill-ghost-hover');
+    expect(cls).toContain('data-[popup-open]:bg-fill-ghost-selected');
 
     expect(cls).not.toContain('border');
     expect(cls).not.toContain('shadow');
@@ -1077,10 +1098,13 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
   // must ship together or neither is trustworthy.
   it('F-A15: hover and keyboard focus produce the same shell, always as a pair', () => {
     const cls = composerModelTriggerClass();
-    expect(cls.includes('hover:bg-hover')).toBe(cls.includes('focus-visible:bg-hover'));
-    expect(cls).toContain('focus-visible:bg-hover');
-    // The outline sits on top of the fill rather than replacing it.
-    expect(cls).toContain('focus-visible:outline-accent-primary');
+    expect(cls.includes('hover:bg-fill-ghost-hover')).toBe(
+      cls.includes('focus-visible:bg-fill-ghost-hover')
+    );
+    expect(cls).toContain('focus-visible:bg-fill-ghost-hover');
+    // The ring sits on top of the fill rather than replacing it (design
+    // system v2: the shared `focus-ring` utility).
+    expect(cls).toContain('focus-ring');
   });
 
   // The shell is a FILL, never a border: a hover border would add 2px to the
@@ -1111,9 +1135,9 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
     const model = composerModelTriggerClass();
 
     for (const state of [
-      'hover:bg-hover',
-      'focus-visible:bg-hover',
-      'data-[popup-open]:bg-selection',
+      'hover:bg-fill-ghost-hover',
+      'focus-visible:bg-fill-ghost-hover',
+      'data-[popup-open]:bg-fill-ghost-selected',
     ]) {
       expect(model).toContain(state);
       expect(attach).toContain(state);
@@ -1206,9 +1230,9 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
     const model = composerModelTriggerClass();
 
     for (const state of [
-      'hover:bg-hover',
-      'focus-visible:bg-hover',
-      'data-[popup-open]:bg-selection',
+      'hover:bg-fill-ghost-hover',
+      'focus-visible:bg-fill-ghost-hover',
+      'data-[popup-open]:bg-fill-ghost-selected',
     ]) {
       expect(model).toContain(state);
       expect(perm).toContain(state);

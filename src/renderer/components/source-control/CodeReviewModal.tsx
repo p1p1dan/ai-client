@@ -87,25 +87,28 @@ const markdownComponents: Components = {
     }
 
     return (
-      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground">
+      <code className="rounded bg-fill-neutral px-1.5 py-0.5 font-mono text-ui text-foreground">
         {children}
       </code>
     );
   },
   table: ({ children, ...props }) => (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm" {...props}>
+      <table className="w-full border-collapse text-ui" {...props}>
         {children}
       </table>
     </div>
   ),
   th: ({ children, ...props }) => (
-    <th className="border border-border bg-muted/50 px-3 py-2 text-left font-medium" {...props}>
+    <th
+      className="border border-border-soft bg-fill-neutral px-3 py-2 text-left font-medium"
+      {...props}
+    >
       {children}
     </th>
   ),
   td: ({ children, ...props }) => (
-    <td className="border border-border px-3 py-2" {...props}>
+    <td className="border border-border-soft px-3 py-2" {...props}>
       {children}
     </td>
   ),
@@ -125,17 +128,17 @@ const markdownComponents: Components = {
     </ol>
   ),
   h1: ({ children, ...props }) => (
-    <h1 className="mt-6 mb-4 text-xl font-bold" {...props}>
+    <h1 className="mt-6 mb-4 text-title font-semibold" {...props}>
       {children}
     </h1>
   ),
   h2: ({ children, ...props }) => (
-    <h2 className="mt-5 mb-3 text-lg font-semibold" {...props}>
+    <h2 className="mt-5 mb-3 text-heading font-semibold" {...props}>
       {children}
     </h2>
   ),
   h3: ({ children, ...props }) => (
-    <h3 className="mt-4 mb-2 text-base font-semibold" {...props}>
+    <h3 className="mt-4 mb-2 text-ui font-semibold" {...props}>
       {children}
     </h3>
   ),
@@ -147,7 +150,7 @@ const markdownComponents: Components = {
       {children}
     </blockquote>
   ),
-  hr: (props) => <hr className="my-6 border-border" {...props} />,
+  hr: (props) => <hr className="my-6 border-border-soft" {...props} />,
 };
 
 interface CodeReviewModalProps {
@@ -277,7 +280,7 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
       case 'streaming':
         return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
       case 'complete':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-success" />;
       case 'error':
         return <XCircle className="h-4 w-4 text-destructive" />;
       default:
@@ -314,7 +317,7 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
           <button
             type="button"
             onClick={() => setIsMaximized(!isMaximized)}
-            className="absolute end-12 top-2.5 z-50 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+            className="absolute end-12 top-2.5 z-50 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground transition-colors"
             title={isMaximized ? t('Restore') : t('Maximize')}
           >
             {isMaximized ? <Shrink className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
@@ -359,7 +362,7 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                     <span>{displayError}</span>
                   </div>
                 ) : displayContent ? (
-                  <div className="text-sm text-foreground select-text">
+                  <div className="text-ui text-foreground select-text">
                     <Markdown
                       remarkPlugins={[[remarkGfm, { singleTilde: false }], remarkBreaks]}
                       components={markdownComponents}
@@ -373,7 +376,7 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                       <Loader2 className="h-6 w-6 animate-spin mr-2" />
                       <span>{t('Starting code review...')}</span>
                     </div>
-                    <span className="max-w-md text-center text-xs text-muted-foreground/70">
+                    <span className="max-w-md text-center text-small text-muted-foreground/70">
                       {t(
                         'Review may take a while. You can minimize this window and continue other work — results will be here when done.'
                       )}
@@ -383,10 +386,10 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                   <div className="flex flex-col items-center justify-center gap-3 py-12">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     <div className="text-center">
-                      <p className="text-sm text-foreground">
+                      <p className="text-ui text-foreground">
                         {t('Another repository is being reviewed')}
                       </p>
-                      <p className="mt-1 max-w-md text-xs text-muted-foreground/70">
+                      <p className="mt-1 max-w-md text-small text-muted-foreground/70">
                         {t(
                           'Wait for the running review to finish, or switch to that repository to manage it.'
                         )}
@@ -397,10 +400,10 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                   <div className="flex flex-col items-center justify-center gap-3 py-12">
                     <Sparkles className="h-10 w-10 text-primary/60" />
                     <div className="text-center">
-                      <p className="text-sm text-foreground">
+                      <p className="text-ui text-foreground">
                         {t('Ready to start AI code review')}
                       </p>
-                      <p className="mt-1 max-w-md text-xs text-muted-foreground/70">
+                      <p className="mt-1 max-w-md text-small text-muted-foreground/70">
                         {t('Click Start to analyze your changes. This will consume API credits.')}
                       </p>
                     </div>

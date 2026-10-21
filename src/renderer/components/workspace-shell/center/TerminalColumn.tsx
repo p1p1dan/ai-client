@@ -73,12 +73,14 @@ export function TerminalColumn({
     >
       {current && (
         <>
-          <div className="flex h-10 shrink-0 items-start border-b">
+          {/* Design system v2 §7.12: the editor's tab strip — the canvas, one
+              hairline below, the selected tab frameless with a 2px clay line. */}
+          <div className="flex h-10 shrink-0 items-start border-b border-border-soft bg-surface-1">
             <div
-              className="relative flex h-9 min-w-0 max-w-56 items-center gap-2 border-r px-3 text-ui text-foreground"
+              className="relative flex h-9 min-w-0 max-w-56 items-center gap-2 px-3 text-ui text-foreground"
               data-testid="terminal-column-tab"
             >
-              <span aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-primary" />
+              <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />
               <Terminal className="size-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{t('Terminal')}</span>
               <button
@@ -86,7 +88,7 @@ export function TerminalColumn({
                 onClick={() => close(current.key)}
                 aria-label={t('Close terminal')}
                 title={t('Close terminal')}
-                className="shrink-0 rounded-sm p-0.5 text-muted-foreground opacity-60 transition-opacity hover:bg-accent hover:text-foreground hover:opacity-100"
+                className="shrink-0 rounded-xs p-0.5 text-muted-foreground opacity-60 transition-opacity hover:bg-fill-ghost-hover hover:text-foreground hover:opacity-100"
               >
                 <X className="size-3.5" />
               </button>
@@ -105,7 +107,7 @@ export function TerminalColumn({
               )}
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1 text-meta">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border-soft px-3 py-1 text-small">
             <span className="shrink-0 text-muted-foreground">{t('Session directory')}</span>
             <Ident
               className="min-w-0 flex-1 truncate text-foreground"

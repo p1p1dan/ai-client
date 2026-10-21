@@ -62,8 +62,8 @@ export function SettingsDialog({
         showCloseButton
         disableNestedTransform
       >
-        <div className="shrink-0 border-b px-4 py-3">
-          <DialogTitle className="text-lg font-medium">{t('Settings')}</DialogTitle>
+        <div className="shrink-0 border-b border-border-soft px-4 py-3">
+          <DialogTitle className="text-heading font-semibold">{t('Settings')}</DialogTitle>
         </div>
         <div className="min-h-0 flex-1">
           <SettingsContent

@@ -109,13 +109,13 @@ function GitEmptyState({
       </EmptyMedia>
       <EmptyHeader>
         <EmptyTitle className="text-ui tracking-normal">{title}</EmptyTitle>
-        <EmptyDescription className="text-meta">{description}</EmptyDescription>
+        <EmptyDescription className="text-small">{description}</EmptyDescription>
         {judgedPath ? (
           // Which directory was actually judged. No new copy — the path is the
           // whole message, so there is nothing to translate; `title` carries
           // the untruncated value for a path too long for the panel.
           <span
-            className="mt-1 block min-w-0 max-w-full truncate text-meta text-muted-foreground"
+            className="mt-1 block min-w-0 max-w-full truncate text-small text-muted-foreground"
             title={judgedPath}
           >
             {getDisplayPath(judgedPath)}

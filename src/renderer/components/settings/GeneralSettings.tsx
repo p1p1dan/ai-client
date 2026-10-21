@@ -73,7 +73,7 @@ export function GeneralSettings() {
         description={t('Review file changes from the current conversation in the right panel.')}
       >
         <SettingsRow>
-          <span className="text-sm">{t('Show session review')}</span>
+          <span className="text-ui">{t('Show session review')}</span>
           <Switch
             aria-label={t('Show session review')}
             checked={showSessionReview}
@@ -83,7 +83,7 @@ export function GeneralSettings() {
       </SettingsSectionBlock>
       <SettingsSectionBlock title={t('Language')} description={t('Choose display language')}>
         <SettingsRow>
-          <span className="text-sm font-medium mt-2">{t('Language')}</span>
+          <span className="text-ui font-medium mt-2">{t('Language')}</span>
           <div className="space-y-1.5">
             <Select value={language} onValueChange={(v) => setLanguage(v as Locale)}>
               <SelectTrigger className="w-48">
@@ -99,9 +99,9 @@ export function GeneralSettings() {
       </SettingsSectionBlock>
       <SettingsSectionBlock title={t('Temp Session')} description={t('Temp Session settings')}>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Temp Session')}</span>
+          <span className="text-ui font-medium">{t('Temp Session')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t('Show Temp Session entry for quick scratch sessions')}
             </p>
             <Switch
@@ -111,9 +111,9 @@ export function GeneralSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Auto-create session')}</span>
+          <span className="text-ui font-medium">{t('Auto-create session')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t('Automatically create Agent/Terminal Session when activating a temp session')}
             </p>
             <Switch
@@ -124,7 +124,7 @@ export function GeneralSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium mt-2">{t('Save location')}</span>
+          <span className="text-ui font-medium mt-2">{t('Save location')}</span>
           <div className="space-y-1.5">
             <div className="flex gap-2">
               <Input
@@ -143,7 +143,7 @@ export function GeneralSettings() {
                 <FolderOpen className="h-4 w-4" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t('Default directory for new temp sessions. Leave empty to use ~/JYWAI/temporary')}
             </p>
           </div>
@@ -151,29 +151,29 @@ export function GeneralSettings() {
       </SettingsSectionBlock>
       <SettingsSectionBlock title={t('Updates')} description={t('Application update settings')}>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Version')}</span>
+          <span className="text-ui font-medium">{t('Version')}</span>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">v{appVersion}</span>
+              <span className="text-ui text-muted-foreground">v{appVersion}</span>
               {updateStatus?.status === 'available' && updateStatus.info?.version && (
-                <span className="text-xs text-green-600 dark:text-green-400">
+                <span className="text-small text-success">
                   ({t('New version')}: v{updateStatus.info.version})
                 </span>
               )}
               {updateStatus?.status === 'downloaded' && (
-                <span className="text-meta text-success">({t('Update ready')})</span>
+                <span className="text-small text-success">({t('Update ready')})</span>
               )}
               {updateStatus?.status === 'unsupported' && (
-                <span className="text-meta text-muted-foreground">
+                <span className="text-small text-muted-foreground">
                   {t('Use your system package manager or install a newer package to update.')}
                 </span>
               )}
               {updateStatus?.status === 'not-available' && (
-                <span className="text-xs text-muted-foreground">({t('Up to date')})</span>
+                <span className="text-small text-muted-foreground">({t('Up to date')})</span>
               )}
               {updateStatus?.status === 'error' && (
                 <span
-                  className="text-xs text-destructive truncate max-w-[420px]"
+                  className="text-small text-destructive truncate max-w-[420px]"
                   title={updateStatus.error || ''}
                 >
                   ({t('Check failed')}
@@ -200,9 +200,9 @@ export function GeneralSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Auto update')}</span>
+          <span className="text-ui font-medium">{t('Auto update')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t(
                 'Automatically download and install updates. New version reminders remain enabled when off.'
               )}

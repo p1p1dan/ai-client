@@ -11,15 +11,16 @@ import { stripComments } from '@/components/chat/__tests__/stripComments';
  * Static, like this directory's other LeftNav pins: what can regress is a
  * class string, and jsdom computes no layout to measure.
  *
- *   top nav       14px 400 foreground       h-8   22px icon slot; hover bg-hover
+ *   top nav       13px 400 foreground       h-8   22px icon slot; hover fill-ghost-hover
  *   tool row      search (h-8) + collapse / expand all + bulk archive (32px)
- *   group label   12px 400 muted            h-8   no icon, no hover fill; soft ink on hover
- *   chat          14px 400 foreground-soft  h-8   fixed w-4 status slot; open: foreground
- *   auxiliary     14px 400 muted            h-8   text in the title column
+ *   group label   12px 500 faint            h-8   no icon, no hover fill; soft ink on hover
+ *   chat          13px 400 foreground-soft  h-8   fixed w-4 status slot; open: foreground
+ *   auxiliary     12px 400 muted            h-8   text in the title column
  *
- * Decision 188 (2026-10-13, screenshot-style spacing preview): every row 32px,
- * the nav down to 14px, the group label down to 12px, and wider gaps between
- * the three zones.
+ * Decision 188 (2026-10-13, screenshot-style spacing preview): every row 32px
+ * and wider gaps between the three zones. Design system v2 (§3.1, §7.12):
+ * rows and nav `text-ui` (13px), the group label `text-small` / 500 / faint,
+ * rows frameless with an inset `rounded-xs` ghost highlight.
  *
  * Gone: the panel title (`DockTitle`, all five panels), the region titles
  * (`SidebarSectionHeader`), 「正在活动」, the dividers and the 16px tier.
@@ -58,18 +59,20 @@ function constant(name: string): string {
   return match?.[1] ?? '';
 }
 
-describe('weights: 400 and 600 only (design system, Font Weight)', () => {
-  it('no hierarchy carrier in the sidebar, the dock or the session bar title uses 500', () => {
-    // Microsoft YaHei UI has no 500: CJK renders it as 400 on Windows 10 and
-    // 11 alike, so a 500 level is invisible there. Button / Badge primitives
-    // carry their own `font-medium`; these files must not add one.
-    expect(NAV).not.toContain('font-medium');
+describe('weights (design system v2 §3.2)', () => {
+  it('500 only on the group label (and its inline editors); no 500 on the dock or the bar title', () => {
+    // Design system v2 §7.12: the group label is the sidebar's one 500 text
+    // (Microsoft YaHei UI renders it as 400, so it must never be the only
+    // carrier of a level: the faint ink carries it too). The two inline name
+    // editors take the label's look so the text does not jump.
+    expect(NAV.match(/font-medium/g)).toHaveLength(3);
+    expect(GROUP_HEADER).toContain('font-medium text-foreground-faint');
     expect(DOCK).not.toContain('font-semibold');
     expect(BAR).not.toContain('font-medium');
   });
 
-  it('the session bar title stays 16px / 400', () => {
-    expect(BAR).toContain('<span className="min-w-0 truncate text-section text-foreground">');
+  it('the session bar title stays 15px (text-heading) / 400', () => {
+    expect(BAR).toContain('<span className="min-w-0 truncate text-heading text-foreground">');
   });
 
   it('no level of the chat sidebar is bold any more: group labels are the grey 400 label', () => {
@@ -88,13 +91,13 @@ describe('the panel title is gone from all five panels (decision 183 §1.9)', ()
 });
 
 describe('levels (decision 183, prototype `.vA`)', () => {
-  it('top nav: two h-8 rows, 14px, a 22px icon slot; New chat on a round bg-selection disc', () => {
+  it('top nav: two h-8 rows, text-ui, a 22px icon slot; New chat on a round selected-fill disc', () => {
     expect(constant('NAV_ITEM_CLASS')).toBe(
-      'flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-meta hover:bg-hover focus-visible:bg-hover'
+      'flex h-8 w-full items-center gap-2.5 rounded-xs px-2 text-left text-ui hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover'
     );
     expect(NAV.split('className={NAV_ITEM_CLASS}').length - 1).toBe(2);
     expect(NAV).toContain(
-      'className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-selection text-foreground"'
+      'className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-fill-ghost-selected text-foreground"'
     );
     expect(NAV).toContain('<FolderPlus className="size-4" />');
     // New chat opens the home page (decision 174); Add repository the dialog.
@@ -102,15 +105,15 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     expect(NAV).toContain('onClick={onAddRepository}');
   });
 
-  it('group label: 12px / 400 / muted, soft ink on hover, no icon, no hover fill', () => {
+  it('group label: 12px / 500 / faint, soft ink on hover, no icon, no hover fill', () => {
     expect(GROUP_HEADER).toContain(
-      '<div className="group flex h-8 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">'
+      '<div className="group flex h-8 w-full items-center gap-1 rounded-xs px-2 has-focus-visible:bg-fill-ghost-hover">'
     );
     expect(GROUP_HEADER).toContain(
-      'className="flex min-w-0 flex-1 items-center gap-1 text-left text-group-label text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"'
+      'className="flex min-w-0 flex-1 items-center gap-1 text-left text-small font-medium text-foreground-faint group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"'
     );
     expect(GROUP_HEADER).toContain('aria-expanded={expanded}');
-    expect(GROUP_HEADER).not.toContain('hover:bg-hover');
+    expect(GROUP_HEADER).not.toContain('hover:bg-fill-ghost-hover');
     expect(NAV).not.toContain('text-folder');
     expect(NAV).not.toMatch(/<Folder(Open)?\b/);
   });
@@ -162,9 +165,10 @@ describe('levels (decision 183, prototype `.vA`)', () => {
   });
 
   it('folded summary: spinner with count, waiting dot, red or green dot (§2.2)', () => {
-    expect(GROUP_SUMMARY).toContain('className="size-3 shrink-0 text-status-running"');
+    // Design system v2 §6: the run marks are StatusIcon's.
+    expect(GROUP_SUMMARY).toContain('<StatusIcon status="running" label={runningLabel} />');
     expect(GROUP_SUMMARY).toContain('{summary.running > 1 && summary.running}');
-    expect(GROUP_SUMMARY).toContain('className="size-1.5 shrink-0 rounded-full bg-warning"');
+    expect(GROUP_SUMMARY).toContain('status="waiting"');
     expect(GROUP_SUMMARY).toContain(
       "summary.unread === 'failed' ? 'bg-destructive' : 'bg-success'"
     );
@@ -172,18 +176,20 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     expect(NAV).toContain('summary: deriveGroupSummary(unboundFolder.rows, unreadSessionIds)');
   });
 
-  it('chat: 14px / 400 in --foreground-soft; the open one keeps the body colour', () => {
+  it('chat: text-ui / 400 in --foreground-soft; the open one keeps the body colour', () => {
     expect(ROW).toContain(
-      "'group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',"
+      "'group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-xs px-2 text-left text-ui',"
     );
-    expect(ROW).toContain("? 'bg-selection text-accent-foreground'");
-    expect(ROW).toContain(": 'text-foreground-soft hover:bg-hover focus-visible:bg-hover'");
+    expect(ROW).toContain("? 'bg-fill-ghost-selected text-foreground'");
+    expect(ROW).toContain(
+      ": 'text-foreground-soft hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover'"
+    );
     // The token is alpha-free and takes no /N (design system, Alpha discipline).
     expect(NAV).not.toMatch(/text-foreground-soft\/\d/);
     expect(NAV).not.toMatch(/muted-foreground-faint\/\d/);
     // The rename editor that replaces the row keeps its size.
     expect(ROW).toContain(
-      'className="h-6 flex-1 rounded-sm text-meta before:rounded-[calc(var(--radius-sm)-1px)]"'
+      'className="h-6 flex-1 rounded-sm text-ui before:rounded-[calc(var(--radius-sm)-1px)]"'
     );
   });
 
@@ -201,9 +207,9 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     expect(slot).not.toContain(') : null}');
   });
 
-  it('auxiliary: h-8, 14px muted, the empty w-4 slot puts the text in the title column', () => {
+  it('auxiliary: h-8, 12px muted, the empty w-4 slot puts the text in the title column', () => {
     expect(AUX_ROW).toContain(
-      'className="flex h-8 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"'
+      'className="flex h-8 w-full items-center gap-1.5 rounded-xs px-2 text-small text-muted-foreground tabular-nums hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover"'
     );
     expect(AUX_ROW).toContain('className="flex w-4 shrink-0 items-center justify-center"');
     // §1.5: no 「新建对话」 row in an empty group, so no icon slot content.
@@ -211,21 +217,20 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     expect(NAV).not.toContain('icon={<Plus');
   });
 
-  it('the 12px group label is the one tier below the 14px rows (issue #14, decision 188)', () => {
-    expect(NAV).not.toMatch(/\btext-(xs|2xs|sm|base|lg|title|section)\b/);
-    // Decision 186 (issue #14): the group label dropped one step to 13px so a
-    // group reads lighter than the chats it heads; decision 188 took it to
-    // 12px. It is the ONLY smaller tier here -- rows, auxiliary lines and
-    // (since decision 188) the top nav are all 14px. Decision 187 added
-    // two more uses, both group labels: the inline name editor (new group and
-    // rename), which must not change size when the label becomes an input.
-    expect(NAV.match(/text-group-label/g)).toHaveLength(3);
-    expect(GROUP_HEADER).toContain('text-group-label');
-    // `Button size="xs"` is 12px on desktop (`sm:text-xs`): every one here
-    // overrides it with `sm:text-meta`.
+  it('the 12px group label sits one tier below the 13px rows (issue #14, design system v2)', () => {
+    // Design system v2 §3.1: only v2 tiers -- no Tailwind defaults, no legacy aliases.
+    expect(NAV).not.toMatch(/\btext-(xs|sm|base|lg|meta|section|group-label)\b/);
+    // Decision 186 (issue #14): the group label reads lighter than the chats
+    // it heads. Design system v2: rows and the top nav are `text-ui` (13px),
+    // the label `text-small` (12px), 500, faint. Decision 187's inline name
+    // editors (new group and rename) take the label's size.
+    expect(GROUP_HEADER).toContain('text-small font-medium');
+    expect(NAV.match(/text-small font-medium/g)).toHaveLength(3);
+    // `Button size="xs"` is 12px (`text-small`); buttons are `text-ui` in v2,
+    // so every one here overrides it.
     const xsButtons = [...NAV.matchAll(/<Button[^>]*size="xs"[^>]*>/g)].map((match) => match[0]);
     expect(xsButtons.length).toBeGreaterThanOrEqual(3);
-    for (const button of xsButtons) expect(button).toContain('sm:text-meta');
+    for (const button of xsButtons) expect(button).toContain('text-ui');
   });
 });
 
@@ -280,7 +285,9 @@ describe('one list (decision 183 §1.10)', () => {
     // 8px), one hairline on the full-width box (its px-2 sits inside the
     // line), shared by the selection bar so nothing moves when multi-select
     // starts.
-    expect(constant('TOP_ZONE_END_CLASS')).toBe('shrink-0 border-b px-2 pt-3 pb-4');
+    expect(constant('TOP_ZONE_END_CLASS')).toBe(
+      'shrink-0 border-b border-border-soft px-2 pt-3 pb-4'
+    );
     expect(NAV.split('className={TOP_ZONE_END_CLASS}').length - 1).toBe(1);
     const zone = slice(NAV, '<div className={TOP_ZONE_END_CLASS}>', '<ContextMenuPrimitive.Root>');
     expect(zone).toContain('<div className="flex h-8 items-center gap-0.5">');
@@ -289,7 +296,7 @@ describe('one list (decision 183 §1.10)', () => {
     // The footer's line is its own top border, across the panel.
     // Decision 188: 12px from the line to the account row, 10px below it.
     expect(FOOTER).toContain(
-      '<div className="flex shrink-0 items-center gap-1 border-t px-2 pt-3 pb-2.5">'
+      '<div className="flex shrink-0 items-center gap-1 border-t border-border-soft px-2 pt-3 pb-2.5">'
     );
   });
 
@@ -333,15 +340,16 @@ describe('the tool row (decision 183 §1.8, §2.1)', () => {
   });
 
   it('the search box is drawn like the prototype, overriding the primitive by matching stacks', () => {
-    // User ruling 2026-10-11: prototype `.search`, not InputGroup's default.
+    // User ruling 2026-10-11: prototype `.search`, not InputGroup's default;
+    // design system v2 §7.12 makes it a filled field (no line until focus).
     // Each override repeats the variant stack of the base class it replaces,
     // so tailwind-merge drops the base one (the rendered result is asserted in
     // sidebarActiveAndFolders.test.ts). No `!important`.
     const focus = 'has-[input:focus-visible,textarea:focus-visible]';
     expect(constant('SIDEBAR_SEARCH_CLASS')).toBe(
       [
-        'h-8 min-w-0 flex-1 rounded-sm border-border bg-transparent shadow-none before:hidden dark:bg-transparent',
-        `${focus}:border-muted-foreground ${focus}:bg-background ${focus}:ring-0`,
+        'h-8 min-w-0 flex-1 rounded-sm border-transparent bg-fill-neutral shadow-none before:hidden dark:bg-fill-neutral',
+        `${focus}:border-border-strong ${focus}:ring-0`,
         '[&_input]:placeholder:text-muted-foreground',
       ].join(' ')
     );
@@ -409,9 +417,9 @@ describe('the tool row (decision 183 §1.8, §2.1)', () => {
 describe('the account footer (decision 183, user ruling 2026-10-12, prototype v6 `.foot.proto`)', () => {
   it('is the prototype s 32px row in every sign-in state', () => {
     expect(FOOTER).toContain(
-      "'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-sm px-2 text-left',"
+      "'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-xs px-2 text-left',"
     );
-    expect(FOOTER).toContain("'text-muted-foreground hover:bg-hover',");
+    expect(FOOTER).toContain("'text-muted-foreground hover:bg-fill-ghost-hover',");
     // One trigger, its content switching by state: the height is the trigger's.
     expect(FOOTER.split('<PopoverTrigger').length - 1).toBe(1);
     expect(FOOTER).not.toMatch(/\bh-6\b/);
@@ -420,12 +428,13 @@ describe('the account footer (decision 183, user ruling 2026-10-12, prototype v6
 
   it('a 22px avatar on --selection with a semibold 14px initial, the e-mail in the soft ink', () => {
     expect(FOOTER).toContain('<Avatar className="size-5.5 shrink-0 bg-transparent">');
-    // text-meta, not the prototype's 12px: the initial can be CJK (≥14px).
+    // text-small (12px): the initial can be CJK, and 12px is v2's CJK floor.
     expect(FOOTER).toContain(
-      '<AvatarFallback className="bg-selection font-semibold text-foreground text-meta">'
+      '<AvatarFallback className="bg-fill-ghost-selected font-semibold text-foreground text-small">'
     );
     expect(FOOTER).not.toContain('className="size-4 shrink-0');
-    expect(FOOTER).toContain('className="min-w-0 flex-1 truncate text-meta text-foreground-soft"');
+    // The e-mail at the sidebar rows' size (design system v2: text-ui).
+    expect(FOOTER).toContain('className="min-w-0 flex-1 truncate text-ui text-foreground-soft"');
     expect(FOOTER).toContain(
       '<ChevronsUpDown aria-hidden className="ml-auto size-3.5 shrink-0 text-muted-foreground" />'
     );
@@ -449,7 +458,9 @@ describe('rows', () => {
   });
 
   it('a chat row has a keyboard focus style, and it is the hover step', () => {
-    expect(ROW).toContain(": 'text-foreground-soft hover:bg-hover focus-visible:bg-hover'");
+    expect(ROW).toContain(
+      ": 'text-foreground-soft hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover'"
+    );
   });
 
   it('every chat row says where it is and when, in its tooltip', () => {
@@ -470,7 +481,6 @@ describe('rows', () => {
 describe('search fields: InputGroup, input first (decision 167)', () => {
   const SEARCH_FIELDS = [
     join(SHELL, 'LeftNav.tsx'),
-    join(COMPONENTS, 'chat/ComposerModelTrigger.tsx'),
     join(COMPONENTS, 'source-control/BranchSwitcher.tsx'),
   ];
 
@@ -514,5 +524,24 @@ describe('search fields: InputGroup, input first (decision 167)', () => {
     const old =
       '<Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5" />\n<Input';
     expect(old).toMatch(/<[A-Z]\w*\s+className="[^"]*\babsolute\b[^"]*"\s*\/>\s*<Input\b/);
+  });
+});
+
+/**
+ * Design system v2 §1 rule 1: the model menu's search field sits INSIDE the
+ * menu's frame, so it has no frame of its own -- a plain row with a hairline
+ * under it. Decision 167's hazard (an absolutely positioned icon painted over
+ * by the input's opaque wrapper) cannot happen in a flex row; the icon still
+ * comes after the input in source and is drawn first with `order-first`.
+ */
+describe('model menu search: a frameless flex row, input first', () => {
+  const source = code(join(COMPONENTS, 'chat/ComposerModelTrigger.tsx'));
+
+  it('the input precedes the icon, which is drawn first in a flex row', () => {
+    const input = source.indexOf('<Input');
+    const icon = source.indexOf('<Search className="order-first');
+    expect(input).toBeGreaterThan(-1);
+    expect(icon).toBeGreaterThan(input);
+    expect(source).toContain('flex h-8 items-center gap-1.5 border-border-soft border-b');
   });
 });

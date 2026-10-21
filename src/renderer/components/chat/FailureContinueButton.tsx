@@ -48,16 +48,15 @@ export function FailureContinueButton({
       onKeyDown={swallow}
     >
       <Button
-        size="sm"
-        variant="outline"
-        className="h-6 text-ui"
+        size="xs"
+        variant="ghost"
         disabled={disabled}
         title={title}
         onClick={() => {
           if (!disabled) onContinue();
         }}
       >
-        <Send className="mr-1 h-3.5 w-3.5" />
+        <Send className="size-3.5" />
         {t(label)}
       </Button>
     </span>

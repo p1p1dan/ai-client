@@ -3,8 +3,8 @@
  * sub-windows share — background jobs and subagents — as the P1-7
  * prototype draws it (evidence/p1-7-prototype-2026-09-28, `.subwin`).
  *
- * A card over the timeline (`bg-popover`, `border`, `rounded-lg`, the
- * design system's `shadow-lg` tier for a floating container), with a header
+ * A card over the timeline (design system v2 §5.1, §7: `bg-surface-3`, one
+ * `border-soft` hairline, `rounded-lg`, the `elev-lg` tier), with a header
  * of two fixed lines so nothing is ever pushed out of it (the prototype's
  * header-overflow fix): the grip, icon, title and close button; then the
  * count and the window's own actions. Both lines truncate their text, never
@@ -16,6 +16,7 @@
 
 import { GripHorizontal, X } from 'lucide-react';
 import { type ReactNode, type PointerEvent as ReactPointerEvent, useRef } from 'react';
+import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import {
@@ -23,25 +24,40 @@ import {
   type SubwindowPosition,
   useSessionSubwindowsStore,
 } from '@/stores/sessionSubwindows';
-import { panelStripIconButtonClass } from './sessionPanelsLayout';
 import { clampSubwindowPosition } from './subwindowsModel';
 
-/** The card: the prototype's 340 px, narrower when the column is. */
+/**
+ * The card: the prototype's 340 px, narrower when the column is. A real
+ * border, not a ring: `elev-lg` owns `box-shadow`, so a ring would fight it.
+ */
 export function subwindowClass(): string {
-  return 'pointer-events-auto flex w-85 max-w-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-popover text-meta shadow-lg';
+  return 'pointer-events-auto flex w-85 max-w-full min-h-0 flex-col overflow-hidden rounded-lg border border-border-soft bg-surface-3 text-small elev-lg';
 }
 
-/** Header line 1: grip, icon, title, close — 30 px with its rule. */
+/** Header line 1: grip, icon, title, close — 32 px with its rule (§4.2). */
 export function subwindowTitleRowClass(draggable: boolean): string {
   return cn(
-    'flex h-7.5 shrink-0 items-center gap-1.5 border-b border-border pr-1 pl-2',
+    'flex h-8 shrink-0 items-center gap-1.5 border-b border-border-soft pr-1 pl-2',
     draggable && 'cursor-grab touch-none select-none active:cursor-grabbing'
   );
 }
 
 /** Header line 2: the count, then the window's actions. */
 export function subwindowCountRowClass(): string {
-  return 'flex min-h-6.5 shrink-0 items-center gap-1.5 border-b border-border pr-1 pl-2 text-muted-foreground';
+  return 'flex min-h-6.5 shrink-0 items-center gap-1.5 border-b border-border-soft pr-1 pl-2 text-foreground-faint';
+}
+
+/**
+ * One list row (design system v2 §1 rule 2): frameless, the one ghost hover.
+ * Rows are two lines, the first 28 px, the second 24 px.
+ */
+export function subwindowRowClass(): string {
+  return 'rounded-sm px-2 py-0.5 transition-colors duration-150 hover:bg-fill-ghost-hover';
+}
+
+/** A row's trailing time: faint, small, tabular. */
+export function subwindowRowTimeClass(): string {
+  return 'shrink-0 text-small text-foreground-faint tabular-nums';
 }
 
 interface SubwindowFrameProps {
@@ -144,18 +160,19 @@ export function SubwindowFrame({
       >
         <GripHorizontal className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <span className="flex shrink-0 text-muted-foreground">{icon}</span>
-        <span className="min-w-0 flex-1 truncate font-semibold text-ui text-foreground">
+        <span className="min-w-0 flex-1 truncate font-semibold text-heading text-foreground">
           {title}
         </span>
-        <button
+        <Button
           type="button"
-          className={panelStripIconButtonClass()}
+          size="icon-xs"
+          variant="ghost"
           aria-label={t('Close')}
           title={t('Close')}
           onClick={() => close(windowKey)}
         >
           <X className="size-3.5" />
-        </button>
+        </Button>
       </div>
       <div className={subwindowCountRowClass()}>
         <span className="min-w-0 flex-1 truncate tabular-nums">{count}</span>

@@ -125,8 +125,9 @@ describe('R02-c the menu says where each command came from', () => {
   it('renders the source on every row', () => {
     // Three kinds share one list; a skill, a template and a plugin command look
     // identical without it.
+    // Design system v2: faint ink, the small tier.
     expect(COMPOSER).toContain(
-      '<span className="shrink-0 text-meta text-muted-foreground">{item.source}</span>'
+      '<span className="shrink-0 text-small text-foreground-faint">{item.source}</span>'
     );
   });
 });

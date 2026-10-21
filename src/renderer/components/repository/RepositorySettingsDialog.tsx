@@ -60,10 +60,10 @@ export function RepositorySettingsDialog({
             {/* Auto-initialize */}
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-0.5">
-                <label className="text-sm font-medium" htmlFor="auto-init-switch">
+                <label className="text-ui font-medium" htmlFor="auto-init-switch">
                   {t('Auto-initialize new worktrees')}
                 </label>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-small text-muted-foreground">
                   {t('Automatically run init script when creating new worktrees')}
                 </p>
               </div>
@@ -78,7 +78,7 @@ export function RepositorySettingsDialog({
 
             {settings.autoInitWorktree && (
               <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="init-script">
+                <label className="text-ui font-medium" htmlFor="init-script">
                   {t('Init Script')}
                 </label>
                 <Textarea
@@ -86,9 +86,9 @@ export function RepositorySettingsDialog({
                   placeholder={t('e.g., pnpm install && pnpm dev')}
                   value={settings.initScript}
                   onChange={(e) => setSettings((prev) => ({ ...prev, initScript: e.target.value }))}
-                  className="min-h-24 font-mono text-sm"
+                  className="min-h-24 font-mono text-ui"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-small text-muted-foreground">
                   {t(
                     'Commands to run after creating a new worktree. Multiple commands can be separated by && or newlines.'
                   )}

@@ -34,7 +34,7 @@ export function SurfacePlaceholder({ surface }: SurfacePlaceholderProps) {
             to 14px (text-ui) and may render CJK, so tracking must be
             cancelled back to normal. */}
         <EmptyTitle className="text-ui tracking-normal">{t(surface.labelKey)}</EmptyTitle>
-        <EmptyDescription className="text-meta">
+        <EmptyDescription className="text-small">
           {surface.pendingTask
             ? t('Not connected yet — {{task}} will wire this surface.', {
                 // A task id like `T-13` has no dictionary entry, so `t()`

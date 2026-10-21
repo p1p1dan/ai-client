@@ -136,7 +136,7 @@ export function AgentMigrationSettings() {
         }
       />
 
-      <div className="grid gap-1 text-meta text-muted-foreground sm:grid-cols-[80px_1fr] sm:gap-3">
+      <div className="grid gap-1 text-small text-muted-foreground sm:grid-cols-[80px_1fr] sm:gap-3">
         {/* Not the bare 'From'/'To' keys — those already exist for the file
             move dialog, where they translate as 从/到. Reusing them would have
             silently overwritten that pair. */}
@@ -146,7 +146,7 @@ export function AgentMigrationSettings() {
         <Ident className="min-w-0 break-all">{plan.targetDir}</Ident>
       </div>
 
-      <ul className="divide-y rounded-md border">
+      <ul className="divide-y divide-border-soft rounded-md border border-border-soft bg-surface-2">
         {plan.items.map((item) => (
           <MigrationRow
             key={item.kind}
@@ -173,7 +173,7 @@ export function AgentMigrationSettings() {
           />
           <span className="min-w-0" id={overwriteLabelId}>
             {t('Replace items this app already has')}
-            <span className="ml-2 text-meta text-muted-foreground">
+            <span className="ml-2 text-small text-muted-foreground">
               {t('Off: anything already here is left alone.')}
             </span>
           </span>
@@ -227,15 +227,15 @@ function MigrationRow({
           <Badge variant="secondary">{`${item.total}`}</Badge>
           {pending === 0 && <Badge variant="success">{t('Already here')}</Badge>}
         </div>
-        <p className="truncate text-meta text-muted-foreground">{item.sourcePath}</p>
+        <p className="truncate text-small text-muted-foreground">{item.sourcePath}</p>
         {/* Names, not just counts: "3 conflicts" is not something a user can
             decide about, and the decision is the point of this control. */}
-        <p className="text-meta text-muted-foreground">
+        <p className="text-small text-muted-foreground">
           {item.entries.map((entry) => entry.name).join(', ')}
           {item.total > item.entries.length && ' …'}
         </p>
         {item.conflicts > 0 && (
-          <p className="text-meta text-warning">
+          <p className="text-small text-warning">
             {t('{{count}} already exist here and will be kept unless you allow replacing.', {
               count: item.conflicts,
             })}
@@ -244,7 +244,7 @@ function MigrationRow({
         {item.entries
           .filter((entry) => entry.blocked)
           .map((entry) => (
-            <p key={entry.name} className="text-meta text-destructive">
+            <p key={entry.name} className="text-small text-destructive">
               {`${entry.name}: ${entry.blocked}`}
             </p>
           ))}
@@ -256,14 +256,14 @@ function MigrationRow({
 function MigrationReport({ outcomes }: { outcomes: MigrationOutcome[] }) {
   const { t } = useI18n();
   return (
-    <div className="space-y-2 rounded-md border p-3">
+    <div className="space-y-2 rounded-md border border-border-soft bg-surface-2 p-3">
       <div className="flex items-center gap-2 text-ui font-medium">
         <Check className="h-4 w-4 text-success" />
         {t('Copy finished')}
       </div>
       {outcomes.map((outcome) => (
         <div key={outcome.kind} className="space-y-1">
-          <p className="text-meta text-muted-foreground">
+          <p className="text-small text-muted-foreground">
             <FolderInput className="mr-1 inline h-3 w-3" />
             {`${t(migrationKindLabel(outcome.kind))}: `}
             {t('{{copied}} copied, {{replaced}} replaced, {{skipped}} left alone', {
@@ -273,7 +273,7 @@ function MigrationReport({ outcomes }: { outcomes: MigrationOutcome[] }) {
             })}
           </p>
           {outcome.failed.map((failure) => (
-            <p key={failure.name} className="text-meta text-destructive">
+            <p key={failure.name} className="text-small text-destructive">
               {`${failure.name}: ${failure.error}`}
             </p>
           ))}

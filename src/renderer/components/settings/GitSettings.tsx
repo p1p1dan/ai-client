@@ -116,9 +116,9 @@ export function GitSettings() {
         description={t('Git worktree save location settings')}
       >
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Auto-create session')}</span>
+          <span className="text-ui font-medium">{t('Auto-create session')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t('Automatically create Agent/Terminal session when activating a worktree')}
             </p>
             <Switch
@@ -128,7 +128,7 @@ export function GitSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium mt-2">{t('Save location')}</span>
+          <span className="text-ui font-medium mt-2">{t('Save location')}</span>
           <div className="space-y-1.5">
             <div className="flex gap-2">
               <Input
@@ -150,15 +150,15 @@ export function GitSettings() {
                 <FolderOpen className="h-4 w-4" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t('Default directory for new worktrees. Leave empty to use ~/JYWAI/workspaces')}
             </p>
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Git auto refresh')}</span>
+          <span className="text-ui font-medium">{t('Git auto refresh')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t('Automatically fetch and refresh git status')}
             </p>
             <Switch checked={gitAutoFetchEnabled} onCheckedChange={setGitAutoFetchEnabled} />
@@ -170,7 +170,7 @@ export function GitSettings() {
         description={t('Settings for cloning remote Git repositories')}
       >
         <SettingsRow>
-          <span className="text-sm font-medium mt-2">{t('Base directory')}</span>
+          <span className="text-ui font-medium mt-2">{t('Base directory')}</span>
           <div className="space-y-1.5">
             <div className="flex gap-2">
               <Input
@@ -192,15 +192,15 @@ export function GitSettings() {
                 <FolderOpen className="h-4 w-4" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t('Base directory for cloned repositories. Leave empty to use ~/JYWAI/repos')}
             </p>
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Organized structure')}</span>
+          <span className="text-ui font-medium">{t('Organized structure')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t('Clone to organized structure (baseDir/host/owner/repo) or flat (baseDir/repo)')}
             </p>
             <Switch
@@ -210,16 +210,16 @@ export function GitSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium mt-2">{t('Repository domains')}</span>
+          <span className="text-ui font-medium mt-2">{t('Repository domains')}</span>
           <div className="space-y-1.5">
-            <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+            <div className="rounded-sm bg-fill-neutral px-3 py-2 text-ui">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-medium">{t('Repository domains')}</span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-6 px-2 text-xs"
+                  className="h-6 px-2 text-small"
                   onClick={() => setHostMappingDialogOpen(true)}
                 >
                   <Plus className="h-3 w-3 mr-1" />
@@ -228,15 +228,19 @@ export function GitSettings() {
               </div>
               <div className="space-y-1">
                 {gitClone.hostMappings.length === 0 ? (
-                  <div className="text-xs text-muted-foreground py-1">
+                  <div className="text-small text-muted-foreground py-1">
                     {t('No mappings configured')}
                   </div>
                 ) : (
                   gitClone.hostMappings.map((mapping) => (
                     <div key={mapping.pattern} className="flex items-center gap-2 group py-1">
-                      <span className="font-mono text-xs flex-1 truncate">{mapping.pattern}</span>
+                      <span className="font-mono text-small flex-1 truncate">
+                        {mapping.pattern}
+                      </span>
                       <span className="text-muted-foreground">→</span>
-                      <span className="font-mono text-xs flex-1 truncate">{mapping.dirname}</span>
+                      <span className="font-mono text-small flex-1 truncate">
+                        {mapping.dirname}
+                      </span>
                       <Button
                         type="button"
                         variant="ghost"
@@ -260,7 +264,7 @@ export function GitSettings() {
                 )}
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t('Host-to-directory mappings for organizing cloned repositories')}
             </p>
           </div>
@@ -305,7 +309,7 @@ export function GitSettings() {
                 </FieldDescription>
               </Field>
 
-              {mappingError && <div className="text-sm text-destructive">{mappingError}</div>}
+              {mappingError && <div className="text-ui text-destructive">{mappingError}</div>}
             </DialogPanel>
 
             <DialogFooter variant="bare">

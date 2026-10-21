@@ -10,6 +10,7 @@
 import { type LegacyAssetNoticeState, legacyAssetCount } from '@shared/legacyAssets';
 import { FolderOpen, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { LegacyAssetList, openLegacyAgentFolder } from './LegacyAssetNotice';
@@ -46,19 +47,17 @@ export function LegacyAssetsSettings({ repoPath }: { repoPath?: string }) {
 
   return (
     <SettingsSectionBlock
+      bare
       title={t('Items from the previous version')}
       description={t(
         'What the previous version used that this version no longer loads. This only lists them: nothing is changed or deleted.'
       )}
     >
       {error ? (
-        <div
-          role="alert"
-          className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive"
-        >
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1">{error}</span>
-        </div>
+        <Alert variant="error">
+          <TriangleAlert />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       ) : !state ? (
         <p className="text-ui text-muted-foreground">{t('Checking...')}</p>
       ) : (
@@ -70,7 +69,7 @@ export function LegacyAssetsSettings({ repoPath }: { repoPath?: string }) {
           ) : (
             <LegacyAssetList report={state.report} />
           )}
-          <p className="text-meta text-muted-foreground">
+          <p className="text-small text-muted-foreground">
             {state.report.workspace
               ? t('Project files were checked in {{path}}.', { path: state.report.workspace })
               : t('Open a workspace to also check its project files.')}
@@ -87,7 +86,7 @@ export function LegacyAssetsSettings({ repoPath }: { repoPath?: string }) {
               {t('Open agent folder')}
             </Button>
           )}
-          {openError && <p className="text-meta text-destructive">{openError}</p>}
+          {openError && <p className="text-small text-destructive">{openError}</p>}
         </div>
       )}
     </SettingsSectionBlock>

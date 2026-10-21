@@ -130,7 +130,7 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           placeholder={t('Search…')}
           aria-label={t('Search…')}
           className={cn(
-            'w-40 bg-transparent text-sm outline-none placeholder:opacity-50',
+            'w-40 bg-transparent text-ui outline-none placeholder:opacity-50',
             hasResults === false && searchTerm && 'text-red-400'
           )}
           style={{ color: fgColor }}
@@ -141,7 +141,7 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           type="button"
           onClick={() => setCaseSensitive(!caseSensitive)}
           className={cn(
-            'flex h-6 w-6 items-center justify-center rounded text-xs font-bold transition-colors',
+            'flex h-6 w-6 items-center justify-center rounded text-small font-bold transition-colors',
             caseSensitive ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
           )}
           style={{ color: fgColor }}
@@ -157,7 +157,7 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           type="button"
           onClick={() => setWholeWord(!wholeWord)}
           className={cn(
-            'flex h-6 w-6 items-center justify-center rounded text-xs font-bold transition-colors',
+            'flex h-6 w-6 items-center justify-center rounded text-small font-bold transition-colors',
             wholeWord ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
           )}
           style={{ color: fgColor }}
@@ -173,7 +173,7 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           type="button"
           onClick={() => setRegex(!regex)}
           className={cn(
-            'flex h-6 w-6 items-center justify-center rounded text-xs font-bold transition-colors',
+            'flex h-6 w-6 items-center justify-center rounded text-small font-bold transition-colors',
             regex ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
           )}
           style={{ color: fgColor }}

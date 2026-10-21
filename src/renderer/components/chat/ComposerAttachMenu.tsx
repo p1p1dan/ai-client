@@ -60,15 +60,8 @@ export function ComposerAttachMenu({ mode, disabled, onAttachFiles }: ComposerAt
       >
         <Plus className="size-3.5" />
       </MenuPrimitive.Trigger>
-      {/* Same paired radius override as the model menu: the shared popup's
-          hairline `::before` derives its radius from the popup's own, so
-          overriding one without the other leaves a 15px inner stroke inside a
-          12px frame — visible as a doubled corner. */}
-      <MenuPopup
-        align="start"
-        className="min-w-40 rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
-        side={composerPopupSide(mode)}
-      >
+      {/* Design system v2 §4.1: the popup keeps the coss Menu's own radius. */}
+      <MenuPopup align="start" className="min-w-40" side={composerPopupSide(mode)}>
         <MenuPrimitive.Item className={composerMenuItemClass()} onClick={onAttachFiles}>
           <Paperclip className="size-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{t('Attach files')}</span>

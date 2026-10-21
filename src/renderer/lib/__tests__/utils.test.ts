@@ -82,4 +82,11 @@ describe('cn with the home title token (decision 174)', () => {
     expect(cn('text-title', 'text-display')).toBe('text-display');
     expect(cn('text-display', 'text-section')).toBe('text-section');
   });
+
+  // Design system v2: text-small / text-heading are sizes, not colours.
+  it.each(['text-small', 'text-heading'])('keeps a colour next to %s, in either order', (size) => {
+    expect(cn('text-muted-foreground', size)).toBe(`text-muted-foreground ${size}`);
+    expect(cn(size, 'text-foreground')).toBe(`${size} text-foreground`);
+    expect(cn('text-ui', size)).toBe(size);
+  });
 });

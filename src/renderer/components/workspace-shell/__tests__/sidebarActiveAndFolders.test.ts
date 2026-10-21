@@ -235,7 +235,8 @@ describe('one list, no 「正在活动」 (decision 183 §1.1, §1.10)', () => {
     expect(container.querySelector('section p')).toBeNull();
     expect(container.querySelector('section.border-t')).toBeNull();
     expect(rows('Chat bound')).toHaveLength(1);
-    expect(rows('Chat bound')[0]?.className).toContain('bg-selection');
+    // Design system v2 §7.12: the selected step of the ghost fill.
+    expect(rows('Chat bound')[0]?.className).toContain('bg-fill-ghost-selected');
     expect(rows('Chat fresh')).toHaveLength(1);
   });
 
@@ -252,9 +253,14 @@ describe('one list, no 「正在活动」 (decision 183 §1.1, §1.10)', () => {
     const [running] = rows('Chat running');
     const [waiting] = rows('Chat waiting');
     const [idle] = rows('Chat idle-bound');
-    expect(running?.querySelector('[role="status"][aria-label="Running"]')).toBeTruthy();
-    expect(waiting?.querySelector('[role="img"][aria-label="Waiting for an answer"]')).toBeTruthy();
-    expect(waiting?.querySelector('[role="status"]')).toBeNull();
+    // Design system v2 §6: both drawn by StatusIcon, told apart by its state.
+    expect(running?.querySelector('[data-status="running"][aria-label="Running"]')).toBeTruthy();
+    expect(
+      waiting?.querySelector(
+        '[role="img"][data-status="waiting"][aria-label="Waiting for an answer"]'
+      )
+    ).toBeTruthy();
+    expect(waiting?.querySelector('[data-status="running"]')).toBeNull();
     expect(idle?.querySelector('[title="Running in the background"]')).toBeTruthy();
   });
 
@@ -323,8 +329,9 @@ describe('rows (decision 183 §1.4, §1.5)', () => {
     // The absolute time stays in the tooltip.
     expect(open?.getAttribute('title')?.split('\n')[2]).toMatch(/^Updated \d{4}-\d{2}-\d{2}/);
     for (const [row, fill] of [
-      [open, 'bg-selection'],
-      [other, 'bg-hover'],
+      // Design system v2 §7.12: the two steps of the ghost fill.
+      [open, 'bg-fill-ghost-selected'],
+      [other, 'bg-fill-ghost-hover'],
     ] as const) {
       expect(row?.className).toContain('relative');
       const actions = row?.querySelector<HTMLElement>('[data-slot="sidebar-row-actions"]');
@@ -400,16 +407,17 @@ describe('the group header (decision 183 §1.3, §1.6)', () => {
     expect(header.textContent).toBe('alpha');
     expect(header.getAttribute('title')).toBe('alpha\nMain branch: main');
     expect(header.getAttribute('aria-expanded')).toBe('true');
-    // The reference's grey label: 400 / muted, the soft ink on hover, no
-    // folder icon. Issue #14 (decision 186) dropped it a step below the rows
-    // to 13px.
-    expect(header.className).toContain('text-group-label');
-    expect(header.className).toContain('text-muted-foreground');
+    // Design system v2 §7.12: the group label is `text-small`, 500, the faint
+    // ink, the soft ink on hover, no folder icon — a step below the rows
+    // (issue #14, decision 186).
+    expect(header.className).toContain('text-small');
+    expect(header.className).toContain('font-medium');
+    expect(header.className).toContain('text-foreground-faint');
     expect(header.className).toContain('group-hover:text-foreground-soft');
     expect(header.className).not.toContain('font-semibold');
     expect(header.querySelector('.text-folder')).toBeNull();
     // No hover fill on the header row.
-    expect(header.parentElement?.className).not.toContain('hover:bg-hover');
+    expect(header.parentElement?.className).not.toContain('hover:bg-fill-ghost-hover');
   });
 
   it('shows ▾ only on hover while open, and ▸ always while folded', async () => {
@@ -465,11 +473,15 @@ describe('a folded group summarises its rows (decision 183 §2.2)', () => {
     await act(async () => folderHeader('alpha').click());
     const marks = summary() as HTMLElement;
     expect(marks, 'the folded header summarises').toBeTruthy();
-    expect(marks.querySelector('[role="status"][aria-label="2 chats running"]')).toBeTruthy();
+    // Design system v2 §6: the run marks are StatusIcon's running spinner
+    // and its clay waiting dot.
+    expect(
+      marks.querySelector('[data-status="running"][aria-label="2 chats running"]')
+    ).toBeTruthy();
     expect(marks.textContent).toBe('2');
-    expect(marks.querySelector('[aria-label="A chat is waiting for you"]')?.className).toContain(
-      'bg-warning'
-    );
+    expect(
+      marks.querySelector('[aria-label="A chat is waiting for you"]')?.getAttribute('data-status')
+    ).toBe('waiting');
     expect(
       marks.querySelector('[aria-label="A chat failed while you were away"]')?.className
     ).toContain('bg-destructive');
@@ -683,20 +695,20 @@ describe('the top of the panel (decision 183 §1.10, §2.1)', () => {
     const groupNode = container.querySelector<HTMLElement>('[data-slot="input-group"]');
     const classes = new Set(groupNode?.className.split(/\s+/));
     const FOCUS = 'has-[input:focus-visible,textarea:focus-visible]';
-    // Resting: transparent in light and dark, a --border line, no shadow, no
-    // inner shade (the ::before carrying it is removed), rounded-sm, h-8 (decision 188).
+    // Design system v2 §7.12: resting, a FILLED field — --fill-neutral in light
+    // and dark, a transparent line, no shadow, no inner shade (the ::before
+    // carrying it is removed), rounded-sm, h-8 (decision 188).
     for (const present of [
       'h-8',
       'rounded-sm',
       'border',
-      'border-border',
-      'bg-transparent',
-      'dark:bg-transparent',
+      'border-transparent',
+      'bg-fill-neutral',
+      'dark:bg-fill-neutral',
       'shadow-none',
       'before:hidden',
-      // Focused: the page fill, a muted line, no ring.
-      `${FOCUS}:bg-background`,
-      `${FOCUS}:border-muted-foreground`,
+      // Focused: the strong border line, no ring.
+      `${FOCUS}:border-border-strong`,
       `${FOCUS}:ring-0`,
       '[&_input]:placeholder:text-muted-foreground',
     ]) {

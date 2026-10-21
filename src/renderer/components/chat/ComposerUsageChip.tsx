@@ -40,18 +40,18 @@ export function ComposerUsageDetails({ usage, tools }: { usage: PiUsagePayload; 
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="text-meta text-muted-foreground">{t('Context window')}</div>
+          <div className="text-small text-muted-foreground">{t('Context window')}</div>
           <div className="font-semibold">
             {t('{{count}} tokens remaining', { count: formatTokenTotal(context.freeTokens) })}
           </div>
         </div>
         <div className="shrink-0 text-right tabular-nums">
           <div className="text-title font-semibold">{Math.round(100 - context.percent)}%</div>
-          <div className="text-meta text-muted-foreground">{t('Remaining')}</div>
+          <div className="text-small text-muted-foreground">{t('Remaining')}</div>
         </div>
       </div>
       <div className="space-y-1">
-        <div className="flex justify-between gap-2 text-meta">
+        <div className="flex justify-between gap-2 text-small">
           <span>{t('Context used')}</span>
           <span className="tabular-nums">
             {formatTokenTotal(context.usedTokens)} / {formatTokenTotal(context.contextWindow)} ·{' '}
@@ -64,21 +64,21 @@ export function ComposerUsageDetails({ usage, tools }: { usage: PiUsagePayload; 
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={context.percent}
-          className="h-1.5 overflow-hidden rounded-full bg-input"
+          className="h-1.5 overflow-hidden rounded-full bg-fill-neutral"
         >
-          <div className="h-full bg-status-running" style={{ width: `${context.percent}%` }} />
+          <div className="h-full bg-muted-foreground" style={{ width: `${context.percent}%` }} />
         </div>
       </div>
-      <div className="border-t border-border pt-2">
-        <p className="mb-2 text-meta font-medium">{t('Latest settled model request')}</p>
+      <div className="border-t border-border-soft pt-2">
+        <p className="mb-2 text-small font-medium">{t('Latest settled model request')}</p>
         {/* T125: a request cut after it started streaming has no reported
             cost; its zeros would read as "free". */}
         {usage.unreported ? (
-          <p className="text-meta text-muted-foreground" data-usage-unreported>
+          <p className="text-small text-muted-foreground" data-usage-unreported>
             {t('Usage for this request is unknown')}
           </p>
         ) : (
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-meta">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-small">
             {rows.map(([label, value]) => (
               <div key={label} className="flex min-w-0 justify-between gap-2">
                 <dt className="text-muted-foreground">{label}</dt>
@@ -89,7 +89,7 @@ export function ComposerUsageDetails({ usage, tools }: { usage: PiUsagePayload; 
         )}
       </div>
       {usage.session && (
-        <div className="flex justify-between gap-2 border-t border-border pt-2 text-meta">
+        <div className="flex justify-between gap-2 border-t border-border-soft pt-2 text-small">
           <span>{t('Conversation total since load')}</span>
           <span className="shrink-0 tabular-nums">
             {formatTokenTotal(usage.session.totalTokens)} tokens · {usage.session.turns}{' '}
@@ -97,7 +97,7 @@ export function ComposerUsageDetails({ usage, tools }: { usage: PiUsagePayload; 
           </span>
         </div>
       )}
-      <div className="space-y-1 border-t border-border pt-2 text-meta">
+      <div className="space-y-1 border-t border-border-soft pt-2 text-small">
         <p className="font-medium">{t('Tools in current turn')}</p>
         <p className="break-words text-muted-foreground">
           {tools || t('No tool calls in this turn')}
@@ -142,7 +142,9 @@ export function ComposerUsageChip({ sessionId }: { sessionId: string }) {
       <PopoverTrigger
         aria-label={t('Context used')}
         title={t('Context used')}
-        className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-sm px-1.5 text-sm text-muted-foreground tabular-nums hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring data-popup-open:bg-hover data-popup-open:text-foreground"
+        // Design system v2 §7.9: a toolbar chip on the `text-ui` tier, the
+        // composer's ghost states.
+        className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-sm px-1.5 text-ui text-muted-foreground tabular-nums transition-colors duration-150 ease-out hover:bg-fill-ghost-hover hover:text-foreground focus-visible:bg-fill-ghost-hover focus-visible:text-foreground focus-ring data-popup-open:bg-fill-ghost-selected data-popup-open:text-foreground"
       >
         {`${Math.round(occupancy.percent)}%`}
       </PopoverTrigger>

@@ -738,7 +738,7 @@ export function AddRepositoryDialog({
                       <span className="text-destructive">{t('Path is not a directory')}</span>
                     )}
                     {!isValidating && pathValidation?.isDirectory && (
-                      <span className="text-green-600">✓ {t('Valid directory')}</span>
+                      <span className="text-success">✓ {t('Valid directory')}</span>
                     )}
                     {!localPath && !isValidating && t('Select a local directory on your computer.')}
                   </FieldDescription>
@@ -761,7 +761,7 @@ export function AddRepositoryDialog({
                       <span className="ml-2 text-destructive">{t('Invalid URL format')}</span>
                     )}
                     {remoteUrl && isValidUrl && (
-                      <span className="ml-2 text-green-600">✓ {t('Valid URL')}</span>
+                      <span className="ml-2 text-success">✓ {t('Valid URL')}</span>
                     )}
                   </FieldDescription>
                 </Field>
@@ -803,7 +803,7 @@ export function AddRepositoryDialog({
                 {isCloning && (
                   <div className="space-y-2">
                     <Progress value={cloneProgress?.progress || 0} className="h-2" />
-                    <div className="flex justify-between text-xs text-muted-foreground">
+                    <div className="flex justify-between text-small text-muted-foreground">
                       <span className="flex items-center gap-2">
                         <Loader2 className="h-3 w-3 animate-spin" />
                         {getProgressLabel()}
@@ -814,7 +814,7 @@ export function AddRepositoryDialog({
                 )}
 
                 {targetDir && repoName && !isCloning && (
-                  <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                  <div className="rounded-md bg-fill-neutral px-3 py-2 text-ui text-muted-foreground">
                     <span className="font-medium">{t('Full path')}:</span>
                     <code className="ml-1 font-mono text-code break-all">
                       {targetDir}
@@ -906,7 +906,7 @@ export function AddRepositoryDialog({
                 </Field>
 
                 {sshRepoPath && selectedProfile && (
-                  <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                  <div className="rounded-md bg-fill-neutral px-3 py-2 text-ui text-muted-foreground">
                     <div className="font-medium text-foreground">{selectedProfile.name}</div>
                     <div>{selectedProfile.sshTarget}</div>
                     <div className="mt-1 break-all">
@@ -919,7 +919,7 @@ export function AddRepositoryDialog({
             </Tabs>
 
             {error && (
-              <div className="rounded-lg border border-destructive/24 bg-destructive/6 px-3 py-2 text-sm text-destructive">
+              <div className="rounded-lg border border-destructive/24 bg-destructive/6 px-3 py-2 text-ui text-destructive">
                 {error}
               </div>
             )}
@@ -985,7 +985,7 @@ export function AddRepositoryDialog({
 
           <DialogPanel className="space-y-4">
             {sshRoots.length > 0 && (
-              <div className="flex flex-wrap gap-2 rounded-xl border bg-muted/20 p-3">
+              <div className="flex flex-wrap gap-2 rounded-md border border-border-soft bg-surface-2 p-3">
                 {sshRoots.map((root) => (
                   <Button
                     key={root}
@@ -1007,10 +1007,10 @@ export function AddRepositoryDialog({
               </div>
             )}
 
-            <div className="space-y-3 rounded-xl border bg-muted/10 p-3">
+            <div className="space-y-3 rounded-md border border-border-soft bg-surface-2 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-muted-foreground">
+                  <p className="text-small font-medium text-muted-foreground">
                     {t('Current location')}
                   </p>
                   <p className="truncate font-mono text-code text-foreground">
@@ -1049,7 +1049,7 @@ export function AddRepositoryDialog({
 
               <div className="max-h-72 overflow-y-auto rounded-lg border bg-background/80">
                 {isLoadingEntries ? (
-                  <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-muted-foreground">
+                  <div className="flex items-center justify-center gap-2 px-3 py-8 text-ui text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     {t('Loading folders...')}
                   </div>
@@ -1058,20 +1058,20 @@ export function AddRepositoryDialog({
                     <button
                       key={entry.path}
                       type="button"
-                      className="flex w-full items-center gap-2 border-b px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-accent/50"
+                      className="flex w-full items-center gap-2 border-b px-3 py-2 text-left text-ui transition-colors last:border-b-0 hover:bg-fill-ghost-hover"
                       disabled={isAddingRemoteRepo}
                       onClick={() => {
                         setSshBrowserPath(entry.path);
                         setError(null);
                       }}
                     >
-                      <FolderOpen className="h-4 w-4 shrink-0 text-yellow-500" />
+                      <FolderOpen className="h-4 w-4 shrink-0 text-folder" />
                       <span className="min-w-0 flex-1 truncate">{entry.name}</span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                     </button>
                   ))
                 ) : (
-                  <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  <div className="px-3 py-8 text-center text-ui text-muted-foreground">
                     {sshBrowserPath
                       ? t('This folder has no subfolders')
                       : t('Choose a root folder to start browsing')}
@@ -1080,7 +1080,7 @@ export function AddRepositoryDialog({
               </div>
             </div>
 
-            <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+            <div className="rounded-md bg-fill-neutral px-3 py-2 text-ui text-muted-foreground">
               {t(
                 'The selected directory will be stored as a repository bound to this SSH profile.'
               )}

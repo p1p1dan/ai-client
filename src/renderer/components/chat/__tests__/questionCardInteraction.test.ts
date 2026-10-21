@@ -286,7 +286,8 @@ it('renders the question header chip and words both cards in the semibold title 
     // D22 — the chip exists, as its own element rather than glued to the text.
     const chip = spansWith('Storage')[0];
     expect(chip).toBeDefined();
-    expect(chip.className).toContain('text-meta');
+    // Design system v2: the chip is a `Badge` on the small tier.
+    expect(chip.className).toContain('text-small');
     expect(chip.textContent).toBe('Storage');
 
     // D23 — the question title. The chip shares its line, so the title is
@@ -321,7 +322,11 @@ it('renders the question header chip and words both cards in the semibold title 
         })
       )
     );
-    expect(spansWith('Permission')[0]?.className).toContain('font-semibold');
+    // Design system v2 §7.6: the title is the dock card head's title slot.
+    const cardTitle = [
+      ...container.querySelectorAll<HTMLElement>('[data-slot="dock-card-title"]'),
+    ].find((el) => el.textContent === 'Permission');
+    expect(cardTitle?.className).toContain('font-semibold');
     const permissionTitle = container.querySelector<HTMLParagraphElement>('p.text-ui');
     expect(permissionTitle).not.toBeNull();
     expect(permissionTitle?.className).toContain('font-semibold');

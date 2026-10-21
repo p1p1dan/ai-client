@@ -662,7 +662,7 @@ export function WorkspaceShell({
 
       {fileDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-md border-2 border-primary border-dashed bg-primary/5">
-          <span className="rounded-md bg-card px-3 py-1.5 text-sm text-foreground shadow-sm">
+          <span className="rounded-md bg-surface-3 px-3 py-1.5 text-ui text-foreground elev-md">
             {t('Add Repository')}
           </span>
         </div>

@@ -83,8 +83,12 @@ describe('P1-11 the terminal shares the right column with the files', () => {
 
   it('wears the file tab chrome and names the folder under it (prototype scene G)', () => {
     const column = code(join(SHELL_DIR, 'center/TerminalColumn.tsx'));
-    expect(column).toContain('flex h-10 shrink-0 items-start border-b');
-    expect(column).toContain('absolute inset-x-0 top-0 h-0.5 bg-primary');
+    // Design system v2 §7.12: the strip is the canvas with one hairline below;
+    // the selected tab is frameless with a 2px clay line along its foot.
+    expect(column).toContain(
+      'flex h-10 shrink-0 items-start border-b border-border-soft bg-surface-1'
+    );
+    expect(column).toContain('absolute inset-x-0 bottom-0 h-0.5 bg-primary');
     expect(column).toContain("t('Close terminal')");
     expect(column).toContain("t('Session directory')");
     // Paths are mono through the D25 primitive, never a raw `font-mono`.
@@ -96,8 +100,9 @@ describe('P1-11 the terminal shares the right column with the files', () => {
     const bar = code(join(SHELL_DIR, 'SessionBar.tsx'));
     // The prototype's second round: labels ran over the right column's tab bar
     // on a wide window. The bar is a size container and clips at its edge.
+    // Design system v2 §7.12: the bar is the canvas (--surface-1), one hairline below.
     expect(bar).toContain(
-      '@container flex h-9 shrink-0 items-center gap-2 overflow-hidden border-b bg-card/40 px-2'
+      '@container flex h-9 shrink-0 items-center gap-2 overflow-hidden border-b border-border-soft bg-surface-1 px-2'
     );
     expect(bar).toContain("const BAR_LABEL_CLASS = 'max-xl:hidden @max-2xl:hidden';");
     // Every labelled button on the bar folds the same way.
@@ -115,7 +120,8 @@ describe('the rail opens level with the panel content (decision 183, was U27)', 
   it('starts 14px down, level with 「新建对话」 (decision 188), not below a title-row spacer', () => {
     const dock = code(join(SHELL_DIR, 'LeftDock.tsx'));
     expect(dock).toContain(
-      'className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card pt-3.5 pb-2"'
+      // Design system v2 §7.12: the rail is the sidebar's --surface-0.
+      'className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r border-border-soft bg-surface-0 pt-3.5 pb-2"'
     );
     expect(dock).not.toContain('<div aria-hidden className="h-9 shrink-0" />');
   });

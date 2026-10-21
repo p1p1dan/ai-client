@@ -17,6 +17,7 @@ import {
   FileText,
   History,
   Image as ImageIcon,
+  Info,
   KeyRound,
   Lock,
   PackageSearch,
@@ -41,6 +42,7 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { useSignInRequest } from '@/hooks/useSignInRequest';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -76,6 +78,7 @@ import {
   shouldRenderMarkdown,
 } from './chatMarkdownPolicy';
 import {
+  CHAT_PROSE_LEADING,
   chatTurnClass,
   readingColumnSpacingClass,
   sessionFailureTitleClass,
@@ -909,7 +912,7 @@ export function MessageTimeline({
                         disabled={loadingOlderHistory || nextTurnStatus !== 'idle'}
                         onClick={() => void loadOlderHistory()}
                       >
-                        {loadingOlderHistory ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw />}
+                        {loadingOlderHistory ? <Spinner className="size-3.5" /> : <RefreshCw />}
                         {t('Load earlier messages')}
                       </Button>
                     </div>
@@ -924,7 +927,7 @@ export function MessageTimeline({
                       className="flex items-center gap-2 text-ui text-muted-foreground"
                       role="status"
                     >
-                      <Spinner className="h-3.5 w-3.5" />
+                      <Spinner className="size-3.5" />
                       {t('Loading this conversation…')}
                     </p>
                   ) : historyNotice.kind === 'empty' && pendingSendStatus == null ? (
@@ -1039,10 +1042,10 @@ export function MessageTimeline({
                 landed as P-06. The failed turn gets its own short head label
                 instead (`deriveTurnStatus` -> 'Failed'). */}
                   {status === 'failed' && (
-                    <div
-                      className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-meta"
-                      role="alert"
-                    >
+                    // Design system v2 §7.7: the session-failed card is the one
+                    // notice (`Alert`), not a hand-written red box beside it.
+                    <Alert variant="error" role="alert">
+                      <TriangleAlert />
                       {/* T-30 P-06: only the title carries weight — body and hint
                     fall back to muted-foreground so a session-level failure
                     doesn't stack a second red block on top of the already-red
@@ -1055,72 +1058,69 @@ export function MessageTimeline({
                     a reason line and a next step under it. The user's report
                     was 「停下了很莫名其妙」, and the fix for that is naming what
                     happened, not repeating that something did. */}
-                      <p className={sessionFailureTitleClass()}>{t(failure.title)}</p>
-                      {lastError && isAuthRequiredError(lastError) ? (
-                        // D47 S5 §3: spawn-gate rejection (resolveSpawnGateDecision,
-                        // @shared/authGate) — retrying won't help without a fresh
-                        // login, so this replaces the raw diagnostic + Retry hint
-                        // with mapped copy and a re-login action instead.
-                        <>
-                          <p className="mt-1 text-muted-foreground">
-                            {t(AUTH_REQUIRED_ERROR_VIEW.message)}
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-2 h-6 text-ui"
-                            onClick={() => void requestSignIn()}
-                            disabled={signInRequesting}
-                          >
-                            {signInRequesting ? <Spinner className="h-3.5 w-3.5" /> : null}
-                            {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
-                          </Button>
-                        </>
-                      ) : lastError && isModelMissingError(lastError) ? (
-                        // H/21 P0: the session's recorded model is not in this app's
-                        // model directory (H/19 U1 gave the app its own agent dir).
-                        // Same reasoning as the auth branch above — resending cannot
-                        // work until the model exists here, so the generic "可从下方
-                        // 输入框重发上条消息" hint would be wrong, and the only useful
-                        // affordance is the migration that puts the model there.
-                        <>
-                          <p className="mt-1 text-muted-foreground">
-                            {t(MODEL_MISSING_ERROR_VIEW.message)}
-                          </p>
-                          <p className="mt-1 text-muted-foreground">
-                            {t(MODEL_MISSING_ERROR_VIEW.hint)}
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-2 h-6 text-ui"
-                            onClick={() =>
-                              requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)
-                            }
-                          >
-                            {t(MODEL_MISSING_ERROR_VIEW.actionLabel)}
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          {/* 2026-09-21: WHY it stopped, before the raw sentence that
+                      <AlertTitle className={sessionFailureTitleClass()}>
+                        {t(failure.title)}
+                      </AlertTitle>
+                      <AlertDescription className="items-start gap-1">
+                        {lastError && isAuthRequiredError(lastError) ? (
+                          // D47 S5 §3: spawn-gate rejection (resolveSpawnGateDecision,
+                          // @shared/authGate) — retrying won't help without a fresh
+                          // login, so this replaces the raw diagnostic + Retry hint
+                          // with mapped copy and a re-login action instead.
+                          <>
+                            <p>{t(AUTH_REQUIRED_ERROR_VIEW.message)}</p>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              className="-ml-2"
+                              onClick={() => void requestSignIn()}
+                              disabled={signInRequesting}
+                            >
+                              {signInRequesting ? <Spinner className="size-3.5" /> : null}
+                              {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
+                            </Button>
+                          </>
+                        ) : lastError && isModelMissingError(lastError) ? (
+                          // H/21 P0: the session's recorded model is not in this app's
+                          // model directory (H/19 U1 gave the app its own agent dir).
+                          // Same reasoning as the auth branch above — resending cannot
+                          // work until the model exists here, so the generic "可从下方
+                          // 输入框重发上条消息" hint would be wrong, and the only useful
+                          // affordance is the migration that puts the model there.
+                          <>
+                            <p>{t(MODEL_MISSING_ERROR_VIEW.message)}</p>
+                            <p>{t(MODEL_MISSING_ERROR_VIEW.hint)}</p>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              className="-ml-2"
+                              onClick={() =>
+                                requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)
+                              }
+                            >
+                              {t(MODEL_MISSING_ERROR_VIEW.actionLabel)}
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            {/* 2026-09-21: WHY it stopped, before the raw sentence that
                         says what the provider said. The two are different
                         kinds of fact and the card needs both — the reason is
                         what a reader can act on, the sentence is the evidence
                         they forward when they ask for help. */}
-                          <p className="mt-1 text-muted-foreground">{t(failure.reason)}</p>
-                          {/* P1-3c: an engine-process sentence ("Worker exited …")
+                            <p>{t(failure.reason)}</p>
+                            {/* P1-3c: an engine-process sentence ("Worker exited …")
                         is not evidence a user can forward; the reason says it. */}
-                          {lastError && failedCardShowsError && failure.showsDetail && (
-                            // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
-                            // content family as ChatComposer's destructive banner — mono.
-                            // Round-10 ③: suppressed when the latest error notice above
-                            // already prints this exact failure (see failedCardShowsError).
-                            <p className="mt-1 select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
-                              {lastError}
-                            </p>
-                          )}
-                          {/* F3 fast-fix batch, superseded 2026-09-21: this used to be
+                            {lastError && failedCardShowsError && failure.showsDetail && (
+                              // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
+                              // content family as ChatComposer's destructive banner — mono.
+                              // Round-10 ③: suppressed when the latest error notice above
+                              // already prints this exact failure (see failedCardShowsError).
+                              <p className="select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
+                                {lastError}
+                              </p>
+                            )}
+                            {/* F3 fast-fix batch, superseded 2026-09-21: this used to be
                         affordance-neutral on purpose — "whether this failure
                         armed the composer's Retry or restored the draft is
                         decided by queueRelease's outcome, so the card must not
@@ -1136,43 +1136,42 @@ export function MessageTimeline({
                         reason re-sending cannot fix), the card says what to do
                         in words instead of offering the button. What is gone
                         is the case where it did nothing at all. */}
-                          {canContinueSession(failure, resumeMessageId != null) ? (
-                            // T135 / decision 045: retries the failed turn itself
-                            // (no second copy of the prompt), and only once the
-                            // failure has settled — see `retryLastTurn.ts`.
-                            // Decision 140: a failure retrying usually repeats
-                            // keeps its hint beside a button that says so.
-                            <>
-                              {failure.hintWithContinue && (
-                                <p className="mt-1 text-muted-foreground">{t(failure.hint)}</p>
-                              )}
-                              <FailureContinueButton
-                                blockedReason={continueBlockedReason({
-                                  failureSettled,
-                                  sendInFlight: sendStatus != null,
-                                })}
-                                label={failure.continueLabel}
-                                onContinue={() =>
-                                  resumeMessageId && requestContinue(sessionId, resumeMessageId)
-                                }
-                              />
-                            </>
-                          ) : (
-                            <p className="mt-1 text-muted-foreground">{t(failure.hint)}</p>
-                          )}
-                          {pendingPermissions.some((item) => item.sessionId === sessionId) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="mt-2 h-6 text-ui"
-                              onClick={() => void stopChatSession(sessionId)}
-                            >
-                              {t('Stop')}
-                            </Button>
-                          )}
-                        </>
-                      )}
-                    </div>
+                            {canContinueSession(failure, resumeMessageId != null) ? (
+                              // T135 / decision 045: retries the failed turn itself
+                              // (no second copy of the prompt), and only once the
+                              // failure has settled — see `retryLastTurn.ts`.
+                              // Decision 140: a failure retrying usually repeats
+                              // keeps its hint beside a button that says so.
+                              <>
+                                {failure.hintWithContinue && <p>{t(failure.hint)}</p>}
+                                <FailureContinueButton
+                                  blockedReason={continueBlockedReason({
+                                    failureSettled,
+                                    sendInFlight: sendStatus != null,
+                                  })}
+                                  label={failure.continueLabel}
+                                  onContinue={() =>
+                                    resumeMessageId && requestContinue(sessionId, resumeMessageId)
+                                  }
+                                />
+                              </>
+                            ) : (
+                              <p>{t(failure.hint)}</p>
+                            )}
+                            {pendingPermissions.some((item) => item.sessionId === sessionId) && (
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                className="-ml-2"
+                                onClick={() => void stopChatSession(sessionId)}
+                              >
+                                {t('Stop')}
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </AlertDescription>
+                    </Alert>
                   )}
                   {/* decision 040: a run that paused at the turn ceiling COMPLETED —
                 its wrap-up summary is the last reply above — so this is a
@@ -1206,11 +1205,14 @@ export function MessageTimeline({
             <button
               type="button"
               onClick={jumpToBottom}
-              className="absolute right-3 bottom-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary/80 text-primary-foreground shadow-lg transition-all hover:scale-105 hover:bg-primary active:scale-95"
+              // Design system v2 §1 rule 7 / §5: a floating control in the
+              // neutral inks (the clay is for primary actions), the popover
+              // surface and its elevation; no scale bounce.
+              className="absolute right-3 bottom-3 flex size-8 items-center justify-center rounded-full bg-surface-3 text-muted-foreground elev-popover transition-colors duration-150 ease-out hover:text-foreground focus-ring"
               title={t('Scroll to bottom')}
               aria-label={t('Scroll to bottom')}
             >
-              <ArrowDown className="h-4 w-4" />
+              <ArrowDown className="size-4" />
             </button>
           )}
         </div>
@@ -1277,7 +1279,7 @@ function LegacyMigrationProgressNotice() {
     <Alert variant="info" role="status">
       <Spinner />
       <AlertTitle className="min-w-0 truncate">{t(LEGACY_MIGRATION_PROGRESS_TITLE)}</AlertTitle>
-      <AlertDescription className="text-meta">
+      <AlertDescription>
         <p className="break-words">{t(LEGACY_MIGRATION_PROGRESS_DETAIL)}</p>
       </AlertDescription>
     </Alert>
@@ -1372,7 +1374,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
       {/* Every field on `view` is a dictionary key, not display text — the
           module that builds it is a plain `.ts` with no translator in scope. */}
       <AlertTitle className="min-w-0 truncate">{t(view.title)}</AlertTitle>
-      <AlertDescription className="gap-1 text-meta">
+      <AlertDescription className="gap-1">
         <p className="break-words">{t(view.guidance)}</p>
         {/* dsh-rebase P1-9e: what stopped the move, and the code Main gave it
             (stage and code only — never a path), for anyone reporting it. */}
@@ -1417,10 +1419,10 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
         )}
         {view.message && (
           <Collapsible open={detailOpen} onOpenChange={setDetailOpen}>
-            <CollapsibleTrigger className="flex h-6 items-center gap-1 rounded-sm hover:text-foreground">
+            <CollapsibleTrigger className="flex h-6 items-center gap-1 rounded-sm hover:text-foreground focus-ring">
               <ChevronRight
                 className={cn(
-                  'h-3.5 w-3.5 shrink-0 transition-transform',
+                  'size-3.5 shrink-0 transition-transform duration-150',
                   detailOpen && 'rotate-90'
                 )}
               />
@@ -1439,12 +1441,11 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
           {retryControl.visible && (
             <Button
               size="xs"
-              variant="outline"
-              className="h-6"
+              variant="ghost"
               disabled={retryControl.disabled}
               onClick={() => void handleRetry()}
             >
-              <RefreshCw className={cn(retrying && 'animate-spin')} />
+              {retrying ? <Spinner /> : <RefreshCw />}
               {/* Decision 144 (decision 123's known issue): the guidance above
                   says 「重试」, so the button must too. */}
               {t('Retry')}
@@ -1456,12 +1457,11 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
           {takeoverControl.visible && view.forceTakeover && (
             <Button
               size="xs"
-              variant="outline"
-              className="h-6"
+              variant="ghost"
               disabled={takeoverControl.disabled}
               onClick={() => void handleForceTakeover()}
             >
-              <Lock className={cn(takingOver && 'animate-pulse')} />
+              {takingOver ? <Spinner /> : <Lock />}
               {t(view.forceTakeover.label)}
             </Button>
           )}
@@ -1472,8 +1472,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
           {view.recovery && (
             <Button
               size="xs"
-              variant="outline"
-              className="h-6"
+              variant="ghost"
               onClick={() => requestSettings(view.recovery?.settingsCategory)}
             >
               <ArrowRightLeft />
@@ -1543,13 +1542,10 @@ function UserBubble({ message }: { message: ChatMessage }) {
             {message.attachments.map((attachment, index) => (
               <span
                 key={`${message.id}-attachment-${index}`}
-                // D3-c: `border-border` measured ≈1.36 on the old `--card`
-                // face but only 1.208 / 1.115 on `--accent` — invisible in
-                // dark. The chip follows the bubble's own edge onto `--input`
-                // (1.350 / 1.322). Its `bg-muted/50` fill stays as it was: the
-                // chip is shaped by its edge and icon, not by its fill.
+                // Design system v2 §1 rule 1 (supersedes D3-c's edge): a tag
+                // inside the tinted bubble is one step deeper fill, no edge.
                 className={cn(
-                  'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-input bg-muted/50 px-1.5 text-meta',
+                  'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs bg-fill-ghost-selected px-1.5 text-small',
                   ink
                 )}
               >
@@ -1577,18 +1573,21 @@ function UserBubble({ message }: { message: ChatMessage }) {
           {textBlocks.map((block) => (
             <p
               key={block.id}
-              className={cn('whitespace-pre-wrap break-words text-chat-body leading-relaxed', ink)}
+              className={cn(
+                `whitespace-pre-wrap break-words text-chat-body ${CHAT_PROSE_LEADING}`,
+                ink
+              )}
             >
               {block.text}
             </p>
           ))}
         </div>
         {pending && (
-          <div className="mt-1 flex items-center justify-end gap-1 text-meta text-muted-foreground">
+          <div className="mt-1 flex items-center justify-end gap-1 text-small text-muted-foreground">
             {awaitingDelivery ? (
               <Clock3 className="size-3 shrink-0" aria-hidden />
             ) : (
-              <Spinner className="size-3 shrink-0" />
+              <StatusIcon status="running" />
             )}
             <span
               title={awaitingDelivery ? t('Joins the running turn at its next step') : undefined}
@@ -1638,7 +1637,7 @@ function SupersededSummaryRow({ message }: { message: ChatMessage }) {
   const [open, setOpen] = useState(false);
   return (
     <Collapsible open={open} onOpenChange={setOpen} data-testid="superseded-summary">
-      <CollapsibleTrigger className="flex h-7 min-w-0 items-center gap-1 text-meta text-muted-foreground hover:text-foreground">
+      <CollapsibleTrigger className="flex h-7 min-w-0 items-center gap-1 rounded-xs text-small text-muted-foreground hover:text-foreground focus-ring">
         <ChevronRight
           className={cn('size-3.5 shrink-0 transition-transform duration-150', open && 'rotate-90')}
         />
@@ -1694,43 +1693,55 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
 
   if (summaryRow && superseded) return <SupersededSummaryRow message={message} />;
 
-  return (
-    <Alert variant={isError ? 'error' : 'default'} role={isError ? 'alert' : 'status'}>
-      <AlertDescription>
-        {message.blocks.map((block, index) =>
-          block.type === 'text' ? (
-            <p
-              key={block.id}
-              className="select-text whitespace-pre-wrap text-chat-body text-foreground"
-            >
-              {/* D47 S5 §3: swap the raw spawn-gate rejection text for mapped
+  // Design system v2 §7.7: a system notice that asks for nothing (a context
+  // summary, the imported-history note) is a frameless light row, like DSH's
+  // notice row; only an error -- something to act on or explain -- is an Alert.
+  const ink = isError ? 'text-foreground' : 'text-muted-foreground';
+  const paragraphs = message.blocks.map((block, index) =>
+    block.type === 'text' ? (
+      <p key={block.id} className={cn('select-text whitespace-pre-wrap text-chat-body', ink)}>
+        {/* D47 S5 §3: swap the raw spawn-gate rejection text for mapped
                   copy in-place — same paragraph, same class, so this
                   stays the one "notice body" surface T-29 pinned (see the
                   wiring test's exact-count assertion on this class string). */}
-              {authRequired
-                ? t(AUTH_REQUIRED_ERROR_VIEW.message)
-                : modelMissing
-                  ? t(MODEL_MISSING_ERROR_VIEW.message)
-                  : // T023: a `notice` marks this paragraph as copy the APP
-                    // wrote (today: the imported-history banner), so it
-                    // follows the language setting like every other label.
-                    // Without one, `text` is transcript content and is
-                    // printed exactly as it arrived.
-                    block.notice
-                    ? t(block.notice.key, block.notice.params)
-                    : summaryRow && index === 0
-                      ? localizeContextSummaryTitle(block.text ?? '', t)
-                      : block.text}
-            </p>
-          ) : null
-        )}
+        {authRequired
+          ? t(AUTH_REQUIRED_ERROR_VIEW.message)
+          : modelMissing
+            ? t(MODEL_MISSING_ERROR_VIEW.message)
+            : // T023: a `notice` marks this paragraph as copy the APP
+              // wrote (today: the imported-history banner), so it
+              // follows the language setting like every other label.
+              // Without one, `text` is transcript content and is
+              // printed exactly as it arrived.
+              block.notice
+              ? t(block.notice.key, block.notice.params)
+              : summaryRow && index === 0
+                ? localizeContextSummaryTitle(block.text ?? '', t)
+                : block.text}
+      </p>
+    ) : null
+  );
+
+  if (!isError) {
+    return (
+      <div className="flex min-w-0 items-start gap-2 text-muted-foreground" role="status">
+        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">{paragraphs}</div>
+      </div>
+    );
+  }
+
+  return (
+    <Alert variant="error" role="alert">
+      <AlertDescription>
+        {paragraphs}
         {/* H/21 P0: unlike the auth swap, the replaced text here carried
             something worth keeping — WHICH model is missing. The mapped copy
             explains the failure and the raw line below still names the model,
             so the user can tell one stale session from another. */}
         {modelMissing && (
           <>
-            <p className="mt-1 text-meta text-muted-foreground">
+            <p className="mt-1 text-small text-muted-foreground">
               {t(MODEL_MISSING_ERROR_VIEW.hint)}
             </p>
             {message.blocks.map((block) =>
@@ -1751,19 +1762,17 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
           {authRequired ? (
             <Button
               size="xs"
-              variant="outline"
-              className="h-6"
+              variant="ghost"
               onClick={() => void requestSignIn()}
               disabled={signInRequesting}
             >
-              {signInRequesting ? <Spinner className="h-3.5 w-3.5" /> : null}
+              {signInRequesting ? <Spinner className="size-3.5" /> : null}
               {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
             </Button>
           ) : (
             <Button
               size="xs"
-              variant="outline"
-              className="h-6"
+              variant="ghost"
               onClick={() => requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)}
             >
               <ArrowRightLeft />
@@ -1993,7 +2002,7 @@ function TurnClockRow({ zone, items }: { zone: TurnWorkZone; items: readonly Tur
   const { line, spinner } = useTurnClockLine({ zone, clock: true, items });
   return (
     <div className={turnClockRowClass()}>
-      {spinner && <Spinner className="size-3.5 shrink-0" />}
+      {spinner && <StatusIcon status="running" />}
       <span className="min-w-0 truncate" title={line}>
         {line}
       </span>
@@ -2071,7 +2080,7 @@ function TurnProgressHead({
           onUserOpenChange(!open);
         }}
       >
-        {spinner && <Spinner className="size-3.5 shrink-0" />}
+        {spinner && <StatusIcon status="running" />}
         <span className="min-w-0 truncate" title={line}>
           {line}
         </span>
@@ -2890,7 +2899,7 @@ const ChatTurn = memo(function ChatTurn({
               <Fragment key={turnItemKey(section.segment.items[0])}>
                 <div className={turnFinalAnswerDividerClass()}>
                   <span className="shrink-0">{t('Final output')}</span>
-                  <span className="h-px min-w-0 flex-1 bg-border" aria-hidden />
+                  <span className="h-px min-w-0 flex-1 bg-border-soft" aria-hidden />
                 </div>
                 {renderSegment(section.segment)}
               </Fragment>
@@ -3093,22 +3102,22 @@ function pendingElapsed(sendStatus: TurnSendStatus, nowMs: number) {
 }
 
 /**
- * T-33: non-fatal transport-retry banner. Tone is the `status-running` trio —
- * the repo's established "running, non-fatal" banner idiom
- * (`HostStatusBanner.tsx`, design-system 运行中横幅) — deliberately NOT
+ * T-33: non-fatal transport-retry banner. Deliberately NOT
  * `warning`/`destructive`: the banner exists to say the turn is alive, and an
  * alarm color would claim the opposite.
+ *
+ * Design system v2 §6 / §7.7: the one notice (`Alert`, neutral tone) with the
+ * shared running icon -- running is gray, never blue. Laid out as a row rather
+ * than the Alert's icon grid, because that grid keys on a direct `<svg>` and
+ * the status icon is a slot around one.
  */
 function RetryBanner({ view, sessionId }: { view: RetryBannerView; sessionId: string }) {
   const { t } = useI18n();
   return (
-    <div
-      className="flex items-start gap-2 rounded-md border border-status-running/30 bg-status-running/10 px-3 py-2 text-meta text-status-running"
-      role="status"
-    >
-      <RefreshCw className="mt-0.5 size-3.5 shrink-0 animate-spin" />
+    <Alert variant="default" role="status" className="flex items-start gap-2">
+      <StatusIcon status="running" className="mt-0.5" />
       <div className="min-w-0 flex-1">
-        <p className="font-medium">{view.title}</p>
+        <p className="font-medium text-foreground">{view.title}</p>
         {/* T093: the detail line is no longer behind a `<details>` disclosure.
             It carries the COUNTDOWN now, and a countdown nobody can see is
             indistinguishable from the frozen number decision 029 clause 3
@@ -3116,7 +3125,9 @@ function RetryBanner({ view, sessionId }: { view: RetryBannerView; sessionId: st
             in place once a second — proportional digits would make the whole
             line twitch sideways (design-system 数字对齐). */}
         {view.detail && (
-          <p className="mt-1 break-words tabular-nums whitespace-pre-wrap">{view.detail}</p>
+          <p className="mt-0.5 break-words tabular-nums whitespace-pre-wrap text-muted-foreground">
+            {view.detail}
+          </p>
         )}
       </div>
       {/* Decision 029 clause 3: give up without hunting for the composer's Stop.
@@ -3128,14 +3139,14 @@ function RetryBanner({ view, sessionId }: { view: RetryBannerView; sessionId: st
           contradict the sentence it sits next to. */}
       <Button
         type="button"
-        size="sm"
+        size="xs"
         variant="ghost"
-        className="-my-0.5 h-6 shrink-0 text-meta"
+        className="-my-0.5 shrink-0"
         onClick={() => void stopChatSession(sessionId)}
       >
         {t('Give up now')}
       </Button>
-    </div>
+    </Alert>
   );
 }
 
@@ -3184,7 +3195,10 @@ function TurnStatusContent({ status }: { status: TurnStatus }) {
       {/* A turn can stay silent for a minute; the spinner and the ticking
           seconds are what say it is alive rather than hung. Same 3.5 size the
           composer's own status row used before this moved here. */}
-      {status.kind !== 'failed' && <Spinner className="size-3.5 shrink-0" />}
+      {/* Design system v2 §6: the shared status icon -- the one spinner while
+          the turn lives, the red cross once it failed (the words beside it
+          are the reason, the only other red). */}
+      <StatusIcon status={status.kind === 'failed' ? 'failed' : 'running'} />
       <span className={cn('min-w-0 truncate', turnStatusToneClass(status.kind))} title={text}>
         {text}
       </span>
@@ -3214,12 +3228,14 @@ interface TurnItemViewProps {
  * whatever a text block is before the gate opens.
  *
  * ONE definition, used by both callers. Two copies of this class string would
- * be two answers to "how does unparsed prose read", and `leading-relaxed` is
+ * be two answers to "how does unparsed prose read", and the prose leading is
  * counted file-wide by the layout suite for exactly that reason.
  */
 function PlainProse({ text }: { text: string }) {
   return (
-    <p className="text-chat-body leading-relaxed text-foreground whitespace-pre-wrap select-text">
+    <p
+      className={`text-chat-body ${CHAT_PROSE_LEADING} text-foreground whitespace-pre-wrap select-text`}
+    >
       {text}
     </p>
   );
@@ -3325,7 +3341,7 @@ function TurnItemView({
      * segment's intermediate prose and the always-visible answer — which is
      * correct: both are assistant text, and the two differ only in position.
      *
-     * The other two `whitespace-pre-wrap text-markdown` paragraphs in this file
+     * The other two `whitespace-pre-wrap text-chat-body` paragraphs in this file
      * are NOT this: `:686` is the user bubble's own prompt echo and `:711` is
      * `NoticeMessage`'s system/error body. Neither is model prose, both are
      * inside a clamped or an alert-shaped box, and neither gets markdown.

@@ -548,7 +548,7 @@ export function DiffViewer({
     selectionWidgetRootRef.current.render(
       <button
         type="button"
-        className="flex items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground shadow-md hover:bg-primary/90 transition-colors"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-sm bg-primary px-2 py-1 text-small font-medium text-primary-foreground elev-md hover:bg-primary/90 transition-colors"
         onClick={showCommentForm}
         onMouseDown={(e) => e.preventDefault()}
       >
@@ -982,7 +982,7 @@ export function DiffViewer({
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
-        <p className="text-sm">{t('Loading...')}</p>
+        <p className="text-ui">{t('Loading...')}</p>
       </div>
     );
   }
@@ -991,9 +991,12 @@ export function DiffViewer({
     const reason = describeDiffLoadError(loadErrorProp ?? fetchError, t);
     return (
       <div className="flex h-full flex-col items-center justify-center gap-1 px-4 text-center text-muted-foreground">
-        <p className="text-sm">{t('Failed to load diff')}</p>
+        <p className="text-ui">{t('Failed to load diff')}</p>
         {reason && (
-          <p className="max-w-full select-text break-words text-meta" data-testid="diff-load-error">
+          <p
+            className="max-w-full select-text break-words text-small"
+            data-testid="diff-load-error"
+          >
             {reason}
           </p>
         )}
@@ -1030,11 +1033,11 @@ export function DiffViewer({
       {/* Header */}
       <div className="flex h-9 shrink-0 items-center justify-between border-b px-4">
         <div className="flex items-center">
-          <span className="text-sm font-medium">{file.path}</span>
+          <span className="text-ui font-medium">{file.path}</span>
           {isCommitView ? (
-            <span className="ml-2 text-xs text-muted-foreground">{t('(commit history)')}</span>
+            <span className="ml-2 text-small text-muted-foreground">{t('(commit history)')}</span>
           ) : (
-            <span className="ml-2 text-xs text-muted-foreground">
+            <span className="ml-2 text-small text-muted-foreground">
               {file.staged ? t('(staged)') : t('(unstaged)')}
             </span>
           )}
@@ -1044,14 +1047,14 @@ export function DiffViewer({
         <div className="flex items-center gap-1">
           {/* Diff count */}
           {lineChanges && lineChanges.length > 0 && (
-            <span className="mr-2 text-xs text-muted-foreground">
+            <span className="mr-2 text-small text-muted-foreground">
               {currentDiffIndex >= 0 ? currentDiffIndex + 1 : '-'}/{lineChanges.length}
             </span>
           )}
 
           {/* Boundary hint */}
           {boundaryHint && (
-            <span className="mr-2 text-xs text-orange-500">{getBoundaryTooltip()}</span>
+            <span className="mr-2 text-small text-warning">{getBoundaryTooltip()}</span>
           )}
 
           {/* Previous diff */}
@@ -1059,7 +1062,7 @@ export function DiffViewer({
             type="button"
             className={cn(
               'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-              'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+              'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
             )}
             onClick={() => navigateToDiff('prev')}
             title={t('Previous change (F7, press again to switch file)')}
@@ -1072,7 +1075,7 @@ export function DiffViewer({
             type="button"
             className={cn(
               'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-              'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+              'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
             )}
             onClick={() => navigateToDiff('next')}
             title={t('Next change (F8, press again to switch file)')}
@@ -1085,7 +1088,7 @@ export function DiffViewer({
             type="button"
             className={cn(
               'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-              'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+              'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
             )}
             onClick={() => navigateToFile({ path: `${rootPath}/${file.path}` })}
             title={t('Open in editor')}
@@ -1100,7 +1103,7 @@ export function DiffViewer({
               'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
               hideUnchangedRegions
                 ? 'text-primary bg-primary/10 hover:bg-primary/20'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
             )}
             onClick={handleToggleUnchangedRegions}
             title={hideUnchangedRegions ? t('Show unchanged code') : t('Collapse unchanged code')}
@@ -1115,8 +1118,8 @@ export function DiffViewer({
                 <button
                   type="button"
                   className={cn(
-                    'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-                    'text-green-500 hover:bg-green-500/20 hover:text-green-400'
+                    'flex h-7 w-7 items-center justify-center rounded-sm transition-colors',
+                    'text-success hover:bg-success/12'
                   )}
                   onClick={handleSave}
                   disabled={isSaving}
@@ -1131,7 +1134,7 @@ export function DiffViewer({
                   'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
                   isEditing
                     ? 'text-primary bg-primary/10 hover:bg-primary/20'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                    : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
                 )}
                 onClick={handleToggleEdit}
                 title={isEditing ? t('Exit edit mode') : t('Edit file')}

@@ -11,6 +11,7 @@ import { DEFAULT_RUNTIME_PERMISSION } from '@shared/types/runtimePermission';
 import type { FileSearchResult } from '@shared/types/search';
 import { QueryClientContext } from '@tanstack/react-query';
 import {
+  CircleAlert,
   File as FileIcon,
   FileText,
   Folder,
@@ -30,7 +31,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Kbd } from '@/components/ui/kbd';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { toastManager } from '@/components/ui/toast';
@@ -409,7 +411,9 @@ const AttachmentChip = memo(function AttachmentChip({
   return (
     <span
       className={cn(
-        'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-border bg-muted/50 pr-0.5 pl-1.5 text-meta text-foreground',
+        // Design system v2 §1 rule 1: a tag inside the composer's frame --
+        // a neutral fill, no frame of its own.
+        'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-sm bg-fill-neutral pr-0.5 pl-1.5 text-small text-foreground',
         sending && 'pointer-events-none opacity-64'
       )}
     >
@@ -423,13 +427,13 @@ const AttachmentChip = memo(function AttachmentChip({
       <span className="min-w-0 flex-1 truncate" title={chip.title}>
         {chip.label}
       </span>
-      <span className="shrink-0 tabular-nums text-muted-foreground">{chip.sizeLabel}</span>
+      <span className="shrink-0 tabular-nums text-foreground-faint">{chip.sizeLabel}</span>
       <button
         type="button"
         onClick={() => onRemove(draft.id)}
         disabled={sending}
         aria-label={t('Remove {{name}}', { name: chip.title })}
-        className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground disabled:pointer-events-none disabled:opacity-64"
+        className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-selected hover:text-foreground focus-ring disabled:pointer-events-none disabled:opacity-64"
       >
         <X className="size-3" />
       </button>
@@ -4384,7 +4388,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             through the round key's Stop state). */}
         {attachments.reading > 0 && <Spinner className="size-3.5 shrink-0 text-muted-foreground" />}
         <p
-          className={cn('min-w-0 truncate text-meta tabular-nums', statusTone)}
+          className={cn('min-w-0 truncate text-small tabular-nums', statusTone)}
           title={statusLine ?? undefined}
         >
           {statusLine}
@@ -4395,7 +4399,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const noticeBlock = attachments.notice ? (
     <Alert
       variant={attachments.notice.tone === 'info' ? 'info' : 'warning'}
-      className="mt-1 items-center gap-x-2 px-2 py-1 text-meta"
+      className="mt-1 items-center gap-x-2 px-2 py-1 text-small"
     >
       <TriangleAlert />
       <AlertTitle className="min-w-0 truncate font-normal" title={attachments.notice.message}>
@@ -4406,7 +4410,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           type="button"
           onClick={attachments.dismissNotice}
           aria-label={t('Dismiss attachment notice')}
-          className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground"
+          className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
         >
           <X className="size-3" />
         </button>
@@ -4422,7 +4426,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     <Alert
       variant="warning"
       role="status"
-      className="mt-1 px-2 py-1 text-meta"
+      className="mt-1 px-2 py-1 text-small"
       data-testid="composer-image-input-hint"
     >
       <TriangleAlert />
@@ -4434,7 +4438,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // byte budget) reuses the same Alert language as the attachment notice
   // above — the draft itself is left untouched by the caller (handleSend).
   const queueNoticeBlock = queueNotice ? (
-    <Alert variant="warning" className="mt-1 items-center gap-x-2 px-2 py-1 text-meta">
+    <Alert variant="warning" className="mt-1 items-center gap-x-2 px-2 py-1 text-small">
       <TriangleAlert />
       <AlertTitle className="min-w-0 truncate font-normal" title={queueNotice}>
         {queueNotice}
@@ -4444,7 +4448,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           type="button"
           onClick={() => setQueueNotice(null)}
           aria-label={t('Dismiss queue notice')}
-          className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground"
+          className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
         >
           <X className="size-3" />
         </button>
@@ -4484,7 +4488,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 source: 'mention-chip',
               });
             }}
-            className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-code text-primary transition-colors hover:bg-primary/20"
+            // Design system v2: a frameless neutral tag inside the composer
+            // (§1 rule 1); clay is reserved for primary actions (§1 rule 7).
+            className="rounded-xs bg-fill-neutral px-1.5 py-0.5 font-mono text-code text-foreground transition-colors duration-150 hover:bg-fill-ghost-selected focus-ring"
           >
             {chip.path}
           </button>
@@ -4507,7 +4513,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // The official client's "History 2/3": which sent line the box shows, oldest first.
   const historyLabel = browsingHistory ? (
     <div
-      className="px-1 text-meta text-muted-foreground tabular-nums"
+      className="px-1 text-small text-muted-foreground tabular-nums"
       data-testid="composer-history-label"
     >
       {t('History {{index}}/{{total}}', {
@@ -5004,9 +5010,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         (isModelMissingError(lastError) ? (
           <ModelMissingNotice error={lastError} className="mb-2" />
         ) : (
-          <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 font-mono text-code text-destructive whitespace-pre-wrap break-all">
-            {statusHint}
-          </div>
+          // Design system v2 §7.7: the one notice. Only the icon is red (§1
+          // rule 5); the raw diagnostic stays mono and scrolls past 7rem.
+          <Alert variant="error" className="mb-2">
+            <CircleAlert />
+            <AlertDescription className="max-h-28 overflow-auto whitespace-pre-wrap break-all font-mono text-code text-foreground">
+              {statusHint}
+            </AlertDescription>
+          </Alert>
         ))}
       {/* Decision 174: the home send found the checkout locked after a branch
           was picked — nothing sent, nothing switched. Where the model-missing
@@ -5063,12 +5074,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         {slashOpen && (
           <div
             className={cn(
-              'absolute left-2 flex w-96 flex-col overflow-hidden rounded-lg border bg-popover shadow-lg',
+              // Design system v2 §7.10: the coss Menu's float.
+              'absolute left-2 flex w-96 flex-col overflow-hidden rounded-md bg-popover text-popover-foreground elev-popover',
               mentionPopupPlacementClass(popupPlacement.side)
             )}
             style={{ maxHeight: popupPlacement.maxHeight }}
           >
-            <div ref={slashListRef} className="min-h-0 flex-1 overflow-y-auto py-1">
+            <div ref={slashListRef} className="min-h-0 flex-1 overflow-y-auto p-1">
               {/* Decision 144: painted rows, `source` in words. */}
               {slashDisplayRows.map((item, i) => {
                 const row = (
@@ -5081,49 +5093,41 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                     }}
                     onMouseEnter={() => setSlashIndex(i)}
                     className={cn(
-                      'flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm transition-colors',
-                      i === slashIndex
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-foreground hover:bg-accent/50'
+                      'flex min-h-7 w-full items-baseline gap-2 rounded-xs px-2 py-1 text-left text-ui text-foreground transition-colors duration-100',
+                      i === slashIndex && 'bg-fill-ghost-hover'
                     )}
                   >
                     <span className="shrink-0 font-mono">/{item.name}</span>
-                    <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                    <span className="min-w-0 flex-1 truncate text-small text-muted-foreground">
                       {item.description}
                     </span>
                     {/* Three kinds share this list — a skill, a prompt template
                         and a plugin command look identical without this. */}
-                    <span className="shrink-0 text-meta text-muted-foreground">{item.source}</span>
+                    <span className="shrink-0 text-small text-foreground-faint">{item.source}</span>
                   </button>
                 );
                 if (!item.description) return <div key={`${item.source}:${item.name}`}>{row}</div>;
                 return (
                   <Tooltip key={`${item.source}:${item.name}`} open={i === slashIndex}>
                     <TooltipTrigger render={<div />}>{row}</TooltipTrigger>
-                    <TooltipPopup side="right" align="start" className="max-w-80 text-meta">
+                    <TooltipPopup side="right" align="start" className="max-w-80 text-small">
                       {item.description}
                     </TooltipPopup>
                   </Tooltip>
                 );
               })}
             </div>
-            <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-3 border-t border-border-soft px-3 py-1.5 text-small text-muted-foreground">
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  ↑↓
-                </kbd>
+                <Kbd>↑↓</Kbd>
                 {t('Navigate')}
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  Enter
-                </kbd>
+                <Kbd>Enter</Kbd>
                 {t('Select')}
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  Esc
-                </kbd>
+                <Kbd>Esc</Kbd>
                 {t('Close')}
               </span>
             </div>
@@ -5137,12 +5141,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         {mentionOpen && (
           <div
             className={cn(
-              'absolute left-2 flex w-72 flex-col overflow-hidden rounded-lg border bg-popover shadow-lg',
+              'absolute left-2 flex w-72 flex-col overflow-hidden rounded-md bg-popover text-popover-foreground elev-popover',
               mentionPopupPlacementClass(popupPlacement.side)
             )}
             style={{ maxHeight: popupPlacement.maxHeight }}
           >
-            <div className="min-h-0 flex-1 overflow-y-auto py-1">
+            <div className="min-h-0 flex-1 overflow-y-auto p-1">
               {mentionResults.map((item, i) => {
                 const lastSep = item.relativePath.lastIndexOf('/');
                 const dirPart = lastSep > 0 ? item.relativePath.slice(0, lastSep) : '';
@@ -5158,10 +5162,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                     }}
                     onMouseEnter={() => setMentionIndex(i)}
                     className={cn(
-                      'w-full px-3 py-1.5 text-left text-sm transition-colors',
-                      i === mentionIndex
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-foreground hover:bg-accent/50'
+                      'block min-h-7 w-full rounded-xs px-2 py-1 text-left text-ui text-foreground transition-colors duration-100',
+                      i === mentionIndex && 'bg-fill-ghost-hover'
                     )}
                   >
                     {/* T-07①: directories are selectable now — mark them so a
@@ -5178,29 +5180,23 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                       </span>
                     </span>
                     {dirPart && (
-                      <span className="ml-1.5 text-meta text-muted-foreground">{dirPart}</span>
+                      <span className="ml-1.5 text-small text-foreground-faint">{dirPart}</span>
                     )}
                   </button>
                 );
               })}
             </div>
-            <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-3 border-t border-border-soft px-3 py-1.5 text-small text-muted-foreground">
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  ↑↓
-                </kbd>
+                <Kbd>↑↓</Kbd>
                 {t('Navigate')}
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  Enter
-                </kbd>
+                <Kbd>Enter</Kbd>
                 {t('Select')}
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  Esc
-                </kbd>
+                <Kbd>Esc</Kbd>
                 {t('Close')}
               </span>
               {/* T-07③: searching `chat` here matches 304 files but only 10

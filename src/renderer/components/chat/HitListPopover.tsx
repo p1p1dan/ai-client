@@ -39,7 +39,7 @@ export function HitListPopover({ source, children, onOpenFile }: HitListPopoverP
           <button
             key={hit.path}
             type="button"
-            className="flex h-7 w-full shrink-0 items-center gap-2 rounded-sm px-2 text-left hover:bg-hover"
+            className="flex h-7 w-full shrink-0 items-center gap-2 rounded-sm px-2 text-left hover:bg-fill-ghost-hover"
             onClick={() => onOpenFile({ path: hit.path, line: hit.line })}
           >
             <span className="shrink-0 font-mono text-code text-foreground">{hit.name}</span>

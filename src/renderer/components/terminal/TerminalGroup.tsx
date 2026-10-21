@@ -3,7 +3,6 @@ import { List, Plus, Terminal, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
-import { springFast } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import type { TerminalGroup as TerminalGroupType, TerminalTab } from './types';
@@ -303,18 +302,17 @@ export function TerminalGroup({
                   role="button"
                   tabIndex={0}
                   className={cn(
-                    'group relative flex h-9 min-w-[120px] max-w-[180px] items-center gap-2 border-r border-border px-3 text-sm transition-colors cursor-grab',
+                    // Design system v2 §7.12: tabs carry no frame; the active one is
+                    // foreground ink plus the 2px clay underline below.
+                    'group relative flex h-9 min-w-[120px] max-w-[180px] items-center gap-2 px-3 text-ui transition-colors cursor-grab',
                     isTabActive
-                      ? cn(!bgImageEnabled && 'bg-background', 'text-foreground')
-                      : cn(
-                          !bgImageEnabled && 'bg-muted hover:bg-muted/80',
-                          'text-muted-foreground hover:text-foreground'
-                        ),
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
                     isDragging && 'opacity-50',
                     isDropTarget && 'ring-2 ring-primary ring-inset'
                   )}
                 >
-                  <List className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  <List className="size-3.5 shrink-0 opacity-60" />
                   {editingId === tab.id ? (
                     <input
                       ref={inputRef}
@@ -324,7 +322,7 @@ export function TerminalGroup({
                       onBlur={handleFinishEdit}
                       onKeyDown={handleKeyDown}
                       onClick={(e) => e.stopPropagation()}
-                      className="flex-1 min-w-0 bg-transparent outline-none border-b border-current text-sm"
+                      className="flex-1 min-w-0 bg-transparent outline-none border-b border-current text-ui"
                     />
                   ) : (
                     <span className="flex-1 truncate">
@@ -338,18 +336,18 @@ export function TerminalGroup({
                       handleCloseTab(tab.id);
                     }}
                     className={cn(
-                      'flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors',
-                      'hover:bg-destructive/20 hover:text-destructive',
+                      'flex size-5 shrink-0 items-center justify-center rounded-xs transition-colors',
+                      'hover:bg-fill-ghost-hover hover:text-foreground',
                       !isTabActive && 'opacity-0 group-hover:opacity-100'
                     )}
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="size-3.5" />
                   </button>
                   {isTabActive && (
                     <motion.div
                       layoutId={`terminal-tab-indicator-${group.id}`}
                       className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                      transition={springFast}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
                     />
                   )}
                 </div>
@@ -383,7 +381,7 @@ export function TerminalGroup({
           )}
         >
           <Terminal className="h-12 w-12 opacity-50" />
-          <p className="text-sm">{t('No terminals open')}</p>
+          <p className="text-ui">{t('No terminals open')}</p>
           <Button variant="outline" size="sm" onClick={handleNewTab}>
             <Plus className="mr-2 h-4 w-4" />
             {t('New Terminal')}

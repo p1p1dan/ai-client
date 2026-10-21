@@ -29,7 +29,7 @@ function createMarkdownComponents(markdownFilePath: string, rootPath?: string): 
       }
 
       return (
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground">
+        <code className="rounded bg-fill-neutral px-1.5 py-0.5 font-mono text-ui text-foreground">
           {children}
         </code>
       );
@@ -67,48 +67,51 @@ function createMarkdownComponents(markdownFilePath: string, rootPath?: string): 
     ),
     table: ({ children, ...props }) => (
       <div className="my-4 overflow-x-auto">
-        <table className="w-full border-collapse border border-border" {...props}>
+        <table className="w-full border-collapse border border-border-soft" {...props}>
           {children}
         </table>
       </div>
     ),
     th: ({ children, ...props }) => (
-      <th className="border border-border bg-muted px-3 py-2 text-left font-semibold" {...props}>
+      <th
+        className="border border-border-soft bg-fill-neutral px-3 py-2 text-left font-semibold"
+        {...props}
+      >
         {children}
       </th>
     ),
     td: ({ children, ...props }) => (
-      <td className="border border-border px-3 py-2" {...props}>
+      <td className="border border-border-soft px-3 py-2" {...props}>
         {children}
       </td>
     ),
     h1: ({ children, ...props }) => (
-      <h1 className="mt-8 mb-4 text-2xl font-bold" {...props}>
+      <h1 className="mt-8 mb-4 text-title font-semibold" {...props}>
         {children}
       </h1>
     ),
     h2: ({ children, ...props }) => (
-      <h2 className="mt-6 mb-3 text-xl font-semibold" {...props}>
+      <h2 className="mt-6 mb-3 text-heading font-semibold" {...props}>
         {children}
       </h2>
     ),
     h3: ({ children, ...props }) => (
-      <h3 className="mt-5 mb-2 text-lg font-semibold" {...props}>
+      <h3 className="mt-5 mb-2 text-ui font-semibold" {...props}>
         {children}
       </h3>
     ),
     h4: ({ children, ...props }) => (
-      <h4 className="mt-4 mb-2 text-base font-semibold" {...props}>
+      <h4 className="mt-4 mb-2 text-ui font-semibold" {...props}>
         {children}
       </h4>
     ),
     h5: ({ children, ...props }) => (
-      <h5 className="mt-3 mb-1 text-sm font-semibold" {...props}>
+      <h5 className="mt-3 mb-1 text-ui font-semibold" {...props}>
         {children}
       </h5>
     ),
     h6: ({ children, ...props }) => (
-      <h6 className="mt-3 mb-1 text-sm font-medium text-muted-foreground" {...props}>
+      <h6 className="mt-3 mb-1 text-ui font-medium text-muted-foreground" {...props}>
         {children}
       </h6>
     ),
@@ -120,7 +123,7 @@ function createMarkdownComponents(markdownFilePath: string, rootPath?: string): 
         {children}
       </blockquote>
     ),
-    hr: (props) => <hr className="my-6 border-border" {...props} />,
+    hr: (props) => <hr className="my-6 border-border-soft" {...props} />,
     img: ({ src, alt, ...props }) => (
       <img
         className="my-4 max-w-full rounded-md"
@@ -151,7 +154,7 @@ export function MarkdownPreview({ content, filePath, rootPath }: MarkdownPreview
   );
 
   return (
-    <div className="p-4 text-sm text-foreground select-text">
+    <div className="p-4 text-ui text-foreground select-text">
       {/* singleTilde: false — bare `~` is a CJK range separator, not strikethrough (F1). */}
       <Markdown
         remarkPlugins={[[remarkGfm, { singleTilde: false }], remarkBreaks]}

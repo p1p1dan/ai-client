@@ -1,9 +1,17 @@
 import type { PermissionDecisionId } from '@shared/types/runtimeEvents';
 import { useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DockCard,
+  DockCardBody,
+  DockCardFooter,
+  DockCardHeader,
+  DockCardTitle,
+} from '@/components/ui/dock-card';
 import { Ident } from '@/components/ui/ident';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { useI18n } from '@/i18n';
-import { cn } from '@/lib/utils';
 import type { ChatBlock } from '@/stores/chatSessions';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import {
@@ -58,22 +66,21 @@ interface QuestionCardProps {
   progress?: string | null;
 }
 
-const QA_SHELL_CLASS = 'overflow-hidden rounded-md border border-border bg-card';
-
 /**
- * The permission card's three tiers, as tone rather than decoration: a write or
- * a command cannot be taken back, so its card carries the destructive edge that
- * every other card in the timeline deliberately does not.
+ * The permission card's three tiers, as tone rather than decoration (design
+ * system v2 §7.6): a write or a command cannot be taken back, so its card
+ * carries the destructive edge; every other live card is `pending`, the clay
+ * edge of "waiting on you".
  */
-const PERMISSION_RISK_SHELL: Record<PermissionRisk, string> = {
-  high: 'border-destructive/40',
-  medium: 'border-border',
-  low: 'border-border',
+const PERMISSION_RISK_TONE: Record<PermissionRisk, 'risk' | 'pending'> = {
+  high: 'risk',
+  medium: 'pending',
+  low: 'pending',
 };
-const PERMISSION_RISK_CHIP: Record<PermissionRisk, string> = {
-  high: 'bg-destructive/10 text-destructive',
-  medium: 'bg-muted text-muted-foreground',
-  low: 'bg-muted text-muted-foreground',
+const PERMISSION_RISK_BADGE: Record<PermissionRisk, 'error' | 'secondary'> = {
+  high: 'error',
+  medium: 'secondary',
+  low: 'secondary',
 };
 /** Catalog keys — the chip was hard-coded Chinese, i.e. wrong in the other locale. */
 const PERMISSION_RISK_LABEL: Record<PermissionRisk, string> = {
@@ -92,6 +99,11 @@ const PERMISSION_BUTTON_VARIANT: Record<PermissionDecisionId, 'default' | 'secon
   deny: 'ghost',
   cancel: 'ghost',
 };
+/**
+ * Design system v2 §7.6: the footer reads quiet → loud, the primary press
+ * last. A stable sort, so rows of one weight keep the order the engine sent.
+ */
+const PERMISSION_BUTTON_RANK = { ghost: 0, secondary: 1, default: 2 } as const;
 
 export function QuestionCard(props: QuestionCardProps) {
   if (props.variant === 'permission') {
@@ -116,17 +128,17 @@ interface QaHeadProps {
   progress?: string | null;
 }
 
-/** `.qa-head` — 36px bar: title and an optional progress counter. */
+/** `.qa-head` — the dock card's 32px head: title and an optional progress tag. */
 function QaHead({ title, progress }: QaHeadProps) {
   return (
-    <div className="flex min-h-9 items-start gap-2 border-b border-border px-3 py-2 text-muted-foreground">
-      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words font-semibold tracking-[0.01em]">
-        {title}
-      </span>
+    <DockCardHeader>
+      <DockCardTitle>{title}</DockCardTitle>
       {progress && (
-        <span className="shrink-0 text-meta tabular-nums text-muted-foreground">{progress}</span>
+        <Badge variant="secondary" className="tabular-nums">
+          {progress}
+        </Badge>
       )}
-    </div>
+    </DockCardHeader>
   );
 }
 
@@ -134,12 +146,9 @@ function QaHead({ title, progress }: QaHeadProps) {
 function QaFrozenPairs({ pairs }: { pairs: FrozenPair[] }) {
   const { t } = useI18n();
   return (
-    <div className="flex flex-col gap-2.5 px-3.5 pb-3">
+    <DockCardBody className="flex flex-col gap-2.5">
       {pairs.map((pair) => (
-        <div
-          key={pair.key}
-          className="flex flex-col gap-1 break-words whitespace-pre-wrap text-ui leading-relaxed"
-        >
+        <div key={pair.key} className="flex flex-col gap-1 break-words whitespace-pre-wrap text-ui">
           {pair.question && <span className="text-foreground">{pair.question}</span>}
           {pair.skipped ? (
             <span className="italic text-muted-foreground">
@@ -160,7 +169,7 @@ function QaFrozenPairs({ pairs }: { pairs: FrozenPair[] }) {
           )}
         </div>
       ))}
-    </div>
+    </DockCardBody>
   );
 }
 
@@ -173,11 +182,12 @@ function FrozenQaCard({ block }: { block: ChatBlock }) {
   const title = t(deriveCardTitle(state));
   const pairs = deriveFrozenPairs(block);
   if (pairs.length === 0) return null;
+  // In the timeline, settled: the strip form (no elevation, not waiting).
   return (
-    <div className={QA_SHELL_CLASS}>
+    <DockCard kind="strip">
       <QaHead title={title} />
       <QaFrozenPairs pairs={pairs} />
-    </div>
+    </DockCard>
   );
 }
 
@@ -197,7 +207,7 @@ function FrozenQaCard({ block }: { block: ChatBlock }) {
 function PermissionDetailBody({ detail }: { detail: PermissionDetailView }) {
   const { t } = useI18n();
   return (
-    <div className="flex min-w-0 flex-col gap-1 px-1">
+    <div className="flex min-w-0 flex-col gap-1">
       {detail.command !== null && (
         <Ident className="min-w-0 truncate text-foreground" title={detail.command}>
           {detail.command}
@@ -205,36 +215,36 @@ function PermissionDetailBody({ detail }: { detail: PermissionDetailView }) {
       )}
       {detail.files.map((file) => (
         <div key={file.key} className="flex min-w-0 items-center gap-2">
-          <span className="grid size-5 shrink-0 place-items-center rounded-xs border border-border bg-muted text-meta leading-none text-muted-foreground">
+          <Badge variant="secondary" className="shrink-0">
             {file.badge}
-          </span>
+          </Badge>
           <Ident className="min-w-0 flex-1 truncate text-foreground" title={file.path}>
             {file.path}
           </Ident>
           {file.stat && (
-            <span className="shrink-0 text-meta tabular-nums text-muted-foreground">
+            <span className="shrink-0 text-small tabular-nums text-foreground-faint">
               {file.stat}
             </span>
           )}
           {file.truncated && (
-            <span className="shrink-0 text-meta text-muted-foreground">
+            <span className="shrink-0 text-small text-muted-foreground">
               {t(PERMISSION_DIFF_CLAMPED_MARK)}
             </span>
           )}
         </div>
       ))}
       {detail.meta.map((line) => (
-        <p key={line} className="min-w-0 truncate text-meta text-muted-foreground" title={line}>
+        <p key={line} className="min-w-0 truncate text-small text-muted-foreground" title={line}>
           {line}
         </p>
       ))}
       {detail.warnings.map((line) => (
-        <p key={line} className="text-meta text-destructive">
+        <p key={line} className="text-small text-destructive">
           {line}
         </p>
       ))}
       {detail.notes.map((line) => (
-        <p key={line} className="text-meta italic text-muted-foreground">
+        <p key={line} className="text-small italic text-muted-foreground">
           {line}
         </p>
       ))}
@@ -287,7 +297,7 @@ function PermissionQaCard({
   );
   const originView = derivePermissionOrigin(origin, t);
   const originChip = originView ? (
-    <p className="px-3.5 pb-1 text-meta text-muted-foreground">{originView.label}</p>
+    <p className="text-small text-muted-foreground">{originView.label}</p>
   ) : null;
 
   // 2026-08-10 ruling: a decided permission collapses to a single tool-row
@@ -302,47 +312,34 @@ function PermissionQaCard({
   // In the composer's slot: capped at 40% of the window, the body scrolls and
   // the decision buttons stay pinned under it.
   return (
-    <div
-      className={cn(
-        QA_SHELL_CLASS,
-        'flex max-h-[40vh] min-h-0 flex-col',
-        PERMISSION_RISK_SHELL[view.risk]
-      )}
-    >
-      <div className="flex min-h-9 shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
-        {/* Top-left, ahead of the title: it answers "how much of this is left"
-            before the user reads what THIS one asks. `tabular-nums` because it
-            is replaced in place as the queue advances, and a proportional `1`
-            would shift the title a pixel on every card. */}
+    <DockCard tone={PERMISSION_RISK_TONE[view.risk]} className="max-h-[40vh] min-h-0">
+      <DockCardHeader>
+        <StatusIcon status="waiting" />
+        <DockCardTitle>{t(view.title)}</DockCardTitle>
+        {/* `tabular-nums` because it is replaced in place as the queue
+            advances, and a proportional `1` would shift the tag a pixel on
+            every card. */}
         {progress && (
-          <span className="shrink-0 rounded-xs bg-muted px-1.5 py-0.5 text-meta tabular-nums text-muted-foreground">
+          <Badge variant="secondary" className="tabular-nums">
             {progress}
-          </span>
+          </Badge>
         )}
-        <span className="min-w-0 flex-1 font-semibold tracking-[0.01em] text-foreground">
-          {t(view.title)}
-        </span>
-        <span
-          className={cn(
-            'shrink-0 rounded-sm px-1.5 py-0.5 text-meta',
-            PERMISSION_RISK_CHIP[view.risk]
-          )}
-        >
+        <Badge variant={PERMISSION_RISK_BADGE[view.risk]}>
           {t(PERMISSION_RISK_LABEL[view.risk])}
-        </span>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2.5 pb-2">
+        </Badge>
+      </DockCardHeader>
+      <DockCardBody className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
         {originChip}
-        <p className="px-1 pt-2 whitespace-pre-wrap break-words text-ui font-semibold leading-relaxed text-foreground">
+        <p className="whitespace-pre-wrap break-words text-ui font-semibold text-foreground">
           {view.prompt}
         </p>
         {/* The thing being approved, above everything the engine has to say
             about it: PI-Desktop puts the content first because that is what the
-            answer is about. */}
+            answer is about. A neutral fill, no frame (§1 rule 1). */}
         {view.content && (
-          <div className="px-1">
-            <p className="pb-1 text-meta text-muted-foreground">{t(view.content.label)}</p>
-            <Ident className="block max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2.5 text-chat-body text-foreground">
+          <div>
+            <p className="pb-1 text-small text-muted-foreground">{t(view.content.label)}</p>
+            <Ident className="block max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-sm bg-fill-neutral px-2.5 py-2 text-code text-foreground">
               {view.content.text}
             </Ident>
           </div>
@@ -351,10 +348,10 @@ function PermissionQaCard({
         {/* P1-6d: why this card is up when the gear would have let the call
             through — the command could not be read statically. */}
         {view.askReasonNote && (
-          <p className="px-1 text-meta text-muted-foreground">{view.askReasonNote}</p>
+          <p className="text-small text-muted-foreground">{view.askReasonNote}</p>
         )}
         {(view.workspace || secondsLeft !== null) && (
-          <div className="flex min-w-0 items-center gap-2 px-1 text-meta text-muted-foreground">
+          <div className="flex min-w-0 items-center gap-2 text-small text-muted-foreground">
             {view.workspace && (
               <p className="min-w-0 flex-1 truncate" title={view.workspace}>
                 {t('Project: {{name}}', { name: view.workspace })}
@@ -370,33 +367,27 @@ function PermissionQaCard({
           </div>
         )}
         {view.waiting && (
-          // T104 adjudication (the task brief left this one open): stays on the
-          // body tier. It is explanatory, but it is the single line a reader
-          // stares at while a permission decision blocks the whole turn --
-          // the same "not passive chrome" test that put the turn status line
-          // on `text-ui` (T097, design-system.md "已记录偏离"). Demoting it to
-          // `text-meta` (13px, same as the process tier) would put the one line
-          // that matters below the tool rows surrounding it.
-          <p className="px-1 text-chat-body text-muted-foreground">{t(PERMISSION_WAITING)}</p>
+          // T104 adjudication: stays on the body tier. It is the single line a
+          // reader stares at while a permission decision blocks the whole turn
+          // -- not passive chrome, so not demoted to the small tier.
+          <p className="text-chat-body text-muted-foreground">{t(PERMISSION_WAITING)}</p>
         )}
         {/* T002 — decision 003: the grant behind "Allow for session" is
             session-scoped, not delegate-scoped, so it also covers the parent
             and every other subagent. The button text alone cannot say that. */}
         {view.sessionScopeNote && (
-          <p className="px-1 text-right text-meta text-muted-foreground">{view.sessionScopeNote}</p>
+          <p className="text-right text-small text-muted-foreground">{view.sessionScopeNote}</p>
         )}
         {/* C9: the "decisions we could not model" line is pinned to the card
             bottom, so a narrowed choice never reads as the whole choice. */}
-        {view.omittedNote && (
-          <p className="px-1 text-meta text-muted-foreground">{view.omittedNote}</p>
-        )}
-      </div>
+        {view.omittedNote && <p className="text-small text-muted-foreground">{view.omittedNote}</p>}
+      </DockCardBody>
       {!view.waiting && (
         // Right-aligned and compact: a decision is one press, not a menu, and
         // four full-width rows are what made the old card swallow the screen.
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border px-2.5 py-1.5">
-          <span className="mr-auto text-meta text-muted-foreground">{t('Esc interrupts')}</span>
-          {view.options.map((option) => (
+        <DockCardFooter className="flex-wrap">
+          <span className="mr-auto text-small text-foreground-faint">{t('Esc interrupts')}</span>
+          {sortPermissionOptions(view.options).map((option) => (
             <Button
               key={option.letter}
               type="button"
@@ -429,8 +420,23 @@ function PermissionQaCard({
               {t(option.label)}
             </Button>
           ))}
-        </div>
+        </DockCardFooter>
       )}
-    </div>
+    </DockCard>
   );
+}
+
+/** Footer order (§7.6): ghost → secondary → primary, stable within a weight. */
+function sortPermissionOptions<T extends { decision?: PermissionDecisionId }>(
+  options: readonly T[]
+): T[] {
+  return options
+    .map((option, index) => ({ option, index }))
+    .sort(
+      (a, b) =>
+        PERMISSION_BUTTON_RANK[PERMISSION_BUTTON_VARIANT[a.option.decision ?? 'deny']] -
+          PERMISSION_BUTTON_RANK[PERMISSION_BUTTON_VARIANT[b.option.decision ?? 'deny']] ||
+        a.index - b.index
+    )
+    .map(({ option }) => option);
 }

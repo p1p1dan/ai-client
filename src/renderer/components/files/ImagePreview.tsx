@@ -180,7 +180,7 @@ export function ImagePreview({ path }: ImagePreviewProps) {
 
       {/* Info bar */}
       {imageDimensions && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded bg-background/80 px-3 py-1 text-xs text-muted-foreground backdrop-blur-sm">
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded bg-background/80 px-3 py-1 text-small text-muted-foreground backdrop-blur-sm">
           {imageDimensions.width}×{imageDimensions.height} • {Math.round(scale * 100)}%
         </div>
       )}

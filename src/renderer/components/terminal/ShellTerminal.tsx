@@ -249,7 +249,7 @@ export function ShellTerminal({
               className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent"
               style={{ color: settings.theme.foreground, opacity: 0.5 }}
             />
-            <span style={{ color: settings.theme.foreground, opacity: 0.5 }} className="text-sm">
+            <span style={{ color: settings.theme.foreground, opacity: 0.5 }} className="text-ui">
               {t('Starting shell...')}
             </span>
           </div>
@@ -258,12 +258,12 @@ export function ShellTerminal({
       {runtimeState !== 'live' && !isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
           <div className="rounded-lg border bg-background/90 px-4 py-3 text-center shadow-sm">
-            <div className="text-sm font-medium">
+            <div className="text-ui font-medium">
               {runtimeState === 'reconnecting'
                 ? t('Remote terminal reconnecting...')
                 : t('Remote terminal disconnected')}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
+            <div className="mt-1 text-small text-muted-foreground">
               {runtimeState === 'reconnecting'
                 ? t('Remote terminal input is temporarily disabled while reconnecting.')
                 : t('Remote terminal has disconnected. Reconnect the remote host to continue.')}

@@ -5,11 +5,9 @@
  *
  * Forked from `source-control/CommitHistoryList.tsx` instead of reused: that
  * component drags in a revert/reset context menu (destructive git actions
- * outside D30(a)'s display-only scope), toast wiring, and legacy hardcoded
- * Tailwind colors (`text-green-500` etc. — `source-control/` hasn't migrated
- * to the semantic tokens yet, design-system.md's T-25 backlog). This file
- * only ever renders a commit's subject + ref badges — no actions, no
- * `components/source-control/` imports.
+ * outside D30(a)'s display-only scope) and toast wiring. This file only ever
+ * renders a commit's subject + ref badges — no actions, and from
+ * `components/source-control/` only the shared status colour map.
  *
  * D34 (2026-08-14, VS Code SCM panel visual polish): the panel now fills its
  * half of the docked 50/50 split (`gitHistoryPanelClass()`, see that
@@ -28,6 +26,7 @@
  */
 import type { CommitFileChange, FileChangeStatus, GitLogEntry } from '@shared/types';
 import { ChevronDown, ChevronRight, GitCommit, History, Loader2 } from 'lucide-react';
+import { GIT_STATUS_TONE } from '@/components/source-control/gitStatusTone';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -44,18 +43,9 @@ import {
   parseRefBadges,
 } from './gitSurfaceModel';
 
-// D34: status letter colors for the expanded commit's inline file list.
-// Mirrors ChangesList.tsx:65-73's semantic token mapping (kept local instead
-// of importing ChangesList — see this file's header for the reuse-vs-fork
-// rationale). R/C have no dedicated mapping table entry so they take the
-// nearest semantic hue (text-info), same call ChangesList made.
-const commitFileStatusColors: Partial<Record<FileChangeStatus, string>> = {
-  M: 'text-warning',
-  A: 'text-success',
-  D: 'text-destructive',
-  R: 'text-info',
-  C: 'text-info',
-};
+// D34: status letter colors for the expanded commit's inline file list — the
+// one shared map (a constants module; still no source-control components).
+const commitFileStatusColors: Partial<Record<FileChangeStatus, string>> = GIT_STATUS_TONE;
 
 interface GitHistoryListProps {
   commits: GitLogEntry[];
@@ -85,7 +75,7 @@ interface GitHistoryListProps {
 function HistoryReadError({ text, testId }: { text: string; testId: string }) {
   return (
     <Alert variant="error" className="mx-1 my-1 w-auto shrink-0 px-2 py-1" data-testid={testId}>
-      <AlertDescription className="min-w-0 text-meta text-destructive">
+      <AlertDescription className="min-w-0 text-small text-destructive">
         <p className="truncate select-text" title={text}>
           {text}
         </p>
@@ -118,7 +108,7 @@ export function GitHistoryList({
 
   return (
     <Collapsible className="flex h-full min-h-0 flex-col" onOpenChange={onToggle} open={expanded}>
-      <CollapsibleTrigger className="flex h-7 w-full shrink-0 items-center gap-2 px-2 text-ui hover:bg-accent/50">
+      <CollapsibleTrigger className="flex h-7 w-full shrink-0 items-center gap-2 px-2 text-ui hover:bg-fill-ghost-hover">
         {expanded ? (
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         ) : (
@@ -141,7 +131,7 @@ export function GitHistoryList({
           historyErrorText !== null ? null : (
             <div className="flex flex-1 flex-col items-center justify-center gap-1.5 text-muted-foreground">
               <GitCommit className="h-5 w-5 opacity-50" />
-              <p className="text-meta">{t('No commits yet')}</p>
+              <p className="text-small">{t('No commits yet')}</p>
             </div>
           )
         ) : (
@@ -156,7 +146,7 @@ export function GitHistoryList({
                     <div
                       aria-expanded={isExpanded}
                       className={cn(
-                        'flex cursor-pointer gap-2 rounded-xs px-2 hover:bg-accent/50',
+                        'flex cursor-pointer gap-2 rounded-xs px-2 hover:bg-fill-ghost-hover',
                         singleLine ? 'h-7 items-center' : 'items-start py-1'
                       )}
                       onClick={() => onToggleCommit(commit.hash)}
@@ -182,7 +172,7 @@ export function GitHistoryList({
                         <div className="flex min-w-0 items-center gap-2">
                           <p className="min-w-0 flex-1 truncate text-ui">{commit.message}</p>
                           <span
-                            className="max-w-24 shrink-0 truncate text-meta text-muted-foreground"
+                            className="max-w-24 shrink-0 truncate text-small text-muted-foreground"
                             title={commit.author_name}
                           >
                             {commit.author_name}
@@ -204,7 +194,7 @@ export function GitHistoryList({
                         {/* Meta line: short hash · author · date — same data
                             `formatCommitTooltip` already formats for the row's
                             hover title, now surfaced visibly under the row. */}
-                        <p className="truncate text-meta text-muted-foreground">
+                        <p className="truncate text-small text-muted-foreground">
                           {formatCommitTooltip(commit)}
                         </p>
                         <div className="mt-1 space-y-0.5">
@@ -219,7 +209,7 @@ export function GitHistoryList({
                               testId="commit-files-load-error"
                             />
                           ) : (commitFilesQuery.data ?? []).length === 0 ? (
-                            <p className="py-1 text-meta text-muted-foreground">{t('No files')}</p>
+                            <p className="py-1 text-small text-muted-foreground">{t('No files')}</p>
                           ) : (
                             (commitFilesQuery.data as CommitFileChange[]).map((file) => {
                               const isFileSelected =
@@ -229,7 +219,9 @@ export function GitHistoryList({
                                 <button
                                   className={cn(
                                     'flex h-7 w-full items-center gap-2 rounded-xs px-2 text-left',
-                                    isFileSelected ? 'bg-accent' : 'hover:bg-accent/50'
+                                    isFileSelected
+                                      ? 'bg-fill-ghost-selected'
+                                      : 'hover:bg-fill-ghost-hover'
                                   )}
                                   key={file.path}
                                   onClick={(e) => {
@@ -266,7 +258,7 @@ export function GitHistoryList({
               })}
               {hasNextPage && (
                 <Button
-                  className="h-6 w-full text-meta text-muted-foreground"
+                  className="h-6 w-full text-small text-muted-foreground"
                   disabled={isFetchingNextPage}
                   onClick={onLoadMore}
                   size="sm"

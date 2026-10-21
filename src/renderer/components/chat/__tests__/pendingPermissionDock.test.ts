@@ -56,10 +56,14 @@ function mount() {
   return { container, root: createRoot(container) };
 }
 
-/** Every `<button>` currently on screen, by visible text. */
+/**
+ * The `<button>` on screen whose visible text is exactly `text`. Exact, not a
+ * substring: the footer puts "Allow for session" before "Allow" (design system
+ * v2 §7.6, primary last), so a substring match would press the wrong one.
+ */
 function buttonNamed(container: HTMLElement, text: string): HTMLButtonElement | undefined {
-  return [...container.querySelectorAll('button')].find((button) =>
-    button.textContent?.includes(text)
+  return [...container.querySelectorAll('button')].find(
+    (button) => button.textContent?.trim() === text
   );
 }
 

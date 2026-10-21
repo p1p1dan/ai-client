@@ -19,6 +19,7 @@ import { SmoothCollapse } from '@/components/ui/smooth-collapse';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useSourceControlStore } from '@/stores/sourceControl';
+import { GIT_STATUS_TONE } from './gitStatusTone';
 import { useChangesActions } from './useChangesActions';
 
 interface ChangesTreeProps {
@@ -44,15 +45,7 @@ const statusIcons: Record<FileChangeStatus, React.ElementType> = {
   X: FileWarning,
 };
 
-const statusColors: Record<FileChangeStatus, string> = {
-  M: 'text-orange-500',
-  A: 'text-green-500',
-  D: 'text-red-500',
-  R: 'text-blue-500',
-  C: 'text-blue-500',
-  U: 'text-green-500',
-  X: 'text-purple-500',
-};
+const statusColors = GIT_STATUS_TONE;
 
 interface TreeNode {
   name: string;
@@ -167,7 +160,7 @@ function FileTreeNode({
     return (
       <>
         <div
-          className="group flex h-7 items-center gap-2 rounded-sm px-2 text-sm cursor-pointer transition-colors hover:bg-accent/50"
+          className="group flex h-7 items-center gap-2 rounded-sm px-2 text-ui cursor-pointer transition-colors hover:bg-fill-ghost-hover"
           style={{ paddingLeft: `${level * 12 + 8}px` }}
           onClick={() => toggleFolder(node.path)}
           onKeyDown={(e) => e.key === 'Enter' && toggleFolder(node.path)}
@@ -244,8 +237,8 @@ function FileTreeNode({
   return (
     <div
       className={cn(
-        'group relative flex h-7 items-center gap-2 rounded-sm px-2 text-sm cursor-pointer transition-colors',
-        isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+        'group relative flex h-7 items-center gap-2 rounded-sm px-2 text-ui cursor-pointer transition-colors',
+        isSelected ? 'bg-fill-ghost-selected text-foreground' : 'hover:bg-fill-ghost-hover'
       )}
       style={{ paddingLeft: `${level * 12 + 8}px` }}
       onClick={() => onFileClick({ path: file.path, staged })}
@@ -257,7 +250,7 @@ function FileTreeNode({
       <Icon className={cn('h-4 w-4 shrink-0', isSelected ? '' : statusColors[file.status])} />
 
       <span
-        className={cn('shrink-0 font-mono text-xs', isSelected ? '' : statusColors[file.status])}
+        className={cn('shrink-0 font-mono text-small', isSelected ? '' : statusColors[file.status])}
       >
         {file.status}
       </span>
@@ -382,7 +375,7 @@ export function ChangesTree({
   if (isEmpty) {
     return (
       <div className="flex h-full min-h-[120px] flex-col items-center justify-center text-center text-muted-foreground">
-        <p className="text-sm">{t('No changes')}</p>
+        <p className="text-ui">{t('No changes')}</p>
       </div>
     );
   }
@@ -395,7 +388,7 @@ export function ChangesTree({
           <div className="flex justify-end px-2">
             <button
               type="button"
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1 text-small text-muted-foreground hover:text-foreground transition-colors"
               onClick={handleToggleAll}
               title={allExpanded ? t('Collapse all folders') : t('Expand all folders')}
             >
@@ -418,12 +411,12 @@ export function ChangesTree({
         {staged.length > 0 && (
           <div className="space-y-1">
             <div className="flex items-center justify-between px-2">
-              <h3 className="text-xs font-medium text-muted-foreground">
+              <h3 className="text-small font-medium text-muted-foreground">
                 {t('Staged changes ({{count}})', { count: staged.length })}
               </h3>
               <button
                 type="button"
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="text-small text-muted-foreground hover:text-foreground transition-colors"
                 onClick={handleUnstageAll}
               >
                 {t('Unstage all')}
@@ -451,13 +444,13 @@ export function ChangesTree({
         {trackedChanges.length > 0 && (
           <div className="space-y-1">
             <div className="flex items-center justify-between px-2">
-              <h3 className="text-xs font-medium text-muted-foreground">
+              <h3 className="text-small font-medium text-muted-foreground">
                 {t('Changes ({{count}})', { count: trackedChanges.length })}
               </h3>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-small text-muted-foreground hover:text-foreground transition-colors"
                   onClick={handleDiscardTracked}
                   title={t('Discard all changes')}
                 >
@@ -465,7 +458,7 @@ export function ChangesTree({
                 </button>
                 <button
                   type="button"
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-small text-muted-foreground hover:text-foreground transition-colors"
                   onClick={handleStageTracked}
                 >
                   {t('Stage all')}
@@ -495,14 +488,14 @@ export function ChangesTree({
         {untrackedChanges.length > 0 && (
           <div className="space-y-1">
             <div className="flex items-center justify-between px-2">
-              <h3 className="text-xs font-medium text-muted-foreground">
+              <h3 className="text-small font-medium text-muted-foreground">
                 {t('Untracked changes ({{count}})', { count: untrackedChanges.length })}
               </h3>
               <div className="flex items-center gap-2">
                 {onDeleteUntracked && (
                   <button
                     type="button"
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-small text-muted-foreground hover:text-foreground transition-colors"
                     onClick={handleDeleteAllUntracked}
                     title={t('Delete all untracked files')}
                   >
@@ -511,7 +504,7 @@ export function ChangesTree({
                 )}
                 <button
                   type="button"
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-small text-muted-foreground hover:text-foreground transition-colors"
                   onClick={handleStageUntracked}
                 >
                   {t('Stage all')}

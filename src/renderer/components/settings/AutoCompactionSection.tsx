@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { autoCompactionNote } from './autoCompactionText';
-import { SettingsSectionBlock } from './SettingsPrimitives';
+import { SETTINGS_CARD_FRAME_CLASS, SettingsSectionBlock } from './SettingsPrimitives';
 
 export function AutoCompactionSection({ reloadKey }: { reloadKey?: string | number }) {
   const { t } = useI18n();
@@ -45,12 +45,13 @@ export function AutoCompactionSection({ reloadKey }: { reloadKey?: string | numb
 
   return (
     <SettingsSectionBlock
+      bare
       title={t('Automatic compaction')}
       description={t(
         'When a conversation nears the context window, the engine summarizes its earlier part by itself. Where that starts, model by model:'
       )}
     >
-      <ul aria-label={t('Automatic compaction')} className="divide-y rounded-md border">
+      <ul aria-label={t('Automatic compaction')} className={SETTINGS_CARD_FRAME_CLASS}>
         {models.map((model) => {
           const policy = model.autoCompaction;
           const note = autoCompactionNote(policy, policy.contextWindowDefaulted, t);
@@ -66,7 +67,7 @@ export function AutoCompactionSection({ reloadKey }: { reloadKey?: string | numb
               </p>
               <p
                 className={cn(
-                  'text-meta',
+                  'text-small',
                   note.tone === 'warning' ? 'text-warning' : 'text-muted-foreground'
                 )}
               >
@@ -76,7 +77,7 @@ export function AutoCompactionSection({ reloadKey }: { reloadKey?: string | numb
           );
         })}
       </ul>
-      <p className="text-meta text-muted-foreground">
+      <p className="text-small text-muted-foreground">
         {t(
           'For an AI service you added yourself, edit it under AI services above and change the context window and output limit in Model settings; for a model your administrator provides, ask them.'
         )}

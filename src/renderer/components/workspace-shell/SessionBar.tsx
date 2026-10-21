@@ -7,6 +7,7 @@ import { deriveJobsWindowView, deriveSubagentsWindowView } from '@/components/ch
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -37,13 +38,13 @@ interface SessionBarProps {
  */
 const BAR_LABEL_CLASS = 'max-xl:hidden @max-2xl:hidden';
 
-/** The toggles' shared look: `h-6`, pressed = `bg-selection`. */
+/** The toggles' shared look: `h-6`, `text-ui`, pressed = `bg-fill-ghost-selected`. */
 function barToggleClass(active: boolean): string {
   return cn(
-    'flex h-6 items-center gap-1 rounded-sm px-2 text-meta transition-colors',
+    'flex h-6 items-center gap-1 rounded-sm px-2 text-ui transition-colors',
     active
-      ? 'bg-selection text-foreground'
-      : 'text-muted-foreground hover:bg-hover hover:text-foreground focus-visible:bg-hover'
+      ? 'bg-fill-ghost-selected text-foreground'
+      : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground focus-visible:bg-fill-ghost-hover'
   );
 }
 
@@ -131,25 +132,27 @@ export function SessionBar({
 
   const title = (
     <div className="flex min-w-0 items-center gap-1.5">
-      {busy && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-running" />}
+      {/* Design system v2 §6: the one running glyph, neutral ink. */}
+      {busy && <StatusIcon status="running" />}
       {/* Decision 167 §6: 400 — the same size as the sidebar's 「聊天」 on this
           h-9 line, told apart by weight (panel name 600, chat name 400). The
           old `font-medium` rendered as 400 on Windows anyway. Decision 170
-          (issue #6 ruling 3): both are 16px (`text-section`) now. Decision
+          (issue #6 ruling 3): both are 16px (`text-heading`) now. Decision
           183 removed the panel title; this stays 16px / 400. Decision 174: no
           conversation open is the home page, and the bar says so. */}
-      <span className="min-w-0 truncate text-section text-foreground">
+      <span className="min-w-0 truncate text-heading text-foreground">
         {activeSession ? displaySessionTitle(activeSession.title, t) : t('Home')}
       </span>
-      {/* P1-7e e6 (decision 145): 「临时」 is CJK, so the title's own
-          `text-meta`, not 10px (design system, CJK cascade rule 3). */}
+      {/* P1-7e e6 (decision 145): 「临时」 is CJK, so `text-small`, not 10px
+          (design system, CJK cascade rule 3). Design system v2 §1: a tag on a
+          bar is a filled chip, not a second frame. */}
       {activeSession?.unbound && (
-        <span className="shrink-0 rounded-xs border px-1 text-meta text-muted-foreground">
+        <span className="shrink-0 rounded-xs bg-fill-neutral px-1 text-small text-muted-foreground">
           {t('Temporary')}
         </span>
       )}
       {contextLine && (
-        <span className="min-w-0 truncate text-meta text-muted-foreground">{contextLine}</span>
+        <span className="min-w-0 truncate text-small text-muted-foreground">{contextLine}</span>
       )}
     </div>
   );
@@ -157,7 +160,9 @@ export function SessionBar({
   return (
     // `overflow-hidden`: the bar ends at the chat column's edge whatever its
     // content does; the labels folding away (`BAR_LABEL_CLASS`) is the real fix.
-    <div className="@container flex h-9 shrink-0 items-center gap-2 overflow-hidden border-b bg-card/40 px-2">
+    // Design system v2 §7.12: the title bar is the canvas (--surface-1) with one
+    // hairline below.
+    <div className="@container flex h-9 shrink-0 items-center gap-2 overflow-hidden border-b border-border-soft bg-surface-1 px-2">
       {activeWorkspace?.path ? (
         <Tooltip>
           <TooltipTrigger delay={400} render={<div className="min-w-0 flex-1" />}>
@@ -180,7 +185,7 @@ export function SessionBar({
         <Button
           variant="ghost"
           size="sm"
-          className="h-6 shrink-0 gap-1 text-meta"
+          className="h-6 shrink-0 gap-1 text-ui"
           disabled={!isIdle}
           onClick={() => setTreeOpen(true)}
           title={t('Session branches')}
@@ -193,7 +198,7 @@ export function SessionBar({
         <Button
           variant="ghost"
           size="sm"
-          className="h-6 shrink-0 gap-1 text-meta tabular-nums"
+          className="h-6 shrink-0 gap-1 text-ui tabular-nums"
           onClick={onToggleReview}
           aria-pressed={reviewOpen}
           title={t('Session review')}
@@ -205,7 +210,7 @@ export function SessionBar({
       )}
       <button
         type="button"
-        className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-hover hover:text-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
         aria-label={t('New chat')}
         title={t('New chat')}
         onClick={startNewChat}
@@ -265,7 +270,7 @@ function TerminalButton({ state, onToggle }: { state: TerminalButtonState; onTog
         type="button"
         className={
           unavailable
-            ? 'flex h-6 cursor-not-allowed items-center gap-1 rounded-sm px-2 text-meta text-muted-foreground opacity-64'
+            ? 'flex h-6 cursor-not-allowed items-center gap-1 rounded-sm px-2 text-ui text-muted-foreground opacity-64'
             : barToggleClass(open)
         }
         onClick={onToggle}
@@ -277,8 +282,10 @@ function TerminalButton({ state, onToggle }: { state: TerminalButtonState; onTog
       >
         <Terminal className="size-3.5" />
         <span className={BAR_LABEL_CLASS}>{t('Terminal')}</span>
+        {/* The sidebar's "attached in the background" mark: a filled muted dot
+            (running is never blue, design system v2 §6). */}
         {state === 'hidden' && (
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-running" />
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-muted-foreground" />
         )}
       </button>
     </span>

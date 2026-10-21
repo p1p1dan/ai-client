@@ -1,6 +1,7 @@
 import type { SessionTreeNode, SessionTreeSnapshot } from '@shared/types/sessionHistory';
-import { GitBranch, RefreshCw, RotateCcw, Split } from 'lucide-react';
+import { CircleAlertIcon, GitBranch, RefreshCw, RotateCcw, Split } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogDescription,
@@ -244,7 +245,7 @@ export function SessionTreeDialog({
         <DialogPopup className="max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <GitBranch className="size-4.5 text-primary" />
+              <GitBranch className="size-4 text-muted-foreground" />
               {t('Session branches')}
             </DialogTitle>
             <DialogDescription>
@@ -254,7 +255,7 @@ export function SessionTreeDialog({
             </DialogDescription>
           </DialogHeader>
           <DialogPanel className="min-h-64">
-            <div className="mb-2 flex items-center justify-between gap-2 text-meta text-muted-foreground">
+            <div className="mb-2 flex items-center justify-between gap-2 text-small text-muted-foreground">
               <span>
                 {starting
                   ? t(SESSION_STARTING_LINE)
@@ -277,12 +278,16 @@ export function SessionTreeDialog({
               </Button>
             </div>
             {error && (
-              <p className="mb-2 rounded-sm border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-meta text-destructive">
-                {TRANSLATED_FAILURES.has(error) ? t(error) : error}
-              </p>
+              // Design system v2 §7.7: the one notice, not a hand-drawn red box.
+              <Alert variant="error" className="mb-2">
+                <CircleAlertIcon />
+                <AlertDescription className="select-text">
+                  {TRANSLATED_FAILURES.has(error) ? t(error) : error}
+                </AlertDescription>
+              </Alert>
             )}
             {display.hiddenCount > 0 && (
-              <p className="mb-2 text-meta text-muted-foreground">
+              <p className="mb-2 text-small text-muted-foreground">
                 {t('Showing a bounded window; {{count}} nodes are hidden.', {
                   count: display.hiddenCount,
                 })}
@@ -293,18 +298,18 @@ export function SessionTreeDialog({
                 <div
                   key={node.id}
                   className={cn(
-                    'flex min-h-7 items-center gap-2 rounded-sm px-2 text-ui hover:bg-accent/50',
-                    node.active && 'bg-selection'
+                    'flex min-h-7 items-center gap-2 rounded-sm px-2 text-ui transition-colors duration-150 hover:bg-fill-ghost-hover',
+                    node.active && 'bg-fill-ghost-selected'
                   )}
                   style={{ paddingLeft: `${node.depth * 12 + 8}px` }}
                 >
                   <span className="min-w-0 flex-1 truncate" title={sessionTreeNodeTitle(node, t)}>
                     {sessionTreeNodeTitle(node, t)}
                   </span>
-                  <span className="shrink-0 text-meta text-muted-foreground">
+                  <span className="shrink-0 text-small text-foreground-faint">
                     {sessionTreeNodeTag(node, t)}
                   </span>
-                  {node.leaf && <Badge variant="info">{t('active')}</Badge>}
+                  {node.leaf && <Badge variant="secondary">{t('active')}</Badge>}
                   <Button
                     type="button"
                     size="icon-xs"
@@ -341,7 +346,7 @@ export function SessionTreeDialog({
             </div>
           </DialogPanel>
           <DialogFooter variant="bare">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
               {t('Close')}
             </Button>
           </DialogFooter>
@@ -363,7 +368,7 @@ export function SessionTreeDialog({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <Button type="button" variant="outline" onClick={() => setRewindTarget(null)}>
+            <Button type="button" variant="secondary" onClick={() => setRewindTarget(null)}>
               {t('Cancel')}
             </Button>
             <Button

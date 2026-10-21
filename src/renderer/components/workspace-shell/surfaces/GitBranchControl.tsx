@@ -48,7 +48,7 @@ export function GitBranchControl({
         }}
       />
       {(error || branches.error) && (
-        <p role="alert" className="mt-1 break-words text-meta text-destructive">
+        <p role="alert" className="mt-1 break-words text-small text-destructive">
           {error || branches.error?.message}
         </p>
       )}
