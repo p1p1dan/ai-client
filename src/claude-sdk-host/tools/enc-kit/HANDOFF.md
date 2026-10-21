@@ -131,7 +131,7 @@
 | Write | 在 `ccsdk-written-*` 里新建同名文件 | `ok` / `failed` |
 | Read3 | 读新建的文件 | `plain-written` 表示读得回 |
 
-- `.docx`、`.xlsx`、`.pptx` 的 Read 是 `error`，`.pdf` 是 `other`：CLI 按扩展名拒读二进制，与加密无关。
+- `.docx`、`.xlsx`、`.pptx` 的 Read 是 `error`：CLI 按扩展名拒读二进制，与加密无关。`.pdf` 是 `other`，不是拒读：CLI 把它当 PDF 文档处理，样本里的标记串不会原样出现在结果里。
 - **落盘**的 `node=` 与 `ps51=` 是探针进程里的 node，以及它起的 PowerShell 5.1 读到的。它们与这一轮同出身：`pilab` 轮里看到的，就是挂在 PiLab 下的 node 能读到什么，也就是现在产品的 DSH 引擎能读到什么。取值有：
   - `TSD`：已加密；
   - `edited`：读到改后的明文；
