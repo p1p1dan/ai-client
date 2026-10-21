@@ -269,7 +269,7 @@ export const COMPOSER_TEXTAREA_LINE_SCALE = 1.5;
  * composer's empty textarea rests at two body-tier lines, on the home page and
  * in a conversation alike, so the first send still moves nothing. A draft
  * still grows it to the eight-line cap (`composerTextareaClass('session')`).
- * At the 17px default that is 17 × 1.5 × 2 = 51px and a 101px card.
+ * At the 14px default (design system v2) that is 14 × 1.5 × 2 = 42px and a 92px card.
  */
 export const COMPOSER_TEXTAREA_MIN_ROWS = 2;
 

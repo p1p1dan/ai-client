@@ -316,8 +316,9 @@ describe('composerCardClass', () => {
         breakdown.controlRow
     ).toBe(breakdown.total);
     // Decision 174 (issue #6): the empty textarea rests at two body-tier lines
-    // (17 × 1.5 × 2 = 51px), so the card is 2 + 16 + 51 + 8 + 24 = 101px.
-    expect(breakdown.total).toBe(101);
+    // (design system v2's 14px default: 14 × 1.5 × 2 = 42px), so the card is
+    // 2 + 16 + 42 + 8 + 24 = 92px.
+    expect(breakdown.total).toBe(92);
 
     // The textarea's row is not a free 51 either: it is the body tier times the
     // line scale the session textarea's `min-h`/`leading` calc actually spells,
@@ -336,8 +337,8 @@ describe('composerCardClass', () => {
     expect((gapStep as number) * 4).toBe(breakdown.rowGap);
 
     // `min-h-18.5` (74px) is the FLOOR, not the height: the card grows with the
-    // body tier above 16px. At the 17px default with two resting lines the
-    // content (101px) is well above it — that is the deal the breakdown
+    // body tier. At the 14px default with two resting lines the content (92px)
+    // is above it — that is the deal the breakdown
     // documents, and why `min-h-*` is the right utility here rather than `h-*`.
     const step = stepValue(cls, /(?:^|\s)min-h-(\d+(?:\.\d+)?)(?:\s|$)/);
     expect(step).not.toBeNull();
@@ -596,14 +597,14 @@ describe('composerTextareaClass', () => {
     expect(cls).toContain('[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5*2)]');
   });
 
-  it('T104 / decision 174: at the 17px default the derived row is the 51px the card arithmetic was built on', () => {
+  it('T104 / decision 174: at the 14px default the derived row is the 42px the card arithmetic is built on', () => {
     // The cross-check between the class string and the breakdown: the same
-    // expression, evaluated at D1's default, has to be the number the 101px
+    // expression, evaluated at the v2 default, has to be the number the 92px
     // resting contract was derived from.
     expect(composerFollowHeightBreakdown().textareaRow).toBe(
       DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE * COMPOSER_TEXTAREA_MIN_ROWS
     );
-    expect(composerFollowHeightBreakdown().textareaRow).toBe(51);
+    expect(composerFollowHeightBreakdown().textareaRow).toBe(42);
   });
 
   it('T104: the derived row stays a whole number of line boxes at the extremes of the body range', () => {

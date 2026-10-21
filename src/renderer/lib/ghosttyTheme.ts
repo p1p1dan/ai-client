@@ -270,6 +270,14 @@ export function applyTerminalThemeToApp(themeName: string, syncDarkMode = true):
   root.style.setProperty('--background', withPanelBgOpacity(theme.background));
   root.style.setProperty('--foreground', theme.foreground);
 
+  // Design system v2: the sidebar surface sits one step below the canvas.
+  root.style.setProperty(
+    '--surface-0',
+    withPanelBgOpacity(
+      mixColors(theme.background, isDark ? '#000000' : theme.black, isDark ? 0.35 : 0.03)
+    )
+  );
+
   // Card - same as background or slightly different
   root.style.setProperty('--card', withPanelBgOpacity(theme.background));
   root.style.setProperty('--card-foreground', theme.foreground);
@@ -334,6 +342,7 @@ export function applyTerminalThemeToApp(themeName: string, syncDarkMode = true):
 export function clearTerminalThemeFromApp(): void {
   const root = document.documentElement;
   const cssVars = [
+    '--surface-0',
     '--background',
     '--foreground',
     '--card',

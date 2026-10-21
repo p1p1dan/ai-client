@@ -1,4 +1,5 @@
 import { sanitizeChatAgentDefaults } from '@shared/models/chatAgentDefaults';
+import { CHAT_TYPOGRAPHY_SCALE_VERSION } from '@shared/types/chatTypography';
 import { checkRequestUserAgent, isRequestUserAgentMode } from '@shared/types/requestUserAgent';
 import type { SettingsState, TerminalKeybinding, XtermKeybindings } from './types';
 
@@ -239,6 +240,20 @@ export function migrateSettings(
   const sanitizedPersisted = sanitizeLegacyAiSettings(persisted);
   for (const key of REMOVED_SETTING_KEYS) {
     delete (sanitizedPersisted as Record<string, unknown>)[key];
+  }
+
+  // Design system v2 (user ruling 2026-10-21): chat sizes saved under the old
+  // scale are reset ONCE to the new defaults. `merge` runs on every launch, so
+  // the persisted scale version is what makes this one-shot: after the reset
+  // the current version is saved with the sizes, and a later pick sticks.
+  if (
+    typeof persisted.chatTypographyScaleVersion !== 'number' ||
+    persisted.chatTypographyScaleVersion < CHAT_TYPOGRAPHY_SCALE_VERSION
+  ) {
+    const reset = sanitizedPersisted as Record<string, unknown>;
+    delete reset.chatBodyFontSize;
+    delete reset.chatProcessFontSize;
+    reset.chatTypographyScaleVersion = CHAT_TYPOGRAPHY_SCALE_VERSION;
   }
 
   return {

@@ -37,7 +37,7 @@ Role: plan（立项方案，2026-10-21 起草，待用户定稿）。从 main `4
 | 阶段 | 内容 | 产出 | 状态 |
 |---|---|---|---|
 | 0 | 规范与预览，用户定 §4 的选择题 | `docs/design-system.md`（v2，旧规范已归档）；预览 | **完成**（2026-10-21，选择题全部已定） |
-| 1 | 底座：新 token 层（底色四层、边框、填充、阴影、品牌色、语义色、字号档、动效）替换 Flexoki，旧变量名保留为别名，全应用一次换色；终端、Monaco、「跟随终端配色」跟着改；对话字号出厂默认改成 14 / 12（`chatTypography.ts`），已保存的旧字号建议一次性重置（旧裁决是不迁移，这次整体换风格，建议重置一次，开工前确认） | `globals.css`、主题相关文件、`chatTypography.ts` | 未开始 |
+| 1 | 底座：新 token 层（底色四层、边框、填充、阴影、品牌色、语义色、字号档、动效）替换 Flexoki，旧变量名保留为别名，全应用一次换色；「跟随终端配色」补上侧栏底色；对话字号出厂默认改成 14 / 12，已保存的旧字号一次性重置（用户 2026-10-21 同意） | `globals.css`、`ghosttyTheme.ts`、`chatTypography.ts`、设置迁移、`LeftDock.tsx` 的侧栏底色 | **完成**（2026-10-22）：typecheck 通过，`src/renderer`、`src/shared` 测试 482 个文件全过；本地构建并拉起给用户看。未动：代码编辑器与终端配色（跟终端主题，与应用配色无关）、正文的 `leading-relaxed`（阶段 3 时间线队改成 1.43） |
 | 2 | 基础组件：coss 组件外观（Button、Menu、Dialog、Alert、Badge、Kbd、Tooltip、Input、Tabs）按新规范调；新增 `StatusIcon`、`DockCard` | `src/renderer/components/ui/` | 未开始 |
 | 3 | 各区域迁移，四队并行（§3） | 各区域代码 | 未开始 |
 | 4 | issue #26 的功能项：用户消息悬停操作、diff 行号与折叠、草稿重启后保留、强度菜单说明等 | 按 §3 的文件归属分给各队 | 未开始 |

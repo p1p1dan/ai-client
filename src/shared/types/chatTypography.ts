@@ -31,8 +31,11 @@ export const CHAT_BODY_FONT_SIZE_MAX = 24;
 /** Lower bound of the body tier (px) — see the module note on the 12px floor. */
 export const CHAT_BODY_FONT_SIZE_MIN = 12;
 
-/** D1: the out-of-the-box body tier. Mirrors `--text-chat-body` in `globals.css`. */
-export const DEFAULT_CHAT_BODY_FONT_SIZE = 17;
+/**
+ * The out-of-the-box body tier. Mirrors `--text-chat-body` in `globals.css`.
+ * Design system v2 (2026-10-21): the reference's 14px (was D1's 17).
+ */
+export const DEFAULT_CHAT_BODY_FONT_SIZE = 14;
 
 /** Upper bound of the process tier (px). Lower than the body's: it is the subordinate tier. */
 export const CHAT_PROCESS_FONT_SIZE_MAX = 20;
@@ -40,8 +43,16 @@ export const CHAT_PROCESS_FONT_SIZE_MAX = 20;
 /** Lower bound of the process tier (px) — the CJK floor, see the module note. */
 export const CHAT_PROCESS_FONT_SIZE_MIN = 12;
 
-/** D1: the out-of-the-box process tier. Mirrors `--text-chat-process` in `globals.css`. */
-export const DEFAULT_CHAT_PROCESS_FONT_SIZE = 14;
+/** The out-of-the-box process tier. Mirrors `--text-chat-process` in `globals.css`. v2: 12 (was 14). */
+export const DEFAULT_CHAT_PROCESS_FONT_SIZE = 12;
+
+/**
+ * Which type scale the persisted chat sizes belong to. Design system v2 moved
+ * the defaults to the reference's density and the user ruled (2026-10-21) that
+ * saved sizes are reset ONCE to the new defaults; this marker records that the
+ * reset ran, because the settings merge runs on every launch.
+ */
+export const CHAT_TYPOGRAPHY_SCALE_VERSION = 2;
 
 /** Empty string means "follow the app's `--font-sans`" — a real value, not a missing one. */
 export const DEFAULT_CHAT_FONT_FAMILY = '';

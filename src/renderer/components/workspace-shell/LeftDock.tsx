@@ -174,7 +174,7 @@ export function LeftDock({
       // dock used to snap while the center animated, and the 250ms of
       // half-painted layout in between was the white strip on the right.
       className={cn(
-        'relative flex h-full shrink-0 bg-card/40',
+        'relative flex h-full shrink-0 bg-surface-0',
         'transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none'
       )}
       style={{ width: dockWidthVar }}
