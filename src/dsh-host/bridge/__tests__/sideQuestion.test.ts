@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildSideQuestionPrompt,
   buildSideQuestionTranscript,
+  buildSurfaceSideQuestionTranscript,
   SIDE_QUESTION_SYSTEM_PROMPT,
 } from '../../../shared/sideQuestion.ts';
 import type { HistoryMessage } from '../../../shared/types/sessionHistory.ts';
@@ -14,7 +15,7 @@ import {
 import { BridgeRpcServer, type BridgeSessionRuntime } from '../bridgeRpcServer.ts';
 import type { CompletionChunk, CompletionStreamOptions } from '../completions.ts';
 import type { DshRoutedModel } from '../modelRoute.ts';
-import { askDshSideQuestion } from '../sideQuestion.ts';
+import { askDshSideQuestion, surfaceMessagesOf } from '../sideQuestion.ts';
 
 /**
  * Layout 5f (ui-cohesion ruling L6): a side question reads the conversation so
@@ -83,6 +84,87 @@ describe('side question prompt (DSH)', () => {
   });
 });
 
+/**
+ * The model surface (`sessionQuery.readSurface`), as DSH logs it: what the
+ * model sees, a compaction checkpoint in place of what it replaced.
+ */
+const SURFACE = [
+  {
+    type: 'system/message',
+    data: { message: { role: 'system', content: [{ type: 'text', text: 'You are DSH.' }] } },
+  },
+  {
+    type: 'developer/message',
+    data: { message: { role: 'developer', content: [{ type: 'text', text: '<env>…</env>' }] } },
+  },
+  {
+    type: 'user/message',
+    data: {
+      role: 'user',
+      source: { kind: 'compact-checkpoint', compactionId: 'c1' },
+      content: [{ type: 'text', text: 'Earlier: the helper lives in src/a.ts.' }],
+    },
+  },
+  {
+    type: 'user/message',
+    data: {
+      role: 'user',
+      source: { kind: 'user' },
+      content: [
+        { type: 'text', text: 'Rename it' },
+        { type: 'image', attachment: {} },
+      ],
+    },
+  },
+  {
+    type: 'assistant/message',
+    data: {
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'reasoning', text: 'secret scratch work' },
+          { type: 'text', text: 'Renaming now.' },
+          { type: 'tool-call', id: 't1', name: 'edit', arguments: '{"path":"src/a.ts"}' },
+        ],
+      },
+    },
+  },
+  {
+    type: 'tool/result',
+    data: {
+      message: {
+        role: 'tool',
+        toolCallId: 't1',
+        isError: true,
+        content: [{ type: 'text', text: 'no match' }],
+      },
+    },
+  },
+  // Not a message: skipped rather than trusted.
+  { type: 'user/message', data: null },
+];
+
+describe('side question transcript from the model surface (readSurface)', () => {
+  it('quotes the summary, what was said and the tools; never instructions or thinking', () => {
+    const transcript = buildSurfaceSideQuestionTranscript(surfaceMessagesOf(SURFACE));
+    expect(transcript).toBe(
+      [
+        '[Context summary]\nEarlier: the helper lives in src/a.ts.',
+        'User: Rename it\nUser: [Image]',
+        'Assistant: Renaming now.\n[Tool call: edit {"path":"src/a.ts"}]',
+        '[Tool result: failed] no match',
+      ].join('\n')
+    );
+  });
+
+  it('keeps the newest whole messages when it runs long', () => {
+    const transcript = buildSurfaceSideQuestionTranscript(surfaceMessagesOf(SURFACE), 60);
+    expect(transcript.startsWith('[Earlier parts of the conversation are omitted.]')).toBe(true);
+    expect(transcript).toContain('[Tool result: failed] no match');
+    expect(transcript).not.toContain('Context summary');
+  });
+});
+
 function fakeLlm(chunks: CompletionChunk[], seen: CompletionStreamOptions[] = []) {
   return {
     stream(options: CompletionStreamOptions): AsyncIterable<CompletionChunk> {
@@ -109,7 +191,7 @@ describe('askDshSideQuestion', () => {
         seen
       ),
       routed: ROUTED,
-      messages: CONVERSATION,
+      transcript: buildSideQuestionTranscript(CONVERSATION),
       question: 'Which file?',
       signal: new AbortController().signal,
       onUsage,
@@ -127,7 +209,7 @@ describe('askDshSideQuestion', () => {
     const empty = await askDshSideQuestion({
       llm: fakeLlm([{ type: 'finish', reason: { kind: 'stop' } }]),
       routed: ROUTED,
-      messages: [],
+      transcript: '',
       question: 'q',
       signal: new AbortController().signal,
     });
@@ -138,7 +220,7 @@ describe('askDshSideQuestion', () => {
           { type: 'finish', reason: { kind: 'error', failure: { code: 'X', message: 'down' } } },
         ]),
         routed: ROUTED,
-        messages: [],
+        transcript: '',
         question: 'q',
         signal: new AbortController().signal,
       })
@@ -152,7 +234,7 @@ describe('askDshSideQuestion', () => {
       askDshSideQuestion({
         llm: fakeLlm([]),
         routed: ROUTED,
-        messages: [],
+        transcript: '',
         question: 'q',
         signal: controller.signal,
       })

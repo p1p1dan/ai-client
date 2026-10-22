@@ -1324,6 +1324,28 @@ async function main() {
         JSON.stringify(
           idsOf(((boot.result as Message | undefined)?.initialHistory as Message)?.page)
         ) === JSON.stringify(pageIds);
+      // Layout 5f: a side question reads what the model sees (`readSurface`):
+      // after a compaction, its summary and what followed — not what it replaced,
+      // which the timeline still shows. Asked before the recall turn, whose
+      // prompt names every marker.
+      if (m.label === 'compaction') {
+        const side = await j.client.request(chJ, 'worker.sideQuestion', {
+          logicalSessionId: m.logical,
+          questionId: 'smoke-side-1',
+          question: `SIDE-RECALL ${JSON.stringify({ markers: [...m.present, ...m.absent] })} which markers?`,
+        });
+        const answer = String(((side as Message | undefined)?.text as string | undefined) ?? '');
+        const [sideSeen = '', sideRest = ''] = answer.split(' missing=');
+        const sideMissing = sideRest.split(' summary=')[0] ?? '';
+        report.sideQuestionSurface = {
+          answer,
+          ok:
+            answer.startsWith('SIDE seen=') &&
+            m.present.every((marker) => sideSeen.includes(marker)) &&
+            m.absent.every((marker) => sideMissing.includes(marker)) &&
+            answer.endsWith('summary=true'),
+        };
+      }
       const turn = await runTurn(
         j,
         chJ,
@@ -1888,6 +1910,9 @@ async function main() {
     capabilitiesReportSkillsOnly:
       JSON.stringify(Object.keys(bootHCapabilities ?? {})) === '["skills"]' &&
       Number(bootHCapabilities?.skills) >= 1,
+    // Layout 5f: the side question quotes the model surface — a compaction's
+    // summary and what followed, not what the compaction replaced.
+    sideQuestionReadsSurface: (report.sideQuestionSurface as Message | undefined)?.ok === true,
     compactTakesInstructions:
       (report.compactInstructions as Message | undefined)?.ok === false &&
       (report.compactInstructions as Message | undefined)?.code === 'WORKER_COMPACT_UNAVAILABLE' &&

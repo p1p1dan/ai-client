@@ -8,7 +8,7 @@
  * value imports keep their `.ts` suffix.
  */
 
-import { isDshSummaryRow } from './dshHistory/types.ts';
+import { DSH_SOURCE_COMPACT_CHECKPOINT, isDshSummaryRow } from './dshHistory/types.ts';
 import type { HistoryMessage } from './types/sessionHistory.ts';
 import type { WorkerSideQuestionTurn } from './types/workerRpc.ts';
 
@@ -86,12 +86,90 @@ export function buildSideQuestionTranscript(
   messages: readonly HistoryMessage[],
   maxChars = SIDE_QUESTION_TRANSCRIPT_MAX_CHARS
 ): string {
+  return joinNewestFirst(
+    messages.map((message) => messageLines(message).join('\n')),
+    maxChars
+  );
+}
+
+/**
+ * A message of the DSH model surface (`sessionQuery.readSurface`), reduced to
+ * what a transcript quotes. Structural, so this file needs no DSH types.
+ */
+export interface SideQuestionSurfaceMessage {
+  role: string;
+  content: ReadonlyArray<{ type: string; text?: string; name?: string; arguments?: string }>;
+  source?: { kind?: string };
+  isError?: boolean;
+}
+
+function surfaceMessageLines(message: SideQuestionSurfaceMessage): string[] {
+  const text = (types: readonly string[]) =>
+    message.content
+      .filter((block) => types.includes(block.type) && typeof block.text === 'string')
+      .map((block) => (block.text ?? '').trim())
+      .filter(Boolean)
+      .join('\n');
+  // Compaction's checkpoint: the summary standing in for what it replaced.
+  if (message.source?.kind === DSH_SOURCE_COMPACT_CHECKPOINT) {
+    const summary = text(['text']);
+    return summary ? [`[Context summary]\n${summary}`] : [];
+  }
+  switch (message.role) {
+    case 'user': {
+      const lines = message.content.flatMap((block) => {
+        if (block.type === 'text') return block.text?.trim() ? [`User: ${block.text.trim()}`] : [];
+        if (block.type === 'image') return ['User: [Image]'];
+        if (block.type === 'file') return ['User: [File]'];
+        return [];
+      });
+      return lines;
+    }
+    case 'assistant':
+      return message.content.flatMap((block) => {
+        if (block.type === 'text') {
+          return block.text?.trim() ? [`Assistant: ${block.text.trim()}`] : [];
+        }
+        if (block.type === 'tool-call') {
+          const input = clip(block.arguments?.trim() ?? '', TOOL_INPUT_MAX_CHARS);
+          return [`[Tool call: ${block.name ?? 'tool'}${input ? ` ${input}` : ''}]`];
+        }
+        // Reasoning stays out: the agent's scratch work, not what it said.
+        return [];
+      });
+    case 'tool': {
+      const body = text(['text']);
+      const head = message.isError ? '[Tool result: failed]' : '[Tool result]';
+      return [body ? `${head} ${clip(body, TOOL_OUTPUT_MAX_CHARS)}` : head];
+    }
+    default:
+      // System and developer messages: the agent's instructions and context
+      // snapshots, not the conversation.
+      return [];
+  }
+}
+
+/**
+ * The conversation as the model sees it now (the DSH surface: after a
+ * compaction, its summary instead of what it replaced), in the same form and
+ * budget as `buildSideQuestionTranscript`.
+ */
+export function buildSurfaceSideQuestionTranscript(
+  messages: readonly SideQuestionSurfaceMessage[],
+  maxChars = SIDE_QUESTION_TRANSCRIPT_MAX_CHARS
+): string {
+  return joinNewestFirst(
+    messages.map((message) => surfaceMessageLines(message).join('\n')),
+    maxChars
+  );
+}
+
+/** The newest texts that fit `maxChars`, whole ones only, oldest first; a note when some are left out. */
+function joinNewestFirst(texts: readonly string[], maxChars: number): string {
   const parts: string[] = [];
   let used = 0;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (!message) continue;
-    const text = messageLines(message).join('\n');
+  for (let index = texts.length - 1; index >= 0; index -= 1) {
+    const text = texts[index];
     if (!text) continue;
     if (used + text.length + 1 > maxChars) {
       parts.push(OMITTED_NOTE);

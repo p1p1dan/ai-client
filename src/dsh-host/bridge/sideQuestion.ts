@@ -4,18 +4,19 @@
  * One tool-free request through the host's LLM service (the same adapter,
  * routes and per-request keys as a chat turn, like the auto gear's review in
  * `autoReviewer.ts`), on the session's own model. The prompt carries the
- * conversation so far (`buildSideQuestionPrompt`); nothing is written to the
- * session and no event is emitted. The answer is the stream's text.
+ * conversation so far (`buildSideQuestionPrompt`) — the session's model surface
+ * read through `sessionQuery.readSurface` where it can be, so the side question
+ * sees what the model sees; nothing is written to the session and no event is
+ * emitted. The answer is the stream's text.
  *
  * Loaded by Node type stripping in a source checkout: erasable syntax only.
  */
 
 import {
   buildSideQuestionPrompt,
-  buildSideQuestionTranscript,
   SIDE_QUESTION_SYSTEM_PROMPT,
+  type SideQuestionSurfaceMessage,
 } from '../../shared/sideQuestion.ts';
-import type { HistoryMessage } from '../../shared/types/sessionHistory.ts';
 import {
   WORKER_SIDE_QUESTION_BUDGET_MS,
   WORKER_SIDE_QUESTION_CANCELLED,
@@ -32,7 +33,8 @@ const TIMEOUT = 'side_question_timed_out';
 export interface DshSideQuestionInput {
   llm: CompletionLlm;
   routed: DshRoutedModel;
-  messages: readonly HistoryMessage[];
+  /** The conversation as text (`buildSurfaceSideQuestionTranscript` or its history fallback). */
+  transcript: string;
   question: string;
   history?: readonly WorkerSideQuestionTurn[];
   signal: AbortSignal;
@@ -65,7 +67,7 @@ export async function askDshSideQuestion(
   let usage: unknown;
   try {
     const prompt = buildSideQuestionPrompt({
-      transcript: buildSideQuestionTranscript(input.messages),
+      transcript: input.transcript,
       ...(input.history ? { history: input.history } : {}),
       question: input.question,
     });
@@ -121,6 +123,29 @@ export async function askDshSideQuestion(
       }
     }
   }
+}
+
+/** One event of `sessionQuery.readSurface(...).events`, as far as a transcript reads it. */
+export interface DshSurfaceEventLike {
+  type: string;
+  data: unknown;
+}
+
+/**
+ * The surface's messages: a `user/message` event's data IS the message; the
+ * other message events carry it under `message`.
+ */
+export function surfaceMessagesOf(
+  events: readonly DshSurfaceEventLike[]
+): SideQuestionSurfaceMessage[] {
+  return events.flatMap((event) => {
+    const data = event.data as { message?: unknown } | null;
+    const message = event.type === 'user/message' ? data : data?.message;
+    if (!message || typeof message !== 'object') return [];
+    const candidate = message as Partial<SideQuestionSurfaceMessage>;
+    if (typeof candidate.role !== 'string' || !Array.isArray(candidate.content)) return [];
+    return [candidate as SideQuestionSurfaceMessage];
+  });
 }
 
 function cancelledError(): BridgeSessionError {

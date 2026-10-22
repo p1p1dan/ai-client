@@ -172,6 +172,10 @@ import {
 } from '../../shared/planReview.ts';
 import { resolveSettingSources } from '../../shared/settingSources.ts';
 import {
+  buildSideQuestionTranscript,
+  buildSurfaceSideQuestionTranscript,
+} from '../../shared/sideQuestion.ts';
+import {
   type ClientPrefixEvidence,
   REQUEST_SCOPE_SERVICE,
   type RequestScopeView,
@@ -336,7 +340,7 @@ import {
   type PlanReviewSettlement,
 } from './questions.ts';
 import { type ApplySandboxMode, dshSandboxModeFor } from './sandboxMode.ts';
-import { askDshSideQuestion } from './sideQuestion.ts';
+import { askDshSideQuestion, surfaceMessagesOf } from './sideQuestion.ts';
 import {
   DSH_SESSION_MISSING,
   grantsSidecarFor,
@@ -2288,17 +2292,39 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     }
     // Decisions 033, 040: the session's model and effort, or a refusal.
     const routed = this.router.session(this.modelId, this.options.effort);
-    await this.historyCache.ready();
     return askDshSideQuestion({
       llm,
       routed,
-      messages: this.historyCache.messages(),
+      transcript: await this.sideQuestionTranscript(),
       question: input.question,
       ...(input.history ? { history: input.history } : {}),
       signal,
       // Decision 193 §10: a request this chat is billed for, like a review.
       onUsage: (usage) => addAuxiliaryUsage(this.reviewUsage, usage),
     });
+  }
+
+  /**
+   * The conversation a side question reads: the model surface
+   * (`sessionQuery.readSurface`, lock-free, mid-turn too), so after a
+   * compaction it is the summary and what followed, as the model has it. The
+   * projected history stands in when the surface cannot be read.
+   */
+  private async sideQuestionTranscript(): Promise<string> {
+    const query = this.ctx.sessionQuery;
+    if (this.dshSessionId && typeof query.readSurface === 'function') {
+      try {
+        const surface = await query.readSurface(this.dshSessionId);
+        return buildSurfaceSideQuestionTranscript(surfaceMessagesOf(surface.events));
+      } catch (error) {
+        this.options.log?.(
+          '[dsh-bridge] side question: surface unreadable, using the history',
+          error
+        );
+      }
+    }
+    await this.historyCache.ready();
+    return buildSideQuestionTranscript(this.historyCache.messages());
   }
 
   /** `worker.job.read`: one job's output, read without moving the model's cursor. */
