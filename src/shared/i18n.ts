@@ -4943,3 +4943,17 @@ Object.assign(zhTranslations, {
   'Filter, or ? to search in files': '筛选文件，输入 ? 搜索文件内容',
   'Filter files': '筛选文件',
 });
+
+/** Layout 5e (ui-cohesion §6, ruling L5): the session rail right of the chat. */
+Object.assign(zhTranslations, {
+  'Session details': '会话详情',
+  'Hide session rail': '隐藏会话侧栏',
+  'Show session rail': '显示会话侧栏',
+  'The session rail makes room while a pane is open': '右侧面板打开时，会话侧栏让位',
+  'The window is too narrow for the session rail': '窗口太窄，会话侧栏已隐藏',
+  'Built-in engine': '内置引擎',
+  Compact: '压缩',
+  'Commit changes': '提交改动',
+  '{{count}} more files': '还有 {{count}} 个文件',
+  'By content, counted in characters of the loaded messages': '按内容分，以已载入消息的字符计',
+});

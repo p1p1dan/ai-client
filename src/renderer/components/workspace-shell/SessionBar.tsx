@@ -9,6 +9,7 @@ import {
   Layers,
   MoreVertical,
   PanelLeftOpen,
+  PanelRight,
   Plus,
   SquareTerminal,
 } from 'lucide-react';
@@ -67,6 +68,18 @@ interface SessionBarProps {
    * divider. Nothing renders (divider included) until 5e passes one.
    */
   sessionRailToggle?: ReactNode;
+  /**
+   * Layout 5e: the rail's ⋮ entry, and whether the rail is on screen — while it
+   * is, its environment card carries the repository / branch / folder, so the
+   * menu drops them.
+   */
+  sessionRail?: {
+    visible: boolean;
+    /** Already translated. */
+    label: string;
+    disabled: boolean;
+    onToggle: () => void;
+  };
 }
 
 /**
@@ -74,7 +87,7 @@ interface SessionBarProps {
  * (the reference's desktop shell). 28px, 16px icons; pressed = the shared
  * `fill-ghost-selected`.
  */
-function barIconClass(pressed: boolean): string {
+export function barIconClass(pressed: boolean): string {
   return cn(
     'relative flex size-7 shrink-0 items-center justify-center rounded-sm transition-colors',
     pressed
@@ -133,8 +146,9 @@ function BarIconButton({
  *
  * Layout 5d: every button toggles a pane card; pressed = that pane is open.
  * The ⋮ menu takes what has no button: the Git / Run / Context / background
- * tasks panes, and the repository / branch / folder the conversation runs in
- * — they move to the session rail's environment card in 5e. The background
+ * tasks panes, the session rail (layout 5e), and — only while the rail is not
+ * on screen — the repository / branch / folder the conversation runs in,
+ * which the rail's environment card otherwise shows. The background
  * tasks button opens the tasks pane; the floating sub-windows (chat/) are no
  * longer opened from here.
  *
@@ -151,6 +165,7 @@ export function SessionBar({
   terminalState,
   onToggleTerminal,
   sessionRailToggle,
+  sessionRail,
 }: SessionBarProps) {
   const { t } = useI18n();
 
@@ -331,10 +346,21 @@ export function SessionBar({
               )}
             </MenuGroup>
           )}
-          {activeWorkspace && (
+          {activeSessionId && sessionRail && (
+            <MenuItem
+              disabled={sessionRail.disabled}
+              onClick={sessionRail.onToggle}
+              data-session-rail-item=""
+            >
+              <PanelRight />
+              {sessionRail.label}
+            </MenuItem>
+          )}
+          {/* Layout 5e: the session rail's environment card carries these
+              while the rail is on screen. */}
+          {activeWorkspace && !sessionRail?.visible && (
             <>
               <MenuSeparator />
-              {/* Moves to the session rail's environment card in 5e. */}
               <MenuGroup>
                 <MenuGroupLabel>{t('Environment')}</MenuGroupLabel>
                 {activeProject?.name && (

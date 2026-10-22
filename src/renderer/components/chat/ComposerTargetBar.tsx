@@ -14,6 +14,7 @@ import {
   targetRowSlots,
 } from './middleColumnLayout';
 import { RunLocationIndicator } from './RunLocationIndicator';
+import { useSessionRailPresent } from './sessionRailPresence';
 import { TargetFolderSelect } from './TargetFolderSelect';
 import { useComposerTarget } from './useComposerTarget';
 import { useHomeTarget } from './useHomeTarget';
@@ -79,6 +80,8 @@ export function ComposerTargetBar({
   trailing,
 }: ComposerTargetBarProps) {
   const { t } = useI18n();
+  // Layout 5e: the session rail's environment card says where it runs.
+  const sessionRailPresent = useSessionRailPresent();
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const onHome = activeSessionId === null;
   const home = useHomeTarget();
@@ -209,7 +212,7 @@ export function ComposerTargetBar({
           heads the right-anchored group, before model/effort and context use. */}
       {mode === 'session' ? (
         <div className={composerBarTrailingClass()}>
-          {slots.runLocation && runLocation && (
+          {slots.runLocation && runLocation && !sessionRailPresent && (
             <RunLocationIndicator text={t(runLocation.text)} tone={runLocation.tone} />
           )}
           {trailing}

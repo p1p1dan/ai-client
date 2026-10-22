@@ -12,6 +12,7 @@ import {
 import { useShallow } from 'zustand/shallow';
 import type { Repository } from '@/App/constants';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
+import { SessionRailPresenceContext } from '@/components/chat/sessionRailPresence';
 import { GlobalSearchDialog } from '@/components/search/GlobalSearchDialog';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,7 @@ import { columnTerminalKey, useColumnTerminalStore } from '@/stores/columnTermin
 import { isDiffTabActive } from '@/stores/diffTabTarget';
 import { useEditorStore } from '@/stores/editor';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
+import { useSessionRailStore } from '@/stores/sessionRail';
 import { useSettingsStore } from '@/stores/settings';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
@@ -33,6 +35,12 @@ import { HomeView } from './HomeView';
 import { LeftDock } from './LeftDock';
 import { type PaneActions, PaneArea } from './PaneArea';
 import { SessionBar, type SessionReviewTotals } from './SessionBar';
+import { SessionRail } from './sessionRail/SessionRail';
+import { SessionRailToggle, sessionRailToggleLabel } from './sessionRail/SessionRailToggle';
+import {
+  resolveSessionRailVisibility,
+  sessionRailToggleEnabled,
+} from './sessionRail/sessionRailModel';
 import { deriveSessionReview, type SessionReviewEntry } from './sessionReview';
 import { resolveTerminalWorkspace } from './surfaces/terminalWorkspace';
 import { useCapacityReclaimNotice } from './useCapacityReclaimNotice';
@@ -118,6 +126,11 @@ export function WorkspaceShell({
   const toggleExpandedPane = useShellLayoutStore((state) => state.toggleExpandedPane);
   const setPaneColumnSplit = useShellLayoutStore((state) => state.setPaneColumnSplit);
   const setPaneRowSplit = useShellLayoutStore((state) => state.setPaneRowSplit);
+  const revealChange = useShellLayoutStore((state) => state.revealChange);
+
+  // Layout 5e: the session rail — the user's shown / hidden choice (persisted).
+  const sessionRailShown = useSessionRailStore((state) => state.shown);
+  const toggleSessionRail = useSessionRailStore((state) => state.toggleShown);
 
   // D35: `manualChat` stays (it also gates the "close all tabs snaps chat
   // back to full width" reset below); nothing sets it any more, so
@@ -419,6 +432,30 @@ export function WorkspaceShell({
     }
   }, [editorOpen, manualChat, clearManualOverrides]);
 
+  /**
+   * Layout 5e (ruling L5): the session rail sits inside the chat column, right
+   * of the conversation. Derived per render from the user's choice, the panes
+   * on screen and the allocator's chat width — never stored (F10). It yields
+   * to any open pane, and hides when the chat would get too narrow.
+   */
+  const sessionRail = resolveSessionRailVisibility({
+    userShown: sessionRailShown,
+    sessionOpen: activeSessionId !== null,
+    panesOpen: visiblePanes.length,
+    chatWidth: chatVisible ? allocation.chatWidth : 0,
+  });
+  const sessionRailLabel = t(sessionRailToggleLabel(sessionRail));
+  const sessionRailMenuDisabled = !sessionRailToggleEnabled(sessionRail);
+  const sessionRailMenu = useMemo(
+    () => ({
+      visible: sessionRail.visible,
+      label: sessionRailLabel,
+      disabled: sessionRailMenuDisabled,
+      onToggle: toggleSessionRail,
+    }),
+    [sessionRail.visible, sessionRailLabel, sessionRailMenuDisabled, toggleSessionRail]
+  );
+
   const commitPaneAreaWidth = useCallback(
     (width: number) => setPaneAreaWidth(paneColumns, width),
     [setPaneAreaWidth, paneColumns]
@@ -482,6 +519,12 @@ export function WorkspaceShell({
             onOpenPane={openPane}
             terminalState={terminalState}
             onToggleTerminal={toggleTerminal}
+            sessionRailToggle={
+              activeSessionId ? (
+                <SessionRailToggle visibility={sessionRail} onToggle={toggleSessionRail} />
+              ) : undefined
+            }
+            sessionRail={sessionRailMenu}
           />
           <div className="relative flex min-h-0 flex-1">
             <div
@@ -499,12 +542,26 @@ export function WorkspaceShell({
               style={chatVisible ? { width: 'var(--shell-chat-w)' } : undefined}
             >
               {/* Decision 174 (issue #6): the home page fills the column while
-                  no conversation is open; ChatWorkspace keeps the composer. */}
-              <ChatWorkspace
-                className="min-w-0 flex-1"
-                onAddRepository={onAddRepository}
-                home={<HomeView />}
-              />
+                  no conversation is open; ChatWorkspace keeps the composer.
+                  Layout 5e: the session rail rides at the column's right
+                  edge, and the composer hides what the rail shows. */}
+              <div className="flex min-h-0 min-w-0 flex-1">
+                <SessionRailPresenceContext.Provider value={sessionRail.visible}>
+                  <ChatWorkspace
+                    className="min-w-0 flex-1"
+                    onAddRepository={onAddRepository}
+                    home={<HomeView />}
+                  />
+                </SessionRailPresenceContext.Provider>
+                {sessionRail.visible && activeSessionId && (
+                  <SessionRail
+                    sessionId={activeSessionId}
+                    reviewEntries={reviewAvailable ? reviewEntries : null}
+                    onOpenPane={openPane}
+                    onRevealChange={revealChange}
+                  />
+                )}
+              </div>
             </div>
             {/*
               Layout 5d: the pane cards. Always mounted — with nothing open

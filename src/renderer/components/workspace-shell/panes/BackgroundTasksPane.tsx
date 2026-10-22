@@ -32,6 +32,33 @@ import { PaneHeaderPortal } from './paneSlots';
 
 const EMPTY: readonly string[] = [];
 
+/**
+ * Stops a running row: a continuable subagent is interrupted (decision 069),
+ * a job is killed. A refusal is said in a toast. Shared with the session
+ * rail's running card (layout 5e).
+ */
+export async function stopBackgroundTask(
+  sessionId: string,
+  target: TaskStop,
+  t: ReturnType<typeof useI18n>['t']
+): Promise<void> {
+  try {
+    if (target.type === 'interrupt') {
+      await window.electronAPI.chat.interruptSubagent({ sessionId, childId: target.childId });
+    } else {
+      await window.electronAPI.chat.killSessionJob({ sessionId, jobId: target.jobId });
+    }
+  } catch (error) {
+    toastManager.add({
+      type: 'error',
+      title: t('The task was not stopped'),
+      description: isSessionNotRunningError(error)
+        ? t(SESSION_TASKS_ENDED)
+        : unwrapIpcErrorMessage(error),
+    });
+  }
+}
+
 export function BackgroundTasksPane({ sessionId }: { sessionId: string }) {
   const { t } = useI18n();
   const panels = useSessionPanelsStore((state) => state.bySession[sessionId]);
@@ -53,23 +80,7 @@ export function BackgroundTasksPane({ sessionId }: { sessionId: string }) {
   const [shown, setShown] = useState(FINISHED_PAGE);
   const [viewing, setViewing] = useState<TaskRow | null>(null);
 
-  const stop = async (target: TaskStop): Promise<void> => {
-    try {
-      if (target.type === 'interrupt') {
-        await window.electronAPI.chat.interruptSubagent({ sessionId, childId: target.childId });
-      } else {
-        await window.electronAPI.chat.killSessionJob({ sessionId, jobId: target.jobId });
-      }
-    } catch (error) {
-      toastManager.add({
-        type: 'error',
-        title: t('The task was not stopped'),
-        description: isSessionNotRunningError(error)
-          ? t(SESSION_TASKS_ENDED)
-          : unwrapIpcErrorMessage(error),
-      });
-    }
-  };
+  const stop = (target: TaskStop): Promise<void> => stopBackgroundTask(sessionId, target, t);
 
   const empty = view.running.length === 0 && view.finishedCount === 0;
 

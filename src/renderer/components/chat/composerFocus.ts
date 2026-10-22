@@ -51,3 +51,27 @@ export function onComposerStopRequest(
   window.addEventListener(COMPOSER_STOP_EVENT, listener);
   return () => window.removeEventListener(COMPOSER_STOP_EVENT, listener);
 }
+
+const COMPOSER_COMPACT_EVENT = 'aiclient:composer-compact';
+
+/**
+ * Layout 5e: the session rail's 「压缩」 button. The composer owns `/compact`'s
+ * whole path (its gates, its timeline row, its toasts), so it runs the command
+ * as if typed rather than the rail calling the bridge directly.
+ */
+export function requestComposerCompact(sessionId: string): void {
+  window.dispatchEvent(new CustomEvent(COMPOSER_COMPACT_EVENT, { detail: { sessionId } }));
+}
+
+/** The composer's side of {@link requestComposerCompact}. */
+export function onComposerCompactRequest(
+  sessionId: () => string | null,
+  compact: () => void
+): () => void {
+  const listener = (event: Event) => {
+    const detail = (event as CustomEvent<{ sessionId?: unknown }>).detail;
+    if (detail?.sessionId === sessionId()) compact();
+  };
+  window.addEventListener(COMPOSER_COMPACT_EVENT, listener);
+  return () => window.removeEventListener(COMPOSER_COMPACT_EVENT, listener);
+}

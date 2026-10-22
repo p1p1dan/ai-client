@@ -119,7 +119,11 @@ import {
 } from './compactCommand';
 import { cancelCompactRun, nextCompactRunId, runCompactWhenRunning } from './compactRun';
 import { buildBranchColumn } from './composerColumns';
-import { onComposerFocusRequest, onComposerStopRequest } from './composerFocus';
+import {
+  onComposerCompactRequest,
+  onComposerFocusRequest,
+  onComposerStopRequest,
+} from './composerFocus';
 import {
   type ComposerHistoryCursor,
   type ComposerHistoryStep,
@@ -249,6 +253,7 @@ import {
   readSessionPermissions,
   writeSessionPermissions,
 } from './sessionPreferenceStore';
+import { useSessionRailPresent } from './sessionRailPresence';
 import {
   buildSlashCatalog,
   extractSlashQuery,
@@ -522,6 +527,7 @@ function deadlineAt(durationMs: number): () => boolean {
 
 export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: ChatComposerProps) {
   const { t } = useI18n();
+  const sessionRailPresent = useSessionRailPresent();
   const [value, setValue] = useState('');
   /**
    * T091: the pre-first-token send latch, now carrying WHICH session it belongs
@@ -4257,6 +4263,27 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     [activeSessionId]
   );
 
+  // Layout 5e: the session rail's 「压缩」 runs `/compact` as if typed here.
+  // When the built-in path does not take it (the engine lists its own
+  // `/compact`, or the draft holds attachments), the command goes into an
+  // empty box for the user to send.
+  const runBuiltinSlashRef = useRef(runBuiltinSlash);
+  runBuiltinSlashRef.current = runBuiltinSlash;
+  useEffect(
+    () =>
+      onComposerCompactRequest(
+        () => activeSessionId,
+        () => {
+          void runBuiltinSlashRef.current('/compact').then((handled) => {
+            if (handled) return;
+            if (!valueRef.current.trim()) updateValue('/compact');
+            textareaRef.current?.focus();
+          });
+        }
+      ),
+    [activeSessionId, updateValue]
+  );
+
   // Decision 046 rule 3: ending a conversation (sidebar) releases everything
   // this composer holds for it — the handshake, the stop latch, the pending
   // watch. `endSessionRuntime` clears the store halves itself.
@@ -4981,7 +5008,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // Deliberately NOT widened by U29: occupancy is a measurement, and a chat
     // that has never run a turn has nothing to measure. pix reads the same way
     // (`snapshot?.usage?.context?.percent ?? undefined`).
-    usage: activeSessionId ? <ComposerUsageChip sessionId={activeSessionId} /> : null,
+    // Layout 5e: the session rail's context card carries it while the rail is on screen.
+    usage:
+      activeSessionId && !sessionRailPresent ? (
+        <ComposerUsageChip sessionId={activeSessionId} />
+      ) : null,
     modelEffort: modelEffortControls,
     actions: actionButtons,
   };
