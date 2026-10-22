@@ -64,6 +64,7 @@ import type {
 } from '@shared/agentMigration';
 import { ArrowRightLeft, Check, KeyRound, MessagesSquare, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -355,14 +356,14 @@ export function AgentMigrationPrompt() {
                       is actually ticked, so unticking it visibly removes the warning
                       as well as the copy. */}
                   {secrets && (
-                    <p className="flex gap-2 rounded-sm border border-warning/30 bg-warning/8 p-3 text-small text-muted-foreground">
-                      <KeyRound className="h-4 w-4 shrink-0 text-warning" />
-                      <span>
+                    <Alert variant="warning">
+                      <KeyRound />
+                      <AlertDescription>
                         {t(
                           'Your AI services include API keys. Copying them stores a copy in this app’s own credential vault. Uncheck that row to leave them out.'
                         )}
-                      </span>
-                    </p>
+                      </AlertDescription>
+                    </Alert>
                   )}
                 </>
               )}
@@ -405,10 +406,10 @@ export function AgentMigrationPrompt() {
           )}
 
           {error && (
-            <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
-              <TriangleAlert className="h-4 w-4 shrink-0" />
-              {error}
-            </p>
+            <Alert variant="error">
+              <TriangleAlert />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
         </DialogPanel>
 

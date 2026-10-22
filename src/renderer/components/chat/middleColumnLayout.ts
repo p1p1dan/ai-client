@@ -319,11 +319,11 @@ const COMPOSER_GHOST_STATES = [
  * The ⊕ button at the far left of the card (T-30b2 §4.6).
  *
  * Same ghost language as the model/target triggers: no border, no shadow, a
- * filled `--hover` shell that only appears on hover or keyboard focus. It is
+ * filled `--fill-ghost-hover` shell that only appears on hover or keyboard focus. It is
  * `size-6` (both axes) rather than `h-6` because it is a square icon target.
  *
  * D4 (round-5): it is now a MENU trigger, so it needs the third state the
- * other menu triggers already have — `data-[popup-open]:bg-selection`. Without
+ * other menu triggers already have — `data-[popup-open]:bg-fill-ghost-selected`. Without
  * it the button loses its shell the moment the pointer moves off it into the
  * open popup, which reads as "the menu belongs to nothing". The size step is
  * untouched: 24px is the one control tier (F-A4 asserts it).

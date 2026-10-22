@@ -76,20 +76,20 @@ describe('[D2-1] globals.css minor-tier token value lock (F456 D2-b)', () => {
    * gives — this asserts the value the argument was made against, and does not
    * re-derive the contrast math.
    */
-  it('② --tool-arg mix ratio is 62%, the decision 034 value (§2.3 kept-derivation ruling)', () => {
-    const percentMatch = source.match(/--tool-arg:[^;]*var\(--muted-foreground\)\s*(\d+)%/);
+  it('② --foreground-faint mix ratio is 62%, the decision 034 value (§2.3 kept-derivation ruling)', () => {
+    const percentMatch = source.match(/--foreground-faint:[^;]*var\(--muted-foreground\)\s*(\d+)%/);
     expect(percentMatch).not.toBeNull();
     expect(Number(percentMatch?.[1])).toBe(62);
   });
 
-  it('③ --tool-arg stays derived from var(--muted-foreground), not an independent literal', () => {
-    const declMatch = source.match(/--tool-arg:\s*([^;]+);/);
+  it('③ --foreground-faint stays derived from var(--muted-foreground), not an independent literal', () => {
+    const declMatch = source.match(/--foreground-faint:\s*([^;]+);/);
     expect(declMatch).not.toBeNull();
     expect(declMatch?.[1]).toContain('var(--muted-foreground)');
   });
 
-  it('④ .dark carries no second --tool-arg declaration (declared once, globals.css:190-194)', () => {
-    expect(darkBlock).not.toContain('--tool-arg');
+  it('④ .dark carries no second --foreground-faint declaration (declared once in :root)', () => {
+    expect(darkBlock).not.toContain('--foreground-faint');
   });
 });
 
@@ -102,7 +102,7 @@ describe('[D2-1] globals.css minor-tier token value lock (F456 D2-b)', () => {
  * reachable as a utility — Tailwind v4 only emits `text-foreground-soft` when
  * `@theme` bridges it, and `text-section` comes from the `--text-*` namespace.
  */
-describe('decision 170: --foreground-soft and --text-section', () => {
+describe('decision 170: --foreground-soft', () => {
   const themeBlock = extractBlock('@theme');
 
   it('--foreground-soft is the oklab midpoint of --foreground and --muted-foreground', () => {
@@ -122,12 +122,30 @@ describe('decision 170: --foreground-soft and --text-section', () => {
   it('@theme bridges it, so Tailwind emits text-foreground-soft', () => {
     expect(themeBlock).toContain('--color-foreground-soft: var(--foreground-soft);');
   });
+});
 
-  // Design system v2: --text-section is a migration alias of the 15px heading tier.
-  it('--text-section is the 14px / 20px heading tier', () => {
-    expect(themeBlock).toContain('--text-section: 0.875rem;');
-    expect(themeBlock).toContain('--text-section--line-height: 1.25rem;');
-    expect(themeBlock.split('--text-section:').length - 1).toBe(1);
+/**
+ * Plan ui-cohesion stage 6: the migration-era names are gone, and stay gone.
+ * Type tiers: meta, group-label, markdown, section (→ small / heading / chat
+ * body). Colours: Flexoki's accent-primary, selection, hover, status-running,
+ * tool-arg (→ clay, fill-ghost-selected, fill-ghost-hover, info, foreground-faint).
+ * The composer's own radius and shadow left with the slim composer (5a).
+ */
+describe('stage 6: no migration-era token names', () => {
+  it.each([
+    '--text-meta',
+    '--text-group-label',
+    '--text-markdown',
+    '--text-section',
+    '--accent-primary',
+    '--selection',
+    '--hover:',
+    '--status-running',
+    '--tool-arg',
+    '--radius-composer',
+    '--elev-composer',
+  ])('globals.css declares no %s', (name) => {
+    expect(source).not.toContain(name);
   });
 });
 

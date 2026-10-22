@@ -18,6 +18,7 @@ import {
 import { matchSorter } from 'match-sorter';
 import * as React from 'react';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Autocomplete,
   AutocompleteEmpty,
@@ -919,9 +920,9 @@ export function AddRepositoryDialog({
             </Tabs>
 
             {error && (
-              <div className="rounded-lg border border-destructive/24 bg-destructive/6 px-3 py-2 text-ui text-destructive">
-                {error}
-              </div>
+              <Alert variant="error">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
           </DialogPanel>
 

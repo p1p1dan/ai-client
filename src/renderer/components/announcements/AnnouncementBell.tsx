@@ -67,7 +67,7 @@ export function AnnouncementBell() {
         {unreadCount > 0 && (
           <span
             aria-hidden
-            className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-accent-primary"
+            className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary"
           />
         )}
       </button>

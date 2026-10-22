@@ -117,7 +117,7 @@ function GoalStateIcon({ state }: { state: GoalBarState }) {
     case 'running':
     case 'waiting':
       // Armed: the engine continues it by itself.
-      return <Target className={cn(className, 'text-status-running')} aria-hidden />;
+      return <Target className={cn(className, 'text-foreground')} aria-hidden />;
     case 'paused':
       return <Pause className={cn(className, 'text-muted-foreground')} aria-hidden />;
     case 'blocked':

@@ -249,7 +249,7 @@ export function ToolRow(props: ToolRowProps) {
     return (
       <div
         data-tool-call-id={view.toolCallId}
-        className="rounded-sm transition-colors duration-250 data-[located]:bg-selection"
+        className="rounded-sm transition-colors duration-250 data-[located]:bg-fill-ghost-selected"
       >
         <SubagentActivity
           {...props}

@@ -196,33 +196,25 @@ export function PiModelManagementSettings({
             it — and the state file's `error` alone does not say WHICH failure,
             which is the part they can act on. */}
         {snapshot?.lastFailure?.withCatalog && (
-          <div className="flex gap-2 rounded-sm border border-warning/30 bg-warning/8 p-3 text-ui text-warning dark:bg-warning/16">
-            <TriangleAlert className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 flex-1">
-              {t(
-                'The last sync could not reach the model service, so the list is the last one that worked. Models added since then are missing.'
-              )}{' '}
-              <span className="select-text">
-                <Ident>{snapshot.lastFailure.error}</Ident>
+          <Alert variant="warning">
+            <TriangleAlert />
+            <AlertDescription>
+              <span className="min-w-0 flex-1">
+                {t(
+                  'The last sync could not reach the model service, so the list is the last one that worked. Models added since then are missing.'
+                )}{' '}
+                <span className="select-text">
+                  <Ident>{snapshot.lastFailure.error}</Ident>
+                </span>
               </span>
-            </span>
-          </div>
+            </AlertDescription>
+          </Alert>
         )}
         {(message || state?.error) && (
-          <div
-            className={`flex gap-2 rounded-sm border p-3 text-ui ${
-              message?.error || (!message && state?.error)
-                ? 'border-destructive/30 bg-destructive/8 text-destructive'
-                : 'border-success/30 bg-success/8 text-success'
-            }`}
-          >
-            {message?.error || (!message && state?.error) ? (
-              <TriangleAlert className="h-4 w-4 shrink-0" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-            )}
-            {message?.text || state?.error}
-          </div>
+          <Alert variant={message?.error || (!message && state?.error) ? 'error' : 'success'}>
+            {message?.error || (!message && state?.error) ? <TriangleAlert /> : <CheckCircle2 />}
+            <AlertDescription>{message?.text || state?.error}</AlertDescription>
+          </Alert>
         )}
       </div>
 

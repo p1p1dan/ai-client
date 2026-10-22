@@ -214,10 +214,10 @@ export function UserProvidersSettings({
       )}
 
       {error && (
-        <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error}
-        </p>
+        <Alert variant="error">
+          <AlertTriangle />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <ProviderSetupDialog

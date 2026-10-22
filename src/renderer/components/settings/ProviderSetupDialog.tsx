@@ -36,6 +36,7 @@ import {
 } from '@shared/userProviders';
 import { AlertTriangle, Check, CheckCircle2, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -508,12 +509,17 @@ export function ProviderSetupDialog({
             </div>
 
             {probe.state === 'failed' && (
-              <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-small text-destructive">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                {/* The service's own words: "refused this key" and "answered
-                    500" send the user to different places. */}
-                {t('Could not reach this service — {{reason}}').replace('{{reason}}', probe.error)}
-              </p>
+              <Alert variant="error">
+                <AlertTriangle />
+                <AlertDescription>
+                  {/* The service's own words: "refused this key" and "answered
+                      500" send the user to different places. */}
+                  {t('Could not reach this service — {{reason}}').replace(
+                    '{{reason}}',
+                    probe.error
+                  )}
+                </AlertDescription>
+              </Alert>
             )}
 
             {probe.state === 'ok' && (
@@ -640,19 +646,21 @@ export function ProviderSetupDialog({
           )}
 
           {invalidModels.length > 0 && (
-            <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-small text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              {t(
-                'Some model settings are not valid. Fix the models marked in the list, then save.'
-              )}
-            </p>
+            <Alert variant="error">
+              <AlertTriangle />
+              <AlertDescription>
+                {t(
+                  'Some model settings are not valid. Fix the models marked in the list, then save.'
+                )}
+              </AlertDescription>
+            </Alert>
           )}
 
           {saveError && (
-            <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-small text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              {saveError}
-            </p>
+            <Alert variant="error">
+              <AlertTriangle />
+              <AlertDescription>{saveError}</AlertDescription>
+            </Alert>
           )}
         </DialogPanel>
 

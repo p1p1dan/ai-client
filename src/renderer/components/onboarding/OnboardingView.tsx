@@ -7,6 +7,7 @@ import type {
 } from '@shared/types';
 import { AlertCircleIcon, CheckCircle2Icon, Loader2Icon, MailIcon, ServerIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -252,10 +253,10 @@ export function OnboardingView({
                 </p>
               </div>
               {sendCodeError && (
-                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-ui text-destructive">
-                  <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{sendCodeError}</span>
-                </div>
+                <Alert variant="error">
+                  <AlertCircleIcon />
+                  <AlertDescription>{sendCodeError}</AlertDescription>
+                </Alert>
               )}
             </div>
           </SectionBody>
@@ -296,7 +297,7 @@ export function OnboardingView({
                   maxLength={CODE_LENGTH}
                   pattern="\d*"
                   placeholder={'_'.repeat(CODE_LENGTH)}
-                  className="text-center text-lg tracking-[0.5em] font-mono"
+                  className="text-center text-heading tracking-[0.5em] font-mono"
                   value={code}
                   onChange={(e) => {
                     const digits = e.target.value.replace(/\D/g, '').slice(0, CODE_LENGTH);
@@ -329,10 +330,10 @@ export function OnboardingView({
               </div>
 
               {verifyError && (
-                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-ui text-destructive">
-                  <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{verifyError}</span>
-                </div>
+                <Alert variant="error">
+                  <AlertCircleIcon />
+                  <AlertDescription>{verifyError}</AlertDescription>
+                </Alert>
               )}
             </div>
           </SectionBody>

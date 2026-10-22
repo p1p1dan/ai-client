@@ -131,9 +131,10 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           aria-label={t('Search…')}
           className={cn(
             'w-40 bg-transparent text-ui outline-none placeholder:opacity-50',
-            hasResults === false && searchTerm && 'text-red-400'
+            hasResults === false && searchTerm && 'text-destructive'
           )}
-          style={{ color: fgColor }}
+          // No match: the error ink, which the terminal's own ink would override.
+          style={{ color: hasResults === false && searchTerm ? undefined : fgColor }}
         />
 
         {/* Case sensitive toggle */}
@@ -142,7 +143,7 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           onClick={() => setCaseSensitive(!caseSensitive)}
           className={cn(
             'flex h-6 w-6 items-center justify-center rounded text-small font-bold transition-colors',
-            caseSensitive ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
+            caseSensitive ? 'bg-current/20' : 'opacity-50 hover:opacity-100'
           )}
           style={{ color: fgColor }}
           title={t('Match case')}
@@ -158,7 +159,7 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           onClick={() => setWholeWord(!wholeWord)}
           className={cn(
             'flex h-6 w-6 items-center justify-center rounded text-small font-bold transition-colors',
-            wholeWord ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
+            wholeWord ? 'bg-current/20' : 'opacity-50 hover:opacity-100'
           )}
           style={{ color: fgColor }}
           title={t('Match whole word')}
@@ -174,7 +175,7 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           onClick={() => setRegex(!regex)}
           className={cn(
             'flex h-6 w-6 items-center justify-center rounded text-small font-bold transition-colors',
-            regex ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
+            regex ? 'bg-current/20' : 'opacity-50 hover:opacity-100'
           )}
           style={{ color: fgColor }}
           title={t('Use regular expression')}

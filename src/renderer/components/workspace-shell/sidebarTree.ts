@@ -95,7 +95,7 @@ export interface SidebarSessionRow {
    */
   unbound?: true;
   updatedAt: number;
-  /** Drives the 6px `--status-running` dot (A07 `.sb-row .live`). */
+  /** Drives the 6px running dot (A07 `.sb-row .live`). */
   busy: boolean;
   /** Failure stays visible after the per-row status badge was dropped. */
   failed: boolean;

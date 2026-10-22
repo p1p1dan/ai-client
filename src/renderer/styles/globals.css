@@ -28,13 +28,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  /* Flexoki additions - must be bridged here or Tailwind v4 emits no utilities */
-  --color-accent-primary: var(--accent-primary);
-  --color-selection: var(--selection);
-  --color-hover: var(--hover);
-  --color-status-running: var(--status-running);
+  /* Directory icons keep their yellow (icon colour rule). */
   --color-folder: var(--folder);
-  --color-tool-arg: var(--tool-arg);
   /* Decision 170 (issue #6): chat titles in the sidebar (L3). Do not add /N. */
   --color-foreground-soft: var(--foreground-soft);
   /* Decision 183: the sidebar's "not started" ring. Do not add /N. */
@@ -55,7 +50,7 @@
   /*
    * Design system v2 (docs/design-system.md §4.1, 2026-10-21): radii grow from
    * the inside out. xs..lg keep their values; the two large objects get the
-   * reference's own radii -- user message 18px, composer 20px. Dialogs use
+   * reference's own radius for the user message, 18px. Dialogs use
    * Tailwind's default `rounded-2xl` (16px).
    */
   --radius-xs: 0.25rem;
@@ -63,7 +58,6 @@
   --radius-md: 0.625rem;
   --radius-lg: 0.75rem;
   --radius-bubble: 1.125rem;
-  --radius-composer: 1.25rem;
 
   /*
    * Design system v2 type scale (§3.1, user ruling 2026-10-21: the reference's
@@ -72,10 +66,8 @@
    *   small 12/16, ui 13/18, heading 14/20, title 18/26, display 38, code 12.
    * 2026-10-22 (user, against the Claude Code desktop screenshot): one notch
    * quieter -- heading 15->14, title 20->18, chat body 14->13.
-   * The legacy names below are aliases kept for the migration and are removed
-   * once every call site has moved (plan ui-cohesion, stage 3):
-   *   meta -> small, group-label -> small, markdown -> chat body default,
-   *   section -> heading.
+   * The migration-era names (meta, group-label, markdown, section) were
+   * removed in plan ui-cohesion stage 6; `tokenValues.test.ts` keeps them out.
    */
   --text-2xs: 11px;
   --text-2xs--line-height: 16px;
@@ -91,15 +83,6 @@
   --text-display--line-height: 1.2;
   --text-code: 0.75rem;
   --text-code--line-height: 1.46;
-
-  --text-meta: 0.75rem;
-  --text-meta--line-height: 1rem;
-  --text-group-label: 0.75rem;
-  --text-group-label--line-height: 1rem;
-  --text-markdown: 0.875rem;
-  --text-markdown--line-height: 1.43;
-  --text-section: 0.875rem;
-  --text-section--line-height: 1.25rem;
 
   /*
    * T104: the chat area's two configurable tiers. These are the ONLY two
@@ -271,12 +254,12 @@
     /* 10%: `hover:bg-accent/50` lands on the 5% ghost hover */
     --accent: #e5e5e4;
     --accent-foreground: #151515;
-    --accent-primary: #d97757;
+    /* clay at a fixed value that sync-terminal never repoints (diff gutter) */
+    --clay: #d97757;
     /* 10%: selected / pressed. Do not add /N */
-    --selection: #e5e5e4;
+    --fill-ghost-selected: #e5e5e4;
     /* 5%: the one ghost hover. Do not add /N */
-    --hover: #f0f0ef;
-    --status-running: #3a6ea5;
+    --fill-ghost-hover: #f0f0ef;
     --destructive: #b5452f;
     --destructive-foreground: #ffffff;
     --success: #3f7d4e;
@@ -302,8 +285,6 @@
     --surface-3: var(--popover);
     --border-soft: var(--border);
     --border-strong: var(--input);
-    --fill-ghost-hover: var(--hover);
-    --fill-ghost-selected: var(--selection);
     --fill-neutral: var(--secondary);
 
     /* Elevation (§5.1): a near soft shadow plus a far diffuse one. Reference values. */
@@ -311,14 +292,10 @@
     --elev-md: 0 2px 4px 0 rgb(0 0 0 / 0.05), 0 6px 16px 0 rgb(0 0 0 / 0.08);
     --elev-lg: 0 4px 8px 0 rgb(0 0 0 / 0.06), 0 12px 28px -2px rgb(0 0 0 / 0.08);
     --elev-popover: 0 0 0 1px var(--border-soft), 0 8px 24px rgb(0 0 0 / 0.12), 0 2px 6px rgb(0 0 0 / 0.08);
-    --elev-composer: 0 4px 20px rgb(0 0 0 / 0.035), inset 0 0 0 1px var(--border-soft);
-    --elev-composer-hover: 0 4px 24px rgb(0 0 0 / 0.06), inset 0 0 0 1px var(--border-strong);
-    --elev-composer-focus: 0 4px 24px rgb(0 0 0 / 0.08), inset 0 0 0 1px var(--border-strong), 0 0 0 1px var(--border-strong);
 
     /* Three ink levels (§2.3). The faint tier: tool arguments, times, counts.
      * Decision 034's 62% mix, declared once so .dark and sync-terminal follow. */
-    --tool-arg: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
-    --foreground-faint: var(--tool-arg);
+    --foreground-faint: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
     /* Decision 170: the sidebar's chat titles, one step below --foreground. Never add /N. */
     --foreground-soft: color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground));
     /* Decision 183: the sidebar's "not started" ring, --muted-foreground mixed
@@ -342,10 +319,9 @@
     --muted-foreground: #a3a3a3;
     --accent: #2b2b2b;
     --accent-foreground: #f5f5f5;
-    --accent-primary: #d97757;
-    --selection: #2b2b2b;
-    --hover: #202020;
-    --status-running: #7aa5d6;
+    --clay: #d97757;
+    --fill-ghost-selected: #2b2b2b;
+    --fill-ghost-hover: #202020;
     --destructive: #e5735c;
     --destructive-foreground: #151515;
     --success: #73b585;
@@ -365,9 +341,6 @@
     --elev-md: 0 2px 4px 0 rgb(0 0 0 / 0.4), 0 6px 16px 0 rgb(0 0 0 / 0.4);
     --elev-lg: 0 4px 8px 0 rgb(0 0 0 / 0.5), 0 16px 36px -2px rgb(0 0 0 / 0.4);
     --elev-popover: inset 0 0 0 1px rgb(255 255 255 / 0.1), 0 8px 28px rgb(0 0 0 / 0.65), 0 2px 8px rgb(0 0 0 / 0.45);
-    --elev-composer: 0 4px 20px rgb(0 0 0 / 0.4), inset 0 0 0 1px var(--border-soft);
-    --elev-composer-hover: 0 4px 24px rgb(0 0 0 / 0.55), inset 0 0 0 1px var(--border-strong);
-    --elev-composer-focus: 0 4px 24px rgb(0 0 0 / 0.65), inset 0 0 0 1px var(--border-strong), 0 0 0 1px var(--border-strong);
   }
 
   /*
@@ -578,15 +551,6 @@
 @utility elev-popover {
   box-shadow: var(--elev-popover);
 }
-@utility elev-composer {
-  box-shadow: var(--elev-composer);
-  &:hover {
-    box-shadow: var(--elev-composer-hover);
-  }
-  &:focus-within {
-    box-shadow: var(--elev-composer-focus);
-  }
-}
 
 .current-diff-highlight {
   background-color: var(--editor-current-diff) !important;
@@ -594,14 +558,14 @@
 
 /*
  * The 3px gutter bar sits against Monaco's terminal-derived background, not
- * against --background, so --accent-primary (per T-21 spec) is the right source
+ * against --background, so the fixed --clay is the right source
  * rather than --primary: it is the one brand tone that keeps a single fixed
  * value in both schemes and is *not* hijacked by theme='sync-terminal', where
  * ghosttyTheme repoints --primary at the editor's own foreground ink and the bar
  * would stop reading as a highlight at all.
  */
 .current-diff-gutter {
-  background-color: var(--accent-primary) !important;
+  background-color: var(--clay) !important;
   width: 3px !important;
   margin-left: 3px;
 }

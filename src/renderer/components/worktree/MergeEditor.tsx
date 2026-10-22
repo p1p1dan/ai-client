@@ -707,7 +707,7 @@ export function MergeEditor({
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold">{t('Resolve Conflicts')}</h2>
+          <h2 className="text-heading font-semibold">{t('Resolve Conflicts')}</h2>
           <span className="text-ui text-muted-foreground">
             {currentIndex + 1} / {conflicts.length}
           </span>
@@ -756,7 +756,7 @@ export function MergeEditor({
                 className={cn(
                   // normal-case: the label is a real filename; the cva base lowercases it
                   'shrink-0 normal-case',
-                  resolvedFiles.has(conflict.file) && 'text-green-600 dark:text-green-400'
+                  resolvedFiles.has(conflict.file) && 'text-success'
                 )}
               >
                 {resolvedFiles.has(conflict.file) && <Check className="h-3 w-3" />}

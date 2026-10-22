@@ -87,7 +87,7 @@ function WeeklyQuotaBar({ percent, exceeded }: { percent: number; exceeded: bool
   return (
     <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
       <div
-        className={cn('h-full rounded-full', exceeded ? 'bg-destructive' : 'bg-accent-primary')}
+        className={cn('h-full rounded-full', exceeded ? 'bg-destructive' : 'bg-primary')}
         style={{ width: `${percent}%` }}
       />
     </div>

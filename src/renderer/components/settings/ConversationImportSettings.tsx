@@ -37,6 +37,7 @@ import { AlertTriangle, ArrowLeft, Folder, RefreshCcw, Upload } from 'lucide-rea
 import { useMemo, useState } from 'react';
 import { refreshSessionIndexNow } from '@/components/chat/sessionIndex/useSessionIndex';
 import { SessionItem } from '@/components/sessions/SessionItem';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -190,10 +191,10 @@ export function ConversationImportSettings({
           <Skeleton className="h-14 w-full" />
         </div>
       ) : projectsQuery.error ? (
-        <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {messageOf(projectsQuery.error)}
-        </p>
+        <Alert variant="error">
+          <AlertTriangle />
+          <AlertDescription>{messageOf(projectsQuery.error)}</AlertDescription>
+        </Alert>
       ) : projects.length === 0 ? (
         <p className="text-small text-muted-foreground">
           {t('No Claude Code or Codex conversations were found on this machine.')}
@@ -325,10 +326,10 @@ export function ConversationImportSettings({
       )}
 
       {error && (
-        <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error}
-        </p>
+        <Alert variant="error">
+          <AlertTriangle />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
     </div>
   );

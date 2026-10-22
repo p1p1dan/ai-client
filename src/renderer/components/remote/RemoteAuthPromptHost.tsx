@@ -16,7 +16,7 @@ import { useI18n } from '@/i18n';
 
 function getPromptIcon(prompt: RemoteAuthPrompt) {
   if (prompt.kind === 'host-verification') {
-    return <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" />;
+    return <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-warning" />;
   }
   return <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-primary" />;
 }
