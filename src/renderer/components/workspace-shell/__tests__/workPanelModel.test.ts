@@ -21,6 +21,7 @@ import {
   resolvePaneView,
   sanitizePaneSplits,
   surfaceIdForPane,
+  swapPanes,
   toggleExpandedPane,
   togglePane,
 } from '../workPanelModel';
@@ -183,6 +184,25 @@ describe('toggle / focus / expand', () => {
     expect(openPane(state, 'run').expanded).toBeNull();
     expect(openPane(state, 'files').expanded).toBe('files');
     expect(closePane(state, 'files').expanded).toBeNull();
+  });
+});
+
+describe('rearranging: a header dropped on another card (user, 2026-10-22)', () => {
+  it('the two trade slots, and the dragged one becomes the focused pane', () => {
+    const state = openAll('changes', 'files', 'git');
+    const next = swapPanes(state, 'git', 'changes');
+    expect(next.panes).toEqual(['git', 'files', 'changes']);
+    expect(next.focus.at(-1)).toBe('git');
+    const grid = derivePaneGrid(resolvePaneView(next, deriveAvailablePanes(ALL)));
+    expect(grid.get('git')).toMatchObject({ column: 0, row: 0 });
+    expect(grid.get('changes')).toMatchObject({ column: 0, row: 1 });
+  });
+
+  it('onto itself, or with a pane that is not open, nothing changes', () => {
+    const state = openAll('changes', 'files');
+    expect(swapPanes(state, 'files', 'files')).toBe(state);
+    expect(swapPanes(state, 'files', 'git')).toBe(state);
+    expect(swapPanes(state, 'git', 'files')).toBe(state);
   });
 });
 

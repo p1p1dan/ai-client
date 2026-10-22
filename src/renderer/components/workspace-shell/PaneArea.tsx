@@ -130,6 +130,8 @@ export interface PaneActions {
   close: (kind: PaneKind) => void;
   focus: (kind: PaneKind) => void;
   toggleExpanded: (kind: PaneKind) => void;
+  /** A card's header dropped on another card: the two trade slots. */
+  swap: (dragged: PaneKind, target: PaneKind) => void;
   commitColumnSplit: (ratio: number) => void;
   commitRowSplit: (column: 0 | 1, ratio: number) => void;
 }
@@ -330,6 +332,9 @@ export function PaneArea({
               onFocus={actions.focus}
               onClose={actions.close}
               onToggleExpanded={actions.toggleExpanded}
+              // Rearranging needs a second card on screen and no expanded one.
+              reorderable={shown && view.panes.length > 1 && !view.expanded}
+              onDropPane={actions.swap}
             >
               {content(kind, shown)}
             </PaneCard>

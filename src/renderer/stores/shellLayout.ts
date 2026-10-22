@@ -39,6 +39,7 @@ import {
   paneForIntent,
   sanitizePaneSplits,
   surfaceIdForPane,
+  swapPanes,
   toggleExpandedPane,
   togglePane,
   type WorkPanelChangeFocus,
@@ -96,6 +97,8 @@ export interface ShellLayoutState
   closePane: (kind: PaneKind) => void;
   focusPane: (kind: PaneKind) => void;
   toggleExpandedPane: (kind: PaneKind) => void;
+  /** A card's header dropped on another card: the two trade slots. */
+  swapPanes: (dragged: PaneKind, target: PaneKind) => void;
   /** Opens a registry surface's pane; surfaces that are not navigable are ignored. */
   openSurface: (id: ContextSurfaceId) => void;
   openInitializationTerminal: () => void;
@@ -165,6 +168,8 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
       focusPane: (kind) => set((state) => fromLayout(state, focusPane(layoutOf(state), kind))),
       toggleExpandedPane: (kind) =>
         set((state) => fromLayout(state, toggleExpandedPane(layoutOf(state), kind))),
+      swapPanes: (dragged, target) =>
+        set((state) => fromLayout(state, swapPanes(layoutOf(state), dragged, target))),
       openSurface: (id) =>
         set((state) => {
           if (getSurface(id)?.registeredOnly !== false) return {};

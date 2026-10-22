@@ -311,6 +311,27 @@ export function togglePane(
   return visible.includes(kind) ? closePane(prev, kind) : openPane(prev, kind);
 }
 
+/**
+ * Dragging one card's header onto another (user, 2026-10-22): the two trade
+ * slots. Same object back when either is not open or they are the same pane.
+ */
+export function swapPanes(
+  prev: PaneLayoutState,
+  dragged: PaneKind,
+  target: PaneKind
+): PaneLayoutState {
+  if (dragged === target || !prev.panes.includes(dragged) || !prev.panes.includes(target)) {
+    return prev;
+  }
+  return {
+    ...prev,
+    panes: prev.panes.map((entry) =>
+      entry === dragged ? target : entry === target ? dragged : entry
+    ),
+    focus: withFocus(prev.focus, dragged, prev.panes),
+  };
+}
+
 export function toggleExpandedPane(prev: PaneLayoutState, kind: PaneKind): PaneLayoutState {
   if (!prev.panes.includes(kind)) return prev;
   return {

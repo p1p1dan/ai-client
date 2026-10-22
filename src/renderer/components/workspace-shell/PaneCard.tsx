@@ -11,7 +11,7 @@
  * FitAddon a 0×0 box and the pty `cols: 2`.
  */
 import { Maximize2, Minimize2, X } from 'lucide-react';
-import { type CSSProperties, type ReactNode, useMemo, useState } from 'react';
+import { type CSSProperties, type ReactNode, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -25,6 +25,15 @@ import type { PaneKind } from './workPanelModel';
 
 /** Computed key so a rename of the constant cannot leave a dead attribute behind. */
 const ESCAPE_HOLD_ATTR = SURFACE_ESCAPE_HOLD_ATTR;
+
+/** The drag payload's type: a pane header, never a file or a sidebar row. */
+export const PANE_DRAG_TYPE = 'application/x-pilab-pane';
+
+/**
+ * The pane being dragged. `dragover` cannot read the payload, only its type,
+ * and a card must not light up as a target for itself.
+ */
+let draggingPane: PaneKind | null = null;
 
 /** The card's frame (design system v2: a soft hairline, the raised surface). */
 export const PANE_CARD_CLASS =
@@ -46,6 +55,10 @@ interface PaneCardProps {
   onFocus: (kind: PaneKind) => void;
   onClose: (kind: PaneKind) => void;
   onToggleExpanded: (kind: PaneKind) => void;
+  /** The header drags the card onto another to trade slots (user, 2026-10-22). */
+  reorderable?: boolean;
+  /** Another card's header was dropped on this one. */
+  onDropPane?: (dragged: PaneKind, target: PaneKind) => void;
   children: ReactNode;
 }
 
@@ -61,6 +74,8 @@ export function PaneCard({
   onFocus,
   onClose,
   onToggleExpanded,
+  reorderable = false,
+  onDropPane,
   children,
 }: PaneCardProps) {
   const { t } = useI18n();
@@ -71,6 +86,12 @@ export function PaneCard({
     () => ({ context: contextSlot, actions: actionsSlot }),
     [contextSlot, actionsSlot]
   );
+  const [dragging, setDragging] = useState(false);
+  const [dropTarget, setDropTarget] = useState(false);
+  // A press on a header control (a view's action, ⤢, ✕) never starts a drag.
+  const pressedOnControlRef = useRef(false);
+  const acceptsDrop = (types: readonly string[]) =>
+    reorderable && types.includes(PANE_DRAG_TYPE) && draggingPane !== null && draggingPane !== kind;
 
   return (
     <section
@@ -80,7 +101,34 @@ export function PaneCard({
       data-pane={kind}
       data-pane-shown={shown ? 'true' : 'false'}
       data-pane-focused={shown && focused ? 'true' : undefined}
-      className={cn(PANE_CARD_CLASS, !shown && 'pointer-events-none invisible inset-0')}
+      data-pane-drop-target={dropTarget ? 'true' : undefined}
+      className={cn(
+        PANE_CARD_CLASS,
+        !shown && 'pointer-events-none invisible inset-0',
+        dragging && 'opacity-60',
+        dropTarget && 'ring-2 ring-ring/50'
+      )}
+      // Capture: the editor and the terminal handle drops of their own; a
+      // pane drag is the card's before either sees it.
+      onDragOverCapture={(event) => {
+        if (!acceptsDrop([...event.dataTransfer.types])) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = 'move';
+        if (!dropTarget) setDropTarget(true);
+      }}
+      onDragLeave={(event) => {
+        const next = event.relatedTarget as Node | null;
+        if (!next || !event.currentTarget.contains(next)) setDropTarget(false);
+      }}
+      onDropCapture={(event) => {
+        setDropTarget(false);
+        const dragged = draggingPane;
+        if (!dragged || !acceptsDrop([...event.dataTransfer.types])) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onDropPane?.(dragged, kind);
+      }}
       style={shown ? slotStyle : undefined}
       onPointerDownCapture={() => onFocus(kind)}
       onFocusCapture={() => onFocus(kind)}
@@ -99,7 +147,33 @@ export function PaneCard({
         event.stopPropagation();
       }}
     >
-      <header className="flex h-9 shrink-0 items-center gap-1 pr-1 pl-3">
+      <header
+        className={cn(
+          'flex h-9 shrink-0 items-center gap-1 pr-1 pl-3',
+          reorderable && 'cursor-grab active:cursor-grabbing'
+        )}
+        draggable={reorderable}
+        data-pane-drag-handle={reorderable ? '' : undefined}
+        onPointerDownCapture={(event) => {
+          pressedOnControlRef.current = !!(event.target as HTMLElement).closest?.(
+            'button, a, input'
+          );
+        }}
+        onDragStart={(event) => {
+          if (!reorderable || pressedOnControlRef.current) {
+            event.preventDefault();
+            return;
+          }
+          draggingPane = kind;
+          event.dataTransfer.setData(PANE_DRAG_TYPE, kind);
+          event.dataTransfer.effectAllowed = 'move';
+          setDragging(true);
+        }}
+        onDragEnd={() => {
+          draggingPane = null;
+          setDragging(false);
+        }}
+      >
         <span
           aria-hidden
           className="flex shrink-0 text-muted-foreground [&_svg:not([class*='size-'])]:size-4"

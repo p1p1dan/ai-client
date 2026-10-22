@@ -128,6 +128,7 @@ export function WorkspaceShell({
   const closePane = useShellLayoutStore((state) => state.closePane);
   const focusPane = useShellLayoutStore((state) => state.focusPane);
   const toggleExpandedPane = useShellLayoutStore((state) => state.toggleExpandedPane);
+  const swapPanes = useShellLayoutStore((state) => state.swapPanes);
   const setPaneColumnSplit = useShellLayoutStore((state) => state.setPaneColumnSplit);
   const setPaneRowSplit = useShellLayoutStore((state) => state.setPaneRowSplit);
   const revealChange = useShellLayoutStore((state) => state.revealChange);
@@ -232,10 +233,19 @@ export function WorkspaceShell({
       close: closePane,
       focus: focusPane,
       toggleExpanded: toggleExpandedPane,
+      swap: swapPanes,
       commitColumnSplit: setPaneColumnSplit,
       commitRowSplit: setPaneRowSplit,
     }),
-    [openPane, closePane, focusPane, toggleExpandedPane, setPaneColumnSplit, setPaneRowSplit]
+    [
+      openPane,
+      closePane,
+      focusPane,
+      toggleExpandedPane,
+      swapPanes,
+      setPaneColumnSplit,
+      setPaneRowSplit,
+    ]
   );
 
   const activeEditorPath = useEditorStore((state) => state.activeTabPath);
