@@ -26,7 +26,9 @@ describe('the home page menu', () => {
       (key) => key
     );
     // Decision 194: `/model` and `/effort` work here too; `/clear` has nothing to clear.
+    // Layout 5f (user, 2026-10-22): `/btw` stays listed, saying it needs an open conversation.
     expect(homeSlashMenu(catalog).map((item) => item.name)).toEqual([
+      'btw',
       'effort',
       'goal',
       'model',
@@ -36,6 +38,9 @@ describe('the home page menu', () => {
     ]);
     // Layout 5f: `/btw` asks about the open conversation.
     expect([...CONVERSATION_BUILTINS].sort()).toEqual(['archive', 'btw', 'clear', 'compact']);
+    expect(homeSlashMenu(catalog).find((item) => item.name === 'btw')?.description).toBe(
+      'Ask a side question about an open conversation (open one first)'
+    );
   });
 
   it('keeps a plugin’s or skill’s command that took one of those names', () => {

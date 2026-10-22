@@ -172,3 +172,33 @@ export function resolveSideChatPlacement(input: {
   }
   return 'float';
 }
+
+/** The floating window's drag offset from its resting corner (bottom-right), in px. */
+export interface SideChatFloatOffset {
+  x: number;
+  y: number;
+}
+
+/** Keep this many px between the floating window and the chat area's edges. */
+export const SIDE_CHAT_FLOAT_MARGIN = 16;
+
+/**
+ * Clamp a drag offset so the floating window stays inside its container.
+ * The window rests at the container's bottom-right corner, `margin` px in;
+ * a negative x moves it left, a negative y moves it up. Pure: the caller
+ * measures both boxes once per pointer move, while dragging only.
+ */
+export function clampSideChatFloatOffset(
+  offset: SideChatFloatOffset,
+  container: { width: number; height: number },
+  panel: { width: number; height: number },
+  margin: number = SIDE_CHAT_FLOAT_MARGIN
+): SideChatFloatOffset {
+  const maxLeft = Math.max(0, container.width - panel.width - 2 * margin);
+  const maxUp = Math.max(0, container.height - panel.height - 2 * margin);
+  // `+ 0` folds -0 to 0 (no room to move: -0 from `-maxLeft`).
+  return {
+    x: Math.min(0, Math.max(-maxLeft, offset.x)) + 0,
+    y: Math.min(0, Math.max(-maxUp, offset.y)) + 0,
+  };
+}

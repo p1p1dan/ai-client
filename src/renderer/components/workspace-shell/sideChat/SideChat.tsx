@@ -1,5 +1,12 @@
 import { ArrowUp, PanelRight, PictureInPicture2, X } from 'lucide-react';
-import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { userBubbleClass, userBubbleRowClass } from '@/components/chat/chatTimelineLayout';
 import { TurnTextItem } from '@/components/chat/MessageTimeline';
 import { Button } from '@/components/ui/button';
@@ -10,10 +17,12 @@ import { cn } from '@/lib/utils';
 import { useSideChatStore } from '@/stores/sideChat';
 import { barIconClass } from '../SessionBar';
 import {
+  clampSideChatFloatOffset,
   SIDE_CHAT_DOCK_WIDTH,
   SIDE_CHAT_FLOAT_HEIGHT,
   SIDE_CHAT_FLOAT_WIDTH,
   type SideChatEntry,
+  type SideChatFloatOffset,
   sideChatBusy,
 } from './sideChatModel';
 
@@ -110,6 +119,16 @@ export function SideChat({ placement }: { placement: 'float' | 'dock' }) {
   const setForm = useSideChatStore((state) => state.setForm);
   const ask = useSideChatStore((state) => state.ask);
   const [draft, setDraft] = useState('');
+  // Floating form only: where the user dragged the window, relative to its
+  // bottom-right resting corner. Local state, so a close (unmount) resets it.
+  const [offset, setOffset] = useState<SideChatFloatOffset>({ x: 0, y: 0 });
+  const panelRef = useRef<HTMLElement>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    from: SideChatFloatOffset;
+  } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -143,8 +162,42 @@ export function SideChat({ placement }: { placement: 'float' | 'dock' }) {
   };
 
   const docked = placement === 'dock';
+
+  // Drag the floating window by its header (buttons excluded). Geometry is
+  // read on pointer events only, never kept as state (F10).
+  const onHeaderPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (docked || event.button !== 0) return;
+    if ((event.target as HTMLElement).closest('button')) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      from: offset,
+    };
+  };
+  const onHeaderPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    const panel = panelRef.current;
+    const container = panel?.offsetParent as HTMLElement | null;
+    if (!drag || drag.pointerId !== event.pointerId || !panel || !container) return;
+    setOffset(
+      clampSideChatFloatOffset(
+        {
+          x: drag.from.x + event.clientX - drag.startX,
+          y: drag.from.y + event.clientY - drag.startY,
+        },
+        { width: container.clientWidth, height: container.clientHeight },
+        { width: panel.offsetWidth, height: panel.offsetHeight }
+      )
+    );
+  };
+  const endDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
+  };
   return (
     <section
+      ref={panelRef}
       aria-label={t('Side chat')}
       data-side-chat={placement}
       onKeyDown={(event) => {
@@ -162,10 +215,30 @@ export function SideChat({ placement }: { placement: 'float' | 'dock' }) {
       style={
         docked
           ? { width: SIDE_CHAT_DOCK_WIDTH }
-          : { width: SIDE_CHAT_FLOAT_WIDTH, height: SIDE_CHAT_FLOAT_HEIGHT }
+          : {
+              width: SIDE_CHAT_FLOAT_WIDTH,
+              height: SIDE_CHAT_FLOAT_HEIGHT,
+              transform:
+                offset.x || offset.y ? `translate(${offset.x}px, ${offset.y}px)` : undefined,
+            }
       }
     >
-      <header className="flex h-10 shrink-0 items-center gap-1 border-border-soft border-b pr-2 pl-3.5">
+      <header
+        className={cn(
+          'flex h-10 shrink-0 items-center gap-1 border-border-soft border-b pr-2 pl-3.5',
+          !docked && 'cursor-grab touch-none select-none active:cursor-grabbing'
+        )}
+        data-side-chat-drag-handle={docked ? undefined : ''}
+        title={docked ? undefined : t('Drag to move; double-click to put it back')}
+        onPointerDown={onHeaderPointerDown}
+        onPointerMove={onHeaderPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onDoubleClick={(event) => {
+          if (!docked && !(event.target as HTMLElement).closest('button'))
+            setOffset({ x: 0, y: 0 });
+        }}
+      >
         <span className="min-w-0 flex-1 truncate text-ui text-foreground">{t('Side chat')}</span>
         {docked ? (
           <HeaderButton

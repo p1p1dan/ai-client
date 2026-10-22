@@ -218,7 +218,16 @@ describe('the slash menu before a session runs', () => {
       workspacePath: '/repo/alpha',
       engine: 'dsh',
     });
-    expect(menuRows()).toEqual(['/effort', '/goal', '/model', '/new', '/plan-tree', '/settings']);
+    // Layout 5f (user, 2026-10-22): `/btw` is listed too, saying it needs an open conversation.
+    expect(menuRows()).toEqual([
+      '/btw',
+      '/effort',
+      '/goal',
+      '/model',
+      '/new',
+      '/plan-tree',
+      '/settings',
+    ]);
   });
 
   it('「不选仓库」 names no folder: Main lists the user’s skills only', async () => {

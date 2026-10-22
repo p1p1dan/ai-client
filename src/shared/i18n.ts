@@ -4976,4 +4976,7 @@ Object.assign(zhTranslations, {
   'Ask again': '再问一次',
   'Ask a quick side question without interrupting the conversation': '问一句旁问，不打断主对话',
   'The session rail makes room while the side chat is docked': '旁问停靠在右侧时，会话侧栏让位',
+  'Ask a side question about an open conversation (open one first)':
+    '对已打开的对话问一句旁问（先打开一个对话）',
+  'Drag to move; double-click to put it back': '拖动可移动位置，双击放回原处',
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveSessionRailVisibility } from '../sessionRail/sessionRailModel';
 import {
   addSideQuestion,
+  clampSideChatFloatOffset,
   closeSideChat,
   followActiveSession,
   INITIAL_SIDE_CHAT,
@@ -119,5 +120,35 @@ describe('side chat model', () => {
     expect(
       resolveSessionRailVisibility({ ...input, userShown: false, sideChatDocked: true }).hidden
     ).toBe('user');
+  });
+});
+
+describe('clampSideChatFloatOffset (user, 2026-10-22: the floating side chat can be dragged)', () => {
+  const container = { width: 1000, height: 800 };
+  const panel = { width: 380, height: 440 };
+
+  it('lets the window move left and up inside the container', () => {
+    expect(clampSideChatFloatOffset({ x: -200, y: -100 }, container, panel)).toEqual({
+      x: -200,
+      y: -100,
+    });
+  });
+
+  it('never moves it past its resting corner (right / bottom)', () => {
+    expect(clampSideChatFloatOffset({ x: 50, y: 30 }, container, panel)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('stops at the far edges, keeping the margin', () => {
+    // 1000 - 380 - 2*16 = 588; 800 - 440 - 2*16 = 328
+    expect(clampSideChatFloatOffset({ x: -5000, y: -5000 }, container, panel)).toEqual({
+      x: -588,
+      y: -328,
+    });
+  });
+
+  it('pins it to the corner when the container is too small to move in', () => {
+    expect(
+      clampSideChatFloatOffset({ x: -10, y: -10 }, { width: 300, height: 300 }, panel)
+    ).toEqual({ x: 0, y: 0 });
   });
 });

@@ -926,7 +926,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // the home page has no conversation for `/archive` or `/compact` to act on.
   const slashMenuCatalog = useMemo(() => {
     const catalog = buildSlashCatalog(slashCatalog, t);
-    return onHome ? homeSlashMenu(catalog) : catalog;
+    return onHome ? homeSlashMenu(catalog, t) : catalog;
   }, [slashCatalog, t, onHome]);
   const slashResults = useMemo(
     () => (slashQuery === null ? [] : filterSlashCommands(slashMenuCatalog, slashQuery)),
