@@ -14,6 +14,7 @@ import {
   Minus,
   RefreshCw,
   Server,
+  TriangleAlert,
 } from 'lucide-react';
 import { matchSorter } from 'match-sorter';
 import * as React from 'react';
@@ -921,6 +922,7 @@ export function AddRepositoryDialog({
 
             {error && (
               <Alert variant="error">
+                <TriangleAlert />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
