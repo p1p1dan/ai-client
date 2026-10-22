@@ -85,6 +85,8 @@ Role: plan（立项方案，2026-10-21 起草，选择题已全部裁决）。�
 
 ## 6 布局重构（阶段 5）
 
+**参考仓库的本地副本**：`/home/pi/code/open-claude-ui`（用户 2026-10-22 拉取的最新版 `c1f923a`）。它没有「会话侧栏」与「旁问」，这两样以 Claude Code 桌面版官方文档为准（`code.claude.com/docs/en/desktop`：See session details、Ask a side question without derailing the session）。参考里与右侧面板相关的数值：文件面板默认宽 480px、最小 320px（`docs/v2/04` §4.4）。
+
 **来由**：用户验收阶段 3、4 时说「感觉变化不是很明显，我更希望是 UI 的重构布局，对齐 open claude ui」。前四个阶段只换了外观，外壳仍是「44px 图标导轨 + 侧栏面板 + 中间对话 + 右侧一整栏」。预览：[`docs/design/2026-10-22-layout-restructure-preview.html`](../../../design/2026-10-22-layout-restructure-preview.html)。
 
 **裁决（2026-10-22）**
