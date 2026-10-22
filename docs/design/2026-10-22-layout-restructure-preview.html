@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PiLab 布局重构预览（对齐 open-claude-ui / Claude 桌面版，2026-10-22）</title>
+<!--
+  Throwaway layout preview. "现状" reproduces today's shell (44px activity
+  rail + sidebar panel + centre + right column); "新布局" follows the
+  reference's desktop shell: one sidebar, a slim top bar, a centred reading
+  column with a floating composer, and work surfaces (diff / files /
+  terminal / preview) opening as a right split pane on demand.
+  Colours are the v2 tokens already shipped (docs/design-system.md §2).
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI Variable Text","Segoe UI","Ubuntu","Noto Sans",Arial,"PingFang SC","Microsoft YaHei UI","Noto Sans CJK SC",sans-serif;
+  background:#1d1d1b;color:var(--fg);font-size:13px;line-height:1.45}
+.mono{font-family:ui-monospace,"SF Mono","Cascadia Mono",Consolas,"Liberation Mono",monospace}
+.tnum{font-variant-numeric:tabular-nums}
+svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.s{width:14px;height:14px}
+
+/* ---------- control bar ---------- */
+.bar{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:8px 14px;background:#1d1d1b;color:#e8e6e1;font-size:13px;border-bottom:1px solid #000}
+.bar b{font-weight:600;margin-right:4px}
+.seg{display:inline-flex;background:#333330;border-radius:6px;padding:2px}
+.seg button{all:unset;cursor:pointer;padding:2px 9px;border-radius:4px;color:#bdbab3}
+.seg button[aria-pressed=true]{background:#5a5853;color:#fff}
+.seg button[disabled]{opacity:.35;cursor:default}
+.page{padding:16px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.explain{width:min(1360px,100%);font-size:13px;color:#cfccc5;line-height:1.6}
+.explain b{color:#fff}
+.explain li{margin-left:18px}
+
+/* ---------- window ---------- */
+.win{width:min(1360px,100%);height:800px;border-radius:12px;overflow:hidden;background:var(--s1);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 50px rgba(0,0,0,.45);display:flex;color:var(--fg)}
+.gb{all:unset;cursor:pointer;height:28px;min-width:28px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:6px;color:var(--fg2);font-size:13px}
+.gb:hover{background:var(--hover);color:var(--fg)}
+.gb.on{background:var(--sel);color:var(--fg)}
+.tag{font-size:11px;padding:0 5px;height:17px;display:inline-flex;align-items:center;border-radius:4px;background:var(--fill);color:var(--fg2)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.dot.run{background:var(--brand);animation:breathe 2.4s ease-in-out infinite}
+.dot.idle{box-shadow:inset 0 0 0 1.5px var(--fg3)}
+.dot.wait{background:var(--brand)}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* sidebar (new) */
+.side{width:var(--side-w);flex:none;background:var(--s0);border-right:1px solid var(--bd);display:flex;flex-direction:column;transition:width .25s ease-out;overflow:hidden}
+.side .top{height:44px;display:flex;align-items:center;gap:4px;padding:0 8px}
+.side .brand{font-family:Georgia,"Songti SC","Noto Serif CJK SC",serif;font-size:17px;padding-left:4px;color:var(--fg);flex:1;white-space:nowrap}
+.newbtn{margin:2px 8px 6px;height:32px;border-radius:8px;display:flex;align-items:center;gap:8px;padding:0 10px;color:var(--fg);font-weight:500;cursor:pointer}
+.newbtn:hover{background:var(--hover)}
+.newbtn .plus{width:20px;height:20px;border-radius:50%;background:var(--brand);color:var(--on-brand);display:grid;place-items:center}
+.nav{display:flex;flex-direction:column;gap:1px;padding:0 8px 8px}
+.nav .it{height:30px;display:flex;align-items:center;gap:9px;padding:0 8px;border-radius:6px;color:var(--fg2);cursor:pointer;white-space:nowrap}
+.nav .it:hover{background:var(--hover);color:var(--fg)}
+.nav .it.on{background:var(--sel);color:var(--fg)}
+.nav .it .k{margin-left:auto;font-size:11px;color:var(--fg3)}
+.list{flex:1;overflow:auto;padding:0 8px}
+.grp{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--fg3);padding:12px 8px 4px;white-space:nowrap}
+.grp .gsp{flex:1}
+.row{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;color:var(--fg-soft);white-space:nowrap;cursor:pointer}
+.row:hover{background:var(--hover)}
+.row.on{background:var(--sel);color:var(--fg)}
+.row .t{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.row .br{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--fg3);max-width:84px;overflow:hidden;text-overflow:ellipsis}
+.acct{height:52px;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid var(--bd);white-space:nowrap}
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--brand);color:var(--on-brand);display:grid;place-items:center;font-size:12px;font-weight:600;flex:none}
+.acct .n{flex:1;min-width:0}
+.acct .n div:last-child{font-size:11px;color:var(--fg3)}
+
+/* main */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--s1)}
+.tbar{height:44px;flex:none;display:flex;align-items:center;gap:6px;padding:0 10px 0 12px}
+.tbar .title{font-weight:500;font-size:13px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbar .chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:6px;color:var(--fg2);font-size:12px}
+.tbar .chip:hover{background:var(--hover)}
+.tbar .sp{flex:1}
+.split{flex:1;min-height:0;display:flex}
+.chatcol{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+.scroll{flex:1;overflow:auto;padding:12px 0 8px}
+.col{max-width:var(--read);margin:0 auto;padding:0 24px}
+.turn{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.u{align-self:flex-end;max-width:80%;background:var(--fill);border-radius:18px;padding:10px 16px;font-size:14px;line-height:20px}
+.p{font-size:14px;line-height:20px}
+.p code{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(--fill);border-radius:4px;padding:1px 4px}
+.think{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--fg2)}
+.trow{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);min-height:22px}
+.trow .a{color:var(--fg3);font-family:ui-monospace,Consolas,monospace;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.filecard{display:flex;align-items:center;gap:10px;border:1px solid var(--bd);border-radius:10px;background:var(--s2);padding:8px 10px;cursor:pointer;max-width:420px}
+.filecard:hover{border-color:var(--bds)}
+.filecard .ic{width:32px;height:32px;border-radius:8px;background:var(--fill);display:grid;place-items:center;color:var(--fg2)}
+.filecard .m{flex:1;min-width:0}
+.filecard .m div:last-child{font-size:11px;color:var(--fg3)}
+.plus{color:var(--success)}.minus{color:var(--danger)}
+.cwrap{padding:0 24px 16px;max-width:calc(var(--read) + 0px);margin:0 auto;width:100%}
+.composer{background:var(--s3);border-radius:20px;box-shadow:0 4px 20px rgba(0,0,0,var(--sh1)),inset 0 0 0 1px var(--bd)}
+.composer textarea{all:unset;display:block;width:100%;box-sizing:border-box;padding:14px 16px 4px;font-size:14px;line-height:21px;min-height:56px;color:var(--fg)}
+.composer textarea::placeholder{color:var(--fg3)}
+.ctool{display:flex;align-items:center;gap:2px;padding:6px 8px 8px}
+.ctool .sp{flex:1}
+.send{width:30px;height:30px;border-radius:8px;background:var(--brand);color:var(--on-brand);display:grid;place-items:center}
+.disclaim{text-align:center;font-size:11px;color:var(--fg3);padding-top:6px}
+
+/* right work panel */
+.panel{width:var(--panel-w);flex:none;display:none;flex-direction:column;background:var(--s1);border-left:1px solid var(--bd)}
+.panel.open{display:flex}
+.phead{height:40px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px;border-bottom:1px solid var(--bd)}
+.ptab{all:unset;cursor:pointer;height:40px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;color:var(--fg2);position:relative}
+.ptab.on{color:var(--fg)}
+.ptab.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--brand);border-radius:2px}
+.pbody{flex:1;overflow:auto;padding:12px}
+.diffblk{border:1px solid var(--bd);border-radius:12px;background:var(--s2);overflow:hidden;margin-bottom:12px}
+.diffblk .h{height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--bd);font-size:12px;color:var(--fg2)}
+.diffblk .h .sp{flex:1}
+.dl{display:grid;grid-template-columns:30px 30px 14px 1fr;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:18px;padding-right:10px;white-space:pre}
+.dl .n{color:var(--fg3);text-align:right;padding-right:6px}
+.dl.add{background:color-mix(in oklab,var(--success) 12%,transparent)}
+.dl.del{background:color-mix(in oklab,var(--danger) 12%,transparent)}
+.fold{font-size:11px;color:var(--fg3);background:var(--fill);padding:2px 10px 2px 74px;font-family:ui-monospace,monospace}
+.term{background:var(--term-bg);color:#d6d4ce;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:18px;padding:10px 12px;height:100%;border-radius:0}
+.tree .r{height:24px;display:flex;align-items:center;gap:6px;padding-left:calc(var(--d)*12px + 6px);border-radius:4px;color:var(--fg-soft);font-size:13px}
+.tree .r:hover{background:var(--hover)}
+.tree .r.on{background:var(--sel)}
+.drawer{display:none;height:180px;flex:none;border-top:1px solid var(--bd);flex-direction:column}
+.drawer.open{display:flex}
+.drawer .dh{height:32px;display:flex;align-items:center;gap:4px;padding:0 8px;border-bottom:1px solid var(--bd)}
+
+/* ---------- "现状" (today) ---------- */
+.old{display:none;width:100%;height:100%}
+body[data-layout=old] .old{display:flex}
+body[data-layout=old] .new{display:none}
+.rail{width:44px;flex:none;background:var(--s0);border-right:1px solid var(--bd);display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:8px;color:var(--fg2)}
+.rail .r{width:32px;height:32px;border-radius:6px;display:grid;place-items:center}
+.rail .r.on{background:var(--sel);color:var(--fg)}
+.oside{width:280px;flex:none;background:var(--s0);border-right:1px solid var(--bd);display:flex;flex-direction:column}
+.oside .search{margin:8px;height:32px;border-radius:6px;background:var(--fill);display:flex;align-items:center;gap:6px;padding:0 10px;color:var(--fg3)}
+.oside .row{height:32px;margin:0 6px;font-size:13px}
+.ocenter{flex:1;min-width:0;display:flex;flex-direction:column}
+.sbar{height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--bd);font-size:13px}
+.sbar .sp{flex:1}
+.oright{width:420px;flex:none;border-left:1px solid var(--bd);display:flex;flex-direction:column}
+.otabs{height:36px;display:flex;align-items:center;border-bottom:1px solid var(--bd);padding:0 6px;gap:2px}
+.notes{position:absolute;pointer-events:none}
+.badge-note{position:absolute;background:#e5735c;color:#fff;font-size:11px;font-weight:600;border-radius:10px;padding:1px 7px;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+</style>
+</head>
+<body data-layout="new">
+
+<div class="bar">
+  <span><b>布局</b><span class="seg" data-k="layout"><button data-v="old">现状</button><button data-v="new">新布局</button></span></span>
+  <span><b>亮暗</b><span class="seg" data-k="theme"><button data-v="light">亮</button><button data-v="dark">暗</button></span></span>
+  <span><b>侧栏</b><span class="seg" data-k="side"><button data-v="open">展开</button><button data-v="closed">收起</button></span></span>
+  <span><b>侧栏分组 L2</b><span class="seg" data-k="group"><button data-v="repo">按仓库</button><button data-v="status">按状态</button><button data-v="date">按时间</button></span></span>
+  <span><b>右侧工作面板 L3</b><span class="seg" data-k="panel"><button data-v="none">关</button><button data-v="diff">改动</button><button data-v="files">文件</button><button data-v="term">终端</button></span></span>
+  <span><b>终端位置 L4</b><span class="seg" data-k="termpos"><button data-v="panel">右侧面板</button><button data-v="drawer">底部抽屉</button></span></span>
+</div>
+
+<div class="page">
+  <div class="win">
+    <!-- ================= 现状 ================= -->
+    <div class="old">
+      <nav class="rail">
+        <div class="r on"><svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+        <div class="r"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
+        <div class="r"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M18 9a9 9 0 0 1-9 9"/><circle cx="18" cy="6" r="3"/></svg></div>
+        <div class="r"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
+        <div style="flex:1"></div>
+        <div class="r"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
+        <div class="r" style="margin-bottom:8px"><div class="avatar" style="width:22px;height:22px;font-size:11px">P</div></div>
+      </nav>
+      <aside class="oside">
+        <div class="search"><svg class="i s" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索对话</div>
+        <div class="grp">临时对话</div>
+        <div class="row"><span class="dot idle"></span><span class="t">整理周报的格式</span></div>
+        <div class="grp">ai-client</div>
+        <div class="row on"><span class="dot run"></span><span class="t">修复 /compact 出两条摘要</span></div>
+        <div class="row"><span class="dot idle"></span><span class="t">SSH 运行时打进安装包</span></div>
+        <div class="row"><span class="dot idle"></span><span class="t">调研网关供应商切换</span></div>
+        <div class="grp">ChipTestMachine</div>
+        <div class="row"><span class="dot idle"></span><span class="t">DIE 算法清理与单测</span></div>
+      </aside>
+      <section class="ocenter">
+        <div class="sbar">修复 /compact 出两条摘要 <span class="tag">ai-client</span><span class="tag mono">main</span><span class="sp"></span><span class="gb"><svg class="i s" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></svg></span><span class="gb"><svg class="i s" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span></div>
+        <div class="scroll"><div class="col" style="max-width:720px">
+          <div class="turn">
+            <div class="u">压缩完成后时间线里有两条「上下文摘要」，旧的那条应该被取代。帮我查一下原因并修掉。</div>
+            <div class="think"><svg class="i s" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>思考了 12 秒</div>
+            <div class="trow"><svg class="i s" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>读取 <span class="a">src/shared/dshHistory/projectTimeline.ts</span></div>
+            <div class="trow"><svg class="i s" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>编辑 <span class="a">projectTimeline.ts</span><span class="plus">+6</span> <span class="minus">−2</span></div>
+            <div class="p">原因在历史投影：每次压缩都会写一个新的摘要节点，但投影时没有标出哪一个是当前生效的。</div>
+          </div>
+        </div></div>
+        <div class="cwrap" style="max-width:760px"><div class="composer" style="border-radius:20px"><textarea placeholder="回复，或用 / 调出命令、@ 引用文件"></textarea><div class="ctool"><span class="gb">+</span><span class="gb">Opus 5.5 · 高</span><span class="gb">自动编辑</span><span class="sp"></span><span class="send"><svg class="i s" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div></div></div>
+      </section>
+      <section class="oright">
+        <div class="otabs"><span class="gb on">审阅</span><span class="gb">终端</span><span class="gb">编辑器</span></div>
+        <div class="pbody"><div class="diffblk"><div class="h">projectTimeline.ts <span class="plus">+6</span><span class="minus">−2</span></div>
+          <div class="dl del"><span class="n">61</span><span class="n"></span><span>−</span><span>  return nodes.filter(isSummary);</span></div>
+          <div class="dl add"><span class="n"></span><span class="n">61</span><span>+</span><span>  const all = nodes.filter(isSummary);</span></div></div></div>
+      </section>
+    </div>
+
+    <!-- ================= 新布局 ================= -->
+    <aside class="side new">
+      <div class="top">
+        <span class="brand">PiLab</span>
+        <span class="gb" title="收起侧栏" data-act="side"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></span>
+      </div>
+      <div class="newbtn"><span class="plus"><svg class="i s" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M12 5v14M5 12h14"/></svg></span>新对话</div>
+      <div class="nav">
+        <div class="it"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索<span class="k">Ctrl K</span></div>
+        <div class="it on"><svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</div>
+        <div class="it"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>仓库</div>
+        <div class="it"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg>技能与插件</div>
+      </div>
+      <div class="list" id="list"></div>
+      <div class="acct"><div class="avatar">P</div><div class="n"><div>Pi</div><div>PiLab 账户</div></div><span class="gb" title="设置"><svg class="i s" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></span></div>
+    </aside>
+
+    <main class="main new">
+      <div class="tbar">
+        <span class="gb" id="sideToggle" title="展开侧栏" data-act="side" style="display:none"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></span>
+        <span class="title">修复 /compact 出两条摘要</span>
+        <span class="chip"><svg class="i s" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>ai-client</span>
+        <span class="chip mono"><svg class="i s" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M18 9a9 9 0 0 1-9 9"/><circle cx="18" cy="6" r="3"/></svg>main</span>
+        <span class="sp"></span>
+        <span class="gb" data-open="diff" title="改动"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v14M5 10h14M5 21h14"/></svg><span class="tnum"><span class="plus">+6</span> <span class="minus">−2</span></span></span>
+        <span class="gb" data-open="files" title="文件"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+        <span class="gb" data-open="term" title="终端"><svg class="i" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></svg></span>
+        <span class="gb" title="更多"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+      </div>
+      <div class="split">
+        <div class="chatcol">
+          <div class="scroll"><div class="col">
+            <div class="turn">
+              <div class="u">压缩完成后时间线里有两条「上下文摘要」，旧的那条应该被取代。帮我查一下原因并修掉。</div>
+              <div class="think"><svg class="i s" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>思考了 <span class="tnum">12</span> 秒</div>
+              <div class="trow"><svg class="i s" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>读取 <span class="a">src/shared/dshHistory/projectTimeline.ts</span></div>
+              <div class="trow"><svg class="i s" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索 <span class="a">"surface_summary" in src/</span></div>
+              <div class="p">原因在历史投影：每次压缩都会写一个新的摘要节点，但投影时没有标出哪一个是<b>当前生效</b>的，所以旧摘要原样留在时间线里。改成只把最后一条当作生效，前面的标为 <code>superseded</code>。</div>
+              <div class="filecard" data-open="diff">
+                <div class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v14M5 10h14M5 21h14"/></svg></div>
+                <div class="m"><div class="mono">projectTimeline.ts</div><div>改了 1 个文件 · <span class="plus">+6</span> <span class="minus">−2</span> · 点开在右侧查看</div></div>
+                <svg class="i s" viewBox="0 0 24 24" style="color:var(--fg3)"><path d="m9 18 6-6-6-6"/></svg>
+              </div>
+              <div class="trow"><span class="dot run" style="width:6px;height:6px"></span>运行 <span class="a">pnpm vitest projectTimeline</span><span class="tnum" style="color:var(--fg3)">0:07</span></div>
+            </div>
+          </div></div>
+          <div class="cwrap">
+            <div class="composer"><textarea placeholder="回复 PiLab…"></textarea>
+              <div class="ctool"><span class="gb"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span class="gb">自动编辑</span><span class="sp"></span><span class="gb">Opus 5.5 · 高</span><span class="send"><svg class="i s" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div>
+            </div>
+          </div>
+          <div class="drawer" id="drawer"><div class="dh"><span class="ptab on" style="height:32px">终端</span><span style="flex:1"></span><span class="gb" data-close="drawer">✕</span></div><div class="term" style="flex:1">pi@ai-client:~$ pnpm vitest projectTimeline<br> ✓ projectTimeline.test.ts (12 tests) 84ms<br><br> Test Files  1 passed (1)<br>pi@ai-client:~$ ▍</div></div>
+        </div>
+        <section class="panel" id="panel">
+          <div class="phead">
+            <button class="ptab" data-tab="diff">改动 <span class="tag tnum">1</span></button>
+            <button class="ptab" data-tab="files">文件</button>
+            <button class="ptab" data-tab="term" id="termTab">终端</button>
+            <span style="flex:1"></span>
+            <span class="gb" title="在新窗口打开"><svg class="i s" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></span>
+            <span class="gb" data-close="panel" title="关闭"><svg class="i s" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+          </div>
+          <div class="pbody" data-body="diff">
+            <div class="diffblk">
+              <div class="h"><span class="mono">src/shared/dshHistory/projectTimeline.ts</span><span class="sp"></span><span class="plus">+6</span><span class="minus">−2</span></div>
+              <div class="fold">⋯ 18 行未改动</div>
+              <div class="dl"><span class="n">60</span><span class="n">60</span><span> </span><span>export function projectSummaries(nodes) {</span></div>
+              <div class="dl del"><span class="n">61</span><span class="n"></span><span class="minus">−</span><span>  return nodes.filter(isSummary);</span></div>
+              <div class="dl del"><span class="n">62</span><span class="n"></span><span class="minus">−</span><span>}</span></div>
+              <div class="dl add"><span class="n"></span><span class="n">61</span><span class="plus">+</span><span>  const all = nodes.filter(isSummary);</span></div>
+              <div class="dl add"><span class="n"></span><span class="n">62</span><span class="plus">+</span><span>  // Only the latest compaction is live.</span></div>
+              <div class="dl add"><span class="n"></span><span class="n">63</span><span class="plus">+</span><span>  return all.map((n, i) =&gt; ({</span></div>
+              <div class="dl add"><span class="n"></span><span class="n">64</span><span class="plus">+</span><span>    ...n, superseded: i &lt; all.length - 1,</span></div>
+              <div class="dl add"><span class="n"></span><span class="n">65</span><span class="plus">+</span><span>  }));</span></div>
+              <div class="dl add"><span class="n"></span><span class="n">66</span><span class="plus">+</span><span>}</span></div>
+            </div>
+            <div style="display:flex;gap:6px;justify-content:flex-end"><span class="gb">撤销这处改动</span><span class="gb" style="background:var(--fill);color:var(--fg)">提交…</span></div>
+          </div>
+          <div class="pbody tree" data-body="files">
+            <div class="r" style="--d:0">▾ src</div>
+            <div class="r" style="--d:1">▾ shared</div>
+            <div class="r" style="--d:2">▾ dshHistory</div>
+            <div class="r on" style="--d:3"><span style="color:#3a6ea5">TS</span> projectTimeline.ts <span class="tag" style="margin-left:auto;margin-right:6px">M</span></div>
+            <div class="r" style="--d:3"><span style="color:#3a6ea5">TS</span> surface.ts</div>
+            <div class="r" style="--d:1">▸ renderer</div>
+            <div class="r" style="--d:1">▸ main</div>
+            <div class="r" style="--d:0">▸ docs</div>
+            <div class="r" style="--d:0"><span style="color:#b07a1e">{}</span> package.json</div>
+          </div>
+          <div class="pbody" data-body="term" style="padding:0"><div class="term">pi@ai-client:~$ pnpm vitest projectTimeline<br> ✓ projectTimeline.test.ts (12 tests) 84ms<br><br> Test Files  1 passed (1)<br>pi@ai-client:~$ ▍</div></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="explain">
+    <p><b>为什么第 1～4 阶段看着变化不大</b>：前四个阶段换的是「皮」——颜色、字号、卡片、状态图标、按钮——外壳的骨架没动，仍是现在的「44px 图标导轨 + 侧栏面板 + 中间对话 + 右侧一整栏（审阅 / 终端 / 编辑器）」，这是 VS Code 式的布局。切到「现状」能看到它。</p>
+    <p style="margin-top:6px"><b>新布局（对齐 Claude 桌面版）</b>：</p>
+    <ul>
+      <li><b>L1 去掉图标导轨</b>：只留一条侧栏。顶上是品牌名和收起按钮、「新对话」，下面是搜索 / 对话 / 仓库 / 技能与插件四个入口，再下面是对话列表（28px 高密行，行尾分支名，运行中的对话一个呼吸点），最底下是账户与设置。侧栏可以整个收起，收起后标题栏左边出现展开按钮。</li>
+      <li><b>L2 侧栏分组</b>：按仓库（现在的做法）、按状态（运行中 / 等你处理 / 已完成，参考 2.0 的「任务监控台」思路）、按时间。顶栏可切换看效果。</li>
+      <li><b>L3 中间是阅读栏</b>：标题栏只有对话名、仓库、分支，没有边线；对话与输入框居中、同宽（约 720px），输入框悬浮在底部。改动不再直接摊在时间线里，而是一张「改了 1 个文件」的卡片，点开在右侧看。</li>
+      <li><b>L3 右侧工作面板按需打开</b>：改动、文件、终端都收进一个可关的右侧面板（标签切换，可在新窗口打开）。平时关着，中间就是一个干净的对话页；点标题栏右边的按钮、或时间线里的改动卡片才打开。</li>
+      <li><b>L4 终端放哪</b>：放进右侧面板的一个标签，或者作为对话下方的底部抽屉。</li>
+    </ul>
+    <p style="margin-top:6px">这是预览，代码一行没动。你定了 L1～L4 之后我再写进计划，按阶段改。</p>
+  </div>
+</div>
+
+<script>
+const P={
+  light:{s0:'#f9f9f7',s1:'#fcfcfb',s2:'#ffffff',s3:'#ffffff',fg:'#151515',fg2:'#525252',fg3:'#8a8a8a',bd:'#e5e5e4',bds:'#cececd',fill:'#eeeeed',hover:'#f0f0ef',sel:'#e5e5e4',brand:'#c6613f',onBrand:'#fff',danger:'#b5452f',success:'#3f7d4e',term:'#1d1d1b',sh1:.035},
+  dark:{s0:'#0b0b0b',s1:'#151515',s2:'#1a1a19',s3:'#20201f',fg:'#f5f5f5',fg2:'#a3a3a3',fg3:'#666666',bd:'#2b2b2b',bds:'#424242',fill:'#222222',hover:'#202020',sel:'#2b2b2b',brand:'#d97757',onBrand:'#151515',danger:'#e5735c',success:'#73b585',term:'#0b0b0b',sh1:.4},
+};
+const state={layout:'new',theme:'light',side:'open',group:'repo',panel:'diff',termpos:'panel'};
+const rows={
+  repo:[['临时对话',[['整理周报的格式','','idle']]],['ai-client',[['修复 /compact 出两条摘要','main','run',1],['SSH 运行时打进安装包','feat/ssh','wait'],['调研网关供应商切换','main','idle'],['设计规范 v2 迁移','feat/ui-cohesion','idle']]],['ChipTestMachine',[['DIE 算法清理与单测','dev','idle'],['报表导出改成 xlsx','dev','idle']]]],
+  status:[['运行中',[['修复 /compact 出两条摘要','main','run',1]]],['等你处理',[['SSH 运行时打进安装包','feat/ssh','wait']]],['最近完成',[['设计规范 v2 迁移','feat/ui-cohesion','idle'],['调研网关供应商切换','main','idle'],['DIE 算法清理与单测','dev','idle'],['整理周报的格式','','idle']]]],
+  date:[['今天',[['修复 /compact 出两条摘要','main','run',1],['SSH 运行时打进安装包','feat/ssh','wait'],['设计规范 v2 迁移','feat/ui-cohesion','idle']]],['昨天',[['调研网关供应商切换','main','idle'],['整理周报的格式','','idle']]],['本周',[['DIE 算法清理与单测','dev','idle'],['报表导出改成 xlsx','dev','idle']]]],
+};
+function renderList(){
+  const el=document.getElementById('list'); el.innerHTML='';
+  for(const [g,items] of rows[state.group]){
+    const h=document.createElement('div'); h.className='grp'; h.innerHTML=`<span>${g}</span><span class="gsp"></span>${state.group==='repo'&&g!=='临时对话'?'<span class="gb" style="height:20px;min-width:20px">+</span>':''}`; el.appendChild(h);
+    for(const [t,br,st,on] of items){
+      const r=document.createElement('div'); r.className='row'+(on?' on':'');
+      r.innerHTML=`<span class="dot ${st}"></span><span class="t">${t}</span>${br?`<span class="br">${br}</span>`:''}`; el.appendChild(r);
+    }
+  }
+}
+function apply(){
+  document.body.dataset.layout=state.layout;
+  const p=P[state.theme], r=document.documentElement.style;
+  const map={s0:p.s0,s1:p.s1,s2:p.s2,s3:p.s3,fg:p.fg,fg2:p.fg2,fg3:p.fg3,bd:p.bd,bds:p.bds,fill:p.fill,hover:p.hover,sel:p.sel,brand:p.brand,'on-brand':p.onBrand,danger:p.danger,success:p.success,'term-bg':p.term,sh1:p.sh1};
+  for(const k in map) r.setProperty('--'+k,map[k]);
+  r.setProperty('--fg-soft',`color-mix(in oklab, ${p.fg} 50%, ${p.fg2})`);
+  r.setProperty('--side-w',state.side==='open'?'272px':'0px');
+  document.getElementById('sideToggle').style.display=state.side==='open'?'none':'inline-flex';
+  const panelTab = state.panel==='term' && state.termpos==='drawer' ? 'none' : state.panel;
+  const open = panelTab!=='none';
+  document.getElementById('panel').classList.toggle('open',open);
+  r.setProperty('--panel-w', panelTab==='files'?'300px':'480px');
+  r.setProperty('--read', open?'640px':'720px');
+  document.querySelectorAll('[data-body]').forEach(b=>b.style.display=b.dataset.body===panelTab?'block':'none');
+  document.querySelectorAll('.ptab[data-tab]').forEach(t=>t.classList.toggle('on',t.dataset.tab===panelTab));
+  document.getElementById('termTab').style.display=state.termpos==='panel'?'':'none';
+  document.getElementById('drawer').classList.toggle('open',state.panel==='term'&&state.termpos==='drawer');
+  document.querySelectorAll('[data-open]').forEach(b=>b.classList.toggle('on',b.dataset.open===state.panel));
+  document.querySelectorAll('.seg').forEach(s=>s.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',state[s.dataset.k]===b.dataset.v)));
+  renderList();
+}
+document.querySelectorAll('.seg').forEach(s=>s.addEventListener('click',e=>{const v=e.target.dataset.v;if(!v)return;state[s.dataset.k]=v;apply()}));
+document.addEventListener('click',e=>{
+  const o=e.target.closest('[data-open]'); if(o){state.panel=state.panel===o.dataset.open?'none':o.dataset.open;apply();return}
+  const t=e.target.closest('.ptab[data-tab]'); if(t){state.panel=t.dataset.tab;apply();return}
+  const c=e.target.closest('[data-close]'); if(c){state.panel='none';apply();return}
+  const sd=e.target.closest('[data-act=side]'); if(sd){state.side=state.side==='open'?'closed':'open';apply();return}
+});
+apply();
+</script>
+</body>
+</html>
