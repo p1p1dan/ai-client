@@ -4956,6 +4956,8 @@ Object.assign(zhTranslations, {
   'Commit changes': '提交改动',
   '{{count}} more files': '还有 {{count}} 个文件',
   'By content, counted in characters of the loaded messages': '按内容分，以已载入消息的字符计',
+  Servers: '服务',
+  'Open in browser': '在浏览器中打开',
 });
 
 /** Layout 5f (ui-cohesion §6, ruling L6): the side chat (`/btw`, Ctrl+;). */

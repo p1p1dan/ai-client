@@ -15,6 +15,7 @@ import { ChangesCard } from './ChangesCard';
 import { ContextCard } from './ContextCard';
 import { EnvironmentCard, useEnvironmentRows } from './EnvironmentCard';
 import { RunningCard } from './RunningCard';
+import { ServersCard } from './ServersCard';
 import {
   deriveChangesCardView,
   deriveContextCardView,
@@ -22,6 +23,7 @@ import {
   visibleRailCards,
 } from './sessionRailModel';
 import { TodoRailCard } from './TodoRailCard';
+import { useJobServers } from './useJobServers';
 
 const NO_HIDDEN: readonly string[] = [];
 
@@ -81,11 +83,14 @@ export function SessionRail({
     [panels, lanes, hidden, now]
   );
 
+  const servers = useJobServers(sessionId, panels?.jobs, panels?.live === true);
+
   const cards = visibleRailCards({
     environmentRows: environmentRows.length,
     context: contextView !== null,
     changes: changesView !== null,
     todo: todoView !== null,
+    servers: servers.length,
     running: running.length,
   });
 
@@ -116,6 +121,8 @@ export function SessionRail({
             );
           case 'todo':
             return todoView && <TodoRailCard key={id} view={todoView} />;
+          case 'servers':
+            return <ServersCard key={id} rows={servers} />;
           case 'running':
             return (
               <RunningCard

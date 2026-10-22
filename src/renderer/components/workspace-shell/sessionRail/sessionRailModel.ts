@@ -17,7 +17,13 @@ export const SESSION_RAIL_WIDTH = 260;
  */
 export const SESSION_RAIL_MIN_CHAT_WIDTH = 600;
 
-export type SessionRailCardId = 'environment' | 'changes' | 'todo' | 'running' | 'context';
+export type SessionRailCardId =
+  | 'environment'
+  | 'changes'
+  | 'todo'
+  | 'servers'
+  | 'running'
+  | 'context';
 
 /** Top-to-bottom order. */
 export const SESSION_RAIL_CARDS: readonly SessionRailCardId[] = [
@@ -25,6 +31,8 @@ export const SESSION_RAIL_CARDS: readonly SessionRailCardId[] = [
   'context',
   'changes',
   'todo',
+  // The local addresses running commands announced, above the commands themselves.
+  'servers',
   'running',
 ];
 
@@ -33,6 +41,7 @@ export const SESSION_RAIL_CARD_DEFAULT_OPEN: Readonly<Record<SessionRailCardId, 
   environment: true,
   changes: true,
   todo: true,
+  servers: true,
   running: true,
   context: false,
 };
@@ -295,6 +304,7 @@ export function visibleRailCards(input: {
   context: boolean;
   changes: boolean;
   todo: boolean;
+  servers: number;
   running: number;
 }): SessionRailCardId[] {
   const shown: Record<SessionRailCardId, boolean> = {
@@ -302,6 +312,7 @@ export function visibleRailCards(input: {
     context: input.context,
     changes: input.changes,
     todo: input.todo,
+    servers: input.servers > 0,
     running: input.running > 0,
   };
   return SESSION_RAIL_CARDS.filter((id) => shown[id]);

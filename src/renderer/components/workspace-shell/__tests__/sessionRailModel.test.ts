@@ -236,14 +236,22 @@ describe('deriveContextCardView', () => {
 describe('visibleRailCards', () => {
   it('draws only cards with something to say, in rail order', () => {
     expect(
-      visibleRailCards({ environmentRows: 2, context: true, changes: true, todo: true, running: 1 })
-    ).toEqual(['environment', 'context', 'changes', 'todo', 'running']);
+      visibleRailCards({
+        environmentRows: 2,
+        context: true,
+        changes: true,
+        todo: true,
+        servers: 1,
+        running: 1,
+      })
+    ).toEqual(['environment', 'context', 'changes', 'todo', 'servers', 'running']);
     expect(
       visibleRailCards({
         environmentRows: 1,
         context: false,
         changes: false,
         todo: false,
+        servers: 0,
         running: 0,
       })
     ).toEqual(['environment']);
@@ -253,6 +261,7 @@ describe('visibleRailCards', () => {
         context: true,
         changes: false,
         todo: true,
+        servers: 0,
         running: 0,
       })
     ).toEqual(['context', 'todo']);
