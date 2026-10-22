@@ -60,6 +60,7 @@ import { WorkerManagerError, workerManager } from '../services/agent-host/Worker
 import { sameWorkerDirectory } from '../services/agent-host/workerSessionKey';
 import { getAppStateRoot } from '../services/appStatePaths';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
+import type { ChatCaller } from '../services/chat/chatCaller';
 import { legacyMigrationService } from '../services/chat/LegacyMigrationService';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
 import {
@@ -68,8 +69,8 @@ import {
 } from '../services/chat/SessionReplayReader';
 import { usableWorkspace } from '../services/legacyAssets/detectLegacyAssets';
 
-/** The window that sent this IPC call, when it still exists. */
-const windowCleanupAttached = new Set<number>();
+/** Owners whose release-on-gone listener is already attached. */
+const ownerCleanupAttached = new Set<number>();
 
 /**
  * Sequence numbers for the read-only replay events (T102).
@@ -86,29 +87,79 @@ function nextReplaySequence(): number {
   return replaySequence;
 }
 
-function ownerIdFor(event: IpcMainInvokeEvent | undefined): number | undefined {
-  const webContentsId = event?.sender?.id;
-  return typeof webContentsId === 'number' ? webContentsId : undefined;
+/** The window behind an IPC call, as a chat caller. */
+function callerForIpc(event: IpcMainInvokeEvent | undefined): ChatCaller {
+  const sender = event?.sender;
+  const ownerId = typeof sender?.id === 'number' ? sender.id : undefined;
+  if (ownerId === undefined || typeof sender?.once !== 'function') return { ownerId };
+  return {
+    ownerId,
+    onGone: (listener) => {
+      sender.once('destroyed', listener);
+    },
+  };
 }
 
 function claimSessionForSender(
-  event: IpcMainInvokeEvent | undefined,
+  caller: ChatCaller,
   sessionId: string | undefined
 ): number | undefined {
   // A call with no identifiable sender claims nothing rather than throwing:
   // routing is an optimisation over broadcast, and no handler may fail a
   // session create because it could not work out which window asked.
-  const webContentsId = ownerIdFor(event);
-  if (!sessionId || webContentsId === undefined) return webContentsId;
-  workerManager.claimSession(sessionId, webContentsId);
-  if (!windowCleanupAttached.has(webContentsId) && typeof event?.sender?.once === 'function') {
-    windowCleanupAttached.add(webContentsId);
-    event.sender.once('destroyed', () => {
-      windowCleanupAttached.delete(webContentsId);
-      workerManager.releaseWindow(webContentsId);
+  const { ownerId } = caller;
+  if (!sessionId || ownerId === undefined) return ownerId;
+  workerManager.claimSession(sessionId, ownerId);
+  if (!ownerCleanupAttached.has(ownerId) && caller.onGone) {
+    ownerCleanupAttached.add(ownerId);
+    caller.onGone(() => {
+      ownerCleanupAttached.delete(ownerId);
+      workerManager.releaseWindow(ownerId);
     });
   }
-  return webContentsId;
+  return ownerId;
+}
+
+/**
+ * Issue #25: every chat handler takes a `ChatCaller` instead of the IPC event
+ * and is kept in this table as well as registered with `ipcMain`, so the
+ * remote gateway runs the very same code for a caller that is not a window.
+ */
+type ChatHandler = (caller: ChatCaller, ...args: unknown[]) => unknown;
+const chatHandlers = new Map<string, ChatHandler>();
+
+function handle<TArgs extends unknown[], TResult>(
+  channel: string,
+  handler: (caller: ChatCaller, ...args: TArgs) => TResult
+): void {
+  // The payload types are the renderer's promise; the gateway validates its own.
+  chatHandlers.set(channel, handler as unknown as ChatHandler);
+  ipcMain.handle(channel, (event, ...args) => handler(callerForIpc(event), ...(args as TArgs)));
+}
+
+/** Run a registered chat handler for a caller that is not an IPC sender. */
+export async function invokeChatHandler(
+  channel: string,
+  caller: ChatCaller,
+  args: unknown[]
+): Promise<unknown> {
+  const handler = chatHandlers.get(channel);
+  if (!handler) throw new Error(`chat_handler_unknown: No chat handler for ${channel}`);
+  return handler(caller, ...args);
+}
+
+const runtimeEventListeners = new Set<(event: RuntimeEvent) => void>();
+
+/**
+ * Every runtime event the windows receive, in the same order — including the
+ * replay pages this file emits itself, which never pass through the
+ * WorkerManager. Returns the unsubscribe.
+ */
+export function onChatRuntimeEvent(listener: (event: RuntimeEvent) => void): () => void {
+  runtimeEventListeners.add(listener);
+  return () => {
+    runtimeEventListeners.delete(listener);
+  };
 }
 
 function broadcastRuntimeEvent(event: RuntimeEvent): void {
@@ -122,6 +173,13 @@ function broadcastRuntimeEvent(event: RuntimeEvent): void {
       win.webContents.send(IPC_CHANNELS.CHAT_RUNTIME_EVENT, event);
     } catch {
       // Window may be closing mid-send
+    }
+  }
+  for (const listener of runtimeEventListeners) {
+    try {
+      listener(event);
+    } catch (error) {
+      console.warn('[chat] A runtime event listener threw:', error);
     }
   }
 }
@@ -349,22 +407,22 @@ export function registerChatHandlers(): void {
 
   // S-6 feedback 11c (user, 2026-10-17): and again while the user types in a DSH
   // chat, for a host that stopped after 10 idle minutes. A running host answers at once.
-  ipcMain.handle(IPC_CHANNELS.CHAT_WARM_DSH_HOST, () => {
+  handle(IPC_CHANNELS.CHAT_WARM_DSH_HOST, () => {
     prewarmDshHost(dshPrewarmDeps);
   });
 
-  ipcMain.handle(IPC_CHANNELS.CHAT_ENSURE_HOST, async () => {
+  handle(IPC_CHANNELS.CHAT_ENSURE_HOST, async () => {
     await workerManager.ensureReady();
     prewarmDshHostOnce();
     return workerManager.getStatus();
   });
 
-  ipcMain.handle(IPC_CHANNELS.CHAT_GET_HOST_STATUS, async () => {
+  handle(IPC_CHANNELS.CHAT_GET_HOST_STATUS, async () => {
     return workerManager.getStatus();
   });
 
   // Route B S-6 feedback 7: the Context panel's "Conversation record" row.
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_LOCATE_TRANSCRIPT,
     async (_event, stubFile: unknown): Promise<TranscriptLocation | null> => {
       if (typeof stubFile !== 'string') return null;
@@ -376,7 +434,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_CREATE_SESSION,
     async (
       e,
@@ -468,7 +526,7 @@ export function registerChatHandlers(): void {
    * `chat:registerSession` follows for workers). Idempotent, so a repeated ask
    * gets the same directory.
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_ENSURE_SCRATCH_WORKSPACE,
     async (_e, payload: { sessionId: string }): Promise<{ path: string }> => {
       // U13: after a restart this process has no allocation for the session,
@@ -504,7 +562,7 @@ export function registerChatHandlers(): void {
    * Returns false instead of throwing — the caller treats indexing as
    * best-effort and must never fail a session creation over it.
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_REGISTER_SESSION,
     async (
       _e,
@@ -532,7 +590,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_RESUME_SESSION,
     async (
       e,
@@ -647,7 +705,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_SEND,
     async (
       e,
@@ -679,7 +737,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_RETRY_LAST_TURN,
     async (
       e,
@@ -707,7 +765,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_STOP,
     async (
       e,
@@ -721,7 +779,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_INTERJECT,
     async (
       e,
@@ -759,7 +817,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_WITHDRAW_INTERJECTION,
     async (
       _e,
@@ -775,7 +833,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_CLOSE_SESSION,
     async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
       workerManager.releaseSession(payload.sessionId);
@@ -784,7 +842,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_RESPOND_PERMISSION,
     async (
       _e,
@@ -798,7 +856,7 @@ export function registerChatHandlers(): void {
   // question is parked inside one live turn and the worker is the authority on
   // whether its id is still waiting. Claiming here would make a second window
   // watching the same session unable to answer a card it can see.
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_RESPOND_QUESTION,
     async (
       _e,
@@ -814,7 +872,7 @@ export function registerChatHandlers(): void {
     })
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_SET_PERMISSIONS,
     async (
       e,
@@ -829,7 +887,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_SET_PERMISSION_TIER,
     async (
       e,
@@ -846,7 +904,7 @@ export function registerChatHandlers(): void {
 
   // P1-9d (decision 051): the legacy rows migrated chats came from stay in the
   // index for a rollback, not in the sidebar, unless 1.0.x wrote to them since.
-  ipcMain.handle(IPC_CHANNELS.CHAT_LIST_SESSIONS, async (): Promise<SessionIndexListEntry[]> => {
+  handle(IPC_CHANNELS.CHAT_LIST_SESSIONS, async (): Promise<SessionIndexListEntry[]> => {
     return sessionIndexService.listForDisplay();
   });
 
@@ -860,21 +918,21 @@ export function registerChatHandlers(): void {
    * behind a running turn, and returns `null` (not an empty inventory) when
    * nothing has reported for this session.
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_LIST_SESSION_CAPABILITIES,
     async (_e, payload: { sessionId: string }): Promise<WorkerCapabilityInventory | null> => {
       return workerManager.getSessionCapabilities(payload.sessionId);
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_RENAME_SESSION,
     async (_e, payload: { sessionId: string; title: string }): Promise<boolean> => {
       return sessionIndexService.rename(payload.sessionId, payload.title);
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_ARCHIVE_SESSION,
     async (_e, payload: { sessionId: string; archived: boolean }): Promise<boolean> => {
       const result = await sessionIndexService.setArchived(payload.sessionId, payload.archived);
@@ -947,7 +1005,7 @@ export function registerChatHandlers(): void {
    * Decision 194: `engine` is the chat's (or the next send's); with no worker
    * up, the DSH host lists a DSH menu, plugin skills included, before the disk.
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_GET_SLASH_COMMANDS,
     async (
       _e,
@@ -976,7 +1034,7 @@ export function registerChatHandlers(): void {
    * cancelled: true}` and logged at info. Rejected, Electron logged it at
    * error level like a failure.
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_COMPACT_SESSION,
     async (
       e,
@@ -1006,7 +1064,7 @@ export function registerChatHandlers(): void {
    * window that asked); answered `cancelled: false` when no compaction of it
    * is with the worker.
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_CANCEL_COMPACT,
     async (e, payload: { sessionId: string }): Promise<{ cancelled: boolean }> => {
       claimSessionForSender(e, payload.sessionId);
@@ -1020,7 +1078,7 @@ export function registerChatHandlers(): void {
    * not refused mid-turn (the worker and `WorkerManager.runSessionCommand`
    * say why).
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_RUN_SESSION_COMMAND,
     async (
       e,
@@ -1046,7 +1104,7 @@ export function registerChatHandlers(): void {
    * live session nor claims one: a chat with no running slot answers no
    * panels.
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_GET_SESSION_PANELS,
     async (
       _e,
@@ -1060,7 +1118,7 @@ export function registerChatHandlers(): void {
    * claimed for the sender like the goal bar's commands; not refused
    * mid-turn (a background job is what runs beside a turn).
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_KILL_SESSION_JOB,
     async (
       e,
@@ -1085,7 +1143,7 @@ export function registerChatHandlers(): void {
    * panels' rehydration: no claim, and a chat with no running slot answers
    * `null` (its jobs went with its host).
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_READ_SESSION_JOB,
     async (
       _e,
@@ -1103,7 +1161,7 @@ export function registerChatHandlers(): void {
    * Decision 203 — one subagent's own conversation, read-only (its
    * sub-conversation page). A read of a live session: nothing is claimed.
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_SUBAGENT_HISTORY,
     async (
       _e,
@@ -1125,7 +1183,7 @@ export function registerChatHandlers(): void {
    * Decision 203 — move one running foreground call of the turn to the
    * background (the Claude engine's Ctrl+B). Claimed for the sender.
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_BACKGROUND_TOOL,
     async (
       e,
@@ -1149,7 +1207,7 @@ export function registerChatHandlers(): void {
    * dsh-rebase P1-7b — interrupt one continuable subagent's current run, as
    * its human parent. A mutation of a live session, claimed for the sender.
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_INTERRUPT_SUBAGENT,
     async (
       e,
@@ -1169,7 +1227,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_GET_SESSION_TREE,
     async (
       e,
@@ -1195,7 +1253,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_REWIND_SESSION,
     async (
       e,
@@ -1219,7 +1277,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_FORK_SESSION,
     async (
       e,
@@ -1240,7 +1298,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_LOAD_HISTORY_PAGE,
     async (
       e,
@@ -1259,7 +1317,7 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.CHAT_READ_SESSION_PAGE,
     async (
       _e,

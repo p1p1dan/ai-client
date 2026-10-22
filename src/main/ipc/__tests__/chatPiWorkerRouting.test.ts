@@ -1519,3 +1519,78 @@ describe('Pi WorkerSlot chat routing', () => {
     expect(handlers.has('chat:respondQuestion')).toBe(true);
   });
 });
+
+/**
+ * Issue #25 — the remote gateway runs the same handlers for a caller that is
+ * not a window, and sees the same runtime events the windows do.
+ */
+describe('issue #25 chat callers', () => {
+  it('[M25-CALLER] a remote caller claims under its own owner id and releases when gone', async () => {
+    const { invokeChatHandler } = await import('../chat');
+    const { allocateRemoteOwnerId } = await import('../../services/chat/chatCaller');
+    const { workerManager } = await import('../../services/agent-host/WorkerManager');
+    let gone: (() => void) | undefined;
+    const ownerId = allocateRemoteOwnerId();
+    expect(ownerId).toBeLessThan(0);
+    const caller = {
+      ownerId,
+      onGone: (listener: () => void) => {
+        gone = listener;
+      },
+    };
+
+    await expect(
+      invokeChatHandler('chat:send', caller, [{ sessionId: 's1', attemptId: 'a1', text: 'hi' }])
+    ).resolves.toEqual({ requestId: 'send-1' });
+    await invokeChatHandler('chat:stop', caller, [{ sessionId: 's1' }]);
+
+    expect(workerManager.claimSession).toHaveBeenCalledWith('s1', ownerId);
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ ownerWebContentsId: ownerId }));
+    expect(workerManager.releaseWindow).not.toHaveBeenCalled();
+    gone?.();
+    expect(workerManager.releaseWindow).toHaveBeenCalledTimes(1);
+    expect(workerManager.releaseWindow).toHaveBeenCalledWith(ownerId);
+  });
+
+  it('[M25-CALLER] a window still releases its claims when it is destroyed', async () => {
+    const { workerManager } = await import('../../services/agent-host/WorkerManager');
+    const listeners: Array<() => void> = [];
+    const sender = {
+      id: 9,
+      once: (_name: string, listener: () => void) => listeners.push(listener),
+    };
+    await handlers.get('chat:stop')?.({ sender }, { sessionId: 's1' });
+    await handlers.get('chat:stop')?.({ sender }, { sessionId: 's1' });
+    expect(listeners).toHaveLength(1);
+    listeners[0]?.();
+    expect(workerManager.releaseWindow).toHaveBeenCalledWith(9);
+  });
+
+  it('[M25-CALLER] runtime event listeners see what the windows see, until unsubscribed', async () => {
+    const { onChatRuntimeEvent } = await import('../chat');
+    const windowSend = vi.fn();
+    fakeWindows = [{ isDestroyed: () => false, webContents: { id: 1, send: windowSend } }];
+    const seen: RuntimeEvent[] = [];
+    const unsubscribe = onChatRuntimeEvent((event) => seen.push(event));
+    const event = {
+      type: 'session.status',
+      sessionId: 's1',
+      seq: 1,
+      timestamp: 1,
+      payload: { status: 'running' },
+    } as RuntimeEvent;
+    for (const handler of runtimeEventHandlers) handler(event);
+    expect(windowSend).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([event]);
+    unsubscribe();
+    for (const handler of runtimeEventHandlers) handler(event);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('[M25-CALLER] an unknown channel is refused', async () => {
+    const { invokeChatHandler } = await import('../chat');
+    await expect(invokeChatHandler('chat:nope', { ownerId: -1 }, [])).rejects.toThrow(
+      /^chat_handler_unknown/
+    );
+  });
+});
