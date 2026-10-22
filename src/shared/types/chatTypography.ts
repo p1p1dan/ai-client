@@ -33,9 +33,10 @@ export const CHAT_BODY_FONT_SIZE_MIN = 12;
 
 /**
  * The out-of-the-box body tier. Mirrors `--text-chat-body` in `globals.css`.
- * Design system v2 (2026-10-21): the reference's 14px (was D1's 17).
+ * Design system v2: 13px (2026-10-22, matched to the Claude Code desktop
+ * screenshot; was the reference's 14, D1's 17 before that).
  */
-export const DEFAULT_CHAT_BODY_FONT_SIZE = 14;
+export const DEFAULT_CHAT_BODY_FONT_SIZE = 13;
 
 /** Upper bound of the process tier (px). Lower than the body's: it is the subordinate tier. */
 export const CHAT_PROCESS_FONT_SIZE_MAX = 20;
@@ -52,7 +53,7 @@ export const DEFAULT_CHAT_PROCESS_FONT_SIZE = 12;
  * saved sizes are reset ONCE to the new defaults; this marker records that the
  * reset ran, because the settings merge runs on every launch.
  */
-export const CHAT_TYPOGRAPHY_SCALE_VERSION = 2;
+export const CHAT_TYPOGRAPHY_SCALE_VERSION = 3;
 
 /** Empty string means "follow the app's `--font-sans`" — a real value, not a missing one. */
 export const DEFAULT_CHAT_FONT_FAMILY = '';

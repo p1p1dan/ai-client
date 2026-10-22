@@ -18,8 +18,9 @@
  * Default to 'active'; pick 'keep-alive' only for a view that owns state the
  * renderer cannot rebuild.
  *
- * A surface without an entry falls back to `SurfacePlaceholder` in
- * `ContextPanel.tsx` (all four rail surfaces are wired as of T-12~T-15).
+ * Layout 5a: the views render as tabs of the work panel (`WorkPanel.tsx`),
+ * which also tells each one whether it is the tab on screen (`active`). They
+ * used to read that off the dock's `activeSurfaceId`, which no longer exists.
  */
 import type { ComponentType } from 'react';
 import type { SearchMode } from '@/components/search/useGlobalSearch';
@@ -33,6 +34,8 @@ import { TerminalSurfaceView } from './surfaces/TerminalSurfaceView';
 
 export interface SurfaceViewProps {
   surfaceId: ContextSurfaceId;
+  /** The work panel is open on this view's tab. */
+  active: boolean;
   onSearch?: (mode: SearchMode) => void;
 }
 

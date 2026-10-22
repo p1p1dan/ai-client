@@ -1,32 +1,25 @@
 /**
- * D08 (U15-a): the left dock — a 44px icon rail plus the panel it switches.
+ * Layout 5a (ui-cohesion §6, ruling L1): the sidebar — the chat list, and
+ * nothing to switch it with.
  *
- * This is the heir of `ContextPanel.tsx`, which held the same three mechanisms
- * on the RIGHT side of the shell: a surface switcher, a multi-mount keep-alive
- * stack, and a resize handle. Under D08 the surfaces live here and the right
- * column keeps only files, so the mechanisms moved with the surfaces rather
- * than being rewritten:
+ * D08 made this the left dock: a 44px icon rail plus a panel that switched
+ * five surfaces (chat list, git, files, context, run). The rail is gone. The
+ * chat list is the sidebar's only content; git / files / context / run are
+ * tabs of the work panel on the right (`WorkPanel.tsx`). The rail's other
+ * entries moved too:
+ *   - Home → the chat list's own 「新建对话」, which opens the home page;
+ *   - collapse → this column's top row (and Ctrl+B); while collapsed, the
+ *     title bar offers the expand button;
+ *   - Capabilities, Settings → small buttons at the end of the account row.
  *
- *   - the tab strip became the vertical icon rail (VSCode's activity bar),
- *   - the mount stack is carried over verbatim, including the `visibility:
- *     hidden` rule its comment explains (a `display: none` layer measures 0×0
- *     and permanently mangles xterm's pty wrapping),
- *   - the drag handle moved to the panel's right edge.
- *
- * What is NEW: the rail is permanent. `sidebarCollapsed` now hides the PANEL,
- * not the column, so the five entries are always one click away — which is why
- * H/18 S4 moved the collapse toggle onto the rail: it is the half of the dock
- * that is always there to click.
- *
- * Decision 183 (user ruling 2026-10-11) removed the panel's title row
- * (`DockTitle`) from all five panels: the content starts at the top, the
- * rail's highlight says which panel is showing, and the panel names itself to
- * screen readers through its region's `aria-label`.
+ * Collapsed means width 0: the column animates closed and turns inert. The
+ * content keeps its committed width while the outer edge moves, so the list
+ * is clipped by the animation instead of reflowing through it.
  */
 
 import type { TempWorkspaceItem } from '@shared/types';
-import { Blocks, House, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-react';
-import { type Ref, useRef, useState } from 'react';
+import { Blocks, PanelLeftClose, Settings } from 'lucide-react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import {
   Dialog,
@@ -40,365 +33,169 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { openHome } from '@/stores/homeDraft';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { LeftNav } from './LeftNav';
-import { derivePanelTabs, type PanelTab } from './panelTabsModel';
 import { ShellResizeHandle } from './ShellResizeHandle';
-import { SurfacePlaceholder } from './SurfacePlaceholder';
 import { deriveSessionCapabilities } from './sessionCapabilityModel';
-import {
-  clampSidebarWidth,
-  DOCK_RAIL_WIDTH,
-  deriveMountedSurfaceIds,
-  ESCAPE_OWNING_POPUP_SELECTOR,
-  SURFACE_ESCAPE_HOLD_ATTR,
-  seedVisitedSurfaceIds,
-  shouldCloseOnEscape,
-} from './shellLayoutModel';
-import { SURFACE_ICON_MAP } from './surfaceIcons';
-import { type ContextSurfaceId, getSurface } from './surfaceRegistry';
-import { SURFACE_VIEWS, type SurfaceViewProps } from './surfaceViews';
+import { clampSidebarWidth } from './shellLayoutModel';
 import { UserFooterPill } from './UserFooterPill';
-import { useGitChangeCount } from './useGitChangeCount';
 import { useSessionCapabilities } from './useSessionCapabilities';
 
 interface LeftDockProps {
-  /** Allocated TOTAL dock width (rail + panel), straight from the allocator. */
+  /** Allocated sidebar width, straight from the allocator (0 while collapsed). */
   dockWidth: number;
-  /** Committed dock width, for the drag handle's starting value. */
+  /** Committed sidebar width: the drag baseline and the content's width. */
   sidebarWidth: number;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onCommitWidth: (width: number) => void;
   onDragFrame?: (width: number) => void;
   onResizingChange?: (resizing: boolean) => void;
   onOpenSettings?: () => void;
-  onSearch?: SurfaceViewProps['onSearch'];
-  /** Everything below is forwarded straight to the `chat` surface (`LeftNav`). */
+  /** Everything below is forwarded straight to the chat list (`LeftNav`). */
   repositories?: Repository[];
   onAddRepository?: () => void;
   onRemoveRepository?: (repoPath: string) => void;
   tempWorkspaces?: TempWorkspaceItem[];
   onRequestTempDelete?: (id: string) => void;
-  dockRef?: Ref<HTMLDivElement>;
 }
+
+/** The roving-tabindex stop of the chat list, else its first item. */
+const CHAT_LIST_FOCUS_SELECTOR = '[data-sidebar-nav-key][tabindex="0"]';
+const CHAT_LIST_FIRST_SELECTOR = '[data-sidebar-nav-key]';
 
 export function LeftDock({
   dockWidth,
   sidebarWidth,
+  collapsed,
+  onToggleCollapsed,
   onCommitWidth,
   onDragFrame,
   onResizingChange,
   onOpenSettings,
-  onSearch,
   repositories = [],
   onAddRepository,
   onRemoveRepository,
   tempWorkspaces = [],
   onRequestTempDelete,
-  dockRef,
 }: LeftDockProps) {
   const { t } = useI18n();
-
-  const activeSurfaceId = useShellLayoutStore((state) => state.activeSurfaceId);
-  const lastSurfaceId = useShellLayoutStore((state) => state.lastSurfaceId);
-  const railOrder = useShellLayoutStore((state) => state.railOrder);
-  const selectSurface = useShellLayoutStore((state) => state.selectSurface);
-  const closeSurface = useShellLayoutStore((state) => state.closeSurface);
-  // S4 (H/18): the rail's collapse control TOGGLES, where the title row's used
-  // to only close. On the rail it has to — the rail outlives the panel, so a
-  // button that could only close would be dead half the time it is on screen.
-  // Same action Ctrl+B runs (`useShellShortcuts` → `toggle-dock`), so the two
-  // cannot drift into meaning different things.
-  const toggleDock = useShellLayoutStore((state) => state.toggleContextPanel);
-
-  const changedFilesCount = useGitChangeCount();
-  const tabs = derivePanelTabs(railOrder, { changedFilesCount });
-
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
+  const dockRef = useRef<HTMLDivElement>(null);
+  const [resizing, setResizing] = useState(false);
 
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [panelResizing, setPanelResizing] = useState(false);
+  // Ctrl/Cmd+1 (`focusChatList`): the store has already expanded the column
+  // in the same update, so by this effect it is no longer inert.
+  const chatListFocusSeq = useShellLayoutStore((state) => state.chatListFocusSeq);
+  const seenFocusSeq = useRef(chatListFocusSeq);
+  useEffect(() => {
+    if (chatListFocusSeq === seenFocusSeq.current) return;
+    seenFocusSeq.current = chatListFocusSeq;
+    const root = dockRef.current;
+    const target =
+      root?.querySelector<HTMLElement>(CHAT_LIST_FOCUS_SELECTOR) ??
+      root?.querySelector<HTMLElement>(CHAT_LIST_FIRST_SELECTOR);
+    target?.focus();
+  }, [chatListFocusSeq]);
 
-  // The rail is permanent, so the panel gets whatever the allocator granted the
-  // dock minus the rail. Floored at 0: a collapsed dock is allocated exactly
-  // `SIDEBAR_COLLAPSED_RESERVE` (= the rail), which would otherwise arithmetic
-  // its way to a negative width.
-  const panelWidth = Math.max(0, dockWidth - DOCK_RAIL_WIDTH);
-  const isOpen = panelWidth > 0 && activeSurfaceId !== null;
-  // Round-13 (user report 14 — the white strip on the right edge): the dock
-  // column reads the SAME CSS variable the center/chat/editor columns read,
-  // not the committed `dockWidth` prop. A sidebar drag repaints by writing
-  // `--shell-sidebar-w` on the shell root alone; a prop-driven width stayed at
-  // its pre-drag value for the whole gesture, so only the center column moved
-  // and the freed pixels showed the shell's `bg-background`. The px fallback
-  // keeps standalone mounts (tests) on the prop, matching the old behaviour.
-  // Both this and the panel width below inherit the root's painted value, so
-  // the drag path and the commit path can no longer disagree.
+  // Round-13 (user report 14 — the white strip on the right edge): the column
+  // reads the SAME CSS variable the center columns read, so a drag (which
+  // repaints by writing `--shell-sidebar-w` on the shell root alone) moves
+  // both sides of the boundary in one paint. The px fallback keeps
+  // standalone mounts (tests) on the prop.
   const dockWidthVar = `var(--shell-sidebar-w, ${dockWidth}px)`;
-  // Carried over from `ContextPanel`: content stays mounted across close/open,
-  // so anything with cross-toggle state survives the collapse.
-  const contentSurfaceId = activeSurfaceId ?? lastSurfaceId;
-  const descriptor = contentSurfaceId ? getSurface(contentSurfaceId) : undefined;
-
-  // Visited set for `deriveMountedSurfaceIds`. A ref written during render
-  // rather than state: the mount list must be correct in the SAME render that
-  // activates a surface (state would mount it one commit late), and the write
-  // is idempotent, so a StrictMode double-render is a no-op.
-  const visitedSurfaceIdsRef = useRef<ContextSurfaceId[]>(
-    seedVisitedSurfaceIds(lastSurfaceId, SURFACE_VIEWS)
-  );
-  if (activeSurfaceId && !visitedSurfaceIdsRef.current.includes(activeSurfaceId)) {
-    visitedSurfaceIdsRef.current = [...visitedSurfaceIdsRef.current, activeSurfaceId];
-  }
-  const mountedSurfaceIds = deriveMountedSurfaceIds({
-    visited: visitedSurfaceIdsRef.current,
-    activeSurfaceId,
-    lastSurfaceId,
-    registrations: SURFACE_VIEWS,
-  });
-
-  // D08: `chat` is the one surface the registry cannot carry. Every other view
-  // takes `{ surfaceId }` and nothing else, but the session list needs the
-  // repository list and four App-owned callbacks (add/remove repo, temp-delete,
-  // settings), so the dock renders it directly instead of through
-  // `SURFACE_VIEWS`. That is also why the placeholder branch below has to
-  // exclude it — an unregistered surface would otherwise read as "not wired".
-  const isChatSurface = contentSurfaceId === 'chat';
-  const contentRegistration = contentSurfaceId ? SURFACE_VIEWS[contentSurfaceId] : undefined;
 
   return (
     <div
       ref={dockRef}
       // Round-13: the same width transition the center row has, so a
-      // collapse/expand animates BOTH edges of the boundary in lockstep. The
-      // dock used to snap while the center animated, and the 250ms of
-      // half-painted layout in between was the white strip on the right.
+      // collapse/expand animates both edges of the boundary in lockstep.
       className={cn(
-        'relative flex h-full shrink-0 bg-surface-0',
+        'relative h-full shrink-0 overflow-hidden bg-surface-0',
         'transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none'
       )}
       style={{ width: dockWidthVar }}
+      inert={collapsed}
+      aria-hidden={collapsed ? true : undefined}
+      data-sidebar-collapsed={collapsed || undefined}
     >
-      {/* Decision 183: with the panel's title row gone, the rail no longer
-          starts below an `h-9` spacer (U27). Its first icon sits level with
-          the panel's first row (the chat panel's 「新建对话」) instead of a row
-          that is no longer there. Decision 188: 14px on top (was 8), matching
-          the chat panel's new top padding, so both start at y=14; the bottom
-          keeps 8px. Design system v2 §7.12: the rail is the sidebar's own
-          --surface-0, not a lighter card strip. */}
       <nav
         aria-label={t('Primary navigation')}
-        className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r border-border-soft bg-surface-0 pt-3.5 pb-2"
-        style={{ width: DOCK_RAIL_WIDTH }}
+        className="flex h-full min-w-0 flex-col border-r border-border-soft"
+        // The committed width, not the animating one; during a drag the
+        // painted variable instead, so the list follows the pointer.
+        style={{ width: resizing ? '100%' : `${sidebarWidth}px` }}
       >
-        {/* Decision 174 (issue #6, user ruling 2026-10-10, entry (a)): the home
-            page, above the five panels and set off from them by a short rule —
-            it changes the center column, not the left panel. Reachable from
-            every panel. No pressed state on the home page: the session bar
-            already says 「首页」, and 「聊天」 below keeps its own. */}
-        <RailIconButton label={t('Home')} icon={House} onClick={() => openHome()} />
-        <div aria-hidden data-rail-separator="" className="my-1 h-0 w-6 shrink-0 border-t" />
-        {tabs.map((tab) => (
-          <RailButton
-            key={tab.id}
-            tab={tab}
-            active={tab.id === activeSurfaceId}
-            onSelect={() => selectSurface(tab.id)}
-          />
-        ))}
-        <div className="flex-1" />
-        {/* S4: the panel's collapse control lives here now, not on the title
-            row it used to share with the section name. The rail is the part
-            that never goes away, so this is the only place the button can sit
-            and still be there to bring the panel BACK. The icon states which
-            way it will go. */}
-        <RailIconButton
-          label={`${isOpen ? t('Collapse sidebar') : t('Expand sidebar')} (Ctrl+B)`}
-          icon={isOpen ? PanelLeftClose : PanelLeftOpen}
-          onClick={toggleDock}
-        />
-        <RailIconButton
-          label={t('Capabilities')}
-          icon={Blocks}
-          onClick={() => setCapabilitiesOpen(true)}
-        />
-        <RailIconButton
-          label={`${t('Settings')} (Ctrl+,)`}
-          icon={Settings}
-          onClick={() => onOpenSettings?.()}
+        {/* Level with the title bar (h-9). The reference's row also holds
+            history arrows; only the collapse control is ours today (5b). */}
+        <div className="flex h-9 shrink-0 items-center px-2">
+          <SidebarIconButton
+            label={`${t('Collapse sidebar')} (Ctrl+B)`}
+            onClick={onToggleCollapsed}
+          >
+            <PanelLeftClose className="size-4" />
+          </SidebarIconButton>
+        </div>
+        <div className="relative min-h-0 flex-1">
+          <div className="absolute inset-0">
+            <LeftNav
+              repositories={repositories}
+              onAddRepository={onAddRepository}
+              onRemoveRepository={onRemoveRepository}
+              tempWorkspaces={tempWorkspaces}
+              onRequestTempDelete={onRequestTempDelete}
+            />
+          </div>
+        </div>
+        <UserFooterPill
+          actions={
+            <>
+              <SidebarIconButton
+                label={t('Capabilities')}
+                onClick={() => setCapabilitiesOpen(true)}
+              >
+                <Blocks className="size-4" />
+              </SidebarIconButton>
+              <SidebarIconButton
+                label={`${t('Settings')} (Ctrl+,)`}
+                onClick={() => onOpenSettings?.()}
+              >
+                <Settings className="size-4" />
+              </SidebarIconButton>
+            </>
+          }
         />
       </nav>
 
-      <div
-        ref={panelRef}
-        data-resizing={panelResizing || undefined}
-        className={cn(
-          'relative flex h-full min-w-0 flex-col overflow-hidden border-r border-border-soft',
-          'transition-[width] duration-[250ms] data-[resizing]:transition-none',
-          !isOpen && 'pointer-events-none'
-        )}
-        // Round-13: derived from the painted variable (see `dockWidthVar`), so
-        // a drag frame moves the dock's outer edge and the panel's edge in the
-        // same paint instead of only the columns to its right.
-        style={{ width: `max(0px, calc(${dockWidthVar} - ${DOCK_RAIL_WIDTH}px))` }}
-        inert={!isOpen}
-        // Panel-scoped Escape, carried over from `ContextPanel`: a subtree
-        // marked `data-surface-holds-escape` (a terminal running vim, Monaco's
-        // find widget) opts out, and the dock then neither closes nor stops
-        // propagation, so the key reaches the surface untouched.
-        onKeyDownCapture={(event) => {
-          const target = event.target as HTMLElement | null;
-          const holdsEscape = !!target?.closest?.(`[${SURFACE_ESCAPE_HOLD_ATTR}]`);
-          // Queried on the document, not on the target's ancestors: a popup is
-          // portaled out of this panel, so `closest` can never find it.
-          const popupOpen = !!document.querySelector(ESCAPE_OWNING_POPUP_SELECTOR);
-          if (!shouldCloseOnEscape({ key: event.key, isOpen, holdsEscape, popupOpen })) {
-            return;
-          }
-          closeSurface();
-          event.stopPropagation();
-        }}
-      >
-        {descriptor && (
-          <>
-            {/* Decision 183 §2.7: no visible title; the region names the panel. */}
-            <section
-              aria-label={t(descriptor.labelKey)}
-              className="relative isolate min-h-0 flex-1"
-            >
-              {/*
-                Multi-mount stack, carried over from `ContextPanel` unchanged.
-                Hidden layers use `invisible pointer-events-none` + `inert`,
-                NEVER `display: none`, `hidden` or a conditional unmount:
-                `visibility: hidden` keeps the layout box, so a hidden layer
-                still measures the panel's real width, while a display-hidden
-                box measures 0×0 — and xterm's `FitAddon` runs off a
-                ResizeObserver that `useXterm` does not zero-guard, so it
-                forwards that measurement to the pty as `cols: 2` and
-                permanently mangles the wrapping of whatever is running in it.
-              */}
-              {mountedSurfaceIds.map((id) => {
-                const registration = SURFACE_VIEWS[id];
-                if (!registration) {
-                  return null;
-                }
-                const SurfaceView = registration.component;
-                const visible = id === contentSurfaceId;
-                return (
-                  <div
-                    key={id}
-                    className={cn(
-                      'absolute inset-0',
-                      visible ? 'z-10' : 'invisible pointer-events-none z-0'
-                    )}
-                    inert={!visible}
-                  >
-                    <SurfaceView surfaceId={id} onSearch={onSearch} />
-                  </div>
-                );
-              })}
-              {isChatSurface && (
-                <div className="absolute inset-0 z-10">
-                  <LeftNav
-                    repositories={repositories}
-                    onAddRepository={onAddRepository}
-                    onRemoveRepository={onRemoveRepository}
-                    tempWorkspaces={tempWorkspaces}
-                    onRequestTempDelete={onRequestTempDelete}
-                  />
-                </div>
-              )}
-              {!contentRegistration && !isChatSurface && (
-                <div className="absolute inset-0">
-                  <SurfacePlaceholder surface={descriptor} />
-                </div>
-              )}
-            </section>
-            <UserFooterPill />
-          </>
-        )}
-
-        {isOpen && (
-          <ShellResizeHandle
-            side="right"
-            ariaLabel={t('Resize sidebar')}
-            width={sidebarWidth}
-            targetRef={panelRef}
-            clamp={clampSidebarWidth}
-            onCommit={onCommitWidth}
-            onDragFrame={onDragFrame}
-            onResizingChange={(next) => {
-              setPanelResizing(next);
-              onResizingChange?.(next);
-            }}
-          />
-        )}
-      </div>
+      {!collapsed && (
+        <ShellResizeHandle
+          side="right"
+          ariaLabel={t('Resize sidebar')}
+          width={sidebarWidth}
+          targetRef={dockRef}
+          clamp={clampSidebarWidth}
+          onCommit={onCommitWidth}
+          onDragFrame={onDragFrame}
+          onResizingChange={(next) => {
+            setResizing(next);
+            onResizingChange?.(next);
+          }}
+        />
+      )}
 
       <CapabilitiesDialog open={capabilitiesOpen} onOpenChange={setCapabilitiesOpen} />
     </div>
   );
 }
 
-interface RailButtonProps {
-  tab: PanelTab;
-  active: boolean;
-  onSelect: () => void;
-}
-
-function RailButton({ tab, active, onSelect }: RailButtonProps) {
-  const { t } = useI18n();
-  const Icon = SURFACE_ICON_MAP[tab.icon];
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        delay={300}
-        render={
-          <button
-            type="button"
-            aria-label={t(tab.labelKey)}
-            aria-pressed={active}
-            onClick={onSelect}
-            className={cn(
-              'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-sm',
-              active
-                ? 'bg-fill-ghost-selected text-foreground'
-                : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
-            )}
-          />
-        }
-      >
-        {/* The active marker is a left rule, VSCode's own idiom. It sits on the
-            rail's edge rather than the button's so it reads as "this column is
-            showing X", not "this button is pressed". */}
-        {active && (
-          <span
-            aria-hidden
-            className="absolute top-1.5 bottom-1.5 -left-1.5 w-0.5 rounded-full bg-primary"
-          />
-        )}
-        <Icon className="h-4.5 w-4.5" />
-        {tab.showDot && (
-          <span aria-hidden className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-info" />
-        )}
-      </TooltipTrigger>
-      <TooltipPopup side="right" sideOffset={8}>
-        <p className="font-medium">{t(tab.labelKey)}</p>
-        <p className="text-muted-foreground">{t(tab.descriptionKey)}</p>
-      </TooltipPopup>
-    </Tooltip>
-  );
-}
-
-function RailIconButton({
+function SidebarIconButton({
   label,
-  icon: Icon,
   onClick,
+  children,
 }: {
   label: string;
-  icon: typeof Blocks;
   onClick: () => void;
+  children: ReactNode;
 }) {
   return (
     <Tooltip>
@@ -409,13 +206,13 @@ function RailIconButton({
             type="button"
             aria-label={label}
             onClick={onClick}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
+            className="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
           />
         }
       >
-        <Icon className="h-4.5 w-4.5" />
+        {children}
       </TooltipTrigger>
-      <TooltipPopup side="right" sideOffset={8}>
+      <TooltipPopup side="top" sideOffset={6}>
         {label}
       </TooltipPopup>
     </Tooltip>

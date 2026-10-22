@@ -1,87 +1,134 @@
 /**
  * T-22 (D19): shell layout store — a thin zustand + persist wrapper around the
- * pure model in `components/workspace-shell/shellLayoutModel.ts`. Every
- * decision (clamps, the surface state machine, persistence hygiene) lives in
- * that pure module; this file only wires actions to `set`/`get` so the store
- * can never behave differently than the pure functions it delegates to.
+ * pure models in `components/workspace-shell/` (`shellLayoutModel.ts` for the
+ * sidebar and persistence, `workPanelModel.ts` for the right work panel).
+ * Every decision lives in those pure modules; this file only wires actions to
+ * `set` so the store cannot behave differently from them.
+ *
+ * Layout 5a (ui-cohesion §6): the icon rail and its surface switcher are gone.
+ * The sidebar is the chat list and collapses entirely; git / files / context /
+ * run, the review, the terminal and the editor are tabs of one work panel.
  *
  * localStorage (not `electronStorage`): localStorage is synchronous, so there
  * is no hydration-flicker frame before the persisted layout applies.
  */
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import type { ManualOverride } from '@/components/workspace-shell/centerLayoutModel';
 import {
-  clampEditorRatio,
-  type ManualOverride,
-} from '@/components/workspace-shell/centerLayoutModel';
-import {
-  clampContextPanelWidth,
   clampSidebarWidth,
   defaultShellLayout,
+  migrateShellLayoutPersisted,
   nextReadingWidthMode,
   type PersistedShellLayout,
   readingColumnClass,
-  reduceShellSurface,
-  type ShellSurfaceState,
+  SHELL_LAYOUT_VERSION,
   sanitizeShellLayoutPersisted,
 } from '@/components/workspace-shell/shellLayoutModel';
-import type { ContextSurfaceId } from '@/components/workspace-shell/surfaceRegistry';
-import { sortSurfaces } from '@/components/workspace-shell/surfaceRegistry';
+import { type ContextSurfaceId, getSurface } from '@/components/workspace-shell/surfaceRegistry';
+import {
+  clampWorkPanelWidth,
+  closeWorkPanel,
+  openWorkPanelTab,
+  tabForIntent,
+  toggleWorkPanelTab,
+  type WorkPanelState,
+  type WorkPanelTab,
+} from '@/components/workspace-shell/workPanelModel';
 
 /**
- * T-32 (D27): A08 §06-4 scopes the manual overrides to the open file — they are
- * deliberately NOT in `PersistedShellLayout`, so a restart cannot resurrect an
- * override for a file that is no longer open.
+ * T-32 (D27): A08 §06-4 scopes the manual chat override to the open file — it
+ * is deliberately NOT persisted, so a restart cannot resurrect an override for
+ * a file that is no longer open.
  */
 export interface ShellSessionOverrides {
-  manualPanel: ManualOverride;
   manualChat: ManualOverride;
 }
 
 export const initialSessionOverrides: ShellSessionOverrides = {
-  manualPanel: null,
   manualChat: null,
 };
 
-export interface ShellLayoutState extends PersistedShellLayout, ShellSessionOverrides {
+/** Session-only work panel state (ruling L3: every start begins closed). */
+export interface WorkPanelSessionState {
+  workPanelOpen: boolean;
+  workPanelHistory: WorkPanelTab[];
+  /** The panel covers the whole center row (the expand button). */
+  expanded: boolean;
+  /** The init-script terminal was opened; from then on it has a tab. */
+  setupTerminalOpened: boolean;
+  /** Bumped by Ctrl/Cmd+1; the sidebar focuses its chat list on change. */
+  chatListFocusSeq: number;
+}
+
+const initialWorkPanelSession: WorkPanelSessionState = {
+  workPanelOpen: false,
+  workPanelHistory: [],
+  expanded: false,
+  setupTerminalOpened: false,
+  chatListFocusSeq: 0,
+};
+
+export interface ShellLayoutState
+  extends PersistedShellLayout,
+    ShellSessionOverrides,
+    WorkPanelSessionState {
   // sidebar
   setSidebarWidth: (width: number) => void;
-  // context panel
-  selectSurface: (id: ContextSurfaceId) => void;
-  openSurface: (id?: ContextSurfaceId) => void;
+  /** Ctrl/Cmd+B and the sidebar / title bar toggles. */
+  toggleSidebar: () => void;
+  /** Ctrl/Cmd+1: expand the sidebar if needed and focus the chat list. */
+  focusChatList: () => void;
+  // work panel
+  openWorkPanel: (tab: WorkPanelTab) => void;
+  /** `shownTab` is what the panel shows now (`resolveWorkPanelView`). */
+  toggleWorkPanel: (tab: WorkPanelTab, shownTab: WorkPanelTab | null) => void;
+  closeWorkPanel: () => void;
+  /** Opens a registry surface's tab; surfaces that are not navigable are ignored. */
+  openSurface: (id: ContextSurfaceId) => void;
   openInitializationTerminal: () => void;
-  closeSurface: () => void;
-  toggleContextPanel: () => void;
   toggleExpanded: () => void;
-  setPanelWidth: (width: number, availableWidth?: number | null) => void;
-  /** T-32: commits an `ed-grip` drag as a share of the center row. */
-  setEditorRatio: (ratio: number) => void;
-  /** T-32: the user overriding the level ladder while a file is open. */
-  setManualPanel: (visible: boolean) => void;
+  setWorkPanelWidth: (width: number) => void;
   setManualChat: (visible: boolean) => void;
-  /** T-32 (A08 §06-4): the file closed — the overrides it scoped go with it. */
+  /** T-32 (A08 §06-4): the file closed — the override it scoped goes with it. */
   clearManualOverrides: () => void;
-  /** Reserved for rail drag-sort (postponed); already sanitized through the registry. */
-  setRailOrder: (order: readonly string[]) => void;
   // reading column
   toggleReadingWidthMode: () => void;
 }
 
-/**
- * Stamps a reducer result with the manual override it implies: the user just
- * said what they want, so the ladder must yield until the file closes.
- */
-function withManualPanel(next: ShellSurfaceState): ShellSurfaceState & { manualPanel: boolean } {
-  return { ...next, manualPanel: next.activeSurfaceId !== null };
+function panelStateOf(state: ShellLayoutState): WorkPanelState {
+  return { open: state.workPanelOpen, tab: state.workPanelTab, history: state.workPanelHistory };
 }
 
-/** Projects the store's persisted fields onto the pure reducer's smaller state shape. */
-function surfaceStateOf(state: PersistedShellLayout): ShellSurfaceState {
+/** Writes a model result back; closing also leaves the expanded overlay. */
+function fromPanelState(next: WorkPanelState): Partial<ShellLayoutState> {
   return {
-    activeSurfaceId: state.activeSurfaceId,
-    lastSurfaceId: state.lastSurfaceId,
-    expanded: state.expanded,
+    workPanelOpen: next.open,
+    workPanelTab: next.tab,
+    workPanelHistory: next.history,
+    ...(next.open ? {} : { expanded: false }),
   };
+}
+
+/**
+ * Selector for the registry surface the panel shows, or null. The surface
+ * views no longer read it (they take `active` from the panel); kept for
+ * non-React callers and tests.
+ */
+export function selectActiveSurfaceId(state: ShellLayoutState): ContextSurfaceId | null {
+  if (!state.workPanelOpen) return null;
+  switch (state.workPanelTab) {
+    case 'files':
+      return 'editor';
+    case 'git':
+    case 'context':
+    case 'run':
+      return state.workPanelTab;
+    case 'setup':
+      return 'terminal';
+    default:
+      return null;
+  }
 }
 
 export const useShellLayoutStore = create<ShellLayoutState>()(
@@ -89,106 +136,59 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
     (set) => ({
       ...defaultShellLayout,
       ...initialSessionOverrides,
+      ...initialWorkPanelSession,
 
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
+      toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      focusChatList: () =>
+        set((state) => ({
+          sidebarCollapsed: false,
+          chatListFocusSeq: state.chatListFocusSeq + 1,
+        })),
 
-      // T-32 m2: every EXPLICIT panel action also records a manual override.
-      // Without this the level ladder wins forever: at L1 it hides the panel,
-      // and clicking a rail icon only set `activeSurfaceId` — visibility stayed
-      // false, so the panel could never be summoned back on a narrow window
-      // (user report: "页面较小时打开文件无法唤出右侧栏骨架").
-      // `manualPanel` mirrors the resulting intent, so an explicit close at L0
-      // is equally respected. Cleared when the file closes (A08 §06-4).
-      selectSurface: (id) =>
-        set((state) =>
-          withManualPanel(
-            reduceShellSurface(surfaceStateOf(state), { type: 'select', surfaceId: id })
-          )
-        ),
+      openWorkPanel: (tab) =>
+        set((state) => fromPanelState(openWorkPanelTab(panelStateOf(state), tab))),
+      toggleWorkPanel: (tab, shownTab) =>
+        set((state) => fromPanelState(toggleWorkPanelTab(panelStateOf(state), tab, shownTab))),
+      closeWorkPanel: () => set((state) => fromPanelState(closeWorkPanel(panelStateOf(state)))),
       openSurface: (id) =>
-        set((state) =>
-          withManualPanel(
-            reduceShellSurface(surfaceStateOf(state), { type: 'open', surfaceId: id })
-          )
-        ),
+        set((state) => {
+          if (getSurface(id)?.registeredOnly !== false) return {};
+          const tab = tabForIntent({ type: 'surface', surfaceId: id });
+          return tab ? fromPanelState(openWorkPanelTab(panelStateOf(state), tab)) : {};
+        }),
       openInitializationTerminal: () =>
-        set((state) =>
-          withManualPanel(
-            reduceShellSurface(surfaceStateOf(state), { type: 'open-initialization-terminal' })
-          )
-        ),
-      closeSurface: () =>
-        set((state) =>
-          withManualPanel(reduceShellSurface(surfaceStateOf(state), { type: 'close' }))
-        ),
-      toggleContextPanel: () =>
-        set((state) =>
-          withManualPanel(reduceShellSurface(surfaceStateOf(state), { type: 'toggle-panel' }))
-        ),
+        set((state) => ({
+          setupTerminalOpened: true,
+          ...fromPanelState(openWorkPanelTab(panelStateOf(state), 'setup')),
+        })),
       toggleExpanded: () =>
-        set((state) => reduceShellSurface(surfaceStateOf(state), { type: 'toggle-expanded' })),
+        set((state) => (state.workPanelOpen ? { expanded: !state.expanded } : {})),
+      setWorkPanelWidth: (width) => set({ workPanelWidth: clampWorkPanelWidth(width) }),
 
-      setPanelWidth: (width, availableWidth) =>
-        set({ panelWidth: clampContextPanelWidth(width, availableWidth) }),
-
-      setEditorRatio: (ratio) => set({ editorRatio: clampEditorRatio(ratio) }),
-
-      setManualPanel: (visible) => set({ manualPanel: visible }),
       setManualChat: (visible) => set({ manualChat: visible }),
       clearManualOverrides: () => set({ ...initialSessionOverrides }),
-
-      setRailOrder: (order) => set({ railOrder: sortSurfaces(order).map((surface) => surface.id) }),
 
       toggleReadingWidthMode: () =>
         set((state) => ({ readingWidthMode: nextReadingWidthMode(state.readingWidthMode) })),
     }),
     {
       name: 'aiclient-shell-layout',
-      version: 3,
+      version: SHELL_LAYOUT_VERSION,
       storage: createJSONStorage(() => localStorage),
-      // Only the persisted data fields — actions are never serialized.
+      // Only the persisted data fields — actions and session state never are.
       partialize: (state): PersistedShellLayout => ({
         sidebarWidth: state.sidebarWidth,
-        activeSurfaceId: state.activeSurfaceId,
-        lastSurfaceId: state.lastSurfaceId,
-        expanded: state.expanded,
-        panelWidth: state.panelWidth,
-        railOrder: state.railOrder,
+        sidebarCollapsed: state.sidebarCollapsed,
+        workPanelTab: state.workPanelTab,
+        workPanelWidth: state.workPanelWidth,
         readingWidthMode: state.readingWidthMode,
-        editorRatio: state.editorRatio,
       }),
-      // v1 → v2 (T-32): `railOrder` was persisted before the registry moved to
-      // A08's tab order, so a v1 profile pins the OLD order — the tab strip
-      // rendered `context|git|editor|terminal` while the digits followed the
-      // new one. `widthBySurface` is likewise gone (one panel width now).
-      //
-      // v2 → v3 (D08): same trap, new cause. `chat` moved to the FRONT of the
-      // registry, but `sortSurfaces` honours a persisted order first and only
-      // appends what is missing — so a v2 profile would render the dock as
-      // `git|files|context|run|chat`, with the session list last. The old
-      // `shellColumnMode` goes too (the mode no longer exists), and the dock is
-      // forced open on `chat`: a v2 user's left column was ALWAYS the session
-      // list, so landing them on a collapsed rail would read as data loss.
-      migrate: (persisted, version) => {
-        const raw = persisted as Record<string, unknown> | null;
-        if (version < 3 && raw && typeof raw === 'object') {
-          const {
-            railOrder: _staleOrder,
-            widthBySurface: _staleWidths,
-            shellColumnMode: _retiredMode,
-            ...rest
-          } = raw;
-          return sanitizeShellLayoutPersisted({
-            ...rest,
-            activeSurfaceId: 'chat',
-            lastSurfaceId: 'chat',
-            // `expanded` is only legal while a surface is active; the sanitiser
-            // would keep a stale `true` now that one always is.
-            expanded: false,
-          });
-        }
-        return sanitizeShellLayoutPersisted(persisted);
-      },
+      // v1–v3 → v4 (layout 5a): see `migrateShellLayoutPersisted` — the rail
+      // width leaves the sidebar width, the rail order / per-surface widths /
+      // editor ratio are dropped, a surface that moved to the work panel
+      // becomes its last tab.
+      migrate: (persisted, version) => migrateShellLayoutPersisted(persisted, version),
       merge: (persisted, current) => ({ ...current, ...sanitizeShellLayoutPersisted(persisted) }),
     }
   )

@@ -139,30 +139,6 @@ function unwrapParens(node: ts.Expression): ts.Expression {
   return current;
 }
 
-/**
- * The one `mode === 'session' ? … : …` ternary in the composer's JSX.
- *
- * Uniqueness is asserted rather than assumed: the file also holds two
- * `mode === 'session' && …` guards (the queue strip and the target bar), and
- * those are binary expressions, not conditionals. If a second ternary on the
- * same condition ever appears, silently taking the first one would let every
- * assertion below point at the wrong branch — so that case throws instead.
- */
-function sessionModeTernary(): ts.ConditionalExpression {
-  const matches: ts.ConditionalExpression[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isConditionalExpression(node) && normalise(node.condition) === "mode === 'session'") {
-      matches.push(node);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(composerAst);
-  if (matches.length !== 1) {
-    throw new Error(`expected exactly one \`mode === 'session'\` ternary, found ${matches.length}`);
-  }
-  return matches[0];
-}
-
 type JsxHost = ts.JsxElement | ts.JsxFragment;
 
 function asJsxHost(node: ts.Node): JsxHost {
@@ -238,116 +214,136 @@ function references(node: ts.Node, name: string): boolean {
   return hit;
 }
 
-describe('F6: the session composer card is two rows, the empty card is unchanged', () => {
-  // [F6-4] The half-done landing this catches: wrapping the existing seven-item
-  // row in a new flex-col and calling it done. Every identifier stays put, the
-  // class-assembly assertions in `middleColumnLayout.test.ts` all still pass,
-  // and the card looks two-row-ish only because the extras stack is above it.
-  // The fact that separates the real change from that one is arity — the
-  // column holds exactly two rows, and the textarea is alone in the first.
-  it('[F6-4] the session branch is a two-row column with the textarea alone in row 1', () => {
-    const rows = asJsxHost(unwrapParens(sessionModeTernary().whenTrue));
-    expect(classNameOf(rows)).toBe('composerRowsClass()');
+/**
+ * The one JSX element whose `className` expression reads exactly `className`.
+ *
+ * Uniqueness is asserted rather than assumed: silently taking the first match
+ * would let every assertion below point at the wrong element.
+ */
+function elementByClass(className: string): ts.JsxElement {
+  const matches: ts.JsxElement[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isJsxElement(node) && classNameOf(node) === className) {
+      matches.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(composerAst);
+  if (matches.length !== 1) {
+    throw new Error(
+      `expected exactly one element with className ${className}, found ${matches.length}`
+    );
+  }
+  return matches[0];
+}
 
-    const children = meaningfulChildren(rows).filter((child) => !isConditionalRender(child));
-    expect(children.map(slotToken)).toEqual(['textareaEl', "composerBarClass('session')"]);
+/** The value expression of a JSX attribute on a self-closing element, normalised. */
+function attributeOf(node: ts.JsxSelfClosingElement, name: string): string | null {
+  for (const attr of node.attributes.properties) {
+    if (!ts.isJsxAttribute(attr) || attr.name.getText(composerAst) !== name) continue;
+    const init = attr.initializer;
+    if (init && ts.isJsxExpression(init) && init.expression) return normalise(init.expression);
+  }
+  return null;
+}
 
-    expect(references(children[0], 'textareaEl')).toBe(true);
-    expect(references(children[1], 'textareaEl')).toBe(false);
+const CARD_CLASS = 'composerCardClass(mode, { hasProtrusion })';
+
+describe('the composer box is one thin input row, its other controls in the row below', () => {
+  // 2026-10-22 (user ruling, Claude Code desktop look): inside the frame there
+  // is only the draft extras stack (conditional) and ONE input row. Anything
+  // else rendering unconditionally in the card is a control that should have
+  // moved to the row below.
+  it('the card holds the input row and nothing else unconditional, in both modes', () => {
+    const card = elementByClass(CARD_CLASS);
+    const children = meaningfulChildren(card).filter((child) => !isConditionalRender(child));
+    expect(children.map(slotToken)).toEqual(['composerInputRowClass()']);
   });
 
-  // [F6-5] `composerActionGroupClass()` predates this change and lives in the
-  // empty branch, so a whole-file presence check is guaranteed to pass whether
-  // or not the session row ever picks it up — the assertion has to be scoped to
-  // the row located above. Order matters as much as presence: the group's whole
-  // job is `ms-auto` tail-anchoring, which only reads correctly as the last
-  // child.
-  //
-  // U09-2 (2026-09-03) changed WHAT this asserts about the row's interior. The
-  // row no longer names its controls; it maps two exported order arrays, and
-  // the controls themselves are keyed off those names. So the structural fact
-  // worth pinning moved up a level: the row is [leading group, tail group], and
-  // each group is wired to the RIGHT array. That last clause is the load-bearing
-  // half — `renderBarSlots` alone reads identically whichever array is passed,
-  // so swapping the two would sail through a callee-name comparison while
-  // putting the send key on the left.
-  it('[F6-5] the session row maps leading slots, then the tail-anchored trailing group', () => {
-    const rows = asJsxHost(unwrapParens(sessionModeTernary().whenTrue));
-    const controlRow = meaningfulChildren(rows)
-      .filter((child) => !isConditionalRender(child))
-      .find((child) => classNameOf(child) === "composerBarClass('session')");
-    expect(controlRow).toBeDefined();
-
-    const children = meaningfulChildren(asJsxHost(controlRow as ts.JsxChild));
-    expect(children.map(slotToken)).toEqual(['renderBarSlots', 'composerActionGroupClass()']);
-    expect(normalise(children[0])).toContain('COMPOSER_BAR_LEADING');
-    expect(normalise(children[1])).toContain('COMPOSER_BAR_TRAILING');
-    // The tail group must stay last, or `ms-auto` anchors nothing.
-    expect(classNameOf(children[children.length - 1])).toBe('composerActionGroupClass()');
-  });
-
-  // [F6-6] The empty card was already two rows before F6, so the cheapest way
-  // to "finish" that change was to unify the two branches — which would move
-  // its status line into an extras stack it does not have. These are ORDER
-  // comparisons, not set comparisons, for exactly that reason.
-  //
-  // U09-2 replaced the bar's interior order (was: attach → model → status →
-  // actions). The status line stays where it was — between the two groups,
-  // holding the elastic middle — and that is the fact this still guards: the
-  // empty bar has a third, non-slot child that the session bar does not, and
-  // "unifying" the branches would drop it.
-  it('[F6-6] the empty branch keeps its own outer order and its mid-bar status line', () => {
-    const empty = asJsxHost(unwrapParens(sessionModeTernary().whenFalse));
-    const children = meaningfulChildren(empty);
+  // The textarea shares its row with ⊕ and the action key, in that order, and
+  // each end is wired to the RIGHT array — `renderBarSlots` alone reads
+  // identically whichever array is passed.
+  it('the input row is ⊕, the textarea slot, then the tail-anchored action group', () => {
+    const row = elementByClass('composerInputRowClass()');
+    const children = meaningfulChildren(row);
     expect(children.map(slotToken)).toEqual([
-      'textareaEl',
+      'renderBarSlots',
+      'composerTextareaSlotClass()',
+      'composerActionGroupClass()',
+    ]);
+    expect(normalise(children[0])).toContain('COMPOSER_CARD_LEADING');
+    expect(references(children[1], 'textareaEl')).toBe(true);
+    expect(normalise(children[2])).toContain('COMPOSER_CARD_TRAILING');
+    // The action group must stay last, or `ms-auto` anchors nothing.
+    expect(references(children[0], 'textareaEl')).toBe(false);
+    expect(references(children[2], 'textareaEl')).toBe(false);
+  });
+
+  // The status line is a draft-side fact and renders in the extras stack above
+  // the input row. Its gate has to widen with it — left at `hasComposerExtras`
+  // alone, the reading spinner and the large-attachment hint would render into
+  // a container that never mounts, i.e. disappear.
+  it('the extras stack sits above the input row, on a widened gate, in a fixed order', () => {
+    const card = elementByClass(CARD_CLASS);
+    const children = meaningfulChildren(card);
+    const extras = children.filter(
+      (child) =>
+        isConditionalRender(child) &&
+        references(child, 'hasComposerExtras') &&
+        !references(child, 'slashOpen') &&
+        !references(child, 'mentionOpen')
+    );
+    expect(extras).toHaveLength(1);
+    const inputRowAt = children.findIndex(
+      (child) => classNameOf(child) === 'composerInputRowClass()'
+    );
+    expect(children.indexOf(extras[0])).toBeLessThan(inputRowAt);
+
+    const gate = (extras[0] as ts.JsxExpression).expression as ts.BinaryExpression;
+    expect(normalise(unwrapParens(gate.left))).toBe('hasComposerExtras || statusRowVisible');
+
+    const stack = asJsxHost(unwrapParens(gate.right));
+    expect(classNameOf(stack)).toBe('composerExtrasClass()');
+    expect(meaningfulChildren(stack).map(slotToken)).toEqual([
       'noticeBlock',
       'queueNoticeBlock',
       'attachmentChipsBlock',
       // T3: the "model will not see this image" warning sits under the chips.
       'imageInputHintBlock',
       'mentionChipsBlock',
-      "composerBarClass('empty')",
-    ]);
-
-    const bottomBar = children.find((child) => classNameOf(child) === "composerBarClass('empty')");
-    expect(bottomBar).toBeDefined();
-    const barChildren = meaningfulChildren(asJsxHost(bottomBar as ts.JsxChild));
-    expect(barChildren.map(slotToken)).toEqual([
-      'renderBarSlots',
       'renderStatusLine',
-      'composerActionGroupClass()',
     ]);
-    // Same wiring check as [F6-5]: the callee name cannot tell the two arrays
-    // apart, so the arrays themselves are asserted.
-    expect(normalise(barChildren[0])).toContain('COMPOSER_BAR_LEADING');
-    expect(normalise(barChildren[2])).toContain('COMPOSER_BAR_TRAILING');
   });
 
-  // The session status line moved into the extras stack (§6.4): it is a
-  // draft-side attachment-I/O fact, same family as the notice and the chips,
-  // and its old row no longer has an elastic text slot to lend it. The stack's
-  // render gate has to widen with it — left at `hasComposerExtras` alone, the
-  // reading spinner and the large-attachment hint would render into a
-  // container that never mounts, i.e. disappear.
-  it('[F6-4] the session status line renders inside the extras stack, on a widened gate', () => {
-    const rows = asJsxHost(unwrapParens(sessionModeTernary().whenTrue));
-    const extras = meaningfulChildren(rows).filter(isConditionalRender);
-    expect(extras).toHaveLength(1);
+  // The start screen's bare row under the box: permission on the left, the
+  // trailing group (model/effort, context use) anchored right.
+  it('the start-screen row below maps the bar slots, the trailing group last', () => {
+    const bar = elementByClass('composerBarClass()');
+    const children = meaningfulChildren(bar);
+    expect(children.map(slotToken)).toEqual(['renderBarSlots', 'composerBarTrailingClass()']);
+    expect(normalise(children[0])).toContain('COMPOSER_BAR_LEADING');
+    expect(normalise(children[1])).toContain('COMPOSER_BAR_TRAILING');
+  });
 
-    const gate = (extras[0] as ts.JsxExpression).expression as ts.BinaryExpression;
-    expect(normalise(unwrapParens(gate.left))).toBe('hasComposerExtras || statusRowVisible');
-
-    const stack = asJsxHost(unwrapParens(gate.right));
-    expect(meaningfulChildren(stack).map(slotToken)).toEqual([
-      'noticeBlock',
-      'queueNoticeBlock',
-      'attachmentChipsBlock',
-      // T3: same slot as in the empty card, directly under the image chips.
-      'imageInputHintBlock',
-      'mentionChipsBlock',
-      'renderStatusLine',
-    ]);
+  // In a conversation and on the home page the row below IS the target row,
+  // which takes the same two arrays at its two ends.
+  it('the session row below is the target bar, handed the bar slots at its two ends', () => {
+    const bars: ts.JsxSelfClosingElement[] = [];
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isJsxSelfClosingElement(node) &&
+        node.tagName.getText(composerAst) === 'ComposerTargetBar'
+      ) {
+        bars.push(node);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(composerAst);
+    const withSlots = bars.filter((bar) => attributeOf(bar, 'leading') !== null);
+    expect(withSlots).toHaveLength(1);
+    expect(attributeOf(withSlots[0], 'mode')).toBe('mode');
+    expect(attributeOf(withSlots[0], 'leading')).toBe('renderBarSlots(COMPOSER_BAR_LEADING)');
+    expect(attributeOf(withSlots[0], 'trailing')).toBe('renderBarSlots(COMPOSER_BAR_TRAILING)');
   });
 });
 

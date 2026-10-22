@@ -62,14 +62,13 @@ const UNAVAILABLE_DESCRIPTION: Record<TerminalWorkspaceUnavailableReason, string
 /** Computed key so a rename of the constant cannot leave a dead attribute behind. */
 const ESCAPE_HOLD_PROPS = { [SURFACE_ESCAPE_HOLD_ATTR]: '' };
 
-export function TerminalSurfaceView({ surfaceId }: SurfaceViewProps) {
+export function TerminalSurfaceView({ active }: SurfaceViewProps) {
   const { t } = useI18n();
 
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
 
-  const activeSurfaceId = useShellLayoutStore((state) => state.activeSurfaceId);
   const expanded = useShellLayoutStore((state) => state.expanded);
 
   // Decision 174: on the home page, the repository its work bar picked.
@@ -99,7 +98,7 @@ export function TerminalSurfaceView({ surfaceId }: SurfaceViewProps) {
           // Narrower than "this surface is active" by `ready` on purpose:
           // without a cwd the panel's own Cmd+T/Cmd+W handlers preventDefault
           // and then do nothing, so the chords would vanish over an empty state.
-          isActive={activeSurfaceId === surfaceId && ready}
+          isActive={active && ready}
           presentation={deriveTerminalPresentation({ expanded })}
         />
       </div>
@@ -110,7 +109,7 @@ export function TerminalSurfaceView({ surfaceId }: SurfaceViewProps) {
           </EmptyMedia>
           <EmptyHeader>
             {/* D25 §3.3: cancel EmptyTitle's 18px-sized negative tracking when
-                overriding to 14px, same as SurfacePlaceholder. */}
+                overriding to 14px. */}
             <EmptyTitle className="text-ui tracking-normal">{t('Terminal')}</EmptyTitle>
             <EmptyDescription className="text-small">
               {t(UNAVAILABLE_DESCRIPTION[resolution.reason])}

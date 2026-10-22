@@ -2389,13 +2389,13 @@ function SessionRow({
           {/* `min-w-20` is the whole point of this row's sizing (S2 b). The title is
           the row's identity and the only user-authored text on it, so it gets a
           floor and everything else yields to it. Without the floor `flex-1
-          min-w-0` shrinks to whatever is left. Budget at the 280px default
+          min-w-0` shrinks to whatever is left. Budget at the 272px default
           (decision 183: rows are not indented and the time box is gone; the
-          hover actions float over the row instead of taking width): the
-          panel's 280 includes its 1px right border, so 280 - 1 - 16 (the
-          list's px-2) - 16 (the row's px-2) = 247px of content; minus the
-          16px status slot and one 6px gap, the title gets 225px
-          (SIDEBAR_DEFAULT_WIDTH - DOCK_RAIL_WIDTH = 280). */}
+          hover actions float over the row instead of taking width; layout
+          5a: SIDEBAR_DEFAULT_WIDTH = 272, no rail): the sidebar's 272
+          includes its 1px right border, so 272 - 1 - 16 (the list's px-2) -
+          16 (the row's px-2) = 239px of content; minus the 16px status slot
+          and one 6px gap, the title gets 217px. */}
           {titleParts.suffix === null ? (
             <span className="min-w-20 flex-1 truncate">{row.title}</span>
           ) : (

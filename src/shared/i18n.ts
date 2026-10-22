@@ -4872,3 +4872,16 @@ Object.assign(zhTranslations, {
     '不指定档位，由对话引擎决定（模型支持时用「中」）',
   'Slower, and uses many more tokens': '更慢，消耗的 token 也多得多',
 });
+
+/**
+ * Layout 5a (ui-cohesion §6): the title bar, the work panel and the sidebar
+ * footer of the restructured shell.
+ */
+Object.assign(zhTranslations, {
+  'Session changes': '改动',
+  'Work panel': '工作面板',
+  'Resize work panel': '调整工作面板宽度',
+  'Conversation menu': '对话菜单',
+  'More actions': '更多',
+  Environment: '环境',
+});

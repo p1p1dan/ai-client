@@ -23,6 +23,8 @@ interface SessionReviewPanelProps {
   filesOpen: boolean;
   expanded: boolean;
   onToggleExpanded: () => void;
+  /** An entry opened its diff; defaults to `onClose` (layout 5a: the panel shows the editor tab instead). */
+  onOpenDiff?: () => void;
 }
 
 export function SessionReviewPanel({
@@ -33,6 +35,7 @@ export function SessionReviewPanel({
   filesOpen,
   expanded,
   onToggleExpanded,
+  onOpenDiff,
 }: SessionReviewPanelProps) {
   const { t } = useI18n();
   const pagination = useChatSessionsStore((state) =>
@@ -64,7 +67,8 @@ export function SessionReviewPanel({
   };
   return (
     <section
-      className="flex h-full min-h-0 min-w-0 flex-col border-l border-border-soft bg-surface-1"
+      // Layout 5a: the work panel draws the left edge.
+      className="flex h-full min-h-0 min-w-0 flex-col bg-surface-1"
       aria-label={t('Session review')}
     >
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border-soft bg-surface-1 px-2">
@@ -137,7 +141,12 @@ export function SessionReviewPanel({
           </p>
         )}
         {entries.map((entry) => (
-          <ReviewEntry key={entry.id} entry={entry} defaultOpen={false} onOpenDiff={onClose} />
+          <ReviewEntry
+            key={entry.id}
+            entry={entry}
+            defaultOpen={false}
+            onOpenDiff={onOpenDiff ?? onClose}
+          />
         ))}
         {/* P1-7e e6 (problem 42, decision 145): `text-small`, the smallest size
             the design system lets CJK sit at; it was 10px (`text-2xs`). */}

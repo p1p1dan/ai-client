@@ -5,7 +5,7 @@ import { stripComments } from '@/components/chat/__tests__/stripComments';
 
 /**
  * Decision 174 (GitHub issue #6, second wave; user rulings 2026-10-10): the
- * wiring of the home page that no unit test mounts — the rail entry, the
+ * wiring of the home page that no unit test mounts — the sidebar entry, the
  * session bar, the shell handing the view to the chat column, and the column
  * keeping ONE composer for the home page and every conversation. Pinned
  * against source, like this directory's other static tests.
@@ -23,40 +23,34 @@ const nav = read('src/renderer/components/workspace-shell/LeftNav.tsx');
 const workspace = read('src/renderer/components/chat/ChatWorkspace.tsx');
 const composer = read('src/renderer/components/chat/ChatComposer.tsx');
 
-describe('the home entry on the rail (entry (a))', () => {
-  it('sits above the five panels, set off by a short rule, and opens the home page', () => {
-    const entry = dock.indexOf(
-      "<RailIconButton label={t('Home')} icon={House} onClick={() => openHome()} />"
-    );
-    expect(entry).toBeGreaterThan(-1);
-    const rule = dock.indexOf('data-rail-separator=""');
-    expect(rule).toBeGreaterThan(entry);
-    expect(rule).toBeLessThan(dock.indexOf('{tabs.map((tab) => ('));
-    // First on the rail, which opens 14px down (decision 183: no title-row
-    // spacer; decision 188: 8 -> 14), so it sits level with the panel's first row.
-    expect(dock).not.toContain('<div aria-hidden className="h-9 shrink-0" />');
-    const rail = dock.slice(dock.indexOf('<nav'), entry);
-    // Design system v2 §7.12: the rail is --surface-0.
-    expect(rail).toContain('bg-surface-0 pt-3.5 pb-2');
-    expect(rail).not.toContain('<RailButton');
+describe('the home entry (entry (a)), after the rail (design system v2 / layout 5a)', () => {
+  it('the rail and its Home button are gone; the sidebar shows the chat list directly', () => {
+    expect(dock).not.toContain('RailIconButton');
+    expect(dock).not.toContain('data-rail-separator');
+    expect(dock).not.toContain("t('Home')");
+    expect(dock).toContain('<LeftNav');
   });
 
-  it('is a 32px icon button with no pressed state', () => {
-    const iconButton = dock.slice(dock.indexOf('function RailIconButton('));
-    expect(iconButton).toContain('h-8 w-8');
-    expect(iconButton).not.toContain('aria-pressed');
+  it('the chat list`s own 「新建对话」 opens the home page instead', () => {
+    const start = nav.indexOf('const handleNewSession = () => {');
+    const handler = nav.slice(start, nav.indexOf('\n  };', start));
+    expect(handler).toContain('openHome();');
+    expect(handler).toContain(
+      "openHome(preselect ? { kind: 'path', path: preselect.path } : undefined)"
+    );
+    expect(nav).toContain('onClick={handleNewSession}');
   });
 });
 
 describe('the session bar', () => {
   it('names the home page when no conversation is open', () => {
     expect(bar).toContain(
-      "{activeSession ? displaySessionTitle(activeSession.title, t) : t('Home')}"
+      "const titleText = activeSession ? displaySessionTitle(activeSession.title, t) : t('Home');"
     );
     expect(bar).not.toContain("t('No conversation open')");
   });
 
-  it('「＋」 opens the home page with the conversation’s folder, or hands the home page the keyboard', () => {
+  it('「新建对话」 (title menu) opens the home page with the conversation’s folder, or hands the home page the keyboard', () => {
     const start = bar.indexOf('const startNewChat = () => {');
     const handler = bar.slice(start, bar.indexOf('\n  };', start));
     expect(handler).toContain('requestComposerFocus(null)');

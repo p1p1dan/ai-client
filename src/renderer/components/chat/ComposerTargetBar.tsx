@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useHomeDraftStore } from '@/stores/homeDraft';
@@ -6,7 +7,12 @@ import { buildBranchColumn, buildRepoColumn } from './composerColumns';
 import { isTargetableWorkspace } from './composerTarget';
 import { LockedRepoLabel, TemporaryChatLabel } from './LockedRepoLabel';
 import type { MiddleColumnMode } from './middleColumnLayout';
-import { shouldRenderTargetRow, targetRowClass, targetRowSlots } from './middleColumnLayout';
+import {
+  composerBarTrailingClass,
+  shouldRenderTargetRow,
+  targetRowClass,
+  targetRowSlots,
+} from './middleColumnLayout';
 import { RunLocationIndicator } from './RunLocationIndicator';
 import { TargetFolderSelect } from './TargetFolderSelect';
 import { useComposerTarget } from './useComposerTarget';
@@ -23,6 +29,13 @@ interface ComposerTargetBarProps {
   disabled?: boolean;
   /** Opens the shared AddRepositoryDialog (owned by App); the 「添加仓库」 rows don't render without it. */
   onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
+  /**
+   * Session mode: this row is the one under the composer box, so the
+   * composer's own controls ride at its two ends — `leading` before the
+   * repository, `trailing` after the run location.
+   */
+  leading?: ReactNode;
+  trailing?: ReactNode;
 }
 
 /**
@@ -62,6 +75,8 @@ export function ComposerTargetBar({
   sending,
   disabled,
   onAddRepository,
+  leading,
+  trailing,
 }: ComposerTargetBarProps) {
   const { t } = useI18n();
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
@@ -154,6 +169,7 @@ export function ComposerTargetBar({
 
   return (
     <div className={targetRowClass(mode)}>
+      {leading}
       {/* Column 1 — repository. A dropdown on the home page (where the next
           conversation is made) and on a blank conversation's start screen; a
           locked label — or 「临时对话」 — in a conversation. */}
@@ -189,9 +205,18 @@ export function ComposerTargetBar({
         <BranchColumn column={branchColumn} disabled={disabled} draft={branchDraft} />
       )}
 
-      {/* Column 3 — run location. Read-only, and says so. */}
-      {slots.runLocation && runLocation && (
-        <RunLocationIndicator text={t(runLocation.text)} tone={runLocation.tone} />
+      {/* Column 3 — run location. Read-only, and says so. In session mode it
+          heads the right-anchored group, before model/effort and context use. */}
+      {mode === 'session' ? (
+        <div className={composerBarTrailingClass()}>
+          {slots.runLocation && runLocation && (
+            <RunLocationIndicator text={t(runLocation.text)} tone={runLocation.tone} />
+          )}
+          {trailing}
+        </div>
+      ) : (
+        slots.runLocation &&
+        runLocation && <RunLocationIndicator text={t(runLocation.text)} tone={runLocation.tone} />
       )}
     </div>
   );

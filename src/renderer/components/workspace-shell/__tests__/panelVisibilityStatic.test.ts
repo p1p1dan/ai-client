@@ -64,10 +64,12 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
   it('WorkspaceShell composes chrome through the pure model rather than inline', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
     expect(shell).toContain('resolveShellChrome({');
-    // D08: the collapsed state is DERIVED from the active surface rather than
-    // stored beside it. `sidebarCollapsed` used to be its own persisted boolean,
-    // which let "collapsed" and "a surface is active" disagree.
-    expect(shell).toContain('const dockCollapsed = activeSurfaceId === null;');
+    // D08 derived "collapsed" from "no surface active", because the dock held
+    // the surfaces. Design system v2 / layout 5a moved the surfaces to the
+    // work panel, so the sidebar's collapse is its own (persisted) fact again
+    // and there is no second field it could disagree with.
+    expect(shell).toContain('sidebarUserCollapsed: sidebarCollapsed,');
+    expect(shell).not.toContain('activeSurfaceId');
     // dsh-rebase P1-11 (decision 127): no TUI override any more; the chrome
     // model alone decides whether the chat column shows.
     expect(shell).toContain('const chatVisible = chrome.chatVisible;');
@@ -79,12 +81,22 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     expect(shell).toContain('panelWidth: 0');
   });
 
-  it('LeftDock receives its width and derives openness from the active surface', () => {
+  it('LeftDock receives its width and its collapsed state, and derives nothing', () => {
     const dock = code(join(SHELL_DIR, 'LeftDock.tsx'));
     expect(dock).toContain('dockWidth: number');
-    // The rail is permanent; only the panel beside it collapses.
-    expect(dock).toContain('const panelWidth = Math.max(0, dockWidth - DOCK_RAIL_WIDTH);');
-    expect(dock).toContain('const isOpen = panelWidth > 0 && activeSurfaceId !== null;');
+    expect(dock).toContain('collapsed: boolean');
+    // Layout 5a: no rail to subtract, no surface to read.
+    expect(dock).not.toContain('DOCK_RAIL_WIDTH');
+    expect(dock).not.toContain('activeSurfaceId');
+  });
+
+  it('the work panel receives what it shows; the shell derives it once (layout 5a)', () => {
+    const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
+    const panel = code(join(SHELL_DIR, 'WorkPanel.tsx'));
+    expect(shell).toContain('const panelView = resolveWorkPanelView(');
+    expect(shell).toContain('view={panelView}');
+    expect(panel).toContain('const open = view.open;');
+    expect(panel).not.toContain('useShellLayoutStore');
   });
 
   it('the empty editor column costs no layout box, yet a pending intent still mounts it (m6 + round-10 ⑥)', () => {
@@ -112,31 +124,26 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // dsh-rebase P1-11 (decision 128): the review is no longer the only thing
     // that can cover the files — the folder's terminal can too. Covered means
     // `hidden`, never unmounted: the column still consumes file intents.
-    expect(shell).toContain('{(editorOpen || fileIntentPending) && (');
-    expect(shell).toContain("editorOpen && !editorCovered && !expanded && 'min-w-0 shrink-0'");
-    expect(shell).toContain("(!editorOpen || editorCovered) && 'hidden'");
-    expect(shell).toContain(
-      "const editorCovered = rightOccupant === 'review' || rightOccupant === 'terminal';"
-    );
-    expect(shell).toContain(
-      "style={editorOpen && !expanded ? { width: 'var(--shell-editor-w)' } : undefined}"
-    );
+    // Design system v2 / layout 5a: the editor is a layer of the work panel,
+    // absolutely placed, so it never claims row width; covered (another tab,
+    // or the panel closed) means `hidden`, never unmounted.
+    const panel = code(join(SHELL_DIR, 'WorkPanel.tsx'));
+    expect(panel).toContain('{(editorOpen || fileIntentPending) && (');
+    expect(panel).toContain("className={cn('absolute inset-0', showEditor ? 'z-10' : 'hidden')}");
+    expect(panel).toContain("const showEditor = shownTab === 'editor' && editorOpen;");
+    expect(shell).toContain('fileIntentPending={fileIntentPending}');
   });
 
-  it('the expanded editor is an opaque overlay over the center row only (m3, moved by D08)', () => {
+  it('the expanded panel is an opaque overlay over the center row only (m3, moved by D08 and 5a)', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
+    const panel = code(join(SHELL_DIR, 'WorkPanel.tsx'));
     // The overlay must be opaque or chat shows through it (user round 1,
-    // screenshot). It covers the center row, NOT the shell: the dock has to
-    // stay reachable, which is the same boundary `ContextPanel`'s overlay used.
-    expect(shell).toContain(
-      "editorOpen && !editorCovered && expanded && 'absolute inset-0 z-20 bg-background'"
-    );
-    // …and it may not outlive the file that justified it.
-    expect(shell).toContain('if (expanded && !editorAllocated) {');
-    // The review shares the overlay: closing it expanded must not promote the
-    // editor underneath to full-bleed over chat.
-    expect(shell).toContain('onClose={dismissReview}');
-    expect(shell).toContain('if (expanded) toggleExpanded();');
+    // screenshot). It covers the row under the title bar, NOT the shell: the
+    // sidebar and the title bar stay reachable.
+    expect(panel).toContain("'flex min-h-0 flex-col bg-surface-1'");
+    expect(panel).toContain("open && expanded && 'absolute inset-0 z-20'");
+    // …and it may not outlive the open panel that justified it.
+    expect(shell).toContain('if (expanded && !panelView.open) {');
   });
 
   /**
@@ -198,31 +205,33 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // Transitions are killed for the WHOLE shell while any handle is down.
     // D08 drops `panelResizing` from the list with the panel it named; the dock
     // reports through `sidebarResizing`, which was always the sidebar's flag.
-    expect(shell).toContain('data-resizing={sidebarResizing || centerResizing || undefined}');
+    // Layout 5a: the chat grip became the work panel's left-edge grip.
+    expect(shell).toContain('data-resizing={sidebarResizing || panelResizing || undefined}');
+    expect(shell).toContain('onDragFrame: paintPanelDrag,');
     expect(shell).toContain('group-data-[resizing]/shell:transition-none');
   });
 
-  it('the surface switcher lives on the dock rail, and nowhere else (D08)', () => {
+  it('the surface switcher is the work panel`s tab strip, and nowhere else (layout 5a)', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
     const dock = code(join(SHELL_DIR, 'LeftDock.tsx'));
-    const bar = code(join(SHELL_DIR, 'SessionBar.tsx'));
+    const panel = code(join(SHELL_DIR, 'WorkPanel.tsx'));
     const layoutModel = code(join(SHELL_DIR, 'shellLayoutModel.ts'));
-    // History of this one control, because it has moved four times and each
-    // move overturned the last: A08 gave the panel a tab strip plus a rail
-    // (a08:1430-1432); round-12 replaced both with one permanent vertical rail;
-    // D34 moved that rail's four icons into MainHeader's bar; D07 moved them
-    // back into the right panel as text tabs; D08 moves them to the LEFT, as a
-    // VSCode activity bar, because the whole point of this batch is that
-    // navigation belongs in the column the user visits least often.
+    // History of this one control, because it has moved five times: A08 gave
+    // the panel a tab strip plus a rail; round-12 one permanent vertical rail;
+    // D34 the header bar; D07 text tabs in the right panel; D08 the left
+    // rail; layout 5a (ruling L1) a tab strip on the right work panel again,
+    // the reference's shape, with the title bar's buttons as shortcuts to it.
     expect(shell).not.toContain('ContextPanelRail');
-    expect(dock).toContain('derivePanelTabs(railOrder');
-    expect(dock).toContain('selectSurface');
-    // The center bar must NOT keep a second copy of the switcher: two readings
-    // of `railOrder` is exactly how the two lists drift apart.
-    expect(bar).not.toContain('derivePanelTabs');
-    expect(bar).not.toContain('selectSurface');
-    // The complement the rail replaced may not creep back under its old name.
+    expect(shell).toContain('const panelTabs = deriveWorkPanelTabs({');
+    expect(panel).toContain('role="tablist"');
+    expect(panel).toContain('tabs.map((tab) => (');
+    // The sidebar keeps no copy of the switcher.
+    expect(dock).not.toContain('derivePanelTabs');
+    expect(dock).not.toContain('RailButton');
+    expect(dock).not.toContain('SURFACE_VIEWS');
+    // The retired helpers may not creep back under their old names.
     expect(layoutModel).not.toContain('deriveRailVisible');
+    expect(layoutModel).not.toContain('railOrder:');
   });
 
   it('the retired two/three-column mode leaves no ghosts behind (D08)', () => {

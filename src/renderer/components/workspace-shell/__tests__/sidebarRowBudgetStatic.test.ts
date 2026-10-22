@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stripComments } from '../../chat/__tests__/stripComments';
-import { DOCK_RAIL_WIDTH, SIDEBAR_DEFAULT_WIDTH } from '../shellLayoutModel';
+import { SIDEBAR_DEFAULT_WIDTH } from '../shellLayoutModel';
 
 /**
  * The session row's width budget. Decision 167 (GitHub issue #3) laid it out;
@@ -12,9 +12,10 @@ import { DOCK_RAIL_WIDTH, SIDEBAR_DEFAULT_WIDTH } from '../shellLayoutModel';
  * the trailing time box is gone — the hover actions float over the row's right
  * edge instead of taking width.
  *
- * At the 280px default (which includes the panel's 1px right border) a row has
- * 280 - 1 - 16 (the list's px-2) - 16 (the row's px-2) = 247px of content.
- * Minus the 16px status slot and one 6px gap the title gets 225px. Pi is the
+ * At the 272px default (design system v2 / layout 5a: the sidebar alone, which
+ * includes its 1px right border) a row has 272 - 1 - 16 (the list's px-2) - 16
+ * (the row's px-2) = 239px of content. Minus the 16px status slot and one 6px
+ * gap the title gets 217px. Pi is the
  * sole chat runtime and is not repeated as a per-row badge; the branch is
  * shown only on a worktree row.
  */
@@ -152,17 +153,14 @@ describe('sidebar session row width budget', () => {
   it('keeps the derivation of the numbers in the source', () => {
     // Asserted on RAW: this one is about the reasoning surviving the next edit.
     expect(RAW).toContain('SIDEBAR_DEFAULT_WIDTH');
-    expect(RAW).toContain('the title gets 225px');
+    expect(RAW).toContain('the title gets 217px');
   });
 
   it('is written against the width the app actually ships with', () => {
-    // If the default ever moves, the 247px / 225px budget above stops
+    // If the default ever moves, the 239px / 217px budget above stops
     // describing reality and this file needs re-deriving rather than silently
-    // drifting.
-    //
-    // D08: `SIDEBAR_DEFAULT_WIDTH` measures the whole dock now (rail + panel),
-    // so the number the rows actually live inside is the panel — the rail is
-    // chrome they never see. That is what this asserts.
-    expect(SIDEBAR_DEFAULT_WIDTH - DOCK_RAIL_WIDTH).toBe(280);
+    // drifting. Layout 5a: no rail any more, so the default IS what the rows
+    // live inside.
+    expect(SIDEBAR_DEFAULT_WIDTH).toBe(272);
   });
 });

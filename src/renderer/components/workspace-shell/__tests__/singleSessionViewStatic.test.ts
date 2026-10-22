@@ -32,7 +32,8 @@ describe('D12 single-session view', () => {
     // maintaining nothing.
     expect(shell).not.toContain('openSessionIds');
     expect(shell).not.toContain('useSessionTabsStore');
-    expect(shell).toMatch(/<SessionBar\s+reviewOpen=\{reviewOpen\}/);
+    // Layout 5a: the title bar takes the sidebar and panel state, no tab list.
+    expect(shell).toMatch(/<SessionBar\s+sidebarCollapsed=\{sidebarCollapsed\}/);
   });
 
   it("the sidebar marker reads the runtime's own binding, not a tab list", () => {

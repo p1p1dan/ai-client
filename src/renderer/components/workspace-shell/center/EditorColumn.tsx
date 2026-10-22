@@ -1,6 +1,7 @@
 /**
- * T-32 (D27 / open-q #28 ①): the editor, back in the CENTER column beside chat
- * (A08 `chat ║ editor`, a08:1208-1241) instead of wedged into the 380px panel.
+ * T-32 (D27 / open-q #28 ①): the editor, beside chat (A08 `chat ║ editor`,
+ * a08:1208-1241). Layout 5a: the work panel's 编辑器 tab, which exists while
+ * a file is open; opening a file from anywhere switches the panel to it.
  *
  * This is the other half of the old `EditorSurfaceView`; the tree half is
  * `../surfaces/FilesSurfaceView.tsx`. Everything that owns editor tabs lives
@@ -8,7 +9,7 @@
  * close prompt, and A08's editor head actions.
  *
  * Renders nothing when no file is open — `editorOpen` is what the shell reads
- * to decide whether the column exists at all, so "no tabs" must cost no box.
+ * to decide whether the editor tab exists at all.
  *
  * D34-E: a git diff can also open a page here (`GitSurfaceView` calling
  * `useEditorStore.getState().openDiffTab`), the same open-mode as a file —
@@ -19,7 +20,7 @@
  */
 
 import { normalizePath } from '@shared/utils/path';
-import { Maximize2, Minimize2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useCallback, useEffect } from 'react';
 import { EditorArea } from '@/components/files/EditorArea';
 import type { UnsavedChangesChoice } from '@/components/files/UnsavedChangesDialog';
@@ -90,17 +91,10 @@ export function isNavigationIntentStillValid(params: {
 // D35 (user feedback, 2026-08-14): retired the column's only prop pair
 // (`onHideChat`/`chatVisible`, the "Chat column" head button below).
 //
-// D08 gives it a new one. This is the RIGHT column now, and the expand/restore
-// overlay came with that role — it used to live on `ContextPanel`'s tab strip,
-// which is exactly where the user reads it as belonging: on the bar of the
-// column it enlarges. The state itself stays in the shell store (`expanded`),
-// so nothing here has to remember it.
-interface EditorColumnProps {
-  expanded?: boolean;
-  onToggleExpanded?: () => void;
-}
-
-export function EditorColumn({ expanded, onToggleExpanded }: EditorColumnProps = {}) {
+// D08 gave it the expand/restore pair; layout 5a moved that to the work
+// panel's tab strip, which enlarges every tab alike, so the column takes no
+// props again.
+export function EditorColumn() {
   const { t } = useI18n();
   const rootPath = useWorkspaceRootPath();
   const editorAutoSave = useSettingsStore((state) => state.editorSettings.autoSave);
@@ -311,7 +305,7 @@ export function EditorColumn({ expanded, onToggleExpanded }: EditorColumnProps =
     // popup own their own Escape, and the panel's capture-phase handler would
     // otherwise eat it (S0 / F-c).
     <div
-      className="flex h-full min-h-0 min-w-0 flex-col border-l"
+      className="flex h-full min-h-0 min-w-0 flex-col"
       {...ESCAPE_HOLD_PROPS}
       data-testid="editor-column"
     >
@@ -351,22 +345,6 @@ export function EditorColumn({ expanded, onToggleExpanded }: EditorColumnProps =
             // render exactly as before (same discipline as T-12's DiffViewer
             // prop).
             <div className="flex shrink-0 items-center gap-0.5 pr-1">
-              {onToggleExpanded && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="h-6 w-6"
-                  onClick={onToggleExpanded}
-                  aria-label={t(expanded ? 'Restore panel' : 'Expand panel')}
-                  title={t(expanded ? 'Restore panel' : 'Expand panel')}
-                >
-                  {expanded ? (
-                    <Minimize2 className="h-3.5 w-3.5" />
-                  ) : (
-                    <Maximize2 className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              )}
               <Button
                 variant="ghost"
                 size="icon-xs"

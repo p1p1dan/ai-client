@@ -71,8 +71,8 @@ describe('weights (design system v2 §3.2)', () => {
     expect(BAR).not.toContain('font-medium');
   });
 
-  it('the session bar title stays 15px (text-heading) / 400', () => {
-    expect(BAR).toContain('<span className="min-w-0 truncate text-heading text-foreground">');
+  it('the title bar title is 13px (text-ui) / 400 (design system v2 / layout 5a)', () => {
+    expect(BAR).toContain("const titleClass = 'min-w-0 truncate text-ui text-foreground';");
   });
 
   it('no level of the chat sidebar is bold any more: group labels are the grey 400 label', () => {
@@ -81,12 +81,12 @@ describe('weights (design system v2 §3.2)', () => {
 });
 
 describe('the panel title is gone from all five panels (decision 183 §1.9)', () => {
-  it('LeftDock renders no DockTitle, and names the panel through its region', () => {
+  it('LeftDock renders no DockTitle, and names itself through its region', () => {
     expect(DOCK).not.toContain('DockTitle');
     expect(DOCK).not.toContain('text-section');
     expect(DOCK).not.toContain('border-b px-3');
-    // §2.7: the region keeps the panel name for screen readers.
-    expect(DOCK).toContain('aria-label={t(descriptor.labelKey)}');
+    // §2.7 / layout 5a: one region now, the sidebar, named for screen readers.
+    expect(DOCK).toContain("aria-label={t('Primary navigation')}");
   });
 });
 

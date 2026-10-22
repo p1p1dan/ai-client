@@ -46,7 +46,8 @@ describe('Escape is held for both halves of the split subtree (M6)', () => {
 
   it('spreads it on each half`s ROOT element, not an inner pane', () => {
     expect(EDITOR.flat).toContain(
-      'className="flex h-full min-h-0 min-w-0 flex-col border-l" {...ESCAPE_HOLD_PROPS}'
+      // Layout 5a: no `border-l` — the work panel draws the left edge.
+      'className="flex h-full min-h-0 min-w-0 flex-col" {...ESCAPE_HOLD_PROPS}'
     );
     expect(FILES.flat).toContain(
       'className="flex h-full min-h-0 min-w-0 flex-col" {...ESCAPE_HOLD_PROPS}'

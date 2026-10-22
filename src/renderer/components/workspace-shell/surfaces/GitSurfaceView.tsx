@@ -89,9 +89,10 @@ const GIT_HISTORY_PAGE_SIZE = 30;
 // file the orchestrator owns.
 interface GitSurfaceViewProps {
   surfaceId: ContextSurfaceId;
+  active: boolean;
 }
 
-/** Same Empty/EmptyMedia/EmptyHeader/EmptyTitle/EmptyDescription pattern as `SurfacePlaceholder`. */
+/** The shared Empty/EmptyMedia/EmptyHeader/EmptyTitle/EmptyDescription pattern. */
 function GitEmptyState({
   title,
   description,
@@ -152,10 +153,9 @@ function useGitEmptyStateCopy(
   }
 }
 
-export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
-  const activeSurfaceId = useShellLayoutStore((s) => s.activeSurfaceId);
+export function GitSurfaceView({ active }: GitSurfaceViewProps) {
   const expanded = useShellLayoutStore((s) => s.expanded);
-  const surfaceActive = activeSurfaceId === surfaceId;
+  const surfaceActive = active;
 
   const activeSessionId = useChatSessionsStore((s) => s.activeSessionId);
   const sessions = useChatSessionsStore((s) => s.sessions);

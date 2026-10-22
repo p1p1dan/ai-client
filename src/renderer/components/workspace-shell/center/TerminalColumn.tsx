@@ -1,12 +1,11 @@
 /**
  * dsh-rebase P1-11 (decisions 109, 126, 128; prototype scene G): the shell
- * terminal in the right column, a peer of the file editor.
+ * terminal of the conversation's folder.
  *
- * It is not a tab inside `EditorTabs` — the column shows either the files or
- * the terminal, never both — but it wears the same chrome so the two read as
- * the same kind of thing: an h-10 bar holding one h-9 tab with the 2px
- * `bg-primary` top mark, and under it a path row where the editor shows its
- * breadcrumb, here the conversation's folder.
+ * Layout 5a (ruling L4): the work panel's 终端 tab. The panel's tab strip
+ * names it, so the column's own h-10 tab bar (and its Files button — the
+ * strip's 编辑器 tab does that now) went; what stays is one row with the
+ * conversation's folder and the button that ends the shell.
  *
  * Every running column shell stays mounted here, one layer per folder, so a
  * conversation switch never tears one down (`useXterm`'s unmount detaches the
@@ -16,10 +15,9 @@
  * pty to two columns; the same rule `TerminalSurfaceView` documents.
  */
 import { getDisplayPath } from '@shared/utils/path';
-import { FileCode, Terminal, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useMemo } from 'react';
 import { ShellTerminal } from '@/components/terminal/ShellTerminal';
-import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { useI18n } from '@/i18n';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
@@ -34,19 +32,11 @@ const ESCAPE_HOLD_PROPS = { [SURFACE_ESCAPE_HOLD_ATTR]: '' };
 interface TerminalColumnProps {
   /** `columnTerminalKey` of the folder on screen; null when it has none. */
   currentKey: string | null;
-  /** The terminal is what the column shows (it has focus rights). */
+  /** The work panel shows the terminal tab (it has focus rights). */
   visible: boolean;
-  /** Files are open underneath: offer the way back to them. */
-  filesOpen: boolean;
-  onShowFiles: () => void;
 }
 
-export function TerminalColumn({
-  currentKey,
-  visible,
-  filesOpen,
-  onShowFiles,
-}: TerminalColumnProps) {
+export function TerminalColumn({ currentKey, visible }: TerminalColumnProps) {
   const { t } = useI18n();
   const terminals = useColumnTerminalStore((state) => state.terminals);
   const close = useColumnTerminalStore((state) => state.close);
@@ -66,57 +56,32 @@ export function TerminalColumn({
 
   return (
     <section
-      className="flex h-full min-h-0 min-w-0 flex-col border-l bg-background"
+      className="flex h-full min-h-0 min-w-0 flex-col bg-surface-1"
       aria-label={t('Terminal')}
       data-testid="terminal-column"
       {...ESCAPE_HOLD_PROPS}
     >
       {current && (
-        <>
-          {/* Design system v2 §7.12: the editor's tab strip — the canvas, one
-              hairline below, the selected tab frameless with a 2px clay line. */}
-          <div className="flex h-10 shrink-0 items-start border-b border-border-soft bg-surface-1">
-            <div
-              className="relative flex h-9 min-w-0 max-w-56 items-center gap-2 px-3 text-ui text-foreground"
-              data-testid="terminal-column-tab"
-            >
-              <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />
-              <Terminal className="size-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{t('Terminal')}</span>
-              <button
-                type="button"
-                onClick={() => close(current.key)}
-                aria-label={t('Close terminal')}
-                title={t('Close terminal')}
-                className="shrink-0 rounded-xs p-0.5 text-muted-foreground opacity-60 transition-opacity hover:bg-fill-ghost-hover hover:text-foreground hover:opacity-100"
-              >
-                <X className="size-3.5" />
-              </button>
-            </div>
-            <div className="ml-auto flex h-9 shrink-0 items-center gap-0.5 pr-1">
-              {filesOpen && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  title={t('Files')}
-                  aria-label={t('Files')}
-                  onClick={onShowFiles}
-                >
-                  <FileCode className="size-3.5" />
-                </Button>
-              )}
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 border-b border-border-soft px-3 py-1 text-small">
-            <span className="shrink-0 text-muted-foreground">{t('Session directory')}</span>
-            <Ident
-              className="min-w-0 flex-1 truncate text-foreground"
-              title={getDisplayPath(current.cwd)}
-            >
-              {getDisplayPath(current.cwd)}
-            </Ident>
-          </div>
-        </>
+        // Design system v2 §4.2: the one strip header height (h-8), one
+        // hairline below.
+        <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border-soft px-3 text-small">
+          <span className="shrink-0 text-muted-foreground">{t('Session directory')}</span>
+          <Ident
+            className="min-w-0 flex-1 truncate text-foreground"
+            title={getDisplayPath(current.cwd)}
+          >
+            {getDisplayPath(current.cwd)}
+          </Ident>
+          <button
+            type="button"
+            onClick={() => close(current.key)}
+            aria-label={t('Close terminal')}
+            title={t('Close terminal')}
+            className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
       )}
       <div className="relative min-h-0 flex-1" style={{ backgroundColor: backdrop }}>
         {Object.values(terminals).map((entry) => {

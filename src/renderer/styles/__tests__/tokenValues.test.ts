@@ -124,8 +124,8 @@ describe('decision 170: --foreground-soft and --text-section', () => {
   });
 
   // Design system v2: --text-section is a migration alias of the 15px heading tier.
-  it('--text-section is the 15px / 20px heading tier', () => {
-    expect(themeBlock).toContain('--text-section: 0.9375rem;');
+  it('--text-section is the 14px / 20px heading tier', () => {
+    expect(themeBlock).toContain('--text-section: 0.875rem;');
     expect(themeBlock).toContain('--text-section--line-height: 1.25rem;');
     expect(themeBlock.split('--text-section:').length - 1).toBe(1);
   });

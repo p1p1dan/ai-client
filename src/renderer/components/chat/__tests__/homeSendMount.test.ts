@@ -60,7 +60,13 @@ vi.mock('@/stores/settings', () => {
 });
 vi.mock('@/components/ui/toast', () => ({ toastManager: { add: mocks.toast } }));
 vi.mock('@/stores/runtimeEventBus', () => ({ subscribeRuntimeEvent: () => () => undefined }));
-vi.mock('../ComposerTargetBar', () => ({ ComposerTargetBar: () => null }));
+// The target row carries the composer's bar controls at its two ends.
+vi.mock('../ComposerTargetBar', () => ({
+  ComposerTargetBar: (props: {
+    leading?: import('react').ReactNode;
+    trailing?: import('react').ReactNode;
+  }) => [props.leading, props.trailing],
+}));
 vi.mock('../ComposerModelTrigger', () => ({ ComposerModelTrigger: () => null }));
 vi.mock('../ComposerPermissionTrigger', () => ({ ComposerPermissionTrigger: () => null }));
 vi.mock('../ComposerUsageChip', () => ({ ComposerUsageChip: () => null }));
@@ -363,10 +369,12 @@ describe('a branch picked on the home page is switched to at send time', () => {
 });
 
 describe('the composer docks the same on the home page and in a conversation', () => {
-  it('two resting lines on the home page, the same textarea class in a conversation', async () => {
+  it('one thin resting line on the home page, the same textarea class in a conversation', async () => {
     await mountComposer();
     const homeClass = box().parentElement?.className ?? '';
-    expect(homeClass).toContain('[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5*2)]');
+    // 2026-10-22 (user ruling): one line at rest, growing with the draft.
+    expect(homeClass).toContain('[&_textarea]:min-h-6');
+    expect(homeClass).not.toContain('*1.5*2)]');
     await act(async () => useChatSessionsStore.getState().selectSession('known-1'));
     expect(box().parentElement?.className).toBe(homeClass);
   });

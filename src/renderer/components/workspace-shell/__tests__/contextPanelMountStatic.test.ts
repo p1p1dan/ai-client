@@ -23,15 +23,16 @@ import { stripComments } from '../../chat/__tests__/stripComments';
  * the scan and keeping the explanation.
  *
  * D08: the stack moved from `ContextPanel.tsx` (the retired right column) to
- * `LeftDock.tsx`. Same mechanism, same hazard, same guard — only the file the
- * surfaces live in changed.
+ * `LeftDock.tsx`; design system v2 / layout 5a moved it again, to the work
+ * panel (`WorkPanel.tsx`). Same mechanism, same hazard, same guard — only the
+ * file the surfaces live in changed.
  */
 
-const PANEL_FILE = join(process.cwd(), 'src/renderer/components/workspace-shell/LeftDock.tsx');
+const PANEL_FILE = join(process.cwd(), 'src/renderer/components/workspace-shell/WorkPanel.tsx');
 const RAW = readFileSync(PANEL_FILE, 'utf8');
 const CODE = stripComments(RAW, PANEL_FILE);
 
-describe('LeftDock keep-alive hiding technique', () => {
+describe('WorkPanel keep-alive hiding technique', () => {
   it('hides inactive layers with visibility, not layout removal', () => {
     expect(CODE).toContain('invisible pointer-events-none');
   });
@@ -40,7 +41,7 @@ describe('LeftDock keep-alive hiding technique', () => {
     expect(CODE).toContain('inert={!visible}');
   });
 
-  it('never uses display:none anywhere in the dock', () => {
+  it('never uses display:none anywhere in the panel', () => {
     expect(CODE).not.toMatch(/display\s*:\s*['"]?\s*none/i);
   });
 

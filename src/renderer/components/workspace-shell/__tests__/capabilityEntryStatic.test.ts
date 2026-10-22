@@ -67,12 +67,13 @@ describe('sidebar capability entry', () => {
 
   it('keeps the entry as app-scoped chrome beside Settings, not a surface of its own', () => {
     // evidence-u09 #6 ruled against adopting pix's one-level primary nav, and
-    // that still holds: this opens a dialog, and sits in the rail's bottom
-    // group with Settings, below the `flex-1` spacer that separates navigation
-    // from chrome.
-    expect(dock).toContain('<div className="flex-1" />');
-    expect(dock.indexOf('<div className="flex-1" />')).toBeLessThan(
-      dock.indexOf("label={t('Capabilities')}")
+    // that still holds: this opens a dialog. Design system v2 / layout 5a: the
+    // rail is gone, so it and Settings sit at the end of the account row in
+    // the sidebar footer, Capabilities first.
+    const footer = dock.slice(dock.indexOf('<UserFooterPill'));
+    expect(footer).toContain("label={t('Capabilities')}");
+    expect(footer.indexOf("label={t('Capabilities')}")).toBeLessThan(
+      footer.indexOf("t('Settings')")
     );
     expect(dock).not.toMatch(/id: 'plugins'/);
   });

@@ -14,11 +14,12 @@
  *
  * ## Why the sidebar's EXPANDED minimum is in the sum
  *
- * The dock can collapse to its 44px rail, and at that width the shell fits in
- * 964px. Sizing the window to that would leave the overflow reachable again the
- * moment the user opens a panel — which they cannot be expected to predict. The
- * floor is therefore the narrowest window in which EVERY legal layout state
- * fits, not the narrowest one some state fits in.
+ * The sidebar can collapse entirely (layout 5a removed the rail it used to
+ * leave behind), and then the shell fits in 720px. Sizing the window to that
+ * would leave the overflow reachable again the moment the user opens the
+ * sidebar — which they cannot be expected to predict. The floor is therefore
+ * the narrowest window in which EVERY legal layout state fits, not the
+ * narrowest one some state fits in.
  *
  * ## Kept in `shared/` on purpose
  *
@@ -31,10 +32,13 @@
  * there rather than in a screenshot.
  */
 
-/** `SIDEBAR_MIN_WIDTH` — 280px panel + the 44px rail (`shellLayoutModel.ts`). */
-const SIDEBAR_MIN_WIDTH = 324;
-/** `CHAT_MIN_WIDTH` + `EDITOR_MIN_WIDTH` (`centerLayoutModel.ts`'s `contentFloor`). */
-const CENTER_ROW_FLOOR = 400 + 520;
+/** `SIDEBAR_MIN_WIDTH` (`shellLayoutModel.ts`); layout 5a: no rail on top. */
+const SIDEBAR_MIN_WIDTH = 240;
+/**
+ * `CHAT_MIN_WIDTH` + `EDITOR_MIN_WIDTH` (`centerLayoutModel.ts`'s
+ * `contentFloor`); layout 5a: the work panel's 320px floor.
+ */
+const CENTER_ROW_FLOOR = 400 + 320;
 
 export const SHELL_MIN_WIDTH = SIDEBAR_MIN_WIDTH + CENTER_ROW_FLOOR;
 

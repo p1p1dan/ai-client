@@ -31,11 +31,11 @@ export function RunLocationIndicator({ text, tone }: RunLocationIndicatorProps) 
             // one until its two words wrapped and the second was clipped by
             // the row height. The branch chip truncates instead (it has the
             // affordance for it: a tooltip and a popup carrying the full name).
-            className="inline-flex h-6 shrink-0 cursor-default items-center gap-1.5 whitespace-nowrap px-1.5 text-ui text-muted-foreground"
+            className="inline-flex h-6 shrink-0 cursor-default items-center gap-1 whitespace-nowrap px-1.5 text-small text-muted-foreground"
           />
         }
       >
-        <Icon className="size-3.5 shrink-0" />
+        <Icon className="size-3 shrink-0" />
         {text}
       </TooltipTrigger>
       <TooltipPopup className="max-w-66 text-small">

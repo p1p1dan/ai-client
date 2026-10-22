@@ -163,13 +163,13 @@ describe('P1-11 · the product has no pi TUI', () => {
     expect(worktree).toContain('openInitializationTerminal()');
   });
 
-  it('opens the session bar terminal as a plain shell in the right column (decision 128)', () => {
+  it('opens the title bar terminal as a plain shell in the work panel (decision 128, layout 5a)', () => {
     const column =
       CODE.get('src/renderer/components/workspace-shell/center/TerminalColumn.tsx') ?? '';
     expect(column).toContain('<ShellTerminal');
     expect(column).not.toMatch(/command=|kind=/);
-    const shell = CODE.get('src/renderer/components/workspace-shell/WorkspaceShell.tsx') ?? '';
-    expect(shell).toContain('<TerminalColumn');
+    const panel = CODE.get('src/renderer/components/workspace-shell/WorkPanel.tsx') ?? '';
+    expect(panel).toContain('<TerminalColumn');
     const bar = CODE.get('src/renderer/components/workspace-shell/SessionBar.tsx') ?? '';
     expect(bar).toContain('<TerminalButton state={terminalState} onToggle={onToggleTerminal} />');
     // No PTY kind but a shell is left: the agent value went with the TUI.

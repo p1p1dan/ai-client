@@ -32,7 +32,7 @@ import {
   userMessageActionFailure,
   userMessageActions,
   userMessageCopyText,
-} from './userMessageActions';
+} from './userMessageActionsModel';
 
 /** A start that did not happen, as the dictionary key it is shown as. */
 class StartRefused extends Error {}

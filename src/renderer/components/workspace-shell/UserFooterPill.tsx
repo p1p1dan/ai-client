@@ -25,7 +25,7 @@
 import { AUTH_GATE_SNAPSHOT_QUERY_KEY, deriveUserProfilePresentation } from '@shared/authGate';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ChevronsUpDown } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { AnnouncementBell } from '@/components/announcements/AnnouncementBell';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
@@ -33,7 +33,11 @@ import { UserProfileCard } from '@/components/user/UserProfileCard';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
-export function UserFooterPill() {
+/**
+ * `actions`: layout 5a — the retired rail's Capabilities and Settings buttons,
+ * which now sit at the end of this row.
+ */
+export function UserFooterPill({ actions }: { actions?: ReactNode } = {}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -115,6 +119,7 @@ export function UserFooterPill() {
         </PopoverPopup>
       </Popover>
       <AnnouncementBell />
+      {actions}
     </div>
   );
 }

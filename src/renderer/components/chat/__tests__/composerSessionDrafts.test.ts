@@ -42,7 +42,13 @@ vi.mock('@/stores/settings', () => {
   };
 });
 vi.mock('@/stores/runtimeEventBus', () => ({ subscribeRuntimeEvent: () => () => undefined }));
-vi.mock('../ComposerTargetBar', () => ({ ComposerTargetBar: () => null }));
+// The target row carries the composer's bar controls at its two ends.
+vi.mock('../ComposerTargetBar', () => ({
+  ComposerTargetBar: (props: {
+    leading?: import('react').ReactNode;
+    trailing?: import('react').ReactNode;
+  }) => [props.leading, props.trailing],
+}));
 vi.mock('../ComposerModelTrigger', () => ({ ComposerModelTrigger: () => null }));
 vi.mock('../ComposerPermissionTrigger', () => ({ ComposerPermissionTrigger: () => null }));
 vi.mock('../ComposerUsageChip', () => ({ ComposerUsageChip: () => null }));

@@ -37,7 +37,6 @@ import {
 import { useEditor } from '@/hooks/useEditor';
 import { useFileTree } from '@/hooks/useFileTree';
 import { useI18n } from '@/i18n';
-import { useShellLayoutStore } from '@/stores/shellLayout';
 import { SURFACE_ESCAPE_HOLD_ATTR } from '../shellLayoutModel';
 import type { SurfaceViewProps } from '../surfaceViews';
 import { useWorkspaceRootPath } from '../useWorkspaceRootPath';
@@ -47,12 +46,11 @@ const ESCAPE_HOLD_PROPS = { [SURFACE_ESCAPE_HOLD_ATTR]: '' };
 
 type NewItemType = 'file' | 'directory' | null;
 
-export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
+export function FilesSurfaceView({ active, onSearch }: SurfaceViewProps) {
   const { t } = useI18n();
   const rootPath = useWorkspaceRootPath();
 
-  const activeSurfaceId = useShellLayoutStore((state) => state.activeSurfaceId);
-  const surfaceActive = activeSurfaceId === surfaceId;
+  const surfaceActive = active;
 
   const {
     tree,

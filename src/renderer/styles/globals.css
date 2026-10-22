@@ -69,7 +69,9 @@
    * Design system v2 type scale (§3.1, user ruling 2026-10-21: the reference's
    * density). Fixed tiers, px line heights:
    *   2xs 11/16 digits and Latin only (no CJK below 12px)
-   *   small 12/16, ui 13/18, heading 15/20, title 20/28, display 38, code 12.
+   *   small 12/16, ui 13/18, heading 14/20, title 18/26, display 38, code 12.
+   * 2026-10-22 (user, against the Claude Code desktop screenshot): one notch
+   * quieter -- heading 15->14, title 20->18, chat body 14->13.
    * The legacy names below are aliases kept for the migration and are removed
    * once every call site has moved (plan ui-cohesion, stage 3):
    *   meta -> small, group-label -> small, markdown -> chat body default,
@@ -81,10 +83,10 @@
   --text-small--line-height: 1rem;
   --text-ui: 0.8125rem;
   --text-ui--line-height: 1.125rem;
-  --text-heading: 0.9375rem;
+  --text-heading: 0.875rem;
   --text-heading--line-height: 1.25rem;
-  --text-title: 1.25rem;
-  --text-title--line-height: 1.75rem;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.625rem;
   --text-display: 2.375rem;
   --text-display--line-height: 1.2;
   --text-code: 0.75rem;
@@ -96,7 +98,7 @@
   --text-group-label--line-height: 1rem;
   --text-markdown: 0.875rem;
   --text-markdown--line-height: 1.43;
-  --text-section: 0.9375rem;
+  --text-section: 0.875rem;
   --text-section--line-height: 1.25rem;
 
   /*
@@ -111,9 +113,9 @@
    * Nothing may ever write these to `documentElement` (UI fonts and terminal /
    * editor fonts stay separate, design-system.md §10.1).
    *
-   * v2 defaults 14 / 12 (were 17 / 14); `chatTypography.ts` mirrors them.
+   * v2 defaults 13 / 12 (were 17 / 14, then 14 / 12); `chatTypography.ts` mirrors them.
    */
-  --text-chat-body: 14px;      /* assistant/user prose, markdown incl. h1-h6, composer */
+  --text-chat-body: 13px;      /* assistant/user prose, markdown incl. h1-h6, composer */
   --text-chat-process: 12px;   /* tool rows, thinking, turn status line */
 
   /* D25 §3.4: reading column = 48 CJK chars @15px = Cursor reference; wide keeps the same -6.25% scaling */

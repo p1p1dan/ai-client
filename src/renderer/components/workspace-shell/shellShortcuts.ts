@@ -3,28 +3,30 @@
  * so vitest can cover every branch without mounting `WorkspaceShell` — same
  * pattern as `shellLayoutModel.ts`.
  */
-import { type ContextSurfaceId, DEFAULT_SURFACE_ORDER, railSurfaces } from './surfaceRegistry';
+import type { WorkPanelTab } from './workPanelModel';
 
 /**
- * D08: the dock has FIVE entries (chat/git/files/context/run), so the digit map
- * grew from 1..4 to 1..5. It is derived from the rendered order, never
- * hardcoded — see `numberedSurfaceIds`.
+ * Layout 5a (ruling L1): the rail's digits keep their slots, retargeted. 1 was
+ * the dock's chat list and still is — the sidebar's, expanding it if it is
+ * collapsed. 2–5 were the rail's git / files / context / run and now open (or
+ * close) those work panel tabs. A fixed table: there is no rail order left to
+ * derive it from.
  */
-const NUMBERED_SURFACE_LIMIT = 5;
+export const DIGIT_PANEL_TABS: Readonly<Record<'2' | '3' | '4' | '5', WorkPanelTab>> = {
+  '2': 'git',
+  '3': 'files',
+  '4': 'context',
+  '5': 'run',
+};
 
 // 2026-09-04: `open-terminal` (Ctrl/Cmd+`) is gone with the terminal's rail
-// button — see `surfaceRegistry.ts`. A shortcut whose target surface is no
-// longer rail-selectable resolves to nothing at the reducer, i.e. a key that
-// looks bound and does nothing, so it leaves with the button rather than after.
-// D08: `toggle-context-panel` (Ctrl/Cmd+J) and `toggle-sidebar` (Ctrl/Cmd+B)
-// used to be two actions on two columns. There is one column left to toggle —
-// the dock — so they collapse into one action on ONE key. Ctrl/Cmd+B keeps it
-// (VSCode's own sidebar binding, and the one that survives the focus guard
-// below unchanged); Ctrl/Cmd+J leaves rather than becoming a silent alias for a
-// panel that no longer exists.
+// button. D08: Ctrl/Cmd+J left with the right panel it toggled; Ctrl/Cmd+B
+// (VSCode's own sidebar binding) toggles the sidebar — since layout 5a, the
+// whole sidebar, which collapses to nothing.
 export type ShellShortcutAction =
-  | { type: 'toggle-dock' }
-  | { type: 'select-surface'; surfaceId: ContextSurfaceId };
+  | { type: 'toggle-sidebar' }
+  | { type: 'focus-chat-list' }
+  | { type: 'toggle-panel-tab'; tab: WorkPanelTab };
 
 export interface ResolveShellShortcutInput {
   /** `KeyboardEvent.key` — currently unused by resolution (kept for callers/future use). */
@@ -47,27 +49,6 @@ export interface ResolveShellShortcutInput {
    * the keystroke the IME needed.
    */
   isComposing: boolean;
-  /**
-   * The rail/tab order currently rendered (the store's `railOrder`). Defaults
-   * to the registry order so existing callers and tests keep working.
-   */
-  railOrder?: readonly string[];
-}
-
-/**
- * First five rail-visible surfaces, in the order the UI actually renders.
- *
- * m-T32: this used to hardcode `DEFAULT_SURFACE_ORDER` while the tab strip and
- * rail render the PERSISTED `railOrder`. The two agreed only until T-32
- * reordered the registry — after which a profile carrying the pre-T-32 order
- * kept showing `context|git|editor|terminal` while Ctrl+1..4 fired the new
- * `git|files|context|terminal`, i.e. the digits "jumped" to the wrong tabs.
- * Taking the same order the caller renders makes that drift impossible.
- */
-function numberedSurfaceIds(order: readonly string[]): readonly ContextSurfaceId[] {
-  return railSurfaces(order)
-    .slice(0, NUMBERED_SURFACE_LIMIT)
-    .map((surface) => surface.id);
 }
 
 /**
@@ -105,14 +86,15 @@ export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellSho
   }
 
   if (input.code === 'KeyB') {
-    return { type: 'toggle-dock' };
+    return { type: 'toggle-sidebar' };
   }
 
   const digitMatch = /^Digit([1-5])$/.exec(input.code);
   if (digitMatch) {
-    const index = Number(digitMatch[1]) - 1;
-    const surfaceId = numberedSurfaceIds(input.railOrder ?? DEFAULT_SURFACE_ORDER)[index];
-    return surfaceId ? { type: 'select-surface', surfaceId } : null;
+    const digit = digitMatch[1] as '1' | '2' | '3' | '4' | '5';
+    return digit === '1'
+      ? { type: 'focus-chat-list' }
+      : { type: 'toggle-panel-tab', tab: DIGIT_PANEL_TABS[digit] };
   }
 
   return null;

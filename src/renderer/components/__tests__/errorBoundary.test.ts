@@ -120,9 +120,11 @@ describe('formatErrorReport', () => {
 
 describe('boundary placement (static)', () => {
   it('the editor column and the file previews sit behind local boundaries', () => {
-    const shell = readFileSync(path.resolve(here, '../workspace-shell/WorkspaceShell.tsx'), 'utf8');
-    expect(shell).toContain('<GuardedEditorColumn expanded={expanded}');
-    expect(shell).toMatch(/scope="editor-column"[\s\S]*?<EditorColumn \{\.\.\.props\} \/>/);
+    // Design system v2 / layout 5a: the editor is a tab of the work panel,
+    // and its boundary moved there with it.
+    const panel = readFileSync(path.resolve(here, '../workspace-shell/WorkPanel.tsx'), 'utf8');
+    expect(panel).toContain('<GuardedEditorColumn />');
+    expect(panel).toMatch(/scope="editor-column"[\s\S]*?<EditorColumn \/>/);
 
     const area = readFileSync(path.resolve(here, '../files/EditorArea.tsx'), 'utf8');
     expect(area).toMatch(/scope="file-preview"[\s\S]*?<ImagePreview[\s\S]*?<PdfPreview/);

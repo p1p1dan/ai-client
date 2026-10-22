@@ -17,9 +17,8 @@ function input(overrides: Partial<ResolveShellShortcutInput> = {}): ResolveShell
 }
 
 describe('resolveShellShortcut', () => {
-  // D08: Ctrl/Cmd+J is UNBOUND. It toggled the right context panel, which no
-  // longer exists; the surfaces moved into the dock, and Ctrl/Cmd+B toggles
-  // that. A key left pointing at a deleted column is a dead key, so it goes
+  // D08: Ctrl/Cmd+J is UNBOUND. It toggled the right context panel of the
+  // time; Ctrl/Cmd+B toggles the sidebar. A key left pointing at a deleted column is a dead key, so it goes
   // rather than becoming a silent alias.
   describe('Ctrl/Cmd+J — no longer bound (D08)', () => {
     it('resolves to nothing on either platform', () => {
@@ -34,15 +33,21 @@ describe('resolveShellShortcut', () => {
     });
   });
 
-  describe('Ctrl/Cmd+1..5 — select surface', () => {
-    // D08: the dock has five entries and `chat` leads them, so every digit
-    // shifted by one and Digit5 became bound.
-    const expected = ['chat', 'git', 'editor', 'context', 'run'];
+  describe('Ctrl/Cmd+1..5 — the rail digits, retargeted (design system v2 / layout 5a)', () => {
+    // 1 was the dock's chat list and is the sidebar's now; 2-5 were the rail's
+    // git / files / context / run and now toggle those work panel tabs.
+    const expected = [
+      { type: 'focus-chat-list' },
+      { type: 'toggle-panel-tab', tab: 'git' },
+      { type: 'toggle-panel-tab', tab: 'files' },
+      { type: 'toggle-panel-tab', tab: 'context' },
+      { type: 'toggle-panel-tab', tab: 'run' },
+    ];
 
-    it('maps Digit1..5 to chat/git/files/context/run in rail order on non-mac', () => {
+    it('maps Digit1..5 to the chat list and the git/files/context/run tabs on non-mac', () => {
       for (let digit = 1; digit <= expected.length; digit++) {
         const action = resolveShellShortcut(input({ code: `Digit${digit}`, ctrlKey: true }));
-        expect(action).toEqual({ type: 'select-surface', surfaceId: expected[digit - 1] });
+        expect(action).toEqual(expected[digit - 1]);
       }
     });
 
@@ -51,11 +56,11 @@ describe('resolveShellShortcut', () => {
         const action = resolveShellShortcut(
           input({ code: `Digit${digit}`, metaKey: true, isMac: true })
         );
-        expect(action).toEqual({ type: 'select-surface', surfaceId: expected[digit - 1] });
+        expect(action).toEqual(expected[digit - 1]);
       }
     });
 
-    it('does not resolve Digit6 (only the five dock entries are bound)', () => {
+    it('does not resolve Digit6 (only the five old rail slots are bound)', () => {
       expect(resolveShellShortcut(input({ code: 'Digit6', ctrlKey: true }))).toBeNull();
     });
 
@@ -80,16 +85,16 @@ describe('resolveShellShortcut', () => {
     });
   });
 
-  describe('Ctrl/Cmd+B — toggle the dock panel', () => {
+  describe('Ctrl/Cmd+B — toggle the sidebar (collapses entirely since layout 5a)', () => {
     it('resolves on non-mac with ctrlKey', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true }))).toEqual({
-        type: 'toggle-dock',
+        type: 'toggle-sidebar',
       });
     });
 
     it('resolves on mac with metaKey', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', metaKey: true, isMac: true }))).toEqual({
-        type: 'toggle-dock',
+        type: 'toggle-sidebar',
       });
     });
 
@@ -130,13 +135,13 @@ describe('resolveShellShortcut', () => {
 
     it('still resolves on non-mac with ctrlKey alone (no metaKey regression)', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true }))).toEqual({
-        type: 'toggle-dock',
+        type: 'toggle-sidebar',
       });
     });
 
     it('still resolves on mac with metaKey alone (no ctrlKey regression)', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', metaKey: true, isMac: true }))).toEqual({
-        type: 'toggle-dock',
+        type: 'toggle-sidebar',
       });
     });
   });
@@ -159,7 +164,7 @@ describe('resolveShellShortcut', () => {
     it('resolves normally once composition ends', () => {
       expect(
         resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true, isComposing: false }))
-      ).toEqual({ type: 'toggle-dock' });
+      ).toEqual({ type: 'toggle-sidebar' });
     });
   });
 

@@ -36,7 +36,7 @@ export function LockedRepoLabel({ label, path, reason }: LockedRepoLabelProps) {
           <span
             role="note"
             aria-label={`${t('Repository')}: ${label}`}
-            className="inline-flex h-6 min-w-0 cursor-default items-center gap-1.5 whitespace-nowrap px-2 text-ui text-muted-foreground"
+            className="inline-flex h-6 min-w-0 cursor-default items-center gap-1.5 whitespace-nowrap px-2 text-small text-muted-foreground"
           />
         }
       >
@@ -70,7 +70,7 @@ export function TemporaryChatLabel() {
           <span
             role="note"
             aria-label={t('Temporary chat')}
-            className="inline-flex h-6 min-w-0 cursor-default items-center gap-1.5 whitespace-nowrap px-2 text-ui text-muted-foreground"
+            className="inline-flex h-6 min-w-0 cursor-default items-center gap-1.5 whitespace-nowrap px-2 text-small text-muted-foreground"
           />
         }
       >

@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { resolveShellShortcut } from './shellShortcuts';
+import type { WorkPanelTab } from './workPanelModel';
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -23,11 +24,15 @@ function isMacPlatform(): boolean {
   return window.electronAPI.env.platform === 'darwin';
 }
 
-export function useShellShortcuts(): void {
-  const toggleDock = useShellLayoutStore((state) => state.toggleContextPanel);
-  const selectSurface = useShellLayoutStore((state) => state.selectSurface);
-  // Same order the dock rail renders — see `numberedSurfaceIds`.
-  const railOrder = useShellLayoutStore((state) => state.railOrder);
+/**
+ * `shownPanelTab` is the tab the work panel shows now (the shell derives it,
+ * `resolveWorkPanelView`), so a digit for that tab closes the panel instead of
+ * re-opening it.
+ */
+export function useShellShortcuts({ shownPanelTab }: { shownPanelTab: WorkPanelTab | null }): void {
+  const toggleSidebar = useShellLayoutStore((state) => state.toggleSidebar);
+  const focusChatList = useShellLayoutStore((state) => state.focusChatList);
+  const toggleWorkPanel = useShellLayoutStore((state) => state.toggleWorkPanel);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -42,18 +47,20 @@ export function useShellShortcuts(): void {
         targetIsEditable: isEditableTarget(event.target),
         // m15: IME composition guard (mirrors App/useAppKeyboardShortcuts.ts).
         isComposing: event.isComposing,
-        railOrder,
       });
       if (!action) {
         return;
       }
       event.preventDefault();
       switch (action.type) {
-        case 'toggle-dock':
-          toggleDock();
+        case 'toggle-sidebar':
+          toggleSidebar();
           break;
-        case 'select-surface':
-          selectSurface(action.surfaceId);
+        case 'focus-chat-list':
+          focusChatList();
+          break;
+        case 'toggle-panel-tab':
+          toggleWorkPanel(action.tab, shownPanelTab);
           break;
         default:
           break;
@@ -65,5 +72,5 @@ export function useShellShortcuts(): void {
     // own element-level handlers can consume the event.
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [toggleDock, selectSurface, railOrder]);
+  }, [toggleSidebar, focusChatList, toggleWorkPanel, shownPanelTab]);
 }

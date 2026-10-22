@@ -12,7 +12,7 @@ import {
   userMessageActionFailure,
   userMessageActions,
   userMessageCopyText,
-} from '../userMessageActions';
+} from '../userMessageActionsModel';
 
 /** Issue #26 item 1: the user message's hover actions. */
 

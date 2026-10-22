@@ -112,8 +112,42 @@ export function ComposerUsageDetails({ usage, tools }: { usage: PiUsagePayload; 
   );
 }
 
+/** Radius of the occupancy ring, in the 14px viewBox. */
+const RING_RADIUS = 5.5;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+
+/** A 14px ring filled to `percent`, drawn in the trigger's own ink. */
+function UsageRing({ percent }: { percent: number }) {
+  const filled = Math.min(100, Math.max(0, percent)) / 100;
+  return (
+    <svg aria-hidden="true" viewBox="0 0 14 14" className="size-3.5 shrink-0 -rotate-90">
+      <circle
+        cx="7"
+        cy="7"
+        r={RING_RADIUS}
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity={0.25}
+        strokeWidth={1.5}
+      />
+      <circle
+        cx="7"
+        cy="7"
+        r={RING_RADIUS}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeDasharray={`${RING_LENGTH * filled} ${RING_LENGTH}`}
+      />
+    </svg>
+  );
+}
+
 /**
- * The compact occupancy chip in the composer bar.
+ * The context-use indicator at the right end of the row under the composer
+ * box: a small ring plus the share in faint text (2026-10-22, the Claude Code
+ * desktop look).
  *
  * It is a BUTTON, not a hover target: the details below are a dense read
  * (six token rows, a meter, the turn's tools) that a reader has to be able to
@@ -142,10 +176,11 @@ export function ComposerUsageChip({ sessionId }: { sessionId: string }) {
       <PopoverTrigger
         aria-label={t('Context used')}
         title={t('Context used')}
-        // Design system v2 §7.9: a toolbar chip on the `text-ui` tier, the
+        // Quiet trigger on the `text-small` tier, faint at rest, with the
         // composer's ghost states.
-        className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-sm px-1.5 text-ui text-muted-foreground tabular-nums transition-colors duration-150 ease-out hover:bg-fill-ghost-hover hover:text-foreground focus-visible:bg-fill-ghost-hover focus-visible:text-foreground focus-ring data-popup-open:bg-fill-ghost-selected data-popup-open:text-foreground"
+        className="inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-sm px-1.5 text-small text-foreground-faint tabular-nums transition-colors duration-150 ease-out hover:bg-fill-ghost-hover hover:text-foreground focus-visible:bg-fill-ghost-hover focus-visible:text-foreground focus-ring data-popup-open:bg-fill-ghost-selected data-popup-open:text-foreground"
       >
+        <UsageRing percent={occupancy.percent} />
         {`${Math.round(occupancy.percent)}%`}
       </PopoverTrigger>
       <PopoverPopup

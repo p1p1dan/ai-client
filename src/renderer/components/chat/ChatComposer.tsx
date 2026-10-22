@@ -169,15 +169,20 @@ import {
 import {
   COMPOSER_BAR_LEADING,
   COMPOSER_BAR_TRAILING,
+  COMPOSER_CARD_LEADING,
+  COMPOSER_CARD_TRAILING,
   type ComposerBarSlot,
   composerActionGroupClass,
   composerBarClass,
+  composerBarTrailingClass,
   composerCardClass,
+  composerExtrasClass,
   composerHasProtrusion,
+  composerInputRowClass,
   composerPlaceholder,
   composerPopupSide,
-  composerRowsClass,
   composerTextareaClass,
+  composerTextareaSlotClass,
   type MiddleColumnMode,
   mentionPopupPlacementClass,
   resolveIdleStatusText,
@@ -4353,9 +4358,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // truth table: neither shows a resting line any more. The empty card used to
   // show one unconditionally (a permanently parked "Ready · cwd: /home/…"),
   // and that is gone — the row now appears only while something is actually in
-  // flight or flagged, in either mode. Keeping it out of the docked card's
-  // resting state is also what holds that card at its 42px contract
-  // (`composerFollowHeightBreakdown`), not the 40px this comment used to name.
+  // flight or flagged, in either mode. Keeping it out of the resting state is
+  // also what holds the box at its one-line contract
+  // (`composerFollowHeightBreakdown`).
   // T-31 §3.2 / F-B11: `sending` is no longer supplied. The function ignores it
   // either way (the field stays in its input type so that assertion can keep
   // proving so), but passing a value the decision does not use would read like
@@ -4366,11 +4371,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     hasStatusError,
     hasLargeHint: Boolean(largeHint),
   });
-  // Wrapper class differs by mode, and after F6 so does the SLOT: empty mode's
-  // status area takes the slack inside the bottom bar (needs flex-1 so it
-  // truncates instead of pushing the buttons off), while session mode renders
-  // it on its own line in the extras stack, where nothing competes for width
-  // (`sessionStatusLineWrapperClass`).
+  // Both modes render it on its own line in the extras stack above the input
+  // row, where nothing competes for width (`sessionStatusLineWrapperClass`).
   // T-30b2: `statusLine != null` is a second gate on top of
   // `shouldShowStatusLine`. Now that session mode admits `hasStatusError` into
   // the show condition (the two modes share one truth table again),
@@ -4543,9 +4545,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // when the field is EMPTY (only the placeholder shows, e.g. mid-send
       // or before the first keystroke) there is no content to measure, so
       // the browser falls back to the HTML default of 2 rows instead of 1.
-      // In the docked session card (composerTextareaClass('session')'s
-      // body-tier-derived min-height/leading — a deliberate one-line resting
-      // contract, 24px at the 16px default) that produced a taller-than-intended box; the placeholder
+      // In the composer box (composerTextareaClass()'s body-tier-derived
+      // leading — a deliberate one-line resting contract) that produced a
+      // taller-than-intended box; the placeholder
       // text is top-anchored inside it (textareas never vertically center
       // their own content), leaving visible empty space below and reading
       // as "text sits high". `rows={1}` pins the no-content baseline to one
@@ -4634,7 +4636,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         t
       )}
       className={cn(
-        composerTextareaClass(mode),
+        composerTextareaClass(),
         // The overlay is placed against this wrapper, and while it paints the
         // command the textarea's own glyphs step aside (it keeps the caret).
         'relative',
@@ -5222,71 +5224,40 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             </div>
           </div>
         )}
-        {/* U09-2: the bar renders by mapping COMPOSER_BAR_LEADING /
-            COMPOSER_BAR_TRAILING, so the shipped order IS the order those
-            arrays state. Writing the controls out inline here again would put
-            the order back where no test can read it. A slot whose node is null
-            (permission → U12, usage → T38) contributes nothing to the DOM. */}
-        {mode === 'session' ? (
-          <div className={composerRowsClass()}>
-            {/* F6 §6.4: the status line joined this stack. It is the fifth
-                draft-side fact here, not a sixth control below — in session
-                mode it can only ever say "reading attachments off disk" or
-                "these attachments are large", both of which happen BEFORE a
-                send and belong with the notice and the chips. The gate widened
-                with it: left at `hasComposerExtras` alone, the status line
-                would render into a container that never mounts. */}
-            {(hasComposerExtras || statusRowVisible) && (
-              <div className="flex flex-col gap-1">
-                {noticeBlock}
-                {queueNoticeBlock}
-                {attachmentChipsBlock}
-                {imageInputHintBlock}
-                {mentionChipsBlock}
-                {renderStatusLine(sessionStatusLineWrapperClass())}
-              </div>
-            )}
-            {textareaEl}
-            {/* F6 §6.2: row 2. The textarea has row 1 to itself, which is the
-                whole point of the split — one row can hold one elastic text
-                child, and this card had two fighting over it.
-                D48 S1 §3.2 still governs the order WITHIN this row: the agent
-                chip sits immediately left of the model/effort chip, NOT next
-                to ⊕, because which models exist follows from which agent runs
-                the chat, and the two ghost chips' height/inset are
-                cross-asserted against each other. */}
-            <div className={composerBarClass('session')}>
-              {renderBarSlots(COMPOSER_BAR_LEADING)}
-              <div className={composerActionGroupClass()}>
-                {renderBarSlots(COMPOSER_BAR_TRAILING)}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <>
-            {textareaEl}
+        {/* 2026-10-22: one thin box — the draft extras when there are any,
+            then the input row (⊕, textarea, action key). Every other control
+            sits in the plain row under the box. The slots map
+            COMPOSER_CARD_LEADING / COMPOSER_CARD_TRAILING, so the shipped
+            order IS the order those arrays state (U09-2). The status line
+            joins the extras on a widened gate: left at `hasComposerExtras`
+            alone it would render into a container that never mounts. */}
+        {(hasComposerExtras || statusRowVisible) && (
+          <div className={composerExtrasClass()}>
             {noticeBlock}
             {queueNoticeBlock}
             {attachmentChipsBlock}
             {imageInputHintBlock}
             {mentionChipsBlock}
-            {/* U09-2 REPLACES T-30b2 §5.2's "⊕ → model → status → actions".
-                  That order grouped "the two controls that start a message" at
-                  the left; the bar now reads ⊕ → permission → status → usage →
-                  model/effort → send, which groups by WHAT A CONTROL ANSWERS:
-                  what this message carries and what it may do, on the left;
-                  how it will be answered and the send key itself, on the right.
-                  The status line keeps the elastic middle either way. */}
-            <div className={composerBarClass('empty')}>
-              {renderBarSlots(COMPOSER_BAR_LEADING)}
-              {renderStatusLine('flex min-w-0 flex-1 items-center gap-1.5')}
-              <div className={composerActionGroupClass()}>
-                {renderBarSlots(COMPOSER_BAR_TRAILING)}
-              </div>
-            </div>
-          </>
+            {renderStatusLine(sessionStatusLineWrapperClass())}
+          </div>
         )}
+        <div className={composerInputRowClass()}>
+          {renderBarSlots(COMPOSER_CARD_LEADING)}
+          <div className={composerTextareaSlotClass()}>{textareaEl}</div>
+          <div className={composerActionGroupClass()}>{renderBarSlots(COMPOSER_CARD_TRAILING)}</div>
+        </div>
       </div>
+      {/* The row under the box. In a conversation and on the home page it is
+          the target row, which carries the composer's own controls at its two
+          ends (decision 174: drawn in every conversation, so the box sits at
+          the same height everywhere). A blank conversation's start screen
+          keeps its target tab on top of the box and gets a bare row here. */}
+      {mode === 'empty' && (
+        <div className={composerBarClass()}>
+          {renderBarSlots(COMPOSER_BAR_LEADING)}
+          <div className={composerBarTrailingClass()}>{renderBarSlots(COMPOSER_BAR_TRAILING)}</div>
+        </div>
+      )}
       {mode === 'session' && (
         <ComposerTargetBar
           mode={mode}
@@ -5295,6 +5266,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           sending={onHome ? homeSwitching : sendingHere}
           disabled={disabled}
           onAddRepository={onAddRepository}
+          leading={renderBarSlots(COMPOSER_BAR_LEADING)}
+          trailing={renderBarSlots(COMPOSER_BAR_TRAILING)}
         />
       )}
     </ReadingColumn>

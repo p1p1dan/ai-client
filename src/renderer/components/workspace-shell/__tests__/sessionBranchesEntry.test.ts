@@ -79,11 +79,22 @@ async function renderBar() {
   return { container, root };
 }
 
-function branchesButton(container: HTMLElement): HTMLButtonElement | undefined {
-  return [...container.querySelectorAll('button')].find((button) =>
-    button.textContent?.includes(BRANCHES)
+/**
+ * Design system v2 / layout 5a: the entry moved from a bar button into the
+ * conversation menu (the title's chevron). Opens that menu, then finds the
+ * item; menu popups portal to `document.body`.
+ */
+async function branchesItem(container: HTMLElement): Promise<HTMLElement | undefined> {
+  const trigger = container.querySelector<HTMLElement>(`[aria-label="${zh('Conversation menu')}"]`);
+  if (!trigger) throw new Error('no conversation menu on the bar');
+  await act(async () => trigger.click());
+  return [...document.querySelectorAll<HTMLElement>('[data-slot="menu-item"]')].find((item) =>
+    item.textContent?.includes(BRANCHES)
   );
 }
+
+const isDisabled = (item: HTMLElement | undefined) =>
+  item?.hasAttribute('data-disabled') || item?.getAttribute('aria-disabled') === 'true';
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -99,27 +110,27 @@ it('is absent until the chat has a durable session on disk', async () => {
   const { container, root } = await renderBar();
   // No `runtimeIdentity` means no JSONL to read a tree out of — the control is
   // dropped, not disabled, so there is no entry point that leads nowhere.
-  expect(branchesButton(container)).toBeUndefined();
+  expect(await branchesItem(container)).toBeUndefined();
   await act(async () => root.unmount());
 });
 
-it('appears on the bar, in Chinese, once the session is durable', async () => {
+it('appears in the conversation menu, in Chinese, once the session is durable', async () => {
   seed({ runtimeIdentity: '/sessions/s1.jsonl' });
   const { container, root } = await renderBar();
-  const button = branchesButton(container);
-  expect(button).toBeDefined();
+  const item = await branchesItem(container);
+  expect(item).toBeDefined();
   // The literal this replaced. A catalog key that never reaches `t()` renders
   // its own English spelling, which is what shipped for as long as the button
   // lived in the timeline.
-  expect(container.textContent).not.toContain('Branches');
-  expect(container.textContent).toContain('会话分支');
+  expect(document.body.textContent).not.toContain('Branches');
+  expect(item?.textContent).toContain('会话分支');
   await act(async () => root.unmount());
 });
 
 it('is disabled while the session is doing anything but idling', async () => {
   seed({ runtimeIdentity: '/sessions/s1.jsonl', status: 'idle' });
   const idle = await renderBar();
-  expect(branchesButton(idle.container)?.disabled).toBe(false);
+  expect(isDisabled(await branchesItem(idle.container))).toBe(false);
   await act(async () => idle.root.unmount());
 
   // `running` is the obvious one. `waiting_permission` is the one a narrower
@@ -129,7 +140,7 @@ it('is disabled while the session is doing anything but idling', async () => {
   for (const status of ['running', 'starting', 'waiting_permission'] as const) {
     seed({ runtimeIdentity: '/sessions/s1.jsonl', status });
     const busy = await renderBar();
-    expect(branchesButton(busy.container)?.disabled, status).toBe(true);
+    expect(isDisabled(await branchesItem(busy.container)), status).toBe(true);
     await act(async () => busy.root.unmount());
   }
 });
@@ -164,8 +175,7 @@ it('the timeline keeps no copy of the button, the dialog, or their gates', () =>
   );
   expect(bar).toContain('SessionTreeDialog');
   expect(bar).toContain("t('Session branches')");
-  // Same size tier as the bar's other controls (review / +): h-6
-  // shell, size-3.5 icon. A control that sets its own height re-opens the
-  // 「臃肿」 D07 spent a round removing.
-  expect(bar).toContain('<GitBranch className="size-3.5" />');
+  // Layout 5a: a menu item, sized by the menu (no size of its own).
+  expect(bar).toContain('data-session-branches=""');
+  expect(bar).toContain('<GitBranch />');
 });
