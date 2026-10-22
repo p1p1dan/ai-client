@@ -110,6 +110,8 @@ Role: plan（立项方案，2026-10-21 起草，选择题已全部裁决）。�
 | L5 | 会话侧栏 | **要**：对话右边一列卡片——环境、改动、待办、运行中、上下文（出处：Claude Code 桌面版 session details panel）。输入框工具栏上的用量芯片与运行位置、输入框上方的待办条、原「上下文」「运行」面板都收进这里。开关在标题栏右边按钮组的**最左侧，用竖线和改动 / 文件 / 终端按钮隔开**；打开右侧工作面板或停靠侧边对话时让位 |
 | L6 | 旁问 | **要**：Ctrl+; 或 `/btw` 打开，能读主对话到当前为止的内容，问答不写回主对话、关掉即丢弃。**默认右下角小窗，可以停靠到右侧** |
 | L7 | 侧边对话（split view） | **要**：旁问窗口的标题是下拉，可以改为打开一个现有对话；侧栏对话行右键「在侧边打开」。打开现有对话时默认停靠在右侧，两个对话并排、各有输入框，侧边那个可收回小窗或关掉 |
+| L8 | 右侧的展示形式（用户 2026-10-22 看过 5a 后改） | **独立的卡片窗**，不是带标签的一整页：改动、文件、终端、浏览器、后台任务等各是一张圆角卡片，各自只有一行标题（图标、上下文标题、自己的操作、放大、关闭），多张时在对话右侧排成网格；去掉 5a 的外层标签条和内容里重复的标题行。参照截图 `/home/pi/Pictures/17926489167536.png` 与后台任务截图 |
+
 
 **子任务与分工**（先做 5a，做完后 5b～5f 并行）
 
@@ -118,7 +120,7 @@ Role: plan（立项方案，2026-10-21 起草，选择题已全部裁决）。�
 | 5a 外壳骨架（一人先做） | 去掉导轨，`LeftDock` 只剩侧栏并能整个收起（收起后标题栏左边出现展开按钮）；标题栏只放对话名、仓库、分支，右边是改动 / 文件 / 终端 / 更多按钮，无边线；右侧一整栏换成「右侧工作面板」容器：标签（改动、文件、git、终端、运行、上下文、编辑器），可关、可拖宽；原来导轨上的入口与快捷键改指向面板标签；旧的布局持久化（导轨顺序、各面板宽度）迁移 | `WorkspaceShell.tsx`、`LeftDock.tsx`、`SessionBar.tsx`、`shellLayoutModel.ts`、`surfaceRegistry.ts`、`rightColumnModel.ts`、`centerLayoutModel.ts`、`center/`、`useShellShortcuts.ts`、`shellShortcuts.ts` |
 | 5b 侧栏 | 顶部品牌与收起、「新对话」按钮、四个入口；对话行 28px、行尾分支名、运行中呼吸点；分组切换（仓库 / 状态 / 时间，记住选择）；底部账户与设置 | `LeftNav.tsx`、`sidebarTree.ts`、`sidebarNavModel.ts`、`UserFooterPill.tsx`、`deriveChatWorkspaceTree.ts` |
 | 5c 中间阅读栏 | 对话与输入框居中同宽；一轮的文件改动聚合成一张卡片，点开在右侧面板「改动」标签定位到对应文件 | `chat/` 下时间线与输入框文件（阶段 3 A、B 的名下文件） |
-| 5d 右侧面板内容 | 改动（原审阅面板）、文件、git、终端、运行、上下文各自作为面板标签的内容适配宽度与标题；打开文件时在面板里的编辑器标签打开 | `surfaces/`、`SessionReviewPanel.tsx`、`surfaceViews.tsx`、`terminal/`、`files/`、`source-control/` |
+| 5d 卡片窗（按 L8 重做） | 改动（原审阅面板）、文件、git、终端、运行、上下文各自作为面板标签的内容适配宽度与标题；打开文件时在面板里的编辑器标签打开 | `surfaces/`、`SessionReviewPanel.tsx`、`surfaceViews.tsx`、`terminal/`、`files/`、`source-control/` |
 | 5e 会话侧栏（5a 之后） | 五张卡片与开关；把用量芯片、运行位置、待办条、上下文与运行面板的内容迁进卡片；窄窗口时自动隐藏 | 新建 `workspace-shell/sessionRail/`；从 `chat/ComposerUsageChip.tsx`、`chat/RunLocationIndicator.tsx`、`chat/TodoCard.tsx`、`surfaces/ContextSurfaceView.tsx`、`surfaces/RunSurfaceView.tsx` 取内容 |
 | 5f 旁问与侧边对话（5a 之后） | 小窗 / 停靠两种形态；旁问：SDK 引擎用 CLI 自带的 `/btw`，DSH 引擎要另开临时会话带上主对话内容（开工时先确认做法）；侧边对话：在侧边容器里再挂一个对话视图（同一宿主本来就支持多会话） | 新建 `workspace-shell/sideChat/`；对话视图复用 `chat/ChatWorkspace` |
 
