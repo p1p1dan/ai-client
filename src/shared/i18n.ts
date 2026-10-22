@@ -4957,3 +4957,23 @@ Object.assign(zhTranslations, {
   '{{count}} more files': '还有 {{count}} 个文件',
   'By content, counted in characters of the loaded messages': '按内容分，以已载入消息的字符计',
 });
+
+/** Layout 5f (ui-cohesion §6, ruling L6): the side chat (`/btw`, Ctrl+;). */
+Object.assign(zhTranslations, {
+  'Side chat': '旁问',
+  'Close side chat': '关闭旁问',
+  'Dock to the right': '停靠到右侧',
+  'Float as a window': '收回小窗',
+  'It can read this conversation up to now. Nothing here is added to it, and closing discards it.':
+    '能看到主对话到现在为止的内容，这里的问答不会写回主对话，关掉即丢弃。',
+  'Ask a side question without interrupting…': '问一句，不打断主对话…',
+  'Ask a question': '提问',
+  'Answering…': '正在回答…',
+  'No answer this time. Try again, or ask in the conversation.':
+    '这次没有回答。可以再问一次，或者在主对话里问。',
+  'The side question could not be answered. Try again.': '旁问没有得到回答，请再试一次。',
+  'The engine of this conversation cannot answer side questions.': '这个对话的引擎不支持旁问。',
+  'Ask again': '再问一次',
+  'Ask a quick side question without interrupting the conversation': '问一句旁问，不打断主对话',
+  'The session rail makes room while the side chat is docked': '旁问停靠在右侧时，会话侧栏让位',
+});

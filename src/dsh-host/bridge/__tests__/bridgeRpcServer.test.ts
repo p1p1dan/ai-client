@@ -81,6 +81,7 @@ function runtime(overrides: Partial<BridgeSessionRuntime> = {}): BridgeSessionRu
     panels: notCalled('panels') as BridgeSessionRuntime['panels'],
     killJob: notCalled('killJob') as BridgeSessionRuntime['killJob'],
     readJob: notCalled('readJob') as BridgeSessionRuntime['readJob'],
+    sideQuestion: notCalled('sideQuestion') as BridgeSessionRuntime['sideQuestion'],
     interruptSubagent: notCalled('interruptSubagent') as BridgeSessionRuntime['interruptSubagent'],
     backgroundTool: notCalled('backgroundTool') as BridgeSessionRuntime['backgroundTool'],
     subagentHistory: notCalled('subagentHistory') as BridgeSessionRuntime['subagentHistory'],

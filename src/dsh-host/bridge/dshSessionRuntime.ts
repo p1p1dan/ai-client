@@ -203,6 +203,7 @@ import {
   WORKER_COMPACT_SETTLE_MS,
   WORKER_RETRY_UNAVAILABLE,
   WORKER_REWIND_JOBS_RUNNING,
+  WORKER_SIDE_QUESTION_UNAVAILABLE,
   type WorkerAcceptForkPayload,
   type WorkerAcceptForkResult,
   type WorkerBootstrapResult,
@@ -234,6 +235,8 @@ import {
   type WorkerRewindResult,
   type WorkerSendPayload,
   type WorkerSendResult,
+  type WorkerSideQuestionPayload,
+  type WorkerSideQuestionResult,
   type WorkerStopPayload,
   type WorkerStopResult,
   type WorkerSubagentHistoryPayload,
@@ -273,6 +276,7 @@ import {
   type CompactInstructionsLease,
   installSummaryHook,
 } from './compactInstructions.ts';
+import type { CompletionLlm } from './completions.ts';
 import { DshDelegatedUsage } from './delegatedUsage.ts';
 import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
 import { copyGrantSidecar, readGrantSidecar, writeGrantSidecar } from './grantStore.ts';
@@ -332,6 +336,7 @@ import {
   type PlanReviewSettlement,
 } from './questions.ts';
 import { type ApplySandboxMode, dshSandboxModeFor } from './sandboxMode.ts';
+import { askDshSideQuestion } from './sideQuestion.ts';
 import {
   DSH_SESSION_MISSING,
   grantsSidecarFor,
@@ -717,6 +722,12 @@ export interface DshBridgeDeps {
     rules(): Promise<AutoModeRules | undefined>;
     llm(): ReviewLlm | undefined;
   };
+  /**
+   * Layout 5f (ruling L6): DSH's model-call service for side questions
+   * (`worker.sideQuestion`). Absent: every side question is answered
+   * `WORKER_SIDE_QUESTION_UNAVAILABLE`.
+   */
+  sideQuestionLlm?: () => CompletionLlm | undefined;
 }
 
 /**
@@ -2255,6 +2266,39 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.assertLogicalSession(input.logicalSessionId);
     this.requireOpen();
     return this.jobs.kill(input.jobId);
+  }
+
+  /**
+   * Layout 5f (ruling L6): `worker.sideQuestion` — one tool-free call on the
+   * session's model that reads the conversation so far and writes nothing.
+   * Allowed while a turn runs; answered off the request chain.
+   */
+  async sideQuestion(
+    input: WorkerSideQuestionPayload,
+    signal: AbortSignal
+  ): Promise<WorkerSideQuestionResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.requireOpen();
+    const llm = this.deps.sideQuestionLlm?.();
+    if (!llm) {
+      throw new BridgeSessionError(
+        WORKER_SIDE_QUESTION_UNAVAILABLE,
+        'This host has no model service for side questions'
+      );
+    }
+    // Decisions 033, 040: the session's model and effort, or a refusal.
+    const routed = this.router.session(this.modelId, this.options.effort);
+    await this.historyCache.ready();
+    return askDshSideQuestion({
+      llm,
+      routed,
+      messages: this.historyCache.messages(),
+      question: input.question,
+      ...(input.history ? { history: input.history } : {}),
+      signal,
+      // Decision 193 §10: a request this chat is billed for, like a review.
+      onUsage: (usage) => addAuxiliaryUsage(this.reviewUsage, usage),
+    });
   }
 
   /** `worker.job.read`: one job's output, read without moving the model's cursor. */

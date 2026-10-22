@@ -1201,6 +1201,20 @@ const electronAPI = {
       maxBytes?: number;
     }): Promise<import('@shared/types/workerRpc').WorkerJobReadResult | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_READ_SESSION_JOB, payload),
+    /** Layout 5f — one side question about the conversation; nothing is written to it. */
+    askSideQuestion: (payload: {
+      sessionId: string;
+      questionId: string;
+      question: string;
+      history?: Array<{ question: string; answer: string }>;
+    }): Promise<import('@shared/types/workerRpc').WorkerSideQuestionResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_ASK_SIDE_QUESTION, payload),
+    /** Layout 5f — cancel a side question still out. */
+    cancelSideQuestion: (payload: {
+      sessionId: string;
+      questionId: string;
+    }): Promise<import('@shared/types/workerRpc').WorkerSideQuestionCancelResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_CANCEL_SIDE_QUESTION, payload),
     /** dsh-rebase P1-7b — interrupt one continuable subagent's current run. */
     interruptSubagent: (payload: {
       sessionId: string;

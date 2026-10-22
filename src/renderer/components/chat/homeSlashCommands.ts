@@ -29,7 +29,12 @@ import { resolveSlashAction, type SlashCatalogItem } from './slashCommands';
  * This window's commands that act on the conversation on screen. Decision 194: `/clear`
  * starts over from one; typed on the home page it is `/new` (the menu leaves it out).
  */
-export const CONVERSATION_BUILTINS: ReadonlySet<string> = new Set(['archive', 'compact', 'clear']);
+export const CONVERSATION_BUILTINS: ReadonlySet<string> = new Set([
+  'archive',
+  'compact',
+  'clear',
+  'btw',
+]);
 
 /**
  * Decision 194 Q2 (user, 2026-10-18): the Claude Agent SDK CLI's commands that would
@@ -80,7 +85,9 @@ export function homeSlashRefusal(
   engine: ChatEngine = 'dsh'
 ): HomeSlashRefusal | null {
   const action = resolveSlashAction(name, args, source);
-  if (action.type === 'archive' || action.type === 'compact') return 'conversation';
+  if (action.type === 'archive' || action.type === 'compact' || action.type === 'btw') {
+    return 'conversation';
+  }
   if (
     engine === 'dsh' &&
     name === 'goal' &&

@@ -240,8 +240,10 @@ describe('the slash menu before a session runs', () => {
       workspacePath: '/repo/alpha',
       engine: 'dsh',
     });
+    // Layout 5f: `/btw` (the side chat) asks about the open conversation.
     expect(menuRows()).toEqual([
       '/archive',
+      '/btw',
       '/clear',
       '/compact',
       '/effort',

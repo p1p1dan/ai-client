@@ -69,6 +69,11 @@ interface SessionBarProps {
    */
   sessionRailToggle?: ReactNode;
   /**
+   * Layout 5f (ruling L6): the side chat's toggle, right after the rail's
+   * divider and before the terminal.
+   */
+  sideChatToggle?: ReactNode;
+  /**
    * Layout 5e: the rail's ⋮ entry, and whether the rail is on screen — while it
    * is, its environment card carries the repository / branch / folder, so the
    * menu drops them.
@@ -141,7 +146,7 @@ function BarIconButton({
  *   left  — the sidebar's expand button (only while it is collapsed), the
  *           conversation's title with a chevron for its menu (branches, new
  *           chat), the running glyph and the 「临时」 tag;
- *   right — [5e session rail toggle | divider] terminal · changes · files ·
+ *   right — [5e session rail toggle | divider] [5f side chat] terminal · changes · files ·
  *           (background tasks while something runs or its pane is open) · ⋮.
  *
  * Layout 5d: every button toggles a pane card; pressed = that pane is open.
@@ -165,6 +170,7 @@ export function SessionBar({
   terminalState,
   onToggleTerminal,
   sessionRailToggle,
+  sideChatToggle,
   sessionRail,
 }: SessionBarProps) {
   const { t } = useI18n();
@@ -282,6 +288,7 @@ export function SessionBar({
           <span aria-hidden className="mx-1 h-4.5 w-px shrink-0 bg-border-soft" />
         </>
       )}
+      {sideChatToggle}
       {activeSessionId && terminalState && onToggleTerminal && (
         <TerminalButton state={terminalState} onToggle={onToggleTerminal} />
       )}

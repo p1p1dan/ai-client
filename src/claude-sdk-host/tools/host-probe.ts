@@ -5,7 +5,7 @@
  *
  *   node tools/host-probe.ts <gatewayUrl> <workspace> [scenario ...]
  *
- * Scenarios: text tools ask stop plan steer agent search enc compact history reopen errors repoenv.
+ * Scenarios: text tools ask stop plan steer agent search enc compact history reopen errors repoenv btw.
  * Default: text tools ask stop plan steer. Resume: run again with PROBE_CONFIG_DIR and
  * PROBE_SESSION_FILE pointing at the first run's config dir and stub.
  * Every scenario ends with deterministic `[check]` lines (terminal event, tools that ran,
@@ -1302,6 +1302,60 @@ async function main(): Promise<void> {
         check('text', 'ends in session.completed', end.type === 'session.completed');
         check('text', 'streams assistant text', assistantText().length > 0);
         check('text', 'streams thinking', countOf('thinking.delta') > 0);
+        break;
+      }
+      case 'btw': {
+        // Layout 5f (ui-cohesion ruling L6): the CLI's own side question. It reads the
+        // conversation, answers, and leaves the transcript and the event stream untouched.
+        // First with no CLI running yet (a reopened chat before its first send).
+        const cold = await request<{ text: string | null }>('worker.sideQuestion', {
+          logicalSessionId,
+          questionId: 'probe-btw-0',
+          question: 'Anything yet?',
+        });
+        check(
+          'btw',
+          'answers before the first send (the CLI starts for it)',
+          cold.text !== undefined
+        );
+        await send('CC-TEXT hello before a side question');
+        await waitFor(terminal, 'btw main turn end');
+        const historyOf = () =>
+          request<{ page: { totalCount: number } }>('worker.history', {
+            logicalSessionId,
+            offset: 0,
+            limit: 50,
+          });
+        const before = (await historyOf()).page.totalCount;
+        const eventsBefore = events.length;
+        const t = Date.now();
+        const side = await request<{ text: string | null }>('worker.sideQuestion', {
+          logicalSessionId,
+          questionId: 'probe-btw-1',
+          question: 'What did I just say?',
+        });
+        console.log(`  side answer in ${Date.now() - t} ms: ${JSON.stringify(side).slice(0, 200)}`);
+        const followUp = await request<{ text: string | null }>('worker.sideQuestion', {
+          logicalSessionId,
+          questionId: 'probe-btw-2',
+          question: 'And before that?',
+          history: [{ question: 'What did I just say?', answer: side.text ?? '' }],
+        });
+        const after = (await historyOf()).page.totalCount;
+        check(
+          'btw',
+          'answers the side question',
+          typeof side.text === 'string' && side.text.length > 0
+        );
+        check('btw', 'answers a follow-up', typeof followUp.text === 'string');
+        check('btw', 'writes nothing to the transcript', after === before);
+        check(
+          'btw',
+          'emits no turn into the conversation',
+          !events
+            .slice(eventsBefore)
+            .some((e) => e.type === 'message.started' || e.type === 'session.status')
+        );
         break;
       }
       case 'tools': {

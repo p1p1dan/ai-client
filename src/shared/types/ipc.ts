@@ -445,6 +445,10 @@ export const IPC_CHANNELS = {
   CHAT_KILL_SESSION_JOB: 'chat:killSessionJob',
   /** dsh-rebase P1-7b — one job's output, read without moving the model's cursor. */
   CHAT_READ_SESSION_JOB: 'chat:readSessionJob',
+  /** Layout 5f — one side question about the conversation (`/btw`, Ctrl+;); nothing is written. */
+  CHAT_ASK_SIDE_QUESTION: 'chat:askSideQuestion',
+  /** Layout 5f — cancel a side question still out (the side chat closed). */
+  CHAT_CANCEL_SIDE_QUESTION: 'chat:cancelSideQuestion',
   /** dsh-rebase P1-7b — interrupt one continuable subagent's current run. */
   CHAT_INTERRUPT_SUBAGENT: 'chat:interruptSubagent',
   /** Decision 203 — move one running foreground call to the background (Claude engine). */

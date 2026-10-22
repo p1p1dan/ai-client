@@ -37,7 +37,7 @@ export const SESSION_RAIL_CARD_DEFAULT_OPEN: Readonly<Record<SessionRailCardId, 
   context: false,
 };
 
-export type SessionRailHiddenReason = 'user' | 'no-session' | 'panes' | 'narrow';
+export type SessionRailHiddenReason = 'user' | 'no-session' | 'panes' | 'side-chat' | 'narrow';
 
 export interface SessionRailVisibility {
   visible: boolean;
@@ -52,6 +52,7 @@ export interface SessionRailVisibility {
  *  - any pane card is open — the rail yields to the panes (ruling L5). The
  *    panes already take the room right of the chat, and a rail between them
  *    would squeeze the chat from both sides; one rule, no width bands;
+ *  - the side chat is docked (layout 5f) — it takes the rail's place;
  *  - the chat column would end up narrower than `SESSION_RAIL_MIN_CHAT_WIDTH`.
  *
  * `chatWidth` is the allocator's chat column width (`resolveShellAllocation`),
@@ -62,10 +63,13 @@ export function resolveSessionRailVisibility(input: {
   sessionOpen: boolean;
   panesOpen: number;
   chatWidth: number;
+  /** Layout 5f: the side chat is on screen as a docked column. */
+  sideChatDocked?: boolean;
 }): SessionRailVisibility {
   if (!input.sessionOpen) return { visible: false, hidden: 'no-session' };
   if (!input.userShown) return { visible: false, hidden: 'user' };
   if (input.panesOpen > 0) return { visible: false, hidden: 'panes' };
+  if (input.sideChatDocked) return { visible: false, hidden: 'side-chat' };
   if (input.chatWidth - SESSION_RAIL_WIDTH < SESSION_RAIL_MIN_CHAT_WIDTH) {
     return { visible: false, hidden: 'narrow' };
   }

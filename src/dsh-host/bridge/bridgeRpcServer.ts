@@ -36,6 +36,8 @@ import {
   isWorkerSetPermissionGearPayload,
   isWorkerSetPermissionsPayload,
   isWorkerSetPermissionTierPayload,
+  isWorkerSideQuestionCancelPayload,
+  isWorkerSideQuestionPayload,
   isWorkerStopPayload,
   isWorkerSubagentHistoryPayload,
   isWorkerSubagentInterruptPayload,
@@ -85,6 +87,9 @@ import {
   type WorkerSendPayload,
   type WorkerSendResult,
   type WorkerSetPermissionTierResult,
+  type WorkerSideQuestionCancelResult,
+  type WorkerSideQuestionPayload,
+  type WorkerSideQuestionResult,
   type WorkerStopPayload,
   type WorkerStopResult,
   type WorkerSubagentHistoryPayload,
@@ -136,6 +141,15 @@ export interface BridgeSessionRuntime {
   killJob(input: WorkerJobKillPayload): Promise<WorkerJobKillResult>;
   /** dsh-rebase P1-7b — one job's output, read without moving the model's cursor. */
   readJob(input: WorkerJobReadPayload): Promise<WorkerJobReadResult>;
+  /**
+   * Layout 5f (ruling L6) — one side question about the conversation so far:
+   * no turn, no event, nothing written. Answered off the request chain;
+   * `signal` aborts it (`worker.sideQuestion.cancel`, dispose).
+   */
+  sideQuestion(
+    input: WorkerSideQuestionPayload,
+    signal: AbortSignal
+  ): Promise<WorkerSideQuestionResult>;
   /** dsh-rebase P1-7b — interrupt one continuable subagent's current run. */
   interruptSubagent(input: WorkerSubagentInterruptPayload): Promise<WorkerSubagentInterruptResult>;
   /** Decision 203: a running foreground call to the background (Claude engine only). */
@@ -322,6 +336,8 @@ export class BridgeRpcServer {
    * yet, by request id; `true` once a cancel reached them there.
    */
   private readonly queuedCompacts = new Map<string, boolean>();
+  /** Layout 5f: side questions in flight, by the renderer's question id. */
+  private readonly sideQuestions = new Map<string, AbortController>();
 
   constructor(options: BridgeRpcServerOptions) {
     if (!Number.isSafeInteger(options.generation) || options.generation <= 0) {
@@ -351,6 +367,15 @@ export class BridgeRpcServer {
     // Decision 180: past the chain, which the compaction it cancels holds.
     if (request.type === 'worker.compact.cancel') {
       this.handleCompactCancel(request);
+      return;
+    }
+    // Layout 5f: a side question is asked while a turn may hold the chain.
+    if (request.type === 'worker.sideQuestion') {
+      this.handleSideQuestion(request);
+      return;
+    }
+    if (request.type === 'worker.sideQuestion.cancel') {
+      this.handleSideQuestionCancel(request);
       return;
     }
     if (request.type === 'worker.compact') this.queuedCompacts.set(request.requestId, false);
@@ -645,6 +670,84 @@ export class BridgeRpcServer {
     } catch (error) {
       this.respondError(request, errorPayload(error));
     }
+  }
+
+  /** Answers a request of another generation; true when it did. */
+  private refuseStaleGeneration(request: WorkerRpcRequest): boolean {
+    if (request.generation === this.options.generation) return false;
+    this.respondError(request, {
+      code: 'WORKER_STALE_GENERATION',
+      message: `Expected generation ${this.options.generation}, got ${request.generation}`,
+      retryable: false,
+    });
+    return true;
+  }
+
+  /** The checks the chain's `dispatch` makes, for a request answered off it. */
+  private refuseOffChain(request: WorkerRpcRequest): boolean {
+    if (this.refuseStaleGeneration(request)) return true;
+    if (this.disposed) {
+      this.respondError(request, {
+        code: 'WORKER_DISPOSED',
+        message: 'Pi utility worker is disposed',
+        retryable: false,
+      });
+      return true;
+    }
+    return false;
+  }
+
+  private handleSideQuestion(request: WorkerRpcRequest): void {
+    if (this.refuseOffChain(request)) return;
+    const payload = request.payload;
+    if (!isWorkerSideQuestionPayload(payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.sideQuestion requires logicalSessionId, questionId and a question',
+        retryable: false,
+      });
+      return;
+    }
+    const runtime = this.runtime;
+    if (!runtime) {
+      this.respondError(request, {
+        code: 'WORKER_NOT_BOOTSTRAPPED',
+        message: 'Worker is not bootstrapped',
+        retryable: false,
+      });
+      return;
+    }
+    this.sideQuestions.get(payload.questionId)?.abort();
+    const controller = new AbortController();
+    this.sideQuestions.set(payload.questionId, controller);
+    void Promise.resolve()
+      .then(() => runtime.sideQuestion(payload, controller.signal))
+      .then(
+        (result) => this.respondSuccess(request, result),
+        (error) => this.respondError(request, errorPayload(error))
+      )
+      .finally(() => {
+        if (this.sideQuestions.get(payload.questionId) === controller) {
+          this.sideQuestions.delete(payload.questionId);
+        }
+      });
+  }
+
+  private handleSideQuestionCancel(request: WorkerRpcRequest): void {
+    if (this.refuseStaleGeneration(request)) return;
+    if (!isWorkerSideQuestionCancelPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.sideQuestion.cancel requires logicalSessionId and questionId',
+        retryable: false,
+      });
+      return;
+    }
+    const controller = this.sideQuestions.get(request.payload.questionId);
+    controller?.abort();
+    this.respondSuccess(request, {
+      cancelled: controller !== undefined,
+    } satisfies WorkerSideQuestionCancelResult);
   }
 
   private async handleCommand(request: WorkerRpcRequest): Promise<void> {
@@ -1064,6 +1167,8 @@ export class BridgeRpcServer {
   private async handleDispose(request: WorkerRpcRequest): Promise<void> {
     let failure: unknown;
     if (!this.disposed) {
+      for (const controller of this.sideQuestions.values()) controller.abort();
+      this.sideQuestions.clear();
       try {
         await this.runtime?.dispose();
       } catch (error) {

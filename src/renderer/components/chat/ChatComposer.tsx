@@ -72,6 +72,7 @@ import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { useSettingsStore } from '@/stores/settings';
 import { effectiveClaudeSdkEngineEnabled } from '@/stores/settings/developerMode';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
+import { useSideChatStore } from '@/stores/sideChat';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
@@ -1495,6 +1496,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       case 'settings':
         useSettingsIntentStore.getState().requestSettings();
         break;
+      case 'btw': {
+        // Layout 5f (ruling L6): asked in the side chat, never sent into this
+        // conversation; a bare `/btw` opens it empty. While its last question
+        // still waits, the line stays in the box.
+        if (!activeSessionId) return false;
+        if (!useSideChatStore.getState().ask(activeSessionId, action.question)) return true;
+        break;
+      }
       case 'archive': {
         if (!activeSessionId) return false;
         // `false` is a refusal the helper already chose not to force (e.g. the

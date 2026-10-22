@@ -5,7 +5,9 @@
  * (`App/useAppKeyboardShortcuts.ts`) are untouched and keep working there.
  */
 import { useEffect, useRef } from 'react';
+import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useShellLayoutStore } from '@/stores/shellLayout';
+import { useSideChatStore } from '@/stores/sideChat';
 import { resolveShellShortcut } from './shellShortcuts';
 import type { PaneView } from './workPanelModel';
 
@@ -60,6 +62,15 @@ export function useShellShortcuts({ paneView }: { paneView: PaneView }): void {
       if (action.type === 'close-focused-pane' && !focusedPane) {
         return;
       }
+      // Layout 5f: no conversation open and no side chat to close.
+      const activeSessionId = useChatSessionsStore.getState().activeSessionId;
+      if (
+        action.type === 'toggle-side-chat' &&
+        !activeSessionId &&
+        !useSideChatStore.getState().open
+      ) {
+        return;
+      }
       event.preventDefault();
       switch (action.type) {
         case 'toggle-sidebar':
@@ -73,6 +84,9 @@ export function useShellShortcuts({ paneView }: { paneView: PaneView }): void {
           break;
         case 'close-focused-pane':
           if (focusedPane) closePane(focusedPane);
+          break;
+        case 'toggle-side-chat':
+          useSideChatStore.getState().toggleFor(activeSessionId);
           break;
         default:
           break;

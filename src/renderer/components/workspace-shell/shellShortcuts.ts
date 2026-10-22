@@ -28,7 +28,8 @@ export type ShellShortcutAction =
   | { type: 'toggle-sidebar' }
   | { type: 'focus-chat-list' }
   | { type: 'toggle-pane'; pane: PaneKind }
-  | { type: 'close-focused-pane' };
+  | { type: 'close-focused-pane' }
+  | { type: 'toggle-side-chat' };
 
 export interface ResolveShellShortcutInput {
   /** `KeyboardEvent.key` — currently unused by resolution (kept for callers/future use). */
@@ -67,9 +68,9 @@ function modKeyPressed(input: ResolveShellShortcutInput): boolean {
  * Resolves a `keydown` event into a shell shortcut action, or `null` when the
  * event isn't one of ours and should be left to native/downstream handling.
  *
- * Focus protection: while the target is editable, nothing but Ctrl/Cmd+\ is
- * honored. Ctrl/Cmd+B collides with Monaco's bold/cursor-left semantics and
- * the digits with editor tab switching. Ctrl/Cmd+\ is exempt (layout 5d): a
+ * Focus protection: while the target is editable, nothing but Ctrl/Cmd+\ and
+ * Ctrl/Cmd+; (layout 5f's side chat) is honored. Ctrl/Cmd+B collides with
+ * Monaco's bold/cursor-left semantics and the digits with editor tab switching. Ctrl/Cmd+\ is exempt (layout 5d): a
  * terminal or an editor pane always has an editable target focused, and the
  * chord has to close exactly that pane — it does not reach the shell as
  * SIGQUIT then, the reference's trade-off too.
@@ -87,6 +88,12 @@ export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellSho
 
   if (input.code === 'Backslash') {
     return { type: 'close-focused-pane' };
+  }
+
+  // Layout 5f (ruling L6): Ctrl/Cmd+; opens and closes the side chat, from the
+  // composer too — a side question is asked while typing.
+  if (input.code === 'Semicolon') {
+    return { type: 'toggle-side-chat' };
   }
 
   if (input.targetIsEditable) {

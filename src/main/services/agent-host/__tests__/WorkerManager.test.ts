@@ -5,6 +5,7 @@ import {
   WORKER_COMPACT_CANCEL_TIMEOUT_MS,
   WORKER_COMPACT_REQUEST_TIMEOUT_MS,
   WORKER_RPC_PROTOCOL_VERSION,
+  WORKER_SIDE_QUESTION_REQUEST_TIMEOUT_MS,
   type WorkerRpcEvent,
 } from '@shared/types/workerRpc';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -3420,6 +3421,46 @@ describe('WorkerManager jobs and subagents windows (P1-7b)', () => {
       jobId: 'bash-2',
       from: 3,
     });
+  });
+
+  it('[5F-WM-SIDE] a side question goes to the ready slot, off the claim; none without one', async () => {
+    const h = createHarness();
+    await expect(
+      h.manager.askSideQuestion({ sessionId: 'never-started', questionId: 'q1', question: 'why?' })
+    ).rejects.toMatchObject({ code: 'session_not_found' });
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    record?.request.mockImplementation(async (type: string) =>
+      type === 'worker.sideQuestion'
+        ? { text: 'because', extra: 1 }
+        : type === 'worker.sideQuestion.cancel'
+          ? { cancelled: true }
+          : {}
+    );
+    await expect(
+      h.manager.askSideQuestion({
+        sessionId: 's1',
+        questionId: 'q1',
+        question: 'why?',
+        history: [{ question: 'what?', answer: 'that' }],
+      })
+    ).resolves.toEqual({ text: 'because' });
+    expect(record?.request).toHaveBeenCalledWith(
+      'worker.sideQuestion',
+      {
+        logicalSessionId: 's1',
+        questionId: 'q1',
+        question: 'why?',
+        history: [{ question: 'what?', answer: 'that' }],
+      },
+      { timeoutMs: WORKER_SIDE_QUESTION_REQUEST_TIMEOUT_MS }
+    );
+    await expect(
+      h.manager.cancelSideQuestion({ sessionId: 's1', questionId: 'q1' })
+    ).resolves.toEqual({ cancelled: true });
+    await expect(
+      h.manager.cancelSideQuestion({ sessionId: 'gone', questionId: 'q1' })
+    ).resolves.toEqual({ cancelled: false });
   });
 
   it('[P7B-WM-INTERRUPT] forwards an interrupt to the ready slot', async () => {

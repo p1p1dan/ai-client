@@ -13,6 +13,8 @@ export function sessionRailToggleLabel(visibility: SessionRailVisibility): strin
       return 'The session rail makes room while a pane is open';
     case 'narrow':
       return 'The window is too narrow for the session rail';
+    case 'side-chat':
+      return 'The session rail makes room while the side chat is docked';
     default:
       return 'Show session rail';
   }
@@ -33,7 +35,10 @@ export function SessionRailToggle({
 }) {
   const { t } = useI18n();
   const label = t(sessionRailToggleLabel(visibility));
-  const blocked = visibility.hidden === 'panes' || visibility.hidden === 'narrow';
+  const blocked =
+    visibility.hidden === 'panes' ||
+    visibility.hidden === 'narrow' ||
+    visibility.hidden === 'side-chat';
   if (blocked) {
     // A disabled button gets no pointer events: the wrapper carries the reason.
     return (

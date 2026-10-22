@@ -24,6 +24,7 @@ import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useSessionRailStore } from '@/stores/sessionRail';
 import { useSettingsStore } from '@/stores/settings';
 import { useShellLayoutStore } from '@/stores/shellLayout';
+import { useSideChatStore } from '@/stores/sideChat';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import {
   deriveEditorOpen,
@@ -42,6 +43,9 @@ import {
   sessionRailToggleEnabled,
 } from './sessionRail/sessionRailModel';
 import { deriveSessionReview, type SessionReviewEntry } from './sessionReview';
+import { SideChat } from './sideChat/SideChat';
+import { SideChatToggle } from './sideChat/SideChatToggle';
+import { resolveSideChatPlacement } from './sideChat/sideChatModel';
 import { resolveTerminalWorkspace } from './surfaces/terminalWorkspace';
 import { useCapacityReclaimNotice } from './useCapacityReclaimNotice';
 import { useEditorWorktreeSync } from './useEditorWorktreeSync';
@@ -131,6 +135,11 @@ export function WorkspaceShell({
   // Layout 5e: the session rail — the user's shown / hidden choice (persisted).
   const sessionRailShown = useSessionRailStore((state) => state.shown);
   const toggleSessionRail = useSessionRailStore((state) => state.toggleShown);
+
+  // Layout 5f: the side chat (`/btw`, Ctrl+;) — open or not, and its form.
+  const sideChatOpen = useSideChatStore((state) => state.open);
+  const sideChatForm = useSideChatStore((state) => state.form);
+  const toggleSideChat = useSideChatStore((state) => state.toggleFor);
 
   // D35: `manualChat` stays (it also gates the "close all tabs snaps chat
   // back to full width" reset below); nothing sets it any more, so
@@ -285,6 +294,12 @@ export function WorkspaceShell({
   // A08: global shell shortcuts (Ctrl/Cmd+B/1-5, layout 5d's Ctrl/Cmd+\\).
   // Only live while this component is mounted, i.e. only for the new shell.
   useShellShortcuts({ paneView });
+
+  // Layout 5f: a side chat belongs to the conversation it reads; opening
+  // another one discards it.
+  useEffect(() => {
+    useSideChatStore.getState().followSession(activeSessionId);
+  }, [activeSessionId]);
   const workspaceSearch = useWorkspaceSearch();
 
   // m7: per-workspace editor tab isolation. Must live somewhere ALWAYS mounted
@@ -438,11 +453,23 @@ export function WorkspaceShell({
    * on screen and the allocator's chat width — never stored (F10). It yields
    * to any open pane, and hides when the chat would get too narrow.
    */
+  /**
+   * Layout 5f (ruling L6): the side chat floats over the chat's bottom-right
+   * corner, or docks right of it in the rail's place (the rail yields). Like
+   * the rail, derived per render: docked but too narrow, it floats.
+   */
+  const sideChatPlacement = resolveSideChatPlacement({
+    open: sideChatOpen,
+    form: sideChatForm,
+    sessionOpen: activeSessionId !== null,
+    chatWidth: chatVisible ? allocation.chatWidth : 0,
+  });
   const sessionRail = resolveSessionRailVisibility({
     userShown: sessionRailShown,
     sessionOpen: activeSessionId !== null,
     panesOpen: visiblePanes.length,
     chatWidth: chatVisible ? allocation.chatWidth : 0,
+    sideChatDocked: sideChatPlacement === 'dock',
   });
   const sessionRailLabel = t(sessionRailToggleLabel(sessionRail));
   const sessionRailMenuDisabled = !sessionRailToggleEnabled(sessionRail);
@@ -524,6 +551,15 @@ export function WorkspaceShell({
                 <SessionRailToggle visibility={sessionRail} onToggle={toggleSessionRail} />
               ) : undefined
             }
+            sideChatToggle={
+              activeSessionId ? (
+                <SideChatToggle
+                  open={sideChatOpen}
+                  onToggle={() => toggleSideChat(activeSessionId)}
+                  isMac={window.electronAPI?.env?.platform === 'darwin'}
+                />
+              ) : undefined
+            }
             sessionRail={sessionRailMenu}
           />
           <div className="relative flex min-h-0 flex-1">
@@ -546,13 +582,19 @@ export function WorkspaceShell({
                   Layout 5e: the session rail rides at the column's right
                   edge, and the composer hides what the rail shows. */}
               <div className="flex min-h-0 min-w-0 flex-1">
-                <SessionRailPresenceContext.Provider value={sessionRail.visible}>
-                  <ChatWorkspace
-                    className="min-w-0 flex-1"
-                    onAddRepository={onAddRepository}
-                    home={<HomeView />}
-                  />
-                </SessionRailPresenceContext.Provider>
+                {/* Layout 5f: always this wrapper, so the floating side chat
+                    lays over the conversation alone and opening it never
+                    remounts ChatWorkspace. */}
+                <div className="relative flex min-h-0 min-w-0 flex-1">
+                  <SessionRailPresenceContext.Provider value={sessionRail.visible}>
+                    <ChatWorkspace
+                      className="min-w-0 flex-1"
+                      onAddRepository={onAddRepository}
+                      home={<HomeView />}
+                    />
+                  </SessionRailPresenceContext.Provider>
+                  {sideChatPlacement === 'float' && <SideChat placement="float" />}
+                </div>
                 {sessionRail.visible && activeSessionId && (
                   <SessionRail
                     sessionId={activeSessionId}
@@ -561,6 +603,7 @@ export function WorkspaceShell({
                     onRevealChange={revealChange}
                   />
                 )}
+                {sideChatPlacement === 'dock' && <SideChat placement="dock" />}
               </div>
             </div>
             {/*

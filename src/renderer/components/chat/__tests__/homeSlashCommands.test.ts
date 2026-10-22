@@ -34,7 +34,8 @@ describe('the home page menu', () => {
       'plan-tree',
       'settings',
     ]);
-    expect([...CONVERSATION_BUILTINS].sort()).toEqual(['archive', 'clear', 'compact']);
+    // Layout 5f: `/btw` asks about the open conversation.
+    expect([...CONVERSATION_BUILTINS].sort()).toEqual(['archive', 'btw', 'clear', 'compact']);
   });
 
   it('keeps a plugin’s or skill’s command that took one of those names', () => {
@@ -49,6 +50,8 @@ describe('homeSlashRefusal', () => {
     ['compact', '', 'builtin', 'conversation'],
     ['compact', 'keep the API notes', 'builtin', 'conversation'],
     ['archive', '', 'builtin', 'conversation'],
+    // Layout 5f: a side question needs a conversation to read.
+    ['btw', 'what changed?', 'builtin', 'conversation'],
     // Not in the catalog (no worker answered): still this window's.
     ['archive', '', undefined, 'conversation'],
     ['goal', '', 'command', 'goal'],

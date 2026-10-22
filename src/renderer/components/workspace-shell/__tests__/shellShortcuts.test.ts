@@ -200,4 +200,34 @@ describe('resolveShellShortcut', () => {
       expect(resolveShellShortcut(input({ code: 'KeyA', ctrlKey: true }))).toBeNull();
     });
   });
+
+  // Layout 5f (ruling L6): the side chat's chord, honored while typing too.
+  describe('Ctrl/Cmd+; — the side chat (layout 5f)', () => {
+    it('toggles the side chat on either platform, from the composer too', () => {
+      expect(resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true }))).toEqual({
+        type: 'toggle-side-chat',
+      });
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', metaKey: true, isMac: true }))
+      ).toEqual({ type: 'toggle-side-chat' });
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true, targetIsEditable: true }))
+      ).toEqual({ type: 'toggle-side-chat' });
+    });
+
+    it('not with Shift or Alt, not mid-composition, not the other platform’s key', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true, shiftKey: true }))
+      ).toBeNull();
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true, altKey: true }))
+      ).toBeNull();
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true, isComposing: true }))
+      ).toBeNull();
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true, isMac: true }))
+      ).toBeNull();
+    });
+  });
 });

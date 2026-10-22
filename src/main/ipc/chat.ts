@@ -1128,6 +1128,47 @@ export function registerChatHandlers(): void {
   );
 
   /**
+   * Layout 5f (ui-cohesion ruling L6) — one side question about the
+   * conversation so far. A read: nothing is claimed and nothing is written.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_ASK_SIDE_QUESTION,
+    async (
+      _e,
+      payload: {
+        sessionId: string;
+        questionId: string;
+        question: string;
+        history?: Array<{ question: string; answer: string }>;
+      }
+    ): Promise<Awaited<ReturnType<typeof workerManager.askSideQuestion>>> => {
+      await requireLiveSession(payload.sessionId);
+      try {
+        return await workerManager.askSideQuestion({
+          sessionId: payload.sessionId,
+          questionId: payload.questionId,
+          question: payload.question,
+          ...(payload.history?.length ? { history: payload.history } : {}),
+        });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_CANCEL_SIDE_QUESTION,
+    async (
+      _e,
+      payload: { sessionId: string; questionId: string }
+    ): Promise<Awaited<ReturnType<typeof workerManager.cancelSideQuestion>>> =>
+      workerManager.cancelSideQuestion({
+        sessionId: payload.sessionId,
+        questionId: payload.questionId,
+      })
+  );
+
+  /**
    * Decision 203 — one subagent's own conversation, read-only (its
    * sub-conversation page). A read of a live session: nothing is claimed.
    */
