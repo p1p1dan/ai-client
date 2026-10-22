@@ -157,6 +157,21 @@ svg.s{width:14px;height:14px}
 .sidechat .sb{flex:1;overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:10px}
 .sidechat .sc{margin:0 10px 10px;border-radius:14px;background:var(--s2);box-shadow:inset 0 0 0 1px var(--bd);display:flex;align-items:center;padding:8px 8px 8px 12px;gap:6px;color:var(--fg3)}
 .mainwrap{position:relative;flex:1;min-width:0;display:flex}
+.vsep{width:1px;height:18px;background:var(--bd);margin:0 4px}
+.sidechat .pick{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 6px;border-radius:6px;font-weight:600}
+.sidechat .pick:hover{background:var(--hover)}
+.menu2{position:absolute;top:36px;left:8px;width:280px;background:var(--s3);border-radius:10px;box-shadow:0 0 0 1px var(--bd),0 8px 24px rgba(0,0,0,.12);padding:4px;display:none;z-index:6}
+.menu2.open{display:block}
+.menu2 .mi{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:4px;color:var(--fg);cursor:pointer;white-space:nowrap}
+.menu2 .mi:hover{background:var(--hover)}
+.menu2 .mi .d{margin-left:auto;color:var(--fg3);font-size:11px}
+.menu2 .lab{font-size:11px;color:var(--fg3);padding:6px 8px 2px}
+.menu2 .sep{height:1px;background:var(--bd);margin:4px -4px}
+.sidechat.dock .sc2{border-radius:20px}
+.sidechat .chatbody .u{font-size:13px;line-height:19px;padding:8px 12px}
+.sidechat .chatbody .p,.sidechat .chatbody .trow{font-size:13px}
+.ctx{position:absolute;display:none;background:var(--s3);border-radius:10px;box-shadow:0 0 0 1px var(--bd),0 8px 24px rgba(0,0,0,.12);padding:4px;width:200px;z-index:20}
+.ctx.open{display:block}
 
 /* ---------- "现状" (today) ---------- */
 .old{display:none;width:100%;height:100%}
@@ -248,6 +263,7 @@ body[data-layout=old] .new{display:none}
         <div class="it"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg>技能与插件</div>
       </div>
       <div class="list" id="list"></div>
+      <div class="ctx" id="ctx"><div class="menu2 open" style="position:static;box-shadow:none;width:auto"><div class="mi" data-pick="ssh">在侧边打开</div><div class="mi">重命名</div><div class="mi">移到分组…</div><div class="mi">归档</div></div></div>
       <div class="acct"><div class="avatar">P</div><div class="n"><div>Pi</div><div>PiLab 账户</div></div><span class="gb" title="设置"><svg class="i s" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></span></div>
     </aside>
 
@@ -258,11 +274,12 @@ body[data-layout=old] .new{display:none}
         <span class="chip"><svg class="i s" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>ai-client</span>
         <span class="chip mono"><svg class="i s" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M18 9a9 9 0 0 1-9 9"/><circle cx="18" cy="6" r="3"/></svg>main</span>
         <span class="sp"></span>
+        <span class="gb" data-act="rail" id="railBtn" title="隐藏会话侧栏"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></span>
+        <span class="vsep"></span>
         <span class="gb" data-open="diff" title="改动"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v14M5 10h14M5 21h14"/></svg><span class="tnum"><span class="plus">+6</span> <span class="minus">−2</span></span></span>
         <span class="gb" data-open="files" title="文件"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
         <span class="gb" data-open="term" title="终端"><svg class="i" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></svg></span>
         <span class="gb" data-act="side2" title="旁问（Ctrl+;）"><svg class="i" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg></span>
-        <span class="gb" data-act="rail" id="railBtn" title="隐藏会话侧栏"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></span>
         <span class="gb" title="更多"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
       </div>
       <div class="split">
@@ -318,13 +335,38 @@ body[data-layout=old] .new{display:none}
           </div></div>
         </aside>
         <section class="sidechat" id="sidechat">
-          <div class="sh">旁问<span class="sp"></span><span class="gb" data-act="side2dock" title="停靠 / 浮起"><svg class="i s" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></span><span class="gb" data-act="side2close" title="关闭"><svg class="i s" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span></div>
-          <div class="note">能看到主对话到现在为止的内容，这里的问答不会写回主对话，关掉即丢弃。</div>
-          <div class="sb">
-            <div class="u" style="font-size:13px;line-height:19px;padding:8px 12px">superseded 这个字段在 DSH 那边的历史里也会写吗？</div>
-            <div class="p" style="font-size:13px;line-height:19px">不会。它只在投影时算出来，不落盘；DSH 历史里每次压缩仍是一个独立的摘要节点，渲染层根据顺序判断哪条生效。</div>
+          <div class="sh" style="position:relative">
+            <button class="pick" data-act="pick"><span id="scTitle">旁问</span><svg class="i s" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+            <span class="sp"></span>
+            <span class="gb" data-act="side2dock" id="dockBtn" title="停靠到右侧"><svg class="i s" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></span>
+            <span class="gb" data-act="side2close" title="关闭"><svg class="i s" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+            <div class="menu2" id="pickMenu">
+              <div class="mi" data-pick="btw">旁问<span class="d">Ctrl+;</span></div>
+              <div class="sep"></div>
+              <div class="lab">在这里打开另一个对话</div>
+              <div class="mi" data-pick="ssh"><span class="dot wait"></span>SSH 运行时打进安装包<span class="d mono">feat/ssh</span></div>
+              <div class="mi" data-pick="ssh2"><span class="dot idle"></span>调研网关供应商切换<span class="d mono">main</span></div>
+              <div class="mi" data-pick="ssh2"><span class="dot idle"></span>设计规范 v2 迁移<span class="d mono">feat/ui-coh…</span></div>
+            </div>
           </div>
-          <div class="sc">问一句，不打断主对话…<span style="flex:1"></span><span class="send" style="width:26px;height:26px"><svg class="i s" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div>
+          <div id="scBtw" style="display:flex;flex-direction:column;flex:1;min-height:0">
+            <div class="note">能看到主对话到现在为止的内容，这里的问答不会写回主对话，关掉即丢弃。</div>
+            <div class="sb">
+              <div class="u" style="font-size:13px;line-height:19px;padding:8px 12px">superseded 这个字段在 DSH 那边的历史里也会写吗？</div>
+              <div class="p" style="font-size:13px;line-height:19px">不会。它只在投影时算出来，不落盘；DSH 历史里每次压缩仍是一个独立的摘要节点，渲染层根据顺序判断哪条生效。</div>
+            </div>
+            <div class="sc">问一句，不打断主对话…<span style="flex:1"></span><span class="send" style="width:26px;height:26px"><svg class="i s" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div>
+          </div>
+          <div id="scConv" style="display:none;flex-direction:column;flex:1;min-height:0">
+            <div class="note">ai-client · <span class="mono">feat/ssh</span> · 等你处理</div>
+            <div class="sb chatbody">
+              <div class="u">把远端运行时打进安装包，下载改走应用代理。</div>
+              <div class="trow"><svg class="i s" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>读取 <span class="a">electron-builder.yml</span></div>
+              <div class="p">需要改安装包配置，把 <code>dist/remote-runtime</code> 加进 extraResources。</div>
+              <div class="card" style="border-color:color-mix(in oklab,var(--brand) 45%,var(--s2))"><div class="ch"><span class="dot wait"></span>要运行这条命令吗？</div><div class="cb"><div class="mono" style="background:var(--fill);border-radius:6px;padding:4px 8px;color:var(--fg)">pnpm build:linux</div><div style="display:flex;gap:6px;justify-content:flex-end"><span class="gb">拒绝</span><span class="gb" style="background:var(--brand);color:var(--on-brand)">允许一次</span></div></div></div>
+            </div>
+            <div class="sc sc2">回复这个对话…<span style="flex:1"></span><span class="send" style="width:26px;height:26px"><svg class="i s" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div>
+          </div>
         </section>
        </div>
         <section class="panel" id="panel">
@@ -382,9 +424,11 @@ body[data-layout=old] .new{display:none}
     <p style="margin-top:6px"><b>新增（参照 Claude Code 桌面版官方文档）</b>：</p>
     <ul>
       <li><b>L5 会话侧栏</b>：对话右边一列卡片——环境（本机 / 远程、仓库、分支、引擎与模型、权限档）、改动（+N −M，点开右侧改动面板，可直接提交）、待办、运行中（后台命令、子代理）、上下文（用量百分比、按类别的占比、缓存命中、压缩按钮）。现在散在输入框工具栏上的用量芯片、运行位置，以及「上下文」「运行」两个面板都收进这里。标题栏右边的按钮可隐藏；打开右侧工作面板时它让出位置。</li>
+      <li><b>L5 补充</b>：会话侧栏的开关放在标题栏右边按钮组的最左侧，用一条竖线和改动 / 文件 / 终端按钮隔开。</li>
       <li><b>L6 旁问</b>：Ctrl+; 或输入 /btw 打开。能看到主对话到现在为止的内容，问答不写回主对话，关掉即丢弃（官方也不存盘）。官方是浮窗；也可以停靠在右侧，预览里两种都能切。</li>
     </ul>
-    <p style="margin-top:6px">L1～L4 已按你的选择定了；L5、L6 是新加的，你看完预览定。</p>
+    <ul><li><b>L7 侧边对话（split view）</b>：旁问窗口左上角的标题是个下拉，可以切到「在这里打开另一个对话」，选一个现有对话；侧栏里对话行右键也有「在侧边打开」。打开现有对话时默认停靠在右侧，两个对话并排，各有自己的输入框；侧边那个可以收回小窗或关掉。</li></ul>
+    <p style="margin-top:6px">L1～L7 都已按你的选择定了（2026-10-22）。</p>
   </div>
 </div>
 
@@ -393,7 +437,7 @@ const P={
   light:{s0:'#f9f9f7',s1:'#fcfcfb',s2:'#ffffff',s3:'#ffffff',fg:'#151515',fg2:'#525252',fg3:'#8a8a8a',bd:'#e5e5e4',bds:'#cececd',fill:'#eeeeed',hover:'#f0f0ef',sel:'#e5e5e4',brand:'#c6613f',onBrand:'#fff',danger:'#b5452f',success:'#3f7d4e',term:'#1d1d1b',sh1:.035},
   dark:{s0:'#0b0b0b',s1:'#151515',s2:'#1a1a19',s3:'#20201f',fg:'#f5f5f5',fg2:'#a3a3a3',fg3:'#666666',bd:'#2b2b2b',bds:'#424242',fill:'#222222',hover:'#202020',sel:'#2b2b2b',brand:'#d97757',onBrand:'#151515',danger:'#e5735c',success:'#73b585',term:'#0b0b0b',sh1:.4},
 };
-const state={layout:'new',theme:'light',side:'open',group:'repo',panel:'none',termpos:'panel',rail:'on',side2:'none'};
+const state={layout:'new',theme:'light',side:'open',group:'repo',panel:'none',termpos:'panel',rail:'on',side2:'none',sc:'btw'};
 const rows={
   repo:[['临时对话',[['整理周报的格式','','idle']]],['ai-client',[['修复 /compact 出两条摘要','main','run',1],['SSH 运行时打进安装包','feat/ssh','wait'],['调研网关供应商切换','main','idle'],['设计规范 v2 迁移','feat/ui-cohesion','idle']]],['ChipTestMachine',[['DIE 算法清理与单测','dev','idle'],['报表导出改成 xlsx','dev','idle']]]],
   status:[['运行中',[['修复 /compact 出两条摘要','main','run',1]]],['等你处理',[['SSH 运行时打进安装包','feat/ssh','wait']]],['最近完成',[['设计规范 v2 迁移','feat/ui-cohesion','idle'],['调研网关供应商切换','main','idle'],['DIE 算法清理与单测','dev','idle'],['整理周报的格式','','idle']]]],
@@ -429,6 +473,11 @@ function apply(){
   document.getElementById('srail').classList.toggle('open', railOn);
   document.getElementById('railBtn').classList.toggle('on', state.rail==='on');
   const sc=document.getElementById('sidechat'); sc.classList.toggle('float',state.side2==='float'); sc.classList.toggle('dock',state.side2==='dock');
+  document.getElementById('scBtw').style.display=state.sc==='btw'?'flex':'none';
+  document.getElementById('scConv').style.display=state.sc==='btw'?'none':'flex';
+  document.getElementById('scTitle').textContent=state.sc==='btw'?'旁问':'SSH 运行时打进安装包';
+  document.getElementById('dockBtn').title=state.side2==='dock'?'浮起为小窗':'停靠到右侧';
+  if(state.side2==='dock') document.getElementById('srail').classList.remove('open');
   document.querySelectorAll('[data-act=side2]').forEach(b=>b.classList.toggle('on',state.side2!=='none'));
   document.getElementById('drawer').classList.toggle('open',state.panel==='term'&&state.termpos==='drawer');
   document.querySelectorAll('[data-open]').forEach(b=>b.classList.toggle('on',b.dataset.open===state.panel));
@@ -436,6 +485,12 @@ function apply(){
   renderList();
 }
 document.querySelectorAll('.seg').forEach(s=>s.addEventListener('click',e=>{const v=e.target.dataset.v;if(!v)return;state[s.dataset.k]=v;apply()}));
+document.addEventListener('contextmenu',e=>{
+  const row=e.target.closest('.side .row'); if(!row) return; e.preventDefault();
+  const c=document.getElementById('ctx'); const w=document.querySelector('.win').getBoundingClientRect();
+  c.style.left=(e.clientX-w.left)+'px'; c.style.top=(e.clientY-w.top)+'px'; c.classList.add('open');
+});
+document.querySelector('.win').style.position='relative';
 document.addEventListener('click',e=>{
   const o=e.target.closest('[data-open]'); if(o){state.panel=state.panel===o.dataset.open?'none':o.dataset.open;apply();return}
   const t=e.target.closest('.ptab[data-tab]'); if(t){state.panel=t.dataset.tab;apply();return}
@@ -445,6 +500,10 @@ document.addEventListener('click',e=>{
   const s2=e.target.closest('[data-act=side2]'); if(s2){state.side2=state.side2==='none'?'float':'none';apply();return}
   const s2d=e.target.closest('[data-act=side2dock]'); if(s2d){state.side2=state.side2==='dock'?'float':'dock';apply();return}
   const s2c=e.target.closest('[data-act=side2close]'); if(s2c){state.side2='none';apply();return}
+  const pk=e.target.closest('[data-act=pick]'); if(pk){document.getElementById('pickMenu').classList.toggle('open');return}
+  const pi=e.target.closest('[data-pick]'); if(pi){document.getElementById('pickMenu').classList.remove('open');document.getElementById('ctx').classList.remove('open');
+    state.sc=pi.dataset.pick==='btw'?'btw':'conv'; if(state.side2==='none'||state.sc==='conv') state.side2= state.sc==='conv'?'dock':(state.side2==='none'?'float':state.side2); apply();return}
+  document.getElementById('pickMenu').classList.remove('open'); document.getElementById('ctx').classList.remove('open');
 });
 apply();
 </script>
