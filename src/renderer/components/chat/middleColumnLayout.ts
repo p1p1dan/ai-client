@@ -517,7 +517,11 @@ export function composerTextareaClass(): string {
   //   at 16px and above it clamps to 0 and the line sets the height.
   // - Growth: `field-sizing-content` (textarea.tsx) up to
   //   `COMPOSER_TEXTAREA_MAX_ROWS` lines, then it scrolls.
-  return 'w-full p-0 [&_textarea]:text-chat-body [&_textarea]:leading-[calc(var(--text-chat-body)*1.5)] [&_textarea]:min-h-6 [&_textarea]:max-h-[calc(var(--text-chat-body)*1.5*8)] [&_textarea]:py-[max(0px,calc((1.5rem_-_var(--text-chat-body)*1.5)/2))] [&_textarea]:resize-none [&_textarea]:px-0';
+  // `block` on both the wrapper span and the textarea: an inline textarea
+  // sits on the span's text baseline and leaves a descender gap below it,
+  // which made the row 30px instead of 24 and pushed the text above the
+  // ⊕ / send keys (measured 2026-10-22).
+  return 'block w-full p-0 [&_textarea]:block [&_textarea]:text-chat-body [&_textarea]:leading-[calc(var(--text-chat-body)*1.5)] [&_textarea]:min-h-6 [&_textarea]:max-h-[calc(var(--text-chat-body)*1.5*8)] [&_textarea]:py-[max(0px,calc((1.5rem_-_var(--text-chat-body)*1.5)/2))] [&_textarea]:resize-none [&_textarea]:px-0';
 }
 
 /**

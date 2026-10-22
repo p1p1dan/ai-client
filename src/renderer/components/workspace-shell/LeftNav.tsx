@@ -45,13 +45,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import {
@@ -1631,34 +1624,22 @@ export function LeftNav({
                 // Issue #15: 「按分组」 mode does not replace this — with no
                 // repository added there is nothing to group BY, and the way
                 // out of that state is still this button.
-                <Empty className="mt-2 gap-3 border-0 p-2 md:p-2">
-                  <EmptyMedia variant="icon">
-                    <FolderGit2 className="h-4.5 w-4.5" />
-                  </EmptyMedia>
-                  <EmptyHeader>
-                    {/* D25 §3.3: EmptyTitle's shared base now carries a
-                        negative tracking meant for its 18px default — this
-                        compact sidebar usage shrinks to 15px (text-ui) and may
-                        render CJK, so tracking must be cancelled back to
-                        normal (negative tracking + CJK is the banned
-                        combination). */}
-                    <EmptyTitle className="text-ui tracking-normal">
-                      {t('Add Repository')}
-                    </EmptyTitle>
-                    <EmptyDescription className="text-small">
-                      {t('Add a repository to get started.')}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    className="h-6 text-ui"
+                // Layout 5b: a quiet sidebar empty state (the reference's
+                // sidebar has no tiles or framed buttons): one faint line and
+                // a ghost row in the sidebar's own row style.
+                <div className="mt-1 flex flex-col gap-0.5 px-2">
+                  <p className="px-2 py-1 text-foreground-faint text-small">
+                    {t('Add a repository to get started.')}
+                  </p>
+                  <button
+                    type="button"
+                    className="flex h-7 items-center gap-2 rounded-xs px-2 text-left text-muted-foreground text-ui transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
                     onClick={onAddRepository}
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="size-4 shrink-0" />
                     {t('Add Repository')}
-                  </Button>
-                </Empty>
+                  </button>
+                </div>
               ) : groupingDerived ? (
                 // Layout 5b (ruling L2): the derived buckets, Temporary chats
                 // included — the mode is about the chats' state, not where

@@ -275,7 +275,8 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     // `Button size="xs"` is 12px (`text-small`); buttons are `text-ui` in v2,
     // so every one here overrides it.
     const xsButtons = [...NAV.matchAll(/<Button[^>]*size="xs"[^>]*>/g)].map((match) => match[0]);
-    expect(xsButtons.length).toBeGreaterThanOrEqual(3);
+    // Layout 5b: the empty-state 「添加仓库」 became a plain sidebar row, not a Button.
+    expect(xsButtons.length).toBeGreaterThanOrEqual(2);
     for (const button of xsButtons) expect(button).toContain('text-ui');
   });
 });
