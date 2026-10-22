@@ -31,6 +31,7 @@ import { registerPiPermissionHandlers } from './piPermissions';
 import { registerPiResourceHandlers } from './piResources';
 import { registerPiRuntimeHandlers } from './piRuntime';
 import { registerRemoteHandlers } from './remote';
+import { registerRemoteAccessHandlers } from './remoteAccess';
 import { registerSearchHandlers } from './search';
 import {
   destroyAllTerminals,
@@ -63,6 +64,7 @@ export function registerIpcHandlers(): void {
   registerSessionHandlers();
   registerSessionStorageHandlers();
   registerChatHandlers();
+  registerRemoteAccessHandlers();
   registerAgentCatalogHandlers();
   registerDialogHandlers();
   registerAppHandlers();
