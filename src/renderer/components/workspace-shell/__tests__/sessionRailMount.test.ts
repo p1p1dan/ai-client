@@ -5,7 +5,7 @@
  * rail shows them. Rendered with the real Chinese catalog.
  */
 import { translate } from '@shared/i18n';
-import { act, createElement } from 'react';
+import { act, type ComponentProps, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatSessionsStore } from '@/stores/chatSessions';
@@ -14,6 +14,11 @@ import { SessionBar } from '../SessionBar';
 import { RailCard } from '../sessionRail/RailCard';
 import { SessionRailToggle } from '../sessionRail/SessionRailToggle';
 import type { SessionRailVisibility } from '../sessionRail/sessionRailModel';
+
+/** A RailCard with a fixed body, built without a `children` prop (lint) and typed. */
+function railCard(props: Omit<ComponentProps<typeof RailCard>, 'children'>) {
+  return createElement(RailCard, { ...props, children: 'BODY' } as ComponentProps<typeof RailCard>);
+}
 
 const zh = (key: string, params?: Record<string, string | number>) => translate('zh', key, params);
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: zh }) }));
@@ -97,9 +102,7 @@ describe('SessionRailToggle', () => {
 
 describe('RailCard', () => {
   it('folds from its header and remembers the fold', async () => {
-    const container = await mount(
-      createElement(RailCard, { id: 'todo', title: '待办', summary: '1 / 3' }, 'BODY')
-    );
+    const container = await mount(railCard({ id: 'todo', title: '待办', summary: '1 / 3' }));
     const header = container.querySelector<HTMLButtonElement>('[aria-expanded]');
     expect(header?.getAttribute('aria-expanded')).toBe('true');
     expect(container.textContent).toContain('BODY');
@@ -112,9 +115,7 @@ describe('RailCard', () => {
   });
 
   it('the context card starts folded', async () => {
-    const container = await mount(
-      createElement(RailCard, { id: 'context', title: '上下文' }, 'BODY')
-    );
+    const container = await mount(railCard({ id: 'context', title: '上下文' }));
     expect(container.textContent).not.toContain('BODY');
   });
 });
