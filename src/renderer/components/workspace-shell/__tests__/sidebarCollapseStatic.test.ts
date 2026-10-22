@@ -23,12 +23,17 @@ const panel = read('src/renderer/components/workspace-shell/WorkPanel.tsx');
 
 describe('the sidebar collapse control (layout 5a)', () => {
   it('sits in the sidebar`s top row while it is open', () => {
-    const topRow = dock.slice(
-      dock.indexOf('<div className="flex h-9 shrink-0 items-center px-2">')
-    );
+    const start = dock.indexOf('<div className="flex h-9 shrink-0 items-center gap-0.5 px-2">');
+    expect(start).toBeGreaterThan(-1);
+    const topRow = dock.slice(start);
     expect(topRow).toContain("t('Collapse sidebar')} (Ctrl+B)");
     expect(topRow).toContain('onClick={onToggleCollapsed}');
     expect(topRow.indexOf('PanelLeftClose')).toBeLessThan(topRow.indexOf('<LeftNav'));
+    // Layout 5b: collapse first, then back / forward (the screenshot's order).
+    expect(topRow.indexOf('PanelLeftClose')).toBeLessThan(topRow.indexOf('<ArrowLeft'));
+    expect(topRow.indexOf('<ArrowLeft')).toBeLessThan(topRow.indexOf('<ArrowRight'));
+    expect(topRow).toContain('disabled={!visits.canGoBack}');
+    expect(topRow).toContain('disabled={!visits.canGoForward}');
   });
 
   it('appears on the title bar only while the sidebar is collapsed', () => {

@@ -75,7 +75,8 @@ describe('repository settings in the new shell', () => {
       resolve('src/renderer/components/workspace-shell/LeftNav.tsx'),
       'utf8'
     );
-    expect(nav).toContain('setRepoToConfigure(folderRepo)');
+    // Layout 5b: one definition of the repository actions, `repositoryMenuItems(repo)`.
+    expect(nav).toContain('setRepoToConfigure(repo)');
     expect(nav).toContain('repoPath={repoToConfigure.path}');
     expect(
       existsSync(resolve('src/renderer/components/repository/RepositoryManagerDialog.tsx'))

@@ -24,7 +24,7 @@
  */
 import { AUTH_GATE_SNAPSHOT_QUERY_KEY, deriveUserProfilePresentation } from '@shared/authGate';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ChevronsUpDown } from 'lucide-react';
+import { AlertTriangle, ChevronDown } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { AnnouncementBell } from '@/components/announcements/AnnouncementBell';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -73,15 +73,16 @@ export function UserFooterPill({ actions }: { actions?: ReactNode } = {}) {
 
   return (
     // Decision 183 (prototype v6): a full-width hairline on top separates the
-    // account zone from the list above it. Decision 188 (2026-10-13): 12px
-    // from that hairline to the row, 10px from the row to the window bottom.
-    <div className="flex shrink-0 items-center gap-1 border-t border-border-soft px-2 pt-3 pb-2.5">
+    // account zone from the list above it. Layout 5b (the desktop
+    // screenshot's quiet footer): 6px above and below the row, the actions
+    // packed tight at the right.
+    <div className="flex shrink-0 items-center gap-0.5 border-t border-border-soft px-2 py-1.5">
       <Popover open={profileOpen} onOpenChange={setProfileOpen}>
         <PopoverTrigger
           className={cn(
             // Prototype `.me`: one 32px row in every state, so signing out or
             // an expired login does not change the footer's height.
-            'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-xs px-2 text-left',
+            'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-xs px-1.5 text-left',
             'text-muted-foreground hover:bg-fill-ghost-hover',
             presentation.tone === 'attention' && 'text-destructive'
           )}
@@ -109,7 +110,7 @@ export function UserFooterPill({ actions }: { actions?: ReactNode } = {}) {
           ) : (
             <span className="min-w-0 truncate text-small">{t('Not signed in')}</span>
           )}
-          <ChevronsUpDown aria-hidden className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
+          <ChevronDown aria-hidden className="ml-auto size-3.5 shrink-0 text-foreground-faint" />
         </PopoverTrigger>
         <PopoverPopup align="start" side="top" sideOffset={8} className="w-[280px]">
           <UserProfileCard

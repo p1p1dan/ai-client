@@ -1,7 +1,8 @@
 /**
  * Issue #15: how the chat sidebar files its conversations.
  *
- * Two modes, chosen by the user from the list's tool row:
+ * Four modes (layout 5b, ruling L2 added the last two), chosen from the
+ * switcher a group heading shows on hover:
  *
  *  - `workspace` (the default, and what the sidebar has always done): one
  *    group per repository, ordered by when the repository was ADDED — newest
@@ -14,6 +15,9 @@
  *    somewhere. A conversation is in exactly ONE group — moving it is a move,
  *    not a tag — which is what keeps this mode a filing cabinet rather than a
  *    filter.
+ *  - `status` / `date` (layout 5b): derived buckets — 运行中 / 等你处理 /
+ *    最近完成, or 今天 / 昨天 / 本周 / 更早 (`sidebar/sidebarGrouping.ts`).
+ *    Nothing is filed in them; the user's groups above stay as they are.
  *
  * Persisted the way the rest of the shell's preferences are (zustand
  * `persist` over `localStorage`, synchronous), so a restart reopens the mode
@@ -23,7 +27,13 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-export type SidebarArchiveMode = 'workspace' | 'group';
+export const SIDEBAR_ARCHIVE_MODES = ['workspace', 'group', 'status', 'date'] as const;
+
+export type SidebarArchiveMode = (typeof SIDEBAR_ARCHIVE_MODES)[number];
+
+function isSidebarArchiveMode(value: unknown): value is SidebarArchiveMode {
+  return (SIDEBAR_ARCHIVE_MODES as readonly unknown[]).includes(value);
+}
 
 export const DEFAULT_SIDEBAR_ARCHIVE_MODE: SidebarArchiveMode = 'workspace';
 
@@ -88,7 +98,7 @@ export function sanitizeSidebarArchivePreferences(
   const mode = stored?.archiveMode;
   const groups = sanitizeGroups(stored?.groups);
   return {
-    archiveMode: mode === 'group' || mode === 'workspace' ? mode : DEFAULT_SIDEBAR_ARCHIVE_MODE,
+    archiveMode: isSidebarArchiveMode(mode) ? mode : DEFAULT_SIDEBAR_ARCHIVE_MODE,
     groups,
     // An assignment pointing at a group that did not survive sanitizing is
     // dropped here rather than repaired at render time: every reader of this

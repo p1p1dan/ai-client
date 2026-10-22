@@ -4885,3 +4885,37 @@ Object.assign(zhTranslations, {
   'More actions': '更多',
   Environment: '环境',
 });
+
+/**
+ * Layout 5c (ui-cohesion §6, ruling L3): the timeline's per-turn change card.
+ */
+Object.assign(zhTranslations, {
+  'Changed 1 file': '改了 1 个文件',
+  'Changed {{count}} files': '改了 {{count}} 个文件',
+  '{{names}} and {{count}} more': '{{names}} 等 {{count}} 个',
+  'Show in the changes panel': '在右侧「改动」里查看',
+});
+
+/**
+ * Layout 5b (ui-cohesion §6, ruling L2): the sidebar — its top row, its four
+ * entries, the grouping switcher and the derived buckets.
+ */
+Object.assign(zhTranslations, {
+  'Go back': '后退',
+  'Go forward': '前进',
+  Repositories: '仓库',
+  'Skills and plugins': '技能与插件',
+  'Open a chat in a repository to search it': '先打开一个仓库里的对话，才能搜索',
+  'Group and filter chats': '分组与筛选',
+  'Group chats': '分组方式',
+  'By repository': '按仓库',
+  'By my groups': '按我的分组',
+  'By status': '按状态',
+  'By date': '按时间',
+  'Filter chats': '筛选对话',
+  'Close filter': '关闭筛选',
+  'Waiting for you': '等你处理',
+  'Recently finished': '最近完成',
+  'This week': '本周',
+  'Show more chats': '显示更多',
+});

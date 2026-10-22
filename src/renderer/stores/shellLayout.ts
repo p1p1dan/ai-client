@@ -29,9 +29,11 @@ import { type ContextSurfaceId, getSurface } from '@/components/workspace-shell/
 import {
   clampWorkPanelWidth,
   closeWorkPanel,
+  nextChangeFocus,
   openWorkPanelTab,
   tabForIntent,
   toggleWorkPanelTab,
+  type WorkPanelChangeFocus,
   type WorkPanelState,
   type WorkPanelTab,
 } from '@/components/workspace-shell/workPanelModel';
@@ -94,6 +96,11 @@ export interface ShellLayoutState
   clearManualOverrides: () => void;
   // reading column
   toggleReadingWidthMode: () => void;
+  // layout 5c: the timeline's change card (session-only, never persisted)
+  /** The last file the change card asked the changes tab to show. */
+  changeFocus: WorkPanelChangeFocus | null;
+  /** Opens the changes tab and asks it to show `target`. */
+  revealChange: (target: { entryId: string; path: string }) => void;
 }
 
 function panelStateOf(state: ShellLayoutState): WorkPanelState {
@@ -171,6 +178,13 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
 
       toggleReadingWidthMode: () =>
         set((state) => ({ readingWidthMode: nextReadingWidthMode(state.readingWidthMode) })),
+
+      changeFocus: null,
+      revealChange: (target) =>
+        set((state) => ({
+          ...fromPanelState(openWorkPanelTab(panelStateOf(state), 'changes')),
+          changeFocus: nextChangeFocus(state.changeFocus, target),
+        })),
     }),
     {
       name: 'aiclient-shell-layout',
@@ -197,4 +211,9 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
 /** Single hook used by chat components so they never import the shell dir. */
 export function useReadingColumnClass(): string {
   return readingColumnClass(useShellLayoutStore((state) => state.readingWidthMode));
+}
+
+/** Layout 5c: the change card's click — chat reads it here, never from the shell dir. */
+export function useRevealChange(): (target: { entryId: string; path: string }) => void {
+  return useShellLayoutStore((state) => state.revealChange);
 }

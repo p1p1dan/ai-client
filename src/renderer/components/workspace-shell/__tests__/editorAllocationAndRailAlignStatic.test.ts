@@ -124,7 +124,8 @@ describe('the sidebar opens level with the title bar (layout 5a, was U27)', () =
     expect(dock).not.toContain(
       'items-center gap-0.5 border-r border-border-soft bg-surface-0 pt-3.5'
     );
-    expect(dock).toContain('<div className="flex h-9 shrink-0 items-center px-2">');
+    // Layout 5b: the row also holds back / forward, packed tight.
+    expect(dock).toContain('<div className="flex h-9 shrink-0 items-center gap-0.5 px-2">');
   });
 
   it('the sidebar has no h-9 title row to track', () => {

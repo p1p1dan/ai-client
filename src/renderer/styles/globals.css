@@ -118,8 +118,12 @@
   --text-chat-body: 13px;      /* assistant/user prose, markdown incl. h1-h6, composer */
   --text-chat-process: 12px;   /* tool rows, thinking, turn status line */
 
-  /* D25 §3.4: reading column = 48 CJK chars @15px = Cursor reference; wide keeps the same -6.25% scaling */
-  --container-reading: 45rem;
+  /*
+   * Layout 5c (2026-10-22 screenshot, ruling L3): the centred reading column is
+   * ~640px at the 13px body (was 45rem for D25's 15px body). Timeline and
+   * composer share it through `ReadingColumn`. Wide mode keeps 60rem.
+   */
+  --container-reading: 40rem;
   --container-reading-wide: 60rem;
 
   /*

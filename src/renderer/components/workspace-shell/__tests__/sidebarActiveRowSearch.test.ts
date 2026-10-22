@@ -98,6 +98,17 @@ afterEach(async () => {
 });
 
 async function typeSearch(text: string): Promise<void> {
+  // Layout 5b: the filter field shows once asked for — from the list menu a
+  // group heading carries.
+  if (!container.querySelector('input[placeholder="Search sessions"]')) {
+    const trigger = container.querySelector<HTMLElement>('[aria-label="Group and filter chats"]');
+    expect(trigger, 'the list menu is rendered').toBeTruthy();
+    await act(async () => trigger?.click());
+    const item = [...document.querySelectorAll<HTMLElement>('[data-slot="menu-item"]')].find(
+      (node) => node.textContent?.trim() === 'Filter chats'
+    );
+    await act(async () => item?.click());
+  }
   const input = [...container.querySelectorAll('input')].find(
     (node) => node.getAttribute('placeholder') === 'Search sessions'
   );

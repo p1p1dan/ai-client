@@ -60,6 +60,7 @@ import {
   type PendingUserMessage,
   usePendingUserMessagesStore,
 } from '@/stores/pendingUserMessages';
+import { useSettingsStore } from '@/stores/settings';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import {
@@ -178,8 +179,10 @@ import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
 import { ToolGroup, ToolRowTimelineContext, useUserDisclosureReport } from './ToolRows';
 import { TurnCeilingNotice } from './TurnCeilingNotice';
+import { TurnChangeCard } from './TurnChangeCard';
 import { TurnEndNotice } from './TurnEndNotice';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
+import { deriveTurnChanges } from './turnChanges';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import { turnEndedByUser } from './turnEndCause';
 import {
@@ -2302,6 +2305,10 @@ const ChatTurn = memo(function ChatTurn({
   // time on every render, clock ticks included.
   const items = useMemo(() => flattenTurnItems(turn), [turn]);
   const segments = useMemo(() => segmentTurnBody(items), [items]);
+  // Layout 5c (ruling L3): the turn's file edits, for its one change card. Only
+  // when the changes tab can exist to receive the click (`showSessionReview`).
+  const showSessionReview = useSettingsStore((state) => state.showSessionReview);
+  const turnChanges = useMemo(() => deriveTurnChanges(turn.body), [turn.body]);
   const copyText = useMemo(() => buildTurnCopyTextFromItems(items), [items]);
 
   // Turn-level metadata: the LAST assistant message's, because that is the one
@@ -2949,6 +2956,13 @@ const ChatTurn = memo(function ChatTurn({
             </TurnProgressHead>
           );
         })}
+        {/* Layout 5c (ruling L3): once the turn settles, its file edits read as
+            ONE card after the reply; a click opens the right panel's changes
+            tab on the first file. The per-call diffs stay inside the folded
+            process group's edit rows, collapsed until the reader opens one. */}
+        {processSettled && showSessionReview && turnChanges && (
+          <TurnChangeCard summary={turnChanges} />
+        )}
         {/* T113: after the last paragraph, before the chrome that talks about
             the session rather than the turn. This is the 「工作区固定在末尾」 the
             user asked for — the duration stops moving from group to group as a

@@ -124,15 +124,17 @@ export function QuestionCard(props: QuestionCardProps) {
 
 interface QaHeadProps {
   title: string;
+  /** Layout 5c: in the reading flow the title drops to the 13px UI tier. */
+  quiet?: boolean;
   /** Answer progress, e.g. `2 / 4`. Absent when the card has nothing to count. */
   progress?: string | null;
 }
 
 /** `.qa-head` — the dock card's 32px head: title and an optional progress tag. */
-function QaHead({ title, progress }: QaHeadProps) {
+function QaHead({ title, progress, quiet }: QaHeadProps) {
   return (
     <DockCardHeader>
-      <DockCardTitle>{title}</DockCardTitle>
+      <DockCardTitle className={quiet ? 'text-ui' : undefined}>{title}</DockCardTitle>
       {progress && (
         <Badge variant="secondary" className="tabular-nums">
           {progress}
@@ -185,7 +187,7 @@ function FrozenQaCard({ block }: { block: ChatBlock }) {
   // In the timeline, settled: the strip form (no elevation, not waiting).
   return (
     <DockCard kind="strip">
-      <QaHead title={title} />
+      <QaHead title={title} quiet />
       <QaFrozenPairs pairs={pairs} />
     </DockCard>
   );

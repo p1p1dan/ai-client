@@ -124,9 +124,9 @@ export const CHAT_PROSE_LEADING = 'leading-[1.43]';
  * would have silently halved the rhythm between turns.
  */
 export function readingColumnSpacingClass(): string {
-  // Design system v2 §4.2: turn gap = body line (20px at 14px) x 0.75, the
-  // nearest step being 16px.
-  return 'space-y-4';
+  // Layout 5c (2026-10-22 screenshot): turns breathe — 24px between them, the
+  // reference's generous whitespace around each exchange. Was 16px (v2 §4.2).
+  return 'space-y-6';
 }
 
 /**
@@ -143,7 +143,8 @@ export function readingColumnSpacingClass(): string {
  * would be the nearest ancestor for some of them and change what they react to.
  */
 export function chatTurnClass(): string {
-  return 'group/turn flex flex-col gap-3';
+  // Layout 5c: 16px prompt -> turn line (was 12px), keeping the ladder 24 > 16 > 10.
+  return 'group/turn flex flex-col gap-4';
 }
 
 /**
@@ -187,9 +188,11 @@ export function userBubbleRowClass(): string {
  * never catches it. `break-words` on the paragraph is the other half.
  */
 export function userBubbleClass(): string {
-  // Design system v2 §7.1: the only tinted block -- neutral fill, no edge, the
-  // bubble radius, 16/12 padding. Supersedes the D3-c edge and sharp corner.
-  return 'min-w-0 max-w-[80%] space-y-2 rounded-bubble bg-fill-neutral px-4 py-3';
+  // Design system v2 §7.1: the only tinted block -- neutral fill, no edge.
+  // Layout 5c (2026-10-22 screenshot): a small 10px radius (`rounded-md`, was
+  // the 18px bubble tier) and compact 12/6 padding, so the prompt reads as a
+  // quiet grey block rather than a chat bubble.
+  return 'min-w-0 max-w-[80%] space-y-2 rounded-md bg-fill-neutral px-3 py-1.5';
 }
 
 /**
@@ -203,7 +206,7 @@ export function userBubbleClass(): string {
  * turn (decision 094).
  */
 export function userBubbleAwaitingClass(): string {
-  return 'min-w-0 max-w-[80%] space-y-2 rounded-bubble border border-dashed border-border-strong bg-transparent px-4 py-3';
+  return 'min-w-0 max-w-[80%] space-y-2 rounded-md border border-dashed border-border-strong bg-transparent px-3 py-1.5';
 }
 
 /**
@@ -520,8 +523,10 @@ export function turnClockRowClass(): string {
  * the muted ink, frameless. The status and work-zone rows below take the same
  * size in the faint ink (§7, turn status line).
  */
+// Layout 5c (2026-10-22 screenshot): one faint summary line at regular weight
+// with the `›` at its end; `font-medium` (v2 §7.3) is dropped.
 const TURN_CLOCK_ROW_BASE =
-  'flex min-w-0 items-center gap-1.5 bg-background py-1 text-chat-process font-medium tabular-nums text-muted-foreground';
+  'flex min-w-0 items-center gap-1 bg-background py-1 text-chat-process tabular-nums text-muted-foreground';
 /**
  * The turn's status row: `Awaiting first token 8s`, `Stalled`, `Failed`, the
  * retry counter — i.e. the things that are only true WHILE the turn is running.
@@ -815,9 +820,9 @@ export const PROMPT_FOLD_THRESHOLD_LINES = 15;
 export const PROMPT_FOLDED_LINES = 12;
 
 /**
- * Width units a bubble line holds: the bubble is at most 80% of the 45rem
- * reading column less its 16px padding (~544px); at the 14px body that is
- * about 76 Latin characters, a CJK character counting two.
+ * Width units a bubble line holds: the bubble is at most 80% of the 40rem
+ * reading column less its 12px padding (~488px); at the 13px body that is
+ * still about 76 Latin characters, a CJK character counting two (layout 5c).
  */
 const PROMPT_UNITS_PER_LINE = 76;
 
@@ -851,4 +856,16 @@ export function userBubbleFoldClass(folded: boolean): string {
   return folded
     ? `max-h-[12lh] overflow-hidden text-chat-body ${CHAT_PROSE_LEADING} [mask-image:linear-gradient(to_bottom,black_calc(100%-3rem),transparent)]`
     : '';
+}
+
+/**
+ * Layout 5c (ruling L3): the per-turn change card — one compact frame
+ * (~44px: `py-1` + two text lines + the hairline) that says how many files the
+ * turn changed and opens the right panel's changes tab on click. The stage-3
+ * card frame (`border-border-soft rounded-md bg-surface-2`), no elevation: it
+ * sits in the reading flow, not above it. A `<button>`, so `text-left` resets
+ * the UA centring.
+ */
+export function turnChangeCardClass(): string {
+  return 'flex w-full max-w-md min-w-0 items-center gap-2.5 rounded-md border border-border-soft bg-surface-2 px-2.5 py-1 text-left transition-colors duration-150 ease-out hover:border-border-strong focus-ring';
 }

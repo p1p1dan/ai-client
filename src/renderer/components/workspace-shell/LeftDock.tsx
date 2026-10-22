@@ -7,10 +7,15 @@
  * chat list is the sidebar's only content; git / files / context / run are
  * tabs of the work panel on the right (`WorkPanel.tsx`). The rail's other
  * entries moved too:
- *   - Home → the chat list's own 「新建对话」, which opens the home page;
+ *   - Home → the chat list's own 「新对话」, which opens the home page;
  *   - collapse → this column's top row (and Ctrl+B); while collapsed, the
  *     title bar offers the expand button;
  *   - Capabilities, Settings → small buttons at the end of the account row.
+ *
+ * Layout 5b: the top row is the screenshot's — collapse, then back / forward
+ * over the conversations visited in this run (Alt+Left / Alt+Right,
+ * `sidebar/useVisitHistory.ts`). The screenshot's leftmost app menu has no
+ * counterpart here (the window menu is the title bar's), so it is left out.
  *
  * Collapsed means width 0: the column animates closed and turns inert. The
  * content keeps its committed width while the outer edge moves, so the list
@@ -18,7 +23,7 @@
  */
 
 import type { TempWorkspaceItem } from '@shared/types';
-import { Blocks, PanelLeftClose, Settings } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Blocks, PanelLeftClose, Settings } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import {
@@ -33,13 +38,17 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useSettingsStore } from '@/stores/settings';
 import { useShellLayoutStore } from '@/stores/shellLayout';
-import { LeftNav } from './LeftNav';
+import { LeftNav, type SidebarSearchEntry } from './LeftNav';
 import { ShellResizeHandle } from './ShellResizeHandle';
 import { deriveSessionCapabilities } from './sessionCapabilityModel';
 import { clampSidebarWidth } from './shellLayoutModel';
+import { keybindingLabel } from './sidebar/keybindingLabel';
+import { useVisitHistory } from './sidebar/useVisitHistory';
 import { UserFooterPill } from './UserFooterPill';
 import { useSessionCapabilities } from './useSessionCapabilities';
+import { useWorkspaceRootPath } from './useWorkspaceRootPath';
 
 interface LeftDockProps {
   /** Allocated sidebar width, straight from the allocator (0 while collapsed). */
@@ -58,6 +67,8 @@ interface LeftDockProps {
   onRemoveRepository?: (repoPath: string) => void;
   tempWorkspaces?: TempWorkspaceItem[];
   onRequestTempDelete?: (id: string) => void;
+  /** Layout 5b: the nav's 「搜索」 — the shell's `useWorkspaceSearch().openSearch`. */
+  onOpenSearch?: () => void;
 }
 
 /** The roving-tabindex stop of the chat list, else its first item. */
@@ -78,8 +89,21 @@ export function LeftDock({
   onRemoveRepository,
   tempWorkspaces = [],
   onRequestTempDelete,
+  onOpenSearch,
 }: LeftDockProps) {
   const { t } = useI18n();
+  const visits = useVisitHistory();
+  // The global search runs over a workspace's files: with none (a home page
+  // with no repository picked) the entry is disabled rather than inert.
+  const searchRoot = useWorkspaceRootPath();
+  const searchBinding = useSettingsStore((state) => state.searchKeybindings.searchFiles);
+  const search: SidebarSearchEntry | undefined = onOpenSearch
+    ? {
+        onOpen: onOpenSearch,
+        enabled: searchRoot !== null,
+        shortcut: keybindingLabel(searchBinding, window.electronAPI.env.platform),
+      }
+    : undefined;
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
   const dockRef = useRef<HTMLDivElement>(null);
   const [resizing, setResizing] = useState(false);
@@ -126,14 +150,27 @@ export function LeftDock({
         // painted variable instead, so the list follows the pointer.
         style={{ width: resizing ? '100%' : `${sidebarWidth}px` }}
       >
-        {/* Level with the title bar (h-9). The reference's row also holds
-            history arrows; only the collapse control is ours today (5b). */}
-        <div className="flex h-9 shrink-0 items-center px-2">
+        {/* Level with the title bar (h-9): collapse, back, forward. */}
+        <div className="flex h-9 shrink-0 items-center gap-0.5 px-2">
           <SidebarIconButton
             label={`${t('Collapse sidebar')} (Ctrl+B)`}
             onClick={onToggleCollapsed}
           >
             <PanelLeftClose className="size-4" />
+          </SidebarIconButton>
+          <SidebarIconButton
+            label={`${t('Go back')} (Alt+←)`}
+            onClick={visits.goBack}
+            disabled={!visits.canGoBack}
+          >
+            <ArrowLeft className="size-4" />
+          </SidebarIconButton>
+          <SidebarIconButton
+            label={`${t('Go forward')} (Alt+→)`}
+            onClick={visits.goForward}
+            disabled={!visits.canGoForward}
+          >
+            <ArrowRight className="size-4" />
           </SidebarIconButton>
         </div>
         <div className="relative min-h-0 flex-1">
@@ -144,6 +181,7 @@ export function LeftDock({
               onRemoveRepository={onRemoveRepository}
               tempWorkspaces={tempWorkspaces}
               onRequestTempDelete={onRequestTempDelete}
+              search={search}
             />
           </div>
         </div>
@@ -191,10 +229,12 @@ export function LeftDock({
 function SidebarIconButton({
   label,
   onClick,
+  disabled,
   children,
 }: {
   label: string;
   onClick: () => void;
+  disabled?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -206,7 +246,8 @@ function SidebarIconButton({
             type="button"
             aria-label={label}
             onClick={onClick}
-            className="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
+            disabled={disabled}
+            className="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
           />
         }
       >

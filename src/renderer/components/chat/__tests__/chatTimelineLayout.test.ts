@@ -18,6 +18,7 @@ import {
   turnProcessToneClass,
   turnStatusToneClass,
   turnWorkGroupSummaryClass,
+  userBubbleAwaitingClass,
   userBubbleClass,
   userBubbleRowClass,
   userBubbleTextClass,
@@ -290,8 +291,9 @@ describe('chatTurnClass (F-B10)', () => {
   // The prompt -> turn body beat. It was 10px (the retired band's bottom
   // padding, inherited whole); on 2026-09-19 it moved to the 12px loose tier so
   // the turn's own line stops reading as the tail of the prompt above it.
-  it('F-B10: owns the 12px prompt-to-body beat', () => {
-    expect(spacingPx(chatTurnClass(), 'gap')).toBe(12);
+  // Layout 5c (2026-10-22 screenshot): 16px, so the turn breathes.
+  it('F-B10: owns the 16px prompt-to-body beat', () => {
+    expect(spacingPx(chatTurnClass(), 'gap')).toBe(16);
     expect(chatTurnClass()).not.toMatch(/(?:^|\s)space-y-/);
   });
 });
@@ -306,9 +308,9 @@ describe('turn spacing arithmetic (F-B9)', () => {
    * the whole reason this assertion is written as an absolute number rather
    * than as a relation between two live values.
    */
-  // Design system v2 §4.2: turn gap = body line (20px) x 0.75 -> the 16px step.
+  // Layout 5c (2026-10-22 screenshot): 24px between turns (was v2 §4.2's 16px).
   it('F-B9: the whole turn-to-turn beat lives in ReadingColumn', () => {
-    expect(spacingPx(readingColumnSpacingClass(), 'space-y')).toBe(16);
+    expect(spacingPx(readingColumnSpacingClass(), 'space-y')).toBe(24);
   });
 
   /**
@@ -323,13 +325,13 @@ describe('turn spacing arithmetic (F-B9)', () => {
    * as the header of the reply (the user's report). So this asserts the ORDER,
    * plus each tier's absolute number so a failure names which one moved.
    */
-  // Design system v2 §4.2: 16 between turns (x 0.75), 10 inside (x 0.5).
-  it('F-B9: the three beats descend — 16 between turns, 12 to the turn line, 10 inside', () => {
+  // Layout 5c: 24 between turns, 16 to the turn line, 10 inside (v2 §4.2 had 16 / 12 / 10).
+  it('F-B9: the three beats descend — 24 between turns, 16 to the turn line, 10 inside', () => {
     const between = spacingPx(readingColumnSpacingClass(), 'space-y');
     const toTurnLine = spacingPx(chatTurnClass(), 'gap');
     const within = spacingPx(turnBodyClass(), 'gap');
-    expect(between).toBe(16);
-    expect(toTurnLine).toBe(12);
+    expect(between).toBe(24);
+    expect(toTurnLine).toBe(16);
     expect(within).toBe(10);
     expect(between).toBeGreaterThan(toTurnLine);
     expect(toTurnLine).toBeGreaterThan(within);
@@ -440,15 +442,21 @@ describe('userBubbleTextClass / userBubbleClass (T12)', () => {
     expect(cls).toContain('bg-fill-neutral');
     expect(cls).not.toMatch(/(?:^|\s)border(?:-|\s|$)/);
     expect(cls).not.toMatch(/rounded-(?:tr|br|tl|bl)-/);
-    expect(cls).toContain('px-4 py-3');
+    // Layout 5c (2026-10-22 screenshot): compact 12/6 padding (was 16/12).
+    expect(cls).toContain('px-3 py-1.5');
   });
 
-  // Radii are token steps, never raw pixels: `rounded-bubble` is the v2 tier
-  // for the user message. An arbitrary `rounded-[18px]` would read as a one-off.
+  // Radii are token steps, never raw pixels. Layout 5c: the small 10px
+  // `rounded-md` tier, not the 18px bubble tier. An arbitrary `rounded-[10px]`
+  // would read as a one-off.
   it('T12: the bubble radii are design-system tiers, not arbitrary values', () => {
     const cls = userBubbleClass();
-    expect(cls).toContain('rounded-bubble');
+    expect(cls).toContain('rounded-md');
+    expect(cls).not.toContain('rounded-bubble');
     expect(cls).not.toMatch(/rounded-\[/);
+    // The awaiting bubble keeps the same geometry, only its face differs.
+    expect(userBubbleAwaitingClass()).toContain('rounded-md');
+    expect(userBubbleAwaitingClass()).toContain('px-3 py-1.5');
   });
 });
 
@@ -478,8 +486,11 @@ describe('turnHeadClass', () => {
       /(?:^|\s)text-(?:ui|meta)(?:\s|$)/
     );
     expect(turnWorkGroupSummaryClass()).not.toMatch(/(?:^|\s)text-(?:ui|meta)(?:\s|$)/);
-    // §7.3: the thinking head is 500 weight.
-    expect(turnWorkGroupSummaryClass()).toContain('font-medium');
+    // Layout 5c (2026-10-22 screenshot): the folded process line is one faint
+    // summary at regular weight (§7.3's 500 weight dropped).
+    expect(turnWorkGroupSummaryClass()).not.toMatch(
+      /(?:^|\s)font-(?:medium|semibold|bold)(?:\s|$)/
+    );
   });
 });
 

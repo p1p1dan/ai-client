@@ -237,3 +237,24 @@ export function deriveTerminalButtonState(input: {
   if (input.visible) return 'open';
   return input.alive ? 'hidden' : 'closed';
 }
+
+// ── layout 5c: the timeline's change card asks for one file ─────────────
+/**
+ * A request to show one file in the changes tab (the timeline's per-turn
+ * change card). The panel reads it and selects / scrolls to the entry; `seq`
+ * rises on every request so a repeated click on the same card re-reveals.
+ */
+export interface WorkPanelChangeFocus {
+  /** `SessionReviewEntry.id` (`${messageId}:${toolCallId}`) of the file's first change in the turn. */
+  entryId: string;
+  /** The file's path as the tool recorded it, for a panel that matches by path. */
+  path: string;
+  seq: number;
+}
+
+export function nextChangeFocus(
+  prev: WorkPanelChangeFocus | null,
+  target: { entryId: string; path: string }
+): WorkPanelChangeFocus {
+  return { entryId: target.entryId, path: target.path, seq: (prev?.seq ?? 0) + 1 };
+}

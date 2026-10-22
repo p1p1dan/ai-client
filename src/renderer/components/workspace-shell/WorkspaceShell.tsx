@@ -414,6 +414,7 @@ export function WorkspaceShell({
       className="group/shell relative flex h-full min-h-0 w-full flex-1 overflow-hidden bg-background"
     >
       <LeftDock
+        onOpenSearch={() => workspaceSearch.openSearch('files')}
         dockWidth={allocation.sidebarWidth}
         sidebarWidth={sidebarWidth}
         collapsed={sidebarCollapsed}

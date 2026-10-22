@@ -11,11 +11,15 @@ import { stripComments } from '@/components/chat/__tests__/stripComments';
  * Static, like this directory's other LeftNav pins: what can regress is a
  * class string, and jsdom computes no layout to measure.
  *
- *   top nav       13px 400 foreground       h-8   22px icon slot; hover fill-ghost-hover
- *   tool row      search (h-8) + collapse / expand all + bulk archive (32px)
- *   group label   12px 500 faint            h-8   no icon, no hover fill; soft ink on hover
- *   chat          13px 400 foreground-soft  h-8   fixed w-4 status slot; open: foreground
- *   auxiliary     12px 400 muted            h-8   text in the title column
+ *   top nav       13px 400 foreground-soft  h-7   16px icon; hover fill-ghost-hover
+ *   filter        search (h-8), shown only while asked for (layout 5b)
+ *   group label   12px 500 faint            h-7   no icon, no hover fill; soft ink on hover
+ *   chat          13px 400 foreground-soft  h-7   text only, a trailing state mark
+ *   auxiliary     12px 400 faint            h-7   「显示更多」 in the title column
+ *
+ * Layout 5b (ui-cohesion §6, the Claude Code desktop screenshot) replaced the
+ * two-entry nav and the tool row with four entries and the list menu, and
+ * moved the row's state mark to its end.
  *
  * Decision 188 (2026-10-13, screenshot-style spacing preview): every row 32px
  * and wider gaps between the three zones. Design system v2 (§3.1, §7.12):
@@ -37,6 +41,7 @@ const NAV = code(join(SHELL, 'LeftNav.tsx'));
 const DOCK = code(join(SHELL, 'LeftDock.tsx'));
 const BAR = code(join(SHELL, 'SessionBar.tsx'));
 const FOOTER = code(join(SHELL, 'UserFooterPill.tsx'));
+const LIST_MENU = code(join(SHELL, 'sidebar/SidebarListMenu.tsx'));
 
 function slice(source: string, from: string, to: string): string {
   const start = source.indexOf(from);
@@ -91,23 +96,34 @@ describe('the panel title is gone from all five panels (decision 183 §1.9)', ()
 });
 
 describe('levels (decision 183, prototype `.vA`)', () => {
-  it('top nav: two h-8 rows, text-ui, a 22px icon slot; New chat on a round selected-fill disc', () => {
+  it('top nav (layout 5b): four h-7 entries, text-ui, a 16px icon, frameless ghost hover', () => {
     expect(constant('NAV_ITEM_CLASS')).toBe(
-      'flex h-8 w-full items-center gap-2.5 rounded-xs px-2 text-left text-ui hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover'
+      'flex h-7 w-full items-center gap-2 rounded-xs px-2 text-left text-ui text-foreground-soft hover:bg-fill-ghost-hover hover:text-foreground focus-visible:bg-fill-ghost-hover disabled:pointer-events-none disabled:opacity-50 data-popup-open:bg-fill-ghost-hover'
     );
-    expect(NAV.split('className={NAV_ITEM_CLASS}').length - 1).toBe(2);
-    expect(NAV).toContain(
-      'className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-fill-ghost-selected text-foreground"'
-    );
-    expect(NAV).toContain('<FolderPlus className="size-4" />');
-    // New chat opens the home page (decision 174); Add repository the dialog.
+    expect(constant('NAV_ICON_CLASS')).toBe('size-4 shrink-0 text-muted-foreground');
+    // 新对话, 搜索, 技能与插件, and 仓库's menu trigger.
+    expect(NAV.split('className={NAV_ITEM_CLASS}').length - 1).toBe(4);
+    expect(NAV.split('className={NAV_ICON_CLASS}').length - 1).toBe(4);
+    const nav = slice(NAV, "{t('New chat')}</span>", "{t('Skills and plugins')}");
+    expect(nav.indexOf("{t('Search')}")).toBeLessThan(nav.indexOf("{t('Repositories')}"));
+    // New chat opens the home page (decision 174); the old disc is gone.
     expect(NAV).toContain('onClick={handleNewSession}');
-    expect(NAV).toContain('onClick={onAddRepository}');
+    expect(NAV).not.toContain('rounded-full bg-fill-ghost-selected');
+    // Search: the shell's global search, the shortcut faint at the right.
+    expect(NAV).toContain('onClick={() => search?.onOpen()}');
+    expect(NAV).toContain(
+      '<span className="shrink-0 text-2xs text-foreground-faint">{search.shortcut}</span>'
+    );
+    // Repositories: each one's actions, then Add repository (the dialog).
+    expect(nav).toContain('{repositoryMenuItems(repo)}');
+    expect(nav).toContain('onClick={() => onAddRepository?.()}');
+    // Skills and plugins: the Extensions settings page.
+    expect(NAV).toContain("requestSettings('extensions')");
   });
 
   it('group label: 12px / 500 / faint, soft ink on hover, no icon, no hover fill', () => {
     expect(GROUP_HEADER).toContain(
-      "'group flex h-8 w-full items-center gap-1 rounded-xs px-2 has-focus-visible:bg-fill-ghost-hover',"
+      "'group flex h-7 w-full items-center gap-1 rounded-xs px-2 has-focus-visible:bg-fill-ghost-hover',"
     );
     // Issue #26 item 7: the clay drop ring while a chat is dragged over it.
     expect(GROUP_HEADER).toContain("drop?.active && 'ring-2 ring-primary/60 ring-inset'");
@@ -145,6 +161,10 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     expect(REPOSITORY_GROUP).toContain(
       "className={cn(GROUP_ACTION_CLASS, 'data-popup-open:opacity-100')}"
     );
+    // Layout 5b: so does the list menu, shown with them on every heading.
+    expect(LIST_MENU).toContain("className={cn(className, 'data-popup-open:opacity-100')}");
+    expect(NAV).toContain('className={GROUP_ACTION_CLASS}\n      mode={archiveMode}');
+    for (const group of [TEMPORARY_GROUP, REPOSITORY_GROUP]) expect(group).toContain('{listMenu}');
   });
 
   it('hover-only reveals answer keyboard focus, never the focus a click leaves behind', () => {
@@ -180,7 +200,7 @@ describe('levels (decision 183, prototype `.vA`)', () => {
 
   it('chat: text-ui / 400 in --foreground-soft; the open one keeps the body colour', () => {
     expect(ROW).toContain(
-      "'group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-xs px-2 text-left text-ui',"
+      "'group relative flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-xs px-2 text-left text-ui',"
     );
     expect(ROW).toContain("? 'bg-fill-ghost-selected text-foreground'");
     expect(ROW).toContain(
@@ -195,28 +215,52 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     );
   });
 
-  it('a chat not started shows the faint ring; started, the filled dot (§1.7, issue #16)', () => {
-    expect(ROW).toContain(
-      'className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground-faint"'
+  it('layout 5b: one trailing state mark, by urgency; started is the faint filled dot (issue #16)', () => {
+    const mark = slice(
+      ROW,
+      '{!onToggleSelect &&\n            (rowWaiting ? (',
+      '{!onToggleSelect && ('
     );
-    expect(ROW).toContain("title={t('Not started')}");
-    // Issue #16: filled, not a second outline -- an outline beside the faint
-    // outline was the pair the user could not tell apart.
-    expect(ROW).toContain('className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground"');
-    // Every branch of the slot renders a mark: no `: null}` at its end.
-    const slot = slice(ROW, '{onToggleSelect ? null : row.busy ? (', '{titleParts.suffix === null');
-    expect(slot).toContain('border-muted-foreground-faint');
-    expect(slot).not.toContain(') : null}');
+    // After the title and the context text: the mark trails.
+    expect(ROW.indexOf('{titleParts.suffix === null')).toBeLessThan(ROW.indexOf('(rowWaiting ? ('));
+    expect(ROW.indexOf('{branch && (')).toBeLessThan(ROW.indexOf('(rowWaiting ? ('));
+    // Urgency order: waiting-on-you, running, failed, unread result, attached.
+    const order = [
+      '<StatusIcon status="waiting"',
+      '<StatusIcon status="running"',
+      ') : row.failed ? (',
+      ') : unread ? (',
+      ') : started ? (',
+      ') : null)}',
+    ].map((needle) => mark.indexOf(needle));
+    for (const at of order) expect(at).toBeGreaterThan(-1);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // A failure is the warning icon; red only while unseen.
+    expect(mark).toContain("unread ? 'text-destructive' : 'text-muted-foreground'");
+    // Issue #16: attached is FILLED (no ring); a chat not started has no mark.
+    expect(mark).toContain('<span className="size-1.5 rounded-full bg-muted-foreground-faint" />');
+    expect(ROW).not.toContain("title={t('Not started')}");
+    // A pending approval waits on the user too; its count is the mark's words.
+    expect(ROW).toContain(
+      '(row.busy && isWaitingSessionStatus(row.status)) || pendingApprovalCount > 0'
+    );
+    expect(ROW).toContain(
+      "t('{{count}} pending approval requests', { count: pendingApprovalCount })"
+    );
   });
 
-  it('auxiliary: h-8, 12px muted, the empty w-4 slot puts the text in the title column', () => {
+  it('auxiliary (layout 5b): h-7, 12px faint, the text in the title column', () => {
     expect(AUX_ROW).toContain(
-      'className="flex h-8 w-full items-center gap-1.5 rounded-xs px-2 text-small text-muted-foreground tabular-nums hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover"'
+      'className="flex h-7 w-full items-center rounded-xs px-2 text-small text-foreground-faint tabular-nums hover:bg-fill-ghost-hover hover:text-muted-foreground focus-visible:bg-fill-ghost-hover"'
     );
-    expect(AUX_ROW).toContain('className="flex w-4 shrink-0 items-center justify-center"');
+    // Rows have no leading slot, so neither does this.
+    expect(AUX_ROW).not.toContain('w-4');
     // §1.5: no 「新建对话」 row in an empty group, so no icon slot content.
     expect(AUX_ROW).not.toContain('icon');
     expect(NAV).not.toContain('icon={<Plus');
+    // 「显示更多」, its count the tooltip.
+    expect(NAV).toContain("title={t('View more ({{count}})', { count: limited.hiddenCount })}");
+    expect(NAV).toContain("{t('Show more chats')}");
   });
 
   it('the 12px group label sits one tier below the 13px rows (issue #14, design system v2)', () => {
@@ -269,45 +313,44 @@ describe('one list (decision 183 §1.10)', () => {
       'deriveActiveRows',
       'limitActiveRows',
       "t('Active now')",
-      "t('Repositories')",
       'max-h-[',
       'sticky',
       'isolate',
     ]) {
       expect(NAV, gone).not.toContain(gone);
     }
-    // Groups and rows are separated by spacing alone: the only line in the
-    // panel body is the top zone's (below).
+    // Layout 5b: 「仓库」 is a nav entry above the list, not a region title in it.
+    expect(NAV.split("t('Repositories')").length - 1).toBe(1);
+    expect(
+      slice(
+        NAV,
+        '<MenuTrigger render={<button type="button" className={NAV_ITEM_CLASS} />}>',
+        '</MenuTrigger>'
+      )
+    ).toContain("t('Repositories')");
+    // Groups and rows are separated by spacing alone, and (layout 5b) the top
+    // zone's hairline went with the tool row: the panel body has no line.
     expect(NAV).not.toMatch(/\bborder-t\b/);
-    expect(NAV.match(/\bborder-b\b/g)).toHaveLength(1);
+    expect(NAV).not.toMatch(/\bborder-b\b/);
   });
 
-  it('two full-width zone lines: under the top zone and on the account footer (user ruling 2026-10-12)', () => {
-    // Prototype v6 `.sep-line`: 16px under the search row (decision 188; was
-    // 8px), one hairline on the full-width box (its px-2 sits inside the
-    // line), shared by the selection bar so nothing moves when multi-select
-    // starts.
-    expect(constant('TOP_ZONE_END_CLASS')).toBe(
-      'shrink-0 border-b border-border-soft px-2 pt-3 pb-4'
-    );
-    expect(NAV.split('className={TOP_ZONE_END_CLASS}').length - 1).toBe(1);
-    const zone = slice(NAV, '<div className={TOP_ZONE_END_CLASS}>', '<ContextMenuPrimitive.Root>');
-    expect(zone).toContain('<div className="flex h-8 items-center gap-0.5">');
-    expect(zone).toContain('{selecting ? (');
-    expect(zone).toContain('<InputGroup className={SIDEBAR_SEARCH_CLASS}>');
-    // The footer's line is its own top border, across the panel.
-    // Decision 188: 12px from the line to the account row, 10px below it.
+  it('one full-width zone line, the account footer`s (layout 5b; was two, user ruling 2026-10-12)', () => {
+    // The top zone's line went with the tool row (the screenshot's list runs
+    // straight on from the nav). The footer's is its own top border, across
+    // the panel; layout 5b: 6px above and below the row.
+    expect(NAV).not.toContain('TOP_ZONE_END_CLASS');
     expect(FOOTER).toContain(
-      '<div className="flex shrink-0 items-center gap-1 border-t border-border-soft px-2 pt-3 pb-2.5">'
+      '<div className="flex shrink-0 items-center gap-0.5 border-t border-border-soft px-2 py-1.5">'
     );
   });
 
-  it('spacing: list px-2 pt-1 pb-4; groups 12px then 14px apart; rows 2px; no indent', () => {
-    // Decision 188: hairline -> first group header 4 + 12 = 16px; last row ->
-    // footer hairline 16px.
-    expect(LIST_AREA).toContain('className="px-2 pt-1 pb-4"');
-    expect(constant('SIDEBAR_GROUP_CLASS')).toBe('mt-3.5 first:mt-3');
-    expect(constant('GROUP_ROWS_CLASS')).toBe('mt-0.5 space-y-0.5');
+  it('spacing (layout 5b): the list starts under the nav, groups 16px apart, rows flush, no indent', () => {
+    // Decision 188's pt-1 measured from the tool row's hairline, which is
+    // gone: the nav's pb-2 plus the first group's mt-1 is the gap now.
+    expect(LIST_AREA).toContain('className="px-2 pt-0 pb-3"');
+    expect(NAV).toContain('<div className="flex shrink-0 flex-col gap-px px-2 pb-2">');
+    expect(constant('SIDEBAR_GROUP_CLASS')).toBe('mt-4 first:mt-1');
+    expect(constant('GROUP_ROWS_CLASS')).toBe('flex flex-col');
     expect(NAV).not.toContain('pl-3');
     expect(TEMPORARY_GROUP).toContain('className={GROUP_ROWS_CLASS}');
     expect(REPOSITORY_GROUP).toContain('className={GROUP_ROWS_CLASS}');
@@ -333,12 +376,14 @@ describe('one list (decision 183 §1.10)', () => {
   });
 });
 
-describe('the tool row (decision 183 §1.8, §2.1)', () => {
-  it('the search box is always there: no filter toggle, no visibility state', () => {
-    expect(NAV).not.toContain('searchVisible');
-    expect(NAV).not.toContain("t('Filter sessions')");
-    expect(NAV).not.toContain('ListFilter');
+describe('the list tools (layout 5b; were the tool row, decision 183 §1.8, §2.1)', () => {
+  it('the filter field shows while asked for or while it holds a query, and owns Escape', () => {
+    expect(NAV).toContain(') : filterOpen || queryActive ? (');
+    expect(NAV).toContain('<div className="shrink-0 px-2 pb-1" {...FILTER_HOLDS_ESCAPE}>');
     expect(NAV).toContain('<InputGroup className={SIDEBAR_SEARCH_CLASS}>');
+    // Opened from the list menu, or by typing on the list.
+    expect(LIST_MENU).toContain("{t('Filter chats')}");
+    expect(NAV).toContain('handleQueryChange(query + event.key);');
   });
 
   it('the search box is drawn like the prototype, overriding the primitive by matching stacks', () => {
@@ -368,13 +413,15 @@ describe('the tool row (decision 183 §1.8, §2.1)', () => {
     expect(toggle).toContain('Object.fromEntries(toggleGroupIds.map((id) => [id, expand]))');
     expect(NAV).toContain(`  const toggleGroupIds = groupingByGroup
     ? groupFolderIds
-    : [`);
+    : groupingDerived
+      ? bucketFolders.map((folder) => folder.projectId)
+      : [`);
     expect(toggle).not.toContain('visibleFolders');
     expect(NAV).toContain("allGroupsCollapsed ? t('Expand all groups') : t('Collapse all groups')");
-    expect(NAV).toContain('aria-label={toggleAllLabel}');
-    expect(NAV).toContain('title={toggleAllLabel}');
-    expect(NAV).toContain('<ChevronsUpDown className="size-4" />');
-    expect(NAV).toContain('<ChevronsDownUp className="size-4" />');
+    // Layout 5b: an item of the list menu, labelled by the same text.
+    expect(NAV).toContain('label: toggleAllLabel,');
+    expect(LIST_MENU).toContain('{foldAll.label}');
+    expect(LIST_MENU).toContain('{foldAll.collapsed ? <ChevronsUpDown /> : <ChevronsDownUp />}');
     // Its state reads the stored folds of the groups the list shows without a
     // search, so typing one cannot change its label.
     expect(NAV).toContain(
@@ -392,7 +439,8 @@ describe('the tool row (decision 183 §1.8, §2.1)', () => {
     // The header writes nothing while a search is typed.
     expect(TEMPORARY_GROUP).toContain('onToggle: queryActive');
     expect(REPOSITORY_GROUP).toContain('onToggle: queryActive');
-    expect(NAV).toContain('disabled={queryActive || toggleGroupIds.length === 0}');
+    expect(NAV).toContain('disabled: queryActive || toggleGroupIds.length === 0,');
+    expect(LIST_MENU).toContain('disabled={foldAll.disabled}');
   });
 
   it('clearing a search leaves exactly the last query s groups open (user ruling)', () => {
@@ -408,18 +456,18 @@ describe('the tool row (decision 183 §1.8, §2.1)', () => {
     expect(NAV.split('setQuery(').length - 1).toBe(1);
   });
 
-  it('32px icon buttons, and selection mode swaps the row in place', () => {
-    expect(constant('TOOL_BUTTON_CLASS')).toBe('size-8 shrink-0 text-muted-foreground sm:size-8');
-    expect(NAV).toContain('<div className={TOP_ZONE_END_CLASS}>');
-    expect(NAV).toContain('<div className="flex h-8 items-center gap-0.5">');
+  it('selection mode swaps its bar in where the filter field goes', () => {
+    expect(NAV).not.toContain('TOOL_BUTTON_CLASS');
+    expect(NAV).toContain('<div className="flex h-8 shrink-0 items-center gap-0.5 px-2">');
     expect(NAV).toContain("{t('{{count}} selected', { count: selection.size })}");
+    expect(LIST_MENU).toContain("{t('Select sessions to archive')}");
   });
 });
 
 describe('the account footer (decision 183, user ruling 2026-10-12, prototype v6 `.foot.proto`)', () => {
   it('is the prototype s 32px row in every sign-in state', () => {
     expect(FOOTER).toContain(
-      "'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-xs px-2 text-left',"
+      "'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-xs px-1.5 text-left',"
     );
     expect(FOOTER).toContain("'text-muted-foreground hover:bg-fill-ghost-hover',");
     // One trigger, its content switching by state: the height is the trigger's.
@@ -437,8 +485,9 @@ describe('the account footer (decision 183, user ruling 2026-10-12, prototype v6
     expect(FOOTER).not.toContain('className="size-4 shrink-0');
     // The e-mail at the sidebar rows' size (design system v2: text-ui).
     expect(FOOTER).toContain('className="min-w-0 flex-1 truncate text-ui text-foreground-soft"');
+    // Layout 5b: the screenshot's quiet ⌄ after the name.
     expect(FOOTER).toContain(
-      '<ChevronsUpDown aria-hidden className="ml-auto size-3.5 shrink-0 text-muted-foreground" />'
+      '<ChevronDown aria-hidden className="ml-auto size-3.5 shrink-0 text-foreground-faint" />'
     );
   });
 

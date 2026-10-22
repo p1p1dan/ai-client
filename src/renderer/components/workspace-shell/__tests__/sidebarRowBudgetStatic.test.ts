@@ -14,8 +14,9 @@ import { SIDEBAR_DEFAULT_WIDTH } from '../shellLayoutModel';
  *
  * At the 272px default (design system v2 / layout 5a: the sidebar alone, which
  * includes its 1px right border) a row has 272 - 1 - 16 (the list's px-2) - 16
- * (the row's px-2) = 239px of content. Minus the 16px status slot and one 6px
- * gap the title gets 217px. Pi is the
+ * (the row's px-2) = 239px of content. Layout 5b (the desktop screenshot):
+ * no leading slot — the state is a 14px TRAILING mark — so minus the mark and
+ * one 6px gap the title gets 219px. Pi is the
  * sole chat runtime and is not repeated as a per-row badge; the branch is
  * shown only on a worktree row.
  */
@@ -32,24 +33,32 @@ const ROW = CODE.slice(CODE.indexOf('function SessionRow('));
  * floating actions.
  */
 const SESSION_ROW_CLASS =
-  /'group relative flex h-8 w-full items-center gap-1\.5 overflow-hidden rounded-xs px-2 text-left text-ui'/;
+  /'group relative flex h-7 w-full items-center gap-1\.5 overflow-hidden rounded-xs px-2 text-left text-ui'/;
 
 describe('sidebar session row width budget', () => {
-  it('keeps the row a single h-8 line with a clipping box', () => {
-    // h-8 is the sidebar row height since decision 188 (was the h-7 tree-node
-    // token); a second line would silently change sidebar density instead of
+  it('keeps the row a single h-7 line with a clipping box', () => {
+    // Layout 5b: h-7 (28px, the screenshot's density; decision 188 had h-8);
+    // a second line would silently change sidebar density instead of
     // solving the overflow. rounded-xs (design system v2 §7.12; the radius clamp rule keeps small
     // controls off rounded-md and up).
     expect(ROW).toMatch(SESSION_ROW_CLASS);
   });
 
-  it('opens every row with one fixed w-4 status slot, rendered even when empty', () => {
-    // The slot is a plain element, not conditional: the spinner, the dots and
-    // the selection checkbox all sit inside it, so the title never moves.
-    const slotAt = ROW.indexOf('<span className="flex w-4 shrink-0 items-center justify-center">');
-    expect(slotAt).toBeGreaterThan(ROW.indexOf('title={tooltip}'));
-    expect(slotAt).toBeLessThan(ROW.indexOf('{onToggleSelect && ('));
-    expect(slotAt).toBeLessThan(ROW.indexOf('{onToggleSelect ? null : row.busy ? ('));
+  it('layout 5b: the title leads the row; the one state mark trails it', () => {
+    // The old fixed w-4 leading slot is gone (the screenshot's rows are text
+    // first). Only the selection checkbox leads, and only while selecting.
+    expect(ROW).not.toContain('<span className="flex w-4 shrink-0 items-center justify-center">');
+    const checkboxAt = ROW.indexOf('{onToggleSelect && (');
+    const titleAt = ROW.indexOf('{titleParts.suffix === null');
+    const markAt = ROW.indexOf('(rowWaiting ? (');
+    expect(checkboxAt).toBeGreaterThan(ROW.indexOf('title={tooltip}'));
+    expect(checkboxAt).toBeLessThan(titleAt);
+    expect(titleAt).toBeLessThan(markAt);
+    // Every mark is one 14px cell, so a state change never moves the title.
+    const mark = ROW.slice(markAt, ROW.indexOf(') : null)}', markAt));
+    expect(
+      mark.split('className="inline-grid size-3.5 shrink-0 place-items-center"').length - 1
+    ).toBe(3);
   });
 
   it('gives the title a floor so it can never collapse to a bare ellipsis', () => {
@@ -71,7 +80,7 @@ describe('sidebar session row width budget', () => {
     expect(at).toBeGreaterThan(ROW.indexOf('{row.title}</span>'));
     const text = ROW.slice(at, ROW.indexOf('</span>', at));
     expect(text).toContain(
-      'className="min-w-0 max-w-24 shrink truncate text-small text-muted-foreground"'
+      'className="min-w-0 max-w-24 shrink truncate text-small text-foreground-faint"'
     );
     expect(text).toContain('title={branch}');
     expect(text).toContain('{lastBranchSegment(branch)}');
@@ -86,6 +95,9 @@ describe('sidebar session row width budget', () => {
     expect(CODE).toContain('branch={branch}');
     expect(CODE).toContain('chipShownInFolder(row, primary) ? row.chip?.label : undefined');
     expect(CODE).toContain('{limited.rows.map((row) => renderSessionRow(row))}');
+    // Layout 5b: in 「按状态」 / 「按时间」 (like 「按分组」) the context slot names
+    // the repository instead, since no repository heading says it.
+    expect(CODE).toContain('renderSessionRow(row, repositoryNameForRow(row) ?? undefined)');
   });
 
   it('has no time box any more: the actions float over the row and take no width', () => {
@@ -140,10 +152,13 @@ describe('sidebar session row width budget', () => {
     expect(badge).not.toMatch(/[\u4e00-\u9fff]/);
   });
 
-  it('unifies the alert badges at Badge lg (14px)', () => {
+  it('keeps one alert badge, at Badge lg (14px); the others became trailing marks (layout 5b)', () => {
+    // The pending-approval count is the waiting mark's words, a failure the
+    // warning mark: badges are what the screenshot's quiet rows do not have.
     const badges = [...ROW.matchAll(/<Badge[\s\S]*?>/g)].map((match) => match[0]);
-    expect(badges).toHaveLength(3);
+    expect(badges).toHaveLength(1);
     for (const badge of badges) expect(badge).toContain('size="lg"');
+    expect(ROW).not.toContain('ShieldQuestion');
   });
 
   it('rows are not indented under their group header', () => {
@@ -153,11 +168,11 @@ describe('sidebar session row width budget', () => {
   it('keeps the derivation of the numbers in the source', () => {
     // Asserted on RAW: this one is about the reasoning surviving the next edit.
     expect(RAW).toContain('SIDEBAR_DEFAULT_WIDTH');
-    expect(RAW).toContain('the title gets 217px');
+    expect(RAW).toContain('gets 219px');
   });
 
   it('is written against the width the app actually ships with', () => {
-    // If the default ever moves, the 239px / 217px budget above stops
+    // If the default ever moves, the 239px / 219px budget above stops
     // describing reality and this file needs re-deriving rather than silently
     // drifting. Layout 5a: no rail any more, so the default IS what the rows
     // live inside.
