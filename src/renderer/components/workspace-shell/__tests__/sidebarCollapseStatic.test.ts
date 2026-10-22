@@ -23,7 +23,9 @@ const card = read('src/renderer/components/workspace-shell/PaneCard.tsx');
 
 describe('the sidebar collapse control (layout 5a)', () => {
   it('sits in the sidebar`s top row while it is open', () => {
-    const start = dock.indexOf('<div className="flex h-9 shrink-0 items-center gap-0.5 px-2">');
+    const start = dock.indexOf(
+      '<div className="flex h-9 shrink-0 items-center gap-0.5 px-2 drag-region select-none">'
+    );
     expect(start).toBeGreaterThan(-1);
     const topRow = dock.slice(start);
     expect(topRow).toContain("t('Collapse sidebar')} (Ctrl+B)");

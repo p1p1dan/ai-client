@@ -150,8 +150,9 @@ export function LeftDock({
         // painted variable instead, so the list follows the pointer.
         style={{ width: resizing ? '100%' : `${sidebarWidth}px` }}
       >
-        {/* Level with the title bar (h-9): collapse, back, forward. */}
-        <div className="flex h-9 shrink-0 items-center gap-0.5 px-2">
+        {/* The window's top line with SessionBar (h-9): collapse, back,
+            forward; the empty rest drags the frameless window. */}
+        <div className="flex h-9 shrink-0 items-center gap-0.5 px-2 drag-region select-none">
           <SidebarIconButton
             label={`${t('Collapse sidebar')} (Ctrl+B)`}
             onClick={onToggleCollapsed}

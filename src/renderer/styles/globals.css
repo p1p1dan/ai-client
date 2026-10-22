@@ -422,6 +422,11 @@
     -webkit-app-region: no-drag;
   }
 
+  /* A drag strip's controls stay clickable without each one opting out. */
+  .drag-region :is(button, a, input, textarea, select, [role="button"], [role="combobox"], [role="tab"]) {
+    -webkit-app-region: no-drag;
+  }
+
   /**
    * 菜单组件 no-drag 覆盖规则
    *

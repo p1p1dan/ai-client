@@ -106,7 +106,12 @@ describe('P1-11 the terminal is a pane card (layout 5d)', () => {
   it('the title bar is one slim borderless row of icon buttons', () => {
     const bar = code(join(SHELL_DIR, 'SessionBar.tsx'));
     // Layout 5a: 36px, the canvas, no hairline; the title truncates first.
-    expect(bar).toContain('flex h-9 shrink-0 items-center gap-1 overflow-hidden bg-surface-1 px-2');
+    expect(bar).toContain(
+      "'flex h-9 shrink-0 items-center gap-1 overflow-hidden bg-surface-1 pl-2 drag-region select-none'"
+    );
+    // The window's top line (2026-10-22): it drags the frameless window and
+    // ends in the window buttons, flush right.
+    expect(bar).toContain('<WindowControls />');
     expect(bar).not.toContain('border-b');
     // Icon only: the names live in tooltips, so nothing folds any more.
     expect(bar).not.toContain('BAR_LABEL_CLASS');
@@ -126,7 +131,9 @@ describe('the sidebar opens level with the title bar (layout 5a, was U27)', () =
       'items-center gap-0.5 border-r border-border-soft bg-surface-0 pt-3.5'
     );
     // Layout 5b: the row also holds back / forward, packed tight.
-    expect(dock).toContain('<div className="flex h-9 shrink-0 items-center gap-0.5 px-2">');
+    expect(dock).toContain(
+      '<div className="flex h-9 shrink-0 items-center gap-0.5 px-2 drag-region select-none">'
+    );
   });
 
   it('the sidebar has no h-9 title row to track', () => {

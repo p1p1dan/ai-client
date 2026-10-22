@@ -37,7 +37,6 @@ import { AddRepositoryDialog } from './components/git';
 import { CloneProgressFloat } from './components/git/CloneProgressFloat';
 import { BackgroundLayer } from './components/layout/BackgroundLayer';
 import { GitMissingNotice } from './components/layout/GitMissingNotice';
-import { WindowTitleBar } from './components/layout/WindowTitleBar';
 import { RemoteAuthPromptHost } from './components/remote/RemoteAuthPromptHost';
 import { AgentMigrationPrompt } from './components/settings/AgentMigrationPrompt';
 import { LegacyAssetNoticePrompt } from './components/settings/LegacyAssetNotice';
@@ -1049,8 +1048,9 @@ export default function App() {
   return (
     <div className="relative z-0 flex h-screen flex-col overflow-hidden">
       <BackgroundLayer />
-      {/* Custom Title Bar for Windows/Linux */}
-      <WindowTitleBar />
+      {/* Layout 5a follow-up (user, 2026-10-22): no separate title strip. The
+          sidebar's top row and SessionBar are the window's top line; SessionBar
+          carries the window buttons. */}
 
       {/* DevTools Overlay for macOS traffic lights protection */}
       <DevToolsOverlay />

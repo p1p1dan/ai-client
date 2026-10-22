@@ -18,6 +18,7 @@ import { requestComposerFocus } from '@/components/chat/composerFocus';
 import { SessionTreeDialog } from '@/components/chat/SessionTreeDialog';
 import { displaySessionTitle } from '@/components/chat/sessionIndex/sessionTitle';
 import { deriveJobsWindowView, deriveSubagentsWindowView } from '@/components/chat/subwindowsModel';
+import { WindowControls } from '@/components/layout/WindowControls';
 import { Badge } from '@/components/ui/badge';
 import { Ident } from '@/components/ui/ident';
 import {
@@ -46,6 +47,15 @@ export interface SessionReviewTotals {
   added: number;
   removed: number;
 }
+
+/**
+ * macOS keeps its native traffic lights; Windows and Linux windows are
+ * frameless. Off, too, where there is no window API (tests, a bare browser).
+ */
+const WINDOW_CONTROLS_SHOWN =
+  typeof window !== 'undefined' &&
+  Boolean(window.electronAPI?.window) &&
+  window.electronAPI.env?.platform !== 'darwin';
 
 interface SessionBarProps {
   /** Layout 5a: the sidebar collapses entirely; this bar then offers it back. */
@@ -230,7 +240,10 @@ export function SessionBar({
     // `overflow-hidden`: the bar ends at the center row's edge whatever its
     // content does; the title truncates first.
     <div
-      className="flex h-9 shrink-0 items-center gap-1 overflow-hidden bg-surface-1 px-2"
+      className={cn(
+        'flex h-9 shrink-0 items-center gap-1 overflow-hidden bg-surface-1 pl-2 drag-region select-none',
+        WINDOW_CONTROLS_SHOWN ? 'pr-0' : 'pr-2'
+      )}
       data-session-bar=""
     >
       {sidebarCollapsed && onExpandSidebar && (
@@ -395,6 +408,14 @@ export function SessionBar({
           )}
         </MenuPopup>
       </Menu>
+
+      {/* The window's top line (frameless on Windows and Linux): its buttons
+          sit at the bar's right end, flush with the window edge. */}
+      {WINDOW_CONTROLS_SHOWN && (
+        <div className="ml-1 flex h-full shrink-0 self-stretch no-drag" data-window-controls="">
+          <WindowControls />
+        </div>
+      )}
 
       {/* Keyed by session: a dialog left open across a session switch must not
           show the previous conversation's tree. Mounted next to its trigger

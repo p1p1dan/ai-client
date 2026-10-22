@@ -48,7 +48,7 @@ export function WindowControls() {
   }
 
   return (
-    <div className="flex items-center shrink-0 h-8">
+    <div className="flex h-full shrink-0 items-stretch">
       {/* Minimize */}
       <button
         type="button"
@@ -56,7 +56,7 @@ export function WindowControls() {
         onMouseEnter={() => setHoveredButton('min')}
         onMouseLeave={() => setHoveredButton(null)}
         className={cn(
-          'relative flex h-8 w-11 items-center justify-center no-drag',
+          'relative flex w-11 items-center justify-center no-drag',
           'transition-colors duration-150 ease-out',
           'hover:bg-foreground/10 active:bg-foreground/15'
         )}
@@ -78,7 +78,7 @@ export function WindowControls() {
         onMouseEnter={() => setHoveredButton('max')}
         onMouseLeave={() => setHoveredButton(null)}
         className={cn(
-          'relative flex h-8 w-11 items-center justify-center no-drag',
+          'relative flex w-11 items-center justify-center no-drag',
           'transition-colors duration-150 ease-out',
           'hover:bg-foreground/10 active:bg-foreground/15'
         )}
@@ -116,7 +116,7 @@ export function WindowControls() {
         onMouseEnter={() => setHoveredButton('close')}
         onMouseLeave={() => setHoveredButton(null)}
         className={cn(
-          'relative flex h-8 w-11 items-center justify-center no-drag',
+          'relative flex w-11 items-center justify-center no-drag',
           'transition-colors duration-150 ease-out',
           // The platform's red close button, on the semantic token.
           'hover:bg-destructive active:bg-destructive/90'
