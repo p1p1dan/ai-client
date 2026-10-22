@@ -5,11 +5,11 @@
  */
 import { type ContextSurfaceId, DEFAULT_SURFACE_ORDER } from './surfaceRegistry';
 import {
-  clampWorkPanelWidth,
-  isWorkPanelTab,
-  tabForIntent,
-  WORK_PANEL_DEFAULT_WIDTH,
-  type WorkPanelTab,
+  clampPaneAreaWidth,
+  DEFAULT_PANE_SPLITS,
+  PANE_AREA_DEFAULT_WIDTH,
+  type PaneSplits,
+  sanitizePaneSplits,
 } from './workPanelModel';
 
 // ── sizes (acceptance ①) ────────────────────────────────────────────────
@@ -325,26 +325,30 @@ export function shouldCloseOnEscape(input: ShouldCloseOnEscapeInput): boolean {
 
 // ── persistence hygiene ─────────────────────────────────────────────────
 /**
- * Layout 5a: what survives a restart. The work panel's OPEN state is not here
- * on purpose — ruling L3 opens it on demand, so every start begins closed; its
- * last tab and width are remembered.
+ * Layout 5d: what survives a restart. Which panes are open is not here on
+ * purpose — ruling L3 opens them on demand, so every start begins with none;
+ * the pane area's widths (one per column count) and its splits are kept.
  */
 export interface PersistedShellLayout {
   sidebarWidth: number;
   /** The sidebar collapses entirely (Ctrl+B); there is no rail left behind. */
   sidebarCollapsed: boolean;
-  workPanelTab: WorkPanelTab;
-  workPanelWidth: number;
+  /** The pane area's width with one column of panes. */
+  paneAreaWidth: number;
+  /** The pane area's width with two columns of panes. */
+  paneAreaSplitWidth: number;
+  paneSplits: PaneSplits;
   readingWidthMode: ReadingWidthMode;
 }
 
-export const SHELL_LAYOUT_VERSION = 4;
+export const SHELL_LAYOUT_VERSION = 5;
 
 export const defaultShellLayout: PersistedShellLayout = {
   sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
   sidebarCollapsed: false,
-  workPanelTab: 'files',
-  workPanelWidth: WORK_PANEL_DEFAULT_WIDTH,
+  paneAreaWidth: PANE_AREA_DEFAULT_WIDTH[1],
+  paneAreaSplitWidth: PANE_AREA_DEFAULT_WIDTH[2],
+  paneSplits: { ...DEFAULT_PANE_SPLITS, rows: [...DEFAULT_PANE_SPLITS.rows] },
   readingWidthMode: 'normal',
 };
 
@@ -352,49 +356,55 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function numberOrNaN(value: unknown): number {
+  return typeof value === 'number' ? value : Number.NaN;
+}
+
 /** Re-clamps every field and drops anything unknown. Total: never throws. */
 export function sanitizeShellLayoutPersisted(raw: unknown): PersistedShellLayout {
   if (!isRecord(raw)) {
-    return { ...defaultShellLayout };
+    return { ...defaultShellLayout, paneSplits: sanitizePaneSplits(null) };
   }
   return {
-    sidebarWidth: clampSidebarWidth(
-      typeof raw.sidebarWidth === 'number' ? raw.sidebarWidth : Number.NaN
-    ),
+    sidebarWidth: clampSidebarWidth(numberOrNaN(raw.sidebarWidth)),
     sidebarCollapsed: raw.sidebarCollapsed === true,
-    workPanelTab: isWorkPanelTab(raw.workPanelTab)
-      ? raw.workPanelTab
-      : defaultShellLayout.workPanelTab,
-    workPanelWidth: clampWorkPanelWidth(
-      typeof raw.workPanelWidth === 'number' ? raw.workPanelWidth : Number.NaN
-    ),
+    paneAreaWidth: clampPaneAreaWidth(numberOrNaN(raw.paneAreaWidth), 1),
+    paneAreaSplitWidth: clampPaneAreaWidth(numberOrNaN(raw.paneAreaSplitWidth), 2),
+    paneSplits: sanitizePaneSplits(raw.paneSplits),
     readingWidthMode: raw.readingWidthMode === 'wide' ? 'wide' : 'normal',
   };
 }
 
-/** A pre-5a `lastSurfaceId` that names a surface now living in the work panel. */
-function legacyPanelTab(raw: unknown): WorkPanelTab | null {
-  if (typeof raw !== 'string' || raw === 'chat') return null;
-  return tabForIntent({ type: 'surface', surfaceId: raw as ContextSurfaceId });
-}
-
 /**
- * v3 (D08 dock) → v4 (layout 5a). The v3 shape was `{ sidebarWidth (rail
- * included), activeSurfaceId, lastSurfaceId, expanded, panelWidth, railOrder,
- * readingWidthMode, editorRatio }`; v1/v2 also carried `widthBySurface` and
- * `shellColumnMode`. Of those:
+ * v1–v3 (D08 dock) → v4 (layout 5a) → v5 (layout 5d panes).
+ *
+ * v3 was `{ sidebarWidth (rail included), activeSurfaceId, lastSurfaceId,
+ * expanded, panelWidth, railOrder, readingWidthMode, editorRatio }`; v1/v2
+ * also carried `widthBySurface` and `shellColumnMode`. Into v4:
  *  - `sidebarWidth` loses the rail it included, then is clamped;
  *  - a v3 dock with no active surface WAS collapsed, so that carries over; v1
  *    and v2 profiles always showed the session list, so they open expanded;
- *  - a last surface that moved to the work panel becomes its last tab;
- *  - the rail order, the per-surface and panel widths, the expanded overlay
- *    and the editor ratio have no successor and are dropped. The old ratio
- *    cannot become a pixel width without the window width, so the panel
- *    starts at its default.
+ *  - the rest has no successor (the old ratio cannot become a pixel width
+ *    without the window width).
+ *
+ * v4 was `{ sidebarWidth, sidebarCollapsed, workPanelTab, workPanelWidth,
+ * readingWidthMode }`. Into v5:
+ *  - `workPanelWidth` (the one panel, border to border) becomes the
+ *    one-column pane area width;
+ *  - `workPanelTab` is dropped: panes start closed, and the remembered tab
+ *    only kept a view mounted behind the closed panel, which panes no longer do.
  */
 export function migrateShellLayoutPersisted(raw: unknown, version: number): PersistedShellLayout {
   if (!isRecord(raw) || version >= SHELL_LAYOUT_VERSION) {
     return sanitizeShellLayoutPersisted(raw);
+  }
+  if (version === 4) {
+    return sanitizeShellLayoutPersisted({
+      sidebarWidth: raw.sidebarWidth,
+      sidebarCollapsed: raw.sidebarCollapsed,
+      paneAreaWidth: raw.workPanelWidth,
+      readingWidthMode: raw.readingWidthMode,
+    });
   }
   const legacyWidth =
     typeof raw.sidebarWidth === 'number' && Number.isFinite(raw.sidebarWidth)
@@ -403,7 +413,6 @@ export function migrateShellLayoutPersisted(raw: unknown, version: number): Pers
   return sanitizeShellLayoutPersisted({
     sidebarWidth: legacyWidth,
     sidebarCollapsed: version >= 3 && raw.activeSurfaceId === null,
-    workPanelTab: legacyPanelTab(raw.activeSurfaceId) ?? legacyPanelTab(raw.lastSurfaceId),
     readingWidthMode: raw.readingWidthMode,
   });
 }

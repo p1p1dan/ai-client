@@ -26,7 +26,7 @@ beforeEach(async () => {
   localStorage.clear();
   add.mockReset().mockResolvedValue(undefined);
   useInitScriptStore.getState().clearPendingScript();
-  useShellLayoutStore.setState({ workPanelOpen: false, setupTerminalOpened: false });
+  useShellLayoutStore.setState({ panes: [], paneFocus: [], setupTerminalOpened: false });
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   container = document.createElement('div');
   document.body.append(container);
@@ -47,7 +47,7 @@ describe('new-shell worktree initialization', () => {
   it('keeps ordinary terminal navigation disabled', () => {
     useShellLayoutStore.getState().openSurface('terminal');
     expect(selectActiveSurfaceId(useShellLayoutStore.getState())).toBeNull();
-    expect(useShellLayoutStore.getState().workPanelOpen).toBe(false);
+    expect(useShellLayoutStore.getState().panes).toEqual([]);
   });
   it('queues the latest repository script for the new path and opens its terminal surface', async () => {
     saveRepositorySettings('/repo', {
@@ -68,9 +68,9 @@ describe('new-shell worktree initialization', () => {
       worktreePath: options.path,
       script: 'pnpm install',
     });
-    // Layout 5a: the work panel's setup tab hosts the init terminal.
+    // Layout 5d: the setup pane hosts the init terminal.
     expect(selectActiveSurfaceId(useShellLayoutStore.getState())).toBe('terminal');
-    expect(useShellLayoutStore.getState().workPanelTab).toBe('setup');
+    expect(useShellLayoutStore.getState().panes).toContain('setup');
     expect(useShellLayoutStore.getState().setupTerminalOpened).toBe(true);
   });
 

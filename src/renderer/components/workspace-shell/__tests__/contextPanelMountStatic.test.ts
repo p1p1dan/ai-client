@@ -23,40 +23,48 @@ import { stripComments } from '../../chat/__tests__/stripComments';
  * the scan and keeping the explanation.
  *
  * D08: the stack moved from `ContextPanel.tsx` (the retired right column) to
- * `LeftDock.tsx`; design system v2 / layout 5a moved it again, to the work
- * panel (`WorkPanel.tsx`). Same mechanism, same hazard, same guard — only the
- * file the surfaces live in changed.
+ * `LeftDock.tsx`; layout 5a moved it to the work panel (`WorkPanel.tsx`);
+ * layout 5d split that panel into pane cards (`PaneArea.tsx` decides what is
+ * mounted, `PaneCard.tsx` how an off-screen card hides). Same mechanism, same
+ * hazard, same guard — only the files changed.
  */
 
-const PANEL_FILE = join(process.cwd(), 'src/renderer/components/workspace-shell/WorkPanel.tsx');
-const RAW = readFileSync(PANEL_FILE, 'utf8');
-const CODE = stripComments(RAW, PANEL_FILE);
+const DIR = join(process.cwd(), 'src/renderer/components/workspace-shell');
+const AREA_FILE = join(DIR, 'PaneArea.tsx');
+const CARD_FILE = join(DIR, 'PaneCard.tsx');
+const AREA_RAW = readFileSync(AREA_FILE, 'utf8');
+const AREA = stripComments(AREA_RAW, AREA_FILE);
+const CARD_RAW = readFileSync(CARD_FILE, 'utf8');
+const CARD = stripComments(CARD_RAW, CARD_FILE);
 
-describe('WorkPanel keep-alive hiding technique', () => {
-  it('hides inactive layers with visibility, not layout removal', () => {
-    expect(CODE).toContain('invisible pointer-events-none');
+describe('pane cards keep-alive hiding technique (layout 5d)', () => {
+  it('hides off-screen cards with visibility, not layout removal', () => {
+    expect(CARD).toContain('pointer-events-none invisible');
   });
 
-  it('also marks hidden layers inert so focus and a11y skip them', () => {
-    expect(CODE).toContain('inert={!visible}');
+  it('also marks hidden cards inert so focus and a11y skip them', () => {
+    expect(CARD).toContain('inert={!shown}');
   });
 
-  it('never uses display:none anywhere in the panel', () => {
-    expect(CODE).not.toMatch(/display\s*:\s*['"]?\s*none/i);
+  it('never uses display:none anywhere in the area or a card', () => {
+    expect(AREA).not.toMatch(/display\s*:\s*['"]?\s*none/i);
+    expect(CARD).not.toMatch(/display\s*:\s*['"]?\s*none/i);
   });
 
-  it('drives mounting from the derived list rather than the active id alone', () => {
-    expect(CODE).toContain('mountedSurfaceIds.map');
-    expect(CODE).toContain('deriveMountedSurfaceIds');
+  it('mounts by a rule per kind, keep-alive surfaces once visited, cards keyed by kind', () => {
+    expect(AREA).toContain('PANE_KINDS.filter(mounted).map((kind) => {');
+    expect(AREA).toContain("SURFACE_VIEWS[surfaceId]?.mountPolicy === 'keep-alive'");
+    expect(AREA).toContain('key={kind}');
   });
 
-  it('stacks the layers over one box so a hidden one still measures full size', () => {
-    expect(CODE).toContain('absolute inset-0');
+  it('lays a hidden card over the whole box so it still measures full size', () => {
+    expect(CARD).toContain("!shown && 'pointer-events-none invisible inset-0'");
   });
 
   it('keeps the reason in the source, where the next edit will read it', () => {
     // Asserted on RAW: this one is about the comment surviving, not the code.
-    expect(RAW).toContain('ResizeObserver');
-    expect(RAW).toMatch(/cols:\s*2/);
+    expect(AREA_RAW).toContain('ResizeObserver');
+    expect(AREA_RAW).toMatch(/cols:\s*2/);
+    expect(CARD_RAW).toMatch(/cols:\s*2/);
   });
 });

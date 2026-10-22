@@ -26,7 +26,7 @@ import {
   shouldCloseOnEscape,
 } from '../shellLayoutModel';
 import type { ContextSurfaceId } from '../surfaceRegistry';
-import { WORK_PANEL_DEFAULT_WIDTH, WORK_PANEL_MIN_WIDTH } from '../workPanelModel';
+import { PANE_AREA_DEFAULT_WIDTH, paneAreaMinWidth } from '../workPanelModel';
 
 describe('clampSidebarWidth (design system v2 / layout 5a: the sidebar alone, no rail)', () => {
   it('pins 272 / 240 / 480', () => {
@@ -188,20 +188,21 @@ describe('sanitizeShellLayoutPersisted (design system v2 / layout 5a)', () => {
     expect(sanitizeShellLayoutPersisted([1, 2, 3])).toEqual(defaultShellLayout);
   });
 
-  it('defaults to an expanded 272px sidebar and a 480px panel remembered on files', () => {
+  it('defaults to an expanded 272px sidebar and the pane area`s 496 / 864 widths (layout 5d)', () => {
     expect(defaultShellLayout).toEqual({
       sidebarWidth: 272,
       sidebarCollapsed: false,
-      workPanelTab: 'files',
-      workPanelWidth: WORK_PANEL_DEFAULT_WIDTH,
+      paneAreaWidth: PANE_AREA_DEFAULT_WIDTH[1],
+      paneAreaSplitWidth: PANE_AREA_DEFAULT_WIDTH[2],
+      paneSplits: { column: 0.5, rows: [0.5, 0.5] },
       readingWidthMode: 'normal',
     });
   });
 
-  it('never persists whether the panel is open (ruling L3: closed on every start)', () => {
-    expect(Object.keys(sanitizeShellLayoutPersisted({ workPanelOpen: true }))).not.toContain(
-      'workPanelOpen'
-    );
+  it('never persists which panes are open (ruling L3: none on every start)', () => {
+    const keys = Object.keys(sanitizeShellLayoutPersisted({ panes: ['git'], workPanelOpen: true }));
+    expect(keys).not.toContain('panes');
+    expect(keys).not.toContain('workPanelOpen');
   });
 
   it('clamps a persisted sidebar width outside the sidebar range', () => {
@@ -216,15 +217,19 @@ describe('sanitizeShellLayoutPersisted (design system v2 / layout 5a)', () => {
     expect(sanitizeShellLayoutPersisted({ sidebarCollapsed: 'yes' }).sidebarCollapsed).toBe(false);
   });
 
-  it('drops an unknown panel tab and clamps the panel width', () => {
-    expect(sanitizeShellLayoutPersisted({ workPanelTab: 'chat' }).workPanelTab).toBe('files');
-    expect(sanitizeShellLayoutPersisted({ workPanelTab: 'git' }).workPanelTab).toBe('git');
-    expect(sanitizeShellLayoutPersisted({ workPanelWidth: 50 }).workPanelWidth).toBe(
-      WORK_PANEL_MIN_WIDTH
+  it('clamps the pane area widths per column count and sanitizes the splits', () => {
+    expect(sanitizeShellLayoutPersisted({ paneAreaWidth: 50 }).paneAreaWidth).toBe(
+      paneAreaMinWidth(1)
     );
-    expect(sanitizeShellLayoutPersisted({ workPanelWidth: 'x' }).workPanelWidth).toBe(
-      WORK_PANEL_DEFAULT_WIDTH
+    expect(sanitizeShellLayoutPersisted({ paneAreaSplitWidth: 50 }).paneAreaSplitWidth).toBe(
+      paneAreaMinWidth(2)
     );
+    expect(sanitizeShellLayoutPersisted({ paneAreaWidth: 'x' }).paneAreaWidth).toBe(
+      PANE_AREA_DEFAULT_WIDTH[1]
+    );
+    expect(
+      sanitizeShellLayoutPersisted({ paneSplits: { column: 0.7, rows: [0.4] } }).paneSplits
+    ).toEqual({ column: 0.7, rows: [0.4, 0.5] });
   });
 
   it('normalises an unknown reading width mode to normal', () => {
@@ -237,7 +242,7 @@ describe('sanitizeShellLayoutPersisted (design system v2 / layout 5a)', () => {
   });
 });
 
-describe('migrateShellLayoutPersisted (v1–v3 → v4, layout 5a)', () => {
+describe('migrateShellLayoutPersisted (v1–v3 → v5, layouts 5a and 5d)', () => {
   /** A real v3 profile: D08 dock open on git, a rail order, a ratio. */
   const v3 = {
     sidebarWidth: 380,
@@ -251,7 +256,7 @@ describe('migrateShellLayoutPersisted (v1–v3 → v4, layout 5a)', () => {
   };
 
   it('is the current version', () => {
-    expect(SHELL_LAYOUT_VERSION).toBe(4);
+    expect(SHELL_LAYOUT_VERSION).toBe(5);
   });
 
   it('subtracts the retired rail from the sidebar width, then clamps', () => {
@@ -266,21 +271,8 @@ describe('migrateShellLayoutPersisted (v1–v3 → v4, layout 5a)', () => {
     );
   });
 
-  it('carries the surface that moved to the work panel over as its last tab', () => {
-    expect(migrateShellLayoutPersisted(v3, 3).workPanelTab).toBe('git');
-    expect(
-      migrateShellLayoutPersisted({ ...v3, activeSurfaceId: 'chat', lastSurfaceId: 'editor' }, 3)
-        .workPanelTab
-    ).toBe('files');
-    expect(
-      migrateShellLayoutPersisted({ ...v3, activeSurfaceId: 'chat', lastSurfaceId: 'chat' }, 3)
-        .workPanelTab
-    ).toBe('files');
-    // The init terminal is not navigation: a remembered `terminal` maps to nothing.
-    expect(
-      migrateShellLayoutPersisted({ ...v3, activeSurfaceId: null, lastSurfaceId: 'terminal' }, 3)
-        .workPanelTab
-    ).toBe('files');
+  it('drops the last surface: panes start closed (layout 5d)', () => {
+    expect(Object.keys(migrateShellLayoutPersisted(v3, 3))).not.toContain('workPanelTab');
   });
 
   it('a v3 dock with nothing active was collapsed, and stays so', () => {
@@ -300,7 +292,7 @@ describe('migrateShellLayoutPersisted (v1–v3 → v4, layout 5a)', () => {
       1
     );
     expect(Object.keys(migrated).sort()).toEqual(Object.keys(defaultShellLayout).sort());
-    expect(migrated.workPanelWidth).toBe(WORK_PANEL_DEFAULT_WIDTH);
+    expect(migrated.paneAreaWidth).toBe(PANE_AREA_DEFAULT_WIDTH[1]);
     expect(migrated.readingWidthMode).toBe('wide');
   });
 
@@ -311,9 +303,43 @@ describe('migrateShellLayoutPersisted (v1–v3 → v4, layout 5a)', () => {
     expect(migrateShellLayoutPersisted(null, 3)).toEqual(defaultShellLayout);
   });
 
-  it('only sanitises a profile that is already v4', () => {
-    const v4 = { ...defaultShellLayout, sidebarWidth: 300, workPanelTab: 'run' };
-    expect(migrateShellLayoutPersisted(v4, 4)).toEqual(v4);
+  it('only sanitises a profile that is already v5', () => {
+    const v5 = { ...defaultShellLayout, sidebarWidth: 300, paneAreaSplitWidth: 900 };
+    expect(migrateShellLayoutPersisted(v5, 5)).toEqual(v5);
+  });
+});
+
+describe('migrateShellLayoutPersisted (v4 → v5, layout 5d)', () => {
+  /** A real v4 profile: the 5a work panel dragged to 640, last on git. */
+  const v4 = {
+    sidebarWidth: 300,
+    sidebarCollapsed: true,
+    workPanelTab: 'git',
+    workPanelWidth: 640,
+    readingWidthMode: 'wide',
+  };
+
+  it('keeps the sidebar and the reading width as they were', () => {
+    const migrated = migrateShellLayoutPersisted(v4, 4);
+    expect(migrated.sidebarWidth).toBe(300);
+    expect(migrated.sidebarCollapsed).toBe(true);
+    expect(migrated.readingWidthMode).toBe('wide');
+  });
+
+  it('the panel width becomes the one-column pane area width; two columns start at the default', () => {
+    const migrated = migrateShellLayoutPersisted(v4, 4);
+    expect(migrated.paneAreaWidth).toBe(640);
+    expect(migrated.paneAreaSplitWidth).toBe(PANE_AREA_DEFAULT_WIDTH[2]);
+    expect(migrated.paneSplits).toEqual({ column: 0.5, rows: [0.5, 0.5] });
+    // A 5a width under the new floor is lifted to it.
+    expect(migrateShellLayoutPersisted({ ...v4, workPanelWidth: 320 }, 4).paneAreaWidth).toBe(
+      paneAreaMinWidth(1)
+    );
+  });
+
+  it('drops the old keys without leaking them', () => {
+    const migrated = migrateShellLayoutPersisted(v4, 4);
+    expect(Object.keys(migrated).sort()).toEqual(Object.keys(defaultShellLayout).sort());
   });
 });
 

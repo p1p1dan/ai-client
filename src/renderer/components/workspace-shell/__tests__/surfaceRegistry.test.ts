@@ -8,7 +8,7 @@ import {
   isContextSurfaceId,
   shouldShowActivityDot,
 } from '../surfaceRegistry';
-import { tabForIntent } from '../workPanelModel';
+import { paneForIntent } from '../workPanelModel';
 
 function gitStatus(overrides: Partial<GitStatus> = {}): GitStatus {
   return {
@@ -57,9 +57,9 @@ describe('CONTEXT_SURFACES', () => {
       .sort();
     expect(navigable).toEqual(['context', 'editor', 'git', 'run']);
     for (const id of navigable) {
-      expect(tabForIntent({ type: 'surface', surfaceId: id })).not.toBeNull();
+      expect(paneForIntent({ type: 'surface', surfaceId: id })).not.toBeNull();
     }
-    expect(tabForIntent({ type: 'surface', surfaceId: 'terminal' })).toBeNull();
+    expect(paneForIntent({ type: 'surface', surfaceId: 'terminal' })).toBeNull();
   });
 
   it('names a pendingTask for exactly the surfaces that are not wired yet', () => {

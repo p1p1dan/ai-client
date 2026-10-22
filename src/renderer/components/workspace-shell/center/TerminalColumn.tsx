@@ -2,10 +2,9 @@
  * dsh-rebase P1-11 (decisions 109, 126, 128; prototype scene G): the shell
  * terminal of the conversation's folder.
  *
- * Layout 5a (ruling L4): the work panel's 终端 tab. The panel's tab strip
- * names it, so the column's own h-10 tab bar (and its Files button — the
- * strip's 编辑器 tab does that now) went; what stays is one row with the
- * conversation's folder and the button that ends the shell.
+ * Layout 5d: the 终端 pane. Its card's header names it, shows the
+ * conversation's folder and holds the button that ends the shell; the column
+ * itself draws no title row.
  *
  * Every running column shell stays mounted here, one layer per folder, so a
  * conversation switch never tears one down (`useXterm`'s unmount detaches the
@@ -15,15 +14,17 @@
  * pty to two columns; the same rule `TerminalSurfaceView` documents.
  */
 import { getDisplayPath } from '@shared/utils/path';
-import { X } from 'lucide-react';
+import { Power } from 'lucide-react';
 import { useMemo } from 'react';
 import { ShellTerminal } from '@/components/terminal/ShellTerminal';
+import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { useI18n } from '@/i18n';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { cn } from '@/lib/utils';
 import { useColumnTerminalStore } from '@/stores/columnTerminal';
 import { useSettingsStore } from '@/stores/settings';
+import { PaneHeaderPortal } from '../panes/paneSlots';
 import { SURFACE_ESCAPE_HOLD_ATTR } from '../shellLayoutModel';
 
 /** Computed key so a rename of the constant cannot leave a dead attribute behind. */
@@ -32,7 +33,7 @@ const ESCAPE_HOLD_PROPS = { [SURFACE_ESCAPE_HOLD_ATTR]: '' };
 interface TerminalColumnProps {
   /** `columnTerminalKey` of the folder on screen; null when it has none. */
   currentKey: string | null;
-  /** The work panel shows the terminal tab (it has focus rights). */
+  /** The terminal pane is on screen (it has focus rights). */
   visible: boolean;
 }
 
@@ -56,32 +57,36 @@ export function TerminalColumn({ currentKey, visible }: TerminalColumnProps) {
 
   return (
     <section
-      className="flex h-full min-h-0 min-w-0 flex-col bg-surface-1"
+      className="flex h-full min-h-0 min-w-0 flex-col"
       aria-label={t('Terminal')}
       data-testid="terminal-column"
       {...ESCAPE_HOLD_PROPS}
     >
+      {/* Layout 5d: the pane card's header says 「终端」; the folder goes
+          next to it and the button that ends the shell among its actions —
+          no row of its own. The card's ✕ only hides the pane. */}
       {current && (
-        // Design system v2 §4.2: the one strip header height (h-8), one
-        // hairline below.
-        <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border-soft px-3 text-small">
-          <span className="shrink-0 text-muted-foreground">{t('Session directory')}</span>
-          <Ident
-            className="min-w-0 flex-1 truncate text-foreground"
-            title={getDisplayPath(current.cwd)}
-          >
-            {getDisplayPath(current.cwd)}
-          </Ident>
-          <button
-            type="button"
-            onClick={() => close(current.key)}
-            aria-label={t('Close terminal')}
-            title={t('Close terminal')}
-            className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
+        <>
+          <PaneHeaderPortal slot="context">
+            <Ident
+              className="min-w-0 truncate text-small text-foreground-faint"
+              title={`${t('Session directory')}: ${getDisplayPath(current.cwd)}`}
+            >
+              {getDisplayPath(current.cwd)}
+            </Ident>
+          </PaneHeaderPortal>
+          <PaneHeaderPortal slot="actions">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => close(current.key)}
+              aria-label={t('Close terminal')}
+              title={t('Close terminal')}
+            >
+              <Power className="size-4" />
+            </Button>
+          </PaneHeaderPortal>
+        </>
       )}
       <div className="relative min-h-0 flex-1" style={{ backgroundColor: backdrop }}>
         {Object.values(terminals).map((entry) => {

@@ -69,7 +69,7 @@ export function TerminalSurfaceView({ active }: SurfaceViewProps) {
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
 
-  const expanded = useShellLayoutStore((state) => state.expanded);
+  const expanded = useShellLayoutStore((state) => state.expandedPane === 'setup');
 
   // Decision 174: on the home page, the repository its work bar picked.
   const homeWorkspaceId = useHomeWorkspace()?.id ?? null;

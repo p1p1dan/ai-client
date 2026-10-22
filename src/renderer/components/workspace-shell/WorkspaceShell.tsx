@@ -31,6 +31,7 @@ import {
 } from './centerLayoutModel';
 import { HomeView } from './HomeView';
 import { LeftDock } from './LeftDock';
+import { type PaneActions, PaneArea } from './PaneArea';
 import { SessionBar, type SessionReviewTotals } from './SessionBar';
 import { deriveSessionReview, type SessionReviewEntry } from './sessionReview';
 import { resolveTerminalWorkspace } from './surfaces/terminalWorkspace';
@@ -39,12 +40,12 @@ import { useEditorWorktreeSync } from './useEditorWorktreeSync';
 import { useShellShortcuts } from './useShellShortcuts';
 import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
 import { useWorkspaceSearch } from './useWorkspaceSearch';
-import { WorkPanel } from './WorkPanel';
 import {
+  deriveAvailablePanes,
   deriveTerminalButtonState,
-  deriveWorkPanelTabs,
-  resolveWorkPanelView,
-  type WorkPanelTab,
+  type PaneKind,
+  paneAreaMinWidth,
+  resolvePaneView,
 } from './workPanelModel';
 
 const NO_REVIEW_ENTRIES: SessionReviewEntry[] = [];
@@ -72,16 +73,16 @@ interface WorkspaceShellProps {
 }
 
 /**
- * Layout 5a (ui-cohesion §6): sidebar │ title bar over chat │ work panel.
+ * Layout 5a/5d (ui-cohesion §6): sidebar │ title bar over chat │ panes.
  *
  *   left   — `LeftDock`: the chat list; collapses to nothing (ruling L1)
  *   center — `SessionBar` (the title bar) over the conversation, and the
- *            work panel beside it when open (rulings L3, L4)
+ *            pane cards beside it when any is open (ruling L3; layout 5d)
  *
  * The allocator is unchanged in shape: it budgets sidebar → chat → editor →
- * panel, and the work panel takes the "editor" term (one pixel width shared
- * by every tab, default 480). The last term stays retired (`panelVisible:
- * false`), as under D08.
+ * panel, and the pane area takes the "editor" term (its width per column
+ * count, default 496 / 864 with the edge margins; its floor is 320 per
+ * column). The last term stays retired (`panelVisible: false`), as under D08.
  */
 export function WorkspaceShell({
   onOpenSettings,
@@ -100,18 +101,23 @@ export function WorkspaceShell({
   const setSidebarWidth = useShellLayoutStore((state) => state.setSidebarWidth);
   const sidebarCollapsed = useShellLayoutStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useShellLayoutStore((state) => state.toggleSidebar);
-  const expanded = useShellLayoutStore((state) => state.expanded);
-  const toggleExpanded = useShellLayoutStore((state) => state.toggleExpanded);
 
-  const workPanelOpen = useShellLayoutStore((state) => state.workPanelOpen);
-  const workPanelTab = useShellLayoutStore((state) => state.workPanelTab);
-  const workPanelHistory = useShellLayoutStore((state) => state.workPanelHistory);
-  const workPanelWidth = useShellLayoutStore((state) => state.workPanelWidth);
-  const setWorkPanelWidth = useShellLayoutStore((state) => state.setWorkPanelWidth);
+  // Layout 5d: the panes (session-only) and the area's persisted geometry.
+  const panes = useShellLayoutStore((state) => state.panes);
+  const paneFocus = useShellLayoutStore((state) => state.paneFocus);
+  const expandedPane = useShellLayoutStore((state) => state.expandedPane);
+  const paneAreaWidth = useShellLayoutStore((state) => state.paneAreaWidth);
+  const paneAreaSplitWidth = useShellLayoutStore((state) => state.paneAreaSplitWidth);
+  const paneSplits = useShellLayoutStore((state) => state.paneSplits);
+  const setPaneAreaWidth = useShellLayoutStore((state) => state.setPaneAreaWidth);
   const setupTerminalOpened = useShellLayoutStore((state) => state.setupTerminalOpened);
-  const openWorkPanel = useShellLayoutStore((state) => state.openWorkPanel);
-  const toggleWorkPanel = useShellLayoutStore((state) => state.toggleWorkPanel);
-  const closeWorkPanel = useShellLayoutStore((state) => state.closeWorkPanel);
+  const openPane = useShellLayoutStore((state) => state.openPane);
+  const togglePane = useShellLayoutStore((state) => state.togglePane);
+  const closePane = useShellLayoutStore((state) => state.closePane);
+  const focusPane = useShellLayoutStore((state) => state.focusPane);
+  const toggleExpandedPane = useShellLayoutStore((state) => state.toggleExpandedPane);
+  const setPaneColumnSplit = useShellLayoutStore((state) => state.setPaneColumnSplit);
+  const setPaneRowSplit = useShellLayoutStore((state) => state.setPaneRowSplit);
 
   // D35: `manualChat` stays (it also gates the "close all tabs snaps chat
   // back to full width" reset below); nothing sets it any more, so
@@ -119,13 +125,13 @@ export function WorkspaceShell({
   const manualChat = useShellLayoutStore((state) => state.manualChat);
   const clearManualOverrides = useShellLayoutStore((state) => state.clearManualOverrides);
 
-  // T-32: a file being open is what gives the panel its editor tab.
+  // T-32: a file being open is what gives the editor pane its content.
   const editorOpen = deriveEditorOpen(useEditorStore((state) => state.tabs).length);
   // D35 round 2 (2026-08-14): a diff tab, while ACTIVE and on screen, takes
   // the whole center row — see `resolveShellChrome`'s `diffTabActive` note.
   const diffTabActive = useEditorStore((state) => isDiffTabActive(state.tabs, state.activeTabPath));
   // Round-10 ⑥: primitive selector — mounts the intent consumer (the editor,
-  // inside the panel) even before any tab exists.
+  // inside its pane card) even before any tab exists.
   const fileIntentPending = useFileOpenIntentStore((state) => state.intent !== null);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const showSessionReview = useSettingsStore((state) => state.showSessionReview);
@@ -152,7 +158,7 @@ export function WorkspaceShell({
 
   /**
    * dsh-rebase P1-11 (decisions 109, 126, 128): the conversation's folder, and
-   * its shell in the work panel. The folder is the chain the init terminal
+   * its shell in the terminal pane. The folder is the chain the init terminal
    * uses (`resolveTerminalWorkspace`: session → workspace → non-empty path);
    * an unbound chat's scratch directory is not one, and nothing falls back to
    * the home directory (decision 126 rule 2).
@@ -166,6 +172,12 @@ export function WorkspaceShell({
     return target.status === 'ready' ? target.path : null;
   });
   const terminalKey = terminalCwd ? columnTerminalKey(terminalCwd) : null;
+  // The diff pane's header names the branch the conversation works on.
+  const activeBranch = useChatSessionsStore((state) => {
+    const session = state.sessions.find((item) => item.id === state.activeSessionId);
+    const workspace = state.workspaces.find((item) => item.id === session?.workspaceId);
+    return workspace?.branch ?? null;
+  });
   const terminalAlive = useColumnTerminalStore((state) =>
     terminalKey ? state.terminals[terminalKey] !== undefined : false
   );
@@ -173,23 +185,35 @@ export function WorkspaceShell({
     (state) => Object.keys(state.terminals).length > 0
   );
 
-  // Which tabs exist, and what the panel shows. Derived, never written back:
-  // a tab that is gone only for a while (another folder has no shell) comes
-  // back by itself, the way the stacked right column used to behave.
-  const panelTabs = deriveWorkPanelTabs({
+  // Which panes can show, and what is on screen. Derived, never written
+  // back: a pane that is gone only for a while (another folder has no shell)
+  // comes back by itself, the way the stacked right column used to behave.
+  const availablePanes = deriveAvailablePanes({
     reviewAvailable,
     editorOpen: editorOpen || fileIntentPending,
     terminalAlive,
     setupTerminalOpened,
+    sessionOpen: activeSessionId !== null,
   });
-  const panelView = resolveWorkPanelView(
-    { open: workPanelOpen, tab: workPanelTab, history: workPanelHistory },
-    panelTabs
+  const paneView = resolvePaneView(
+    { panes, focus: paneFocus, expanded: expandedPane },
+    availablePanes
   );
-  const shownTab = panelView.tab;
-  const togglePanelTab = useCallback(
-    (tab: WorkPanelTab) => toggleWorkPanel(tab, shownTab),
-    [toggleWorkPanel, shownTab]
+  const visiblePanes = paneView.panes;
+  const togglePaneOnScreen = useCallback(
+    (kind: PaneKind) => togglePane(kind, visiblePanes),
+    [togglePane, visiblePanes]
+  );
+  const paneActions = useMemo<PaneActions>(
+    () => ({
+      open: openPane,
+      close: closePane,
+      focus: focusPane,
+      toggleExpanded: toggleExpandedPane,
+      commitColumnSplit: setPaneColumnSplit,
+      commitRowSplit: setPaneRowSplit,
+    }),
+    [openPane, closePane, focusPane, toggleExpandedPane, setPaneColumnSplit, setPaneRowSplit]
   );
 
   const activeEditorPath = useEditorStore((state) => state.activeTabPath);
@@ -203,9 +227,9 @@ export function WorkspaceShell({
     revealSeq,
   });
   useEffect(() => {
-    // Opening a file from anywhere switches the panel to the editor tab
-    // (opening it if it was closed). A worktree switch restoring its own tabs
-    // is not a request to show one, hence the same-worktree condition.
+    // Opening a file from anywhere opens (or focuses) the editor pane. A
+    // worktree switch restoring its own tabs is not a request to show one,
+    // hence the same-worktree condition.
     if (
       fileIntentPending ||
       previousEditor.current.revealSeq !== revealSeq ||
@@ -213,14 +237,14 @@ export function WorkspaceShell({
         previousEditor.current.path !== activeEditorPath &&
         activeEditorPath !== null)
     ) {
-      openWorkPanel('editor');
+      openPane('editor');
     }
     previousEditor.current = {
       worktreePath: editorWorktreePath,
       path: activeEditorPath,
       revealSeq,
     };
-  }, [fileIntentPending, activeEditorPath, editorWorktreePath, revealSeq, openWorkPanel]);
+  }, [fileIntentPending, activeEditorPath, editorWorktreePath, revealSeq, openPane]);
 
   // A workspace being deleted takes its column shells with it, through the
   // same hook the init terminal answers (`closeTerminalSessions`).
@@ -245,9 +269,9 @@ export function WorkspaceShell({
     temporaryWorkspaceEnabled,
   });
 
-  // A08: global shell shortcuts (Ctrl/Cmd+B/1-5). Only live while this
-  // component is mounted, i.e. only for the new shell.
-  useShellShortcuts({ shownPanelTab: shownTab });
+  // A08: global shell shortcuts (Ctrl/Cmd+B/1-5, layout 5d's Ctrl/Cmd+\\).
+  // Only live while this component is mounted, i.e. only for the new shell.
+  useShellShortcuts({ paneView });
   const workspaceSearch = useWorkspaceSearch();
 
   // m7: per-workspace editor tab isolation. Must live somewhere ALWAYS mounted
@@ -278,7 +302,7 @@ export function WorkspaceShell({
     return () => observer.disconnect();
   }, []);
 
-  const terminalVisible = shownTab === 'terminal';
+  const terminalVisible = visiblePanes.includes('terminal');
   const terminalState = deriveTerminalButtonState({
     available: terminalCwd !== null,
     alive: terminalAlive,
@@ -287,39 +311,46 @@ export function WorkspaceShell({
   const toggleTerminal = useCallback(() => {
     if (!terminalCwd) return;
     if (terminalVisible) {
-      closeWorkPanel();
+      closePane('terminal');
       return;
     }
     useColumnTerminalStore.getState().show(terminalCwd);
-    openWorkPanel('terminal');
-  }, [terminalCwd, terminalVisible, closeWorkPanel, openWorkPanel]);
+    openPane('terminal');
+  }, [terminalCwd, terminalVisible, closePane, openPane]);
 
   // Layout 5a: `panelOpen: false` keeps the allocator's last term retired.
+  // D35 round 2: a diff tab takes the whole center row only while the editor
+  // is the one pane on screen — beside other panes it stays a card.
+  const editorPaneAlone =
+    paneView.expanded === 'editor' || (visiblePanes.length === 1 && visiblePanes[0] === 'editor');
   const chrome = resolveShellChrome({
     sidebarUserCollapsed: sidebarCollapsed,
     panelOpen: false,
     manualChat,
-    diffTabActive: shownTab === 'editor' && diffTabActive,
+    diffTabActive: editorPaneAlone && diffTabActive,
   });
   const chatVisible = chrome.chatVisible;
 
+  // One column of panes, or two: each count keeps its own area width.
+  const paneColumns = paneView.columns === 2 ? 2 : 1;
   const allocationInput = {
     shellWidth,
     sidebarWidth,
     sidebarCollapsed: chrome.sidebarCollapsed,
     chatVisible,
-    editorOpen: panelView.open,
-    editorWidth: workPanelWidth,
+    editorOpen: paneView.columns > 0,
+    editorWidth: paneColumns === 2 ? paneAreaSplitWidth : paneAreaWidth,
+    editorMinWidth: paneAreaMinWidth(paneColumns),
     panelVisible: false,
     panelWidth: 0,
   };
   const allocation = resolveShellAllocation(allocationInput);
   /**
-   * Where the closed panel waits: the width it would have if it opened. A
-   * parked terminal keeps a real box (no FitAddon collapse to two columns),
-   * at the width it will show at, so opening does not resize it.
+   * Where the empty pane area waits: the width it would have if a pane
+   * opened. A parked terminal keeps a real box (no FitAddon collapse to two
+   * columns), at the width it will show at, so opening does not resize it.
    */
-  const parkedPanelWidth =
+  const parkedPaneWidth =
     allocation.editorWidth > 0
       ? allocation.editorWidth
       : resolveShellAllocation({ ...allocationInput, editorOpen: true }).editorWidth;
@@ -388,13 +419,10 @@ export function WorkspaceShell({
     }
   }, [editorOpen, manualChat, clearManualOverrides]);
 
-  // The expand overlay belongs to the open panel. A panel that fell back to
-  // closed (its last tab went away) must not reopen as a full-bleed overlay.
-  useEffect(() => {
-    if (expanded && !panelView.open) {
-      toggleExpanded();
-    }
-  }, [expanded, panelView.open, toggleExpanded]);
+  const commitPaneAreaWidth = useCallback(
+    (width: number) => setPaneAreaWidth(paneColumns, width),
+    [setPaneAreaWidth, paneColumns]
+  );
 
   return (
     <div
@@ -444,14 +472,14 @@ export function WorkspaceShell({
           style={{ width: 'var(--shell-center-w)' }}
         >
           {/* Layout 5a: the title bar spans the center row — the conversation
-              AND the work panel under it, as in the reference. */}
+              AND the panes under it, as in the reference. */}
           <SessionBar
             sidebarCollapsed={sidebarCollapsed}
             onExpandSidebar={toggleSidebar}
             review={reviewTotals}
-            shownPanelTab={shownTab}
-            onTogglePanelTab={togglePanelTab}
-            onOpenPanelTab={openWorkPanel}
+            openPanes={visiblePanes}
+            onTogglePane={togglePaneOnScreen}
+            onOpenPane={openPane}
             terminalState={terminalState}
             onToggleTerminal={toggleTerminal}
           />
@@ -479,24 +507,20 @@ export function WorkspaceShell({
               />
             </div>
             {/*
-              Layout 5a: the one right-hand container. Always mounted — closed,
-              it parks out of the row (see WorkPanel) so running shells and the
-              file-intent consumer survive. When `expanded` it overlays THIS
-              row (not the shell), so the sidebar and title bar stay reachable.
+              Layout 5d: the pane cards. Always mounted — with nothing open
+              the area parks out of the row (see PaneArea) so running shells
+              and the file-intent consumer survive. An expanded pane overlays
+              THIS row (not the shell): the sidebar and title bar stay reachable.
             */}
-            <WorkPanel
-              view={panelView}
-              tabs={panelTabs}
-              rememberedTab={workPanelTab}
-              onSelectTab={openWorkPanel}
-              onClose={closeWorkPanel}
-              expanded={expanded}
-              onToggleExpanded={toggleExpanded}
-              parkedWidth={parkedPanelWidth}
+            <PaneArea
+              view={paneView}
+              splits={paneSplits}
+              actions={paneActions}
+              parkedWidth={parkedPaneWidth}
               resize={{
                 width: allocation.editorWidth,
                 clamp: clampPanelDrag,
-                onCommit: setWorkPanelWidth,
+                onCommit: commitPaneAreaWidth,
                 onDragFrame: paintPanelDrag,
                 onResizingChange: setPanelResizing,
               }}
@@ -505,6 +529,8 @@ export function WorkspaceShell({
               review={
                 reviewAvailable ? { sessionId: activeSessionId, entries: reviewEntries } : null
               }
+              branch={activeBranch}
+              sessionId={activeSessionId}
               hasColumnTerminals={hasColumnTerminals}
               terminalKey={terminalKey}
               onSearch={workspaceSearch.openSearch}

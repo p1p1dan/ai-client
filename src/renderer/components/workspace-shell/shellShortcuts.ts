@@ -3,16 +3,16 @@
  * so vitest can cover every branch without mounting `WorkspaceShell` — same
  * pattern as `shellLayoutModel.ts`.
  */
-import type { WorkPanelTab } from './workPanelModel';
+import type { PaneKind } from './workPanelModel';
 
 /**
  * Layout 5a (ruling L1): the rail's digits keep their slots, retargeted. 1 was
  * the dock's chat list and still is — the sidebar's, expanding it if it is
  * collapsed. 2–5 were the rail's git / files / context / run and now open (or
- * close) those work panel tabs. A fixed table: there is no rail order left to
- * derive it from.
+ * close) those panes (layout 5d). A fixed table: there is no rail order left
+ * to derive it from.
  */
-export const DIGIT_PANEL_TABS: Readonly<Record<'2' | '3' | '4' | '5', WorkPanelTab>> = {
+export const DIGIT_PANES: Readonly<Record<'2' | '3' | '4' | '5', PaneKind>> = {
   '2': 'git',
   '3': 'files',
   '4': 'context',
@@ -23,10 +23,12 @@ export const DIGIT_PANEL_TABS: Readonly<Record<'2' | '3' | '4' | '5', WorkPanelT
 // button. D08: Ctrl/Cmd+J left with the right panel it toggled; Ctrl/Cmd+B
 // (VSCode's own sidebar binding) toggles the sidebar — since layout 5a, the
 // whole sidebar, which collapses to nothing.
+// Layout 5d: Ctrl/Cmd+\ closes the focused pane (the reference's binding).
 export type ShellShortcutAction =
   | { type: 'toggle-sidebar' }
   | { type: 'focus-chat-list' }
-  | { type: 'toggle-panel-tab'; tab: WorkPanelTab };
+  | { type: 'toggle-pane'; pane: PaneKind }
+  | { type: 'close-focused-pane' };
 
 export interface ResolveShellShortcutInput {
   /** `KeyboardEvent.key` — currently unused by resolution (kept for callers/future use). */
@@ -65,10 +67,12 @@ function modKeyPressed(input: ResolveShellShortcutInput): boolean {
  * Resolves a `keydown` event into a shell shortcut action, or `null` when the
  * event isn't one of ours and should be left to native/downstream handling.
  *
- * Focus protection: while the target is editable, NOTHING is honored. D08
- * removed the one exception (Ctrl/Cmd+J) along with the panel it toggled;
- * Ctrl/Cmd+B was never exempt because it collides with Monaco's
- * bold/cursor-left semantics, and the digits collide with editor tab switching.
+ * Focus protection: while the target is editable, nothing but Ctrl/Cmd+\ is
+ * honored. Ctrl/Cmd+B collides with Monaco's bold/cursor-left semantics and
+ * the digits with editor tab switching. Ctrl/Cmd+\ is exempt (layout 5d): a
+ * terminal or an editor pane always has an editable target focused, and the
+ * chord has to close exactly that pane — it does not reach the shell as
+ * SIGQUIT then, the reference's trade-off too.
  */
 export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellShortcutAction | null {
   // m15: composing always wins, even over the Ctrl/Cmd+J focus-protection
@@ -79,6 +83,10 @@ export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellSho
   }
   if (input.altKey || input.shiftKey || !modKeyPressed(input)) {
     return null;
+  }
+
+  if (input.code === 'Backslash') {
+    return { type: 'close-focused-pane' };
   }
 
   if (input.targetIsEditable) {
@@ -94,7 +102,7 @@ export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellSho
     const digit = digitMatch[1] as '1' | '2' | '3' | '4' | '5';
     return digit === '1'
       ? { type: 'focus-chat-list' }
-      : { type: 'toggle-panel-tab', tab: DIGIT_PANEL_TABS[digit] };
+      : { type: 'toggle-pane', pane: DIGIT_PANES[digit] };
   }
 
   return null;

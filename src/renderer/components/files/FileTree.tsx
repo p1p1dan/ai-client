@@ -9,6 +9,7 @@ import {
   FolderPlus,
   Loader2,
   MessageSquarePlus,
+  MoreVertical,
   PanelLeftClose,
   Pencil,
   RefreshCw,
@@ -28,8 +29,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Menu, MenuItem, MenuPopup, MenuSeparator } from '@/components/ui/menu';
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PaneHeaderPortal, usePaneHeaderSlots } from '@/components/workspace-shell/panes/paneSlots';
 import type { FileTreeNode } from '@/hooks/useFileTree';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -92,6 +94,7 @@ export function FileTree({
   onSendToSession,
 }: FileTreeProps) {
   const { t } = useI18n();
+  const paneSlots = usePaneHeaderSlots();
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [internalSelectedNode, setInternalSelectedNode] = useState<{
@@ -1112,69 +1115,122 @@ export function FileTree({
         onDrop={handleDrop}
         onContextMenu={handleRootContextMenu}
       >
-        {/* Toolbar */}
-        <div className="sticky top-0 z-10 flex h-12 items-center justify-between gap-1 border-b bg-background px-3">
-          {onToggleCollapse && (
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
-              title={t('Collapse file tree')}
-            >
-              <PanelLeftClose className="h-4 w-4" />
-            </button>
-          )}
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                const targetPath = getCreateTargetPath();
-                if (targetPath) onCreateFile(targetPath);
-              }}
-              className="p-1 text-muted-foreground hover:text-foreground rounded"
-              title={t('New File')}
-            >
-              <FilePlus className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const targetPath = getCreateTargetPath();
-                if (targetPath) onCreateDirectory(targetPath);
-              }}
-              className="p-1 text-muted-foreground hover:text-foreground rounded"
-              title={t('New Folder')}
-            >
-              <FolderPlus className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={onRefresh}
-              className="p-1 text-muted-foreground hover:text-foreground rounded"
-              title={t('Refresh')}
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleCollapseAll}
-              className="p-1 text-muted-foreground hover:text-foreground rounded"
-              title={t('Collapse all folders')}
-            >
-              <SquareMinus className="h-4 w-4" />
-            </button>
+        {/* Toolbar. Layout 5d: inside a pane card the card's header carries
+            it (search, then ⋮ with the rest) — no second row under the title. */}
+        {paneSlots ? (
+          <PaneHeaderPortal slot="actions">
             {onOpenSearch && (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={onOpenSearch}
-                className="p-1 text-muted-foreground hover:text-foreground rounded"
+                aria-label={t('Search')}
                 title={t('Search')}
               >
-                <Search className="h-4 w-4" />
+                <Search className="size-4" />
+              </Button>
+            )}
+            <Menu>
+              <MenuTrigger
+                render={<Button variant="ghost" size="icon-sm" aria-label={t('More actions')} />}
+              >
+                <MoreVertical className="size-4" />
+              </MenuTrigger>
+              <MenuPopup align="end">
+                <MenuItem
+                  onClick={() => {
+                    const targetPath = getCreateTargetPath();
+                    if (targetPath) onCreateFile(targetPath);
+                  }}
+                >
+                  <FilePlus />
+                  {t('New File')}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    const targetPath = getCreateTargetPath();
+                    if (targetPath) onCreateDirectory(targetPath);
+                  }}
+                >
+                  <FolderPlus />
+                  {t('New Folder')}
+                </MenuItem>
+                <MenuSeparator />
+                <MenuItem onClick={onRefresh}>
+                  <RefreshCw />
+                  {t('Refresh')}
+                </MenuItem>
+                <MenuItem onClick={handleCollapseAll}>
+                  <SquareMinus />
+                  {t('Collapse all folders')}
+                </MenuItem>
+              </MenuPopup>
+            </Menu>
+          </PaneHeaderPortal>
+        ) : (
+          <div className="sticky top-0 z-10 flex h-12 items-center justify-between gap-1 border-b bg-background px-3">
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground"
+                title={t('Collapse file tree')}
+              >
+                <PanelLeftClose className="h-4 w-4" />
               </button>
             )}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetPath = getCreateTargetPath();
+                  if (targetPath) onCreateFile(targetPath);
+                }}
+                className="p-1 text-muted-foreground hover:text-foreground rounded"
+                title={t('New File')}
+              >
+                <FilePlus className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetPath = getCreateTargetPath();
+                  if (targetPath) onCreateDirectory(targetPath);
+                }}
+                className="p-1 text-muted-foreground hover:text-foreground rounded"
+                title={t('New Folder')}
+              >
+                <FolderPlus className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="p-1 text-muted-foreground hover:text-foreground rounded"
+                title={t('Refresh')}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleCollapseAll}
+                className="p-1 text-muted-foreground hover:text-foreground rounded"
+                title={t('Collapse all folders')}
+              >
+                <SquareMinus className="h-4 w-4" />
+              </button>
+              {onOpenSearch && (
+                <button
+                  type="button"
+                  onClick={onOpenSearch}
+                  className="p-1 text-muted-foreground hover:text-foreground rounded"
+                  title={t('Search')}
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         {/* Tree nodes */}
         {tree.map((node) => (
           <FileTreeNodeComponent

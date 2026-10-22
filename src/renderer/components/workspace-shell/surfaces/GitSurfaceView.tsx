@@ -154,7 +154,8 @@ function useGitEmptyStateCopy(
 }
 
 export function GitSurfaceView({ active }: GitSurfaceViewProps) {
-  const expanded = useShellLayoutStore((s) => s.expanded);
+  // Layout 5d: the git pane expanded (⤢) gets the split view.
+  const expanded = useShellLayoutStore((s) => s.expandedPane === 'git');
   const surfaceActive = active;
 
   const activeSessionId = useChatSessionsStore((s) => s.activeSessionId);

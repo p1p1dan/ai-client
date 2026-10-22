@@ -12,7 +12,10 @@ import {
   resolveShellChrome,
   SIDEBAR_COLLAPSED_RESERVE,
 } from '../centerLayoutModel';
-import { WORK_PANEL_DEFAULT_WIDTH, WORK_PANEL_MIN_WIDTH } from '../workPanelModel';
+import { PANE_MIN_WIDTH } from '../workPanelModel';
+
+// Layout 5d: the 5a panel's 480 default is the one-column card width.
+const WORK_PANEL_DEFAULT_WIDTH = 480;
 
 /**
  * Design system v2 / layout 5a: the right column is the work panel, sized in
@@ -21,9 +24,9 @@ import { WORK_PANEL_DEFAULT_WIDTH, WORK_PANEL_MIN_WIDTH } from '../workPanelMode
  * term the panel took over.
  */
 describe('the work panel floor', () => {
-  it('is 320 for every tab, the same number in both models', () => {
+  it('is 320, the same number as a pane card`s minimum (layout 5d)', () => {
     expect(EDITOR_MIN_WIDTH).toBe(320);
-    expect(EDITOR_MIN_WIDTH).toBe(WORK_PANEL_MIN_WIDTH);
+    expect(EDITOR_MIN_WIDTH).toBe(PANE_MIN_WIDTH);
   });
 });
 
@@ -42,7 +45,7 @@ describe('resolveChatColumnWidth (pixel panel width, layout 5a)', () => {
 
   it('lets the panel floor beat a narrower preference', () => {
     expect(resolveChatColumnWidth({ centerWidth: 1200, editorWidth: 100 })).toBe(
-      1200 - WORK_PANEL_MIN_WIDTH
+      1200 - PANE_MIN_WIDTH
     );
   });
 

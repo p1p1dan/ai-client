@@ -189,14 +189,13 @@ describe('revealChange (layout 5c)', () => {
     expect(nextChangeFocus(first, { entryId: 'm:c1', path: 'a.ts' }).seq).toBe(2);
   });
 
-  it('opens the work panel on the changes tab and records the focus', () => {
+  it('opens the changes pane, focuses it and records the focus (layout 5d)', () => {
     const store = useShellLayoutStore;
-    store.setState({ workPanelOpen: false, workPanelTab: 'files', changeFocus: null });
+    store.setState({ panes: [], paneFocus: [], changeFocus: null });
     store.getState().revealChange({ entryId: 'm:c1', path: 'src/a.ts' });
     const state = store.getState();
-    expect(state.workPanelOpen).toBe(true);
-    expect(state.workPanelTab).toBe('changes');
-    expect(state.workPanelHistory.at(-1)).toBe('changes');
+    expect(state.panes).toContain('changes');
+    expect(state.paneFocus.at(-1)).toBe('changes');
     expect(state.changeFocus).toEqual({ entryId: 'm:c1', path: 'src/a.ts', seq: 1 });
   });
 });

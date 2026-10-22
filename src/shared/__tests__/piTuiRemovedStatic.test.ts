@@ -163,12 +163,12 @@ describe('P1-11 · the product has no pi TUI', () => {
     expect(worktree).toContain('openInitializationTerminal()');
   });
 
-  it('opens the title bar terminal as a plain shell in the work panel (decision 128, layout 5a)', () => {
+  it('opens the title bar terminal as a plain shell in its pane (decision 128, layout 5d)', () => {
     const column =
       CODE.get('src/renderer/components/workspace-shell/center/TerminalColumn.tsx') ?? '';
     expect(column).toContain('<ShellTerminal');
     expect(column).not.toMatch(/command=|kind=/);
-    const panel = CODE.get('src/renderer/components/workspace-shell/WorkPanel.tsx') ?? '';
+    const panel = CODE.get('src/renderer/components/workspace-shell/PaneArea.tsx') ?? '';
     expect(panel).toContain('<TerminalColumn');
     const bar = CODE.get('src/renderer/components/workspace-shell/SessionBar.tsx') ?? '';
     expect(bar).toContain('<TerminalButton state={terminalState} onToggle={onToggleTerminal} />');

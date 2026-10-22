@@ -5,7 +5,7 @@
  * D08 made this the left dock: a 44px icon rail plus a panel that switched
  * five surfaces (chat list, git, files, context, run). The rail is gone. The
  * chat list is the sidebar's only content; git / files / context / run are
- * tabs of the work panel on the right (`WorkPanel.tsx`). The rail's other
+ * tabs of the work panel on the right (`PaneArea.tsx`). The rail's other
  * entries moved too:
  *   - Home → the chat list's own 「新对话」, which opens the home page;
  *   - collapse → this column's top row (and Ctrl+B); while collapsed, the

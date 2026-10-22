@@ -27,9 +27,9 @@ const code = (file: string) => stripComments(readFileSync(file, 'utf8'), file);
 describe('U26 (D13) the editor is never suppressed (design system v2 / layout 5a)', () => {
   it('nothing suppresses the editor tab while a file is open or an intent waits', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
-    // Layout 5a: the work panel's width is allocated whenever it is open, and
-    // the editor tab exists whenever a file is open or an intent is pending.
-    expect(shell).toContain('editorOpen: panelView.open,');
+    // Layout 5d: the pane area's width is allocated whenever a pane shows,
+    // and the editor pane exists whenever a file is open or an intent waits.
+    expect(shell).toContain('editorOpen: paneView.columns > 0,');
     expect(shell).toContain('editorOpen: editorOpen || fileIntentPending,');
     expect(shell).not.toContain('isTui');
   });
@@ -45,9 +45,9 @@ describe('U26 (D13) the editor is never suppressed (design system v2 / layout 5a
   it('chat visibility and the fullscreen-diff hide come from the shell chrome alone', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
     expect(shell).toContain('const chatVisible = chrome.chatVisible;');
-    // A diff tab takes the whole center row only while the panel shows the
-    // editor; another tab on screen does not.
-    expect(shell).toContain("diffTabActive: shownTab === 'editor' && diffTabActive,");
+    // A diff tab takes the whole center row only while the editor is the one
+    // pane on screen (layout 5d); beside other panes it stays a card.
+    expect(shell).toContain('diffTabActive: editorPaneAlone && diffTabActive,');
   });
 });
 
@@ -57,43 +57,44 @@ describe('U26 (D13) the editor is never suppressed (design system v2 / layout 5a
  * tab (ruling L4). Layout facts no pure function can reach: which width it
  * takes, how it hides, and what the title bar looks like.
  */
-describe('P1-11 the terminal is a tab of the work panel', () => {
-  it('takes the panel width and grip, never a width of its own', () => {
+describe('P1-11 the terminal is a pane card (layout 5d)', () => {
+  it('takes the pane area width and grip, never a width of its own', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
-    const panel = code(join(SHELL_DIR, 'WorkPanel.tsx'));
-    // Decision 126 rule 3: one drag width, the panel's.
-    expect(panel).toContain("{ width: 'var(--shell-editor-w)' }");
+    const area = code(join(SHELL_DIR, 'PaneArea.tsx'));
+    // Decision 126 rule 3: one drag width, the pane area's.
+    expect(area).toContain("{ width: 'var(--shell-editor-w)' }");
     // biome-ignore lint/suspicious/noTemplateCurlyInString: asserting on source text that itself contains a template placeholder
-    expect(panel).toContain('{ width: `${parkedWidth}px` }');
-    expect(shell).toContain('parkedWidth={parkedPanelWidth}');
-    expect(panel).toContain('<TerminalColumn');
-    // One grip, on the panel's left edge, for every tab.
-    expect(panel).toContain('side="left"');
-    // Every tab shares the panel's floor, so switching tabs never moves the grip.
+    expect(area).toContain('{ width: `${parkedWidth}px` }');
+    expect(shell).toContain('parkedWidth={parkedPaneWidth}');
+    expect(area).toContain('<TerminalColumn');
+    // One grip, on the area's left edge, for every pane.
+    expect(area).toContain('side="left"');
     expect(shell).not.toContain('REVIEW_MIN_WIDTH');
-    expect(shell).not.toContain('editorMinWidth');
+    // The floor is per column count (320 a card), never per pane kind.
+    expect(shell).toContain('editorMinWidth: paneAreaMinWidth(paneColumns),');
   });
 
   it('hides without unmounting and without collapsing to zero width', () => {
-    const panel = code(join(SHELL_DIR, 'WorkPanel.tsx'));
+    const area = code(join(SHELL_DIR, 'PaneArea.tsx'));
+    const card = code(join(SHELL_DIR, 'PaneCard.tsx'));
     // Mounted while any column shell runs: an unmount ends the shell.
-    expect(panel).toContain('{hasColumnTerminals && (');
-    // Out of sight = invisible with a real box; `hidden` (display: none) would
-    // hand xterm a zero measurement and the pty two columns. The closed panel
-    // itself parks the same way.
-    expect(panel).toContain("showTerminal ? 'z-10' : 'pointer-events-none invisible'");
-    expect(panel).toContain("!open && 'pointer-events-none invisible absolute inset-y-0 right-0'");
+    expect(area).toContain("if (kind === 'terminal') return hasColumnTerminals;");
+    // Out of sight = invisible over the area's box; `hidden` (display: none)
+    // would hand xterm a zero measurement and the pty two columns. The empty
+    // area itself parks the same way.
+    expect(card).toContain("!shown && 'pointer-events-none invisible inset-0'");
+    expect(card).not.toMatch(/['"`\s]hidden['"`\s]/);
+    expect(area).toContain("!open && 'pointer-events-none invisible absolute inset-y-0 right-0'");
     const column = code(join(SHELL_DIR, 'center/TerminalColumn.tsx'));
     expect(column).toContain("cn('absolute inset-2', !shown && 'pointer-events-none invisible')");
     expect(column).not.toMatch(/['"`\s]hidden['"`\s]/);
   });
 
-  it('names the folder in one strip row, under the panel tab (prototype scene G)', () => {
+  it('names the folder in the card header, with no row of its own (prototype scene G, layout 5d)', () => {
     const column = code(join(SHELL_DIR, 'center/TerminalColumn.tsx'));
-    // The panel's strip names the tab; the column keeps one h-8 row.
-    expect(column).toContain(
-      'flex h-8 shrink-0 items-center gap-2 border-b border-border-soft px-3 text-small'
-    );
+    expect(column).toContain('<PaneHeaderPortal slot="context">');
+    expect(column).toContain('<PaneHeaderPortal slot="actions">');
+    expect(column).not.toContain('h-8');
     expect(column).not.toContain('h-10');
     expect(column).toContain("t('Close terminal')");
     expect(column).toContain("t('Session directory')");

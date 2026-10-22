@@ -1,6 +1,5 @@
 import {
   Activity,
-  Check,
   ChevronDown,
   Diff,
   Folder,
@@ -12,9 +11,8 @@ import {
   PanelLeftOpen,
   Plus,
   SquareTerminal,
-  Users,
 } from 'lucide-react';
-import { type ReactElement, type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { requestComposerFocus } from '@/components/chat/composerFocus';
 import { SessionTreeDialog } from '@/components/chat/SessionTreeDialog';
 import { displaySessionTitle } from '@/components/chat/sessionIndex/sessionTitle';
@@ -37,9 +35,10 @@ import { cn } from '@/lib/utils';
 import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
 import { openHome } from '@/stores/homeDraft';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
-import { type SubwindowKey, useSessionSubwindowsStore } from '@/stores/sessionSubwindows';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
-import type { TerminalButtonState, WorkPanelTab } from './workPanelModel';
+import type { PaneKind, TerminalButtonState } from './workPanelModel';
+
+const NO_PANES: readonly PaneKind[] = [];
 
 export interface SessionReviewTotals {
   count: number;
@@ -53,13 +52,13 @@ interface SessionBarProps {
   onExpandSidebar?: () => void;
   /** Absent = the session review is off (setting) or no conversation is open. */
   review?: SessionReviewTotals;
-  /** The tab the work panel shows now, for the buttons' pressed state. */
-  shownPanelTab?: WorkPanelTab | null;
-  /** The bar's buttons toggle: the shown tab closes the panel. */
-  onTogglePanelTab?: (tab: WorkPanelTab) => void;
-  /** Menu entries open (never close) a tab. */
-  onOpenPanelTab?: (tab: WorkPanelTab) => void;
-  /** dsh-rebase P1-11: the terminal tab's toggle; absent = no button. */
+  /** Layout 5d: the panes on screen, for the buttons' pressed state. */
+  openPanes?: readonly PaneKind[];
+  /** The bar's buttons toggle: a pane on screen closes. */
+  onTogglePane?: (kind: PaneKind) => void;
+  /** Menu entries open (never close) a pane. */
+  onOpenPane?: (kind: PaneKind) => void;
+  /** dsh-rebase P1-11: the terminal pane's toggle; absent = no button. */
   terminalState?: TerminalButtonState;
   onToggleTerminal?: () => void;
   /**
@@ -130,12 +129,14 @@ function BarIconButton({
  *           conversation's title with a chevron for its menu (branches, new
  *           chat), the running glyph and the 「临时」 tag;
  *   right — [5e session rail toggle | divider] terminal · changes · files ·
- *           (background work while it runs) · ⋮.
+ *           (background tasks while something runs or its pane is open) · ⋮.
  *
- * The ⋮ menu takes what has no button: the Git / Run / Context tabs (the
- * retired rail's surfaces), the two sub-window toggles, and the repository /
- * branch / folder the conversation runs in — they move to the session rail's
- * environment card in 5e.
+ * Layout 5d: every button toggles a pane card; pressed = that pane is open.
+ * The ⋮ menu takes what has no button: the Git / Run / Context / background
+ * tasks panes, and the repository / branch / folder the conversation runs in
+ * — they move to the session rail's environment card in 5e. The background
+ * tasks button opens the tasks pane; the floating sub-windows (chat/) are no
+ * longer opened from here.
  *
  * Unchanged from D12: the close ✕ does NOT come back here. "End this
  * conversation" lives in the sidebar row's context menu.
@@ -144,9 +145,9 @@ export function SessionBar({
   sidebarCollapsed = false,
   onExpandSidebar,
   review,
-  shownPanelTab = null,
-  onTogglePanelTab,
-  onOpenPanelTab,
+  openPanes = NO_PANES,
+  onTogglePane,
+  onOpenPane,
   terminalState,
   onToggleTerminal,
   sessionRailToggle,
@@ -269,11 +270,11 @@ export function SessionBar({
       {activeSessionId && terminalState && onToggleTerminal && (
         <TerminalButton state={terminalState} onToggle={onToggleTerminal} />
       )}
-      {review && onTogglePanelTab && (
+      {review && onTogglePane && (
         <BarIconButton
           label={reviewLabel}
-          pressed={shownPanelTab === 'changes'}
-          onClick={() => onTogglePanelTab('changes')}
+          pressed={openPanes.includes('changes')}
+          onClick={() => onTogglePane('changes')}
           data={{ 'data-panel-toggle': 'changes' }}
         >
           <Diff className="size-4" />
@@ -285,44 +286,50 @@ export function SessionBar({
           )}
         </BarIconButton>
       )}
-      {onTogglePanelTab && (
+      {onTogglePane && (
         <BarIconButton
           label={t('Files')}
-          pressed={shownPanelTab === 'files'}
-          onClick={() => onTogglePanelTab('files')}
+          pressed={openPanes.includes('files')}
+          onClick={() => onTogglePane('files')}
           data={{ 'data-panel-toggle': 'files' }}
         >
           <FolderOpen className="size-4" />
         </BarIconButton>
       )}
-      {activeSessionId && <BackgroundWorkButtons sessionId={activeSessionId} />}
+      {activeSessionId && onTogglePane && (
+        <BackgroundTasksButton
+          sessionId={activeSessionId}
+          open={openPanes.includes('tasks')}
+          onToggle={() => onTogglePane('tasks')}
+        />
+      )}
 
       <Menu>
         <MenuTrigger className={barIconClass(false)} aria-label={t('More actions')}>
           <MoreVertical className="size-4" />
         </MenuTrigger>
         <MenuPopup align="end" className="min-w-56">
-          {onOpenPanelTab && (
+          {onOpenPane && (
             <MenuGroup>
-              <MenuItem onClick={() => onOpenPanelTab('git')}>
+              <MenuItem onClick={() => onOpenPane('git')}>
                 <GitBranch />
                 {t('Git')}
               </MenuItem>
-              <MenuItem onClick={() => onOpenPanelTab('run')}>
+              <MenuItem onClick={() => onOpenPane('run')}>
                 <Activity />
                 {t('Run')}
               </MenuItem>
-              <MenuItem onClick={() => onOpenPanelTab('context')}>
+              <MenuItem onClick={() => onOpenPane('context')}>
                 <Gauge />
                 {t('Context')}
               </MenuItem>
+              {activeSessionId && (
+                <MenuItem onClick={() => onOpenPane('tasks')} data-pane-item="tasks">
+                  <Layers />
+                  {t('Background tasks')}
+                </MenuItem>
+              )}
             </MenuGroup>
-          )}
-          {activeSessionId && (
-            <>
-              <MenuSeparator />
-              <SubwindowMenuItems sessionId={activeSessionId} />
-            </>
           )}
           {activeWorkspace && (
             <>
@@ -376,7 +383,7 @@ const NO_HIDDEN_JOBS: readonly string[] = [];
 
 /**
  * dsh-rebase P1-11 (decision 128): opens and hides the shell of this
- * conversation's folder — since layout 5a, the work panel's terminal tab.
+ * conversation's folder — since layout 5d, the terminal pane.
  * Disabled, with the reason, when the conversation has no folder (decision
  * 126 rule 2). A dot marks a shell that is running out of sight, so hiding
  * the terminal never hides a process.
@@ -445,103 +452,32 @@ function useBackgroundWorkCounts(sessionId: string): { jobs: number; agents: num
 }
 
 /**
- * dsh-rebase P1-7b: 「后台任务」 and 「子代理」. Layout 5a keeps the bar quiet:
- * each one shows only while it has something running or its window is open
- * (so it can be closed from where it was opened), with the running count; the
- * ⋮ menu always offers both.
+ * Layout 5d: one 「后台任务」 button for the tasks pane (background commands,
+ * workflows and subagents — the pane lists both kinds the two floating
+ * sub-windows used to). Shown only while something runs or the pane is open,
+ * with the running count; the ⋮ menu always offers it.
  */
-function BackgroundWorkButtons({ sessionId }: { sessionId: string }) {
-  const { t } = useI18n();
-  const open = useSessionSubwindowsStore((state) => state.open);
-  const toggle = useSessionSubwindowsStore((state) => state.toggle);
-  const { jobs, agents } = useBackgroundWorkCounts(sessionId);
-  const buttons: ReactElement[] = [];
-  if (jobs > 0 || open.jobs) {
-    buttons.push(
-      <SubwindowButton
-        key="jobs"
-        windowKey="jobs"
-        label={t('Background tasks')}
-        icon={Layers}
-        count={jobs}
-        active={open.jobs}
-        onClick={() => toggle('jobs')}
-      />
-    );
-  }
-  if (agents > 0 || open.agents) {
-    buttons.push(
-      <SubwindowButton
-        key="agents"
-        windowKey="agents"
-        label={t('Subagents')}
-        icon={Users}
-        count={agents}
-        active={open.agents}
-        onClick={() => toggle('agents')}
-      />
-    );
-  }
-  if (buttons.length === 0) return null;
-  return (
-    <div
-      className="flex shrink-0 items-center gap-0.5"
-      role="group"
-      aria-label={t('Background work')}
-    >
-      {buttons}
-    </div>
-  );
-}
-
-function SubwindowMenuItems({ sessionId }: { sessionId: string }) {
-  const { t } = useI18n();
-  const open = useSessionSubwindowsStore((state) => state.open);
-  const toggle = useSessionSubwindowsStore((state) => state.toggle);
-  const { jobs, agents } = useBackgroundWorkCounts(sessionId);
-  return (
-    <MenuGroup>
-      <MenuItem onClick={() => toggle('jobs')} data-subwindow-item="jobs">
-        <Layers />
-        <span className="min-w-0 flex-1 truncate">{t('Background tasks')}</span>
-        {jobs > 0 && <span className="text-small text-muted-foreground tabular-nums">{jobs}</span>}
-        {open.jobs && <Check aria-label={t('Open')} />}
-      </MenuItem>
-      <MenuItem onClick={() => toggle('agents')} data-subwindow-item="agents">
-        <Users />
-        <span className="min-w-0 flex-1 truncate">{t('Subagents')}</span>
-        {agents > 0 && (
-          <span className="text-small text-muted-foreground tabular-nums">{agents}</span>
-        )}
-        {open.agents && <Check aria-label={t('Open')} />}
-      </MenuItem>
-    </MenuGroup>
-  );
-}
-
-function SubwindowButton({
-  windowKey,
-  label,
-  icon: Icon,
-  count,
-  active,
-  onClick,
+function BackgroundTasksButton({
+  sessionId,
+  open,
+  onToggle,
 }: {
-  windowKey: SubwindowKey;
-  label: string;
-  icon: typeof Layers;
-  count: number;
-  active: boolean;
-  onClick: () => void;
+  sessionId: string;
+  open: boolean;
+  onToggle: () => void;
 }) {
+  const { t } = useI18n();
+  const { jobs, agents } = useBackgroundWorkCounts(sessionId);
+  const count = jobs + agents;
+  if (count === 0 && !open) return null;
   return (
     <BarIconButton
-      label={label}
-      pressed={active}
-      onClick={onClick}
-      data={{ 'data-subwindow': windowKey }}
+      label={t('Background tasks')}
+      pressed={open}
+      onClick={onToggle}
+      data={{ 'data-panel-toggle': 'tasks' }}
     >
-      <Icon className="size-4" />
+      <Layers className="size-4" />
       {count > 0 && (
         <Badge size="sm" className="absolute -top-0.5 -right-0.5 rounded-full tabular-nums">
           {count}

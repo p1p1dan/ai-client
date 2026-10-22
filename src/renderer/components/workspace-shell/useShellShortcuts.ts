@@ -4,10 +4,10 @@
  * while the new shell is rendered — the legacy shell's own global shortcuts
  * (`App/useAppKeyboardShortcuts.ts`) are untouched and keep working there.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { resolveShellShortcut } from './shellShortcuts';
-import type { WorkPanelTab } from './workPanelModel';
+import type { PaneView } from './workPanelModel';
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -25,14 +25,18 @@ function isMacPlatform(): boolean {
 }
 
 /**
- * `shownPanelTab` is the tab the work panel shows now (the shell derives it,
- * `resolveWorkPanelView`), so a digit for that tab closes the panel instead of
- * re-opening it.
+ * `paneView` is what is on screen now (the shell derives it,
+ * `resolvePaneView`): a digit for a pane on screen closes it instead of
+ * re-opening it, and Ctrl/Cmd+\ closes the focused one.
  */
-export function useShellShortcuts({ shownPanelTab }: { shownPanelTab: WorkPanelTab | null }): void {
+export function useShellShortcuts({ paneView }: { paneView: PaneView }): void {
   const toggleSidebar = useShellLayoutStore((state) => state.toggleSidebar);
   const focusChatList = useShellLayoutStore((state) => state.focusChatList);
-  const toggleWorkPanel = useShellLayoutStore((state) => state.toggleWorkPanel);
+  const togglePane = useShellLayoutStore((state) => state.togglePane);
+  const closePane = useShellLayoutStore((state) => state.closePane);
+  // Read at key time: the listener is installed once, not per shell render.
+  const paneViewRef = useRef(paneView);
+  paneViewRef.current = paneView;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -51,6 +55,11 @@ export function useShellShortcuts({ shownPanelTab }: { shownPanelTab: WorkPanelT
       if (!action) {
         return;
       }
+      const { panes: visiblePanes, focused: focusedPane } = paneViewRef.current;
+      // Nothing to close: leave the chord to whoever else wants it.
+      if (action.type === 'close-focused-pane' && !focusedPane) {
+        return;
+      }
       event.preventDefault();
       switch (action.type) {
         case 'toggle-sidebar':
@@ -59,8 +68,11 @@ export function useShellShortcuts({ shownPanelTab }: { shownPanelTab: WorkPanelT
         case 'focus-chat-list':
           focusChatList();
           break;
-        case 'toggle-panel-tab':
-          toggleWorkPanel(action.tab, shownPanelTab);
+        case 'toggle-pane':
+          togglePane(action.pane, visiblePanes);
+          break;
+        case 'close-focused-pane':
+          if (focusedPane) closePane(focusedPane);
           break;
         default:
           break;
@@ -72,5 +84,5 @@ export function useShellShortcuts({ shownPanelTab }: { shownPanelTab: WorkPanelT
     // own element-level handlers can consume the event.
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [toggleSidebar, focusChatList, toggleWorkPanel, shownPanelTab]);
+  }, [toggleSidebar, focusChatList, togglePane, closePane]);
 }

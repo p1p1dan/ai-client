@@ -73,7 +73,7 @@ export interface ContextSurfaceDescriptor {
 // Registry order: `deriveMountedSurfaceIds` mounts in this order, so React
 // keys stay stable. Layout 5a (ruling L1) retired the rail and the dock's
 // `chat` slot: the sidebar is the chat list itself, and git / files / context /
-// run are work panel tabs (`workPanelModel.ts` owns their strip order and
+// run are panes (`workPanelModel.ts` owns the pane layout; `shellShortcuts.ts`
 // their Ctrl/Cmd+digit mapping).
 export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
   {

@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest';
 import { isDiffTabActive } from '@/stores/diffTabTarget';
 import { useEditorStore } from '@/stores/editor';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
+import { useShellLayoutStore } from '@/stores/shellLayout';
 import { SessionReviewPanel } from '../SessionReviewPanel';
 import type { SessionReviewEntry } from '../sessionReview';
 
@@ -12,7 +13,7 @@ vi.mock('../useWorkspaceRootPath', () => ({ readWorkspaceRootPath: () => '/repo'
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 
-it('expands diffs, opens a real diff tab, and closes without touching files', async () => {
+it('expands diffs and opens a real diff tab without touching files', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   const element = document.createElement('div');
   document.body.append(element);
@@ -20,8 +21,7 @@ it('expands diffs, opens a real diff tab, and closes without touching files', as
   const editorBefore = useEditorStore.getState();
   const intentBefore = useFileOpenIntentStore.getState().intent;
   useEditorStore.setState({ tabs: [], activeTabPath: null });
-  const onClose = vi.fn();
-  const onShowFiles = vi.fn();
+  const onOpenDiff = vi.fn();
   const entry: SessionReviewEntry = {
     id: 'one',
     path: '/repo/test.txt',
@@ -37,11 +37,7 @@ it('expands diffs, opens a real diff tab, and closes without touching files', as
       id: `entry-${index}`,
       path: `/repo/file-${index}.txt`,
     })),
-    onClose,
-    onShowFiles,
-    filesOpen: true,
-    expanded: false,
-    onToggleExpanded: vi.fn(),
+    onOpenDiff,
   };
   try {
     await act(async () => root.render(createElement(SessionReviewPanel, props)));
@@ -78,23 +74,17 @@ it('expands diffs, opens a real diff tab, and closes without touching files', as
       status: 'M',
     });
     expect(isDiffTabActive(editor.tabs, editor.activeTabPath)).toBe(true);
-    expect(onShowFiles).not.toHaveBeenCalled();
-    expect(onClose).toHaveBeenCalledOnce();
+    // Layout 5d: opening a diff asks for the editor pane; the review stays.
+    expect(onOpenDiff).toHaveBeenCalledOnce();
     expect(triggers[0].getAttribute('aria-expanded')).toBe('true');
     await act(async () =>
       element.querySelector<HTMLButtonElement>('button[aria-label="Open file"]')!.click()
     );
     expect(useEditorStore.getState().tabs).toHaveLength(1);
-    expect(onClose).toHaveBeenCalledTimes(2);
-    // The toolbar's Files action is still a live, separate consumer.
-    await act(async () =>
-      element.querySelector<HTMLButtonElement>('button[aria-label="Files"]')!.click()
-    );
-    expect(onShowFiles).toHaveBeenCalledOnce();
-    await act(async () =>
-      element.querySelector<HTMLButtonElement>('button[aria-label="Close review"]')!.click()
-    );
-    expect(onClose).toHaveBeenCalledTimes(3);
+    expect(onOpenDiff).toHaveBeenCalledTimes(2);
+    // Layout 5d: no header of its own — the pane card has the one close / expand.
+    expect(element.querySelector('button[aria-label="Close review"]')).toBeNull();
+    expect(element.querySelector('button[aria-label="Expand panel"]')).toBeNull();
     await act(async () =>
       root.render(
         createElement(SessionReviewPanel, {
@@ -111,6 +101,68 @@ it('expands diffs, opens a real diff tab, and closes without touching files', as
     await act(async () => root.unmount());
     element.remove();
     useEditorStore.setState(editorBefore, true);
+    vi.unstubAllGlobals();
+  }
+});
+
+it('groups changes by file, and the change card expands and marks its file (layout 5c/5d)', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
+    callback();
+    return 0;
+  });
+  const element = document.createElement('div');
+  document.body.append(element);
+  const root = createRoot(element);
+  const change = (id: string, path: string, patch: string): SessionReviewEntry => ({
+    id,
+    path,
+    status: 'modified',
+    patch,
+    added: 1,
+    removed: 0,
+  });
+  const entries = [
+    change('m1:a', '/repo/src/a.ts', '@@ -1 +1,2 @@\n one\n+first'),
+    change('m1:b', '/repo/src/b.ts', '@@ -1 +1,2 @@\n one\n+other'),
+    change('m2:a', '/repo/src/a.ts', '@@ -2 +2,2 @@\n two\n+second'),
+  ];
+  useShellLayoutStore.setState({ changeFocus: null });
+  try {
+    await act(async () =>
+      root.render(
+        createElement(SessionReviewPanel, { sessionId: 's', entries, onOpenDiff: vi.fn() })
+      )
+    );
+    const files = element.querySelectorAll('[data-review-file]');
+    expect([...files].map((file) => file.getAttribute('data-review-file'))).toEqual([
+      '/repo/src/a.ts',
+      '/repo/src/b.ts',
+    ]);
+    // Both of a.ts's changes add up on its row.
+    expect(files[0]?.textContent).toContain('+2');
+    expect(element.textContent).not.toContain('+second');
+    await act(async () =>
+      useShellLayoutStore.getState().revealChange({ entryId: 'm2:a', path: '/repo/src/a.ts' })
+    );
+    const trigger = files[0]?.querySelector('[data-slot="collapsible-trigger"]');
+    expect(trigger?.getAttribute('aria-expanded')).toBe('true');
+    expect(element.textContent).toContain('+first');
+    expect(element.textContent).toContain('+second');
+    expect(
+      files[1]?.querySelector('[data-slot="collapsible-trigger"]')?.getAttribute('aria-expanded')
+    ).toBe('false');
+    // By path when the entry is unknown (an older page not loaded yet).
+    await act(async () =>
+      useShellLayoutStore.getState().revealChange({ entryId: 'gone', path: '/repo/src/b.ts' })
+    );
+    expect(
+      files[1]?.querySelector('[data-slot="collapsible-trigger"]')?.getAttribute('aria-expanded')
+    ).toBe('true');
+  } finally {
+    await act(async () => root.unmount());
+    element.remove();
+    useShellLayoutStore.setState({ changeFocus: null, panes: [], paneFocus: [] });
     vi.unstubAllGlobals();
   }
 });

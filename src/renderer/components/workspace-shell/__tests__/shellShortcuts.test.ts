@@ -35,16 +35,16 @@ describe('resolveShellShortcut', () => {
 
   describe('Ctrl/Cmd+1..5 — the rail digits, retargeted (design system v2 / layout 5a)', () => {
     // 1 was the dock's chat list and is the sidebar's now; 2-5 were the rail's
-    // git / files / context / run and now toggle those work panel tabs.
+    // git / files / context / run and now toggle those panes (layout 5d).
     const expected = [
       { type: 'focus-chat-list' },
-      { type: 'toggle-panel-tab', tab: 'git' },
-      { type: 'toggle-panel-tab', tab: 'files' },
-      { type: 'toggle-panel-tab', tab: 'context' },
-      { type: 'toggle-panel-tab', tab: 'run' },
+      { type: 'toggle-pane', pane: 'git' },
+      { type: 'toggle-pane', pane: 'files' },
+      { type: 'toggle-pane', pane: 'context' },
+      { type: 'toggle-pane', pane: 'run' },
     ];
 
-    it('maps Digit1..5 to the chat list and the git/files/context/run tabs on non-mac', () => {
+    it('maps Digit1..5 to the chat list and the git/files/context/run panes on non-mac', () => {
       for (let digit = 1; digit <= expected.length; digit++) {
         const action = resolveShellShortcut(input({ code: `Digit${digit}`, ctrlKey: true }));
         expect(action).toEqual(expected[digit - 1]);
@@ -68,6 +68,33 @@ describe('resolveShellShortcut', () => {
       expect(
         resolveShellShortcut(input({ code: 'Digit1', ctrlKey: true, targetIsEditable: true }))
       ).toBeNull();
+    });
+  });
+
+  describe('Ctrl/Cmd+\\ — close the focused pane (layout 5d)', () => {
+    it('resolves on both platforms', () => {
+      expect(resolveShellShortcut(input({ code: 'Backslash', ctrlKey: true }))).toEqual({
+        type: 'close-focused-pane',
+      });
+      expect(
+        resolveShellShortcut(input({ code: 'Backslash', metaKey: true, isMac: true }))
+      ).toEqual({ type: 'close-focused-pane' });
+    });
+
+    it('is honored in an editable target too — a terminal or editor pane always has one', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'Backslash', ctrlKey: true, targetIsEditable: true }))
+      ).toEqual({ type: 'close-focused-pane' });
+    });
+
+    it('still yields to an IME composition and to extra modifiers', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'Backslash', ctrlKey: true, isComposing: true }))
+      ).toBeNull();
+      expect(
+        resolveShellShortcut(input({ code: 'Backslash', ctrlKey: true, shiftKey: true }))
+      ).toBeNull();
+      expect(resolveShellShortcut(input({ code: 'Backslash' }))).toBeNull();
     });
   });
 

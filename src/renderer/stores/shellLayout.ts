@@ -1,13 +1,14 @@
 /**
  * T-22 (D19): shell layout store — a thin zustand + persist wrapper around the
  * pure models in `components/workspace-shell/` (`shellLayoutModel.ts` for the
- * sidebar and persistence, `workPanelModel.ts` for the right work panel).
+ * sidebar and persistence, `workPanelModel.ts` for the panes on the right).
  * Every decision lives in those pure modules; this file only wires actions to
  * `set` so the store cannot behave differently from them.
  *
  * Layout 5a (ui-cohesion §6): the icon rail and its surface switcher are gone.
- * The sidebar is the chat list and collapses entirely; git / files / context /
- * run, the review, the terminal and the editor are tabs of one work panel.
+ * The sidebar is the chat list and collapses entirely. Layout 5d: git / files /
+ * context / run, the review, the terminal, the editor and the background
+ * tasks are pane cards to the right of the chat, several open at once.
  *
  * localStorage (not `electronStorage`): localStorage is synchronous, so there
  * is no hydration-flicker frame before the persisted layout applies.
@@ -27,15 +28,20 @@ import {
 } from '@/components/workspace-shell/shellLayoutModel';
 import { type ContextSurfaceId, getSurface } from '@/components/workspace-shell/surfaceRegistry';
 import {
-  clampWorkPanelWidth,
-  closeWorkPanel,
+  clampPaneAreaWidth,
+  closePane,
+  focusPane,
   nextChangeFocus,
-  openWorkPanelTab,
-  tabForIntent,
-  toggleWorkPanelTab,
+  openPane,
+  type PaneColumns,
+  type PaneKind,
+  type PaneLayoutState,
+  paneForIntent,
+  sanitizePaneSplits,
+  surfaceIdForPane,
+  toggleExpandedPane,
+  togglePane,
   type WorkPanelChangeFocus,
-  type WorkPanelState,
-  type WorkPanelTab,
 } from '@/components/workspace-shell/workPanelModel';
 
 /**
@@ -51,22 +57,24 @@ export const initialSessionOverrides: ShellSessionOverrides = {
   manualChat: null,
 };
 
-/** Session-only work panel state (ruling L3: every start begins closed). */
-export interface WorkPanelSessionState {
-  workPanelOpen: boolean;
-  workPanelHistory: WorkPanelTab[];
-  /** The panel covers the whole center row (the expand button). */
-  expanded: boolean;
-  /** The init-script terminal was opened; from then on it has a tab. */
+/** Session-only pane state (ruling L3: every start begins with no pane open). */
+export interface PaneSessionState {
+  /** Open panes in slot order (`workPanelModel.ts`'s layout rule). */
+  panes: PaneKind[];
+  /** Open panes, least recently focused first. */
+  paneFocus: PaneKind[];
+  /** The pane that fills the area (⤢). */
+  expandedPane: PaneKind | null;
+  /** The init-script terminal was opened; from then on it can show. */
   setupTerminalOpened: boolean;
   /** Bumped by Ctrl/Cmd+1; the sidebar focuses its chat list on change. */
   chatListFocusSeq: number;
 }
 
-const initialWorkPanelSession: WorkPanelSessionState = {
-  workPanelOpen: false,
-  workPanelHistory: [],
-  expanded: false,
+const initialPaneSession: PaneSessionState = {
+  panes: [],
+  paneFocus: [],
+  expandedPane: null,
   setupTerminalOpened: false,
   chatListFocusSeq: 0,
 };
@@ -74,68 +82,65 @@ const initialWorkPanelSession: WorkPanelSessionState = {
 export interface ShellLayoutState
   extends PersistedShellLayout,
     ShellSessionOverrides,
-    WorkPanelSessionState {
+    PaneSessionState {
   // sidebar
   setSidebarWidth: (width: number) => void;
   /** Ctrl/Cmd+B and the sidebar / title bar toggles. */
   toggleSidebar: () => void;
   /** Ctrl/Cmd+1: expand the sidebar if needed and focus the chat list. */
   focusChatList: () => void;
-  // work panel
-  openWorkPanel: (tab: WorkPanelTab) => void;
-  /** `shownTab` is what the panel shows now (`resolveWorkPanelView`). */
-  toggleWorkPanel: (tab: WorkPanelTab, shownTab: WorkPanelTab | null) => void;
-  closeWorkPanel: () => void;
-  /** Opens a registry surface's tab; surfaces that are not navigable are ignored. */
+  // panes
+  openPane: (kind: PaneKind) => void;
+  /** `visible` is what is on screen now (`resolvePaneView`). */
+  togglePane: (kind: PaneKind, visible: readonly PaneKind[]) => void;
+  closePane: (kind: PaneKind) => void;
+  focusPane: (kind: PaneKind) => void;
+  toggleExpandedPane: (kind: PaneKind) => void;
+  /** Opens a registry surface's pane; surfaces that are not navigable are ignored. */
   openSurface: (id: ContextSurfaceId) => void;
   openInitializationTerminal: () => void;
-  toggleExpanded: () => void;
-  setWorkPanelWidth: (width: number) => void;
+  setPaneAreaWidth: (columns: PaneColumns, width: number) => void;
+  setPaneColumnSplit: (ratio: number) => void;
+  setPaneRowSplit: (column: 0 | 1, ratio: number) => void;
   setManualChat: (visible: boolean) => void;
   /** T-32 (A08 §06-4): the file closed — the override it scoped goes with it. */
   clearManualOverrides: () => void;
   // reading column
   toggleReadingWidthMode: () => void;
   // layout 5c: the timeline's change card (session-only, never persisted)
-  /** The last file the change card asked the changes tab to show. */
+  /** The last file the change card asked the changes pane to show. */
   changeFocus: WorkPanelChangeFocus | null;
-  /** Opens the changes tab and asks it to show `target`. */
+  /** Opens the changes pane and asks it to show `target`. */
   revealChange: (target: { entryId: string; path: string }) => void;
 }
 
-function panelStateOf(state: ShellLayoutState): WorkPanelState {
-  return { open: state.workPanelOpen, tab: state.workPanelTab, history: state.workPanelHistory };
+function layoutOf(state: ShellLayoutState): PaneLayoutState {
+  return { panes: state.panes, focus: state.paneFocus, expanded: state.expandedPane };
 }
 
-/** Writes a model result back; closing also leaves the expanded overlay. */
-function fromPanelState(next: WorkPanelState): Partial<ShellLayoutState> {
-  return {
-    workPanelOpen: next.open,
-    workPanelTab: next.tab,
-    workPanelHistory: next.history,
-    ...(next.open ? {} : { expanded: false }),
-  };
+/** Writes a model result back; an unchanged result writes nothing. */
+function fromLayout(prev: ShellLayoutState, next: PaneLayoutState): Partial<ShellLayoutState> {
+  if (
+    next.panes === prev.panes &&
+    next.focus === prev.paneFocus &&
+    next.expanded === prev.expandedPane
+  ) {
+    return {};
+  }
+  return { panes: next.panes, paneFocus: next.focus, expandedPane: next.expanded };
 }
 
 /**
- * Selector for the registry surface the panel shows, or null. The surface
- * views no longer read it (they take `active` from the panel); kept for
- * non-React callers and tests.
+ * Selector for the registry surface of the most recently focused open pane,
+ * or null. The surface views do not read it (each pane tells its view whether
+ * it is on screen); kept for non-React callers and tests.
  */
 export function selectActiveSurfaceId(state: ShellLayoutState): ContextSurfaceId | null {
-  if (!state.workPanelOpen) return null;
-  switch (state.workPanelTab) {
-    case 'files':
-      return 'editor';
-    case 'git':
-    case 'context':
-    case 'run':
-      return state.workPanelTab;
-    case 'setup':
-      return 'terminal';
-    default:
-      return null;
+  for (let index = state.paneFocus.length - 1; index >= 0; index -= 1) {
+    const surface = surfaceIdForPane(state.paneFocus[index] as PaneKind);
+    if (surface) return surface;
   }
+  return null;
 }
 
 export const useShellLayoutStore = create<ShellLayoutState>()(
@@ -143,7 +148,7 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
     (set) => ({
       ...defaultShellLayout,
       ...initialSessionOverrides,
-      ...initialWorkPanelSession,
+      ...initialPaneSession,
 
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
@@ -153,25 +158,40 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
           chatListFocusSeq: state.chatListFocusSeq + 1,
         })),
 
-      openWorkPanel: (tab) =>
-        set((state) => fromPanelState(openWorkPanelTab(panelStateOf(state), tab))),
-      toggleWorkPanel: (tab, shownTab) =>
-        set((state) => fromPanelState(toggleWorkPanelTab(panelStateOf(state), tab, shownTab))),
-      closeWorkPanel: () => set((state) => fromPanelState(closeWorkPanel(panelStateOf(state)))),
+      openPane: (kind) => set((state) => fromLayout(state, openPane(layoutOf(state), kind))),
+      togglePane: (kind, visible) =>
+        set((state) => fromLayout(state, togglePane(layoutOf(state), kind, visible))),
+      closePane: (kind) => set((state) => fromLayout(state, closePane(layoutOf(state), kind))),
+      focusPane: (kind) => set((state) => fromLayout(state, focusPane(layoutOf(state), kind))),
+      toggleExpandedPane: (kind) =>
+        set((state) => fromLayout(state, toggleExpandedPane(layoutOf(state), kind))),
       openSurface: (id) =>
         set((state) => {
           if (getSurface(id)?.registeredOnly !== false) return {};
-          const tab = tabForIntent({ type: 'surface', surfaceId: id });
-          return tab ? fromPanelState(openWorkPanelTab(panelStateOf(state), tab)) : {};
+          const kind = paneForIntent({ type: 'surface', surfaceId: id });
+          return kind ? fromLayout(state, openPane(layoutOf(state), kind)) : {};
         }),
       openInitializationTerminal: () =>
         set((state) => ({
           setupTerminalOpened: true,
-          ...fromPanelState(openWorkPanelTab(panelStateOf(state), 'setup')),
+          ...fromLayout(state, openPane(layoutOf(state), 'setup')),
         })),
-      toggleExpanded: () =>
-        set((state) => (state.workPanelOpen ? { expanded: !state.expanded } : {})),
-      setWorkPanelWidth: (width) => set({ workPanelWidth: clampWorkPanelWidth(width) }),
+      setPaneAreaWidth: (columns, width) =>
+        set(
+          columns === 1
+            ? { paneAreaWidth: clampPaneAreaWidth(width, 1) }
+            : { paneAreaSplitWidth: clampPaneAreaWidth(width, 2) }
+        ),
+      setPaneColumnSplit: (ratio) =>
+        set((state) => ({
+          paneSplits: sanitizePaneSplits({ ...state.paneSplits, column: ratio }),
+        })),
+      setPaneRowSplit: (column, ratio) =>
+        set((state) => {
+          const rows: [number, number] = [...state.paneSplits.rows];
+          rows[column] = ratio;
+          return { paneSplits: sanitizePaneSplits({ ...state.paneSplits, rows }) };
+        }),
 
       setManualChat: (visible) => set({ manualChat: visible }),
       clearManualOverrides: () => set({ ...initialSessionOverrides }),
@@ -182,7 +202,7 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
       changeFocus: null,
       revealChange: (target) =>
         set((state) => ({
-          ...fromPanelState(openWorkPanelTab(panelStateOf(state), 'changes')),
+          ...fromLayout(state, openPane(layoutOf(state), 'changes')),
           changeFocus: nextChangeFocus(state.changeFocus, target),
         })),
     }),
@@ -194,14 +214,14 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
       partialize: (state): PersistedShellLayout => ({
         sidebarWidth: state.sidebarWidth,
         sidebarCollapsed: state.sidebarCollapsed,
-        workPanelTab: state.workPanelTab,
-        workPanelWidth: state.workPanelWidth,
+        paneAreaWidth: state.paneAreaWidth,
+        paneAreaSplitWidth: state.paneAreaSplitWidth,
+        paneSplits: state.paneSplits,
         readingWidthMode: state.readingWidthMode,
       }),
-      // v1–v3 → v4 (layout 5a): see `migrateShellLayoutPersisted` — the rail
-      // width leaves the sidebar width, the rail order / per-surface widths /
-      // editor ratio are dropped, a surface that moved to the work panel
-      // becomes its last tab.
+      // v1–v4 → v5 (layout 5d): see `migrateShellLayoutPersisted` — the 5a
+      // panel width becomes the one-column pane area width, its last tab is
+      // dropped (panes start closed).
       migrate: (persisted, version) => migrateShellLayoutPersisted(persisted, version),
       merge: (persisted, current) => ({ ...current, ...sanitizeShellLayoutPersisted(persisted) }),
     }

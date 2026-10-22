@@ -4919,3 +4919,27 @@ Object.assign(zhTranslations, {
   'This week': '本周',
   'Show more chats': '显示更多',
 });
+
+/** Layout 5d: the background-tasks pane. */
+Object.assign(zhTranslations, {
+  'Clear finished': '清除已完成',
+  'Show more tasks': '显示更多',
+  '{{count}} tasks': '{{count}} 个任务',
+  '{{count}} finished': '{{count}} 个已完成',
+});
+
+/** Layout 5d: the pane cards to the right of the chat. */
+Object.assign(zhTranslations, {
+  Panes: '窗格',
+  'Resize panes': '调整窗格大小',
+  'Expand pane': '展开窗格',
+  'Restore pane': '还原窗格',
+  'Close pane': '关闭窗格',
+  Browser: '浏览器',
+  'Which changes': '查看哪些改动',
+  'This conversation': '本次对话',
+  "This conversation's changes": '本次对话的改动',
+  'Uncommitted changes (Git)': '未提交的改动（Git）',
+  'Filter, or ? to search in files': '筛选文件，输入 ? 搜索文件内容',
+  'Filter files': '筛选文件',
+});

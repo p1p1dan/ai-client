@@ -1,25 +1,24 @@
 // @vitest-environment happy-dom
 /**
  * dsh-rebase P1-11 (decisions 109, 126, 128; prototype scene G), rendered: the
- * title bar's terminal button and the shell it opens — since design system v2
- * / layout 5a, in the work panel's 终端 tab.
+ * title bar's terminal button and the shell it opens — since layout 5d, in
+ * the terminal pane card beside the others.
  *
  * What only a mounted shell can show:
  *  - the button is disabled, with the reason, when the conversation has no
  *    folder (decision 126 rule 2), and opening never falls back to $HOME;
- *  - the panel is closed until asked for (ruling L3);
- *  - closing the terminal brings the same file tabs back (decision 126 rule
- *    1) — the panel falls back to the tab shown before it;
- *  - it and the session review are tabs of one panel, never shown together;
- *  - hiding (the toggle, a file opening, another tab) keeps the shell mounted
- *    — only the ✕, the shell exiting, or its folder going away unmounts it,
+ *  - no pane is open until asked for (ruling L3);
+ *  - the terminal is its own card: opening it leaves the file tabs and the
+ *    review where they are (decision 126 rule 1 holds trivially now);
+ *  - hiding (the toggle, the card's ✕, Escape) keeps the shell mounted —
+ *    only ending it, the shell exiting, or its folder going away unmounts it,
  *    and an unmount is what ends a local shell;
- *  - switching conversations shows each folder's own shell.
+ *  - switching conversations shows each folder's own shell;
+ *  - up to four cards by open order, and ⤢ gives one card the row.
  *
- * Everything the panel does not need is stubbed: the chat column, the
- * sidebar, the editor (a marker div — its layer's classes are what is under
- * test), the review panel (two buttons), the git dot, and the shell itself
- * (records its mounts, never spawns a pty).
+ * Everything the panes do not need is stubbed: the chat column, the sidebar,
+ * the editor (a marker div), the review (one button), the tasks pane, and
+ * the shell itself (records its mounts, never spawns a pty).
  */
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -86,14 +85,17 @@ vi.mock('../center/EditorColumn', async () => {
 vi.mock('../SessionReviewPanel', async () => {
   const { createElement: h } = await import('react');
   return {
-    SessionReviewPanel: (props: { onClose: () => void; onShowFiles: () => void }) =>
+    SessionReviewPanel: (props: { onOpenDiff: () => void }) =>
       h(
         'section',
         { 'data-testid': 'review' },
-        h('button', { type: 'button', 'aria-label': 'Close review', onClick: props.onClose }),
-        h('button', { type: 'button', 'aria-label': 'Files', onClick: props.onShowFiles })
+        h('button', { type: 'button', 'aria-label': 'Open diff', onClick: props.onOpenDiff })
       ),
   };
+});
+vi.mock('../panes/BackgroundTasksPane', async () => {
+  const { createElement: h } = await import('react');
+  return { BackgroundTasksPane: () => h('div', { 'data-testid': 'tasks' }) };
 });
 vi.mock('@/components/terminal/ShellTerminal', async () => {
   const React = await import('react');
@@ -188,22 +190,25 @@ function classes(element: Element | null | undefined): string[] {
   return element?.className.split(/\s+/) ?? [];
 }
 
-/** `closed`, or the tab the work panel shows. */
-function panelShows(): string | null {
-  return container.querySelector('[data-work-panel]')?.getAttribute('data-work-panel') ?? null;
+/** `closed`, or the panes on screen in slot order. */
+function areaShows(): string | null {
+  return container.querySelector('[data-pane-area]')?.getAttribute('data-pane-area') ?? null;
 }
 
-/** Files show: the panel is on its editor tab and the editor layer has a box. */
-function editorShowing(): boolean {
-  const layer = container.querySelector('[data-panel-layer="editor"]');
-  return panelShows() === 'editor' && layer !== null && !classes(layer).includes('hidden');
+function card(kind: string): HTMLElement | null {
+  return container.querySelector<HTMLElement>(`[data-pane="${kind}"]`);
 }
 
-/** The terminal shows: the panel is on its terminal tab and the layer is visible. */
-function terminalShowing(): boolean {
-  const layer = container.querySelector('[data-panel-layer="terminal"]');
-  return panelShows() === 'terminal' && layer !== null && !classes(layer).includes('invisible');
+/** A card is on screen: placed in its slot, not the invisible keep-alive box. */
+function paneShowing(kind: string): boolean {
+  const element = card(kind);
+  return (
+    element?.getAttribute('data-pane-shown') === 'true' && !classes(element).includes('invisible')
+  );
 }
+
+const editorShowing = () => paneShowing('editor');
+const terminalShowing = () => paneShowing('terminal');
 
 function shells(): { cwd: string | null; active: string | null; shown: boolean }[] {
   return [...container.querySelectorAll<HTMLElement>('[data-testid="shell"]')].map((shell) => ({
@@ -214,7 +219,8 @@ function shells(): { cwd: string | null; active: string | null; shown: boolean }
 }
 
 const changesButton = () => container.querySelector('button[data-panel-toggle="changes"]');
-const stripTab = (tab: string) => container.querySelector(`button[data-panel-tab="${tab}"]`);
+const filesButton = () => container.querySelector('button[data-panel-toggle="files"]');
+const closeButton = (kind: string) => card(kind)?.querySelector('button[aria-label="Close pane"]');
 
 beforeEach(async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -231,12 +237,7 @@ beforeEach(async () => {
   probe.unmounts.length = 0;
   probe.exits.clear();
   useColumnTerminalStore.setState({ terminals: {} });
-  useShellLayoutStore.setState({
-    workPanelOpen: false,
-    workPanelTab: 'files',
-    workPanelHistory: [],
-    expanded: false,
-  });
+  useShellLayoutStore.setState({ panes: [], paneFocus: [], expandedPane: null });
   useEditorStore.setState({
     tabs: [{ path: `${ALPHA}/a.ts`, title: 'a.ts', content: '', isDirty: false }],
     activeTabPath: `${ALPHA}/a.ts`,
@@ -288,42 +289,88 @@ describe('the title bar terminal button', () => {
   });
 });
 
-describe('the work panel opens on demand (ruling L3)', () => {
-  it('is closed when a conversation opens, yet keeps the editor mounted for file intents', () => {
-    expect(panelShows()).toBe('closed');
-    // Round-10 ⑥: the editor is the intent consumer; closed means `hidden`.
-    const layer = container.querySelector('[data-panel-layer="editor"]');
-    expect(layer).not.toBeNull();
-    expect(classes(layer)).toContain('hidden');
+describe('the panes open on demand (ruling L3)', () => {
+  it('none is open when a conversation opens, yet the editor stays mounted for file intents', () => {
+    expect(areaShows()).toBe('closed');
+    // Round-10 ⑥: the editor is the intent consumer; off screen means an
+    // invisible card with a real box, never unmounted.
+    expect(card('editor')).not.toBeNull();
+    expect(editorShowing()).toBe(false);
+    expect(classes(card('editor'))).toContain('invisible');
   });
 
-  it('the files button toggles the files tab, which is told when it is on screen', async () => {
-    await click(container.querySelector('button[data-panel-toggle="files"]'));
-    expect(panelShows()).toBe('files');
+  it('the files button toggles the files pane, which is told when it is on screen', async () => {
+    await click(filesButton());
+    expect(areaShows()).toBe('files');
+    expect(filesButton()?.getAttribute('aria-pressed')).toBe('true');
     const tree = () => container.querySelector('[data-testid="surface-editor"]');
     expect(tree()?.getAttribute('data-active')).toBe('true');
-    await click(container.querySelector('button[data-panel-toggle="files"]'));
-    expect(panelShows()).toBe('closed');
-    // Still mounted across the close (the dock's rule), but no longer active.
-    expect(tree()?.getAttribute('data-active')).toBe('false');
+    // One header: the card's. No tab strip anywhere.
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+    await click(filesButton());
+    expect(areaShows()).toBe('closed');
+    expect(filesButton()?.getAttribute('aria-pressed')).toBe('false');
+    // An 'active' surface lives as long as its pane (layout 5d).
+    expect(tree()).toBeNull();
+  });
+
+  it('places up to four cards by open order; a fifth replaces the least recently focused', async () => {
+    const store = useShellLayoutStore.getState();
+    await act(async () => {
+      store.openPane('changes');
+      store.openPane('files');
+      store.openPane('git');
+      store.openPane('context');
+    });
+    expect(areaShows()).toBe('changes files git context');
+    await act(async () =>
+      card('changes')?.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    );
+    await act(async () => useShellLayoutStore.getState().openPane('run'));
+    // Focus order was files, git, context, changes: files' slot goes to run.
+    expect(areaShows()).toBe('changes run git context');
+    expect(card('files')).toBeNull();
+  });
+
+  it('⤢ gives one card the whole row and toggles back; the others stay mounted', async () => {
+    await click(filesButton());
+    await click(changesButton());
+    await click(card('files')?.querySelector('button[aria-label="Expand pane"]') ?? null);
+    const area = container.querySelector('[data-pane-area]');
+    expect(classes(area)).toEqual(expect.arrayContaining(['absolute', 'inset-0']));
+    expect(paneShowing('files')).toBe(true);
+    expect(paneShowing('changes')).toBe(false);
+    expect(container.querySelector('[data-testid="review"]')).not.toBeNull();
+    await click(card('files')?.querySelector('button[aria-label="Restore pane"]') ?? null);
+    expect(paneShowing('changes')).toBe(true);
+    expect(classes(container.querySelector('[data-pane-area]'))).not.toContain('inset-0');
+  });
+
+  it('Escape closes the pane it is pressed in, and only that one', async () => {
+    await click(filesButton());
+    await click(changesButton());
+    const target = card('changes')?.querySelector('button') as HTMLElement;
+    await act(async () =>
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    );
+    expect(areaShows()).toBe('files');
   });
 });
 
-describe('the terminal in the work panel', () => {
-  it('takes the files’ place, and closing it brings the same file tabs back', async () => {
+describe('the terminal pane', () => {
+  it('opens beside the files, and ending it leaves the same file tabs', async () => {
     const tabsBefore = useEditorStore.getState().tabs;
-    await act(async () => useShellLayoutStore.getState().openWorkPanel('editor'));
+    await act(async () => useShellLayoutStore.getState().openPane('editor'));
     expect(editorShowing()).toBe(true);
 
     await click(terminalButton());
     expect(terminalShowing()).toBe(true);
-    expect(editorShowing()).toBe(false);
+    expect(editorShowing()).toBe(true);
+    expect(areaShows()).toBe('editor terminal');
     expect(terminalButton().getAttribute('aria-pressed')).toBe('true');
     expect(shells()).toEqual([{ cwd: ALPHA, active: 'true', shown: true }]);
-    // The column names the folder (prototype scene G).
-    const column = container.querySelector('[data-testid="terminal-column"]');
-    expect(column?.textContent).toContain('Session directory');
-    expect(column?.textContent).toContain(ALPHA);
+    // The card's header names the folder (prototype scene G).
+    expect(card('terminal')?.querySelector('header')?.textContent).toContain(ALPHA);
 
     await click(container.querySelector('button[aria-label="Close terminal"]'));
     expect(container.querySelector('[data-testid="terminal-column"]')).toBeNull();
@@ -340,7 +387,7 @@ describe('the terminal in the work panel', () => {
 
     await click(terminalButton());
     expect(terminalShowing()).toBe(false);
-    expect(panelShows()).toBe('closed');
+    expect(areaShows()).toBe('closed');
     expect(probe.unmounts).toEqual([]);
     expect(shells()).toEqual([{ cwd: ALPHA, active: 'false', shown: true }]);
     // Running out of sight is marked, and a click brings the same shell back.
@@ -351,33 +398,28 @@ describe('the terminal in the work panel', () => {
     expect(probe.mounts).toEqual([ALPHA]);
   });
 
-  it('shares the panel with the review as tabs, never shown together', async () => {
+  it('sits beside the review as its own card; closing either leaves the other', async () => {
     await click(terminalButton());
     await click(changesButton());
-    // The review is on screen; the terminal waits behind it, still running.
     expect(container.querySelector('[data-testid="review"]')).not.toBeNull();
-    expect(terminalShowing()).toBe(false);
-    expect(editorShowing()).toBe(false);
-    expect(terminalButton().getAttribute('data-session-terminal')).toBe('hidden');
-    await click(stripTab('terminal'));
     expect(terminalShowing()).toBe(true);
-    expect(container.querySelector('[data-testid="review"]')).toBeNull();
+    expect(paneShowing('changes')).toBe(true);
 
-    // The review's Files button means the files, not the terminal behind it.
-    await click(changesButton());
-    await click(container.querySelector('[data-testid="review"] button[aria-label="Files"]'));
-    expect(container.querySelector('[data-testid="review"]')).toBeNull();
-    expect(editorShowing()).toBe(true);
+    // The review's diff opens the editor as a third card.
+    await click(container.querySelector('[data-testid="review"] button[aria-label="Open diff"]'));
+    expect(areaShows()).toBe('terminal changes editor');
+
+    // The card's ✕ hides the terminal; the shell keeps running.
+    await click(closeButton('terminal') ?? null);
     expect(terminalShowing()).toBe(false);
-
-    // Closing the review closes the panel; the shell keeps running.
-    await click(changesButton());
-    await click(container.querySelector('button[aria-label="Close review"]'));
-    expect(panelShows()).toBe('closed');
     expect(probe.unmounts).toEqual([]);
+    expect(terminalButton().getAttribute('data-session-terminal')).toBe('hidden');
+    await click(closeButton('changes') ?? null);
+    expect(container.querySelector('[data-testid="review"]')).toBeNull();
+    expect(areaShows()).toBe('editor');
   });
 
-  it('steps behind a file being opened, and the strip brings it back', async () => {
+  it('a file being opened opens the editor beside it', async () => {
     await click(terminalButton());
     await act(async () =>
       useEditorStore.setState({
@@ -389,17 +431,11 @@ describe('the terminal in the work panel', () => {
       })
     );
     expect(editorShowing()).toBe(true);
-    expect(terminalShowing()).toBe(false);
-
-    await click(stripTab('terminal'));
     expect(terminalShowing()).toBe(true);
-    await click(stripTab('editor'));
-    expect(editorShowing()).toBe(true);
-    expect(terminalShowing()).toBe(false);
     expect(probe.unmounts).toEqual([]);
   });
 
-  it('[E3-21-REVEAL] steps behind a request for the file that is already the active tab (P1-7e problem 21)', async () => {
+  it('[E3-21-REVEAL] a request for the file that is already the active tab opens the editor (P1-7e problem 21)', async () => {
     await click(terminalButton());
     expect(terminalShowing()).toBe(true);
     const before = useEditorStore.getState();
@@ -408,18 +444,14 @@ describe('the terminal in the work panel', () => {
     expect(useEditorStore.getState().activeTabPath).toBe(before.activeTabPath);
     expect(useEditorStore.getState().tabs).toBe(before.tabs);
     expect(editorShowing()).toBe(true);
-    expect(terminalShowing()).toBe(false);
-    // Still running behind the files.
     expect(probe.unmounts).toEqual([]);
-    expect(terminalButton().getAttribute('data-session-terminal')).toBe('hidden');
 
-    // The same for the diff that is already showing (the git panel's click).
+    // The same for the diff that is already showing (the git pane's click).
     const target = { kind: 'workdir' as const, path: 'a.ts', staged: false };
     await act(async () => useEditorStore.getState().openDiffTab(target));
-    await click(terminalButton());
-    expect(terminalShowing()).toBe(true);
+    await click(closeButton('editor') ?? null);
+    expect(editorShowing()).toBe(false);
     await act(async () => useEditorStore.getState().openDiffTab(target));
-    expect(terminalShowing()).toBe(false);
     expect(editorShowing()).toBe(true);
   });
 
@@ -445,7 +477,7 @@ describe('the terminal in the work panel', () => {
     expect(terminalShowing()).toBe(false);
     expect(terminalButton().disabled).toBe(true);
 
-    // Back in alpha's folder the terminal tab is back, by itself.
+    // Back in alpha's folder the terminal pane is back, by itself.
     await select('s1');
     expect(terminalShowing()).toBe(true);
     expect(shells().find((shell) => shell.shown)?.cwd).toBe(ALPHA);

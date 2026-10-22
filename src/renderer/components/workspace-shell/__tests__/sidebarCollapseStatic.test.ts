@@ -19,7 +19,7 @@ const dock = read('src/renderer/components/workspace-shell/LeftDock.tsx');
 const bar = read('src/renderer/components/workspace-shell/SessionBar.tsx');
 const shell = read('src/renderer/components/workspace-shell/WorkspaceShell.tsx');
 const shortcuts = read('src/renderer/components/workspace-shell/useShellShortcuts.ts');
-const panel = read('src/renderer/components/workspace-shell/WorkPanel.tsx');
+const card = read('src/renderer/components/workspace-shell/PaneCard.tsx');
 
 describe('the sidebar collapse control (layout 5a)', () => {
   it('sits in the sidebar`s top row while it is open', () => {
@@ -53,9 +53,9 @@ describe('the sidebar collapse control (layout 5a)', () => {
     expect(dock).not.toContain('DOCK_RAIL_WIDTH');
   });
 
-  it('Escape closes the work panel now — the dock`s panel-scoped Escape moved with the surfaces', () => {
-    expect(panel).toContain('shouldCloseOnEscape');
-    expect(panel).toContain('onClose();');
+  it('Escape closes the focused pane now (layout 5d) — the dock`s Escape moved with the surfaces', () => {
+    expect(card).toContain('shouldCloseOnEscape');
+    expect(card).toContain('onClose(kind);');
     expect(dock).not.toContain('shouldCloseOnEscape');
   });
 });
