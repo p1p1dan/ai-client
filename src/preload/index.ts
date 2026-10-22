@@ -957,6 +957,11 @@ const electronAPI = {
       errors: number;
       capabilities: { history: true; thinking: true };
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_HOST_STATUS),
+    /** Issue #26 item 6: a sent image's bytes, by its store reference (read-only). */
+    readSentAttachment: (
+      payload: import('@shared/types/ipc').SentAttachmentReadRequest
+    ): Promise<import('@shared/types/ipc').SentAttachmentReadResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_READ_SENT_ATTACHMENT, payload),
     /** Route B S-6 feedback 7: the record behind a chat's identity stub (`runtimeIdentity`). */
     locateTranscript: (
       stubFile: string

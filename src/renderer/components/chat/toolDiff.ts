@@ -30,11 +30,23 @@ import { PI_TOOL_NAMES } from './piToolNames';
 export type { ToolDiffRow, ToolDiffRowKind } from '../../../shared/textDiff';
 export { lineDiffRows } from '../../../shared/textDiff';
 
+/**
+ * Issue #26 item 2: a row with its line numbers, where the source knows them —
+ * an SDK patch's hunk headers, a whole-file write. An argument preview has no
+ * position in the file, so it carries none rather than invented ones.
+ */
+export interface ToolDiffLineRow extends ToolDiffRow {
+  /** Line in the old file (`same` / `del`). */
+  oldLine?: number;
+  /** Line in the new file (`same` / `add`). */
+  newLine?: number;
+}
+
 export interface ToolDiff {
   /** File the change lands in, when the arguments name one. */
   path?: string;
   source?: 'sdk' | 'arguments' | 'write-content';
-  rows: ToolDiffRow[];
+  rows: ToolDiffLineRow[];
   added: number;
   removed: number;
 }
@@ -73,6 +85,9 @@ function editPairs(rec: Record<string, unknown> | undefined): Array<[string, str
   }
   return pairs;
 }
+
+/** `@@ -12,7 +12,9 @@`: the old and new start lines (counts are optional). */
+const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 
 function countRows(rows: readonly ToolDiffRow[]): { added: number; removed: number } {
   let added = 0;
@@ -116,7 +131,7 @@ export function deriveToolDiff(run: {
     // A write has no "before" — every line is an insertion. Still worth
     // rendering: it puts the new file's contents on screen in reading order
     // instead of as one escaped JSON string.
-    const rows = lineDiffRows('', content);
+    const rows = lineDiffRows('', content).map((row, index) => ({ ...row, newLine: index + 1 }));
     return { path, rows, ...countRows(rows), source: 'write-content' };
   }
 
@@ -129,11 +144,16 @@ export function deriveToolDiff(run: {
     const details = asRecord(output?.details);
     const patch = run.status !== 'failed' ? stringField(details, 'patch') : undefined;
     if (patch) {
-      const rows: ToolDiffRow[] = [];
+      const rows: ToolDiffLineRow[] = [];
       let inHunk = false;
+      let oldLine = 0;
+      let newLine = 0;
       for (const line of patch.split('\n')) {
         if (line.startsWith('@@')) {
           inHunk = true;
+          const header = HUNK_HEADER.exec(line);
+          oldLine = header ? Number(header[1]) : 0;
+          newLine = header ? Number(header[2]) : 0;
           continue;
         }
         if (line.startsWith('diff ')) {
@@ -141,10 +161,17 @@ export function deriveToolDiff(run: {
           continue;
         }
         if (!inHunk || !/^[ +-]/.test(line)) continue;
+        const kind = line[0] === '+' ? 'add' : line[0] === '-' ? 'del' : 'same';
+        // A header that did not parse leaves the numbers off, never wrong.
+        const numbered = oldLine > 0 || newLine > 0;
         rows.push({
-          kind: line[0] === '+' ? 'add' : line[0] === '-' ? 'del' : 'same',
+          kind,
           text: line.slice(1),
+          ...(numbered && kind !== 'add' ? { oldLine } : {}),
+          ...(numbered && kind !== 'del' ? { newLine } : {}),
         });
+        if (kind !== 'add') oldLine += oldLine > 0 ? 1 : 0;
+        if (kind !== 'del') newLine += newLine > 0 ? 1 : 0;
       }
       return { path, rows, ...countRows(rows), source: 'sdk' };
     }

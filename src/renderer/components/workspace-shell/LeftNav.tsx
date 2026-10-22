@@ -25,7 +25,9 @@ import {
   X,
 } from 'lucide-react';
 import {
+  type DragEvent,
   type FocusEvent,
+  type KeyboardEvent,
   type ReactElement,
   type ReactNode,
   useCallback,
@@ -80,6 +82,16 @@ import { projectIdForRepo, workspaceIdFor } from './deriveChatWorkspaceTree';
 import { endSessionRuntime } from './endSessionRuntime';
 import { sumFolderDiffTotals } from './folderDiffStats';
 import { SURFACE_ESCAPE_HOLD_ATTR } from './shellLayoutModel';
+import {
+  resolveGroupDrop,
+  resolveRovingKey,
+  resolveSidebarNavKey,
+  SIDEBAR_SESSION_DRAG_TYPE,
+  type SidebarNavItem,
+  sidebarAuxNavKey,
+  sidebarHeaderNavKey,
+  sidebarRowNavKey,
+} from './sidebarNavModel';
 import {
   applyHeldFolderOrder,
   buildGroupFolder,
@@ -452,6 +464,102 @@ export function LeftNav({
    * (`handleQueryChange`).
    */
   const groupExpanded = (groupId: string) => queryActive || isProjectExpanded(groupId);
+
+  // ---- Issue #26 item 7: drag a chat onto a group, and keyboard navigation ----
+
+  /** The chat row being dragged (「按分组」 only), and the header it is over. */
+  const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
+  const [dropTargetGroupId, setDropTargetGroupId] = useState<string | null>(null);
+  const endSessionDrag = () => {
+    setDraggingSessionId(null);
+    setDropTargetGroupId(null);
+  };
+  /**
+   * A group header's drop wiring while a chat is dragged. Only a header the
+   * chat could move to takes the drop (not its own group); the drop calls the
+   * same `assignSession` as the row's 「移到分组」 menu.
+   */
+  const groupDropProps = (
+    groupId: string
+  ): { active: boolean; handlers: GroupDropHandlers } | undefined => {
+    const target = resolveGroupDrop({
+      sessionId: draggingSessionId,
+      targetGroupId: groupId,
+      assignments: groupAssignments,
+      groupIds: orderedGroups.map((group) => group.id),
+    });
+    if (!target || !draggingSessionId) return undefined;
+    const sessionId = draggingSessionId;
+    return {
+      active: dropTargetGroupId === groupId,
+      handlers: {
+        onDragOver: (event) => {
+          if (!event.dataTransfer.types.includes(SIDEBAR_SESSION_DRAG_TYPE)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          if (dropTargetGroupId !== groupId) setDropTargetGroupId(groupId);
+        },
+        onDragLeave: (event) => {
+          // Moving onto a child of the header is not leaving it.
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          setDropTargetGroupId((current) => (current === groupId ? null : current));
+        },
+        onDrop: (event) => {
+          event.preventDefault();
+          assignSession(sessionId, target);
+          endSessionDrag();
+        },
+      },
+    };
+  };
+
+  /**
+   * Roving tabindex: the one list item Tab lands on. Set by focus; when that
+   * item leaves the list (its group folded, a search narrowed it) the effect
+   * below moves it to the open chat's row or the first item.
+   */
+  const [navFocusKey, setNavFocusKey] = useState<string | null>(null);
+  const navListRef = useRef<HTMLDivElement>(null);
+  const navItemElements = (): HTMLElement[] => [
+    ...(navListRef.current?.querySelectorAll<HTMLElement>('[data-sidebar-nav-key]') ?? []),
+  ];
+  // Every commit: the list's items come from the DOM it just rendered (order,
+  // not geometry), so no derivation has to mirror the render's branches.
+  useEffect(() => {
+    const keys = navItemElements().map((element) => element.dataset.sidebarNavKey ?? '');
+    const next = resolveRovingKey(
+      keys,
+      navFocusKey,
+      activeSessionId ? sidebarRowNavKey(activeSessionId) : null
+    );
+    if (next !== navFocusKey) setNavFocusKey(next);
+  });
+  const handleNavFocus = (event: FocusEvent<HTMLElement>) => {
+    const key = event.target.dataset?.sidebarNavKey;
+    if (key && key !== navFocusKey) setNavFocusKey(key);
+  };
+  const handleNavKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const elements = navItemElements();
+    const index = elements.indexOf(event.target as HTMLElement);
+    if (index < 0) return;
+    const items: SidebarNavItem[] = elements.map((element) => ({
+      kind: (element.dataset.sidebarNav as SidebarNavItem['kind']) ?? 'row',
+      key: element.dataset.sidebarNavKey ?? '',
+      groupId: element.dataset.sidebarNavGroup,
+      expanded: element.getAttribute('aria-expanded') === 'true',
+    }));
+    const action = resolveSidebarNavKey(items, index, event.key);
+    if (!action) return;
+    event.preventDefault();
+    if (action.type === 'focus') {
+      elements[action.index]?.focus();
+      return;
+    }
+    // A search holds every group with matches open; its headers fold nothing.
+    if (queryActive) return;
+    setExpandedProjects((prev) => ({ ...prev, [action.groupId]: action.expanded }));
+  };
   /**
    * What 「按分组」 renders. A search narrows it the way it narrows the
    * repository tree below: a group with no hits collapses away instead of
@@ -609,6 +717,19 @@ export function LeftNav({
       // Every conversation is listed in exactly one of them, so the tick can
       // always say which — `null` is 「未分组」, which is the absence of an
       // assignment rather than a group id.
+      navKey={sidebarRowNavKey(row.sessionId)}
+      tabbable={navFocusKey === sidebarRowNavKey(row.sessionId)}
+      // Issue #26 item 7: in 「按分组」 a row drags onto a group header. Not
+      // while choosing rows to archive: there a press picks the row.
+      {...(groupingByGroup && !selecting
+        ? {
+            drag: {
+              dragging: draggingSessionId === row.sessionId,
+              onStart: () => setDraggingSessionId(row.sessionId),
+              onEnd: endSessionDrag,
+            },
+          }
+        : {})}
       {...(groupingByGroup
         ? {
             groupMove: {
@@ -637,7 +758,11 @@ export function LeftNav({
   ) => {
     if (limited.hiddenCount > 0) {
       return (
-        <SidebarAuxRow onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: true }))}>
+        <SidebarAuxRow
+          navKey={sidebarAuxNavKey(projectId)}
+          tabbable={navFocusKey === sidebarAuxNavKey(projectId)}
+          onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: true }))}
+        >
           {t('View more ({{count}})', { count: limited.hiddenCount })}
         </SidebarAuxRow>
       );
@@ -645,6 +770,8 @@ export function LeftNav({
     if (limited.collapsible) {
       return (
         <SidebarAuxRow
+          navKey={sidebarAuxNavKey(projectId)}
+          tabbable={navFocusKey === sidebarAuxNavKey(projectId)}
           onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: false }))}
         >
           {t('Show less')}
@@ -701,6 +828,8 @@ export function LeftNav({
                     [UNBOUND_FOLDER_ID]: !expanded,
                   })),
             summary: deriveGroupSummary(unboundFolder.rows, unreadSessionIds),
+            groupId: UNBOUND_FOLDER_ID,
+            tabbable: navFocusKey === sidebarHeaderNavKey(UNBOUND_FOLDER_ID),
             actions: (
               // Decision 174: the home page with 「不选仓库（临时对话）」
               // picked; the temporary chat is made by its first send.
@@ -811,6 +940,9 @@ export function LeftNav({
             })),
       summary: deriveGroupSummary(folder.rows, unreadSessionIds),
       actions,
+      groupId,
+      tabbable: navFocusKey === sidebarHeaderNavKey(groupId),
+      drop: groupDropProps(groupId),
     });
     return (
       <section key={groupId} className={SIDEBAR_GROUP_CLASS} data-sidebar-group={groupId}>
@@ -1013,6 +1145,8 @@ export function LeftNav({
               [folder.projectId]: !expanded,
             })),
       summary: deriveGroupSummary(folder.rows, unreadSessionIds),
+      groupId: folder.projectId,
+      tabbable: navFocusKey === sidebarHeaderNavKey(folder.projectId),
       trailing: diffTotals && (
         <span
           className="flex items-center gap-1 text-small tabular-nums"
@@ -1265,7 +1399,15 @@ export function LeftNav({
           <ScrollArea>
             {/* Decision 188: pt 2 -> 4 (+ the first group's 12 = 16 below the
                 hairline), pb 12 -> 16 above the footer's hairline. */}
-            <div className="px-2 pt-1 pb-4">
+            {/* Issue #26 item 7: arrow keys move between the list's headers,
+                rows and "View more" lines; focus sets the roving tab stop. The
+                items keep their own roles and Enter handling. */}
+            <div
+              ref={navListRef}
+              className="px-2 pt-1 pb-4"
+              onKeyDown={handleNavKeyDown}
+              onFocus={handleNavFocus}
+            >
               {noMatches && (
                 <p className="px-2 py-1 text-small text-muted-foreground">
                   {t('No matching sessions')}
@@ -1577,6 +1719,9 @@ function renderGroupHeader({
   summary,
   trailing,
   actions,
+  groupId,
+  tabbable,
+  drop,
 }: {
   name: string;
   nameSlot: 'sidebar-folder-name' | 'sidebar-temporary-name' | 'sidebar-group-name';
@@ -1589,15 +1734,33 @@ function renderGroupHeader({
   summary: SidebarGroupSummary | null;
   trailing?: ReactNode;
   actions: ReactNode;
+  /** Issue #26 item 7: the group this header folds, for the keyboard model. */
+  groupId: string;
+  /** Roving tabindex: whether Tab lands on this header. */
+  tabbable: boolean;
+  /** 「按分组」 only: the header as a drop target for a dragged chat. */
+  drop?: { active: boolean; handlers: GroupDropHandlers };
 }): ReactElement {
   return (
-    <div className="group flex h-8 w-full items-center gap-1 rounded-xs px-2 has-focus-visible:bg-fill-ghost-hover">
+    <div
+      className={cn(
+        'group flex h-8 w-full items-center gap-1 rounded-xs px-2 has-focus-visible:bg-fill-ghost-hover',
+        // Design system v2 §1 rule 7: the drag target is one of clay's few places.
+        drop?.active && 'ring-2 ring-primary/60 ring-inset'
+      )}
+      data-drop-target={drop?.active || undefined}
+      {...drop?.handlers}
+    >
       <button
         type="button"
         className="flex min-w-0 flex-1 items-center gap-1 text-left text-small font-medium text-foreground-faint group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"
         title={tooltip}
         aria-expanded={expanded}
         onClick={onToggle}
+        tabIndex={tabbable ? 0 : -1}
+        data-sidebar-nav="header"
+        data-sidebar-nav-key={sidebarHeaderNavKey(groupId)}
+        data-sidebar-nav-group={groupId}
       >
         {mark && <GroupMark />}
         <span data-slot={nameSlot} className="min-w-0 truncate">
@@ -1625,6 +1788,13 @@ function renderGroupHeader({
       </span>
     </div>
   );
+}
+
+/** A group header's drop handlers (issue #26 item 7). */
+interface GroupDropHandlers {
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
 }
 
 /**
@@ -1776,10 +1946,23 @@ function useRegionHold(mounted: boolean) {
  * less". h-8 like a row (prototype `.aux`), 14px, muted; the empty leading
  * `w-4` slot puts the text in the same column as the chat titles.
  */
-function SidebarAuxRow({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function SidebarAuxRow({
+  onClick,
+  navKey,
+  tabbable,
+  children,
+}: {
+  onClick: () => void;
+  navKey: string;
+  tabbable: boolean;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
+      tabIndex={tabbable ? 0 : -1}
+      data-sidebar-nav="aux"
+      data-sidebar-nav-key={navKey}
       className="flex h-8 w-full items-center gap-1.5 rounded-xs px-2 text-small text-muted-foreground tabular-nums hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover"
       onClick={onClick}
     >
@@ -1864,6 +2047,14 @@ interface SessionRowProps {
     /** 「新建分组…」: the new group is made with the name and this chat goes in. */
     onCreateGroup: () => void;
   };
+  /** Issue #26 item 7: the row's roving-tabindex key, and whether Tab lands on it. */
+  navKey: string;
+  tabbable: boolean;
+  /**
+   * Issue #26 item 7: present when the row can be dragged onto a group header
+   * (「按分组」, not selecting). Rows without it are not draggable.
+   */
+  drag?: { dragging: boolean; onStart: () => void; onEnd: () => void };
 }
 
 function SessionRow({
@@ -1883,6 +2074,9 @@ function SessionRow({
   onDeleteTemp,
   onJumpToWorkspace,
   groupMove,
+  navKey,
+  tabbable,
+  drag,
 }: SessionRowProps) {
   const { t, locale } = useI18n();
   // Decision 144: the row as shown. A placeholder title (`New chat`) is an
@@ -2079,12 +2273,29 @@ function SessionRow({
             'group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-xs px-2 text-left text-ui',
             active
               ? 'bg-fill-ghost-selected text-foreground'
-              : 'text-foreground-soft hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover'
+              : 'text-foreground-soft hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover',
+            drag?.dragging && 'opacity-50'
           )}
           onClick={() => (onToggleSelect ? onToggleSelect(row.sessionId) : onSelect())}
           onDoubleClick={onToggleSelect ? undefined : beginRename}
           role="button"
-          tabIndex={0}
+          // Issue #26 item 7: roving tabindex — still focusable, one Tab stop.
+          tabIndex={tabbable ? 0 : -1}
+          data-sidebar-nav="row"
+          data-sidebar-nav-key={navKey}
+          // Native drag: the platform's drag threshold (a few px, like the
+          // reference's 4px dead zone) keeps a click from starting one.
+          draggable={drag ? true : undefined}
+          onDragStart={
+            drag
+              ? (event: DragEvent<HTMLElement>) => {
+                  event.dataTransfer.setData(SIDEBAR_SESSION_DRAG_TYPE, row.sessionId);
+                  event.dataTransfer.effectAllowed = 'move';
+                  drag.onStart();
+                }
+              : undefined
+          }
+          onDragEnd={drag ? drag.onEnd : undefined}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();

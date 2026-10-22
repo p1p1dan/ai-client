@@ -984,7 +984,8 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     // dsh-rebase decision 180: with no turn to stop, Esc cancels this window's
     // `/compact` instead — the same thing the round Stop does then.
     expect(escBlock).toBe(
-      "if (event.key === 'Escape') { if (composingRef.current) return; if (canStop) { event.preventDefault(); handleStop(); } else if (compactPhase !== undefined) { event.preventDefault(); handleCancelCompact(); } return; }"
+      // Issue #26 item 9: `composing` is `isImeComposing(event, composingRef.current)`.
+      "if (event.key === 'Escape') { if (composing) return; if (canStop) { event.preventDefault(); handleStop(); } else if (compactPhase !== undefined) { event.preventDefault(); handleCancelCompact(); } return; }"
     );
   });
 

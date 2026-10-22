@@ -117,7 +117,11 @@ describe('R02-c the menu keyboard comes before the @ popup’s', () => {
   it('checks slashOpen first', () => {
     const keydown = COMPOSER.slice(COMPOSER.indexOf('onKeyDown={(event) => {'));
     const body = keydown.slice(0, keydown.indexOf('void handleSend();'));
-    expect(body.indexOf('if (slashOpen) {')).toBeLessThan(body.indexOf('if (mentionOpen) {'));
+    // Issue #26 item 9: both popups stand aside while an IME composes.
+    expect(body.indexOf('if (slashOpen && !composing) {')).toBeGreaterThan(-1);
+    expect(body.indexOf('if (slashOpen && !composing) {')).toBeLessThan(
+      body.indexOf('if (mentionOpen && !composing) {')
+    );
   });
 });
 

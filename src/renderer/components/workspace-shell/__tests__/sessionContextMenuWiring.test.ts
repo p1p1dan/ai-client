@@ -78,7 +78,8 @@ describe('T13 session context menu wiring', () => {
     expect(sessionRowSource).toContain('<ContextMenuPrimitive.Trigger');
     const trigger = between('<ContextMenuPrimitive.Trigger', '</ContextMenuPrimitive.Trigger>');
     expect(trigger).toContain('role="button"');
-    expect(trigger).toContain('tabIndex={0}');
+    // Issue #26 item 7: still focusable; Tab lands on one row (roving tabindex).
+    expect(trigger).toContain('tabIndex={tabbable ? 0 : -1}');
     expect(trigger).toContain("event.key === 'Enter'");
   });
 });

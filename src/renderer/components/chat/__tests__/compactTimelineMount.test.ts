@@ -121,7 +121,7 @@ describe('/compact in the timeline (decision 180)', () => {
     const command = container.querySelector('[data-testid="compact-command-row"]');
     expect(command?.textContent).toBe('/compact 保留未完成的任务');
     // Drawn as the user's bubble is drawn: the right edge.
-    expect(command?.className).toContain('justify-end');
+    expect(command?.className).toContain('items-end');
     // One turn: the typed prompt's.
     expect(container.querySelectorAll('[data-turn-id]')).toHaveLength(1);
     // Not this window's run: the row runs, with no clock and no way to cancel here.

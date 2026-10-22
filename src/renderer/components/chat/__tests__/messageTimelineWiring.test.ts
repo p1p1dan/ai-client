@@ -471,7 +471,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // `userBubbleClass()`; the attachment chip's fill is the nearest surviving
     // class literal that is unambiguously code and not prose.)
     expect(SYNTAX, 'string literals must survive for the negatives to bite').toContain(
-      'bg-fill-ghost-selected'
+      'text-small text-muted-foreground'
     );
   });
 
@@ -937,7 +937,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     );
     // The clamp and its toggle retired with the band — see `userBubbleClass()`.
     expect(SYNTAX, 'the prompt clamp must not return on its own').not.toContain('line-clamp');
-    expect(SYNTAX, 'the Show more toggle retired with the clamp').not.toContain('Show more');
+    // Issue #26 item 5: the toggle is back, but over a fold decided from the
+    // TEXT (`promptFolds`), never from geometry — see `promptFold.test.ts`.
+    expectCalled('promptFolds(');
+    expectCalled('userBubbleFoldClass(folded)');
     // T096: the one legal pin is the thought fold header, and it is not here.
     // Class tokens, not a substring scan — `stickToBottomRef` and `position` are
     // ordinary identifiers in this file and must not read as a pin.
@@ -1183,10 +1186,17 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   it('[D3-3] the attachment chip is a fill inside the bubble, with no edge', () => {
     // Issue #8 (decision 172): a `cn(…)` now — the chip's ink greys with an
     // awaiting bubble's — so the literal is read through the expression.
-    const chip = classNameExpressionOf(jsxNodeAt('UserBubble', ['article', 'div', 'div', 'span']));
+    // Issue #26 item 6: the chip moved into `SentAttachmentChip.tsx` (it grew a
+    // thumbnail form); the bubble hands it its ink.
+    const mount = nodeSource(
+      jsxNodeAt('UserBubble', ['article', 'div', 'div', 'SentAttachmentChip'])
+    );
+    expect(mount).toContain('ink={ink}');
+    const file = path.join(path.dirname(FILE), 'SentAttachmentChip.tsx');
+    const chipSource = stripComments(readFileSync(file, 'utf8'), file);
+    const chip = /className=\{cn\(\s*'([^']*)',\s*ink\s*\)\}/.exec(chipSource)?.[1] ?? '';
     expect(chip).toContain('bg-fill-ghost-selected');
-    expect(chip).not.toMatch(/(?:^|\s|')border(?:-|\s|')/);
-    expect(chip).toContain('ink');
+    expect(chip).not.toMatch(/(?:^|\s)border(?:-|\s|$)/);
   });
 
   /**
@@ -1198,16 +1208,19 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * a "copy the prompt" drag select filenames as if the operator had typed
    * them. FB3's third child — the `Show more` toggle — is gone with the clamp.
    */
+  // Issue #26 item 5: the fold toggle sits between the prose and the pending
+  // status — outside the prose container, so it is never part of the prompt.
   it('[D3-8] the prose container holds paragraphs only, never the attachment chips', () => {
     const children = jsxChildrenOf(jsxNodeAt('UserBubble', ['article', 'div']));
-    expect(children.map(tagNameOf), 'attachment strip, prose, then pending status').toEqual([
-      'div',
-      'div',
-      'div',
-    ]);
+    expect(
+      children.map(tagNameOf),
+      'attachment strip, prose, fold toggle, then pending status'
+    ).toEqual(['div', 'div', 'Button', 'div']);
     expect(classNameExpressionOf(children[0])).toContain('flex flex-wrap');
-    expect(classNameExpressionOf(children[1])).toBe('{userBubbleTextClass()}');
-    expect(classNameExpressionOf(children[2])).toContain('text-muted-foreground');
+    expect(classNameExpressionOf(children[1])).toBe(
+      '{cn(userBubbleTextClass(), userBubbleFoldClass(folded))}'
+    );
+    expect(classNameExpressionOf(children[3])).toContain('text-muted-foreground');
     const prose = jsxChildrenOf(children[1]);
     expect(prose.map(tagNameOf), 'the prose container holds paragraphs and nothing else').toEqual([
       'p',

@@ -107,8 +107,10 @@ describe('levels (decision 183, prototype `.vA`)', () => {
 
   it('group label: 12px / 500 / faint, soft ink on hover, no icon, no hover fill', () => {
     expect(GROUP_HEADER).toContain(
-      '<div className="group flex h-8 w-full items-center gap-1 rounded-xs px-2 has-focus-visible:bg-fill-ghost-hover">'
+      "'group flex h-8 w-full items-center gap-1 rounded-xs px-2 has-focus-visible:bg-fill-ghost-hover',"
     );
+    // Issue #26 item 7: the clay drop ring while a chat is dragged over it.
+    expect(GROUP_HEADER).toContain("drop?.active && 'ring-2 ring-primary/60 ring-inset'");
     expect(GROUP_HEADER).toContain(
       'className="flex min-w-0 flex-1 items-center gap-1 text-left text-small font-medium text-foreground-faint group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"'
     );
@@ -303,7 +305,7 @@ describe('one list (decision 183 §1.10)', () => {
   it('spacing: list px-2 pt-1 pb-4; groups 12px then 14px apart; rows 2px; no indent', () => {
     // Decision 188: hairline -> first group header 4 + 12 = 16px; last row ->
     // footer hairline 16px.
-    expect(LIST_AREA).toContain('<div className="px-2 pt-1 pb-4">');
+    expect(LIST_AREA).toContain('className="px-2 pt-1 pb-4"');
     expect(constant('SIDEBAR_GROUP_CLASS')).toBe('mt-3.5 first:mt-3');
     expect(constant('GROUP_ROWS_CLASS')).toBe('mt-0.5 space-y-0.5');
     expect(NAV).not.toContain('pl-3');

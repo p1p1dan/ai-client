@@ -190,6 +190,12 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
       'Decision 203: a subagent’s conversation scrolls inside a ScrollArea capped at max-h-[70vh] with px-6 pb-6 by hand, as AnnouncementDialog does — DialogPanel’s full-growth ScrollArea cannot be capped.',
   },
   {
+    file: 'components/chat/SentAttachmentChip.tsx',
+    category: 'manual',
+    reason:
+      'Issue #26 image preview: a fixed-height zoom surface (ImagePreview) inside a manual px-6 frame -- a DialogPanel ScrollArea would fight its own pan and zoom.',
+  },
+  {
     file: 'components/chat/SessionTreeDialog.tsx',
     category: 'panel',
     reason: 'Standard DialogPanel body (the session tree list) between header and footer.',

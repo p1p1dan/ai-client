@@ -6,6 +6,7 @@ import {
 } from '@shared/models/chatAgentDefaults';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Menu,
@@ -136,7 +137,32 @@ function MenuRadioRows({
               if (!item.disabled) onSelect(item.id);
             }}
           >
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            {item.description || item.warning ? (
+              // Issue #26 item 4: an effort row says what it does on its own
+              // lines (it used to be a tooltip), the costly ones warn faintly.
+              <span className="flex min-w-0 flex-1 flex-col py-0.5">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="min-w-0 truncate" data-slot="menu-row-label">
+                    {item.label}
+                  </span>
+                  {item.badge && (
+                    <Badge variant="secondary" data-slot="effort-default-badge">
+                      {item.badge}
+                    </Badge>
+                  )}
+                </span>
+                {item.description && (
+                  <span className="text-small text-muted-foreground">{item.description}</span>
+                )}
+                {item.warning && (
+                  <span className="text-small text-foreground-faint">{item.warning}</span>
+                )}
+              </span>
+            ) : (
+              <span className="min-w-0 flex-1 truncate" data-slot="menu-row-label">
+                {item.label}
+              </span>
+            )}
             <MenuPrimitive.RadioItemIndicator className="shrink-0">
               <Check className="size-3.5" />
             </MenuPrimitive.RadioItemIndicator>
@@ -579,7 +605,7 @@ function SessionModelTrigger({
           between `Automatic` and `GPT-5.6 Terra High`, and jumped again while
           the menu was open and a pick changed the label behind it. The right
           edge is the stable one, so the popup hangs off that. */}
-      <MenuPopup align="end" className="min-w-40" side={composerPopupSide(mode)}>
+      <MenuPopup align="end" className="min-w-40 max-w-80" side={composerPopupSide(mode)}>
         {/* Decision 167 (issue #3 item 5): the search field, input FIRST and
             the icon after it in source (`order-first` draws it on the left).
             Design system v2 §1 rule 1: inside the menu's frame the field has

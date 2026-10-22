@@ -3,6 +3,7 @@ import {
   Braces,
   ChevronDown,
   ChevronRight,
+  ChevronsUpDown,
   ClipboardList,
   FileOutput,
   FileText,
@@ -49,6 +50,7 @@ import {
   useToolExpansionStore,
 } from '@/stores/toolExpansion';
 import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
+import { CopyIconButton } from './CopyIconButton';
 import {
   thoughtBodyMaxHeightClass,
   toolRowIconClass,
@@ -86,6 +88,7 @@ import {
   withStoppedOutput,
 } from './toolCard';
 import type { ToolDiff } from './toolDiff';
+import { buildDiffView, diffHasLineNumbers } from './toolDiffView';
 import { stoppedToolOutput } from './toolLiveOutputModel';
 import { kilobytesLabel } from './toolOutputHead';
 import { formatWorkedForDuration } from './turnTiming';
@@ -1148,6 +1151,12 @@ function ToolRowDiffSegment({
   running: boolean;
 }) {
   const { t } = useI18n();
+  // Issue #26 item 2: which folded runs the reader opened. Opening one grows
+  // the page, so it is reported like any other disclosure (C3).
+  const [openFolds, setOpenFolds] = useState<ReadonlySet<string>>(() => new Set());
+  const markUserToggle = useUserDisclosureReport(openFolds.size > 0);
+  const items = useMemo(() => buildDiffView(diff.rows, openFolds), [diff.rows, openFolds]);
+  const numbered = diffHasLineNumbers(diff.rows);
   return (
     <div className="mt-1 overflow-hidden rounded-lg border border-border-soft bg-surface-2">
       <div className="flex h-8 items-center gap-2 border-b border-border-soft px-3 text-small text-muted-foreground tabular-nums">
@@ -1168,41 +1177,88 @@ function ToolRowDiffSegment({
         <span className="text-destructive">-{diff.removed}</span>
       </div>
       <div className="max-h-72 overflow-auto py-1 font-mono text-code leading-[1.55]">
-        {diff.rows.map((row, index) => (
-          <div
-            // Rows are positional and can repeat verbatim (two identical blank
-            // lines are ordinary), so the index IS the identity here.
-            key={`${index}-${row.kind}`}
-            className={cn(
-              'flex',
-              row.kind === 'add' && 'bg-success/12',
-              row.kind === 'del' && 'bg-destructive/12'
-            )}
-          >
-            <span
+        {items.map((item) => {
+          if (item.kind === 'fold') {
+            return (
+              // Issue #26 item 2: an unchanged run, folded; a click opens it in place.
+              <button
+                key={item.key}
+                type="button"
+                data-slot="diff-fold"
+                className="flex w-full items-center gap-2 px-3 py-0.5 text-left font-sans text-small text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
+                onClick={() => {
+                  markUserToggle();
+                  setOpenFolds((previous) => new Set(previous).add(item.key));
+                }}
+              >
+                <ChevronsUpDown className="size-3.5 shrink-0" aria-hidden />
+                {t('{{count}} unchanged lines', { count: item.count })}
+              </button>
+            );
+          }
+          if (item.kind === 'gap') {
+            return (
+              <div
+                key={item.key}
+                data-slot="diff-gap"
+                className="select-none px-3 text-foreground-faint"
+                aria-hidden
+              >
+                ⋯
+              </div>
+            );
+          }
+          const { row } = item;
+          return (
+            <div
+              // Rows are positional and can repeat verbatim (two identical blank
+              // lines are ordinary), so the position IS the identity here.
+              key={item.key}
               className={cn(
-                'w-6 shrink-0 select-none text-center',
-                row.kind === 'add' && 'text-success',
-                row.kind === 'del' && 'text-destructive',
-                row.kind === 'same' && 'text-muted-foreground/40'
+                'flex',
+                row.kind === 'add' && 'bg-success/12',
+                row.kind === 'del' && 'bg-destructive/12'
               )}
             >
-              {row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}
-            </span>
-            <span
-              className={cn(
-                'min-w-0 flex-1 select-text whitespace-pre-wrap break-all pr-3 pl-1',
-                row.kind === 'same' ? 'text-muted-foreground/70' : 'text-foreground'
+              {numbered && (
+                <>
+                  <span data-slot="diff-old-line" className={DIFF_LINE_NUMBER_CLASS}>
+                    {row.oldLine ?? ''}
+                  </span>
+                  <span data-slot="diff-new-line" className={DIFF_LINE_NUMBER_CLASS}>
+                    {row.newLine ?? ''}
+                  </span>
+                </>
               )}
-            >
-              {row.text}
-            </span>
-          </div>
-        ))}
+              <span
+                className={cn(
+                  'w-6 shrink-0 select-none text-center',
+                  row.kind === 'add' && 'text-success',
+                  row.kind === 'del' && 'text-destructive',
+                  row.kind === 'same' && 'text-muted-foreground/40'
+                )}
+              >
+                {row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}
+              </span>
+              <span
+                className={cn(
+                  'min-w-0 flex-1 select-text whitespace-pre-wrap break-all pr-3 pl-1',
+                  row.kind === 'same' ? 'text-muted-foreground/70' : 'text-foreground'
+                )}
+              >
+                {row.text}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
+
+/** A diff gutter cell: the old or new line number, tabular and faint, never selected. */
+const DIFF_LINE_NUMBER_CLASS =
+  'w-10 shrink-0 select-none pr-2 text-right tabular-nums text-foreground-faint';
 
 /** Structured-input scroll window — always 240px, rendered above the output segment. */
 function ToolRowInputSegment({
@@ -1372,16 +1428,22 @@ function RunningToolClock({ startedAtMs, timeoutMs }: { startedAtMs: number; tim
  * 038) is kept: no inner height limit.
  */
 function ThinkingBody({ text }: { text: string }) {
+  const { t } = useI18n();
   const displayText = text
     .split(/\r\n|\n|\r/)
     .filter((line) => line.trim().length > 0)
     .join('\n');
+  // Issue #26 item 8: a copy button once the thought is open (it only renders
+  // open); the thought itself is never forced open for it.
   return (
-    <p
-      data-slot="thinking-text"
-      className="mt-1 select-text whitespace-pre-wrap text-chat-process leading-[1.55] text-foreground-faint"
-    >
-      {displayText}
-    </p>
+    <div className="mt-1 flex items-start gap-1">
+      <p
+        data-slot="thinking-text"
+        className="min-w-0 flex-1 select-text whitespace-pre-wrap text-chat-process leading-[1.55] text-foreground-faint"
+      >
+        {displayText}
+      </p>
+      <CopyIconButton text={text} label={t('Copy thinking')} copiedLabel={t('Copied')} />
+    </div>
   );
 }

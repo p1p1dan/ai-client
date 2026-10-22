@@ -371,6 +371,11 @@ export const IPC_CHANNELS = {
   /** Route B S-6 feedback 7: where a chat's conversation record lives, from its identity stub. */
   CHAT_LOCATE_TRANSCRIPT: 'chat:locateTranscript',
   /**
+   * Issue #26 item 6: the bytes of an image a sent message carried, read-only,
+   * from the DSH attachment store by its reference (`sha256:<hex>`).
+   */
+  CHAT_READ_SENT_ATTACHMENT: 'chat:readSentAttachment',
+  /**
    * Answer one `permission.requested`. Addressed by session plus the
    * `permissionId` the timeline block and the pending queue already carry.
    */
@@ -460,3 +465,15 @@ export const IPC_CHANNELS = {
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
+
+/** `chat:readSentAttachment`'s request: which session's message, which stored image. */
+export interface SentAttachmentReadRequest {
+  sessionId: string;
+  /** The store reference, `sha256:<64 hex>`; anything else is refused before any IO. */
+  attachmentId: string;
+}
+
+/** `chat:readSentAttachment`'s answer: the image as base64, or why not. */
+export type SentAttachmentReadResult =
+  | { ok: true; mediaType: string; data: string }
+  | { ok: false; reason: 'invalid-ref' | 'not-found' | 'too-large' | 'corrupt' | 'unsupported' };

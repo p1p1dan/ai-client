@@ -158,6 +158,7 @@ import {
   sdkBlockedCommandHint,
 } from './homeSlashCommands';
 import { planHomeBranchSwitch } from './homeTarget';
+import { isImeComposing } from './imeComposing';
 import { ModelMissingNotice } from './ModelMissingNotice';
 import {
   createEmptyState as createEmptyQueueState,
@@ -1201,6 +1202,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     replaceAttachmentDrafts,
     updateValue,
   ]);
+
+  // Issue #26 item 3: mirror the box into the drafts store so its text is saved
+  // across a restart (the store debounces the write). Refs, not the render's
+  // `value`: in the commit that switches chats, the layout effect above has
+  // already swapped `valueRef` to the incoming chat's text.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `value` and `activeSessionId` are the triggers; the effect reads their refs.
+  useEffect(() => {
+    useComposerDraftsStore.getState().noteLive(draftOwnerRef.current, valueRef.current);
+  }, [value, activeSessionId]);
 
   // P1-7e (problem 1, decision 139): text offered to this chat's composer from
   // outside it — a rewind handing back the prompt it rewound to. Taken only
@@ -4643,6 +4653,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // textarea.
       disabled={disabled}
       onKeyDown={(event) => {
+        // Issue #26 item 9: while an IME composes, Enter / arrows / Esc belong
+        // to its candidate list — the popups below, the history walk and the
+        // send all stand aside.
+        const composing = isImeComposing(event, composingRef.current);
         if (commandInfoOpen) {
           setCommandInfoOpen(false);
           if (event.key === 'Escape') {
@@ -4655,7 +4669,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // with `/`, where an `@` has no whitespace before it — but the narrower
         // condition goes first so the ordering states that rather than relying
         // on it.
-        if (slashOpen) {
+        if (slashOpen && !composing) {
           if (event.key === 'ArrowDown') {
             event.preventDefault();
             setSlashIndex((i) => (i + 1) % slashResults.length);
@@ -4680,7 +4694,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           }
         }
         // T-07 @ popup: while it is open, arrow keys / Enter / Esc belong to it, so nothing is sent by mistake.
-        if (mentionOpen) {
+        if (mentionOpen && !composing) {
           if (event.key === 'ArrowDown') {
             event.preventDefault();
             setMentionIndex((i) => (i + 1) % mentionResults.length);
@@ -4712,8 +4726,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           !event.ctrlKey &&
           !event.metaKey &&
           !event.shiftKey &&
-          !composingRef.current &&
-          !event.nativeEvent.isComposing
+          !composing
         ) {
           const ta = event.currentTarget;
           const up = event.key === 'ArrowUp';
@@ -4741,7 +4754,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // Decision 180: with no turn to stop, it cancels this window's
         // `/compact` (the round Stop does the same then).
         if (event.key === 'Escape') {
-          if (composingRef.current) return;
+          if (composing) return;
           if (canStop) {
             event.preventDefault();
             handleStop();
@@ -4755,7 +4768,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // An IME confirming a candidate fires Enter before
           // compositionend — sending here would fire off a half-typed
           // message, and with attachments that is an expensive mistake.
-          if (composingRef.current) return;
+          if (composing) return;
           event.preventDefault();
           // Decision 203: while a turn runs, Enter joins it at its next step
           // (as in Claude Code) and Ctrl+Enter queues for the turn's end. A

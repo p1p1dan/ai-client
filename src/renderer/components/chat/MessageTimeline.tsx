@@ -9,14 +9,14 @@ import {
   ArrowDown,
   ArrowRightLeft,
   Check,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Clock3,
   Copy,
   FileQuestion,
   FileSearch,
-  FileText,
   History,
-  Image as ImageIcon,
   Info,
   KeyRound,
   Lock,
@@ -80,6 +80,7 @@ import {
 import {
   CHAT_PROSE_LEADING,
   chatTurnClass,
+  promptFolds,
   readingColumnSpacingClass,
   sessionFailureTitleClass,
   turnActionsInnerClass,
@@ -98,6 +99,7 @@ import {
   turnWorkZoneClass,
   userBubbleAwaitingClass,
   userBubbleClass,
+  userBubbleFoldClass,
   userBubbleRowClass,
   userBubbleTextClass,
 } from './chatTimelineLayout';
@@ -164,6 +166,7 @@ import { deriveQuestionCardState } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
 import { continueBlockedReason } from './retryLastTurn';
+import { SentAttachmentChip } from './SentAttachmentChip';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { canContinueSession, deriveSessionFailure } from './sessionFailure';
 import {
@@ -241,6 +244,7 @@ import {
   splitWorkedForDuration,
   type ThinkingTiming,
 } from './turnTiming';
+import { UserMessageActions } from './UserMessageActions';
 import { useMessageMetadata } from './useMessageMetadata';
 import { useResolvedSessionModel } from './useResolvedSessionModel';
 import { useTurnTiming } from './useTurnTiming';
@@ -1519,6 +1523,11 @@ function UserBubble({ message }: { message: ChatMessage }) {
   const awaitingDelivery = isAwaitingDeliveryMessage(message);
   const ink = awaitingDelivery ? 'text-muted-foreground' : 'text-foreground';
   const withdrawAttemptId = awaitingDeliveryAttemptId(message);
+  // Issue #26 item 5: a long prompt starts folded, decided from its text alone
+  // (F10). The toggle is the user's; nothing measures the bubble.
+  const folds = promptFolds(textBlocks.map((block) => block.text ?? '').join('\n'));
+  const [unfolded, setUnfolded] = useState(false);
+  const folded = folds && !unfolded;
 
   return (
     // What makes the two roles distinguishable is SHAPE on this side: the right
@@ -1533,43 +1542,25 @@ function UserBubble({ message }: { message: ChatMessage }) {
     >
       <div className={awaitingDelivery ? userBubbleAwaitingClass() : userBubbleClass()}>
         {/* Round-2 P0 (Chat attachments): read-only echo of what this turn sent,
-            metadata only (no bytes, no size — never threaded over the wire).
-            Visual language mirrors ChatComposer's AttachmentChip (icon +
-            truncated name), minus the size label and remove button — this
-            chip cannot be edited after the fact. */}
+            metadata only on the wire. Issue #26 item 6: a DSH image's chip
+            reads its bytes back by store reference for a thumbnail
+            (`SentAttachmentChip`). */}
         {message.attachments && message.attachments.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {message.attachments.map((attachment, index) => (
-              <span
+              <SentAttachmentChip
                 key={`${message.id}-attachment-${index}`}
-                // Design system v2 §1 rule 1 (supersedes D3-c's edge): a tag
-                // inside the tinted bubble is one step deeper fill, no edge.
-                className={cn(
-                  'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs bg-fill-ghost-selected px-1.5 text-small',
-                  ink
-                )}
-              >
-                {attachment.kind === 'image' ? (
-                  <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                ) : (
-                  <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                )}
-                <span
-                  className="min-w-0 flex-1 truncate"
-                  title={attachment.name ?? attachment.mediaType}
-                >
-                  {attachment.name ?? attachment.mediaType}
-                </span>
-              </span>
+                sessionId={message.sessionId}
+                attachment={attachment}
+                ink={ink}
+              />
             ))}
           </div>
         ) : null}
-        {/* T12: the prompt in full. No clamp and no `Show more` — both retired
-            with the sticky band that made them necessary (`userBubbleClass()`'s
-            header carries the chain). `title` retired with them: with nothing
-            hidden there is nothing for a tooltip to reveal, and a `title` on a
-            long prompt is a screen-sized tooltip. */}
-        <div className={userBubbleTextClass()}>
+        {/* T12 retired the geometry-driven clamp with the sticky band. Issue
+            #26 item 5 brings back a fold of another kind: decided from the
+            text, opened and closed only by the button below. */}
+        <div className={cn(userBubbleTextClass(), userBubbleFoldClass(folded))}>
           {textBlocks.map((block) => (
             <p
               key={block.id}
@@ -1582,6 +1573,19 @@ function UserBubble({ message }: { message: ChatMessage }) {
             </p>
           ))}
         </div>
+        {folds && (
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="-ml-2"
+            aria-expanded={!folded}
+            onClick={() => setUnfolded((value) => !value)}
+          >
+            {folded ? <ChevronDown /> : <ChevronUp />}
+            {folded ? t('Show more') : t('Show less')}
+          </Button>
+        )}
         {pending && (
           <div className="mt-1 flex items-center justify-end gap-1 text-small text-muted-foreground">
             {awaitingDelivery ? (
@@ -1604,6 +1608,8 @@ function UserBubble({ message }: { message: ChatMessage }) {
           </div>
         )}
       </div>
+      {/* Issue #26 item 1: once the message is in the conversation. */}
+      {!pending && <UserMessageActions message={message} />}
     </article>
   );
 }

@@ -155,7 +155,10 @@ export function chatTurnClass(): string {
  * only read JSX through an AST walk that breaks whenever the element moves.
  */
 export function userBubbleRowClass(): string {
-  return 'flex justify-end';
+  // Issue #26 item 1: a column now -- the bubble, then its action row, both at
+  // the right edge. `group/user` scopes the action row's hover reveal to the
+  // message, not the whole turn.
+  return 'group/user flex flex-col items-end';
 }
 
 /**
@@ -787,4 +790,65 @@ export function turnStatusToneClass(kind: TurnStatusKind): string | false {
   if (kind === 'stalled') return 'text-warning';
   if (kind === 'failed') return 'text-destructive';
   return false;
+}
+
+/**
+ * Issue #26 item 1: the user message's action row (copy / edit & resend /
+ * fork), under the bubble. Frameless ghost icon buttons; revealed by hovering
+ * the message or by keyboard focus inside the row.
+ *
+ * Same mechanism as `turnActionsSlotClass()`, for the same user ruling: the
+ * row RESERVES its 24px (`h-6`, the icon button's own size) and only fades,
+ * so hovering a message never moves the page under the pointer.
+ */
+export function userMessageActionRowClass(): string {
+  return 'mt-1 flex h-6 items-center gap-0.5 opacity-0 transition-opacity duration-150 ease-out group-hover/user:opacity-100 focus-within:opacity-100 motion-reduce:transition-none';
+}
+
+/**
+ * Issue #26 item 5: a long prompt folds, decided from its TEXT -- never from a
+ * measured height (F10: no geometry-dependent state). Above this many
+ * estimated lines the bubble starts folded; folded, it shows
+ * `PROMPT_FOLDED_LINES` with the reference's 3rem bottom fade.
+ */
+export const PROMPT_FOLD_THRESHOLD_LINES = 15;
+export const PROMPT_FOLDED_LINES = 12;
+
+/**
+ * Width units a bubble line holds: the bubble is at most 80% of the 45rem
+ * reading column less its 16px padding (~544px); at the 14px body that is
+ * about 76 Latin characters, a CJK character counting two.
+ */
+const PROMPT_UNITS_PER_LINE = 76;
+
+/** Wide characters (CJK, fullwidth forms) take two units. */
+const WIDE =
+  /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/u;
+
+/** Visual lines a prompt is expected to take: hard breaks, plus soft wraps by width. */
+export function estimatePromptLines(text: string, unitsPerLine = PROMPT_UNITS_PER_LINE): number {
+  let lines = 0;
+  for (const line of text.split(/\r\n|\n|\r/)) {
+    let units = 0;
+    for (const char of line) units += WIDE.test(char) ? 2 : 1;
+    lines += Math.max(1, Math.ceil(units / unitsPerLine));
+  }
+  return lines;
+}
+
+/** Does this prompt fold? A pure function of its text. */
+export function promptFolds(text: string): boolean {
+  return estimatePromptLines(text) > PROMPT_FOLD_THRESHOLD_LINES;
+}
+
+/**
+ * The prompt text box while folded, or `''` when open. `lh` is the box's own
+ * line height, which is why the box pins the prose size and leading: the
+ * height is a number of the prompt's lines, not of pixels. The clip is CSS of
+ * a boolean the user toggles; nothing reads it back.
+ */
+export function userBubbleFoldClass(folded: boolean): string {
+  return folded
+    ? `max-h-[12lh] overflow-hidden text-chat-body ${CHAT_PROSE_LEADING} [mask-image:linear-gradient(to_bottom,black_calc(100%-3rem),transparent)]`
+    : '';
 }

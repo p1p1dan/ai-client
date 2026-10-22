@@ -434,7 +434,8 @@ describe('userBubbleTextClass / userBubbleClass (T12)', () => {
   // bubble is the page's one tinted block -- the neutral fill, NO edge (§1
   // rule 1), the bubble radius all round, 16 / 12 padding.
   it('T12: right-aligned and faced — the whole role signal', () => {
-    expect(userBubbleRowClass()).toContain('justify-end');
+    // Issue #26 item 1: a column (bubble, then its action row) at the right edge.
+    expect(userBubbleRowClass()).toContain('items-end');
     const cls = userBubbleClass();
     expect(cls).toContain('bg-fill-neutral');
     expect(cls).not.toMatch(/(?:^|\s)border(?:-|\s|$)/);

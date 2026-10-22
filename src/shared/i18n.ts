@@ -3453,6 +3453,22 @@ export const zhTranslations: Record<string, string> = {
     '当前工作区以外的文件无法在这里预览。',
   'Open with system viewer': '用系统程序打开',
   'Could not open the file with the system viewer.': '无法用系统程序打开这个文件。',
+
+  // --- 时间线功能项（issue #26 第 1、2、5、6、8 项，界面风格迁移第 4 阶段）---------
+  'Copy message': '复制消息',
+  'Edit and resend': '编辑重发',
+  'Edit and resend this message?': '编辑并重发这条消息？',
+  'The conversation goes back to before this message and its text returns to the input box. Later messages stay in the session branches; nothing is deleted.':
+    '对话会回到这条消息之前，它的原文放回输入框。之后的消息保留在会话分支里，不会删除。',
+  'Could not go back to this message': '无法回到这条消息',
+  'Could not fork from this message': '无法从这条消息分叉',
+  'This message is not in the session tree yet. Try again once the reply has finished.':
+    '这条消息还不在会话树里，等回复结束后再试。',
+  'Show more': '展开',
+  'Copy thinking': '复制思考内容',
+  '{{count}} unchanged lines': '{{count}} 行未改动',
+  'Preview image {{name}}': '预览图片 {{name}}',
+  Image: '图片',
 };
 
 export function normalizeLocale(input?: string): Locale {
@@ -4845,4 +4861,14 @@ Object.assign(zhTranslations, {
   '{{count}} matching lines': '{{count}} 处匹配',
   'HTTP {{status}}': 'HTTP {{status}}',
   Truncated: '已截断',
+});
+
+/**
+ * Issue #26 item 4: the reasoning-effort menu's second lines (`efforts.ts`) —
+ * the Default row's, and the warning the costly extremes carry.
+ */
+Object.assign(zhTranslations, {
+  'No level chosen: the engine decides (Medium where offered)':
+    '不指定档位，由对话引擎决定（模型支持时用「中」）',
+  'Slower, and uses many more tokens': '更慢，消耗的 token 也多得多',
 });

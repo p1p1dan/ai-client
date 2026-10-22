@@ -83,7 +83,8 @@ async function click(element: Element | null | undefined) {
 }
 function row(text: string) {
   return [...document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]')].find(
-    (node) => node.textContent === text
+    // Issue #26 item 4: effort rows add description lines, so match the label.
+    (node) => (node.querySelector('[data-slot="menu-row-label"]') ?? node).textContent === text
   );
 }
 

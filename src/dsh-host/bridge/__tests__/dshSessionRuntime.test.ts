@@ -1031,7 +1031,8 @@ describe('DshSessionRuntime — turn semantics (P1-4c1, decisions 093-095)', () 
     expect(emitted.find((event) => event.type === 'message.started')?.payload?.attachments).toEqual(
       [
         // The stored (normalized) type, as the history projection reads it.
-        { kind: 'image', mediaType: 'image/jpeg', name: 'a.png' },
+        // Issue #26 item 6: with its store reference, for the bubble's thumbnail.
+        { kind: 'image', mediaType: 'image/jpeg', name: 'a.png', attachmentId: 'sha256:i' },
         { kind: 'text', mediaType: 'text/plain', name: 'n.txt' },
       ]
     );

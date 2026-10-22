@@ -8,7 +8,7 @@ import {
 } from '@/components/workspace-shell/sidebarTree';
 import { composerModelLabelParts, composerModelMenuModel } from '../composerModel';
 import { localizeContextSummaryTitle } from '../dshTimelineRowModel';
-import { CHAT_EFFORTS } from '../efforts';
+import { CHAT_EFFORTS, DEFAULT_EFFORT_HINT } from '../efforts';
 import { describeHostStatus, type HostStatus } from '../hostStatus';
 import { AUTOMATIC_MODEL_LABEL } from '../models';
 import {
@@ -53,7 +53,9 @@ describe('model menu (point-check problem 9: Automatic / Default / Low…)', () 
       expectChinese(zh(effort.label), effort.label);
       expectChinese(zh(effort.hint), effort.hint);
       expect(effort.hint).not.toMatch(/\bPi\b/);
+      if (effort.warning) expectChinese(zh(effort.warning), effort.warning);
     }
+    expectChinese(zh(DEFAULT_EFFORT_HINT), DEFAULT_EFFORT_HINT);
     expectChinese(zh(AUTOMATIC_MODEL_LABEL), AUTOMATIC_MODEL_LABEL);
   });
 

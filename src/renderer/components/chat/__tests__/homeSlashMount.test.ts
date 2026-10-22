@@ -248,6 +248,49 @@ describe('the slash menu before a session runs', () => {
   });
 });
 
+/** A keydown Enter as an IME sends it: flagged composing, or keyCode 229. */
+async function pressImeEnter(signal: 'isComposing' | 'keyCode229') {
+  const event = new KeyboardEvent('keydown', {
+    key: 'Enter',
+    bubbles: true,
+    isComposing: signal === 'isComposing',
+  });
+  if (signal === 'keyCode229') Object.defineProperty(event, 'keyCode', { value: 229 });
+  await act(async () => {
+    box().dispatchEvent(event);
+  });
+  await settle();
+}
+
+// Issue #26 item 9: the Enter that confirms an IME candidate picks nothing in
+// the slash menu and sends nothing, whichever signal carries the composition.
+describe('an IME composing in the box', () => {
+  it.each([
+    'isComposing',
+    'keyCode229',
+  ] as const)('Enter with %s leaves the slash menu row unpicked; a plain Enter picks it', async (signal) => {
+    await mountComposer();
+    await type('/pl');
+    expect(menuRows()).toEqual(['/plan-tree']);
+
+    await pressImeEnter(signal);
+    expect(box().value).toBe('/pl');
+
+    await pressEnter();
+    expect(box().value.startsWith('/plan-tree')).toBe(true);
+  });
+
+  it.each(['isComposing', 'keyCode229'] as const)('Enter with %s sends nothing', async (signal) => {
+    await mountComposer();
+    await type('hello there');
+    await pressImeEnter(signal);
+
+    expect(mocks.api.createSession).not.toHaveBeenCalled();
+    expect(createdSessions()).toEqual([]);
+    expect(box().value).toBe('hello there');
+  });
+});
+
 describe('a command typed on the home page that needs a conversation', () => {
   it.each([
     '/compact',

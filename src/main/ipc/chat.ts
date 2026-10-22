@@ -8,6 +8,7 @@ import {
  * Forwards Host Runtime Events to all BrowserWindows.
  */
 
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { CLAUDE_SDK_STUB_SUFFIX } from '@shared/claudeSdkEngine';
 import { IPC_CHANNELS } from '@shared/types';
@@ -18,6 +19,7 @@ import {
   PI_AGENT,
   resolveAgentWireName,
 } from '@shared/types/agentWire';
+import type { SentAttachmentReadRequest, SentAttachmentReadResult } from '@shared/types/ipc';
 import {
   LEGACY_MIGRATION_REQUIRED,
   type LegacyMigrationSummary,
@@ -67,6 +69,7 @@ import {
   SESSION_REPLAY_UNAVAILABLE,
 } from '../services/chat/SessionReplayReader';
 import { usableWorkspace } from '../services/legacyAssets/detectLegacyAssets';
+import { readSentImage } from './sentAttachmentRead';
 
 /** The window that sent this IPC call, when it still exists. */
 const windowCleanupAttached = new Set<number>();
@@ -372,6 +375,31 @@ export function registerChatHandlers(): void {
       return locateTranscript(stubFile, {
         dshHome: resolveDshHome({ isPackaged: app.isPackaged, appStateRoot }),
         claudeSdkConfigDir: path.join(appStateRoot, CLAUDE_SDK_HOME_DIR_NAME),
+      });
+    }
+  );
+
+  // Issue #26 item 6: a sent image's bytes for the bubble's thumbnail and
+  // preview. Read-only, by store reference only, for a chat this index holds
+  // (`sentAttachmentRead.ts` carries the path guard and its test).
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_READ_SENT_ATTACHMENT,
+    async (_event, payload: SentAttachmentReadRequest): Promise<SentAttachmentReadResult> => {
+      const row =
+        typeof payload?.sessionId === 'string'
+          ? await sessionIndexService.get(payload.sessionId)
+          : null;
+      if (!row) return { ok: false, reason: 'not-found' };
+      const dshHome = resolveDshHome({
+        isPackaged: app.isPackaged,
+        appStateRoot: getAppStateRoot(),
+      });
+      return readSentImage(dshHome, payload.attachmentId, {
+        size: async (file) => {
+          const facts = await stat(file);
+          return facts.isFile() ? facts.size : null;
+        },
+        read: async (file) => new Uint8Array(await readFile(file)),
       });
     }
   );
