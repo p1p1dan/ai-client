@@ -5,7 +5,7 @@
  * menu (the list title's icon, a group heading's hover icon, the list's
  * right-click):
  *
- *  - `workspace` (what the sidebar has always done): one
+ *  - `workspace` (the default, and what the sidebar has always done): one
  *    group per repository, ordered by when the repository was ADDED — newest
  *    first. The order used to follow each group's last activity, which moved
  *    folders under the pointer as chats elsewhere finished turns; the issue
@@ -36,8 +36,8 @@ function isSidebarArchiveMode(value: unknown): value is SidebarArchiveMode {
   return (SIDEBAR_ARCHIVE_MODES as readonly unknown[]).includes(value);
 }
 
-/** User, 2026-10-23: 按时间 by default; a mode already saved is kept. */
-export const DEFAULT_SIDEBAR_ARCHIVE_MODE: SidebarArchiveMode = 'date';
+/** User, 2026-10-23: back to 按仓库 by default; a mode already saved is kept. */
+export const DEFAULT_SIDEBAR_ARCHIVE_MODE: SidebarArchiveMode = 'workspace';
 
 /**
  * The id of the fixed bucket (decision 187). Not a real group — it cannot be
