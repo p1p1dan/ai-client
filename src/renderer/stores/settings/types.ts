@@ -301,6 +301,18 @@ export interface SettingsState {
    * root node — never `documentElement`.
    */
   chatFontFamily: string;
+  /**
+   * Design system v2 §3.4: the home greeting and the chat welcome line in the
+   * `--font-display` serif. Off draws them in the app's sans (user, 2026-10-23:
+   * a switch, to compare the two).
+   */
+  displaySerifEnabled: boolean;
+  /**
+   * The chat list's title row (「对话 · 按时间」 and the list menu icon).
+   * Developer mode only (user, 2026-10-23): shown when both are on; the list's
+   * right-click is the everyday way to switch the grouping.
+   */
+  sidebarListTitleEnabled: boolean;
   chatBodyFontSize: number;
   chatProcessFontSize: number;
   /**
@@ -414,6 +426,8 @@ export interface SettingsState {
   // Setters - Chat typography (T104)
   /** Empty string = follow the app's `--font-sans`. */
   setChatFontFamily: (family: string) => void;
+  setDisplaySerifEnabled: (enabled: boolean) => void;
+  setSidebarListTitleEnabled: (enabled: boolean) => void;
   /**
    * Both sizes are clamped by the store, not by the control that calls them,
    * and the two are clamped AGAINST EACH OTHER: `chatProcessFontSize` may never

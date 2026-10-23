@@ -134,9 +134,11 @@ export const HOME_BOTTOM_SPACER_CLASS = 'min-h-8 grow';
  * The title (design system v2 §3.4, §7.11): a quiet serif sentence — the
  * `--font-display` stack, 38px, 400, the secondary ink — around one name in
  * the body ink. The app's only serif. Tracking -0.01em is allowed at >= 18px.
+ * `displaySerifEnabled` off swaps the face for the app's sans.
  */
-export const HOME_TITLE_CLASS =
-  'font-display text-display font-normal tracking-[-0.01em] text-balance text-muted-foreground';
+export function homeTitleClass(serif: boolean): string {
+  return `${serif ? 'font-display' : 'font-sans'} text-display font-normal tracking-[-0.01em] text-balance text-muted-foreground`;
+}
 
 /**
  * The repository's name (or 「PiLab」 with none): the body ink, same 400

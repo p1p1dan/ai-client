@@ -171,6 +171,20 @@ describe('deriveEnvironmentRows', () => {
     expect(rows.map((row) => row.id)).toEqual(['folder']);
   });
 
+  it('the chat record path comes last, once Main has found it (user, 2026-10-23)', () => {
+    expect(
+      deriveEnvironmentRows({
+        ...none,
+        permission: 'Full auto',
+        transcriptPath: '/home/u/rec.jsonl',
+      })
+    ).toEqual([
+      { id: 'permission', text: 'Full auto' },
+      { id: 'transcript', path: '/home/u/rec.jsonl' },
+    ]);
+    expect(deriveEnvironmentRows({ ...none, transcriptPath: null })).toEqual([]);
+  });
+
   it('a temporary chat names its scratch folder; a model without a known engine still shows', () => {
     const rows = deriveEnvironmentRows({
       ...none,

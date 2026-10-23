@@ -183,8 +183,10 @@ interface ToolRowProps {
  * icons inherit `currentColor` so they dim with the row instead of needing a
  * second colour decision.
  *
- * Design system v2 §6 / §7.4: while a row runs, or once it failed, the slot
- * holds the shared `StatusIcon` instead -- the one spinner, the one red cross.
+ * Design system v2 §6 / §7.4: once a row failed, the slot holds the shared
+ * `StatusIcon` instead -- the one red cross. A running row keeps its own mark:
+ * the turn head is the one line that spins and counts (user, 2026-10-23: two
+ * lines both spinning and ticking read as the same thing said twice).
  * `plan` wears the plan review card's own mark, so it no longer shares the
  * directory listing's tree.
  */
@@ -213,7 +215,6 @@ const ROW_ICONS: Record<string, typeof Wrench> = {
 };
 
 function ToolRowIcon({ view }: { view: ToolRowView }) {
-  if (view.running) return <StatusIcon status="running" className="self-center" />;
   if (view.failed || view.reviewDenied) {
     return <StatusIcon status="failed" className="self-center" />;
   }
@@ -430,9 +431,17 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
           T146 — once `execStartedAtMs` is known (bash, past approval and path
           checks), both numbers switch to that origin instead, and the limit
           is withheld until then — see `deriveToolRowView`. */}
-      {view.running && typeof view.runningStartedAtMs === 'number' && (
-        <RunningToolClock startedAtMs={view.runningStartedAtMs} timeoutMs={view.runningTimeoutMs} />
-      )}
+      {/* User, 2026-10-23: the turn head already spins and counts, so a row's
+          own seconds are drawn only with what the head cannot say -- the
+          deadline DSH moves the command to the background at. */}
+      {view.running &&
+        typeof view.runningStartedAtMs === 'number' &&
+        typeof view.runningTimeoutMs === 'number' && (
+          <RunningToolClock
+            startedAtMs={view.runningStartedAtMs}
+            timeoutMs={view.runningTimeoutMs}
+          />
+        )}
       {showDiff && view.diff && (
         <span className="shrink-0 tabular-nums">
           {/* Decision 034: the ordinary settled edit prints the NUMBERS only.

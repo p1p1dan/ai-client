@@ -6,6 +6,7 @@ import {
 } from '@shared/types/chatTypography';
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
@@ -79,6 +80,8 @@ export function ChatTypographySection() {
     setChatBodyFontSize,
     chatProcessFontSize: globalProcessSize,
     setChatProcessFontSize,
+    displaySerifEnabled,
+    setDisplaySerifEnabled,
   } = useSettingsStore();
   const { t } = useI18n();
 
@@ -216,6 +219,19 @@ export function ChatTypographySection() {
           <span className="text-ui text-muted-foreground">px</span>
         </div>
       </SettingsRow>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-ui font-medium">{t('Serif greeting')}</p>
+          <p className="text-small text-muted-foreground">
+            {t('Draw the home page and new chat greeting in a serif face')}
+          </p>
+        </div>
+        <Switch
+          checked={displaySerifEnabled}
+          onCheckedChange={setDisplaySerifEnabled}
+          aria-label={t('Serif greeting')}
+        />
+      </div>
     </SettingsSectionBlock>
   );
 }

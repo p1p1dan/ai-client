@@ -82,7 +82,7 @@ describe('P1-11 the terminal is a pane card (layout 5d)', () => {
     // Out of sight = invisible over the area's box; `hidden` (display: none)
     // would hand xterm a zero measurement and the pty two columns. The empty
     // area itself parks the same way.
-    expect(card).toContain("!shown && 'pointer-events-none invisible inset-0'");
+    expect(card).toContain("!shown && 'pointer-events-none invisible inset-0 opacity-0'");
     expect(card).not.toMatch(/['"`\s]hidden['"`\s]/);
     expect(area).toContain("!open && 'pointer-events-none invisible absolute inset-y-0 right-0'");
     const column = code(join(SHELL_DIR, 'center/TerminalColumn.tsx'));

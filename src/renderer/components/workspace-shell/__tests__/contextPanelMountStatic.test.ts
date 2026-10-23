@@ -58,7 +58,7 @@ describe('pane cards keep-alive hiding technique (layout 5d)', () => {
   });
 
   it('lays a hidden card over the whole box so it still measures full size', () => {
-    expect(CARD).toContain("!shown && 'pointer-events-none invisible inset-0'");
+    expect(CARD).toContain("!shown && 'pointer-events-none invisible inset-0 opacity-0'");
   });
 
   it('keeps the reason in the source, where the next edit will read it', () => {

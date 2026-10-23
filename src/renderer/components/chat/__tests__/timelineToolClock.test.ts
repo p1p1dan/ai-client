@@ -236,18 +236,18 @@ it('[ROW-CLOCK-2] a tick re-derives no tool group, while the running tail still 
   expect(container.textContent).toContain('· 16s · to background at 5m');
 });
 
-it('[ROW-CLOCK-4] with no execStartedAt yet (pre-exec), the row shows elapsed and no limit', async () => {
+it('[ROW-CLOCK-4] with no execStartedAt yet (pre-exec), the row draws no clock of its own', async () => {
   // T146 — a row still waiting on approval or a path re-check (no
   // `toolExecStartedAt` on the block yet) must not show a limit against the
   // `tool.started` origin; that combination is exactly the field report's
-  // "elapsed already past the limit" illusion. The elapsed itself stays live.
+  // "elapsed already past the limit" illusion. User, 2026-10-23: with no limit
+  // to show, the row's seconds would only repeat the turn head's ticking clock.
   const container = await renderRunning();
   await emit({ type: 'tool.started', timestamp: NOW - 16_000, payload: { toolCallId: 'live-1' } });
   expect(derivedCallIds()).toContain('live-1');
-  expect(container.textContent).toContain('· 16s');
-  expect(container.textContent?.match(/to background at/g)).toBeNull();
+  expect(container.querySelector('[data-slot="tool-row-clock"]')).toBeNull();
   await tick();
-  expect(container.textContent).toContain('· 17s');
+  expect(container.querySelector('[data-slot="tool-row-clock"]')).toBeNull();
   expect(container.textContent?.match(/to background at/g)).toBeNull();
 });
 

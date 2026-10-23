@@ -431,6 +431,9 @@ export const zhTranslations: Record<string, string> = {
   'Font and text size for messages and process information': '消息与过程信息的字体和字号',
   'Chat font family': '聊天区字体',
   'Empty follows the app font': '留空则跟随应用字体',
+  'Serif greeting': '衬线体问候语',
+  'Draw the home page and new chat greeting in a serif face':
+    '首页与新对话的问候语用衬线体（宋体类）显示',
   'Message text size': '正文字号',
   'Process text size': '过程信息字号',
   'For example: this paragraph is the message text, and it changes with the setting.':
@@ -1025,8 +1028,14 @@ export const zhTranslations: Record<string, string> = {
   'Load earlier changes': '加载更早的修改记录',
   'Open file': '打开文件',
   'No file changes recorded in this conversation yet.': '当前对话尚无文件修改记录。',
-  'Changes made by the file tools (edit, write) in this conversation. Shell commands and external edits are not tracked.':
-    '记录当前对话中文件工具（edit、write）所做的修改；不包含命令行及外部编辑。',
+  'Changes made by the file tools (edit, write) in this conversation. Changes from shell commands or other editors are under Working tree.':
+    '记录当前对话中文件工具（edit、write）所做的修改；命令行和其他编辑器改的，见「工作区」。',
+  'Working tree': '工作区',
+  'No uncommitted changes in the working tree.': '工作区没有未提交的改动。',
+  'Only the first changes are listed.': '改动太多，只列出了前一部分。',
+  'Uncommitted changes in the working tree (git status), whatever made them.':
+    '当前工作区的未提交改动（git status），不分来源。',
+  'Stage and commit in Git': '去 Git 暂存和提交',
   'Diff exceeds the preview limit.': '差异超过预览大小限制。',
   'Binary content has no text diff.': '二进制内容无法展示文本差异。',
   'Previous content could not be read; no diff is available.': '未能读取修改前内容，无法展示差异。',
@@ -4756,9 +4765,12 @@ Object.assign(zhTranslations, {
  */
 Object.assign(zhTranslations, {
   'Developer mode': '开发人员模式',
+  'Chat list title': '对话列表标题行',
+  'Show a title row above the chat list with the grouping and its menu':
+    '在对话列表上方显示一行标题，写明当前分组方式，带分组菜单按钮',
   'Enable developer mode': '启用开发人员模式',
-  'Shows settings meant for development and testing on the Models page: request identity (User-Agent), the Agent SDK engine switch and caching tool definitions. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.':
-    '在「模型」页显示供开发与测试用的设置：请求标识（User-Agent）、Agent SDK 引擎开关和缓存工具定义。关闭时这些设置隐藏，并按默认值生效；你改过的值会保留，重新打开后恢复生效。',
+  'Shows settings meant for development and testing below: request identity (User-Agent), the Agent SDK engine switch, caching tool definitions and the chat list title. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.':
+    '在下方显示供开发与测试用的设置：请求标识（User-Agent）、Agent SDK 引擎开关、缓存工具定义和对话列表标题行。关闭时这些设置隐藏，并按默认值生效；你改过的值会保留，重新打开后恢复生效。',
 });
 
 // Agent SDK chat model menu (route B, S-6 feedback 3)
@@ -4907,6 +4919,7 @@ Object.assign(zhTranslations, {
   'Skills and plugins': '技能与插件',
   'Open a chat in a repository to search it': '先打开一个仓库里的对话，才能搜索',
   'Group and filter chats': '分组与筛选',
+  'Chats · {{grouping}}': '对话 · {{grouping}}',
   'Group chats': '分组方式',
   'By repository': '按仓库',
   'By my groups': '按我的分组',
@@ -4938,8 +4951,6 @@ Object.assign(zhTranslations, {
   Browser: '浏览器',
   'Which changes': '查看哪些改动',
   'This conversation': '本次对话',
-  "This conversation's changes": '本次对话的改动',
-  'Uncommitted changes (Git)': '未提交的改动（Git）',
   'Filter, or ? to search in files': '筛选文件，输入 ? 搜索文件内容',
   'Filter files': '筛选文件',
 });

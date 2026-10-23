@@ -335,6 +335,15 @@ export function migrateSettings(
       currentState.claudeSdkEngineEnabled
     ),
 
+    displaySerifEnabled: sanitizeBoolean(
+      persisted.displaySerifEnabled,
+      currentState.displaySerifEnabled
+    ),
+    sidebarListTitleEnabled: sanitizeBoolean(
+      persisted.sidebarListTitleEnabled,
+      currentState.sidebarListTitleEnabled
+    ),
+
     // S-6 feedback 10: the same rule Main gates by (`resolveDeveloperModeEnabled`).
     developerModeEnabled: sanitizeBoolean(
       persisted.developerModeEnabled,

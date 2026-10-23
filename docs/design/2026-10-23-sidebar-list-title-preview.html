@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>侧栏列表标题与折叠组保留当前对话（2026-10-23）</title>
+<!--
+  Throwaway preview, follow-up to 2026-10-23-sidebar-grouping-button-preview.html
+  (option A shipped). Two questions:
+   1. the list title 「对话」 reads like one more group heading — three ways to
+      tell it apart;
+   2. a folded group still shows the chat that is open (selected), so the
+      reader never loses where they are.
+  Group headings match the app: 14px / 400 / muted, chevron after the name.
+  Colours are the v2 tokens (docs/design-system.md §2).
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI Variable Text","Segoe UI","Noto Sans",Arial,"PingFang SC","Microsoft YaHei UI","Noto Sans CJK SC",sans-serif;
+  background:#1d1d1b;color:var(--fg);font-size:13px;line-height:1.45;padding:20px}
+svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.s{width:14px;height:14px}
+.bar{display:flex;gap:8px;align-items:center;color:#ddd;margin-bottom:14px;flex-wrap:wrap}
+.bar button{all:unset;cursor:pointer;padding:4px 10px;border-radius:6px;background:#333;color:#eee}
+.bar button.on{background:#c6613f}
+.grid{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.card{display:flex;flex-direction:column;gap:8px}
+.cap{color:#eee;font-weight:600}
+.cap small{display:block;font-weight:400;color:#aaa;max-width:280px;margin-top:2px}
+.win{width:280px;height:600px;border-radius:12px;overflow:hidden;background:var(--s0);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 50px rgba(0,0,0,.45);display:flex;flex-direction:column}
+.top{height:40px;display:flex;align-items:center;padding:0 14px;font-family:Georgia,"Songti SC","Noto Serif CJK SC",serif;font-size:17px}
+.nav{display:flex;flex-direction:column;gap:1px;padding:0 8px 8px}
+.it{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;color:var(--fg-soft);white-space:nowrap}
+.it svg{color:var(--fg2)}
+.list{flex:1;overflow:auto;padding:0 8px 12px}
+.gh{display:flex;align-items:center;gap:4px;height:28px;padding:0 8px;font-size:14px;color:var(--fg2);cursor:pointer;margin-top:12px;user-select:none}
+.gh:first-child{margin-top:4px}
+.gh:hover{color:var(--fg-soft)}
+.gh .cv{transition:transform .15s;color:var(--fg3)}
+.gh.fold .cv{transform:rotate(-90deg)}
+.row{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;color:var(--fg-soft);white-space:nowrap;cursor:pointer}
+.row span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis}
+.row:hover{background:var(--hover)}
+.row.on{background:var(--sel);color:var(--fg)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1.5px var(--fg3)}
+.dot.run{background:var(--brand);box-shadow:none}
+.ib{all:unset;cursor:pointer;width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--fg2);flex:none}
+.ib:hover{background:var(--hover);color:var(--fg)}
+/* title variants */
+.t1{display:flex;align-items:center;gap:6px;height:28px;padding:0 4px 0 16px}
+.t1 .lab{flex:1;font-size:11px;font-weight:500;letter-spacing:.06em;color:var(--fg3)}
+.t2{display:flex;align-items:center;gap:8px;height:28px;padding:0 4px 0 16px;border-top:1px solid var(--bd);margin:0 8px 0 8px;padding-left:8px;padding-top:2px;height:32px}
+.t2 .lab{flex:1;font-size:11px;font-weight:500;color:var(--fg3)}
+.t3{display:flex;align-items:center;height:24px;padding:0 4px 0 8px;margin:0 8px;border-top:1px solid var(--bd)}
+.t3 .lab{flex:1}
+.t3 .ib{width:22px;height:22px;margin-top:-1px}
+.note{color:#bbb;max-width:960px;margin-top:18px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="bar">主题：<button data-th="light" class="on">浅色</button><button data-th="dark">深色</button>
+  <span style="margin-left:16px;color:#aaa">组标题可点击折叠；当前对话是「侧栏分组按钮」（今天组）。折叠「今天」看效果。</span></div>
+<div class="grid">
+  <div class="card"><div class="cap">1 小号字标签 + 显示当前分组（推荐）<small>标签改成 11px、更淡，写「对话 · 按时间」——比组标题（14px）小一档，又顺带说清现在按什么分。</small></div>
+    <div class="win" data-v="1"></div></div>
+  <div class="card"><div class="cap">2 细线分隔 + 小号字标签<small>导航和列表之间加一道细线，标签放在线下。分区感最强，但侧栏多了一条线。</small></div>
+    <div class="win" data-v="2"></div></div>
+  <div class="card"><div class="cap">3 只留细线和图标，不要文字<small>没有文字就不会和组标题混；图标贴在细线右端。最安静，但新用户可能看不出那是什么。</small></div>
+    <div class="win" data-v="3"></div></div>
+</div>
+<p class="note">折叠行为（三个方案相同）：组折叠后，如果当前打开的对话在这个组里，它仍留在组标题下面（选中底色不变），其余对话收起；当前对话不在这个组里就整组收起。对话少的组折叠后看起来变化不大，这是预期的。</p>
+
+<script>
+const ICON={
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  repo:'<path d="M4 20V6a2 2 0 0 1 2-2h4l2 3h6a2 2 0 0 1 2 2v11z"/>',
+  puzzle:'<path d="M9 3h6v4a2 2 0 1 0 0 4v4h-4a2 2 0 1 0-4 0H3V9h4a2 2 0 1 0 0-4z"/>',
+  filter:'<path d="M3 6h18M7 12h10M10 18h4"/>',
+  chev:'<path d="m6 9 6 6 6-6"/>',
+};
+const ic=(n,c='i')=>`<svg class="${c}" viewBox="0 0 24 24">${ICON[n]}</svg>`;
+const GROUPS=[['今天',[['修 CI 缓存测试',1],['侧栏分组按钮',0],['回合计时重复',0]]],['昨天',[['同步状态检查',0],['打包脚本',0]]],['本周',[['旁问读模型视角',0],['卡片拖动重排',0],['服务卡识别端口',0]]],['更早',[['DSH 宿主启动',0],['权限三档',0]]]];
+const ACTIVE='侧栏分组按钮';
+const folded={1:{},2:{},3:{}};
+function title(v){
+  const btn=`<button class="ib" title="分组与筛选">${ic('filter','i s')}</button>`;
+  if(v==='1')return `<div class="t1"><span class="lab">对话 · 按时间</span>${btn}</div>`;
+  if(v==='2')return `<div class="t2"><span class="lab">对话</span>${btn}</div>`;
+  return `<div class="t3"><span class="lab"></span>${btn}</div>`;
+}
+function render(v){
+  const el=document.querySelector(`.win[data-v="${v}"]`);
+  const list=GROUPS.map(([g,rows])=>{
+    const f=folded[v][g];
+    const shown=f?rows.filter(r=>r[0]===ACTIVE):rows;
+    return `<div class="gh${f?' fold':''}" data-v="${v}" data-g="${g}">${g}${ic('chev','i s cv')}</div>`+
+      shown.map(([n,run])=>`<div class="row${n===ACTIVE?' on':''}"><i class="dot${run?' run':''}"></i><span>${n}</span></div>`).join('');
+  }).join('');
+  el.innerHTML=`<div class="top">PiLab</div><div class="nav">
+    <div class="it">${ic('plus')}新对话</div><div class="it">${ic('search')}搜索</div>
+    <div class="it">${ic('repo')}仓库</div><div class="it">${ic('puzzle')}技能与插件</div></div>
+    ${title(v)}<div class="list">${list}</div>`;
+}
+['1','2','3'].forEach(render);
+document.addEventListener('click',e=>{const h=e.target.closest('.gh');if(!h)return;const{v,g}=h.dataset;folded[v][g]=!folded[v][g];render(v);});
+const TH={
+  light:{s0:'#f9f9f7',fg:'#151515','fg-soft':'#2e2e2e',fg2:'#525252',fg3:'#8a8a8a',bd:'#e5e5e4',hover:'#f0f0ef',sel:'#e5e5e4',brand:'#c6613f'},
+  dark:{s0:'#0b0b0b',fg:'#f5f5f5','fg-soft':'#d4d4d4',fg2:'#a3a3a3',fg3:'#666666',bd:'#2b2b2b',hover:'#202020',sel:'#2b2b2b',brand:'#d97757'},
+};
+function theme(n){for(const[k,v]of Object.entries(TH[n]))document.documentElement.style.setProperty('--'+k,v);
+  document.querySelectorAll('[data-th]').forEach(b=>b.classList.toggle('on',b.dataset.th===n));}
+document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>theme(b.dataset.th));
+theme('light');
+</script>
+</body>
+</html>

@@ -210,6 +210,8 @@ export function getInitialState() {
     // composer arithmetic is derived from). Saved sizes from the old scale are
     // reset once (user ruling 2026-10-21), see `migrateSettings`.
     chatFontFamily: DEFAULT_CHAT_FONT_FAMILY,
+    displaySerifEnabled: true,
+    sidebarListTitleEnabled: false,
     chatBodyFontSize: DEFAULT_CHAT_BODY_FONT_SIZE,
     chatProcessFontSize: DEFAULT_CHAT_PROCESS_FONT_SIZE,
     chatTypographyScaleVersion: CHAT_TYPOGRAPHY_SCALE_VERSION,
@@ -380,6 +382,8 @@ export const useSettingsStore = create<SettingsState>()(
       // body write can drag the process tier down with it in the same `set`,
       // never through two renders that briefly disagree.
       setChatFontFamily: (chatFontFamily) => set({ chatFontFamily }),
+      setDisplaySerifEnabled: (displaySerifEnabled) => set({ displaySerifEnabled }),
+      setSidebarListTitleEnabled: (sidebarListTitleEnabled) => set({ sidebarListTitleEnabled }),
       setChatBodyFontSize: (size) =>
         set((state) => {
           const { body, process } = resolveChatBodyWrite(size, state.chatProcessFontSize);

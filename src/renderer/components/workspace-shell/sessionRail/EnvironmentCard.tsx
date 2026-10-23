@@ -4,7 +4,7 @@ import {
   presetOf,
 } from '@shared/types/runtimePermission';
 import { useQuery } from '@tanstack/react-query';
-import { Cpu, Folder, GitBranch, Monitor, Server, Shield } from 'lucide-react';
+import { Cpu, FileText, Folder, GitBranch, Monitor, Server, Shield } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { resolveRuntimeRepoPath, runLocationLabel } from '@/components/chat/composerTarget';
 import { catalogModels } from '@/components/chat/piModelCatalog';
@@ -20,6 +20,7 @@ import { useRepositoryRuntimeContext } from '@/hooks/useRepositoryRuntimeContext
 import { useI18n } from '@/i18n';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useLegacyMigrationStore } from '@/stores/legacyMigration';
+import { CopyPathButton, RevealPathButton, useTranscriptPath } from '../surfaces/pathActions';
 import { RailCard, RailRow } from './RailCard';
 import {
   deriveEnvironmentRows,
@@ -110,6 +111,7 @@ export function useEnvironmentRows(sessionId: string): EnvironmentRow[] {
   });
   const permission = usePermissionLabel(sessionId, engine);
   const model = useReportedModel(sessionId);
+  const transcriptPath = useTranscriptPath(session?.runtimeIdentity, session?.status);
   return useMemo(
     () =>
       deriveEnvironmentRows({
@@ -120,6 +122,7 @@ export function useEnvironmentRows(sessionId: string): EnvironmentRow[] {
         engine,
         model,
         permission,
+        transcriptPath,
       }),
     [
       runLocation,
@@ -129,6 +132,7 @@ export function useEnvironmentRows(sessionId: string): EnvironmentRow[] {
       engine,
       model,
       permission,
+      transcriptPath,
     ]
   );
 }
@@ -136,7 +140,8 @@ export function useEnvironmentRows(sessionId: string): EnvironmentRow[] {
 /**
  * Layout 5e: where the session runs — this computer or a remote, the project
  * folder, the branch (and whether it is a worktree), the engine and model, the
- * permission mode. The reference's 「Environment」 card.
+ * permission mode, and where the chat's record is on disk. The reference's
+ * 「Environment」 card.
  */
 export function EnvironmentCard({ rows }: { rows: readonly EnvironmentRow[] }) {
   const { t } = useI18n();
@@ -208,6 +213,28 @@ export function EnvironmentCard({ rows }: { rows: readonly EnvironmentRow[] }) {
                 title={t('Permission mode')}
               >
                 {t(row.text)}
+              </RailRow>
+            );
+          case 'transcript':
+            // User, 2026-10-23: the record's path, with the Context panel's
+            // copy and reveal, so it is one click from the rail.
+            return (
+              <RailRow
+                key={row.id}
+                icon={<FileText className="size-3.5" />}
+                title={row.path}
+                tail={
+                  <span className="flex items-center">
+                    <CopyPathButton value={row.path} />
+                    <RevealPathButton value={row.path} />
+                  </span>
+                }
+              >
+                {t('Conversation record')}
+                <span className="text-foreground-faint">
+                  {' · '}
+                  {truncateMiddle(row.path, PATH_CHARS)}
+                </span>
               </RailRow>
             );
           default:
