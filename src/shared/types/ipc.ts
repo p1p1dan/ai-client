@@ -385,7 +385,7 @@ export const IPC_CHANNELS = {
    * above: the `ask` tool's own question, keyed by the `questionId` the card
    * and the timeline block carry. The name existed once for the legacy
    * `canUseTool` path and was removed when that path went; it is back for a
-   * different contract, which `chatPiWorkerRouting.test.ts` pins.
+   * different contract, which `chatWorkerRouting.test.ts` pins.
    */
   CHAT_RESPOND_QUESTION: 'chat:respondQuestion',
   /** U12 — set the session-level permission tier on the running Worker. */

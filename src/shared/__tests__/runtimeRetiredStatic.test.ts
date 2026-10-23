@@ -24,6 +24,10 @@ import { stripComments } from '../../renderer/components/chat/__tests__/stripCom
  * mapper into Main's legacy import), nothing imports or mocks a path inside
  * it, and no manifest, tsconfig, gate or build script still names it.
  *
+ * Earlier retirements, pinned at the end: the Claude Code / Codex agent era
+ * (T31, T35) and the pi Extension UI chain (T036, decision 012). The pi TUI's
+ * removal is pinned in `piTuiRemovedStatic.test.ts`.
+ *
  * Code only where it is code: comments are blanked first, so the prose that
  * explains a removal (like this one) cannot fail the scan.
  */
@@ -341,5 +345,218 @@ describe('P1-12 step 4 · src/agent-host is deleted', () => {
     for (const script of ['scripts/dsh-host-build-lib.mjs', 'scripts/build-dsh-host.mjs']) {
       expect(code(path.join(REPO, script)), script).not.toContain('src/agent-host');
     }
+  });
+});
+
+describe('T31 / T35 · the Claude Code and Codex agent era stays retired', () => {
+  it('leaves none of its pickers, detectors, installers or sharing entry points', () => {
+    for (const deleted of [
+      'src/main/ipc/agent.ts',
+      'src/main/ipc/hapi.ts',
+      'src/main/ipc/claudeRuntime.ts',
+      'src/main/services/agent/AgentRegistry.ts',
+      'src/main/services/auth/claudeHome.ts',
+      'src/main/services/cli/ClaudeRuntimeChecker.ts',
+      'src/main/services/cli/CliDetector.ts',
+      'src/shared/models/familyWhitelist.ts',
+      'src/shared/models/seedCatalog.ts',
+      'src/shared/types/claude.ts',
+      'src/shared/types/claudeRuntime.ts',
+      'src/shared/types/cli.ts',
+      'src/renderer/components/chat/AgentPickerMenu.tsx',
+      'src/renderer/components/chat/ComposerAgentPicker.tsx',
+      'src/renderer/components/chat/StatusLine.tsx',
+      'src/renderer/components/settings/AgentSettings.tsx',
+      'src/renderer/components/settings/HapiSettings.tsx',
+      'src/renderer/hooks/useManagedMode.ts',
+      'src/renderer/stores/agentStatus.ts',
+      'packages/bootstrap/cmd/jyw-bootstrap/main.go',
+    ]) {
+      expect(existsSync(path.join(REPO, deleted)), deleted).toBe(false);
+    }
+  });
+
+  /**
+   * The root manifest only: electron-builder ships every root `dependencies`
+   * entry inside app.asar. The Agent SDK engine depends on
+   * `@anthropic-ai/claude-agent-sdk` from its own package in
+   * `src/claude-sdk-host`, which is why this list is not `RETIRED_PACKAGES`.
+   */
+  it('keeps the agent packages out of the root manifest', () => {
+    const pkg = JSON.parse(text('package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+    for (const name of [
+      '@anthropic-ai/claude-agent-sdk',
+      '@cometix/claude-code',
+      '@openai/codex',
+      '@agentclientprotocol/sdk',
+    ]) {
+      expect(deps, name).not.toHaveProperty(name);
+    }
+  });
+
+  it('exposes no legacy CLI, agent-status or remote-sharing IPC', () => {
+    const contracts = [
+      'src/shared/types/ipc.ts',
+      'src/preload/index.ts',
+      'src/main/ipc/auth.ts',
+      'src/main/services/onboarding/OnboardingService.ts',
+    ]
+      .map(text)
+      .join('\n');
+    for (const token of [
+      'CLAUDE_RUNTIME_CHECK',
+      'CHAT_LIST_AGENT_MODELS',
+      'CHAT_UPDATE_PERMISSION',
+      'listAgentModels:',
+      'CLI_DETECT_ONE',
+      'REMOTE_HELPER_',
+      'AGENT_LIST',
+      'ONBOARDING_INSTALL_AGENTS',
+      'HAPI_START',
+      'HAPPY_CHECK_GLOBAL',
+      'CLOUDFLARED_START',
+      'onAgentStop',
+      'AUTH_MANAGED_MODE',
+      'AGENT_STATUS_UPDATE',
+      'AGENT_ASK_USER_QUESTION_NOTIFICATION',
+      'AGENT_PRE_TOOL_USE_NOTIFICATION',
+      'checkCredentialsHealth',
+      'claudeEnvOk',
+      'codexAuthOk',
+    ]) {
+      expect(contracts, token).not.toContain(token);
+    }
+    expect(text('src/main/ipc/chat.ts')).not.toContain('assertModelMatchesAgent');
+  });
+
+  it('the remote helper cannot run a legacy agent or plugin CLI method', () => {
+    const helper = text('src/main/services/remote/RemoteServerSource.ts');
+    for (const token of [
+      "command: 'claude'",
+      "command: 'codex'",
+      "'cli:detectOne'",
+      "'claude:plugins:",
+      "'hapi:checkGlobal'",
+      "'happy:checkGlobal'",
+    ]) {
+      expect(helper, token).not.toContain(token);
+    }
+  });
+
+  it('generic shell sessions have no agent PTY route left', () => {
+    // dsh-rebase P1-11 (decision 128): `SessionKind` is `'terminal'` alone, and
+    // Main stamps it on every create instead of rejecting `'agent'` — the IPC
+    // payload is untyped, and the remote helper still branches on the value.
+    const manager = text('src/main/services/session/SessionManager.ts');
+    expect(manager).toContain(
+      "const options: SessionCreateOptions = { ...requested, kind: 'terminal' };"
+    );
+    expect(manager).not.toContain("kind === 'agent'");
+    expect(manager).not.toContain('Agent PTYs are not supported');
+    expect(manager).not.toContain('withManagedClaudeEnv');
+    expect(manager).not.toContain('withManagedPiEnv');
+    expect(text('src/shared/types/session.ts')).toContain("export type SessionKind = 'terminal';");
+  });
+
+  it('keeps the agent-specific permission dialect out of the runtime contracts', () => {
+    const contracts = [
+      'src/shared/types/runtimeEvents.ts',
+      'src/renderer/components/workspace-shell/surfaces/contextSurfaceModel.ts',
+      'src/shared/types/onboarding.ts',
+      'src/main/ipc/auth.ts',
+    ]
+      .map(text)
+      .join('\n');
+    for (const token of [
+      'SessionPermissionPreference',
+      'SessionPermissionPolicy',
+      'session.permissionUpdated',
+      'session.settingsEcho',
+      "agent: 'claude-code'",
+      "agent: 'codex'",
+    ]) {
+      expect(contracts, token).not.toContain(token);
+    }
+  });
+
+  it('the composer answers no permission or question', () => {
+    // The timeline's card answers permissions and `PendingQuestionDock`
+    // answers questions; a composer that could also reply is how one gate
+    // gets two answers.
+    const composer = text('src/renderer/components/chat/ChatComposer.tsx');
+    expect(composer).not.toContain('ComposerAgentPicker');
+    for (const legacy of [
+      'chat:respondPermission',
+      'chat:updatePermission',
+      'permissionMode',
+      'chat:respondQuestion',
+      'respondQuestion',
+    ]) {
+      expect(composer, legacy).not.toContain(legacy);
+    }
+    // Decision 169's one exception: the composer closes this chat's pending
+    // plan review (always a cancel, never an answer) through this one store
+    // action.
+    expect(composer).toContain('closePlanReview(');
+  });
+
+  it('the legacy import readers import no agent runtime', () => {
+    for (const relative of [
+      'src/main/services/legacyImport/ClaudeSessionScanner.ts',
+      'src/main/services/legacyImport/ClaudeSourceAdapter.ts',
+      'src/main/services/legacyImport/codexItemMapper.ts',
+    ]) {
+      const source = text(relative);
+      for (const forbidden of [
+        './claudeRuntime',
+        './codexRuntime',
+        './codexConnection',
+        './codexNodeEntry',
+        './cometix',
+      ]) {
+        expect(source, `${relative} -> ${forbidden}`).not.toContain(forbidden);
+      }
+    }
+  });
+
+  it('onboarding copy names no Claude Code or Codex runtime', () => {
+    const copy = [
+      'src/renderer/Root.tsx',
+      'src/renderer/components/onboarding/WelcomeView.tsx',
+      'src/renderer/components/onboarding/OnboardingView.tsx',
+    ]
+      .map(text)
+      .join('\n');
+    for (const token of ['Claude Code 运行时', 'Claude Code 与 Codex', 'bundled Claude Code']) {
+      expect(copy, token).not.toContain(token);
+    }
+  });
+});
+
+/** The Extension UI chain's vocabulary: `extensionUi`, `ExtensionUI`, `extension_ui`, … */
+const EXTENSION_UI = /extension[_-]?ui/i;
+
+describe('T036 · the pi Extension UI chain stays retired', () => {
+  // The pi-era pipe that let an extension open a dialog, a status line or a
+  // notification in the GUI. A deletion this wide is easy to half-undo, so the
+  // whole tree is scanned for the vocabulary, comments included, rather than
+  // for the files that used to exist.
+  it('names the chain nowhere under src or scripts', () => {
+    const self = fileURLToPath(import.meta.url);
+    const offenders: string[] = [];
+    for (const file of files) {
+      if (path.resolve(file) === path.resolve(self)) continue;
+      // latin1, not utf8: a few generated sources carry NUL bytes, and a
+      // decoder that replaces them can drop the surrounding run of text.
+      const source = readFileSync(file, 'latin1');
+      if (!EXTENSION_UI.test(source)) continue;
+      const line = source.split('\n').findIndex((row) => EXTENSION_UI.test(row)) + 1;
+      offenders.push(`${repoRelative(file)}:${line}`);
+    }
+    expect(offenders).toEqual([]);
   });
 });

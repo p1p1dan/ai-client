@@ -384,7 +384,7 @@ describe('session operations keep their code (decision 176)', () => {
   });
 });
 
-describe('Pi WorkerSlot chat routing', () => {
+describe('WorkerSlot chat routing', () => {
   // Electron's `invoke` rejection carries only `error.message`, and nothing in
   // Main emits a `host.error` runtime event, so a WorkerManager refusal used
   // to reach the renderer as opaque prose. The composer branches on the code:

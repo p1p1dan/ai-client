@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { stripComments } from './stripComments';
@@ -63,11 +63,6 @@ function valueImportLines(source: string): string[] {
 describe('pure module import gate (build spec 施工纪律)', () => {
   for (const relativePath of TARGET_FILES) {
     const absolutePath = fileURLToPath(new URL(relativePath, import.meta.url));
-
-    if (!existsSync(absolutePath)) {
-      it.skip(`${relativePath}: file does not exist yet (later slice)`, () => {});
-      continue;
-    }
 
     it(`${relativePath} carries no react / store / settings value import`, () => {
       const source = stripComments(readFileSync(absolutePath, 'utf8'), absolutePath);

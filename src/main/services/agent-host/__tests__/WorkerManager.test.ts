@@ -2079,7 +2079,7 @@ describe('WorkerManager unwritten Pi session files', () => {
       // would be a second source of truth with its own eviction problem. What
       // this pins is that the call is a harmless deferral, not a throw.
       // The renderer half is covered by `permissionTierWiring.test.ts` and
-      // `chatPiWorkerRouting.test.ts`.
+      // `chatWorkerRouting.test.ts`.
       const h = createHarness();
       await expect(h.manager.setPermissionTier('never-sent', 'readonly')).resolves.toMatch(
         /^permtier-/
