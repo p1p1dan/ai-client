@@ -27,6 +27,7 @@ export default async function afterPack(context) {
   // the only engine the package carries.
   copyDshHost(context);
   copyClaudeSdkHost(context);
+  copyPluginHost(context);
   copyNodeRuntime(context);
 
   if (process.platform !== 'win32') return;
@@ -37,6 +38,8 @@ export default async function afterPack(context) {
     path.join(context.appOutDir, 'resources', 'dsh-host'),
     // Claude Agent SDK host (route B S-4 B-11): host.js and the SDK's .mjs files.
     path.join(context.appOutDir, 'resources', 'claude-sdk-host'),
+    // Plugin host (plugin-system README §3): run by the bundled node.exe like the DSH host.
+    path.join(context.appOutDir, 'resources', 'plugin-host'),
   ];
   for (const dir of targets) {
     fixTsdEncryption(dir);
@@ -122,6 +125,19 @@ export function copyClaudeSdkHost(context) {
     `[afterPack] Copied Claude SDK host artifact (${platform}-${arch}, ${copied.files} files, ` +
       `${(copied.bytes / 1024 / 1024).toFixed(1)} MiB) -> ${dest}`
   );
+}
+
+/** Copy the plugin host (`pnpm build:plugin-host`) into resources/plugin-host. */
+export function copyPluginHost(context) {
+  const src = path.join(context.packager.info.projectDir, 'out-plugin-host', 'pluginHost.mjs');
+  if (!fs.existsSync(src)) {
+    throw new Error(`[afterPack] ${src} missing — run "pnpm build:plugin-host" first`);
+  }
+  const dest = path.join(resolveResourcesDir(context), 'plugin-host');
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.mkdirSync(dest, { recursive: true });
+  fs.copyFileSync(src, path.join(dest, 'pluginHost.mjs'));
+  console.log(`[afterPack] Copied plugin host -> ${dest}`);
 }
 
 /**

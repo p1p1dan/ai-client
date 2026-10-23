@@ -30,8 +30,8 @@ import { registerPiModelHandlers } from './piModels';
 import { registerPiPermissionHandlers } from './piPermissions';
 import { registerPiResourceHandlers } from './piResources';
 import { registerPiRuntimeHandlers } from './piRuntime';
+import { killAllPluginsSync, registerPluginHandlers, stopAllPlugins } from './plugins';
 import { registerRemoteHandlers } from './remote';
-import { registerRemoteAccessHandlers } from './remoteAccess';
 import { registerSearchHandlers } from './search';
 import {
   destroyAllTerminals,
@@ -64,7 +64,7 @@ export function registerIpcHandlers(): void {
   registerSessionHandlers();
   registerSessionStorageHandlers();
   registerChatHandlers();
-  registerRemoteAccessHandlers();
+  registerPluginHandlers();
   registerAgentCatalogHandlers();
   registerDialogHandlers();
   registerAppHandlers();
@@ -146,6 +146,8 @@ export async function cleanupAllResources(): Promise<void> {
       safeRun(() => cleanupWorkerManager(), 'workerManager'),
       // Temp files
       safeRun(() => cleanupTempFiles(), 'tempFiles'),
+      // Plugin processes: deactivate, then end (each bounded inside).
+      safeRun(() => stopAllPlugins(), 'plugins'),
     ]),
     deadline,
   ]);
@@ -179,6 +181,9 @@ export function cleanupAllResourcesSync(): void {
 
   // Kill tmux aiclient server (sync)
   cleanupTmuxSync();
+
+  // Kill plugin processes (sync)
+  killAllPluginsSync();
 
   // Stop Web Inspector server (sync)
   webInspectorServer.stop();

@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { homedir } from 'node:os';
+import { PLUGIN_IPC, type PluginInstallResult, type PluginView } from '@shared/plugins/view';
 import type { RuntimePermissionSettings } from '@shared/types/runtimePermission';
 import type { UpdateStatus } from '../shared/types/updater';
 import 'electron-log/preload.js';
@@ -1334,6 +1335,24 @@ const electronAPI = {
       const handler = (_: unknown, state: DshPluginsState) => callback(state);
       ipcRenderer.on(IPC_CHANNELS.DSH_PLUGINS_CHANGED, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.DSH_PLUGINS_CHANGED, handler);
+    },
+  },
+
+  /** PiLab's own plugins (plugin-system README §3), not the DSH engine's plugins above. */
+  plugins: {
+    list: (): Promise<PluginView[]> => ipcRenderer.invoke(PLUGIN_IPC.list),
+    /** Main opens the file picker; `null` when the user cancels. */
+    pickAndInstall: (): Promise<PluginInstallResult | null> =>
+      ipcRenderer.invoke(PLUGIN_IPC.pickAndInstall),
+    setEnabled: (id: string, enabled: boolean): Promise<void> =>
+      ipcRenderer.invoke(PLUGIN_IPC.setEnabled, { id, enabled }),
+    uninstall: (id: string): Promise<void> => ipcRenderer.invoke(PLUGIN_IPC.uninstall, { id }),
+    setSetting: (id: string, key: string, value: unknown): Promise<void> =>
+      ipcRenderer.invoke(PLUGIN_IPC.setSetting, { id, key, value }),
+    onChanged: (callback: (views: PluginView[]) => void): (() => void) => {
+      const handler = (_: unknown, views: PluginView[]) => callback(views);
+      ipcRenderer.on(PLUGIN_IPC.changed, handler);
+      return () => ipcRenderer.off(PLUGIN_IPC.changed, handler);
     },
   },
 

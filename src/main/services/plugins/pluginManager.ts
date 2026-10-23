@@ -98,6 +98,15 @@ export class PluginManager {
     this.stopControlTap();
   }
 
+  /** Quit without waiting: every plugin process is killed. */
+  killAllSync(): void {
+    for (const runtime of this.runtimes.values()) {
+      runtime.generation += 1;
+      runtime.process?.killNow();
+      runtime.process = undefined;
+    }
+  }
+
   list(): PluginView[] {
     const { plugins } = this.deps.store.list();
     return plugins.map((plugin) => this.view(plugin));

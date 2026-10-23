@@ -25,7 +25,7 @@ export const PLUGIN_HOST_MISSING = 'PLUGIN_HOST_MISSING';
 
 export const PLUGIN_HOST_LAYOUT = {
   unpackaged: { nodeDir: 'out-node-runtime', entry: ['src', 'plugin-host', 'pluginHost.ts'] },
-  packaged: { nodeDir: 'node-runtime', entry: ['plugin-host', 'pluginHost.js'] },
+  packaged: { nodeDir: 'node-runtime', entry: ['plugin-host', 'pluginHost.mjs'] },
 } as const;
 
 /** Variables a plugin process inherits; nothing else (no provider keys, no shell env). */
@@ -203,6 +203,13 @@ export class PluginProcess {
     } catch {
       // Exiting mid-send; the exit handler reports it.
     }
+  }
+
+  /** End the process now, for a quit that cannot wait. */
+  killNow(): void {
+    if (this.exited) return;
+    this.stopping = true;
+    this.child.kill('SIGKILL');
   }
 
   /** Let the plugin clean up, then end the process. */

@@ -156,7 +156,7 @@ describe('PluginProcess with the real plugin host', () => {
     });
     expect(launch).toEqual({
       command: '/res/node-runtime/node',
-      args: ['/res/plugin-host/pluginHost.js'],
+      args: ['/res/plugin-host/pluginHost.mjs'],
       cwd: '/data',
       env: { PILAB_PLUGIN_ID: 'p.x', PATH: '/bin', HOME: '/home/u' },
     });
