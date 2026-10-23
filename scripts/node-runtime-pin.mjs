@@ -5,11 +5,11 @@
  * Main's runtime lookup table so afterPack and runtime resolution cannot drift.
  *
  * SHA-256 values are transcribed verbatim from the official
- * https://nodejs.org/dist/v24.18.0/SHASUMS256.txt (fetched 2026-08-20T07:52:21Z).
+ * https://nodejs.org/dist/v24.22.1/SHASUMS256.txt (fetched 2026-10-23T06:33:18Z).
  * Never compute, guess, or "fix up" these by hand.
  */
 
-export const NODE_RUNTIME_VERSION = '24.18.0';
+export const NODE_RUNTIME_VERSION = '24.22.1';
 
 /** Mirror order matters: official first, npmmirror as the fallback source. */
 function runtimeUrls(archiveName) {
@@ -29,7 +29,7 @@ export const NODE_RUNTIME_PINS = {
   'win32-x64': {
     platformKey: 'win32-x64',
     archiveName: `node-v${NODE_RUNTIME_VERSION}-win-x64.zip`,
-    sha256: '0ae68406b42d7725661da979b1403ec9926da205c6770827f33aac9d8f26e821',
+    sha256: 'd2046d28c2c3dcd211ac5145c0bf30e2047ef9dfb306693c8c6e2eccd8b95fa5',
     binaryRel: 'node.exe',
     outName: 'node.exe',
     urls: runtimeUrls(`node-v${NODE_RUNTIME_VERSION}-win-x64.zip`),
@@ -37,7 +37,7 @@ export const NODE_RUNTIME_PINS = {
   'darwin-arm64': {
     platformKey: 'darwin-arm64',
     archiveName: `node-v${NODE_RUNTIME_VERSION}-darwin-arm64.tar.gz`,
-    sha256: 'e1a97e14c99c803e96c7339403282ea05a499c32f8d83defe9ef5ec66f979ed1',
+    sha256: '89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7',
     binaryRel: 'bin/node',
     outName: 'node',
     urls: runtimeUrls(`node-v${NODE_RUNTIME_VERSION}-darwin-arm64.tar.gz`),
@@ -45,7 +45,7 @@ export const NODE_RUNTIME_PINS = {
   'darwin-x64': {
     platformKey: 'darwin-x64',
     archiveName: `node-v${NODE_RUNTIME_VERSION}-darwin-x64.tar.gz`,
-    sha256: 'dfd0dbd3e721503434df7b7205e719f61b3a3a31b2bcf9729b8b91fea240f080',
+    sha256: 'd132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035',
     binaryRel: 'bin/node',
     outName: 'node',
     urls: runtimeUrls(`node-v${NODE_RUNTIME_VERSION}-darwin-x64.tar.gz`),
@@ -56,7 +56,7 @@ export const NODE_RUNTIME_PINS = {
     // build-remote-runtime-bundle.mjs and avoids an implicit `xz` dependency
     // on the runner.
     archiveName: `node-v${NODE_RUNTIME_VERSION}-linux-x64.tar.gz`,
-    sha256: '783130984963db7ba9cbd01089eaf2c2efb055c7c1693c943174b967b3050cb8',
+    sha256: 'eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c',
     binaryRel: 'bin/node',
     outName: 'node',
     urls: runtimeUrls(`node-v${NODE_RUNTIME_VERSION}-linux-x64.tar.gz`),
