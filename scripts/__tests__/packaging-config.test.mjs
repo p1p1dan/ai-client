@@ -744,8 +744,14 @@ describe('afterPack copies the DSH host for its own target only (dsh-rebase P1-2
   it('runs the Windows TSD rewrite over resources/dsh-host too', () => {
     expect(afterPackText).toContain("path.join(context.appOutDir, 'resources', 'dsh-host')");
     expect(afterPackText).toMatch(
-      /copyDshHost\(context\);\s+copyClaudeSdkHost\(context\);\s+copyNodeRuntime\(context\);/
+      /copyDshHost\(context\);\s+copyClaudeSdkHost\(context\);\s+copyPluginHost\(context\);\s+copyNodeRuntime\(context\);/
     );
+  });
+
+  /** Plugin-system README §3: the plugin host runs on the bundled Node like the DSH host. */
+  it('copies the plugin host and runs the Windows TSD rewrite over it', () => {
+    expect(afterPackText).toContain("'out-plugin-host', 'pluginHost.mjs'");
+    expect(afterPackText).toContain("path.join(context.appOutDir, 'resources', 'plugin-host')");
   });
 
   /** dsh-rebase P1-12 step 1 (decision 147): the native worker is not packaged. */
