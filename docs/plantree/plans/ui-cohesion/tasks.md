@@ -59,4 +59,4 @@
 | | 开发者设置集中 | ✅ | User-Agent、Agent SDK 引擎、缓存工具定义、列表标题行都在 高级 → 开发人员模式 下面，模型页不再有 |
 | | 「改动」面板 | ✅ | 改动内容沿用时间线 diff 画法（一列行号、+/− 单列、折行、未改动折叠）；顶部「本次对话 / 工作区」切换，工作区是 git status（预览 `docs/design/2026-10-23-session-changes-preview.html`） |
 | | 环境卡显示对话记录路径 | ✅ | 复制与打开文件夹，和上下文面板共用一份 |
-| | DSH 下改动只有参数预览 | ⬜ | 桥接层没产出 `details.review`（原运行时记录前后内容的部分随 P1-12 删掉），改动条目都是参数预览，没有完整前后对比 |
+| | 改动只有参数预览（issue #27） | ✅ | 实测 DSH 桥接层早已从 diff 卡产出 `details.review`（`dshFileReview.ts`），缺的是 Claude SDK 引擎：现从 CLI 的 `tool_use_result`（直播）与转录行的 `toolUseResult`（历史）建记录（`sdkFileReview.ts`），带真实行号；假网关上真 CLI 跑过 Edit / Write，直播与重开历史都有完整 diff |

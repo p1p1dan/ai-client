@@ -81,7 +81,7 @@ function hunksOf(meta: unknown): Hunk[] | undefined {
 }
 
 /** A created file as one hunk from line 1, in 1.0.x's patch format; undefined past 1.0.x's bounds. */
-function createdPatch(content: string): string | undefined {
+export function createdPatch(content: string): string | undefined {
   // Lines keep their newline, so a last line without one is marked as such.
   const lines = content.match(/[^\n]*\n|[^\n]+$/g) ?? [];
   if (utf8Length(content) > FILE_MAX_BYTES || lines.length > FILE_MAX_LINES) return undefined;
@@ -96,7 +96,7 @@ function createdPatch(content: string): string | undefined {
 }
 
 /** The record with its patch, or marked too large for the renderer's bound. */
-function withPatch(base: SessionFileChange, patch: string | undefined): SessionFileChange {
+export function withPatch(base: SessionFileChange, patch: string | undefined): SessionFileChange {
   if (patch === undefined || patch.length > PATCH_MAX || utf8Length(patch) > PATCH_MAX) {
     return { ...base, unavailable: 'too-large' };
   }

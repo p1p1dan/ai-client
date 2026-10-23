@@ -64,6 +64,8 @@ import {
   REVIEW_DISMISSED_TEXT,
   SDK_PLAN_REVIEW_CHOICES,
 } from '../shared/planReview.ts';
+import { sdkFileReview } from '../shared/sdkFileReview.ts';
+import type { SessionFileChange } from '../shared/sessionFileChange.ts';
 import { resolveSettingSources } from '../shared/settingSources.ts';
 import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type {
@@ -629,6 +631,11 @@ function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+/** A user message's content that is exactly one tool result. */
+function loneToolResult(content: readonly unknown[]): boolean {
+  return content.filter((block) => record(block)?.type === 'tool_result').length === 1;
 }
 
 function num(value: unknown): number {
@@ -1790,6 +1797,9 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     if (!turn) return;
     const content = record(message.message)?.content;
     if (!Array.isArray(content)) return;
+    // Issue #27: an Edit / Write's review record, off the result the CLI keeps
+    // beside the model's text. It belongs to the message, so only to a lone result.
+    const review = loneToolResult(content) ? sdkFileReview(message.tool_use_result) : undefined;
     for (const block of content) {
       const b = record(block);
       if (!b || b.type !== 'tool_result' || typeof b.tool_use_id !== 'string') continue;
@@ -1830,7 +1840,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             messageId,
             toolCallId,
             ok: !failed,
-            output: text,
+            output:
+              review && !failed ? { content: [{ type: 'text', text }], details: { review } } : text,
             ...(failed ? { error: text || 'Tool call failed' } : {}),
           },
         });
@@ -2580,6 +2591,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
    *   turn's head goes.
    * - Decision 194: a local command's output, a `system` `local_command` row whose parent
    *   is the command's own row (`localOutputs`, by that parent; measured, 2.1.300).
+   * - Issue #27: an Edit / Write's review record, off the row's `toolUseResult`, which the
+   *   SDK's reader does not pass on (`reviews`, by tool call id).
    *
    * Every copy is read: a chat that entered a worktree has its file under that worktree's
    * project directory.
@@ -2588,17 +2601,19 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     rows: Set<string>;
     heads: Set<string>;
     localOutputs: Map<string, { uuid: string; text: string }>;
+    reviews: Map<string, SessionFileChange>;
   } {
     const rows = new Set<string>();
     const heads = new Set<string>();
     const localOutputs = new Map<string, { uuid: string; text: string }>();
-    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return { rows, heads, localOutputs };
+    const reviews = new Map<string, SessionFileChange>();
+    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return { rows, heads, localOutputs, reviews };
     const root = path.join(this.config.configDir, 'projects');
     let dirs: string[] = [];
     try {
       dirs = readdirSync(root);
     } catch {
-      return { rows, heads, localOutputs };
+      return { rows, heads, localOutputs, reviews };
     }
     for (const dir of dirs) {
       let raw: string;
@@ -2618,9 +2633,21 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             subtype?: unknown;
             content?: unknown;
             turnOrigin?: unknown;
+            message?: unknown;
+            toolUseResult?: unknown;
           };
           parsed.push(row);
           if (row.turnOrigin === 'scheduled' && typeof row.uuid === 'string') rows.add(row.uuid);
+          const blocks = record(row.message)?.content;
+          if (row.type === 'user' && row.toolUseResult && Array.isArray(blocks)) {
+            const result = loneToolResult(blocks)
+              ? blocks.map(record).find((b) => b?.type === 'tool_result')
+              : undefined;
+            if (result && result.is_error !== true && typeof result.tool_use_id === 'string') {
+              const review = sdkFileReview(row.toolUseResult);
+              if (review) reviews.set(result.tool_use_id, review);
+            }
+          }
           if (
             row.type === 'system' &&
             row.subtype === 'local_command' &&
@@ -2646,7 +2673,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         }
       }
     }
-    return { rows, heads, localOutputs };
+    return { rows, heads, localOutputs, reviews };
   }
 
   /** The CLI's own transcript, projected onto history messages (tool results folded into their call's message). */
@@ -2676,12 +2703,14 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             // A refusal of the CLI's own reads as it did live: never its sentence (A-18).
             const raw = textOf(b.content);
             const text = b.is_error === true ? cliRefusalRewrite(raw) : raw;
+            const review = scheduled.reviews.get(b.tool_use_id);
             owner?.blocks.push({
               type: 'tool_result',
               id: `${b.tool_use_id}-result`,
               toolCallId: b.tool_use_id,
               ok: b.is_error !== true,
               output: text,
+              ...(review ? { review } : {}),
               ...(b.is_error === true ? { error: text } : {}),
             });
           }

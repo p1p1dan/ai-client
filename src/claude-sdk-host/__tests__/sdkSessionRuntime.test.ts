@@ -1412,6 +1412,94 @@ describe('CLI refusals in our words (S-2 A-18, review)', () => {
   });
 });
 
+describe('an Edit carries its review record (issue #27)', () => {
+  const EDIT = {
+    filePath: '/repo/a.ts',
+    oldString: 'two',
+    newString: 'TWO',
+    originalFile: 'one\ntwo\nthree\n',
+    structuredPatch: [
+      {
+        oldStart: 1,
+        oldLines: 3,
+        newStart: 1,
+        newLines: 3,
+        lines: [' one', '-two', '+TWO', ' three'],
+      },
+    ],
+    userModified: false,
+    replaceAll: false,
+  };
+  const REVIEW = {
+    version: 1,
+    path: '/repo/a.ts',
+    status: 'modified',
+    patch: '@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three',
+  };
+  const editCall = {
+    type: 'assistant' as const,
+    parent_tool_use_id: null,
+    message: {
+      id: 'm1',
+      content: [{ type: 'tool_use', id: 'tu1', name: 'Edit', input: { file_path: '/repo/a.ts' } }],
+    },
+  };
+  const editResult = {
+    type: 'user' as const,
+    parent_tool_use_id: null,
+    message: {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'The file was updated.' }],
+    },
+  };
+
+  it('live: off the message’s tool_use_result', async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    q.push({
+      type: 'stream_event',
+      parent_tool_use_id: null,
+      event: { type: 'message_start', message: { id: 'm1', usage: {} } },
+    });
+    q.push(editCall);
+    q.push({ ...editResult, tool_use_result: EDIT });
+    await flush();
+    expect(ofType('tool.completed').at(-1)?.payload).toMatchObject({
+      ok: true,
+      output: {
+        content: [{ type: 'text', text: 'The file was updated.' }],
+        details: { review: REVIEW },
+      },
+    });
+    q.end();
+    await rt.dispose();
+  });
+
+  it('history: off the transcript row’s toolUseResult, which the SDK’s reader drops', async () => {
+    const { rt } = await started();
+    const stub = (rt as unknown as { stub: { ccSessionId: string; started: boolean } }).stub;
+    stub.started = true;
+    const id = stub.ccSessionId;
+    const dir = join(configDir, 'projects', 'C--repo');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${id}.jsonl`),
+      `${JSON.stringify({ type: 'user', uuid: 'r1', message: editResult.message, toolUseResult: EDIT })}\n`
+    );
+    const sdkModule = await import('@anthropic-ai/claude-agent-sdk');
+    vi.mocked(sdkModule.getSessionMessages).mockResolvedValueOnce([
+      { ...editCall, uuid: 'a1', session_id: id, parent_agent_id: null },
+      { ...editResult, uuid: 'r1', session_id: id, parent_agent_id: null },
+    ]);
+    const page = (await rt.history({ logicalSessionId: 'chat-1' })).page;
+    expect(page.messages[0]?.blocks.find((b) => b.type === 'tool_result')).toMatchObject({
+      ok: true,
+      review: REVIEW,
+    });
+    await rt.dispose();
+  });
+});
+
 describe('the card offers what the CLI will remember (review)', () => {
   it('no "Allow for session" when the CLI has no rule to keep', async () => {
     const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
