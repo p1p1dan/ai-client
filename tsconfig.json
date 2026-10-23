@@ -23,6 +23,6 @@
       "@shared/*": ["src/shared/*"]
     }
   },
-  "include": ["src/**/*", "electron.vite.config.ts"],
+  "include": ["src/**/*", "relay/**/*", "electron.vite.config.ts"],
   "exclude": ["src/dsh-host/**", "src/claude-sdk-host/**", "node_modules", "out", "dist"]
 }

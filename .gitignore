@@ -6,6 +6,7 @@ out/
 out-dsh-host/
 out-claude-sdk-host/
 out-plugin-host/
+out-relay/
 out-node-runtime/
 dist/
 

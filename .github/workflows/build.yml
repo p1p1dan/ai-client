@@ -192,6 +192,47 @@ jobs:
           path: out/
           retention-days: 1
 
+  # Issue #25: the relay and the remote-access plugin ship outside the
+  # installer (plugin-system README §1). Built on every run so a test build
+  # carries both next to the installers.
+  build-remote-access:
+    needs: [gate]
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build relay and pack plugins
+        run: |
+          node scripts/build-relay.mjs
+          mkdir -p out-remote-access
+          cp out-relay/pilab-relay.mjs out-remote-access/
+          node scripts/pack-plugin.ts plugins/remote-access out-remote-access
+          node scripts/pack-plugin.ts plugins/example-hello out-remote-access
+          cp docs/plugins/remote-access.md out-remote-access/README.md
+
+      - name: Upload relay and plugins
+        uses: actions/upload-artifact@v5
+        with:
+          name: remote-access
+          path: out-remote-access/
+          retention-days: 14
+          if-no-files-found: error
+
   build-windows:
     needs: build-app
     # 20 -> 30 for the DSH host (dsh-rebase P1-2): its npm ci, TSD rewrite of
@@ -287,6 +328,11 @@ jobs:
       # runner's CLI, verified into out-claude-sdk-host/; afterPack copies it.
       - name: Build Claude SDK host artifact
         run: node scripts/build-claude-sdk-host.mjs
+
+      # Plugin host (plugin-system README §3): one bundled .mjs the bundled Node
+      # runs for each installed plugin; afterPack copies it to resources/plugin-host.
+      - name: Build plugin host
+        run: node scripts/build-plugin-host.mjs
 
       # The legacy pi permission-plugin smoke (T08-a) was removed with the legacy
       # engine (fe246bd6, P6-5); the permission row is exercised by the DSH L1
@@ -489,6 +535,11 @@ jobs:
       - name: Build Claude SDK host artifact
         run: node scripts/build-claude-sdk-host.mjs
 
+      # Plugin host (plugin-system README §3): one bundled .mjs the bundled Node
+      # runs for each installed plugin; afterPack copies it to resources/plugin-host.
+      - name: Build plugin host
+        run: node scripts/build-plugin-host.mjs
+
       - name: Cache bundled Node runtime
         uses: actions/cache@v5
         with:
@@ -655,6 +706,11 @@ jobs:
       # runner's CLI, verified into out-claude-sdk-host/; afterPack copies it.
       - name: Build Claude SDK host artifact
         run: node scripts/build-claude-sdk-host.mjs
+
+      # Plugin host (plugin-system README §3): one bundled .mjs the bundled Node
+      # runs for each installed plugin; afterPack copies it to resources/plugin-host.
+      - name: Build plugin host
+        run: node scripts/build-plugin-host.mjs
 
       - name: Resolve native macOS target
         id: target

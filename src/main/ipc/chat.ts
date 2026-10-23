@@ -456,6 +456,47 @@ export function registerChatHandlers(): void {
     return workerManager.getStatus();
   });
 
+  /**
+   * Issue #25: one history page for a plugin client, returned rather than
+   * broadcast (the windows never see it), and readable while a turn runs. A
+   * running chat answers from its engine; a DSH chat with no slot from the
+   * host's preview read; an Agent SDK chat with no slot has to be resumed.
+   */
+  handle(
+    IPC_CHANNELS.CHAT_PEEK_HISTORY,
+    async (
+      _caller,
+      payload: { sessionId: string; offset?: number; limit?: number }
+    ): Promise<
+      SessionHistoryPage & { runtimeIdentity: string; workspacePath: string; live: boolean }
+    > => {
+      const { row, agent } = await requireIndexedSession(payload.sessionId);
+      const live = await workerManager.peekHistory(payload).catch((error: unknown) => {
+        throw withWorkerErrorCode(error);
+      });
+      if (live) {
+        return {
+          ...live.page,
+          runtimeIdentity: live.sessionFile,
+          workspacePath: live.workspacePath,
+          live: true,
+        };
+      }
+      if (agent !== DSH_AGENT || row.runtimeIdentity.endsWith(CLAUDE_SDK_STUB_SUFFIX)) {
+        throw new Error(
+          `${SESSION_REPLAY_UNAVAILABLE}: Session ${payload.sessionId} is read by resuming it`
+        );
+      }
+      const page = await readDshReplayPage(payload.sessionId, row.runtimeIdentity, payload);
+      return {
+        ...page,
+        runtimeIdentity: row.runtimeIdentity,
+        workspacePath: row.workspacePath,
+        live: false,
+      };
+    }
+  );
+
   handle(IPC_CHANNELS.CHAT_GET_SESSION_CONTROLS, () => sessionControl.list());
 
   // The desktop's 「接管」. A window is always the desktop, so no owner check.

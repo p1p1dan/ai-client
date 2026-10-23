@@ -1949,6 +1949,23 @@ export class WorkerManager {
    * without a ready slot answers no panels rather than an error — the
    * renderer asks for every chat it shows, and most of them are not running.
    */
+  /**
+   * Issue #25: one history page of a running session, returned to the caller
+   * rather than broadcast, and allowed mid-turn: the engine answers it from
+   * the timeline it keeps current (`historyCache.ts`), so a client that opens
+   * a chat while another drives it still gets what came before this turn.
+   * Claims nothing. `null` when the session has no ready slot.
+   */
+  async peekHistory(input: {
+    sessionId: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<WorkerHistoryResult | null> {
+    const entry = this.entriesBySession.get(input.sessionId);
+    if (!entry || entry.state !== 'ready' || !entry.slot) return null;
+    return this.readHistory(entry, input.offset ?? 0, input.limit ?? 80);
+  }
+
   async getSessionPanels(input: { sessionId: string }): Promise<WorkerPanelsResult> {
     const entry = this.entriesBySession.get(input.sessionId);
     if (!entry || entry.state !== 'ready' || !entry.slot) return { projections: [] };

@@ -39,6 +39,7 @@ export const PLUGIN_CHAT_READ_CHANNELS: ReadonlySet<string> = new Set([
   'chat:readSessionPage',
   'chat:loadHistoryPage',
   'chat:resumeSession',
+  'chat:peekHistory',
 ]);
 
 /** Changes a plugin with `chat.control` may make (the controlled ones still need control). */

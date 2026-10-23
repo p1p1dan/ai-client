@@ -461,6 +461,8 @@ export const IPC_CHANNELS = {
   CHAT_LIST_PI_MODELS: 'chat:listPiModels',
   /** Main → Renderer: Agent Host RuntimeEvent push */
   CHAT_RUNTIME_EVENT: 'chat:runtimeEvent',
+  /** Issue #25: a history page returned to the caller, readable mid-turn; for plugins. */
+  CHAT_PEEK_HISTORY: 'chat:peekHistory',
   /** Plugin-system §4: sessions a plugin client controls (all others: the desktop). */
   CHAT_GET_SESSION_CONTROLS: 'chat:getSessionControls',
   /** Plugin-system §4: the desktop takes a session back. */

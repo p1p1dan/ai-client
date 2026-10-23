@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "pilab.remote-access",
+  "name": "手机远程",
+  "version": "0.1.0",
+  "description": "在手机或浏览器里接着用这台机器上的对话：连到你自己部署的中转服务器，打开中转的网址就能看到所有机器。",
+  "author": "PiLab",
+  "apiVersion": 1,
+  "main": "main.mjs",
+  "permissions": ["chat.read", "chat.control"],
+  "contributes": {
+    "settings": [
+      {
+        "key": "relayUrl",
+        "title": "中转地址",
+        "description": "中转服务器的 IP:端口，例如 203.0.113.7:8790；用了 HTTPS 就写 https://IP:端口。本机测试填 127.0.0.1:8790。",
+        "type": "string",
+        "default": ""
+      },
+      {
+        "key": "accessToken",
+        "title": "接入口令",
+        "description": "中转服务器启动时打印的「接入口令」。",
+        "type": "string",
+        "secret": true
+      },
+      {
+        "key": "machineName",
+        "title": "这台机器的名字",
+        "description": "手机上机器列表里显示的名字；不填就用主机名。",
+        "type": "string",
+        "default": ""
+      }
+    ],
+    "services": [{ "id": "connector", "title": "中转连接" }]
+  }
+}
