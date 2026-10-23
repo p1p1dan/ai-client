@@ -83,6 +83,9 @@ export function permissionActivityEvent(
             resolution: RESOLUTION[record.source],
             ...(record.reviewReason ? { reviewReason: record.reviewReason } : {}),
             ...(record.reviewFailure ? { reviewFailure: record.reviewFailure } : {}),
+            ...(record.reviewFailureDetail
+              ? { reviewFailureDetail: record.reviewFailureDetail }
+              : {}),
           }
         : {}),
     },

@@ -683,7 +683,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS)/;
+  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -701,6 +701,9 @@ function carriesCompletionSystem(parsed) {
 }
 /** Decision 192: the auto gear's review model (src/shared/permissions/autoReview/prompt.ts). */
 const REVIEW_SYSTEM = /You are a security monitor for an autonomous AI coding agent/;
+/** The explanation of a `refusal` stop, as the user's gateway relayed one on 2026-10-24. */
+const REVIEW_REFUSAL_TEXT =
+  "This request was blocked as it seems to violate Anthropic's Terms of Service restrictions on reverse engineering or duplicating model outputs.";
 
 /**
  * Decision 192: plays the review model, by the marker in the call under review
@@ -721,6 +724,10 @@ function decideReview(parsed) {
   const prompt = ownText(messages[messages.length - 1]);
   const action = prompt.slice(prompt.indexOf('<action_under_review>'));
   const stage2 = /Think it through first/.test(prompt);
+  // The review model's service refuses the request (Anthropic's `refusal` stop).
+  if (action.includes('REVIEW-REFUSE')) {
+    return { ...say(''), refusal: REVIEW_REFUSAL_TEXT, label: 'review-refused' };
+  }
   if (action.includes('REVIEW-ERROR')) {
     return {
       kind: 'error',
@@ -2118,6 +2125,14 @@ const DSH_P0_2_SCRIPTS = {
     }
     return say('P1-AUTO-REVIEW finished.');
   },
+  // A review the service refuses goes to the card; one that fails says why.
+  'P1-AUTO-REVIEW-REFUSE'(_round, step) {
+    const file = ['REVIEW-REFUSE-f.txt', 'REVIEW-ERROR-g.txt'][step];
+    if (file) {
+      return tool('bash', { command: `rm -f ${file}`, description: `Remove ${file}` });
+    }
+    return say('P1-AUTO-REVIEW-REFUSE finished.');
+  },
   'P1-PERM-GRANTS'(_round, step) {
     if (step === 0) {
       return tool('bash', { command: 'echo perm-grant-a', description: 'First echo' });
@@ -2655,7 +2670,7 @@ function writeSSE(res, frames) {
  * counts of `message_start`, e.g. to report cache reads and writes.
  * `thinking`, when given, is streamed first as its own block (P1-4d1 `think`).
  */
-function sendTextTurn(res, model, text, { usage, thinking } = {}) {
+function sendTextTurn(res, model, text, { usage, thinking, refusal } = {}) {
   const thought =
     typeof thinking === 'string'
       ? [
@@ -2718,7 +2733,14 @@ function sendTextTurn(res, model, text, { usage, thinking } = {}) {
       'message_delta',
       {
         type: 'message_delta',
-        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        delta:
+          refusal === undefined
+            ? { stop_reason: 'end_turn', stop_sequence: null }
+            : {
+                stop_reason: 'refusal',
+                stop_sequence: null,
+                stop_details: { type: 'refusal', explanation: refusal },
+              },
         usage: { output_tokens: 9 },
       },
     ],
@@ -4348,7 +4370,11 @@ function main() {
           'authentication_error'
         );
       } else if (decision.kind === 'text') {
-        sendTextTurn(res, model, decision.text, { usage, thinking: decision.thinking });
+        sendTextTurn(res, model, decision.text, {
+          usage,
+          thinking: decision.thinking,
+          refusal: decision.refusal,
+        });
       } else if (decision.kind === 'tool_use') {
         sendToolUseTurn(res, model, {
           name: decision.name,

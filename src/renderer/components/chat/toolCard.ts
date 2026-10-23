@@ -808,7 +808,7 @@ function reviewStateOf(
   | { kind: 'reviewing' }
   | { kind: 'allowed' }
   | { kind: 'denied'; reason?: string }
-  | { kind: 'failed'; failure: string }
+  | { kind: 'failed'; failure: string; detail?: string }
   | null {
   const review = run.review;
   if (!review) return null;
@@ -817,7 +817,11 @@ function reviewStateOf(
     return { kind: 'denied', ...(review.reviewReason ? { reason: review.reviewReason } : {}) };
   }
   if (review.resolution === 'review_failed') {
-    return { kind: 'failed', failure: review.reviewFailure ?? 'error' };
+    return {
+      kind: 'failed',
+      failure: review.reviewFailure ?? 'error',
+      ...(review.reviewFailureDetail ? { detail: review.reviewFailureDetail } : {}),
+    };
   }
   return review.phase === 'review' && run.status === 'running' ? { kind: 'reviewing' } : null;
 }
@@ -829,6 +833,7 @@ const REVIEW_FAILURE_LABEL: Readonly<Record<string, string>> = {
   unparseable: 'unreadable answer',
   too_long: 'conversation too long',
   unavailable: 'review unavailable',
+  refused: 'refused by its service',
 };
 
 /** Single call row. A failed run always forces `body: 'output'` (sign-off ②: failures auto-expand). */
@@ -875,14 +880,16 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // before the stop, when this window still holds it, is laid in by the row
   // (`withStoppedOutput`).
   // Decision 192: what the model was told is English for the model; the row
-  // shows the review's own reason, or nothing when it could not judge.
+  // shows the review's own reason, or why it could not judge when that is known.
   const recordedOutput =
     review?.kind === 'denied'
       ? review.reason
         ? reviewT('Not allowed by review: {{reason}}', { reason: review.reason })
         : undefined
       : review?.kind === 'failed'
-        ? undefined
+        ? review.detail
+          ? reviewT('Why the review could not complete: {{detail}}', { detail: review.detail })
+          : undefined
         : outcome === 'stopped' && isDshAbortedText(run.output)
           ? undefined
           : run.output;
@@ -904,11 +911,13 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // its body: the runtime's reason is the only account of why.
   // Decision 169: nor has a plan review's — DSH's English account of the
   // answer, which the row's word already says (the plan stays the input body).
+  // A call the review could not judge never started; its body says why, when that is known.
+  const reviewWhy = review?.kind === 'failed' && Boolean(review.detail);
   const showOutputBody =
     !showTodos &&
     !running &&
     !planReview &&
-    outcome !== 'notStarted' &&
+    (outcome !== 'notStarted' || reviewWhy) &&
     outcome !== 'outcomeUnknown' &&
     (failed || Boolean(recordedOutput));
   // P1-7e (problem 21): a long command's record keeps the tail of its stdout;

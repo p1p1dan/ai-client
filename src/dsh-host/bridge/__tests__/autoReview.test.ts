@@ -100,12 +100,24 @@ describe('the auto-mode rules source', () => {
   });
 });
 
-function stream(text: string, finish: 'stop' | 'error' = 'stop'): AsyncIterable<CompletionChunk> {
+const TOS_REFUSAL =
+  "This request was blocked as it seems to violate Anthropic's Terms of Service restrictions on reverse engineering or duplicating model outputs.";
+
+function stream(
+  text: string,
+  finish: 'stop' | 'error' | 'refusal' = 'stop'
+): AsyncIterable<CompletionChunk> {
   return (async function* () {
     if (text) yield { type: 'text-delta', text };
-    yield finish === 'error'
-      ? { type: 'finish', reason: { kind: 'error', failure: { message: 'HTTP 502' } } }
-      : { type: 'finish', reason: { kind: 'stop' } };
+    yield finish === 'stop'
+      ? { type: 'finish', reason: { kind: 'stop' } }
+      : {
+          type: 'finish',
+          reason: {
+            kind: 'error',
+            failure: { message: finish === 'error' ? 'HTTP 502' : TOS_REFUSAL },
+          },
+        };
   })();
 }
 
@@ -123,7 +135,7 @@ const RULE_SET: AutoModeRules = {
 };
 
 function reviewer(
-  answers: Array<string | 'error' | 'hang'>,
+  answers: Array<string | 'error' | 'refusal' | 'hang'>,
   options: { contextWindow?: number; rules?: AutoModeRules | undefined; thinks?: boolean } = {}
 ) {
   const sent: Array<{ maxTokens?: number; prompt: string }> = [];
@@ -140,7 +152,7 @@ function reviewer(
           yield { type: 'finish', reason: { kind: 'aborted' } } as CompletionChunk;
         })();
       }
-      return answer === 'error' ? stream('', 'error') : stream(answer);
+      return answer === 'error' || answer === 'refusal' ? stream('', answer) : stream(answer);
     },
   };
   const instance = new AutoReviewer({
@@ -233,6 +245,19 @@ describe('the two-stage review', () => {
       failure: 'too_long',
     });
     expect(r.sent).toEqual([]);
+  });
+
+  it('tells a failed call from its service refusing the request, keeping their words', async () => {
+    expect(await reviewer(['error']).instance.review(REQUEST, {}, signal)).toEqual({
+      kind: 'failed',
+      failure: 'error',
+      detail: 'HTTP 502',
+    });
+    expect(await reviewer(['refusal']).instance.review(REQUEST, {}, signal)).toEqual({
+      kind: 'failed',
+      failure: 'refused',
+      detail: TOS_REFUSAL,
+    });
   });
 
   it('stops waiting when the call is stopped', async () => {

@@ -36,8 +36,18 @@ function harness(
   gear: 'ask' | 'accept-edits' | 'auto' | 'bypass' = 'auto'
 ) {
   const reviewed: string[] = [];
-  const asked: Array<{ command: string; reviewReason?: string; askReason?: string }> = [];
-  const records: Array<{ phase: string; source?: string; reviewReason?: string }> = [];
+  const asked: Array<{
+    command: string;
+    reviewReason?: string;
+    reviewRefusal?: string;
+    askReason?: string;
+  }> = [];
+  const records: Array<{
+    phase: string;
+    source?: string;
+    reviewReason?: string;
+    reviewFailureDetail?: string;
+  }> = [];
   const queue = Array.isArray(verdicts) ? [...verdicts] : null;
   const gate = new PermissionGate({
     cwd: ROOT,
@@ -51,6 +61,7 @@ function harness(
       asked.push({
         command: request.command ?? request.tool,
         ...(context?.reviewReason ? { reviewReason: context.reviewReason } : {}),
+        ...(context?.reviewRefusal !== undefined ? { reviewRefusal: context.reviewRefusal } : {}),
         ...(context?.askReason ? { askReason: context.askReason } : {}),
       });
       return 'allow-once';
@@ -62,6 +73,9 @@ function harness(
       ...(record.phase === 'decision' ? { source: record.source } : {}),
       ...(record.phase === 'decision' && record.reviewReason
         ? { reviewReason: record.reviewReason }
+        : {}),
+      ...(record.phase === 'decision' && record.reviewFailureDetail
+        ? { reviewFailureDetail: record.reviewFailureDetail }
         : {}),
     })
   );
@@ -117,6 +131,32 @@ describe('full auto with a review model', () => {
     }
     expect(message).toContain('not a judgment that the action is unsafe');
     expect(h.asked).toEqual([]);
+  });
+
+  it('tells the model and the record why the review could not judge', async () => {
+    const h = harness([{ kind: 'failed', failure: 'error', detail: 'HTTP 502 Bad Gateway' }]);
+    let message = '';
+    try {
+      await h.gate.authorize(pwsh('rm -r dist'));
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain('(error: HTTP 502 Bad Gateway)');
+    expect(h.records.at(-1)).toEqual({
+      phase: 'decision',
+      source: 'review-failed',
+      reviewFailureDetail: 'HTTP 502 Bad Gateway',
+    });
+  });
+
+  it('asks the user when the review service refuses the request, with its words', async () => {
+    const words =
+      "This request was blocked as it seems to violate the provider's Terms of Service.";
+    const h = harness([{ kind: 'failed', failure: 'refused', detail: words }]);
+    expect(await outcome(h.gate, pwsh('rm -r dist'))).toBe('allowed');
+    expect(h.asked).toEqual([
+      { command: 'rm -r dist', reviewRefusal: words, askReason: 'dangerous' },
+    ]);
   });
 
   it('asks as before when no rules or no review model can be reached', async () => {

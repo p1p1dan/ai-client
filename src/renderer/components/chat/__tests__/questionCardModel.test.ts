@@ -1808,6 +1808,24 @@ describe('the PowerShell card: aliases and the reason it asks (P1-6d)', () => {
     );
   });
 
+  it('says the review service refused to review the call, in its own words', () => {
+    const words =
+      "This request was blocked as it seems to violate the provider's Terms of Service.";
+    const card = (refusal: string) =>
+      derivePermissionCardView(
+        permissionBlock({
+          toolName: 'bash',
+          permissionKind: 'exec',
+          permissionAskReason: 'dangerous',
+          permissionReviewRefusal: refusal,
+        }),
+        true,
+        zh
+      ).askReasonNote;
+    expect(card(words)).toBe(`审核模型的服务商拒绝审核这次调用：${words}`);
+    expect(card('')).toBe('审核模型的服务商拒绝审核这次调用');
+  });
+
   it('says a dangerous command is confirmed every time, and names a path outside the workspace (DSH decision 191 §6)', () => {
     for (const toolName of ['bash', 'pwsh']) {
       const block = permissionBlock({

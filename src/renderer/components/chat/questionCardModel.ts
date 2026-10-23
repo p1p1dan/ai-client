@@ -723,6 +723,14 @@ export function derivePermissionAskReasonNote(
   if (block.permissionReviewReason) {
     return t('Not allowed by review: {{reason}}', { reason: block.permissionReviewReason });
   }
+  // The review model's service would not review the call, so it is the user's.
+  if (block.permissionReviewRefusal !== undefined) {
+    return block.permissionReviewRefusal
+      ? t('The review service refused to review this call: {{reason}}', {
+          reason: block.permissionReviewRefusal,
+        })
+      : t('The review service refused to review this call');
+  }
   if (block.permissionAskReason === 'dangerous') return t(PERMISSION_ASK_REASON_DANGEROUS);
   if (block.permissionAskReason === 'outside_workspace') return t(PERMISSION_ASK_REASON_OUTSIDE);
   if (block.permissionAskReason !== 'unresolved') return null;

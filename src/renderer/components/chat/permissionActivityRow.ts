@@ -85,6 +85,8 @@ export interface PermissionActivityRecord {
   reviewReason?: string;
   /** Decision 192: why the review could not decide (`review_failed`). */
   reviewFailure?: AutoReviewFailure;
+  /** `review_failed`: the failure's own text, verbatim. */
+  reviewFailureDetail?: string;
   origin?: string;
   matchedPattern?: string;
   /** Legacy backend's attribution pair — see `delegationId` / `agentName` above. */

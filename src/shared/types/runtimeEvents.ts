@@ -779,6 +779,12 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
      * The model's prose, shown verbatim.
      */
     reviewReason?: string;
+    /**
+     * The review model's service refused to review this call (a policy or
+     * safety stop), so it is the user's to decide: the service's own words,
+     * verbatim; empty when it gave none.
+     */
+    reviewRefusal?: string;
     /** S2: the agent's own justification, when it sent one. */
     reason?: string;
     /**
@@ -1654,6 +1660,8 @@ export interface PermissionActivityEvent extends RuntimeEventBase {
     reviewReason?: string;
     /** Decision 192, `review_failed` only: what kept the review from deciding. */
     reviewFailure?: AutoReviewFailure;
+    /** `review_failed` only: the failure's own text (the gateway's or the model call's), verbatim. */
+    reviewFailureDetail?: string;
     /** `decision` phase only — which config scope supplied the winning rule. */
     origin?: string;
     /** The rule pattern, when the plugin exposes it for this phase. */

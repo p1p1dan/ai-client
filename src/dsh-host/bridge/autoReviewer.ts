@@ -21,9 +21,10 @@ import {
   type ReviewTranscriptEntry,
 } from '../../shared/permissions/autoReview/prompt.ts';
 import type { AutoModeRules } from '../../shared/permissions/autoReview/rules.ts';
-import type {
-  AutoReviewFailure,
-  AutoReviewVerdict,
+import {
+  type AutoReviewFailure,
+  type AutoReviewVerdict,
+  isReviewRefusal,
 } from '../../shared/permissions/autoReview/types.ts';
 import {
   estimateTokens,
@@ -213,7 +214,8 @@ export class AutoReviewer {
         if (kind === 'aborted') return timedOut() ? failed('timeout') : failed('error', 'aborted');
         if (kind === 'error') {
           const message = chunk.reason?.failure?.message;
-          return failed('error', typeof message === 'string' ? message : 'the model call failed');
+          if (typeof message !== 'string') return failed('error', 'the model call failed');
+          return failed(isReviewRefusal(message) ? 'refused' : 'error', message);
         }
         return { kind: 'text', text };
       }

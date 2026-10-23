@@ -1769,6 +1769,23 @@ describe('decision 192: the review model on the tool row', () => {
     expect(row.output).toBeUndefined();
   });
 
+  it('a review that could not judge says why, when its failure had words', () => {
+    const row = view([
+      call('a', 'bash', { command: 'git reset --hard' }),
+      review('a', {
+        phase: 'decision',
+        result: 'deny',
+        resolution: 'review_failed',
+        reviewFailure: 'error',
+        reviewFailureDetail: 'HTTP 502 Bad Gateway',
+      }),
+      result('a', refused),
+    ]);
+    expect(row.reviewNote).toBe('自动：审核没能完成（出错）');
+    expect(row.output).toBe('审核没能完成的原因：HTTP 502 Bad Gateway');
+    expect(row.failed).toBe(false);
+  });
+
   it('stops saying 「审核中」 once the review hands the call to a card', () => {
     const items = joinReviewActivity(
       turnItems(

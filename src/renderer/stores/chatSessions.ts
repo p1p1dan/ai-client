@@ -355,6 +355,8 @@ export interface ChatBlock {
   permissionAskReason?: PermissionAskReason;
   /** Decision 192: the review model's reason, on a card raised after repeated review blocks. */
   permissionReviewReason?: string;
+  /** The review model's service refused to review the call: its own words, possibly empty. */
+  permissionReviewRefusal?: string;
   /** S2 (c): which button settled it, when richer than the `allowed` boolean. */
   permissionDecision?: PermissionDecisionId;
   /** S2 (c): set when the client answered without asking anyone. */
@@ -2374,6 +2376,9 @@ function applyRuntimeEventCore(
                   : {}),
                 ...(event.payload.reviewReason
                   ? { permissionReviewReason: event.payload.reviewReason }
+                  : {}),
+                ...(event.payload.reviewRefusal !== undefined
+                  ? { permissionReviewRefusal: event.payload.reviewRefusal }
                   : {}),
                 ...(event.payload.timeoutMs !== undefined
                   ? { permissionExpiresAt: event.timestamp + event.payload.timeoutMs }

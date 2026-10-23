@@ -192,6 +192,8 @@ export interface PermissionAskContext {
   askReason?: PermissionAskReason;
   /** Decision 192: the review model's reason, on a card raised after repeated review blocks. */
   reviewReason?: string;
+  /** The review model's service refused to review this call: its own words, on the card it raised. */
+  reviewRefusal?: string;
 }
 export interface PermissionConfig {
   /** The workspace, canonicalized the way the host canonicalizes targets. */
@@ -310,6 +312,8 @@ export type PermissionActivityRecord =
       reviewReason?: string;
       /** `review-failed`: what kept the review from deciding. */
       reviewFailure?: AutoReviewFailure;
+      /** `review-failed`: the failure's own text (the gateway's or the model call's), when it has one. */
+      reviewFailureDetail?: string;
     };
 
 /** The gate's API; the 1.0.x runtime publishes it as `RuntimePermissionsService`. */
@@ -954,7 +958,8 @@ export class PermissionGate implements PermissionGateService {
   }
   /**
    * Decision 192: ask the review model. Allowed goes through; a failure is a
-   * refusal that does not count (`unavailable` is the ordinary card instead);
+   * refusal that does not count (`unavailable` is the ordinary card instead,
+   * and so is `refused`, which no retry gets past, with the service's words);
    * a block is a refusal that counts, until the count reaches Claude Code's
    * limits, when this one goes to the user's card with the reason on it
    * (`card`). Throws the refusals.
@@ -964,7 +969,7 @@ export class PermissionGate implements PermissionGateService {
     request: ToolPermissionRequest,
     signal: AbortSignal,
     epoch: number
-  ): Promise<{ kind: 'allowed' } | { kind: 'card'; reason?: string }> {
+  ): Promise<{ kind: 'allowed' } | { kind: 'card'; reason?: string; refusal?: string }> {
     const askReason = this.askReasonFor(request);
     this.notify({ phase: 'review', request, mode: this.mode, gear: this.gearFor(request) });
     let verdict: AutoReviewVerdict;
@@ -982,10 +987,18 @@ export class PermissionGate implements PermissionGateService {
     if (verdict.kind === 'allow') return { kind: 'allowed' };
     // No rules or no reachable review model: as if review were not configured.
     if (verdict.kind === 'failed' && verdict.failure === 'unavailable') return { kind: 'card' };
+    if (verdict.kind === 'failed' && verdict.failure === 'refused') {
+      return { kind: 'card', refusal: verdict.detail ?? '' };
+    }
     if (verdict.kind === 'failed') {
-      throw this.reviewDenial('review-failed', reviewFailureMessage(verdict.failure), {
-        reviewFailure: verdict.failure,
-      });
+      throw this.reviewDenial(
+        'review-failed',
+        reviewFailureMessage(verdict.failure, verdict.detail),
+        {
+          reviewFailure: verdict.failure,
+          ...(verdict.detail ? { reviewFailureDetail: verdict.detail } : {}),
+        }
+      );
     }
     const counts = this.reviewDenials;
     counts.consecutive += 1;
@@ -1002,7 +1015,7 @@ export class PermissionGate implements PermissionGateService {
   private reviewDenial(
     source: 'review-denied' | 'review-failed',
     message: string,
-    info: { reviewReason?: string; reviewFailure?: AutoReviewFailure }
+    info: ReviewDenialInfo
   ): Error {
     const error = this.denied(source, message);
     REVIEW_DENIALS.set(error, info);
@@ -1024,10 +1037,12 @@ export class PermissionGate implements PermissionGateService {
     if (!approve) throw this.denied('error', 'approval UI is not connected');
     const epoch = this.epoch;
     let reviewReason: string | undefined;
+    let reviewRefusal: string | undefined;
     if (this.config.review && this.gearFor(request) === 'auto') {
       const reviewed = await this.review(this.config.review, request, combined, epoch);
       if (reviewed.kind === 'allowed') return 'review-allowed';
       reviewReason = reviewed.reason;
+      reviewRefusal = reviewed.refusal;
     }
     const gearAtEntry = this.gearFor(request);
     // One card at a time, from here to the `finally` at the bottom. Everything
@@ -1072,6 +1087,7 @@ export class PermissionGate implements PermissionGateService {
         const context: PermissionAskContext = {
           ...(askReason ? { askReason } : {}),
           ...(reviewReason ? { reviewReason } : {}),
+          ...(reviewRefusal !== undefined ? { reviewRefusal } : {}),
         };
         const decision = await Promise.race([
           Object.keys(context).length > 0
@@ -1170,20 +1186,22 @@ export class PermissionDenial extends PermissionError {
 /** Every refusal any gate built, with its reason. Weak, so errors are still collected. */
 const DENIAL_SOURCES = new WeakMap<object, PermissionDecisionSource>();
 /** What a review refusal adds to its audit record. */
-const REVIEW_DENIALS = new WeakMap<
-  object,
-  { reviewReason?: string; reviewFailure?: AutoReviewFailure }
->();
+type ReviewDenialInfo = {
+  reviewReason?: string;
+  reviewFailure?: AutoReviewFailure;
+  reviewFailureDetail?: string;
+};
+const REVIEW_DENIALS = new WeakMap<object, ReviewDenialInfo>();
 /** What the model reads when the review blocked its call (decision 192 §3.3). */
 function reviewBlockMessage(reason: string): string {
   return `The automatic safety review did not allow this call${reason ? `: ${reason}` : '.'} It did not run. Do not retry it in another form. Continue with work that does not depend on it; if it is needed, ask the user to authorize it explicitly.`;
 }
 /** What the model reads when the review could not decide; Claude Code's guidance. */
-function reviewFailureMessage(failure: AutoReviewFailure): string {
+function reviewFailureMessage(failure: AutoReviewFailure, detail?: string): string {
   if (failure === 'too_long') {
     return 'This call was not reviewed and did not run: the conversation is too long for the automatic safety review. This is not a judgment that the action is unsafe. Continue with other work, or ask the user to compact the conversation (/compact) and then issue it again.';
   }
-  return `The automatic safety review could not be completed (${failure}), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review.`;
+  return `The automatic safety review could not be completed (${failure}${detail ? `: ${detail.slice(0, 300)}` : ''}), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review.`;
 }
 /**
  * Why a gate refused, when `error` is one of its refusals; `undefined` for

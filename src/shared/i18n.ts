@@ -2861,6 +2861,11 @@ export const zhTranslations: Record<string, string> = {
   'review denied': '审核没放行',
   'review failed': '审核没能完成',
   'Not allowed by review: {{reason}}': '审核没放行：{{reason}}',
+  'refused by its service': '被服务商拒绝',
+  'Why the review could not complete: {{detail}}': '审核没能完成的原因：{{detail}}',
+  'The review service refused to review this call: {{reason}}':
+    '审核模型的服务商拒绝审核这次调用：{{reason}}',
+  'The review service refused to review this call': '审核模型的服务商拒绝审核这次调用',
   'Rarely asks; deletes, force pushes and anything outside the workspace go to the review model first':
     '基本不再询问；删除、强推和工作区外的操作先由审核模型把关',
   'Never asks and never reviews; everything runs straight through': '不询问也不审核，全部直接执行',
