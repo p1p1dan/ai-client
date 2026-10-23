@@ -31,14 +31,13 @@ PI-Desktop（`/home/pi/code/PI-Desktop`）已经做完一套并跑稳了，照�
    |---|---|---|
    | `chat` | 会话列表、调用对话处理函数（白名单内）、订阅运行事件、会话实时快照与按序号补发 | `chat.read`、`chat.control` |
    | `sessionControl` | 代表插件的客户端接管 / 交还某个对话（见 §4） | `chat.control` |
-   | `settings` | 读写本插件自己的设置 | 无（只能碰自己的） |
-   | `secrets` | 存取本插件的口令类数据（`safeStorage` 加密） | 无（只能碰自己的） |
+   | `settings` | 读写本插件自己的设置；声明为 `secret` 的设置用 `safeStorage` 加密保存（落地时把原计划的单独 `secrets` 接口并进了这里） | 无（只能碰自己的） |
    | `status` | 在插件页和标题栏状态里报告「已连接 / 断开 / 出错」 | 无 |
 
    网络访问不经宿主 API：插件进程本身是 Node，可以直接连网；在清单里用 `net` 声明要连的地址，安装时展示给用户。和 PI-Desktop 一样，第一版不做进程级的沙箱，权限只管宿主 API 这一面。
 4. **包格式** `.pilabplug`（zip + 根目录 `manifest.json`），校验规则照 ADR 0007。`engines.pilab` 写兼容的 PiLab 版本范围，`apiVersion` 写用的宿主 API 版本，不兼容就拒绝加载并说明原因。
 5. **管理入口**：设置里新增「插件」页：从文件安装、启用 / 停用、卸载、查看权限和网络声明、查看服务状态。没有安装任何插件的用户，除了这一页什么都看不到，也不起任何插件进程。
-6. **开发标准**：仓库里加 `packages/plugin-sdk`（清单类型、宿主 API 类型、版本号）和一个打包校验脚本，再放一个最小示例插件。以后的插件都按这一套写。
+6. **开发标准**：插件 SDK 是 `src/shared/plugins/`（清单 schema 与校验、宿主 API 类型、帧协议、版本号），打包脚本 `scripts/pack-plugin.ts`，示例插件 `plugins/example-hello/`，开发说明 `docs/plugins/developing-plugins.md`。仓库不是 pnpm 工作区，所以没有另起 `packages/plugin-sdk`；以后要单独发布 SDK 时再搬。
 7. **签名、市场、自动更新**：先不做。内部使用，从文件安装。
 
 ## 4. 对话接管（属于主体，不属于插件）
@@ -61,10 +60,15 @@ PI-Desktop（`/home/pi/code/PI-Desktop`）已经做完一套并跑稳了，照�
 
 | 组 | 内容 | 拥有的文件 | 依赖 |
 |---|---|---|---|
-| A 插件运行时 | 安装与校验、插件进程（打包 Node 启动）、RPC 桥、宿主 API 分发（白名单 → 权限 → 审计）、常驻服务监管 | `src/main/services/plugins/`、`src/main/ipc/plugins.ts`、`packages/plugin-sdk/` | 无 |
+| A 插件运行时 | 安装与校验、插件进程（打包 Node 启动）、RPC 桥、宿主 API 分发（白名单 → 权限 → 审计）、常驻服务监管 | `src/main/services/plugins/`、`src/main/ipc/plugins.ts`、`src/plugin-host/`、`src/shared/plugins/` | 无 |
 | B 插件页 | 设置里的「插件」页：安装、启停、卸载、权限、服务状态；按 `settings` 声明画表单 | `src/renderer/components/settings/plugins/` | A 的 IPC 接口（先定接口再并行） |
 | C 对话接管 | 主进程操作方记录与改动类调用拦截；桌面输入框只读与「接管」 | `src/main/services/chat/sessionControl.ts`、`src/main/ipc/chat.ts`、输入框相关组件 | 无 |
 | D 中转与网页 | `pilab-relay`、网页端 | `packages/pilab-relay/`、`src/mobile/`（网页入口） | 网关帧协议（先定协议再并行） |
 | E 手机远程插件 | `pilab.remote-access` | `plugins/remote-access/` | A、C 完成 |
 
 接缝：A 与 C 都要动 `chat` 宿主 API 的权限（`chat.control` 要先过接管检查）——由 C 提供 `sessionControl` 的判断函数，A 只调用不实现。
+
+## 7. 待现场验证
+
+- **加密机上的插件文件**：插件包由 Electron 主进程解压写盘，由打包的 `node.exe` 读取执行。两个进程是否都在加密驱动的白名单里、写出来的文件另一方能否读成明文，只有上机才能确认（ARD D11 的教训：载体决定兼容性）。如果读到密文，改成由插件宿主程序（`node.exe`）自己解压。
+- **打包后的插件宿主程序**：`resources/plugin-host/pluginHost.mjs` 已加进 `afterPack` 和 Windows 的去加密处理，要跟下一个 Windows 测试包一起看。

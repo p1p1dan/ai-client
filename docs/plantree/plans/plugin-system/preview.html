@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>预览：对话接管 + 插件页</title>
+<style>
+  /* Tokens copied from feat/ui-cohesion src/renderer/styles/globals.css (design system v2). */
+  :root {
+    --surface-0: rgb(249 249 247); --background: rgb(252 252 251); --card: #fff; --popover: #fff;
+    --foreground: #151515; --muted-foreground: #525252; --primary: #c6613f; --primary-foreground: #fff;
+    --secondary: #eeeeed; --fill-ghost-hover: #f0f0ef; --fill-ghost-selected: #e5e5e4;
+    --destructive: #b5452f; --success: #3f7d4e; --warning: #b07a1e; --border: #e5e5e4; --input: #cececd;
+    --radius: 6px; --radius-md: 10px; --radius-lg: 12px;
+    --elev-sm: 0 1px 2px 0 rgb(0 0 0 / .05), 0 2px 8px 0 rgb(0 0 0 / .08);
+    --elev-lg: 0 4px 8px 0 rgb(0 0 0 / .06), 0 12px 28px -2px rgb(0 0 0 / .08);
+    --foreground-faint: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
+    --text-small: 12px; --text-ui: 13px; --text-heading: 14px; --text-title: 18px;
+  }
+  .dark {
+    --surface-0: rgb(11 11 11); --background: rgb(21 21 21); --card: rgb(26 26 25); --popover: rgb(32 32 31);
+    --foreground: #f5f5f5; --muted-foreground: #a3a3a3; --primary: #d97757; --primary-foreground: #151515;
+    --secondary: #262626; --fill-ghost-hover: #202020; --fill-ghost-selected: #2b2b2b;
+    --destructive: #e5735c; --success: #73b585; --warning: #d6a24a; --border: #2b2b2b; --input: #3a3a3a;
+    --elev-sm: 0 1px 2px 0 rgb(0 0 0 / .4), 0 2px 8px 0 rgb(0 0 0 / .4);
+    --elev-lg: 0 4px 8px 0 rgb(0 0 0 / .5), 0 16px 36px -2px rgb(0 0 0 / .4);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: var(--text-ui)/1.4 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--surface-0); color: var(--foreground); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .controls { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+    padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--border); }
+  .controls fieldset { border: 0; padding: 0; margin: 0; display: flex; gap: 8px; align-items: center; }
+  .controls legend { float: left; margin-right: 6px; color: var(--muted-foreground); }
+  .controls label { display: inline-flex; gap: 4px; align-items: center; }
+  h2.section { font-size: var(--text-heading); font-weight: 600; margin: 24px 16px 8px; color: var(--muted-foreground); }
+  .note { margin: 0 16px 12px; color: var(--muted-foreground); max-width: 860px; }
+  .frame { margin: 0 16px 24px; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden;
+    display: grid; grid-template-columns: 240px 1fr; height: 560px; background: var(--background); box-shadow: var(--elev-sm); }
+  svg.i { width: 16px; height: 16px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  svg.s { width: 14px; height: 14px; }
+
+  /* Sidebar */
+  .side { background: var(--surface-0); border-right: 1px solid var(--border); padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .side .group { color: var(--foreground-faint); font-size: var(--text-small); padding: 8px 8px 4px; }
+  .row { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: var(--radius); color: var(--foreground); }
+  .row:hover { background: var(--fill-ghost-hover); }
+  .row.sel { background: var(--fill-ghost-selected); }
+  .row .t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .remote { color: var(--muted-foreground); display: none; }
+  .row.elsewhere .remote { display: inline-flex; }
+
+  /* Chat */
+  .chat { display: flex; flex-direction: column; min-width: 0; }
+  .chat header { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .chat header .who { margin-left: auto; font-weight: 400; color: var(--muted-foreground); display: none; align-items: center; gap: 6px; }
+  .elsewhere-mode .chat header .who.variant-b { display: inline-flex; }
+  .timeline { flex: 1; overflow: auto; padding: 20px 0; }
+  .col { max-width: 640px; margin: 0 auto; padding: 0 20px; display: flex; flex-direction: column; gap: 14px; }
+  .user { align-self: flex-end; background: var(--secondary); padding: 8px 12px; border-radius: 18px; max-width: 80%; }
+  .user .via { display: block; font-size: var(--text-small); color: var(--foreground-faint); margin-top: 2px; text-align: right; }
+  .assistant { line-height: 1.55; }
+  .tool { color: var(--muted-foreground); display: flex; gap: 6px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); display: inline-block; }
+  .dot.ok { background: var(--success); } .dot.err { background: var(--destructive); } .dot.idle { background: var(--input); }
+  .dock { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); box-shadow: var(--elev-sm); overflow: hidden; }
+  .dock .h { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .dock .b { padding: 10px 12px; color: var(--muted-foreground); font-family: ui-monospace, monospace; font-size: 12px; }
+  .dock .f { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); align-items: center; }
+  .dock .f .hint { margin-left: auto; color: var(--muted-foreground); display: none; }
+  .elsewhere-mode .dock .f .hint { display: inline; }
+
+  .btn { height: 28px; padding: 0 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--card); display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { background: var(--fill-ghost-hover); }
+  .btn.primary { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
+  .btn.primary:hover { filter: brightness(1.05); }
+  .btn.ghost { border-color: transparent; background: transparent; }
+  .btn.danger { color: var(--destructive); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .composer-wrap { padding: 0 20px 16px; }
+  .composer-wrap .col { gap: 6px; }
+  .composer { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); padding: 8px 8px 8px 12px; display: flex; align-items: center; gap: 8px; min-height: 38px; }
+  .composer input { flex: 1; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; }
+  .composer .send { width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--primary); color: var(--primary-foreground); display: grid; place-items: center; }
+  .composer-meta { display: flex; gap: 12px; color: var(--muted-foreground); font-size: var(--text-small); padding: 0 4px; }
+
+  /* Variant A: the composer is replaced by one bar. */
+  .takeover-bar { display: none; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); padding: 8px 8px 8px 12px; align-items: center; gap: 8px; min-height: 38px; }
+  .takeover-bar .t { flex: 1; min-width: 0; color: var(--muted-foreground); }
+  .takeover-bar b { color: var(--foreground); font-weight: 600; }
+  .elsewhere-mode.variant-a .composer, .elsewhere-mode.variant-a .composer-meta { display: none; }
+  .elsewhere-mode.variant-a .takeover-bar { display: flex; }
+  /* Variant B: composer stays, disabled, with a strip above it. */
+  .strip { display: none; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius); background: var(--secondary); color: var(--muted-foreground); }
+  .strip .t { flex: 1; min-width: 0; }
+  .strip b { color: var(--foreground); font-weight: 600; }
+  .elsewhere-mode.variant-b .strip { display: flex; }
+  .elsewhere-mode.variant-b .composer { opacity: .5; pointer-events: none; }
+
+  /* Plugins page */
+  .settings { margin: 0 16px 40px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--background); display: grid; grid-template-columns: 200px 1fr; min-height: 600px; overflow: hidden; box-shadow: var(--elev-sm); }
+  .settings nav { background: var(--surface-0); border-right: 1px solid var(--border); padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .page { padding: 24px 32px; max-width: 760px; }
+  .page h1 { font-size: var(--text-title); margin: 0 0 4px; font-weight: 600; }
+  .page .lead { color: var(--muted-foreground); margin: 0 0 16px; }
+  .page .top { display: flex; align-items: flex-start; gap: 12px; }
+  .page .top > div { flex: 1; }
+  .card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); margin-bottom: 12px; }
+  .card .head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+  .card .head .name { font-weight: 600; font-size: var(--text-heading); }
+  .card .head .ver { color: var(--foreground-faint); margin-left: 6px; font-weight: 400; font-size: var(--text-small); }
+  .card .head .desc { color: var(--muted-foreground); margin-top: 2px; }
+  .card .head .status { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); margin-top: 6px; }
+  .card .grow { flex: 1; min-width: 0; }
+  .card .body { border-top: 1px solid var(--border); padding: 12px 14px; display: none; }
+  .card.open .body { display: block; }
+  .card .body h4 { margin: 12px 0 6px; font-size: var(--text-small); font-weight: 600; color: var(--muted-foreground); }
+  .card .body h4:first-child { margin-top: 0; }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; align-items: center; }
+  .kv .k { color: var(--muted-foreground); }
+  .field { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; align-items: center; margin-bottom: 8px; }
+  .field .k { color: var(--foreground); }
+  .field .help { grid-column: 2; color: var(--foreground-faint); font-size: var(--text-small); margin-top: -4px; }
+  .input { height: 28px; border: 1px solid var(--border); border-radius: var(--radius); padding: 0 8px; background: var(--card); color: inherit; font: inherit; width: 100%; }
+  .input:focus { outline: 2px solid color-mix(in oklab, var(--primary) 40%, transparent); border-color: var(--primary); }
+  .secret { display: flex; gap: 8px; align-items: center; color: var(--muted-foreground); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--secondary); font-size: var(--text-small); }
+  .alert { display: flex; gap: 8px; padding: 8px 10px; border-radius: var(--radius); border: 1px solid color-mix(in oklab, var(--destructive) 35%, var(--border)); color: var(--destructive); margin-top: 8px; }
+  .footer-actions { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .switch { width: 32px; height: 18px; border-radius: 999px; background: var(--input); position: relative; border: 0; flex-shrink: 0; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .switch.on { background: var(--primary); } .switch.on::after { left: 16px; }
+  .empty { border: 1px dashed var(--border); border-radius: var(--radius-lg); padding: 32px; text-align: center; color: var(--muted-foreground); }
+  .chev { transition: transform .15s; color: var(--muted-foreground); }
+  .card.open .chev { transform: rotate(90deg); }
+
+  .backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / .35); display: none; place-items: center; z-index: 50; }
+  .backdrop.show { display: grid; }
+  .dialog { width: 440px; background: var(--popover); border-radius: 16px; box-shadow: var(--elev-lg); padding: 20px; }
+  .dialog h3 { margin: 0 0 4px; font-size: var(--text-heading); }
+  .dialog p { margin: 0 0 12px; color: var(--muted-foreground); }
+  .dialog ul { margin: 0 0 16px; padding-left: 18px; }
+  .dialog li { margin-bottom: 4px; }
+  .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--popover); box-shadow: var(--elev-lg); border-radius: var(--radius-md); padding: 8px 14px; display: none; z-index: 60; }
+  .toast.show { display: block; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="phone" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="send" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 19V5"/></symbol>
+  <symbol id="square" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+  <symbol id="hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="upload" viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></symbol>
+  <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/></symbol>
+  <symbol id="refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M8 16H3v5"/></symbol>
+</svg>
+
+<div class="controls">
+  <fieldset><legend>主题</legend>
+    <label><input type="radio" name="theme" value="light" checked> 亮</label>
+    <label><input type="radio" name="theme" value="dark"> 暗</label>
+  </fieldset>
+  <fieldset><legend>当前操作方</legend>
+    <label><input type="radio" name="ctl" value="desktop"> 桌面</label>
+    <label><input type="radio" name="ctl" value="phone" checked> 网页 · iPhone</label>
+  </fieldset>
+  <fieldset><legend>桌面只读时的样子</legend>
+    <label><input type="radio" name="variant" value="a" checked> A 输入框换成一条</label>
+    <label><input type="radio" name="variant" value="b"> B 输入框置灰 + 上方提示</label>
+  </fieldset>
+  <fieldset><legend>插件页</legend>
+    <label><input type="radio" name="plugins" value="list" checked> 已装</label>
+    <label><input type="radio" name="plugins" value="empty"> 未装任何插件</label>
+    <label><input type="radio" name="plugins" value="failed"> 插件出错</label>
+  </fieldset>
+</div>
+
+<h2 class="section">一、对话接管：桌面这边看到的样子</h2>
+<p class="note">对话正在手机网页上用时，桌面照常看到进度，但不能发消息、不能回答权限请求。点「接管」拿回操作权，手机那边同样变成只读。「停止」两边都能按。侧栏里被别处占着的对话行尾有一个手机图标。</p>
+
+<div class="frame" id="chatFrame">
+  <aside class="side">
+    <div class="group">ai-client</div>
+    <div class="row sel elsewhere" id="rowCurrent"><span class="t">修复设置页保存失败</span><span class="remote" title="正在 网页 · iPhone 上使用"><svg class="i s"><use href="#phone"/></svg></span></div>
+    <div class="row"><span class="t">插件页布局</span></div>
+    <div class="row elsewhere"><span class="t">整理 issue 25 调研</span><span class="remote" title="正在 网页 · iPhone 上使用"><svg class="i s"><use href="#phone"/></svg></span></div>
+    <div class="row"><span class="t">发版清单</span></div>
+  </aside>
+  <section class="chat">
+    <header>修复设置页保存失败
+      <span class="who variant-b"><svg class="i s"><use href="#phone"/></svg>正在 网页 · iPhone 上使用</span>
+    </header>
+    <div class="timeline"><div class="col">
+      <div class="user">设置页点保存没反应，帮我查一下<span class="via">桌面</span></div>
+      <div class="assistant">我先看一下保存按钮的处理函数和对应的 IPC 调用。</div>
+      <div class="tool"><span class="dot ok"></span>读取 SettingsPage.tsx</div>
+      <div class="user">顺便把错误提示也加上<span class="via">网页 · iPhone</span></div>
+      <div class="tool"><span class="dot"></span>正在运行 pnpm test settings</div>
+      <div class="dock">
+        <div class="h"><svg class="i s"><use href="#shield"/></svg>需要批准：运行命令</div>
+        <div class="b">pnpm test src/renderer/components/settings</div>
+        <div class="f">
+          <button class="btn primary ctl-only">允许</button>
+          <button class="btn ctl-only">本次会话都允许</button>
+          <button class="btn ctl-only">拒绝</button>
+          <span class="hint">在 网页 · iPhone 上回答，或先接管</span>
+        </div>
+      </div>
+    </div></div>
+    <div class="composer-wrap"><div class="col">
+      <div class="strip"><svg class="i s"><use href="#phone"/></svg><span class="t">正在 <b>网页 · iPhone</b> 上使用，这里只能看</span>
+        <button class="btn ghost" data-act="stop"><svg class="i s"><use href="#square"/></svg>停止</button>
+        <button class="btn" data-act="takeover"><svg class="i s"><use href="#hand"/></svg>接管</button></div>
+      <div class="takeover-bar"><svg class="i"><use href="#phone"/></svg><span class="t">正在 <b>网页 · iPhone</b> 上使用，这里只能看进度</span>
+        <button class="btn ghost" data-act="stop"><svg class="i s"><use href="#square"/></svg>停止</button>
+        <button class="btn primary" data-act="takeover"><svg class="i s"><use href="#hand"/></svg>接管</button></div>
+      <div class="composer"><input placeholder="回复…" /><button class="send" title="发送"><svg class="i s"><use href="#send"/></svg></button></div>
+      <div class="composer-meta"><span>默认权限</span><span>claude-opus · 中</span><span>上下文 32%</span></div>
+    </div></div>
+  </section>
+</div>
+
+<h2 class="section">二、设置 → 插件</h2>
+<p class="note">插件装好后默认停用，打开开关时先弹窗列出它要的权限和要连的地址。点卡片展开看详情和设置项；口令类设置只显示「已设置」，不回显。插件出错时显示原因和「重新启动」。</p>
+
+<div class="settings">
+  <nav>
+    <div class="row"><span class="t">通用</span></div>
+    <div class="row"><span class="t">外观</span></div>
+    <div class="row"><span class="t">模型</span></div>
+    <div class="row"><span class="t">网络</span></div>
+    <div class="row sel"><svg class="i s"><use href="#plug"/></svg><span class="t">插件</span></div>
+  </nav>
+  <div class="page">
+    <div class="top">
+      <div><h1>插件</h1><p class="lead">不在安装包里的额外功能，从 .pilabplug 文件安装。每个插件在自己的进程里运行，拿不到你的模型密钥。</p></div>
+      <button class="btn" id="installBtn"><svg class="i s"><use href="#upload"/></svg>从文件安装…</button>
+    </div>
+
+    <div id="emptyState" class="empty" style="display:none">还没有安装插件。<br>插件是 .pilabplug 文件，点右上角「从文件安装」。</div>
+
+    <div id="pluginList">
+      <div class="card open" id="remoteCard">
+        <div class="head" data-toggle>
+          <svg class="i chev"><use href="#chev"/></svg>
+          <div class="grow">
+            <div><span class="name">手机远程</span><span class="ver">0.1.0 · pilab.remote-access</span></div>
+            <div class="desc">在手机或浏览器里接着用这台机器上的对话。</div>
+            <div class="status" id="remoteStatus"><span class="dot ok"></span>已连上中转 203.0.113.7:8443 · 1 台设备在线</div>
+          </div>
+          <button class="switch on" id="remoteSwitch" title="启用"></button>
+        </div>
+        <div class="body">
+          <div id="failedAlert" class="alert" style="display:none"><span class="dot err" style="margin-top:4px"></span><div><b>插件已停止</b>：连续退出 5 次，不再自动重启。<br>最后一次错误：PLUGIN_CRASHED: exited with 1</div></div>
+          <h4>设置</h4>
+          <div class="field"><span class="k">中转地址</span><input class="input" value="203.0.113.7:8443"><span class="help">公网服务器的 IP:端口；本机测试填 127.0.0.1:端口</span></div>
+          <div class="field"><span class="k">接入口令</span><span class="secret">已设置 <button class="btn ghost">更换</button><button class="btn ghost">清除</button></span></div>
+          <div class="field"><span class="k">这台机器的名字</span><input class="input" value="build-server-03"><span class="help">手机上机器列表里显示的名字</span></div>
+          <h4>权限</h4>
+          <div class="chips"><span class="chip">看对话</span><span class="chip">改对话（发消息、批准、停止）</span></div>
+          <h4>网络</h4>
+          <div class="chips"><span class="chip"><svg class="i s"><use href="#globe"/></svg>203.0.113.7:8443</span></div>
+          <h4>服务</h4>
+          <div class="chips" id="serviceChips"><span class="chip"><span class="dot ok"></span>中转连接 · 运行中</span></div>
+          <div class="footer-actions">
+            <button class="btn" id="restartBtn" style="display:none"><svg class="i s"><use href="#refresh"/></svg>重新启动</button>
+            <button class="btn danger" id="uninstallBtn">卸载</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="exampleCard">
+        <div class="head" data-toggle>
+          <svg class="i chev"><use href="#chev"/></svg>
+          <div class="grow">
+            <div><span class="name">示例插件</span><span class="ver">0.1.0 · pilab.example-hello</span></div>
+            <div class="desc">插件开发示例：统计对话事件，在插件页显示状态。</div>
+            <div class="status"><span class="dot idle"></span>已停用</div>
+          </div>
+          <button class="switch" id="exampleSwitch" title="启用"></button>
+        </div>
+        <div class="body">
+          <h4>设置</h4>
+          <div class="field"><span class="k">显示名称</span><input class="input" value="示例"></div>
+          <h4>权限</h4>
+          <div class="chips"><span class="chip">看对话</span></div>
+          <div class="footer-actions"><button class="btn danger">卸载</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="enableDialog">
+  <div class="dialog">
+    <h3>启用「示例插件」？</h3>
+    <p>启用后它会在自己的进程里运行，并且可以：</p>
+    <ul><li>看到所有对话的内容和进度</li></ul>
+    <p>只启用你信得过的插件。</p>
+    <div class="actions"><button class="btn" data-close>取消</button><button class="btn primary" id="confirmEnable">启用</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const frame = $('#chatFrame');
+  function apply() {
+    document.documentElement.classList.toggle('dark', document.querySelector('input[name=theme]:checked').value === 'dark');
+    const phone = document.querySelector('input[name=ctl]:checked').value === 'phone';
+    const variant = document.querySelector('input[name=variant]:checked').value;
+    frame.classList.toggle('elsewhere-mode', phone);
+    frame.classList.toggle('variant-a', variant === 'a');
+    frame.classList.toggle('variant-b', variant === 'b');
+    $('#rowCurrent').classList.toggle('elsewhere', phone);
+    document.querySelectorAll('.ctl-only').forEach((b) => (b.disabled = phone));
+    const plugins = document.querySelector('input[name=plugins]:checked').value;
+    $('#emptyState').style.display = plugins === 'empty' ? 'block' : 'none';
+    $('#pluginList').style.display = plugins === 'empty' ? 'none' : 'block';
+    const failed = plugins === 'failed';
+    $('#failedAlert').style.display = failed ? 'flex' : 'none';
+    $('#restartBtn').style.display = failed ? 'inline-flex' : 'none';
+    $('#remoteStatus').innerHTML = failed
+      ? '<span class="dot err"></span>失败 · 已重试 5 次'
+      : '<span class="dot ok"></span>已连上中转 203.0.113.7:8443 · 1 台设备在线';
+    $('#serviceChips').innerHTML = failed
+      ? '<span class="chip"><span class="dot err"></span>中转连接 · 失败</span>'
+      : '<span class="chip"><span class="dot ok"></span>中转连接 · 运行中</span>';
+    if (failed) $('#remoteCard').classList.add('open');
+  }
+  document.querySelectorAll('.controls input').forEach((i) => i.addEventListener('change', apply));
+  document.querySelectorAll('[data-act=takeover]').forEach((b) =>
+    b.addEventListener('click', () => { document.querySelector('input[name=ctl][value=desktop]').checked = true; apply(); toast('已接管，手机那边现在只能看'); }));
+  document.querySelectorAll('[data-act=stop]').forEach((b) => b.addEventListener('click', () => toast('已停止这一轮（两边都能停）')));
+  document.querySelectorAll('[data-toggle]').forEach((h) =>
+    h.addEventListener('click', (e) => { if (e.target.closest('.switch')) return; h.parentElement.classList.toggle('open'); }));
+  $('#exampleSwitch').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.currentTarget.classList.contains('on')) { e.currentTarget.classList.remove('on'); setExample(false); return; }
+    $('#enableDialog').classList.add('show');
+  });
+  $('#remoteSwitch').addEventListener('click', (e) => { e.stopPropagation(); e.currentTarget.classList.toggle('on'); });
+  $('#confirmEnable').addEventListener('click', () => { $('#exampleSwitch').classList.add('on'); setExample(true); $('#enableDialog').classList.remove('show'); });
+  document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => b.closest('.backdrop').classList.remove('show')));
+  $('#installBtn').addEventListener('click', () => toast('这里会打开文件选择框，只认 .pilabplug'));
+  $('#uninstallBtn').addEventListener('click', () => toast('卸载前会再确认一次：插件文件、数据和设置都会删除'));
+  function setExample(on) {
+    $('#exampleCard .status').innerHTML = on ? '<span class="dot ok"></span>示例: 0 个对话事件' : '<span class="dot idle"></span>已停用';
+  }
+  let t; function toast(text) { const el = $('#toast'); el.textContent = text; el.classList.add('show'); clearTimeout(t); t = setTimeout(() => el.classList.remove('show'), 1800); }
+  apply();
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { PluginView } from '@shared/plugins/view';
@@ -207,5 +207,26 @@ describe('PluginManager', () => {
     await manager.setEnabled('pilab.sample', true);
     await manager.uninstall('pilab.sample');
     expect(manager.list()).toEqual([]);
+  }, 30_000);
+
+  it('[PLG-MGR] the example plugin in plugins/example-hello installs and runs', async () => {
+    const exampleDir = path.join(process.cwd(), 'plugins', 'example-hello');
+    const file = path.join(root, 'example.pilabplug');
+    writeFileSync(
+      file,
+      writeZip(
+        ['manifest.json', 'main.mjs'].map((name) => ({
+          path: name,
+          data: readFileSync(path.join(exampleDir, name)),
+        }))
+      )
+    );
+    await expect(manager.install(file)).resolves.toMatchObject({ ok: true });
+    await manager.setEnabled('pilab.example-hello', true);
+    const example = () => views.find((view) => view.id === 'pilab.example-hello');
+    await until(() => example()?.status?.text === '示例: 0 个对话事件');
+    for (const listener of chatListeners)
+      listener(event('session.status', { payload: { status: 'idle' } }));
+    await until(() => example()?.status?.text === '示例: 1 个对话事件');
   }, 30_000);
 });
