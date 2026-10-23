@@ -40,10 +40,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { type RunStatus, StatusIcon } from '@/components/ui/status-icon';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { Z_INDEX } from '@/lib/z-index';
+import { pluginStatusLine } from './pluginStatusLine';
 import { SETTINGS_CARD_FRAME_CLASS, SettingsRow } from './SettingsPrimitives';
 
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -56,38 +57,6 @@ function permissionLabel(permission: PluginPermission, t: Translate): string {
   return permission === 'chat.read'
     ? t('Read conversations')
     : t('Change conversations (send, approve, stop)');
-}
-
-/** What the card's status line shows: the plugin's own line while it runs, ours otherwise. */
-export function pluginStatusLine(
-  plugin: PluginView,
-  t: Translate
-): { status: RunStatus; text: string } {
-  if (plugin.state === 'failed') {
-    return {
-      status: 'failed',
-      text:
-        plugin.restartCount > 0
-          ? t('Failed · retried {{count}} times', { count: plugin.restartCount })
-          : t('Failed'),
-    };
-  }
-  if (plugin.state === 'starting') return { status: 'running', text: t('Starting…') };
-  if (plugin.state === 'stopped') {
-    return plugin.enabled && plugin.restartCount > 0
-      ? { status: 'waiting', text: t('Restarting…') }
-      : { status: 'idle', text: plugin.enabled ? t('Stopped') : t('Off') };
-  }
-  const own = plugin.status;
-  const status: RunStatus =
-    own?.state === 'error'
-      ? 'failed'
-      : own?.state === 'warning'
-        ? 'waiting'
-        : own?.state === 'idle'
-          ? 'idle'
-          : 'success';
-  return { status, text: own?.text || t('Running') };
 }
 
 function PluginSettingField({

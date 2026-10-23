@@ -1,6 +1,6 @@
 import type { PluginView } from '@shared/plugins/view';
 import { describe, expect, it } from 'vitest';
-import { pluginStatusLine } from '../PluginsSettings';
+import { pluginStatusLine } from '../pluginStatusLine';
 
 const t = ((text: string, vars?: Record<string, unknown>) =>
   text.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(vars?.[key] ?? ''))) as never;
