@@ -1539,6 +1539,8 @@ describe('issue #25 chat callers', () => {
       },
     };
 
+    const { sessionControl } = await import('../../services/chat/sessionControl');
+    sessionControl.acquireForClient('s1', { ownerId, pluginId: 'p.x', label: '网页' });
     await expect(
       invokeChatHandler('chat:send', caller, [{ sessionId: 's1', attemptId: 'a1', text: 'hi' }])
     ).resolves.toEqual({ requestId: 'send-1' });
@@ -1592,5 +1594,45 @@ describe('issue #25 chat callers', () => {
     await expect(invokeChatHandler('chat:nope', { ownerId: -1 }, [])).rejects.toThrow(
       /^chat_handler_unknown/
     );
+  });
+});
+
+/** Plugin-system §4 — conversation-changing calls run only for the session's controller. */
+describe('session control in chat handlers', () => {
+  it('[PLG-CONTROL-IPC] a client must take over first; then the desktop is refused until it takes back', async () => {
+    const { invokeChatHandler } = await import('../chat');
+    const { sessionControl } = await import('../../services/chat/sessionControl');
+    const client = { ownerId: -5 };
+    const sendPayload = { sessionId: 's1', attemptId: 'a1', text: 'hi' };
+
+    await expect(invokeChatHandler('chat:send', client, [sendPayload])).rejects.toThrow(
+      /^session_controlled_elsewhere/
+    );
+    sessionControl.acquireForClient('s1', { ownerId: -5, pluginId: 'p.x', label: '网页' });
+    await expect(invokeChatHandler('chat:send', client, [sendPayload])).resolves.toEqual({
+      requestId: 'send-1',
+    });
+    await expect(invoke('chat:send', sendPayload)).rejects.toThrow(/网页/);
+    // Stop is either side's.
+    await expect(invoke('chat:stop', { sessionId: 's1' })).resolves.toEqual({
+      requestId: 'stop-1',
+    });
+    // Reads are either side's.
+    await expect(invoke('chat:listSessions')).resolves.toEqual([]);
+
+    await invoke('chat:takeOverSession', { sessionId: 's1' });
+    await expect(invoke('chat:send', sendPayload)).resolves.toEqual({ requestId: 'send-1' });
+    await expect(invoke('chat:getSessionControls')).resolves.toEqual([]);
+  });
+
+  it('[PLG-CONTROL-IPC] every window hears a change of controller', async () => {
+    const { sessionControl } = await import('../../services/chat/sessionControl');
+    const windowSend = vi.fn();
+    fakeWindows = [{ isDestroyed: () => false, webContents: { id: 1, send: windowSend } }];
+    sessionControl.acquireForClient('s1', { ownerId: -5, pluginId: 'p.x', label: '网页' });
+    expect(windowSend).toHaveBeenCalledWith('chat:sessionControlChanged', {
+      sessionId: 's1',
+      controller: { kind: 'client', ownerId: -5, pluginId: 'p.x', label: '网页' },
+    });
   });
 });

@@ -1110,6 +1110,22 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.CHAT_RUNTIME_EVENT, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.CHAT_RUNTIME_EVENT, handler);
     },
+    /** Plugin-system §4: sessions a plugin client controls; every other one is the desktop's. */
+    getSessionControls: (): Promise<
+      import('@shared/types/sessionControl').SessionControlChange[]
+    > => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_SESSION_CONTROLS),
+    takeOverSession: (payload: { sessionId: string }): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_TAKE_OVER_SESSION, payload),
+    onSessionControlChanged: (
+      callback: (change: import('@shared/types/sessionControl').SessionControlChange) => void
+    ): (() => void) => {
+      const handler = (
+        _: unknown,
+        change: import('@shared/types/sessionControl').SessionControlChange
+      ) => callback(change);
+      ipcRenderer.on(IPC_CHANNELS.CHAT_SESSION_CONTROL_CHANGED, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.CHAT_SESSION_CONTROL_CHANGED, handler);
+    },
     /** P1-9d: rows a migrated chat came from are left out, or flagged `migrationDiverged`. */
     listSessions: (): Promise<SessionIndexListEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_SESSIONS),

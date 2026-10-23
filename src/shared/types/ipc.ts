@@ -452,6 +452,12 @@ export const IPC_CHANNELS = {
   CHAT_LIST_PI_MODELS: 'chat:listPiModels',
   /** Main → Renderer: Agent Host RuntimeEvent push */
   CHAT_RUNTIME_EVENT: 'chat:runtimeEvent',
+  /** Plugin-system §4: sessions a plugin client controls (all others: the desktop). */
+  CHAT_GET_SESSION_CONTROLS: 'chat:getSessionControls',
+  /** Plugin-system §4: the desktop takes a session back. */
+  CHAT_TAKE_OVER_SESSION: 'chat:takeOverSession',
+  /** Main → Renderer: a session's controller changed. */
+  CHAT_SESSION_CONTROL_CHANGED: 'chat:sessionControlChanged',
 
   // Logging
   LOG_UPDATE_CONFIG: 'log:update-config',

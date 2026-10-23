@@ -10,6 +10,7 @@ import {
 
 import path from 'node:path';
 import { CLAUDE_SDK_STUB_SUFFIX } from '@shared/claudeSdkEngine';
+import { CONTROLLED_CHAT_CHANNELS } from '@shared/plugins/chatChannels';
 import { IPC_CHANNELS } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import {
@@ -67,6 +68,7 @@ import {
   readSessionReplayPage,
   SESSION_REPLAY_UNAVAILABLE,
 } from '../services/chat/SessionReplayReader';
+import { sessionControl } from '../services/chat/sessionControl';
 import { usableWorkspace } from '../services/legacyAssets/detectLegacyAssets';
 
 /** Owners whose release-on-gone listener is already attached. */
@@ -128,13 +130,37 @@ function claimSessionForSender(
 type ChatHandler = (caller: ChatCaller, ...args: unknown[]) => unknown;
 const chatHandlers = new Map<string, ChatHandler>();
 
+/**
+ * Plugin-system §4: a call that changes a conversation runs only for the
+ * session's controller. Checked here, once, for windows and plugin clients
+ * alike; every controlled call (`CONTROLLED_CHAT_CHANNELS`) names its
+ * session as `payload.sessionId`.
+ */
+function assertSessionControl(caller: ChatCaller, payload: unknown): void {
+  const sessionId = (payload as { sessionId?: unknown } | undefined)?.sessionId;
+  if (typeof sessionId !== 'string') return;
+  sessionControl.assertMayChange(sessionId, caller.ownerId);
+}
+
 function handle<TArgs extends unknown[], TResult>(
   channel: string,
-  handler: (caller: ChatCaller, ...args: TArgs) => TResult
+  rawHandler: (caller: ChatCaller, ...args: TArgs) => TResult
 ): void {
+  // A refused call rejects like any other failure, never throws synchronously.
+  const handler = CONTROLLED_CHAT_CHANNELS.has(channel)
+    ? async (caller: ChatCaller, ...args: TArgs): Promise<unknown> => {
+        assertSessionControl(caller, args[0]);
+        return rawHandler(caller, ...args);
+      }
+    : rawHandler;
   // The payload types are the renderer's promise; the gateway validates its own.
   chatHandlers.set(channel, handler as unknown as ChatHandler);
-  ipcMain.handle(channel, (event, ...args) => handler(callerForIpc(event), ...(args as TArgs)));
+  ipcMain.handle(channel, (event, ...args) =>
+    (handler as (caller: ChatCaller, ...args: TArgs) => unknown)(
+      callerForIpc(event),
+      ...(args as TArgs)
+    )
+  );
 }
 
 /** Run a registered chat handler for a caller that is not an IPC sender. */
@@ -191,6 +217,16 @@ function ensureEventBridge(): void {
   eventBridgeAttached = true;
   workerManager.onEvent(broadcastRuntimeEvent);
   workerManager.onEvent((event) => sessionIndexService.handleRuntimeEvent(event));
+  sessionControl.onChange((change) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue;
+      try {
+        win.webContents.send(IPC_CHANNELS.CHAT_SESSION_CONTROL_CHANGED, change);
+      } catch {
+        // Window may be closing mid-send
+      }
+    }
+  });
 }
 
 function agentMismatch(sessionId: string): Error {
@@ -415,6 +451,14 @@ export function registerChatHandlers(): void {
     await workerManager.ensureReady();
     prewarmDshHostOnce();
     return workerManager.getStatus();
+  });
+
+  handle(IPC_CHANNELS.CHAT_GET_SESSION_CONTROLS, () => sessionControl.list());
+
+  // The desktop's 「接管」. A window is always the desktop, so no owner check.
+  handle(IPC_CHANNELS.CHAT_TAKE_OVER_SESSION, (_caller, payload: { sessionId: string }) => {
+    if (typeof payload?.sessionId !== 'string') throw new Error('Invalid session id');
+    sessionControl.acquireForDesktop(payload.sessionId);
   });
 
   handle(IPC_CHANNELS.CHAT_GET_HOST_STATUS, async () => {
