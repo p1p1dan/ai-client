@@ -21,7 +21,7 @@ export function DeveloperModeSection() {
     <SettingsSectionBlock
       title={t('Developer mode')}
       description={t(
-        'Shows settings meant for development and testing below: request identity (User-Agent), the Agent SDK engine switch, caching tool definitions and the chat list title. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.'
+        'Shows settings meant for development and testing below: request identity (User-Agent), the Agent SDK engine switch with its automatic compaction threshold and empty system message fix, caching tool definitions and the chat list title. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.'
       )}
     >
       <SettingsRow>

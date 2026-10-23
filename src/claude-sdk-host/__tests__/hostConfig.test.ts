@@ -73,6 +73,25 @@ describe('buildHostConfig', () => {
     // The CLI's environment does not carry Main's variable.
     expect(windowed.cliEnv).not.toHaveProperty('AICLIENT_CLAUDE_SDK_MODEL_WINDOWS');
   });
+
+  it('hands the CLI Main’s auto-compact percentage, 60 when absent or malformed (user 2026-10-23)', () => {
+    expect(config.cliEnv.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBe('60');
+    expect(config.settingsEnv.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBe('60');
+    const percentOf = (raw: string) =>
+      buildHostConfig({
+        inherited: { AICLIENT_CLAUDE_SDK_AUTO_COMPACT_PERCENT: raw },
+        configDir: 'D:stateclaude-sdk-home',
+        settingSources: ['project'],
+        apiKey: KEY,
+        proxy: { url: 'http://127.0.0.1:50123', token: TOKEN },
+      }).config;
+    const set = percentOf('70');
+    expect(set.cliEnv.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBe('70');
+    expect(set.settingsEnv.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBe('70');
+    expect(set.cliEnv).not.toHaveProperty('AICLIENT_CLAUDE_SDK_AUTO_COMPACT_PERCENT');
+    for (const raw of ['5', '101', '55.5', 'x', ''])
+      expect(percentOf(raw).cliEnv.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE, raw).toBe('60');
+  });
 });
 
 /**

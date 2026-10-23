@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import {
   type ChatEngine,
+  CLAUDE_SDK_AUTO_COMPACT_PERCENT_ENV,
+  CLAUDE_SDK_DROP_EMPTY_SYSTEM_ENV,
   CLAUDE_SDK_INHERITED_ENV,
   CLAUDE_SDK_MODEL_WINDOWS_ENV,
   CLAUDE_SDK_STUB_SUFFIX,
@@ -15,6 +17,7 @@ import { app } from 'electron';
 import { getAppStateRoot } from '../appStatePaths';
 import { getEngineProxySetting, onEngineProxyChange } from '../proxy/ProxyConfig';
 import { ClaudeSdkProcessTransport } from './ClaudeSdkProcessTransport';
+import { claudeSdkAutoCompactPercent, claudeSdkDropEmptySystem } from './claudeSdkEngineSetting';
 import { ensurePrivateDirectory, resolveDshHostLayout } from './DshHostProcess';
 import type { WorkerTransport } from './WorkerTransport';
 import { WorkerManagerError } from './workerManagerError';
@@ -395,6 +398,9 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
     ...(input.modelWindows && Object.keys(input.modelWindows).length > 0
       ? { [CLAUDE_SDK_MODEL_WINDOWS_ENV]: JSON.stringify(input.modelWindows) }
       : {}),
+    // User 2026-10-23: the developer setting as this host starts.
+    [CLAUDE_SDK_AUTO_COMPACT_PERCENT_ENV]: String(claudeSdkAutoCompactPercent()),
+    [CLAUDE_SDK_DROP_EMPTY_SYSTEM_ENV]: claudeSdkDropEmptySystem() ? '1' : '0',
   });
   return new ClaudeSdkProcessTransport({
     command: launch.node,

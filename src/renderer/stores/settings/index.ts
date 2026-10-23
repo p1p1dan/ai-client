@@ -1,4 +1,9 @@
-import { DEFAULT_CLAUDE_SDK_ENGINE_ENABLED } from '@shared/claudeSdkEngine';
+import {
+  DEFAULT_CLAUDE_SDK_AUTO_COMPACT_PERCENT,
+  DEFAULT_CLAUDE_SDK_DROP_EMPTY_SYSTEM,
+  DEFAULT_CLAUDE_SDK_ENGINE_ENABLED,
+  resolveClaudeSdkAutoCompactPercent,
+} from '@shared/claudeSdkEngine';
 import { DEFAULT_DEVELOPER_MODE_ENABLED } from '@shared/developerMode';
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
@@ -193,6 +198,8 @@ export function getInitialState() {
 
     // Route B, S-1: the default Main applies when the key is absent.
     claudeSdkEngineEnabled: DEFAULT_CLAUDE_SDK_ENGINE_ENABLED,
+    claudeSdkAutoCompactPercent: DEFAULT_CLAUDE_SDK_AUTO_COMPACT_PERCENT,
+    claudeSdkDropEmptySystemMessages: DEFAULT_CLAUDE_SDK_DROP_EMPTY_SYSTEM,
 
     // Decision 171: the plan's own default, `claude-cli-pilab/<app version>`.
     requestUserAgentMode: DEFAULT_REQUEST_USER_AGENT_MODE,
@@ -350,6 +357,13 @@ export const useSettingsStore = create<SettingsState>()(
         set({ experimentalCacheControlOnTools }),
 
       setClaudeSdkEngineEnabled: (claudeSdkEngineEnabled) => set({ claudeSdkEngineEnabled }),
+      setClaudeSdkDropEmptySystemMessages: (claudeSdkDropEmptySystemMessages) =>
+        set({ claudeSdkDropEmptySystemMessages }),
+      setClaudeSdkAutoCompactPercent: (percent) => {
+        if (resolveClaudeSdkAutoCompactPercent(percent) === percent) {
+          set({ claudeSdkAutoCompactPercent: percent });
+        }
+      },
 
       // Decision 171: guarded at the door, like the idle timeout above — a
       // value the plan would refuse is never stored. `''` clears the custom

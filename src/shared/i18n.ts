@@ -4687,6 +4687,12 @@ Object.assign(zhTranslations, {
   'Run Anthropic-protocol models on the official Agent SDK':
     'Anthropic 协议的模型使用官方 Agent SDK',
   'Use Agent SDK': '使用 Agent SDK',
+  'Automatic compaction at': '自动压缩阈值',
+  'Drop empty system messages': '删除空的 system 消息',
+  'After a compaction the CLI can send an empty system message that the gateway refuses, and every later turn of that chat fails. When on, PiLab removes it before the request goes out. Applies when a chat engine starts next.':
+    'CLI 压缩后可能发出一条空的 system 消息，网关会拒绝，这个会话之后每一轮都会失败。开启后，PiLab 在请求发出前把它删掉。会话引擎下次启动时生效。',
+  'Percentage of the context window at which Agent SDK chats summarize earlier turns. 100 keeps the CLI default. Applies when a chat engine starts next.':
+    'Agent SDK 会话的上下文用到窗口的这个比例时自动压缩早前的对话。填 100 即沿用 CLI 自己的阈值。会话引擎下次启动时生效。',
   'The Agent SDK engine could not start': 'Agent SDK 引擎没能启动',
   'The engine process for this chat would not start. Your other chats are not affected, and nothing is wrong with this chat.':
     '这个对话的引擎进程没能启动。其他对话不受影响，这个对话本身也没有问题。',
@@ -4769,8 +4775,8 @@ Object.assign(zhTranslations, {
   'Show a title row above the chat list with the grouping and its menu':
     '在对话列表上方显示一行标题，写明当前分组方式，带分组菜单按钮',
   'Enable developer mode': '启用开发人员模式',
-  'Shows settings meant for development and testing below: request identity (User-Agent), the Agent SDK engine switch, caching tool definitions and the chat list title. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.':
-    '在下方显示供开发与测试用的设置：请求标识（User-Agent）、Agent SDK 引擎开关、缓存工具定义和对话列表标题行。关闭时这些设置隐藏，并按默认值生效；你改过的值会保留，重新打开后恢复生效。',
+  'Shows settings meant for development and testing below: request identity (User-Agent), the Agent SDK engine switch with its automatic compaction threshold and empty system message fix, caching tool definitions and the chat list title. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.':
+    '在下方显示供开发与测试用的设置：请求标识（User-Agent）、Agent SDK 引擎开关及其自动压缩阈值和空 system 消息修复、缓存工具定义和对话列表标题行。关闭时这些设置隐藏，并按默认值生效；你改过的值会保留，重新打开后恢复生效。',
 });
 
 // Agent SDK chat model menu (route B, S-6 feedback 3)

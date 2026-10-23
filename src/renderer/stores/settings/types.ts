@@ -255,6 +255,20 @@ export interface SettingsState {
   claudeSdkEngineEnabled: boolean;
 
   /**
+   * User 2026-10-23 (`@shared/claudeSdkEngine`): where an SDK chat compacts by
+   * itself, in percent of its auto-compact window. Developer mode; Main reads
+   * it when a chat's host starts.
+   */
+  claudeSdkAutoCompactPercent: number;
+
+  /**
+   * User 2026-10-23 (`@shared/claudeSdkEngine`): the SDK host drops the empty
+   * `system` messages the CLI can send after a compaction. On by default;
+   * developer mode. Main reads it when a chat's host starts.
+   */
+  claudeSdkDropEmptySystemMessages: boolean;
+
+  /**
    * dsh-rebase decision 171 (GitHub issue #7): the User-Agent of every request
    * to a model service (`@shared/types/requestUserAgent`): `default`
    * (`claude-cli-pilab/<app version>`), `engine` (DSH's own) or `custom`.
@@ -416,6 +430,9 @@ export interface SettingsState {
   setExperimentalCacheControlOnTools: (enabled: boolean) => void;
   /** Route B, S-1: the Claude engine switch. */
   setClaudeSdkEngineEnabled: (enabled: boolean) => void;
+  /** Ignores a value out of range or not a whole number. */
+  setClaudeSdkAutoCompactPercent: (percent: number) => void;
+  setClaudeSdkDropEmptySystemMessages: (enabled: boolean) => void;
   /** Decision 171: ignores a mode it does not know. */
   setRequestUserAgentMode: (mode: RequestUserAgentMode) => void;
   /** Decision 171: stores a value that passes the check (trimmed), or `''` to clear; ignores the rest. */

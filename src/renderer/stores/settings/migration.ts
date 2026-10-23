@@ -1,3 +1,4 @@
+import { resolveClaudeSdkAutoCompactPercent } from '@shared/claudeSdkEngine';
 import { sanitizeChatAgentDefaults } from '@shared/models/chatAgentDefaults';
 import { CHAT_TYPOGRAPHY_SCALE_VERSION } from '@shared/types/chatTypography';
 import { checkRequestUserAgent, isRequestUserAgentMode } from '@shared/types/requestUserAgent';
@@ -334,6 +335,15 @@ export function migrateSettings(
       persisted.claudeSdkEngineEnabled,
       currentState.claudeSdkEngineEnabled
     ),
+    claudeSdkDropEmptySystemMessages: sanitizeBoolean(
+      persisted.claudeSdkDropEmptySystemMessages,
+      currentState.claudeSdkDropEmptySystemMessages
+    ),
+    // Main's own rule (`resolveClaudeSdkAutoCompactPercent`): anything else reads as the default.
+    claudeSdkAutoCompactPercent:
+      persisted.claudeSdkAutoCompactPercent === undefined
+        ? currentState.claudeSdkAutoCompactPercent
+        : resolveClaudeSdkAutoCompactPercent(persisted.claudeSdkAutoCompactPercent),
 
     displaySerifEnabled: sanitizeBoolean(
       persisted.displaySerifEnabled,

@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IPC_CHANNELS } from '@shared/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { claudeSdkEngineEnabled } from '../claudeSdkEngineSetting';
+import {
+  claudeSdkAutoCompactPercent,
+  claudeSdkDropEmptySystem,
+  claudeSdkEngineEnabled,
+} from '../claudeSdkEngineSetting';
 
 /**
  * Route B, S-1 (decision 1): Main's read of the renderer-owned switch
@@ -101,5 +105,48 @@ describe('a renderer save reaches the read through the settings IPC', () => {
     await save({ theme: 'dark', claudeSdkEngineEnabled: true });
     expect(setting.claudeSdkEngineEnabled()).toBe(true);
     await vi.advanceTimersByTimeAsync(600);
+  });
+});
+
+describe('claudeSdkAutoCompactPercent (user 2026-10-23)', () => {
+  it('is 60 for an install that never chose, and carries a whole number in range through', () => {
+    expect(claudeSdkAutoCompactPercent(values({}))).toBe(60);
+    expect(claudeSdkAutoCompactPercent(values({ claudeSdkAutoCompactPercent: 70 }))).toBe(70);
+    expect(claudeSdkAutoCompactPercent(values({ claudeSdkAutoCompactPercent: 100 }))).toBe(100);
+    expect(claudeSdkAutoCompactPercent(values({ claudeSdkAutoCompactPercent: 10 }))).toBe(10);
+  });
+
+  it('reads anything else as the default', () => {
+    for (const value of [9, 101, 55.5, '70', null, {}]) {
+      expect(claudeSdkAutoCompactPercent(values({ claudeSdkAutoCompactPercent: value }))).toBe(60);
+    }
+  });
+
+  it('is the default while developer mode is off', () => {
+    expect(
+      claudeSdkAutoCompactPercent(() => ({
+        developerModeEnabled: false,
+        claudeSdkAutoCompactPercent: 70,
+      }))
+    ).toBe(60);
+  });
+});
+
+describe('claudeSdkDropEmptySystem (user 2026-10-23)', () => {
+  it('is on unless a stored false says otherwise, and on while developer mode is off', () => {
+    expect(claudeSdkDropEmptySystem(values({}))).toBe(true);
+    expect(claudeSdkDropEmptySystem(values({ claudeSdkDropEmptySystemMessages: false }))).toBe(
+      false
+    );
+    for (const value of ['false', 0, null])
+      expect(claudeSdkDropEmptySystem(values({ claudeSdkDropEmptySystemMessages: value }))).toBe(
+        true
+      );
+    expect(
+      claudeSdkDropEmptySystem(() => ({
+        developerModeEnabled: false,
+        claudeSdkDropEmptySystemMessages: false,
+      }))
+    ).toBe(true);
   });
 });

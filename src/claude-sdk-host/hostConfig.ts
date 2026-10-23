@@ -6,7 +6,9 @@
  */
 
 import {
+  CLAUDE_SDK_AUTO_COMPACT_PERCENT_ENV,
   CLAUDE_SDK_MODEL_WINDOWS_ENV,
+  parseClaudeSdkAutoCompactPercent,
   parseClaudeSdkModelWindows,
 } from '../shared/claudeSdkEngine.ts';
 import { childProxyOverlay, type HostProxySetting, hostProxySecrets } from '../shared/hostProxy.ts';
@@ -52,6 +54,13 @@ export function buildHostConfig(input: HostConfigInput): {
   });
   // Main's catalog windows for this route (user 2026-10-18); malformed ones are dropped.
   const modelWindows = parseClaudeSdkModelWindows(input.inherited[CLAUDE_SDK_MODEL_WINDOWS_ENV]);
+  // User 2026-10-23: Main's auto-compact percentage, pinned in the flag tier too so a
+  // repository's settings `env` cannot move it.
+  const autoCompact = {
+    CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: String(
+      parseClaudeSdkAutoCompactPercent(input.inherited[CLAUDE_SDK_AUTO_COMPACT_PERCENT_ENV])
+    ),
+  };
   return {
     config: {
       ...(Object.keys(modelWindows).length > 0 ? { modelWindows } : {}),
@@ -73,8 +82,9 @@ export function buildHostConfig(input: HostConfigInput): {
         }),
         // Not an inherited name: only the product proxy's overlay sets it, as DSH does.
         ...(overlay.NODE_USE_ENV_PROXY ? { NODE_USE_ENV_PROXY: overlay.NODE_USE_ENV_PROXY } : {}),
+        ...autoCompact,
       },
-      settingsEnv: pinned.env,
+      settingsEnv: { ...pinned.env, ...autoCompact },
       secrets: [input.apiKey, input.proxy.token, ...hostProxySecrets(input.outboundProxy)],
     },
     credentialedProxies: pinned.credentialedProxies,

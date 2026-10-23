@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
-import { CLAUDE_SDK_ENGINE_SETTING_KEY } from '@shared/claudeSdkEngine';
+import {
+  CLAUDE_SDK_AUTO_COMPACT_PERCENT_SETTING_KEY,
+  CLAUDE_SDK_DROP_EMPTY_SYSTEM_SETTING_KEY,
+  CLAUDE_SDK_ENGINE_SETTING_KEY,
+} from '@shared/claudeSdkEngine';
 import {
   applyDeveloperModeGate,
   DEFAULT_DEVELOPER_MODE_ENABLED,
@@ -42,15 +46,19 @@ import { migrateSettings } from '../migration';
 const STORED = {
   [CACHE_CONTROL_ON_TOOLS_SETTING_KEY]: true,
   [CLAUDE_SDK_ENGINE_SETTING_KEY]: false,
+  [CLAUDE_SDK_AUTO_COMPACT_PERCENT_SETTING_KEY]: 70,
+  [CLAUDE_SDK_DROP_EMPTY_SYSTEM_SETTING_KEY]: false,
   [REQUEST_USER_AGENT_MODE_SETTING_KEY]: 'custom',
   [REQUEST_USER_AGENT_CUSTOM_SETTING_KEY]: 'gw/2',
 };
 
 describe('the developer-mode gate', () => {
-  it('holds exactly the three settings of ruling 26, keyed as the store names them', () => {
+  it('holds the settings of ruling 26 and the SDK auto-compact percentage, keyed as the store names them', () => {
     expect(DEVELOPER_MODE_SETTING_KEY).toBe('developerModeEnabled');
     expect([...DEVELOPER_MODE_SETTING_KEYS].sort()).toEqual(
       [
+        'claudeSdkAutoCompactPercent',
+        'claudeSdkDropEmptySystemMessages',
         'claudeSdkEngineEnabled',
         'experimentalCacheControlOnTools',
         'requestUserAgentCustom',
@@ -123,6 +131,8 @@ describe('the developer mode setting', () => {
     useSettingsStore.setState({
       experimentalCacheControlOnTools: true,
       claudeSdkEngineEnabled: false,
+      claudeSdkAutoCompactPercent: 70,
+      claudeSdkDropEmptySystemMessages: false,
       requestUserAgentMode: 'custom',
       requestUserAgentCustom: 'gw/2',
     });

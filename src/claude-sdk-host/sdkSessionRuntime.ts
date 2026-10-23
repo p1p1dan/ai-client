@@ -208,6 +208,9 @@ const CLI_MARKER_TEXT = /^(\[Request interrupted by user|<local-command-caveat>)
 /** The model of a message the CLI wrote itself (a local command's output, decision 194). */
 const SYNTHETIC_MODEL = '<synthetic>';
 const COMPACT_SUMMARY_PREFIX = 'This session is being continued from a previous conversation';
+/** User 2026-10-23: what a `/compact` without instructions asks the summary to keep. */
+export const DEFAULT_COMPACT_INSTRUCTIONS =
+  '只保留：当前目标；已完成和未完成事项；已修改文件；关键设计决定及原因；失败方案及其证据；测试结果；未解决风险；下一步验证计划。删除闲聊、重复输出、过时计划和已经失效的尝试。';
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const FILE_CHANGE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 /** How long Stop waits for the CLI to close the turn itself before closing it here. */
@@ -2862,10 +2865,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const done = new Promise<WorkerCompactResult>((resolve, reject) => {
       this.compacting = { resolve, reject };
     });
-    const instructions = input.instructions?.trim();
+    const instructions = input.instructions?.trim() || DEFAULT_COMPACT_INSTRUCTIONS;
     this.input?.push({
       type: 'user',
-      message: { role: 'user', content: instructions ? `/compact ${instructions}` : '/compact' },
+      message: { role: 'user', content: `/compact ${instructions}` },
       parent_tool_use_id: null,
       uuid: randomUUID(),
     });

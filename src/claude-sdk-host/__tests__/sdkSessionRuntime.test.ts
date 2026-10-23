@@ -92,6 +92,7 @@ vi.mock('../processTree.ts', () => ({
 
 const {
   ClaudeSdkSessionRuntime,
+  DEFAULT_COMPACT_INSTRUCTIONS,
   isUserHomeDir,
   launchSettingSources,
   subagentText,
@@ -2245,5 +2246,28 @@ describe('side questions (layout 5f, ruling L6)', () => {
       code: 'WORKER_SIDE_QUESTION_CANCELLED',
     });
     await rt.dispose();
+  });
+});
+
+// ---- User 2026-10-23: a bare `/compact` asks for the default summary ----
+
+describe('compact instructions', () => {
+  const sentText = (rt: InstanceType<typeof ClaudeSdkSessionRuntime>) =>
+    (
+      rt as unknown as { input: { items: Array<{ message: { content: string } }> } }
+    ).input.items.map((item) => item.message.content);
+
+  it('sends the default instructions when none are given, and the user’s own otherwise', async () => {
+    const { rt: bare } = await started();
+    void bare.compact({});
+    void bare.compact({ instructions: '   ' }).catch(() => undefined);
+    expect(sentText(bare)).toEqual([`/compact ${DEFAULT_COMPACT_INSTRUCTIONS}`]);
+    await bare.dispose();
+
+    sdk.queries.length = 0;
+    const { rt: own } = await started();
+    void own.compact({ instructions: ' keep the API notes ' });
+    expect(sentText(own)).toEqual(['/compact keep the API notes']);
+    await own.dispose();
   });
 });
