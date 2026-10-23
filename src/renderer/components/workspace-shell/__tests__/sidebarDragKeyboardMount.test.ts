@@ -18,6 +18,7 @@ vi.hoisted(() => {
   window.electronAPI = {
     env: { platform: 'linux' },
     settings: { read: async () => null, write: async () => undefined },
+    app: { setLanguage: () => undefined },
   } as unknown as typeof window.electronAPI;
 });
 

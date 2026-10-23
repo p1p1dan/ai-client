@@ -48,8 +48,17 @@ vi.mock('@/components/ui/toast', () => ({
   toastManager: { add: (toast: { type?: string; title: string }) => toasts.push(toast) },
 }));
 
-const { openPath } = vi.hoisted(() => ({ openPath: vi.fn(async (_path: string) => '') }));
-vi.stubGlobal('electronAPI', { shell: { openPath } });
+const { openPath } = vi.hoisted(() => {
+  const openPath = vi.fn(async (_path: string) => '');
+  // Must be hoisted: the settings store rehydrates from `electronAPI` at import time.
+  window.electronAPI = {
+    env: { platform: 'linux' },
+    settings: { read: async () => null, write: async () => undefined },
+    app: { setLanguage: () => undefined },
+    shell: { openPath },
+  } as unknown as typeof window.electronAPI;
+  return { openPath };
+});
 
 const { LeftNav } = await import('../LeftNav');
 
