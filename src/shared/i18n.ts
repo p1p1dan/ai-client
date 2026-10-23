@@ -3501,6 +3501,10 @@ export const zhTranslations: Record<string, string> = {
   'Turn on “{{name}}”?': '启用「{{name}}」？',
   'Uninstall “{{name}}”?': '卸载「{{name}}」？',
   '{{name}} needs a number': '{{name}}需要填数字',
+  // Plugin-system §4: a chat in use on a plugin's client (the remote web page).
+  'In use on {{label}}; you can only watch here': '正在 {{label}} 上使用，这里只能看进度',
+  'In use on {{label}}': '正在 {{label}} 上使用',
+  'Take over': '接管',
 };
 
 export function normalizeLocale(input?: string): Locale {

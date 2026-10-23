@@ -494,7 +494,8 @@ describe('the menu before a session is up', () => {
 describe('the IPC handler wiring', () => {
   const chat = readFileSync(join(REPO, 'src/main/ipc/chat.ts'), 'utf8');
   const handler = chat.slice(chat.indexOf('IPC_CHANNELS.CHAT_GET_SLASH_COMMANDS,'));
-  const body = handler.slice(0, handler.indexOf('ipcMain.handle('));
+  // Handlers register through `handle(` (plugin-system: one table for IPC and plugins).
+  const body = handler.slice(0, handler.indexOf('\n  handle('));
 
   it('answers through composerSlashCommands, with a checked workspace and the host’s homes', () => {
     expect(body).toContain('composerSlashCommands(');

@@ -3,6 +3,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useMessageMetadataStore } from '@/stores/messageMetadataRegistry';
+import { useRemoteController } from '@/stores/sessionControl';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { markSessionsLive } from '@/stores/sessionRetirement';
@@ -26,6 +27,7 @@ import { PendingInteractionSlot, usePendingInteraction } from './PendingInteract
 import type { RunSendOrigin } from './queueRelease';
 import { SessionPanelStrips } from './SessionPanelStrips';
 import { SubwindowRegion } from './SessionSubwindows';
+import { SessionTakeoverBar } from './SessionTakeoverBar';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
@@ -256,6 +258,9 @@ export function ChatWorkspace({ className, onAddRepository, home }: ChatWorkspac
   // Decision 174: no conversation open is the home page.
   const onHome = activeSessionId === null;
   const waitingOnUser = usePendingInteraction(activeSessionId);
+  // Plugin-system §4: a plugin's client (the remote web page) holds this chat.
+  const usedElsewhere = useRemoteController(activeSessionId) !== undefined && !onHome;
+  const composerHidden = waitingOnUser || usedElsewhere;
 
   return (
     <section className={cn('relative flex min-h-0 flex-col', className)} style={chatSurfaceStyle}>
@@ -314,7 +319,9 @@ export function ChatWorkspace({ className, onAddRepository, home }: ChatWorkspac
             composer's place; the composer stays mounted, hidden, so its draft
             survives the card. */}
         {waitingOnUser && <PendingInteractionSlot sessionId={activeSessionId} />}
-        <div hidden={waitingOnUser} className={waitingOnUser ? 'hidden' : 'contents'}>
+        {/* Plugin-system §4: in use on a plugin's client — a bar instead of the composer. */}
+        {usedElsewhere && <SessionTakeoverBar sessionId={activeSessionId} />}
+        <div hidden={composerHidden} className={composerHidden ? 'hidden' : 'contents'}>
           <ChatComposer
             mode={renderedMode}
             onAddRepository={onAddRepository}

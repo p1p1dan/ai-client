@@ -13,6 +13,7 @@
  */
 
 import type React from 'react';
+import { useRemoteController } from '@/stores/sessionControl';
 import { requestComposerStop } from './composerFocus';
 import { PendingPermissionDock, useHasPendingPermissionCard } from './PendingPermissionDock';
 import { PendingQuestionDock, useHasPendingQuestionCard } from './PendingQuestionDock';
@@ -33,8 +34,15 @@ export function PendingInteractionSlot({ sessionId }: { sessionId: string | null
     event.preventDefault();
     requestComposerStop(sessionId);
   };
+  // Plugin-system §4: used on a plugin's client, the card stays readable but
+  // is answered there (or here after taking over), so it is inert here.
+  const usedElsewhere = useRemoteController(sessionId) !== undefined;
   return (
-    <div onKeyDown={onKeyDown}>
+    <div
+      onKeyDown={onKeyDown}
+      inert={usedElsewhere}
+      className={usedElsewhere ? 'opacity-60' : undefined}
+    >
       <ReadingColumn className="flex flex-col">
         {permission ? (
           <PendingPermissionDock sessionId={sessionId} />

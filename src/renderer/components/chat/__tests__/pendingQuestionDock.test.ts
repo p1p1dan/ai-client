@@ -225,11 +225,13 @@ it("takes the composer's place while it waits, and the composer stays mounted", 
   expect(source).toContain(
     '{waitingOnUser && <PendingInteractionSlot sessionId={activeSessionId} />}'
   );
-  // …and the composer is hidden, not unmounted, so its draft survives the card.
-  expect(source).toMatch(/<div hidden=\{waitingOnUser\}[^>]*>\s*<ChatComposer/);
+  // …and the composer is hidden, not unmounted, so its draft survives the card
+  // (plugin-system §4: the takeover bar hides it the same way).
+  expect(source).toContain('const composerHidden = waitingOnUser || usedElsewhere;');
+  expect(source).toMatch(/<div hidden=\{composerHidden\}[^>]*>\s*<ChatComposer/);
   // `display: contents` would override the `hidden` attribute, so the class
   // must switch too.
-  expect(source).toContain("className={waitingOnUser ? 'hidden' : 'contents'}");
+  expect(source).toContain("className={composerHidden ? 'hidden' : 'contents'}");
 });
 
 it('sends Chat about this as a free-text response to every question', async () => {

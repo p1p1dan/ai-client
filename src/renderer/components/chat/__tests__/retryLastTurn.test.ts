@@ -195,7 +195,7 @@ describe('the composer retries instead of resending (source)', () => {
     expect(PRELOAD).toContain('ipcRenderer.invoke(IPC_CHANNELS.CHAT_RETRY_LAST_TURN, payload)');
     const handler = MAIN_IPC.indexOf('IPC_CHANNELS.CHAT_RETRY_LAST_TURN');
     expect(handler).toBeGreaterThan(-1);
-    const body = MAIN_IPC.slice(handler, MAIN_IPC.indexOf('ipcMain.handle(', handler));
+    const body = MAIN_IPC.slice(handler, MAIN_IPC.indexOf('\n  handle(', handler));
     // Same preamble as a send: ownership, then the turn. (The pi TUI handover
     // that sat between them went with the TUI in dsh-rebase P1-11.)
     expect(body).toContain('claimSessionForSender(e, payload.sessionId)');

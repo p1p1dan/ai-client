@@ -27,7 +27,7 @@ describe('P1-7b wiring (jobs window, subagents window, live output)', () => {
     const handler = (channel: string) => {
       const start = chat.indexOf(`IPC_CHANNELS.${channel},`);
       expect(start, channel).toBeGreaterThan(-1);
-      return chat.slice(start, chat.indexOf('ipcMain.handle(', start + 1));
+      return chat.slice(start, chat.indexOf('\n  handle(', start + 1));
     };
     expect(handler('CHAT_KILL_SESSION_JOB')).toContain(
       'claimSessionForSender(e, payload.sessionId)'

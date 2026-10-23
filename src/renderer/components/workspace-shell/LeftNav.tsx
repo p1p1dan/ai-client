@@ -17,6 +17,7 @@ import {
   Puzzle,
   Search,
   Settings,
+  Smartphone,
   Square,
   Trash2,
   X,
@@ -64,6 +65,7 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { openHome } from '@/stores/homeDraft';
+import { useRemoteController } from '@/stores/sessionControl';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { orderGroups, UNGROUPED_GROUP_ID, useSidebarArchiveStore } from '@/stores/sidebarArchive';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
@@ -2284,6 +2286,7 @@ function SessionRow({
   drag,
 }: SessionRowProps) {
   const { t, locale } = useI18n();
+  const remoteController = useRemoteController(sourceRow.sessionId);
   // Decision 144: the row as shown. A placeholder title (`New chat`) is an
   // identifier; every use below reads it in the UI language, so a rename that
   // leaves the shown title untouched is still "no change".
@@ -2593,6 +2596,16 @@ function SessionRow({
             >
               1.0.x
             </Badge>
+          )}
+          {/* Plugin-system §4: in use on a plugin's client (the remote web
+              page); the label is the tooltip. */}
+          {remoteController && (
+            <Smartphone
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-label={t('In use on {{label}}', { label: remoteController.label })}
+            >
+              <title>{t('In use on {{label}}', { label: remoteController.label })}</title>
+            </Smartphone>
           )}
           {/* Layout 5b (the screenshot): the row's state is ONE small mark at
               its end, not a leading dot. Order is urgency, which is also why
