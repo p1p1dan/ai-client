@@ -111,17 +111,17 @@ function RuntimeDetectionFailedShell({
       <DevToolsOverlay />
       <div className="flex flex-1 items-center justify-center px-6">
         <div className="flex max-w-md flex-col items-center gap-3 text-center">
-          <AlertTriangle className="h-8 w-8 text-yellow-500" />
-          <h2 className="text-base font-medium text-foreground">
+          <AlertTriangle className="size-8 text-warning" />
+          <h2 className="text-heading font-medium text-foreground">
             {t('Could not detect the Pi runtime')}
           </h2>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-small text-muted-foreground">
             {t(
               'The probe failed — it may be an IPC, permission or environment problem. Try again; if it keeps failing, check the error log in developer tools.'
             )}
           </p>
           {error ? (
-            <pre className="max-w-full overflow-x-auto rounded bg-muted px-3 py-2 text-left text-[11px] text-muted-foreground">
+            <pre className="max-w-full overflow-x-auto rounded-sm bg-muted px-3 py-2 text-left text-small text-muted-foreground">
               {error}
             </pre>
           ) : null}

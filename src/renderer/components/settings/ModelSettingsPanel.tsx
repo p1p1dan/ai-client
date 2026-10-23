@@ -190,7 +190,7 @@ function ModelTab({
         render={
           <TabsTab
             value={modelId}
-            className="h-auto min-h-8 grow-0 gap-2 rounded-sm px-2 py-1 text-left font-normal hover:bg-hover data-active:bg-selection data-active:text-accent-foreground sm:h-auto"
+            className="h-auto min-h-8 grow-0 gap-2 rounded-sm px-2 py-1 text-left font-normal hover:bg-fill-ghost-hover data-active:bg-fill-ghost-selected data-active:text-foreground sm:h-auto"
           />
         }
       >
@@ -202,8 +202,8 @@ function ModelTab({
           )}
         />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-meta">{name ?? modelId}</span>
-          {name && <span className="truncate text-meta text-muted-foreground">{modelId}</span>}
+          <span className="truncate text-small">{name ?? modelId}</span>
+          {name && <span className="truncate text-small text-muted-foreground">{modelId}</span>}
         </span>
         {customized && <span className="sr-only">{t('Customized')}</span>}
         {invalid && (
@@ -270,7 +270,7 @@ function ModelFields({
   return (
     <>
       <div className="flex items-center gap-2">
-        <p data-slot="model-settings-id" className="min-w-0 flex-1 truncate font-medium text-meta">
+        <p data-slot="model-settings-id" className="min-w-0 flex-1 truncate font-medium text-small">
           {modelId}
         </p>
         <IconAction label={t('Reset to defaults')} disabled={!resettable} onClick={onReset}>
@@ -282,7 +282,7 @@ function ModelFields({
       </div>
 
       <Field className="w-full gap-1.5">
-        <FieldLabel className="font-normal text-meta text-muted-foreground">
+        <FieldLabel className="font-normal text-small text-muted-foreground">
           {t('Display name')}
         </FieldLabel>
         <Input
@@ -293,7 +293,7 @@ function ModelFields({
           autoComplete="off"
           onChange={(event) => onPatch({ name: event.target.value || undefined })}
         />
-        <FieldDescription className="text-meta">
+        <FieldDescription className="text-small">
           {t('Shown in the model menu. Leave empty to use the model ID.')}
         </FieldDescription>
       </Field>
@@ -329,7 +329,7 @@ function ModelFields({
               onChange={(efforts) => onPatch({ efforts })}
             />
           ) : (
-            <p className="text-meta text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t(
                 'This format only turns thinking on or off and sends no level, so every level in the chat menu behaves the same.'
               )}
@@ -415,7 +415,7 @@ function AutoCompactionLine({ api, meta }: { api: UserProviderApi; meta: UserMod
       data-slot="auto-compaction"
       data-auto={policy.auto ? 'on' : 'off'}
       className={cn(
-        'text-meta',
+        'text-small',
         note.tone === 'warning' ? 'text-warning' : 'text-muted-foreground'
       )}
     >
@@ -427,7 +427,7 @@ function AutoCompactionLine({ api, meta }: { api: UserProviderApi; meta: UserMod
 function PanelSection({ legend, children }: { legend: string; children: ReactNode }) {
   return (
     <Fieldset className="max-w-none gap-3 border-t pt-3">
-      <FieldsetLegend className="font-medium text-meta">{legend}</FieldsetLegend>
+      <FieldsetLegend className="font-medium text-small">{legend}</FieldsetLegend>
       {children}
     </Fieldset>
   );
@@ -449,7 +449,7 @@ function SwitchRow({
   return (
     <div className="w-full space-y-1">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-meta">{label}</span>
+        <span className="text-small">{label}</span>
         <Switch
           aria-label={label}
           aria-describedby={description ? descriptionId : undefined}
@@ -458,7 +458,7 @@ function SwitchRow({
         />
       </div>
       {description && (
-        <p id={descriptionId} className="text-meta text-muted-foreground">
+        <p id={descriptionId} className="text-small text-muted-foreground">
           {description}
         </p>
       )}
@@ -478,7 +478,7 @@ function PresetSelect({
   const label = t('Vendor protocol');
   return (
     <div className="w-full space-y-1.5">
-      <span className="text-meta">{label}</span>
+      <span className="text-small">{label}</span>
       <Select
         value={preset ?? PRESET_AUTO}
         onValueChange={(value) => onChange(isUserCompatPreset(value) ? value : undefined)}
@@ -499,7 +499,7 @@ function PresetSelect({
           ))}
         </SelectPopup>
       </Select>
-      <p id={descriptionId} className="text-meta text-muted-foreground">
+      <p id={descriptionId} className="text-small text-muted-foreground">
         {t(
           'Decides how thinking, the reasoning level and the output limit are sent. Through a proxy such as new-api, automatic detection sends them the OpenAI way; pick the vendor the model really comes from.'
         )}
@@ -536,7 +536,7 @@ function EffortToggles({
     : t('Without adaptive thinking, X-High and Max are sent as High.');
   return (
     <div className="w-full space-y-1.5">
-      <span className="text-meta">{label}</span>
+      <span className="text-small">{label}</span>
       <ToggleGroup
         multiple
         variant="outline"
@@ -577,7 +577,7 @@ function EffortToggles({
           );
         })}
       </ToggleGroup>
-      <p id={descriptionId} className="text-meta text-muted-foreground">
+      <p id={descriptionId} className="text-small text-muted-foreground">
         {t(
           'Levels offered in the chat\'s reasoning effort menu. "Default" uses Medium when it is offered; without Medium no level is sent and the service decides.'
         )}
@@ -606,7 +606,7 @@ function TokenInput({
   const { t } = useI18n();
   return (
     <Field invalid={invalid} className="w-full gap-1.5">
-      <FieldLabel className="font-normal text-meta text-muted-foreground">{label}</FieldLabel>
+      <FieldLabel className="font-normal text-small text-muted-foreground">{label}</FieldLabel>
       <Input
         type="text"
         inputMode="numeric"
@@ -617,12 +617,14 @@ function TokenInput({
         onChange={(event) => onChange(event.target.value)}
       />
       {invalid && (
-        <FieldError match className="text-destructive text-meta">
+        <FieldError match className="text-destructive text-small">
           {t('Enter a whole number greater than 0.')}
         </FieldError>
       )}
-      {warning && <FieldDescription className="text-meta text-warning">{warning}</FieldDescription>}
-      {description && <FieldDescription className="text-meta">{description}</FieldDescription>}
+      {warning && (
+        <FieldDescription className="text-small text-warning">{warning}</FieldDescription>
+      )}
+      {description && <FieldDescription className="text-small">{description}</FieldDescription>}
     </Field>
   );
 }

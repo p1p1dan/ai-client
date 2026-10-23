@@ -29,7 +29,12 @@ import { resolveSlashAction, type SlashCatalogItem } from './slashCommands';
  * This window's commands that act on the conversation on screen. Decision 194: `/clear`
  * starts over from one; typed on the home page it is `/new` (the menu leaves it out).
  */
-export const CONVERSATION_BUILTINS: ReadonlySet<string> = new Set(['archive', 'compact', 'clear']);
+export const CONVERSATION_BUILTINS: ReadonlySet<string> = new Set([
+  'archive',
+  'compact',
+  'clear',
+  'btw',
+]);
 
 /**
  * Decision 194 Q2 (user, 2026-10-18): the Claude Agent SDK CLI's commands that would
@@ -54,11 +59,28 @@ export function sdkBlockedCommandHint(
   return SDK_BLOCKED_COMMANDS[name] ?? null;
 }
 
-/** The home page's menu: the catalog without this window's commands that need a conversation. */
-export function homeSlashMenu(catalog: readonly SlashCatalogItem[]): SlashCatalogItem[] {
-  return catalog.filter(
-    (item) => !(item.source === 'builtin' && CONVERSATION_BUILTINS.has(item.name))
-  );
+/**
+ * Conversation commands the home page still LISTS, with a description that says
+ * so: the user looks for `/btw` here (user, 2026-10-22) and should learn where it
+ * works rather than find nothing. Picking one runs `homeSlashRefusal`'s hint.
+ */
+const HOME_LISTED_CONVERSATION_BUILTINS: Readonly<Record<string, string>> = {
+  btw: 'Ask a side question about an open conversation (open one first)',
+};
+
+/**
+ * The home page's menu: the catalog without this window's commands that need a
+ * conversation, except the few listed with a home-page description.
+ */
+export function homeSlashMenu(
+  catalog: readonly SlashCatalogItem[],
+  t: Translate = (key) => key
+): SlashCatalogItem[] {
+  return catalog.flatMap((item) => {
+    if (item.source !== 'builtin' || !CONVERSATION_BUILTINS.has(item.name)) return [item];
+    const homeDescription = HOME_LISTED_CONVERSATION_BUILTINS[item.name];
+    return homeDescription ? [{ ...item, description: t(homeDescription) }] : [];
+  });
 }
 
 /** Why a command cannot run from the home page: `goal` has its own hint. */
@@ -80,7 +102,9 @@ export function homeSlashRefusal(
   engine: ChatEngine = 'dsh'
 ): HomeSlashRefusal | null {
   const action = resolveSlashAction(name, args, source);
-  if (action.type === 'archive' || action.type === 'compact') return 'conversation';
+  if (action.type === 'archive' || action.type === 'compact' || action.type === 'btw') {
+    return 'conversation';
+  }
   if (
     engine === 'dsh' &&
     name === 'goal' &&

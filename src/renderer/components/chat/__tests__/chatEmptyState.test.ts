@@ -138,7 +138,8 @@ describe('[T12-e′ wiring] the workspace owns the no-repository surface', () =>
   it('still renders the red diagnostic box on the error surface', () => {
     // The half that must NOT be lost while making the other half friendlier.
     expect(SOURCE).toContain("emptySurface === 'error-notice'");
-    expect(SOURCE).toContain('border-destructive/40');
+    // Design system v2 §7.7: the box is the one notice, `Alert` in its error tone.
+    expect(SOURCE).toContain('<Alert variant="error" className="mb-2">');
   });
 
   it('tells the placeholder about the missing directory too', () => {

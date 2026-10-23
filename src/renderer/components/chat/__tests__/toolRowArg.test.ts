@@ -41,15 +41,18 @@ describe('toolRowArgClass', () => {
     expect(ident).not.toContain('tabular-nums');
   });
 
-  it('preserves the failed-state destructive color independently of argKind', () => {
+  // Design system v2 §6: a failed row is no longer red as a whole — only its
+  // icon and its reason are. The argument keeps the faint ink, whatever its kind.
+  it('keeps the faint argument ink on a failed row, independently of argKind', () => {
     const failedIdent = toolRowArgClass({ failed: true, argKind: 'ident' });
     expect(failedIdent).toContain('font-mono');
-    expect(failedIdent).toContain('destructive');
-    expect(failedIdent).not.toContain('text-tool-arg');
+    expect(failedIdent).toContain('text-foreground-faint');
+    expect(failedIdent).not.toContain('destructive');
 
     const failedProse = toolRowArgClass({ failed: true, argKind: 'prose' });
     expect(failedProse).not.toContain('font-mono');
-    expect(failedProse).toContain('destructive');
+    expect(failedProse).toContain('text-foreground-faint');
+    expect(failedProse).not.toContain('destructive');
   });
 });
 

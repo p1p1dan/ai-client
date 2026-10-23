@@ -145,7 +145,7 @@ function ContextRowLine({ row }: { row: ContextGroup['rows'][number] }) {
   const { t } = useI18n();
   return (
     <div className="flex h-7 shrink-0 items-center gap-2 px-1" data-row={row.id}>
-      <span className="text-meta text-muted-foreground shrink-0">{t(row.label)}</span>
+      <span className="text-small text-muted-foreground shrink-0">{t(row.label)}</span>
       <span className="min-w-0 flex-1 truncate text-ui" title={row.title ?? row.value}>
         {row.value}
       </span>
@@ -206,26 +206,26 @@ function ConversationSegmentRow({
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="flex h-7 w-full items-center gap-1 rounded-md px-1 text-left hover:bg-hover"
+        className="flex h-7 w-full items-center gap-1 rounded-md px-1 text-left hover:bg-fill-ghost-hover"
       >
         {expanded ? (
           <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
         ) : (
           <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
         )}
-        <span className="shrink-0 text-meta text-muted-foreground">{t(segment.role)}</span>
+        <span className="shrink-0 text-small text-muted-foreground">{t(segment.role)}</span>
         {segment.detail && (
-          <span className="shrink-0 text-meta text-muted-foreground">{segment.detail}</span>
+          <span className="shrink-0 text-small text-muted-foreground">{segment.detail}</span>
         )}
         <span className="min-w-0 flex-1 truncate text-ui" title={segment.preview}>
           {segment.preview}
         </span>
-        <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
+        <span className="shrink-0 text-small text-muted-foreground tabular-nums">
           {formatCharCount(segment.chars)}
         </span>
       </button>
       {expanded && (
-        <p className="mb-1 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1 text-meta">
+        <p className="mb-1 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-fill-neutral px-2 py-1 text-small">
           {segment.body || t('(no text in this message)')}
           {segment.truncated && <span className="text-muted-foreground"> {t('… truncated')}</span>}
         </p>
@@ -325,12 +325,12 @@ function CompositionChart({ conversation }: { conversation: ConversationComposit
             <span className="text-ui font-semibold tabular-nums leading-none">
               {formatCharCount(conversation.totalChars)}
             </span>
-            <span className="text-meta text-muted-foreground">{t('chars')}</span>
+            <span className="text-small text-muted-foreground">{t('chars')}</span>
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           {conversation.buckets.map((bucket) => (
-            <div key={bucket.id} className="flex items-center gap-2 text-meta">
+            <div key={bucket.id} className="flex items-center gap-2 text-small">
               <span
                 aria-hidden
                 className="h-2 w-2 shrink-0 rounded-xs"
@@ -351,7 +351,7 @@ function CompositionChart({ conversation }: { conversation: ConversationComposit
           the donut answers "roughly what mix", the bar answers "in what
           proportion" at a glance for the four-bucket case where a donut is
           hardest to read. */}
-      <div className="flex h-2 overflow-hidden rounded-xs bg-muted">
+      <div className="flex h-2 overflow-hidden rounded-xs bg-fill-neutral">
         {conversation.buckets.map((bucket) => (
           <span
             key={bucket.id}
@@ -366,8 +366,8 @@ function CompositionChart({ conversation }: { conversation: ConversationComposit
           compete for the same glance. */}
       {conversation.roles.length > 0 && (
         <div className="flex flex-col gap-1">
-          <span className="text-meta text-muted-foreground">{t('By sender')}</span>
-          <div className="flex h-2 overflow-hidden rounded-xs bg-muted">
+          <span className="text-small text-muted-foreground">{t('By sender')}</span>
+          <div className="flex h-2 overflow-hidden rounded-xs bg-fill-neutral">
             {conversation.roles.map((role) => (
               <span
                 key={role.role}
@@ -378,7 +378,7 @@ function CompositionChart({ conversation }: { conversation: ConversationComposit
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-1">
             {conversation.roles.map((role) => (
-              <span key={role.role} className="flex items-center gap-1.5 text-meta">
+              <span key={role.role} className="flex items-center gap-1.5 text-small">
                 <span
                   aria-hidden
                   className="h-2 w-2 shrink-0 rounded-xs"
@@ -577,7 +577,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
     <div className={cn('select-text flex h-full flex-col overflow-y-auto p-2')}>
       {groups.map((group) => (
         <div key={group.id} className="mb-3 flex flex-col">
-          <p className="px-1 py-1 text-meta font-medium text-muted-foreground">{t(group.label)}</p>
+          <p className="px-1 py-1 text-small font-medium text-muted-foreground">{t(group.label)}</p>
           <div className="flex flex-col">
             {group.rows.map((row) => (
               <ContextRowLine key={row.id} row={row} />
@@ -587,7 +587,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
       ))}
       {conversation.totalMessages > 0 && (
         <div className="mb-3 flex flex-col">
-          <p className="px-1 py-1 text-meta font-medium text-muted-foreground">
+          <p className="px-1 py-1 text-small font-medium text-muted-foreground">
             {t('Conversation (loaded)')}
           </p>
           {/* Says plainly what this counts, and — since the 2026-09-20 report —
@@ -598,13 +598,13 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
               figure at all. So the unit, the source and the fact that it is a
               tally of THIS window's transcript are all stated here, before the
               numbers. */}
-          <p className="px-1 pb-1 text-meta text-muted-foreground">
+          <p className="px-1 pb-1 text-small text-muted-foreground">
             {t('{{count}} messages · {{chars}} chars in this window', {
               count: conversation.totalMessages,
               chars: formatCharCount(conversation.totalChars),
             })}
           </p>
-          <p className="px-1 pb-1 text-meta text-muted-foreground">
+          <p className="px-1 pb-1 text-small text-muted-foreground">
             {t(
               'Characters in the messages this window has loaded — not tokens, and not the context window. Token usage is on the Run panel.'
             )}
@@ -616,7 +616,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
             type="button"
             aria-expanded={segmentsOpen}
             onClick={() => setSegmentsOpen((prev) => !prev)}
-            className="flex h-7 w-full items-center gap-1 rounded-md px-1 text-left hover:bg-hover"
+            className="flex h-7 w-full items-center gap-1 rounded-md px-1 text-left hover:bg-fill-ghost-hover"
           >
             {segmentsOpen ? (
               <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -624,7 +624,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
               <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
             )}
             <span className="min-w-0 flex-1 truncate text-ui">{t('Message breakdown')}</span>
-            <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
+            <span className="shrink-0 text-small text-muted-foreground tabular-nums">
               {conversation.totalMessages}
             </span>
           </button>
@@ -644,7 +644,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
                 <button
                   type="button"
                   onClick={() => setShowAllSegments(true)}
-                  className="flex h-7 w-full items-center rounded-md px-1 pl-5 text-meta text-muted-foreground tabular-nums hover:bg-hover"
+                  className="flex h-7 w-full items-center rounded-md px-1 pl-5 text-small text-muted-foreground tabular-nums hover:bg-fill-ghost-hover"
                 >
                   {t('View more ({{count}})', { count: segmentPage.hiddenCount })}
                 </button>
@@ -654,7 +654,9 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
         </div>
       )}
       {groups.length === 0 && conversation.totalMessages === 0 && (
-        <p className="px-1 py-2 text-meta text-muted-foreground">{t('No context reported yet.')}</p>
+        <p className="px-1 py-2 text-small text-muted-foreground">
+          {t('No context reported yet.')}
+        </p>
       )}
     </div>
   );

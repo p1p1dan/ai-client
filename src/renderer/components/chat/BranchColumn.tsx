@@ -165,7 +165,7 @@ export function BranchColumn({ column, disabled, disabledReason, draft }: Branch
             <Lock className="size-3.5" />
           </TooltipTrigger>
           {/* Decision 174: 14px — the reason is CJK, and coss's popup is 12px. */}
-          <TooltipPopup className="max-w-66 text-meta">{lockReason}</TooltipPopup>
+          <TooltipPopup className="max-w-66 text-small">{lockReason}</TooltipPopup>
         </Tooltip>
       )}
 

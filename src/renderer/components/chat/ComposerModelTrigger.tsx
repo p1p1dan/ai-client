@@ -6,7 +6,8 @@ import {
 } from '@shared/models/chatAgentDefaults';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
   Menu,
   MenuGroup,
@@ -136,7 +137,32 @@ function MenuRadioRows({
               if (!item.disabled) onSelect(item.id);
             }}
           >
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            {item.description || item.warning ? (
+              // Issue #26 item 4: an effort row says what it does on its own
+              // lines (it used to be a tooltip), the costly ones warn faintly.
+              <span className="flex min-w-0 flex-1 flex-col py-0.5">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="min-w-0 truncate" data-slot="menu-row-label">
+                    {item.label}
+                  </span>
+                  {item.badge && (
+                    <Badge variant="secondary" data-slot="effort-default-badge">
+                      {item.badge}
+                    </Badge>
+                  )}
+                </span>
+                {item.description && (
+                  <span className="text-small text-muted-foreground">{item.description}</span>
+                )}
+                {item.warning && (
+                  <span className="text-small text-foreground-faint">{item.warning}</span>
+                )}
+              </span>
+            ) : (
+              <span className="min-w-0 flex-1 truncate" data-slot="menu-row-label">
+                {item.label}
+              </span>
+            )}
             <MenuPrimitive.RadioItemIndicator className="shrink-0">
               <Check className="size-3.5" />
             </MenuPrimitive.RadioItemIndicator>
@@ -149,7 +175,7 @@ function MenuRadioRows({
           <Tooltip key={item.id}>
             <TooltipTrigger render={<div data-slot="locked-model-row" />}>{row}</TooltipTrigger>
             {/* Decision 174: 14px, the hint is CJK and coss's popup is 12px. */}
-            <TooltipPopup className="max-w-80 text-meta">{item.hint}</TooltipPopup>
+            <TooltipPopup className="max-w-80 text-small">{item.hint}</TooltipPopup>
           </Tooltip>
         );
       })}
@@ -203,7 +229,7 @@ function ModelMenuSection({
                 <span className="min-w-0 flex-1 truncate">{group.label}</span>
                 {selected ? <Check className="size-3.5 shrink-0" /> : null}
               </MenuSubTrigger>
-              <MenuSubPopup className="min-w-52 rounded-md before:rounded-[calc(var(--radius-md)-1px)]">
+              <MenuSubPopup className="min-w-52">
                 <MenuRadioRows
                   items={items}
                   selectedId={selectedId}
@@ -569,11 +595,8 @@ function SessionModelTrigger({
             title={t(status.message ?? '')}
           />
         )}
-        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+        <ChevronDown className="size-3.5 shrink-0" />
       </MenuPrimitive.Trigger>
-      {/* The shared popup's hairline `::before` derives its radius from the
-          popup's own, so overriding one without the other leaves a 15px inner
-          stroke inside a 12px frame — visible as a doubled corner. */}
       {/* U30: anchored to the trigger's RIGHT edge, not its left.
           This trigger's width is its content — a model name plus an effort
           suffix — so it changes every time either one changes. It sits in the
@@ -582,31 +605,24 @@ function SessionModelTrigger({
           between `Automatic` and `GPT-5.6 Terra High`, and jumped again while
           the menu was open and a pick changed the label behind it. The right
           edge is the stable one, so the popup hangs off that. */}
-      <MenuPopup
-        align="end"
-        className="min-w-40 rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
-        side={composerPopupSide(mode)}
-      >
-        {/* Decision 167 (issue #3 item 5): coss's InputGroup with the input
-            FIRST and the icon addon after it (`order-first` draws it on the
-            left). An absolutely positioned icon placed before `Input` is
-            painted over by the input's `relative`, opaque wrapper. */}
-        <div className="px-1 pb-1">
-          <InputGroup className="h-7 rounded-sm before:rounded-[calc(var(--radius-sm)-1px)]">
-            <InputGroupInput
-              size="sm"
-              value={modelQuery}
-              onChange={(event) => setModelQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key !== 'Escape') event.stopPropagation();
-              }}
-              placeholder={t('Search models')}
-              aria-label={t('Search models')}
-            />
-            <InputGroupAddon align="inline-start">
-              <Search className="size-4 text-muted-foreground" />
-            </InputGroupAddon>
-          </InputGroup>
+      <MenuPopup align="end" className="min-w-40 max-w-80" side={composerPopupSide(mode)}>
+        {/* Decision 167 (issue #3 item 5): the search field, input FIRST and
+            the icon after it in source (`order-first` draws it on the left).
+            Design system v2 §1 rule 1: inside the menu's frame the field has
+            no frame of its own -- one hairline divides it from the list. */}
+        <div className="-mx-1 mb-1 flex h-8 items-center gap-1.5 border-border-soft border-b px-2.5">
+          <Input
+            unstyled
+            className="min-w-0 flex-1 text-ui [&_input]:h-7 [&_input]:px-0 [&_input]:leading-7"
+            value={modelQuery}
+            onChange={(event) => setModelQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') event.stopPropagation();
+            }}
+            placeholder={t('Search models')}
+            aria-label={t('Search models')}
+          />
+          <Search className="order-first size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         </div>
         {menu.sections.map((section, index) => (
           <div key={section.id}>
@@ -628,7 +644,7 @@ function SessionModelTrigger({
         {status.message && (
           <>
             <MenuSeparator />
-            <div className="flex items-center gap-2 px-2 py-1.5 text-meta text-muted-foreground">
+            <div className="flex items-center gap-2 px-2 py-1.5 text-small text-muted-foreground">
               <span className="min-w-0 flex-1 truncate" title={status.reason ?? undefined}>
                 {/* A catalog key (`piModelCatalog.ts`'s notices). */}
                 {t(status.message)}
@@ -647,7 +663,7 @@ function SessionModelTrigger({
               </span>
               {status.retryable && (
                 <button
-                  className="shrink-0 rounded-sm px-1 text-ui hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary"
+                  className="shrink-0 rounded-xs px-1.5 text-ui text-foreground transition-colors duration-150 hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover focus-ring"
                   disabled={loading}
                   onClick={retry}
                   type="button"
@@ -663,7 +679,7 @@ function SessionModelTrigger({
         {unavailableNotice && (
           <>
             <MenuSeparator />
-            <div className="flex items-center gap-2 px-2 py-1.5 text-meta text-muted-foreground">
+            <div className="flex items-center gap-2 px-2 py-1.5 text-small text-muted-foreground">
               <span className="min-w-0 flex-1 truncate" title={unavailableNotice.title}>
                 {unavailableNotice.message}
               </span>

@@ -433,7 +433,7 @@ function DefinitionPickerWidget({
     'div',
     {
       className:
-        'z-50 min-w-[280px] max-w-[440px] overflow-hidden rounded-md border bg-popover shadow-md',
+        'z-50 min-w-[280px] max-w-[440px] overflow-hidden rounded-md bg-surface-3 elev-popover',
       onKeyDown: handleKeyDown,
     },
     // Search input
@@ -445,7 +445,7 @@ function DefinitionPickerWidget({
         type: 'text',
         value: query,
         placeholder: 'Filter definitions…',
-        className: 'w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground',
+        className: 'w-full bg-transparent text-ui outline-none placeholder:text-muted-foreground',
         onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
           setQuery(e.target.value);
           setActiveIndex(-1); // Reset selection when filter changes
@@ -455,7 +455,7 @@ function DefinitionPickerWidget({
     // Header
     h(
       'div',
-      { className: 'px-2 py-1 text-xs text-muted-foreground border-b' },
+      { className: 'px-2 py-1 text-small text-muted-foreground border-b' },
       `${visible.length} of ${items.length} definitions`
     ),
     // List
@@ -469,7 +469,7 @@ function DefinitionPickerWidget({
       visible.length === 0
         ? h(
             'li',
-            { className: 'px-3 py-2 text-xs text-muted-foreground' },
+            { className: 'px-3 py-2 text-small text-muted-foreground' },
             'No matching definitions'
           )
         : visible.map((item, idx) =>
@@ -480,7 +480,7 @@ function DefinitionPickerWidget({
                 'button',
                 {
                   type: 'button',
-                  className: `flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none${idx === activeIndex ? ' bg-accent text-accent-foreground' : ''}`,
+                  className: `flex w-full items-center gap-2 px-2 py-1.5 text-left text-ui hover:bg-fill-ghost-hover hover:text-foreground focus:bg-fill-ghost-selected focus:text-foreground focus:outline-none${idx === activeIndex ? ' bg-fill-ghost-selected text-foreground' : ''}`,
                   onClick: () => onSelect(item.location),
                 },
                 // File name (bold, original case)
@@ -494,7 +494,7 @@ function DefinitionPickerWidget({
                   'span',
                   {
                     className:
-                      'shrink-0 rounded bg-muted px-1 font-mono text-xs text-muted-foreground',
+                      'shrink-0 rounded bg-fill-neutral px-1 font-mono text-small text-muted-foreground',
                   },
                   item.symbolName
                 ),

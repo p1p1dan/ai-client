@@ -190,11 +190,14 @@ export function dshMessageAttachments(content: unknown): HistoryAttachment[] {
     const attachment = recordOf(block.attachment);
     const name = stringOf(attachment?.name);
     if (block.type === 'image') {
+      const attachmentId = stringOf(attachment?.attachmentId);
       return [
         {
           kind: 'image',
           mediaType: stringOf(attachment?.mediaType) ?? 'image/*',
           ...(name ? { name } : {}),
+          // Issue #26 item 6: the store reference the bubble's thumbnail reads by.
+          ...(attachmentId ? { attachmentId } : {}),
         },
       ];
     }

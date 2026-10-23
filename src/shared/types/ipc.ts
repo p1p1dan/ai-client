@@ -371,6 +371,11 @@ export const IPC_CHANNELS = {
   /** Route B S-6 feedback 7: where a chat's conversation record lives, from its identity stub. */
   CHAT_LOCATE_TRANSCRIPT: 'chat:locateTranscript',
   /**
+   * Issue #26 item 6: the bytes of an image a sent message carried, read-only,
+   * from the DSH attachment store by its reference (`sha256:<hex>`).
+   */
+  CHAT_READ_SENT_ATTACHMENT: 'chat:readSentAttachment',
+  /**
    * Answer one `permission.requested`. Addressed by session plus the
    * `permissionId` the timeline block and the pending queue already carry.
    */
@@ -440,6 +445,10 @@ export const IPC_CHANNELS = {
   CHAT_KILL_SESSION_JOB: 'chat:killSessionJob',
   /** dsh-rebase P1-7b — one job's output, read without moving the model's cursor. */
   CHAT_READ_SESSION_JOB: 'chat:readSessionJob',
+  /** Layout 5f — one side question about the conversation (`/btw`, Ctrl+;); nothing is written. */
+  CHAT_ASK_SIDE_QUESTION: 'chat:askSideQuestion',
+  /** Layout 5f — cancel a side question still out (the side chat closed). */
+  CHAT_CANCEL_SIDE_QUESTION: 'chat:cancelSideQuestion',
   /** dsh-rebase P1-7b — interrupt one continuable subagent's current run. */
   CHAT_INTERRUPT_SUBAGENT: 'chat:interruptSubagent',
   /** Decision 203 — move one running foreground call to the background (Claude engine). */
@@ -466,3 +475,15 @@ export const IPC_CHANNELS = {
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
+
+/** `chat:readSentAttachment`'s request: which session's message, which stored image. */
+export interface SentAttachmentReadRequest {
+  sessionId: string;
+  /** The store reference, `sha256:<64 hex>`; anything else is refused before any IO. */
+  attachmentId: string;
+}
+
+/** `chat:readSentAttachment`'s answer: the image as base64, or why not. */
+export type SentAttachmentReadResult =
+  | { ok: true; mediaType: string; data: string }
+  | { ok: false; reason: 'invalid-ref' | 'not-found' | 'too-large' | 'corrupt' | 'unsupported' };

@@ -16,7 +16,7 @@ import { useI18n } from '@/i18n';
 
 function getPromptIcon(prompt: RemoteAuthPrompt) {
   if (prompt.kind === 'host-verification') {
-    return <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" />;
+    return <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-warning" />;
   }
   return <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-primary" />;
 }
@@ -88,23 +88,23 @@ export function RemoteAuthPromptHost() {
             </DialogHeader>
 
             <DialogPanel className="space-y-4">
-              <div className="rounded-xl border bg-muted/40 p-3 text-sm">
+              <div className="rounded-xl border bg-muted/40 p-3 text-ui">
                 <div className="font-medium">{currentPrompt.profileName}</div>
                 <div className="text-muted-foreground">{currentPrompt.sshTarget}</div>
               </div>
 
               {currentPrompt.promptText && (
-                <div className="rounded-xl border bg-background p-3 text-sm text-muted-foreground">
+                <div className="rounded-xl border bg-background p-3 text-ui text-muted-foreground">
                   {currentPrompt.promptText}
                 </div>
               )}
 
               {currentPrompt.kind === 'host-verification' && currentPrompt.fingerprints?.length ? (
                 <div className="space-y-2 rounded-xl border bg-background p-3">
-                  <div className="font-medium text-sm">
+                  <div className="font-medium text-ui">
                     {currentPrompt.host}:{currentPrompt.port}
                   </div>
-                  <div className="space-y-2 text-sm">
+                  <div className="space-y-2 text-ui">
                     {currentPrompt.fingerprints.map((fingerprint) => (
                       <div
                         key={`${fingerprint.keyType}:${fingerprint.fingerprint}`}
@@ -129,7 +129,7 @@ export function RemoteAuthPromptHost() {
                   }}
                 >
                   <label className="space-y-2">
-                    <div className="font-medium text-sm">
+                    <div className="font-medium text-ui">
                       {currentPrompt.secretLabel || t('Password')}
                     </div>
                     <Input

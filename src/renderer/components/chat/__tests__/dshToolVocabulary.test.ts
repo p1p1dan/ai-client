@@ -904,6 +904,14 @@ describe('every icon kind has an element', () => {
     expect(map).toMatch(new RegExp(`\\n\\s+${kind}: [A-Z]\\w+,`));
   });
 
+  // Design system v2 §1 rule 6: one concept, one mark — the plan mark is the
+  // plan review card's own, not the directory listing's tree.
+  it('plan and list wear different icons', () => {
+    const icon = (kind: string) => new RegExp(`\\n\\s+${kind}: ([A-Z]\\w+),`).exec(map)?.[1];
+    expect(icon('plan')).toBeDefined();
+    expect(icon('plan')).not.toBe(icon('list'));
+  });
+
   it('every kind a probe reaches is in the map', () => {
     for (const probe of Object.values(PROBES)) {
       expect(map, probe.icon).toMatch(new RegExp(`\\n\\s+${probe.icon}: [A-Z]\\w+,`));

@@ -56,6 +56,7 @@ import type {
   SessionHistoryPage,
   SessionTreeSnapshot,
 } from '../../shared/types/sessionHistory.ts';
+import type { DshSurfaceEventLike } from './sideQuestion.ts';
 
 /** `SessionObservation` (dsh-session-query), narrowed to what is read here. */
 export interface DshSessionObservation {
@@ -73,6 +74,12 @@ export interface DshSessionQuery {
     sessionId: string,
     options?: { projectionMode?: 'all' | 'none' }
   ): Promise<DshSessionObservation>;
+  /**
+   * The session's current model surface (dsh-session-query): what the next
+   * request would carry, a compaction's summary in place of what it replaced.
+   * Optional so a test double may leave it out.
+   */
+  readSurface?(sessionId: string): Promise<{ events: readonly DshSurfaceEventLike[] }>;
 }
 
 type CacheState = 'empty' | 'loading' | 'ready' | 'stale';

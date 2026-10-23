@@ -17,9 +17,8 @@ function input(overrides: Partial<ResolveShellShortcutInput> = {}): ResolveShell
 }
 
 describe('resolveShellShortcut', () => {
-  // D08: Ctrl/Cmd+J is UNBOUND. It toggled the right context panel, which no
-  // longer exists; the surfaces moved into the dock, and Ctrl/Cmd+B toggles
-  // that. A key left pointing at a deleted column is a dead key, so it goes
+  // D08: Ctrl/Cmd+J is UNBOUND. It toggled the right context panel of the
+  // time; Ctrl/Cmd+B toggles the sidebar. A key left pointing at a deleted column is a dead key, so it goes
   // rather than becoming a silent alias.
   describe('Ctrl/Cmd+J — no longer bound (D08)', () => {
     it('resolves to nothing on either platform', () => {
@@ -34,15 +33,21 @@ describe('resolveShellShortcut', () => {
     });
   });
 
-  describe('Ctrl/Cmd+1..5 — select surface', () => {
-    // D08: the dock has five entries and `chat` leads them, so every digit
-    // shifted by one and Digit5 became bound.
-    const expected = ['chat', 'git', 'editor', 'context', 'run'];
+  describe('Ctrl/Cmd+1..5 — the rail digits, retargeted (design system v2 / layout 5a)', () => {
+    // 1 was the dock's chat list and is the sidebar's now; 2-5 were the rail's
+    // git / files / context / run and now toggle those panes (layout 5d).
+    const expected = [
+      { type: 'focus-chat-list' },
+      { type: 'toggle-pane', pane: 'git' },
+      { type: 'toggle-pane', pane: 'files' },
+      { type: 'toggle-pane', pane: 'context' },
+      { type: 'toggle-pane', pane: 'run' },
+    ];
 
-    it('maps Digit1..5 to chat/git/files/context/run in rail order on non-mac', () => {
+    it('maps Digit1..5 to the chat list and the git/files/context/run panes on non-mac', () => {
       for (let digit = 1; digit <= expected.length; digit++) {
         const action = resolveShellShortcut(input({ code: `Digit${digit}`, ctrlKey: true }));
-        expect(action).toEqual({ type: 'select-surface', surfaceId: expected[digit - 1] });
+        expect(action).toEqual(expected[digit - 1]);
       }
     });
 
@@ -51,11 +56,11 @@ describe('resolveShellShortcut', () => {
         const action = resolveShellShortcut(
           input({ code: `Digit${digit}`, metaKey: true, isMac: true })
         );
-        expect(action).toEqual({ type: 'select-surface', surfaceId: expected[digit - 1] });
+        expect(action).toEqual(expected[digit - 1]);
       }
     });
 
-    it('does not resolve Digit6 (only the five dock entries are bound)', () => {
+    it('does not resolve Digit6 (only the five old rail slots are bound)', () => {
       expect(resolveShellShortcut(input({ code: 'Digit6', ctrlKey: true }))).toBeNull();
     });
 
@@ -63,6 +68,33 @@ describe('resolveShellShortcut', () => {
       expect(
         resolveShellShortcut(input({ code: 'Digit1', ctrlKey: true, targetIsEditable: true }))
       ).toBeNull();
+    });
+  });
+
+  describe('Ctrl/Cmd+\\ — close the focused pane (layout 5d)', () => {
+    it('resolves on both platforms', () => {
+      expect(resolveShellShortcut(input({ code: 'Backslash', ctrlKey: true }))).toEqual({
+        type: 'close-focused-pane',
+      });
+      expect(
+        resolveShellShortcut(input({ code: 'Backslash', metaKey: true, isMac: true }))
+      ).toEqual({ type: 'close-focused-pane' });
+    });
+
+    it('is honored in an editable target too — a terminal or editor pane always has one', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'Backslash', ctrlKey: true, targetIsEditable: true }))
+      ).toEqual({ type: 'close-focused-pane' });
+    });
+
+    it('still yields to an IME composition and to extra modifiers', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'Backslash', ctrlKey: true, isComposing: true }))
+      ).toBeNull();
+      expect(
+        resolveShellShortcut(input({ code: 'Backslash', ctrlKey: true, shiftKey: true }))
+      ).toBeNull();
+      expect(resolveShellShortcut(input({ code: 'Backslash' }))).toBeNull();
     });
   });
 
@@ -80,16 +112,16 @@ describe('resolveShellShortcut', () => {
     });
   });
 
-  describe('Ctrl/Cmd+B — toggle the dock panel', () => {
+  describe('Ctrl/Cmd+B — toggle the sidebar (collapses entirely since layout 5a)', () => {
     it('resolves on non-mac with ctrlKey', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true }))).toEqual({
-        type: 'toggle-dock',
+        type: 'toggle-sidebar',
       });
     });
 
     it('resolves on mac with metaKey', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', metaKey: true, isMac: true }))).toEqual({
-        type: 'toggle-dock',
+        type: 'toggle-sidebar',
       });
     });
 
@@ -130,13 +162,13 @@ describe('resolveShellShortcut', () => {
 
     it('still resolves on non-mac with ctrlKey alone (no metaKey regression)', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true }))).toEqual({
-        type: 'toggle-dock',
+        type: 'toggle-sidebar',
       });
     });
 
     it('still resolves on mac with metaKey alone (no ctrlKey regression)', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', metaKey: true, isMac: true }))).toEqual({
-        type: 'toggle-dock',
+        type: 'toggle-sidebar',
       });
     });
   });
@@ -159,13 +191,43 @@ describe('resolveShellShortcut', () => {
     it('resolves normally once composition ends', () => {
       expect(
         resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true, isComposing: false }))
-      ).toEqual({ type: 'toggle-dock' });
+      ).toEqual({ type: 'toggle-sidebar' });
     });
   });
 
   describe('unrelated keys', () => {
     it('returns null for a key outside the four bindings', () => {
       expect(resolveShellShortcut(input({ code: 'KeyA', ctrlKey: true }))).toBeNull();
+    });
+  });
+
+  // Layout 5f (ruling L6): the side chat's chord, honored while typing too.
+  describe('Ctrl/Cmd+; — the side chat (layout 5f)', () => {
+    it('toggles the side chat on either platform, from the composer too', () => {
+      expect(resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true }))).toEqual({
+        type: 'toggle-side-chat',
+      });
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', metaKey: true, isMac: true }))
+      ).toEqual({ type: 'toggle-side-chat' });
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true, targetIsEditable: true }))
+      ).toEqual({ type: 'toggle-side-chat' });
+    });
+
+    it('not with Shift or Alt, not mid-composition, not the other platform’s key', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true, shiftKey: true }))
+      ).toBeNull();
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true, altKey: true }))
+      ).toBeNull();
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true, isComposing: true }))
+      ).toBeNull();
+      expect(
+        resolveShellShortcut(input({ code: 'Semicolon', ctrlKey: true, isMac: true }))
+      ).toBeNull();
     });
   });
 });

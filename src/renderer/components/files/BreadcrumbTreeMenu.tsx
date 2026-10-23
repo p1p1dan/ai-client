@@ -257,7 +257,11 @@ export function BreadcrumbTreeMenu({
         return (
           <div key={node.path}>
             <MenuItem
-              className={cn('min-h-7', isActive && 'bg-accent/50', node.isDirectory && 'pr-2')}
+              className={cn(
+                'min-h-7',
+                isActive && 'bg-fill-ghost-hover',
+                node.isDirectory && 'pr-2'
+              )}
               style={{ paddingLeft: `${currentLevel * 12 + 8}px` }}
               onClick={() => handleNodeClick(node)}
             >
@@ -299,7 +303,7 @@ export function BreadcrumbTreeMenu({
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : tree.length === 0 ? (
-          <div className="py-2 text-center text-muted-foreground text-xs">Empty directory</div>
+          <div className="py-2 text-center text-muted-foreground text-small">Empty directory</div>
         ) : (
           <div className="py-1">{renderTree(tree, 0)}</div>
         )}

@@ -56,7 +56,7 @@ export function ShellResizeHandle({
       aria-label={ariaLabel}
       data-resizing={resizing || undefined}
       className={cn(
-        'absolute inset-y-0 z-10 w-1 cursor-col-resize touch-none select-none hover:bg-border data-[resizing]:bg-accent-primary',
+        'absolute inset-y-0 z-10 w-1 cursor-col-resize touch-none select-none hover:bg-border data-[resizing]:bg-primary',
         side === 'right' ? 'right-0' : 'left-0'
       )}
       {...handleProps}

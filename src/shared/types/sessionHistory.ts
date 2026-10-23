@@ -226,6 +226,12 @@ export interface HistoryAttachment {
   kind: 'image' | 'text';
   mediaType: string;
   name?: string;
+  /**
+   * Issue #26 item 6 (optional-field addition): a DSH image's store reference
+   * (`sha256:<hex>`), so the bubble can ask Main for its bytes
+   * (`chat:readSentAttachment`). A reference, never the bytes.
+   */
+  attachmentId?: string;
 }
 
 /**

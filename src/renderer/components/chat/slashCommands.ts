@@ -48,6 +48,8 @@ export type SlashAction =
   | { type: 'settings' }
   | { type: 'archive' }
   | { type: 'compact'; instructions?: string }
+  /** Layout 5f (ruling L6): the side chat; an empty question opens it empty. */
+  | { type: 'btw'; question: string }
   | { type: 'runtime' };
 
 /** Commands that are actions in this window; pi has no idea these exist. */
@@ -67,6 +69,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<{ name: string; descriptionKe
     descriptionKey: 'Set the reasoning effort; with no level, open the model menu',
   },
   { name: 'settings', descriptionKey: 'Open settings' },
+  // Layout 5f (ruling L6): asked beside the conversation, never sent into it.
+  {
+    name: 'btw',
+    descriptionKey: 'Ask a quick side question without interrupting the conversation',
+  },
   { name: 'archive', descriptionKey: 'Archive this conversation' },
   // Decision 179: instructions may follow (`/compact keep the open tasks`).
   {
@@ -257,6 +264,8 @@ export function resolveSlashAction(name: string, args: string, source?: string):
       return { type: 'archive' };
     case 'compact':
       return args ? { type: 'compact', instructions: args } : { type: 'compact' };
+    case 'btw':
+      return { type: 'btw', question: args };
     default:
       return { type: 'runtime' };
   }

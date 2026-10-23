@@ -28,85 +28,61 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  /* Flexoki additions - must be bridged here or Tailwind v4 emits no utilities */
-  --color-accent-primary: var(--accent-primary);
-  --color-selection: var(--selection);
-  --color-hover: var(--hover);
-  --color-status-running: var(--status-running);
+  /* Directory icons keep their yellow (icon colour rule). */
   --color-folder: var(--folder);
-  --color-tool-arg: var(--tool-arg);
   /* Decision 170 (issue #6): chat titles in the sidebar (L3). Do not add /N. */
   --color-foreground-soft: var(--foreground-soft);
   /* Decision 183: the sidebar's "not started" ring. Do not add /N. */
   --color-muted-foreground-faint: var(--muted-foreground-faint);
 
+  /* Design system v2 (§2): four surfaces, two border strengths, ghost fills. */
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border-soft: var(--border-soft);
+  --color-border-strong: var(--border-strong);
+  --color-fill-ghost-hover: var(--fill-ghost-hover);
+  --color-fill-ghost-selected: var(--fill-ghost-selected);
+  --color-fill-neutral: var(--fill-neutral);
+  --color-foreground-faint: var(--foreground-faint);
+
   /*
-   * U01-a: radius scale tightened to pix's three tiers (6/10/12px). `--radius`
-   * itself carries the sm value, so the base declaration in `:root` moved with
-   * it. `--radius-xs` is this repo's own tier and pix has no counterpart, so it
-   * stays at 4px. Evidence: docs/plantree/plans/pix-ui-alignment/topics/
-   * evidence-u01-numeric-scale.md.
+   * Design system v2 (docs/design-system.md §4.1, 2026-10-21): radii grow from
+   * the inside out. xs..lg keep their values; the two large objects get the
+   * reference's own radius for the user message, 18px. Dialogs use
+   * Tailwind's default `rounded-2xl` (16px).
    */
   --radius-xs: 0.25rem;
   --radius-sm: var(--radius);
   --radius-md: 0.625rem;
   --radius-lg: 0.75rem;
+  --radius-bubble: 1.125rem;
 
-  --text-2xs: 10px;
-  --text-2xs--line-height: 14px;
-  /* T-05: first real landing of the design-system.md:335/337 code/markdown tiers into @theme. */
-  --text-code: 0.8125rem;        /* 13px -- A07 --t-code; optical compensation vs the 15px sans body (D25 §2.4, retuned by U01-a) */
-  --text-code--line-height: 1.5;
-  --text-markdown: 0.9375rem;    /* 15px -- A07 --t-md, tool rows share body copy's tier */
-  --text-markdown--line-height: 1.55;
   /*
-   * D25: --text-meta is a separate token from --text-code on purpose -- code's
-   * size is a mono-vs-sans optical compensation value, meta's is "secondary UI
-   * text". A future mono recalibration must not silently move every timestamp
-   * (D25 §3.1). U01-a moved code 13->12 with the body; meta stayed at 13
-   * because the body change is not its reason to move.
-   *
-   * --text-markdown and --text-ui now hold the same 15px, exactly as they do in
-   * pix. They stay two tokens for the same reason meta and code did at 13px:
-   * equal values, different reasons to change.
+   * Design system v2 type scale (§3.1, user ruling 2026-10-21: the reference's
+   * density). Fixed tiers, px line heights:
+   *   2xs 11/16 digits and Latin only (no CJK below 12px)
+   *   small 12/16, ui 13/18, heading 14/20, title 18/26, display 38, code 12.
+   * 2026-10-22 (user, against the Claude Code desktop screenshot): one notch
+   * quieter -- heading 15->14, title 20->18, chat body 14->13.
+   * The migration-era names (meta, group-label, markdown, section) were
+   * removed in plan ui-cohesion stage 6; `tokenValues.test.ts` keeps them out.
    */
-  --text-meta: 0.875rem;         /* 14px sans -- timestamps / statusline / meta rows */
-  --text-meta--line-height: 1.5;
-  /*
-   * GitHub issue #14: the sidebar's GROUP LABEL tier (folder names and
-   * 「临时对话」). It was --text-meta (14px), level with the chat titles it
-   * heads, separated only by ink colour -- the user read the label as too
-   * heavy next to its own rows. Decision 186 relaxes the "no CJK below 14px"
-   * floor for this one tier: a group label is short, its rows are the text
-   * being read, and the drop is what actually makes it recede. The rows
-   * themselves stay at 14px.
-   *
-   * 2026-10-13 (screenshot-style spacing, decision 188): 13 -> 12, together
-   * with the rows growing to 32px. The reference the user picked reads as
-   * "one type size for the whole panel" with a single lighter step for the
-   * labels; at a 32px row the 13px label stopped reading as a step down. The
-   * exception above still covers it -- same tier, same reason, one notch
-   * further.
-   */
-  --text-group-label: 0.75rem; /* 12px sans -- sidebar group labels only */
-  --text-group-label--line-height: 1.5;
-  --text-ui: 0.9375rem;          /* 15px sans -- sidebar rows, buttons, labels, tabs, dropdown triggers */
-  --text-ui--line-height: 1.5;
-  /*
-   * Decision 170 (issue #6): the 16px tier. Decision 183 removed the panel
-   * titles (`DockTitle`) and the sidebar's region titles, so it is the session
-   * bar title's alone now.
-   */
-  --text-section: 1rem;          /* 16px sans */
-  --text-section--line-height: 1.5;
-  --text-title: 1.125rem;        /* 18px sans -- settings L1, dialog and sheet titles */
-  /*
-   * Decision 174 (issue #6, second wave): the home page's title and nothing
-   * else -- 26px, line height 1.3; the title sets weight 400 / 600 and the
-   * heading tracking -0.01em (allowed at >= 18px) itself.
-   */
-  --text-display: 1.625rem;      /* 26px sans */
-  --text-display--line-height: 1.3;
+  --text-2xs: 11px;
+  --text-2xs--line-height: 16px;
+  --text-small: 0.75rem;
+  --text-small--line-height: 1rem;
+  --text-ui: 0.8125rem;
+  --text-ui--line-height: 1.125rem;
+  --text-heading: 0.875rem;
+  --text-heading--line-height: 1.25rem;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.625rem;
+  --text-display: 2.375rem;
+  --text-display--line-height: 1.2;
+  --text-code: 0.75rem;
+  --text-code--line-height: 1.46;
 
   /*
    * T104: the chat area's two configurable tiers. These are the ONLY two
@@ -116,20 +92,21 @@
    * `chatProcessFontSize`), and the utilities resolve through `var()`, so every
    * descendant picks up the override by inheritance.
    *
-   * Declared in px, not rem, on purpose: the inline override writes px, and a
-   * rem default would leave the same scale expressed two ways. `--text-2xs`
-   * above is the existing px precedent.
+   * Declared in px, not rem, on purpose: the inline override writes px.
+   * Nothing may ever write these to `documentElement` (UI fonts and terminal /
+   * editor fonts stay separate, design-system.md §10.1).
    *
-   * Scope is the override point, not this declaration: `:root` still holds the
-   * out-of-the-box values, and nothing may ever write these to
-   * `documentElement` (see design-system.md "字体族（分域）" -- the deleted
-   * `applyTerminalFont()` is what that red line was paid for).
+   * v2 defaults 13 / 12 (were 17 / 14, then 14 / 12); `chatTypography.ts` mirrors them.
    */
-  --text-chat-body: 17px;      /* D1 -- assistant/user prose, markdown incl. h1-h6, composer */
-  --text-chat-process: 14px;   /* D1 -- tool rows and thinking body (the downgraded tier) */
+  --text-chat-body: 13px;      /* assistant/user prose, markdown incl. h1-h6, composer */
+  --text-chat-process: 12px;   /* tool rows, thinking, turn status line */
 
-  /* D25 §3.4: reading column = 48 CJK chars @15px = Cursor reference; wide keeps the same -6.25% scaling */
-  --container-reading: 45rem;
+  /*
+   * Layout 5c (2026-10-22 screenshot, ruling L3): the centred reading column is
+   * ~640px at the 13px body (was 45rem for D25's 15px body). Timeline and
+   * composer share it through `ReadingColumn`. Wide mode keeps 60rem.
+   */
+  --container-reading: 40rem;
   --container-reading-wide: 60rem;
 
   /*
@@ -197,12 +174,33 @@
 
   --font-heading: var(--font-sans);
 
+  /*
+   * Design system v2 §3.4: the home page greeting, and nothing else. System
+   * serif faces only (no bundled font): Latin first, then CJK Song faces, so a
+   * Latin letter never falls into a CJK face.
+   */
+  --font-display:
+    Georgia, "Times New Roman", ui-serif,
+    "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "Noto Serif SC", "SimSun",
+    serif;
+
   --animate-skeleton: skeleton 2s -1s infinite linear;
   --animate-marquee: marquee 4s linear infinite alternate;
+  /* Design system v2 §6: the "waiting on you" dot. */
+  --animate-breathe: breathe 2.4s ease-in-out infinite;
 
   @keyframes skeleton {
     to {
       background-position: -200% 0;
+    }
+  }
+
+  @keyframes breathe {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
     }
   }
 
@@ -218,154 +216,131 @@
 
 @layer base {
   /*
-   * Flexoki Light.
-   * Source of truth: openchamber@v1.17.0-6-ga3519141
-   * packages/ui/src/lib/theme/themes/flexoki-light.json (sRGB hex -> OKLCH D65).
+   * Design system v2 palette (docs/design-system.md §2, user ruling 2026-10-21):
+   * neutral warm grays plus clay, the reference's (open-claude-ui) values.
+   * Replaces Flexoki.
    *
-   * Alpha discipline: every semantic token below is alpha-free, because the
-   * Tailwind `/N` modifier compiles to `color-mix(in oklab, X N%, transparent)`
-   * whose resulting alpha is N x alpha(X) - stacking a pre-baked alpha would
-   * silently halve (or worse) every translucent usage in the app.
-   * Values whose upstream source carries alpha are pre-composited onto the
-   * matching surface instead (see --accent / --hover / --selection).
+   * Four surfaces, nearer = lighter: --surface-0 (sidebar, rail) <
+   * --surface-1 (canvas) < --surface-2 (cards) <= --surface-3 (composer,
+   * menus, dialogs). The legacy semantic names stay the storage (shadcn-style
+   * `--background` / `--card` / `--popover`, which the sync-terminal theme
+   * overrides inline) and the v2 names alias them.
    *
-   * The four panel surfaces multiply in --panel-bg-opacity so that the
-   * background-image feature has exactly one knob (set on documentElement by
-   * App/hooks/useBackgroundImage.ts). Nothing else opts in: --accent must stay
-   * opaque or hover states vanish behind a background image, and --border /
-   * --input must stay opaque because in light mode --card is nearly identical
-   * to --background and all panel separation rests on the border.
-   *
-   * U01-b (2026-09-03) retuned the LIGHTNESS of the surface steps only. Hue and
-   * chroma are untouched, so these are still the Flexoki colors -- pix's grays
-   * are achromatic hex and copying them would flatten the warm cast (see
-   * docs/plantree/plans/pix-ui-alignment/topics/evidence-u01-numeric-scale.md).
-   *
-   * What moved and why: the canvas -> panel step was 0.0216 L in dark, which is
-   * a 1.05:1 separation -- panels were effectively invisible against the canvas
-   * and, as the paragraph above admits, "all panel separation rests on the
-   * border". pix separates them by 0.0838 L. The step is now 0.0639 L (1.18:1),
-   * about three quarters of the way there, with panel -> hover set to pix's own
-   * 0.043 L so hover stays readable on the raised panel.
-   *
-   * Every token kept its rank in the ladder; only the gaps widened. Foregrounds
-   * were not touched, and the resulting contrast was measured rather than
-   * assumed: --foreground lands between 6.67:1 and 11.38:1 on every dark
-   * surface and 11.98:1 to 18.78:1 on every light one. Numbers and method:
-   * docs/plantree/plans/pix-ui-alignment/evidence/2026-09-03-u01-style-baseline.md.
+   * Alpha discipline: every semantic token is alpha-free; translucency only
+   * through Tailwind's `/N`. Borders and fills are the reference's 5 / 6 / 10 /
+   * 20% foreground-over-canvas mixes, pre-composited into solid colours. The
+   * four panel surfaces (plus --surface-0) multiply in --panel-bg-opacity,
+   * the background-image knob set by App/hooks/useBackgroundImage.ts; nothing
+   * else opts in.
    */
   :root {
     --panel-bg-opacity: 1;
     --font-size-base: 16px;
-    --background: oklch(0.9931 0.012 96.42 / var(--panel-bg-opacity, 1));
-    --foreground: oklch(0.1696 0.0017 17.32);
-    --card: oklch(0.97 0.0106 100.82 / var(--panel-bg-opacity, 1));
-    --card-foreground: oklch(0.1696 0.0017 17.32);
-    --popover: oklch(0.97 0.0106 100.82 / var(--panel-bg-opacity, 1));
-    --popover-foreground: oklch(0.1696 0.0017 17.32);
-    /* primary is the brand orange (#BC5215), no longer "highest contrast ink" */
-    --primary: oklch(0.5665 0.1523 45.02);
-    --primary-foreground: oklch(0.9931 0.012 96.42);
-    --secondary: oklch(0.962 0.0111 89.72);
-    --secondary-foreground: oklch(0.1696 0.0017 17.32);
-    --muted: oklch(0.965 0.0093 99.98 / var(--panel-bg-opacity, 1));
-    --muted-foreground: oklch(0.4531 0.005 91.5);
-    /* interactive.hover #76736f @ 12.55% pre-composited over --background; L retuned by U01-b */
-    --accent: oklch(0.935 0.0122 96.43);
-    --accent-foreground: oklch(0.1696 0.0017 17.32);
-    /* primary.emphasis #F9AE77 - light mode: fills/borders/hover-on-primary only (1.82:1 on bg) */
-    --accent-primary: oklch(0.8109 0.1131 56.61);
-    /* interactive.selection pre-composited; tree/list selected rows, never ::selection. Do not add /N */
-    --selection: oklch(0.91 0.0109 95.17);
-    /* same source as --accent; semantic alias for new code. Do not add /N */
-    --hover: oklch(0.935 0.0122 96.43);
-    /* status.info - deliberately not warning: Flexoki warning == primary */
-    --status-running: oklch(0.4818 0.1315 254.79);
-    --destructive: oklch(0.5042 0.1648 27.84);
-    --destructive-foreground: oklch(0.9931 0.012 96.42);
-    --success: oklch(0.5593 0.1335 122.92);
-    --success-foreground: oklch(0.9931 0.012 96.42);
-    /* identical to --primary upstream; do not use it to escape the brand hue */
-    --warning: oklch(0.5665 0.1523 45.02);
-    --warning-foreground: oklch(0.9931 0.012 96.42);
-    --info: oklch(0.4818 0.1315 254.79);
-    --info-foreground: oklch(0.9931 0.012 96.42);
-    /* syntax.base.type - directory/folder affordances */
+    --surface-0: rgb(249 249 247 / var(--panel-bg-opacity, 1));
+    --background: rgb(252 252 251 / var(--panel-bg-opacity, 1));
+    --foreground: #151515;
+    --card: rgb(255 255 255 / var(--panel-bg-opacity, 1));
+    --card-foreground: #151515;
+    --popover: rgb(255 255 255 / var(--panel-bg-opacity, 1));
+    --popover-foreground: #151515;
+    /* clay, the brand colour: primary buttons, send, focus ring, "waiting on you" */
+    --primary: #c6613f;
+    --primary-foreground: #ffffff;
+    /* 6%: neutral fill -- user message, secondary buttons, tags */
+    --secondary: #eeeeed;
+    --secondary-foreground: #151515;
+    --muted: rgb(243 243 242 / var(--panel-bg-opacity, 1));
+    --muted-foreground: #525252;
+    /* 10%: `hover:bg-accent/50` lands on the 5% ghost hover */
+    --accent: #e5e5e4;
+    --accent-foreground: #151515;
+    /* clay at a fixed value that sync-terminal never repoints (diff gutter) */
+    --clay: #d97757;
+    /* 10%: selected / pressed. Do not add /N */
+    --fill-ghost-selected: #e5e5e4;
+    /* 5%: the one ghost hover. Do not add /N */
+    --fill-ghost-hover: #f0f0ef;
+    --destructive: #b5452f;
+    --destructive-foreground: #ffffff;
+    --success: #3f7d4e;
+    --success-foreground: #ffffff;
+    --warning: #b07a1e;
+    --warning-foreground: #ffffff;
+    --info: #3a6ea5;
+    --info-foreground: #ffffff;
+    /* directory icons keep their yellow (icon colour rule) */
     --folder: oklch(0.6333 0.1295 85.81);
-    --border: oklch(0.875 0.0137 97.46);
-    /* interactive.borderHover, not border: this repo uses --input as a fill */
-    --input: oklch(0.8463 0.0137 102.05);
-    /* interactive.focus without alpha (focusRing's own 0.251 would collapse ring-ring/24) */
-    --ring: oklch(0.5665 0.1523 45.02);
-    /* U01-a: 8px -> 6px, the sm tier of the pix-aligned radius scale in @theme. */
+    /* 10%: every closed frame and divider */
+    --border: #e5e5e4;
+    /* 20%: hovered / active / focused frames */
+    --input: #cececd;
+    --ring: #c6613f;
     --radius: 0.375rem;
     /* Neutral overlay for Monaco decorations; host background is the terminal theme */
     --editor-current-diff: oklch(0 0 0 / 0.06);
-    /* T-05, A07 screen 5: the only new derived color -- tool row argument tier
-     * (lightest of the three grays). Declared once: color-mix's var()
-     * references resolve against whichever element uses --tool-arg, so
-     * .dark's --muted-foreground/--background overrides are picked up
-     * automatically without a second .dark declaration. */
-    /* 2026-09-22 (decision 034): 85% -> 62%. The process tier is meant to be
-       skimmed PAST, and at 85% it still competed with the prose it interrupts —
-       the zcode comparison the user brought in reads cleaner in large part
-       because its process rows sit much closer to the background. Lowering the
-       mix is what widens the gap without touching a single size or weight. */
-    --tool-arg: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
-    /* Decision 170 (issue #6): the sidebar's chat titles (L3), one step below
-     * --foreground -- the oklab midpoint of it and --muted-foreground (light
-     * ~Flexoki base-850, dark ~base-300). Declared once, as the tool-arg tier
-     * is: the var() references resolve on documentElement, so .dark and the
-     * sync-terminal inline overrides are picked up without a second
-     * declaration. Alpha-free; never add /N. */
+
+    /* v2 names (§2.1, §2.2). Aliases, so sync-terminal's inline overrides follow. */
+    --surface-1: var(--background);
+    --surface-2: var(--card);
+    --surface-3: var(--popover);
+    --border-soft: var(--border);
+    --border-strong: var(--input);
+    --fill-neutral: var(--secondary);
+
+    /* Elevation (§5.1): a near soft shadow plus a far diffuse one. Reference values. */
+    --elev-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 2px 8px 0 rgb(0 0 0 / 0.08);
+    --elev-md: 0 2px 4px 0 rgb(0 0 0 / 0.05), 0 6px 16px 0 rgb(0 0 0 / 0.08);
+    --elev-lg: 0 4px 8px 0 rgb(0 0 0 / 0.06), 0 12px 28px -2px rgb(0 0 0 / 0.08);
+    --elev-popover: 0 0 0 1px var(--border-soft), 0 8px 24px rgb(0 0 0 / 0.12), 0 2px 6px rgb(0 0 0 / 0.08);
+
+    /* Three ink levels (§2.3). The faint tier: tool arguments, times, counts.
+     * Decision 034's 62% mix, declared once so .dark and sync-terminal follow. */
+    --foreground-faint: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
+    /* Decision 170: the sidebar's chat titles, one step below --foreground. Never add /N. */
     --foreground-soft: color-mix(in oklab, var(--foreground) 50%, var(--muted-foreground));
-    /* Decision 183: the sidebar's "not started" ring, a step quieter than the
-     * --muted-foreground ring of a chat attached in the background --
-     * --muted-foreground mixed 45% toward the sidebar's actual surface
-     * (LeftDock paints --card at 40% over the shell's --background). Declared
-     * once, like --foreground-soft, so .dark and the sync-terminal inline
-     * overrides follow. Alpha-free; never add /N. */
-    --muted-foreground-faint: color-mix(
-      in oklab,
-      var(--muted-foreground) 45%,
-      color-mix(in oklab, var(--card) 40%, var(--background))
-    );
+    /* Decision 183: the sidebar's "not started" ring, --muted-foreground mixed
+     * 45% toward the sidebar's surface (--surface-0 since v2). Never add /N. */
+    --muted-foreground-faint: color-mix(in oklab, var(--muted-foreground) 45%, var(--surface-0));
   }
 
-  /* Flexoki Dark - flexoki-dark.json */
   .dark {
-    --background: oklch(0.1981 0.0032 17.43 / var(--panel-bg-opacity, 1));
-    --foreground: oklch(0.8463 0.0137 102.05);
-    --card: oklch(0.262 0.0037 48.55 / var(--panel-bg-opacity, 1));
-    --card-foreground: oklch(0.8463 0.0137 102.05);
-    --popover: oklch(0.262 0.0037 48.55 / var(--panel-bg-opacity, 1));
-    --popover-foreground: oklch(0.8463 0.0137 102.05);
-    --primary: oklch(0.6576 0.1539 49.3);
-    --primary-foreground: oklch(0.1981 0.0032 17.43);
-    --secondary: oklch(0.276 0.0024 67.71);
-    --secondary-foreground: oklch(0.8463 0.0137 102.05);
-    --muted: oklch(0.268 0.0025 67.7 / var(--panel-bg-opacity, 1));
-    --muted-foreground: oklch(0.6956 0.0103 93.62);
-    /* interactive.hover #ffffff @ 9.41% pre-composited over --background; L retuned by U01-b */
-    --accent: oklch(0.305 0.0029 17.32);
-    --accent-foreground: oklch(0.8463 0.0137 102.05);
-    --accent-primary: oklch(0.8109 0.1131 56.61);
-    --selection: oklch(0.325 0.0029 17.31);
-    --hover: oklch(0.305 0.0029 17.32);
-    --status-running: oklch(0.5988 0.1104 247);
-    --destructive: oklch(0.597 0.1692 28.38);
-    --destructive-foreground: oklch(0.1981 0.0032 17.43);
-    --success: oklch(0.7227 0.1178 117.2);
-    --success-foreground: oklch(0.1981 0.0032 17.43);
-    --warning: oklch(0.6576 0.1539 49.3);
-    --warning-foreground: oklch(0.1981 0.0032 17.43);
-    --info: oklch(0.5988 0.1104 247);
-    --info-foreground: oklch(0.1981 0.0032 17.43);
+    --surface-0: rgb(11 11 11 / var(--panel-bg-opacity, 1));
+    --background: rgb(21 21 21 / var(--panel-bg-opacity, 1));
+    --foreground: #f5f5f5;
+    --card: rgb(26 26 25 / var(--panel-bg-opacity, 1));
+    --card-foreground: #f5f5f5;
+    --popover: rgb(32 32 31 / var(--panel-bg-opacity, 1));
+    --popover-foreground: #f5f5f5;
+    --primary: #d97757;
+    --primary-foreground: #151515;
+    --secondary: #222222;
+    --secondary-foreground: #f5f5f5;
+    --muted: rgb(30 30 30 / var(--panel-bg-opacity, 1));
+    --muted-foreground: #a3a3a3;
+    --accent: #2b2b2b;
+    --accent-foreground: #f5f5f5;
+    --clay: #d97757;
+    --fill-ghost-selected: #2b2b2b;
+    --fill-ghost-hover: #202020;
+    --destructive: #e5735c;
+    --destructive-foreground: #151515;
+    --success: #73b585;
+    --success-foreground: #151515;
+    --warning: #d9a441;
+    --warning-foreground: #151515;
+    --info: #7aa5d6;
+    --info-foreground: #151515;
     --folder: oklch(0.7346 0.1462 87.46);
-    --border: oklch(0.34 0.0038 84.58);
-    --input: oklch(0.3651 0.0044 67.69);
-    --ring: oklch(0.6576 0.1539 49.3);
+    --border: #2b2b2b;
+    --input: #424242;
+    --ring: #d97757;
     --editor-current-diff: oklch(1 0 0 / 0.08);
+
+    /* Dark floats: an inner highlight instead of an outer frame (§5.1). */
+    --elev-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 2px 8px 0 rgb(0 0 0 / 0.4);
+    --elev-md: 0 2px 4px 0 rgb(0 0 0 / 0.4), 0 6px 16px 0 rgb(0 0 0 / 0.4);
+    --elev-lg: 0 4px 8px 0 rgb(0 0 0 / 0.5), 0 16px 36px -2px rgb(0 0 0 / 0.4);
+    --elev-popover: inset 0 0 0 1px rgb(255 255 255 / 0.1), 0 8px 28px rgb(0 0 0 / 0.65), 0 2px 8px rgb(0 0 0 / 0.45);
   }
 
   /*
@@ -430,7 +405,7 @@
   body {
     @apply bg-background text-foreground;
     font-size: var(--text-ui);
-    line-height: 1.55;
+    line-height: 1.45;
   }
 
   button:not(:disabled),
@@ -444,6 +419,11 @@
   }
 
   .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  /* A drag strip's controls stay clickable without each one opting out. */
+  .drag-region :is(button, a, input, textarea, select, [role="button"], [role="combobox"], [role="tab"]) {
     -webkit-app-region: no-drag;
   }
 
@@ -551,20 +531,46 @@
  * (This also fixes the previous three-rule stack, where the .dark override was
  * dead: `:root .current-diff-highlight` had equal specificity and came later.)
  */
+/*
+ * Design system v2 §1, §2.2: the one focus ring for hand-rolled controls -- a
+ * canvas-coloured gap, then the clay ring. coss components carry their own
+ * `focus-visible:ring-*`, which resolves to the same --ring.
+ */
+@utility focus-ring {
+  outline: none;
+  &:focus-visible {
+    box-shadow: 0 0 0 1px var(--surface-1), 0 0 0 2.5px var(--ring);
+  }
+}
+
+/* Design system v2 §5.1: elevation tiers. Buttons never take one. */
+@utility elev-sm {
+  box-shadow: var(--elev-sm);
+}
+@utility elev-md {
+  box-shadow: var(--elev-md);
+}
+@utility elev-lg {
+  box-shadow: var(--elev-lg);
+}
+@utility elev-popover {
+  box-shadow: var(--elev-popover);
+}
+
 .current-diff-highlight {
   background-color: var(--editor-current-diff) !important;
 }
 
 /*
  * The 3px gutter bar sits against Monaco's terminal-derived background, not
- * against --background, so --accent-primary (per T-21 spec) is the right source
+ * against --background, so the fixed --clay is the right source
  * rather than --primary: it is the one brand tone that keeps a single fixed
  * value in both schemes and is *not* hijacked by theme='sync-terminal', where
  * ghosttyTheme repoints --primary at the editor's own foreground ink and the bar
  * would stop reading as a highlight at all.
  */
 .current-diff-gutter {
-  background-color: var(--accent-primary) !important;
+  background-color: var(--clay) !important;
   width: 3px !important;
   margin-left: 3px;
 }

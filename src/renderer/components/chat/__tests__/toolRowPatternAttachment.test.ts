@@ -147,6 +147,9 @@ describe('icon and failure-title contrast (P1-7e problem 19)', () => {
     expect(sessionFailureTitleClass()).toContain('text-foreground');
     expect(sessionFailureTitleClass()).not.toContain('text-destructive');
     const timeline = readFileSync(path.join(here, '..', 'MessageTimeline.tsx'), 'utf8');
-    expect(timeline).toContain('<p className={sessionFailureTitleClass()}>{t(failure.title)}</p>');
+    // Design system v2 §7.7: the card is the error `Alert`, its title the AlertTitle.
+    expect(timeline.replace(/\s+/g, ' ')).toContain(
+      '<AlertTitle className={sessionFailureTitleClass()}> {t(failure.title)} </AlertTitle>'
+    );
   });
 });

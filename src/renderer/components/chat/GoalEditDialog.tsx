@@ -62,7 +62,7 @@ export function GoalEditDialog({
           />
         </DialogPanel>
         <DialogFooter variant="bare">
-          <DialogClose render={<Button variant="outline" />}>{t('Cancel')}</DialogClose>
+          <DialogClose render={<Button variant="secondary" />}>{t('Cancel')}</DialogClose>
           <Button disabled={!canSave} onClick={() => void onSave(trimmed)}>
             {t('Save')}
           </Button>

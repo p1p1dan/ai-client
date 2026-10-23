@@ -89,9 +89,10 @@ const GIT_HISTORY_PAGE_SIZE = 30;
 // file the orchestrator owns.
 interface GitSurfaceViewProps {
   surfaceId: ContextSurfaceId;
+  active: boolean;
 }
 
-/** Same Empty/EmptyMedia/EmptyHeader/EmptyTitle/EmptyDescription pattern as `SurfacePlaceholder`. */
+/** The shared Empty/EmptyMedia/EmptyHeader/EmptyTitle/EmptyDescription pattern. */
 function GitEmptyState({
   title,
   description,
@@ -109,13 +110,13 @@ function GitEmptyState({
       </EmptyMedia>
       <EmptyHeader>
         <EmptyTitle className="text-ui tracking-normal">{title}</EmptyTitle>
-        <EmptyDescription className="text-meta">{description}</EmptyDescription>
+        <EmptyDescription className="text-small">{description}</EmptyDescription>
         {judgedPath ? (
           // Which directory was actually judged. No new copy — the path is the
           // whole message, so there is nothing to translate; `title` carries
           // the untruncated value for a path too long for the panel.
           <span
-            className="mt-1 block min-w-0 max-w-full truncate text-meta text-muted-foreground"
+            className="mt-1 block min-w-0 max-w-full truncate text-small text-muted-foreground"
             title={judgedPath}
           >
             {getDisplayPath(judgedPath)}
@@ -152,10 +153,10 @@ function useGitEmptyStateCopy(
   }
 }
 
-export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
-  const activeSurfaceId = useShellLayoutStore((s) => s.activeSurfaceId);
-  const expanded = useShellLayoutStore((s) => s.expanded);
-  const surfaceActive = activeSurfaceId === surfaceId;
+export function GitSurfaceView({ active }: GitSurfaceViewProps) {
+  // Layout 5d: the git pane expanded (⤢) gets the split view.
+  const expanded = useShellLayoutStore((s) => s.expandedPane === 'git');
+  const surfaceActive = active;
 
   const activeSessionId = useChatSessionsStore((s) => s.activeSessionId);
   const sessions = useChatSessionsStore((s) => s.sessions);

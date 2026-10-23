@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  "relative inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-sm border border-transparent font-medium outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3 [&_svg]:pointer-events-none [&_svg]:shrink-0 [button,a&]:cursor-pointer [button,a&]:pointer-coarse:after:absolute [button,a&]:pointer-coarse:after:size-full [button,a&]:pointer-coarse:after:min-h-11 [button,a&]:pointer-coarse:after:min-w-11",
+  "relative inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-xs border border-transparent font-medium outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-3 [&_svg]:pointer-events-none [&_svg]:shrink-0 [button,a&]:cursor-pointer [button,a&]:pointer-coarse:after:absolute [button,a&]:pointer-coarse:after:size-full [button,a&]:pointer-coarse:after:min-h-11 [button,a&]:pointer-coarse:after:min-w-11",
   {
     defaultVariants: {
       size: 'default',
@@ -13,10 +13,10 @@ const badgeVariants = cva(
     },
     variants: {
       size: {
-        default:
-          'h-5.5 min-w-5.5 px-[calc(--spacing(1)-1px)] text-sm sm:h-4.5 sm:min-w-4.5 sm:text-xs',
-        lg: 'h-6.5 min-w-6.5 px-[calc(--spacing(1.5)-1px)] text-base sm:h-5.5 sm:min-w-5.5 sm:text-sm',
-        sm: 'h-5 min-w-5 rounded-[calc(var(--radius-sm)-2px)] px-[calc(--spacing(1)-1px)] text-xs sm:h-4 sm:min-w-4 sm:text-[.625rem]',
+        // Design system v2: a tag is 12px (CJK floor), 4px radius, neutral or toned fill.
+        default: 'h-5 min-w-5 px-1.5 text-small',
+        lg: 'h-6 min-w-6 px-2 text-ui',
+        sm: 'h-4.5 min-w-4.5 px-1 text-2xs',
       },
       variant: {
         // The four tinted variants below carry the status colour as *text* on a low-alpha
@@ -27,14 +27,15 @@ const badgeVariants = cva(
         // 3.6:1-5.8:1 instead. -foreground stays reserved for solid fills (default,
         // destructive, secondary).
         default: 'bg-primary text-primary-foreground [button,a&]:hover:bg-primary/90',
-        destructive: 'bg-destructive text-white [button,a&]:hover:bg-destructive/90',
-        error: 'bg-destructive/8 text-destructive dark:bg-destructive/16',
-        info: 'bg-info/8 text-info dark:bg-info/16',
+        destructive:
+          'bg-destructive text-destructive-foreground [button,a&]:hover:bg-destructive/90',
+        error: 'bg-destructive/10 text-destructive dark:bg-destructive/16',
+        info: 'bg-info/10 text-info dark:bg-info/16',
         outline:
-          'border-border bg-transparent dark:bg-input/32 [button,a&]:hover:bg-accent/50 dark:[button,a&]:hover:bg-input/48',
-        secondary: 'bg-secondary text-secondary-foreground [button,a&]:hover:bg-secondary/90',
-        success: 'bg-success/8 text-success dark:bg-success/16',
-        warning: 'bg-warning/8 text-warning dark:bg-warning/16',
+          'border-border-soft bg-transparent text-muted-foreground [button,a&]:hover:bg-fill-ghost-hover',
+        secondary: 'bg-fill-neutral text-muted-foreground [button,a&]:hover:bg-fill-ghost-selected',
+        success: 'bg-success/10 text-success dark:bg-success/16',
+        warning: 'bg-warning/10 text-warning dark:bg-warning/16',
       },
     },
   }

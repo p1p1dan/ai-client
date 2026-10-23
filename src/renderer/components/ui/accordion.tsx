@@ -24,7 +24,7 @@ function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.
     <AccordionPrimitive.Header className="flex">
       <AccordionPrimitive.Trigger
         className={cn(
-          'flex flex-1 cursor-pointer items-start justify-between gap-4 rounded-md py-4 text-left font-medium text-sm outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-64 [&[data-panel-open]>svg]:rotate-180',
+          'flex flex-1 cursor-pointer items-start justify-between gap-4 rounded-md py-4 text-left font-medium text-ui outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-64 [&[data-panel-open]>svg]:rotate-180',
           className
         )}
         data-slot="accordion-trigger"
@@ -41,7 +41,7 @@ function AccordionPanel({ className, children, ...props }: AccordionPrimitive.Pa
   return (
     <AccordionPrimitive.Panel
       // 优化动画：150ms，使用模拟 Spring 的 cubic-bezier 曲线
-      className="h-(--accordion-panel-height) overflow-hidden text-muted-foreground text-sm transition-[height] duration-150 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] data-ending-style:h-0 data-starting-style:h-0"
+      className="h-(--accordion-panel-height) overflow-hidden text-muted-foreground text-ui transition-[height] duration-150 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] data-ending-style:h-0 data-starting-style:h-0"
       data-slot="accordion-panel"
       {...props}
     >

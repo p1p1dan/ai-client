@@ -2105,8 +2105,6 @@ export type ToolIconKind =
 
 const TERMINAL_TOOL_NAMES = new Set<string>([
   'Bash',
-  'BashOutput',
-  'KillShell',
   PI_TOOL_NAMES.bash,
   PI_TOOL_NAMES.powershell,
   RUNTIME_TOOL_NAMES.bash,
@@ -2130,7 +2128,21 @@ const WEB_TOOL_NAMES = new Set<string>([
   DSH_TOOL_NAMES.webSearch,
   DSH_TOOL_NAMES.webFetch,
 ]);
-const PLAN_TOOL_NAMES = new Set<string>(['TodoWrite', 'ExitPlanMode', DSH_TOOL_NAMES.exitPlanMode]);
+const PLAN_TOOL_NAMES = new Set<string>(['ExitPlanMode', DSH_TOOL_NAMES.exitPlanMode]);
+
+/**
+ * Design system v2 §1 rule 6: the Claude SDK tools that do what a DSH tool
+ * with an icon of its own does wear that icon -- the todo list's mark for
+ * `TodoWrite` (DSH `todo_write`), the background job's for reading or ending
+ * one (DSH `job_output` / `job_kill`). They used to wear the plan mark (which
+ * the directory listing shared) and the terminal's.
+ */
+const SDK_ICON_KINDS: Readonly<Record<string, ToolIconKind>> = {
+  TodoWrite: 'todo',
+  BashOutput: 'job',
+  KillShell: 'job',
+  [RUNTIME_TOOL_NAMES.taskStop]: 'job',
+};
 
 /**
  * dsh-rebase P1-7c: DSH tools whose icon is a kind of its own (shard 04 §1).
@@ -2160,6 +2172,7 @@ const DSH_ICON_KINDS: Readonly<Record<string, ToolIconKind>> = {
 
 export function toolIconKind(toolName: string): ToolIconKind {
   if (Object.hasOwn(DSH_ICON_KINDS, toolName)) return DSH_ICON_KINDS[toolName] as ToolIconKind;
+  if (Object.hasOwn(SDK_ICON_KINDS, toolName)) return SDK_ICON_KINDS[toolName] as ToolIconKind;
   // Order matters where the sets overlap: `WebSearch` is a SEARCH to
   // `classifyTool` (it counts as one) but a globe to the reader, and a reader
   // who sees a magnifier expects local hits.
@@ -2909,7 +2922,7 @@ export function inputMaxHeightClass(): string {
  * `argKind === 'ident'` gets the D25 mono primitive (paths/URLs/commands,
  * light-optical-compensation text-code + tracking-normal so mono columns
  * still line up); 'prose' (or missing `argKind`) adds no font-family class
- * and inherits the row's sans `text-markdown`. The failed-state color is
+ * and inherits the row's sans `text-chat-body`. The failed-state color is
  * unaffected by `argKind` -- font domain and status color are orthogonal
  * (D25 §2.4 technical note 4).
  *
@@ -2965,8 +2978,9 @@ export function toolRowPermissionNoteClass(): string {
  * argument would — the verb's tone (it leads the row), the argument's
  * truncation (a plugin wrote it, and a path inside it can be long).
  */
-export function toolRowTitleClass(view: Pick<ToolRowView, 'failed'>): string {
-  return cn('min-w-0 truncate', !view.failed && 'group-hover/row:text-foreground');
+export function toolRowTitleClass(_view: Pick<ToolRowView, 'failed'>): string {
+  // Design system v2 §6: a failed row keeps its ink; only its icon is red.
+  return 'min-w-0 truncate font-medium text-muted-foreground group-hover/row:text-foreground';
 }
 
 export function toolRowArgClass(view: Pick<ToolRowView, 'failed' | 'argKind'>): string {
@@ -2980,12 +2994,11 @@ export function toolRowArgClass(view: Pick<ToolRowView, 'failed' | 'argKind'>): 
   // `min-w-0` stays on both: without it a long unbroken token refuses to shrink
   // and pushes the row's own verb and icon off a narrow row (the flexbox rule
   // in `renderer/AGENTS.md`).
+  // Design system v2 §6: the argument keeps the faint ink on a failed row too.
   const colorClass = cn(
     'min-w-0',
     view.argKind === 'ident' ? 'truncate' : 'line-clamp-3',
-    view.failed
-      ? 'text-[color-mix(in_oklab,var(--destructive)_70%,var(--background))]'
-      : 'text-tool-arg'
+    'text-foreground-faint'
   );
   return view.argKind === 'ident'
     ? `${colorClass} font-mono text-code tracking-normal`

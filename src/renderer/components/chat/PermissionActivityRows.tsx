@@ -84,9 +84,9 @@ export function PermissionActivityRows({
           <li
             key={view.requestId}
             data-tone={view.tone}
-            // `text-meta`, not a raw size (D25 §6.3): this is a meta row, the
+            // `text-small`, not a raw size (D25 §6.3): this is a meta row, the
             // same domain as timestamps and the status line.
-            className={cn('flex min-w-0 items-start gap-2 text-meta', TONE_CLASS[view.tone])}
+            className={cn('flex min-w-0 items-start gap-2 text-small', TONE_CLASS[view.tone])}
           >
             <Icon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             <span className="min-w-0 flex-1">

@@ -61,7 +61,7 @@ describe('R02-c the slash menu works without a workspace', () => {
 
 describe('decision 175: the home page has no conversation for some commands', () => {
   it('filters the menu on the home page only', () => {
-    expect(COMPOSER).toContain('return onHome ? homeSlashMenu(catalog) : catalog;');
+    expect(COMPOSER).toContain('return onHome ? homeSlashMenu(catalog, t) : catalog;');
     expect(COMPOSER).toContain('filterSlashCommands(slashMenuCatalog, slashQuery)');
   });
 
@@ -117,7 +117,11 @@ describe('R02-c the menu keyboard comes before the @ popup’s', () => {
   it('checks slashOpen first', () => {
     const keydown = COMPOSER.slice(COMPOSER.indexOf('onKeyDown={(event) => {'));
     const body = keydown.slice(0, keydown.indexOf('void handleSend();'));
-    expect(body.indexOf('if (slashOpen) {')).toBeLessThan(body.indexOf('if (mentionOpen) {'));
+    // Issue #26 item 9: both popups stand aside while an IME composes.
+    expect(body.indexOf('if (slashOpen && !composing) {')).toBeGreaterThan(-1);
+    expect(body.indexOf('if (slashOpen && !composing) {')).toBeLessThan(
+      body.indexOf('if (mentionOpen && !composing) {')
+    );
   });
 });
 
@@ -125,8 +129,9 @@ describe('R02-c the menu says where each command came from', () => {
   it('renders the source on every row', () => {
     // Three kinds share one list; a skill, a template and a plugin command look
     // identical without it.
+    // Design system v2: faint ink, the small tier.
     expect(COMPOSER).toContain(
-      '<span className="shrink-0 text-meta text-muted-foreground">{item.source}</span>'
+      '<span className="shrink-0 text-small text-foreground-faint">{item.source}</span>'
     );
   });
 });

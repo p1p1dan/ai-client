@@ -135,314 +135,195 @@ export const TIMELINE_PADDING_CLASS = 'px-6 pt-5 pb-2';
 // ---- Composer control sizing ----
 
 /**
- * T-30b2 §3.3-E2: the single height tier every Composer control derives from
- * — the attach button, the merged model/effort trigger, the round action
- * button and the target-row triggers are all 24px (A07's own `--h-btn`).
- * "One height tier across the whole Composer" is the structural half of the
- * coherence this batch is chasing; A07 :1329's `--h-row` (28px) tier stays for
- * dropdown rows and sidebar session rows, but no longer appears inside the
- * Composer.
- *
- * Every class helper below spells its own Tailwind step (`size-6` / `h-6`)
- * because Tailwind cannot read a TS constant — the assertions cross-check the
- * spelled step against this number (`step × 4 === COMPOSER_CONTROL_SIZE`) so
- * the two can never drift apart silently.
+ * The single height tier every Composer control derives from: the ⊕ attach
+ * button, the action key, and the ghost triggers in the row under the box are
+ * all 24px. Class helpers spell the Tailwind step (`size-6` / `h-6`); tests
+ * cross-check `step × 4 === COMPOSER_CONTROL_SIZE`.
  */
 export const COMPOSER_CONTROL_SIZE = 24;
 
 /**
- * Composer card's outer frame class — shared border/fill/radius tokens,
- * mode-specific padding and layout.
+ * The composer box (2026-10-22, matched to the Claude Code desktop app): one
+ * thin line when empty that grows with the draft. Inside the frame there is
+ * only the input row (⊕, textarea, action key) and, when present, the draft
+ * extras stacked above it; every other control lives in the plain row below
+ * (`composerBarClass`).
  *
- * T-30b2 §4.1: the resting border is `--border`, and focus steps it to
- * `--input` (ΔL 0.0347, zero chroma). It used to rest on `--input` and step to
- * `--ring`, i.e. the brand orange (C = 0.1523) — measured against the Cursor
- * reference that is a 2.5× heavier resting edge plus a fully chromatic focus
- * state, and it was the second-largest contributor to the "too round / too AI"
- * reading. A07 :1336 justified `--input` as a substitute for "the drop shadow
- * Cursor floats its card with"; pixel measurement showed Cursor's card has NO
- * shadow at all (8 rows outside the border are a flat background value), so
- * the premise for that tier is gone.
+ * A 1px `border-soft` frame stepping to `border-strong` on hover and while the
+ * textarea has focus, `rounded-lg` (12px), the nearest surface, no shadow.
+ * `min-h-9.5` is the resting FLOOR (`composerFollowHeightBreakdown().total`);
+ * the box grows past it with the draft and with a larger body font.
  *
- * F6 (2026-08-18) RETIRES the pill radius and the `hasExtras` opt-in that
- * switched it. Both cards now rest on `rounded-md`.
- *
- * The pill was never a free constant: `21` was defined as
- * `composerFollowHeightBreakdown().total / 2`, cross-asserted against the 42px
- * resting height, and spelled as a fixed value rather than `rounded-full`
- * precisely so the corners could not ride the textarea's `field-sizing-content`
- * growth into the 33-37px arcs §5.3 names as the "runaway" shape. That
- * derivation is what broke, not its value: the session card is two rows now and
- * rests at 74px, so the same chain yields `rounded-[37px]` — a hand-written
- * arbitrary value the design system bans, and half-height corners on a two-row
- * card read as a stretched capsule, not a pill. There is no pill mental model
- * left to preserve, so the chain retires whole and the radius joins the empty
- * card's.
- *
- * With the radius constant in both branches, `opts.hasExtras` had no remaining
- * consumer and is gone from the signature; the extras stack still uses
- * `hasComposerExtras` at the call site to decide whether to RENDER, which was
- * always a separate question.
- *
- * U09-1 (2026-09-03) reintroduces an options bag, for a different question than
- * the one F6 retired. `hasExtras` asked "is there content inside" and answered
- * it with a radius, which is why it went; `hasProtrusion` asks "is another
- * surface flush against this card's top edge", which a radius is the correct
- * answer to. When the tab is present the top corners drop to `rounded-xs` (4px)
- * so the join reads as two surfaces meeting rather than one rounded shape with
- * something tucked behind it; the bottom corners keep `rounded-md` throughout.
- * Absent the tab — no targetable workspace — nothing changes, which is what
- * keeps a fresh install's card looking like it always did.
+ * U09-1: on the start screen of a blank conversation the target tab sits
+ * flush on top, so the top corners drop to `rounded-t-xs` there.
  */
 export function composerCardClass(
   mode: MiddleColumnMode,
   opts?: { hasProtrusion?: boolean }
 ): string {
-  if (mode === 'empty') {
-    // T-30b2 §4.1: both modes now share one symmetric 8px inset (`p-2`). The
-    // old 12/10 split traced back to A07's eyeballed three-value padding, not
-    // to a measurement.
-    const base = 'relative rounded-md border border-border bg-card focus-within:border-input p-2';
-    return opts?.hasProtrusion ? `${base} rounded-t-xs` : base;
+  if (mode === 'empty' && opts?.hasProtrusion) {
+    return `${COMPOSER_CARD_SURFACE} rounded-t-xs`;
   }
-  // Resting height contract, T-30b2 §3.3-E1 as re-derived by F6: exactly 74px.
-  // The arithmetic is unchanged in KIND — borders + padding + content, done
-  // completely (the 40px A07 :1844 wrote left the two 1px borders out of the
-  // sum, and T-28 "fixed" the correct 42 back down to it by squeezing the
-  // padding to 5px, the wrong direction). What changed is the content term:
-  // the card stacks two 24px rows with an 8px gap between them instead of one
-  // row, so 2 + 16 + 24 + 8 + 24 = 74 and the card rests at `min-h-18.5`.
-  // `composerFollowHeightBreakdown()` below carries the same arithmetic as
-  // data, including the gap, so a test can cross-check every term of it
-  // against this string and against `composerRowsClass()`.
-  //
-  // T104: `min-h-18.5` (74px) stays as the FLOOR and is no longer the height.
-  // Row 1 is the textarea, which now follows `--text-chat-body`, so above the
-  // 16px default the content exceeds the floor and the card is taller than
-  // 74px — that is the deal the breakdown documents, and why `min-h-*` is the
-  // right utility here rather than `h-*`: the floor keeps the resting card from
-  // collapsing when the reader shrinks the tier, and never clips it when they
-  // grow it.
-  //
-  // No `items-center`: the card's only in-flow child is now one full-width
-  // column (`composerRowsClass()`), so there is nothing to centre cross-axis,
-  // and the moment the extras stack appears inside that column, centring it
-  // would align the card's contents against an ambiguous reference.
-  return 'relative rounded-md border border-border bg-card focus-within:border-input flex min-h-18.5 gap-2 p-2';
+  return COMPOSER_CARD_SURFACE;
 }
 
+const COMPOSER_CARD_SURFACE =
+  'relative flex min-h-9.5 flex-col gap-1.5 rounded-lg border border-border-soft bg-surface-3 p-1.5 transition-colors duration-150 ease-out hover:border-border-strong focus-within:border-border-strong';
+
 /**
- * The resting height of the docked follow-up card, as data.
- *
- * This exists purely so the height contract is assertable as ARITHMETIC rather
- * than as "the class string contains `min-h-18.5`". T-28's blocker was exactly
- * that gap: the test asserted a class was present and could not notice that
- * the composed height it produced was wrong.
- *
- * F6 (2026-08-18) added `rows` and `rowGap` rather than editing `total` to a
- * new literal, for the same reason the breakdown exists at all — the height
- * has to stay something you can re-derive.
- *
- * T104 (2026-09-19) SPLITS the old single `content` term in two, because the
- * two rows stopped being the same height. Row 2 is the control strip and is
- * still the fixed 24px button tier (`controlRow`, `COMPOSER_CONTROL_SIZE`).
- * Row 1 is the textarea, and it follows `--text-chat-body`:
- * `composerTextareaClass('session')` pins its line box to
- * `calc(var(--text-chat-body) * 1.5)` and derives its `min-h` from the same
- * expression, so at the 16px default it is 24px — the number the whole 74px
- * contract was derived from. Above or below 16px the card deliberately grows or
- * shrinks with the reader's setting; `COMPOSER_TEXTAREA_LINE_SCALE` holds that
- * multiplier so a test can re-derive both the expression and the total rather
- * than restating 24px in three places.
- *
- * The alternative — pinning the textarea's row to 24px regardless of the
- * setting — was rejected on the merits, not for convenience: 16px glyphs in a
- * 24px line box is 1.5 leading (already tighter than the transcript's 1.625),
- * and at the 24px ceiling the text would overrun a box this arithmetic still
- * called 24px, i.e. the card would clip its own input at exactly the settings
- * the feature exists to offer.
+ * The textarea's line box as a multiple of `--text-chat-body`: the class
+ * string spells `calc(var(--text-chat-body)*1.5)` for both its line-height and
+ * its cap, and the height arithmetic multiplies the body default by this.
  */
 export const COMPOSER_TEXTAREA_LINE_SCALE = 1.5;
 
-/**
- * Decision 174 (issue #6, user ruling 2026-10-10 — "输入框太小气"): the docked
- * composer's empty textarea rests at two body-tier lines, on the home page and
- * in a conversation alike, so the first send still moves nothing. A draft
- * still grows it to the eight-line cap (`composerTextareaClass('session')`).
- * At the 17px default that is 17 × 1.5 × 2 = 51px and a 101px card.
- */
-export const COMPOSER_TEXTAREA_MIN_ROWS = 2;
+/** How many body lines the textarea grows to before it scrolls (F7f's cap). */
+export const COMPOSER_TEXTAREA_MAX_ROWS = 8;
 
+/**
+ * The resting height of the composer box, as data, so the contract is
+ * assertable as arithmetic and cross-checked against the class strings.
+ *
+ * The input row is as tall as the taller of its children: the 24px control
+ * tier, or the textarea's single line plus its centring padding. Below a 16px
+ * body the textarea pads its one line out to the control tier
+ * (`composerTextareaClass`'s `py`), so placeholder and caret sit on the
+ * controls' centreline; at 16px and above the padding clamps to 0 and the line
+ * itself sets the height.
+ */
 export function composerFollowHeightBreakdown(): {
+  /** `border` — 1px top + 1px bottom. */
   border: number;
+  /** `p-1.5` — 6px top + 6px bottom. */
   padding: number;
-  /**
-   * Row 1: the textarea at rest, at the DEFAULT body size — its minimum of
-   * `textareaLines` line boxes (17px → × 1.5 → × 2 = 51px since decision 174).
-   */
+  /** One body line at the DEFAULT body size. */
+  textareaLine: number;
+  /** The textarea's own top + bottom padding that centres its one line. */
+  textareaPadding: number;
+  /** The textarea at rest: one line plus its padding. */
   textareaRow: number;
-  /** How many body-tier lines the empty textarea rests at (`COMPOSER_TEXTAREA_MIN_ROWS`). */
-  textareaLines: number;
-  /** Row 2: the control strip, on the fixed button tier. */
+  /** The ⊕ button and the action key. */
   controlRow: number;
-  /**
-   * How many rows the card stacks. A structural assertion, not a multiplier:
-   * `total` adds the two named rows rather than `n × one row`, because T104 made
-   * them different heights.
-   */
-  rows: number;
-  rowGap: number;
+  /** The single input row: the taller of the two. */
+  inputRow: number;
   total: number;
 } {
-  const border = 2; // 1px top + 1px bottom
-  const padding = 16; // p-2 → 8px top + 8px bottom
-  // The body tier's default lives in `@shared/types/chatTypography` (the store,
-  // the settings UI and `globals.css` all key off the same number); this module
-  // only multiplies it by the line scale its own class string spells.
-  const textareaLines = COMPOSER_TEXTAREA_MIN_ROWS;
-  const textareaRow = DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE * textareaLines;
-  const controlRow = COMPOSER_CONTROL_SIZE; // 24px button tier, size-6 / h-6
-  const rows = 2; // row 1: the textarea; row 2: the control strip
-  const rowGap = 8; // composerRowsClass()'s `gap-2`
+  const border = 2;
+  const padding = 12;
+  // The body default lives in `@shared/types/chatTypography`.
+  const textareaLine = DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE;
+  const controlRow = COMPOSER_CONTROL_SIZE;
+  const textareaPadding = Math.max(0, controlRow - textareaLine);
+  const textareaRow = textareaLine + textareaPadding;
+  const inputRow = Math.max(textareaRow, controlRow);
   return {
     border,
     padding,
+    textareaLine,
+    textareaPadding,
     textareaRow,
-    textareaLines,
     controlRow,
-    rows,
-    rowGap,
-    total: border + padding + textareaRow + rowGap + controlRow,
+    inputRow,
+    total: border + padding + inputRow,
   };
 }
 
 /**
- * The session card's body: the column that holds the two rows.
- *
- * This is not a new wrapper — the docked branch always had a
- * `flex min-w-0 flex-1 flex-col` div written inline at the call site, whose one
- * job was to stack the conditional extras above the single control row. F6
- * promotes that literal into the class-assembly layer (and gives it a real
- * `gap-2`, replacing the extras stack's own `mb-1`) so the two-row structure is
- * assertable from a pure module instead of only from JSX text.
- *
- * `flex-1` lets it claim the card's full width; `min-w-0` is what lets both
- * rows shrink below their content's intrinsic width, which every `truncate`
- * inside them depends on.
+ * The one row inside the box: ⊕, the textarea, the action key. `items-end`
+ * keeps ⊕ and the key on the last line as the draft grows, the way the
+ * reference does; on a single line every child is the same 24px, so it is
+ * also centred.
  */
-export function composerRowsClass(): string {
-  return 'flex min-w-0 flex-1 flex-col gap-2';
+export function composerInputRowClass(): string {
+  return 'flex min-w-0 items-end gap-1.5';
 }
 
 /**
- * The card's inner control row.
- *
- * `empty` mode: the bottom bar under the textarea (attach → agent → model →
- * permission → status line → action buttons). `session` mode: row 2 of the
- * card, the same strip minus the status line. Both are 8px-gapped flex rows;
- * only the empty bar needs the 6px offset from the textarea above it (the
- * session column spaces its own rows through `composerRowsClass()`'s gap).
- *
- * F6 (2026-08-18) REVERSES the round-5 fix (diag:placeholder-align), which had
- * put `session` on `items-start`. That fix existed for exactly one child: the
- * textarea's rendered height is NOT pinned to 24px (it relies on
- * `field-sizing-content`, and the UA's intrinsic one-row height is not
- * guaranteed to equal `1 × line-height`), and a `<textarea>`'s content is
- * always top-anchored inside its own box, so `items-center` centred that
- * taller box and pushed the placeholder above the other controls' centreline.
- * `items-start` sidestepped the uncertain height by aligning top edges.
- *
- * The textarea now has row 1 to itself. Every remaining child of this row —
- * attach button, agent picker, model/effort trigger, permission trigger,
- * action buttons — is an exact 24px box, which makes `items-start` and
- * `items-center` identical in output. `items-center` is the one that states
- * what the row means, and it no longer needs the status slot's `h-6`
- * compensation (see `sessionStatusLineWrapperClass`).
+ * The textarea's slot in the input row: takes the free width, and stacks the
+ * history label (`History 2/3`) above the textarea when it shows.
  */
-export function composerBarClass(mode: MiddleColumnMode): string {
-  if (mode === 'empty') {
-    return 'mt-1.5 flex items-center gap-2';
-  }
-  return 'flex min-w-0 items-center gap-2';
+export function composerTextareaSlotClass(): string {
+  return 'flex min-w-0 flex-1 flex-col';
 }
 
-// ---- Bottom bar slot order (U09-2) ----
+/** The draft extras (notices, attachment and mention chips, status line) above the input row. */
+export function composerExtrasClass(): string {
+  return 'flex min-w-0 flex-col gap-1 px-1';
+}
 
 /**
- * One control position in the Composer's bottom bar.
- *
- * `modelEffort` is ONE slot, not two: this repo merged the model name and the
- * reasoning-effort suffix into a single trigger (`composerModelTriggerClass`),
- * and evidence-u09 #2 judged pix's split pair "do not adopt". The prototype's
- * "模型 · 思考" therefore lands here as one chip, in that position.
+ * The plain row under the box (no frame, no fill): the permission tier on the
+ * left, model/effort and context use on the right. In a conversation and on
+ * the home page the target row IS this row (`targetRowClass('session')`), so
+ * repository, branch and run location join it rather than adding a second line.
+ * `px-1` lines the first trigger's text up with the box's text inset.
+ */
+export function composerBarClass(): string {
+  return 'mt-1.5 flex h-6 min-w-0 items-center gap-0.5 px-1';
+}
+
+/** The right-anchored group of the row under the box. */
+export function composerBarTrailingClass(): string {
+  return 'ms-auto flex shrink-0 items-center gap-0.5';
+}
+
+// ---- Slot order ----
+
+/**
+ * One control position. `modelEffort` is ONE slot: the model name and the
+ * reasoning-effort suffix are a single trigger (`composerModelTriggerClass`).
  */
 export type ComposerBarSlot = 'attach' | 'permission' | 'usage' | 'modelEffort' | 'actions';
 
 /**
- * The bar's order, as DATA rather than as JSX reading order (U09-2).
+ * The order as DATA rather than JSX reading order (U09-2): the call site maps
+ * these arrays, so the order a test reads here is the order that ships. A slot
+ * with nothing real to say (no session for `usage`) renders nothing.
  *
- * The acceptance condition for this slice is "the controls appear in this
- * order", and JSX order is not something a test can state — the T-28 failure
- * shape exactly: assertions that pass while the composed result is wrong. The
- * call site renders by mapping these arrays, so the order a test reads here is
- * the order that ships.
- *
- * Both reserved slots are now filled — `permission` by U12's tier chip and
- * `usage` by U06-b's occupancy share, once T38-a gave the runtime a
- * `usage.updated` producer. Each still renders NOTHING when it has nothing real
- * to say (no session, no occupancy reported yet) rather than an empty shell,
- * which is the rule the reservation existed to protect.
- *
- * The status line is absent on purpose: it exists only in empty mode, it is
- * elastic text rather than a control, and it takes whatever width is left
- * between the two groups. The bar branch places it directly.
+ * Inside the box: ⊕ leads, the action key trails.
  */
-export const COMPOSER_BAR_LEADING: readonly ComposerBarSlot[] = ['attach', 'permission'];
+export const COMPOSER_CARD_LEADING: readonly ComposerBarSlot[] = ['attach'];
 
-/** @see COMPOSER_BAR_LEADING — rendered inside the tail-anchored group. */
-export const COMPOSER_BAR_TRAILING: readonly ComposerBarSlot[] = [
-  'usage',
-  'modelEffort',
-  'actions',
-];
+/** @see COMPOSER_CARD_LEADING */
+export const COMPOSER_CARD_TRAILING: readonly ComposerBarSlot[] = ['actions'];
+
+/** The row under the box: what the message may do, on the left. */
+export const COMPOSER_BAR_LEADING: readonly ComposerBarSlot[] = ['permission'];
+
+/** How it will be answered, then how full the context is, on the right. */
+export const COMPOSER_BAR_TRAILING: readonly ComposerBarSlot[] = ['modelEffort', 'usage'];
 
 /**
- * The tail-anchored control group, shared by both modes.
- *
- * `ms-auto` rather than a `justify-between` row: what sits to its left is
- * conditional in both cards — the empty bar's status line, and (before F6) the
- * session row's status slot — and without an auto margin the send key would
- * slide left whenever those are absent. A round action key that changes
- * position depending on unrelated state breaks the "Stop replaces Send in
- * place" rule the whole button stack is built on.
- *
- * F6 (2026-08-18): the session card's row 2 uses this too. It used to render
- * `actionButtons` bare, relying on the textarea's `flex-[2]` to eat the free
- * space and push them right; row 2 has no elastic child at all now, so without
- * the auto margin the whole strip would bunch at the left edge.
- *
- * U09-2 (2026-09-03) widened what this group HOLDS — it is no longer only the
- * round keys. The model/effort chip moved in from the leading side, and the
- * usage share will join it, so the group is now every trailing control
- * (`COMPOSER_BAR_TRAILING`) rather than the action buttons alone. The class
- * itself is unchanged: `ms-auto` and `shrink-0` were always about anchoring a
- * fixed-width cluster at the end, which is still exactly what this is. The
- * 6px gap stays finer than the bar's own 8px on purpose — controls that read as
- * one cluster sit tighter than the gap between clusters.
+ * The action key's group at the end of the input row. `ms-auto` keeps it at
+ * the end whatever sits to its left, so Stop replaces Send in place.
  */
 export function composerActionGroupClass(): string {
   return 'ms-auto flex shrink-0 items-center gap-1.5';
 }
 
 /**
+ * Design system v2 §1 rule 1 / §7.9: every control inside the composer is a
+ * ghost -- no frame, secondary ink at rest, foreground ink plus the one
+ * ghost-hover fill on hover and keyboard focus (always as a pair), the
+ * selected fill while its menu is open, and the shared focus ring.
+ */
+const COMPOSER_GHOST_STATES = [
+  'transition-colors duration-150 ease-out',
+  'hover:bg-fill-ghost-hover hover:text-foreground',
+  'focus-visible:bg-fill-ghost-hover focus-visible:text-foreground focus-ring',
+  'data-[popup-open]:bg-fill-ghost-selected data-[popup-open]:text-foreground',
+  'disabled:pointer-events-none disabled:opacity-64',
+] as const;
+
+/**
  * The ⊕ button at the far left of the card (T-30b2 §4.6).
  *
  * Same ghost language as the model/target triggers: no border, no shadow, a
- * filled `--hover` shell that only appears on hover or keyboard focus. It is
+ * filled `--fill-ghost-hover` shell that only appears on hover or keyboard focus. It is
  * `size-6` (both axes) rather than `h-6` because it is a square icon target.
  *
  * D4 (round-5): it is now a MENU trigger, so it needs the third state the
- * other menu triggers already have — `data-[popup-open]:bg-selection`. Without
+ * other menu triggers already have — `data-[popup-open]:bg-fill-ghost-selected`. Without
  * it the button loses its shell the moment the pointer moves off it into the
  * open popup, which reads as "the menu belongs to nothing". The size step is
  * untouched: 24px is the one control tier (F-A4 asserts it).
@@ -450,12 +331,7 @@ export function composerActionGroupClass(): string {
 export function composerAttachButtonClass(): string {
   return [
     'grid size-6 shrink-0 place-items-center rounded-sm text-muted-foreground',
-    'transition-colors duration-150',
-    'hover:bg-hover',
-    'focus-visible:bg-hover',
-    'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary',
-    'data-[popup-open]:bg-selection',
-    'disabled:pointer-events-none disabled:opacity-64',
+    ...COMPOSER_GHOST_STATES,
   ].join(' ');
 }
 
@@ -467,7 +343,7 @@ export function composerAttachButtonClass(): string {
  *
  *  - **no `border*`** — a permanently visible outline is exactly what the
  *    round-4 point-check asked to remove ("no always-on outer frame; show it
- *    on hover"). The shell is a FILL (`bg-hover`), never a border: a hover
+ *    on hover"). The shell is a FILL (`bg-fill-ghost-hover`), never a border: a hover
  *    border would add 2px to the box on hover and make the whole row jump.
  *  - **no `shadow*`** — including `SelectTrigger`'s `before:shadow` inner
  *    highlight. A07 :1337 (zero shadows on buttons and cards) and the Cursor
@@ -485,14 +361,14 @@ export function composerAttachButtonClass(): string {
  *    on a 24px-tall control renders as a full pill. `rounded-sm` (8px) is
  *    A07 :810-819's own value for this control.
  *
- * `focus-visible:bg-hover` is not optional decoration: with the resting state
+ * `focus-visible:bg-fill-ghost-hover` is not optional decoration: with the resting state
  * having no frame at all, a keyboard user tabbing onto this control would
  * otherwise see no shape appear. It must always ship paired with
- * `hover:bg-hover` (asserted), and the outline sits ON TOP of the fill rather
+ * `hover:bg-fill-ghost-hover` (asserted), and the outline sits ON TOP of the fill rather
  * than replacing it.
  *
  * Note for future edits: this repo's custom font-size tokens (`text-ui`,
- * `text-meta`, `text-code`, …) ARE registered in tailwind-merge's `font-size`
+ * `text-small`, `text-code`, …) ARE registered in tailwind-merge's `font-size`
  * class group in `lib/utils.ts`, so `cn('text-muted-foreground', 'text-ui')`
  * keeps both. It did not always: twMerge's stock config classifies an
  * unrecognised `text-<name>` as a COLOUR, and used to drop the real colour
@@ -508,13 +384,8 @@ export function composerModelTriggerClass(): string {
     // controls move when I pick something". The cap plus the name's own
     // `truncate` bounds that travel; the effort suffix is never truncated,
     // being the short half that changes most often.
-    'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-sm px-2 text-ui',
-    'transition-colors duration-150',
-    'hover:bg-hover',
-    'focus-visible:bg-hover',
-    'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary',
-    'data-[popup-open]:bg-selection',
-    'disabled:pointer-events-none disabled:opacity-64',
+    'group/model inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-sm px-2 text-small text-muted-foreground',
+    ...COMPOSER_GHOST_STATES,
   ].join(' ');
 }
 
@@ -523,13 +394,8 @@ export function composerModelTriggerClass(): string {
  */
 export function composerPermissionTriggerClass(): string {
   return [
-    'inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-ui',
-    'transition-colors duration-150',
-    'hover:bg-hover',
-    'focus-visible:bg-hover',
-    'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary',
-    'data-[popup-open]:bg-selection',
-    'disabled:pointer-events-none disabled:opacity-64',
+    'inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-small text-muted-foreground',
+    ...COMPOSER_GHOST_STATES,
   ].join(' ');
 }
 
@@ -541,7 +407,8 @@ export function composerPermissionTriggerClass(): string {
 export function composerModelBaseClass(): string {
   // `min-w-0` is what makes `truncate` engage inside a flex row: a flex item
   // defaults to `min-width: auto` and refuses to shrink below its content.
-  return 'min-w-0 truncate text-muted-foreground';
+  // Design system v2: brightens with the trigger's own hover/open state.
+  return 'min-w-0 truncate text-muted-foreground group-hover/model:text-foreground group-data-[popup-open]/model:text-foreground';
 }
 
 /**
@@ -566,12 +433,12 @@ export function composerModelSuffixClass(): string {
  * different apps.
  *
  * It is deliberately NOT `components/ui/menu.tsx`'s shared `MenuItem`: that
- * one carries `text-base sm:text-sm`, i.e. the app-chrome font size, and using
+ * one carries `text-ui`, i.e. the app-chrome font size, and using
  * it here would put 16px rows inside a card whose whole content is on D25's
  * `text-ui` domain scale. The shared item is right for app menus and wrong for
  * this card; the divergence is the point, not an oversight.
  *
- * Font-size tokens (`text-ui`, `text-meta`) are written as plain concatenated
+ * Font-size tokens (`text-ui`, `text-small`) are written as plain concatenated
  * strings rather than composed through `cn()`. They ARE registered in
  * tailwind-merge's `font-size` class group in `lib/utils.ts` — but twMerge's
  * stock config classifies an unrecognised `text-<name>` as a COLOUR and drops
@@ -579,12 +446,16 @@ export function composerModelSuffixClass(): string {
  * window between a new token landing and someone registering it.
  */
 export function composerMenuItemClass(): string {
-  return 'flex min-h-7 cursor-default select-none items-center gap-2 rounded-sm px-2 text-ui outline-none data-disabled:pointer-events-none data-disabled:opacity-64 data-highlighted:bg-accent data-highlighted:text-accent-foreground';
+  // Design system v2 §7.10: the coss MenuItem's own look (xs highlight block,
+  // the one ghost-hover fill). `sm:` restatements displace MenuSubTrigger's
+  // responsive base so a sub-menu row matches its siblings.
+  return 'flex min-h-7 cursor-default select-none items-center gap-2 rounded-xs px-2 py-1 text-ui outline-none data-disabled:pointer-events-none data-disabled:opacity-64 data-highlighted:bg-fill-ghost-hover data-highlighted:text-foreground data-popup-open:bg-fill-ghost-hover data-popup-open:text-foreground';
 }
 
 /** Section heading inside a Composer popup — same two-menu sharing rule as above. */
 export function composerMenuGroupLabelClass(): string {
-  return 'px-2 py-1.5 text-meta font-medium tracking-[0.04em] text-muted-foreground';
+  // Design system v2 §7.10: the coss MenuGroupLabel's look.
+  return 'px-2 pt-2 pb-1 text-small font-medium text-foreground-faint';
 }
 
 /**
@@ -607,19 +478,24 @@ export function targetTriggerClass(tone: 'default' | 'muted' = 'default'): strin
     // defaults to `min-width: auto`, i.e. it refuses to shrink below its
     // content, so under pressure the row overflowed and pushed its siblings
     // around instead of the label ellipsing (T-32 m8).
-    'inline-flex h-6 min-w-0 items-center gap-1.5 rounded-sm px-2 text-ui',
-    'transition-colors duration-150',
-    'hover:bg-hover',
-    'focus-visible:bg-hover',
-    'data-[popup-open]:bg-selection',
+    'inline-flex h-6 min-w-0 items-center gap-1.5 rounded-sm px-2 text-small',
+    'transition-colors duration-150 ease-out',
+    'hover:bg-fill-ghost-hover',
+    'focus-visible:bg-fill-ghost-hover focus-ring',
+    'data-[popup-open]:bg-fill-ghost-selected',
     'disabled:opacity-64',
   ].join(' ');
   return tone === 'muted' ? `${base} text-muted-foreground` : base;
 }
 
-/** Queue strip wrapper (T-19), owner of the single 8px gap above the composer card. */
+/**
+ * Queue strip wrapper (T-19), owner of the single 8px gap above the composer
+ * card. Design system v2 §7.8: one strip frame (the `DockCard` strip look),
+ * its 32px rows divided by hairlines rather than each row framing itself;
+ * the cap holds three rows (3 × 32 + 2 dividers + 2 border = 100px).
+ */
 export function queueStripWrapperClass(): string {
-  return 'mb-2 flex max-h-24 flex-col gap-1 overflow-y-auto';
+  return 'mb-2 flex max-h-25 min-w-0 flex-col divide-y divide-border-soft overflow-y-auto rounded-md border border-border-soft bg-surface-2 text-ui';
 }
 
 /**
@@ -630,116 +506,29 @@ export function queueStripWrapperClass(): string {
  * focus-visible:ring-0` counters against that default chrome are gone —
  * only size and pierce-through classes remain.
  */
-export function composerTextareaClass(mode: MiddleColumnMode): string {
-  if (mode === 'empty') {
-    // Round-2 visual fix: `<Textarea unstyled>` only applies `className` to
-    // the outer span (textarea.tsx), never to the real inner `<textarea>` —
-    // a bare `resize-none` here was inert (outer span isn't a scroll
-    // container) and left the UA default `resize: both` grip on the real
-    // element. `[&_textarea]:` pierces through like every sizing class next
-    // to it.
-    //
-    // T104: `[&_textarea]:text-chat-body` — the reader's own prompt follows the
-    // body tier, which is the "message text and what I type should match" half
-    // of the request. No height term follows it here: this branch centres its
-    // line with symmetric padding and its 56px floor is a floor, so a larger
-    // font is simply a taller resting card, not a broken contract.
-    return 'min-h-14 p-0 [&_textarea]:text-chat-body [&_textarea]:min-h-14 [&_textarea]:resize-none [&_textarea]:px-0';
-  }
-  // Round-2 visual fix: same resize pierce-through as the empty branch, plus
-  // the line box — the session textarea pins the resting height and `py-0`
-  // (the row the card's height arithmetic counts twice, see
-  // `composerFollowHeightBreakdown`), and a `<textarea>` never
-  // vertically centers its own content, so with zero padding the resting
-  // line sat high in the box. Matching line-height to the height token
-  // fills the box instead of relying on padding.
+export function composerTextareaClass(): string {
+  // `<Textarea unstyled>` applies `className` to the outer span only, so every
+  // sizing rule pierces through to the real `<textarea>` with `[&_textarea]:`.
   //
-  // T104 MOVES that line box from the literal `min-h-6`/`leading-6` pair to
-  // `calc(var(--text-chat-body) * 1.5)` — height and line-height, both off the
-  // SAME expression, and that is the point rather than a detail. The reader can
-  // put the body tier anywhere in 12..24px, and the old pair was a hard-coded
-  // 24px: 16px of text inside a 24px line box is only 1.5 leading, and at the
-  // 24px ceiling the glyphs would overrun a box the height arithmetic still
-  // insists is 24px. Deriving both from the token keeps "the resting line fills
-  // its box" true at every setting, which is the invariant the round-2 fix was
-  // for. At the 16px default the expression is exactly 24px, so nothing moves
-  // for a reader who never opens the setting.
-  //
-  // The drift this creates is deliberate and stated in
-  // `composerFollowHeightBreakdown()`: the card's resting height follows the
-  // body size. `COMPOSER_CONTROL_SIZE` stays the 24px BUTTON tier it always
-  // was, and the two are no longer the same number — that conflation is what
-  // this change retires.
-  //
-  // F6 (2026-08-18) RETIRES `min-w-32` (round-4 defect B) and `flex-[2]`
-  // (round-4 F5b) together. Both were arbitration between two elastic text
-  // competitors in one row: a same-row sibling with a large max-content basis
-  // (a long error string) could claim the entire negative-shrink budget and
-  // crush this to 0px, so it got a 128px floor; then the status slot needed a
-  // non-zero grow weight of its own to stop rendering at 0px, so this one was
-  // raised to grow:2 to keep the dominant share. The textarea now owns row 1
-  // outright and the status line moved into the extras stack, which deletes
-  // the contest instead of arbitrating it — a width floor and a grow weight
-  // both describe a negotiation that no longer happens.
-  //
-  // `w-full` in their place: this is a column child, so it stretches by
-  // default, and saying so keeps the intent legible next to the empty
-  // branch. The four `[&_textarea]:` pierce-through variants are untouched —
-  // `<Textarea unstyled>` only applies `className` to the outer span
-  // (textarea.tsx), so sizing that must reach the real inner element still
-  // has to be written this way.
-  // F7f (2026-09-09 Windows field pass): the cap was `max-h-14`, the empty
-  // card's 56px, chosen so growth would not invent a third height step. In use
-  // that is 2.3 rows — a follow-up longer than two lines scrolls inside a box
-  // barely taller than the resting one, which is what the field called
-  // "输入框增高有限". The cap is now eight of the same rows this branch already
-  // pins, so it is still one rule rather than a new magic number, and the card
-  // keeps a scroll boundary instead of pushing the timeline off screen.
-  // T104 re-expresses both the resting row and the cap through
-  // `--text-chat-body` rather than dropping them: they were 24px and 192px
-  // literals, and the row they measure is exactly the derived line box above.
-  // Decision 174: the floor is two of those line boxes
-  // (`COMPOSER_TEXTAREA_MIN_ROWS`), the cap still eight.
-  return 'w-full p-0 [&_textarea]:text-chat-body [&_textarea]:min-h-[calc(var(--text-chat-body)*1.5*2)] [&_textarea]:max-h-[calc(var(--text-chat-body)*1.5*8)] [&_textarea]:resize-none [&_textarea]:px-0 [&_textarea]:py-0 [&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]';
+  // - Line box: `calc(var(--text-chat-body)*1.5)` for line-height, so the
+  //   reader's prompt follows the body tier (T104).
+  // - Rest: one line (`min-h-6`, the control tier). Below a 16px body the
+  //   `py` pads that line out to 24px and centres it on the ⊕ / action key;
+  //   at 16px and above it clamps to 0 and the line sets the height.
+  // - Growth: `field-sizing-content` (textarea.tsx) up to
+  //   `COMPOSER_TEXTAREA_MAX_ROWS` lines, then it scrolls.
+  // `block` on both the wrapper span and the textarea: an inline textarea
+  // sits on the span's text baseline and leaves a descender gap below it,
+  // which made the row 30px instead of 24 and pushed the text above the
+  // ⊕ / send keys (measured 2026-10-22).
+  return 'block w-full p-0 [&_textarea]:block [&_textarea]:text-chat-body [&_textarea]:leading-[calc(var(--text-chat-body)*1.5)] [&_textarea]:min-h-6 [&_textarea]:max-h-[calc(var(--text-chat-body)*1.5*8)] [&_textarea]:py-[max(0px,calc((1.5rem_-_var(--text-chat-body)*1.5)/2))] [&_textarea]:resize-none [&_textarea]:px-0';
 }
 
 /**
- * The session card's status line wrapper — now a full-width line in the extras
- * stack, no longer a slot competing inside the control row.
- *
- * F6 (2026-08-18) RETIRES the whole patch network this class used to carry
- * (`basis-0`, `flex-1`, `max-w-48`, `h-6`), and MOVES the line itself out of
- * `composerBarClass('session')` into the extras stack above the textarea. Both
- * halves of that need justifying, because the patches were each fixing a real,
- * observed defect:
- *
- *  - `basis-0` (round-4 defect B): without an explicit flex-basis this slot's
- *    own potentially-long content became its base size, and CSS's negative
- *    shrink distribution (`shrink × basis`) handed the deficit to the larger
- *    basis, starving the textarea toward 0px.
- *  - `flex-1` + `max-w-48` (round-4 F5b): `basis-0` with grow:0 then rendered
- *    this slot at literally 0px in the ORDINARY positive-free-space case, so
- *    it needed a grow weight back, bounded so it could not win a width contest.
- *  - `h-6` (round-5 diag:placeholder-align): compensation for the parent row's
- *    `items-start`, so this slot's shorter content still stood at the shared
- *    24px reference.
- *
- * Every one of those answers the same question — how should this slot and the
- * textarea divide one row — and F6 stops asking it. The line is a DRAFT-side
- * fact (attachments being read off disk, or a large-attachment hint; see
- * `shouldShowStatusLine` and `resolveIdleStatusText` for why nothing else can
- * reach it in this mode), which puts it in the same family as the notice, the
- * queue notice and the chips. It renders with them, on its own line, with the
- * card's full width. `min-w-0` is all that survives, and only because the
- * inner `<p>`'s `truncate` needs a zero min-width above it to fire at all;
- * `h-6` goes because the parent it compensated for is `items-center` again.
- *
- * The two modes deliberately place this line DIFFERENTLY and must not be
- * "unified": `empty` keeps its status line inside the bottom bar, where it is
- * the only elastic text and has room to be (`ChatComposer.tsx`'s empty branch
- * passes its own wrapper class). The empty card is a wide centred card; the
- * session card is a narrow docked one whose row 2 already carries five
- * controls. Same component, two different width budgets, two right answers.
+ * The status line's wrapper inside the extras stack above the input row (both
+ * modes). It is a draft-side fact (attachments being read off disk, or a
+ * large-attachment hint), so it sits with the notices and chips on its own
+ * full-width line; `min-w-0` lets the inner `<p>`'s `truncate` fire.
  */
 export function sessionStatusLineWrapperClass(): string {
   return 'flex min-w-0 items-center gap-1.5';
@@ -800,17 +589,21 @@ export function resolveIdleStatusText(input: {
  * `bg-muted` is the adjacent surface step to the card's `bg-card` in both
  * themes — deliberately a small delta. The tab is distinguished by SHAPE (top
  * radius, narrower, flush join); a loud fill would read as a separate panel,
- * which is the thing being retired. Do not reach for `bg-hover` here: that
+ * which is the thing being retired. Do not reach for `bg-fill-ghost-hover` here: that
  * token means "pointer is over this" and using it as a resting fill would leave
  * the real hover state with nowhere to go.
  *
- * Session mode is untouched — its row still sits 8px below the card, bare.
+ * Session mode: the plain row under the box, shared with the composer's own
+ * controls (`composerBarClass`).
  */
 export function targetRowClass(mode: MiddleColumnMode): string {
   if (mode === 'empty') {
     return 'mx-3 flex h-7 items-center gap-1 rounded-t-md bg-muted px-2';
   }
-  return 'mt-2 flex h-6 items-center gap-1';
+  // 2026-10-22: the row under the box (`composerBarClass`) — the permission
+  // tier, model/effort and context use join repository, branch and run location
+  // on one quiet line.
+  return composerBarClass();
 }
 
 /**
@@ -1066,10 +859,8 @@ export function composerPopupSide(mode: MiddleColumnMode): PopupSide {
 // ---- Round action button ----
 
 /**
- * 24px true-circle class for the send/stop/retry/enqueue action button,
- * overriding `Button`'s forced squircle four-piece (`rounded-[10px]
- * [corner-shape:squircle] supports-…:rounded-[50px] before:rounded-[9px]…`).
- * Same for both modes — only the colour differs by kind
+ * 24px small-radius square (design system v2; was a true circle) for the
+ * send/stop/retry/enqueue action button. Same for both modes — only the colour differs by kind
  * (`roundActionButtonKindClass`).
  *
  * T-30b2 §3.3-E2: was `size-7` (28px). A07 :1329 derived 28 from "Cursor's
@@ -1077,7 +868,7 @@ export function composerPopupSide(mode: MiddleColumnMode): PopupSide {
  * that derivation was 25% off. 24px is A07's own `--h-btn` and is what every
  * other Composer control already uses.
  *
- * `sm:size-6` is NOT redundant. `Button`'s `icon-sm` size is `size-8
+ * `sm:size-6` is belt-and-braces: `Button`'s `icon-sm` used to be `size-8
  * sm:size-7`, and a bare `size-6` only displaces the unprefixed half —
  * tailwind-merge keeps `sm:size-7` because a breakpoint-prefixed class is a
  * different conflict group. At `sm` and wider (i.e. every real window) the
@@ -1088,7 +879,9 @@ export function composerPopupSide(mode: MiddleColumnMode): PopupSide {
  * flat override onto a responsive variant, not a one-off.
  */
 export function roundActionButtonClass(): string {
-  return 'size-6 sm:size-6 rounded-full [corner-shape:round] supports-[corner-shape:squircle]:rounded-full before:rounded-full supports-[corner-shape:squircle]:before:rounded-full';
+  // Design system v2 §7.9: the reference's send key is a small-radius square,
+  // not a circle; `Button` has no squircle left to override.
+  return 'size-6 sm:size-6 rounded-sm';
 }
 
 export type RoundActionButtonKind =
@@ -1102,16 +895,15 @@ export type RoundActionButtonKind =
 /**
  * Per-kind fill for the round action button.
  *
- * `send` and `enqueue` are deliberately the SAME near-neutral black: enqueue
- * is not a demoted action, it is this turn's send with a delay, so giving it
- * its own colour would invent a distinction the behaviour does not have. They
- * used to be `--primary` (the brand orange, C = 0.1523); the reference uses a
- * near-zero-chroma dark fill, and orange-plus-red round keys sitting side by
- * side (Retry + Send, or Stop + …) was the last of the four "too AI" sources.
+ * `send` and `enqueue` are deliberately the SAME fill: enqueue is not a
+ * demoted action, it is this turn's send with a delay, so giving it its own
+ * colour would invent a distinction the behaviour does not have. Design system
+ * v2 (§1 rule 7, open-claude-ui's composer) makes that fill the clay primary;
+ * the near-black fill it replaces belonged to the retired Cursor reference.
  *
  * `stop` keeps the saturated red — a destructive-coloured Stop is an
  * established safety signal here and at most one is ever on screen. `retry`
- * keeps the outline treatment.
+ * and `send-now` are secondary: a neutral fill, no frame (§1 rule 1).
  *
  * These strings are applied ON TOP of the `Button` variant each kind already
  * uses, so they only need to restate what actually changes plus enough to be
@@ -1122,12 +914,14 @@ export function roundActionButtonKindClass(kind: RoundActionButtonKind): string 
     case 'send':
     case 'enqueue':
     case 'interject':
-      return 'border-foreground bg-foreground text-background shadow-none not-disabled:inset-shadow-none hover:border-foreground hover:bg-foreground/90';
+      // Design system v2 §1 rule 7: the send key is the clay primary.
+      return 'bg-primary text-primary-foreground hover:bg-primary/90';
     case 'stop':
-      return 'border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90';
+      return 'bg-destructive text-destructive-foreground hover:bg-destructive/90';
     case 'retry':
     case 'send-now':
-      return 'border-border bg-background text-foreground hover:bg-accent/50';
+      // Frameless inside the composer (§1 rule 1): the neutral secondary fill.
+      return 'bg-fill-neutral text-foreground hover:bg-fill-ghost-selected';
   }
 }
 

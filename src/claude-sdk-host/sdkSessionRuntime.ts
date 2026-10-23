@@ -84,6 +84,8 @@ import type { SessionPermissionTier } from '../shared/types/sessionPermissionTie
 import {
   subagentHistoryOf,
   WORKER_JOB_READ_DEFAULT_BYTES,
+  WORKER_SIDE_QUESTION_CANCELLED,
+  WORKER_SIDE_QUESTION_UNAVAILABLE,
   type WorkerAcceptForkResult,
   type WorkerBootstrapResult,
   type WorkerCommandResult,
@@ -105,6 +107,8 @@ import {
   type WorkerRewindResult,
   type WorkerSendPayload,
   type WorkerSendResult,
+  type WorkerSideQuestionPayload,
+  type WorkerSideQuestionResult,
   type WorkerStopPayload,
   type WorkerStopResult,
   type WorkerSubagentHistoryPayload,
@@ -2961,6 +2965,62 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
    * (`<tmp>/claude/<cwd dir>/<session id>/tasks/<task id>.output`), named by its
    * notification once it ended and found by its id while it runs.
    */
+  /**
+   * Layout 5f (ui-cohesion ruling L6): the CLI's own side question — what its `/btw`
+   * sends (the `side_question` control request, `Query.askSideQuestion`, untyped in
+   * 0.3.300). The CLI reads the live conversation, runs no tool and writes nothing to
+   * the transcript. A reopened chat starts its CLI first, as a send does, so the
+   * question sees the resumed conversation. Allowed while a turn runs.
+   */
+  async sideQuestion(
+    input: WorkerSideQuestionPayload,
+    signal: AbortSignal
+  ): Promise<WorkerSideQuestionResult> {
+    const cancelled = () =>
+      new BridgeSessionError(WORKER_SIDE_QUESTION_CANCELLED, 'The side question was cancelled');
+    if (signal.aborted) throw cancelled();
+    if (this.disposed) {
+      throw new BridgeSessionError('WORKER_DISPOSED', 'The conversation was closed');
+    }
+    this.requireStub();
+    const q = this.ensureQuery() as Query & {
+      askSideQuestion?: (
+        question: string,
+        options?: {
+          history?: Array<{ question: string; response: string }>;
+          signal?: AbortSignal;
+        }
+      ) => Promise<{ response: string; synthetic: boolean } | null>;
+    };
+    if (typeof q.askSideQuestion !== 'function') {
+      throw new BridgeSessionError(
+        WORKER_SIDE_QUESTION_UNAVAILABLE,
+        'This engine version cannot answer side questions'
+      );
+    }
+    let answer: { response: string; synthetic: boolean } | null;
+    try {
+      answer = await q.askSideQuestion(input.question, {
+        ...(input.history?.length
+          ? {
+              history: input.history.map((turn) => ({
+                question: turn.question,
+                response: turn.answer,
+              })),
+            }
+          : {}),
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted) throw cancelled();
+      throw error;
+    }
+    if (signal.aborted) throw cancelled();
+    // `synthetic`: the CLI's own "no answer" sentence stands in for one.
+    if (!answer || answer.synthetic || !answer.response.trim()) return { text: null };
+    return { text: answer.response };
+  }
+
   async readJob(input: WorkerJobReadPayload): Promise<WorkerJobReadResult> {
     const empty: WorkerJobReadResult = {
       text: '',

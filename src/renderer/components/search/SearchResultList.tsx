@@ -46,7 +46,7 @@ function HighlightText({ text, query }: { text: string; query: string }) {
       {parts.map((part, i) =>
         part.highlight ? (
           // biome-ignore lint/suspicious/noArrayIndexKey: parts are derived from text split, order is stable
-          <mark key={i} className="bg-yellow-500/40 text-inherit rounded-sm px-0.5">
+          <mark key={i} className="bg-warning/30 text-inherit rounded-sm px-0.5">
             {part.text}
           </mark>
         ) : (
@@ -105,7 +105,7 @@ export function SearchResultList({
   if (mode === 'files') {
     if (fileResults.length === 0) {
       return (
-        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        <div className="flex h-full items-center justify-center text-ui text-muted-foreground">
           {query ? t('No files found') : t('Type to search files')}
         </div>
       );
@@ -122,8 +122,10 @@ export function SearchResultList({
               role="option"
               aria-selected={index === selectedIndex}
               className={cn(
-                'flex h-7 cursor-pointer items-center gap-2 rounded px-2 text-sm',
-                index === selectedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                'flex h-7 cursor-pointer items-center gap-2 rounded px-2 text-ui',
+                index === selectedIndex
+                  ? 'bg-accent text-accent-foreground'
+                  : 'hover:bg-fill-ghost-hover'
               )}
               tabIndex={-1}
               onClick={() => handleItemClick(index)}
@@ -133,7 +135,10 @@ export function SearchResultList({
               <span className="min-w-0 flex-1 truncate" title={result.relativePath}>
                 <HighlightText text={result.name} query={query} />
               </span>
-              <span className="shrink-0 text-xs text-muted-foreground" title={result.relativePath}>
+              <span
+                className="shrink-0 text-small text-muted-foreground"
+                title={result.relativePath}
+              >
                 {result.relativePath.replace(result.name, '').replace(/\/$/, '')}
               </span>
             </div>
@@ -148,7 +153,7 @@ export function SearchResultList({
 
   if (matches.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-ui text-muted-foreground">
         {query ? t('No matches found') : t('Type to search in files')}
       </div>
     );
@@ -165,26 +170,28 @@ export function SearchResultList({
             role="option"
             aria-selected={index === selectedIndex}
             className={cn(
-              'flex h-7 cursor-pointer items-center gap-2 rounded px-2 text-sm',
-              index === selectedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+              'flex h-7 cursor-pointer items-center gap-2 rounded px-2 text-ui',
+              index === selectedIndex
+                ? 'bg-accent text-accent-foreground'
+                : 'hover:bg-fill-ghost-hover'
             )}
             tabIndex={-1}
             onClick={() => handleItemClick(index)}
             onDoubleClick={() => handleItemDoubleClick(match)}
           >
             <span
-              className="min-w-0 flex-1 truncate text-xs"
+              className="min-w-0 flex-1 truncate text-small"
               style={{ fontFamily: editorSettings.fontFamily }}
             >
               <HighlightText text={match.content.trim()} query={query} />
             </span>
             <span
-              className="shrink-0 truncate text-xs text-muted-foreground max-w-[200px]"
+              className="shrink-0 truncate text-small text-muted-foreground max-w-[200px]"
               title={match.relativePath}
             >
               {match.relativePath.split('/').pop()}
             </span>
-            <span className="shrink-0 text-xs text-muted-foreground">{match.line}</span>
+            <span className="shrink-0 text-small text-muted-foreground">{match.line}</span>
           </div>
         ))}
       </div>

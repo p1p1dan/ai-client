@@ -69,25 +69,34 @@ describe('S1 list and group context menus', () => {
   });
 
   it('keeps the visible buttons — the menu is a second way in, not a replacement', () => {
-    // Right-click alone is undiscoverable; the top nav's 「添加仓库」 and the
-    // repository header's "more" button both stay.
-    expect(nav).toContain(
-      '<button type="button" className={NAV_ITEM_CLASS} onClick={onAddRepository}>'
+    // Right-click alone is undiscoverable; the top nav's 「仓库」 (layout 5b:
+    // its menu ends in 「添加仓库」) and the repository header's "more" button
+    // both stay.
+    const repositories = nav.slice(
+      nav.indexOf('<MenuTrigger render={<button type="button" className={NAV_ITEM_CLASS} />}>'),
+      nav.indexOf("{t('Skills and plugins')}")
     );
+    expect(repositories).toContain("{t('Repositories')}");
+    expect(repositories).toContain('onClick={() => onAddRepository?.()}');
+    expect(repositories).toContain("{t('Add Repository')}");
     expect(nav).toContain("aria-label={t('Repository actions')}");
   });
 });
 
 describe('S2 project row context menu', () => {
   it('shares one definition of the actions with the more button', () => {
-    expect(nav).toContain('const repoMenuItems = folderRepo ? (');
-    // Both entry points render the same value. A second literal copy is the
-    // failure this guards: the two would drift the first time either changed.
+    // Layout 5b: one function, so the 「仓库」 entry's submenu renders it too.
+    expect(nav).toContain(
+      'const repoMenuItems = folderRepo ? repositoryMenuItems(folderRepo) : null;'
+    );
+    // Every entry point renders the same value. A second literal copy is the
+    // failure this guards: they would drift the first time either changed.
     expect(nav).toContain('<MenuPopup align="end">{repoMenuItems}</MenuPopup>');
     expect(nav).toContain('<ContextMenuPrimitive.Trigger render={header} />');
+    expect(nav).toContain('{repositoryMenuItems(repo)}');
     const items = nav.slice(
-      nav.indexOf('const repoMenuItems = folderRepo ? ('),
-      nav.indexOf(') : null;')
+      nav.indexOf('const repositoryMenuItems = (repo: Repository) => ('),
+      nav.indexOf('const renderRepositoryGroup')
     );
     expect(items).toContain("{t('Repository Settings')}");
     expect(items).toContain("{t('Remove repository')}");

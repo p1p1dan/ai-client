@@ -125,7 +125,7 @@ export function SearchPreviewPanel({ path, line, query }: SearchPreviewPanelProp
 
   if (!path) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-ui text-muted-foreground">
         {t('Select a result to preview')}
       </div>
     );
@@ -133,7 +133,7 @@ export function SearchPreviewPanel({ path, line, query }: SearchPreviewPanelProp
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-ui text-muted-foreground">
         {t('Loading...')}
       </div>
     );
@@ -141,7 +141,7 @@ export function SearchPreviewPanel({ path, line, query }: SearchPreviewPanelProp
 
   if (content === null) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-ui text-muted-foreground">
         {t('Unable to load file')}
       </div>
     );
@@ -154,7 +154,7 @@ export function SearchPreviewPanel({ path, line, query }: SearchPreviewPanelProp
   return (
     <div className="flex h-full flex-col">
       {/* File Header */}
-      <div className="flex h-7 shrink-0 items-center gap-2 border-b bg-muted/30 px-3 text-xs">
+      <div className="flex h-7 shrink-0 items-center gap-2 border-b bg-muted/30 px-3 text-small">
         <span className="font-medium">{fileName}</span>
         <span className="text-muted-foreground truncate">{dirPath}</span>
       </div>

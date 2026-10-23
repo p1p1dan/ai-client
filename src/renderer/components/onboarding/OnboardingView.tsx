@@ -7,6 +7,7 @@ import type {
 } from '@shared/types';
 import { AlertCircleIcon, CheckCircle2Icon, Loader2Icon, MailIcon, ServerIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -245,17 +246,17 @@ export function OnboardingView({
                     }
                   }}
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-small text-muted-foreground">
                   {t('Only {{suffixes}} addresses are accepted.', {
                     suffixes: ALLOWED_EMAIL_SUFFIXES.join(' / '),
                   })}
                 </p>
               </div>
               {sendCodeError && (
-                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive">
-                  <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{sendCodeError}</span>
-                </div>
+                <Alert variant="error">
+                  <AlertCircleIcon />
+                  <AlertDescription>{sendCodeError}</AlertDescription>
+                </Alert>
               )}
             </div>
           </SectionBody>
@@ -296,7 +297,7 @@ export function OnboardingView({
                   maxLength={CODE_LENGTH}
                   pattern="\d*"
                   placeholder={'_'.repeat(CODE_LENGTH)}
-                  className="text-center text-lg tracking-[0.5em] font-mono"
+                  className="text-center text-heading tracking-[0.5em] font-mono"
                   value={code}
                   onChange={(e) => {
                     const digits = e.target.value.replace(/\D/g, '').slice(0, CODE_LENGTH);
@@ -309,7 +310,7 @@ export function OnboardingView({
                   }}
                   autoFocus
                 />
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div className="flex items-center justify-between text-small text-muted-foreground">
                   <span>
                     {t('{{count}} digits, valid for 15 minutes.', { count: CODE_LENGTH })}
                   </span>
@@ -329,10 +330,10 @@ export function OnboardingView({
               </div>
 
               {verifyError && (
-                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive">
-                  <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{verifyError}</span>
-                </div>
+                <Alert variant="error">
+                  <AlertCircleIcon />
+                  <AlertDescription>{verifyError}</AlertDescription>
+                </Alert>
               )}
             </div>
           </SectionBody>
@@ -364,7 +365,7 @@ export function OnboardingView({
             title={t('Signed in')}
           />
           <SectionBody>
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-2 text-ui text-muted-foreground">
               {registerResult.data?.user && (
                 <p>{t('Welcome, {{name}}.', { name: registerResult.data.user.name })}</p>
               )}
@@ -399,7 +400,7 @@ function SectionHeader({
         {icon}
         {title}
       </h2>
-      <p className="text-muted-foreground text-sm">{description}</p>
+      <p className="text-muted-foreground text-ui">{description}</p>
     </div>
   );
 }

@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   CHAT_MIN_WIDTH,
-  chatWidthToEditorRatio,
-  clampEditorRatio,
   contentFloor,
-  DEFAULT_EDITOR_RATIO,
   deriveEditorOpen,
   EDITOR_MIN_WIDTH,
-  MAX_EDITOR_RATIO,
-  MIN_EDITOR_RATIO,
   maxPanelWidth,
   PANEL_MIN_USEFUL_WIDTH,
   RAIL_RESERVE,
@@ -17,120 +12,73 @@ import {
   resolveShellChrome,
   SIDEBAR_COLLAPSED_RESERVE,
 } from '../centerLayoutModel';
+import { PANE_MIN_WIDTH } from '../workPanelModel';
 
-describe('clampEditorRatio', () => {
-  it('keeps a ratio inside 0.25..0.75', () => {
-    expect(clampEditorRatio(0.5)).toBe(0.5);
-    expect(clampEditorRatio(0.1)).toBe(MIN_EDITOR_RATIO);
-    expect(clampEditorRatio(0.99)).toBe(MAX_EDITOR_RATIO);
-  });
+// Layout 5d: the 5a panel's 480 default is the one-column card width.
+const WORK_PANEL_DEFAULT_WIDTH = 480;
 
-  it('falls back to the default for anything non-finite', () => {
-    expect(clampEditorRatio(Number.NaN)).toBe(DEFAULT_EDITOR_RATIO);
-    expect(clampEditorRatio(Number.POSITIVE_INFINITY)).toBe(DEFAULT_EDITOR_RATIO);
-    expect(clampEditorRatio(undefined as unknown as number)).toBe(DEFAULT_EDITOR_RATIO);
+/**
+ * Design system v2 / layout 5a: the right column is the work panel, sized in
+ * pixels (default 480, floor 320 — the reference's file panel), not a share
+ * of the row. The "editor" names below are the allocator's, kept for the
+ * term the panel took over.
+ */
+describe('the work panel floor', () => {
+  it('is 320, the same number as a pane card`s minimum (layout 5d)', () => {
+    expect(EDITOR_MIN_WIDTH).toBe(320);
+    expect(EDITOR_MIN_WIDTH).toBe(PANE_MIN_WIDTH);
   });
 });
 
-describe('resolveChatColumnWidth', () => {
-  it('allows the review column to use its narrower floor without squeezing chat', () => {
-    const allocation = resolveShellAllocation({
-      shellWidth: 1000,
-      sidebarWidth: 280,
-      sidebarCollapsed: false,
-      chatVisible: true,
-      editorOpen: true,
-      editorRatio: 0.5,
-      panelVisible: false,
-      panelWidth: 0,
-      editorMinWidth: 320,
-    });
-    expect(allocation.chatWidth).toBe(400);
-    expect(allocation.editorWidth).toBe(320);
-    expect(allocation.overflowWidth).toBe(0);
-  });
-  const roomy = CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + 400; // 1320
-
-  it('splits the row by the ratio when the ratio is reachable', () => {
-    // 2000 wide: chat may run 400..1480, so a 0.5 split is reachable.
-    expect(resolveChatColumnWidth({ centerWidth: 2000, editorRatio: 0.5 })).toBe(1000);
-    expect(resolveChatColumnWidth({ centerWidth: 2000, editorRatio: 0.6 })).toBe(800);
+describe('resolveChatColumnWidth (pixel panel width, layout 5a)', () => {
+  it('gives the panel its preferred width and chat the rest', () => {
+    expect(resolveChatColumnWidth({ centerWidth: 2000, editorWidth: 480 })).toBe(1520);
+    expect(resolveChatColumnWidth({ centerWidth: 2000, editorWidth: 900 })).toBe(1100);
   });
 
-  it('lets the editor floor beat the persisted ratio, not the other way round', () => {
-    // The floors are hard and the ratio is a preference. At 1000 wide a 0.5
-    // split wants 500 for chat, but that leaves the editor 500 — under its
-    // 520 floor — so chat gets 480 instead. The persisted ratio is NOT
-    // rewritten; widen the window and the 0.5 split comes back.
-    expect(resolveChatColumnWidth({ centerWidth: 1000, editorRatio: 0.5 })).toBe(480);
-    expect(resolveChatColumnWidth({ centerWidth: roomy, editorRatio: 0.25 })).toBe(
-      roomy - EDITOR_MIN_WIDTH
+  it('a wider window widens the conversation, not the panel', () => {
+    const narrow = resolveChatColumnWidth({ centerWidth: 1200, editorWidth: 480 });
+    const wide = resolveChatColumnWidth({ centerWidth: 1800, editorWidth: 480 });
+    expect(1200 - narrow).toBe(480);
+    expect(1800 - wide).toBe(480);
+  });
+
+  it('lets the panel floor beat a narrower preference', () => {
+    expect(resolveChatColumnWidth({ centerWidth: 1200, editorWidth: 100 })).toBe(
+      1200 - PANE_MIN_WIDTH
     );
   });
 
-  it('keeps the editor at or above its floor for every width where chat renders', () => {
-    // "Where chat renders" is the qualifier that matters: at or above the L1
-    // threshold both floors fit, so neither column is ever squeezed. Below it
-    // the ladder is at L2 and chat is not rendered at all, which is why
-    // `resolveChatColumnWidth` may stop honouring the editor floor down there.
-    for (const centerWidth of [920, 1000, 1320, 2400]) {
-      const chat = resolveChatColumnWidth({ centerWidth, editorRatio: MIN_EDITOR_RATIO });
-      expect(chat).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
-      expect(centerWidth - chat).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
+  it('keeps chat at or above its floor when the preference is too wide', () => {
+    expect(resolveChatColumnWidth({ centerWidth: 1000, editorWidth: 900 })).toBe(CHAT_MIN_WIDTH);
+  });
+
+  it('keeps the panel at or above its floor for every width where both fit', () => {
+    for (const centerWidth of [720, 1000, 1320, 2400]) {
+      for (const editorWidth of [0, 320, 480, 2000]) {
+        const chat = resolveChatColumnWidth({ centerWidth, editorWidth });
+        expect(chat).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
+        expect(centerWidth - chat).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
+      }
     }
   });
 
-  it('holds chat`s floor while there is room for both', () => {
-    const width = resolveChatColumnWidth({ centerWidth: 1000, editorRatio: MAX_EDITOR_RATIO });
-    expect(width).toBe(CHAT_MIN_WIDTH);
-  });
-
-  it('NEVER squeezes chat below its floor — the ladder hides it instead (m-T32)', () => {
-    // User report: 「聊天页面极度变形」. 800 < 400 + 520, and the old behaviour
-    // handed chat the 280px shortfall. A deformed strip is worse than no
-    // strip: at this width `resolveShellLevel` is already L2, so chat is not
-    // rendered at all — and if it ever is, it is readable.
-    for (const centerWidth of [800, 700, EDITOR_MIN_WIDTH, 100]) {
-      expect(resolveChatColumnWidth({ centerWidth, editorRatio: 0.5 })).toBeGreaterThanOrEqual(
-        CHAT_MIN_WIDTH
-      );
+  it('NEVER squeezes chat below its floor (m-T32)', () => {
+    // User report: 「聊天页面极度变形」. A deformed strip is worse than none.
+    for (const centerWidth of [700, 600, EDITOR_MIN_WIDTH, 100]) {
+      expect(
+        resolveChatColumnWidth({ centerWidth, editorWidth: WORK_PANEL_DEFAULT_WIDTH })
+      ).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
     }
   });
 
-  it('hands the shortfall to the editor, which can scroll, not to chat', () => {
-    expect(resolveChatColumnWidth({ centerWidth: 800, editorRatio: 0.5 })).toBe(CHAT_MIN_WIDTH);
-  });
-
-  it('falls back to the chat floor before the first measurement', () => {
-    expect(resolveChatColumnWidth({ centerWidth: 0, editorRatio: 0.5 })).toBe(CHAT_MIN_WIDTH);
-    expect(resolveChatColumnWidth({ centerWidth: Number.NaN, editorRatio: 0.5 })).toBe(
+  it('falls back to the chat floor before the first measurement, and on garbage', () => {
+    expect(resolveChatColumnWidth({ centerWidth: 0, editorWidth: 480 })).toBe(CHAT_MIN_WIDTH);
+    expect(resolveChatColumnWidth({ centerWidth: Number.NaN, editorWidth: 480 })).toBe(
       CHAT_MIN_WIDTH
     );
-  });
-});
-
-describe('chatWidthToEditorRatio', () => {
-  it('inverts resolveChatColumnWidth for every ratio that row can actually reach', () => {
-    // At 1600 the reachable band is 0.325 (chat pinned at 1600-520) to 0.75
-    // (chat pinned at its own 400 floor). Inside it the round trip is exact;
-    // outside it `resolveChatColumnWidth` has already clamped, so asking the
-    // inverse to return the unreachable input would be asserting a lie.
-    const centerWidth = 1600;
-    for (const ratio of [0.4, 0.5, 0.6, 0.75]) {
-      const width = resolveChatColumnWidth({ centerWidth, editorRatio: ratio });
-      expect(chatWidthToEditorRatio({ chatWidth: width, centerWidth })).toBeCloseTo(ratio, 2);
-    }
-  });
-
-  it('clamps a drag past either end instead of persisting an unusable ratio', () => {
-    expect(chatWidthToEditorRatio({ chatWidth: 1590, centerWidth: 1600 })).toBe(MIN_EDITOR_RATIO);
-    expect(chatWidthToEditorRatio({ chatWidth: 10, centerWidth: 1600 })).toBe(MAX_EDITOR_RATIO);
-  });
-
-  it('falls back to the default for an unmeasured row', () => {
-    expect(chatWidthToEditorRatio({ chatWidth: 500, centerWidth: 0 })).toBe(DEFAULT_EDITOR_RATIO);
-    expect(chatWidthToEditorRatio({ chatWidth: Number.NaN, centerWidth: 1600 })).toBe(
-      DEFAULT_EDITOR_RATIO
+    expect(resolveChatColumnWidth({ centerWidth: 1000, editorWidth: Number.NaN })).toBe(
+      1000 - EDITOR_MIN_WIDTH
     );
   });
 });
@@ -248,7 +196,7 @@ const alloc = (overrides: Partial<Parameters<typeof resolveShellAllocation>[0]> 
     sidebarCollapsed: false,
     chatVisible: true,
     editorOpen: false,
-    editorRatio: DEFAULT_EDITOR_RATIO,
+    editorWidth: WORK_PANEL_DEFAULT_WIDTH,
     panelVisible: true,
     panelWidth: PANEL,
     ...overrides,
@@ -265,7 +213,7 @@ describe('resolveShellAllocation — sidebar and chat are satisfied first', () =
     }
   });
 
-  it('grants the collapsed sidebar its 48px, never less', () => {
+  it('grants the collapsed sidebar its reserve (0 since layout 5a), never more', () => {
     for (const shellWidth of [2000, 700, 300]) {
       expect(alloc({ shellWidth, sidebarCollapsed: true }).sidebarWidth).toBe(
         SIDEBAR_COLLAPSED_RESERVE
@@ -304,8 +252,9 @@ describe('resolveShellAllocation — sidebar and chat are satisfied first', () =
     expect(result.editorWidth).toBe(0);
   });
 
-  it('splits the center row by the ratio when a file is open', () => {
-    const result = alloc({ shellWidth: 2000, editorOpen: true, editorRatio: 0.5 });
+  it('gives the open work panel its pixel width and chat the rest', () => {
+    const result = alloc({ shellWidth: 2000, editorOpen: true, panelVisible: false });
+    expect(result.editorWidth).toBe(WORK_PANEL_DEFAULT_WIDTH);
     expect(result.chatWidth + result.editorWidth).toBe(result.centerWidth);
   });
 
@@ -438,8 +387,9 @@ describe('resolveShellAllocation — the round-11 report still holds', () => {
     const after = alloc({ ...collapsed, sidebarCollapsed: false, panelVisible: true });
     expect(after.sidebarWidth).toBe(SIDEBAR);
     expect(after.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
-    // 1100 - 280 - 0 (D34: no rail reserve) - 920 floors = -100: no room, so
-    // the panel yields it all rather than cutting into chat or the editor.
+    // 1100 - 280 - 0 (D34: no rail reserve) - 720 floors = 100, under the
+    // useful minimum: the panel yields it all rather than cutting into chat
+    // or the editor.
     expect(after.panelWidth).toBe(0);
     expect(after.panelSuppressed).toBe(true);
   });
@@ -482,13 +432,13 @@ describe('maxPanelWidth', () => {
 });
 
 describe('reserve constants match the shell they describe', () => {
-  it('mirrors the collapsed-sidebar width, and the rail reserve is retired (D34)', () => {
+  it('the collapsed sidebar and the rail reserve are both 0 (D34, layout 5a)', () => {
     // D34: the rail migrated into MainHeader's top bar, which sits outside
     // this allocator's row — there is nothing left in the content row to
     // reserve width for.
     expect(RAIL_RESERVE).toBe(0);
-    // D08: 44, matching `DOCK_RAIL_WIDTH` — a collapsed dock is exactly its
-    // icon rail, and the old 48 left a 4px gutter nothing painted.
-    expect(SIDEBAR_COLLAPSED_RESERVE).toBe(44);
+    // Layout 5a (ruling L1): 0 — the icon rail a collapsed dock left behind
+    // (44px, D08) is gone; a collapsed sidebar takes no width at all.
+    expect(SIDEBAR_COLLAPSED_RESERVE).toBe(0);
   });
 });

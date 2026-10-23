@@ -21,6 +21,7 @@ import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { GoalBar } from './GoalBar';
 import { ReadingColumn } from './ReadingColumn';
 import { deriveGoalBarView, deriveTodoCardView } from './sessionPanelsModel';
+import { useSessionRailPresent } from './sessionRailPresence';
 import { TodoCard } from './TodoCard';
 import { isTurnInFlight } from './turnHead';
 
@@ -42,6 +43,7 @@ export function SessionPanelStrips({ sessionId }: { sessionId: string | null }) 
     sessionId ? state.dismissed[sessionId] : undefined
   );
   const ensureHydrated = useSessionPanelsStore((state) => state.ensureHydrated);
+  const railPresent = useSessionRailPresent();
   const turnInFlight = useChatSessionsStore((state) => {
     const status = state.sessions.find((session) => session.id === sessionId)?.status;
     return status ? isTurnInFlight(status) : false;
@@ -54,7 +56,8 @@ export function SessionPanelStrips({ sessionId }: { sessionId: string | null }) 
   }, [sessionId, ensureHydrated]);
 
   if (!sessionId) return null;
-  const todo = deriveTodoCardView(panels);
+  // Layout 5e: while the session rail is on screen its todo card is the list.
+  const todo = railPresent ? null : deriveTodoCardView(panels);
   const goal = deriveGoalBarView(panels, turnInFlight, dismissed);
   if (!todo && !goal) return null;
 

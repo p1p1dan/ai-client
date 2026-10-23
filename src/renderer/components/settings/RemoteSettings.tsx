@@ -448,13 +448,13 @@ export function RemoteSettings() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h2 className="font-semibold text-xl">{t('Remote Connection')}</h2>
-        <p className="text-muted-foreground text-sm">
+        <h2 className="text-heading font-semibold">{t('Remote Connection')}</h2>
+        <p className="text-muted-foreground text-ui">
           {t(
             'Save SSH profiles here, then use the Remote Host entry in the sidebar to attach remote repositories into this window.'
           )}
         </p>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-ui">
           {t('Remote connections currently support Linux x64 and arm64 glibc hosts only.')}
         </p>
       </div>
@@ -649,8 +649,8 @@ export function RemoteSettings() {
                         key={item.label}
                         className="min-w-0 rounded-lg bg-background/70 px-3 py-2"
                       >
-                        <div className="text-muted-foreground text-xs">{item.label}</div>
-                        <div className="mt-1 break-all font-medium text-foreground text-sm">
+                        <div className="text-muted-foreground text-small">{item.label}</div>
+                        <div className="mt-1 break-all font-medium text-foreground text-ui">
                           {item.value}
                         </div>
                       </div>
@@ -736,8 +736,8 @@ export function RemoteSettings() {
           <AlertDescription className="grid gap-3 sm:grid-cols-2">
             {environmentItems.map((item) => (
               <div key={item.label} className="min-w-0 rounded-lg bg-background/70 px-3 py-2">
-                <div className="text-muted-foreground text-xs">{item.label}</div>
-                <div className="mt-1 break-all font-medium text-foreground text-sm">
+                <div className="text-muted-foreground text-small">{item.label}</div>
+                <div className="mt-1 break-all font-medium text-foreground text-ui">
                   {item.value}
                 </div>
               </div>

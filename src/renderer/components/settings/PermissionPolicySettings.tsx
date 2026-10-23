@@ -15,6 +15,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogDescription,
@@ -52,7 +53,12 @@ import {
   surfacePatch,
   validateNewRule,
 } from './permissionPolicyView';
-import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
+import {
+  SETTINGS_CARD_CLASS,
+  SETTINGS_CARD_FRAME_CLASS,
+  SettingsRow,
+  SettingsSectionBlock,
+} from './SettingsPrimitives';
 
 /**
  * T08-c slice 2 — Settings → 权限策略.
@@ -161,32 +167,29 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
         {snapshot && (
           <>
             {!snapshot.editable && (
-              <div className="flex gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-ui text-info">
-                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                <span className="min-w-0 flex-1">{snapshot.readOnlyReason}</span>
-              </div>
+              <Alert variant="info">
+                <TriangleAlert />
+                <AlertDescription>{snapshot.readOnlyReason}</AlertDescription>
+              </Alert>
             )}
 
             {snapshot.effective.yoloMode.value && (
-              <div className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span className="min-w-0 flex-1">
+              <Alert variant="error">
+                <AlertTriangle />
+                <AlertDescription>
                   {t(
                     'Yolo mode disables all permission checks, including command restrictions. Disable it in the {{source}} configuration file.',
                     { source: t(originLabel(snapshot.effective.yoloMode.origin)) }
                   )}
-                </span>
-              </div>
+                </AlertDescription>
+              </Alert>
             )}
 
             {error && (
-              <div
-                role="alert"
-                className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive"
-              >
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span className="min-w-0 flex-1">{error}</span>
-              </div>
+              <Alert variant="error">
+                <AlertTriangle />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
 
             <section className="space-y-3">
@@ -196,7 +199,7 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
                   'Choose whether each tool call is allowed, requires approval, or is denied.'
                 )}
               />
-              <div className="border-t divide-y">
+              <div className={SETTINGS_CARD_CLASS}>
                 {controls.map((control) => (
                   <SurfaceRow
                     key={`${control.surface}:${control.pattern ?? ''}`}
@@ -222,10 +225,10 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
                 title={t('Approval log')}
                 description={t('Record allowed and denied actions for review.')}
               />
-              <div className="flex items-center justify-between gap-4 border-t p-4">
+              <div className="flex items-center justify-between gap-4 rounded-md border border-border-soft bg-surface-2 p-4">
                 <div className="min-w-0 flex-1">
                   <p className="text-ui font-medium">{t('Record approval results')}</p>
-                  <p className="text-meta text-muted-foreground">
+                  <p className="text-small text-muted-foreground">
                     {t('Write to')}
                     <Ident>{'<agentDir>/extensions/pi-permission-system/logs'}</Ident>。
                     {snapshot.effective.permissionReviewLog.origin
@@ -251,7 +254,7 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
                   'Lower entries take precedence. The last layer defining a setting determines its value.'
                 )}
               />
-              <div className="border-t divide-y">
+              <div className={SETTINGS_CARD_FRAME_CLASS}>
                 {scopes.map((scope) => (
                   <ScopeRowView key={scope.id} scope={scope} />
                 ))}
@@ -370,7 +373,7 @@ function SurfaceRow({
           <span className="text-ui font-medium">{t(control.label)}</span>
           <OriginBadge origin={control.origin} overridden={control.overridden} />
         </div>
-        <p className="text-meta text-muted-foreground">{t(control.description)}</p>
+        <p className="text-small text-muted-foreground">{t(control.description)}</p>
       </div>
       <Select
         value={control.overridden ? control.value : INHERIT_OPTION}
@@ -433,11 +436,11 @@ function RuleTableSection({
   return (
     <section className="space-y-3">
       <SettingsSectionBlock title={t(table.label)} description={t(table.description)} />
-      <div className="border-t">
+      <div className={SETTINGS_CARD_FRAME_CLASS}>
         {table.rules.length === 0 ? (
-          <p className="p-4 text-meta text-muted-foreground">{t('No rules in this category.')}</p>
+          <p className="p-4 text-small text-muted-foreground">{t('No rules in this category.')}</p>
         ) : (
-          <ol className="divide-y">
+          <ol className="divide-y divide-border-soft">
             {table.rules.map((rule, index) => (
               <RuleRow
                 key={rule.pattern}
@@ -485,11 +488,11 @@ function RuleTableSection({
             </Button>
           </div>
           {validation.error && (
-            <p role="alert" className="text-meta text-destructive">
+            <p role="alert" className="text-small text-destructive">
               {validation.error}
             </p>
           )}
-          {validation.warning && <p className="text-meta text-warning">{validation.warning}</p>}
+          {validation.warning && <p className="text-small text-warning">{validation.warning}</p>}
         </div>
       )}
     </section>
@@ -511,7 +514,9 @@ function RuleRow({
 
   return (
     <li className="flex items-center gap-3 p-3">
-      <span className="w-6 shrink-0 text-meta tabular-nums text-muted-foreground">{index + 1}</span>
+      <span className="w-6 shrink-0 text-small tabular-nums text-muted-foreground">
+        {index + 1}
+      </span>
       <Ident className="min-w-0 flex-1 truncate">{rule.pattern}</Ident>
       {rule.repositioned && (
         <Badge
@@ -598,13 +603,13 @@ function ScopeRowView({ scope }: { scope: ScopeRow }) {
             </Badge>
           )}
         </div>
-        <p className="text-meta text-muted-foreground">{t(scope.summary)}</p>
+        <p className="text-small text-muted-foreground">{t(scope.summary)}</p>
         {scope.onDisk && (
-          <p className="break-all text-meta text-muted-foreground">
+          <p className="break-all text-small text-muted-foreground">
             <Ident>{scope.path}</Ident>
           </p>
         )}
-        {scope.detail && <p className="text-meta text-warning">{scope.detail}</p>}
+        {scope.detail && <p className="text-small text-warning">{scope.detail}</p>}
       </div>
       {scope.onDisk && (
         <Button

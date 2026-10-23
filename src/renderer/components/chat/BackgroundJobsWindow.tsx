@@ -13,17 +13,7 @@
  * never the model's cursor — once a second while an open row runs.
  */
 
-import {
-  BrushCleaning,
-  EyeOff,
-  Hand,
-  Layers,
-  ScrollText,
-  Square,
-  SquareTerminal,
-  Users,
-  Workflow,
-} from 'lucide-react';
+import { BrushCleaning, EyeOff, Hand, Layers, ScrollText, Square } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -37,6 +27,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
+import { type RunStatus, StatusIcon } from '@/components/ui/status-icon';
 import { toastManager } from '@/components/ui/toast';
 import { type TFunction, useI18n } from '@/i18n';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
@@ -44,8 +35,12 @@ import { cn } from '@/lib/utils';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { type SubwindowPosition, useSessionSubwindowsStore } from '@/stores/sessionSubwindows';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
-import { SubwindowEmpty, SubwindowFrame } from './SubwindowFrame';
-import { panelStripActionClass, panelStripIconButtonClass } from './sessionPanelsLayout';
+import {
+  SubwindowEmpty,
+  SubwindowFrame,
+  subwindowRowClass,
+  subwindowRowTimeClass,
+} from './SubwindowFrame';
 import { isSessionNotRunningError, SESSION_TASKS_ENDED } from './sessionStart';
 import { deriveSubagentPanelRows, type SubagentLane } from './subagentActivityModel';
 import {
@@ -84,17 +79,25 @@ export function jobStatusLabel(
   }
 }
 
-function kindIcon(row: JobRowView) {
-  const className = 'size-3.5 shrink-0 text-muted-foreground';
-  switch (row.kind) {
-    case 'command':
-      return <SquareTerminal className={className} aria-hidden />;
-    case 'subagent':
-      return <Users className={className} aria-hidden />;
-    case 'workflow':
-      return <Workflow className={className} aria-hidden />;
+/**
+ * Design system v2 §6: a row's state as the one status icon draws it. The
+ * row leads with it, as the subagents window's rows do; the kind is in the
+ * words beside it (the job id, 子代理, 工作流).
+ */
+export function jobRunStatus(status: JobRowStatus): RunStatus {
+  switch (status) {
+    case 'running':
+    case 'stopping':
+      return 'running';
+    case 'completed':
+      return 'success';
+    case 'failed':
+      return 'failed';
+    case 'killed':
+    case 'lost':
+      return 'stopped';
     default:
-      return <Layers className={className} aria-hidden />;
+      return 'idle';
   }
 }
 
@@ -165,28 +168,30 @@ export function BackgroundJobsWindow({
         : t('{{running}} running', { running: view.running });
 
   const stopAll = view.canStopAll ? (
-    <button
+    <Button
       type="button"
-      className={panelStripIconButtonClass()}
+      size="icon-xs"
+      variant="ghost"
       aria-label={t('Stop all')}
       title={t('Stop all')}
       onClick={() => setConfirming(true)}
     >
       <Square className="size-3.5" />
-    </button>
+    </Button>
   ) : null;
   // Put every ended row away in one go (this window only, like each row's Remove).
   const clearEnded =
     endedKeys.length > 0 ? (
-      <button
+      <Button
         type="button"
-        className={panelStripIconButtonClass()}
+        size="icon-xs"
+        variant="ghost"
         aria-label={t('Clear ended')}
         title={t('Clear ended')}
         onClick={() => hideJobs(sessionId, endedKeys)}
       >
         <BrushCleaning className="size-3.5" />
-      </button>
+      </Button>
     ) : null;
 
   return (
@@ -232,7 +237,7 @@ export function BackgroundJobsWindow({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline">{t('Cancel')}</Button>} />
+            <AlertDialogClose render={<Button variant="secondary">{t('Cancel')}</Button>} />
             <Button
               variant="destructive"
               onClick={() => {
@@ -282,9 +287,9 @@ function JobRow({
 
   return (
     <div data-testid="job-row" data-status={row.status}>
-      <div className="rounded-sm px-2 py-0.5 hover:bg-hover">
-        <div className="flex h-6 min-w-0 items-center gap-1.5 text-ui">
-          {kindIcon(row)}
+      <div className={subwindowRowClass()}>
+        <div className="flex h-7 min-w-0 items-center gap-1.5 text-ui">
+          <StatusIcon status={jobRunStatus(row.status)} />
           {row.kind === 'command' ? (
             <Ident className="shrink-0 text-muted-foreground">{idText}</Ident>
           ) : (
@@ -299,22 +304,20 @@ function JobRow({
               {row.label}
             </span>
           )}
-          {elapsed && (
-            <span className="shrink-0 text-muted-foreground tabular-nums">{elapsed}</span>
-          )}
+          {elapsed && <span className={subwindowRowTimeClass()}>{elapsed}</span>}
         </div>
-        <div className="flex h-6 min-w-0 items-center gap-1.5 pl-5 text-muted-foreground">
+        <div className="flex h-6 min-w-0 items-center gap-1.5 pl-5 text-small text-muted-foreground">
           <span className="min-w-0 truncate">{jobStatusLabel(row.status, row.stop, t)}</span>
-          {/* P1-7e e6 (decision 145): both badges are CJK in Chinese, so the
-              badge's large size (14px on desktop) like the sidebar's (decision
-              144 §2); the small size is 10px. */}
+          {/* P1-7e e6 (decision 145): both badges are CJK in Chinese, so never
+              the 11px small size. Design system v2 §1 rule 1: inside the
+              framed window a tag is a neutral fill, not a second frame. */}
           {row.promoted && (
-            <Badge variant="outline" size="lg" className="font-normal">
+            <Badge variant="secondary" className="font-normal">
               {t('Timed out into the background')}
             </Badge>
           )}
           {row.exitCode !== undefined && (
-            <Badge variant="outline" size="lg" className="font-normal tabular-nums">
+            <Badge variant="secondary" className="font-normal tabular-nums">
               {t('Exit code {{code}}', { code: row.exitCode })}
             </Badge>
           )}
@@ -325,7 +328,7 @@ function JobRow({
               <Button
                 size="xs"
                 variant="ghost"
-                className={cn(panelStripActionClass(), expanded && 'bg-selection')}
+                className={cn(expanded && 'bg-fill-ghost-selected text-foreground')}
                 aria-expanded={expanded}
                 onClick={() => toggleExpanded(expandKey)}
               >
@@ -334,12 +337,7 @@ function JobRow({
               </Button>
             )}
             {row.stop && (
-              <Button
-                size="xs"
-                variant="ghost"
-                className={panelStripActionClass()}
-                onClick={onStop}
-              >
+              <Button size="xs" variant="ghost" onClick={onStop}>
                 {row.stop === 'interrupt' ? (
                   <Hand className="size-3.5" />
                 ) : (
@@ -352,7 +350,6 @@ function JobRow({
               <Button
                 size="xs"
                 variant="ghost"
-                className={panelStripActionClass()}
                 onClick={() => {
                   if (row.hideKey) hideJob(sessionId, row.hideKey);
                 }}
@@ -382,7 +379,7 @@ function JobRow({
 
 /** The expanded pane's frame (prototype `.tail`): indented, a rule on its left. */
 function tailClass(): string {
-  return 'mb-1.5 ml-7 border-l border-border pl-3';
+  return 'mb-1.5 ml-7 border-l border-border-soft pl-3';
 }
 
 /** A continuable subagent's latest lane rows — its activity, not bytes (prototype `.mini-lane`). */
@@ -516,7 +513,7 @@ export function JobOutputPane({
           {t('Output unavailable: the engine that ran it is gone')}
         </p>
       ) : pane.error ? (
-        <p className="text-muted-foreground">{pane.error}</p>
+        <p className="text-destructive">{pane.error}</p>
       ) : shown ? (
         <pre
           ref={scroller}
@@ -524,7 +521,7 @@ export function JobOutputPane({
             const element = event.currentTarget;
             following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 8;
           }}
-          className="m-0 max-h-40 select-text overflow-auto whitespace-pre-wrap break-words text-code text-muted-foreground leading-[1.55]"
+          className="m-0 max-h-40 select-text overflow-auto whitespace-pre-wrap break-words text-code text-muted-foreground"
         >
           {shown}
         </pre>

@@ -1,3 +1,4 @@
+import { CHAT_PROSE_LEADING } from './chatTimelineLayout';
 import { parseMarkdownFileLink } from './markdownFileLink';
 /**
  * T-29: the assistant-prose Markdown layer's decision logic and class assembly
@@ -458,7 +459,7 @@ function segmentClosedText(closed: string): string[] {
  * spacing tier — D25 allows exactly two (14px block / 24px section).
  */
 export function chatMarkdownSegmentGapClass(): string {
-  return 'space-y-3.5';
+  return 'space-y-2.5';
 }
 
 export interface ClosedPrefixSplit {
@@ -685,8 +686,10 @@ export function deriveStreamingBlockIds(input: {
  * What F-C4 actually pins is untouched: prose has exactly TWO tiers and invents
  * no third. Only the values those tiers hold have changed.
  */
-const BLOCK_GAP = 'mt-3.5 first:mt-0';
-const SECTION_GAP = 'mt-6 first:mt-0';
+// Design system v2 §1 rule 10 / §4.2: both tiers now derive from the 20px body
+// line -- block = x 0.5 (10px, the reference's chat-item-gap), section = x 1.
+const BLOCK_GAP = 'mt-2.5 first:mt-0';
+const SECTION_GAP = 'mt-5 first:mt-0';
 
 /**
  * The Markdown root — one flex item inside `turnBodyClass()`.
@@ -712,7 +715,7 @@ const SECTION_GAP = 'mt-6 first:mt-0';
  * (found in T-29 GUI review).
  */
 export function chatMarkdownRootClass(): string {
-  return 'min-w-0 select-text break-words text-chat-body leading-relaxed text-foreground';
+  return `min-w-0 select-text break-words text-chat-body ${CHAT_PROSE_LEADING} text-foreground`;
 }
 
 export function chatMarkdownParagraphClass(): string {
@@ -790,7 +793,9 @@ export function chatMarkdownLinkClass(): string {
   // state, and `docs/design-system.md`'s "已知偏差" table is for deviations we
   // decided to keep, not a place to file new ones. Decoration alpha carries the
   // same affordance and is not text contrast.
-  return 'text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-primary';
+  // Design system v2 §1 rule 7: prose links do not wear the brand clay; the
+  // underline alone marks them, in the body ink.
+  return 'text-foreground underline decoration-foreground-faint underline-offset-4 hover:decoration-foreground';
 }
 
 /**
@@ -806,7 +811,23 @@ export function chatMarkdownLinkClass(): string {
  * the sticky chain (F-C4).
  */
 export function chatMarkdownCodeBlockClass(): string {
-  return `${BLOCK_GAP} overflow-x-auto rounded-sm border border-border bg-muted/50 p-3 text-code leading-normal`;
+  // Design system v2 §7.5: the frame and the block gap moved to
+  // `chatMarkdownCodeFrameClass()`; `<pre>` is only the scroll box now.
+  return 'overflow-x-auto px-3 py-2.5 text-code';
+}
+
+/**
+ * Design system v2 §7.5: a fenced block's one closed frame -- `lg` radius,
+ * the card surface, the soft edge. No `overflow-*`: nothing inside paints a
+ * face, so the corners need no clipping (F-C4).
+ */
+export function chatMarkdownCodeFrameClass(): string {
+  return `${BLOCK_GAP} rounded-lg border border-border-soft bg-surface-2`;
+}
+
+/** The frame's 32px head bar: the language, then the copy button, over a hairline. */
+export function chatMarkdownCodeHeadClass(): string {
+  return 'flex h-8 items-center justify-between gap-2 border-b border-border-soft pr-1 pl-3 text-small text-muted-foreground';
 }
 
 /** GFM table, wrapped so the horizontal scroll is the TABLE's, not the column's. */
@@ -815,21 +836,21 @@ export function chatMarkdownTableWrapClass(): string {
 }
 
 export function chatMarkdownTableClass(): string {
-  return 'w-full border-collapse border border-border';
+  return 'w-full border-collapse border border-border-soft';
 }
 
 export function chatMarkdownTableCellClass(kind: 'head' | 'body'): string {
   return kind === 'head'
-    ? 'border border-border bg-muted/50 px-2.5 py-1.5 text-left font-semibold'
-    : 'border border-border px-2.5 py-1.5';
+    ? 'border border-border-soft bg-surface-2 px-2.5 py-1.5 text-left font-semibold'
+    : 'border border-border-soft px-2.5 py-1.5';
 }
 
 export function chatMarkdownBlockquoteClass(): string {
-  return `${BLOCK_GAP} border-l-2 border-border pl-2.5 text-muted-foreground`;
+  return `${BLOCK_GAP} border-l-2 border-border-soft pl-2.5 text-muted-foreground`;
 }
 
 export function chatMarkdownHrClass(): string {
-  return `${BLOCK_GAP} border-border`;
+  return `${BLOCK_GAP} border-border-soft`;
 }
 
 /**
@@ -857,7 +878,7 @@ export function chatMarkdownFootnotesClass(className: unknown): string {
       : Array.isArray(className)
         ? className
         : [];
-  return names.includes('footnotes') ? `${SECTION_GAP} text-meta text-muted-foreground` : '';
+  return names.includes('footnotes') ? `${SECTION_GAP} text-small text-muted-foreground` : '';
 }
 
 /**
@@ -870,7 +891,7 @@ export function chatMarkdownFootnotesClass(className: unknown): string {
  * meaning in a chat transcript, so there is no case worth the channel.
  */
 export function chatMarkdownImagePlaceholderClass(): string {
-  return 'inline-flex max-w-full items-center gap-1 rounded-xs border border-border bg-muted/50 px-1.5 align-middle text-meta text-muted-foreground';
+  return 'inline-flex max-w-full items-center gap-1 rounded-xs bg-fill-neutral px-1.5 align-middle text-small text-muted-foreground';
 }
 
 // ---------------------------------------------------------------------------

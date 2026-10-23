@@ -64,6 +64,7 @@ import type {
 } from '@shared/agentMigration';
 import { ArrowRightLeft, Check, KeyRound, MessagesSquare, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -332,14 +333,14 @@ export function AgentMigrationPrompt() {
             <div className="space-y-3">
               {piCopyAvailable && (
                 <>
-                  <div className="grid gap-1 text-meta text-muted-foreground sm:grid-cols-[80px_1fr] sm:gap-3">
+                  <div className="grid gap-1 text-small text-muted-foreground sm:grid-cols-[80px_1fr] sm:gap-3">
                     <span>{t('Copy from')}</span>
                     <Ident className="min-w-0 break-all">{plan.sourceDir}</Ident>
                     <span>{t('Copy to')}</span>
                     <Ident className="min-w-0 break-all">{plan.targetDir}</Ident>
                   </div>
 
-                  <ul className="divide-y rounded-md border">
+                  <ul className="divide-y divide-border-soft rounded-md border border-border-soft">
                     {plan.items.map((item) => (
                       <PromptRow
                         key={item.kind}
@@ -355,14 +356,14 @@ export function AgentMigrationPrompt() {
                       is actually ticked, so unticking it visibly removes the warning
                       as well as the copy. */}
                   {secrets && (
-                    <p className="flex gap-2 rounded-sm border border-warning/30 bg-warning/8 p-3 text-meta text-muted-foreground">
-                      <KeyRound className="h-4 w-4 shrink-0 text-warning" />
-                      <span>
+                    <Alert variant="warning">
+                      <KeyRound />
+                      <AlertDescription>
                         {t(
                           'Your AI services include API keys. Copying them stores a copy in this app’s own credential vault. Uncheck that row to leave them out.'
                         )}
-                      </span>
-                    </p>
+                      </AlertDescription>
+                    </Alert>
                   )}
                 </>
               )}
@@ -375,7 +376,7 @@ export function AgentMigrationPrompt() {
                       <p className="text-ui font-medium">
                         {t('Import conversations from Claude Code / Codex')}
                       </p>
-                      <p className="text-meta text-muted-foreground">
+                      <p className="text-small text-muted-foreground">
                         {t(
                           'Found Claude Code or Codex conversation history on this machine. Import it to keep working with those conversations here.'
                         )}
@@ -396,7 +397,7 @@ export function AgentMigrationPrompt() {
                 </div>
               )}
 
-              <p className="text-meta text-muted-foreground">
+              <p className="text-small text-muted-foreground">
                 {t(
                   'Anything this app already has is left alone. You can do this later in Settings.'
                 )}
@@ -405,10 +406,10 @@ export function AgentMigrationPrompt() {
           )}
 
           {error && (
-            <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
-              <TriangleAlert className="h-4 w-4 shrink-0" />
-              {error}
-            </p>
+            <Alert variant="error">
+              <TriangleAlert />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
         </DialogPanel>
 
@@ -477,14 +478,14 @@ function PromptRow({
 function PromptReport({ outcomes }: { outcomes: MigrationOutcome[] }) {
   const { t } = useI18n();
   return (
-    <div className="space-y-2 rounded-md border p-3">
+    <div className="space-y-2 rounded-md border border-border-soft p-3">
       <div className="flex items-center gap-2 text-ui font-medium">
         <Check className="h-4 w-4 text-success" />
         {t('Copy finished')}
       </div>
       {outcomes.map((outcome) => (
         <div key={outcome.kind} className="space-y-1">
-          <p className="text-meta text-muted-foreground">
+          <p className="text-small text-muted-foreground">
             {`${t(migrationKindLabel(outcome.kind))}: `}
             {t('{{copied}} copied, {{replaced}} replaced, {{skipped}} left alone', {
               copied: outcome.copied,
@@ -495,7 +496,7 @@ function PromptReport({ outcomes }: { outcomes: MigrationOutcome[] }) {
           {/* A shorter list than promised has to say why — a keyring that would
               not unlock reports here, not in a log nobody reads. */}
           {outcome.failed.map((failure) => (
-            <p key={failure.name} className="text-meta text-destructive">
+            <p key={failure.name} className="text-small text-destructive">
               {`${failure.name}: ${failure.error}`}
             </p>
           ))}

@@ -12,46 +12,30 @@ import { cn } from '../utils';
 describe('cn (tailwind-merge font-size vs text-color conflict)', () => {
   it('keeps both a text-color class and a D25 size token together', () => {
     expect(cn('text-muted-foreground', 'text-ui')).toBe('text-muted-foreground text-ui');
-    expect(cn('text-muted-foreground', 'text-meta')).toBe('text-muted-foreground text-meta');
     expect(cn('text-muted-foreground', 'text-code')).toBe('text-muted-foreground text-code');
-    expect(cn('text-muted-foreground', 'text-markdown')).toBe(
-      'text-muted-foreground text-markdown'
-    );
     expect(cn('text-muted-foreground', 'text-title')).toBe('text-muted-foreground text-title');
     expect(cn('text-muted-foreground', 'text-2xs')).toBe('text-muted-foreground text-2xs');
   });
 
   it('still dedupes two font-size utilities, keeping only the later one', () => {
-    expect(cn('text-xs', 'text-meta')).toBe('text-meta');
+    expect(cn('text-xs', 'text-small')).toBe('text-small');
     expect(cn('text-base', 'text-ui')).toBe('text-ui');
     expect(cn('text-sm', 'text-code')).toBe('text-code');
   });
 
-  it('leaves text-tool-arg classified as a colour token (unregistered on purpose)', () => {
-    expect(cn('text-muted-foreground', 'text-tool-arg')).toBe('text-tool-arg');
+  it('leaves text-foreground-faint classified as a colour token (unregistered on purpose)', () => {
+    expect(cn('text-muted-foreground', 'text-foreground-faint')).toBe('text-foreground-faint');
   });
 });
 
 /**
- * Decision 170 (issue #6): the 16px tier `text-section` is a size, registered
- * like the D25 tokens; `text-foreground-soft` is a colour and must stay in the
- * colour group, so it replaces another colour and never a size.
+ * Decision 170 (issue #6): `text-foreground-soft` is a colour and must stay in
+ * the colour group, so it replaces another colour and never a size.
  */
 describe('cn with the sidebar region tokens (decision 170)', () => {
-  it('keeps a colour next to text-section, in either order', () => {
-    expect(cn('text-foreground', 'text-section')).toBe('text-foreground text-section');
-    expect(cn('text-section', 'text-foreground')).toBe('text-section text-foreground');
-    expect(cn('text-muted-foreground', 'text-section')).toBe('text-muted-foreground text-section');
-  });
-
-  it('dedupes text-section against the other size tokens', () => {
-    expect(cn('text-ui', 'text-section')).toBe('text-section');
-    expect(cn('text-section', 'text-meta')).toBe('text-meta');
-  });
-
   it('treats text-foreground-soft as a colour: it keeps the size and replaces a colour', () => {
-    expect(cn('text-meta', 'text-foreground-soft')).toBe('text-meta text-foreground-soft');
-    expect(cn('text-foreground-soft', 'text-meta')).toBe('text-foreground-soft text-meta');
+    expect(cn('text-small', 'text-foreground-soft')).toBe('text-small text-foreground-soft');
+    expect(cn('text-foreground-soft', 'text-small')).toBe('text-foreground-soft text-small');
     expect(cn('text-foreground', 'text-foreground-soft')).toBe('text-foreground-soft');
     expect(cn('text-foreground-soft', 'text-accent-foreground')).toBe('text-accent-foreground');
   });
@@ -80,6 +64,13 @@ describe('cn with the home title token (decision 174)', () => {
 
   it('dedupes text-display against the other size tokens', () => {
     expect(cn('text-title', 'text-display')).toBe('text-display');
-    expect(cn('text-display', 'text-section')).toBe('text-section');
+    expect(cn('text-display', 'text-heading')).toBe('text-heading');
+  });
+
+  // Design system v2: text-small / text-heading are sizes, not colours.
+  it.each(['text-small', 'text-heading'])('keeps a colour next to %s, in either order', (size) => {
+    expect(cn('text-muted-foreground', size)).toBe(`text-muted-foreground ${size}`);
+    expect(cn(size, 'text-foreground')).toBe(`${size} text-foreground`);
+    expect(cn('text-ui', size)).toBe(size);
   });
 });

@@ -21,7 +21,7 @@ function Meter({ className, children, ...props }: MeterPrimitive.Root.Props) {
 function MeterLabel({ className, ...props }: MeterPrimitive.Label.Props) {
   return (
     <MeterPrimitive.Label
-      className={cn('font-medium text-sm', className)}
+      className={cn('font-medium text-ui', className)}
       data-slot="meter-label"
       {...props}
     />
@@ -51,7 +51,7 @@ function MeterIndicator({ className, ...props }: MeterPrimitive.Indicator.Props)
 function MeterValue({ className, ...props }: MeterPrimitive.Value.Props) {
   return (
     <MeterPrimitive.Value
-      className={cn('text-sm tabular-nums', className)}
+      className={cn('text-ui tabular-nums', className)}
       data-slot="meter-value"
       {...props}
     />

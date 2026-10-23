@@ -121,7 +121,7 @@ export function ComposerCommandMirror({
     >
       <Tooltip open={infoOpen}>
         <TooltipTrigger render={token}>{value.slice(0, end)}</TooltipTrigger>
-        <TooltipPopup side="top" align="start" className="max-w-80 text-meta">
+        <TooltipPopup side="top" align="start" className="max-w-80 text-small">
           <div className="flex flex-col gap-1 py-1">
             <span className="text-muted-foreground">/{name}</span>
             {description ? <span>{description}</span> : null}

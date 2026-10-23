@@ -29,6 +29,8 @@ interface FakeQuery {
   setPermissionMode: ReturnType<typeof vi.fn>;
   /** The SDK's generic control request (decision 201's `send_now` interrupt goes through it). */
   request: ReturnType<typeof vi.fn>;
+  /** Layout 5f: the CLI's side question (`/btw`). */
+  askSideQuestion: ReturnType<typeof vi.fn>;
 }
 /** `init`: what the next CLI's `initializationResult()` waits on (S-5 H-4); ready at once if unset. */
 const sdk = vi.hoisted(() => ({
@@ -56,6 +58,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       applyFlagSettings: vi.fn(async () => {}),
       setPermissionMode: vi.fn(async () => {}),
       request: vi.fn(async () => ({ response: { send_now: 'delivering' } })),
+      askSideQuestion: vi.fn(async () => ({ response: 'side answer', synthetic: false })),
     };
     sdk.queries.push(fake);
     return {
@@ -75,6 +78,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       applyFlagSettings: fake.applyFlagSettings,
       setPermissionMode: fake.setPermissionMode,
       request: fake.request,
+      askSideQuestion: fake.askSideQuestion,
       initializationResult: () => sdk.init ?? Promise.resolve({}),
     };
   },
@@ -2199,6 +2203,47 @@ describe('transcript ids (decision 206)', () => {
       // No API message id: nothing to vouch for.
       ['h:e-3', undefined],
     ]);
+    await rt.dispose();
+  });
+});
+
+describe('side questions (layout 5f, ruling L6)', () => {
+  const QUESTION = { logicalSessionId: 'chat-1', questionId: 'q1', question: 'why?' };
+
+  it("asks the CLI's own side question, history and signal passed on, and emits nothing", async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    const before = events.length;
+    const controller = new AbortController();
+    await expect(
+      rt.sideQuestion(
+        { ...QUESTION, history: [{ question: 'first?', answer: 'one' }] },
+        controller.signal
+      )
+    ).resolves.toEqual({ text: 'side answer' });
+    expect(q?.askSideQuestion).toHaveBeenCalledWith('why?', {
+      history: [{ question: 'first?', response: 'one' }],
+      signal: controller.signal,
+    });
+    // Nothing reaches the main conversation: no turn, no row, no status.
+    expect(events.length).toBe(before);
+    await rt.dispose();
+  });
+
+  it("the CLI's stand-in sentence is no answer; an abort is a cancel", async () => {
+    const { rt, q } = await started();
+    q?.askSideQuestion.mockResolvedValueOnce({ response: '(No answer…)', synthetic: true });
+    await expect(rt.sideQuestion(QUESTION, new AbortController().signal)).resolves.toEqual({
+      text: null,
+    });
+    const controller = new AbortController();
+    q?.askSideQuestion.mockImplementationOnce(async () => {
+      controller.abort();
+      throw new Error('aborted');
+    });
+    await expect(rt.sideQuestion(QUESTION, controller.signal)).rejects.toMatchObject({
+      code: 'WORKER_SIDE_QUESTION_CANCELLED',
+    });
     await rt.dispose();
   });
 });

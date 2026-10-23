@@ -116,10 +116,10 @@ function FavoriteButton({
         e.preventDefault();
         onClick(e);
       }}
-      className={cn('p-1 hover:text-red-500 transition-colors', className)}
+      className={cn('p-1 hover:text-destructive transition-colors', className)}
     >
       {isFavorite ? (
-        <Heart className="h-4 w-4 fill-red-500 text-red-500" />
+        <Heart className="h-4 w-4 fill-destructive text-destructive" />
       ) : (
         <Heart className="h-4 w-4" />
       )}
@@ -262,7 +262,7 @@ function ThemeCombobox({
           />
           <label
             htmlFor="show-favorites-only-inner"
-            className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap"
+            className="text-small text-muted-foreground cursor-pointer whitespace-nowrap"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
@@ -273,7 +273,7 @@ function ThemeCombobox({
       <ComboboxPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
         <ComboboxList ref={listRef}>
           {filteredThemes.length === 0 && (
-            <div className="py-6 text-center text-sm text-muted-foreground">
+            <div className="py-6 text-center text-ui text-muted-foreground">
               {showEmptyFavoritesHint
                 ? t('No favorite themes yet. Click the heart icon to add favorites.')
                 : t('No themes found')}
@@ -389,7 +389,7 @@ export function TerminalAppearanceSettings() {
     <div className="space-y-6">
       <SettingsSectionBlock title={t('Terminal')} description={t('Terminal appearance')}>
         <div className="space-y-2">
-          <p className="text-sm font-medium">{t('Preview')}</p>
+          <p className="text-ui font-medium">{t('Preview')}</p>
           <TerminalPreview
             theme={previewTheme}
             fontSize={localFontSize}
@@ -398,7 +398,7 @@ export function TerminalAppearanceSettings() {
           />
         </div>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Color scheme')}</span>
+          <span className="text-ui font-medium">{t('Color scheme')}</span>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={handlePrevTheme}>
               <ChevronLeft className="h-4 w-4" />
@@ -422,7 +422,7 @@ export function TerminalAppearanceSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Font')}</span>
+          <span className="text-ui font-medium">{t('Font')}</span>
           <Input
             value={localFontFamily}
             onChange={(e) => setLocalFontFamily(e.target.value)}
@@ -437,7 +437,7 @@ export function TerminalAppearanceSettings() {
           />
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Font size')}</span>
+          <span className="text-ui font-medium">{t('Font size')}</span>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -454,11 +454,11 @@ export function TerminalAppearanceSettings() {
               max={32}
               className="w-20"
             />
-            <span className="text-sm text-muted-foreground">px</span>
+            <span className="text-ui text-muted-foreground">px</span>
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Font weight')}</span>
+          <span className="text-ui font-medium">{t('Font weight')}</span>
           <Select
             value={terminalFontWeight}
             onValueChange={(v) => setTerminalFontWeight(v as FontWeight)}
@@ -476,7 +476,7 @@ export function TerminalAppearanceSettings() {
           </Select>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Bold font weight')}</span>
+          <span className="text-ui font-medium">{t('Bold font weight')}</span>
           <Select
             value={terminalFontWeightBold}
             onValueChange={(v) => setTerminalFontWeightBold(v as FontWeight)}

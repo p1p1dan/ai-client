@@ -63,9 +63,11 @@ describe('TerminalSurfaceView keeps the pty alive', () => {
     expect(VIEW.flat).not.toMatch(/display\s*:\s*['"]?\s*none/i);
   });
 
-  it('binds isActive to the active surface, not to the panel being open', () => {
-    expect(VIEW.flat).toContain('isActive={activeSurfaceId === surfaceId');
-    expect(VIEW.flat).not.toContain('activeSurfaceId !== null');
+  it('binds isActive to its own tab being on screen, not to the panel being open', () => {
+    // Design system v2 / layout 5a: the work panel passes `active` (open AND
+    // this tab shown); the view no longer reads the dock's `activeSurfaceId`.
+    expect(VIEW.flat).toContain('isActive={active && ready}');
+    expect(VIEW.flat).not.toContain('activeSurfaceId');
   });
 
   it('holds Escape on the terminal container', () => {

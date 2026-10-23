@@ -120,13 +120,13 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps) {
   if (error) {
     return (
       <div className={cn('overflow-x-auto rounded-lg border border-destructive/50', className)}>
-        <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-small text-destructive">
           <span>{t('Mermaid render error')}</span>
         </div>
-        <pre className="p-4 text-sm">
+        <pre className="p-4 text-ui">
           <code className="block font-mono leading-relaxed text-muted-foreground">{code}</code>
         </pre>
-        <div className="border-t border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <div className="border-t border-border bg-muted/30 px-3 py-2 text-small text-muted-foreground">
           {error}
         </div>
       </div>
@@ -141,7 +141,7 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps) {
           className
         )}
       >
-        <div className="text-sm text-muted-foreground">{t('Loading Mermaid diagram...')}</div>
+        <div className="text-ui text-muted-foreground">{t('Loading Mermaid diagram...')}</div>
       </div>
     );
   }

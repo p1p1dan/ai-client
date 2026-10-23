@@ -111,16 +111,16 @@ export function AnnouncementDialog({
                       )}
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm">{announcement.title}</div>
+                      <div className="font-medium text-ui">{announcement.title}</div>
                       {announcement.publishedAt && (
-                        <div className="text-meta text-muted-foreground">
+                        <div className="text-small text-muted-foreground">
                           {announcement.publishedAt}
                         </div>
                       )}
                     </div>
                   </div>
                   {announcement.body && (
-                    <p className="whitespace-pre-wrap break-words text-muted-foreground text-sm">
+                    <p className="whitespace-pre-wrap break-words text-muted-foreground text-ui">
                       {announcement.body}
                     </p>
                   )}

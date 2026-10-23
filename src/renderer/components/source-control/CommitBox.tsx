@@ -103,7 +103,7 @@ export function CommitBox({
         {commitMessageGenerator.enabled && (
           <button
             type="button"
-            className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+            className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
             onClick={handleGenerateMessage}
             disabled={!canGenerate}
             title={t('Generate commit message')}
@@ -120,7 +120,7 @@ export function CommitBox({
       {/* Actions */}
       <div className="flex items-center justify-between gap-2 border-t px-3 py-2">
         {/* Staged count */}
-        <span className="text-meta text-muted-foreground">
+        <span className="text-small text-muted-foreground">
           {stagedCount > 0
             ? t('{{count}} staged changes', { count: stagedCount })
             : t('No staged changes')}

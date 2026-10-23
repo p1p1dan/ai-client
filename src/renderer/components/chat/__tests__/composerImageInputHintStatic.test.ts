@@ -29,8 +29,9 @@ describe('composer image-input hint (T3)', () => {
     );
   });
 
-  it('renders in both composer layouts as a non-blocking warning', () => {
-    expect(count('{imageInputHintBlock}')).toBe(2);
+  it('renders in the one extras stack both composer layouts share, as a non-blocking warning', () => {
+    // 2026-10-22: both modes render the same box, so one stack serves both.
+    expect(count('{imageInputHintBlock}')).toBe(1);
     expect(source).toMatch(/imageInputHintBlock \|\|/);
     expect(source).toMatch(/<Alert\s+variant="warning"\s+role="status"/);
   });

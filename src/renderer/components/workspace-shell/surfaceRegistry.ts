@@ -1,12 +1,13 @@
 /**
  * T-22 (D19): the context surface registry — 11 surfaces mirroring openchamber
- * `lib/surfaces/registry.ts` @a3519141. This round lands five
- * (chat/editor/git/terminal/context); the other six are registry slots only.
+ * `lib/surfaces/registry.ts` @a3519141. Five are wired
+ * (editor/git/terminal/context/run); the rest are registry slots only.
  *
  * Pure so vitest (node env, `.ts` only) can cover it — same pattern as
- * `sidebarTree.ts` / `hostStatus.ts`. Icons are string names here; the mapping
- * to lucide components lives in `surfaceIcons.ts` (D34: split out of the
- * retired `ContextPanelRail.tsx`, whose four icons moved into MainHeader).
+ * `sidebarTree.ts` / `hostStatus.ts`. Icons are string names here; layout 5a
+ * retired their last renderers (the rail and `SurfacePlaceholder`, with the
+ * `surfaceIcons.ts` lookup) — the work panel's tabs are text, as in the
+ * reference. The names stay as descriptor data.
  */
 import type { GitStatus } from '@shared/types/git';
 
@@ -21,10 +22,9 @@ export type ContextSurfaceId =
   | 'context'
   | 'run'
   | 'browser'
-  | 'preview'
-  | 'chat';
+  | 'preview';
 
-/** 'always' can be opened empty from the rail; 'has-content' stays hidden until content exists. */
+/** 'always' can be opened empty; 'has-content' stays hidden until content exists. */
 export type SurfaceAvailability = 'always' | 'has-content';
 
 /**
@@ -48,8 +48,7 @@ export type SurfaceIconName =
   | 'sticky-note'
   | 'gauge'
   | 'globe'
-  | 'app-window'
-  | 'message-square';
+  | 'app-window';
 
 export interface ContextSurfaceDescriptor {
   id: ContextSurfaceId;
@@ -59,8 +58,8 @@ export interface ContextSurfaceDescriptor {
   descriptionKey: string;
   availability: SurfaceAvailability;
   /**
-   * MVP scope gate: true = registry slot only, never rendered on the rail this
-   * round. The task that lands the surface flips this to false.
+   * MVP scope gate: true = registry slot only, never offered as a work panel
+   * tab. The task that lands the surface flips this to false.
    */
   registeredOnly: boolean;
   /**
@@ -71,28 +70,12 @@ export interface ContextSurfaceDescriptor {
   pendingTask: string | null;
 }
 
-// Order doubles as the panel tab order AND the rail order (decision 10).
-// D08 (2026-09-05) puts `chat` FIRST: the left dock's first entry is the
-// session list, matching the prototype's rail order
-// `聊天 · Git · 文件 · 上下文 · 运行`.
-// NOTE: this order is also what `Ctrl/Cmd+1..4` maps to (shellShortcuts.ts
-// derives the digits from `railSurfaces(DEFAULT_SURFACE_ORDER).slice(0, 4)`),
-// so reordering here silently rebinds those shortcuts — which is exactly what
-// D08 intends (digit 1 is now the session list).
+// Registry order: `deriveMountedSurfaceIds` mounts in this order, so React
+// keys stay stable. Layout 5a (ruling L1) retired the rail and the dock's
+// `chat` slot: the sidebar is the chat list itself, and git / files / context /
+// run are panes (`workPanelModel.ts` owns the pane layout; `shellShortcuts.ts`
+// their Ctrl/Cmd+digit mapping).
 export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
-  {
-    // D08: the id is REUSED, its meaning is not. It used to mean "split chat
-    // sessions (deferred)"; it now means the session list that used to be the
-    // whole left sidebar. Reusing it avoids both a store migration for a new id
-    // and a dead id left behind in persisted `railOrder` / `lastSurfaceId`.
-    id: 'chat',
-    icon: 'message-square',
-    labelKey: 'Chat',
-    descriptionKey: 'Sessions and repositories',
-    availability: 'always',
-    registeredOnly: false,
-    pendingTask: null,
-  },
   {
     id: 'git',
     icon: 'git-branch',
@@ -106,10 +89,9 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     // T-32: the id stays `editor` while the surface now means "Files" (the
     // tree only — the editor itself moved to the center column, D27/#28 ①).
     // Renaming it to `files` would be cosmetically right and practically
-    // wrong: this id is already persisted in `aiclient-shell-layout` under
-    // `widthBySurface` / `lastSurfaceId` / `railOrder`, so the rename costs a
-    // store migration and a version bump and buys nothing but the name.
-    // If you came here to "fix" the mismatch, that is the reason not to.
+    // wrong: pre-5a profiles persisted it in `aiclient-shell-layout`, and the
+    // v4 migration maps it to the work panel's `files` tab through
+    // `tabForIntent`. The panel names the tab; this id stays internal.
     id: 'editor',
     icon: 'file-code',
     labelKey: 'Files',
@@ -129,10 +111,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
   },
   {
     // U06-a: the conversation's RUN state — status, model, thinking level, turn
-    // clock, tools. Placed right after `context` so the rail digit it takes is
-    // Ctrl/Cmd+4 (the slot the terminal vacated) and the first three do not
-    // move; a profile with a persisted `railOrder` gets it appended by
-    // `sortSurfaces`, which lands it in the same visible position.
+    // clock, tools.
     id: 'run',
     icon: 'activity',
     labelKey: 'Run',
@@ -142,15 +121,11 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     pendingTask: null,
   },
   {
-    // 2026-09-04: taken off the rail at the user's request. The surface itself
-    // still exists (`surfaceViews.tsx` keeps `TerminalSurfaceView`, and a
-    // persisted `lastSurfaceId: 'terminal'` still resolves through
-    // `getSurface`), it simply has no entry point any more — no header button,
-    // no Ctrl/Cmd+`, no rail digit. `registeredOnly` is the registry's own way
-    // of saying "not offered on the rail this round"; it is what every guard
-    // in `shellLayoutModel.ts` already reads. S05 preserves one non-navigation
-    // use: an explicitly enabled repository init script opens this surface
-    // through openInitializationTerminal after worktree creation succeeds.
+    // 2026-09-04: taken off the rail at the user's request; the shell terminal
+    // users open is the work panel's column terminal. S05 preserves one
+    // non-navigation use: an explicitly enabled repository init script opens
+    // this surface through `openInitializationTerminal` after worktree
+    // creation succeeds — the work panel's `setup` tab.
     id: 'terminal',
     icon: 'square-terminal',
     labelKey: 'Terminal',
@@ -229,74 +204,6 @@ export function getSurface(id: ContextSurfaceId): ContextSurfaceDescriptor | und
   return SURFACE_BY_ID.get(id);
 }
 
-/** Applies a persisted reorder: unknown/dup ids dropped, missing ids appended in default order. */
-export function sortSurfaces(order: readonly string[]): ContextSurfaceDescriptor[] {
-  const seen = new Set<ContextSurfaceId>();
-  const result: ContextSurfaceDescriptor[] = [];
-
-  for (const raw of order) {
-    if (!isContextSurfaceId(raw) || seen.has(raw)) {
-      continue;
-    }
-    const surface = getSurface(raw);
-    if (!surface) {
-      continue;
-    }
-    seen.add(raw);
-    result.push(surface);
-  }
-
-  for (const id of DEFAULT_SURFACE_ORDER) {
-    if (seen.has(id)) {
-      continue;
-    }
-    seen.add(id);
-    // Every id in DEFAULT_SURFACE_ORDER resolves — it is derived from CONTEXT_SURFACES itself.
-    result.push(getSurface(id) as ContextSurfaceDescriptor);
-  }
-
-  return result;
-}
-
-export interface RailSurfacesOptions {
-  /** MVP: always false. T-12~T-15 pass a real predicate when content-driven surfaces land. */
-  hasContent?: (id: ContextSurfaceId) => boolean;
-}
-
-/** True when the rail may select this surface today (used as a reducer guard). */
-export function isRailSelectableSurface(
-  id: ContextSurfaceId,
-  options: RailSurfacesOptions = {}
-): boolean {
-  const surface = getSurface(id);
-  if (!surface || surface.registeredOnly) {
-    return false;
-  }
-  if (surface.availability === 'has-content') {
-    return options.hasContent?.(id) ?? false;
-  }
-  return true;
-}
-
-/** Rail-visible subset, in `order`: drops registeredOnly, drops has-content without content. */
-export function railSurfaces(
-  order: readonly string[],
-  options: RailSurfacesOptions = {}
-): ContextSurfaceDescriptor[] {
-  return sortSurfaces(order).filter((surface) => isRailSelectableSurface(surface.id, options));
-}
-
-/**
- * Fallback target for "open the dock" when nothing was open before (decision 4).
- * D08 moves the safety net from `context` to `chat`: the dock's first entry is
- * the session list, and an empty registry must not resolve to a surface that is
- * no longer first.
- */
-export function firstAlwaysSurfaceId(options: RailSurfacesOptions = {}): ContextSurfaceId {
-  const visible = railSurfaces(DEFAULT_SURFACE_ORDER, options);
-  return visible[0]?.id ?? 'chat';
-}
-
 /** Unique changed paths across staged/modified/deleted/untracked/conflicted. */
 export function countChangedFiles(status: GitStatus | null | undefined): number {
   if (!status) {
@@ -312,7 +219,7 @@ export function countChangedFiles(status: GitStatus | null | undefined): number 
   return paths.size;
 }
 
-/** Acceptance ④: only `git`, only when the working tree has changes. */
+/** Acceptance ④: only `git`, only when the working tree has changes (its panel tab's dot). */
 export function shouldShowActivityDot(
   id: ContextSurfaceId,
   input: { changedFilesCount: number }

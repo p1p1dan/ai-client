@@ -127,11 +127,15 @@ describe('the title', () => {
     expect(title().textContent).toBe('Create with PiLab in beta');
     const name = container.querySelector('[data-home-workspace]') as HTMLElement;
     expect(name.textContent).toBe('beta');
-    expect(name.className).toContain('font-semibold');
+    // Design system v2 §3.4: the name is told apart by the body ink alone,
+    // at the sentence's own 400.
+    expect(name.className).toContain('font-normal');
     expect(name.className).toContain('text-foreground');
     expect(name.className).toContain('max-w-[14em]');
     expect(name.title).toBe('beta');
-    // The sentence itself is quiet: 26px, 400, the secondary ink.
+    // The sentence itself is quiet: the serif display face (design system v2
+    // §3.4), 38px, 400, the secondary ink.
+    expect(title().className).toContain('font-display');
     expect(title().className).toContain('text-display');
     expect(title().className).toContain('font-normal');
     expect(title().className).toContain('text-muted-foreground');
@@ -232,7 +236,8 @@ describe('layout (prototype v4)', () => {
     const area = container.querySelector('[data-home-view]') as HTMLElement;
     expect(area.className).toBe(HOME_AREA_CLASS);
     expect(HOME_AREA_CLASS).toContain('@container-[size]');
-    expect(HOME_TOP_SPACER_CLASS).toContain('h-[calc(38.2cqh_-_var(--text-display)*0.65)]');
+    // Half the title's line box: design system v2's display line height is 1.2.
+    expect(HOME_TOP_SPACER_CLASS).toContain('h-[calc(38.2cqh_-_var(--text-display)*0.6)]');
     expect(HOME_TOP_SPACER_CLASS).toContain('min-h-12');
     expect(area.querySelector(`[class="${HOME_TOP_SPACER_CLASS}"]`)).not.toBeNull();
   });

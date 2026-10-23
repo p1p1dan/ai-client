@@ -180,6 +180,8 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
       llm: () => ctx.llm as unknown as ReviewLlm,
     };
   }
+  // Layout 5f (ruling L6): side questions use the same model-call service.
+  deps.sideQuestionLlm = () => ctx.llm;
   // P1-15 (decisions 039, 125): one-shot completions, routed by the same plan
   // as every chat turn, as completions (no effort unless one was chosen).
   const completionRouter = new DshModelRouter(

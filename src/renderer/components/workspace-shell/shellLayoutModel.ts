@@ -3,41 +3,30 @@
  * Every hard size lives here; `docs/design-system.md` 「新壳布局档位」 mirrors it.
  * Pure so vitest (node env, `.ts` only) can cover it — `hostStatus.ts` pattern.
  */
-import { clampEditorRatio, DEFAULT_EDITOR_RATIO } from './centerLayoutModel';
+import { type ContextSurfaceId, DEFAULT_SURFACE_ORDER } from './surfaceRegistry';
 import {
-  type ContextSurfaceId,
-  DEFAULT_SURFACE_ORDER,
-  firstAlwaysSurfaceId,
-  isContextSurfaceId,
-  isRailSelectableSurface,
-  sortSurfaces,
-} from './surfaceRegistry';
+  clampPaneAreaWidth,
+  DEFAULT_PANE_SPLITS,
+  PANE_AREA_DEFAULT_WIDTH,
+  type PaneSplits,
+  sanitizePaneSplits,
+} from './workPanelModel';
 
 // ── sizes (acceptance ①) ────────────────────────────────────────────────
-// D34: the vertical rail retired (its four icons moved into MainHeader's top
-// bar) — `RAIL_WIDTH` had exactly one consumer, `ContextPanelRail.tsx`, and
-// dies with it. `centerLayoutModel.ts`'s `RAIL_RESERVE` is a SEPARATE
-// constant (a width-budget reservation, not a rendered column) and is
-// zeroed there rather than removed.
 /**
- * D08: the dock's icon rail, in px. The rail is PERMANENT — it is what makes
- * the left column a VSCode-style activity bar rather than a collapsible
- * sidebar. `SIDEBAR_COLLAPSED_WIDTH` is therefore exactly the rail width now:
- * "collapsed" hides the panel beside the rail, it does not hide the column.
+ * Layout 5a (ui-cohesion §6, ruling L1): the icon rail is gone. The left
+ * column is the sidebar alone — the chat list — and it collapses entirely
+ * (width 0), so these measure the sidebar and nothing else. 272 / 240 / 480
+ * follow the reference's sidebar (preview `--side-w`).
  */
-export const DOCK_RAIL_WIDTH = 44;
-export const SIDEBAR_COLLAPSED_WIDTH = DOCK_RAIL_WIDTH;
+export const SIDEBAR_MIN_WIDTH = 240;
+export const SIDEBAR_MAX_WIDTH = 480;
+export const SIDEBAR_DEFAULT_WIDTH = 272;
 /**
- * D08: these three now measure the WHOLE dock — rail + panel — because that is
- * what the allocator grants and what the drag handle commits. Each is the old
- * panel-only number plus the rail, so the PANEL still defaults to 280 and
- * `sidebarRowBudgetStatic`'s 236px row budget keeps describing reality.
- * Deriving them rather than restating 324/544 is deliberate: the row budget is
- * the thing that breaks silently if the rail and these drift apart.
+ * The retired rail's width. Profiles persisted before layout 5a stored the
+ * sidebar width WITH the rail in it; migration subtracts this once.
  */
-export const SIDEBAR_MIN_WIDTH = 280 + DOCK_RAIL_WIDTH;
-export const SIDEBAR_MAX_WIDTH = 500 + DOCK_RAIL_WIDTH;
-export const SIDEBAR_DEFAULT_WIDTH = 280 + DOCK_RAIL_WIDTH;
+export const LEGACY_DOCK_RAIL_WIDTH = 44;
 // D34 (user ruling 2026-08-14): the hard floor drops 380 -> 250 so the panel
 // can go narrower than a fixed 380px minimum. The DEFAULT stays 380 (A08's
 // value, unchanged) — the two used to be the same number by coincidence, not
@@ -76,7 +65,7 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-/** 280..500; NaN/Infinity/non-finite → SIDEBAR_DEFAULT_WIDTH; result is rounded. */
+/** 240..480; NaN/Infinity/non-finite → SIDEBAR_DEFAULT_WIDTH; result is rounded. */
 export function clampSidebarWidth(width: number): number {
   if (!isFiniteNumber(width)) {
     return SIDEBAR_DEFAULT_WIDTH;
@@ -236,9 +225,9 @@ export interface SurfaceMountRegistration {
 
 export interface DeriveMountedSurfaceIdsInput {
   /**
-   * Every surface that has been `activeSurfaceId` at least once — either this
-   * session, or (for a keep-alive surface) seeded from a persisted
-   * `lastSurfaceId` before the very first render, see `seedVisitedSurfaceIds`.
+   * Every surface that has been on screen at least once this session (the
+   * work panel tracks it; layout 5a dropped the persisted-restore seed — the
+   * panel starts closed, so nothing is restored before first use).
    */
   visited: readonly ContextSurfaceId[];
   /** null = panel closed. */
@@ -256,8 +245,7 @@ export interface DeriveMountedSurfaceIdsInput {
 /**
  * The surfaces whose views must exist in the DOM right now, in registry order
  * (deterministic, so callers get a stable React key order and tests can assert
- * the whole list). Unregistered ids are never mounted — an unwired surface
- * shows `SurfacePlaceholder` instead.
+ * the whole list). Unregistered ids are never mounted.
  */
 export function deriveMountedSurfaceIds(input: DeriveMountedSurfaceIdsInput): ContextSurfaceId[] {
   const { visited, activeSurfaceId, lastSurfaceId = null, registrations } = input;
@@ -279,32 +267,6 @@ export function deriveMountedSurfaceIds(input: DeriveMountedSurfaceIdsInput): Co
     }
   }
   return mounted;
-}
-
-/**
- * m14 fix: the seed for `ContextPanel`'s `visitedSurfaceIdsRef` on its very
- * first render. That ref otherwise only grows via a render-time write gated
- * on `activeSurfaceId` being truthy — which never runs on a persisted
- * `{activeSurfaceId: null, lastSurfaceId: 'terminal'}` restore, since the
- * panel opens CLOSED on that first render. Without this seed, `visited` stays
- * empty, `deriveMountedSurfaceIds` never mounts the keep-alive `lastSurfaceId`
- * surface, and the panel shows a header naming it with an empty body (neither
- * the mount stack nor the `SurfacePlaceholder` fallback render, because a
- * registered `contentSurfaceId` skips the placeholder branch).
- *
- * Only seeds a KEEP-ALIVE `lastSurfaceId`: an 'active'-policy surface never
- * needed this (it is only ever mounted while it IS `contentSurfaceId`, which
- * `deriveMountedSurfaceIds` already derives from `activeSurfaceId ??
- * lastSurfaceId` with no `visited` dependency).
- */
-export function seedVisitedSurfaceIds(
-  lastSurfaceId: ContextSurfaceId | null,
-  registrations: Partial<Record<ContextSurfaceId, SurfaceMountRegistration>>
-): ContextSurfaceId[] {
-  if (lastSurfaceId && registrations[lastSurfaceId]?.mountPolicy === 'keep-alive') {
-    return [lastSurfaceId];
-  }
-  return [];
 }
 
 // ── Escape scope (S0, risk R1) ──────────────────────────────────────────
@@ -330,7 +292,7 @@ export const SURFACE_ESCAPE_HOLD_ATTR = 'data-surface-holds-escape';
  *
  * Tooltips are excluded on purpose. They open on hover, so treating one as an
  * Escape owner would make the key stop working while the pointer merely rests
- * on a rail icon.
+ * on a tab.
  */
 export const ESCAPE_OWNING_POPUP_SELECTOR =
   '[data-slot$="-popup"]:not([data-slot="tooltip-popup"])';
@@ -361,182 +323,96 @@ export function shouldCloseOnEscape(input: ShouldCloseOnEscapeInput): boolean {
   return input.key === 'Escape' && input.isOpen && !input.holdsEscape && !input.popupOpen;
 }
 
-// ── surface state machine (decision 2) ──────────────────────────────────
-export interface ShellSurfaceState {
-  /** null = panel closed. */
-  activeSurfaceId: ContextSurfaceId | null;
-  /** Survives close so the header toggle can restore the user's last surface. */
-  lastSurfaceId: ContextSurfaceId | null;
-  expanded: boolean;
-}
-
-export const initialShellSurfaceState: ShellSurfaceState = {
-  activeSurfaceId: null,
-  lastSurfaceId: null,
-  expanded: false,
-};
-
-export type ShellSurfaceAction =
-  | { type: 'open-initialization-terminal' }
-  | { type: 'select'; surfaceId: ContextSurfaceId } // rail click
-  | { type: 'open'; surfaceId?: ContextSurfaceId } // header toggle on / T-12~15 entry
-  | { type: 'close' }
-  | { type: 'toggle-panel' } // header PanelRight button
-  | { type: 'toggle-expanded' };
-
-/** Opens `id`, keeping expanded as-is. Reused by `select`'s non-toggle branch and by `open`. */
-function openSurface(prev: ShellSurfaceState, id: ContextSurfaceId): ShellSurfaceState {
-  return { activeSurfaceId: id, lastSurfaceId: id, expanded: prev.expanded };
-}
-
-function closePanel(prev: ShellSurfaceState): ShellSurfaceState {
-  return {
-    activeSurfaceId: null,
-    lastSurfaceId: prev.activeSurfaceId ?? prev.lastSurfaceId,
-    expanded: false,
-  };
-}
-
-function bareOpenTarget(prev: ShellSurfaceState): ContextSurfaceId | null {
-  // The remembered surface may have left the registry (e.g. `terminal` after it
-  // was taken off the rail), so guard it before reusing it; otherwise fall back
-  // to the dock's first entry.
-  const remembered = prev.activeSurfaceId ?? prev.lastSurfaceId;
-  if (remembered && isRailSelectableSurface(remembered)) {
-    return remembered;
-  }
-  return firstAlwaysSurfaceId();
-}
-
-function applySelect(prev: ShellSurfaceState, id: ContextSurfaceId): ShellSurfaceState {
-  if (!isRailSelectableSurface(id)) {
-    return prev;
-  }
-  if (id === prev.activeSurfaceId) {
-    // Toggle-off; also exits the expanded overlay so a re-open never restores a stale overlay.
-    return { activeSurfaceId: null, lastSurfaceId: id, expanded: false };
-  }
-  return openSurface(prev, id);
-}
-
-function applyOpen(prev: ShellSurfaceState, id: ContextSurfaceId | undefined): ShellSurfaceState {
-  if (id === undefined) {
-    // Explicit open never no-ops (decision 4 correction): fall back through the
-    // last surface, then the dock's first entry.
-    const target = bareOpenTarget(prev);
-    return target ? openSurface(prev, target) : prev;
-  }
-  if (!isRailSelectableSurface(id)) {
-    return prev;
-  }
-  // Explicit open is always an open, never a toggle-off — unlike `select`.
-  return openSurface(prev, id);
-}
-
-/**
- * D08: the `columnMode` parameter is gone. It existed to stop an entry point
- * from opening a surface the two-column mode hid; there is no such mode any
- * more, so `isRailSelectableSurface` is the single remaining guard.
- */
-export function reduceShellSurface(
-  prev: ShellSurfaceState,
-  action: ShellSurfaceAction
-): ShellSurfaceState {
-  switch (action.type) {
-    case 'open-initialization-terminal':
-      return openSurface(prev, 'terminal');
-    case 'select':
-      return applySelect(prev, action.surfaceId);
-    case 'open':
-      return applyOpen(prev, action.surfaceId);
-    case 'close':
-      return closePanel(prev);
-    case 'toggle-panel':
-      return prev.activeSurfaceId !== null ? closePanel(prev) : applyOpen(prev, undefined);
-    case 'toggle-expanded':
-      return prev.activeSurfaceId === null ? prev : { ...prev, expanded: !prev.expanded };
-    default:
-      return prev;
-  }
-}
-
 // ── persistence hygiene ─────────────────────────────────────────────────
+/**
+ * Layout 5d: what survives a restart. Which panes are open is not here on
+ * purpose — ruling L3 opens them on demand, so every start begins with none;
+ * the pane area's widths (one per column count) and its splits are kept.
+ */
 export interface PersistedShellLayout {
-  /**
-   * D08: `sidebarCollapsed` is GONE. "Is the left column collapsed" and "which
-   * surface is showing" were two fields for one fact once the rail became
-   * permanent — a collapsed dock is simply `activeSurfaceId === null`, and
-   * keeping both let them disagree (collapsed with a surface still "active").
-   */
   sidebarWidth: number;
-  activeSurfaceId: ContextSurfaceId | null;
-  lastSurfaceId: ContextSurfaceId | null;
-  expanded: boolean;
-  /** One width for the panel (T-32 m1): tab switches must not move the edge. */
-  panelWidth: number | null;
-  railOrder: ContextSurfaceId[];
+  /** The sidebar collapses entirely (Ctrl+B); there is no rail left behind. */
+  sidebarCollapsed: boolean;
+  /** The pane area's width with one column of panes. */
+  paneAreaWidth: number;
+  /** The pane area's width with two columns of panes. */
+  paneAreaSplitWidth: number;
+  paneSplits: PaneSplits;
   readingWidthMode: ReadingWidthMode;
-  /** T-32: share of the center row given to the editor when a file is open. */
-  editorRatio: number;
 }
+
+export const SHELL_LAYOUT_VERSION = 5;
 
 export const defaultShellLayout: PersistedShellLayout = {
   sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
-  // D08: the dock opens on the session list, not closed. A closed dock on first
-  // run would show a bare 44px rail and nothing else — the app would look empty
-  // on the one screen where the user has not yet learned what the icons are.
-  activeSurfaceId: 'chat',
-  lastSurfaceId: 'chat',
-  expanded: false,
-  panelWidth: null,
-  railOrder: [...DEFAULT_SURFACE_ORDER],
+  sidebarCollapsed: false,
+  paneAreaWidth: PANE_AREA_DEFAULT_WIDTH[1],
+  paneAreaSplitWidth: PANE_AREA_DEFAULT_WIDTH[2],
+  paneSplits: { ...DEFAULT_PANE_SPLITS, rows: [...DEFAULT_PANE_SPLITS.rows] },
   readingWidthMode: 'normal',
-  editorRatio: DEFAULT_EDITOR_RATIO,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Illegal or not rail-selectable this round → null (never trusts a stale persisted id). */
-function sanitizeSurfaceIdOrNull(value: unknown): ContextSurfaceId | null {
-  if (!isContextSurfaceId(value) || !isRailSelectableSurface(value)) {
-    return null;
-  }
-  return value;
+function numberOrNaN(value: unknown): number {
+  return typeof value === 'number' ? value : Number.NaN;
 }
 
-function sanitizePanelWidth(raw: unknown): number | null {
-  // No `availableWidth` here: the window size is unknown at persistence time.
-  return isFiniteNumber(raw) ? clampContextPanelWidth(raw) : null;
-}
-
-function sanitizeRailOrder(raw: unknown): ContextSurfaceId[] {
-  const order = Array.isArray(raw) ? raw : [];
-  return sortSurfaces(order as readonly string[]).map((surface) => surface.id);
-}
-
-/** Re-clamps and drops anything the registry no longer knows. Total: never throws. */
+/** Re-clamps every field and drops anything unknown. Total: never throws. */
 export function sanitizeShellLayoutPersisted(raw: unknown): PersistedShellLayout {
   if (!isRecord(raw)) {
-    return { ...defaultShellLayout };
+    return { ...defaultShellLayout, paneSplits: sanitizePaneSplits(null) };
   }
-
-  const activeSurfaceId = sanitizeSurfaceIdOrNull(raw.activeSurfaceId);
-
   return {
-    sidebarWidth: clampSidebarWidth(
-      typeof raw.sidebarWidth === 'number' ? raw.sidebarWidth : Number.NaN
-    ),
-    activeSurfaceId,
-    lastSurfaceId: sanitizeSurfaceIdOrNull(raw.lastSurfaceId),
-    // Only meaningful while a surface is active — otherwise the overlay would be orphaned.
-    expanded: raw.expanded === true && activeSurfaceId !== null,
-    panelWidth: sanitizePanelWidth(raw.panelWidth),
-    railOrder: sanitizeRailOrder(raw.railOrder),
+    sidebarWidth: clampSidebarWidth(numberOrNaN(raw.sidebarWidth)),
+    sidebarCollapsed: raw.sidebarCollapsed === true,
+    paneAreaWidth: clampPaneAreaWidth(numberOrNaN(raw.paneAreaWidth), 1),
+    paneAreaSplitWidth: clampPaneAreaWidth(numberOrNaN(raw.paneAreaSplitWidth), 2),
+    paneSplits: sanitizePaneSplits(raw.paneSplits),
     readingWidthMode: raw.readingWidthMode === 'wide' ? 'wide' : 'normal',
-    editorRatio: clampEditorRatio(
-      typeof raw.editorRatio === 'number' ? raw.editorRatio : Number.NaN
-    ),
   };
+}
+
+/**
+ * v1–v3 (D08 dock) → v4 (layout 5a) → v5 (layout 5d panes).
+ *
+ * v3 was `{ sidebarWidth (rail included), activeSurfaceId, lastSurfaceId,
+ * expanded, panelWidth, railOrder, readingWidthMode, editorRatio }`; v1/v2
+ * also carried `widthBySurface` and `shellColumnMode`. Into v4:
+ *  - `sidebarWidth` loses the rail it included, then is clamped;
+ *  - a v3 dock with no active surface WAS collapsed, so that carries over; v1
+ *    and v2 profiles always showed the session list, so they open expanded;
+ *  - the rest has no successor (the old ratio cannot become a pixel width
+ *    without the window width).
+ *
+ * v4 was `{ sidebarWidth, sidebarCollapsed, workPanelTab, workPanelWidth,
+ * readingWidthMode }`. Into v5:
+ *  - `workPanelWidth` (the one panel, border to border) becomes the
+ *    one-column pane area width;
+ *  - `workPanelTab` is dropped: panes start closed, and the remembered tab
+ *    only kept a view mounted behind the closed panel, which panes no longer do.
+ */
+export function migrateShellLayoutPersisted(raw: unknown, version: number): PersistedShellLayout {
+  if (!isRecord(raw) || version >= SHELL_LAYOUT_VERSION) {
+    return sanitizeShellLayoutPersisted(raw);
+  }
+  if (version === 4) {
+    return sanitizeShellLayoutPersisted({
+      sidebarWidth: raw.sidebarWidth,
+      sidebarCollapsed: raw.sidebarCollapsed,
+      paneAreaWidth: raw.workPanelWidth,
+      readingWidthMode: raw.readingWidthMode,
+    });
+  }
+  const legacyWidth =
+    typeof raw.sidebarWidth === 'number' && Number.isFinite(raw.sidebarWidth)
+      ? raw.sidebarWidth - LEGACY_DOCK_RAIL_WIDTH
+      : Number.NaN;
+  return sanitizeShellLayoutPersisted({
+    sidebarWidth: legacyWidth,
+    sidebarCollapsed: version >= 3 && raw.activeSurfaceId === null,
+    readingWidthMode: raw.readingWidthMode,
+  });
 }

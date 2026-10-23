@@ -118,11 +118,11 @@ export const HOME_COLUMN_CLASS = 'flex h-full flex-col px-6';
 
 /**
  * The top spacer puts the title's centre at 38.2% of the area (the golden
- * section): the anchor minus half the title's line box (26px × 1.3 / 2). It is
+ * section): the anchor minus half the title's line box (`--text-display` × 1.2 / 2). It is
  * the only part that gives way — down to 48px — when the recent list would
  * come closer than 32px to the composer; below that the area scrolls.
  */
-export const HOME_TOP_SPACER_CLASS = 'h-[calc(38.2cqh_-_var(--text-display)*0.65)] min-h-12';
+export const HOME_TOP_SPACER_CLASS = 'h-[calc(38.2cqh_-_var(--text-display)*0.6)] min-h-12';
 
 /** Title and list: the reading column, never squeezed. */
 export const HOME_BODY_CLASS = 'mx-auto w-full max-w-reading shrink-0';
@@ -131,15 +131,19 @@ export const HOME_BODY_CLASS = 'mx-auto w-full max-w-reading shrink-0';
 export const HOME_BOTTOM_SPACER_CLASS = 'min-h-8 grow';
 
 /**
- * The title: a quiet sentence — 26px, 400, the secondary ink — around one
- * emphasised name. The heading tracking (-0.01em) is allowed at >= 18px.
+ * The title (design system v2 §3.4, §7.11): a quiet serif sentence — the
+ * `--font-display` stack, 38px, 400, the secondary ink — around one name in
+ * the body ink. The app's only serif. Tracking -0.01em is allowed at >= 18px.
  */
 export const HOME_TITLE_CLASS =
-  'font-heading text-display font-normal tracking-[-0.01em] text-muted-foreground';
+  'font-display text-display font-normal tracking-[-0.01em] text-balance text-muted-foreground';
 
-/** The repository's name (or 「PiLab」 with none): 600, body ink, cut at 14em. */
+/**
+ * The repository's name (or 「PiLab」 with none): the body ink, same 400
+ * weight as the sentence (the colour step alone marks it), cut at 14em.
+ */
 export const HOME_TITLE_EMPHASIS_CLASS =
-  'inline-block max-w-[14em] truncate align-bottom font-semibold text-foreground';
+  'inline-block max-w-[14em] truncate align-bottom font-normal text-foreground';
 
 /** The line under the title when there is no repository. */
 export const HOME_SUBLINE_CLASS = 'mx-auto mt-3 max-w-md text-ui text-muted-foreground';
@@ -147,16 +151,23 @@ export const HOME_SUBLINE_CLASS = 'mx-auto mt-3 max-w-md text-ui text-muted-fore
 /** 「最近对话」 hangs 40px under the title. */
 export const HOME_RECENT_SECTION_CLASS = 'mt-10';
 
-/** Its heading is a quiet 14px label: the title is the anchor, the list secondary. */
-export const HOME_RECENT_HEADING_CLASS = 'text-meta font-normal text-muted-foreground';
+/**
+ * Its heading is a quiet label like a sidebar group name (design system v2
+ * §7.12): `text-small`, 500, the faint ink. The title is the anchor.
+ */
+export const HOME_RECENT_HEADING_CLASS = 'text-small font-medium text-foreground-faint';
 
-/** A conversation row: 36px, 15px body ink. */
+/**
+ * A conversation row: 36px, `text-ui`, frameless; the one ghost fill on hover
+ * and keyboard focus, an `rounded-xs` highlight (design system v2 §7.11).
+ */
 export const HOME_ROW_CLASS =
-  'group flex h-9 w-full items-center gap-2 rounded-sm px-2 text-left text-ui hover:bg-hover focus-visible:bg-hover';
+  'group flex h-9 w-full items-center gap-2 rounded-xs px-2 text-left text-ui hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover';
 
 /** 「查看更多（N）」 and 「收起」. */
 export const HOME_AUX_ROW_CLASS =
-  'flex h-7 w-full items-center gap-2 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover';
+  'flex h-7 w-full items-center gap-2 rounded-xs px-2 text-small text-muted-foreground tabular-nums hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover';
 
-/** 今天 / 昨天 / 更早 (the expanded list only). */
-export const HOME_GROUP_LABEL_CLASS = 'flex h-6 items-center px-2 text-meta text-muted-foreground';
+/** 今天 / 昨天 / 更早 (the expanded list only): the same faint label as the heading. */
+export const HOME_GROUP_LABEL_CLASS =
+  'flex h-6 items-center px-2 text-small font-medium text-foreground-faint';

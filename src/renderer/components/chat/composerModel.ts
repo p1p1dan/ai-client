@@ -20,8 +20,10 @@ import { englishTranslate, type Translate } from '@shared/i18n';
 import {
   CHAT_EFFORTS,
   type ChatEffort,
+  DEFAULT_EFFORT_HINT,
   EFFORT_DEFAULT_ID,
   effortLabel,
+  effortSentByDefault,
   isEffortLevel,
 } from './efforts';
 import type { ChatModel } from './models';
@@ -74,8 +76,14 @@ export function composerModelLabelParts(
 export interface ComposerMenuItem {
   id: string;
   label: string;
-  /** Tooltip text: an effort level's own, or why a disabled model row cannot be picked. */
+  /** Tooltip text: why a disabled model row cannot be picked. */
   hint?: string;
+  /** Issue #26 item 4: an effort row's second line, already translated. */
+  description?: string;
+  /** A faint warning line under the description (the costly extremes). */
+  warning?: string;
+  /** A tag after the label — 「默认」 on the level a chat with no choice sends. */
+  badge?: string;
   selected: boolean;
   /** S-6 feedback 3: a locked model (`ChatModel.locked`), listed greyed out and never selectable. */
   disabled?: boolean;
@@ -231,6 +239,7 @@ export function composerModelMenuModel(input: {
       })),
   ];
 
+  const sentByDefault = effortSentByDefault(efforts);
   const effortItems: ComposerMenuItem[] = [
     // Same treatment, same reason. The label is the raw stored value, which is
     // exactly what `composerModelLabelParts` puts in the trigger's suffix for
@@ -240,12 +249,15 @@ export function composerModelMenuModel(input: {
     {
       id: EFFORT_DEFAULT_ID,
       label: t('Default'),
+      description: t(DEFAULT_EFFORT_HINT),
       selected: effectiveEffort === EFFORT_DEFAULT_ID,
     },
     ...efforts.map((effort) => ({
       id: effort.id as string,
       label: t(effort.label),
-      hint: t(effort.hint),
+      description: t(effort.hint),
+      ...(effort.warning ? { warning: t(effort.warning) } : {}),
+      ...(effort.id === sentByDefault ? { badge: t('Default') } : {}),
       selected: effort.id === effectiveEffort,
     })),
   ];

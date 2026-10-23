@@ -11,6 +11,7 @@ import { DEFAULT_RUNTIME_PERMISSION } from '@shared/types/runtimePermission';
 import type { FileSearchResult } from '@shared/types/search';
 import { QueryClientContext } from '@tanstack/react-query';
 import {
+  CircleAlert,
   File as FileIcon,
   FileText,
   Folder,
@@ -30,7 +31,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Kbd } from '@/components/ui/kbd';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { toastManager } from '@/components/ui/toast';
@@ -70,6 +72,7 @@ import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { useSettingsStore } from '@/stores/settings';
 import { effectiveClaudeSdkEngineEnabled } from '@/stores/settings/developerMode';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
+import { useSideChatStore } from '@/stores/sideChat';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
@@ -117,7 +120,11 @@ import {
 } from './compactCommand';
 import { cancelCompactRun, nextCompactRunId, runCompactWhenRunning } from './compactRun';
 import { buildBranchColumn } from './composerColumns';
-import { onComposerFocusRequest, onComposerStopRequest } from './composerFocus';
+import {
+  onComposerCompactRequest,
+  onComposerFocusRequest,
+  onComposerStopRequest,
+} from './composerFocus';
 import {
   type ComposerHistoryCursor,
   type ComposerHistoryStep,
@@ -156,6 +163,7 @@ import {
   sdkBlockedCommandHint,
 } from './homeSlashCommands';
 import { planHomeBranchSwitch } from './homeTarget';
+import { isImeComposing } from './imeComposing';
 import { ModelMissingNotice } from './ModelMissingNotice';
 import {
   createEmptyState as createEmptyQueueState,
@@ -166,15 +174,20 @@ import {
 import {
   COMPOSER_BAR_LEADING,
   COMPOSER_BAR_TRAILING,
+  COMPOSER_CARD_LEADING,
+  COMPOSER_CARD_TRAILING,
   type ComposerBarSlot,
   composerActionGroupClass,
   composerBarClass,
+  composerBarTrailingClass,
   composerCardClass,
+  composerExtrasClass,
   composerHasProtrusion,
+  composerInputRowClass,
   composerPlaceholder,
   composerPopupSide,
-  composerRowsClass,
   composerTextareaClass,
+  composerTextareaSlotClass,
   type MiddleColumnMode,
   mentionPopupPlacementClass,
   resolveIdleStatusText,
@@ -241,6 +254,7 @@ import {
   readSessionPermissions,
   writeSessionPermissions,
 } from './sessionPreferenceStore';
+import { useSessionRailPresent } from './sessionRailPresence';
 import {
   buildSlashCatalog,
   extractSlashQuery,
@@ -409,7 +423,9 @@ const AttachmentChip = memo(function AttachmentChip({
   return (
     <span
       className={cn(
-        'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-border bg-muted/50 pr-0.5 pl-1.5 text-meta text-foreground',
+        // Design system v2 §1 rule 1: a tag inside the composer's frame --
+        // a neutral fill, no frame of its own.
+        'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-sm bg-fill-neutral pr-0.5 pl-1.5 text-small text-foreground',
         sending && 'pointer-events-none opacity-64'
       )}
     >
@@ -423,13 +439,13 @@ const AttachmentChip = memo(function AttachmentChip({
       <span className="min-w-0 flex-1 truncate" title={chip.title}>
         {chip.label}
       </span>
-      <span className="shrink-0 tabular-nums text-muted-foreground">{chip.sizeLabel}</span>
+      <span className="shrink-0 tabular-nums text-foreground-faint">{chip.sizeLabel}</span>
       <button
         type="button"
         onClick={() => onRemove(draft.id)}
         disabled={sending}
         aria-label={t('Remove {{name}}', { name: chip.title })}
-        className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground disabled:pointer-events-none disabled:opacity-64"
+        className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-selected hover:text-foreground focus-ring disabled:pointer-events-none disabled:opacity-64"
       >
         <X className="size-3" />
       </button>
@@ -512,6 +528,7 @@ function deadlineAt(durationMs: number): () => boolean {
 
 export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: ChatComposerProps) {
   const { t } = useI18n();
+  const sessionRailPresent = useSessionRailPresent();
   const [value, setValue] = useState('');
   /**
    * T091: the pre-first-token send latch, now carrying WHICH session it belongs
@@ -909,7 +926,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // the home page has no conversation for `/archive` or `/compact` to act on.
   const slashMenuCatalog = useMemo(() => {
     const catalog = buildSlashCatalog(slashCatalog, t);
-    return onHome ? homeSlashMenu(catalog) : catalog;
+    return onHome ? homeSlashMenu(catalog, t) : catalog;
   }, [slashCatalog, t, onHome]);
   const slashResults = useMemo(
     () => (slashQuery === null ? [] : filterSlashCommands(slashMenuCatalog, slashQuery)),
@@ -1198,6 +1215,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     updateValue,
   ]);
 
+  // Issue #26 item 3: mirror the box into the drafts store so its text is saved
+  // across a restart (the store debounces the write). Refs, not the render's
+  // `value`: in the commit that switches chats, the layout effect above has
+  // already swapped `valueRef` to the incoming chat's text.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `value` and `activeSessionId` are the triggers; the effect reads their refs.
+  useEffect(() => {
+    useComposerDraftsStore.getState().noteLive(draftOwnerRef.current, valueRef.current);
+  }, [value, activeSessionId]);
+
   // P1-7e (problem 1, decision 139): text offered to this chat's composer from
   // outside it — a rewind handing back the prompt it rewound to. Taken only
   // while its chat is the one in the box (the layout effect above has run by
@@ -1470,6 +1496,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       case 'settings':
         useSettingsIntentStore.getState().requestSettings();
         break;
+      case 'btw': {
+        // Layout 5f (ruling L6): asked in the side chat, never sent into this
+        // conversation; a bare `/btw` opens it empty. While its last question
+        // still waits, the line stays in the box.
+        if (!activeSessionId) return false;
+        if (!useSideChatStore.getState().ask(activeSessionId, action.question)) return true;
+        break;
+      }
       case 'archive': {
         if (!activeSessionId) return false;
         // `false` is a refusal the helper already chose not to force (e.g. the
@@ -4238,6 +4272,27 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     [activeSessionId]
   );
 
+  // Layout 5e: the session rail's 「压缩」 runs `/compact` as if typed here.
+  // When the built-in path does not take it (the engine lists its own
+  // `/compact`, or the draft holds attachments), the command goes into an
+  // empty box for the user to send.
+  const runBuiltinSlashRef = useRef(runBuiltinSlash);
+  runBuiltinSlashRef.current = runBuiltinSlash;
+  useEffect(
+    () =>
+      onComposerCompactRequest(
+        () => activeSessionId,
+        () => {
+          void runBuiltinSlashRef.current('/compact').then((handled) => {
+            if (handled) return;
+            if (!valueRef.current.trim()) updateValue('/compact');
+            textareaRef.current?.focus();
+          });
+        }
+      ),
+    [activeSessionId, updateValue]
+  );
+
   // Decision 046 rule 3: ending a conversation (sidebar) releases everything
   // this composer holds for it — the handshake, the stop latch, the pending
   // watch. `endSessionRuntime` clears the store halves itself.
@@ -4339,9 +4394,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // truth table: neither shows a resting line any more. The empty card used to
   // show one unconditionally (a permanently parked "Ready · cwd: /home/…"),
   // and that is gone — the row now appears only while something is actually in
-  // flight or flagged, in either mode. Keeping it out of the docked card's
-  // resting state is also what holds that card at its 42px contract
-  // (`composerFollowHeightBreakdown`), not the 40px this comment used to name.
+  // flight or flagged, in either mode. Keeping it out of the resting state is
+  // also what holds the box at its one-line contract
+  // (`composerFollowHeightBreakdown`).
   // T-31 §3.2 / F-B11: `sending` is no longer supplied. The function ignores it
   // either way (the field stays in its input type so that assertion can keep
   // proving so), but passing a value the decision does not use would read like
@@ -4352,11 +4407,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     hasStatusError,
     hasLargeHint: Boolean(largeHint),
   });
-  // Wrapper class differs by mode, and after F6 so does the SLOT: empty mode's
-  // status area takes the slack inside the bottom bar (needs flex-1 so it
-  // truncates instead of pushing the buttons off), while session mode renders
-  // it on its own line in the extras stack, where nothing competes for width
-  // (`sessionStatusLineWrapperClass`).
+  // Both modes render it on its own line in the extras stack above the input
+  // row, where nothing competes for width (`sessionStatusLineWrapperClass`).
   // T-30b2: `statusLine != null` is a second gate on top of
   // `shouldShowStatusLine`. Now that session mode admits `hasStatusError` into
   // the show condition (the two modes share one truth table again),
@@ -4384,7 +4436,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             through the round key's Stop state). */}
         {attachments.reading > 0 && <Spinner className="size-3.5 shrink-0 text-muted-foreground" />}
         <p
-          className={cn('min-w-0 truncate text-meta tabular-nums', statusTone)}
+          className={cn('min-w-0 truncate text-small tabular-nums', statusTone)}
           title={statusLine ?? undefined}
         >
           {statusLine}
@@ -4395,7 +4447,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const noticeBlock = attachments.notice ? (
     <Alert
       variant={attachments.notice.tone === 'info' ? 'info' : 'warning'}
-      className="mt-1 items-center gap-x-2 px-2 py-1 text-meta"
+      className="mt-1 items-center gap-x-2 px-2 py-1 text-small"
     >
       <TriangleAlert />
       <AlertTitle className="min-w-0 truncate font-normal" title={attachments.notice.message}>
@@ -4406,7 +4458,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           type="button"
           onClick={attachments.dismissNotice}
           aria-label={t('Dismiss attachment notice')}
-          className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground"
+          className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
         >
           <X className="size-3" />
         </button>
@@ -4422,7 +4474,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     <Alert
       variant="warning"
       role="status"
-      className="mt-1 px-2 py-1 text-meta"
+      className="mt-1 px-2 py-1 text-small"
       data-testid="composer-image-input-hint"
     >
       <TriangleAlert />
@@ -4434,7 +4486,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // byte budget) reuses the same Alert language as the attachment notice
   // above — the draft itself is left untouched by the caller (handleSend).
   const queueNoticeBlock = queueNotice ? (
-    <Alert variant="warning" className="mt-1 items-center gap-x-2 px-2 py-1 text-meta">
+    <Alert variant="warning" className="mt-1 items-center gap-x-2 px-2 py-1 text-small">
       <TriangleAlert />
       <AlertTitle className="min-w-0 truncate font-normal" title={queueNotice}>
         {queueNotice}
@@ -4444,7 +4496,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           type="button"
           onClick={() => setQueueNotice(null)}
           aria-label={t('Dismiss queue notice')}
-          className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground"
+          className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
         >
           <X className="size-3" />
         </button>
@@ -4484,7 +4536,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 source: 'mention-chip',
               });
             }}
-            className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-code text-primary transition-colors hover:bg-primary/20"
+            // Design system v2: a frameless neutral tag inside the composer
+            // (§1 rule 1); clay is reserved for primary actions (§1 rule 7).
+            className="rounded-xs bg-fill-neutral px-1.5 py-0.5 font-mono text-code text-foreground transition-colors duration-150 hover:bg-fill-ghost-selected focus-ring"
           >
             {chip.path}
           </button>
@@ -4507,7 +4561,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // The official client's "History 2/3": which sent line the box shows, oldest first.
   const historyLabel = browsingHistory ? (
     <div
-      className="px-1 text-meta text-muted-foreground tabular-nums"
+      className="px-1 text-small text-muted-foreground tabular-nums"
       data-testid="composer-history-label"
     >
       {t('History {{index}}/{{total}}', {
@@ -4527,9 +4581,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // when the field is EMPTY (only the placeholder shows, e.g. mid-send
       // or before the first keystroke) there is no content to measure, so
       // the browser falls back to the HTML default of 2 rows instead of 1.
-      // In the docked session card (composerTextareaClass('session')'s
-      // body-tier-derived min-height/leading — a deliberate one-line resting
-      // contract, 24px at the 16px default) that produced a taller-than-intended box; the placeholder
+      // In the composer box (composerTextareaClass()'s body-tier-derived
+      // leading — a deliberate one-line resting contract) that produced a
+      // taller-than-intended box; the placeholder
       // text is top-anchored inside it (textareas never vertically center
       // their own content), leaving visible empty space below and reading
       // as "text sits high". `rows={1}` pins the no-content baseline to one
@@ -4618,7 +4672,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         t
       )}
       className={cn(
-        composerTextareaClass(mode),
+        composerTextareaClass(),
         // The overlay is placed against this wrapper, and while it paints the
         // command the textarea's own glyphs step aside (it keeps the caret).
         'relative',
@@ -4637,6 +4691,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // textarea.
       disabled={disabled}
       onKeyDown={(event) => {
+        // Issue #26 item 9: while an IME composes, Enter / arrows / Esc belong
+        // to its candidate list — the popups below, the history walk and the
+        // send all stand aside.
+        const composing = isImeComposing(event, composingRef.current);
         if (commandInfoOpen) {
           setCommandInfoOpen(false);
           if (event.key === 'Escape') {
@@ -4649,7 +4707,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // with `/`, where an `@` has no whitespace before it — but the narrower
         // condition goes first so the ordering states that rather than relying
         // on it.
-        if (slashOpen) {
+        if (slashOpen && !composing) {
           if (event.key === 'ArrowDown') {
             event.preventDefault();
             setSlashIndex((i) => (i + 1) % slashResults.length);
@@ -4674,7 +4732,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           }
         }
         // T-07 @ popup: while it is open, arrow keys / Enter / Esc belong to it, so nothing is sent by mistake.
-        if (mentionOpen) {
+        if (mentionOpen && !composing) {
           if (event.key === 'ArrowDown') {
             event.preventDefault();
             setMentionIndex((i) => (i + 1) % mentionResults.length);
@@ -4706,8 +4764,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           !event.ctrlKey &&
           !event.metaKey &&
           !event.shiftKey &&
-          !composingRef.current &&
-          !event.nativeEvent.isComposing
+          !composing
         ) {
           const ta = event.currentTarget;
           const up = event.key === 'ArrowUp';
@@ -4735,7 +4792,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // Decision 180: with no turn to stop, it cancels this window's
         // `/compact` (the round Stop does the same then).
         if (event.key === 'Escape') {
-          if (composingRef.current) return;
+          if (composing) return;
           if (canStop) {
             event.preventDefault();
             handleStop();
@@ -4749,7 +4806,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // An IME confirming a candidate fires Enter before
           // compositionend — sending here would fire off a half-typed
           // message, and with attachments that is an expensive mistake.
-          if (composingRef.current) return;
+          if (composing) return;
           event.preventDefault();
           // Decision 203: while a turn runs, Enter joins it at its next step
           // (as in Claude Code) and Ctrl+Enter queues for the turn's end. A
@@ -4960,7 +5017,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // Deliberately NOT widened by U29: occupancy is a measurement, and a chat
     // that has never run a turn has nothing to measure. pix reads the same way
     // (`snapshot?.usage?.context?.percent ?? undefined`).
-    usage: activeSessionId ? <ComposerUsageChip sessionId={activeSessionId} /> : null,
+    // Layout 5e: the session rail's context card carries it while the rail is on screen.
+    usage:
+      activeSessionId && !sessionRailPresent ? (
+        <ComposerUsageChip sessionId={activeSessionId} />
+      ) : null,
     modelEffort: modelEffortControls,
     actions: actionButtons,
   };
@@ -5004,9 +5065,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         (isModelMissingError(lastError) ? (
           <ModelMissingNotice error={lastError} className="mb-2" />
         ) : (
-          <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 font-mono text-code text-destructive whitespace-pre-wrap break-all">
-            {statusHint}
-          </div>
+          // Design system v2 §7.7: the one notice. Only the icon is red (§1
+          // rule 5); the raw diagnostic stays mono and scrolls past 7rem.
+          <Alert variant="error" className="mb-2">
+            <CircleAlert />
+            <AlertDescription className="max-h-28 overflow-auto whitespace-pre-wrap break-all font-mono text-code text-foreground">
+              {statusHint}
+            </AlertDescription>
+          </Alert>
         ))}
       {/* Decision 174: the home send found the checkout locked after a branch
           was picked — nothing sent, nothing switched. Where the model-missing
@@ -5063,12 +5129,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         {slashOpen && (
           <div
             className={cn(
-              'absolute left-2 flex w-96 flex-col overflow-hidden rounded-lg border bg-popover shadow-lg',
+              // Design system v2 §7.10: the coss Menu's float.
+              'absolute left-2 flex w-96 flex-col overflow-hidden rounded-md bg-popover text-popover-foreground elev-popover',
               mentionPopupPlacementClass(popupPlacement.side)
             )}
             style={{ maxHeight: popupPlacement.maxHeight }}
           >
-            <div ref={slashListRef} className="min-h-0 flex-1 overflow-y-auto py-1">
+            <div ref={slashListRef} className="min-h-0 flex-1 overflow-y-auto p-1">
               {/* Decision 144: painted rows, `source` in words. */}
               {slashDisplayRows.map((item, i) => {
                 const row = (
@@ -5081,49 +5148,41 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                     }}
                     onMouseEnter={() => setSlashIndex(i)}
                     className={cn(
-                      'flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm transition-colors',
-                      i === slashIndex
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-foreground hover:bg-accent/50'
+                      'flex min-h-7 w-full items-baseline gap-2 rounded-xs px-2 py-1 text-left text-ui text-foreground transition-colors duration-100',
+                      i === slashIndex && 'bg-fill-ghost-hover'
                     )}
                   >
                     <span className="shrink-0 font-mono">/{item.name}</span>
-                    <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                    <span className="min-w-0 flex-1 truncate text-small text-muted-foreground">
                       {item.description}
                     </span>
                     {/* Three kinds share this list — a skill, a prompt template
                         and a plugin command look identical without this. */}
-                    <span className="shrink-0 text-meta text-muted-foreground">{item.source}</span>
+                    <span className="shrink-0 text-small text-foreground-faint">{item.source}</span>
                   </button>
                 );
                 if (!item.description) return <div key={`${item.source}:${item.name}`}>{row}</div>;
                 return (
                   <Tooltip key={`${item.source}:${item.name}`} open={i === slashIndex}>
                     <TooltipTrigger render={<div />}>{row}</TooltipTrigger>
-                    <TooltipPopup side="right" align="start" className="max-w-80 text-meta">
+                    <TooltipPopup side="right" align="start" className="max-w-80 text-small">
                       {item.description}
                     </TooltipPopup>
                   </Tooltip>
                 );
               })}
             </div>
-            <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-3 border-t border-border-soft px-3 py-1.5 text-small text-muted-foreground">
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  ↑↓
-                </kbd>
+                <Kbd>↑↓</Kbd>
                 {t('Navigate')}
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  Enter
-                </kbd>
+                <Kbd>Enter</Kbd>
                 {t('Select')}
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  Esc
-                </kbd>
+                <Kbd>Esc</Kbd>
                 {t('Close')}
               </span>
             </div>
@@ -5137,12 +5196,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         {mentionOpen && (
           <div
             className={cn(
-              'absolute left-2 flex w-72 flex-col overflow-hidden rounded-lg border bg-popover shadow-lg',
+              'absolute left-2 flex w-72 flex-col overflow-hidden rounded-md bg-popover text-popover-foreground elev-popover',
               mentionPopupPlacementClass(popupPlacement.side)
             )}
             style={{ maxHeight: popupPlacement.maxHeight }}
           >
-            <div className="min-h-0 flex-1 overflow-y-auto py-1">
+            <div className="min-h-0 flex-1 overflow-y-auto p-1">
               {mentionResults.map((item, i) => {
                 const lastSep = item.relativePath.lastIndexOf('/');
                 const dirPart = lastSep > 0 ? item.relativePath.slice(0, lastSep) : '';
@@ -5158,10 +5217,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                     }}
                     onMouseEnter={() => setMentionIndex(i)}
                     className={cn(
-                      'w-full px-3 py-1.5 text-left text-sm transition-colors',
-                      i === mentionIndex
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-foreground hover:bg-accent/50'
+                      'block min-h-7 w-full rounded-xs px-2 py-1 text-left text-ui text-foreground transition-colors duration-100',
+                      i === mentionIndex && 'bg-fill-ghost-hover'
                     )}
                   >
                     {/* T-07①: directories are selectable now — mark them so a
@@ -5178,29 +5235,23 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                       </span>
                     </span>
                     {dirPart && (
-                      <span className="ml-1.5 text-meta text-muted-foreground">{dirPart}</span>
+                      <span className="ml-1.5 text-small text-foreground-faint">{dirPart}</span>
                     )}
                   </button>
                 );
               })}
             </div>
-            <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-3 border-t border-border-soft px-3 py-1.5 text-small text-muted-foreground">
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  ↑↓
-                </kbd>
+                <Kbd>↑↓</Kbd>
                 {t('Navigate')}
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  Enter
-                </kbd>
+                <Kbd>Enter</Kbd>
                 {t('Select')}
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
-                  Esc
-                </kbd>
+                <Kbd>Esc</Kbd>
                 {t('Close')}
               </span>
               {/* T-07③: searching `chat` here matches 304 files but only 10
@@ -5213,71 +5264,40 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             </div>
           </div>
         )}
-        {/* U09-2: the bar renders by mapping COMPOSER_BAR_LEADING /
-            COMPOSER_BAR_TRAILING, so the shipped order IS the order those
-            arrays state. Writing the controls out inline here again would put
-            the order back where no test can read it. A slot whose node is null
-            (permission → U12, usage → T38) contributes nothing to the DOM. */}
-        {mode === 'session' ? (
-          <div className={composerRowsClass()}>
-            {/* F6 §6.4: the status line joined this stack. It is the fifth
-                draft-side fact here, not a sixth control below — in session
-                mode it can only ever say "reading attachments off disk" or
-                "these attachments are large", both of which happen BEFORE a
-                send and belong with the notice and the chips. The gate widened
-                with it: left at `hasComposerExtras` alone, the status line
-                would render into a container that never mounts. */}
-            {(hasComposerExtras || statusRowVisible) && (
-              <div className="flex flex-col gap-1">
-                {noticeBlock}
-                {queueNoticeBlock}
-                {attachmentChipsBlock}
-                {imageInputHintBlock}
-                {mentionChipsBlock}
-                {renderStatusLine(sessionStatusLineWrapperClass())}
-              </div>
-            )}
-            {textareaEl}
-            {/* F6 §6.2: row 2. The textarea has row 1 to itself, which is the
-                whole point of the split — one row can hold one elastic text
-                child, and this card had two fighting over it.
-                D48 S1 §3.2 still governs the order WITHIN this row: the agent
-                chip sits immediately left of the model/effort chip, NOT next
-                to ⊕, because which models exist follows from which agent runs
-                the chat, and the two ghost chips' height/inset are
-                cross-asserted against each other. */}
-            <div className={composerBarClass('session')}>
-              {renderBarSlots(COMPOSER_BAR_LEADING)}
-              <div className={composerActionGroupClass()}>
-                {renderBarSlots(COMPOSER_BAR_TRAILING)}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <>
-            {textareaEl}
+        {/* 2026-10-22: one thin box — the draft extras when there are any,
+            then the input row (⊕, textarea, action key). Every other control
+            sits in the plain row under the box. The slots map
+            COMPOSER_CARD_LEADING / COMPOSER_CARD_TRAILING, so the shipped
+            order IS the order those arrays state (U09-2). The status line
+            joins the extras on a widened gate: left at `hasComposerExtras`
+            alone it would render into a container that never mounts. */}
+        {(hasComposerExtras || statusRowVisible) && (
+          <div className={composerExtrasClass()}>
             {noticeBlock}
             {queueNoticeBlock}
             {attachmentChipsBlock}
             {imageInputHintBlock}
             {mentionChipsBlock}
-            {/* U09-2 REPLACES T-30b2 §5.2's "⊕ → model → status → actions".
-                  That order grouped "the two controls that start a message" at
-                  the left; the bar now reads ⊕ → permission → status → usage →
-                  model/effort → send, which groups by WHAT A CONTROL ANSWERS:
-                  what this message carries and what it may do, on the left;
-                  how it will be answered and the send key itself, on the right.
-                  The status line keeps the elastic middle either way. */}
-            <div className={composerBarClass('empty')}>
-              {renderBarSlots(COMPOSER_BAR_LEADING)}
-              {renderStatusLine('flex min-w-0 flex-1 items-center gap-1.5')}
-              <div className={composerActionGroupClass()}>
-                {renderBarSlots(COMPOSER_BAR_TRAILING)}
-              </div>
-            </div>
-          </>
+            {renderStatusLine(sessionStatusLineWrapperClass())}
+          </div>
         )}
+        <div className={composerInputRowClass()}>
+          {renderBarSlots(COMPOSER_CARD_LEADING)}
+          <div className={composerTextareaSlotClass()}>{textareaEl}</div>
+          <div className={composerActionGroupClass()}>{renderBarSlots(COMPOSER_CARD_TRAILING)}</div>
+        </div>
       </div>
+      {/* The row under the box. In a conversation and on the home page it is
+          the target row, which carries the composer's own controls at its two
+          ends (decision 174: drawn in every conversation, so the box sits at
+          the same height everywhere). A blank conversation's start screen
+          keeps its target tab on top of the box and gets a bare row here. */}
+      {mode === 'empty' && (
+        <div className={composerBarClass()}>
+          {renderBarSlots(COMPOSER_BAR_LEADING)}
+          <div className={composerBarTrailingClass()}>{renderBarSlots(COMPOSER_BAR_TRAILING)}</div>
+        </div>
+      )}
       {mode === 'session' && (
         <ComposerTargetBar
           mode={mode}
@@ -5286,6 +5306,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           sending={onHome ? homeSwitching : sendingHere}
           disabled={disabled}
           onAddRepository={onAddRepository}
+          leading={renderBarSlots(COMPOSER_BAR_LEADING)}
+          trailing={renderBarSlots(COMPOSER_BAR_TRAILING)}
         />
       )}
     </ReadingColumn>

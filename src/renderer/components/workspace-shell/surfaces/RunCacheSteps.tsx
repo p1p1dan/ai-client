@@ -78,7 +78,7 @@ export function RunCacheAlert({
             <Button
               size="xs"
               variant="outline"
-              className="h-6 sm:text-meta"
+              className="h-6 text-ui"
               onClick={() => void handleCopy()}
               data-cache-copy=""
             >
@@ -122,7 +122,7 @@ function CacheStepBadge({ badge }: { badge: RunCacheBadge }) {
         <span className="truncate">{badge.text}</span>
       </TooltipTrigger>
       {/* Decision 174: 14px — the sentences are CJK, and coss's popup is 12px. */}
-      <TooltipPopup className="max-w-66 text-meta">
+      <TooltipPopup className="max-w-66 text-small">
         <div className="flex flex-col gap-1" data-cache-tip="">
           {badge.tips.map((tip) => (
             <p key={tip}>{tip}</p>
@@ -140,7 +140,7 @@ function CacheStepBadge({ badge }: { badge: RunCacheBadge }) {
 function CacheStepRow({ row }: { row: RunCacheRow }) {
   return (
     <div className="flex flex-wrap items-center gap-x-2 px-1" data-cache-step={row.step}>
-      <span className="flex h-7 w-8 shrink-0 items-center justify-end text-meta text-muted-foreground tabular-nums">
+      <span className="flex h-7 w-8 shrink-0 items-center justify-end text-small text-muted-foreground tabular-nums">
         {row.step}
       </span>
       {row.badge && (
@@ -149,7 +149,7 @@ function CacheStepRow({ row }: { row: RunCacheRow }) {
         </div>
       )}
       <span
-        className="ml-auto flex h-7 shrink-0 items-center gap-2 text-meta tabular-nums"
+        className="ml-auto flex h-7 shrink-0 items-center gap-2 text-small tabular-nums"
         title={row.title}
       >
         <span className="w-12 text-right">{formatTokenTotal(row.prompt)}</span>
@@ -190,7 +190,7 @@ export function RunCacheStepsGroup({ group }: { group: RunCacheGroupView }) {
       className="@container mt-1 flex flex-col border-t pt-1"
       data-cache-steps=""
     >
-      <CollapsibleTrigger className="flex h-7 w-full items-center gap-1 rounded-sm px-1 text-left hover:bg-hover focus-visible:bg-hover">
+      <CollapsibleTrigger className="flex h-7 w-full items-center gap-1 rounded-sm px-1 text-left hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover">
         <ChevronRight
           className={cn(
             'size-3 shrink-0 text-muted-foreground transition-transform duration-150',
@@ -205,16 +205,16 @@ export function RunCacheStepsGroup({ group }: { group: RunCacheGroupView }) {
             {t('{{count}} anomalies', { count: group.anomalies })}
           </Badge>
         )}
-        <span className="ml-auto min-w-0 truncate pl-2 text-meta text-muted-foreground tabular-nums">
+        <span className="ml-auto min-w-0 truncate pl-2 text-small text-muted-foreground tabular-nums">
           {group.summary}
         </span>
       </CollapsibleTrigger>
       <CollapsiblePanel>
         {group.rows.length === 0 ? (
-          group.note && <p className="px-1 py-1 text-meta text-muted-foreground">{group.note}</p>
+          group.note && <p className="px-1 py-1 text-small text-muted-foreground">{group.note}</p>
         ) : (
           <>
-            <div className="flex h-6 items-center gap-2 px-1 text-meta text-muted-foreground">
+            <div className="flex h-6 items-center gap-2 px-1 text-small text-muted-foreground">
               <span className="w-8 shrink-0 text-right">{t('Step')}</span>
               <span className="ml-auto flex shrink-0 gap-2">
                 <span className="w-12 text-right">{t('Prompt')}</span>
@@ -225,7 +225,7 @@ export function RunCacheStepsGroup({ group }: { group: RunCacheGroupView }) {
             {hidden > 0 && (
               <button
                 type="button"
-                className="flex h-6 w-full items-center rounded-sm px-1 text-left text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"
+                className="flex h-6 w-full items-center rounded-sm px-1 text-left text-small text-muted-foreground tabular-nums hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover"
                 onClick={() => setExpandedTurn(group.turn)}
                 data-cache-earlier=""
               >
@@ -236,7 +236,7 @@ export function RunCacheStepsGroup({ group }: { group: RunCacheGroupView }) {
               <CacheStepRow key={row.step} row={row} />
             ))}
             {group.note && (
-              <p className="px-1 py-1 text-meta text-muted-foreground">{group.note}</p>
+              <p className="px-1 py-1 text-small text-muted-foreground">{group.note}</p>
             )}
           </>
         )}

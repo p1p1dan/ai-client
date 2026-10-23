@@ -55,12 +55,15 @@ const rootBlock = extractBlock(':root');
 const darkBlock = extractBlock('.dark');
 
 describe('[D2-1] globals.css minor-tier token value lock (F456 D2-b)', () => {
-  it('① light --muted-foreground is the Flexoki base-700 target (5.62:1 -> 7.20:1)', () => {
-    expect(rootBlock).toContain('--muted-foreground: oklch(0.4531 0.005 91.5);');
+  // Design system v2 (2026-10-21) replaced Flexoki with the reference's
+  // neutral grays; the secondary ink is #525252 / #a3a3a3 (7.6:1 / 7.4:1 on
+  // the canvas).
+  it('① light --muted-foreground is the v2 secondary ink', () => {
+    expect(rootBlock).toContain('--muted-foreground: #525252;');
   });
 
-  it('① dark --muted-foreground is the Flexoki base-400 target (4.48:1 -> 6.70:1)', () => {
-    expect(darkBlock).toContain('--muted-foreground: oklch(0.6956 0.0103 93.62);');
+  it('① dark --muted-foreground is the v2 secondary ink', () => {
+    expect(darkBlock).toContain('--muted-foreground: #a3a3a3;');
   });
 
   /**
@@ -73,20 +76,20 @@ describe('[D2-1] globals.css minor-tier token value lock (F456 D2-b)', () => {
    * gives — this asserts the value the argument was made against, and does not
    * re-derive the contrast math.
    */
-  it('② --tool-arg mix ratio is 62%, the decision 034 value (§2.3 kept-derivation ruling)', () => {
-    const percentMatch = source.match(/--tool-arg:[^;]*var\(--muted-foreground\)\s*(\d+)%/);
+  it('② --foreground-faint mix ratio is 62%, the decision 034 value (§2.3 kept-derivation ruling)', () => {
+    const percentMatch = source.match(/--foreground-faint:[^;]*var\(--muted-foreground\)\s*(\d+)%/);
     expect(percentMatch).not.toBeNull();
     expect(Number(percentMatch?.[1])).toBe(62);
   });
 
-  it('③ --tool-arg stays derived from var(--muted-foreground), not an independent literal', () => {
-    const declMatch = source.match(/--tool-arg:\s*([^;]+);/);
+  it('③ --foreground-faint stays derived from var(--muted-foreground), not an independent literal', () => {
+    const declMatch = source.match(/--foreground-faint:\s*([^;]+);/);
     expect(declMatch).not.toBeNull();
     expect(declMatch?.[1]).toContain('var(--muted-foreground)');
   });
 
-  it('④ .dark carries no second --tool-arg declaration (declared once, globals.css:190-194)', () => {
-    expect(darkBlock).not.toContain('--tool-arg');
+  it('④ .dark carries no second --foreground-faint declaration (declared once in :root)', () => {
+    expect(darkBlock).not.toContain('--foreground-faint');
   });
 });
 
@@ -99,7 +102,7 @@ describe('[D2-1] globals.css minor-tier token value lock (F456 D2-b)', () => {
  * reachable as a utility — Tailwind v4 only emits `text-foreground-soft` when
  * `@theme` bridges it, and `text-section` comes from the `--text-*` namespace.
  */
-describe('decision 170: --foreground-soft and --text-section', () => {
+describe('decision 170: --foreground-soft', () => {
   const themeBlock = extractBlock('@theme');
 
   it('--foreground-soft is the oklab midpoint of --foreground and --muted-foreground', () => {
@@ -119,11 +122,30 @@ describe('decision 170: --foreground-soft and --text-section', () => {
   it('@theme bridges it, so Tailwind emits text-foreground-soft', () => {
     expect(themeBlock).toContain('--color-foreground-soft: var(--foreground-soft);');
   });
+});
 
-  it('--text-section is 16px with the 1.5 line height of its neighbours', () => {
-    expect(themeBlock).toContain('--text-section: 1rem;');
-    expect(themeBlock).toContain('--text-section--line-height: 1.5;');
-    expect(themeBlock.split('--text-section:').length - 1).toBe(1);
+/**
+ * Plan ui-cohesion stage 6: the migration-era names are gone, and stay gone.
+ * Type tiers: meta, group-label, markdown, section (→ small / heading / chat
+ * body). Colours: Flexoki's accent-primary, selection, hover, status-running,
+ * tool-arg (→ clay, fill-ghost-selected, fill-ghost-hover, info, foreground-faint).
+ * The composer's own radius and shadow left with the slim composer (5a).
+ */
+describe('stage 6: no migration-era token names', () => {
+  it.each([
+    '--text-meta',
+    '--text-group-label',
+    '--text-markdown',
+    '--text-section',
+    '--accent-primary',
+    '--selection',
+    '--hover:',
+    '--status-running',
+    '--tool-arg',
+    '--radius-composer',
+    '--elev-composer',
+  ])('globals.css declares no %s', (name) => {
+    expect(source).not.toContain(name);
   });
 });
 
@@ -131,7 +153,7 @@ describe('decision 170: --foreground-soft and --text-section', () => {
  * Decision 183: the sidebar's "not started" ring, one step quieter than the
  * `--muted-foreground` ring of a chat attached in the background. A
  * derivation, like `--foreground-soft`: `--muted-foreground` mixed 45% toward
- * the sidebar's actual surface (`--card` at 40% over `--background`, which is
+ * the sidebar's actual surface (`--surface-0` since design system v2, which is
  * what LeftDock paints), so it follows light, dark and sync-terminal.
  */
 describe('decision 183: --muted-foreground-faint', () => {
@@ -142,9 +164,7 @@ describe('decision 183: --muted-foreground-faint', () => {
   );
 
   it('is --muted-foreground mixed 45% toward the sidebar surface, in oklab', () => {
-    expect(declaration).toBe(
-      'color-mix( in oklab, var(--muted-foreground) 45%, color-mix(in oklab, var(--card) 40%, var(--background)) )'
-    );
+    expect(declaration).toBe('color-mix(in oklab, var(--muted-foreground) 45%, var(--surface-0))');
   });
 
   it('is declared once, in :root only, and carries no alpha of its own', () => {
@@ -161,17 +181,16 @@ describe('decision 183: --muted-foreground-faint', () => {
 });
 
 /**
- * Decision 174 (issue #6, second wave): the home title's tier. 26px with a 1.3
- * line height (the prototype's v4 value, down from v3's proposed 28px); it is a
- * `--text-*` theme key so `text-display` exists as a utility, and it is
- * declared once.
+ * Decision 174 (issue #6, second wave): the home title's tier, a `--text-*`
+ * theme key so `text-display` exists as a utility, declared once. Design
+ * system v2 (§3.1, §3.4): the reference's 38px serif greeting, line height 1.2.
  */
 describe('decision 174: --text-display', () => {
   const themeBlock = extractBlock('@theme');
 
-  it('is 26px with a 1.3 line height, declared once in @theme', () => {
-    expect(themeBlock).toContain('--text-display: 1.625rem;');
-    expect(themeBlock).toContain('--text-display--line-height: 1.3;');
+  it('is 38px with a 1.2 line height, declared once in @theme', () => {
+    expect(themeBlock).toContain('--text-display: 2.375rem;');
+    expect(themeBlock).toContain('--text-display--line-height: 1.2;');
     expect(source.split('--text-display:').length - 1).toBe(1);
   });
 });

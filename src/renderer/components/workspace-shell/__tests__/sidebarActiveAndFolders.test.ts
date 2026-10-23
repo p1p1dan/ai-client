@@ -213,6 +213,65 @@ function buttonLabelled(label: string): HTMLButtonElement | null {
   return container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
 }
 
+/** Layout 5b: a row's state marks — anything titled or an icon, outside its hover actions. */
+function statusMarks(row: Element | undefined): Element[] {
+  if (!row) return [];
+  return [...row.querySelectorAll('[title], [role="img"], [data-slot="status-icon"]')].filter(
+    (node) => !node.closest('[data-slot="sidebar-row-actions"]')
+  );
+}
+
+/** Layout 5b: the 「显示更多」 row, by the count its tooltip carries. */
+function moreButton(count: number): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+    (node) => node.title === `View more (${count})`
+  );
+}
+
+/** Every menu item on screen (popups portal to body). */
+function menuItem(text: string): HTMLElement | undefined {
+  return [...document.querySelectorAll<HTMLElement>('[data-slot="menu-item"]')].find(
+    (item) => item.textContent?.trim() === text
+  );
+}
+
+/**
+ * Layout 5b: the list tools (fold all, select to archive, filter) live in the
+ * menu a group heading shows on hover. Opens it from the first heading.
+ */
+async function openListMenu(): Promise<void> {
+  const trigger = buttonLabelled('Group and filter chats');
+  if (!trigger) throw new Error('list menu trigger not rendered');
+  await act(async () => trigger.click());
+}
+
+async function pickListMenuItem(text: string): Promise<void> {
+  await openListMenu();
+  const item = menuItem(text);
+  if (!item) throw new Error(`list menu item ${text} not rendered`);
+  await act(async () => item.click());
+}
+
+/** The fold-all item as a freshly opened list menu shows it (then closed again). */
+async function foldAll(): Promise<{ label: string; disabled: boolean }> {
+  await openListMenu();
+  const item = menuItem('Collapse all groups') ?? menuItem('Expand all groups');
+  if (!item) throw new Error('fold-all item not rendered');
+  const state = {
+    label: item.textContent?.trim() ?? '',
+    disabled: item.hasAttribute('data-disabled') || item.getAttribute('aria-disabled') === 'true',
+  };
+  await act(async () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  });
+  return state;
+}
+
+async function toggleFoldAll(): Promise<void> {
+  const { label } = await foldAll();
+  await pickListMenuItem(label);
+}
+
 async function flush(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -228,14 +287,17 @@ describe('one list, no 「正在活动」 (decision 183 §1.1, §1.10)', () => {
       activeSessionId: 'bound',
     });
     await render();
+    // Layout 5b: 「仓库」 is a nav entry above the list now, not a region title in it.
+    const list = container.querySelector('[data-slot="sidebar-list"]');
     for (const gone of ['Active now', 'Repositories', 'Recent']) {
-      expect(container.textContent).not.toContain(gone);
+      expect(list?.textContent).not.toContain(gone);
     }
     // No L1 title paragraphs, no divider between groups.
     expect(container.querySelector('section p')).toBeNull();
     expect(container.querySelector('section.border-t')).toBeNull();
     expect(rows('Chat bound')).toHaveLength(1);
-    expect(rows('Chat bound')[0]?.className).toContain('bg-selection');
+    // Design system v2 §7.12: the selected step of the ghost fill.
+    expect(rows('Chat bound')[0]?.className).toContain('bg-fill-ghost-selected');
     expect(rows('Chat fresh')).toHaveLength(1);
   });
 
@@ -252,31 +314,40 @@ describe('one list, no 「正在活动」 (decision 183 §1.1, §1.10)', () => {
     const [running] = rows('Chat running');
     const [waiting] = rows('Chat waiting');
     const [idle] = rows('Chat idle-bound');
-    expect(running?.querySelector('[role="status"][aria-label="Running"]')).toBeTruthy();
-    expect(waiting?.querySelector('[role="img"][aria-label="Waiting for an answer"]')).toBeTruthy();
-    expect(waiting?.querySelector('[role="status"]')).toBeNull();
+    // Design system v2 §6: both drawn by StatusIcon, told apart by its state.
+    expect(running?.querySelector('[data-status="running"][aria-label="Running"]')).toBeTruthy();
+    expect(
+      waiting?.querySelector(
+        '[role="img"][data-status="waiting"][aria-label="Waiting for an answer"]'
+      )
+    ).toBeTruthy();
+    expect(waiting?.querySelector('[data-status="running"]')).toBeNull();
     expect(idle?.querySelector('[title="Running in the background"]')).toBeTruthy();
   });
 
-  it('gives a chat not started the faint ring, one step quieter than the background ring', async () => {
+  it('layout 5b: a started chat ends in a faint filled dot; a chat not started in no mark', async () => {
     useChatSessionsStore.setState({
       sessions: [chat('bound'), chat('cold', { updatedAt: NOW - 1000 })],
       hostBoundSessionIds: ['bound'],
     });
     await render();
-    const bound = rows('Chat bound')[0]?.querySelector('[title="Running in the background"]');
-    const cold = rows('Chat cold')[0]?.querySelector('[title="Not started"]');
-    // Issue #16: filled vs. outline, not outline vs. outline. The two used to
-    // be rings one colour step apart, which read as the same mark.
-    expect(bound?.className).toContain('bg-muted-foreground');
-    expect(bound?.className).not.toContain('border-muted-foreground-faint');
-    expect(bound?.className).not.toContain('border-muted-foreground');
-    expect(cold?.className).toContain('border-muted-foreground-faint');
-    expect(cold?.className).toContain('rounded-full');
-    // Every row has a mark in its slot (decision 183 §1.7).
-    for (const row of allRows()) {
-      expect(row.firstElementChild?.childElementCount).toBe(1);
-    }
+    const [boundRow] = rows('Chat bound');
+    const [coldRow] = rows('Chat cold');
+    const bound = boundRow?.querySelector('[title="Running in the background"]');
+    // Issue #16: filled, not a ring.
+    expect(bound?.firstElementChild?.className).toContain('rounded-full');
+    expect(bound?.firstElementChild?.className).toContain('bg-muted-foreground-faint');
+    expect(bound?.innerHTML).not.toContain('border-');
+    // Trailing (the screenshot): the mark is the row's last visible item, right
+    // before the floating actions; the title leads the row.
+    expect((bound?.nextElementSibling as HTMLElement | null)?.dataset.slot).toBe(
+      'sidebar-row-actions'
+    );
+    expect(boundRow?.firstElementChild?.textContent).toBe('Chat bound');
+    // Not started: nothing at all — the old faint ring only kept a leading
+    // column aligned, and there is no leading column any more.
+    expect(coldRow?.querySelector('[title="Not started"]')).toBeNull();
+    expect(statusMarks(coldRow)).toHaveLength(0);
   });
 
   it('E6-37: a chat the engine let go of (a plugin switch, the idle sweep) drops to the faint ring', async () => {
@@ -305,7 +376,8 @@ describe('one list, no 「正在活动」 (decision 183 §1.1, §1.10)', () => {
     // Still in their folder, only no longer marked as running in the background.
     expect(rows('Chat a')).toHaveLength(1);
     expect(rows('Chat a')[0]?.querySelector('[title="Running in the background"]')).toBeNull();
-    expect(rows('Chat a')[0]?.querySelector('[title="Not started"]')).toBeTruthy();
+    // Layout 5b: a chat not started carries no mark.
+    expect(statusMarks(rows('Chat a')[0])).toHaveLength(0);
   });
 });
 
@@ -323,8 +395,9 @@ describe('rows (decision 183 §1.4, §1.5)', () => {
     // The absolute time stays in the tooltip.
     expect(open?.getAttribute('title')?.split('\n')[2]).toMatch(/^Updated \d{4}-\d{2}-\d{2}/);
     for (const [row, fill] of [
-      [open, 'bg-selection'],
-      [other, 'bg-hover'],
+      // Design system v2 §7.12: the two steps of the ghost fill.
+      [open, 'bg-fill-ghost-selected'],
+      [other, 'bg-fill-ghost-hover'],
     ] as const) {
       expect(row?.className).toContain('relative');
       const actions = row?.querySelector<HTMLElement>('[data-slot="sidebar-row-actions"]');
@@ -343,7 +416,8 @@ describe('rows (decision 183 §1.4, §1.5)', () => {
 
   it('does not float the actions in selection mode', async () => {
     await render();
-    await act(async () => buttonLabelled('Select sessions to archive')?.click());
+    // Layout 5b: 「选择归档」 is in the list menu.
+    await pickListMenuItem('Select sessions to archive');
     expect(container.querySelector('[data-slot="sidebar-row-actions"]')).toBeNull();
     expect(buttonText('Cancel')).toBeTruthy();
   });
@@ -352,7 +426,8 @@ describe('rows (decision 183 §1.4, §1.5)', () => {
     await render();
     // beta has no chats.
     const beta = group(BETA) as HTMLElement;
-    expect(beta.querySelectorAll('button')).toHaveLength(3); // toggle, more, 「＋」
+    // toggle, the list menu (layout 5b), more, 「＋」
+    expect(beta.querySelectorAll('button')).toHaveLength(4);
     expect(beta.textContent).not.toContain('New chat');
     expect(allRows(beta)).toHaveLength(0);
     expect(beta.querySelector('[aria-label="New chat"]')).toBeTruthy();
@@ -400,16 +475,17 @@ describe('the group header (decision 183 §1.3, §1.6)', () => {
     expect(header.textContent).toBe('alpha');
     expect(header.getAttribute('title')).toBe('alpha\nMain branch: main');
     expect(header.getAttribute('aria-expanded')).toBe('true');
-    // The reference's grey label: 400 / muted, the soft ink on hover, no
-    // folder icon. Issue #14 (decision 186) dropped it a step below the rows
-    // to 13px.
-    expect(header.className).toContain('text-group-label');
-    expect(header.className).toContain('text-muted-foreground');
+    // Design system v2 §7.12: the group label is `text-small`, 500, the faint
+    // ink, the soft ink on hover, no folder icon — a step below the rows
+    // (issue #14, decision 186).
+    expect(header.className).toContain('text-small');
+    expect(header.className).toContain('font-medium');
+    expect(header.className).toContain('text-foreground-faint');
     expect(header.className).toContain('group-hover:text-foreground-soft');
     expect(header.className).not.toContain('font-semibold');
     expect(header.querySelector('.text-folder')).toBeNull();
     // No hover fill on the header row.
-    expect(header.parentElement?.className).not.toContain('hover:bg-hover');
+    expect(header.parentElement?.className).not.toContain('hover:bg-fill-ghost-hover');
   });
 
   it('shows ▾ only on hover while open, and ▸ always while folded', async () => {
@@ -465,11 +541,15 @@ describe('a folded group summarises its rows (decision 183 §2.2)', () => {
     await act(async () => folderHeader('alpha').click());
     const marks = summary() as HTMLElement;
     expect(marks, 'the folded header summarises').toBeTruthy();
-    expect(marks.querySelector('[role="status"][aria-label="2 chats running"]')).toBeTruthy();
+    // Design system v2 §6: the run marks are StatusIcon's running spinner
+    // and its clay waiting dot.
+    expect(
+      marks.querySelector('[data-status="running"][aria-label="2 chats running"]')
+    ).toBeTruthy();
     expect(marks.textContent).toBe('2');
-    expect(marks.querySelector('[aria-label="A chat is waiting for you"]')?.className).toContain(
-      'bg-warning'
-    );
+    expect(
+      marks.querySelector('[aria-label="A chat is waiting for you"]')?.getAttribute('data-status')
+    ).toBe('waiting');
     expect(
       marks.querySelector('[aria-label="A chat failed while you were away"]')?.className
     ).toContain('bg-destructive');
@@ -588,7 +668,8 @@ describe('groups list 8 rows (decision 137 §4)', () => {
     expect(allRows()).toHaveLength(9);
     expect(rows('Chat n10')).toHaveLength(1);
     expect(rows('Chat n08')).toHaveLength(0);
-    expect(buttonText('View more (2)')).toBeTruthy();
+    // Layout 5b: the quiet 「显示更多」, its count in the tooltip.
+    expect(moreButton(2)?.textContent).toBe('Show more chats');
   });
 
   it('expands to all rows ending in "Show less", and keeps that across a fold', async () => {
@@ -596,7 +677,7 @@ describe('groups list 8 rows (decision 137 §4)', () => {
     await render();
     expect(allRows()).toHaveLength(8);
 
-    await act(async () => buttonText('View more (3)')?.click());
+    await act(async () => moreButton(3)?.click());
     expect(allRows()).toHaveLength(11);
     expect(buttonText('Show less')).toBeTruthy();
 
@@ -613,30 +694,34 @@ describe('groups list 8 rows (decision 137 §4)', () => {
     expect(allRows()).toHaveLength(9);
   });
 
-  it('E6-40: Temporary chats says "View more (N)" like a folder, h-8 with the title column', async () => {
+  it('E6-40: Temporary chats says 「显示更多」 like a folder, h-7 in the title column (layout 5b)', async () => {
     const tenScratch = Array.from({ length: 10 }, (_, i) =>
       scratch(`s${i}`, { updatedAt: NOW - i * 1000 })
     );
     useChatSessionsStore.setState({ sessions: [...eleven.slice(0, 10), ...tenScratch] });
     await render();
     const more = [...container.querySelectorAll<HTMLButtonElement>('button')].filter(
-      (node) => node.textContent?.trim() === 'View more (2)'
+      (node) => node.title === 'View more (2)'
     );
     expect(more).toHaveLength(2);
     // Issue #13: the temporary group is the last one on the list, so its
     // "View more" is the second of the two.
     expect(group(UNBOUND_FOLDER_ID)?.contains(more[1] as Node)).toBe(true);
-    expect(container.textContent).not.toContain('Show more');
     for (const button of more) {
-      expect(button.className).toContain('h-8');
-      // The empty w-4 slot puts the text in the title column.
-      expect(button.firstElementChild?.className).toContain('w-4');
+      expect(button.textContent).toBe('Show more chats');
+      expect(button.className).toContain('h-7');
+      expect(button.className).toContain('text-foreground-faint');
+      // Rows have no leading slot now, so the text starts at the row's px-2,
+      // the titles' column.
+      expect(button.className).toContain('px-2');
+      expect(button.querySelector('.w-4')).toBeNull();
     }
   });
 
   it('lists every match while searching', async () => {
     useChatSessionsStore.setState({ sessions: eleven });
     await render();
+    await pickListMenuItem('Filter chats');
     const input = [...container.querySelectorAll('input')].find(
       (node) => node.getAttribute('placeholder') === 'Search sessions'
     );
@@ -646,32 +731,105 @@ describe('groups list 8 rows (decision 137 §4)', () => {
       (input as HTMLInputElement).dispatchEvent(new Event('input', { bubbles: true }));
     });
     expect(allRows()).toHaveLength(11);
-    expect(buttonText('View more (3)')).toBeUndefined();
+    expect(moreButton(3)).toBeUndefined();
   });
 });
 
-describe('the top of the panel (decision 183 §1.10, §2.1)', () => {
-  it('a vertical nav, then the search box always shown beside the toggle and bulk archive', async () => {
-    await render();
+describe('the top of the panel (layout 5b, was decision 183 §1.10, §2.1)', () => {
+  it('four frameless nav entries, then the list; the filter field only once asked for', async () => {
+    const onOpen = vi.fn();
+    await act(async () =>
+      root.render(
+        createElement(LeftNav, {
+          repositories: REPOS as never,
+          search: { onOpen, enabled: true, shortcut: 'Super+P' },
+        })
+      )
+    );
     const newChat = buttonText('New chat');
-    const addRepository = buttonText('Add Repository');
+    const searchEntry = [...container.querySelectorAll('button')].find((node) =>
+      node.textContent?.startsWith('Search')
+    );
+    const repositories = buttonText('Repositories');
+    const skills = buttonText('Skills and plugins');
     expect(newChat?.title).toBe('New chat (opens the home page)');
-    expect(newChat?.className).toContain('h-8');
-    expect(addRepository?.className).toBe(newChat?.className);
-    const search = container.querySelector('input[placeholder="Search sessions"]');
-    expect(search).toBeTruthy();
-    // No filter toggle: the search box cannot be hidden.
-    expect(buttonLabelled('Filter sessions')).toBeNull();
-    expect(buttonLabelled('Collapse all groups')).toBeTruthy();
-    expect(buttonLabelled('Select sessions to archive')).toBeTruthy();
-    // Nav above the tool row, the tool row above the list.
+    // One class for all four: 28px, 13px, frameless, the ghost hover.
+    for (const entry of [newChat, searchEntry, repositories, skills]) {
+      expect(entry?.className).toBe(newChat?.className);
+    }
+    expect(newChat?.className).toContain('h-7');
+    expect(newChat?.className).toContain('text-ui');
+    expect(newChat?.className).toContain('hover:bg-fill-ghost-hover');
+    expect(newChat?.className).not.toMatch(/\bborder\b/);
+    // The shortcut sits faintly at the right; the entry opens the global search.
+    expect(searchEntry?.lastElementChild?.textContent).toBe('Super+P');
+    expect(searchEntry?.lastElementChild?.className).toContain('text-foreground-faint');
+    await act(async () => searchEntry?.click());
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    // The old 「添加仓库」 entry is folded into 「仓库」 (and the list's right-click).
+    expect(buttonText('Add Repository')).toBeUndefined();
+    // No always-on search box, no tool row: the tools are in the list menu.
+    expect(container.querySelector('input[placeholder="Search sessions"]')).toBeNull();
+    expect(buttonLabelled('Collapse all groups')).toBeNull();
+    expect(buttonLabelled('Select sessions to archive')).toBeNull();
+    // Nav above the list.
     expect(
-      (newChat as Node).compareDocumentPosition(search as Node) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
-    expect(
-      (search as Node).compareDocumentPosition(group(ALPHA) as Node) &
+      (skills as Node).compareDocumentPosition(group(ALPHA) as Node) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+
+    await pickListMenuItem('Filter chats');
+    await flush();
+    const filter = container.querySelector('input[placeholder="Search sessions"]');
+    expect(filter).toBeTruthy();
+    expect(document.activeElement).toBe(filter);
+    expect(
+      (filter as Node).compareDocumentPosition(group(ALPHA) as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    // ✕ clears and closes it.
+    await act(async () => buttonLabelled('Close filter')?.click());
+    expect(container.querySelector('input[placeholder="Search sessions"]')).toBeNull();
+  });
+
+  it('the search entry is disabled with nothing to search, or without the shell`s search', async () => {
+    await act(async () =>
+      root.render(
+        createElement(LeftNav, {
+          repositories: REPOS as never,
+          search: { onOpen: () => {}, enabled: false, shortcut: 'Super+P' },
+        })
+      )
+    );
+    const entry = () =>
+      [...container.querySelectorAll('button')].find((node) =>
+        node.textContent?.startsWith('Search')
+      );
+    expect(entry()?.disabled).toBe(true);
+    expect(entry()?.title).toBe('Open a chat in a repository to search it');
+    await render();
+    expect(entry()?.disabled).toBe(true);
+  });
+
+  it('typing on the list opens the filter with what was typed; Escape clears and closes it', async () => {
+    useChatSessionsStore.setState({ sessions: [chat('a'), chat('b', { title: 'Other' })] });
+    await render();
+    const [row] = rows('Chat a');
+    await act(async () => {
+      row?.focus();
+      row?.dispatchEvent(new KeyboardEvent('keydown', { key: 'C', bubbles: true }));
+    });
+    const filter = container.querySelector<HTMLInputElement>(
+      'input[placeholder="Search sessions"]'
+    );
+    expect(filter?.value).toBe('C');
+    expect(rows('Other')).toHaveLength(0);
+    expect(filter?.closest(`[${SURFACE_ESCAPE_HOLD_ATTR}]`)).toBeTruthy();
+    await act(async () => {
+      filter?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(container.querySelector('input[placeholder="Search sessions"]')).toBeNull();
+    expect(rows('Other')).toHaveLength(1);
   });
 
   it('the search box drops coss InputGroup s default chrome for the prototype s (user ruling)', async () => {
@@ -680,23 +838,25 @@ describe('the top of the panel (decision 183 §1.10, §2.1)', () => {
     // override only wins if tailwind-merge drops the base class (same variant
     // stack) or the CSS outranks it; a class merely present proves neither.
     await render();
+    // Layout 5b: the field shows once asked for.
+    await pickListMenuItem('Filter chats');
     const groupNode = container.querySelector<HTMLElement>('[data-slot="input-group"]');
     const classes = new Set(groupNode?.className.split(/\s+/));
     const FOCUS = 'has-[input:focus-visible,textarea:focus-visible]';
-    // Resting: transparent in light and dark, a --border line, no shadow, no
-    // inner shade (the ::before carrying it is removed), rounded-sm, h-8 (decision 188).
+    // Design system v2 §7.12: resting, a FILLED field — --fill-neutral in light
+    // and dark, a transparent line, no shadow, no inner shade (the ::before
+    // carrying it is removed), rounded-sm, h-8 (decision 188).
     for (const present of [
       'h-8',
       'rounded-sm',
       'border',
-      'border-border',
-      'bg-transparent',
-      'dark:bg-transparent',
+      'border-transparent',
+      'bg-fill-neutral',
+      'dark:bg-fill-neutral',
       'shadow-none',
       'before:hidden',
-      // Focused: the page fill, a muted line, no ring.
-      `${FOCUS}:bg-background`,
-      `${FOCUS}:border-muted-foreground`,
+      // Focused: the strong border line, no ring.
+      `${FOCUS}:border-border-strong`,
       `${FOCUS}:ring-0`,
       '[&_input]:placeholder:text-muted-foreground',
     ]) {
@@ -749,38 +909,40 @@ describe('Collapse all is a toggle (decision 183 §1.8)', () => {
     });
   });
 
-  const toggle = () => buttonLabelled('Collapse all groups') ?? buttonLabelled('Expand all groups');
+  // Layout 5b: the toggle is an item of the list menu.
 
   it('folds every group, Temporary chats included, then turns into Expand all', async () => {
     await render();
     expect(allRows()).toHaveLength(4);
-    expect(toggle()?.getAttribute('aria-label')).toBe('Collapse all groups');
-    expect(toggle()?.title).toBe('Collapse all groups');
+    expect((await foldAll()).label).toBe('Collapse all groups');
 
-    await act(async () => toggle()?.click());
+    await toggleFoldAll();
     expect(allRows()).toHaveLength(0);
     // The headers stay, closed.
     expect(folderOrder()).toEqual(['beta', 'alpha', 'Temporary workspaces']);
     expect(temporaryHeader().getAttribute('aria-expanded')).toBe('false');
-    expect(toggle()?.getAttribute('aria-label')).toBe('Expand all groups');
-    expect(toggle()?.title).toBe('Expand all groups');
+    expect((await foldAll()).label).toBe('Expand all groups');
 
-    await act(async () => toggle()?.click());
+    await toggleFoldAll();
     expect(allRows()).toHaveLength(4);
-    expect(toggle()?.getAttribute('aria-label')).toBe('Collapse all groups');
+    expect((await foldAll()).label).toBe('Collapse all groups');
   });
 
   it('any open group makes it fold: one opened by hand turns it back into Collapse all', async () => {
     await render();
-    await act(async () => toggle()?.click());
+    await toggleFoldAll();
     await act(async () => folderHeader('alpha').click());
     expect(rows('Chat a')).toHaveLength(1);
-    expect(toggle()?.getAttribute('aria-label')).toBe('Collapse all groups');
-    await act(async () => toggle()?.click());
+    expect((await foldAll()).label).toBe('Collapse all groups');
+    await toggleFoldAll();
     expect(allRows()).toHaveLength(0);
   });
 
-  const search = (text: string) => {
+  const search = async (text: string) => {
+    // Layout 5b: the field shows once asked for (or while it holds a query).
+    if (!container.querySelector('input[placeholder="Search sessions"]')) {
+      await pickListMenuItem('Filter chats');
+    }
     const input = container.querySelector<HTMLInputElement>(
       'input[placeholder="Search sessions"]'
     ) as HTMLInputElement;
@@ -850,24 +1012,20 @@ describe('Collapse all is a toggle (decision 183 §1.8)', () => {
   it('is disabled while a search is typed, and keeps its label', async () => {
     withDrafts();
     await render();
-    await act(async () => toggle()?.click());
+    await toggleFoldAll();
     expect(allRows()).toHaveLength(0);
-    expect(toggle()?.getAttribute('aria-label')).toBe('Expand all groups');
-    expect(toggle()?.disabled).toBe(false);
+    expect(await foldAll()).toEqual({ label: 'Expand all groups', disabled: false });
 
     await search('draft');
     // Every group with matches is open, but the toggle neither flips its
     // label (it speaks for the stored folds) nor can be pressed.
     expect(allRows()).toHaveLength(2);
-    expect(toggle()?.getAttribute('aria-label')).toBe('Expand all groups');
-    expect(toggle()?.title).toBe('Expand all groups');
-    expect(toggle()?.disabled).toBe(true);
+    expect(await foldAll()).toEqual({ label: 'Expand all groups', disabled: true });
 
     // Cleared: the matched groups stay open, so it is Collapse all again.
     await search('');
     expect(allRows()).toHaveLength(2);
-    expect(toggle()?.disabled).toBe(false);
-    expect(toggle()?.getAttribute('aria-label')).toBe('Collapse all groups');
+    expect(await foldAll()).toEqual({ label: 'Collapse all groups', disabled: false });
   });
 });
 

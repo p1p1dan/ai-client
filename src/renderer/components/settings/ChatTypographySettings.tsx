@@ -50,7 +50,7 @@ function ChatTypographyPreview({
   // has to say so.
   const familyStyle = fontFamily ? { fontFamily } : {};
   return (
-    <div className="rounded-lg border bg-card p-3">
+    <div className="rounded-sm bg-surface-1 p-3">
       <p
         className="leading-relaxed text-foreground"
         style={{ fontSize: `${bodySize}px`, ...familyStyle }}
@@ -145,7 +145,7 @@ export function ChatTypographySection() {
       description={t('Font and text size for messages and process information')}
     >
       <div className="space-y-2">
-        <p className="text-sm font-medium">{t('Preview')}</p>
+        <p className="text-ui font-medium">{t('Preview')}</p>
         <ChatTypographyPreview
           fontFamily={localFontFamily}
           bodySize={localBodySize}
@@ -154,7 +154,7 @@ export function ChatTypographySection() {
         />
       </div>
       <SettingsRow>
-        <span className="text-sm font-medium">{t('Font family')}</span>
+        <span className="text-ui font-medium">{t('Font family')}</span>
         <Input
           value={localFontFamily}
           onChange={(e) => setLocalFontFamily(e.target.value)}
@@ -170,7 +170,7 @@ export function ChatTypographySection() {
         />
       </SettingsRow>
       <SettingsRow>
-        <span className="text-sm font-medium">{t('Message text size')}</span>
+        <span className="text-ui font-medium">{t('Message text size')}</span>
         <div className="flex items-center gap-2">
           <Input
             type="number"
@@ -188,11 +188,11 @@ export function ChatTypographySection() {
             className="w-20"
             aria-label={t('Message text size')}
           />
-          <span className="text-sm text-muted-foreground">px</span>
+          <span className="text-ui text-muted-foreground">px</span>
         </div>
       </SettingsRow>
       <SettingsRow>
-        <span className="text-sm font-medium">{t('Process text size')}</span>
+        <span className="text-ui font-medium">{t('Process text size')}</span>
         <div className="flex items-center gap-2">
           <Input
             type="number"
@@ -213,7 +213,7 @@ export function ChatTypographySection() {
             className="w-20"
             aria-label={t('Process text size')}
           />
-          <span className="text-sm text-muted-foreground">px</span>
+          <span className="text-ui text-muted-foreground">px</span>
         </div>
       </SettingsRow>
     </SettingsSectionBlock>

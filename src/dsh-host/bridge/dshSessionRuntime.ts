@@ -172,6 +172,10 @@ import {
 } from '../../shared/planReview.ts';
 import { resolveSettingSources } from '../../shared/settingSources.ts';
 import {
+  buildSideQuestionTranscript,
+  buildSurfaceSideQuestionTranscript,
+} from '../../shared/sideQuestion.ts';
+import {
   type ClientPrefixEvidence,
   REQUEST_SCOPE_SERVICE,
   type RequestScopeView,
@@ -203,6 +207,7 @@ import {
   WORKER_COMPACT_SETTLE_MS,
   WORKER_RETRY_UNAVAILABLE,
   WORKER_REWIND_JOBS_RUNNING,
+  WORKER_SIDE_QUESTION_UNAVAILABLE,
   type WorkerAcceptForkPayload,
   type WorkerAcceptForkResult,
   type WorkerBootstrapResult,
@@ -234,6 +239,8 @@ import {
   type WorkerRewindResult,
   type WorkerSendPayload,
   type WorkerSendResult,
+  type WorkerSideQuestionPayload,
+  type WorkerSideQuestionResult,
   type WorkerStopPayload,
   type WorkerStopResult,
   type WorkerSubagentHistoryPayload,
@@ -273,6 +280,7 @@ import {
   type CompactInstructionsLease,
   installSummaryHook,
 } from './compactInstructions.ts';
+import type { CompletionLlm } from './completions.ts';
 import { DshDelegatedUsage } from './delegatedUsage.ts';
 import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
 import { copyGrantSidecar, readGrantSidecar, writeGrantSidecar } from './grantStore.ts';
@@ -332,6 +340,7 @@ import {
   type PlanReviewSettlement,
 } from './questions.ts';
 import { type ApplySandboxMode, dshSandboxModeFor } from './sandboxMode.ts';
+import { askDshSideQuestion, surfaceMessagesOf } from './sideQuestion.ts';
 import {
   DSH_SESSION_MISSING,
   grantsSidecarFor,
@@ -717,6 +726,12 @@ export interface DshBridgeDeps {
     rules(): Promise<AutoModeRules | undefined>;
     llm(): ReviewLlm | undefined;
   };
+  /**
+   * Layout 5f (ruling L6): DSH's model-call service for side questions
+   * (`worker.sideQuestion`). Absent: every side question is answered
+   * `WORKER_SIDE_QUESTION_UNAVAILABLE`.
+   */
+  sideQuestionLlm?: () => CompletionLlm | undefined;
 }
 
 /**
@@ -2255,6 +2270,61 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.assertLogicalSession(input.logicalSessionId);
     this.requireOpen();
     return this.jobs.kill(input.jobId);
+  }
+
+  /**
+   * Layout 5f (ruling L6): `worker.sideQuestion` — one tool-free call on the
+   * session's model that reads the conversation so far and writes nothing.
+   * Allowed while a turn runs; answered off the request chain.
+   */
+  async sideQuestion(
+    input: WorkerSideQuestionPayload,
+    signal: AbortSignal
+  ): Promise<WorkerSideQuestionResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.requireOpen();
+    const llm = this.deps.sideQuestionLlm?.();
+    if (!llm) {
+      throw new BridgeSessionError(
+        WORKER_SIDE_QUESTION_UNAVAILABLE,
+        'This host has no model service for side questions'
+      );
+    }
+    // Decisions 033, 040: the session's model and effort, or a refusal.
+    const routed = this.router.session(this.modelId, this.options.effort);
+    return askDshSideQuestion({
+      llm,
+      routed,
+      transcript: await this.sideQuestionTranscript(),
+      question: input.question,
+      ...(input.history ? { history: input.history } : {}),
+      signal,
+      // Decision 193 §10: a request this chat is billed for, like a review.
+      onUsage: (usage) => addAuxiliaryUsage(this.reviewUsage, usage),
+    });
+  }
+
+  /**
+   * The conversation a side question reads: the model surface
+   * (`sessionQuery.readSurface`, lock-free, mid-turn too), so after a
+   * compaction it is the summary and what followed, as the model has it. The
+   * projected history stands in when the surface cannot be read.
+   */
+  private async sideQuestionTranscript(): Promise<string> {
+    const query = this.ctx.sessionQuery;
+    if (this.dshSessionId && typeof query.readSurface === 'function') {
+      try {
+        const surface = await query.readSurface(this.dshSessionId);
+        return buildSurfaceSideQuestionTranscript(surfaceMessagesOf(surface.events));
+      } catch (error) {
+        this.options.log?.(
+          '[dsh-bridge] side question: surface unreadable, using the history',
+          error
+        );
+      }
+    }
+    await this.historyCache.ready();
+    return buildSideQuestionTranscript(this.historyCache.messages());
   }
 
   /** `worker.job.read`: one job's output, read without moving the model's cursor. */

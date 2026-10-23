@@ -8,42 +8,44 @@ import {
   type DeriveMountedSurfaceIdsInput,
   defaultShellLayout,
   deriveMountedSurfaceIds,
-  initialShellSurfaceState,
+  LEGACY_DOCK_RAIL_WIDTH,
+  migrateShellLayoutPersisted,
   nextReadingWidthMode,
   READING_COLUMN_CLASS,
   type ReadingWidthMode,
   readingColumnClass,
-  reduceShellSurface,
   resolveContentColumnWidth,
   resolveContextPanelWidth,
   resolveDockedPanelBudget,
-  type ShellSurfaceState,
+  SHELL_LAYOUT_VERSION,
   SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   SURFACE_ESCAPE_HOLD_ATTR,
   sanitizeShellLayoutPersisted,
-  seedVisitedSurfaceIds,
   shouldCloseOnEscape,
 } from '../shellLayoutModel';
-import { type ContextSurfaceId, DEFAULT_SURFACE_ORDER, sortSurfaces } from '../surfaceRegistry';
+import type { ContextSurfaceId } from '../surfaceRegistry';
+import { PANE_AREA_DEFAULT_WIDTH, paneAreaMinWidth } from '../workPanelModel';
 
-describe('clampSidebarWidth', () => {
-  it('raises a width below 280 to the minimum', () => {
+describe('clampSidebarWidth (design system v2 / layout 5a: the sidebar alone, no rail)', () => {
+  it('pins 272 / 240 / 480', () => {
+    expect([SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH]).toEqual([272, 240, 480]);
+  });
+
+  it('raises a width below 240 to the minimum', () => {
     expect(clampSidebarWidth(100)).toBe(SIDEBAR_MIN_WIDTH);
   });
 
-  it('lowers a width above 500 to the maximum', () => {
+  it('lowers a width above 480 to the maximum', () => {
     expect(clampSidebarWidth(600)).toBe(SIDEBAR_MAX_WIDTH);
   });
 
   it('rounds fractional widths', () => {
-    // D08: 300.6 is now BELOW the 324 dock minimum (280 panel + 44 rail), so a
-    // value inside the range is needed to exercise rounding at all.
-    expect(clampSidebarWidth(400.6)).toBe(401);
+    expect(clampSidebarWidth(300.6)).toBe(301);
   });
 
-  it('falls back to the 280 default for NaN and Infinity', () => {
+  it('falls back to the 272 default for NaN and Infinity', () => {
     expect(clampSidebarWidth(Number.NaN)).toBe(SIDEBAR_DEFAULT_WIDTH);
     expect(clampSidebarWidth(Number.POSITIVE_INFINITY)).toBe(SIDEBAR_DEFAULT_WIDTH);
     expect(clampSidebarWidth(Number.NEGATIVE_INFINITY)).toBe(SIDEBAR_DEFAULT_WIDTH);
@@ -154,240 +156,6 @@ describe('resolveContextPanelWidth', () => {
   });
 });
 
-describe('reduceShellSurface', () => {
-  it('opens a surface from the closed state', () => {
-    const result = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'git',
-    });
-    expect(result).toEqual({ activeSurfaceId: 'git', lastSurfaceId: 'git', expanded: false });
-  });
-
-  it('switches to another surface without closing the panel', () => {
-    const opened = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'git',
-    });
-    const switched = reduceShellSurface(opened, { type: 'select', surfaceId: 'editor' });
-    expect(switched).toEqual({
-      activeSurfaceId: 'editor',
-      lastSurfaceId: 'editor',
-      expanded: false,
-    });
-  });
-
-  it('closes the panel when the active surface is selected again', () => {
-    const opened = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'git',
-    });
-    const closed = reduceShellSurface(opened, { type: 'select', surfaceId: 'git' });
-    expect(closed).toEqual({ activeSurfaceId: null, lastSurfaceId: 'git', expanded: false });
-  });
-
-  it('remembers the closed surface as lastSurfaceId', () => {
-    // Any rail-selectable surface does; `terminal` used to stand in here and
-    // stopped being selectable on 2026-09-04.
-    const opened = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'editor',
-    });
-    const closed = reduceShellSurface(opened, { type: 'close' });
-    expect(closed.activeSurfaceId).toBeNull();
-    expect(closed.lastSurfaceId).toBe('editor');
-  });
-
-  it('ignores a select for an unknown surface id', () => {
-    const result = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'bogus' as ContextSurfaceId,
-    });
-    expect(result).toBe(initialShellSurfaceState);
-  });
-
-  it('ignores a select for a surface that is not rail-visible this round', () => {
-    expect(reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId: 'pr' })).toBe(
-      initialShellSurfaceState
-    );
-    // `chat` used to stand alongside `pr` here; D08 promoted it to the dock's
-    // first entry, so `preview` (still registeredOnly) takes its place.
-    expect(
-      reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId: 'preview' })
-    ).toBe(initialShellSurfaceState);
-  });
-
-  it('restores lastSurfaceId on a bare open', () => {
-    const prev: ShellSurfaceState = {
-      activeSurfaceId: null,
-      lastSurfaceId: 'git',
-      expanded: false,
-    };
-    const result = reduceShellSurface(prev, { type: 'open' });
-    expect(result).toEqual({ activeSurfaceId: 'git', lastSurfaceId: 'git', expanded: false });
-  });
-
-  it('opens the first always-surface when there is no lastSurfaceId', () => {
-    const result = reduceShellSurface(initialShellSurfaceState, { type: 'open' });
-    // D08: the dock's first entry is `chat`.
-    expect(result.activeSurfaceId).toBe('chat');
-  });
-
-  it('opens the requested surface when open carries an explicit id', () => {
-    const result = reduceShellSurface(initialShellSurfaceState, {
-      type: 'open',
-      surfaceId: 'editor',
-    });
-    expect(result).toEqual({
-      activeSurfaceId: 'editor',
-      lastSurfaceId: 'editor',
-      expanded: false,
-    });
-  });
-
-  it('never toggles off on an explicit open of the active surface', () => {
-    const opened = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'git',
-    });
-    const reopened = reduceShellSurface(opened, { type: 'open', surfaceId: 'git' });
-    expect(reopened).toEqual({ activeSurfaceId: 'git', lastSurfaceId: 'git', expanded: false });
-  });
-
-  it('closes an open panel via toggle-panel', () => {
-    const opened = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'git',
-    });
-    const closed = reduceShellSurface(opened, { type: 'toggle-panel' });
-    expect(closed).toEqual({ activeSurfaceId: null, lastSurfaceId: 'git', expanded: false });
-  });
-
-  it('opens via toggle-panel with the fallback surface when nothing was open', () => {
-    const result = reduceShellSurface(initialShellSurfaceState, { type: 'toggle-panel' });
-    // D08: the dock's first entry is `chat`.
-    expect(result.activeSurfaceId).toBe('chat');
-  });
-
-  it('drops expanded when the panel closes', () => {
-    const opened = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'git',
-    });
-    const expanded = reduceShellSurface(opened, { type: 'toggle-expanded' });
-    expect(expanded.expanded).toBe(true);
-    const closed = reduceShellSurface(expanded, { type: 'close' });
-    expect(closed.expanded).toBe(false);
-  });
-
-  it('drops expanded when toggling off the active surface', () => {
-    const opened = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'git',
-    });
-    const expanded = reduceShellSurface(opened, { type: 'toggle-expanded' });
-    const toggledOff = reduceShellSurface(expanded, { type: 'select', surfaceId: 'git' });
-    expect(toggledOff).toEqual({ activeSurfaceId: null, lastSurfaceId: 'git', expanded: false });
-  });
-
-  it('keeps expanded while switching between surfaces', () => {
-    const opened = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'git',
-    });
-    const expanded = reduceShellSurface(opened, { type: 'toggle-expanded' });
-    const switched = reduceShellSurface(expanded, { type: 'select', surfaceId: 'editor' });
-    expect(switched).toEqual({
-      activeSurfaceId: 'editor',
-      lastSurfaceId: 'editor',
-      expanded: true,
-    });
-  });
-
-  it('toggles expanded while the panel is open', () => {
-    const opened = reduceShellSurface(initialShellSurfaceState, {
-      type: 'select',
-      surfaceId: 'git',
-    });
-    const expanded = reduceShellSurface(opened, { type: 'toggle-expanded' });
-    expect(expanded.expanded).toBe(true);
-    const collapsed = reduceShellSurface(expanded, { type: 'toggle-expanded' });
-    expect(collapsed.expanded).toBe(false);
-  });
-
-  it('ignores toggle-expanded while the panel is closed', () => {
-    const result = reduceShellSurface(initialShellSurfaceState, { type: 'toggle-expanded' });
-    expect(result).toBe(initialShellSurfaceState);
-  });
-
-  it('returns the previous state object for every ignored action', () => {
-    const prev = initialShellSurfaceState;
-    expect(
-      reduceShellSurface(prev, { type: 'select', surfaceId: 'bogus' as ContextSurfaceId })
-    ).toBe(prev);
-    expect(reduceShellSurface(prev, { type: 'open', surfaceId: 'pr' })).toBe(prev);
-    expect(reduceShellSurface(prev, { type: 'toggle-expanded' })).toBe(prev);
-  });
-});
-
-/**
- * D08 replaced the two-column guard block and `reduceColumnModeChange` that
- * used to sit here.
- *
- * `reduceShellSurface` no longer takes a `columnMode`, and the mode reducer is
- * deleted, because the mode they guarded is gone: the surfaces live in the left
- * dock, which every layout has. What survives is the ONE remaining guard —
- * `isRailSelectableSurface` — plus the bare-open fallback, which now lands on
- * the dock's first entry instead of a `?? 'context'` safety net no caller was
- * allowed to trust.
- */
-describe('reduceShellSurface — registry guard (D08)', () => {
-  it('binds every dock surface, including the promoted chat entry', () => {
-    for (const surfaceId of ['chat', 'git', 'editor', 'context', 'run'] as const) {
-      expect(
-        reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId }).activeSurfaceId
-      ).toBe(surfaceId);
-    }
-  });
-
-  it('still blocks a registry-only surface', () => {
-    expect(reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId: 'pr' })).toBe(
-      initialShellSurfaceState
-    );
-    expect(
-      reduceShellSurface(initialShellSurfaceState, { type: 'open', surfaceId: 'terminal' })
-    ).toBe(initialShellSurfaceState);
-  });
-
-  it('opens the dock on chat when nothing is remembered', () => {
-    expect(reduceShellSurface(initialShellSurfaceState, { type: 'open' }).activeSurfaceId).toBe(
-      'chat'
-    );
-    expect(
-      reduceShellSurface(initialShellSurfaceState, { type: 'toggle-panel' }).activeSurfaceId
-    ).toBe('chat');
-  });
-
-  it('reopens the remembered surface rather than the first entry', () => {
-    const prev: ShellSurfaceState = {
-      activeSurfaceId: null,
-      lastSurfaceId: 'git',
-      expanded: false,
-    };
-    expect(reduceShellSurface(prev, { type: 'open' }).activeSurfaceId).toBe('git');
-  });
-
-  it('falls back to chat when the remembered surface left the rail', () => {
-    const prev: ShellSurfaceState = {
-      activeSurfaceId: null,
-      // `terminal` is registeredOnly since 2026-09-04 — a profile persisted
-      // before that still names it.
-      lastSurfaceId: 'terminal',
-      expanded: false,
-    };
-    expect(reduceShellSurface(prev, { type: 'open' }).activeSurfaceId).toBe('chat');
-  });
-});
-
 describe('readingColumnClass', () => {
   it('maps normal to max-w-reading (45rem, D25 §3.4)', () => {
     expect(readingColumnClass('normal')).toBe('max-w-reading');
@@ -413,59 +181,55 @@ describe('nextReadingWidthMode', () => {
   });
 });
 
-describe('sanitizeShellLayoutPersisted', () => {
+describe('sanitizeShellLayoutPersisted (design system v2 / layout 5a)', () => {
   it('returns defaults for null, a string and an array', () => {
     expect(sanitizeShellLayoutPersisted(null)).toEqual(defaultShellLayout);
     expect(sanitizeShellLayoutPersisted('nope')).toEqual(defaultShellLayout);
     expect(sanitizeShellLayoutPersisted([1, 2, 3])).toEqual(defaultShellLayout);
   });
 
-  it('clamps a persisted sidebar width outside the dock range', () => {
+  it('defaults to an expanded 272px sidebar and the pane area`s 496 / 864 widths (layout 5d)', () => {
+    expect(defaultShellLayout).toEqual({
+      sidebarWidth: 272,
+      sidebarCollapsed: false,
+      paneAreaWidth: PANE_AREA_DEFAULT_WIDTH[1],
+      paneAreaSplitWidth: PANE_AREA_DEFAULT_WIDTH[2],
+      paneSplits: { column: 0.5, rows: [0.5, 0.5] },
+      readingWidthMode: 'normal',
+    });
+  });
+
+  it('never persists which panes are open (ruling L3: none on every start)', () => {
+    const keys = Object.keys(sanitizeShellLayoutPersisted({ panes: ['git'], workPanelOpen: true }));
+    expect(keys).not.toContain('panes');
+    expect(keys).not.toContain('workPanelOpen');
+  });
+
+  it('clamps a persisted sidebar width outside the sidebar range', () => {
     expect(sanitizeShellLayoutPersisted({ sidebarWidth: 50 }).sidebarWidth).toBe(SIDEBAR_MIN_WIDTH);
     expect(sanitizeShellLayoutPersisted({ sidebarWidth: 9000 }).sidebarWidth).toBe(
       SIDEBAR_MAX_WIDTH
     );
   });
 
-  it('drops an activeSurfaceId the registry no longer knows', () => {
-    expect(sanitizeShellLayoutPersisted({ activeSurfaceId: 'bogus' }).activeSurfaceId).toBeNull();
+  it('keeps only a literal true as collapsed', () => {
+    expect(sanitizeShellLayoutPersisted({ sidebarCollapsed: true }).sidebarCollapsed).toBe(true);
+    expect(sanitizeShellLayoutPersisted({ sidebarCollapsed: 'yes' }).sidebarCollapsed).toBe(false);
   });
 
-  it('drops an activeSurfaceId that is registry-only this round', () => {
-    expect(sanitizeShellLayoutPersisted({ activeSurfaceId: 'pr' }).activeSurfaceId).toBeNull();
-  });
-
-  it('clamps a persisted panel width and rejects a non-number', () => {
-    // D34: the floor this clamps to is 250 now, not 380 — `sanitizePanelWidth`
-    // calls `clampContextPanelWidth` with no `availableWidth`, i.e. the plain
-    // MIN..MAX clamp, not the DEFAULT fallback (that only applies to `null`).
-    expect(sanitizeShellLayoutPersisted({ panelWidth: 50 }).panelWidth).toBe(
-      CONTEXT_PANEL_MIN_WIDTH
+  it('clamps the pane area widths per column count and sanitizes the splits', () => {
+    expect(sanitizeShellLayoutPersisted({ paneAreaWidth: 50 }).paneAreaWidth).toBe(
+      paneAreaMinWidth(1)
     );
-    expect(sanitizeShellLayoutPersisted({ panelWidth: 9999 }).panelWidth).toBe(1400);
-    expect(sanitizeShellLayoutPersisted({ panelWidth: 700 }).panelWidth).toBe(700);
-    // A v1 profile carried a per-surface MAP here; anything but a number is
-    // discarded to `null`, so downstream (`WorkspaceShell`) falls back to the
-    // 380 DEFAULT rather than NaN.
-    expect(sanitizeShellLayoutPersisted({ panelWidth: { git: 500 } }).panelWidth).toBeNull();
-    expect(sanitizeShellLayoutPersisted({}).panelWidth).toBeNull();
-  });
-
-  it('rebuilds a corrupted rail order from the registry', () => {
-    const result = sanitizeShellLayoutPersisted({ railOrder: ['bogus', 'git', 'git'] });
-    expect(result.railOrder).toEqual(sortSurfaces(['bogus', 'git', 'git']).map((s) => s.id));
-    expect(result.railOrder).toHaveLength(DEFAULT_SURFACE_ORDER.length);
-  });
-
-  it('keeps a persisted closed panel closed', () => {
-    const result = sanitizeShellLayoutPersisted({ activeSurfaceId: null, lastSurfaceId: 'git' });
-    expect(result.activeSurfaceId).toBeNull();
-  });
-
-  it('forces expanded to false when nothing is open', () => {
-    const result = sanitizeShellLayoutPersisted({ expanded: true });
-    expect(result.activeSurfaceId).toBeNull();
-    expect(result.expanded).toBe(false);
+    expect(sanitizeShellLayoutPersisted({ paneAreaSplitWidth: 50 }).paneAreaSplitWidth).toBe(
+      paneAreaMinWidth(2)
+    );
+    expect(sanitizeShellLayoutPersisted({ paneAreaWidth: 'x' }).paneAreaWidth).toBe(
+      PANE_AREA_DEFAULT_WIDTH[1]
+    );
+    expect(
+      sanitizeShellLayoutPersisted({ paneSplits: { column: 0.7, rows: [0.4] } }).paneSplits
+    ).toEqual({ column: 0.7, rows: [0.4, 0.5] });
   });
 
   it('normalises an unknown reading width mode to normal', () => {
@@ -475,6 +239,107 @@ describe('sanitizeShellLayoutPersisted', () => {
     expect(sanitizeShellLayoutPersisted({ readingWidthMode: 'wide' }).readingWidthMode).toBe(
       'wide'
     );
+  });
+});
+
+describe('migrateShellLayoutPersisted (v1–v3 → v5, layouts 5a and 5d)', () => {
+  /** A real v3 profile: D08 dock open on git, a rail order, a ratio. */
+  const v3 = {
+    sidebarWidth: 380,
+    activeSurfaceId: 'git',
+    lastSurfaceId: 'git',
+    expanded: true,
+    panelWidth: 700,
+    railOrder: ['chat', 'git', 'editor', 'context', 'run'],
+    readingWidthMode: 'wide',
+    editorRatio: 0.6,
+  };
+
+  it('is the current version', () => {
+    expect(SHELL_LAYOUT_VERSION).toBe(5);
+  });
+
+  it('subtracts the retired rail from the sidebar width, then clamps', () => {
+    expect(LEGACY_DOCK_RAIL_WIDTH).toBe(44);
+    expect(migrateShellLayoutPersisted(v3, 3).sidebarWidth).toBe(380 - 44);
+    // The old 324 default (280 panel + rail) lands on the panel it measured.
+    expect(migrateShellLayoutPersisted({ ...v3, sidebarWidth: 324 }, 3).sidebarWidth).toBe(280);
+    // The old 544 maximum is wider than the new 480 one.
+    expect(migrateShellLayoutPersisted({ ...v3, sidebarWidth: 544 }, 3).sidebarWidth).toBe(480);
+    expect(migrateShellLayoutPersisted({ ...v3, sidebarWidth: 'x' }, 3).sidebarWidth).toBe(
+      SIDEBAR_DEFAULT_WIDTH
+    );
+  });
+
+  it('drops the last surface: panes start closed (layout 5d)', () => {
+    expect(Object.keys(migrateShellLayoutPersisted(v3, 3))).not.toContain('workPanelTab');
+  });
+
+  it('a v3 dock with nothing active was collapsed, and stays so', () => {
+    expect(migrateShellLayoutPersisted({ ...v3, activeSurfaceId: null }, 3).sidebarCollapsed).toBe(
+      true
+    );
+    expect(migrateShellLayoutPersisted(v3, 3).sidebarCollapsed).toBe(false);
+    // v1/v2 always showed the session list.
+    expect(migrateShellLayoutPersisted({ ...v3, activeSurfaceId: null }, 2).sidebarCollapsed).toBe(
+      false
+    );
+  });
+
+  it('drops the rail order, the widths and the ratio without leaking them', () => {
+    const migrated = migrateShellLayoutPersisted(
+      { ...v3, widthBySurface: { git: 500 }, shellColumnMode: 'three-column' },
+      1
+    );
+    expect(Object.keys(migrated).sort()).toEqual(Object.keys(defaultShellLayout).sort());
+    expect(migrated.paneAreaWidth).toBe(PANE_AREA_DEFAULT_WIDTH[1]);
+    expect(migrated.readingWidthMode).toBe('wide');
+  });
+
+  it('never throws on garbage', () => {
+    for (const raw of [null, undefined, 'x', 42, [], { sidebarWidth: Number.NaN }]) {
+      expect(() => migrateShellLayoutPersisted(raw, 0)).not.toThrow();
+    }
+    expect(migrateShellLayoutPersisted(null, 3)).toEqual(defaultShellLayout);
+  });
+
+  it('only sanitises a profile that is already v5', () => {
+    const v5 = { ...defaultShellLayout, sidebarWidth: 300, paneAreaSplitWidth: 900 };
+    expect(migrateShellLayoutPersisted(v5, 5)).toEqual(v5);
+  });
+});
+
+describe('migrateShellLayoutPersisted (v4 → v5, layout 5d)', () => {
+  /** A real v4 profile: the 5a work panel dragged to 640, last on git. */
+  const v4 = {
+    sidebarWidth: 300,
+    sidebarCollapsed: true,
+    workPanelTab: 'git',
+    workPanelWidth: 640,
+    readingWidthMode: 'wide',
+  };
+
+  it('keeps the sidebar and the reading width as they were', () => {
+    const migrated = migrateShellLayoutPersisted(v4, 4);
+    expect(migrated.sidebarWidth).toBe(300);
+    expect(migrated.sidebarCollapsed).toBe(true);
+    expect(migrated.readingWidthMode).toBe('wide');
+  });
+
+  it('the panel width becomes the one-column pane area width; two columns start at the default', () => {
+    const migrated = migrateShellLayoutPersisted(v4, 4);
+    expect(migrated.paneAreaWidth).toBe(640);
+    expect(migrated.paneAreaSplitWidth).toBe(PANE_AREA_DEFAULT_WIDTH[2]);
+    expect(migrated.paneSplits).toEqual({ column: 0.5, rows: [0.5, 0.5] });
+    // A 5a width under the new floor is lifted to it.
+    expect(migrateShellLayoutPersisted({ ...v4, workPanelWidth: 320 }, 4).paneAreaWidth).toBe(
+      paneAreaMinWidth(1)
+    );
+  });
+
+  it('drops the old keys without leaking them', () => {
+    const migrated = migrateShellLayoutPersisted(v4, 4);
+    expect(Object.keys(migrated).sort()).toEqual(Object.keys(defaultShellLayout).sort());
   });
 });
 
@@ -633,48 +498,6 @@ describe('deriveMountedSurfaceIds', () => {
 });
 
 // ── seedVisitedSurfaceIds (m14) ─────────────────────────────────────────
-describe('seedVisitedSurfaceIds', () => {
-  it('seeds a keep-alive lastSurfaceId', () => {
-    expect(seedVisitedSurfaceIds('terminal', MOUNT_REGISTRATIONS)).toEqual(['terminal']);
-  });
-
-  it('does not seed an active-policy lastSurfaceId (never needed the seed)', () => {
-    expect(seedVisitedSurfaceIds('git', MOUNT_REGISTRATIONS)).toEqual([]);
-  });
-
-  it('does not seed when lastSurfaceId is null', () => {
-    expect(seedVisitedSurfaceIds(null, MOUNT_REGISTRATIONS)).toEqual([]);
-  });
-
-  it('does not seed a surface with no registered view', () => {
-    expect(seedVisitedSurfaceIds('editor', MOUNT_REGISTRATIONS)).toEqual([]);
-  });
-
-  it('composes with deriveMountedSurfaceIds to close the m14 restore gap', () => {
-    // {activeSurfaceId: null, lastSurfaceId: 'terminal'} restored from
-    // persistence, panel closed on the very first render.
-    const seeded = seedVisitedSurfaceIds('terminal', MOUNT_REGISTRATIONS);
-    const mounted = deriveMountedSurfaceIds({
-      visited: seeded,
-      activeSurfaceId: null,
-      lastSurfaceId: 'terminal',
-      registrations: MOUNT_REGISTRATIONS,
-    });
-    expect(mounted).toEqual(['terminal']);
-  });
-
-  it('documents the bug this closes: the same restore without the seed mounts nothing', () => {
-    const mounted = deriveMountedSurfaceIds({
-      visited: [],
-      activeSurfaceId: null,
-      lastSurfaceId: 'terminal',
-      registrations: MOUNT_REGISTRATIONS,
-    });
-    expect(mounted).toEqual([]);
-  });
-});
-
-// ── shouldCloseOnEscape (S0, F-c/R1) ────────────────────────────────────
 describe('shouldCloseOnEscape', () => {
   it('closes on Escape from a panel-owned target', () => {
     expect(shouldCloseOnEscape({ key: 'Escape', isOpen: true, holdsEscape: false })).toBe(true);

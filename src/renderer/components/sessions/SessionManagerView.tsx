@@ -110,7 +110,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 <div className="min-w-0 truncate font-heading text-title leading-none tracking-[-0.01em]">
                   {getDisplayPathBasename(selectedProject.path)}
                 </div>
-                <div className="mt-1 flex min-w-0 items-center gap-2 text-meta text-muted-foreground">
+                <div className="mt-1 flex min-w-0 items-center gap-2 text-small text-muted-foreground">
                   <span
                     className="min-w-0 flex-1 truncate font-mono text-code tracking-normal"
                     title={selectedProject.path}
@@ -208,7 +208,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
           )}
 
           {report.length > 0 ? (
-            <div className="rounded-md border bg-card p-3 text-meta">
+            <div className="rounded-md border bg-surface-2 p-3 text-small">
               {t(
                 'Import report: {{imported}} new snapshots, {{existing}} already there, {{failed}} failed. Imported sessions are not opened automatically.',
                 {
@@ -227,14 +227,14 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
               <div className="font-heading text-title leading-none tracking-[-0.01em]">
                 {t('Import history')}
               </div>
-              <div className="mt-1 text-meta text-muted-foreground">
+              <div className="mt-1 text-small text-muted-foreground">
                 {t(
                   "Copies history read-only from this machine's Claude Code or Codex session directories, so you can carry on in Pi"
                 )}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex items-center rounded-sm bg-muted p-0.5">
+              <div className="flex items-center rounded-sm bg-fill-neutral p-0.5">
                 <Button
                   aria-label={t('Grid view')}
                   onClick={() => setViewMode('grid')}
@@ -303,7 +303,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                   return (
                     <button
                       className={cn(
-                        'group w-full min-w-0 rounded-md border bg-card text-left transition-colors hover:bg-accent/50',
+                        'group w-full min-w-0 rounded-md border bg-surface-2 text-left transition-colors hover:bg-fill-ghost-hover',
                         viewMode === 'grid'
                           ? 'flex flex-col gap-3 p-4'
                           : 'flex items-center gap-3 p-3'
@@ -333,7 +333,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                           </div>
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center justify-between gap-2 text-meta text-muted-foreground tabular-nums">
+                      <div className="flex shrink-0 items-center justify-between gap-2 text-small text-muted-foreground tabular-nums">
                         <span>
                           {project.sourceKind === 'codex' ? 'Codex' : 'Claude Code'} ·{' '}
                           {t('{{count}} sessions', { count: project.sessionCount })}

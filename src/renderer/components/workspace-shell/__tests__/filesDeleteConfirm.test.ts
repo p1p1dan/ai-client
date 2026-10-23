@@ -115,7 +115,7 @@ async function mount() {
       createElement(
         QueryClientProvider,
         { client },
-        createElement(FilesSurfaceView, { surfaceId: 'editor' })
+        createElement(FilesSurfaceView, { surfaceId: 'editor', active: false })
       )
     );
   });

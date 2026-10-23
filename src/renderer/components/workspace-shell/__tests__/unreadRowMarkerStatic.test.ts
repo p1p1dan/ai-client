@@ -30,27 +30,26 @@ describe('S3 unread marker on the session row', () => {
     );
   });
 
-  it('shares the row s one marker slot instead of adding a second dot', () => {
-    // The slot is the row's fixed `w-4` status slot (decision 167) and the row
-    // is width-starved (see the `min-w-20` note on the title). A second marker
-    // would push the title, so the states share one slot in urgency order:
-    // busy, then unread, then merely started.
-    const slotStart = rowSource.indexOf(
-      '<span className="flex w-4 shrink-0 items-center justify-center">'
-    );
-    expect(slotStart).toBeGreaterThan(-1);
-    expect(slotStart).toBeLessThan(rowSource.indexOf('{onToggleSelect ? null : row.busy ? ('));
-    const slot = rowSource.slice(
-      rowSource.indexOf('{onToggleSelect ? null : row.busy ? ('),
+  it('shares the row s one marker instead of adding a second dot (layout 5b: trailing)', () => {
+    // The row is width-starved (see the `min-w-20` note on the title). A second
+    // marker would push the title, so the states share ONE trailing mark in
+    // urgency order: waiting, running, failed, unread, then merely started.
+    const markStart = rowSource.indexOf('(rowWaiting ? (');
+    expect(markStart).toBeGreaterThan(
       rowSource.indexOf('<span className="min-w-20 flex-1 truncate">')
     );
-    expect(slot).toContain(') : unread ? (');
-    expect(slot.indexOf('row.busy')).toBeLessThan(slot.indexOf(') : unread ? ('));
-    expect(slot.indexOf(') : unread ? (')).toBeLessThan(slot.indexOf(') : started ? ('));
+    const mark = rowSource.slice(markStart, rowSource.indexOf(') : null)}', markStart));
+    expect(mark).toContain(') : unread ? (');
+    expect(mark.indexOf('row.busy')).toBeLessThan(mark.indexOf(') : unread ? ('));
+    expect(mark.indexOf(') : unread ? (')).toBeLessThan(mark.indexOf(') : started ? ('));
   });
 
   it('distinguishes a finished run from a failed one, and says so in words', () => {
-    expect(rowSource).toContain("row.failed ? 'bg-destructive' : 'bg-success'");
+    // Layout 5b: an unseen failure is the red warning icon, an unseen result
+    // the green dot.
+    expect(rowSource).toContain("unread ? 'text-destructive' : 'text-muted-foreground'");
+    expect(rowSource).toContain('<span className="size-1.5 rounded-full bg-success" />');
+    expect(rowSource).toContain("aria-label={unread ? unreadLabel : t('Failed')}");
     expect(rowSource).toContain("t('Failed while you were away')");
     expect(rowSource).toContain("t('Finished while you were away')");
     // Not aria-hidden like the run-state dots beside it: this marker is the

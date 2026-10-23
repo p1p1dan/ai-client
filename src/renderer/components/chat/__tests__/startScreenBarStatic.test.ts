@@ -39,8 +39,10 @@ describe('U29 the start screen keeps its bar controls', () => {
   it('occupancy stays session-only — it is a measurement, not a preference', () => {
     // The one slot U29 deliberately did NOT widen: a chat that has never run a
     // turn has no context to report. pix reads it the same way.
-    expect(COMPOSER).toContain(
-      'usage: activeSessionId ? <ComposerUsageChip sessionId={activeSessionId} /> : null,'
+    // Layout 5e: and only while the session rail (whose context card carries
+    // the same figure) is not on screen.
+    expect(COMPOSER).toMatch(
+      /usage:\s*activeSessionId && !sessionRailPresent \? \(\s*<ComposerUsageChip sessionId=\{activeSessionId\} \/>\s*\) : null,/
     );
   });
 

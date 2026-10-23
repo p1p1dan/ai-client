@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { saveRepositorySettings } from '@/App/storage';
 import { useInitScriptStore } from '@/stores/initScript';
-import { useShellLayoutStore } from '@/stores/shellLayout';
+import { selectActiveSurfaceId, useShellLayoutStore } from '@/stores/shellLayout';
 import { useWorktreeCreate } from '../useWorktree';
 
 let root: Root;
@@ -26,7 +26,7 @@ beforeEach(async () => {
   localStorage.clear();
   add.mockReset().mockResolvedValue(undefined);
   useInitScriptStore.getState().clearPendingScript();
-  useShellLayoutStore.getState().closeSurface();
+  useShellLayoutStore.setState({ panes: [], paneFocus: [], setupTerminalOpened: false });
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   container = document.createElement('div');
   document.body.append(container);
@@ -46,9 +46,8 @@ afterEach(async () => {
 describe('new-shell worktree initialization', () => {
   it('keeps ordinary terminal navigation disabled', () => {
     useShellLayoutStore.getState().openSurface('terminal');
-    expect(useShellLayoutStore.getState().activeSurfaceId).toBeNull();
-    useShellLayoutStore.getState().selectSurface('terminal');
-    expect(useShellLayoutStore.getState().activeSurfaceId).toBeNull();
+    expect(selectActiveSurfaceId(useShellLayoutStore.getState())).toBeNull();
+    expect(useShellLayoutStore.getState().panes).toEqual([]);
   });
   it('queues the latest repository script for the new path and opens its terminal surface', async () => {
     saveRepositorySettings('/repo', {
@@ -69,7 +68,10 @@ describe('new-shell worktree initialization', () => {
       worktreePath: options.path,
       script: 'pnpm install',
     });
-    expect(useShellLayoutStore.getState().activeSurfaceId).toBe('terminal');
+    // Layout 5d: the setup pane hosts the init terminal.
+    expect(selectActiveSurfaceId(useShellLayoutStore.getState())).toBe('terminal');
+    expect(useShellLayoutStore.getState().panes).toContain('setup');
+    expect(useShellLayoutStore.getState().setupTerminalOpened).toBe(true);
   });
 
   it.each([
@@ -81,7 +83,7 @@ describe('new-shell worktree initialization', () => {
       await mutation.mutateAsync({ workdir: '/repo', options });
     });
     expect(useInitScriptStore.getState().pendingScript).toBeNull();
-    expect(useShellLayoutStore.getState().activeSurfaceId).toBeNull();
+    expect(selectActiveSurfaceId(useShellLayoutStore.getState())).toBeNull();
   });
 
   it('never schedules initialization when creation fails', async () => {
@@ -97,6 +99,6 @@ describe('new-shell worktree initialization', () => {
       );
     });
     expect(useInitScriptStore.getState().pendingScript).toBeNull();
-    expect(useShellLayoutStore.getState().activeSurfaceId).toBeNull();
+    expect(selectActiveSurfaceId(useShellLayoutStore.getState())).toBeNull();
   });
 });

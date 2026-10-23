@@ -707,8 +707,8 @@ export function MergeEditor({
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold">{t('Resolve Conflicts')}</h2>
-          <span className="text-sm text-muted-foreground">
+          <h2 className="text-heading font-semibold">{t('Resolve Conflicts')}</h2>
+          <span className="text-ui text-muted-foreground">
             {currentIndex + 1} / {conflicts.length}
           </span>
         </div>
@@ -756,7 +756,7 @@ export function MergeEditor({
                 className={cn(
                   // normal-case: the label is a real filename; the cva base lowercases it
                   'shrink-0 normal-case',
-                  resolvedFiles.has(conflict.file) && 'text-green-600 dark:text-green-400'
+                  resolvedFiles.has(conflict.file) && 'text-success'
                 )}
               >
                 {resolvedFiles.has(conflict.file) && <Check className="h-3 w-3" />}
@@ -778,7 +778,7 @@ export function MergeEditor({
       {/* Chunk Navigation Bar */}
       {!isLoading && conflictChunks.length > 0 && (
         <div className="flex items-center gap-2 border-b bg-muted/30 px-4 py-1.5">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-small text-muted-foreground">
             {t('Conflict')} {currentChunkIndex + 1} / {conflictChunks.length}
           </span>
           <div className="flex items-center gap-1">
@@ -826,7 +826,7 @@ export function MergeEditor({
           {/* THEIRS (Left - Source Branch) */}
           <div className="flex flex-1 flex-col border-r">
             <div className="flex items-center justify-between border-b bg-muted/50 px-3 py-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
+              <span className="text-small font-medium text-muted-foreground">
                 THEIRS ({sourceBranch || 'source'})
               </span>
               <Button
@@ -858,7 +858,7 @@ export function MergeEditor({
           {/* RESULT (Center - Editable) */}
           <div className="flex flex-[1.5] flex-col border-r">
             <div className="flex items-center justify-between border-b bg-muted/50 px-3 py-1.5">
-              <span className="text-xs font-medium">RESULT</span>
+              <span className="text-small font-medium">RESULT</span>
               <Button
                 size="xs"
                 onClick={markResolved}
@@ -899,7 +899,7 @@ export function MergeEditor({
               >
                 ← {t('Accept')}
               </Button>
-              <span className="text-xs font-medium text-muted-foreground">
+              <span className="text-small font-medium text-muted-foreground">
                 OURS ({targetBranch || 'target'})
               </span>
             </div>
@@ -921,7 +921,7 @@ export function MergeEditor({
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between border-t px-4 py-2 text-sm text-muted-foreground">
+      <div className="flex items-center justify-between border-t px-4 py-2 text-ui text-muted-foreground">
         <span>{currentConflict?.file}</span>
         <span>
           {resolvedFiles.size} / {conflicts.length} {t('resolved')}

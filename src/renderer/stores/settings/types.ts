@@ -303,6 +303,12 @@ export interface SettingsState {
   chatFontFamily: string;
   chatBodyFontSize: number;
   chatProcessFontSize: number;
+  /**
+   * The type scale the two sizes above were saved under
+   * (`CHAT_TYPOGRAPHY_SCALE_VERSION`). Older or missing means the one-time v2
+   * reset has not run yet; see `migrateSettings`.
+   */
+  chatTypographyScaleVersion: number;
 
   // AI Features
   commitMessageGenerator: CommitMessageGeneratorSettings;

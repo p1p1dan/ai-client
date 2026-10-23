@@ -61,6 +61,24 @@ describe('sanitizeSidebarArchivePreferences', () => {
     expect(groups).toEqual([{ id: 'g1', name: '要交的', createdAt: 5 }]);
   });
 
+  it('layout 5b: keeps the by-status and by-date modes, and the groups beside them', () => {
+    for (const mode of ['workspace', 'group', 'status', 'date'] as const) {
+      expect(sanitizeSidebarArchivePreferences({ archiveMode: mode }).archiveMode).toBe(mode);
+    }
+    // Switching to a derived mode files nothing away: the groups stay.
+    expect(
+      sanitizeSidebarArchivePreferences({
+        archiveMode: 'status',
+        groups: [{ id: 'g1', name: 'kept', createdAt: 1 }],
+        assignments: { s1: 'g1' },
+      })
+    ).toEqual({
+      archiveMode: 'status',
+      groups: [{ id: 'g1', name: 'kept', createdAt: 1 }],
+      assignments: { s1: 'g1' },
+    });
+  });
+
   it('drops assignments pointing at a group that did not survive', () => {
     const { assignments } = sanitizeSidebarArchivePreferences({
       groups: [{ id: 'g1', name: 'kept', createdAt: 1 }],

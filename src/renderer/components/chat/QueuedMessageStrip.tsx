@@ -3,10 +3,12 @@
  *
  * Renders exactly what `deriveQueueStripModel` (queueRelease.ts) computed —
  * this component makes NO judgment of its own (no `SessionRuntimeStatus`, no
- * queue reducers, no i18n lookups beyond the static button label). The
- * icon/size/truncation language is copied from `ChatComposer.tsx`'s
- * `AttachmentChip` remove button (`:155-163`) so the two chip surfaces read
- * as one system.
+ * queue reducers, no i18n lookups beyond the static button label).
+ *
+ * Design system v2 §7.8: one strip frame (`queueStripWrapperClass`) holds 32px
+ * rows divided by hairlines; the row controls are the strips' ghost icon
+ * buttons (`panelStripIconButtonClass`), so the queue, todo and goal strips
+ * read as one system.
  *
  * T-19 fix review (R5): the failed-row Retry/Discard variant (warning
  * border, TriangleAlert, inline Retry button) is removed here — batch 3's
@@ -30,11 +32,12 @@ import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { queueStripWrapperClass } from './middleColumnLayout';
 import type { QueueStripEntryModel, QueueStripModel } from './queueRelease';
+import { panelStripIconButtonClass } from './sessionPanelsLayout';
 
-// Copied verbatim from AttachmentChip's remove-button class (ChatComposer.tsx)
-// — same 16px icon-button language for the queue strip's Pencil/X actions.
-const ICON_BUTTON_CLASS =
-  'flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground disabled:pointer-events-none disabled:opacity-64';
+const ICON_BUTTON_CLASS = panelStripIconButtonClass();
+
+/** A strip line: the 32px head height, the strip's 12px inset. */
+const STRIP_LINE_CLASS = 'flex h-8 shrink-0 items-center gap-2 px-3';
 
 export interface QueuedMessageStripProps {
   model: QueueStripModel;
@@ -79,20 +82,16 @@ export function QueuedMessageStrip({
   return (
     <div className={queueStripWrapperClass()}>
       {model.permissionHint && (
-        <div className="flex h-6 items-center gap-2 text-meta text-muted-foreground">
+        <div className={`${STRIP_LINE_CLASS} text-muted-foreground`}>
           <span className="min-w-0 flex-1 truncate">{model.permissionHint}</span>
         </div>
       )}
       {model.pausedLabel && (
-        <div className="flex h-6 items-center justify-between gap-2 text-meta text-muted-foreground">
+        <div className={`${STRIP_LINE_CLASS} justify-between pr-1 text-muted-foreground`}>
           <span className="min-w-0 flex-1 truncate">{model.pausedLabel}</span>
-          <button
-            type="button"
-            onClick={onResume}
-            className="shrink-0 text-foreground underline-offset-2 hover:underline"
-          >
+          <Button size="xs" variant="ghost" onClick={onResume}>
             {t('Resume')}
-          </button>
+          </Button>
         </div>
       )}
       {model.entries.map((entry) => (
@@ -141,19 +140,19 @@ function QueueEntryRow({
           onEdit(entry.id);
         }
       }}
-      className="flex h-7 items-center gap-1.5 rounded-sm border border-border bg-muted/50 px-2 text-meta"
+      className={`${STRIP_LINE_CLASS} cursor-pointer pr-1 transition-colors duration-150 ease-out hover:bg-fill-ghost-hover focus-ring`}
     >
-      <span className="shrink-0 tabular-nums text-muted-foreground">{entry.index}</span>
+      <span className="shrink-0 tabular-nums text-foreground-faint">{entry.index}</span>
       <span className="min-w-0 flex-1 truncate" title={entry.preview}>
         {entry.preview}
       </span>
       {entry.attachmentCount > 0 && (
-        <span className="shrink-0 text-muted-foreground">
+        <span className="shrink-0 text-small tabular-nums text-foreground-faint">
           {entry.attachmentCount} file{entry.attachmentCount > 1 ? 's' : ''}
         </span>
       )}
       <div
-        className="flex shrink-0 items-center gap-1.5"
+        className="flex shrink-0 items-center gap-0.5"
         data-testid="queue-row-actions"
         onClick={stopRowActivation}
         onKeyDown={stopRowActivation}
@@ -176,7 +175,7 @@ function QueueEntryRow({
               }
               onClick={() => onSendNow(entry.id)}
             >
-              <Zap className="size-3" />
+              <Zap className="size-3.5" />
               {t('Send now')}
             </Button>
           </span>
@@ -188,7 +187,7 @@ function QueueEntryRow({
           aria-label={t('Move queued message up')}
           className={ICON_BUTTON_CLASS}
         >
-          <ArrowUp className="size-3" />
+          <ArrowUp className="size-3.5" />
         </button>
         <button
           type="button"
@@ -197,7 +196,7 @@ function QueueEntryRow({
           aria-label={t('Move queued message down')}
           className={ICON_BUTTON_CLASS}
         >
-          <ArrowDown className="size-3" />
+          <ArrowDown className="size-3.5" />
         </button>
         <button
           type="button"
@@ -205,7 +204,7 @@ function QueueEntryRow({
           aria-label={t('Edit queued message')}
           className={ICON_BUTTON_CLASS}
         >
-          <Pencil className="size-3" />
+          <Pencil className="size-3.5" />
         </button>
         <button
           type="button"
@@ -213,7 +212,7 @@ function QueueEntryRow({
           aria-label={t('Remove queued message')}
           className={ICON_BUTTON_CLASS}
         >
-          <X className="size-3" />
+          <X className="size-3.5" />
         </button>
       </div>
     </div>

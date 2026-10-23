@@ -36,7 +36,7 @@ export function LockedRepoLabel({ label, path, reason }: LockedRepoLabelProps) {
           <span
             role="note"
             aria-label={`${t('Repository')}: ${label}`}
-            className="inline-flex h-6 min-w-0 cursor-default items-center gap-1.5 whitespace-nowrap px-2 text-ui text-muted-foreground"
+            className="inline-flex h-6 min-w-0 cursor-default items-center gap-1.5 whitespace-nowrap px-2 text-small text-muted-foreground"
           />
         }
       >
@@ -45,7 +45,7 @@ export function LockedRepoLabel({ label, path, reason }: LockedRepoLabelProps) {
         <Lock className="size-3 shrink-0" />
       </TooltipTrigger>
       {/* Decision 174: 14px — the reason is CJK, and coss's popup is 12px. */}
-      <TooltipPopup className="max-w-80 text-meta">
+      <TooltipPopup className="max-w-80 text-small">
         <span className="block">{reason}</span>
         {path && <span className="mt-1 block font-mono text-code opacity-80">{path}</span>}
       </TooltipPopup>
@@ -70,14 +70,14 @@ export function TemporaryChatLabel() {
           <span
             role="note"
             aria-label={t('Temporary chat')}
-            className="inline-flex h-6 min-w-0 cursor-default items-center gap-1.5 whitespace-nowrap px-2 text-ui text-muted-foreground"
+            className="inline-flex h-6 min-w-0 cursor-default items-center gap-1.5 whitespace-nowrap px-2 text-small text-muted-foreground"
           />
         }
       >
         <MessageSquare className="size-3.5 shrink-0" />
         <span className="min-w-0 max-w-60 truncate">{t('Temporary chat')}</span>
       </TooltipTrigger>
-      <TooltipPopup className="max-w-80 text-meta">
+      <TooltipPopup className="max-w-80 text-small">
         {t('Temporary chat — it runs in a private temporary folder')}
       </TooltipPopup>
     </Tooltip>

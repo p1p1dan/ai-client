@@ -19,9 +19,15 @@ type ImageError = 'load' | 'too-large';
 
 interface ImagePreviewProps {
   path: string;
+  /**
+   * Issue #26 item 6: an image that is not a file in the workspace (a sent
+   * chat attachment, as a `data:` URL). `path` is then only its name, and the
+   * system-viewer fallback, which needs a file, is not offered.
+   */
+  src?: string;
 }
 
-export function ImagePreview({ path }: ImagePreviewProps) {
+export function ImagePreview({ path, src }: ImagePreviewProps) {
   const { t } = useI18n();
   const [scale, setScale] = useState(1);
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(
@@ -35,7 +41,10 @@ export function ImagePreview({ path }: ImagePreviewProps) {
   // Convert file path to local-file:// URL (Electron custom protocol). Never
   // throws: a path that cannot become a URL is this component's error state,
   // not a render-time exception for an error boundary to catch.
-  const preview = useMemo(() => buildPreviewUrl(path, retryKey), [path, retryKey]);
+  const preview = useMemo(
+    () => (src ? { ok: true as const, url: src } : buildPreviewUrl(path, retryKey)),
+    [path, src, retryKey]
+  );
 
   // Reset scale when image changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: path change should reset scale
@@ -125,7 +134,7 @@ export function ImagePreview({ path }: ImagePreviewProps) {
           <EmptyDescription>{description}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row flex-wrap justify-center gap-2">
-          <OpenWithSystemViewerButton path={path} />
+          {!src && <OpenWithSystemViewerButton path={path} />}
           {preview.ok && (
             <Button
               variant="outline"
@@ -180,7 +189,7 @@ export function ImagePreview({ path }: ImagePreviewProps) {
 
       {/* Info bar */}
       {imageDimensions && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded bg-background/80 px-3 py-1 text-xs text-muted-foreground backdrop-blur-sm">
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded bg-background/80 px-3 py-1 text-small text-muted-foreground backdrop-blur-sm">
           {imageDimensions.width}×{imageDimensions.height} • {Math.round(scale * 100)}%
         </div>
       )}

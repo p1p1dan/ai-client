@@ -109,6 +109,14 @@
 import type { TurnStatusKind } from './turnStatus';
 
 /**
+ * Design system v2 §3.1: chat prose leading, ~1.43 (20px at the 14px body),
+ * the reference's `--chat-leading`. `--text-chat-body` carries no line height
+ * of its own (it is user-adjustable), so every prose surface -- Markdown root,
+ * plain streaming tail, user bubble -- spells this one constant.
+ */
+export const CHAT_PROSE_LEADING = 'leading-[1.43]';
+
+/**
  * `ReadingColumn`'s turn-to-turn spacing — the whole 20px beat, in one place.
  *
  * It was `space-y-2.5` while `turnBubbleBandClass()`'s `py-2.5` carried the
@@ -116,7 +124,9 @@ import type { TurnStatusKind } from './turnStatus';
  * would have silently halved the rhythm between turns.
  */
 export function readingColumnSpacingClass(): string {
-  return 'space-y-5';
+  // Layout 5c (2026-10-22 screenshot): turns breathe — 24px between them, the
+  // reference's generous whitespace around each exchange. Was 16px (v2 §4.2).
+  return 'space-y-6';
 }
 
 /**
@@ -133,7 +143,8 @@ export function readingColumnSpacingClass(): string {
  * would be the nearest ancestor for some of them and change what they react to.
  */
 export function chatTurnClass(): string {
-  return 'group/turn flex flex-col gap-3';
+  // Layout 5c: 16px prompt -> turn line (was 12px), keeping the ladder 24 > 16 > 10.
+  return 'group/turn flex flex-col gap-4';
 }
 
 /**
@@ -145,7 +156,10 @@ export function chatTurnClass(): string {
  * only read JSX through an AST walk that breaks whenever the element moves.
  */
 export function userBubbleRowClass(): string {
-  return 'flex justify-end';
+  // Issue #26 item 1: a column now -- the bubble, then its action row, both at
+  // the right edge. `group/user` scopes the action row's hover reveal to the
+  // message, not the whole turn.
+  return 'group/user flex flex-col items-end';
 }
 
 /**
@@ -174,7 +188,11 @@ export function userBubbleRowClass(): string {
  * never catches it. `break-words` on the paragraph is the other half.
  */
 export function userBubbleClass(): string {
-  return 'min-w-0 max-w-[80%] space-y-2 rounded-md rounded-tr-xs border border-input bg-accent px-3.5 py-2';
+  // Design system v2 §7.1: the only tinted block -- neutral fill, no edge.
+  // Layout 5c (2026-10-22 screenshot): a small 10px radius (`rounded-md`, was
+  // the 18px bubble tier) and compact 12/6 padding, so the prompt reads as a
+  // quiet grey block rather than a chat bubble.
+  return 'min-w-0 max-w-[80%] space-y-2 rounded-md bg-fill-neutral px-3 py-1.5';
 }
 
 /**
@@ -188,18 +206,18 @@ export function userBubbleClass(): string {
  * turn (decision 094).
  */
 export function userBubbleAwaitingClass(): string {
-  return 'min-w-0 max-w-[80%] space-y-2 rounded-md rounded-tr-xs border border-dashed border-input bg-transparent px-3.5 py-2';
+  return 'min-w-0 max-w-[80%] space-y-2 rounded-md border border-dashed border-border-strong bg-transparent px-3 py-1.5';
 }
 
 /**
  * GitHub issue #8 (decision 172 §4): the labelled action on an awaiting
  * bubble's status line, 「撤回」 — a ghost `Button` at the 24 px button tier,
  * in the meta size its line already uses (CJK needs it; the `xs` size's own
- * `text-xs` is gone from this folder). The same shape as the goal and todo
+ * `text-meta` is gone from this folder). The same shape as the goal and todo
  * strips' labelled actions (`panelStripActionClass`).
  */
 export function userBubbleActionClass(): string {
-  return 'h-6 gap-1 px-1.5 text-meta sm:h-6 sm:text-meta';
+  return 'h-6 gap-1 px-1.5 text-small';
 }
 
 /**
@@ -232,14 +250,15 @@ export function turnBodyClass(): string {
   // the body scale by inheritance. Dropping it here would silently resize a
   // component nothing in this module names. The head and footer slots override
   // it on their own elements — the head with `text-ui`, the hover strip with
-  // `text-meta` (D25 S24); see those two functions for why they differ.
+  // `text-small` (D25 S24); see those two functions for why they differ.
   //
   // T104: this is a runtime-configurable token, so the process shell that
   // shares this class also inherits whatever the reader picked. That is
   // intended and harmless — `ToolRows`' two sites (`:124` / `:682`) declare
   // `text-chat-process` explicitly and therefore override the inherited value
   // on the rows that actually carry process text.
-  return 'flex flex-col gap-2 text-chat-body leading-normal';
+  // Design system v2 §4.2: the in-turn block gap is body line x 0.5 = 10px.
+  return `flex flex-col gap-2.5 text-chat-body ${CHAT_PROSE_LEADING}`;
 }
 
 /**
@@ -264,7 +283,7 @@ export function turnProcessShellClass(): string {
   // Pinned to `turnBodyClass()`'s gap rather than spelled independently: the
   // shell stacks process rows INSIDE one turn-body slot, so a second number
   // here would read as a third tier nobody chose.
-  return 'flex flex-col gap-2';
+  return 'flex flex-col gap-2.5';
 }
 
 /**
@@ -328,13 +347,13 @@ export function turnIntermediateToneClass(): string {
  * pinned element, which is the property the rewritten T096 group asserts.
  */
 export function turnFinalAnswerDividerClass(): string {
-  return 'flex min-w-0 items-center gap-2 pt-1 text-meta text-muted-foreground';
+  return 'flex min-w-0 items-center gap-2 pt-1 text-small text-muted-foreground';
 }
 
 /**
  * Tier 3 — thinking and terminal rows. Dimmer than the head that summarises them. */
 export function turnProcessToneClass(): string {
-  return 'text-tool-arg';
+  return 'text-foreground-faint';
 }
 
 /**
@@ -346,7 +365,8 @@ export function turnProcessToneClass(): string {
  * dims below the words it stands for.
  */
 export function toolRowIconClass(): string {
-  return 'size-[13px] shrink-0 self-center';
+  // Design system v2 §4.3: the chat area's SM icon tier.
+  return 'size-3.5 shrink-0 self-center';
 }
 
 /**
@@ -497,9 +517,16 @@ export function turnClockRowClass(): string {
  * Holds every class that AFFECTS THE LOOK. The pin (`sticky top-0 z-10`) is
  * deliberately outside it — see `turnClockRowClass` for why only one of the two
  * carries it.
+ *
+ * Design system v2 §7.3 supersedes the `text-ui` ruling recorded above: the
+ * head is the process tier (`text-chat-process`, user-adjustable) at 500 in
+ * the muted ink, frameless. The status and work-zone rows below take the same
+ * size in the faint ink (§7, turn status line).
  */
+// Layout 5c (2026-10-22 screenshot): one faint summary line at regular weight
+// with the `›` at its end; `font-medium` (v2 §7.3) is dropped.
 const TURN_CLOCK_ROW_BASE =
-  'flex min-w-0 items-center gap-1.5 bg-background py-1 text-ui tabular-nums text-muted-foreground';
+  'flex min-w-0 items-center gap-1 bg-background py-1 text-chat-process tabular-nums text-muted-foreground';
 /**
  * The turn's status row: `Awaiting first token 8s`, `Stalled`, `Failed`, the
  * retry counter — i.e. the things that are only true WHILE the turn is running.
@@ -530,7 +557,7 @@ const TURN_CLOCK_ROW_BASE =
  * two shapes and share one size.
  */
 export function turnHeadClass(): string {
-  return 'flex min-w-0 items-center gap-1.5 text-ui tabular-nums text-muted-foreground';
+  return 'flex min-w-0 items-center gap-1.5 text-chat-process tabular-nums text-foreground-faint';
 }
 
 /**
@@ -560,7 +587,7 @@ export function turnHeadClass(): string {
  * block above `position: sticky` applies to every row in this chain.
  */
 export function turnWorkZoneClass(): string {
-  return 'flex min-w-0 items-center gap-1.5 text-ui tabular-nums text-muted-foreground';
+  return 'flex min-w-0 items-center gap-1.5 text-chat-process tabular-nums text-foreground-faint';
 }
 
 /**
@@ -668,13 +695,13 @@ export function turnActionsSlotClass(): string {
  * `overflow-hidden` and `min-h-0` retired with the `0fr` track — they existed
  * only to make that track clip rather than merely shrink.
  *
- * It keeps `text-meta` while the turn's status line moved to `text-ui`
+ * It keeps `text-small` while the turn's status line moved to `text-ui`
  * (2026-09-19). Not an oversight: what this row carries is a wall clock and a
  * copy button — the meta tier's own examples, read once if at all — and it must
  * stay inside `h-6`, which is the copy button's tier, not a type decision.
  */
 export function turnActionsInnerClass(): string {
-  return 'flex h-6 items-center gap-1.5 text-meta tabular-nums text-muted-foreground';
+  return 'flex h-6 items-center gap-1.5 text-small tabular-nums text-muted-foreground';
 }
 
 /**
@@ -689,7 +716,7 @@ export function turnActionsInnerClass(): string {
  * click could land.
  */
 export function turnCopyButtonClass(): string {
-  return 'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-hover';
+  return 'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground focus-ring';
 }
 
 /**
@@ -768,4 +795,77 @@ export function turnStatusToneClass(kind: TurnStatusKind): string | false {
   if (kind === 'stalled') return 'text-warning';
   if (kind === 'failed') return 'text-destructive';
   return false;
+}
+
+/**
+ * Issue #26 item 1: the user message's action row (copy / edit & resend /
+ * fork), under the bubble. Frameless ghost icon buttons; revealed by hovering
+ * the message or by keyboard focus inside the row.
+ *
+ * Same mechanism as `turnActionsSlotClass()`, for the same user ruling: the
+ * row RESERVES its 24px (`h-6`, the icon button's own size) and only fades,
+ * so hovering a message never moves the page under the pointer.
+ */
+export function userMessageActionRowClass(): string {
+  return 'mt-1 flex h-6 items-center gap-0.5 opacity-0 transition-opacity duration-150 ease-out group-hover/user:opacity-100 focus-within:opacity-100 motion-reduce:transition-none';
+}
+
+/**
+ * Issue #26 item 5: a long prompt folds, decided from its TEXT -- never from a
+ * measured height (F10: no geometry-dependent state). Above this many
+ * estimated lines the bubble starts folded; folded, it shows
+ * `PROMPT_FOLDED_LINES` with the reference's 3rem bottom fade.
+ */
+export const PROMPT_FOLD_THRESHOLD_LINES = 15;
+export const PROMPT_FOLDED_LINES = 12;
+
+/**
+ * Width units a bubble line holds: the bubble is at most 80% of the 40rem
+ * reading column less its 12px padding (~488px); at the 13px body that is
+ * still about 76 Latin characters, a CJK character counting two (layout 5c).
+ */
+const PROMPT_UNITS_PER_LINE = 76;
+
+/** Wide characters (CJK, fullwidth forms) take two units. */
+const WIDE =
+  /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/u;
+
+/** Visual lines a prompt is expected to take: hard breaks, plus soft wraps by width. */
+export function estimatePromptLines(text: string, unitsPerLine = PROMPT_UNITS_PER_LINE): number {
+  let lines = 0;
+  for (const line of text.split(/\r\n|\n|\r/)) {
+    let units = 0;
+    for (const char of line) units += WIDE.test(char) ? 2 : 1;
+    lines += Math.max(1, Math.ceil(units / unitsPerLine));
+  }
+  return lines;
+}
+
+/** Does this prompt fold? A pure function of its text. */
+export function promptFolds(text: string): boolean {
+  return estimatePromptLines(text) > PROMPT_FOLD_THRESHOLD_LINES;
+}
+
+/**
+ * The prompt text box while folded, or `''` when open. `lh` is the box's own
+ * line height, which is why the box pins the prose size and leading: the
+ * height is a number of the prompt's lines, not of pixels. The clip is CSS of
+ * a boolean the user toggles; nothing reads it back.
+ */
+export function userBubbleFoldClass(folded: boolean): string {
+  return folded
+    ? `max-h-[12lh] overflow-hidden text-chat-body ${CHAT_PROSE_LEADING} [mask-image:linear-gradient(to_bottom,black_calc(100%-3rem),transparent)]`
+    : '';
+}
+
+/**
+ * Layout 5c (ruling L3): the per-turn change card — one compact frame
+ * (~44px: `py-1` + two text lines + the hairline) that says how many files the
+ * turn changed and opens the right panel's changes tab on click. The stage-3
+ * card frame (`border-border-soft rounded-md bg-surface-2`), no elevation: it
+ * sits in the reading flow, not above it. A `<button>`, so `text-left` resets
+ * the UA centring.
+ */
+export function turnChangeCardClass(): string {
+  return 'flex w-full max-w-md min-w-0 items-center gap-2.5 rounded-md border border-border-soft bg-surface-2 px-2.5 py-1 text-left transition-colors duration-150 ease-out hover:border-border-strong focus-ring';
 }

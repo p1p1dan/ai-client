@@ -18,6 +18,7 @@ import {
   turnProcessToneClass,
   turnStatusToneClass,
   turnWorkGroupSummaryClass,
+  userBubbleAwaitingClass,
   userBubbleClass,
   userBubbleRowClass,
   userBubbleTextClass,
@@ -241,7 +242,7 @@ describe('T096: one pinned surface, and its height never moves with the scroll',
     // strings on purpose: an editor who adds `overflow-hidden` to either breaks
     // the `toContain` first and has to read this note before re-stating it.
     const toolRows = readSource('ToolRows.tsx');
-    for (const wrapper of ['flex flex-col gap-1', 'ml-0.5 border-l border-border pl-3.5']) {
+    for (const wrapper of ['flex flex-col gap-1', 'ml-0.5 border-l border-border-soft pl-3.5']) {
       expect(toolRows, `ToolRows.tsx no longer wraps rows in: ${wrapper}`).toContain(
         `"${wrapper}"`
       );
@@ -290,8 +291,9 @@ describe('chatTurnClass (F-B10)', () => {
   // The prompt -> turn body beat. It was 10px (the retired band's bottom
   // padding, inherited whole); on 2026-09-19 it moved to the 12px loose tier so
   // the turn's own line stops reading as the tail of the prompt above it.
-  it('F-B10: owns the 12px prompt-to-body beat', () => {
-    expect(spacingPx(chatTurnClass(), 'gap')).toBe(12);
+  // Layout 5c (2026-10-22 screenshot): 16px, so the turn breathes.
+  it('F-B10: owns the 16px prompt-to-body beat', () => {
+    expect(spacingPx(chatTurnClass(), 'gap')).toBe(16);
     expect(chatTurnClass()).not.toMatch(/(?:^|\s)space-y-/);
   });
 });
@@ -306,8 +308,9 @@ describe('turn spacing arithmetic (F-B9)', () => {
    * the whole reason this assertion is written as an absolute number rather
    * than as a relation between two live values.
    */
-  it('F-B9: the whole 20px turn-to-turn beat lives in ReadingColumn', () => {
-    expect(spacingPx(readingColumnSpacingClass(), 'space-y')).toBe(20);
+  // Layout 5c (2026-10-22 screenshot): 24px between turns (was v2 §4.2's 16px).
+  it('F-B9: the whole turn-to-turn beat lives in ReadingColumn', () => {
+    expect(spacingPx(readingColumnSpacingClass(), 'space-y')).toBe(24);
   });
 
   /**
@@ -322,13 +325,14 @@ describe('turn spacing arithmetic (F-B9)', () => {
    * as the header of the reply (the user's report). So this asserts the ORDER,
    * plus each tier's absolute number so a failure names which one moved.
    */
-  it('F-B9: the three beats descend — 20 between turns, 12 to the turn line, 8 inside', () => {
+  // Layout 5c: 24 between turns, 16 to the turn line, 10 inside (v2 §4.2 had 16 / 12 / 10).
+  it('F-B9: the three beats descend — 24 between turns, 16 to the turn line, 10 inside', () => {
     const between = spacingPx(readingColumnSpacingClass(), 'space-y');
     const toTurnLine = spacingPx(chatTurnClass(), 'gap');
     const within = spacingPx(turnBodyClass(), 'gap');
-    expect(between).toBe(20);
-    expect(toTurnLine).toBe(12);
-    expect(within).toBe(8);
+    expect(between).toBe(24);
+    expect(toTurnLine).toBe(16);
+    expect(within).toBe(10);
     expect(between).toBeGreaterThan(toTurnLine);
     expect(toTurnLine).toBeGreaterThan(within);
   });
@@ -428,26 +432,31 @@ describe('userBubbleTextClass / userBubbleClass (T12)', () => {
    * against the timeline surface, and the edge carries the remaining
    * definition at 1.350 / 1.322.
    */
-  it('T12: right-aligned, faced, and edged — the whole role signal', () => {
-    expect(userBubbleRowClass()).toContain('justify-end');
+  // Design system v2 §7.1 supersedes D3-c's face + edge + sharp corner: the
+  // bubble is the page's one tinted block -- the neutral fill, NO edge (§1
+  // rule 1), the bubble radius all round, 16 / 12 padding.
+  it('T12: right-aligned and faced — the whole role signal', () => {
+    // Issue #26 item 1: a column (bubble, then its action row) at the right edge.
+    expect(userBubbleRowClass()).toContain('items-end');
     const cls = userBubbleClass();
-    expect(cls).toContain('bg-accent');
-    expect(cls).toContain('border border-input');
-    // The corner MOVED from bottom-right to top-right (pi-app's form): it now
-    // points back at the composer the message was typed in.
-    expect(cls).toContain('rounded-tr-xs');
-    expect(cls, 'the old bottom-right tail is not kept alongside it').not.toContain(
-      'rounded-br-xs'
-    );
+    expect(cls).toContain('bg-fill-neutral');
+    expect(cls).not.toMatch(/(?:^|\s)border(?:-|\s|$)/);
+    expect(cls).not.toMatch(/rounded-(?:tr|br|tl|bl)-/);
+    // Layout 5c (2026-10-22 screenshot): compact 12/6 padding (was 16/12).
+    expect(cls).toContain('px-3 py-1.5');
   });
 
-  // Radii are token steps, never raw pixels (design-system.md Border Radius):
-  // `rounded-md` is the 12px tier for containers ≥32px tall, `rounded-*-xs` the
-  // 4px inset tier. An arbitrary `rounded-[10px]` here would read as a one-off.
+  // Radii are token steps, never raw pixels. Layout 5c: the small 10px
+  // `rounded-md` tier, not the 18px bubble tier. An arbitrary `rounded-[10px]`
+  // would read as a one-off.
   it('T12: the bubble radii are design-system tiers, not arbitrary values', () => {
     const cls = userBubbleClass();
     expect(cls).toContain('rounded-md');
+    expect(cls).not.toContain('rounded-bubble');
     expect(cls).not.toMatch(/rounded-\[/);
+    // The awaiting bubble keeps the same geometry, only its face differs.
+    expect(userBubbleAwaitingClass()).toContain('rounded-md');
+    expect(userBubbleAwaitingClass()).toContain('px-3 py-1.5');
   });
 });
 
@@ -467,17 +476,21 @@ describe('turnHeadClass', () => {
    * token, so moving one without the other fails here rather than in a
    * screenshot.
    *
-   * 14px (`text-ui`) rather than 13px (`text-meta`) by user decision
-   * 2026-09-19; the deviation from the Typography table's "status line -> meta"
-   * row is recorded on `turnWorkGroupSummaryClass()`.
+   * Design system v2 §7.3 / §7 (turn status line): both are the process
+   * tier, `text-chat-process`, which follows the reader's process size.
    */
-  it('shares one size token with the work-group head, and it is the 14px tier', () => {
-    expect(turnHeadClass()).toContain('text-ui');
-    expect(turnWorkGroupSummaryClass()).toContain('text-ui');
-    expect(turnHeadClass(), 'the 13px tier must not linger on one of the pair').not.toContain(
-      'text-meta'
+  it('shares one size token with the work-group head, and it is the process tier', () => {
+    expect(turnHeadClass()).toContain('text-chat-process');
+    expect(turnWorkGroupSummaryClass()).toContain('text-chat-process');
+    expect(turnHeadClass(), 'the old tiers must not linger on one of the pair').not.toMatch(
+      /(?:^|\s)text-(?:ui|meta)(?:\s|$)/
     );
-    expect(turnWorkGroupSummaryClass()).not.toContain('text-meta');
+    expect(turnWorkGroupSummaryClass()).not.toMatch(/(?:^|\s)text-(?:ui|meta)(?:\s|$)/);
+    // Layout 5c (2026-10-22 screenshot): the folded process line is one faint
+    // summary at regular weight (§7.3's 500 weight dropped).
+    expect(turnWorkGroupSummaryClass()).not.toMatch(
+      /(?:^|\s)font-(?:medium|semibold|bold)(?:\s|$)/
+    );
   });
 });
 
@@ -579,7 +592,8 @@ describe('turn hover action strip (T12-b)', () => {
     const cls = turnCopyButtonClass();
     expect(cls).toContain('size-6');
     expect(cls).toContain('rounded-sm');
-    expect(cls).toContain('hover:bg-hover');
+    // Design system v2 §2.2: the one ghost hover fill.
+    expect(cls).toContain('hover:bg-fill-ghost-hover');
   });
 
   /**
@@ -661,7 +675,8 @@ describe('turnStatusToneClass (F456 §7.5)', () => {
   it('[F4-6] slow falls back to the head colour instead of a warning', () => {
     expect(turnStatusToneClass('slow')).toBe(false);
     // The fallback has to land somewhere legible, or "muted" is just "gone".
-    expect(turnHeadClass()).toContain('text-muted-foreground');
+    // Design system v2 §7: the turn status line is the faint ink.
+    expect(turnHeadClass()).toContain('text-foreground-faint');
   });
 
   /**
@@ -730,7 +745,8 @@ describe('reading ladder (2026-09-18)', () => {
 
   it('[LADDER-2] the answer is the brightest rung and the process rows the dimmest', () => {
     expect(turnAnswerToneClass()).toBe('text-foreground');
-    expect(turnProcessToneClass()).toBe('text-tool-arg');
+    // Design system v2 §2.3: `--tool-arg` is named `--foreground-faint` now.
+    expect(turnProcessToneClass()).toBe('text-foreground-faint');
     // The head sits between them, on the same tier as the status row it
     // replaced at the end of a completed turn.
     expect(turnWorkGroupSummaryClass()).toContain('text-muted-foreground');
@@ -756,7 +772,7 @@ describe('reading ladder (2026-09-18)', () => {
     expect(answer).toContain('text-foreground');
     const process = cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass());
     expect(process).toContain('text-chat-body');
-    expect(process).toContain('text-tool-arg');
+    expect(process).toContain('text-foreground-faint');
   });
 
   it('[LADDER-3] the group head strips the native disclosure marker', () => {

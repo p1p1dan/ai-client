@@ -54,11 +54,11 @@ describe('P1-7b wiring (jobs window, subagents window, live output)', () => {
     );
   });
 
-  it('[P7B-WIRE-BAR] the session bar opens and hides both windows', () => {
+  // Layout 5d: background work is a pane card now, toggled from the title bar.
+  it('[P7B-WIRE-BAR] the session bar toggles the background-tasks pane', () => {
     const bar = read('renderer/components/workspace-shell/SessionBar.tsx');
-    expect(bar).toContain('<BackgroundWorkButtons sessionId={activeSessionId} />');
-    expect(bar).toContain("toggle('jobs')");
-    expect(bar).toContain("toggle('agents')");
+    expect(bar).toContain('<BackgroundTasksButton');
+    expect(bar).toContain("onTogglePane('tasks')");
   });
 
   it('[P7B-WIRE-ROWS] a running row shows its live tail; a delegation row can be located', () => {

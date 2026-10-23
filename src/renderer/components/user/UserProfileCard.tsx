@@ -56,13 +56,13 @@ function UsageMetric({
 }) {
   return (
     <div className="rounded-md border bg-muted/20 px-3 py-2">
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-small text-muted-foreground">{label}</div>
       {loading ? (
         <Skeleton className="mt-1 h-4 w-16" />
       ) : (
         <div
           className={cn(
-            'mt-1 text-sm font-medium tabular-nums',
+            'mt-1 text-ui font-medium tabular-nums',
             tone === 'attention' && 'text-destructive'
           )}
         >
@@ -87,7 +87,7 @@ function WeeklyQuotaBar({ percent, exceeded }: { percent: number; exceeded: bool
   return (
     <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
       <div
-        className={cn('h-full rounded-full', exceeded ? 'bg-destructive' : 'bg-accent-primary')}
+        className={cn('h-full rounded-full', exceeded ? 'bg-destructive' : 'bg-primary')}
         style={{ width: `${percent}%` }}
       />
     </div>
@@ -250,14 +250,14 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
           <div className="min-w-0 flex-1">
             <div
               className={cn(
-                'text-sm font-medium',
+                'text-ui font-medium',
                 isAttention ? 'text-destructive' : 'text-muted-foreground'
               )}
             >
               {isAttention ? t('Login expired') : t('Not signed in')}
             </div>
             {presentation.email && (
-              <div className="truncate text-xs text-muted-foreground">{presentation.email}</div>
+              <div className="truncate text-small text-muted-foreground">{presentation.email}</div>
             )}
           </div>
         </div>
@@ -286,7 +286,7 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
         </Avatar>
 
         <div className="min-w-0 flex-1">
-          <div className={cn('text-sm font-medium', !email && 'text-muted-foreground')}>
+          <div className={cn('text-ui font-medium', !email && 'text-muted-foreground')}>
             <span className="block truncate">{email ?? t('Not signed in')}</span>
           </div>
         </div>
@@ -331,7 +331,7 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
                 <WeeklyQuotaBar percent={quota.percent} exceeded={quota.state === 'exceeded'} />
                 <div
                   className={cn(
-                    'mt-1 text-meta tabular-nums',
+                    'mt-1 text-small tabular-nums',
                     quota.state === 'exceeded' ? 'text-destructive' : 'text-muted-foreground'
                   )}
                 >
@@ -379,7 +379,7 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
                 terminates every session and invalidates the worker before it
                 clears the vault. Same count, opposite promise. */}
             {logoutLosses && logoutLossLines.length > 0 && (
-              <ul className="flex list-disc flex-col gap-1 pl-4 text-sm text-foreground">
+              <ul className="flex list-disc flex-col gap-1 pl-4 text-ui text-foreground">
                 {logoutLossLines.map((line) => (
                   <li key={line.key}>{t(line.key, line.params)}</li>
                 ))}
@@ -388,7 +388,7 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
             {/* D47 S6 §2 (A-m9) — known limitation: flag-on logout stops
                 touching ~/.claude at all (U1 decision), so a CLI logged in
                 outside this app keeps working after this dialog's logout. */}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t('This does not affect CLI logins in your system terminal.')}
             </p>
           </DialogHeader>

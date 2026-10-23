@@ -19,10 +19,10 @@ import { cn } from '@/lib/utils';
 /**
  * Decision 174 (issue #6): the group names 「本地分支」「远程分支」 at 14px / 400.
  * `SelectGroupLabel` takes its props after its own class, so this replaces the
- * primitive's `text-xs font-medium` rather than merging with it — the rest of
+ * primitive's `text-small font-medium` rather than merging with it — the rest of
  * its class is restated here.
  */
-export const BRANCH_GROUP_LABEL_CLASS = 'px-2 py-1.5 text-meta text-muted-foreground';
+export const BRANCH_GROUP_LABEL_CLASS = 'px-2 py-1.5 text-small text-muted-foreground';
 
 interface BranchSwitcherProps {
   currentBranch: string | null;
@@ -120,9 +120,9 @@ export function BranchSwitcher({
           // `feat/ctrl-enter-interject` stay readable, and `shrink` so a narrow
           // row truncates the name instead of overflowing.
           size === 'xs' &&
-            'h-auto min-h-0 w-auto max-w-60 shrink gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground sm:!min-h-0 sm:!h-auto',
-          size === 'sm' && 'h-6 min-h-6 w-auto max-w-32 gap-1 px-2 text-xs',
-          size === 'md' && 'h-7 min-h-7 w-auto max-w-40 gap-1.5 px-2 text-sm'
+            'h-auto min-h-0 w-auto max-w-60 shrink gap-1 px-2 py-1 text-small text-muted-foreground hover:text-foreground sm:!min-h-0 sm:!h-auto',
+          size === 'sm' && 'h-6 min-h-6 w-auto max-w-32 gap-1 px-2 text-small',
+          size === 'md' && 'h-7 min-h-7 w-auto max-w-40 gap-1.5 px-2 text-ui'
         )}
         disabled={isDisabled}
       >
@@ -136,7 +136,7 @@ export function BranchSwitcher({
         <SelectValue
           className={cn(
             'min-w-0 flex-1 truncate',
-            size === 'xs' && (currentBranch ? 'text-xs' : 'text-meta')
+            size === 'xs' && (currentBranch ? 'text-small' : 'text-small')
           )}
         >
           {currentBranch || t('Select branch')}
@@ -148,7 +148,7 @@ export function BranchSwitcher({
             the input FIRST and the icon addon after it (`order-first` draws it
             on the left); an absolutely positioned icon placed before `Input` is
             painted over by the input's `relative`, opaque wrapper. The group's
-            own 14px replaces the 12px `text-xs` the CJK placeholder had. */}
+            own 14px replaces the 12px `text-small` the CJK placeholder had. */}
         <div className="p-2">
           <InputGroup className="my-2 h-7 rounded-sm before:rounded-[calc(var(--radius-sm)-1px)]">
             <InputGroupInput
@@ -183,7 +183,7 @@ export function BranchSwitcher({
                   }}
                   placeholder={t('Branch name...')}
                   // Decision 174: 14px — the placeholder is CJK.
-                  className="text-meta"
+                  className="text-small"
                   disabled={isCreatingBranch}
                   autoFocus
                 />
@@ -195,7 +195,7 @@ export function BranchSwitcher({
               // Decision 174 (issue #6): 14px — 「创建新分支...」 is CJK.
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-meta text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-small text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground transition-colors"
                 onClick={() => setIsCreating(true)}
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -262,7 +262,7 @@ export function BranchSwitcher({
         {/* Empty state */}
         {!isLoading && localBranches.length === 0 && remoteBranches.length === 0 && (
           // Decision 174: 14px — 「未找到分支」 is CJK.
-          <div className="py-4 text-center text-meta text-muted-foreground">
+          <div className="py-4 text-center text-small text-muted-foreground">
             {searchQuery ? t('No branches found') : t('No branches available')}
           </div>
         )}

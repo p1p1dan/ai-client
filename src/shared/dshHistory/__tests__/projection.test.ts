@@ -169,9 +169,10 @@ describe('projectDshHistory — human messages', () => {
       ]);
     const [message] = projectDshHistory(events);
     expect(message?.blocks).toEqual([]);
+    // Issue #26 item 6: an image keeps its store reference for the thumbnail.
     expect(message?.attachments).toEqual([
-      { kind: 'image', mediaType: 'image/png', name: 'shot.png' },
-      { kind: 'image', mediaType: 'image/webp' },
+      { kind: 'image', mediaType: 'image/png', name: 'shot.png', attachmentId: 'sha' },
+      { kind: 'image', mediaType: 'image/webp', attachmentId: 'sha2' },
       { kind: 'text', mediaType: 'text/plain', name: 'notes.md' },
     ]);
   });

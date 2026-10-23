@@ -2,8 +2,10 @@ import { SESSION_EFFORT_LEVELS } from '@shared/types/agentHost';
 import { describe, expect, it } from 'vitest';
 import {
   CHAT_EFFORTS,
+  COSTLY_EFFORT_WARNING,
   EFFORT_DEFAULT_ID,
   effortLabel,
+  effortSentByDefault,
   effortsForModel,
   isEffortLevel,
   reconcileEffortForModel,
@@ -322,5 +324,22 @@ describe('effortLabel', () => {
   it('falls back to Default for the sentinel and unknown values', () => {
     expect(effortLabel(EFFORT_DEFAULT_ID)).toBe('Default');
     expect(effortLabel('nonsense')).toBe('Default');
+  });
+});
+
+// Issue #26 item 4: the menu's second lines and the 「默认」 tag.
+describe('effort menu copy', () => {
+  it('warns on exactly the two costly extremes', () => {
+    const warned = CHAT_EFFORTS.filter((effort) => effort.warning).map((effort) => effort.id);
+    expect(warned).toEqual(['xhigh', 'max']);
+    for (const effort of CHAT_EFFORTS) {
+      if (effort.warning) expect(effort.warning).toBe(COSTLY_EFFORT_WARNING);
+    }
+  });
+
+  it('tags Medium as what Default sends, and nothing when the model lacks it', () => {
+    expect(effortSentByDefault(CHAT_EFFORTS)).toBe('medium');
+    expect(effortSentByDefault(effortsForModel({ efforts: ['high', 'max'] }))).toBeNull();
+    expect(effortSentByDefault(effortsForModel({ efforts: ['low', 'medium'] }))).toBe('medium');
   });
 });

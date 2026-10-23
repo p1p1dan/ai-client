@@ -56,7 +56,7 @@ export function KeybindingInput({
     <div className="flex items-center gap-2">
       <div
         className={cn(
-          'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background',
+          'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-ui ring-offset-background',
           'focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
           isRecording && 'ring-2 ring-ring ring-offset-2'
         )}
@@ -110,7 +110,7 @@ function ShortcutSection<K extends string>({
     <SettingsSectionBlock title={title}>
       {labels.map(([key, label]) => (
         <SettingsRow key={key}>
-          <span className="text-sm">{label}</span>
+          <span className="text-ui">{label}</span>
           <KeybindingInput
             label={label}
             value={bindings[key]}

@@ -190,7 +190,9 @@ export function MergeWorktreeDialog({
                       <GitBranch className="mr-2 h-4 w-4" />
                       {branch.name}
                       {(branch.name === 'main' || branch.name === 'master') && (
-                        <span className="ml-2 text-xs text-muted-foreground">{t('Default')}</span>
+                        <span className="ml-2 text-small text-muted-foreground">
+                          {t('Default')}
+                        </span>
                       )}
                     </SelectItem>
                   ))}
@@ -216,7 +218,7 @@ export function MergeWorktreeDialog({
                     <SelectItem key={opt.value} value={opt.value}>
                       <div className="flex flex-col">
                         <span>{opt.label}</span>
-                        <span className="text-xs text-muted-foreground">{opt.description}</span>
+                        <span className="text-small text-muted-foreground">{opt.description}</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -225,14 +227,14 @@ export function MergeWorktreeDialog({
             </Field>
 
             {/* Auto Stash Option */}
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-ui">
               <Checkbox
                 checked={autoStash}
                 onCheckedChange={(checked) => setAutoStash(checked === true)}
               />
               <div className="flex flex-col">
                 <span>{t('Auto stash uncommitted changes')}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-small text-muted-foreground">
                   {t('Automatically stash and restore uncommitted changes')}
                 </span>
               </div>
@@ -240,8 +242,8 @@ export function MergeWorktreeDialog({
 
             {/* Cleanup Options */}
             <div className="space-y-3">
-              <span className="text-sm font-medium">{t('After merge')}</span>
-              <label className="flex items-center gap-2 text-sm">
+              <span className="text-ui font-medium">{t('After merge')}</span>
+              <label className="flex items-center gap-2 text-ui">
                 <Checkbox
                   checked={deleteWorktree}
                   onCheckedChange={(checked) => {
@@ -255,7 +257,7 @@ export function MergeWorktreeDialog({
                 />
                 {t('Delete worktree')}
               </label>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-ui">
                 <Checkbox
                   checked={deleteBranch}
                   onCheckedChange={(checked) => setDeleteBranch(checked === true)}
@@ -263,14 +265,14 @@ export function MergeWorktreeDialog({
                 />
                 {t('Delete branch')}
                 {deleteWorktree && (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-small text-muted-foreground">
                     ({t('Included with worktree deletion')})
                   </span>
                 )}
               </label>
             </div>
 
-            {error && <div className="text-sm text-destructive">{error}</div>}
+            {error && <div className="text-ui text-destructive">{error}</div>}
           </DialogPanel>
 
           <DialogFooter>

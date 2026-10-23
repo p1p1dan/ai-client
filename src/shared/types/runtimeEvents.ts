@@ -303,6 +303,8 @@ export interface MessageAttachmentMeta {
   kind: 'image' | 'text';
   mediaType: string;
   name?: string;
+  /** Issue #26 item 6: a DSH image's store reference (`HistoryAttachment.attachmentId`). */
+  attachmentId?: string;
 }
 
 export interface MessageStartedEvent extends RuntimeEventBase {

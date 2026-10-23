@@ -79,7 +79,7 @@ export function SignInConfirmDialog({ open, kind, snapshot, onAnswer }: SignInCo
         </AlertDialogHeader>
 
         <div className="flex flex-col gap-2 px-6">
-          <ul className="flex list-disc flex-col gap-1 pl-4 text-sm text-foreground">
+          <ul className="flex list-disc flex-col gap-1 pl-4 text-ui text-foreground">
             {lines.map((line) => (
               <li key={line.key}>{t(line.key, line.params)}</li>
             ))}
@@ -94,7 +94,7 @@ export function SignInConfirmDialog({ open, kind, snapshot, onAnswer }: SignInCo
               The unsent draft is named here rather than counted: it lives in
               `ChatComposer`'s own `useState`, so there is no number to read,
               and it really does go. */}
-          <p className="text-xs text-muted-foreground">
+          <p className="text-small text-muted-foreground">
             {t(
               'Chat history is safe. Anything you typed into the composer but have not sent is not.'
             )}

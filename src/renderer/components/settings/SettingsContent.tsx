@@ -88,7 +88,9 @@ export function SettingsContent({
     <div className="flex h-full min-w-0 flex-col sm:flex-row">
       <nav
         aria-label={t('Settings')}
-        className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 sm:w-40 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r"
+        // Design system v2 §7.12: the left nav reads like the sidebar —
+        // --surface-0, one hairline to the content, frameless h-8 rows.
+        className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border-soft bg-surface-0 p-2 sm:w-44 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r"
       >
         {categories.map((category) => (
           <button
@@ -100,10 +102,10 @@ export function SettingsContent({
               onCategoryChange?.(category.id);
             }}
             className={cn(
-              'flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors sm:w-full',
+              'flex h-8 shrink-0 items-center gap-2 rounded-xs px-2 text-ui transition-colors duration-150 sm:w-full',
               activeCategory === category.id
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                ? 'bg-fill-ghost-selected text-foreground'
+                : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
             )}
           >
             <category.icon className="h-4 w-4 shrink-0" />

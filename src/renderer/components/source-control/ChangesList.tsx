@@ -26,6 +26,7 @@ import { useSettingsStore } from '@/stores/settings';
 import { useSourceControlStore } from '@/stores/sourceControl';
 import { ChangesTree } from './ChangesTree';
 import { CodeReviewModal } from './CodeReviewModal';
+import { GIT_STATUS_TONE } from './gitStatusTone';
 import { useChangesActions } from './useChangesActions';
 
 interface ChangesListProps {
@@ -57,7 +58,7 @@ function ChangesLoadError({ detail }: { detail: string }) {
       className="mx-3 mt-2 w-auto shrink-0 px-2 py-1"
       data-testid="changes-load-error"
     >
-      <AlertDescription className="min-w-0 text-meta text-destructive">
+      <AlertDescription className="min-w-0 text-small text-destructive">
         <p className="truncate select-text" title={text}>
           {text}
         </p>
@@ -77,25 +78,7 @@ const statusIcons: Record<FileChangeStatus, React.ElementType> = {
   X: FileWarning, // Conflict
 };
 
-// D34 token slice (design-system.md:227 mapping table): A/U map to the "diff
-// added" token, D to "diff deleted", R/C (rename/copy) have no dedicated
-// mapping table entry so they take the nearest semantic hue (`text-info`,
-// blue). M keeps its amber hue via `text-warning` — the only token with that
-// hue, despite `warning` being value-identical to `primary` (design-system.md
-// warns against reusing it as a generic "amber" stand-in); accepted here
-// because there's no other token for "modified". X (conflict, purple) has no
-// semantic token in the palette at all — left as a literal, tracked under
-// T-25 rather than collapsed onto `destructive` (which would make it
-// indistinguishable from D).
-const statusColors: Record<FileChangeStatus, string> = {
-  M: 'text-warning',
-  A: 'text-success',
-  D: 'text-destructive',
-  R: 'text-info',
-  C: 'text-info',
-  U: 'text-success', // Untracked shows as new-file green (same token as Added)
-  X: 'text-purple-500', // Conflict — no semantic token for this hue (T-25)
-};
+const statusColors = GIT_STATUS_TONE;
 
 function FileItem({
   file,
@@ -121,7 +104,7 @@ function FileItem({
     <div
       className={cn(
         'group relative flex h-7 items-center gap-2 rounded-sm px-2 text-ui cursor-pointer transition-colors',
-        isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+        isSelected ? 'bg-fill-ghost-selected text-foreground' : 'hover:bg-fill-ghost-hover'
       )}
       onClick={onFileClick}
       onKeyDown={(e) => e.key === 'Enter' && onFileClick()}
@@ -358,7 +341,7 @@ export function ChangesList({
         // A failed read with nothing to list says so above, not 「没有更改」.
         loadError !== null ? null : (
           <div className="flex min-h-[80px] shrink-0 items-center justify-center text-center text-muted-foreground">
-            <p className="text-meta">{t('No changes')}</p>
+            <p className="text-small">{t('No changes')}</p>
           </div>
         )
       ) : (

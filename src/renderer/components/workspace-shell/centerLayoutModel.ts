@@ -1,20 +1,22 @@
 /**
- * T-32 (D27 / open-q #28 ①): the center column's geometry — `chat ║ editor`
- * side by side (A08 a08:1208-1241), with a grip between them.
+ * T-32 (D27 / open-q #28 ①): the center row's geometry — chat and, since
+ * layout 5a, the work panel side by side, with a grip between them.
  *
- * S3 lands the ratio math here; S4 adds the L0/L1/L2 level ladder that decides
- * whether the panel and the chat column exist at all. Pure so vitest (node env,
- * `.ts` only) can cover it — `shellLayoutModel.ts` pattern.
+ * S3 landed a ratio split here (layout 5a replaced it with the work panel's
+ * pixel width); S4 added the level ladder, since overturned (see below).
+ * Pure so vitest (node env, `.ts` only) can cover it.
  */
 
-/** A08 a08:1421 — the minimum widths its degradation thresholds are built from. */
+/** A08 a08:1421 — the chat floor its degradation thresholds were built from. */
 export const CHAT_MIN_WIDTH = 400;
-export const EDITOR_MIN_WIDTH = 520;
-export const REVIEW_MIN_WIDTH = 320;
-
-export const DEFAULT_EDITOR_RATIO = 0.5;
-export const MIN_EDITOR_RATIO = 0.25;
-export const MAX_EDITOR_RATIO = 0.75;
+/**
+ * Layout 5a: the work panel's floor (`WORK_PANEL_MIN_WIDTH`, the reference's
+ * file panel minimum). Every tab — files, the review, the terminal — shares
+ * it, so switching tabs never moves the grip. Was 520 for the editor and 320
+ * for the review while they were separate occupants. Written as a literal:
+ * `shellMinimums.test.ts` reads it from this file's source.
+ */
+export const EDITOR_MIN_WIDTH = 320;
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
@@ -24,71 +26,45 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-/** 0.25..0.75; non-finite → DEFAULT_EDITOR_RATIO. */
-export function clampEditorRatio(ratio: number): number {
-  if (!isFiniteNumber(ratio)) {
-    return DEFAULT_EDITOR_RATIO;
-  }
-  return clamp(ratio, MIN_EDITOR_RATIO, MAX_EDITOR_RATIO);
-}
-
 export interface ResolveChatColumnWidthInput {
   editorMinWidth?: number;
-  /** Measured width of chat + editor (NOT including the panel or the rail). */
+  /** Measured width of chat + work panel (NOT including the sidebar). */
   centerWidth: number;
-  /** Persisted share of the center row given to the editor. */
-  editorRatio: number;
+  /** The work panel's preferred pixel width (persisted, user-dragged). */
+  editorWidth: number;
 }
 
 /**
- * Chat's pixel width when the editor column is open.
+ * Chat's pixel width when the work panel is open.
+ *
+ * Layout 5a: the panel keeps a PIXEL width (default 480, the reference's)
+ * rather than a share of the row, so a wider window gives the extra room to
+ * the conversation, not to the panel. Chat takes what is left.
  *
  * **Chat is never squeezed below its floor.** m-T32 (user round 1: 「聊天页面
- * 极度变形」): this used to let chat absorb the shortfall — at a 800px center
- * row it returned 280px of chat, a deformed strip nobody can read. Both floors
- * are hard; when they cannot both hold, the answer is not a squeezed chat but
- * NO chat, and that is the ladder's job (`resolveShellLevel` drops to L2 at
- * exactly the width where both stop fitting). So this function assumes chat is
- * visible and always returns ≥ CHAT_MIN_WIDTH; callers must consult
- * `deriveChatVisible` first.
+ * 极度变形」): when chat and the panel cannot both hold their floors, chat
+ * keeps its floor and the panel takes the overflow, never the other way round.
  */
 export function resolveChatColumnWidth(input: ResolveChatColumnWidthInput): number {
-  const { centerWidth, editorRatio } = input;
+  const { centerWidth } = input;
   if (!isFiniteNumber(centerWidth) || centerWidth <= 0) {
     return CHAT_MIN_WIDTH;
   }
-
-  const max = centerWidth - (input.editorMinWidth ?? EDITOR_MIN_WIDTH);
+  const editorMinWidth = input.editorMinWidth ?? EDITOR_MIN_WIDTH;
+  const max = centerWidth - editorMinWidth;
   if (max <= CHAT_MIN_WIDTH) {
-    // Too narrow for both. Chat keeps its floor and the editor takes the
-    // overflow for the frame or two before the ladder hides chat entirely —
-    // never the other way round.
     return CHAT_MIN_WIDTH;
   }
-
-  const desired = Math.round(centerWidth * (1 - clampEditorRatio(editorRatio)));
-  return clamp(desired, CHAT_MIN_WIDTH, max);
-}
-
-export interface ChatWidthToEditorRatioInput {
-  /** Chat width the user just dragged to. */
-  chatWidth: number;
-  centerWidth: number;
-}
-
-/** Inverse of `resolveChatColumnWidth`, for committing a grip drag. */
-export function chatWidthToEditorRatio(input: ChatWidthToEditorRatioInput): number {
-  const { chatWidth, centerWidth } = input;
-  if (!isFiniteNumber(centerWidth) || centerWidth <= 0 || !isFiniteNumber(chatWidth)) {
-    return DEFAULT_EDITOR_RATIO;
-  }
-  return clampEditorRatio(1 - chatWidth / centerWidth);
+  const editor = isFiniteNumber(input.editorWidth)
+    ? Math.max(input.editorWidth, editorMinWidth)
+    : editorMinWidth;
+  return Math.round(clamp(centerWidth - editor, CHAT_MIN_WIDTH, max));
 }
 
 /**
- * "Is a file open" — the single fact the shell keys the whole center column
- * off. Taking the tab count (not `activeTab`) keeps it true during the frame
- * where a tab exists but none is active yet.
+ * "Is a file open" — whether the work panel offers its editor tab. Taking the
+ * tab count (not `activeTab`) keeps it true during the frame where a tab
+ * exists but none is active yet.
  */
 export function deriveEditorOpen(openTabCount: number): boolean {
   return isFiniteNumber(openTabCount) && openTabCount > 0;
@@ -172,13 +148,11 @@ export const RAIL_RESERVE = 0;
 /** The panel's PREFERRED width (round-12 demoted it from a hard floor). */
 export const PANEL_MIN_RESERVE = 380;
 /**
- * D08: 44, not 48 — a collapsed dock is exactly its icon rail
- * (`DOCK_RAIL_WIDTH`), and a reserve wider than the rendered column leaves a
- * dead 4px gutter that nothing paints. The constant is duplicated rather than
- * imported because `shellLayoutModel` already imports FROM this module, and
- * the reverse edge would be a cycle vite has to chunk.
+ * Layout 5a (ruling L1): 0. The icon rail that a collapsed dock used to leave
+ * behind (44px, D08) is gone; a collapsed sidebar takes no width at all, and
+ * the title bar's expand button brings it back.
  */
-export const SIDEBAR_COLLAPSED_RESERVE = 44;
+export const SIDEBAR_COLLAPSED_RESERVE = 0;
 
 /**
  * Below this the panel yields its width entirely and only the rail represents
@@ -202,7 +176,7 @@ export function contentFloor(input: {
 export interface ResolveShellChromeInput {
   /** The user's own sidebar toggle. */
   sidebarUserCollapsed: boolean;
-  /** `activeSurfaceId !== null` — the user's panel choice. */
+  /** The retired right panel's open flag; the shell passes `false` (D08, layout 5a). */
   panelOpen: boolean;
   /** The editor head's "hide chat" toggle; `null` = never touched = chat shows. */
   manualChat: ManualOverride;
@@ -268,8 +242,10 @@ export interface ResolveShellAllocationInput {
   sidebarWidth: number;
   sidebarCollapsed: boolean;
   chatVisible: boolean;
+  /** Layout 5a: the work panel is open (the name predates the panel). */
   editorOpen: boolean;
-  editorRatio: number;
+  /** The work panel's preferred pixel width. */
+  editorWidth: number;
   /** The user's surface choice — intent, not width. */
   panelVisible: boolean;
   /** The width the user dragged the panel to; a PREFERENCE since round-12. */
@@ -283,7 +259,7 @@ export interface ShellAllocation {
   centerWidth: number;
   /** 0 when chat is hidden; otherwise never below `CHAT_MIN_WIDTH`. */
   chatWidth: number;
-  /** 0 when no file is open. */
+  /** The work panel; 0 while it is closed. */
   editorWidth: number;
   /** What the panel ACTUALLY gets: the preference, compressed to fit. */
   panelWidth: number;
@@ -331,7 +307,7 @@ export function resolveShellAllocation(input: ResolveShellAllocationInput): Shel
     sidebarCollapsed,
     chatVisible,
     editorOpen,
-    editorRatio,
+    editorWidth: preferredEditorWidth,
     panelVisible,
     panelWidth,
   } = input;
@@ -345,7 +321,11 @@ export function resolveShellAllocation(input: ResolveShellAllocationInput): Shel
     let chatWidth = 0;
     let editorWidth = 0;
     if (chatVisible && editorOpen) {
-      chatWidth = resolveChatColumnWidth({ centerWidth, editorRatio, editorMinWidth });
+      chatWidth = resolveChatColumnWidth({
+        centerWidth,
+        editorWidth: preferredEditorWidth,
+        editorMinWidth,
+      });
       editorWidth = Math.max(editorMinWidth, centerWidth - chatWidth);
     } else if (chatVisible) {
       chatWidth = centerWidth;

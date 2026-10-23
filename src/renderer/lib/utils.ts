@@ -5,8 +5,8 @@ import { extendTailwindMerge } from 'tailwind-merge';
  * D25: tailwind-merge's default config only recognises font-size utilities
  * whose suffix is a themed t-shirt size (`xs`/`sm`/`md`/`lg`/`xl`, optionally
  * digit-prefixed) or an arbitrary value/variable. Our custom size tokens
- * (`text-code`, `text-markdown`, `text-meta`, `text-ui`, `text-section`,
- * `text-title`, `text-display`) don't
+ * (`text-code`, `text-ui`, `text-small`, `text-heading`, `text-title`,
+ * `text-display`) don't
  * match that shape, so twMerge falls through to the `text-color` group --
  * which matches ANY bare word via its default `isAny` catch-all -- and
  * silently drops whatever text-color class came before it (e.g.
@@ -17,7 +17,7 @@ import { extendTailwindMerge } from 'tailwind-merge';
  *
  * `text-2xs` already happens to match the default t-shirt regex ("2xs") and
  * is registered here too for clarity/robustness rather than relying on that
- * coincidence. `text-tool-arg` and `text-foreground-soft` are colour tokens
+ * coincidence. `text-foreground-faint` and `text-foreground-soft` are colour tokens
  * (not sizes), so they are deliberately left unregistered -- they belong in
  * `text-color`.
  */
@@ -27,20 +27,17 @@ const twMerge = extendTailwindMerge({
       'font-size': [
         'text-2xs',
         'text-code',
-        'text-markdown',
-        'text-meta',
         'text-ui',
-        // Decision 170 (issue #6): the 16px tier.
-        'text-section',
         'text-title',
         // Decision 174 (issue #6, second wave): the home title's 26px tier.
         'text-display',
-        // Decision 186 (issue #14): the sidebar group label's 13px tier.
-        'text-group-label',
         // T104: the chat area's runtime-configurable pair -- same classifier
         // hazard as the tokens above, see this block's note.
         'text-chat-body',
         'text-chat-process',
+        // Design system v2 (§3.1): the small (12px) and heading (14px) tiers.
+        'text-small',
+        'text-heading',
       ],
     },
   },

@@ -130,14 +130,16 @@ export function WelcomeView({ entry, onSignIn, onContinue, onUseOwnSetup }: Welc
       <AiClientMark />
 
       <div className="flex flex-col items-center gap-2">
-        <h1 className="font-semibold text-2xl tracking-[0.2em] text-foreground">{PRODUCT_NAME}</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="font-semibold text-title tracking-[0.2em] text-foreground">
+          {PRODUCT_NAME}
+        </h1>
+        <p className="text-muted-foreground text-ui">
           {t('Just a really good one to code with ai.')}
         </p>
       </div>
 
       {entry.notice === 'expired' ? (
-        <p className="text-sm text-warning">{t('Your session expired. Sign in again.')}</p>
+        <p className="text-ui text-warning">{t('Your session expired. Sign in again.')}</p>
       ) : null}
 
       {/* Just the buttons. The one-line blurbs that used to sit under each

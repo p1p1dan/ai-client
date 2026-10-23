@@ -26,6 +26,7 @@ import {
   TOOL_VERBS,
   type ToolGroupEntry,
   type ToolRun,
+  toolIconKind,
   toolRowPermissionClass,
   toolRowPermissionNoteClass,
   toolRunOutcome,
@@ -343,6 +344,25 @@ describe('deriveToolGroupRows — one row per entry', () => {
       'search',
       'thinking',
     ]);
+  });
+});
+
+// Design system v2 §1 rule 6: same concept, same icon in both engines.
+describe('icon parity between the Claude SDK and DSH tools', () => {
+  it.each([
+    ['TodoWrite', 'todo_write', 'todo'],
+    ['BashOutput', 'job_output', 'job'],
+    ['KillShell', 'job_kill', 'job'],
+    ['TaskStop', 'job_kill', 'job'],
+    ['ExitPlanMode', 'exit_plan_mode', 'plan'],
+  ] as const)('%s wears what %s wears (%s)', (sdk, dsh, kind) => {
+    expect(toolIconKind(sdk)).toBe(kind);
+    expect(toolIconKind(dsh)).toBe(kind);
+  });
+
+  it('the plan mark no longer shares the directory listing', () => {
+    expect(toolIconKind('TodoWrite')).not.toBe(toolIconKind('ls'));
+    expect(toolIconKind('ExitPlanMode')).not.toBe(toolIconKind('ls'));
   });
 });
 

@@ -63,9 +63,9 @@ export function NetworkSettings() {
     <div className="space-y-6">
       <SettingsSectionBlock title={t('Proxy')} description={t('Network proxy settings')}>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Enable proxy')}</span>
+          <span className="text-ui font-medium">{t('Enable proxy')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t(
                 'Sign-in, model requests, git, the terminal and commands run in chats go through the proxy'
               )}
@@ -77,7 +77,7 @@ export function NetworkSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium mt-2">{t('Proxy server')}</span>
+          <span className="text-ui font-medium mt-2">{t('Proxy server')}</span>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <Input
@@ -114,23 +114,21 @@ export function NetworkSettings() {
                 )}
               </Button>
               {proxyTestStatus === 'success' && proxyTestLatency !== null && (
-                <span className="text-xs text-green-600 dark:text-green-400">
-                  ✓ {proxyTestLatency}ms
-                </span>
+                <span className="text-small text-success">✓ {proxyTestLatency}ms</span>
               )}
               {proxyTestStatus === 'error' && proxyTestError && (
-                <span className="text-xs text-destructive" title={proxyTestError}>
+                <span className="text-small text-destructive" title={proxyTestError}>
                   ✗ {t('Failed')}
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t(
                 'e.g., 127.0.0.1:7897 or http://proxy:8080. Model requests cannot use a SOCKS proxy.'
               )}
             </p>
             {proxySettings.enabled && SOCKS_PROXY.test(proxySettings.server) && (
-              <p className="text-xs text-warning">
+              <p className="text-small text-warning">
                 {t(
                   'Model requests and commands run in chats cannot use a SOCKS proxy and connect directly. Use an http:// proxy for them.'
                 )}
@@ -139,7 +137,7 @@ export function NetworkSettings() {
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium mt-2">{t('Bypass list')}</span>
+          <span className="text-ui font-medium mt-2">{t('Bypass list')}</span>
           <div className="space-y-1.5">
             <Input
               value={proxySettings.bypassList}
@@ -148,18 +146,18 @@ export function NetworkSettings() {
               disabled={!proxySettings.enabled}
               className="w-64"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t('Comma-separated list of hosts that bypass the proxy')}
             </p>
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Update via proxy')}</span>
+          <span className="text-ui font-medium">{t('Update via proxy')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t('Route update requests through proxy')}
               {!proxySettings.enabled && proxySettings.useProxyForUpdates && (
-                <span className="text-xs ml-1">({t('Requires proxy to be enabled')})</span>
+                <span className="text-small ml-1">({t('Requires proxy to be enabled')})</span>
               )}
             </p>
             <Switch

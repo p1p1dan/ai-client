@@ -31,6 +31,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
   Empty,
@@ -43,7 +44,7 @@ import { Ident } from '@/components/ui/ident';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { SettingsSectionBlock } from './SettingsPrimitives';
+import { SETTINGS_CARD_FRAME_CLASS, SettingsSectionBlock } from './SettingsPrimitives';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
@@ -132,7 +133,7 @@ function PluginRow({
           <span id={nameId} className="min-w-0 truncate text-ui font-semibold">
             {plugin.name}
           </span>
-          <span className="shrink-0 text-meta tabular-nums text-muted-foreground">
+          <span className="shrink-0 text-small tabular-nums text-muted-foreground">
             {plugin.version}
           </span>
           <HostStateBadge plugin={plugin} />
@@ -143,8 +144,8 @@ function PluginRow({
             </Badge>
           )}
         </div>
-        {summary && <p className="text-meta text-muted-foreground">{summary}</p>}
-        <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-meta text-muted-foreground">
+        {summary && <p className="text-small text-muted-foreground">{summary}</p>}
+        <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-small text-muted-foreground">
           <span>
             {plugin.kind === 'official'
               ? t('Official DSH plugin')
@@ -187,7 +188,7 @@ function PluginRow({
         {reason && (
           <p
             className={cn(
-              'break-words text-meta',
+              'break-words text-small',
               host?.state === 'disabled' ? 'text-muted-foreground' : 'text-destructive'
             )}
           >
@@ -195,7 +196,7 @@ function PluginRow({
           </p>
         )}
         {host?.state === 'loaded' && host.inactiveRows && host.inactiveRows.length > 0 && (
-          <p className="break-words text-meta text-warning">
+          <p className="break-words text-small text-warning">
             {t('Loaded, but part of it did not start: {{rows}}', {
               rows: host.inactiveRows.join(', '),
             })}
@@ -217,21 +218,14 @@ function PluginRow({
   );
 }
 
+/** Design system v2 §7.7: the one notice is coss's `Alert`. */
 function Callout({ tone, children }: { tone: 'info' | 'warning' | 'error'; children: ReactNode }) {
   const Icon = tone === 'info' ? RefreshCw : TriangleAlert;
   return (
-    <div
-      role={tone === 'error' ? 'alert' : 'status'}
-      className={cn(
-        'flex gap-3 rounded-md border p-3 text-ui',
-        tone === 'info' && 'border-info/30 bg-info/8 text-info',
-        tone === 'warning' && 'border-warning/30 bg-warning/8 text-warning',
-        tone === 'error' && 'border-destructive/30 bg-destructive/8 text-destructive'
-      )}
-    >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-      <span className="min-w-0 flex-1 break-words">{children}</span>
-    </div>
+    <Alert variant={tone} role={tone === 'error' ? 'alert' : 'status'}>
+      <Icon />
+      <AlertDescription className="break-words">{children}</AlertDescription>
+    </Alert>
   );
 }
 
@@ -288,6 +282,7 @@ export function DshPluginsSettings() {
 
   return (
     <SettingsSectionBlock
+      bare
       title={t('Plugins')}
       description={t(
         'Plugins reviewed by this app and installed with it. Nothing is downloaded, and plugins cannot be added or removed here. Tools a plugin adds go through this app’s approval like the built-in tools.'
@@ -321,7 +316,7 @@ export function DshPluginsSettings() {
           {saveError && <Callout tone="error">{saveError}</Callout>}
 
           {plugins.length === 0 && !state.catalogError ? (
-            <Empty className="rounded-md border">
+            <Empty className="rounded-md border border-border-soft bg-surface-2">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <Blocks className="h-5 w-5" />
@@ -332,7 +327,7 @@ export function DshPluginsSettings() {
             </Empty>
           ) : (
             plugins.length > 0 && (
-              <ul className="divide-y rounded-md border">
+              <ul className={SETTINGS_CARD_FRAME_CLASS}>
                 {plugins.map((plugin) => (
                   <PluginRow
                     key={plugin.name}
@@ -346,7 +341,7 @@ export function DshPluginsSettings() {
           )}
 
           {plugins.length > 0 && !state.hostReported && (
-            <p className="text-meta text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t(
                 'The chat engine has not started since the app opened, so what it loaded is not shown yet.'
               )}
@@ -357,7 +352,7 @@ export function DshPluginsSettings() {
             <div className="space-y-2">
               <div className="space-y-1">
                 <h4 className="text-ui font-semibold">{t('No longer available')}</h4>
-                <p className="text-meta text-muted-foreground">
+                <p className="text-small text-muted-foreground">
                   {t('This version no longer ships these plugins, so they are not loaded.')}
                 </p>
               </div>
@@ -368,7 +363,7 @@ export function DshPluginsSettings() {
                     <div className="min-w-0 flex-1">
                       <Ident className="break-all">{item.name}</Ident>
                       {item.reason && (
-                        <p className="break-words text-meta text-muted-foreground">
+                        <p className="break-words text-small text-muted-foreground">
                           {t('Reason: {{reason}}', { reason: item.reason })}
                         </p>
                       )}

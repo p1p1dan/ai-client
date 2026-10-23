@@ -13,6 +13,8 @@ import {
   chatCodeTokenStyle,
   chatMarkdownBlockquoteClass,
   chatMarkdownCodeBlockClass,
+  chatMarkdownCodeFrameClass,
+  chatMarkdownCodeHeadClass,
   chatMarkdownFootnotesClass,
   chatMarkdownHeadingClass,
   chatMarkdownHrClass,
@@ -36,7 +38,7 @@ import {
   shouldRenderMarkdown,
   splitClosedPrefix,
 } from '../chatMarkdownPolicy';
-import { chatTurnClass, turnBodyClass, turnCopyButtonClass } from '../chatTimelineLayout';
+import { CHAT_PROSE_LEADING, chatTurnClass, turnBodyClass } from '../chatTimelineLayout';
 import { readDarkClass } from '../useDarkClass';
 import { stripComments } from './stripComments';
 
@@ -527,9 +529,10 @@ describe('FB1: splitClosedPrefix / advanceClosedPrefix', () => {
  */
 describe('[FB1-b] segment gap', () => {
   it('restores the block gap between segments, at the block gap value', () => {
-    expect(chatMarkdownSegmentGapClass()).toBe('space-y-3.5');
+    // Design system v2 §4.2: the block gap is body line x 0.5 = 10px.
+    expect(chatMarkdownSegmentGapClass()).toBe('space-y-2.5');
     // Read from the module rather than repeated as a literal: if `BLOCK_GAP`
-    // ever moves off 3.5, this fails instead of quietly disagreeing with it.
+    // ever moves off 2.5, this fails instead of quietly disagreeing with it.
     const source = readFileSync(
       fileURLToPath(new URL('../chatMarkdownPolicy.ts', import.meta.url)),
       'utf8'
@@ -750,6 +753,7 @@ const FONT_SIZE_TOKENS = [
   'text-2xs',
   'text-code',
   'text-meta',
+  'text-small',
   'text-ui',
   'text-markdown',
   'text-title',
@@ -784,7 +788,9 @@ const ALL_BLOCK_CLASSES: ReadonlyArray<{ name: string; cls: string }> = [
   { name: 'h6', cls: chatMarkdownHeadingClass(6) },
   { name: 'ul', cls: chatMarkdownListClass(false) },
   { name: 'ol', cls: chatMarkdownListClass(true) },
-  { name: 'code block', cls: chatMarkdownCodeBlockClass() },
+  // Design system v2 §7.5: the fence's block gap rides its frame; `<pre>` is
+  // only the scroll box inside it (asserted separately below).
+  { name: 'code block', cls: chatMarkdownCodeFrameClass() },
   { name: 'table wrap', cls: chatMarkdownTableWrapClass() },
   { name: 'blockquote', cls: chatMarkdownBlockquoteClass() },
   { name: 'hr', cls: chatMarkdownHrClass() },
@@ -842,11 +848,13 @@ describe('F-C4: wide content scrolls at the leaves, so no ancestor may clip', ()
     // runtime-configurable) \u2014 the heading assertion below pins the same token,
     // which is what keeps headings from shrinking below their own paragraph.
     expect(cls).toContain('text-chat-body');
-    // D1-b: 1.625, not 1.5. The negative is not redundant — this is a bare
-    // string, not a `cn()` call, so tailwind-merge never sees it and two
-    // `leading-*` classes would simply coexist, with the CSS cascade (not the
-    // write order) deciding. "Added the new one" must not pass on its own.
-    expect(cls).toContain('leading-relaxed');
+    // Design system v2 §3.1: the shared ~1.43 prose leading (was D1-b's
+    // 1.625). The negatives are not redundant — this is a bare string, not a
+    // `cn()` call, so tailwind-merge never sees it and two `leading-*` classes
+    // would simply coexist, with the CSS cascade (not the write order)
+    // deciding. "Added the new one" must not pass on its own.
+    expect(cls).toContain(CHAT_PROSE_LEADING);
+    expect(cls).not.toContain('leading-relaxed');
     expect(cls).not.toContain('leading-normal');
     expect(cls).toContain('break-words');
     // `globals.css` disables `user-select` on `*`; `.select-text` is the only
@@ -893,20 +901,21 @@ describe('F-C4: heading rank is carried by weight + colour + section gap, never 
     }
   });
 
-  it('F-C4: h1-h3 open a section (24px), h4-h6 sit on the block beat (14px)', () => {
+  // Design system v2 §1 rule 10: section = body line (20px), block = x 0.5.
+  it('F-C4: h1-h3 open a section (20px), h4-h6 sit on the block beat (10px)', () => {
     for (const level of [1, 2, 3] as const) {
-      expect(marginTopPx(chatMarkdownHeadingClass(level)), `h${level}`).toBe(24);
+      expect(marginTopPx(chatMarkdownHeadingClass(level)), `h${level}`).toBe(20);
     }
     for (const level of [4, 5, 6] as const) {
-      expect(marginTopPx(chatMarkdownHeadingClass(level)), `h${level}`).toBe(14);
+      expect(marginTopPx(chatMarkdownHeadingClass(level)), `h${level}`).toBe(10);
     }
   });
 });
 
 describe('F-C4: prose owns its two tiers and still invents no third (D1-b)', () => {
-  it('F-C4: every block gap is either the 14px block tier or the 24px section tier', () => {
+  it('F-C4: every block gap is either the 10px block tier or the 20px section tier', () => {
     for (const { name, cls } of ALL_BLOCK_CLASSES) {
-      expect([14, 24], `${name}: ${cls}`).toContain(marginTopPx(cls));
+      expect([10, 20], `${name}: ${cls}`).toContain(marginTopPx(cls));
     }
   });
 
@@ -919,23 +928,21 @@ describe('F-C4: prose owns its two tiers and still invents no third (D1-b)', () 
    * claim is gone, and re-numbering it would leave a test pinning a coupling
    * nobody intends. The decoupling gets its own positive evidence instead.
    */
-  it('[D1-1] the prose tiers are D1-b’s own, explicitly decoupled from the skeleton', () => {
+  // Design system v2 §1 rule 10 re-couples what D1-b split: every gap is now
+  // derived from the body line, so the prose block tier and the turn body's
+  // in-turn gap are the same 10px (the reference's chat-item-gap).
+  it('[D1-1] the prose tiers derive from the body line, with the turn skeleton', () => {
     // ① / ② the two prose tiers, spelled out so a failure names which moved.
-    expect(marginTopPx(chatMarkdownParagraphClass())).toBe(14);
-    expect(marginTopPx(chatMarkdownHeadingClass(1))).toBe(24);
-    // ③ the skeleton was NOT dragged along: P-17's within-turn beat keeps its
-    //    own number (8px since 2026-09-19 — `chatTimelineLayout.ts` owns it and
-    //    `chatTimelineLayout.test.ts` pins it), and `turnBodyClass()` feeds
-    //    `QuestionCard` and the tool shells, which set no size of their own.
+    expect(marginTopPx(chatMarkdownParagraphClass())).toBe(10);
+    expect(marginTopPx(chatMarkdownHeadingClass(1))).toBe(20);
+    // ③ the skeleton's in-turn gap is the same x 0.5 beat.
     const bodyGap = /(?:^|\s)gap-([0-9]+(?:\.[0-9]+)?)(?:\s|$)/.exec(turnBodyClass());
     expect(bodyGap).not.toBeNull();
     const skeletonGapPx = Number(bodyGap?.[1]) * SPACING_STEP_PX;
-    expect(skeletonGapPx).toBe(8);
-    // ④ the decoupling itself, asserted positively rather than left implicit
-    //    in ①. Without this line, an edit that re-couples BOTH sides (prose
-    //    back to 10, skeleton unchanged) is caught only by ①'s literal — and
-    //    an edit that moves them together is caught by nothing at all.
-    expect(marginTopPx(chatMarkdownParagraphClass())).not.toBe(skeletonGapPx);
+    expect(skeletonGapPx).toBe(10);
+    // ④ the coupling itself, asserted positively: moving one without the
+    //    other re-creates two answers to "what is a block gap".
+    expect(marginTopPx(chatMarkdownParagraphClass())).toBe(skeletonGapPx);
   });
 
   // Strictly stronger than the `toContain([14, 24])` check above: that one
@@ -945,7 +952,7 @@ describe('F-C4: prose owns its two tiers and still invents no third (D1-b)', () 
   it('[D1-2] there are exactly two tiers — never a third, and never one', () => {
     const tiers = new Set(ALL_BLOCK_CLASSES.map(({ cls }) => marginTopPx(cls)));
     expect(tiers.size, `tiers: ${[...tiers].join(', ')}`).toBe(2);
-    expect([...tiers].sort((a, b) => a - b)).toEqual([14, 24]);
+    expect([...tiers].sort((a, b) => a - b)).toEqual([10, 20]);
   });
 
   it('F-C4: every block neutralises its own leading gap when it is first', () => {
@@ -1007,9 +1014,12 @@ describe('F-C4: the mono domain', () => {
 });
 
 describe('F-C4: the remaining surfaces', () => {
+  // Design system v2 §1 rule 7: links do not wear the brand clay; the
+  // underline is what makes them visibly links.
   it('F-C4: links are visibly links', () => {
     const cls = chatMarkdownLinkClass();
-    expect(cls).toContain('text-primary');
+    expect(cls).toContain('text-foreground');
+    expect(cls).not.toMatch(/(?:^|\s)text-primary(?:\s|$)/);
     expect(cls).toContain('underline');
   });
 
@@ -1027,10 +1037,10 @@ describe('F-C4: the remaining surfaces', () => {
     // …and no alpha on the resting text colour either, which would fail the
     // same contrast floor without a hover involved.
     expect(cls).not.toMatch(/(?:^|\s)text-primary\/\d/);
-    // The affordance that replaced it. Alpha on the DECORATION is fine: it is
-    // not text, so the 4.5:1 floor does not apply to it.
-    expect(cls).toContain('decoration-primary/40');
-    expect(cls).toContain('hover:decoration-primary');
+    // The affordance that replaced it: the decoration moves from the faint ink
+    // to the body ink (design system v2: no brand clay on links).
+    expect(cls).toContain('decoration-foreground-faint');
+    expect(cls).toContain('hover:decoration-foreground');
     expect(cls).toContain('underline-offset-4');
   });
 
@@ -1070,7 +1080,7 @@ describe('F-C4: the remaining surfaces', () => {
   // `<section>` can inherit it.
   it('F-C4: the footnote block separates on the section tier, and nothing else does', () => {
     const footnotes = chatMarkdownFootnotesClass('footnotes');
-    expect(marginTopPx(footnotes)).toBe(24);
+    expect(marginTopPx(footnotes)).toBe(20);
     expect(footnotes).toContain('text-muted-foreground');
     // Any other section — including one whose class merely CONTAINS the word —
     // gets nothing.
@@ -1084,7 +1094,7 @@ describe('F-C4: the remaining surfaces', () => {
   // The placeholder must not be able to become a picture by CSS either.
   it('F-C4: the image placeholder is a chip, with nothing that can fetch', () => {
     const cls = chatMarkdownImagePlaceholderClass();
-    expect(cls).toContain('text-meta');
+    expect(cls).toContain('text-small');
     expect(cls).not.toMatch(/bg-\[url/);
     expect(cls).not.toContain('bg-cover');
   });
@@ -1639,13 +1649,14 @@ describe('FB2: the prose code-block copy button', () => {
       forbidden pair while explaining why it is forbidden. */
   const code = (): string => strippedChatSource('ChatCodeBlock.tsx');
 
-  // [FB2-1] a. Reuse, not a second button. `turnCopyButtonClass()` owns the
-  // 24px ghost-icon shape; FB2 adds a resting tier on top of it and nothing else.
-  it('[FB2-1] the button is assembled from turnCopyButtonClass(), body untouched', () => {
-    expect(source()).toContain('turnCopyButtonClass()');
-    // The shared function itself must not have grown an FB2-only class.
-    expect(turnCopyButtonClass()).not.toContain('absolute');
-    expect(turnCopyButtonClass()).not.toContain('/60');
+  // [FB2-1] a. Reuse, not a second button. Design system v2 §7.5: the 24px
+  // ghost icon button is the coss `Button` (ghost is the default inside a
+  // framed object), sitting in the frame's head bar.
+  it('[FB2-1] the button is the shared ghost icon button', () => {
+    expect(source()).toContain('<Button');
+    expect(source()).toContain('variant="ghost"');
+    expect(source()).toContain('size="icon-xs"');
+    expect(code()).not.toContain('absolute');
   });
 
   // [FB2-1] b. F-B15: a control only a mouse can discover is unreachable by
@@ -1656,10 +1667,10 @@ describe('FB2: the prose code-block copy button', () => {
   });
 
   // [FB2-1] c. D55 (3) asked for restraint, and "restraint" needs a value or it
-  // cannot be verified. The tier is the repo's existing ghost-icon one.
-  it('[FB2-1] the resting state drops exactly one tier, with a focus-visible lift', () => {
-    expect(source()).toContain('text-muted-foreground/70');
-    expect(source()).toContain('focus-visible:');
+  // cannot be verified. Design system v2: the ghost button's resting ink is
+  // the muted tier, with its own focus ring -- so no local tier is spelled.
+  it('[FB2-1] the resting state is the ghost tier, with no local override', () => {
+    expect(code()).not.toContain('text-muted-foreground/');
     // No arbitrary values -- design-system.md token discipline.
     expect(code()).not.toMatch(/opacity-\[/);
     expect(code()).not.toMatch(/text-muted-foreground\/\[/);
@@ -1668,14 +1679,23 @@ describe('FB2: the prose code-block copy button', () => {
   // [FB2-2] The (b) route -- putting `relative` on the shared class -- would
   // spread one component change into the policy layer, where several
   // assertions already pin this string.
-  it('[FB2-2] chatMarkdownCodeBlockClass() is unchanged; the wrapper carries the positioning', () => {
-    expect(chatMarkdownCodeBlockClass()).toBe(
-      'mt-3.5 first:mt-0 overflow-x-auto rounded-sm border border-border bg-muted/50 p-3 text-code leading-normal'
-    );
-    expect(chatMarkdownCodeBlockClass()).not.toContain('relative');
+  // Design system v2 §7.5: one closed frame (lg radius, card surface, soft
+  // edge) with a 32px head bar over a hairline; `<pre>` is only the scroll box.
+  it('[FB2-2] the frame carries the box, the head carries the button', () => {
+    expect(chatMarkdownCodeBlockClass()).toContain('overflow-x-auto');
+    expect(chatMarkdownCodeBlockClass()).not.toMatch(/(?:^|\s)(?:border|rounded-|bg-)/);
+    const frame = chatMarkdownCodeFrameClass();
+    for (const token of ['rounded-lg', 'border', 'border-border-soft', 'bg-surface-2']) {
+      expect(frame.split(/\s+/), token).toContain(token);
+    }
+    const head = chatMarkdownCodeHeadClass();
+    expect(head).toContain('h-8');
+    expect(head).toContain('border-b border-border-soft');
     // `<pre>` is the scroll container, so the button must be parented above it
-    // or it rides away on a long line.
-    expect(source()).toContain('<div className="relative">');
+    // (in the head) or it rides away on a long line.
+    expect(source()).toContain('<div className={chatMarkdownCodeHeadClass()}>');
+    expect(code().indexOf('<CodeCopyButton')).toBeGreaterThan(-1);
+    expect(code().indexOf('<CodeCopyButton')).toBeLessThan(code().indexOf('<pre '));
   });
 
   // [FB2-3] D53 (1) keeps copy off tool input/output, and the render path is

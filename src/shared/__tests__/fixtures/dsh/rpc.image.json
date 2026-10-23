@@ -40,7 +40,8 @@
             {
               "kind": "image",
               "mediaType": "image/png",
-              "name": "dot.png"
+              "name": "dot.png",
+              "attachmentId": "sha256:31596a2068ffa38bb8bb0f737ac50a7f942897342cfdbd64db7c16d9844ffb2c"
             }
           ],
           "liveMessageId": "dsh-user-5"

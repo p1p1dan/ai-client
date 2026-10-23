@@ -1,31 +1,30 @@
 import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu';
 import type { TempWorkspaceItem } from '@shared/types';
 import {
+  AlertTriangle,
   Archive,
   Check,
   ChevronDown,
   ChevronRight,
-  ChevronsDownUp,
-  ChevronsUpDown,
   CornerDownRight,
   FolderGit2,
   FolderMinus,
   FolderPlus,
   FolderTree,
-  ListChecks,
   MoreHorizontal,
   Pencil,
   Plus,
+  Puzzle,
   Search,
   Settings,
-  ShieldQuestion,
   Square,
-  Tag,
   Trash2,
   X,
 } from 'lucide-react';
 import {
+  type DragEvent,
   type FocusEvent,
+  type KeyboardEvent,
   type ReactElement,
   type ReactNode,
   useCallback,
@@ -46,13 +45,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import {
@@ -66,12 +58,13 @@ import {
   MenuTrigger,
 } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Spinner } from '@/components/ui/spinner';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { openHome } from '@/stores/homeDraft';
+import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { orderGroups, UNGROUPED_GROUP_ID, useSidebarArchiveStore } from '@/stores/sidebarArchive';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
@@ -80,6 +73,18 @@ import { projectIdForRepo, workspaceIdFor } from './deriveChatWorkspaceTree';
 import { endSessionRuntime } from './endSessionRuntime';
 import { sumFolderDiffTotals } from './folderDiffStats';
 import { SURFACE_ESCAPE_HOLD_ATTR } from './shellLayoutModel';
+import { GroupingModeRadio, SidebarListMenu } from './sidebar/SidebarListMenu';
+import { bucketSessions } from './sidebar/sidebarGrouping';
+import {
+  resolveGroupDrop,
+  resolveRovingKey,
+  resolveSidebarNavKey,
+  SIDEBAR_SESSION_DRAG_TYPE,
+  type SidebarNavItem,
+  sidebarAuxNavKey,
+  sidebarHeaderNavKey,
+  sidebarRowNavKey,
+} from './sidebarNavModel';
 import {
   applyHeldFolderOrder,
   buildGroupFolder,
@@ -126,7 +131,23 @@ import { useFolderDiffStatsPolling } from './useFolderDiffStats';
  * pinned first, the repositories by activity after it. No panel title, no
  * region titles, no dividers; groups are told apart by spacing alone. See
  * `docs/design-system.md`, 「侧栏层级（聊天面板）」.
+ *
+ * Layout 5b (ui-cohesion §6, the Claude Code desktop screenshot): the vertical
+ * nav is four entries — 新对话, 搜索 (the global search), 仓库 (the
+ * repositories and 添加仓库), 技能与插件 (the Extensions settings page). The
+ * tool row and its hairline are gone: its tools moved into the menu a group
+ * heading shows on hover (`SidebarListMenu`), and the filter field appears at
+ * the top of the list only while it is in use. Rows are text only with their
+ * state as a trailing mark; the grouping is switchable (ruling L2).
  */
+export interface SidebarSearchEntry {
+  onOpen: () => void;
+  /** False while there is no workspace to search (a home page with no repository). */
+  enabled: boolean;
+  /** The search shortcut as shown, faint at the entry's right. */
+  shortcut: string;
+}
+
 interface LeftNavProps {
   /** T-24: opens the shared AddRepositoryDialog mounted in App. */
   onAddRepository?: () => void;
@@ -138,6 +159,12 @@ interface LeftNavProps {
   /** Opens the shared `TempWorkspaceDialogs` delete confirmation, same as the
    * legacy shell's `onRequestTempDelete={openTempDelete}` wiring. */
   onRequestTempDelete?: (id: string) => void;
+  /**
+   * Layout 5b: the 「搜索」 entry — the shell's global search, resolved by
+   * `LeftDock` (whether there is a workspace to search, and the shortcut as
+   * shown). Absent, the entry is disabled.
+   */
+  search?: SidebarSearchEntry;
 }
 
 export function LeftNav({
@@ -146,9 +173,15 @@ export function LeftNav({
   repositories = [],
   tempWorkspaces = [],
   onRequestTempDelete,
+  search,
 }: LeftNavProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
+  /**
+   * Layout 5b: the filter field is shown while opened (from the list menu or
+   * by typing in the list) or while it holds a query.
+   */
+  const [filterOpen, setFilterOpen] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   // D1 (round-5): sidebar-local "which folder is the user targeting" state.
   // T-26 deliberately removed the cross-cutting store `selectedWorkspaceId`
@@ -403,6 +436,8 @@ export function LeftNav({
   const deleteGroup = useSidebarArchiveStore((state) => state.deleteGroup);
   const assignSession = useSidebarArchiveStore((state) => state.assignSession);
   const groupingByGroup = archiveMode === 'group';
+  /** Layout 5b (ruling L2): 「按状态」 / 「按时间」, buckets derived from the sessions. */
+  const groupingDerived = archiveMode === 'status' || archiveMode === 'date' ? archiveMode : null;
   // Issue #15 phase 2 (decision 187): the user's groups, newest first like the
   // repositories, then the fixed 「未分组」 bucket LAST — it is the least
   // specific group on the list and a permanently-first slot would push the
@@ -441,6 +476,30 @@ export function LeftNav({
     );
     return folders;
   }, [groupingByGroup, orderedGroups, groupAssignments, sessions, query, activeSessionId, t]);
+  /**
+   * Layout 5b: the buckets of 「按状态」 / 「按时间」, as folders so they render
+   * through the same header, fold, row budget and search as every group.
+   * `Date.now()` is read per derivation: a chat crosses midnight into 「昨天」
+   * on the next change to the list, which is soon enough for a list that
+   * changes with every turn.
+   */
+  const bucketFolders = useMemo(() => {
+    if (!groupingDerived) return [];
+    const pendingApprovalSessionIds = new Set(pendingApprovalCountBySession.keys());
+    return bucketSessions(sessions, groupingDerived, {
+      now: Date.now(),
+      pendingApprovalSessionIds,
+    }).map((bucket) =>
+      buildGroupFolder({
+        sessions: bucket.sessions,
+        groupId: bucket.id,
+        name: t(bucket.label),
+        query,
+        activeSessionId,
+        t,
+      })
+    );
+  }, [groupingDerived, sessions, pendingApprovalCountBySession, query, activeSessionId, t]);
   /** The ids the list shows in 「按分组」 — the mode's groups, bucket included. */
   const groupFolderIds = groupFolders.map((folder) => folder.projectId);
   const queryActive = query.trim().length > 0;
@@ -452,6 +511,138 @@ export function LeftNav({
    * (`handleQueryChange`).
    */
   const groupExpanded = (groupId: string) => queryActive || isProjectExpanded(groupId);
+
+  // ---- Issue #26 item 7: drag a chat onto a group, and keyboard navigation ----
+
+  /** The chat row being dragged (「按分组」 only), and the header it is over. */
+  const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
+  const [dropTargetGroupId, setDropTargetGroupId] = useState<string | null>(null);
+  const endSessionDrag = () => {
+    setDraggingSessionId(null);
+    setDropTargetGroupId(null);
+  };
+  /**
+   * A group header's drop wiring while a chat is dragged. Only a header the
+   * chat could move to takes the drop (not its own group); the drop calls the
+   * same `assignSession` as the row's 「移到分组」 menu.
+   */
+  const groupDropProps = (
+    groupId: string
+  ): { active: boolean; handlers: GroupDropHandlers } | undefined => {
+    const target = resolveGroupDrop({
+      sessionId: draggingSessionId,
+      targetGroupId: groupId,
+      assignments: groupAssignments,
+      groupIds: orderedGroups.map((group) => group.id),
+    });
+    if (!target || !draggingSessionId) return undefined;
+    const sessionId = draggingSessionId;
+    return {
+      active: dropTargetGroupId === groupId,
+      handlers: {
+        onDragOver: (event) => {
+          if (!event.dataTransfer.types.includes(SIDEBAR_SESSION_DRAG_TYPE)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          if (dropTargetGroupId !== groupId) setDropTargetGroupId(groupId);
+        },
+        onDragLeave: (event) => {
+          // Moving onto a child of the header is not leaving it.
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          setDropTargetGroupId((current) => (current === groupId ? null : current));
+        },
+        onDrop: (event) => {
+          event.preventDefault();
+          assignSession(sessionId, target);
+          endSessionDrag();
+        },
+      },
+    };
+  };
+
+  /**
+   * Roving tabindex: the one list item Tab lands on. Set by focus; when that
+   * item leaves the list (its group folded, a search narrowed it) the effect
+   * below moves it to the open chat's row or the first item.
+   */
+  const [navFocusKey, setNavFocusKey] = useState<string | null>(null);
+  const navListRef = useRef<HTMLDivElement>(null);
+  const navItemElements = (): HTMLElement[] => [
+    ...(navListRef.current?.querySelectorAll<HTMLElement>('[data-sidebar-nav-key]') ?? []),
+  ];
+  // Every commit: the list's items come from the DOM it just rendered (order,
+  // not geometry), so no derivation has to mirror the render's branches.
+  useEffect(() => {
+    const keys = navItemElements().map((element) => element.dataset.sidebarNavKey ?? '');
+    const next = resolveRovingKey(
+      keys,
+      navFocusKey,
+      activeSessionId ? sidebarRowNavKey(activeSessionId) : null
+    );
+    if (next !== navFocusKey) setNavFocusKey(next);
+  });
+  const handleNavFocus = (event: FocusEvent<HTMLElement>) => {
+    const key = event.target.dataset?.sidebarNavKey;
+    if (key && key !== navFocusKey) setNavFocusKey(key);
+  };
+  const filterInputRef = useRef<HTMLInputElement>(null);
+  const [filterFocusSeq, setFilterFocusSeq] = useState(0);
+  const openFilter = () => {
+    setSelection(null);
+    setFilterOpen(true);
+    setFilterFocusSeq((seq) => seq + 1);
+  };
+  // After the commit that shows the field, and a task later: the menu that
+  // asked for it settles its own focus as it closes.
+  useEffect(() => {
+    if (filterFocusSeq === 0) return;
+    filterInputRef.current?.focus();
+    const timer = setTimeout(() => filterInputRef.current?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [filterFocusSeq]);
+  const closeFilter = () => {
+    handleQueryChange('');
+    setFilterOpen(false);
+    navItemElements()
+      .find((element) => element.tabIndex === 0)
+      ?.focus();
+  };
+  const handleNavKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const elements = navItemElements();
+    const index = elements.indexOf(event.target as HTMLElement);
+    if (index < 0) return;
+    // Layout 5b: typing on the list filters it — the field the tool row used
+    // to show at all times opens with the typed character.
+    if (
+      event.key.length === 1 &&
+      event.key !== ' ' &&
+      !event.nativeEvent.isComposing &&
+      !selecting
+    ) {
+      event.preventDefault();
+      handleQueryChange(query + event.key);
+      openFilter();
+      return;
+    }
+    if (event.shiftKey) return;
+    const items: SidebarNavItem[] = elements.map((element) => ({
+      kind: (element.dataset.sidebarNav as SidebarNavItem['kind']) ?? 'row',
+      key: element.dataset.sidebarNavKey ?? '',
+      groupId: element.dataset.sidebarNavGroup,
+      expanded: element.getAttribute('aria-expanded') === 'true',
+    }));
+    const action = resolveSidebarNavKey(items, index, event.key);
+    if (!action) return;
+    event.preventDefault();
+    if (action.type === 'focus') {
+      elements[action.index]?.focus();
+      return;
+    }
+    // A search holds every group with matches open; its headers fold nothing.
+    if (queryActive) return;
+    setExpandedProjects((prev) => ({ ...prev, [action.groupId]: action.expanded }));
+  };
   /**
    * What 「按分组」 renders. A search narrows it the way it narrows the
    * repository tree below: a group with no hits collapses away instead of
@@ -489,7 +680,16 @@ export function LeftNav({
   const visibleFolders = queryActive
     ? orderedFolders.filter((folder) => folder.rows.length > 0)
     : orderedFolders;
-  const noMatches = queryActive && visibleFolders.length === 0 && !unboundFolder;
+  const visibleBucketFolders = queryActive
+    ? bucketFolders.filter((folder) => folder.rows.length > 0)
+    : bucketFolders;
+  const noMatches =
+    queryActive &&
+    (groupingDerived
+      ? visibleBucketFolders.length === 0
+      : groupingByGroup
+        ? visibleGroupFolders.length === 0
+        : visibleFolders.length === 0 && !unboundFolder);
 
   /**
    * User ruling 2026-10-11: clearing a search leaves open the groups its LAST
@@ -500,10 +700,17 @@ export function LeftNav({
    */
   const handleQueryChange = (next: string) => {
     if (queryActive && next.trim().length === 0) {
-      const matched = [
-        ...(unboundFolder ? [UNBOUND_FOLDER_ID] : []),
-        ...(showAddRepositoryEmptyState ? [] : visibleFolders.map((folder) => folder.projectId)),
-      ];
+      // Layout 5b: in the other groupings, the groups or buckets on screen.
+      const matched = groupingDerived
+        ? visibleBucketFolders.map((folder) => folder.projectId)
+        : groupingByGroup
+          ? visibleGroupFolders.map((folder) => folder.projectId)
+          : [
+              ...(unboundFolder ? [UNBOUND_FOLDER_ID] : []),
+              ...(showAddRepositoryEmptyState
+                ? []
+                : visibleFolders.map((folder) => folder.projectId)),
+            ];
       setExpandedProjects((prev) => ({
         ...prev,
         ...Object.fromEntries(matched.map((id) => [id, true])),
@@ -552,10 +759,12 @@ export function LeftNav({
    */
   const toggleGroupIds = groupingByGroup
     ? groupFolderIds
-    : [
-        ...(sessions.some(isUnboundSessionRow) ? [UNBOUND_FOLDER_ID] : []),
-        ...(showAddRepositoryEmptyState ? [] : folders.map((folder) => folder.projectId)),
-      ];
+    : groupingDerived
+      ? bucketFolders.map((folder) => folder.projectId)
+      : [
+          ...(sessions.some(isUnboundSessionRow) ? [UNBOUND_FOLDER_ID] : []),
+          ...(showAddRepositoryEmptyState ? [] : folders.map((folder) => folder.projectId)),
+        ];
   const allGroupsCollapsed =
     toggleGroupIds.length > 0 && toggleGroupIds.every((id) => !isProjectExpanded(id));
   const toggleAllGroups = () => {
@@ -566,12 +775,23 @@ export function LeftNav({
     }));
   };
   const toggleAllLabel = allGroupsCollapsed ? t('Expand all groups') : t('Collapse all groups');
-  // Issue #15: the tool row's one mode button. Its label states the mode the
-  // list is IN, not the one a click would switch to — a control that reads
-  // 「按分组」 while showing repositories would describe the wrong screen.
-  const archiveModeToggleLabel = groupingByGroup
-    ? t('Grouped by: group — switch to working directory')
-    : t('Grouped by: working directory — switch to group');
+  /** Layout 5b: the list menu a group heading shows on hover (`SidebarListMenu`). */
+  const listMenu = (
+    <SidebarListMenu
+      className={GROUP_ACTION_CLASS}
+      mode={archiveMode}
+      onModeChange={setArchiveMode}
+      onFilter={openFilter}
+      foldAll={{
+        label: toggleAllLabel,
+        collapsed: allGroupsCollapsed,
+        disabled: queryActive || toggleGroupIds.length === 0,
+        onToggle: toggleAllGroups,
+      }}
+      onSelectToArchive={() => setSelection(new Set())}
+      onNewGroup={groupingByGroup ? () => setCreatingGroup(true) : undefined}
+    />
+  );
 
   /**
    * Every list renders its rows through here, so the row's wiring (markers,
@@ -609,6 +829,19 @@ export function LeftNav({
       // Every conversation is listed in exactly one of them, so the tick can
       // always say which — `null` is 「未分组」, which is the absence of an
       // assignment rather than a group id.
+      navKey={sidebarRowNavKey(row.sessionId)}
+      tabbable={navFocusKey === sidebarRowNavKey(row.sessionId)}
+      // Issue #26 item 7: in 「按分组」 a row drags onto a group header. Not
+      // while choosing rows to archive: there a press picks the row.
+      {...(groupingByGroup && !selecting
+        ? {
+            drag: {
+              dragging: draggingSessionId === row.sessionId,
+              onStart: () => setDraggingSessionId(row.sessionId),
+              onEnd: endSessionDrag,
+            },
+          }
+        : {})}
       {...(groupingByGroup
         ? {
             groupMove: {
@@ -637,14 +870,22 @@ export function LeftNav({
   ) => {
     if (limited.hiddenCount > 0) {
       return (
-        <SidebarAuxRow onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: true }))}>
-          {t('View more ({{count}})', { count: limited.hiddenCount })}
+        <SidebarAuxRow
+          navKey={sidebarAuxNavKey(projectId)}
+          tabbable={navFocusKey === sidebarAuxNavKey(projectId)}
+          onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: true }))}
+          // Layout 5b: the screenshot's quiet 「显示更多」; the count is the tooltip.
+          title={t('View more ({{count}})', { count: limited.hiddenCount })}
+        >
+          {t('Show more chats')}
         </SidebarAuxRow>
       );
     }
     if (limited.collapsible) {
       return (
         <SidebarAuxRow
+          navKey={sidebarAuxNavKey(projectId)}
+          tabbable={navFocusKey === sidebarAuxNavKey(projectId)}
           onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: false }))}
         >
           {t('Show less')}
@@ -701,19 +942,24 @@ export function LeftNav({
                     [UNBOUND_FOLDER_ID]: !expanded,
                   })),
             summary: deriveGroupSummary(unboundFolder.rows, unreadSessionIds),
+            groupId: UNBOUND_FOLDER_ID,
+            tabbable: navFocusKey === sidebarHeaderNavKey(UNBOUND_FOLDER_ID),
             actions: (
-              // Decision 174: the home page with 「不选仓库（临时对话）」
-              // picked; the temporary chat is made by its first send.
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className={GROUP_ACTION_CLASS}
-                aria-label={t('New temporary chat')}
-                title={t('New temporary chat')}
-                onClick={() => openHome({ kind: 'unbound' })}
-              >
-                <Plus className="size-3.5" />
-              </Button>
+              <>
+                {listMenu}
+                {/* Decision 174: the home page with 「不选仓库（临时对话）」
+                    picked; the temporary chat is made by its first send. */}
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className={GROUP_ACTION_CLASS}
+                  aria-label={t('New temporary chat')}
+                  title={t('New temporary chat')}
+                  onClick={() => openHome({ kind: 'unbound' })}
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+              </>
             ),
           })}
           {expanded && limited.rows.length > 0 && (
@@ -762,6 +1008,7 @@ export function LeftNav({
     if (renamingGroupId === groupId) return renderGroupRename(folder);
     const actions = (
       <>
+        {listMenu}
         <Menu>
           <MenuTrigger
             render={
@@ -811,6 +1058,9 @@ export function LeftNav({
             })),
       summary: deriveGroupSummary(folder.rows, unreadSessionIds),
       actions,
+      groupId,
+      tabbable: navFocusKey === sidebarHeaderNavKey(groupId),
+      drop: groupDropProps(groupId),
     });
     return (
       <section key={groupId} className={SIDEBAR_GROUP_CLASS} data-sidebar-group={groupId}>
@@ -835,8 +1085,65 @@ export function LeftNav({
               {renderFolderLimitToggle(groupId, limited)}
             </div>
           ) : (
-            <p className="px-2 py-0.5 pl-5 text-meta text-muted-foreground">{t('No chats yet')}</p>
+            <p className="px-2 py-0.5 pl-5 text-small text-muted-foreground">{t('No chats yet')}</p>
           ))}
+      </section>
+    );
+  };
+
+  /**
+   * Layout 5b (ruling L2): one bucket of 「按状态」 / 「按时间」. The same
+   * header, fold, row budget and search as every group; no menu, no drop and
+   * no filing — a chat moves between buckets by itself. Rows name their
+   * repository at the end, as in 「按分组」. The 「＋」 opens the home page
+   * with nothing picked: a bucket has no repository to offer.
+   */
+  const renderBucketSection = (folder: SidebarFolder) => {
+    const bucketId = folder.projectId;
+    const expanded = groupExpanded(bucketId);
+    const limited = limitFolderRows({
+      rows: folder.rows,
+      showAll: folderShowAll[bucketId] === true,
+      queryActive,
+      activeSessionId,
+    });
+    return (
+      <section key={bucketId} className={SIDEBAR_GROUP_CLASS} data-sidebar-group={bucketId}>
+        {renderGroupHeader({
+          name: folder.name,
+          nameSlot: 'sidebar-bucket-name',
+          tooltip: folder.name,
+          expanded,
+          onToggle: queryActive
+            ? undefined
+            : () => setExpandedProjects((prev) => ({ ...prev, [bucketId]: !expanded })),
+          summary: deriveGroupSummary(folder.rows, unreadSessionIds),
+          groupId: bucketId,
+          tabbable: navFocusKey === sidebarHeaderNavKey(bucketId),
+          actions: (
+            <>
+              {listMenu}
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={GROUP_ACTION_CLASS}
+                aria-label={t('New chat')}
+                title={t('New chat')}
+                onClick={() => openHome()}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </>
+          ),
+        })}
+        {expanded && limited.rows.length > 0 && (
+          <div className={GROUP_ROWS_CLASS}>
+            {limited.rows.map((row) =>
+              renderSessionRow(row, repositoryNameForRow(row) ?? undefined)
+            )}
+            {renderFolderLimitToggle(bucketId, limited)}
+          </div>
+        )}
       </section>
     );
   };
@@ -850,14 +1157,14 @@ export function LeftNav({
    */
   const renderGroupRename = (folder: SidebarFolder) => (
     <section key={folder.projectId} className={SIDEBAR_GROUP_CLASS}>
-      <div className="flex h-8 w-full items-center gap-1 rounded-sm bg-hover px-2">
+      <div className="flex h-8 w-full items-center gap-1 rounded-xs bg-fill-ghost-hover px-2">
         <GroupMark />
         <input
           // biome-ignore lint/a11y/noAutofocus: the menu item that opened this asked for a name; typing must not need a second click.
           autoFocus
           defaultValue={folder.projectId === UNGROUPED_GROUP_ID ? '' : folder.name}
           aria-label={t('Group name')}
-          className="h-5.5 min-w-0 flex-1 rounded-xs border-0 bg-background px-1 text-group-label text-foreground outline-none ring-2 ring-ring/24"
+          className="h-5.5 min-w-0 flex-1 rounded-xs border-0 bg-surface-1 px-1 text-small font-medium text-foreground outline-none ring-2 ring-ring/24"
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               renameGroup(folder.projectId, event.currentTarget.value);
@@ -910,14 +1217,14 @@ export function LeftNav({
    */
   const renderNewGroup = () => (
     <section className={SIDEBAR_GROUP_CLASS}>
-      <div className="flex h-8 w-full items-center gap-1 rounded-sm bg-hover px-2">
+      <div className="flex h-8 w-full items-center gap-1 rounded-xs bg-fill-ghost-hover px-2">
         <GroupMark />
         <input
           // biome-ignore lint/a11y/noAutofocus: the menu item that opened this asked for a name; typing must not need a second click.
           autoFocus
           placeholder={t('Group name')}
           aria-label={t('Group name')}
-          className="h-5.5 min-w-0 flex-1 rounded-xs border-0 bg-background px-1 text-group-label text-foreground outline-none ring-2 ring-ring/24 placeholder:text-muted-foreground"
+          className="h-5.5 min-w-0 flex-1 rounded-xs border-0 bg-surface-1 px-1 text-small font-medium text-foreground outline-none ring-2 ring-ring/24 placeholder:text-muted-foreground"
           onKeyDown={(event) => {
             if (event.key === 'Enter') commitGroupName(event.currentTarget.value);
             else if (event.key === 'Escape') cancelGroupName();
@@ -949,6 +1256,38 @@ export function LeftNav({
     pendingMoveSessionId.current = null;
   };
 
+  /**
+   * S2 (H/18): ONE definition of the repository actions, rendered from every
+   * entry point — a repository heading's hover 「···」, its context menu, and
+   * (layout 5b) the 「仓库」 entry's submenu for that repository.
+   */
+  const repositoryMenuItems = (repo: Repository) => (
+    <>
+      <MenuItem onClick={() => setRepoToConfigure(repo)}>
+        <Settings />
+        {t('Repository Settings')}
+      </MenuItem>
+      {/* Remote repositories have no local directory to open — same
+          unsupported case `files.ts` throws on for
+          `file:revealInFileManager`, handled here by hiding the action
+          instead of exposing a click that always fails. */}
+      {repo.kind !== 'remote' && (
+        <MenuItem onClick={() => void handleOpenFolder(repo.path)}>
+          <Search />
+          {navigator.platform.toUpperCase().indexOf('MAC') >= 0
+            ? t('Reveal in Finder')
+            : t('Reveal in Explorer')}
+        </MenuItem>
+      )}
+      {onRemoveRepository && (
+        <MenuItem variant="destructive" onClick={() => setRepoToRemove(repo)}>
+          <FolderMinus />
+          {t('Remove repository')}
+        </MenuItem>
+      )}
+    </>
+  );
+
   /** One repository group: its header, then its rows. */
   const renderRepositoryGroup = (folder: (typeof visibleFolders)[number]) => {
     const expanded = groupExpanded(folder.projectId);
@@ -970,32 +1309,7 @@ export function LeftNav({
     // entry points — the hover "more" button and the header's context menu.
     // Two copies would drift apart the first time either gains an action, and
     // "the two give the same menu" is the whole acceptance criterion.
-    const repoMenuItems = folderRepo ? (
-      <>
-        <MenuItem onClick={() => setRepoToConfigure(folderRepo)}>
-          <Settings />
-          {t('Repository Settings')}
-        </MenuItem>
-        {/* Remote repositories have no local directory to open — same
-            unsupported case `files.ts` throws on for
-            `file:revealInFileManager`, handled here by hiding the action
-            instead of exposing a click that always fails. */}
-        {folderRepo.kind !== 'remote' && (
-          <MenuItem onClick={() => void handleOpenFolder(folderRepo.path)}>
-            <Search />
-            {navigator.platform.toUpperCase().indexOf('MAC') >= 0
-              ? t('Reveal in Finder')
-              : t('Reveal in Explorer')}
-          </MenuItem>
-        )}
-        {onRemoveRepository && (
-          <MenuItem variant="destructive" onClick={() => setRepoToRemove(folderRepo)}>
-            <FolderMinus />
-            {t('Remove repository')}
-          </MenuItem>
-        )}
-      </>
-    ) : null;
+    const repoMenuItems = folderRepo ? repositoryMenuItems(folderRepo) : null;
     const header = renderGroupHeader({
       name: folderName,
       nameSlot: 'sidebar-folder-name',
@@ -1013,9 +1327,11 @@ export function LeftNav({
               [folder.projectId]: !expanded,
             })),
       summary: deriveGroupSummary(folder.rows, unreadSessionIds),
+      groupId: folder.projectId,
+      tabbable: navFocusKey === sidebarHeaderNavKey(folder.projectId),
       trailing: diffTotals && (
         <span
-          className="flex items-center gap-1 text-meta tabular-nums"
+          className="flex items-center gap-1 text-small tabular-nums"
           title={t('Folder diff totals', {
             insertions: diffTotals.insertions,
             deletions: diffTotals.deletions,
@@ -1031,6 +1347,7 @@ export function LeftNav({
       ),
       actions: (
         <>
+          {listMenu}
           {folderRepo && (
             <Menu>
               <MenuTrigger
@@ -1112,139 +1429,159 @@ export function LeftNav({
     // drag handle on its right edge); this is one surface inside it, laid out
     // over the dock's absolutely-positioned mount stack.
     <aside className="flex h-full w-full min-w-0 flex-col">
-      {/* Decision 183 §1.10: the vertical nav, as in the reference. 「新建对话」
-          opens the home page (decision 174); 「添加仓库」 the shared dialog.
-          Decision 188 (2026-10-13): pt 10 -> 14, the two entries 1px -> 3px
-          apart, pb 2 -> 4, per the screenshot-style preview the user picked. */}
-      <div className="flex shrink-0 flex-col gap-0.75 px-2 pt-3.5 pb-1">
+      {/* Layout 5b (the desktop screenshot): four frameless entries right
+          under the dock's top row — 新对话 (the home page, decision 174),
+          搜索 (the global search, its shortcut faint at the right), 仓库 (each
+          repository's actions, and 添加仓库), 技能与插件 (the Extensions
+          settings page: skills and the DSH plugins). */}
+      <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
         <button
           type="button"
           className={NAV_ITEM_CLASS}
           title={t('New chat (opens the home page)')}
           onClick={handleNewSession}
         >
-          <span
-            aria-hidden
-            className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-selection text-foreground"
-          >
-            <Plus className="size-3.5" />
-          </span>
-          <span className="min-w-0 truncate">{t('New chat')}</span>
+          <Plus className={NAV_ICON_CLASS} />
+          <span className="min-w-0 flex-1 truncate">{t('New chat')}</span>
         </button>
-        <button type="button" className={NAV_ITEM_CLASS} onClick={onAddRepository}>
-          <span
-            aria-hidden
-            className="flex size-5.5 shrink-0 items-center justify-center text-muted-foreground"
-          >
-            <FolderPlus className="size-4" />
-          </span>
-          <span className="min-w-0 truncate">{t('Add Repository')}</span>
+        <button
+          type="button"
+          className={NAV_ITEM_CLASS}
+          disabled={!search?.enabled}
+          title={search?.enabled ? t('Search') : t('Open a chat in a repository to search it')}
+          onClick={() => search?.onOpen()}
+        >
+          <Search className={NAV_ICON_CLASS} />
+          <span className="min-w-0 flex-1 truncate">{t('Search')}</span>
+          {search && (
+            <span className="shrink-0 text-2xs text-foreground-faint">{search.shortcut}</span>
+          )}
+        </button>
+        <Menu>
+          <MenuTrigger render={<button type="button" className={NAV_ITEM_CLASS} />}>
+            <FolderGit2 className={NAV_ICON_CLASS} />
+            <span className="min-w-0 flex-1 truncate">{t('Repositories')}</span>
+          </MenuTrigger>
+          <MenuPopup align="start" side="bottom" className="min-w-52">
+            {repositories.map((repo) => {
+              const folder = folders.find((item) => item.projectId === projectIdForRepo(repo));
+              const workspaceId = folder?.newSessionWorkspaceId ?? null;
+              return (
+                <MenuSub key={repo.path}>
+                  <MenuSubTrigger>
+                    <FolderGit2 />
+                    <span className="min-w-0 truncate">{repo.name}</span>
+                  </MenuSubTrigger>
+                  <MenuSubPopup className="min-w-40">
+                    {workspaceId && (
+                      <>
+                        <MenuItem onClick={() => openHomeInFolder(workspaceId)}>
+                          <Plus />
+                          {t('New chat')}
+                        </MenuItem>
+                        <MenuSeparator />
+                      </>
+                    )}
+                    {repositoryMenuItems(repo)}
+                  </MenuSubPopup>
+                </MenuSub>
+              );
+            })}
+            {repositories.length > 0 && <MenuSeparator />}
+            <MenuItem onClick={() => onAddRepository?.()}>
+              <FolderPlus />
+              {t('Add Repository')}
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+        <button
+          type="button"
+          className={NAV_ITEM_CLASS}
+          onClick={() => useSettingsIntentStore.getState().requestSettings('extensions')}
+        >
+          <Puzzle className={NAV_ICON_CLASS} />
+          <span className="min-w-0 flex-1 truncate">{t('Skills and plugins')}</span>
         </button>
       </div>
 
-      {/* U31: both modes share this one h-8 row. A second row appearing only
-          while selecting would push the list down on entry and pull it back on
-          exit — the list is the thing being worked on, so it must not move
-          under the pointer. Decision 167: `sm:text-meta` on every xs button
-          here; the variant's desktop size is 12px (`sm:text-xs`), and these
-          labels are CJK in Chinese, which the design system keeps at 14px or
-          more. Decision 183 (user ruling 2026-10-12, prototype v6
-          `.sep-line`): the top zone ends 8px below this row in a full-width
-          hairline, the same in both modes, so the list starts at the same
-          place either way. */}
-      <div className={TOP_ZONE_END_CLASS}>
-        <div className="flex h-8 items-center gap-0.5">
-          {selecting ? (
-            <>
-              <span className="min-w-0 flex-1 truncate pl-2 text-meta">
-                {t('{{count}} selected', { count: selection.size })}
-              </span>
-              <Button
-                variant="outline"
-                size="xs"
-                className="h-6 shrink-0 sm:text-meta"
-                disabled={selection.size === 0}
-                title={t('Archive selected')}
-                onClick={() => setBulkArchiveOpen(true)}
-              >
-                <Archive className="h-3.5 w-3.5" />
-                {t('Archive')}
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="h-6 shrink-0 sm:text-meta"
-                onClick={() => setSelection(null)}
-              >
-                {t('Cancel')}
-              </Button>
-            </>
-          ) : (
-            <>
-              {/* Decision 183 §2.1: always shown, no filter toggle, drawn like the
-                prototype's `.search` (see `SIDEBAR_SEARCH_CLASS`). Decision 167
-                (issue #3 item 5): coss's InputGroup, input FIRST and the icon
-                addon after it — `order-first` draws the addon on the left, and
-                its `[data-size=sm]+&` padding only matches in this order.
-                `opacity-100` on the icon opts it out of the addon's 80% icon
-                fade (`svg:not([class*='opacity-'])`). */}
-              <InputGroup className={SIDEBAR_SEARCH_CLASS}>
-                <InputGroupInput
-                  size="sm"
-                  value={query}
-                  onChange={(event) => handleQueryChange(event.target.value)}
-                  placeholder={t('Search sessions')}
-                  aria-label={t('Search sessions')}
-                />
-                <InputGroupAddon align="inline-start">
-                  <Search className="size-3.5 text-muted-foreground opacity-100" />
-                </InputGroupAddon>
-              </InputGroup>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className={TOOL_BUTTON_CLASS}
-                aria-label={toggleAllLabel}
-                title={toggleAllLabel}
-                disabled={queryActive || toggleGroupIds.length === 0}
-                onClick={toggleAllGroups}
-              >
-                {allGroupsCollapsed ? (
-                  <ChevronsUpDown className="size-4" />
-                ) : (
-                  <ChevronsDownUp className="size-4" />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className={TOOL_BUTTON_CLASS}
-                title={t('Select sessions to archive')}
-                aria-label={t('Select sessions to archive')}
-                onClick={() => setSelection(new Set())}
-              >
-                <ListChecks className="size-4" />
-              </Button>
-              {/* Issue #15: one button, two modes. An icon toggle rather than a
-                  two-label segmented control: the row already holds a search
-                  box and two buttons inside a 280px panel, and CJK labels for
-                  「按工作目录」/「按分组」 would take most of it — the current mode
-                  is the tooltip and the accessible name, and the icon says
-                  which list the user is about to get. */}
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className={cn(TOOL_BUTTON_CLASS, groupingByGroup && 'bg-selection text-foreground')}
-                title={archiveModeToggleLabel}
-                aria-label={archiveModeToggleLabel}
-                onClick={() => setArchiveMode(groupingByGroup ? 'workspace' : 'group')}
-              >
-                {groupingByGroup ? <Tag className="size-4" /> : <FolderTree className="size-4" />}
-              </Button>
-            </>
-          )}
+      {/* U31: selecting to archive swaps in its bar. Layout 5b: otherwise the
+          filter field, only while it is open or holds a query — opened from
+          the list menu, or by typing on the list. Design system v2 §3.1:
+          buttons are `text-ui` (13px), so every xs button here overrides the
+          variant's 12px `text-small`. */}
+      {selecting ? (
+        <div className="flex h-8 shrink-0 items-center gap-0.5 px-2">
+          <span className="min-w-0 flex-1 truncate pl-2 text-small">
+            {t('{{count}} selected', { count: selection.size })}
+          </span>
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-6 shrink-0 text-ui"
+            disabled={selection.size === 0}
+            title={t('Archive selected')}
+            onClick={() => setBulkArchiveOpen(true)}
+          >
+            <Archive className="h-3.5 w-3.5" />
+            {t('Archive')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="h-6 shrink-0 text-ui"
+            onClick={() => setSelection(null)}
+          >
+            {t('Cancel')}
+          </Button>
         </div>
-      </div>
+      ) : filterOpen || queryActive ? (
+        // Decision 167 (issue #3 item 5): coss's InputGroup, input FIRST and
+        // the icon addon after it — `order-first` draws the addon on the
+        // left, and its `[data-size=sm]+&` padding only matches in this order.
+        // `opacity-100` on the icon opts it out of the addon's 80% icon fade.
+        // The field owns Escape (it clears and closes), like the rename editor.
+        <div className="shrink-0 px-2 pb-1" {...FILTER_HOLDS_ESCAPE}>
+          <InputGroup className={SIDEBAR_SEARCH_CLASS}>
+            <InputGroupInput
+              ref={filterInputRef}
+              size="sm"
+              autoFocus
+              value={query}
+              onChange={(event) => handleQueryChange(event.target.value)}
+              onFocus={(event) => {
+                const end = event.currentTarget.value.length;
+                event.currentTarget.setSelectionRange(end, end);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  closeFilter();
+                } else if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  navItemElements()[0]?.focus();
+                }
+              }}
+              placeholder={t('Search sessions')}
+              aria-label={t('Search sessions')}
+            />
+            <InputGroupAddon align="inline-start">
+              <Search className="size-3.5 text-muted-foreground opacity-100" />
+            </InputGroupAddon>
+            <InputGroupAddon align="inline-end">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="size-5 sm:size-5"
+                aria-label={t('Close filter')}
+                title={t('Close filter')}
+                onClick={closeFilter}
+              >
+                <X className="size-3.5" />
+              </Button>
+            </InputGroupAddon>
+          </InputGroup>
+        </div>
+      ) : null}
 
       {/* Decision 183 §1.10: ONE scrolling list — Temporary chats first, then
           the repositories (or, with none usable yet, the add-repository call
@@ -1261,11 +1598,21 @@ export function LeftNav({
           {...listHold.regionProps}
         >
           <ScrollArea>
-            {/* Decision 188: pt 2 -> 4 (+ the first group's 12 = 16 below the
-                hairline), pb 12 -> 16 above the footer's hairline. */}
-            <div className="px-2 pt-1 pb-4">
+            {/* Layout 5b: no hairline above the list any more (decision 188's
+                pt 4 measured from it); the nav's own pb-2 and the first
+                group's mt-1 set the gap. pb-3 above the footer's hairline. */}
+            {/* Issue #26 item 7: arrow keys move between the list's headers,
+                rows and "View more" lines; focus sets the roving tab stop. The
+                items keep their own roles and Enter handling. */}
+            <div
+              ref={navListRef}
+              data-slot="sidebar-list"
+              className="px-2 pt-0 pb-3"
+              onKeyDown={handleNavKeyDown}
+              onFocus={handleNavFocus}
+            >
               {noMatches && (
-                <p className="px-2 py-1 text-meta text-muted-foreground">
+                <p className="px-2 py-1 text-small text-muted-foreground">
                   {t('No matching sessions')}
                 </p>
               )}
@@ -1277,34 +1624,34 @@ export function LeftNav({
                 // Issue #15: 「按分组」 mode does not replace this — with no
                 // repository added there is nothing to group BY, and the way
                 // out of that state is still this button.
-                <Empty className="mt-2 gap-3 border-0 p-2 md:p-2">
-                  <EmptyMedia variant="icon">
-                    <FolderGit2 className="h-4.5 w-4.5" />
-                  </EmptyMedia>
-                  <EmptyHeader>
-                    {/* D25 §3.3: EmptyTitle's shared base now carries a
-                        negative tracking meant for its 18px default — this
-                        compact sidebar usage shrinks to 15px (text-ui) and may
-                        render CJK, so tracking must be cancelled back to
-                        normal (negative tracking + CJK is the banned
-                        combination). */}
-                    <EmptyTitle className="text-ui tracking-normal">
-                      {t('Add Repository')}
-                    </EmptyTitle>
-                    <EmptyDescription className="text-meta">
-                      {t('Add a repository to get started.')}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    className="h-6 sm:text-meta"
+                // Layout 5b: a quiet sidebar empty state (the reference's
+                // sidebar has no tiles or framed buttons): one faint line and
+                // a ghost row in the sidebar's own row style.
+                <div className="mt-1 flex flex-col gap-0.5 px-2">
+                  <p className="px-2 py-1 text-foreground-faint text-small">
+                    {t('Add a repository to get started.')}
+                  </p>
+                  <button
+                    type="button"
+                    className="flex h-7 items-center gap-2 rounded-xs px-2 text-left text-muted-foreground text-ui transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
                     onClick={onAddRepository}
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="size-4 shrink-0" />
                     {t('Add Repository')}
-                  </Button>
-                </Empty>
+                  </button>
+                </div>
+              ) : groupingDerived ? (
+                // Layout 5b (ruling L2): the derived buckets, Temporary chats
+                // included — the mode is about the chats' state, not where
+                // they run.
+                <>
+                  {visibleBucketFolders.map(renderBucketSection)}
+                  {!queryActive && bucketFolders.length === 0 && (
+                    <p className="px-2 py-1 text-small text-muted-foreground">
+                      {t('No chats yet')}
+                    </p>
+                  )}
+                </>
               ) : groupingByGroup ? (
                 // Issue #15 phase 2: the user's groups, then 「未分组」 last.
                 // Temporary chats and the Temp Session project are INSIDE a
@@ -1331,6 +1678,17 @@ export function LeftNav({
           </ScrollArea>
         </ContextMenuPrimitive.Trigger>
         <MenuPopup align="start" side="bottom" className="min-w-40">
+          {/* Layout 5b: the grouping, reachable with no heading on screen. */}
+          <MenuSub>
+            <MenuSubTrigger>
+              <FolderTree className="size-4" />
+              {t('Group chats')}
+            </MenuSubTrigger>
+            <MenuSubPopup className="min-w-40">
+              <GroupingModeRadio mode={archiveMode} onModeChange={setArchiveMode} />
+            </MenuSubPopup>
+          </MenuSub>
+          <MenuSeparator />
           {groupingByGroup && (
             <MenuItem onClick={() => setCreatingGroup(true)}>
               <Plus className="size-4" />
@@ -1479,51 +1837,41 @@ export function LeftNav({
 const LIST_AREA_CLASS = 'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)]';
 
 /**
- * Decision 183 (user ruling 2026-10-12, prototype v6 `.sep-line`): the top zone
- * (nav + search row) ends 12px + h-8 + 16px down in ONE full-width hairline —
- * the border sits on this full-width box, outside its `px-2`. The other zone
- * line is the account footer's top border (`UserFooterPill`); nothing else in
- * the panel has one.
- *
- * Decision 188 (2026-10-13, screenshot-style preview): pt 6 -> 12, pb 8 -> 16.
- * With the nav's own pb of 4 that puts 16px between 「添加仓库」 bottom and the
- * search box top, and 16px between the search box bottom and the hairline.
- */
-const TOP_ZONE_END_CLASS = 'shrink-0 border-b px-2 pt-3 pb-4';
-
-/**
  * Decision 183 (prototype `.group`): groups are separated by spacing alone —
- * 12px above the first, 14px between the rest. No divider, no region title.
- * Decision 188: the first gap 8 -> 12, matching the eight gaps in the preview.
+ * no divider, no region title. Layout 5b (the desktop screenshot): 16px above
+ * every heading but the first (4px under the nav's own 8px).
  */
-const SIDEBAR_GROUP_CLASS = 'mt-3.5 first:mt-3';
+const SIDEBAR_GROUP_CLASS = 'mt-4 first:mt-1';
 
-/** Header → first row 2px, rows 2px apart (prototype `.rows`). Not indented. */
-const GROUP_ROWS_CLASS = 'mt-0.5 space-y-0.5';
+/** Header → first row and rows to each other: flush, as in the screenshot. Not indented. */
+const GROUP_ROWS_CLASS = 'flex flex-col';
 
 /**
- * The top nav's two entries (prototype `.nav`): h-8, 14px (decision 188; was 15px), a 22px icon slot
- * (`size-5.5`), the hover step on hover and keyboard focus.
+ * Layout 5b: the top nav's entries — 28px rows, 13px text, a 16px Lucide icon,
+ * frameless with the ghost hover (design system v2 §7.12, `rounded-xs`).
  */
 const NAV_ITEM_CLASS =
-  'flex h-8 w-full items-center gap-2.5 rounded-sm px-2 text-left text-meta hover:bg-hover focus-visible:bg-hover';
+  'flex h-7 w-full items-center gap-2 rounded-xs px-2 text-left text-ui text-foreground-soft hover:bg-fill-ghost-hover hover:text-foreground focus-visible:bg-fill-ghost-hover disabled:pointer-events-none disabled:opacity-50 data-popup-open:bg-fill-ghost-hover';
+
+const NAV_ICON_CLASS = 'size-4 shrink-0 text-muted-foreground';
+
+/** The filter field owns Escape (it clears and closes) — see `SURFACE_ESCAPE_HOLD_ATTR`. */
+const FILTER_HOLDS_ESCAPE = { [SURFACE_ESCAPE_HOLD_ATTR]: '' };
 
 /**
- * The search box (prototype `.search`; user ruling 2026-10-11): coss's
- * InputGroup with its default chrome taken off on this one instance — resting,
- * a transparent fill (light and dark) inside a 1px `--border` line, no drop
- * shadow and no inner shade; focused, the `--background` fill and a
- * `--muted-foreground` line, no ring. `rounded-sm` because the group's
+ * The search box (prototype `.search`; user ruling 2026-10-11), redrawn for
+ * design system v2 §7.12: a FILLED field — `--fill-neutral`, no border line,
+ * no drop shadow, no inner shade — in light and dark alike; focused, a
+ * `--border-strong` line and no ring. `rounded-sm` because the group's
  * `rounded-lg` on an h-8 control breaks the radius clamp rule.
  *
  * Each override names the SAME variant stack as the base class it replaces,
  * so tailwind-merge drops the base one instead of leaving both to a
- * specificity contest (`border-border` / `border-input`, `bg-transparent` /
- * `bg-background`, `dark:bg-transparent` / `dark:bg-input/32`, `shadow-none` /
- * `shadow-xs`, and the `has-[input:focus-visible,…]` trio replacing
- * `border-ring` and `ring-2`). The focused fill is a `has-[…]` variant, whose
- * `:has()` argument outranks `bg-transparent` and `dark:bg-transparent` in
- * specificity. The inner shade lives on the group's `::before` behind two long
+ * specificity contest (`border-transparent` / `border-input`,
+ * `bg-fill-neutral` / `bg-background`, `dark:bg-fill-neutral` /
+ * `dark:bg-input/32`, `shadow-none` / `shadow-xs`, and the
+ * `has-[input:focus-visible,…]` pair replacing `border-ring` and `ring-2`).
+ * The inner shade lives on the group's `::before` behind two long
  * `not-has-[…]` stacks (light and dark); `before:hidden` removes the pseudo
  * element instead, since nothing else sets its `display`. The placeholder is
  * the full muted ink (the input's own is `/72`): the descendant selector
@@ -1531,13 +1879,7 @@ const NAV_ITEM_CLASS =
  * `sidebarActiveAndFolders.test.ts`.
  */
 const SIDEBAR_SEARCH_CLASS =
-  'h-8 min-w-0 flex-1 rounded-sm border-border bg-transparent shadow-none before:hidden dark:bg-transparent has-[input:focus-visible,textarea:focus-visible]:border-muted-foreground has-[input:focus-visible,textarea:focus-visible]:bg-background has-[input:focus-visible,textarea:focus-visible]:ring-0 [&_input]:placeholder:text-muted-foreground';
-
-/**
- * The tool row's icon buttons (prototype `.tb`): 32px (decision 188), a 16px icon. `sm:size-8`
- * because the `icon-xs` variant's desktop `sm:size-6` would otherwise win.
- */
-const TOOL_BUTTON_CLASS = 'size-8 shrink-0 text-muted-foreground sm:size-8';
+  'h-8 min-w-0 flex-1 rounded-sm border-transparent bg-fill-neutral shadow-none before:hidden dark:bg-fill-neutral has-[input:focus-visible,textarea:focus-visible]:border-border-strong has-[input:focus-visible,textarea:focus-visible]:ring-0 [&_input]:placeholder:text-muted-foreground';
 
 /**
  * A group header's hover buttons (prototype `.ib`): 20px, shown while the
@@ -1576,9 +1918,16 @@ function renderGroupHeader({
   summary,
   trailing,
   actions,
+  groupId,
+  tabbable,
+  drop,
 }: {
   name: string;
-  nameSlot: 'sidebar-folder-name' | 'sidebar-temporary-name' | 'sidebar-group-name';
+  nameSlot:
+    | 'sidebar-folder-name'
+    | 'sidebar-temporary-name'
+    | 'sidebar-group-name'
+    | 'sidebar-bucket-name';
   /** Decision 187: draw the 2px group mark before the label (groups only). */
   mark?: boolean;
   tooltip: string;
@@ -1588,15 +1937,33 @@ function renderGroupHeader({
   summary: SidebarGroupSummary | null;
   trailing?: ReactNode;
   actions: ReactNode;
+  /** Issue #26 item 7: the group this header folds, for the keyboard model. */
+  groupId: string;
+  /** Roving tabindex: whether Tab lands on this header. */
+  tabbable: boolean;
+  /** 「按分组」 only: the header as a drop target for a dragged chat. */
+  drop?: { active: boolean; handlers: GroupDropHandlers };
 }): ReactElement {
   return (
-    <div className="group flex h-8 w-full items-center gap-1 rounded-sm px-2 has-focus-visible:bg-hover">
+    <div
+      className={cn(
+        'group flex h-7 w-full items-center gap-1 rounded-xs px-2 has-focus-visible:bg-fill-ghost-hover',
+        // Design system v2 §1 rule 7: the drag target is one of clay's few places.
+        drop?.active && 'ring-2 ring-primary/60 ring-inset'
+      )}
+      data-drop-target={drop?.active || undefined}
+      {...drop?.handlers}
+    >
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-center gap-1 text-left text-group-label text-muted-foreground group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"
+        className="flex min-w-0 flex-1 items-center gap-1 text-left text-small font-medium text-foreground-faint group-hover:text-foreground-soft group-has-focus-visible:text-foreground-soft"
         title={tooltip}
         aria-expanded={expanded}
         onClick={onToggle}
+        tabIndex={tabbable ? 0 : -1}
+        data-sidebar-nav="header"
+        data-sidebar-nav-key={sidebarHeaderNavKey(groupId)}
+        data-sidebar-nav-group={groupId}
       >
         {mark && <GroupMark />}
         <span data-slot={nameSlot} className="min-w-0 truncate">
@@ -1626,6 +1993,13 @@ function renderGroupHeader({
   );
 }
 
+/** A group header's drop handlers (issue #26 item 7). */
+interface GroupDropHandlers {
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+}
+
 /**
  * Decision 187 (user ruling 2026-10-13): the mark in front of a group label in
  * 「按分组」 mode — a 2px vertical rule, user-created group and 「未分组」 alike.
@@ -1645,8 +2019,8 @@ function GroupMark() {
 
 /**
  * Decision 183 §2.2: what a folded group is hiding, in the rows' own marks —
- * a spinner for turns running (with the count past one), the orange dot for a
- * chat waiting on the user, then red for an unseen failure or else green for
+ * a spinner for turns running (with the count past one), the clay
+ * waiting-on-you dot (design system v2 §6: both drawn by `StatusIcon`), then red for an unseen failure or else green for
  * an unseen result. Each says itself in words for screen readers.
  */
 function GroupSummaryMarks({ summary }: { summary: SidebarGroupSummary }) {
@@ -1659,20 +2033,19 @@ function GroupSummaryMarks({ summary }: { summary: SidebarGroupSummary }) {
   return (
     <span
       data-slot="sidebar-group-summary"
-      className="ml-0.5 flex shrink-0 items-center gap-1 text-meta text-muted-foreground tabular-nums"
+      className="ml-0.5 flex shrink-0 items-center gap-1 text-small text-muted-foreground tabular-nums"
     >
       {summary.running > 0 && (
         <span className="flex items-center gap-0.5" title={runningLabel}>
-          <Spinner aria-label={runningLabel} className="size-3 shrink-0 text-status-running" />
+          <StatusIcon status="running" label={runningLabel} />
           {summary.running > 1 && summary.running}
         </span>
       )}
       {summary.waiting && (
-        <span
-          role="img"
-          aria-label={t('A chat is waiting for you')}
+        <StatusIcon
+          status="waiting"
+          label={t('A chat is waiting for you')}
           title={t('A chat is waiting for you')}
-          className="size-1.5 shrink-0 rounded-full bg-warning"
         />
       )}
       {summary.unread && (
@@ -1772,18 +2145,33 @@ function useRegionHold(mounted: boolean) {
 }
 
 /**
- * Decision 167 / 183: the list's own L4 rows — "View more (N)" and "Show
- * less". h-8 like a row (prototype `.aux`), 14px, muted; the empty leading
- * `w-4` slot puts the text in the same column as the chat titles.
+ * Decision 167 / 183: the list's own L4 rows — 「显示更多」 and "Show less".
+ * Layout 5b: h-7 like a row, 12px in the faint ink, starting in the titles'
+ * column (rows no longer have a leading slot).
  */
-function SidebarAuxRow({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function SidebarAuxRow({
+  onClick,
+  navKey,
+  tabbable,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  navKey: string;
+  tabbable: boolean;
+  title?: string;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
-      className="flex h-8 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"
+      tabIndex={tabbable ? 0 : -1}
+      data-sidebar-nav="aux"
+      data-sidebar-nav-key={navKey}
+      title={title}
+      className="flex h-7 w-full items-center rounded-xs px-2 text-small text-foreground-faint tabular-nums hover:bg-fill-ghost-hover hover:text-muted-foreground focus-visible:bg-fill-ghost-hover"
       onClick={onClick}
     >
-      <span aria-hidden className="flex w-4 shrink-0 items-center justify-center" />
       <span className="min-w-0 truncate">{children}</span>
     </button>
   );
@@ -1864,6 +2252,14 @@ interface SessionRowProps {
     /** 「新建分组…」: the new group is made with the name and this chat goes in. */
     onCreateGroup: () => void;
   };
+  /** Issue #26 item 7: the row's roving-tabindex key, and whether Tab lands on it. */
+  navKey: string;
+  tabbable: boolean;
+  /**
+   * Issue #26 item 7: present when the row can be dragged onto a group header
+   * (「按分组」, not selecting). Rows without it are not draggable.
+   */
+  drag?: { dragging: boolean; onStart: () => void; onEnd: () => void };
 }
 
 function SessionRow({
@@ -1883,6 +2279,9 @@ function SessionRow({
   onDeleteTemp,
   onJumpToWorkspace,
   groupMove,
+  navKey,
+  tabbable,
+  drag,
 }: SessionRowProps) {
   const { t, locale } = useI18n();
   // Decision 144: the row as shown. A placeholder title (`New chat`) is an
@@ -1904,8 +2303,15 @@ function SessionRow({
   const unreadLabel = row.failed
     ? t('Failed while you were away')
     : t('Finished while you were away');
+  // Layout 5b: a pending approval is waiting-on-you even before the status
+  // says so; the count moved from its badge into this mark's words.
+  const rowWaiting = (row.busy && isWaitingSessionStatus(row.status)) || pendingApprovalCount > 0;
   const waitingLabel =
-    row.status === 'waiting_question' ? t('Waiting for an answer') : t('Waiting for approval');
+    pendingApprovalCount > 0
+      ? t('{{count}} pending approval requests', { count: pendingApprovalCount })
+      : row.status === 'waiting_question'
+        ? t('Waiting for an answer')
+        : t('Waiting for approval');
   const titleParts = splitBranchSuffix(row.title);
 
   // Point-check issue 26 (decision 138). The editor used to lose focus to the
@@ -2048,8 +2454,8 @@ function SessionRow({
           }}
           // Decision 167: the radius clamp rule (design system, Border
           // Radius) — the primitive's `rounded-lg` on h-6 renders as a pill.
-          // Decision 170: the row's own 14px, so a rename does not grow the text.
-          className="h-6 flex-1 rounded-sm text-meta before:rounded-[calc(var(--radius-sm)-1px)]"
+          // Decision 170: the row's own size (`text-ui`), so a rename does not grow the text.
+          className="h-6 flex-1 rounded-sm text-ui before:rounded-[calc(var(--radius-sm)-1px)]"
         />
       </div>
     );
@@ -2061,10 +2467,10 @@ function SessionRow({
         <ContextMenuPrimitive.Trigger
           ref={rowRef}
           className={cn(
-            // --hover / --selection are two distinct steps of the same Flexoki
-            // interactive ramp; neither takes a /N modifier.
-            // The two are mutually exclusive on purpose: `hover:bg-hover` compiles to
-            // `.hover\:bg-hover:hover` (0,2,0) and would outrank a plain `.bg-selection`
+            // Design system v2 §7.12: --fill-ghost-hover / --fill-ghost-selected
+            // are two solid steps of one ramp; neither takes a /N modifier.
+            // The two are mutually exclusive on purpose: `hover:bg-fill-ghost-hover` compiles to
+            // `.hover\:bg-fill-ghost-hover:hover` (0,2,0) and would outrank a plain `.bg-fill-ghost-selected`
             // (0,1,0), so pointing at the active row would repaint it as an ordinary
             // hovered row and erase the selection. Keyboard focus (decision 167) lights
             // the same step as hover; the global reset removed the outline.
@@ -2072,19 +2478,37 @@ function SessionRow({
             // makes the row's minimum content size exceed the track at the default
             // sidebar width, and without it the trailing items would spill past the
             // rounded edge instead of the branch text absorbing the deficit.
-            // Decision 170 (issue #6 rulings 3–4): 14px, and the title one step
+            // Decision 170 (issue #6 rulings 3–4): `text-ui`, and the title one step
             // below the body ink — `--foreground-soft`, never with /N — except
             // on the open chat, which keeps the body colour. `relative`
             // anchors the floating actions (decision 183 §1.4).
-            'group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-meta',
+            // Layout 5b: 28px (h-7), text only — the state is a trailing mark.
+            'group relative flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-xs px-2 text-left text-ui',
             active
-              ? 'bg-selection text-accent-foreground'
-              : 'text-foreground-soft hover:bg-hover focus-visible:bg-hover'
+              ? 'bg-fill-ghost-selected text-foreground'
+              : 'text-foreground-soft hover:bg-fill-ghost-hover focus-visible:bg-fill-ghost-hover',
+            drag?.dragging && 'opacity-50'
           )}
           onClick={() => (onToggleSelect ? onToggleSelect(row.sessionId) : onSelect())}
           onDoubleClick={onToggleSelect ? undefined : beginRename}
           role="button"
-          tabIndex={0}
+          // Issue #26 item 7: roving tabindex — still focusable, one Tab stop.
+          tabIndex={tabbable ? 0 : -1}
+          data-sidebar-nav="row"
+          data-sidebar-nav-key={navKey}
+          // Native drag: the platform's drag threshold (a few px, like the
+          // reference's 4px dead zone) keeps a click from starting one.
+          draggable={drag ? true : undefined}
+          onDragStart={
+            drag
+              ? (event: DragEvent<HTMLElement>) => {
+                  event.dataTransfer.setData(SIDEBAR_SESSION_DRAG_TYPE, row.sessionId);
+                  event.dataTransfer.effectAllowed = 'move';
+                  drag.onStart();
+                }
+              : undefined
+          }
+          onDragEnd={drag ? drag.onEnd : undefined}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
@@ -2094,102 +2518,31 @@ function SessionRow({
           }}
           title={tooltip}
         >
-          {/* Decision 167: ONE fixed `w-4` status slot at the head of every row,
-              rendered even when empty, so the title never moves when a run
-              starts or ends or selection mode begins (decision 138 §2 accepted
-              a 6px shift; this retires it). */}
-          <span className="flex w-4 shrink-0 items-center justify-center">
-            {/* U31: the checkbox replaces the run-state dot rather than joining
-              it. Both want the same slot at the row's head, and while the
-              user is choosing what to archive, "is it selected" is the fact
-              that matters — the dot comes back the moment selection ends. */}
-            {onToggleSelect && (
-              <span
-                aria-hidden
-                className={cn(
-                  'flex size-3.5 shrink-0 items-center justify-center rounded-xs border',
-                  selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
-                )}
-              >
-                {selected && <Check className="size-2.5" />}
-              </span>
-            )}
-            {/* The marker, in one slot so rows never jump: spinner = running,
-              filled green/red = an unread result (S3), ring = started (a
-              worker is attached in the background), faint ring = not started
-              (decision 183 §1.7: every row carries a mark, so they line up).
-              One slot, not several — a second dot would widen the row and push
-              the title, and only ever one of these is the fact worth acting on.
-
-              Order is urgency, and it is also why nothing is lost by sharing
-              the slot: `busy` outranks `unread` because a session cannot be
-              running and holding an unseen result at the same time (the result
-              is what ends the run), and `unread` outranks `started` because
-              "attached in the background" is exactly the state every unread row
-              is in — showing the ring there would say the less useful half. */}
-            {/* Decision 137 §1: a running turn spins; a turn parked on an
-              approval card or a question shows an attention dot instead,
-              because the next move is the user's. Both carry their state in
-              words for the tooltip and screen readers. */}
-            {onToggleSelect ? null : row.busy ? (
-              isWaitingSessionStatus(row.status) ? (
-                <span
-                  role="img"
-                  aria-label={waitingLabel}
-                  title={waitingLabel}
-                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
-                />
-              ) : (
-                <Spinner
-                  aria-label={t('Running')}
-                  className="size-3 shrink-0 text-status-running"
-                />
-              )
-            ) : unread ? (
-              // Not `aria-hidden` like its neighbours: the run-state dots restate
-              // something the row's own text already implies, while this one is
-              // the ONLY carrier of "there is a result here you have not seen".
-              <span
-                role="img"
-                aria-label={unreadLabel}
-                title={unreadLabel}
-                className={cn(
-                  'h-1.5 w-1.5 shrink-0 rounded-full',
-                  row.failed ? 'bg-destructive' : 'bg-success'
-                )}
-              />
-            ) : started ? (
-              // Issue #16: an attached session is a FILLED dot. It used to be a
-              // hollow ring, and the only other ring was the faint one below —
-              // two outlines differing by one colour step, which the user could
-              // not tell apart at this size. Filled vs. outline separates them
-              // by shape, so the distinction survives any palette.
-              <span
-                aria-hidden
-                className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground"
-                title={t('Running in the background')}
-              />
-            ) : (
-              // `--muted-foreground-faint`: the muted ink mixed toward the
-              // sidebar's surface, so "not started" reads a step quieter than
-              // "attached in the background". A colour token; never add /N.
-              <span
-                aria-hidden
-                className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground-faint"
-                title={t('Not started')}
-              />
-            )}
-          </span>
+          {/* U31: while choosing what to archive, a checkbox leads the row —
+              the one time a row has a leading slot (layout 5b moved the
+              run-state mark to the end). */}
+          {onToggleSelect && (
+            <span
+              aria-hidden
+              className={cn(
+                'flex size-3.5 shrink-0 items-center justify-center rounded-xs border',
+                selected
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border-soft'
+              )}
+            >
+              {selected && <Check className="size-2.5" />}
+            </span>
+          )}
           {/* `min-w-20` is the whole point of this row's sizing (S2 b). The title is
           the row's identity and the only user-authored text on it, so it gets a
           floor and everything else yields to it. Without the floor `flex-1
-          min-w-0` shrinks to whatever is left. Budget at the 280px default
-          (decision 183: rows are not indented and the time box is gone; the
-          hover actions float over the row instead of taking width): the
-          panel's 280 includes its 1px right border, so 280 - 1 - 16 (the
-          list's px-2) - 16 (the row's px-2) = 247px of content; minus the
-          16px status slot and one 6px gap, the title gets 225px
-          (SIDEBAR_DEFAULT_WIDTH - DOCK_RAIL_WIDTH = 280). */}
+          min-w-0` shrinks to whatever is left. Budget at the 272px default
+          (layout 5a: SIDEBAR_DEFAULT_WIDTH = 272, no rail; layout 5b: no
+          leading slot): the sidebar's 272 includes its 1px right border, so
+          272 - 1 - 16 (the list's px-2) - 16 (the row's px-2) = 239px of
+          content; minus the trailing 14px mark and one 6px gap, the title
+          gets 219px. */}
           {titleParts.suffix === null ? (
             <span className="min-w-20 flex-1 truncate">{row.title}</span>
           ) : (
@@ -2207,15 +2560,29 @@ function SessionRow({
               <span className="shrink-0 text-muted-foreground">{titleParts.suffix}</span>
             </span>
           )}
-          {/* Alert badges are state, not context, so they stay on every row.
-              Decision 167 unified them at Badge `lg` (14px
-              on desktop; revises decisions 144 §2 and 123 §13, which kept the
-              Latin-only marks at `sm`'s 10px). */}
+          {branch && (
+            // Decision 167 §2 (replaces D21-A): context text, only for a chat
+            // on a non-main workspace (a linked worktree), only inside its
+            // folder, and only the branch's last segment — the full name is
+            // its tooltip. It is the row's sole yielder: the only trailing
+            // item that is unbounded user data and recoverable elsewhere (the
+            // tooltip, the Composer target bar), so when the row runs out of
+            // width this gives — never the title. `shrink` + `min-w-0` is what
+            // lets flexbox route the deficit here; dropping either sends it
+            // back to the title. Layout 5b: the faint ink, so it reads as
+            // context next to the soft title.
+            <span
+              className="min-w-0 max-w-24 shrink truncate text-small text-foreground-faint"
+              title={branch}
+            >
+              {lastBranchSegment(branch)}
+            </span>
+          )}
           {/* dsh-rebase P1-9e (decision 051): the legacy copy of a migrated
               chat, continued in 1.0.x since. It sits next to the migrated
               chat under the same title, so the mark is what tells the two
               apart; the tooltip says what continuing it does. The label is
-              the version alone. */}
+              the version alone. Decision 167: Badge `lg`. */}
           {row.legacyDiverged && (
             <Badge
               variant="warning"
@@ -2227,47 +2594,52 @@ function SessionRow({
               1.0.x
             </Badge>
           )}
-          {pendingApprovalCount > 0 && (
-            <Badge
-              variant="warning"
-              size="lg"
-              className="shrink-0 gap-0.5 tabular-nums"
-              aria-label={t('{{count}} pending approval requests', {
-                count: pendingApprovalCount,
-              })}
-              title={t('{{count}} pending approval requests', {
-                count: pendingApprovalCount,
-              })}
-            >
-              <ShieldQuestion className="size-3.5" />
-              {pendingApprovalCount}
-            </Badge>
-          )}
-          {/* Decision 144: in the UI language, and at the badge's large size
-              (14px on desktop) because the word is CJK in Chinese — the design
-              system does not let CJK sit at the small size's 10px. */}
-          {row.failed && (
-            <Badge variant="destructive" size="lg" className="shrink-0">
-              {t('Failed')}
-            </Badge>
-          )}
-          {branch && (
-            // Decision 167 §2 (replaces D21-A): context text, only for a chat
-            // on a non-main workspace (a linked worktree), only inside its
-            // folder, and only the branch's last segment — the full name is
-            // its tooltip. It is the row's sole yielder: the only trailing
-            // item that is unbounded user data and recoverable elsewhere (the
-            // tooltip, the Composer target bar), so when the row runs out of
-            // width this gives — never the title. `shrink` + `min-w-0` is what
-            // lets flexbox route the deficit here; dropping either sends it
-            // back to the title.
-            <span
-              className="min-w-0 max-w-24 shrink truncate text-meta text-muted-foreground"
-              title={branch}
-            >
-              {lastBranchSegment(branch)}
-            </span>
-          )}
+          {/* Layout 5b (the screenshot): the row's state is ONE small mark at
+              its end, not a leading dot. Order is urgency, which is also why
+              one slot loses nothing: waiting-on-you (a parked turn, or a
+              pending approval — the count is its tooltip) outranks running;
+              a running session cannot hold an unseen result (the result is
+              what ends the run); a failure stays marked after it was seen,
+              only quieter; "attached in the background" is the faint dot,
+              and a chat not started shows nothing. Design system v2 §6: run
+              states are drawn by `StatusIcon`. */}
+          {!onToggleSelect &&
+            (rowWaiting ? (
+              <StatusIcon status="waiting" label={waitingLabel} title={waitingLabel} />
+            ) : row.busy ? (
+              <StatusIcon status="running" label={t('Running')} />
+            ) : row.failed ? (
+              <span
+                role="img"
+                aria-label={unread ? unreadLabel : t('Failed')}
+                title={unread ? unreadLabel : t('Failed')}
+                className="inline-grid size-3.5 shrink-0 place-items-center"
+              >
+                <AlertTriangle
+                  className={cn('size-3.5', unread ? 'text-destructive' : 'text-muted-foreground')}
+                />
+              </span>
+            ) : unread ? (
+              // Not `aria-hidden` like the background dot: this is the ONLY
+              // carrier of "there is a result here you have not seen".
+              <span
+                role="img"
+                aria-label={unreadLabel}
+                title={unreadLabel}
+                className="inline-grid size-3.5 shrink-0 place-items-center"
+              >
+                <span className="size-1.5 rounded-full bg-success" />
+              </span>
+            ) : started ? (
+              // Issue #16: an attached session is a FILLED dot.
+              <span
+                aria-hidden
+                className="inline-grid size-3.5 shrink-0 place-items-center"
+                title={t('Running in the background')}
+              >
+                <span className="size-1.5 rounded-full bg-muted-foreground-faint" />
+              </span>
+            ) : null)}
           {/* Decision 183 §1.4: no time on the row (the absolute time is the
           tooltip's third line). The actions float over the row's right edge on
           hover, painted in the row's own fill with a fade to the left, so the
@@ -2286,8 +2658,8 @@ function SessionRow({
               className={cn(
                 'absolute inset-y-1 right-1.5 hidden items-center group-hover:flex group-focus-visible:flex group-has-focus-visible:flex',
                 active
-                  ? 'bg-selection shadow-[-10px_0_8px_var(--selection)]'
-                  : 'bg-hover shadow-[-10px_0_8px_var(--hover)]'
+                  ? 'bg-fill-ghost-selected shadow-[-10px_0_8px_var(--fill-ghost-selected)]'
+                  : 'bg-fill-ghost-hover shadow-[-10px_0_8px_var(--fill-ghost-hover)]'
               )}
             >
               <Button

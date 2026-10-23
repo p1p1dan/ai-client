@@ -3453,6 +3453,22 @@ export const zhTranslations: Record<string, string> = {
     '当前工作区以外的文件无法在这里预览。',
   'Open with system viewer': '用系统程序打开',
   'Could not open the file with the system viewer.': '无法用系统程序打开这个文件。',
+
+  // --- 时间线功能项（issue #26 第 1、2、5、6、8 项，界面风格迁移第 4 阶段）---------
+  'Copy message': '复制消息',
+  'Edit and resend': '编辑重发',
+  'Edit and resend this message?': '编辑并重发这条消息？',
+  'The conversation goes back to before this message and its text returns to the input box. Later messages stay in the session branches; nothing is deleted.':
+    '对话会回到这条消息之前，它的原文放回输入框。之后的消息保留在会话分支里，不会删除。',
+  'Could not go back to this message': '无法回到这条消息',
+  'Could not fork from this message': '无法从这条消息分叉',
+  'This message is not in the session tree yet. Try again once the reply has finished.':
+    '这条消息还不在会话树里，等回复结束后再试。',
+  'Show more': '展开',
+  'Copy thinking': '复制思考内容',
+  '{{count}} unchanged lines': '{{count}} 行未改动',
+  'Preview image {{name}}': '预览图片 {{name}}',
+  Image: '图片',
 };
 
 export function normalizeLocale(input?: string): Locale {
@@ -4845,4 +4861,124 @@ Object.assign(zhTranslations, {
   '{{count}} matching lines': '{{count}} 处匹配',
   'HTTP {{status}}': 'HTTP {{status}}',
   Truncated: '已截断',
+});
+
+/**
+ * Issue #26 item 4: the reasoning-effort menu's second lines (`efforts.ts`) —
+ * the Default row's, and the warning the costly extremes carry.
+ */
+Object.assign(zhTranslations, {
+  'No level chosen: the engine decides (Medium where offered)':
+    '不指定档位，由对话引擎决定（模型支持时用「中」）',
+  'Slower, and uses many more tokens': '更慢，消耗的 token 也多得多',
+});
+
+/**
+ * Layout 5a (ui-cohesion §6): the title bar, the work panel and the sidebar
+ * footer of the restructured shell.
+ */
+Object.assign(zhTranslations, {
+  'Session changes': '改动',
+  'Work panel': '工作面板',
+  'Resize work panel': '调整工作面板宽度',
+  'Conversation menu': '对话菜单',
+  'More actions': '更多',
+  Environment: '环境',
+});
+
+/**
+ * Layout 5c (ui-cohesion §6, ruling L3): the timeline's per-turn change card.
+ */
+Object.assign(zhTranslations, {
+  'Changed 1 file': '改了 1 个文件',
+  'Changed {{count}} files': '改了 {{count}} 个文件',
+  '{{names}} and {{count}} more': '{{names}} 等 {{count}} 个',
+  'Show in the changes panel': '在右侧「改动」里查看',
+});
+
+/**
+ * Layout 5b (ui-cohesion §6, ruling L2): the sidebar — its top row, its four
+ * entries, the grouping switcher and the derived buckets.
+ */
+Object.assign(zhTranslations, {
+  'Go back': '后退',
+  'Go forward': '前进',
+  Repositories: '仓库',
+  'Skills and plugins': '技能与插件',
+  'Open a chat in a repository to search it': '先打开一个仓库里的对话，才能搜索',
+  'Group and filter chats': '分组与筛选',
+  'Group chats': '分组方式',
+  'By repository': '按仓库',
+  'By my groups': '按我的分组',
+  'By status': '按状态',
+  'By date': '按时间',
+  'Filter chats': '筛选对话',
+  'Close filter': '关闭筛选',
+  'Waiting for you': '等你处理',
+  'Recently finished': '最近完成',
+  'This week': '本周',
+  'Show more chats': '显示更多',
+});
+
+/** Layout 5d: the background-tasks pane. */
+Object.assign(zhTranslations, {
+  'Clear finished': '清除已完成',
+  'Show more tasks': '显示更多',
+  '{{count}} tasks': '{{count}} 个任务',
+  '{{count}} finished': '{{count}} 个已完成',
+});
+
+/** Layout 5d: the pane cards to the right of the chat. */
+Object.assign(zhTranslations, {
+  Panes: '窗格',
+  'Resize panes': '调整窗格大小',
+  'Expand pane': '展开窗格',
+  'Restore pane': '还原窗格',
+  'Close pane': '关闭窗格',
+  Browser: '浏览器',
+  'Which changes': '查看哪些改动',
+  'This conversation': '本次对话',
+  "This conversation's changes": '本次对话的改动',
+  'Uncommitted changes (Git)': '未提交的改动（Git）',
+  'Filter, or ? to search in files': '筛选文件，输入 ? 搜索文件内容',
+  'Filter files': '筛选文件',
+});
+
+/** Layout 5e (ui-cohesion §6, ruling L5): the session rail right of the chat. */
+Object.assign(zhTranslations, {
+  'Session details': '会话详情',
+  'Hide session rail': '隐藏会话侧栏',
+  'Show session rail': '显示会话侧栏',
+  'The session rail makes room while a pane is open': '右侧面板打开时，会话侧栏让位',
+  'The window is too narrow for the session rail': '窗口太窄，会话侧栏已隐藏',
+  'Built-in engine': '内置引擎',
+  Compact: '压缩',
+  'Commit changes': '提交改动',
+  '{{count}} more files': '还有 {{count}} 个文件',
+  'By content, counted in characters of the loaded messages': '按内容分，以已载入消息的字符计',
+  Servers: '服务',
+  'Open in browser': '在浏览器中打开',
+});
+
+/** Layout 5f (ui-cohesion §6, ruling L6): the side chat (`/btw`, Ctrl+;). */
+Object.assign(zhTranslations, {
+  'Side chat': '旁问',
+  'Close side chat': '关闭旁问',
+  'Dock to the right': '停靠到右侧',
+  'Float as a window': '收回小窗',
+  'It can read this conversation up to now. Nothing here is added to it, and closing discards it.':
+    '能看到主对话到现在为止的内容，这里的问答不会写回主对话，关掉即丢弃。',
+  'Ask a side question without interrupting…': '问一句，不打断主对话…',
+  'Ask a question': '提问',
+  'Answering…': '正在回答…',
+  'No answer this time. Try again, or ask in the conversation.':
+    '这次没有回答。可以再问一次，或者在主对话里问。',
+  'The side question could not be answered. Try again.': '旁问没有得到回答，请再试一次。',
+  'The engine of this conversation cannot answer side questions.': '这个对话的引擎不支持旁问。',
+  'Ask again': '再问一次',
+  'Ask a quick side question without interrupting the conversation': '问一句旁问，不打断主对话',
+  'The session rail makes room while the side chat is docked': '旁问停靠在右侧时，会话侧栏让位',
+  'Ask a side question about an open conversation (open one first)':
+    '对已打开的对话问一句旁问（先打开一个对话）',
+  'Drag to move; double-click to put it back': '拖动可移动位置，双击放回原处',
 });

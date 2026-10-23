@@ -117,7 +117,7 @@ function GoalStateIcon({ state }: { state: GoalBarState }) {
     case 'running':
     case 'waiting':
       // Armed: the engine continues it by itself.
-      return <Target className={cn(className, 'text-status-running')} aria-hidden />;
+      return <Target className={cn(className, 'text-foreground')} aria-hidden />;
     case 'paused':
       return <Pause className={cn(className, 'text-muted-foreground')} aria-hidden />;
     case 'blocked':
@@ -329,7 +329,7 @@ export function GoalBar({ sessionId, view }: { sessionId: string; view: GoalBarV
 /** The open bar: the whole objective, why it is blocked, when it was set and changed. */
 function GoalBarBody({ view, t }: { view: GoalBarView; t: TFunction }) {
   return (
-    <div className={cn(panelStripBodyClass(), 'space-y-0.5 pl-7')}>
+    <div className={cn(panelStripBodyClass(), 'space-y-0.5 pl-8')}>
       {/* Decision 169: a goal set from a plan can run long; the open bar
           scrolls it instead of pushing the timeline away. */}
       <p className="max-h-48 select-text overflow-y-auto whitespace-pre-wrap break-words text-foreground">

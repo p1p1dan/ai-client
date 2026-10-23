@@ -112,33 +112,30 @@ export function CloneProgressFloat({ onCloneComplete }: CloneProgressFloatProps)
         type="button"
         onClick={handleToggleCollapse}
         className={cn(
-          'fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full px-3 py-2 shadow-lg transition-all hover:scale-105',
-          activeTasks.length > 0
-            ? 'bg-blue-500 text-white'
-            : completedTasks.length > 0
-              ? 'bg-green-500 text-white'
-              : 'bg-destructive text-destructive-foreground'
+          // Design system v2 §6: a neutral floating pill; only the icon says
+          // the state (running neutral, done green, failed red).
+          'fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-surface-3 px-3 py-2 text-foreground elev-popover transition-colors duration-150 hover:bg-fill-ghost-hover'
         )}
       >
         {activeTasks.length > 0 ? (
           <>
-            <Download className="h-4 w-4 animate-pulse" />
-            <span className="text-sm font-medium">
+            <Download className="h-4 w-4 animate-pulse text-muted-foreground" />
+            <span className="text-ui font-medium">
               {activeTasks.length > 1 ? `${activeTasks.length} ${t('tasks')}` : `${totalProgress}%`}
             </span>
           </>
         ) : completedTasks.length > 0 ? (
           <>
-            <Check className="h-4 w-4" />
-            <span className="text-sm font-medium">{completedTasks.length}</span>
+            <Check className="h-4 w-4 text-success" />
+            <span className="text-ui font-medium">{completedTasks.length}</span>
           </>
         ) : (
           <>
-            <AlertCircle className="h-4 w-4" />
-            <span className="text-sm font-medium">{errorTasks.length}</span>
+            <AlertCircle className="h-4 w-4 text-destructive" />
+            <span className="text-ui font-medium">{errorTasks.length}</span>
           </>
         )}
-        <ChevronUp className="h-3 w-3" />
+        <ChevronUp className="h-3 w-3 text-muted-foreground" />
       </button>
     );
   }
@@ -150,11 +147,11 @@ export function CloneProgressFloat({ onCloneComplete }: CloneProgressFloatProps)
       {visibleErrorTasks.map((task) => (
         <div
           key={task.id}
-          className="rounded-lg border border-destructive/50 bg-card shadow-lg p-3 animate-in slide-in-from-bottom-2"
+          className="rounded-md bg-surface-3 elev-popover p-3 animate-in slide-in-from-bottom-2"
         >
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{task.repoName}</span>
+            <span className="min-w-0 flex-1 truncate text-ui font-medium">{task.repoName}</span>
             <Button
               size="sm"
               variant="ghost"
@@ -164,7 +161,7 @@ export function CloneProgressFloat({ onCloneComplete }: CloneProgressFloatProps)
               <X className="h-3 w-3" />
             </Button>
           </div>
-          <p className="mt-1 text-xs text-destructive truncate" title={task.error}>
+          <p className="mt-1 text-small text-destructive truncate" title={task.error}>
             {task.error}
           </p>
         </div>
@@ -176,19 +173,19 @@ export function CloneProgressFloat({ onCloneComplete }: CloneProgressFloatProps)
           key={task.id}
           role="button"
           tabIndex={0}
-          className="rounded-lg border bg-card shadow-lg p-3 space-y-2 animate-in slide-in-from-bottom-2 cursor-pointer hover:bg-accent/30 transition-colors"
+          className="rounded-md bg-surface-3 elev-popover p-3 space-y-2 animate-in slide-in-from-bottom-2 cursor-pointer hover:bg-fill-ghost-hover transition-colors"
           onClick={handleToggleCollapse}
           onKeyDown={handleKeyDown}
         >
           <div className="flex items-center gap-2">
-            <Download className="h-4 w-4 shrink-0 text-blue-500 animate-pulse" />
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            <Download className="h-4 w-4 shrink-0 text-muted-foreground animate-pulse" />
+            <span className="min-w-0 flex-1 truncate text-ui font-medium">
               {t('Cloning')} {task.repoName}
             </span>
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
           </div>
           <Progress value={task.progress?.progress || 0} className="h-1.5" />
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="flex justify-between text-small text-muted-foreground">
             <span>{getProgressLabel(task)}</span>
             <span>{task.progress?.progress || 0}%</span>
           </div>
@@ -199,15 +196,15 @@ export function CloneProgressFloat({ onCloneComplete }: CloneProgressFloatProps)
       {visibleCompletedTasks.map((task) => (
         <div
           key={task.id}
-          className="rounded-lg border border-green-500/30 bg-card shadow-lg p-3 animate-in slide-in-from-bottom-2"
+          className="rounded-md bg-surface-3 elev-popover p-3 animate-in slide-in-from-bottom-2"
         >
           <div className="flex items-center gap-2">
-            <Check className="h-4 w-4 shrink-0 text-green-500" />
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{task.repoName}</span>
+            <Check className="h-4 w-4 shrink-0 text-success" />
+            <span className="min-w-0 flex-1 truncate text-ui font-medium">{task.repoName}</span>
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 px-2 text-xs"
+              className="h-6 px-2 text-small"
               onClick={() => handleOpenComplete(task)}
             >
               {t('Open')}
@@ -226,8 +223,8 @@ export function CloneProgressFloat({ onCloneComplete }: CloneProgressFloatProps)
 
       {/* Hidden tasks indicator */}
       {hiddenCount > 0 && (
-        <div className="rounded-lg border bg-card/80 shadow-lg p-2 animate-in slide-in-from-bottom-2">
-          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <div className="rounded-md bg-surface-3 elev-popover p-2 animate-in slide-in-from-bottom-2">
+          <div className="flex items-center justify-center gap-2 text-small text-muted-foreground">
             <MoreHorizontal className="h-3 w-3" />
             <span>{t('and {{count}} more...', { count: hiddenCount })}</span>
           </div>

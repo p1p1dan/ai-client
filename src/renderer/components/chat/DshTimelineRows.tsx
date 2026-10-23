@@ -10,7 +10,6 @@ import {
   AlarmClock,
   ChevronDown,
   ChevronRight,
-  CircleX,
   Info,
   Layers,
   SquareSlash,
@@ -19,12 +18,17 @@ import {
   Users,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Spinner } from '@/components/ui/spinner';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { type TFunction, useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { useCompactRunsStore } from '@/stores/compactRuns';
-import { userBubbleClass, userBubbleRowClass, userBubbleTextClass } from './chatTimelineLayout';
+import {
+  CHAT_PROSE_LEADING,
+  userBubbleClass,
+  userBubbleRowClass,
+  userBubbleTextClass,
+} from './chatTimelineLayout';
 import {
   type AutoTurnHeadView,
   autoTurnHeadView,
@@ -35,10 +39,18 @@ import {
 } from './dshTimelineRowModel';
 import { formatAbsoluteTime } from './messageMetadata';
 
-/** The row both share: the meta size, muted (prototype `.autohead`). */
+/**
+ * The row both share: the small size, muted (prototype `.autohead`). Design
+ * system v2 §7.7: this is also the shape of every timeline notice that asks
+ * for nothing -- frameless, an icon, the words.
+ */
 export function dshLightRowClass(): string {
-  return 'flex min-w-0 items-center gap-2 text-meta text-muted-foreground';
+  return 'flex min-w-0 items-center gap-2 text-small text-muted-foreground';
 }
+
+/** The light row's disclosure button: ghost text, the shared focus ring. */
+const LIGHT_ROW_TOGGLE_CLASS =
+  'flex min-w-0 items-center gap-1 rounded-xs text-left hover:text-foreground focus-ring';
 
 /** What a head says, before DSH's own account of it. */
 export function autoTurnHeadLabel(view: AutoTurnHeadView, t: TFunction): string {
@@ -109,7 +121,7 @@ export function AutoTurnHead({
         {view.expandable ? (
           <button
             type="button"
-            className="flex min-w-0 items-center gap-1 rounded-xs text-left outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className={LIGHT_ROW_TOGGLE_CLASS}
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
           >
@@ -123,13 +135,13 @@ export function AutoTurnHead({
         ) : (
           words
         )}
-        <span className="h-px min-w-4 flex-1 bg-border" aria-hidden />
+        <span className="h-px min-w-4 flex-1 bg-border-soft" aria-hidden />
         {startedAt !== null && (
           <span className="shrink-0 tabular-nums">{formatAbsoluteTime(startedAt)}</span>
         )}
       </div>
       {view.expandable && open && (
-        <p className="select-text whitespace-pre-wrap break-words pl-5.5 text-meta text-muted-foreground">
+        <p className="select-text whitespace-pre-wrap break-words pl-5.5 text-small text-muted-foreground">
           {view.detail}
         </p>
       )}
@@ -149,17 +161,14 @@ export function DshNoticeRow({ view }: { view: DshNoticeRowView }) {
     const failed = view.kind === 'command-error';
     return (
       <div
-        className="flex min-w-0 items-start gap-2 text-meta text-muted-foreground"
+        className="flex min-w-0 items-start gap-2 text-small text-muted-foreground"
         data-testid="dsh-notice-row"
         data-kind={view.kind}
       >
         {failed ? (
-          <CircleX
-            className="mt-0.5 size-3.5 shrink-0 text-destructive"
-            aria-label={t('Command failed')}
-          />
+          <StatusIcon status="failed" className="mt-px" label={t('Command failed')} />
         ) : (
-          <SquareSlash className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <SquareSlash className="mt-px size-3.5 shrink-0" aria-hidden />
         )}
         <p className="min-w-0 flex-1 select-text whitespace-pre-wrap break-words">{view.text}</p>
       </div>
@@ -170,12 +179,12 @@ export function DshNoticeRow({ view }: { view: DshNoticeRowView }) {
     // than its setting), so the whole sentence shows, not one truncated line.
     return (
       <div
-        className="flex min-w-0 items-start gap-2 text-meta text-muted-foreground"
+        className="flex min-w-0 items-start gap-2 text-small text-muted-foreground"
         data-testid="dsh-notice-row"
         data-kind={view.kind}
         data-warning="true"
       >
-        <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />
+        <TriangleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
         <p className="min-w-0 flex-1 select-text whitespace-pre-wrap break-words">
           {view.translatable ? t(view.text, view.params) : view.text}
         </p>
@@ -189,7 +198,7 @@ export function DshNoticeRow({ view }: { view: DshNoticeRowView }) {
         {view.expandable ? (
           <button
             type="button"
-            className="flex min-w-0 items-center gap-1 rounded-xs text-left outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className={LIGHT_ROW_TOGGLE_CLASS}
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
           >
@@ -212,7 +221,7 @@ export function DshNoticeRow({ view }: { view: DshNoticeRowView }) {
         )}
       </div>
       {view.expandable && open && (
-        <p className="select-text whitespace-pre-wrap break-words pl-5.5 text-meta text-muted-foreground">
+        <p className="select-text whitespace-pre-wrap break-words pl-5.5 text-small text-muted-foreground">
           {view.text}
         </p>
       )}
@@ -264,7 +273,7 @@ export function DshCompactionRow({
       role={view.running ? 'status' : undefined}
     >
       {view.running ? (
-        <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
+        <StatusIcon status="running" />
       ) : (
         <Info className="size-3.5 shrink-0" aria-hidden />
       )}
@@ -302,7 +311,9 @@ export function DshCompactCommandRow({ view }: { view: DshCompactCommandRowView 
     <article className={userBubbleRowClass()} data-testid="compact-command-row">
       <div className={userBubbleClass()}>
         <div className={userBubbleTextClass()}>
-          <p className="whitespace-pre-wrap break-words text-chat-body leading-relaxed text-foreground">
+          <p
+            className={`whitespace-pre-wrap break-words text-chat-body ${CHAT_PROSE_LEADING} text-foreground`}
+          >
             {view.text}
           </p>
         </div>

@@ -323,6 +323,60 @@ export const WORKER_COMPACT_CANCEL_TIMEOUT_MS = 5_000;
  */
 export const WORKER_COMPACT_CANCELLED = 'WORKER_COMPACT_CANCELLED';
 
+/**
+ * Layout 5f (ui-cohesion ruling L6): one side question (`/btw`, Ctrl+;) about
+ * the conversation so far. It reads the main conversation and writes nothing
+ * to it: no turn, no event, no history row. The Claude engine asks the CLI's
+ * own side question (`side_question`); DSH makes one tool-free model call with
+ * the session's history as context.
+ *
+ * Like `worker.compact.cancel` it does not wait its turn on the worker's
+ * request chain: a running turn may hold that chain, and a side question is
+ * meant to be asked while the turn runs. `worker.sideQuestion.cancel` aborts
+ * it by `questionId`.
+ */
+export interface WorkerSideQuestionPayload {
+  logicalSessionId: string;
+  /** The renderer's id for this question; the cancel names it. */
+  questionId: string;
+  question: string;
+  /** Earlier questions of the same side chat, oldest first, for follow-ups. */
+  history?: WorkerSideQuestionTurn[];
+}
+
+export interface WorkerSideQuestionTurn {
+  question: string;
+  answer: string;
+}
+
+/** `text: null`: the engine had no answer (the CLI's "synthetic" reply, an empty stream). */
+export interface WorkerSideQuestionResult {
+  text: string | null;
+}
+
+export interface WorkerSideQuestionCancelPayload {
+  logicalSessionId: string;
+  questionId: string;
+}
+
+export interface WorkerSideQuestionCancelResult {
+  cancelled: boolean;
+}
+
+/** The worker's budget for one side question, and Main's wait (a little longer). */
+export const WORKER_SIDE_QUESTION_BUDGET_MS = 300_000;
+export const WORKER_SIDE_QUESTION_REQUEST_TIMEOUT_MS = 310_000;
+/** Main's wait for `worker.sideQuestion.cancel`, which the worker answers at once. */
+export const WORKER_SIDE_QUESTION_CANCEL_TIMEOUT_MS = 5_000;
+/** Ceilings of one request (UTF-16 code units, turns). */
+export const WORKER_SIDE_QUESTION_MAX_CHARS = 20_000;
+export const WORKER_SIDE_QUESTION_MAX_TURNS = 20;
+export const WORKER_SIDE_QUESTION_MAX_ANSWER_CHARS = 40_000;
+/** The side question was cancelled (closed side chat, Esc) before it was answered. */
+export const WORKER_SIDE_QUESTION_CANCELLED = 'WORKER_SIDE_QUESTION_CANCELLED';
+/** This engine cannot answer side questions (no model service, an older CLI). */
+export const WORKER_SIDE_QUESTION_UNAVAILABLE = 'WORKER_SIDE_QUESTION_UNAVAILABLE';
+
 export interface WorkerCompactResult {
   compacted: true;
   /**
@@ -894,6 +948,14 @@ export type WorkerCompactCancelRequest = WorkerRpcRequest<
   WorkerCompactCancelPayload
 >;
 export type WorkerCommandRequest = WorkerRpcRequest<'worker.command', WorkerCommandPayload>;
+export type WorkerSideQuestionRequest = WorkerRpcRequest<
+  'worker.sideQuestion',
+  WorkerSideQuestionPayload
+>;
+export type WorkerSideQuestionCancelRequest = WorkerRpcRequest<
+  'worker.sideQuestion.cancel',
+  WorkerSideQuestionCancelPayload
+>;
 export type WorkerPanelsRequest = WorkerRpcRequest<'worker.panels', WorkerPanelsPayload>;
 export type WorkerJobKillRequest = WorkerRpcRequest<'worker.job.kill', WorkerJobKillPayload>;
 export type WorkerJobReadRequest = WorkerRpcRequest<'worker.job.read', WorkerJobReadPayload>;
@@ -1440,6 +1502,56 @@ export function isWorkerCompactCancelPayload(value: unknown): value is WorkerCom
 }
 
 export function isWorkerCompactCancelResult(value: unknown): value is WorkerCompactCancelResult {
+  return isRecord(value) && typeof value.cancelled === 'boolean';
+}
+
+function isSideQuestionId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 200;
+}
+
+function isSideQuestionText(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    value.length <= WORKER_SIDE_QUESTION_MAX_CHARS
+  );
+}
+
+export function isWorkerSideQuestionPayload(value: unknown): value is WorkerSideQuestionPayload {
+  if (!isLogicalSessionPayload(value) || !isSideQuestionId(value.questionId)) return false;
+  if (!isSideQuestionText(value.question)) return false;
+  if (value.history === undefined) return true;
+  return (
+    Array.isArray(value.history) &&
+    value.history.length <= WORKER_SIDE_QUESTION_MAX_TURNS &&
+    value.history.every(
+      (turn) =>
+        isRecord(turn) &&
+        isSideQuestionText(turn.question) &&
+        typeof turn.answer === 'string' &&
+        turn.answer.length <= WORKER_SIDE_QUESTION_MAX_ANSWER_CHARS
+    )
+  );
+}
+
+export function isWorkerSideQuestionCancelPayload(
+  value: unknown
+): value is WorkerSideQuestionCancelPayload {
+  return isLogicalSessionPayload(value) && isSideQuestionId(value.questionId);
+}
+
+/** A side question's answer Main passes on, clamped; null for a malformed one. */
+export function sanitizeWorkerSideQuestionResult(value: unknown): WorkerSideQuestionResult | null {
+  if (!isRecord(value)) return null;
+  if (value.text === null) return { text: null };
+  if (typeof value.text !== 'string') return null;
+  const text = value.text.slice(0, WORKER_SIDE_QUESTION_MAX_ANSWER_CHARS);
+  return { text: text.trim() ? text : null };
+}
+
+export function isWorkerSideQuestionCancelResult(
+  value: unknown
+): value is WorkerSideQuestionCancelResult {
   return isRecord(value) && typeof value.cancelled === 'boolean';
 }
 

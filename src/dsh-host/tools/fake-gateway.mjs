@@ -2264,9 +2264,48 @@ function histProse(i, token) {
 }
 
 /** dsh-p0-2: decide from the request's own messages (`seq` only names P1-CHAIN's signatures). */
+/** Layout 5f: the DSH side question's system prompt (src/shared/sideQuestion.ts). */
+const SIDE_QUESTION_SYSTEM = /You answer a quick side question the user asks/;
+
+/**
+ * Layout 5f: plays the side question's model. `SIDE-RECALL {"markers":[...]}`
+ * in the question asks which markers the quoted <conversation> holds; the
+ * reply names them, the missing ones, and whether a context summary was
+ * quoted. Null for any other request.
+ */
+function decideSideQuestion(parsed) {
+  const system = parsed?.system;
+  const texts = [];
+  if (typeof system === 'string') texts.push(system);
+  else if (Array.isArray(system)) for (const block of system) texts.push(String(block?.text ?? ''));
+  const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
+  for (const message of messages) {
+    if (message?.role === 'system' || message?.role === 'developer') texts.push(ownText(message));
+  }
+  if (!texts.some((text) => SIDE_QUESTION_SYSTEM.test(text))) return null;
+  const prompt = ownText(messages[messages.length - 1]);
+  const conversation = /<conversation>\n([\s\S]*?)\n<\/conversation>/.exec(prompt)?.[1] ?? '';
+  const question = prompt.slice(prompt.lastIndexOf('Side question:'));
+  let markers = [];
+  try {
+    markers = JSON.parse(/SIDE-RECALL (\{.*\})/.exec(question)?.[1] ?? '{}').markers ?? [];
+  } catch {
+    markers = [];
+  }
+  const seen = markers.filter((marker) => conversation.includes(marker));
+  const missing = markers.filter((marker) => !conversation.includes(marker));
+  const summary = conversation.includes('[Context summary]');
+  return {
+    ...say(`SIDE seen=${seen.join('|')} missing=${missing.join('|')} summary=${summary}`),
+    label: 'side-question',
+  };
+}
+
 function decideDshP02(parsed, seq) {
   const review = decideReview(parsed);
   if (review) return review;
+  const side = decideSideQuestion(parsed);
+  if (side) return side;
   const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
   const lastText = ownText(messages[messages.length - 1]);
   if (/<goal_(complete|blocked)>/.test(lastText)) {

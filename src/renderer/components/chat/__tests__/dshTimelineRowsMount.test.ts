@@ -142,7 +142,7 @@ describe('DSH timeline rows (P1-7a)', () => {
     expect(heads[0]?.textContent).toContain('Goal · round 3/256');
     // Only the typed prompt is a bubble.
     const bubbles = [...container.querySelectorAll('article')].filter((article) =>
-      article.className.includes('justify-end')
+      article.className.includes('items-end')
     );
     expect(bubbles.map((bubble) => bubble.textContent)).toEqual(['SET-A-GOAL']);
     // The head still opens its own turn.

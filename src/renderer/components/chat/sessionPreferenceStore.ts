@@ -181,6 +181,9 @@ export function readSessionPermissions(sessionId: string): RuntimePermissionSett
   const legacy = readSessionTier(sessionId);
   return legacy ? migratePermissionTier(legacy) : null;
 }
+/** Layout 5e: a chat's posture was written; read-only mirrors (the session rail) re-read it. */
+export const SESSION_PERMISSIONS_CHANGED_EVENT = 'aiclient:session-permissions-changed';
+
 export function writeSessionPermissions(
   sessionId: string,
   settings: RuntimePermissionSettings
@@ -188,6 +191,12 @@ export function writeSessionPermissions(
   const map = loadMap(SESSION_PERMISSIONS_STORAGE_KEY);
   map[sessionId] = settings;
   saveMap(SESSION_PERMISSIONS_STORAGE_KEY, map);
+  // Tests stub `window` with only what they need; the write must not depend on it.
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(
+      new CustomEvent(SESSION_PERMISSIONS_CHANGED_EVENT, { detail: { sessionId } })
+    );
+  }
 }
 /** `engine`: the engine the chat it starts runs on, when known (S-2, `defaultFor`). */
 export function readDefaultPermissions(engine?: ChatEngine): RuntimePermissionSettings | null {

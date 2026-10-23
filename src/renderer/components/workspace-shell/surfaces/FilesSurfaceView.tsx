@@ -14,8 +14,8 @@
  */
 
 import { getDisplayPathBasename } from '@shared/utils/path';
-import { FileCode, FileSearch, Search } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { FileCode, Search } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { FileTree } from '@/components/files/FileTree';
 import { NewItemDialog } from '@/components/files/NewItemDialog';
 import {
@@ -34,25 +34,25 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { useEditor } from '@/hooks/useEditor';
 import { useFileTree } from '@/hooks/useFileTree';
 import { useI18n } from '@/i18n';
-import { useShellLayoutStore } from '@/stores/shellLayout';
 import { SURFACE_ESCAPE_HOLD_ATTR } from '../shellLayoutModel';
 import type { SurfaceViewProps } from '../surfaceViews';
 import { useWorkspaceRootPath } from '../useWorkspaceRootPath';
+import { filterFileTree, parseFileFilter } from './fileTreeFilter';
 
 /** Computed key so a rename of the constant cannot leave a dead attribute behind. */
 const ESCAPE_HOLD_PROPS = { [SURFACE_ESCAPE_HOLD_ATTR]: '' };
 
 type NewItemType = 'file' | 'directory' | null;
 
-export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
+export function FilesSurfaceView({ active, onSearch }: SurfaceViewProps) {
   const { t } = useI18n();
   const rootPath = useWorkspaceRootPath();
 
-  const activeSurfaceId = useShellLayoutStore((state) => state.activeSurfaceId);
-  const surfaceActive = activeSurfaceId === surfaceId;
+  const surfaceActive = active;
 
   const {
     tree,
@@ -71,6 +71,19 @@ export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
   });
 
   const { navigateToFile, closeFile } = useEditor();
+
+  // Layout 5d: the filter box. A content query (`?…`) leaves the tree alone.
+  const [filter, setFilter] = useState('');
+  const parsedFilter = parseFileFilter(filter);
+  const filtered = useMemo(
+    () => filterFileTree(tree, parsedFilter.kind === 'name' ? parsedFilter.text : ''),
+    [tree, parsedFilter.kind, parsedFilter.text]
+  );
+  const shownExpandedPaths = useMemo(
+    () =>
+      filtered.expand.size === 0 ? expandedPaths : new Set([...expandedPaths, ...filtered.expand]),
+    [expandedPaths, filtered.expand]
+  );
 
   // ── file tree CRUD plumbing (FileTree's props are non-optional) ────────
   const [newItemType, setNewItemType] = useState<NewItemType>(null);
@@ -140,7 +153,7 @@ export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
           {/* D25 §3.3: cancel EmptyTitle's 18px-sized negative tracking when
               overriding to 14px, same as the other surfaces. */}
           <EmptyTitle className="text-ui tracking-normal">{t('Files')}</EmptyTitle>
-          <EmptyDescription className="text-meta">
+          <EmptyDescription className="text-small">
             {t('Select a Workspace to browse files')}
           </EmptyDescription>
         </EmptyHeader>
@@ -154,32 +167,37 @@ export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
     // ContextPanel's onKeyDownCapture) before the rename's own handler ran,
     // silently dropping the in-progress rename.
     <div className="flex h-full min-h-0 min-w-0 flex-col" {...ESCAPE_HOLD_PROPS}>
-      <div className="flex h-7 shrink-0 items-center justify-end gap-1 border-b px-2">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={t('Search files')}
-          title={t('Search files')}
-          disabled={!onSearch}
-          onClick={() => onSearch?.('files')}
-        >
-          <FileSearch className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={t('Search content')}
-          title={t('Search content')}
-          disabled={!onSearch}
-          onClick={() => onSearch?.('content')}
-        >
-          <Search className="h-3.5 w-3.5" />
-        </Button>
+      {/* Layout 5d: the card's header names the pane and carries the tree's
+          toolbar; the filter box sits right under it (the reference's files
+          pane). `?text` + Enter searches file contents instead. */}
+      <div className="shrink-0 px-2 pb-1.5">
+        <InputGroup className="h-7">
+          <InputGroupAddon>
+            <Search className="size-3.5 text-foreground-faint" />
+          </InputGroupAddon>
+          <InputGroupInput
+            size="sm"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && parsedFilter.kind === 'content') {
+                event.preventDefault();
+                onSearch?.('content');
+              } else if (event.key === 'Escape' && filter) {
+                // Clear first; the next Escape reaches the pane.
+                event.stopPropagation();
+                setFilter('');
+              }
+            }}
+            placeholder={t('Filter, or ? to search in files')}
+            aria-label={t('Filter files')}
+          />
+        </InputGroup>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         <FileTree
-          tree={tree}
-          expandedPaths={expandedPaths}
+          tree={filtered.nodes}
+          expandedPaths={shownExpandedPaths}
           onToggleExpand={toggleExpand}
           onFileClick={handleFileClick}
           onCreateFile={handleCreateFile}
@@ -187,6 +205,7 @@ export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
           onRename={renameItem}
           onDelete={handleDeleteRequest}
           onRefresh={refresh}
+          onOpenSearch={onSearch ? () => onSearch?.('files') : undefined}
           isLoading={isTreeLoading}
           rootPath={rootPath}
         />

@@ -1661,7 +1661,15 @@ scenario('steer-withdraw', (events, id) => {
 
 scenario('image', (events, id) => {
   const rpc = loadRpc('image');
-  const chip = [{ kind: 'image', mediaType: 'image/png', name: 'dot.png' }];
+  // Issue #26 item 6: the image keeps its store reference, live and reopened alike.
+  const chip = [
+    {
+      kind: 'image',
+      mediaType: 'image/png',
+      name: 'dot.png',
+      attachmentId: 'sha256:31596a2068ffa38bb8bb0f737ac50a7f942897342cfdbd64db7c16d9844ffb2c',
+    },
+  ];
 
   it('shows the image chip on the prompt, live and reopened', () => {
     const live = bucket(replay(events), id).find((message) => message.role === 'user');

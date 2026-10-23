@@ -69,9 +69,12 @@ import {
   sanitizeWorkerCommandRows,
   sanitizeWorkerJobRead,
   sanitizeWorkerPanels,
+  sanitizeWorkerSideQuestionResult,
   WORKER_COMPACT_CANCEL_TIMEOUT_MS,
   WORKER_COMPACT_REQUEST_TIMEOUT_MS,
   WORKER_RETRY_UNAVAILABLE,
+  WORKER_SIDE_QUESTION_CANCEL_TIMEOUT_MS,
+  WORKER_SIDE_QUESTION_REQUEST_TIMEOUT_MS,
   type WorkerAcceptForkPayload,
   type WorkerAcceptForkResult,
   type WorkerCapabilityInventory,
@@ -114,6 +117,11 @@ import {
   type WorkerSendResult,
   type WorkerSetPermissionTierPayload,
   type WorkerSetPermissionTierResult,
+  type WorkerSideQuestionCancelPayload,
+  type WorkerSideQuestionCancelResult,
+  type WorkerSideQuestionPayload,
+  type WorkerSideQuestionResult,
+  type WorkerSideQuestionTurn,
   type WorkerSlashCommandInfo,
   type WorkerStopPayload,
   type WorkerStopResult,
@@ -1842,6 +1850,65 @@ export class WorkerManager {
       return { cancelled: result?.cancelled === true };
     } catch (error) {
       this.log('[worker-manager] /compact cancel was not delivered', sessionId, error);
+      return { cancelled: false };
+    }
+  }
+
+  /**
+   * Layout 5f (ui-cohesion ruling L6) — one side question about the
+   * conversation so far (`/btw`, Ctrl+;). A read: no claim, no idle check (it
+   * is asked while a turn runs), and nothing reaches the conversation — the
+   * worker answers it off its request chain and emits no event. A session
+   * without a ready slot is `session_not_found`, which the renderer answers by
+   * starting the conversation the way a send does, then asking again.
+   */
+  async askSideQuestion(input: {
+    sessionId: string;
+    questionId: string;
+    question: string;
+    history?: WorkerSideQuestionTurn[];
+  }): Promise<WorkerSideQuestionResult> {
+    const entry = this.requireReadySession(input.sessionId);
+    entry.lastUsedAt = this.now();
+    const result = await entry.slot?.request<WorkerSideQuestionResult, WorkerSideQuestionPayload>(
+      'worker.sideQuestion',
+      {
+        logicalSessionId: entry.logicalSessionId,
+        questionId: input.questionId,
+        question: input.question,
+        ...(input.history?.length ? { history: input.history } : {}),
+      },
+      { timeoutMs: WORKER_SIDE_QUESTION_REQUEST_TIMEOUT_MS }
+    );
+    const sanitized = sanitizeWorkerSideQuestionResult(result);
+    if (!sanitized) {
+      throw new WorkerManagerError(
+        'worker_invalid_side_question_result',
+        'The worker returned an invalid side question answer'
+      );
+    }
+    return sanitized;
+  }
+
+  /** Layout 5f — the side chat closed (or Esc) while its question was out. Best effort. */
+  async cancelSideQuestion(input: {
+    sessionId: string;
+    questionId: string;
+  }): Promise<WorkerSideQuestionCancelResult> {
+    const entry = this.entriesBySession.get(input.sessionId);
+    if (!entry || entry.state !== 'ready' || !entry.slot) return { cancelled: false };
+    try {
+      const result = await entry.slot.request<
+        WorkerSideQuestionCancelResult,
+        WorkerSideQuestionCancelPayload
+      >(
+        'worker.sideQuestion.cancel',
+        { logicalSessionId: entry.logicalSessionId, questionId: input.questionId },
+        { timeoutMs: WORKER_SIDE_QUESTION_CANCEL_TIMEOUT_MS }
+      );
+      return { cancelled: result?.cancelled === true };
+    } catch (error) {
+      this.log('[worker-manager] side question cancel was not delivered', input.sessionId, error);
       return { cancelled: false };
     }
   }

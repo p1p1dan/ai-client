@@ -1,4 +1,3 @@
-import { MessagesSquare } from 'lucide-react';
 import { useI18n } from '@/i18n';
 
 /**
@@ -29,6 +28,12 @@ import { useI18n } from '@/i18n';
  * the same moment as an unbound one — an empty column above an empty composer.
  * Only the sentence differs, and it differs by naming the folder the agent will
  * work in, which is the one fact worth stating before the first message.
+ *
+ * ## Design system v2 §7.11: the home page's language
+ *
+ * No icon block and no bold title any more: one line in the display serif
+ * (`font-display`, the home greeting's face) at the title size, regular
+ * weight, muted -- with the folder sentence under it in the small tier.
  */
 interface ChatWelcomeCardProps {
   /**
@@ -42,16 +47,13 @@ export function ChatWelcomeCard({ workspaceName }: ChatWelcomeCardProps) {
   const { t } = useI18n();
 
   return (
-    <div className="mb-6 flex flex-col items-center gap-3 text-center">
-      {/* A mark, not an illustration: it carries no information, so it gets the
-          smallest form that still reads as "this is where the app starts". */}
-      <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <MessagesSquare className="size-6" />
-      </div>
-      <h2 className="font-semibold text-foreground text-title">{t('Start a conversation')}</h2>
-      {/* `text-meta` rather than a raw size: D25 §6.3 bans raw size utilities
+    <div className="mb-6 flex flex-col items-center gap-2 text-center">
+      <h2 className="text-balance font-display font-normal text-muted-foreground text-title">
+        {t('Start a conversation')}
+      </h2>
+      {/* `text-small` rather than a raw size: D25 §6.3 bans raw size utilities
           in chat/, and this is a secondary line. */}
-      <p className="max-w-sm text-meta text-muted-foreground">
+      <p className="max-w-sm text-small text-foreground-faint">
         {workspaceName
           ? t('The agent will work inside {{folder}} — type what you want done.', {
               folder: workspaceName,

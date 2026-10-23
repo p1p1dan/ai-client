@@ -23,8 +23,10 @@ import { SESSION_EFFORT_LEVELS, type SessionEffortLevel } from '@shared/types/ag
 export interface ChatEffort {
   id: SessionEffortLevel;
   label: string;
-  /** Shown as the option's tooltip. */
+  /** Shown as the option's second line (issue #26 item 4; was a tooltip). */
   hint: string;
+  /** A faint third line for the costly extremes (issue #26 item 4). */
+  warning?: string;
 }
 
 /**
@@ -49,11 +51,32 @@ const EFFORT_COPY: Record<SessionEffortLevel, { label: string; hint: string }> =
   max: { label: 'Max', hint: 'Maximum reasoning; only on models that declare it' },
 };
 
+/** Catalog key: the extremes' one warning line. */
+export const COSTLY_EFFORT_WARNING = 'Slower, and uses many more tokens';
+
+/** Levels that carry `COSTLY_EFFORT_WARNING`. */
+const COSTLY_EFFORT_IDS = new Set<SessionEffortLevel>(['xhigh', 'max']);
+
 /** Order and membership come from the wire union, never from a second list. */
 export const CHAT_EFFORTS: ChatEffort[] = SESSION_EFFORT_LEVELS.map((id) => ({
   id,
   ...EFFORT_COPY[id],
+  ...(COSTLY_EFFORT_IDS.has(id) ? { warning: COSTLY_EFFORT_WARNING } : {}),
 }));
+
+/** Catalog key: the `Default` row's second line. */
+export const DEFAULT_EFFORT_HINT = 'No level chosen: the engine decides (Medium where offered)';
+
+/**
+ * Issue #26 item 4: the level a chat with no level chosen actually sends.
+ * The DSH route sends `medium` when the model offers it and nothing otherwise
+ * (`shared/dshModelPlan/route.ts`), so the menu marks that row 「默认」.
+ */
+export function effortSentByDefault(
+  efforts: readonly Pick<ChatEffort, 'id'>[]
+): SessionEffortLevel | null {
+  return efforts.some((effort) => effort.id === 'medium') ? 'medium' : null;
+}
 
 /**
  * Sentinel for "send no `effort` at all" so the model default applies.

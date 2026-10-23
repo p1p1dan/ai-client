@@ -1,13 +1,14 @@
 import { Check, Copy } from 'lucide-react';
 import { Fragment, memo, useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import {
   type ChatCodeToken,
   chatCodeTokenStyle,
   chatMarkdownCodeBlockClass,
+  chatMarkdownCodeFrameClass,
+  chatMarkdownCodeHeadClass,
 } from './chatMarkdownPolicy';
 import { highlightChatCode } from './chatShiki';
-import { turnCopyButtonClass } from './chatTimelineLayout';
 import { useDarkClass } from './useDarkClass';
 
 /**
@@ -42,6 +43,12 @@ import { useDarkClass } from './useDarkClass';
  * The button sits on a wrapper, NOT inside `<pre>`: `<pre>` is the horizontal
  * scroll container (`overflow-x-auto`), so a button parented to it would ride
  * away with the scroll on a long line.
+ *
+ * ## Design system v2 §7.5: one closed frame with a head bar
+ *
+ * The frame is the wrapper; a 32px head (the fence's language, the ghost copy
+ * button) sits over a hairline, and `<pre>` below it is only the scroll box.
+ * The head is what holds the button now, so it no longer floats over the code.
  */
 export const ChatCodeBlock = memo(function ChatCodeBlock({
   code,
@@ -68,9 +75,14 @@ export const ChatCodeBlock = memo(function ChatCodeBlock({
     };
   }, [code, language, isDark]);
 
+  // The info string's first word is the language; the rest is fence metadata.
+  const label = language?.trim().split(/\s+/, 1)[0] ?? '';
   return (
-    <div className="relative">
-      <CodeCopyButton code={code} />
+    <div className={chatMarkdownCodeFrameClass()}>
+      <div className={chatMarkdownCodeHeadClass()}>
+        <span className="min-w-0 truncate lowercase">{label}</span>
+        <CodeCopyButton code={code} />
+      </div>
       <pre className={chatMarkdownCodeBlockClass()}>
         <code>
           {lines
@@ -100,9 +112,9 @@ const COPY_CONFIRM_MS = 1500;
  *
  * Always visible -- F-B15 forbids the `opacity-0` / `group-hover:` pair, because
  * a control only a mouse can discover is unreachable by touch and keyboard. D55
- * (3) asks for restraint instead of concealment, so the resting state drops one
- * tier to `text-muted-foreground/60` (the repo's existing ghost-icon tier) and
- * `focus-visible` brings it back for keyboard users.
+ * (3) asks for restraint instead of concealment; design system v2 gives that
+ * job to the ghost button inside the head bar (muted ink, hover fill, the coss
+ * focus ring).
  *
  * The clipboard behaviour is `TurnCopyButton`'s, verbatim: no `execCommand`
  * fallback, silent on refusal, 1.5s `Check` confirmation. Two copy buttons that
@@ -134,18 +146,16 @@ function CodeCopyButton({ code }: { code: string }) {
 
   const label = copied ? 'Copied' : 'Copy code';
   return (
-    <button
+    <Button
       type="button"
-      className={cn(
-        turnCopyButtonClass(),
-        'absolute top-1.5 right-1.5 z-10 text-muted-foreground/70',
-        'focus-visible:text-foreground'
-      )}
+      variant="ghost"
+      size="icon-xs"
+      className="shrink-0"
       onClick={() => void handleCopy()}
       aria-label={label}
       title={label}
     >
       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-    </button>
+    </Button>
   );
 }

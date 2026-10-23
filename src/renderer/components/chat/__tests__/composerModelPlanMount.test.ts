@@ -30,6 +30,13 @@ const fixture = vi.hoisted(() => ({
         thinkingLevelMap: { off: null },
         efforts: ['high', 'max'],
       },
+      {
+        id: 'china/full',
+        label: 'Full',
+        tags: ['china'],
+        reasoning: true,
+        efforts: ['low', 'medium', 'high', 'xhigh'],
+      },
     ],
     source: 'managed',
     stale: false,
@@ -98,9 +105,16 @@ async function openMenu(sessionId: string) {
   });
 }
 
+/** Each row's label alone (issue #26 item 4: rows also carry description lines). */
 function rowLabels(): string[] {
   return [...document.querySelectorAll('[role="menuitemradio"]')].map(
-    (node) => node.textContent ?? ''
+    (node) => node.querySelector('[data-slot="menu-row-label"]')?.textContent ?? ''
+  );
+}
+
+function effortRow(label: string): Element | undefined {
+  return [...document.querySelectorAll('[role="menuitemradio"]')].find(
+    (node) => node.querySelector('[data-slot="menu-row-label"]')?.textContent === label
   );
 }
 
@@ -112,6 +126,30 @@ describe('the model menu under the DSH model plan', () => {
     expect(labels).toEqual(expect.arrayContaining(['Default', 'High', 'Max']));
     expect(labels).not.toContain('Low');
     expect(labels).not.toContain('Medium');
+  });
+
+  // Issue #26 item 4: what each level does is on the row itself, the level a
+  // chat with no choice actually sends is tagged, and the extremes warn.
+  it('shows each effort level its description, tags the level Default sends, and warns on the extremes', async () => {
+    writeSessionModel('c', 'china/full');
+    await openMenu('c');
+    expect(effortRow('Medium')?.textContent).toContain(
+      'Moderate reasoning; used when no level is chosen'
+    );
+    expect(
+      effortRow('Medium')?.querySelector('[data-slot="effort-default-badge"]')?.textContent
+    ).toBe('Default');
+    expect(effortRow('High')?.querySelector('[data-slot="effort-default-badge"]')).toBeNull();
+    expect(effortRow('X-High')?.textContent).toContain('Slower, and uses many more tokens');
+    expect(effortRow('High')?.textContent).not.toContain('Slower');
+    expect(effortRow('Default')?.textContent).toContain('the engine decides');
+  });
+
+  it('tags no level when the model does not offer Medium', async () => {
+    writeSessionModel('d', 'china/glm');
+    await openMenu('d');
+    expect(document.querySelector('[data-slot="effort-default-badge"]')).toBeNull();
+    expect(effortRow('Max')?.textContent).toContain('Slower, and uses many more tokens');
   });
 
   it('reconciles a stored level the plan does not offer back to Default', async () => {

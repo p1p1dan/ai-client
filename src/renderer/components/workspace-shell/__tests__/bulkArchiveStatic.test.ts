@@ -94,7 +94,8 @@ describe('U30 the composer chrome stops moving', () => {
 
   it('the model label is width-capped and truncates', () => {
     expect(LAYOUT).toContain('inline-flex h-6 max-w-56 shrink-0 items-center gap-1');
-    expect(LAYOUT).toContain("return 'min-w-0 truncate text-muted-foreground';");
+    // Design system v2: still truncates; the ink brightens with the trigger's hover/open state.
+    expect(LAYOUT).toContain("return 'min-w-0 truncate text-muted-foreground");
   });
 });
 
@@ -130,7 +131,11 @@ describe('U31 bulk archive', () => {
     expect(NAV).toContain('void archiveMany(ids);');
   });
 
-  it('keeps one row height: the checkbox takes the run-dot slot rather than adding one', () => {
-    expect(NAV).toContain('{onToggleSelect ? null : row.busy ? (');
+  it('keeps one row height; the checkbox replaces the trailing state mark (layout 5b)', () => {
+    // Layout 5b: the run state is a TRAILING mark now; while selecting, the
+    // checkbox leads the row and the mark is not drawn, so the row still
+    // carries one state indicator and never grows.
+    expect(NAV).toContain('{onToggleSelect && (');
+    expect(NAV).toContain('{!onToggleSelect &&');
   });
 });

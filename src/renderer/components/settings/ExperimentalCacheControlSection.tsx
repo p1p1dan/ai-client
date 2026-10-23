@@ -38,7 +38,7 @@ export function ExperimentalCacheControlSection() {
             checked={enabled}
             onCheckedChange={setEnabled}
           />
-          <p className="text-meta text-muted-foreground">
+          <p className="text-small text-muted-foreground">
             {t('Takes effect from the next turn; no restart needed.')}
           </p>
         </div>

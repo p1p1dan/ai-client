@@ -14,6 +14,7 @@ import type { UserProviderState, UserProviderView } from '@shared/userProviders'
 import { isSupportedUserProviderApi } from '@shared/userProviders';
 import { AlertTriangle, Pencil, Plus, Server, ShieldOff, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -85,24 +86,32 @@ export function UserProvidersSettings({
         // H/17 constraint 3: the vault falls back to plaintext when the OS
         // keyring is unavailable. Discovering that by reading the file is not
         // an acceptable way to find out.
-        <div className="flex gap-3 rounded-md border border-warning/30 bg-warning/10 p-3 text-ui text-warning">
-          <ShieldOff className="mt-0.5 h-4 w-4 shrink-0" />
-          {t('The system keyring is unavailable, so keys are stored unencrypted on this machine.')}
-        </div>
+        <Alert variant="warning">
+          <ShieldOff />
+          <AlertDescription>
+            {t(
+              'The system keyring is unavailable, so keys are stored unencrypted on this machine.'
+            )}
+          </AlertDescription>
+        </Alert>
       )}
 
       {state?.unavailable === 'locked' && (
-        <div className="flex gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-ui text-info">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          {t('Unlock the system keyring to see and change your AI services.')}
-        </div>
+        <Alert variant="info">
+          <AlertTriangle />
+          <AlertDescription>
+            {t('Unlock the system keyring to see and change your AI services.')}
+          </AlertDescription>
+        </Alert>
       )}
 
       {state?.unavailable === 'invalid' && (
-        <div className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          {t('Stored AI services could not be read. Adding one again will replace the record.')}
-        </div>
+        <Alert variant="error">
+          <AlertTriangle />
+          <AlertDescription>
+            {t('Stored AI services could not be read. Adding one again will replace the record.')}
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="flex items-center justify-between gap-3">
@@ -127,7 +136,7 @@ export function UserProvidersSettings({
       </div>
 
       {providers.length === 0 ? (
-        <Empty className="border rounded-md">
+        <Empty className="rounded-md border border-border-soft bg-surface-2">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <Server className="h-5 w-5" />
@@ -139,7 +148,7 @@ export function UserProvidersSettings({
           </EmptyHeader>
         </Empty>
       ) : (
-        <ul className="divide-y rounded-md border">
+        <ul className="divide-y divide-border-soft rounded-md border border-border-soft bg-surface-2">
           {providers.map((provider) => (
             <li
               key={provider.id}
@@ -166,8 +175,8 @@ export function UserProvidersSettings({
                     </Badge>
                   )}
                 </div>
-                <p className="truncate text-meta text-muted-foreground">{provider.baseUrl}</p>
-                <p className="text-meta text-muted-foreground">
+                <p className="truncate text-small text-muted-foreground">{provider.baseUrl}</p>
+                <p className="text-small text-muted-foreground">
                   {provider.models.length > 0
                     ? t('{{count}} models').replace('{{count}}', `${provider.models.length}`)
                     : t('No models selected')}
@@ -205,10 +214,10 @@ export function UserProvidersSettings({
       )}
 
       {error && (
-        <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error}
-        </p>
+        <Alert variant="error">
+          <AlertTriangle />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <ProviderSetupDialog

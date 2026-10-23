@@ -1031,7 +1031,8 @@ describe('DshSessionRuntime — turn semantics (P1-4c1, decisions 093-095)', () 
     expect(emitted.find((event) => event.type === 'message.started')?.payload?.attachments).toEqual(
       [
         // The stored (normalized) type, as the history projection reads it.
-        { kind: 'image', mediaType: 'image/jpeg', name: 'a.png' },
+        // Issue #26 item 6: with its store reference, for the bubble's thumbnail.
+        { kind: 'image', mediaType: 'image/jpeg', name: 'a.png', attachmentId: 'sha256:i' },
         { kind: 'text', mediaType: 'text/plain', name: 'n.txt' },
       ]
     );
@@ -1895,5 +1896,73 @@ describe('DshSessionRuntime — the prompt cache of each step (decision 173 B2)'
     expect(settled()).toEqual([undefined, undefined]);
     expect(lines).toEqual([]);
     if (!('cacheChain' in depsOverride)) expect(evidenceFor).not.toHaveBeenCalled();
+  });
+});
+
+describe('DshSessionRuntime — a side question reads the model surface (layout 5f)', () => {
+  function captureLlm(seen: Array<{ messages: Array<{ content: Array<{ text?: string }> }> }>) {
+    return {
+      stream(options: never) {
+        seen.push(options);
+        return (async function* () {
+          yield { type: 'text-delta', text: 'answer' };
+          yield { type: 'finish', reason: { kind: 'stop' } };
+        })();
+      },
+    };
+  }
+  const promptOf = (seen: Array<{ messages: Array<{ content: Array<{ text?: string }> }> }>) =>
+    seen[0]?.messages[0]?.content[0]?.text ?? '';
+
+  it('quotes `sessionQuery.readSurface` of its own DSH session', async () => {
+    const dsh = fakeDsh();
+    const readSurface = vi.fn(async (_id: string) => ({
+      events: [
+        {
+          type: 'user/message',
+          data: {
+            role: 'user',
+            source: { kind: 'compact-checkpoint' },
+            content: [{ type: 'text', text: 'SUMMARY OF EARLIER WORK' }],
+          },
+        },
+      ],
+    }));
+    Object.assign(dsh.ctx.sessionQuery, { readSurface });
+    const seen: Array<{ messages: Array<{ content: Array<{ text?: string }> }> }> = [];
+    const rt = runtime(dsh.ctx, {}, { sideQuestionLlm: () => captureLlm(seen) as never });
+    await rt.bootstrap();
+
+    const result = await rt.sideQuestion(
+      { logicalSessionId: LOGICAL, questionId: 'q1', question: 'what was done?' },
+      new AbortController().signal
+    );
+    expect(result).toEqual({ text: 'answer' });
+    expect(readSurface).toHaveBeenCalledWith(DSH_ID);
+    expect(promptOf(seen)).toContain('[Context summary]\nSUMMARY OF EARLIER WORK');
+  });
+
+  it('falls back to the projected history when the surface cannot be read', async () => {
+    const dsh = fakeDsh();
+    const log = vi.fn();
+    Object.assign(dsh.ctx.sessionQuery, {
+      readSurface: vi.fn(async () => {
+        throw new Error('surface invalid');
+      }),
+    });
+    const seen: Array<{ messages: Array<{ content: Array<{ text?: string }> }> }> = [];
+    const rt = runtime(dsh.ctx, { log }, { sideQuestionLlm: () => captureLlm(seen) as never });
+    await rt.bootstrap();
+
+    await rt.sideQuestion(
+      { logicalSessionId: LOGICAL, questionId: 'q1', question: 'anything?' },
+      new AbortController().signal
+    );
+    expect(promptOf(seen)).toContain('<conversation>');
+    expect(promptOf(seen)).not.toContain('Context summary');
+    expect(log).toHaveBeenCalledWith(
+      '[dsh-bridge] side question: surface unreadable, using the history',
+      expect.any(Error)
+    );
   });
 });

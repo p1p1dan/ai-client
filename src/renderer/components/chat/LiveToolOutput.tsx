@@ -33,7 +33,7 @@ export function LiveToolOutput({ toolCallId }: { toolCallId: string }) {
   if (!output || !text) return null;
   return (
     <div className="ml-0.5 border-l border-border pl-3.5" data-testid="live-tool-output">
-      <p className="pt-1 text-meta text-muted-foreground tabular-nums">
+      <p className="pt-1 text-small text-muted-foreground tabular-nums">
         {t('Live output')}
         {shown.omittedBytes > 0 &&
           ` · ${t('Earlier {{size}} not shown', { size: kilobytesLabel(shown.omittedBytes) })}`}

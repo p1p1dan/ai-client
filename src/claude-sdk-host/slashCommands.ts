@@ -56,6 +56,8 @@ export const SDK_HIDDEN_COMMANDS: ReadonlySet<string> = new Set([
   'insights',
   'team-onboarding',
   'auto-mode-setup',
+  // Layout 5f: the window's own side chat answers `/btw` (`worker.sideQuestion`).
+  'btw',
 ]);
 
 /**

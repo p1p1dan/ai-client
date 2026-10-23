@@ -62,11 +62,11 @@ function toComboItem(entry: FolderMenuEntry): FolderComboItem {
 }
 
 /**
- * Decision 174: 14px (`text-meta`) and 400 for the group names — coss's own
+ * Decision 174: 14px (`text-small`) and 400 for the group names — coss's own
  * label is 12px / 500, and 「最近」「本机」「远程仓库」「添加仓库」 are CJK,
  * which the design system keeps at 14px or more.
  */
-export const FOLDER_MENU_GROUP_LABEL_CLASS = 'text-meta font-normal';
+export const FOLDER_MENU_GROUP_LABEL_CLASS = 'text-small font-normal';
 
 interface TargetFolderSelectProps {
   folderMenu: FolderMenuModel;
@@ -299,7 +299,7 @@ export function TargetFolderSelect({
           />
         </div>
         {!hasRepositories && query.trim() === '' && (
-          <div className="p-2 text-center text-meta text-muted-foreground">
+          <div className="p-2 text-center text-small text-muted-foreground">
             {t('No repositories yet')}
           </div>
         )}
@@ -320,7 +320,7 @@ export function TargetFolderSelect({
                         {itemIcon(item)}
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
                         {item.hint && (
-                          <span className="shrink-0 text-meta text-muted-foreground">
+                          <span className="shrink-0 text-small text-muted-foreground">
                             {item.hint}
                           </span>
                         )}

@@ -402,6 +402,8 @@ export interface ChatMessageAttachment {
   kind: 'image' | 'text';
   mediaType: string;
   name?: string;
+  /** Issue #26 item 6: a DSH image's store reference, for its thumbnail. */
+  attachmentId?: string;
 }
 
 export interface ChatMessage {
@@ -1499,6 +1501,7 @@ function mapHistoryAttachment(attachment: HistoryAttachment): ChatMessageAttachm
     kind: attachment.kind,
     mediaType: attachment.mediaType,
     ...(attachment.name ? { name: attachment.name } : {}),
+    ...(attachment.attachmentId ? { attachmentId: attachment.attachmentId } : {}),
   };
 }
 

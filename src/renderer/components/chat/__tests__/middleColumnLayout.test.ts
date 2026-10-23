@@ -9,26 +9,30 @@ import { describe, expect, it } from 'vitest';
 import {
   COMPOSER_BAR_LEADING,
   COMPOSER_BAR_TRAILING,
+  COMPOSER_CARD_LEADING,
+  COMPOSER_CARD_TRAILING,
   COMPOSER_CONTROL_SIZE,
   COMPOSER_POPUP_DESIRED_HEIGHT,
   COMPOSER_POPUP_GAP,
   COMPOSER_POPUP_VIEWPORT_MARGIN,
   COMPOSER_TEXTAREA_LINE_SCALE,
-  COMPOSER_TEXTAREA_MIN_ROWS,
+  COMPOSER_TEXTAREA_MAX_ROWS,
   composerActionGroupClass,
   composerAttachButtonClass,
   composerBarClass,
+  composerBarTrailingClass,
   composerCardClass,
   composerFollowHeightBreakdown,
   composerHasProtrusion,
+  composerInputRowClass,
   composerModelBaseClass,
   composerModelSuffixClass,
   composerModelTriggerClass,
   composerPermissionTriggerClass,
   composerPlaceholder,
   composerPopupSide,
-  composerRowsClass,
   composerTextareaClass,
+  composerTextareaSlotClass,
   deriveMiddleColumnMode,
   MIGRATING_SESSION_PLACEHOLDER,
   type MiddleColumnMode,
@@ -246,119 +250,84 @@ describe('middleColumnHostClass', () => {
 });
 
 describe('composerCardClass', () => {
-  // F-A1: the resting edge is --border and focus steps it to --input, a
-  // neutral ΔL with zero chroma. The old pair rested on --input and focused to
-  // --ring (the brand orange) — a 2.5x heavier resting edge plus a fully
-  // chromatic focus state.
-  it('F-A1: rests on --border and focuses to --input, with no brand-orange focus edge in either mode', () => {
+  // 2026-10-22 (user ruling, Claude Code desktop screenshot): a thin box with
+  // a 1px frame — `border-soft` at rest, `border-strong` on hover and while
+  // the textarea has focus — on the nearest surface. No brand-orange focus
+  // edge, and no heavy shadow.
+  it('F-A1: wears a thin soft frame that steps to border-strong, with no brand-orange focus edge in either mode', () => {
     for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
       const cls = composerCardClass(mode);
-      expect(cls).toContain('border-border');
-      expect(cls).toContain('focus-within:border-input');
-      // A standalone `border-input` would be the RESTING edge; the
-      // `focus-within:`-prefixed one is the focus edge and must not match.
-      expect(cls).not.toMatch(/(^|\s)border-input(\s|$)/);
+      expect(cls).toContain('bg-surface-3');
+      expect(cls).toMatch(/(^|\s)border(\s|$)/);
+      expect(cls).toContain('border-border-soft');
+      expect(cls).toContain('hover:border-border-strong');
+      expect(cls).toContain('focus-within:border-border-strong');
       expect(cls).not.toContain('focus-within:border-ring');
-      expect(cls).toContain('bg-card');
+      expect(cls).not.toContain('ring-primary');
     }
   });
 
-  // F-A7: A07 :1337 (zero shadows on buttons and cards), independently
-  // confirmed by measurement — the reference card's "float" comes from a
-  // slightly brighter fill plus a hairline edge, not from a shadow.
-  it('F-A7: carries no shadow in either mode', () => {
-    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
-      expect(composerCardClass(mode)).not.toContain('shadow-');
-    }
-  });
-
-  it('gives both cards one symmetric 8px inset instead of a three-value padding', () => {
+  // At most `elev-sm`; never an ad-hoc `shadow-*`, and not the composer
+  // elevation (its inset ring would double the real border).
+  it('F-A7: carries no heavy or ad-hoc shadow, in either mode', () => {
     for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
       const cls = composerCardClass(mode);
-      expect(cls).toContain('p-2');
+      expect(cls).not.toContain('shadow-');
+      expect(cls).not.toContain('elev-composer');
+      expect(cls).not.toMatch(/(^|\s)elev-(?!sm(\s|$))/);
+    }
+  });
+
+  it('gives both cards one symmetric 6px inset instead of a three-value padding', () => {
+    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+      const cls = composerCardClass(mode);
+      expect(cls).toContain('p-1.5');
       expect(cls).not.toMatch(/(^|\s)p[xytblrse]-/);
     }
   });
 
   // F-A2: the T-28 blocker was a test that asserted a class was PRESENT and
   // therefore could not notice that the height it composed was wrong. This
-  // crosses the spelled Tailwind step against the arithmetic breakdown, so a
+  // crosses every spelled Tailwind step against the arithmetic breakdown, so a
   // change to either one alone fails.
   //
-  // F6 (2026-08-18): the contract is 74px, not 42px — the card now stacks a
-  // textarea row and a control row with an 8px gap between them. The
-  // load-bearing proposition is unchanged ("the resting height is DERIVED, not
-  // copied"), so this is a value change rather than a retirement; the
-  // breakdown simply grew the two terms the second row introduced, and the gap
-  // term is cross-checked against the class that actually produces it.
-  //
-  // The `items-center` assertion that used to sit here is GONE on purpose, not
-  // by omission: the card's only in-flow child is now a single full-width
-  // column, so centring it cross-axis is meaningless, and it aligns
-  // ambiguously the moment the extras stack appears.
-  // T104: the card's resting height is still DERIVED, and the derivation now
-  // has two content rows of different kinds — the textarea's (which follows
-  // `--text-chat-body`) and the control strip's (the fixed 24px button tier).
-  // Collapsing them back into one term is the regression: it would make the
-  // 16px default and a 24px setting produce the same claimed height, which is
-  // exactly the drift this test is here to notice.
-  it('F-A2: rests the follow-up card with a 74px floor, cross-checking the class step against the arithmetic', () => {
+  // 2026-10-22: the box is ONE input row now (⊕, textarea, action key), so the
+  // contract is border + inset + the taller of the textarea's padded line and
+  // the 24px control tier — 2 + 12 + 24 = 38px at the 13px default.
+  it('F-A2: rests the box at one thin 38px line, cross-checking the class steps against the arithmetic', () => {
     const cls = composerCardClass('session');
     const breakdown = composerFollowHeightBreakdown();
 
-    expect(breakdown.rows).toBe(2);
     expect(breakdown.controlRow).toBe(COMPOSER_CONTROL_SIZE);
-    expect(
-      breakdown.border +
-        breakdown.padding +
-        breakdown.textareaRow +
-        breakdown.rowGap +
-        breakdown.controlRow
-    ).toBe(breakdown.total);
-    // Decision 174 (issue #6): the empty textarea rests at two body-tier lines
-    // (17 × 1.5 × 2 = 51px), so the card is 2 + 16 + 51 + 8 + 24 = 101px.
-    expect(breakdown.total).toBe(101);
+    expect(breakdown.textareaLine).toBe(DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE);
+    expect(breakdown.textareaRow).toBe(breakdown.textareaLine + breakdown.textareaPadding);
+    expect(breakdown.inputRow).toBe(Math.max(breakdown.textareaRow, breakdown.controlRow));
+    expect(breakdown.border + breakdown.padding + breakdown.inputRow).toBe(breakdown.total);
+    expect(breakdown.total).toBe(38);
 
-    // The textarea's row is not a free 51 either: it is the body tier times the
-    // line scale the session textarea's `min-h`/`leading` calc actually spells,
-    // times the resting line count (asserted against that class string in
-    // `composerTextareaClass`'s group below, so the same expression is checked
-    // from both ends).
-    expect(breakdown.textareaLines).toBe(COMPOSER_TEXTAREA_MIN_ROWS);
-    expect(breakdown.textareaRow).toBe(
-      DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE * COMPOSER_TEXTAREA_MIN_ROWS
-    );
+    // The border term is the 1px `border` the class spells, top and bottom.
+    expect(cls).toMatch(/(^|\s)border(\s|$)/);
+    expect(breakdown.border).toBe(2);
+    // The inset term is whatever the class spells, so the two cannot drift.
+    const padStep = stepValue(cls, /(?:^|\s)p-(\d+(?:\.\d+)?)(?:\s|$)/);
+    expect(padStep).not.toBeNull();
+    expect((padStep as number) * 4 * 2).toBe(breakdown.padding);
 
-    // The inter-row gap is not a free number either: it is whatever
-    // `composerRowsClass()` spells, so the two cannot drift apart.
-    const gapStep = stepValue(composerRowsClass(), /(?:^|\s)gap-(\d+(?:\.\d+)?)(?:\s|$)/);
-    expect(gapStep).not.toBeNull();
-    expect((gapStep as number) * 4).toBe(breakdown.rowGap);
-
-    // `min-h-18.5` (74px) is the FLOOR, not the height: the card grows with the
-    // body tier above 16px. At the 17px default with two resting lines the
-    // content (101px) is well above it — that is the deal the breakdown
-    // documents, and why `min-h-*` is the right utility here rather than `h-*`.
+    // `min-h-9.5` is the FLOOR, and it is exactly the resting total: a larger
+    // body font or a longer draft grows the box past it, never below.
     const step = stepValue(cls, /(?:^|\s)min-h-(\d+(?:\.\d+)?)(?:\s|$)/);
     expect(step).not.toBeNull();
-    expect((step as number) * 4).toBe(74);
-    expect(breakdown.total).toBeGreaterThan((step as number) * 4);
+    expect((step as number) * 4).toBe(breakdown.total);
 
-    expect(cls).toContain('flex');
-    // The single-row 42px step must not come back on its own: that spelling
-    // and the two-row structure cannot both be right.
-    expect(cls).not.toContain('min-h-10.5');
+    // The input row is one row: the extras stack above it is the only other
+    // in-flow child, and the gap between them is the card's own.
+    expect(cls).toContain('flex-col');
   });
 
-  // F-A2's blind spot, same shape as the one F-A3 documents for `size-*`: the
-  // arithmetic above cross-checks the UNPREFIXED `min-h-10.5` and `p-2`, and a
-  // variant-prefixed sibling (`sm:min-h-11`, `focus-within:p-3`, …) belongs to
-  // a different tailwind-merge conflict group, so it does not displace them —
-  // it simply wins wherever it applies. Above the `sm` breakpoint (i.e. every
-  // real window) the card would rest at a different height while every
-  // assertion in this file still passed. Since exactly one height and one inset
-  // are contracted here, ANY variant-prefixed spacing/height token is the bug,
-  // and enumerating them is cheaper than guessing which one gets written.
+  // F-A2's blind spot: a variant-prefixed sibling (`sm:min-h-11`,
+  // `focus-within:p-3`, …) belongs to a different tailwind-merge conflict group,
+  // so it does not displace the contracted steps — it simply wins wherever it
+  // applies. ANY variant-prefixed spacing/height token is the bug.
   it('F-A2: no variant-prefixed padding or height token can override the resting contract', () => {
     const spacingBase = /^(?:p[xytbrlse]?|min-h)-/;
     const offenders = composerCardClass('session')
@@ -368,43 +337,27 @@ describe('composerCardClass', () => {
     expect(offenders).toEqual([]);
   });
 
-  // [F6-1] RETIRES both F-A21 assertions and F-A2b (2026-08-18). Those three
-  // asserted the PILL DERIVATION: that the session card's radius was
-  // `composerFollowHeightBreakdown().total / 2` spelled as a constant, and
-  // that `hasExtras` switched it down to `rounded-md`. That derivation chain
-  // is what stopped being true — not its value. Followed literally at the new
-  // 74px resting height it yields `rounded-[37px]`, which is a hand-written
-  // arbitrary value (the design system bans those), and half-height corners on
-  // a two-row card read as a stretched capsule rather than a pill. The card
-  // has no pill mental model left to protect, so the whole chain retires and
-  // both cards simply share `rounded-md`.
-  //
-  // What replaces it is a stronger fact than "the number is 12": arbitrary-
-  // value radii are out of this card entirely. `rounded-[21px]` coming back —
-  // or any other `rounded-[…]` — is the regression, whatever its number.
-  it('[F6-1] both composer cards share rounded-md, with no arbitrary-value radius anywhere', () => {
+  // [F6-1]: arbitrary-value radii are out of this card entirely. 2026-10-22:
+  // the shared radius is the 12px `rounded-lg` token.
+  it('[F6-1] both composer cards share rounded-lg, with no arbitrary-value radius anywhere', () => {
     for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
       const cls = composerCardClass(mode);
-      expect(cls).toContain('rounded-md');
+      expect(cls).toContain('rounded-lg');
+      expect(cls).not.toContain('rounded-composer');
       expect(cls).not.toMatch(/rounded-\[/);
       expect(cls).not.toContain('rounded-full');
     }
   });
 
-  it('never uses rounded-lg (16px in this repo) for the card', () => {
-    expect(composerCardClass('empty')).not.toContain('rounded-lg');
-    expect(composerCardClass('session')).not.toContain('rounded-lg');
-  });
-
   // U09-1: the tab and the card's top radius are one visual join, so they are
   // asserted against each other rather than each on its own.
   describe('U09-1 protrusion join', () => {
-    it('drops the top corners to 4px when the tab is present, keeping the bottom at 10px', () => {
+    it('drops the top corners to 4px when the tab is present, keeping the bottom at the card radius', () => {
       const cls = composerCardClass('empty', { hasProtrusion: true });
       expect(cls).toContain('rounded-t-xs');
-      // The base `rounded-md` must survive — it is what the bottom corners
-      // still render at; dropping it would square the whole card.
-      expect(cls).toContain('rounded-md');
+      // The base radius must survive — it is what the bottom corners still
+      // render at; dropping it would square the whole card.
+      expect(cls).toContain('rounded-lg');
       expect(cls).not.toMatch(/rounded-\[/);
     });
 
@@ -454,224 +407,179 @@ describe('composerHasProtrusion', () => {
   });
 });
 
-describe('composerBarClass / composerActionGroupClass', () => {
-  it('offsets the empty-state bottom bar 6px below the textarea and gaps it at 8px', () => {
-    const cls = composerBarClass('empty');
-    expect(cls).toContain('mt-1.5');
-    expect(cls).toContain('gap-2');
-    expect(cls).toContain('items-center');
+describe('composerInputRowClass / composerBarClass / composerActionGroupClass', () => {
+  // The one row inside the box. `items-end` keeps ⊕ and the action key on the
+  // draft's last line as it grows; at rest every child is 24px, so it is
+  // centred too.
+  it('lays the input row out as one bottom-aligned row with a shrinkable textarea slot', () => {
+    const row = composerInputRowClass();
+    expect(row).toContain('flex');
+    expect(row).toContain('items-end');
+    expect(row).toContain('min-w-0');
+    expect(row).not.toContain('flex-col');
+    const slot = composerTextareaSlotClass();
+    expect(slot).toContain('flex-1');
+    expect(slot).toContain('min-w-0');
   });
 
-  it('gives the docked single row the same 8px gap with no top offset', () => {
-    const cls = composerBarClass('session');
-    expect(cls).toContain('gap-2');
+  // The row under the box: no frame, no fill, the 24px control tier.
+  it('gives the row under the box no frame or fill, at the control tier', () => {
+    const cls = composerBarClass();
+    expect(cls).toContain('items-center');
     expect(cls).toContain('min-w-0');
-    expect(cls).not.toContain('mt-');
+    expect(cls).not.toMatch(/(^|\s)border/);
+    expect(cls).not.toMatch(/(^|\s)bg-/);
+    const step = stepValue(cls, /(?:^|\s)h-(\d+(?:\.\d+)?)(?:\s|$)/);
+    expect((step as number) * 4).toBe(COMPOSER_CONTROL_SIZE);
   });
 
-  // F6 (2026-08-18) REVERSES the round-5 fix (diag:placeholder-align), because
-  // the condition that fix existed for is gone. `items-start` was chosen for
-  // one reason: the textarea was the single child in this row whose rendered
-  // height was NOT pinned to 24px (`field-sizing-content`), so `items-center`
-  // would centre its taller box against the 24px reference and push its
-  // top-anchored first line above the other controls' centreline. Row 2 no
-  // longer contains the textarea — every remaining child is an exact 24px box,
-  // which makes the two values equivalent in output and `items-center` the
-  // honest one to write.
-  it('F6: aligns the docked control row by centre, now that the textarea has left it', () => {
-    const cls = composerBarClass('session');
-    expect(cls).toContain('items-center');
-    expect(cls).not.toContain('items-start');
+  // In a conversation and on the home page the target row IS the row under
+  // the box, so the two cannot disagree about its look.
+  it('makes the session target row the row under the box', () => {
+    expect(targetRowClass('session')).toBe(composerBarClass());
   });
 
-  // The action group is shared by BOTH modes now (F6): it tail-anchors the
-  // round keys at the end of the empty card's bottom bar and of the session
-  // card's row 2. Without the auto margin the round key would slide left
-  // whenever the slots to its left are narrow, breaking the "Stop replaces
-  // Send in place" rule the whole button stack is built on.
-  it('pins the action group right in both modes, whatever sits to its left', () => {
+  it('anchors the trailing group of the row under the box at its end', () => {
+    const cls = composerBarTrailingClass();
+    expect(cls).toContain('ms-auto');
+    expect(cls).toContain('shrink-0');
+  });
+
+  // Without the auto margin the action key would slide whenever the slots to
+  // its left change, breaking the "Stop replaces Send in place" rule.
+  it('pins the action group to the end of the input row', () => {
     const cls = composerActionGroupClass();
     expect(cls).toContain('ms-auto');
     expect(cls).toContain('shrink-0');
   });
 
-  // U09-2 acceptance 1. The prototype's bar reads
-  // 「＋附件 · 权限管理」 on the left and 「上下文占用 · 模型 · 思考 · 发送」 on the
-  // right; "模型 · 思考" is one merged chip here (evidence-u09 #2), so it is a
-  // single `modelEffort` slot in that position.
-  describe('U09-2 bar order', () => {
-    it('leads with attach then the permission position', () => {
-      expect(COMPOSER_BAR_LEADING).toEqual(['attach', 'permission']);
+  // U09-2, re-cut 2026-10-22: inside the box only ⊕ and the action key; the
+  // permission tier on the left of the row below, model/effort then context
+  // use on its right (the Claude Code desktop order).
+  describe('U09-2 slot order', () => {
+    it('keeps only attach and the action key inside the box', () => {
+      expect(COMPOSER_CARD_LEADING).toEqual(['attach']);
+      expect(COMPOSER_CARD_TRAILING).toEqual(['actions']);
     });
 
-    it('trails with usage, then model/effort, then the send key', () => {
-      expect(COMPOSER_BAR_TRAILING).toEqual(['usage', 'modelEffort', 'actions']);
+    it('leads the row below with the permission tier', () => {
+      expect(COMPOSER_BAR_LEADING).toEqual(['permission']);
     });
 
-    // The send key must be last in the bar, full stop: every "Stop replaces
+    it('trails the row below with model/effort, then context use', () => {
+      expect(COMPOSER_BAR_TRAILING).toEqual(['modelEffort', 'usage']);
+    });
+
+    // The send key must be last in the box, full stop: every "Stop replaces
     // Send in place" guarantee assumes a fixed terminal position.
-    it('keeps the action slot last', () => {
-      expect(COMPOSER_BAR_TRAILING.at(-1)).toBe('actions');
+    it('keeps the action slot last inside the box and nowhere else', () => {
+      expect(COMPOSER_CARD_TRAILING.at(-1)).toBe('actions');
+      expect(COMPOSER_CARD_LEADING).not.toContain('actions');
       expect(COMPOSER_BAR_LEADING).not.toContain('actions');
+      expect(COMPOSER_BAR_TRAILING).not.toContain('actions');
     });
 
-    // A slot appearing in both groups would render its control twice.
-    it('assigns every slot to exactly one group', () => {
-      const all = [...COMPOSER_BAR_LEADING, ...COMPOSER_BAR_TRAILING];
+    // A slot appearing in two groups would render its control twice.
+    it('assigns every slot to exactly one group, and every slot somewhere', () => {
+      const all = [
+        ...COMPOSER_CARD_LEADING,
+        ...COMPOSER_CARD_TRAILING,
+        ...COMPOSER_BAR_LEADING,
+        ...COMPOSER_BAR_TRAILING,
+      ];
       expect(new Set(all).size).toBe(all.length);
+      expect([...all].sort()).toEqual(
+        ['actions', 'attach', 'modelEffort', 'permission', 'usage'].sort()
+      );
     });
-
-    // The two reserved positions exist so U12 and T38 fill a slot rather than
-    // reopening the order debate. Losing them is how a later slice ends up
-    // appending its control wherever it happens to be convenient.
-    it('reserves the permission and usage positions', () => {
-      const all = [...COMPOSER_BAR_LEADING, ...COMPOSER_BAR_TRAILING];
-      expect(all).toContain('permission');
-      expect(all).toContain('usage');
-    });
-  });
-
-  // The two-row mechanism itself. `[F6-4]` proves this class is APPLIED to the
-  // session branch's root; nothing there proves it lays out as a column, so a
-  // silent `flex-col` → `flex-row` edit would put the textarea back beside the
-  // controls with every AST assertion still green. `flex-1`/`min-w-0` are the
-  // pair that lets the column fill the card and still shrink below its
-  // content's intrinsic width.
-  it('F6: the session card body is a growable, shrinkable column', () => {
-    const cls = composerRowsClass();
-    expect(cls).toContain('flex-col');
-    expect(cls).toContain('flex-1');
-    expect(cls).toContain('min-w-0');
-    expect(cls).not.toContain('flex-row');
   });
 });
 
 describe('composerTextareaClass', () => {
-  it('gives the empty card a 56px minimum input height on the inner textarea', () => {
-    const cls = composerTextareaClass('empty');
-    expect(cls).toContain('min-h-14');
-    expect(cls).toContain('[&_textarea]:min-h-14');
+  // 2026-10-22 (user ruling): one thin line when empty, growing with the text.
+  it('rests the textarea at one line on the control tier', () => {
+    const cls = composerTextareaClass();
+    const step = stepValue(cls, /\[&_textarea\]:min-h-(\d+(?:\.\d+)?)(?:\s|$)/);
+    expect((step as number) * 4).toBe(COMPOSER_CONTROL_SIZE);
+    // The two-line resting floor (decision 174) is gone.
+    expect(cls).not.toContain('*1.5*2)]');
   });
 
-  it('rests the follow-up input at two body-tier line boxes (decision 174)', () => {
-    // T104: the resting row is no longer the literal `min-h-6`. It is derived
-    // from the body tier so the same class works at every setting the reader
-    // can pick. Decision 174 (issue #6, user ruling 2026-10-10): two lines, on
-    // the home page and in a conversation alike — the `*2` is
-    // `COMPOSER_TEXTAREA_MIN_ROWS`, and that is what
-    // `composerFollowHeightBreakdown()` counts.
-    expect(COMPOSER_TEXTAREA_MIN_ROWS).toBe(2);
-    expect(composerTextareaClass('session')).toContain(
-      '[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5*2)]'
+  it('caps growth at eight of its own body-tier rows, then scrolls', () => {
+    // F7f: eight rows keeps the cap expressed in the row the class already
+    // pins, and keeps a scroll boundary so a long draft cannot push the
+    // timeline off screen.
+    expect(COMPOSER_TEXTAREA_MAX_ROWS).toBe(8);
+    const cls = composerTextareaClass();
+    expect(cls).toContain(
+      `[&_textarea]:max-h-[calc(var(--text-chat-body)*${COMPOSER_TEXTAREA_LINE_SCALE}*${COMPOSER_TEXTAREA_MAX_ROWS})]`
     );
   });
 
-  it('caps follow-up growth at eight of its own body-tier rows', () => {
-    // F7f: the previous cap was the empty card's 56px, which is 2.3 of these
-    // rows — long enough to look like the box refuses to grow. Eight rows keeps
-    // the cap expressed in the row this branch already pins, and keeps a scroll
-    // boundary so a long draft cannot push the timeline off screen.
-    // T104: the row is derived now, so the cap is the same expression × 8 —
-    // still one rule, still no new magic number (192px at the 16px default).
-    const cls = composerTextareaClass('session');
-    expect(cls).toContain('[&_textarea]:max-h-[calc(var(--text-chat-body)*1.5*8)]');
-    expect(cls).toContain('[&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]');
-  });
-
-  it('T104: the follow-up textarea follows the body tier, in the same calc as its own line box', () => {
-    // The half of the user request that is easy to miss: "the text I type
-    // should match the message text". The pierce-through form is required, not
-    // stylistic — `<Textarea unstyled>` only puts `className` on the outer span
-    // (textarea.tsx), which is the trap `resize-none` already fell into.
-    const cls = composerTextareaClass('session');
+  it('T104: follows the body tier, its line box in the same calc the arithmetic multiplies', () => {
+    // The pierce-through form is required, not stylistic — `<Textarea
+    // unstyled>` only puts `className` on the outer span (textarea.tsx).
+    const cls = composerTextareaClass();
     expect(cls).toContain('[&_textarea]:text-chat-body');
-    // Empty mode is the same one-line contract but centred with padding; it
-    // follows the tier too, and carries no height term that would need to.
-    expect(composerTextareaClass('empty')).toContain('[&_textarea]:text-chat-body');
-    // leading and min-h must be the SAME expression: a line box and a floor
-    // derived from two different scales is how the resting line ends up sitting
-    // high in its own box again (the round-2 defect this pair fixed). The floor
-    // is a whole number of those line boxes (decision 174: two).
-    expect(cls).toContain('[&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]');
-    expect(cls).toContain('[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5*2)]');
-  });
-
-  it('T104 / decision 174: at the 17px default the derived row is the 51px the card arithmetic was built on', () => {
-    // The cross-check between the class string and the breakdown: the same
-    // expression, evaluated at D1's default, has to be the number the 101px
-    // resting contract was derived from.
-    expect(composerFollowHeightBreakdown().textareaRow).toBe(
-      DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE * COMPOSER_TEXTAREA_MIN_ROWS
+    expect(cls).toContain(
+      `[&_textarea]:leading-[calc(var(--text-chat-body)*${COMPOSER_TEXTAREA_LINE_SCALE})]`
     );
-    expect(composerFollowHeightBreakdown().textareaRow).toBe(51);
   });
 
-  it('T104: the derived row stays a whole number of line boxes at the extremes of the body range', () => {
-    // The other end of the same claim: the expression is what makes the row
-    // work at every setting, so the line box stays proportional — 18px at the
-    // 12px floor, 36px at the 24px ceiling — instead of the 24px literal the
-    // old pair froze. Decision 174: the resting textarea is two of them, so it
-    // lies between two lines at the floor and two at the ceiling.
+  // The class pads the one line out to the control tier and the arithmetic
+  // counts that padding; both are checked from the same numbers.
+  it('centres its one line on the control tier, clamping the padding at 0 for large body sizes', () => {
+    const cls = composerTextareaClass();
+    expect(cls).toContain(
+      '[&_textarea]:py-[max(0px,calc((1.5rem_-_var(--text-chat-body)*1.5)/2))]'
+    );
+    const breakdown = composerFollowHeightBreakdown();
+    expect(breakdown.textareaPadding).toBe(
+      Math.max(
+        0,
+        COMPOSER_CONTROL_SIZE - DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE
+      )
+    );
+    expect(breakdown.textareaRow).toBe(COMPOSER_CONTROL_SIZE);
+  });
+
+  it('T104: the line box stays proportional across the body range', () => {
     expect(CHAT_BODY_FONT_SIZE_MIN * COMPOSER_TEXTAREA_LINE_SCALE).toBe(18);
     expect(CHAT_BODY_FONT_SIZE_MAX * COMPOSER_TEXTAREA_LINE_SCALE).toBe(36);
-    const breakdown = composerFollowHeightBreakdown();
-    expect(breakdown.textareaRow).toBeGreaterThan(
-      CHAT_BODY_FONT_SIZE_MIN * COMPOSER_TEXTAREA_LINE_SCALE * COMPOSER_TEXTAREA_MIN_ROWS
+    // Below 16px the line is padded up to the 24px tier; above it the line
+    // itself is taller than the tier and the box grows with it.
+    expect(CHAT_BODY_FONT_SIZE_MIN * COMPOSER_TEXTAREA_LINE_SCALE).toBeLessThan(
+      COMPOSER_CONTROL_SIZE
     );
-    expect(breakdown.textareaRow).toBeLessThan(
-      CHAT_BODY_FONT_SIZE_MAX * COMPOSER_TEXTAREA_LINE_SCALE * COMPOSER_TEXTAREA_MIN_ROWS
+    expect(CHAT_BODY_FONT_SIZE_MAX * COMPOSER_TEXTAREA_LINE_SCALE).toBeGreaterThan(
+      COMPOSER_CONTROL_SIZE
     );
   });
 
-  it('zeroes the inner horizontal padding so the caret lines up with the card edge in both modes', () => {
-    expect(composerTextareaClass('empty')).toContain('[&_textarea]:px-0');
-    expect(composerTextareaClass('session')).toContain('[&_textarea]:px-0');
+  it('zeroes the inner horizontal padding so the caret starts right after ⊕', () => {
+    expect(composerTextareaClass()).toContain('[&_textarea]:px-0');
   });
 
   it('pierces resize-none through to the real inner textarea (round-2 fix: a bare resize-none on the unstyled outer span never reached the native <textarea>)', () => {
-    expect(composerTextareaClass('empty')).toContain('[&_textarea]:resize-none');
-    expect(composerTextareaClass('session')).toContain('[&_textarea]:resize-none');
-  });
-
-  it('gives the follow-up textarea a line-height matching its height so its resting line fills the box instead of sitting high (round-2 visual fix)', () => {
-    expect(composerTextareaClass('session')).toContain(
-      '[&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]'
-    );
-    // Empty mode keeps its own symmetric padding-based centering — no floor to fill.
-    expect(composerTextareaClass('empty')).not.toContain('leading-');
+    expect(composerTextareaClass()).toContain('[&_textarea]:resize-none');
   });
 
   it('drops the border/bg/shadow/ring counters now that <Textarea unstyled> renders no outer chrome to fight', () => {
-    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
-      const cls = composerTextareaClass(mode);
-      expect(cls).not.toContain('border-0');
-      expect(cls).not.toContain('bg-transparent');
-      expect(cls).not.toContain('shadow-none');
-      expect(cls).not.toContain('focus-visible:ring-0');
-    }
+    const cls = composerTextareaClass();
+    expect(cls).not.toContain('border-0');
+    expect(cls).not.toContain('bg-transparent');
+    expect(cls).not.toContain('shadow-none');
+    expect(cls).not.toContain('focus-visible:ring-0');
   });
 
-  // [F6-2] RETIRES the 128px width floor (round-4 defect B) and the dominant
-  // flex-grow weight (F5b), 2026-08-18. Both were patches for ONE condition:
-  // the session row held two elastic text competitors, so the textarea needed
-  // a floor no sibling's shrink math could cross and a grow weight that
-  // outvoted the status slot. Row 1 now holds the textarea and nothing else,
-  // which deletes the contest rather than arbitrating it.
-  //
-  // The replacement fact is that the contest cannot come back by accident:
-  // any `flex-` weight or `min-w-` floor on this class means something is
-  // sharing the row again, which is the regression this catches.
-  it('[F6-2] the session textarea owns its whole row, carrying no flex weight and no width floor', () => {
-    const cls = composerTextareaClass('session');
+  // [F6-2]: the textarea's slot takes the free width (`composerTextareaSlotClass`);
+  // the textarea itself fills that slot and carries no flex weight or width
+  // floor of its own.
+  it('[F6-2] the textarea fills its slot, carrying no flex weight and no width floor', () => {
+    const cls = composerTextareaClass();
     expect(cls).toContain('w-full');
     expect(cls).not.toMatch(/(?:^|\s)flex-/);
     expect(cls).not.toMatch(/(?:^|\s)min-w-/);
-  });
-
-  it('[F6-2] the empty-state textarea never picked up the row-sharing patches either', () => {
-    const cls = composerTextareaClass('empty');
-    expect(cls).not.toContain('min-w-32');
-    expect(cls).not.toContain('flex-[2]');
   });
 });
 
@@ -767,19 +675,20 @@ describe('targetRowClass / targetRowSlots', () => {
     expect(cls).not.toContain('bg-hover');
   });
 
-  it('places the target row 8px below the card in session mode', () => {
-    expect(targetRowClass('session')).toContain('mt-2');
+  it('places the target row 6px below the card in session mode', () => {
+    expect(targetRowClass('session')).toContain('mt-1.5');
   });
 
   // The empty row became a filled CONTAINER around the 24px control tier, so
   // it carries 28px to give its chips 2px of breathing room. 28px is the
-  // sidebar row step D03 pinned, not a new one. The session row is still bare
-  // and stays at the control height itself.
-  it('keeps 4px gaps in both modes, with 28px for the tab and 24px for the bare row', () => {
+  // sidebar row step D03 pinned, not a new one. The session row is the bare
+  // row under the box, at the control height itself, its ghost triggers
+  // spaced by their own inset.
+  it('gives the tab 28px with 4px gaps and the bare row 24px with 2px gaps', () => {
     expect(targetRowClass('empty')).toContain('h-7');
     expect(targetRowClass('empty')).toContain('gap-1');
     expect(targetRowClass('session')).toContain('h-6');
-    expect(targetRowClass('session')).toContain('gap-1');
+    expect(targetRowClass('session')).toContain('gap-0.5');
   });
 
   it('renders folder + branch + run location in empty mode', () => {
@@ -1000,29 +909,34 @@ describe('roundActionButtonClass', () => {
     }
   });
 
-  it('overrides both squircle radius pairs so the shape is a true circle', () => {
+  // Design system v2 §7.9: the reference's send key is a small-radius square,
+  // not a circle; at 24px the clamp rule (§10.3) allows only xs/sm.
+  it('is a small-radius square, never a pill or circle', () => {
     const cls = roundActionButtonClass();
-    expect(cls).toContain('rounded-full');
-    expect(cls).toContain('before:rounded-full');
-  });
-
-  it('neutralises corner-shape so the fallback and supports- radii agree', () => {
-    const cls = roundActionButtonClass();
-    expect(cls).toContain('[corner-shape:round]');
-    expect(cls).toContain('supports-[corner-shape:squircle]:rounded-full');
-    expect(cls).toContain('supports-[corner-shape:squircle]:before:rounded-full');
+    expect(cls).toContain('rounded-sm');
+    expect(cls).not.toContain('rounded-full');
+    expect(cls).not.toMatch(/rounded-(md|lg|xl|\[)/);
   });
 });
 
 // F-A22 (supersedes the earlier F-A14, which was written as conditional on a
 // decision that has since been taken).
 describe('roundActionButtonKindClass', () => {
-  it('F-A22: send and enqueue are the near-neutral dark fill, never the brand primary', () => {
+  // Design system v2 §1 rule 7 supersedes F-A22's "never the brand primary":
+  // the send key is one of the few places the clay appears.
+  it('F-A22: send and enqueue are the clay primary fill', () => {
     for (const kind of ['send', 'enqueue'] as const) {
       const cls = roundActionButtonKindClass(kind);
-      expect(cls).toContain('bg-foreground');
-      expect(cls).toContain('text-background');
-      expect(cls).not.toContain('bg-primary');
+      expect(cls).toContain('bg-primary');
+      expect(cls).toContain('text-primary-foreground');
+      expect(cls).not.toContain('bg-foreground');
+    }
+  });
+
+  // §1 rule 1: inside the composer's frame no key carries a frame of its own.
+  it('no kind draws a border inside the composer', () => {
+    for (const kind of ['send', 'stop', 'retry', 'enqueue', 'interject', 'send-now'] as const) {
+      expect(roundActionButtonKindClass(kind)).not.toMatch(/(^|\s)(hover:)?border(-|\s|$)/);
     }
   });
 
@@ -1060,8 +974,9 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
 
     expect(cls).toContain('rounded-sm');
     expect(cls).toContain('px-2');
-    expect(cls).toContain('hover:bg-hover');
-    expect(cls).toContain('data-[popup-open]:bg-selection');
+    // Design system v2: the one ghost-hover fill, the selected fill while open.
+    expect(cls).toContain('hover:bg-fill-ghost-hover');
+    expect(cls).toContain('data-[popup-open]:bg-fill-ghost-selected');
 
     expect(cls).not.toContain('border');
     expect(cls).not.toContain('shadow');
@@ -1076,10 +991,13 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
   // must ship together or neither is trustworthy.
   it('F-A15: hover and keyboard focus produce the same shell, always as a pair', () => {
     const cls = composerModelTriggerClass();
-    expect(cls.includes('hover:bg-hover')).toBe(cls.includes('focus-visible:bg-hover'));
-    expect(cls).toContain('focus-visible:bg-hover');
-    // The outline sits on top of the fill rather than replacing it.
-    expect(cls).toContain('focus-visible:outline-accent-primary');
+    expect(cls.includes('hover:bg-fill-ghost-hover')).toBe(
+      cls.includes('focus-visible:bg-fill-ghost-hover')
+    );
+    expect(cls).toContain('focus-visible:bg-fill-ghost-hover');
+    // The ring sits on top of the fill rather than replacing it (design
+    // system v2: the shared `focus-ring` utility).
+    expect(cls).toContain('focus-ring');
   });
 
   // The shell is a FILL, never a border: a hover border would add 2px to the
@@ -1110,9 +1028,9 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
     const model = composerModelTriggerClass();
 
     for (const state of [
-      'hover:bg-hover',
-      'focus-visible:bg-hover',
-      'data-[popup-open]:bg-selection',
+      'hover:bg-fill-ghost-hover',
+      'focus-visible:bg-fill-ghost-hover',
+      'data-[popup-open]:bg-fill-ghost-selected',
     ]) {
       expect(model).toContain(state);
       expect(attach).toContain(state);
@@ -1205,9 +1123,9 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
     const model = composerModelTriggerClass();
 
     for (const state of [
-      'hover:bg-hover',
-      'focus-visible:bg-hover',
-      'data-[popup-open]:bg-selection',
+      'hover:bg-fill-ghost-hover',
+      'focus-visible:bg-fill-ghost-hover',
+      'data-[popup-open]:bg-fill-ghost-selected',
     ]) {
       expect(model).toContain(state);
       expect(perm).toContain(state);

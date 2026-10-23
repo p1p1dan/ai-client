@@ -12,6 +12,7 @@ import {
 } from '@shared/types/providerTimeout';
 import { CheckCircle2, ExternalLink, RefreshCw, Server, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
@@ -114,15 +115,17 @@ export function PiModelManagementSettings({
       />
 
       {!snapshot?.managed && (
-        <div className="flex gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-ui text-info">
-          <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" />
-          {/* Decision 144: on DSH the local route's models are the AI services
-              above (P1-5); `~/.pi/agent` is no longer read. */}
-          {t('Using your own setup: the models come from the AI services you add above.')}
-        </div>
+        <Alert variant="info">
+          <TriangleAlert />
+          <AlertDescription>
+            {/* Decision 144: on DSH the local route's models are the AI services
+                above (P1-5); `~/.pi/agent` is no longer read. */}
+            {t('Using your own setup: the models come from the AI services you add above.')}
+          </AlertDescription>
+        </Alert>
       )}
 
-      <div className="border-t p-4 space-y-4">
+      <div className="space-y-4 rounded-md border border-border-soft bg-surface-2 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <Server className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -135,7 +138,7 @@ export function PiModelManagementSettings({
           )}
         </div>
         <div className="space-y-2">
-          <label htmlFor="pi-model-management-url" className="text-meta text-muted-foreground">
+          <label htmlFor="pi-model-management-url" className="text-small text-muted-foreground">
             {t('Configuration URL')}
           </label>
           <div className="flex flex-wrap gap-2">
@@ -162,7 +165,7 @@ export function PiModelManagementSettings({
         </div>
 
         {state && (
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-4 text-meta sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-4 text-small sm:grid-cols-4">
             <div>
               <dt className="text-muted-foreground">{t('Providers')}</dt>
               <dd className="tabular-nums font-semibold">{state.providerCount}</dd>
@@ -183,7 +186,7 @@ export function PiModelManagementSettings({
         )}
 
         {state?.agentDir && (
-          <p className="break-all text-meta text-muted-foreground">
+          <p className="break-all text-small text-muted-foreground">
             {t('Managed directory:')}
             <Ident>{state.agentDir}</Ident>
           </p>
@@ -193,37 +196,29 @@ export function PiModelManagementSettings({
             it — and the state file's `error` alone does not say WHICH failure,
             which is the part they can act on. */}
         {snapshot?.lastFailure?.withCatalog && (
-          <div className="flex gap-2 rounded-sm border border-warning/30 bg-warning/8 p-3 text-ui text-warning dark:bg-warning/16">
-            <TriangleAlert className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 flex-1">
-              {t(
-                'The last sync could not reach the model service, so the list is the last one that worked. Models added since then are missing.'
-              )}{' '}
-              <span className="select-text">
-                <Ident>{snapshot.lastFailure.error}</Ident>
+          <Alert variant="warning">
+            <TriangleAlert />
+            <AlertDescription>
+              <span className="min-w-0 flex-1">
+                {t(
+                  'The last sync could not reach the model service, so the list is the last one that worked. Models added since then are missing.'
+                )}{' '}
+                <span className="select-text">
+                  <Ident>{snapshot.lastFailure.error}</Ident>
+                </span>
               </span>
-            </span>
-          </div>
+            </AlertDescription>
+          </Alert>
         )}
         {(message || state?.error) && (
-          <div
-            className={`flex gap-2 rounded-sm border p-3 text-ui ${
-              message?.error || (!message && state?.error)
-                ? 'border-destructive/30 bg-destructive/8 text-destructive'
-                : 'border-success/30 bg-success/8 text-success'
-            }`}
-          >
-            {message?.error || (!message && state?.error) ? (
-              <TriangleAlert className="h-4 w-4 shrink-0" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-            )}
-            {message?.text || state?.error}
-          </div>
+          <Alert variant={message?.error || (!message && state?.error) ? 'error' : 'success'}>
+            {message?.error || (!message && state?.error) ? <TriangleAlert /> : <CheckCircle2 />}
+            <AlertDescription>{message?.text || state?.error}</AlertDescription>
+          </Alert>
         )}
       </div>
 
-      <div className="border-t pt-4 text-meta text-muted-foreground space-y-1">
+      <div className="border-t pt-4 text-small text-muted-foreground space-y-1">
         <p>{t('The default URL points to /api/v1/models-config on the onboarding service.')}</p>
         <p>
           {t('The management page is at /admin and requires the server administrator password.')}
@@ -298,7 +293,7 @@ function PromptCacheTtlSection() {
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          <p className="text-meta text-muted-foreground">
+          <p className="text-small text-muted-foreground">
             {t('Takes effect the next time a conversation starts its runtime.')}
           </p>
         </div>
@@ -365,7 +360,7 @@ export function ProviderIdleTimeoutSection() {
               ))}
             </SelectPopup>
           </Select>
-          <p className="text-meta text-muted-foreground">
+          <p className="text-small text-muted-foreground">
             {t('Takes effect the next time a conversation starts its runtime.')}
           </p>
         </div>

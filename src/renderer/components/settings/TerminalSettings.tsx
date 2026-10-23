@@ -116,10 +116,10 @@ export function TerminalSettings() {
     <div className="space-y-6">
       {window.electronAPI?.env?.platform === 'darwin' && (
         <SettingsRow>
-          <span className="text-sm">{t('Option as Meta')}</span>
+          <span className="text-ui">{t('Option as Meta')}</span>
           <div className="flex items-center gap-3">
             <Switch checked={terminalOptionIsMeta} onCheckedChange={setTerminalOptionIsMeta} />
-            <span className="text-xs text-muted-foreground">
+            <span className="text-small text-muted-foreground">
               {t('Use Option key as Meta instead of composing special characters')}
             </span>
           </div>
@@ -130,7 +130,7 @@ export function TerminalSettings() {
         description={t('Terminal renderer and performance settings')}
       >
         <SettingsRow>
-          <span className="text-sm font-medium mt-2">{t('Shell')}</span>
+          <span className="text-ui font-medium mt-2">{t('Shell')}</span>
           <div className="space-y-1.5">
             {loadingShells ? (
               <div className="flex h-10 items-center">
@@ -152,7 +152,7 @@ export function TerminalSettings() {
                       <div className="flex items-center gap-2">
                         <span>{shell.name}</span>
                         {shell.isWsl && (
-                          <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-xs text-blue-600 dark:text-blue-400">
+                          <span className="rounded-xs bg-fill-neutral px-1.5 py-0.5 text-2xs text-muted-foreground">
                             WSL
                           </span>
                         )}
@@ -189,11 +189,11 @@ export function TerminalSettings() {
                 />
               </div>
             )}
-            <p className="text-xs text-muted-foreground">{t('Apply on new terminals')}</p>
+            <p className="text-small text-muted-foreground">{t('Apply on new terminals')}</p>
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium mt-2">{t('Renderer')}</span>
+          <span className="text-ui font-medium mt-2">{t('Renderer')}</span>
           <div className="space-y-1.5">
             <Select
               value={terminalRenderer}
@@ -212,16 +212,16 @@ export function TerminalSettings() {
                 ))}
               </SelectPopup>
             </Select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {rendererOptions.find((o) => o.value === terminalRenderer)?.description}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t('Apply on new terminals or restart')}
             </p>
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium mt-2">{t('Terminal scrollback')}</span>
+          <span className="text-ui font-medium mt-2">{t('Terminal scrollback')}</span>
           <div className="space-y-1.5">
             <Select
               value={String(terminalScrollback)}
@@ -241,16 +241,16 @@ export function TerminalSettings() {
                 ))}
               </SelectPopup>
             </Select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               {t('History lines in the terminal. Higher values use more memory.')}
             </p>
-            <p className="text-xs text-muted-foreground">{t('Apply on new terminals only')}</p>
+            <p className="text-small text-muted-foreground">{t('Apply on new terminals only')}</p>
           </div>
         </SettingsRow>
         <SettingsRow>
-          <span className="text-sm font-medium">{t('Copy on Selection')}</span>
+          <span className="text-ui font-medium">{t('Copy on Selection')}</span>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui text-muted-foreground">
               {t('Automatically copy selected text in the terminal to the clipboard')}
             </p>
             <Switch checked={copyOnSelection} onCheckedChange={setCopyOnSelection} />

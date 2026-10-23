@@ -131,3 +131,44 @@ describe('Appearance settings survive a restart', () => {
     expect(persistedState().theme).toBe('system');
   });
 });
+
+/**
+ * Design system v2 (user ruling 2026-10-21): chat sizes saved under the old
+ * 17 / 14 scale are reset once to the current defaults (13 / 12 since scale version 3). One-shot across restarts: after the
+ * reset, a size the user picks again must survive the next launch.
+ */
+describe('v2 chat type scale: saved sizes are reset once', () => {
+  it('an old-scale file comes up on the v2 defaults', async () => {
+    disk.value = {
+      'aiclient-settings': {
+        state: { chatBodyFontSize: 17, chatProcessFontSize: 14, chatFontFamily: 'Fira Sans' },
+        version: 0,
+      },
+    };
+    const store = await launch();
+    expect(store.getState()).toMatchObject({
+      chatBodyFontSize: 13,
+      chatProcessFontSize: 12,
+      chatTypographyScaleVersion: 3,
+      // Only the two sizes are reset; the family is the user's own pick.
+      chatFontFamily: 'Fira Sans',
+    });
+  });
+
+  it('a size picked after the reset survives the next launch', async () => {
+    disk.value = {
+      'aiclient-settings': { state: { chatBodyFontSize: 17, chatProcessFontSize: 14 }, version: 0 },
+    };
+    const first = await launch();
+    first.getState().setChatBodyFontSize(16);
+    await vi.waitFor(() =>
+      expect(persistedState()).toMatchObject({
+        chatBodyFontSize: 16,
+        chatTypographyScaleVersion: 3,
+      })
+    );
+
+    const second = await launch();
+    expect(second.getState().chatBodyFontSize).toBe(16);
+  });
+});

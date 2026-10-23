@@ -57,7 +57,7 @@ export function AnnouncementBell() {
         type="button"
         className={cn(
           'relative flex size-6 shrink-0 items-center justify-center rounded-md',
-          'text-muted-foreground transition-colors hover:bg-hover hover:text-foreground'
+          'text-muted-foreground transition-colors hover:bg-fill-ghost-hover hover:text-foreground'
         )}
         aria-label={label}
         title={label}
@@ -67,7 +67,7 @@ export function AnnouncementBell() {
         {unreadCount > 0 && (
           <span
             aria-hidden
-            className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-accent-primary"
+            className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary"
           />
         )}
       </button>

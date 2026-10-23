@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useMemo, useReducer, useState } from 'react'
 import { useHomeTarget } from '@/components/chat/useHomeTarget';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Spinner } from '@/components/ui/spinner';
+import { StatusIcon } from '@/components/ui/status-icon';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
@@ -338,10 +338,11 @@ function HomeRow({
         </Badge>
       )}
       {/* Gives way first: the title is the row's identity. */}
-      <span className="min-w-0 max-w-[45%] shrink truncate text-meta text-muted-foreground">
+      <span className="min-w-0 max-w-[45%] shrink truncate text-small text-muted-foreground">
         {where}
       </span>
-      <span className="w-12 shrink-0 text-right text-meta text-muted-foreground tabular-nums">
+      {/* Design system v2 §2.3: times are the faint ink. */}
+      <span className="w-12 shrink-0 text-right text-small text-foreground-faint tabular-nums">
         {formatRelativeAge(row.updatedAt, now)}
       </span>
     </button>
@@ -363,16 +364,10 @@ function HomeRowMarker({
     if (isWaitingSessionStatus(row.status)) {
       const label =
         row.status === 'waiting_question' ? t('Waiting for an answer') : t('Waiting for approval');
-      return (
-        <span
-          role="img"
-          aria-label={label}
-          title={label}
-          className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
-        />
-      );
+      // Design system v2 §6: run states are drawn by `StatusIcon` only.
+      return <StatusIcon status="waiting" label={label} title={label} />;
     }
-    return <Spinner aria-label={t('Running')} className="size-3 shrink-0 text-status-running" />;
+    return <StatusIcon status="running" label={t('Running')} />;
   }
   if (unread) {
     const label = row.failed ? t('Failed while you were away') : t('Finished while you were away');

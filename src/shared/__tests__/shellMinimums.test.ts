@@ -23,27 +23,23 @@ const shellModel = readFileSync(
 );
 
 /**
- * Reads `export const NAME = <number>;` or `= <number> + DOCK_RAIL_WIDTH;`,
- * which is every form these four constants are written in. Summing the terms
- * by hand rather than evaluating the expression: this file only needs to
- * understand the shapes that exist, and a general evaluator here would be a
- * second place that has to be right about arithmetic.
+ * Reads `export const NAME = <number>;` or a sum of numbers, which is every
+ * form these constants are written in. Summing the terms by hand rather than
+ * evaluating the expression: this file only needs to understand the shapes
+ * that exist, and a general evaluator here would be a second place that has
+ * to be right about arithmetic. (Layout 5a removed the `DOCK_RAIL_WIDTH` term
+ * the sidebar minimum used to carry.)
  */
 function readConst(source: string, name: string): number {
   const match = new RegExp(`export const ${name} = ([^;]+);`).exec(source);
   if (!match) throw new Error(`${name} not found in source`);
-  const railWidth = /export const DOCK_RAIL_WIDTH = (\d+);/.exec(shellModel);
-  if (!railWidth) throw new Error('DOCK_RAIL_WIDTH not found in source');
-
-  const total = (match[1] as string)
+  return (match[1] as string)
     .split('+')
     .map((term) => term.trim())
     .reduce((sum, term) => {
-      if (term === 'DOCK_RAIL_WIDTH') return sum + Number(railWidth[1]);
       if (/^\d+$/.test(term)) return sum + Number(term);
       throw new Error(`${name} has a term this test cannot read: ${term}`);
     }, 0);
-  return total;
 }
 
 describe('U25 shell minimums', () => {
@@ -57,12 +53,14 @@ describe('U25 shell minimums', () => {
     expect(SHELL_MIN_WIDTH).toBe(sidebarMin + chatMin + editorMin);
   });
 
-  it('is wide enough for the collapsed-dock case with room to spare', () => {
-    const railWidth = readConst(shellModel, 'DOCK_RAIL_WIDTH');
+  it('is wide enough for the collapsed-sidebar case with room to spare', () => {
+    // Layout 5a: a collapsed sidebar reserves nothing (no rail any more).
+    const collapsed = readConst(centerModel, 'SIDEBAR_COLLAPSED_RESERVE');
     const chatMin = readConst(centerModel, 'CHAT_MIN_WIDTH');
     const editorMin = readConst(centerModel, 'EDITOR_MIN_WIDTH');
 
-    expect(SHELL_MIN_WIDTH).toBeGreaterThan(railWidth + chatMin + editorMin);
+    expect(collapsed).toBe(0);
+    expect(SHELL_MIN_WIDTH).toBeGreaterThan(collapsed + chatMin + editorMin);
   });
 
   it('the window actually asks for these, not its own numbers', () => {
