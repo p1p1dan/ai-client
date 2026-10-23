@@ -6,6 +6,11 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, 'src/renderer'),
       '@shared': path.resolve(__dirname, 'src/shared'),
+      // Its Proxy export is thenable and hangs the module loader; see the stub.
+      'electron-log/renderer.js': path.resolve(
+        __dirname,
+        'src/__tests__/setup/electronLogRendererStub.ts'
+      ),
     },
   },
   test: {
