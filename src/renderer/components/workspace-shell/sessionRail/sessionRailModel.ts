@@ -203,6 +203,8 @@ export interface EnvironmentInput {
   unboundPath: string | null;
   engine: 'dsh' | 'claude-sdk' | null;
   model: string | null;
+  /** Where the chat's record is on disk, once Main has found it. */
+  transcriptPath?: string | null;
   permission: string | null;
 }
 
@@ -212,7 +214,8 @@ export type EnvironmentRow =
   | { id: 'branch'; text: string; worktree: boolean }
   | { id: 'engine'; engine: 'dsh' | 'claude-sdk'; model: string | null }
   | { id: 'model'; model: string }
-  | { id: 'permission'; text: string };
+  | { id: 'permission'; text: string }
+  | { id: 'transcript'; path: string };
 
 function lastSegment(path: string): string {
   return splitPath(path).name || path;
@@ -241,6 +244,7 @@ export function deriveEnvironmentRows(input: EnvironmentInput): EnvironmentRow[]
     rows.push({ id: 'model', model: input.model });
   }
   if (input.permission) rows.push({ id: 'permission', text: input.permission });
+  if (input.transcriptPath) rows.push({ id: 'transcript', path: input.transcriptPath });
   return rows;
 }
 

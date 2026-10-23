@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>侧栏分组按钮预览（2026-10-23）</title>
+<!--
+  Throwaway preview. Three placements for an always-visible "group chats"
+  button in the left sidebar, so switching the grouping no longer needs a
+  hovered group heading or an empty spot to right-click. The default grouping
+  becomes 按时间. Colours are the v2 tokens (docs/design-system.md §2).
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI Variable Text","Segoe UI","Noto Sans",Arial,"PingFang SC","Microsoft YaHei UI","Noto Sans CJK SC",sans-serif;
+  background:#1d1d1b;color:var(--fg);font-size:13px;line-height:1.45;padding:20px}
+svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.s{width:14px;height:14px}
+.bar{display:flex;gap:8px;align-items:center;color:#ddd;margin-bottom:14px}
+.bar button{all:unset;cursor:pointer;padding:4px 10px;border-radius:6px;background:#333;color:#eee}
+.bar button.on{background:#c6613f}
+.grid{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.card{display:flex;flex-direction:column;gap:8px}
+.cap{color:#eee;font-weight:600}
+.cap small{display:block;font-weight:400;color:#aaa;max-width:300px;margin-top:2px}
+.win{width:300px;height:640px;border-radius:12px;overflow:hidden;background:var(--s0);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 50px rgba(0,0,0,.45);display:flex;flex-direction:column;position:relative}
+.top{height:40px;display:flex;align-items:center;padding:0 14px;font-family:Georgia,"Songti SC","Noto Serif CJK SC",serif;font-size:17px}
+.nav{display:flex;flex-direction:column;gap:1px;padding:0 8px 8px}
+.it{height:30px;display:flex;align-items:center;gap:9px;padding:0 8px;border-radius:6px;color:var(--fg2);cursor:pointer;white-space:nowrap}
+.it:hover{background:var(--hover);color:var(--fg)}
+.it .k{margin-left:auto;font-size:11px;color:var(--fg3)}
+.list{flex:1;overflow:auto;padding:0 8px 8px}
+.grp{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--fg3);padding:12px 8px 4px;white-space:nowrap}
+.row{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;color:var(--fg2);white-space:nowrap;cursor:pointer}
+.row span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis}
+.row:hover{background:var(--hover)}
+.row.on{background:var(--sel);color:var(--fg)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1.5px var(--fg3)}
+.dot.run{background:var(--brand);box-shadow:none}
+.ib{all:unset;cursor:pointer;width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--fg3);flex:none}
+.ib:hover,.ib.open{background:var(--hover);color:var(--fg)}
+/* A: section header with a right-aligned icon */
+.sect{display:flex;align-items:center;gap:6px;padding:8px 8px 0 16px;font-size:12px;font-weight:500;color:var(--fg3)}
+.sect .t{flex:1}
+/* B: text trigger naming the current mode */
+.mode{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 6px;margin-left:-6px;border-radius:6px;font-size:12px;font-weight:500;color:var(--fg3)}
+.mode:hover,.mode.open{background:var(--hover);color:var(--fg)}
+/* C: segmented control */
+.seg{margin:4px 16px 0;display:flex;background:var(--fill);border-radius:8px;padding:2px}
+.seg button{all:unset;cursor:pointer;flex:1;text-align:center;height:24px;line-height:24px;border-radius:6px;font-size:12px;color:var(--fg2)}
+.seg button.on{background:var(--s2);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 1px var(--bd)}
+.menu{position:absolute;z-index:5;min-width:176px;background:var(--s3);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,var(--sh)),0 0 0 1px var(--bd);display:none}
+.menu.show{display:block}
+.menu .l{font-size:11px;color:var(--fg3);padding:6px 8px 2px}
+.menu .m{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;cursor:pointer;color:var(--fg)}
+.menu .m:hover{background:var(--hover)}
+.menu .m .ck{width:14px;color:var(--brand)}
+.menu hr{border:0;border-top:1px solid var(--bd);margin:4px 0}
+.note{color:#bbb;max-width:960px;margin-top:18px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="bar">主题：<button data-th="light" class="on">浅色</button><button data-th="dark">深色</button>
+  <span style="margin-left:16px;color:#aaa">点按钮可打开菜单切换分组；默认「按时间」</span></div>
+<div class="grid">
+  <div class="card"><div class="cap">A 列表标题 + 右侧图标（推荐）<small>列表上方一行小标题「对话」，右端常驻一个筛选图标，点开就是现在的分组菜单。和官方桌面版「最近」标题一个画法。</small></div>
+    <div class="win" data-v="a"></div></div>
+  <div class="card"><div class="cap">B 标题本身就是开关<small>标题直接写当前分组「按时间 ⌄」，点它弹菜单。一眼看得到现在按什么分，但比 A 多一个字段在动。</small></div>
+    <div class="win" data-v="b"></div></div>
+  <div class="card"><div class="cap">C 分段切换<small>常驻四段按钮，一点就切，不用开菜单。最直接，但多占一行、侧栏最显眼的位置给了一个不常用的设置。</small></div>
+    <div class="win" data-v="c"></div></div>
+</div>
+<p class="note">共同点：原来悬停组标题出现的小图标和右键菜单都保留；新按钮打开的是同一个菜单（分组方式、筛选对话、全部折叠、选择归档）。默认分组从「按仓库」改为「按时间」，已经手动选过分组的用户保持原选择。</p>
+
+<script>
+const ICON={
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  repo:'<path d="M4 20V6a2 2 0 0 1 2-2h4l2 3h6a2 2 0 0 1 2 2v11z"/>',
+  puzzle:'<path d="M9 3h6v4a2 2 0 1 0 0 4v4h-4a2 2 0 1 0-4 0H3V9h4a2 2 0 1 0 0-4z"/>',
+  filter:'<path d="M3 6h18M7 12h10M10 18h4"/>',
+  chev:'<path d="m6 9 6 6 6-6"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  find:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  fold:'<path d="m7 20 5-5 5 5M7 4l5 5 5-5"/>',
+  sel:'<path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/>',
+};
+const ic=(n,c='i')=>`<svg class="${c}" viewBox="0 0 24 24">${ICON[n]}</svg>`;
+const MODES=['按仓库','按我的分组','按状态','按时间'];
+const DATA={
+  '按时间':[['今天',[['修 CI 缓存测试',1],['侧栏分组按钮',0,1],['回合计时重复',0]]],['昨天',[['同步状态检查',0],['打包脚本',0]]],['本周',[['旁问读模型视角',0],['卡片拖动重排',0],['服务卡识别端口',0],['标题栏贴顶',0]]],['更早',[['DSH 宿主启动',0],['权限三档',0]]]],
+  '按仓库':[['ai-client',[['侧栏分组按钮',0,1],['回合计时重复',0],['旁问读模型视角',0],['卡片拖动重排',0]]],['demo-api',[['修 CI 缓存测试',1],['同步状态检查',0]]],['临时对话',[['打包脚本',0]]]],
+  '按我的分组':[['界面',[['侧栏分组按钮',0,1],['卡片拖动重排',0]]],['未分组',[['修 CI 缓存测试',1],['回合计时重复',0],['同步状态检查',0]]]],
+  '按状态':[['运行中',[['修 CI 缓存测试',1]]],['最近完成',[['侧栏分组按钮',0,1],['回合计时重复',0],['同步状态检查',0],['打包脚本',0]]]],
+};
+const state={a:'按时间',b:'按时间',c:'按时间'};
+function list(mode){return DATA[mode].map(([g,rows])=>`<div class="grp">${g}</div>`+rows.map(([n,run,on])=>`<div class="row${on?' on':''}"><i class="dot${run?' run':''}"></i><span>${n}</span></div>`).join('')).join('');}
+function menu(v){return `<div class="menu" id="m-${v}"><div class="l">对话分组</div>${MODES.map(m=>`<div class="m" data-v="${v}" data-m="${m}"><span class="ck">${state[v]===m?ic('check','i s'):''}</span>${m}</div>`).join('')}<hr><div class="m">${ic('find','i s')}筛选对话</div><div class="m">${ic('fold','i s')}全部折叠</div><div class="m">${ic('sel','i s')}选择对话归档</div></div>`;}
+function header(v){
+  if(v==='a')return `<div class="sect"><span class="t">对话</span><button class="ib" data-open="${v}" title="分组与筛选">${ic('filter','i s')}</button></div>`;
+  if(v==='b')return `<div class="sect"><button class="mode" data-open="${v}">${state[v]}${ic('chev','i s')}</button></div>`;
+  return `<div class="seg">${['仓库','分组','状态','时间'].map((s,i)=>`<button data-v="c" data-m="${MODES[i]}" class="${state.c===MODES[i]?'on':''}">${s}</button>`).join('')}</div>`;
+}
+function render(v){
+  const el=document.querySelector(`.win[data-v="${v}"]`);
+  el.innerHTML=`<div class="top">PiLab</div><div class="nav">
+    <div class="it">${ic('plus')}新对话</div><div class="it">${ic('search')}搜索<span class="k">Ctrl+K</span></div>
+    <div class="it">${ic('repo')}仓库</div><div class="it">${ic('puzzle')}技能与插件</div></div>
+    ${header(v)}<div class="list">${list(state[v])}</div>${menu(v)}`;
+}
+['a','b','c'].forEach(render);
+document.addEventListener('click',e=>{
+  const open=e.target.closest('[data-open]');
+  const pick=e.target.closest('[data-m]');
+  document.querySelectorAll('.menu.show').forEach(m=>m.classList.remove('show'));
+  document.querySelectorAll('.open').forEach(m=>m.classList.remove('open'));
+  if(pick){state[pick.dataset.v]=pick.dataset.m;render(pick.dataset.v);return;}
+  if(open){const v=open.dataset.open,m=document.getElementById('m-'+v),win=open.closest('.win');
+    const r=open.getBoundingClientRect(),w=win.getBoundingClientRect();
+    m.style.top=(r.bottom-w.top+4)+'px';
+    if(v==='a'){m.style.right=(w.right-r.right)+'px';m.style.left='auto';}else{m.style.left=(r.left-w.left)+'px';m.style.right='auto';}
+    m.classList.add('show');open.classList.add('open');}
+});
+const TH={
+  light:{s0:'#f9f9f7',s2:'#ffffff',s3:'#ffffff',fg:'#151515',fg2:'#525252',fg3:'#8a8a8a',bd:'#e5e5e4',fill:'#eeeeed',hover:'#f0f0ef',sel:'#e5e5e4',brand:'#c6613f',sh:.12},
+  dark:{s0:'#0b0b0b',s2:'#1a1a19',s3:'#20201f',fg:'#f5f5f5',fg2:'#a3a3a3',fg3:'#666666',bd:'#2b2b2b',fill:'#222222',hover:'#202020',sel:'#2b2b2b',brand:'#d97757',sh:.5},
+};
+function theme(n){for(const[k,v]of Object.entries(TH[n]))document.documentElement.style.setProperty('--'+k,v);
+  document.querySelectorAll('[data-th]').forEach(b=>b.classList.toggle('on',b.dataset.th===n));}
+document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>theme(b.dataset.th));
+theme('light');
+</script>
+</body>
+</html>

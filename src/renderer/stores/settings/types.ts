@@ -255,6 +255,20 @@ export interface SettingsState {
   claudeSdkEngineEnabled: boolean;
 
   /**
+   * User 2026-10-23 (`@shared/claudeSdkEngine`): where an SDK chat compacts by
+   * itself, in percent of its auto-compact window. Developer mode; Main reads
+   * it when a chat's host starts.
+   */
+  claudeSdkAutoCompactPercent: number;
+
+  /**
+   * User 2026-10-23 (`@shared/claudeSdkEngine`): the SDK host drops the empty
+   * `system` messages the CLI can send after a compaction. On by default;
+   * developer mode. Main reads it when a chat's host starts.
+   */
+  claudeSdkDropEmptySystemMessages: boolean;
+
+  /**
    * dsh-rebase decision 171 (GitHub issue #7): the User-Agent of every request
    * to a model service (`@shared/types/requestUserAgent`): `default`
    * (`claude-cli-pilab/<app version>`), `engine` (DSH's own) or `custom`.
@@ -301,6 +315,18 @@ export interface SettingsState {
    * root node — never `documentElement`.
    */
   chatFontFamily: string;
+  /**
+   * Design system v2 §3.4: the home greeting and the chat welcome line in the
+   * `--font-display` serif. Off draws them in the app's sans (user, 2026-10-23:
+   * a switch, to compare the two).
+   */
+  displaySerifEnabled: boolean;
+  /**
+   * The chat list's title row (「对话 · 按时间」 and the list menu icon).
+   * Developer mode only (user, 2026-10-23): shown when both are on; the list's
+   * right-click is the everyday way to switch the grouping.
+   */
+  sidebarListTitleEnabled: boolean;
   chatBodyFontSize: number;
   chatProcessFontSize: number;
   /**
@@ -404,6 +430,9 @@ export interface SettingsState {
   setExperimentalCacheControlOnTools: (enabled: boolean) => void;
   /** Route B, S-1: the Claude engine switch. */
   setClaudeSdkEngineEnabled: (enabled: boolean) => void;
+  /** Ignores a value out of range or not a whole number. */
+  setClaudeSdkAutoCompactPercent: (percent: number) => void;
+  setClaudeSdkDropEmptySystemMessages: (enabled: boolean) => void;
   /** Decision 171: ignores a mode it does not know. */
   setRequestUserAgentMode: (mode: RequestUserAgentMode) => void;
   /** Decision 171: stores a value that passes the check (trimmed), or `''` to clear; ignores the rest. */
@@ -414,6 +443,8 @@ export interface SettingsState {
   // Setters - Chat typography (T104)
   /** Empty string = follow the app's `--font-sans`. */
   setChatFontFamily: (family: string) => void;
+  setDisplaySerifEnabled: (enabled: boolean) => void;
+  setSidebarListTitleEnabled: (enabled: boolean) => void;
   /**
    * Both sizes are clamped by the store, not by the control that calls them,
    * and the two are clamped AGAINST EACH OTHER: `chatProcessFontSize` may never

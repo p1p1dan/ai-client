@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>「改动」面板：紧凑 diff 与改动范围（2026-10-23）</title>
+<!--
+  Throwaway preview. Part 1: the expanded change in SessionReviewPanel today
+  (pl-5 indent + two always-empty w-10 number columns + "+"/"-" left in the
+  text, ~114px before the code) vs the timeline's diff drawing reused.
+  Part 2: what the list covers — today only edit/write tool calls; three ways
+  to show working-tree changes made by shell commands or other editors.
+  Colours are the v2 tokens (docs/design-system.md §2).
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI Variable Text","Segoe UI","Noto Sans",Arial,"PingFang SC","Microsoft YaHei UI","Noto Sans CJK SC",sans-serif;
+  background:#1d1d1b;color:var(--fg);font-size:13px;line-height:1.45;padding:20px}
+.mono{font-family:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace;font-size:12px}
+svg.i{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.bar{display:flex;gap:8px;align-items:center;color:#ddd;margin-bottom:14px}
+.bar button{all:unset;cursor:pointer;padding:4px 10px;border-radius:6px;background:#333;color:#eee}
+.bar button.on{background:#c6613f}
+h2{color:#eee;font-size:15px;margin:18px 0 10px}
+.grid{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.card{display:flex;flex-direction:column;gap:8px}
+.cap{color:#eee;font-weight:600}
+.cap small{display:block;font-weight:400;color:#aaa;max-width:340px;margin-top:2px}
+.pane{width:340px;height:520px;border-radius:12px;overflow:hidden;background:var(--s2);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 50px rgba(0,0,0,.45);display:flex;flex-direction:column}
+.ph{height:36px;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--bd);font-weight:500}
+.ph .sp{flex:1}
+.ph .dd{display:inline-flex;align-items:center;gap:4px;color:var(--fg2);font-weight:400;font-size:12px;padding:2px 6px;border-radius:6px}
+.tabs{display:flex;gap:2px;padding:6px 10px 0}
+.tabs span{font-size:12px;padding:3px 8px;border-radius:6px;color:var(--fg2);cursor:pointer}
+.tabs span.on{background:var(--sel);color:var(--fg)}
+.body{flex:1;overflow:auto;padding:6px}
+.file{display:flex;align-items:center;gap:6px;height:28px;padding:0 6px;border-radius:6px;white-space:nowrap}
+.file:hover{background:var(--hover)}
+.file .n{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis}
+.file .d{color:var(--fg3);font-size:11px}
+.add{color:var(--success)}.del{color:var(--danger)}
+.tag{font-size:11px;padding:0 5px;border-radius:4px;background:var(--fill);color:var(--fg2)}
+.foot{font-size:12px;color:var(--fg3);padding:10px 6px 4px}
+.foot a{color:var(--fg2);text-decoration:underline;cursor:pointer}
+/* old diff */
+.old{padding:4px 0 4px 26px;overflow:hidden}
+.old .l{display:flex;white-space:pre;padding:0 8px}
+.old .c{width:40px;flex:none;text-align:right;padding-right:8px;color:var(--fg3)}
+.old .l.a{background:var(--add-bg)}.old .l.r{background:var(--del-bg)}
+.old .note{font-size:12px;color:var(--fg3);padding:2px 8px 4px}
+/* new diff (timeline style) */
+.new{margin:2px 0 6px 6px;border-left:1px solid var(--bd)}
+.new .l{display:flex;white-space:pre-wrap;word-break:break-all}
+.new .c{width:28px;flex:none;text-align:right;padding-right:6px;color:var(--fg3)}
+.new .m{width:14px;flex:none;color:var(--fg3)}
+.new .l.a{background:var(--add-bg)}.new .l.a .m{color:var(--success)}
+.new .l.r{background:var(--del-bg)}.new .l.r .m{color:var(--danger)}
+.new .fold{color:var(--fg3);font-size:11px;padding:1px 0 1px 42px;cursor:pointer}
+.ruler{position:relative;height:0}
+.ruler i{position:absolute;top:-3px;height:6px;background:#c6613f55;border-radius:2px}
+.note2{color:#bbb;max-width:1100px;margin-top:10px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="bar">主题：<button data-th="light" class="on">浅色</button><button data-th="dark">深色</button></div>
+
+<h2>一、展开后的改动内容</h2>
+<div class="grid">
+  <div class="card"><div class="cap">现在<small>缩进 20px + 两列永远为空的行号（各 40px）+「+/−」混在正文里，代码前约 114px 空白；长行横向滚动。</small></div>
+    <div class="pane"><div class="ph">改动<span class="sp"></span><span class="dd">本次对话 ▾</span></div><div class="body" id="old"></div></div></div>
+  <div class="card"><div class="cap">改后（推荐）：沿用聊天时间线里的 diff 画法<small>有行号才画一列行号（28px），「+/−」单独一窄列，长行折行不横滚，没改的长段落折成「⋯ 12 行未改」。代码前约 50px。</small></div>
+    <div class="pane"><div class="ph">改动<span class="sp"></span><span class="dd">本次对话 ▾</span></div><div class="body" id="new"></div></div></div>
+</div>
+
+<h2>二、为什么只有工具的改动？以及三种补法</h2>
+<p class="note2">这是当初的设计：面板记的是「这个对话的文件工具做了什么」，从对话历史里重建，每次 edit/write 一条，所以能说清是哪个对话、哪一步改的。Git 工作区说不出改动来自哪个对话，命令行（bash）和外部编辑器的改动当时就明确留到以后做，一直没做。底部那行「命令行和外部编辑不计入」就是这个意思。下面三种做法都只是把 Git 里已有的数据拿来显示，不需要新的记录机制：</p>
+<div class="grid">
+  <div class="card"><div class="cap">1 维持现状，底部点明还有别的改动<small>最小改动。列表照旧只有工具改的，末尾一行「工作区另有 2 个未提交的文件 · 在 Git 中查看」。</small></div>
+    <div class="pane"><div class="ph">改动<span class="sp"></span><span class="dd">本次对话 ▾</span></div><div class="body" id="s1"></div></div></div>
+  <div class="card"><div class="cap">2 顶部切换：本次对话 / 工作区（推荐）<small>同一个面板两种视图：「本次对话」按工具记录；「工作区」就是 git status，含命令行和外部改的。现在那个 ▾ 菜单里「本次对话」只是个摆设，正好变成真开关。</small></div>
+    <div class="pane"><div class="ph">改动<span class="sp"></span></div><div class="tabs"><span class="on" data-s2="chat">本次对话</span><span data-s2="git">工作区</span></div><div class="body" id="s2"></div></div></div>
+  <div class="card"><div class="cap">3 合成一张列表<small>工具改的照常列出；Git 里有、但没有工具碰过的文件也列进来，标「外部」，只能看当前 diff，没有逐次记录。信息最全，但两类东西混在一起。</small></div>
+    <div class="pane"><div class="ph">改动<span class="sp"></span><span class="dd">本次对话 ▾</span></div><div class="body" id="s3"></div></div></div>
+</div>
+<p class="note2">另：现在 DSH 下每条改动都只是「根据工具参数预览」，没有完整的前后对比（原运行时记录前后内容的那部分随 P1-12 删掉了，桥接层没补上）。这个可以单独再补，不影响上面的选择。</p>
+
+<script>
+const ch='<svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>';
+const cd='<svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>';
+const LINES=[
+ [' ',40,40,'export function limitFolderRows(input: FolderRowsLimitInput) {'],
+ [' ',41,41,'  const total = input.rows.length;'],
+ ['+',null,42,'  if (input.expanded === false && !input.queryActive) {'],
+ ['+',null,43,'    const active = input.rows.find((row) => row.sessionId === input.activeSessionId);'],
+ ['+',null,44,'    return { rows: active ? [active] : [], hiddenCount: 0, collapsible: false };'],
+ ['+',null,45,'  }'],
+ ['-',42,null,'  // folded groups list nothing'],
+ [' ',43,46,'  if (input.queryActive || total <= FOLDER_DEFAULT_LIMIT) {'],
+];
+const fileRow=(n,dir,a,r,open,tag='')=>`<div class="file">${open?cd:ch}<span class="n">${n}</span>${tag}<span class="d">${dir}</span><span class="add">+${a}</span><span class="del">−${r}</span></div>`;
+document.getElementById('old').innerHTML=fileRow('sidebarTree.ts','workspace-shell',4,1,1)+
+ `<div class="old mono"><div class="note">根据工具参数预览 — 完整 diff 不可用</div>${LINES.map(([k,o,n,t])=>`<div class="l ${k==='+'?'a':k==='-'?'r':''}"><span class="c"></span><span class="c"></span>${k}${t}</div>`).join('')}</div>`+
+ fileRow('LeftNav.tsx','workspace-shell',12,3,0)+fileRow('i18n.ts','shared',2,0,0);
+document.getElementById('new').innerHTML=fileRow('sidebarTree.ts','workspace-shell',4,1,1)+
+ `<div class="new mono"><div class="fold">⋯ 39 行未改</div>${LINES.map(([k,o,n,t])=>`<div class="l ${k==='+'?'a':k==='-'?'r':''}"><span class="c">${n??o}</span><span class="m">${k===' '?'':k==='-'?'−':'+'}</span><span>${t}</span></div>`).join('')}</div>`+
+ fileRow('LeftNav.tsx','workspace-shell',12,3,0)+fileRow('i18n.ts','shared',2,0,0);
+const chatList=fileRow('sidebarTree.ts','workspace-shell',4,1,0)+fileRow('LeftNav.tsx','workspace-shell',12,3,0)+fileRow('i18n.ts','shared',2,0,0);
+document.getElementById('s1').innerHTML=chatList+`<div class="foot">工作区另有 2 个未提交的文件（命令行或其他编辑器改的）· <a>在 Git 中查看</a></div>`;
+const gitList=fileRow('sidebarTree.ts','workspace-shell',4,1,0)+fileRow('LeftNav.tsx','workspace-shell',12,3,0)+fileRow('i18n.ts','shared',2,0,0)+fileRow('package-lock.json','',120,80,0)+fileRow('dist-notes.md','docs',6,0,0);
+function s2(v){document.querySelectorAll('[data-s2]').forEach(e=>e.classList.toggle('on',e.dataset.s2===v));
+ document.getElementById('s2').innerHTML=v==='chat'?chatList+`<div class="foot">按对话里的文件工具（edit、write）逐次记录</div>`:gitList+`<div class="foot">当前工作区的未提交改动（git status），不分来源</div>`;}
+document.querySelectorAll('[data-s2]').forEach(e=>e.onclick=()=>s2(e.dataset.s2));s2('chat');
+const ext='<span class="tag">外部</span>';
+document.getElementById('s3').innerHTML=chatList+fileRow('package-lock.json','',120,80,0,ext)+fileRow('dist-notes.md','docs',6,0,0,ext)+`<div class="foot">「外部」：命令行或其他编辑器改的，只能看当前 diff</div>`;
+const TH={
+ light:{s2:'#ffffff',fg:'#151515',fg2:'#525252',fg3:'#8a8a8a',bd:'#e5e5e4',fill:'#eeeeed',hover:'#f0f0ef',sel:'#e5e5e4',success:'#3f7d4e',danger:'#b5452f','add-bg':'#3f7d4e14','del-bg':'#b5452f14'},
+ dark:{s2:'#1a1a19',fg:'#f5f5f5',fg2:'#a3a3a3',fg3:'#666666',bd:'#2b2b2b',fill:'#222222',hover:'#202020',sel:'#2b2b2b',success:'#73b585',danger:'#e5735c','add-bg':'#73b5851f','del-bg':'#e5735c1f'},
+};
+function theme(n){for(const[k,v]of Object.entries(TH[n]))document.documentElement.style.setProperty('--'+k,v);
+ document.querySelectorAll('[data-th]').forEach(b=>b.classList.toggle('on',b.dataset.th===n));}
+document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>theme(b.dataset.th));theme('light');
+</script>
+</body>
+</html>

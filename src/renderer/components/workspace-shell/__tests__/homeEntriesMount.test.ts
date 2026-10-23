@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
 import { resetHomeDraftForTests, useHomeDraftStore } from '@/stores/homeDraft';
+import { useSidebarArchiveStore } from '@/stores/sidebarArchive';
 
 /**
  * Decision 174 (GitHub issue #6, second wave; user ruling 2026-10-10, ruling
@@ -72,6 +73,8 @@ let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 
 beforeEach(async () => {
+  // These tests read the repository grouping; the app default is 按时间.
+  useSidebarArchiveStore.setState({ archiveMode: 'workspace' });
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   resetHomeDraftForTests();
   useChatSessionsStore.setState({

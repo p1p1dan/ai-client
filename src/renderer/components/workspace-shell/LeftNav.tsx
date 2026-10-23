@@ -66,6 +66,7 @@ import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { openHome } from '@/stores/homeDraft';
 import { useRemoteController } from '@/stores/sessionControl';
+import { useSettingsStore } from '@/stores/settings';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { orderGroups, UNGROUPED_GROUP_ID, useSidebarArchiveStore } from '@/stores/sidebarArchive';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
@@ -75,7 +76,11 @@ import { projectIdForRepo, workspaceIdFor } from './deriveChatWorkspaceTree';
 import { endSessionRuntime } from './endSessionRuntime';
 import { sumFolderDiffTotals } from './folderDiffStats';
 import { SURFACE_ESCAPE_HOLD_ATTR } from './shellLayoutModel';
-import { GroupingModeRadio, SidebarListMenu } from './sidebar/SidebarListMenu';
+import {
+  GroupingModeRadio,
+  SIDEBAR_GROUPING_LABELS,
+  SidebarListMenu,
+} from './sidebar/SidebarListMenu';
 import { bucketSessions } from './sidebar/sidebarGrouping';
 import {
   resolveGroupDrop,
@@ -430,6 +435,9 @@ export function LeftNav({
     [repositories]
   );
   const archiveMode = useSidebarArchiveStore((state) => state.archiveMode);
+  const listTitleShown = useSettingsStore(
+    (state) => state.developerModeEnabled && state.sidebarListTitleEnabled
+  );
   const setArchiveMode = useSidebarArchiveStore((state) => state.setArchiveMode);
   const groups = useSidebarArchiveStore((state) => state.groups);
   const groupAssignments = useSidebarArchiveStore((state) => state.assignments);
@@ -778,22 +786,20 @@ export function LeftNav({
   };
   const toggleAllLabel = allGroupsCollapsed ? t('Expand all groups') : t('Collapse all groups');
   /** Layout 5b: the list menu a group heading shows on hover (`SidebarListMenu`). */
-  const listMenu = (
-    <SidebarListMenu
-      className={GROUP_ACTION_CLASS}
-      mode={archiveMode}
-      onModeChange={setArchiveMode}
-      onFilter={openFilter}
-      foldAll={{
-        label: toggleAllLabel,
-        collapsed: allGroupsCollapsed,
-        disabled: queryActive || toggleGroupIds.length === 0,
-        onToggle: toggleAllGroups,
-      }}
-      onSelectToArchive={() => setSelection(new Set())}
-      onNewGroup={groupingByGroup ? () => setCreatingGroup(true) : undefined}
-    />
-  );
+  const listMenuProps = {
+    mode: archiveMode,
+    onModeChange: setArchiveMode,
+    onFilter: openFilter,
+    foldAll: {
+      label: toggleAllLabel,
+      collapsed: allGroupsCollapsed,
+      disabled: queryActive || toggleGroupIds.length === 0,
+      onToggle: toggleAllGroups,
+    },
+    onSelectToArchive: () => setSelection(new Set()),
+    onNewGroup: groupingByGroup ? () => setCreatingGroup(true) : undefined,
+  };
+  const listMenu = <SidebarListMenu {...listMenuProps} className={GROUP_ACTION_CLASS} />;
 
   /**
    * Every list renders its rows through here, so the row's wiring (markers,
@@ -915,6 +921,7 @@ export function LeftNav({
     if (!unboundFolder) return null;
     const expanded = groupExpanded(UNBOUND_FOLDER_ID);
     const limited = limitFolderRows({
+      expanded,
       rows: unboundFolder.rows,
       showAll: folderShowAll[UNBOUND_FOLDER_ID] === true,
       queryActive,
@@ -964,7 +971,7 @@ export function LeftNav({
               </>
             ),
           })}
-          {expanded && limited.rows.length > 0 && (
+          {limited.rows.length > 0 && (
             <div className={GROUP_ROWS_CLASS}>
               {limited.rows.map((row) => renderSessionRow(row))}
               {renderFolderLimitToggle(UNBOUND_FOLDER_ID, limited)}
@@ -1002,6 +1009,7 @@ export function LeftNav({
     const isUngrouped = groupId === UNGROUPED_GROUP_ID;
     const expanded = groupExpanded(groupId);
     const limited = limitFolderRows({
+      expanded,
       rows: folder.rows,
       showAll: folderShowAll[groupId] === true,
       queryActive,
@@ -1078,7 +1086,7 @@ export function LeftNav({
             rename, its delete and its 「＋」 live, and a group that vanished
             the moment its last chat left would read as deleted. The
             placeholder quotes 「暂无对话」 rather than the row's own title. */}
-        {expanded &&
+        {(expanded || limited.rows.length > 0) &&
           (limited.rows.length > 0 ? (
             <div className={GROUP_ROWS_CLASS}>
               {limited.rows.map((row) =>
@@ -1104,6 +1112,7 @@ export function LeftNav({
     const bucketId = folder.projectId;
     const expanded = groupExpanded(bucketId);
     const limited = limitFolderRows({
+      expanded,
       rows: folder.rows,
       showAll: folderShowAll[bucketId] === true,
       queryActive,
@@ -1138,7 +1147,7 @@ export function LeftNav({
             </>
           ),
         })}
-        {expanded && limited.rows.length > 0 && (
+        {limited.rows.length > 0 && (
           <div className={GROUP_ROWS_CLASS}>
             {limited.rows.map((row) =>
               renderSessionRow(row, repositoryNameForRow(row) ?? undefined)
@@ -1294,6 +1303,7 @@ export function LeftNav({
   const renderRepositoryGroup = (folder: (typeof visibleFolders)[number]) => {
     const expanded = groupExpanded(folder.projectId);
     const limited = limitFolderRows({
+      expanded,
       rows: folder.rows,
       showAll: folderShowAll[folder.projectId] === true,
       queryActive,
@@ -1407,7 +1417,7 @@ export function LeftNav({
         )}
         {/* Decision 183 §1.5: an empty group shows its header only — its 「＋」
             is the way to start a chat there. */}
-        {expanded && limited.rows.length > 0 && (
+        {limited.rows.length > 0 && (
           <div className={GROUP_ROWS_CLASS}>
             {limited.rows.map((row) => {
               const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
@@ -1511,6 +1521,25 @@ export function LeftNav({
           the list menu, or by typing on the list. Design system v2 §3.1:
           buttons are `text-ui` (13px), so every xs button here overrides the
           variant's 12px `text-small`. */}
+      {/* User, 2026-10-23 (preview `2026-10-23-sidebar-grouping-button-preview.html`,
+          option A): the list's title with the list menu always on screen.
+          Developer mode only, off by default (`sidebarListTitleEnabled`). */}
+      {listTitleShown && !selecting && (
+        <div
+          data-slot="sidebar-list-title"
+          className="flex h-7 shrink-0 items-center gap-1 pr-3 pl-4"
+        >
+          {/* Preview option 1: a tier below the 14px group headings, and it
+              names the grouping, so it cannot read as one more group. */}
+          <span className="min-w-0 flex-1 truncate text-2xs text-foreground-faint">
+            {t('Chats · {{grouping}}', { grouping: t(SIDEBAR_GROUPING_LABELS[archiveMode]) })}
+          </span>
+          <SidebarListMenu
+            {...listMenuProps}
+            className="size-6 shrink-0 text-muted-foreground sm:size-6"
+          />
+        </div>
+      )}
       {selecting ? (
         <div className="flex h-8 shrink-0 items-center gap-0.5 px-2">
           <span className="min-w-0 flex-1 truncate pl-2 text-small">

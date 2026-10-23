@@ -77,7 +77,10 @@ async function mountSection() {
  * the point of these assertions is not the copy.
  */
 function inputsOf(container: HTMLElement): HTMLInputElement[] {
-  const all = Array.from(container.querySelectorAll<HTMLInputElement>('input'));
+  // The serif greeting switch (user, 2026-10-23) carries a hidden checkbox.
+  const all = Array.from(
+    container.querySelectorAll<HTMLInputElement>('input:not([type="checkbox"])')
+  );
   expect(all.length, 'family + two sizes').toBe(3);
   return all;
 }

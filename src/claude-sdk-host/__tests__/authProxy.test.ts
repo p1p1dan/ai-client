@@ -2,7 +2,12 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { startTestProxy } from '../../dsh-host/tools/lib/testProxy.ts';
-import { mintSessionToken, proxiedRoute, startAuthProxy } from '../authProxy.ts';
+import {
+  dropEmptySystemMessages,
+  mintSessionToken,
+  proxiedRoute,
+  startAuthProxy,
+} from '../authProxy.ts';
 
 /**
  * Route B S-3 (topic s3-project-config.md §3.1 item 1): the loopback auth proxy.
@@ -59,8 +64,8 @@ async function gateway(handler?: (req: http.IncomingMessage, res: http.ServerRes
   return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, seen };
 }
 
-async function proxyTo(upstream: string) {
-  const proxy = await startAuthProxy({ upstream, apiKey: KEY });
+async function proxyTo(upstream: string, extra: { dropEmptySystemMessages?: boolean } = {}) {
+  const proxy = await startAuthProxy({ upstream, apiKey: KEY, ...extra });
   closers.unshift(() => proxy.close());
   return proxy;
 }
@@ -371,5 +376,94 @@ describe('the leg to the gateway follows the product proxy (decision 196)', () =
     const { proxy } = await authProxy(invalidName(gw.url), {});
     expect(await ask(proxy)).toBe(200);
     expect(outbound.records).toHaveLength(1);
+  });
+});
+
+/**
+ * User 2026-10-23: the CLI can send `{ role: "system", content: [] }` after a
+ * compaction (field transcript 2e27f4ab…, CLI 2.1.300; still sent by 2.1.309),
+ * which the gateway refuses. The proxy drops it; any other body goes on as sent.
+ */
+describe('empty system messages', () => {
+  const conversation = {
+    model: 'claude-opus-5-5',
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: 'summary' }] },
+      { role: 'system', content: [], output_config: { effort: 'medium' } },
+      { role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+      { role: 'user', content: [{ type: 'text', text: 'next' }] },
+      {
+        role: 'system',
+        content: [{ type: 'text', text: 'agents', cache_control: { type: 'ephemeral' } }],
+      },
+      { role: 'system', content: '  ' },
+    ],
+    stream: true,
+  };
+
+  it('drops only the empty ones, keeping everything else as it was', () => {
+    const { body, dropped } = dropEmptySystemMessages(Buffer.from(JSON.stringify(conversation)));
+    expect(dropped).toEqual([1, 5]);
+    const sent = JSON.parse(body.toString('utf8'));
+    expect(sent.messages.map((m: { role: string }) => m.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'system',
+    ]);
+    expect(sent.messages[3]).toEqual(conversation.messages[4]);
+    expect({ ...sent, messages: undefined }).toEqual({ ...conversation, messages: undefined });
+  });
+
+  it('returns the very same buffer when there is nothing to drop or the body is not JSON', () => {
+    for (const raw of [
+      JSON.stringify({ messages: [conversation.messages[0], conversation.messages[4]] }),
+      'not json',
+      '[]',
+      '{"messages":"x"}',
+    ]) {
+      const original = Buffer.from(raw);
+      expect(dropEmptySystemMessages(original).body, raw).toBe(original);
+    }
+  });
+
+  it('sends the gateway the cleaned body with its own length, on both conversation paths', async () => {
+    const gw = await gateway();
+    const proxy = await proxyTo(gw.url);
+    for (const path of ['/v1/messages', '/v1/messages/count_tokens']) {
+      const answer = await call(`${proxy.url}${path}`, {
+        headers: { 'x-api-key': proxy.token, 'content-type': 'application/json' },
+        body: JSON.stringify(conversation),
+      });
+      expect(answer.status).toBe(200);
+    }
+    for (const seen of gw.seen) {
+      const sent = JSON.parse(seen.body);
+      expect(sent.messages).toHaveLength(4);
+      expect(JSON.stringify(sent)).not.toContain('"content":[]');
+      expect(Number(seen.headers['content-length'])).toBe(Buffer.byteLength(seen.body));
+    }
+  });
+
+  it('passes a body with nothing to drop byte for byte', async () => {
+    const gw = await gateway();
+    const proxy = await proxyTo(gw.url);
+    const raw = '{ "messages": [ {"role":"user","content":"hi"} ],  "stream":true }';
+    await call(`${proxy.url}/v1/messages`, {
+      headers: { 'x-api-key': proxy.token },
+      body: raw,
+    });
+    expect(gw.seen[0]?.body).toBe(raw);
+  });
+
+  it('switched off, sends the empty message on as it came', async () => {
+    const gw = await gateway();
+    const proxy = await proxyTo(gw.url, { dropEmptySystemMessages: false });
+    const raw = JSON.stringify(conversation);
+    await call(`${proxy.url}/v1/messages`, {
+      headers: { 'x-api-key': proxy.token },
+      body: raw,
+    });
+    expect(gw.seen[0]?.body).toBe(raw);
   });
 });

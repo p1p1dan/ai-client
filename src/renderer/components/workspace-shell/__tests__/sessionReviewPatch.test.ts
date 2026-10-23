@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reviewPatchLines } from '../sessionReviewPatch';
+import { reviewEntryRows, reviewPatchLines } from '../sessionReviewPatch';
 
 describe('reviewPatchLines', () => {
   it('reads both hunk origins, advances context on both sides, and resets for another hunk', () => {
@@ -44,5 +44,26 @@ describe('reviewPatchLines', () => {
     expect(rows[1]).toMatchObject({ oldLine: 8, newLine: 9 });
     expect(rows[2]).toMatchObject({ oldLine: 9 });
     expect(rows[3]).toMatchObject({ newLine: 10 });
+  });
+});
+
+describe('reviewEntryRows (user, 2026-10-23)', () => {
+  it('turns a recorded patch into numbered rows, without hunk headers or markers', () => {
+    expect(
+      reviewEntryRows({ patch: '@@ -1,2 +1,2 @@\n keep\n-old\n+new\n\\ No newline at end of file' })
+    ).toEqual([
+      { kind: 'same', text: 'keep', oldLine: 1, newLine: 1 },
+      { kind: 'del', text: 'old', oldLine: 2 },
+      { kind: 'add', text: 'new', newLine: 2 },
+    ]);
+  });
+
+  it('passes a preview through, keeping the line numbers it has', () => {
+    const rows = [
+      { kind: 'add' as const, text: 'a', newLine: 4 },
+      { kind: 'add' as const, text: 'b' },
+    ];
+    expect(reviewEntryRows({ preview: { rows } })).toEqual(rows);
+    expect(reviewEntryRows({})).toEqual([]);
   });
 });

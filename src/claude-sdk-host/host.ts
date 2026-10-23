@@ -16,6 +16,8 @@
  *                                    pathToClaudeCodeExecutable; a .js build runs on this node
  *   AICLIENT_CLAUDE_SDK_CLIENT_APP   User-Agent suffix
  *   AICLIENT_CLAUDE_SDK_RG_DIR       optional directory with an `rg` used instead of the CLI's built-in one
+ *   AICLIENT_CLAUDE_SDK_AUTO_COMPACT_PERCENT  the CLI's auto-compact percentage (default 60)
+ *   AICLIENT_CLAUDE_SDK_DROP_EMPTY_SYSTEM     `0`: the auth proxy keeps empty system messages
  *
  * Catalog mode (dsh-rebase decision 194 Q1), instead of a chat:
  *   AICLIENT_CLAUDE_SDK_CATALOG_CWD      the folder whose slash menu Main wants; the host lists
@@ -48,6 +50,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { BridgeRpcServer } from '../dsh-host/bridge/bridgeRpcServer.ts';
 import {
+  CLAUDE_SDK_DROP_EMPTY_SYSTEM_ENV,
   CLAUDE_SDK_HOST_SECRET,
   isClaudeSdkHostProxyUpdate,
   isClaudeSdkHostSecret,
@@ -260,6 +263,8 @@ async function start(apiKey: string, rawProxy: unknown): Promise<void> {
     log,
     ...(outboundProxy !== undefined ? { proxy: outboundProxy } : {}),
     ...(launchNoProxy !== undefined ? { inheritedNoProxy: launchNoProxy } : {}),
+    // User 2026-10-23: Main's developer switch; on unless it says `0`.
+    dropEmptySystemMessages: process.env[CLAUDE_SDK_DROP_EMPTY_SYSTEM_ENV]?.trim() !== '0',
   });
   logSecrets.push(proxy.token);
   const config = hostConfig(proxy, apiKey, outboundProxy);

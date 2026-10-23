@@ -665,8 +665,10 @@ export interface FolderRowsLimitInput {
   showAll: boolean;
   /** A search is active: every match is listed, the cap does not apply. */
   queryActive: boolean;
-  /** Kept visible below the cap — decision 137 §4. */
+  /** Kept visible below the cap — decision 137 §4 — and in a folded group. */
   activeSessionId?: string | null;
+  /** The group is open. Folded, only the selected conversation stays listed. */
+  expanded?: boolean;
 }
 
 export interface FolderRowsLimitResult {
@@ -688,9 +690,18 @@ export interface FolderRowsLimitResult {
  *   anything to fold back.
  * - A search lists every match — the query already narrowed the list, and
  *   hiding a hit behind a button would read as "no such chat".
+ * - A folded group (user, 2026-10-23) still lists the selected conversation,
+ *   so folding never hides the row the main pane is showing.
  */
 export function limitFolderRows(input: FolderRowsLimitInput): FolderRowsLimitResult {
   const total = input.rows.length;
+  if (input.expanded === false && !input.queryActive) {
+    const active =
+      input.activeSessionId != null
+        ? input.rows.find((row) => row.sessionId === input.activeSessionId)
+        : undefined;
+    return { rows: active ? [active] : [], hiddenCount: 0, collapsible: false };
+  }
   if (input.queryActive || total <= FOLDER_DEFAULT_LIMIT) {
     return { rows: [...input.rows], hiddenCount: 0, collapsible: false };
   }

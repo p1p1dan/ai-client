@@ -11,7 +11,11 @@
  */
 
 import {
+  CLAUDE_SDK_AUTO_COMPACT_PERCENT_SETTING_KEY,
+  CLAUDE_SDK_DROP_EMPTY_SYSTEM_SETTING_KEY,
   CLAUDE_SDK_ENGINE_SETTING_KEY,
+  resolveClaudeSdkAutoCompactPercent,
+  resolveClaudeSdkDropEmptySystem,
   resolveClaudeSdkEngineEnabled,
 } from '@shared/claudeSdkEngine';
 import { applyDeveloperModeGate } from '@shared/developerMode';
@@ -23,5 +27,27 @@ export function claudeSdkEngineEnabled(
 ): boolean {
   return resolveClaudeSdkEngineEnabled(
     applyDeveloperModeGate(read())[CLAUDE_SDK_ENGINE_SETTING_KEY]
+  );
+}
+
+/**
+ * User 2026-10-23: where an SDK chat compacts, in percent of its window. Read
+ * when a chat's host starts, so a change reaches the next host that starts.
+ * A developer-mode setting, like the switch above.
+ */
+export function claudeSdkAutoCompactPercent(
+  read: () => Record<string, unknown> = readSettingsState
+): number {
+  return resolveClaudeSdkAutoCompactPercent(
+    applyDeveloperModeGate(read())[CLAUDE_SDK_AUTO_COMPACT_PERCENT_SETTING_KEY]
+  );
+}
+
+/** User 2026-10-23: whether the host drops empty `system` messages; read when a chat's host starts. */
+export function claudeSdkDropEmptySystem(
+  read: () => Record<string, unknown> = readSettingsState
+): boolean {
+  return resolveClaudeSdkDropEmptySystem(
+    applyDeveloperModeGate(read())[CLAUDE_SDK_DROP_EMPTY_SYSTEM_SETTING_KEY]
   );
 }

@@ -8,6 +8,7 @@ import { StatusIcon } from '@/components/ui/status-icon';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useSettingsStore } from '@/stores/settings';
 import {
   deriveHomeRecentRows,
   groupHomeRows,
@@ -22,10 +23,10 @@ import {
   HOME_RECENT_SECTION_CLASS,
   HOME_ROW_CLASS,
   HOME_SUBLINE_CLASS,
-  HOME_TITLE_CLASS,
   HOME_TITLE_EMPHASIS_CLASS,
   HOME_TOP_SPACER_CLASS,
   type HomeDayGroup,
+  homeTitleClass,
   limitHomeRows,
   nextHomeRowsShown,
 } from './homeViewModel';
@@ -78,6 +79,7 @@ export function HomeView() {
   const { target } = useHomeTarget();
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
+  const displaySerif = useSettingsStore((state) => state.displaySerifEnabled);
   const rows = useMemo(
     () => deriveHomeRecentRows({ sessions, workspaces }),
     [sessions, workspaces]
@@ -90,7 +92,7 @@ export function HomeView() {
           <div aria-hidden className={HOME_TOP_SPACER_CLASS} />
           <div className={HOME_BODY_CLASS}>
             <div className="text-center">
-              <h1 className={HOME_TITLE_CLASS} data-home-title="">
+              <h1 className={homeTitleClass(displaySerif)} data-home-title="">
                 <HomeTitle repositoryName={target.repositoryName} />
               </h1>
               {target.workspace === null && (

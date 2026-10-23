@@ -13,6 +13,13 @@
  * proxy (Settings · Network) when Main hands one over, directly when the
  * product proxy is off, and switches at once when it changes (`setProxy`);
  * requests already under way finish on the route they started on.
+ *
+ * User 2026-10-23: the CLI (2.1.300 to 2.1.309, measured) can send, after a
+ * compaction, a mid-conversation `{ role: "system", content: [] }` that the
+ * gateway refuses ("system content must contain at least one block"), and
+ * keeps it in the transcript, so every later turn fails. A conversation
+ * request is read whole and such messages are dropped before it goes on; any
+ * other body goes on byte for byte.
  */
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -43,6 +50,8 @@ export interface AuthProxyOptions {
   proxy?: HostProxySetting | null;
   /** The launch environment's NO_PROXY, still a bypass under the product proxy (rule 8). */
   inheritedNoProxy?: string;
+  /** User 2026-10-23: drop empty `system` messages from conversation requests. Default on. */
+  dropEmptySystemMessages?: boolean;
 }
 
 export interface AuthProxy {
@@ -70,6 +79,48 @@ export function proxiedRoute(method: string | undefined, url: string | undefined
   if (method === 'POST') return path === '/v1/messages' || path === '/v1/messages/count_tokens';
   if (method === 'GET') return path === '/v1/models' || /^\/v1\/models\/[^/]+$/.test(path);
   return false;
+}
+
+/** The conversation paths whose body is read whole (empty system messages dropped). */
+function conversationRoute(method: string | undefined, url: string | undefined): boolean {
+  const path = (url ?? '').split('?')[0] ?? '';
+  return method === 'POST' && (path === '/v1/messages' || path === '/v1/messages/count_tokens');
+}
+
+function emptyContent(content: unknown): boolean {
+  if (Array.isArray(content)) return content.length === 0;
+  return typeof content === 'string' && content.trim() === '';
+}
+
+/**
+ * `body` without its empty `role: "system"` messages, and where they were.
+ * Nothing dropped (or a body that is not JSON): the very same buffer.
+ */
+export function dropEmptySystemMessages(body: Buffer): { body: Buffer; dropped: number[] } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body.toString('utf8'));
+  } catch {
+    return { body, dropped: [] };
+  }
+  if (typeof parsed !== 'object' || parsed === null) return { body, dropped: [] };
+  const messages = (parsed as { messages?: unknown }).messages;
+  if (!Array.isArray(messages)) return { body, dropped: [] };
+  const dropped: number[] = [];
+  const kept = messages.filter((message, index) => {
+    const empty =
+      typeof message === 'object' &&
+      message !== null &&
+      (message as { role?: unknown }).role === 'system' &&
+      emptyContent((message as { content?: unknown }).content);
+    if (empty) dropped.push(index);
+    return !empty;
+  });
+  if (dropped.length === 0) return { body, dropped };
+  return {
+    body: Buffer.from(JSON.stringify({ ...(parsed as object), messages: kept }), 'utf8'),
+    dropped,
+  };
 }
 
 /** Hop-by-hop headers and the credentials this proxy replaces. */
@@ -174,54 +225,81 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
       if (value !== undefined && !DROPPED_HEADERS.has(name)) headers[name] = value;
     }
     headers['x-api-key'] = options.apiKey;
-    const upstream = transport.request(
-      {
-        protocol: target.protocol,
-        hostname: target.hostname,
-        port: target.port || undefined,
-        method: req.method,
-        path: `${base}${req.url ?? ''}`,
-        headers,
-        agent,
-      },
-      (answer) => {
-        if (answer.statusCode === 407) {
-          // Decision 196: the product proxy refused its credentials. A 407 reaching the
-          // CLI reads as a network error it retries; this one never fixes itself.
-          answer.resume();
-          log('auth proxy: the outbound proxy refused the request (407)');
-          refuse(
-            res,
-            502,
-            'api_error',
-            'The proxy set in PiLab (Settings · Network) refused the request: 407 Proxy Authentication Required',
-            false
-          );
-          return;
-        }
-        res.writeHead(answer.statusCode ?? 502, answer.statusMessage, answer.headers);
-        answer.pipe(res);
+    const forward = (rewritten?: Buffer) => {
+      if (rewritten) {
+        headers['content-length'] = String(rewritten.length);
+        delete headers['transfer-encoding'];
       }
-    );
-    upstream.on('error', (error) => {
-      // Never the key: a request error names host and code only.
-      log(
-        'auth proxy: upstream request failed',
-        (error as NodeJS.ErrnoException).code ?? error.message
+      const upstream = transport.request(
+        {
+          protocol: target.protocol,
+          hostname: target.hostname,
+          port: target.port || undefined,
+          method: req.method,
+          path: `${base}${req.url ?? ''}`,
+          headers,
+          agent,
+        },
+        (answer) => {
+          if (answer.statusCode === 407) {
+            // Decision 196: the product proxy refused its credentials. A 407 reaching the
+            // CLI reads as a network error it retries; this one never fixes itself.
+            answer.resume();
+            log('auth proxy: the outbound proxy refused the request (407)');
+            refuse(
+              res,
+              502,
+              'api_error',
+              'The proxy set in PiLab (Settings · Network) refused the request: 407 Proxy Authentication Required',
+              false
+            );
+            return;
+          }
+          res.writeHead(answer.statusCode ?? 502, answer.statusMessage, answer.headers);
+          answer.pipe(res);
+        }
       );
-      refuse(
-        res,
-        502,
-        'api_error',
-        `PiLab could not reach the model service (${(error as NodeJS.ErrnoException).code ?? 'error'})`,
-        true
-      );
+      upstream.on('error', (error) => {
+        // Never the key: a request error names host and code only.
+        log(
+          'auth proxy: upstream request failed',
+          (error as NodeJS.ErrnoException).code ?? error.message
+        );
+        refuse(
+          res,
+          502,
+          'api_error',
+          `PiLab could not reach the model service (${(error as NodeJS.ErrnoException).code ?? 'error'})`,
+          true
+        );
+      });
+      // The CLI hung up (Stop, an interrupt): end the upstream request with it.
+      res.on('close', () => {
+        if (!res.writableFinished) upstream.destroy();
+      });
+      if (rewritten) upstream.end(rewritten);
+      else req.pipe(upstream);
+    };
+    // A compressed body is not ours to read; it goes on as it came.
+    if (
+      options.dropEmptySystemMessages === false ||
+      !conversationRoute(req.method, req.url) ||
+      req.headers['content-encoding']
+    ) {
+      forward();
+      return;
+    }
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      if (res.destroyed) return;
+      const original = Buffer.concat(chunks);
+      const { body, dropped } = dropEmptySystemMessages(original);
+      if (dropped.length > 0) {
+        log(`auth proxy: dropped empty system message(s) at messages[${dropped.join(',')}]`);
+      }
+      forward(body);
     });
-    // The CLI hung up (Stop, an interrupt): end the upstream request with it.
-    res.on('close', () => {
-      if (!res.writableFinished) upstream.destroy();
-    });
-    req.pipe(upstream);
   });
 
   await new Promise<void>((resolve, reject) => {

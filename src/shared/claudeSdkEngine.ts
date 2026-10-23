@@ -194,6 +194,51 @@ export function parseClaudeSdkModelWindows(raw: string | undefined): Record<stri
 }
 
 /**
+ * User 2026-10-23: where an SDK chat compacts by itself, as a percentage of
+ * its auto-compact window. The CLI's `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`
+ * (2.1.300): the threshold becomes `min(window × pct / 100, window − 13,000)`,
+ * so 100 leaves the CLI's own threshold. A developer-mode setting
+ * (`@shared/developerMode`); out of it, the default.
+ */
+export const CLAUDE_SDK_AUTO_COMPACT_PERCENT_SETTING_KEY = 'claudeSdkAutoCompactPercent';
+export const DEFAULT_CLAUDE_SDK_AUTO_COMPACT_PERCENT = 60;
+export const CLAUDE_SDK_AUTO_COMPACT_PERCENT_MIN = 10;
+export const CLAUDE_SDK_AUTO_COMPACT_PERCENT_MAX = 100;
+
+/** The SDK host's launch variable for the percentage Main read; the host passes it to the CLI. */
+export const CLAUDE_SDK_AUTO_COMPACT_PERCENT_ENV = 'AICLIENT_CLAUDE_SDK_AUTO_COMPACT_PERCENT';
+
+/** Only a whole number in range counts; anything else is the default. */
+export function resolveClaudeSdkAutoCompactPercent(value: unknown): number {
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= CLAUDE_SDK_AUTO_COMPACT_PERCENT_MIN &&
+    value <= CLAUDE_SDK_AUTO_COMPACT_PERCENT_MAX
+    ? value
+    : DEFAULT_CLAUDE_SDK_AUTO_COMPACT_PERCENT;
+}
+
+/** {@link CLAUDE_SDK_AUTO_COMPACT_PERCENT_ENV} read back, by the same rule. */
+export function parseClaudeSdkAutoCompactPercent(raw: string | undefined): number {
+  return resolveClaudeSdkAutoCompactPercent(raw?.trim() ? Number(raw.trim()) : undefined);
+}
+
+/**
+ * User 2026-10-23: the SDK host's auth proxy drops the empty mid-conversation
+ * `system` messages the CLI can send after a compaction (`authProxy.ts`). On by
+ * default; a developer-mode setting, so off only while developer mode is on.
+ */
+export const CLAUDE_SDK_DROP_EMPTY_SYSTEM_SETTING_KEY = 'claudeSdkDropEmptySystemMessages';
+export const DEFAULT_CLAUDE_SDK_DROP_EMPTY_SYSTEM = true;
+/** The SDK host's launch variable for it: `0` off, anything else on. */
+export const CLAUDE_SDK_DROP_EMPTY_SYSTEM_ENV = 'AICLIENT_CLAUDE_SDK_DROP_EMPTY_SYSTEM';
+
+/** Only a real boolean counts; anything else is the default. */
+export function resolveClaudeSdkDropEmptySystem(value: unknown): boolean {
+  return typeof value === 'boolean' ? value : DEFAULT_CLAUDE_SDK_DROP_EMPTY_SYSTEM;
+}
+
+/**
  * `WorkerManagerError` code: a model of another engine, or of another route,
  * asked of a running SDK chat. The renderer hands the message back and says why.
  */

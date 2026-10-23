@@ -1,3 +1,15 @@
+import {
+  CLAUDE_SDK_AUTO_COMPACT_PERCENT_MAX,
+  CLAUDE_SDK_AUTO_COMPACT_PERCENT_MIN,
+} from '@shared/claudeSdkEngine';
+import { useEffect, useState } from 'react';
+import {
+  NumberField,
+  NumberFieldDecrement,
+  NumberFieldGroup,
+  NumberFieldIncrement,
+  NumberFieldInput,
+} from '@/components/ui/number-field';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
@@ -14,6 +26,13 @@ export function ClaudeSdkEngineSection() {
   const { t } = useI18n();
   const enabled = useSettingsStore((state) => state.claudeSdkEngineEnabled);
   const setEnabled = useSettingsStore((state) => state.setClaudeSdkEngineEnabled);
+  const dropEmptySystem = useSettingsStore((state) => state.claudeSdkDropEmptySystemMessages);
+  const setDropEmptySystem = useSettingsStore((state) => state.setClaudeSdkDropEmptySystemMessages);
+  const compactPercent = useSettingsStore((state) => state.claudeSdkAutoCompactPercent);
+  const setCompactPercent = useSettingsStore((state) => state.setClaudeSdkAutoCompactPercent);
+  // A local draft while typing; only a committed value reaches the store.
+  const [compactDraft, setCompactDraft] = useState<number | null>(compactPercent);
+  useEffect(() => setCompactDraft(compactPercent), [compactPercent]);
 
   return (
     <SettingsSectionBlock
@@ -31,6 +50,58 @@ export function ClaudeSdkEngineSection() {
             aria-label={t('Run Anthropic-protocol models on the official Agent SDK')}
             checked={enabled}
             onCheckedChange={setEnabled}
+          />
+        </div>
+      </SettingsRow>
+      {/* User 2026-10-23: the CLI compacts at this share of the model's window
+          (`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`); committed on blur, Enter or a step. */}
+      <SettingsRow>
+        <div className="min-w-0">
+          <p className="text-ui">{t('Automatic compaction at')}</p>
+          <p className="text-small text-muted-foreground">
+            {t(
+              'Percentage of the context window at which Agent SDK chats summarize earlier turns. 100 keeps the CLI default. Applies when a chat engine starts next.'
+            )}
+          </p>
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <NumberField
+            className="w-32"
+            size="sm"
+            min={CLAUDE_SDK_AUTO_COMPACT_PERCENT_MIN}
+            max={CLAUDE_SDK_AUTO_COMPACT_PERCENT_MAX}
+            step={1}
+            value={compactDraft}
+            onValueChange={setCompactDraft}
+            onValueCommitted={(value) => {
+              if (value === null) setCompactDraft(compactPercent);
+              else setCompactPercent(Math.round(value));
+            }}
+          >
+            <NumberFieldGroup>
+              <NumberFieldDecrement />
+              <NumberFieldInput aria-label={t('Automatic compaction at')} />
+              <NumberFieldIncrement />
+            </NumberFieldGroup>
+          </NumberField>
+          <span className="shrink-0 text-ui text-muted-foreground">%</span>
+        </div>
+      </SettingsRow>
+      {/* User 2026-10-23: the auth proxy's fix for the CLI's empty system message. */}
+      <SettingsRow>
+        <div className="min-w-0">
+          <p className="text-ui">{t('Drop empty system messages')}</p>
+          <p className="text-small text-muted-foreground">
+            {t(
+              'After a compaction the CLI can send an empty system message that the gateway refuses, and every later turn of that chat fails. When on, PiLab removes it before the request goes out. Applies when a chat engine starts next.'
+            )}
+          </p>
+        </div>
+        <div className="min-w-0">
+          <Switch
+            aria-label={t('Drop empty system messages')}
+            checked={dropEmptySystem}
+            onCheckedChange={setDropEmptySystem}
           />
         </div>
       </SettingsRow>

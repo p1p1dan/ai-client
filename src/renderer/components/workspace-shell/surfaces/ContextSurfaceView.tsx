@@ -7,15 +7,13 @@
  * only renders, never decides.
  */
 import { agentDefaultEffort } from '@shared/models/chatAgentDefaults';
-import { ChevronDown, ChevronRight, Copy, FolderOpen } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { resolveEffortSelection } from '@/components/chat/efforts';
 import { useHostStatus } from '@/components/chat/useHostStatus';
 import { useMessageMetadata } from '@/components/chat/useMessageMetadata';
 import { useResolvedSessionModel } from '@/components/chat/useResolvedSessionModel';
 import { useSessionEffort } from '@/components/chat/useSessionEffort';
-import { Button } from '@/components/ui/button';
-import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
@@ -41,6 +39,7 @@ import {
   formatCharCount,
   formatShare,
 } from './conversationSegments';
+import { CopyPathButton, RevealPathButton, useTranscriptPath } from './pathActions';
 
 /**
  * U16: one colour per role, shared by the donut, the stacked bar and the
@@ -93,54 +92,6 @@ const BUCKET_LABEL: Record<ConversationBucketId, string> = {
 // store as changed on every commit and re-render forever.
 const EMPTY_MESSAGES: readonly ChatMessage[] = [];
 
-function CopyRowButton({ value }: { value: string }) {
-  const { t } = useI18n();
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toastManager.add({
-        title: t('Copied'),
-        description: t('Path copied to clipboard'),
-        type: 'success',
-        timeout: 2000,
-      });
-    } catch {
-      // Ignore clipboard errors — same as StatusLine's DirItem.
-    }
-  }, [value, t]);
-
-  return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      className="h-6 w-6 shrink-0"
-      aria-label={t('Copy Path')}
-      title={t('Copy Path')}
-      onClick={() => void handleCopy()}
-    >
-      <Copy className="h-3.5 w-3.5" />
-    </Button>
-  );
-}
-
-/** S-6 feedback 7: shows a row's local path (the conversation record) in the file manager. */
-function RevealRowButton({ value }: { value: string }) {
-  const { t } = useI18n();
-  return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      className="h-6 w-6 shrink-0"
-      aria-label={t('Reveal in Explorer')}
-      title={t('Reveal in Explorer')}
-      onClick={() => void window.electronAPI?.file.revealInFileManager(value).catch(() => {})}
-    >
-      <FolderOpen className="h-3.5 w-3.5" />
-    </Button>
-  );
-}
-
 function ContextRowLine({ row }: { row: ContextGroup['rows'][number] }) {
   const { t } = useI18n();
   return (
@@ -149,39 +100,10 @@ function ContextRowLine({ row }: { row: ContextGroup['rows'][number] }) {
       <span className="min-w-0 flex-1 truncate text-ui" title={row.title ?? row.value}>
         {row.value}
       </span>
-      {row.copyable && <CopyRowButton value={row.value} />}
-      {row.revealable && <RevealRowButton value={row.value} />}
+      {row.copyable && <CopyPathButton value={row.value} />}
+      {row.revealable && <RevealPathButton value={row.value} />}
     </div>
   );
-}
-
-/**
- * Route B S-6 feedback 7: where this chat's record is on disk, asked of Main from its
- * identity stub. Asked again when a turn settles: an Agent SDK chat's CLI writes its
- * transcript only once the first message has gone out.
- */
-function useTranscriptPath(
-  runtimeIdentity: string | null | undefined,
-  status: string | undefined
-): string | null {
-  const [found, setFound] = useState<{ stub: string; path: string | null } | null>(null);
-  const settled = status !== 'running';
-  useEffect(() => {
-    if (!runtimeIdentity || !settled) return;
-    let live = true;
-    void window.electronAPI?.chat
-      .locateTranscript(runtimeIdentity)
-      .then((location) => {
-        if (live) setFound({ stub: runtimeIdentity, path: location?.path ?? null });
-      })
-      .catch(() => {
-        if (live) setFound({ stub: runtimeIdentity, path: null });
-      });
-    return () => {
-      live = false;
-    };
-  }, [runtimeIdentity, settled]);
-  return found && found.stub === runtimeIdentity ? found.path : null;
 }
 
 /**

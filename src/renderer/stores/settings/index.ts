@@ -1,4 +1,9 @@
-import { DEFAULT_CLAUDE_SDK_ENGINE_ENABLED } from '@shared/claudeSdkEngine';
+import {
+  DEFAULT_CLAUDE_SDK_AUTO_COMPACT_PERCENT,
+  DEFAULT_CLAUDE_SDK_DROP_EMPTY_SYSTEM,
+  DEFAULT_CLAUDE_SDK_ENGINE_ENABLED,
+  resolveClaudeSdkAutoCompactPercent,
+} from '@shared/claudeSdkEngine';
 import { DEFAULT_DEVELOPER_MODE_ENABLED } from '@shared/developerMode';
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
@@ -193,6 +198,8 @@ export function getInitialState() {
 
     // Route B, S-1: the default Main applies when the key is absent.
     claudeSdkEngineEnabled: DEFAULT_CLAUDE_SDK_ENGINE_ENABLED,
+    claudeSdkAutoCompactPercent: DEFAULT_CLAUDE_SDK_AUTO_COMPACT_PERCENT,
+    claudeSdkDropEmptySystemMessages: DEFAULT_CLAUDE_SDK_DROP_EMPTY_SYSTEM,
 
     // Decision 171: the plan's own default, `claude-cli-pilab/<app version>`.
     requestUserAgentMode: DEFAULT_REQUEST_USER_AGENT_MODE,
@@ -210,6 +217,8 @@ export function getInitialState() {
     // composer arithmetic is derived from). Saved sizes from the old scale are
     // reset once (user ruling 2026-10-21), see `migrateSettings`.
     chatFontFamily: DEFAULT_CHAT_FONT_FAMILY,
+    displaySerifEnabled: true,
+    sidebarListTitleEnabled: false,
     chatBodyFontSize: DEFAULT_CHAT_BODY_FONT_SIZE,
     chatProcessFontSize: DEFAULT_CHAT_PROCESS_FONT_SIZE,
     chatTypographyScaleVersion: CHAT_TYPOGRAPHY_SCALE_VERSION,
@@ -348,6 +357,13 @@ export const useSettingsStore = create<SettingsState>()(
         set({ experimentalCacheControlOnTools }),
 
       setClaudeSdkEngineEnabled: (claudeSdkEngineEnabled) => set({ claudeSdkEngineEnabled }),
+      setClaudeSdkDropEmptySystemMessages: (claudeSdkDropEmptySystemMessages) =>
+        set({ claudeSdkDropEmptySystemMessages }),
+      setClaudeSdkAutoCompactPercent: (percent) => {
+        if (resolveClaudeSdkAutoCompactPercent(percent) === percent) {
+          set({ claudeSdkAutoCompactPercent: percent });
+        }
+      },
 
       // Decision 171: guarded at the door, like the idle timeout above — a
       // value the plan would refuse is never stored. `''` clears the custom
@@ -380,6 +396,8 @@ export const useSettingsStore = create<SettingsState>()(
       // body write can drag the process tier down with it in the same `set`,
       // never through two renders that briefly disagree.
       setChatFontFamily: (chatFontFamily) => set({ chatFontFamily }),
+      setDisplaySerifEnabled: (displaySerifEnabled) => set({ displaySerifEnabled }),
+      setSidebarListTitleEnabled: (sidebarListTitleEnabled) => set({ sidebarListTitleEnabled }),
       setChatBodyFontSize: (size) =>
         set((state) => {
           const { body, process } = resolveChatBodyWrite(size, state.chatProcessFontSize);

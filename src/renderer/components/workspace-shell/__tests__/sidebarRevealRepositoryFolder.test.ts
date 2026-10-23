@@ -5,6 +5,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useSidebarArchiveStore } from '@/stores/sidebarArchive';
 
 /**
  * "Reveal in Finder / Explorer" on the repository row's context menu — opens
@@ -68,6 +69,8 @@ let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 
 beforeEach(() => {
+  // These tests read the repository grouping; the app default is 按时间.
+  useSidebarArchiveStore.setState({ archiveMode: 'workspace' });
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   openPath.mockClear();
   openPath.mockImplementation(async () => '');

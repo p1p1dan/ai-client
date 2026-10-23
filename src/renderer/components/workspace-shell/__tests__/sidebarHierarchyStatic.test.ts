@@ -163,7 +163,9 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     );
     // Layout 5b: so does the list menu, shown with them on every heading.
     expect(LIST_MENU).toContain("className={cn(className, 'data-popup-open:opacity-100')}");
-    expect(NAV).toContain('className={GROUP_ACTION_CLASS}\n      mode={archiveMode}');
+    expect(NAV).toContain(
+      'const listMenu = <SidebarListMenu {...listMenuProps} className={GROUP_ACTION_CLASS} />;'
+    );
     for (const group of [TEMPORARY_GROUP, REPOSITORY_GROUP]) expect(group).toContain('{listMenu}');
   });
 
@@ -372,7 +374,8 @@ describe('one list (decision 183 §1.10)', () => {
   });
 
   it('an empty repository group shows its header only (§1.5)', () => {
-    expect(REPOSITORY_GROUP).toContain('{expanded && limited.rows.length > 0 && (');
+    // Folded, `limitFolderRows` keeps only the selected chat (user, 2026-10-23).
+    expect(REPOSITORY_GROUP).toContain('{limited.rows.length > 0 && (');
     expect(NAV).not.toContain('folder.rows.length === 0 &&');
   });
 });

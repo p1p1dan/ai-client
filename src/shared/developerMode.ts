@@ -9,7 +9,11 @@
  * choice cannot disagree about what is in effect.
  */
 
-import { CLAUDE_SDK_ENGINE_SETTING_KEY } from './claudeSdkEngine';
+import {
+  CLAUDE_SDK_AUTO_COMPACT_PERCENT_SETTING_KEY,
+  CLAUDE_SDK_DROP_EMPTY_SYSTEM_SETTING_KEY,
+  CLAUDE_SDK_ENGINE_SETTING_KEY,
+} from './claudeSdkEngine';
 import { CACHE_CONTROL_ON_TOOLS_SETTING_KEY } from './types/cacheControlOnTools';
 import {
   REQUEST_USER_AGENT_CUSTOM_SETTING_KEY,
@@ -29,6 +33,8 @@ export function resolveDeveloperModeEnabled(value: unknown): boolean {
 export const DEVELOPER_MODE_SETTING_KEYS: readonly string[] = [
   CACHE_CONTROL_ON_TOOLS_SETTING_KEY,
   CLAUDE_SDK_ENGINE_SETTING_KEY,
+  CLAUDE_SDK_AUTO_COMPACT_PERCENT_SETTING_KEY,
+  CLAUDE_SDK_DROP_EMPTY_SYSTEM_SETTING_KEY,
   REQUEST_USER_AGENT_MODE_SETTING_KEY,
   REQUEST_USER_AGENT_CUSTOM_SETTING_KEY,
 ];

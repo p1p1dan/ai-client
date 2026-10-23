@@ -7,8 +7,8 @@
  * The card is placed by the pane area (absolute, `paneSlotStyle`). A card
  * that is mounted but not on screen (a running terminal, the editor waiting
  * for a file-open intent, a keep-alive surface) stays in the area's box,
- * `invisible` + `inert`: never `display: none`, which would hand xterm's
- * FitAddon a 0×0 box and the pty `cols: 2`.
+ * `invisible` + `opacity-0` + `inert`: never `display: none`, which would
+ * hand xterm's FitAddon a 0×0 box and the pty `cols: 2`.
  */
 import { Maximize2, Minimize2, X } from 'lucide-react';
 import { type CSSProperties, type ReactNode, useMemo, useRef, useState } from 'react';
@@ -104,7 +104,11 @@ export function PaneCard({
       data-pane-drop-target={dropTarget ? 'true' : undefined}
       className={cn(
         PANE_CARD_CLASS,
-        !shown && 'pointer-events-none invisible inset-0',
+        // `opacity-0` as well as `invisible`: Monaco's diff editor writes an
+        // inline `visibility: visible` on both of its sides, which beats the
+        // inherited `hidden` and left a closed editor's diff painted over the
+        // chat. Opacity on the card cannot be overridden by a descendant.
+        !shown && 'pointer-events-none invisible inset-0 opacity-0',
         dragging && 'opacity-60',
         dropTarget && 'ring-2 ring-ring/50'
       )}

@@ -1,4 +1,6 @@
 import { useI18n } from '@/i18n';
+import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settings';
 
 /**
  * The screen above the composer whenever a conversation has not started yet.
@@ -34,6 +36,7 @@ import { useI18n } from '@/i18n';
  * No icon block and no bold title any more: one line in the display serif
  * (`font-display`, the home greeting's face) at the title size, regular
  * weight, muted -- with the folder sentence under it in the small tier.
+ * `displaySerifEnabled` off draws it in the app's sans instead.
  */
 interface ChatWelcomeCardProps {
   /**
@@ -45,10 +48,16 @@ interface ChatWelcomeCardProps {
 
 export function ChatWelcomeCard({ workspaceName }: ChatWelcomeCardProps) {
   const { t } = useI18n();
+  const displaySerif = useSettingsStore((state) => state.displaySerifEnabled);
 
   return (
     <div className="mb-6 flex flex-col items-center gap-2 text-center">
-      <h2 className="text-balance font-display font-normal text-muted-foreground text-title">
+      <h2
+        className={cn(
+          'text-balance font-normal text-muted-foreground text-title',
+          displaySerif ? 'font-display' : 'font-sans'
+        )}
+      >
         {t('Start a conversation')}
       </h2>
       {/* `text-small` rather than a raw size: D25 §6.3 bans raw size utilities

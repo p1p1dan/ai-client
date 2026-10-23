@@ -527,6 +527,17 @@ describe('limitFolderRows (decision 137 §4)', () => {
     expect(limited.hiddenCount).toBe(2);
   });
 
+  it('a folded group lists only the selected conversation, or nothing (user, 2026-10-23)', () => {
+    const base = { rows: rows(11), showAll: true, queryActive: false, expanded: false };
+    expect(limitFolderRows({ ...base, activeSessionId: 's-9' })).toMatchObject({
+      rows: [expect.objectContaining({ sessionId: 's-9' })],
+      hiddenCount: 0,
+      collapsible: false,
+    });
+    expect(limitFolderRows({ ...base, activeSessionId: 'elsewhere' }).rows).toEqual([]);
+    expect(limitFolderRows({ ...base, queryActive: true }).rows).toHaveLength(11);
+  });
+
   it('does not duplicate a selected conversation already inside the first 8', () => {
     const limited = limitFolderRows({
       rows: rows(11),

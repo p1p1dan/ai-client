@@ -59,8 +59,9 @@ it('expands diffs and opens a real diff tab without touching files', async () =>
     triggers[0].focus();
     expect(document.activeElement).toBe(triggers[0]);
     const added = element.querySelector('[data-diff-line="add"]');
-    expect(added?.querySelector('[data-line-number="old"]')?.textContent).toBe('');
-    expect(added?.querySelector('[data-line-number="new"]')?.textContent).toBe('2');
+    // User, 2026-10-23: one number column (the new line on an added row).
+    expect(added?.querySelectorAll('[data-line-number]')).toHaveLength(1);
+    expect(added?.querySelector('[data-line-number]')?.textContent).toBe('2');
     await act(async () =>
       element.querySelector<HTMLButtonElement>('button[aria-label="Open file"]')!.click()
     );

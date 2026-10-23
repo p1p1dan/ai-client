@@ -141,3 +141,34 @@ describe('dragging a pane header onto another card', () => {
     expect(header('files').className).not.toContain('cursor-grab');
   });
 });
+
+describe('a mounted card that is not on screen', () => {
+  // Field bug (2026-10-23): close the editor after 「打开文件」 in the diff
+  // pane and the editor card stays mounted (its tabs are still open) but
+  // hidden. Monaco's diff editor writes an inline `visibility: visible` on
+  // both sides, which beats the card's inherited `visibility: hidden`, so the
+  // diff stayed painted over the chat. The card must also go fully transparent.
+  it('is transparent as well as invisible, so a descendant forcing visibility stays unseen', async () => {
+    const props = {
+      kind: 'editor',
+      icon: null,
+      title: 'editor',
+      shown: false,
+      focused: false,
+      expanded: false,
+      onFocus: () => undefined,
+      onClose: () => undefined,
+      onToggleExpanded: () => undefined,
+      children: createElement('div', { style: { visibility: 'visible' } }, 'diff'),
+    } as ComponentProps<typeof PaneCard>;
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => root?.render(createElement(PaneCard, props)));
+    const classes = section('editor').className.split(/\s+/);
+    expect(classes).toContain('invisible');
+    expect(classes).toContain('opacity-0');
+    expect(classes).toContain('pointer-events-none');
+    expect(section('editor').hasAttribute('inert')).toBe(true);
+  });
+});

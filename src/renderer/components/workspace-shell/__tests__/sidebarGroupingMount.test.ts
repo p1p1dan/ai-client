@@ -3,6 +3,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
+import { useSettingsStore } from '@/stores/settings';
 import { useSidebarArchiveStore } from '@/stores/sidebarArchive';
 
 /**
@@ -85,6 +86,7 @@ beforeEach(() => {
     unreadSessionIds: [],
     pendingPermissions: [{ requestId: 'p1', sessionId: 'approve' } as never],
   });
+  useSettingsStore.setState({ developerModeEnabled: false, sidebarListTitleEnabled: false });
   useSidebarArchiveStore.setState({
     archiveMode: 'workspace',
     groups: [{ id: 'g-work', name: 'Work', createdAt: 1 }],
@@ -119,9 +121,12 @@ function bucketTitles(bucketId: string): string[] {
 }
 
 async function pickGrouping(label: string): Promise<void> {
-  const trigger = container.querySelector<HTMLElement>('[aria-label="Group and filter chats"]');
-  expect(trigger, 'the list menu sits on a heading').toBeTruthy();
-  await act(async () => trigger?.click());
+  // A radio item does not close the menu, so open it only when it is shut.
+  if (!document.querySelector('[data-slot="menu-radio-item"]')) {
+    const trigger = container.querySelector<HTMLElement>('[aria-label="Group and filter chats"]');
+    expect(trigger, 'the list menu sits on a heading').toBeTruthy();
+    await act(async () => trigger?.click());
+  }
   const item = [...document.querySelectorAll<HTMLElement>('[data-slot="menu-radio-item"]')].find(
     (node) => node.textContent?.trim() === label
   );
@@ -186,5 +191,16 @@ describe('the grouping switcher (layout 5b, ruling L2)', () => {
       (node) => node.textContent?.trim() === 'Group chats'
     );
     expect(sub).toBeTruthy();
+  });
+  it('the list title row: developer mode and its switch both on, off by default (user, 2026-10-23)', async () => {
+    const title = () => container.querySelector('[data-slot="sidebar-list-title"]');
+    useSidebarArchiveStore.setState({ archiveMode: 'date' });
+    await render();
+    expect(title()).toBeNull();
+    await act(async () => useSettingsStore.setState({ sidebarListTitleEnabled: true }));
+    expect(title(), 'the switch alone does nothing outside developer mode').toBeNull();
+    await act(async () => useSettingsStore.setState({ developerModeEnabled: true }));
+    expect(title()?.textContent).toContain('Chats · By date');
+    expect(title()?.querySelector('[aria-label="Group and filter chats"]')).toBeTruthy();
   });
 });

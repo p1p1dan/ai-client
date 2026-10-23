@@ -1,7 +1,8 @@
 /**
  * Layout 5d: the diff pane (the reference's diff pane, adapted). The card
- * draws the one header; this view puts its context there — 「本次对话 →
- * branch ▾」, the ▾ offering the Git pane's uncommitted changes — and lists
+ * draws the one header; this view puts its context there — 「本次对话 |
+ * 工作区 → branch」 (user, 2026-10-23: the working tree is the pane's second
+ * view, `WorkspaceChangesList`) — and, in 「本次对话」, lists
  * the files the conversation's file tools changed: `›`, icon, name, faint
  * directory, `+A −D`, each expanding to its diffs.
  *
@@ -9,20 +10,21 @@
  * names a change; the pane expands that change's file and scrolls to it.
  */
 import { getDisplayPath } from '@shared/utils/path';
-import { ArrowRight, Check, ChevronDown, ChevronRight, FileCode, GitBranch } from 'lucide-react';
+import { ArrowRight, ChevronRight, FileCode } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadOlderHistoryPage } from '@/components/chat/historyPageRequest';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Ident } from '@/components/ui/ident';
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from '@/components/ui/menu';
 import { toastManager } from '@/components/ui/toast';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useEditorStore } from '@/stores/editor';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { PaneHeaderPortal } from './panes/paneSlots';
+import { ReviewDiff } from './ReviewDiff';
 import type { SessionReviewEntry } from './sessionReview';
 import { sessionReviewDiffTarget } from './sessionReviewDiffTarget';
 import {
@@ -31,8 +33,9 @@ import {
   type SessionReviewFile,
   shortenDir,
 } from './sessionReviewFiles';
-import { reviewPatchLines } from './sessionReviewPatch';
+import { reviewEntryRows } from './sessionReviewPatch';
 import { readWorkspaceRootPath } from './useWorkspaceRootPath';
+import { WorkspaceChangesList } from './WorkspaceChangesList';
 
 interface SessionReviewPanelProps {
   sessionId: string | null;
@@ -56,6 +59,7 @@ export function SessionReviewPanel({
   const pagination = useChatSessionsStore((state) =>
     sessionId ? state.historyPagination?.[sessionId] : undefined
   );
+  const [view, setView] = useState<'chat' | 'workspace'>('chat');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const files = useMemo(() => groupReviewByFile(entries), [entries]);
@@ -111,97 +115,100 @@ export function SessionReviewPanel({
       aria-label={t('Session review')}
     >
       <PaneHeaderPortal slot="context">
-        <Menu>
-          <MenuTrigger
-            className="flex h-7 min-w-0 items-center gap-1 rounded-sm px-1.5 text-ui text-foreground hover:bg-fill-ghost-hover"
+        {/* User, 2026-10-23 (preview part 2, option 2): two views of one
+            pane — the file tools' record, or the whole working tree. */}
+        <div className="flex min-w-0 items-center gap-1">
+          <ToggleGroup
+            size="sm"
+            value={[view]}
+            onValueChange={(value) => {
+              const next = (value as string[])[0];
+              if (next === 'chat' || next === 'workspace') setView(next);
+            }}
             aria-label={t('Which changes')}
           >
-            <span className="shrink-0">{t('This conversation')}</span>
-            {branch && (
-              <>
-                <ArrowRight aria-hidden className="size-3.5 shrink-0 text-foreground-faint" />
-                <Ident className="min-w-0 truncate">{branch}</Ident>
-              </>
-            )}
-            <ChevronDown aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-          </MenuTrigger>
-          <MenuPopup align="start">
-            <MenuItem>
-              <Check />
-              {t("This conversation's changes")}
-            </MenuItem>
-            {onOpenGit && (
-              <MenuItem onClick={onOpenGit}>
-                <GitBranch />
-                {t('Uncommitted changes (Git)')}
-              </MenuItem>
-            )}
-          </MenuPopup>
-        </Menu>
-      </PaneHeaderPortal>
-      <div className="flex shrink-0 items-center gap-2 px-3 pb-1.5 text-small text-foreground-faint tabular-nums">
-        <span className="min-w-0 flex-1 truncate">
-          {t('Recorded {{count}} changes', { count: entries.length })}
-        </span>
-        <span
-          title={
-            incomplete ? t('Counts include previews; unavailable diffs are excluded.') : undefined
-          }
-        >
-          <span className="text-success">+{additions}</span>{' '}
-          <span className="text-destructive">−{deletions}</span>
-          {incomplete ? ' *' : ''}
-        </span>
-      </div>
-      <div ref={listRef} className="min-h-0 flex-1 overflow-auto px-1.5 pb-3">
-        {pagination?.hasMore && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mb-2 w-full"
-            disabled={loading}
-            onClick={() => void loadOlder()}
-          >
-            {t(loading ? 'Loading...' : 'Load earlier changes')}
-          </Button>
-        )}
-        {error && (
-          <p role="alert" className="mb-2 break-words text-small text-destructive">
-            {error}
-          </p>
-        )}
-        {!files.length && (
-          <p className="px-1.5 py-4 text-small text-muted-foreground">
-            {t('No file changes recorded in this conversation yet.')}
-          </p>
-        )}
-        {files.map((file) => (
-          <ReviewFile
-            key={file.path}
-            file={file}
-            open={openPaths.has(file.path)}
-            focused={focusedPath === file.path}
-            onOpenChange={(open) =>
-              setOpenPaths((current) => {
-                const next = new Set(current);
-                if (open) next.add(file.path);
-                else next.delete(file.path);
-                return next;
-              })
-            }
-            onOpenDiff={onOpenDiff}
-          />
-        ))}
-        {/* P1-7e e6 (problem 42, decision 145): `text-small`, the smallest size
-            the design system lets CJK sit at. */}
-        <p className="px-1.5 pt-3 text-small text-foreground-faint">
-          {/* Decision 144: DSH's file tools are `edit` and `write` (the list is
-              `sessionReview.ts`'s). */}
-          {t(
-            'Changes made by the file tools (edit, write) in this conversation. Shell commands and external edits are not tracked.'
+            <ToggleGroupItem value="chat">{t('This conversation')}</ToggleGroupItem>
+            <ToggleGroupItem value="workspace">{t('Working tree')}</ToggleGroupItem>
+          </ToggleGroup>
+          {branch && (
+            <>
+              <ArrowRight aria-hidden className="size-3.5 shrink-0 text-foreground-faint" />
+              <Ident className="min-w-0 truncate text-ui text-muted-foreground">{branch}</Ident>
+            </>
           )}
-        </p>
-      </div>
+        </div>
+      </PaneHeaderPortal>
+      {view === 'workspace' ? (
+        <WorkspaceChangesList onOpenDiff={onOpenDiff} onOpenGit={onOpenGit} />
+      ) : (
+        <>
+          <div className="flex shrink-0 items-center gap-2 px-3 pb-1.5 text-small text-foreground-faint tabular-nums">
+            <span className="min-w-0 flex-1 truncate">
+              {t('Recorded {{count}} changes', { count: entries.length })}
+            </span>
+            <span
+              title={
+                incomplete
+                  ? t('Counts include previews; unavailable diffs are excluded.')
+                  : undefined
+              }
+            >
+              <span className="text-success">+{additions}</span>{' '}
+              <span className="text-destructive">−{deletions}</span>
+              {incomplete ? ' *' : ''}
+            </span>
+          </div>
+          <div ref={listRef} className="min-h-0 flex-1 overflow-auto px-1.5 pb-3">
+            {pagination?.hasMore && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mb-2 w-full"
+                disabled={loading}
+                onClick={() => void loadOlder()}
+              >
+                {t(loading ? 'Loading...' : 'Load earlier changes')}
+              </Button>
+            )}
+            {error && (
+              <p role="alert" className="mb-2 break-words text-small text-destructive">
+                {error}
+              </p>
+            )}
+            {!files.length && (
+              <p className="px-1.5 py-4 text-small text-muted-foreground">
+                {t('No file changes recorded in this conversation yet.')}
+              </p>
+            )}
+            {files.map((file) => (
+              <ReviewFile
+                key={file.path}
+                file={file}
+                open={openPaths.has(file.path)}
+                focused={focusedPath === file.path}
+                onOpenChange={(open) =>
+                  setOpenPaths((current) => {
+                    const next = new Set(current);
+                    if (open) next.add(file.path);
+                    else next.delete(file.path);
+                    return next;
+                  })
+                }
+                onOpenDiff={onOpenDiff}
+              />
+            ))}
+            {/* P1-7e e6 (problem 42, decision 145): `text-small`, the smallest size
+            the design system lets CJK sit at. */}
+            <p className="px-1.5 pt-3 text-small text-foreground-faint">
+              {/* Decision 144: DSH's file tools are `edit` and `write` (the list is
+              `sessionReview.ts`'s). */}
+              {t(
+                'Changes made by the file tools (edit, write) in this conversation. Changes from shell commands or other editors are under Working tree.'
+              )}
+            </p>
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -299,7 +306,8 @@ function ReviewFile({
         </Button>
       </div>
       <CollapsiblePanel>
-        <div className="flex flex-col gap-1.5 py-1 pl-5">
+        {/* User, 2026-10-23: a small step in, not the 20px it was. */}
+        <div className="flex flex-col gap-1.5 py-1 pl-2">
           {file.entries.map((entry) => (
             <ReviewEntry key={entry.id} entry={entry} />
           ))}
@@ -311,13 +319,7 @@ function ReviewFile({
 
 function ReviewEntry({ entry }: { entry: SessionReviewEntry }) {
   const { t } = useI18n();
-  const lines = reviewPatchLines(
-    entry.patch ??
-      entry.preview?.rows
-        .map((row) => `${row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}${row.text}`)
-        .join('\n') ??
-      ''
-  );
+  const rows = useMemo(() => reviewEntryRows(entry), [entry]);
   const unavailable =
     entry.unavailable === 'too-large'
       ? 'Diff exceeds the preview limit.'
@@ -340,37 +342,8 @@ function ReviewEntry({ entry }: { entry: SessionReviewEntry }) {
       )}
       {entry.unavailable ? (
         <p className="px-2 py-2 text-small text-muted-foreground">{t(unavailable)}</p>
-      ) : lines.length ? (
-        <div className="max-h-96 overflow-auto rounded-lg border border-border-soft bg-surface-1 font-mono text-code leading-relaxed">
-          {lines.map((line, index) => (
-            <div
-              key={`${index}-${line.kind}`}
-              data-diff-line={line.kind}
-              className={cn(
-                'flex min-w-fit whitespace-pre px-2',
-                line.kind === 'add' && 'bg-success/12',
-                line.kind === 'del' && 'bg-destructive/12',
-                line.text.startsWith('@@') && 'bg-fill-neutral text-muted-foreground'
-              )}
-            >
-              <span
-                data-line-number="old"
-                className="w-10 shrink-0 select-none pr-2 text-right text-muted-foreground tabular-nums"
-              >
-                {line.oldLine}
-              </span>
-              <span
-                data-line-number="new"
-                className="w-10 shrink-0 select-none pr-2 text-right text-muted-foreground tabular-nums"
-              >
-                {line.newLine}
-              </span>
-              <span>
-                {line.text.startsWith('\\ No newline') ? t('No newline at end of file') : line.text}
-              </span>
-            </div>
-          ))}
-        </div>
+      ) : rows.length ? (
+        <ReviewDiff rows={rows} />
       ) : (
         <p className="px-2 py-2 text-small text-muted-foreground">{t('No text differences.')}</p>
       )}

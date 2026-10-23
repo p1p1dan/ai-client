@@ -33,7 +33,7 @@ vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: 'e
 const TITLE = 'Developer mode';
 const SWITCH_LABEL = 'Enable developer mode';
 const DESCRIPTION =
-  'Shows settings meant for development and testing on the Models page: request identity (User-Agent), the Agent SDK engine switch and caching tool definitions. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.';
+  'Shows settings meant for development and testing below: request identity (User-Agent), the Agent SDK engine switch with its automatic compaction threshold and empty system message fix, caching tool definitions and the chat list title. While off, they are hidden and run on their defaults; values you set are kept and apply again when you turn it back on.';
 /** The titles of the three gated sections. */
 const GATED_TITLES = [
   'Request identity (User-Agent)',
@@ -114,7 +114,7 @@ describe('developer mode (S-6 feedback 10)', () => {
     expect(useSettingsStore.getState().claudeSdkEngineEnabled).toBe(false);
   });
 
-  it('gates the three sections on the Models page and nothing else there', () => {
+  it('gates the three sections, drawn under the switch on the Advanced page', () => {
     // happy-dom replaces `URL`, so the path is built from the repo root.
     const page = readFileSync(
       path.join(process.cwd(), 'src/renderer/components/settings/PiModelManagementSettings.tsx'),
@@ -129,7 +129,13 @@ describe('developer mode (S-6 feedback 10)', () => {
       expect(page.split(section).length - 1, section).toBe(1);
       expect(gate).toContain(section);
     }
-    expect(page).toContain('<DeveloperModelSections />');
+    // User, 2026-10-23: no developer setting on the Models page any more.
+    expect(page).not.toContain('<DeveloperModelSections />');
+    const advancedPage = readFileSync(
+      path.join(process.cwd(), 'src/renderer/components/settings/AdvancedSettings.tsx'),
+      'utf8'
+    );
+    expect(advancedPage).toContain('<DeveloperModeSection />\n      <DeveloperModelSections />');
     // Web Inspector stays outside developer mode.
     const advanced = readFileSync(
       path.join(process.cwd(), 'src/renderer/components/settings/DeveloperModeSection.tsx'),
@@ -142,7 +148,7 @@ describe('developer mode (S-6 feedback 10)', () => {
     expect(zhTranslations[TITLE]).toBe('开发人员模式');
     expect(zhTranslations[SWITCH_LABEL]).toBe('启用开发人员模式');
     expect(zhTranslations[DESCRIPTION]).toBe(
-      '在「模型」页显示供开发与测试用的设置：请求标识（User-Agent）、Agent SDK 引擎开关和缓存工具定义。关闭时这些设置隐藏，并按默认值生效；你改过的值会保留，重新打开后恢复生效。'
+      '在下方显示供开发与测试用的设置：请求标识（User-Agent）、Agent SDK 引擎开关及其自动压缩阈值和空 system 消息修复、缓存工具定义和对话列表标题行。关闭时这些设置隐藏，并按默认值生效；你改过的值会保留，重新打开后恢复生效。'
     );
   });
 });
