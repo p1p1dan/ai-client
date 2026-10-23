@@ -43,6 +43,7 @@ const panels = [
   'PiResourcesSettings',
   'DshPluginsSettings',
   'LegacyAssetsSettings',
+  'PluginsSettings',
   'KeybindingsSettings',
   'NetworkSettings',
   'RemoteSettings',
@@ -87,13 +88,14 @@ describe('settings navigation', () => {
       // plugins (P1-10c), then the legacy-asset entry; no sub-agent page, no
       // pi extension page.
       ['PiResourcesSettings', 'DshPluginsSettings', 'LegacyAssetsSettings'],
+      ['PluginsSettings'],
       ['AgentMigrationSettings', 'ConversationImportSettings'],
       ['KeybindingsSettings'],
       ['NetworkSettings', 'RemoteSettings'],
       ['AdvancedSettings', 'PermissionPolicySettings', 'WebInspectorSettings'],
     ];
     const buttons = Array.from(container.querySelectorAll('nav button'));
-    expect(buttons).toHaveLength(11);
+    expect(buttons).toHaveLength(12);
     for (const [index, button] of buttons.entries()) {
       await act(() => (button as HTMLButtonElement).click());
       expect(

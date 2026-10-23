@@ -18,6 +18,7 @@ export const SETTINGS_CATEGORIES = [
   'git',
   'pi',
   'extensions',
+  'plugins',
   'migration',
   'keybindings',
   'network',

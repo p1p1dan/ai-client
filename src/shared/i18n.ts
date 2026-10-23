@@ -3469,6 +3469,38 @@ export const zhTranslations: Record<string, string> = {
   '{{count}} unchanged lines': '{{count}} 行未改动',
   'Preview image {{name}}': '预览图片 {{name}}',
   Image: '图片',
+  // Plugin-system README §3: Settings → Plugins (PiLab's own plugins).
+  'Change conversations (send, approve, stop)': '改对话（发消息、批准、停止）',
+  'Collapse {{name}}': '收起{{name}}',
+  'Connect to {{host}}': '连接 {{host}}',
+  'Could not install: {{error}}': '安装失败：{{error}}',
+  'Expand {{name}}': '展开{{name}}',
+  'Extra features that are not in the installer, installed from a .pilabplug file. Each plugin runs in its own process and cannot read your model keys. The chat engine’s plugins are under Extensions.':
+    '不在安装包里的额外功能，从 .pilabplug 文件安装。每个插件在自己的进程里运行，拿不到你的模型密钥。对话引擎的插件在「扩展」里。',
+  'Failed · retried {{count}} times': '失败 · 已重试 {{count}} 次',
+  'Install from file…': '从文件安装…',
+  'It will run in its own process and can:': '启用后它会在自己的进程里运行，并且可以：',
+  'Its files, its data and its settings are deleted.': '插件文件、数据和设置都会删除。',
+  'Last error: {{error}}': '最后一次错误：{{error}}',
+  'No plugins installed': '还没有安装插件',
+  'Not set': '未设置',
+  'Nothing beyond its own settings': '只读写它自己的设置',
+  'Only turn on plugins you trust.': '只启用你信得过的插件。',
+  Permissions: '权限',
+  'Plugins are .pilabplug files. Use “Install from file…” above.':
+    '插件是 .pilabplug 文件，点上方「从文件安装…」。',
+  'Read conversations': '看对话',
+  'Restarting…': '正在重启…',
+  Services: '服务',
+  Set: '已设置',
+  'Fill in': '填写',
+  'Starting…': '正在启动…',
+  'Stopped after {{count}} restarts. Last error: {{error}}':
+    '连续重启 {{count}} 次后已停止。最后一次错误：{{error}}',
+  'Turn on': '启用',
+  'Turn on “{{name}}”?': '启用「{{name}}」？',
+  'Uninstall “{{name}}”?': '卸载「{{name}}」？',
+  '{{name}} needs a number': '{{name}}需要填数字',
 };
 
 export function normalizeLocale(input?: string): Locale {

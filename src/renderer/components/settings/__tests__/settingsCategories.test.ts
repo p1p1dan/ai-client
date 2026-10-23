@@ -21,7 +21,7 @@ const SETTINGS_CONTENT = join(__dirname, '..', 'SettingsContent.tsx');
 const source = stripComments(readFileSync(SETTINGS_CONTENT, 'utf8'), SETTINGS_CONTENT);
 
 describe('settings categories', () => {
-  it('uses the eleven agreed categories in order', () => {
+  it('uses the twelve agreed categories in order', () => {
     expect(SETTINGS_CATEGORIES).toEqual([
       'general',
       'appearance',
@@ -30,6 +30,8 @@ describe('settings categories', () => {
       'git',
       'pi',
       'extensions',
+      // Plugin-system README §3: PiLab's own plugins.
+      'plugins',
       'migration',
       'keybindings',
       'network',

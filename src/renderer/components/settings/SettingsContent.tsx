@@ -6,6 +6,7 @@ import {
   Globe,
   Keyboard,
   Palette,
+  Plug,
   Settings,
   SlidersHorizontal,
   Sparkles,
@@ -30,6 +31,7 @@ import { NetworkSettings } from './NetworkSettings';
 import { PermissionPolicySettings } from './PermissionPolicySettings';
 import { PiModelManagementSettings } from './PiModelManagementSettings';
 import { PiResourcesSettings } from './PiResourcesSettings';
+import { PluginsSettings } from './PluginsSettings';
 import { RemoteSettings } from './RemoteSettings';
 import { SettingsPageShell } from './SettingsPrimitives';
 import { TerminalAppearanceSettings } from './TerminalAppearanceSettings';
@@ -79,6 +81,8 @@ export function SettingsContent({
     // management, request settings), not for the 1.0.x engine. The id stays.
     { id: 'pi', icon: Sparkles, label: t('Models') },
     { id: 'extensions', icon: Blocks, label: t('Extensions') },
+    // Plugin-system README §3: PiLab's own plugins, apart from the engine's.
+    { id: 'plugins', icon: Plug, label: t('Plugins') },
     { id: 'migration', icon: ArrowRightLeft, label: t('Data migration') },
     { id: 'keybindings', icon: Keyboard, label: t('Keybindings') },
     { id: 'network', icon: Globe, label: t('Network') },
@@ -152,6 +156,7 @@ export function SettingsContent({
               <LegacyAssetsSettings repoPath={repoPath} />
             </>
           )}
+          {activeCategory === 'plugins' && <PluginsSettings />}
           {activeCategory === 'migration' && (
             <>
               <AgentMigrationSettings />
