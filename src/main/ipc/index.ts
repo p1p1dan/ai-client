@@ -9,6 +9,7 @@ import { registerAnnouncementHandlers } from './announcements';
 import { registerAppHandlers } from './app';
 import { registerAuthHandlers } from './auth';
 import { registerChatHandlers } from './chat';
+import { registerChatSearchHandlers } from './chatSearch';
 import { registerCliHandlers } from './cli';
 import { registerDialogHandlers } from './dialog';
 import { registerDshPluginHandlers } from './dshPlugins';
@@ -91,6 +92,7 @@ export function registerIpcHandlers(): void {
   registerUserProviderHandlers();
   registerUsageHandlers();
   registerAnnouncementHandlers();
+  registerChatSearchHandlers();
   sweepScratchWorkspacesOnStartup();
   installChatEngineModelSource();
 }
