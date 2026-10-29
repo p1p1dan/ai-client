@@ -2,8 +2,8 @@
  * Encrypted-machine content search probe.
  *
  * Question: on the TSD-encrypted Windows host, which way of searching a file
- * sees plaintext? Node reads plaintext for most types, while the bundled
- * rg.exe has been seen to search ciphertext. This probe runs the same literal
+ * sees plaintext? Node reads plaintext for most types; this checks whether
+ * the bundled rg.exe does too. This probe runs the same literal
  * search over one known-encrypted file through every carrier we could ship:
  * node itself, rg.exe started by node (mmap on/off, file vs directory walk),
  * rg.exe started by cmd.exe, rg.exe fed plaintext on stdin by node, and the
@@ -17,6 +17,9 @@
  *
  * The report prints only booleans, sizes and exit codes, never the file path
  * or its content, so it can be pasted back as is.
+ *
+ * Field result (2026-10-28): rg.exe sees plaintext like node does, whatever
+ * its parent; see docs/plantree/plans/dsh-rebase/evidence/encrypted-search-2026-10-28.md.
  */
 
 import { spawnSync } from 'node:child_process';

@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>按聊天内容搜索并跳到对应会话（2026-10-29）</title>
+<!--
+  Throwaway preview. A user typed a part number into the sidebar's 「搜索」,
+  expecting the chat where it came up; that entry only searches repository
+  files. Three questions: where chat search lives, what a hit shows, and what
+  happens after picking one. Colours are the v2 tokens (globals.css).
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI Variable Text","Segoe UI","Noto Sans",Arial,"PingFang SC","Microsoft YaHei UI","Noto Sans CJK SC",sans-serif;
+  background:#1d1d1b;color:var(--fg);font-size:13px;line-height:1.45;padding:20px}
+svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.s{width:14px;height:14px}
+.bar{display:flex;gap:8px;align-items:center;color:#ddd;margin-bottom:8px;flex-wrap:wrap}
+.bar b{font-weight:600;min-width:72px}
+.bar button{all:unset;cursor:pointer;padding:4px 10px;border-radius:6px;background:#333;color:#eee}
+.bar button.on{background:#c6613f}
+.hint{color:#aaa;margin:10px 0 14px;max-width:1120px;line-height:1.7}
+.win{position:relative;width:1120px;height:660px;border-radius:12px;overflow:hidden;background:var(--s0);
+  box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 50px rgba(0,0,0,.45);display:flex}
+.side{width:280px;flex:none;display:flex;flex-direction:column}
+.top{height:40px;display:flex;align-items:center;padding:0 14px;font-family:Georgia,"Songti SC","Noto Serif CJK SC",serif;font-size:17px}
+.nav{display:flex;flex-direction:column;gap:1px;padding:0 8px 8px}
+.it{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;color:var(--fg-soft);white-space:nowrap;cursor:pointer}
+.it:hover{background:var(--hover)}
+.it svg{color:var(--fg2)}
+.it .k{margin-left:auto;font-size:11px;color:var(--fg3)}
+.it.on{background:var(--sel);color:var(--fg)}
+.list{flex:1;overflow:auto;padding:0 8px 12px}
+.gh{height:28px;display:flex;align-items:center;padding:0 8px;font-size:14px;color:var(--fg2);margin-top:12px}
+.gh:first-child{margin-top:4px}
+.row{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;color:var(--fg-soft);white-space:nowrap;cursor:pointer}
+.row span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis}
+.row:hover{background:var(--hover)}
+.row.on{background:var(--sel);color:var(--fg)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1.5px var(--fg3)}
+.sfield{margin:0 8px 6px;height:30px;display:flex;align-items:center;gap:6px;padding:0 8px;border-radius:8px;background:var(--s3);box-shadow:0 0 0 1px var(--input)}
+.sfield input{all:unset;flex:1;min-width:0;font-size:13px;color:var(--fg)}
+.sfield input::placeholder{color:var(--fg3)}
+.sfield svg{color:var(--fg3)}
+.shit{padding:6px 8px;border-radius:6px;cursor:pointer}
+.shit:hover,.shit.sel{background:var(--hover)}
+.shit .t{display:flex;align-items:center;gap:6px;color:var(--fg);white-space:nowrap}
+.shit .t span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis}
+.shit .t small{flex:none;font-size:11px;color:var(--fg3)}
+.shit .sn{margin-top:2px;font-size:12px;color:var(--fg2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.shit .more{margin-top:2px;font-size:11px;color:var(--fg3)}
+.slab{font-size:11px;color:var(--fg3);padding:8px 8px 4px}
+mark{background:color-mix(in oklab,var(--brand) 28%,transparent);color:inherit;border-radius:2px;padding:0 1px}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg);border-left:1px solid var(--bd)}
+.head{height:40px;flex:none;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid var(--bd)}
+.head .ttl{font-weight:500}
+.head .chip{font-size:11px;color:var(--fg2);background:var(--neutral);border-radius:4px;padding:1px 6px}
+.find{position:absolute;right:16px;top:48px;z-index:5;display:none;align-items:center;gap:6px;height:32px;padding:0 6px 0 10px;border-radius:10px;background:var(--s3);box-shadow:0 0 0 1px var(--bd),0 6px 20px rgba(0,0,0,.16)}
+.find.show{display:flex}
+.find .q{font-size:12px;color:var(--fg);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.find .n{font-size:11px;color:var(--fg3);min-width:34px;text-align:center}
+.ib{all:unset;cursor:pointer;width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--fg2);flex:none}
+.ib:hover{background:var(--hover);color:var(--fg)}
+.tl{flex:1;overflow:auto;padding:24px 0 40px;scroll-behavior:smooth}
+.col{max-width:640px;margin:0 auto;padding:0 24px;display:flex;flex-direction:column;gap:18px}
+.msg{border-radius:10px;transition:box-shadow .3s,background .3s}
+.msg.u{align-self:flex-end;max-width:78%;background:var(--neutral);padding:8px 12px;border-radius:18px}
+.msg.a{line-height:1.65}
+.msg.flash{box-shadow:0 0 0 2px color-mix(in oklab,var(--brand) 55%,transparent);background:color-mix(in oklab,var(--brand) 8%,transparent)}
+.msg.a.flash{padding:4px 8px;margin:-4px -8px}
+.msg mark.cur{background:color-mix(in oklab,var(--brand) 55%,transparent)}
+.empty{flex:1;display:grid;place-items:center;color:var(--fg3)}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.28);display:none;z-index:10}
+.scrim.show{display:block}
+.dlg{position:absolute;left:50%;top:70px;transform:translateX(-50%);width:640px;max-height:520px;display:flex;flex-direction:column;border-radius:14px;background:var(--s3);
+  box-shadow:0 0 0 1px var(--bd),0 24px 60px rgba(0,0,0,.28);overflow:hidden}
+.dlg .in{height:48px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--bd)}
+.dlg .in input{all:unset;flex:1;font-size:15px;color:var(--fg)}
+.dlg .in input::placeholder{color:var(--fg3)}
+.dlg .in svg{color:var(--fg3)}
+.tabs{display:flex;gap:4px;padding:8px 12px 0;flex:none}
+.tab{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:7px;color:var(--fg2);font-size:13px}
+.tab:hover{background:var(--hover)}
+.tab.on{background:var(--sel);color:var(--fg)}
+.tab .k{font-size:11px;color:var(--fg3)}
+.scope{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--fg2);cursor:pointer;padding:0 8px;border-radius:7px;height:28px}
+.scope:hover{background:var(--hover)}
+.res{flex:1;overflow:auto;padding:6px 8px 8px}
+.res .shit{padding:8px 10px}
+.res .shit .t small.chip{font-size:11px;color:var(--fg2);background:var(--neutral);border-radius:4px;padding:1px 6px}
+.res .who{color:var(--fg3)}
+.foot{height:32px;flex:none;display:flex;align-items:center;gap:14px;padding:0 14px;border-top:1px solid var(--bd);font-size:11px;color:var(--fg3)}
+.placeholder{padding:40px 0;text-align:center;color:var(--fg3)}
+.notes{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1120px;margin-top:18px}
+.notes div{color:#bbb;line-height:1.7}
+.notes b{color:#eee;display:block;margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="bar"><b>入口</b>
+  <button data-entry="dlg" class="on">A 搜索对话框，默认在「对话」页（推荐）</button>
+  <button data-entry="side">B 侧栏原地搜索</button></div>
+<div class="bar"><b>选中之后</b>
+  <button data-jump="find" class="on">1 跳到那条消息 + 会话内查找条（推荐）</button>
+  <button data-jump="plain">2 只跳到那条消息</button></div>
+<div class="bar"><b>主题</b>
+  <button data-th="light" class="on">浅色</button><button data-th="dark">深色</button></div>
+<p class="hint">点侧栏「搜索」（或按 Ctrl+K），试着输入 <b style="color:#eee">8GE21E15</b>、<b style="color:#eee">良率</b> 或 <b style="color:#eee">CI</b>。上下键选择，回车或点击打开。空输入时显示最近的对话。</p>
+<div class="win" id="win">
+  <div class="side" id="side"></div>
+  <div class="main" id="main"></div>
+  <div class="find" id="find"></div>
+  <div class="scrim" id="scrim"><div class="dlg" id="dlg"></div></div>
+</div>
+<div class="notes">
+  <div><b>A 搜索对话框</b>和 Claude 桌面版一样：侧栏「搜索」打开居中对话框，第一页就是「对话」，「文件」「内容」两页原样保留（就是现在的工作区文件搜索）。用户点「搜索」最先看到的就是对话，不会再误会。代价：文件搜索要多点一下页签，或者继续用原来的快捷键直达。</div>
+  <div><b>B 侧栏原地搜索</b>把侧栏现有的「搜索会话」（现在只比对标题）扩展成也搜内容，命中片段直接列在侧栏里。不弹窗，但侧栏只有 280px，片段很短；「搜索」按钮仍然打开文件搜索，这次的误会照样会发生。</div>
+  <div><b>选中之后</b>两种都会打开会话、滚到命中的那条消息并闪一下。方案 1 另在右上角留一个查找条，显示「第几处 / 共几处」，上下箭头在这个会话的其他命中之间跳；方案 2 更干净，但同一会话里要找第二处只能回去重搜。</div>
+</div>
+<script>
+const ICON={
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  repo:'<path d="M4 20V6a2 2 0 0 1 2-2h4l2 3h6a2 2 0 0 1 2 2v11z"/>',
+  puzzle:'<path d="M9 3h6v4a2 2 0 1 0 0 4v4h-4a2 2 0 1 0-4 0H3V9h4a2 2 0 1 0 0-4z"/>',
+  chat:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  file:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  code:'<path d="m9 8-4 4 4 4M15 8l4 4-4 4"/>',
+  up:'<path d="m18 15-6-6-6 6"/>',
+  down:'<path d="m6 9 6 6 6-6"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+};
+const ic=(n,c='i')=>`<svg class="${c}" viewBox="0 0 24 24">${ICON[n]}</svg>`;
+
+// Mock sessions: [id, title, repo, group, when, messages[[role, text]]]
+const S=[
+  ['s1','批次良率分析','ChipTestMachine','今天','10:42',[
+    ['u','帮我看一下昨天那批 8GE21E15 的良率为什么掉到 91%'],
+    ['a','我读了 logs/2026-10-28 下的测试记录。8GE21E15 这一批在第 3 站（高温测试）失败最多，集中在 BIN 7，占失败的 64%。'],
+    ['u','BIN 7 是什么判据？'],
+    ['a','BIN 7 是漏电流超限。阈值在 config/limits.yml 里是 2.0 μA，这批的中位数是 1.86 μA，比上一批高了 0.3。'],
+    ['u','把阈值相关的代码位置列一下'],
+    ['a','判据在 src/bins/leakage.ts 第 40 行附近；读取阈值的是 src/config/limits.ts。8GE21E15 批次没有单独覆盖阈值。'],
+  ]],
+  ['s2','修 CI 缓存测试','ai-client','今天','09:15',[
+    ['u','CI 上缓存测试又挂了，帮我看看'],
+    ['a','失败的是 cache.test.ts 的「过期后重新拉取」，时间依赖真实时钟。我改成假时钟后本地通过。'],
+  ]],
+  ['s3','芯片料号对照表','ChipTestMachine','昨天','16:20',[
+    ['u','整理一份料号对照表，旧料号对新料号'],
+    ['a','已生成 docs/part-map.md，共 42 行。其中 8GE21E15 对应新料号 8GE21E15-B，供应商相同。'],
+  ]],
+  ['s4','侧栏分组按钮','ai-client','昨天','11:03',[
+    ['u','侧栏的分组按钮放在哪里比较好'],
+    ['a','建议放在列表标题右侧，和筛选合并成一个菜单。'],
+  ]],
+  ['s5','测试机日志导出','ChipTestMachine','本周','周一',[
+    ['u','导出脚本要支持按批次过滤'],
+    ['a','加了 --lot 参数，例如 --lot 8GE21E15。良率汇总也会按批次分开写。'],
+    ['u','再加一个按日期的'],
+    ['a','加了 --since，和 --lot 可以一起用。'],
+  ]],
+  ['s6','打包脚本','ai-client','更早','10-20',[
+    ['u','打包脚本在 Windows 上报路径错误'],
+    ['a','原因是路径里有空格没加引号，已修。CI 上 Windows 构建通过。'],
+  ]],
+];
+const st={entry:'dlg',jump:'find',open:false,q:'',sel:0,tab:'chat',active:'s4',hits:[],cur:0,flashKey:null};
+
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function hl(text,q){
+  if(!q)return esc(text);
+  const lo=text.toLowerCase(),ql=q.toLowerCase();let out='',i=0,j;
+  while((j=lo.indexOf(ql,i))>=0){out+=esc(text.slice(i,j))+'<mark>'+esc(text.slice(j,j+q.length))+'</mark>';i=j+q.length;}
+  return out+esc(text.slice(i));
+}
+function snippet(text,q){
+  const j=text.toLowerCase().indexOf(q.toLowerCase());
+  const a=Math.max(0,j-18);return (a>0?'…':'')+text.slice(a);
+}
+// One result per session: title hit and/or message hits (first one shown).
+function search(q){
+  q=q.trim();
+  if(!q)return S.map(s=>({s,hits:[],title:false}));
+  const ql=q.toLowerCase();
+  return S.map(s=>{
+    const hits=s[5].map((m,i)=>[m,i]).filter(([m])=>m[1].toLowerCase().includes(ql)).map(([,i])=>i);
+    const title=s[1].toLowerCase().includes(ql);
+    return (hits.length||title)?{s,hits,title}:null;
+  }).filter(Boolean);
+}
+function hitHtml(r,q,showRepo){
+  const [id,title,repo,,when,msgs]=r.s;
+  let sn='';
+  if(r.hits.length){
+    const m=msgs[r.hits[0]];
+    sn=`<div class="sn"><span class="who">${m[0]==='u'?'你':'助手'}：</span>${hl(snippet(m[1],q),q)}</div>`;
+    if(r.hits.length>1)sn+=`<div class="more">还有 ${r.hits.length-1} 处</div>`;
+  }
+  return `<div class="t">${ic('chat','i s')}<span>${hl(title,q)}</span>${showRepo?`<small class="chip">${repo}</small>`:''}<small>${when}</small></div>${sn}`;
+}
+
+function renderSide(){
+  const side=document.getElementById('side');
+  const nav=`<div class="top">PiLab</div><div class="nav">
+    <div class="it">${ic('plus')}新对话</div>
+    <div class="it${st.open?' on':''}" id="navSearch">${ic('search')}搜索<span class="k">Ctrl+K</span></div>
+    <div class="it">${ic('repo')}仓库</div><div class="it">${ic('puzzle')}技能与插件</div></div>`;
+  if(st.entry==='side'&&st.open){
+    const rs=search(st.q);
+    const body=st.q.trim()
+      ?(rs.length?`<div class="slab">${rs.length} 个对话</div>`+rs.map((r,i)=>`<div class="shit${i===st.sel?' sel':''}" data-pick="${i}">${hitHtml(r,st.q.trim(),false)}</div>`).join(''):'<div class="placeholder">没有找到</div>')
+      :'<div class="slab">输入文字，搜索所有对话的标题和内容</div>';
+    side.innerHTML=nav+`<div class="sfield">${ic('search','i s')}<input id="sq" placeholder="搜索对话" value="${esc(st.q)}">${'<button class="ib" id="sx" title="关闭">'+ic('x','i s')+'</button>'}</div><div class="list">${body}</div>`;
+    wireInput('sq');document.getElementById('sx').onclick=()=>{st.open=false;st.q='';renderAll();};
+    return;
+  }
+  let list='',g='';
+  for(const s of S){if(s[3]!==g){g=s[3];list+=`<div class="gh">${g}</div>`;}
+    list+=`<div class="row${s[0]===st.active?' on':''}" data-open="${s[0]}"><i class="dot"></i><span>${s[1]}</span></div>`;}
+  side.innerHTML=nav+`<div class="list">${list}</div>`;
+}
+function renderDlg(){
+  const scrim=document.getElementById('scrim');
+  scrim.classList.toggle('show',st.entry==='dlg'&&st.open);
+  if(!(st.entry==='dlg'&&st.open)){document.getElementById('dlg').innerHTML='';return;}
+  const tabs=`<div class="tabs">
+    <button class="tab${st.tab==='chat'?' on':''}" data-tab="chat">${ic('chat','i s')}对话</button>
+    <button class="tab${st.tab==='file'?' on':''}" data-tab="file">${ic('file','i s')}文件<span class="k">P</span></button>
+    <button class="tab${st.tab==='content'?' on':''}" data-tab="content">${ic('code','i s')}内容<span class="k">F</span></button>
+    ${st.tab==='chat'?`<span class="scope">全部仓库${ic('down','i s')}</span>`:''}</div>`;
+  let res;
+  if(st.tab!=='chat'){res='<div class="placeholder">这里是现有的工作区文件搜索，原样保留。</div>';}
+  else{
+    const rs=search(st.q);const q=st.q.trim();
+    res=(q?'':'<div class="slab">最近的对话</div>')+(rs.length?rs.map((r,i)=>`<div class="shit${i===st.sel?' sel':''}" data-pick="${i}">${hitHtml(r,q,true)}</div>`).join(''):'<div class="placeholder">没有找到</div>');
+  }
+  document.getElementById('dlg').innerHTML=`<div class="in">${ic('search')}<input id="dq" placeholder="${st.tab==='chat'?'搜索对话的标题和内容':'搜索文件'}" value="${esc(st.q)}"></div>${tabs}<div class="res">${res}</div>
+    <div class="foot"><span>↑↓ 选择</span><span>↵ 打开</span><span>Esc 关闭</span></div>`;
+  wireInput('dq');
+}
+function renderMain(){
+  const s=S.find(x=>x[0]===st.active);
+  const q=st.hits.length?st.findQ:'';
+  const msgs=s[5].map(([r,t],i)=>{
+    let h=hl(t,q);
+    if(q&&st.hits[st.cur]===i)h=h.replace('<mark>','<mark class="cur">');
+    return `<div class="msg ${r}${st.flashKey===s[0]+':'+i?' flash':''}" data-i="${i}">${h}</div>`;
+  }).join('');
+  document.getElementById('main').innerHTML=`<div class="head"><span class="ttl">${s[1]}</span><span class="chip">${s[2]}</span></div><div class="tl" id="tl"><div class="col">${msgs}</div></div>`;
+  const f=document.getElementById('find');
+  const show=st.jump==='find'&&st.hits.length>0;
+  f.classList.toggle('show',show);
+  if(show)f.innerHTML=`${ic('search','i s')}<span class="q">${esc(st.findQ)}</span><span class="n">${st.cur+1} / ${st.hits.length}</span>
+    <button class="ib" id="fu" title="上一处">${ic('up','i s')}</button><button class="ib" id="fd" title="下一处">${ic('down','i s')}</button><button class="ib" id="fx" title="关闭">${ic('x','i s')}</button>`;
+  if(show){
+    document.getElementById('fu').onclick=()=>step(-1);
+    document.getElementById('fd').onclick=()=>step(1);
+    document.getElementById('fx').onclick=()=>{st.hits=[];st.flashKey=null;renderMain();};
+  }
+}
+function scrollToHit(){
+  const el=document.querySelector(`#tl .msg[data-i="${st.hits[st.cur]}"]`);
+  const tl=document.getElementById('tl');
+  if(el&&tl)tl.scrollTop=el.offsetTop-tl.clientHeight/3;
+}
+function step(d){
+  st.cur=(st.cur+d+st.hits.length)%st.hits.length;
+  st.flashKey=st.active+':'+st.hits[st.cur];renderMain();scrollToHit();flashOff();
+}
+let ft;function flashOff(){clearTimeout(ft);ft=setTimeout(()=>{st.flashKey=null;document.querySelectorAll('.msg.flash').forEach(m=>m.classList.remove('flash'));},1400);}
+function pick(i){
+  const r=search(st.q)[i];if(!r)return;
+  st.active=r.s[0];st.open=false;
+  st.findQ=st.q.trim();st.hits=r.hits;st.cur=0;st.q='';
+  st.flashKey=st.hits.length?st.active+':'+st.hits[0]:null;
+  renderAll();if(st.hits.length)scrollToHit();flashOff();
+}
+function wireInput(id){
+  const inp=document.getElementById(id);
+  inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);
+  inp.oninput=()=>{st.q=inp.value;st.sel=0;(st.entry==='dlg'?renderDlg:renderSide)();};
+  inp.onkeydown=e=>{
+    const n=st.tab==='chat'||st.entry==='side'?search(st.q).length:0;
+    if(e.key==='ArrowDown'){e.preventDefault();st.sel=Math.min(n-1,st.sel+1);(st.entry==='dlg'?renderDlg:renderSide)();}
+    else if(e.key==='ArrowUp'){e.preventDefault();st.sel=Math.max(0,st.sel-1);(st.entry==='dlg'?renderDlg:renderSide)();}
+    else if(e.key==='Enter'){e.preventDefault();if(n)pick(st.sel);}
+    else if(e.key==='Escape'){e.preventDefault();st.open=false;st.q='';renderAll();}
+  };
+}
+function renderAll(){renderSide();renderDlg();renderMain();}
+function openSearch(){st.open=true;st.q='';st.sel=0;st.tab='chat';renderAll();}
+
+document.addEventListener('click',e=>{
+  if(e.target.closest('#navSearch')){openSearch();return;}
+  const p=e.target.closest('[data-pick]');if(p){pick(+p.dataset.pick);return;}
+  const o=e.target.closest('[data-open]');if(o){st.active=o.dataset.open;st.hits=[];st.flashKey=null;renderAll();return;}
+  const t=e.target.closest('[data-tab]');if(t){st.tab=t.dataset.tab;st.sel=0;renderDlg();return;}
+  if(e.target.id==='scrim'){st.open=false;st.q='';renderAll();}
+});
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch();}});
+document.querySelectorAll('[data-entry]').forEach(b=>b.onclick=()=>{st.entry=b.dataset.entry;st.open=false;st.q='';
+  document.querySelectorAll('[data-entry]').forEach(x=>x.classList.toggle('on',x===b));renderAll();});
+document.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{st.jump=b.dataset.jump;st.hits=[];st.flashKey=null;
+  document.querySelectorAll('[data-jump]').forEach(x=>x.classList.toggle('on',x===b));renderAll();});
+
+const TH={
+  light:{s0:'#f9f9f7',bg:'#fcfcfb',s3:'#ffffff',fg:'#151515','fg-soft':'#2e2e2e',fg2:'#525252',fg3:'#8a8a8a',bd:'#e5e5e4',input:'#cececd',hover:'#f0f0ef',sel:'#e5e5e4',neutral:'#f0f0ef',brand:'#c6613f'},
+  dark:{s0:'#0b0b0b',bg:'#151515',s3:'#20201f',fg:'#f5f5f5','fg-soft':'#d4d4d4',fg2:'#a3a3a3',fg3:'#666666',bd:'#2b2b2b',input:'#424242',hover:'#202020',sel:'#2b2b2b',neutral:'#262626',brand:'#d97757'},
+};
+function theme(n){for(const[k,v]of Object.entries(TH[n]))document.documentElement.style.setProperty('--'+k,v);
+  document.querySelectorAll('[data-th]').forEach(b=>b.classList.toggle('on',b.dataset.th===n));}
+document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>theme(b.dataset.th));
+theme('light');renderAll();
+</script>
+</body>
+</html>
