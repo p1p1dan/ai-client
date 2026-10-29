@@ -82,7 +82,9 @@ export function SettingsContent({
     // Decision 144: named for what the page holds (AI services, model
     // management, request settings), not for the 1.0.x engine. The id stays.
     { id: 'pi', icon: Sparkles, label: t('Models') },
-    { id: 'extensions', icon: Blocks, label: t('Extensions') },
+    // User 2026-10-29: only skills (and the legacy-asset list) are left here, so the
+    // page is named for them; the id stays `extensions` (saved category, intents).
+    { id: 'extensions', icon: Blocks, label: t('Skills') },
     // Plugin-system README §3: PiLab's own plugins, apart from the engine's.
     { id: 'plugins', icon: Plug, label: t('Plugins') },
     { id: 'migration', icon: ArrowRightLeft, label: t('Data migration') },

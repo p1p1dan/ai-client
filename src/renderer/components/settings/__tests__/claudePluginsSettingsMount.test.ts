@@ -10,7 +10,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * claude-plugins plan §3.3, §6 — Settings → Extensions → Claude plugins and Claude
+ * claude-plugins plan §3.3, §6 — Settings → Plugins → Claude plugins and Claude
  * MCP servers, mounted: the empty state offers the official marketplace, a row says
  * what its plugin brings with hooks and MCP servers flagged, a repository's plugin is
  * read-only, a switch goes to the CLI and the "new chats" notice follows, and an MCP
