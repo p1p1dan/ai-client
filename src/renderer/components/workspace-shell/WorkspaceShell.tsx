@@ -516,7 +516,7 @@ export function WorkspaceShell({
       className="group/shell relative flex h-full min-h-0 w-full flex-1 overflow-hidden bg-background"
     >
       <LeftDock
-        onOpenSearch={() => workspaceSearch.openSearch('files')}
+        onOpenSearch={() => workspaceSearch.openSearch('chat')}
         dockWidth={allocation.sidebarWidth}
         sidebarWidth={sidebarWidth}
         collapsed={sidebarCollapsed}
@@ -651,7 +651,7 @@ export function WorkspaceShell({
 
       {workspaceSearch.request && (
         <GlobalSearchDialog
-          key={workspaceSearch.request.rootPath}
+          key={workspaceSearch.request.rootPath ?? ''}
           open
           onOpenChange={(open) => {
             if (!open) workspaceSearch.closeSearch();
@@ -659,6 +659,7 @@ export function WorkspaceShell({
           rootPath={workspaceSearch.request.rootPath}
           initialMode={workspaceSearch.request.mode}
           onOpenFile={workspaceSearch.onOpenFile}
+          onOpenChat={workspaceSearch.onOpenChat}
         />
       )}
 

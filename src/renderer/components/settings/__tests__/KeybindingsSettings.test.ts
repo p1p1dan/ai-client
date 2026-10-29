@@ -25,14 +25,15 @@ import { KeybindingsSettings } from '../KeybindingsSettings';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('active keybinding controls', () => {
-  it('renders all twelve bindings and saves a recorded search shortcut without replacing its sibling', async () => {
+  it('renders all thirteen bindings and saves a recorded search shortcut without replacing its sibling', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
     try {
       await act(() => root.render(createElement(KeybindingsSettings)));
-      expect(container.querySelectorAll('[role="button"]')).toHaveLength(12);
+      expect(container.querySelectorAll('[role="button"]')).toHaveLength(13);
+      expect(container.querySelector('[aria-label="Search chats"]')).not.toBeNull();
       const search = container.querySelector('[aria-label="Search files"]') as HTMLElement;
       await act(() => search.click());
       expect(search.hasAttribute('data-keybinding-recording')).toBe(true);

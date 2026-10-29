@@ -5041,3 +5041,23 @@ Object.assign(zhTranslations, {
     '对已打开的对话问一句旁问（先打开一个对话）',
   'Drag to move; double-click to put it back': '拖动可移动位置，双击放回原处',
 });
+
+/** Chat search (docs/plantree/plans/chat-search): the 「对话」 tab and the find bar. */
+Object.assign(zhTranslations, {
+  Chats: '对话',
+  'Search chat titles and messages': '搜索对话的标题和内容',
+  'Which chats': '搜索范围',
+  'All repositories': '全部仓库',
+  'Current repository': '当前仓库',
+  'Recent chats': '最近的对话',
+  'No chats found': '没有找到',
+  'Chat search failed': '搜索对话失败',
+  'Building the search index… {{done}} / {{total}}': '正在建立索引… {{done}} / {{total}}',
+  'You:': '你：',
+  'Assistant:': '助手：',
+  '{{count}} more matches': '还有 {{count}} 处',
+  'Find in chat': '在对话中查找',
+  'Previous match': '上一处',
+  'Next match': '下一处',
+  'Search chats': '搜索对话',
+});
