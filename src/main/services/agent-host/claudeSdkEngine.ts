@@ -357,6 +357,23 @@ export function createClaudeSdkHostAvailability(deps: {
   };
 }
 
+/** The user layer every SDK chat reads (ruling 19), created owner-only. */
+export function claudeSdkConfigDir(): string {
+  const configDir = claudeSdkConfigDir();
+  return configDir;
+}
+
+/** The CLI binary this build would hand an SDK host, for Main's own CLI commands. */
+export function claudeSdkBundledCli(): string | undefined {
+  return claudeSdkCliPath(
+    claudeSdkHostLayout({
+      isPackaged: app.isPackaged,
+      appPath: app.getAppPath(),
+      resourcesPath: process.resourcesPath,
+    })
+  );
+}
+
 /** Names the host may inherit from Main besides its own launch variables. */
 const HOST_INHERITED = new Set([...CLAUDE_SDK_INHERITED_ENV, 'AICLIENT_GIT_BASH_PATH']);
 

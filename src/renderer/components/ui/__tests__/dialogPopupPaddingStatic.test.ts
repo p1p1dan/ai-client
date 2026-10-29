@@ -245,6 +245,18 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
     reason: 'Standard DialogPanel body (the remote form) between header and footer.',
   },
   {
+    file: 'components/settings/ClaudeMcpSettings.tsx',
+    category: 'panel',
+    reason: 'Standard DialogPanel body (the add-an-MCP-server form) between header and footer.',
+  },
+  {
+    file: 'components/settings/ClaudePluginsSettings.tsx',
+    category: 'panel',
+    occurrences: 2,
+    reason:
+      'Two standard DialogPanel bodies: browsing a marketplace’s plugins, and the marketplace list with its add form.',
+  },
+  {
     file: 'components/settings/ProviderSetupDialog.tsx',
     category: 'panel',
     reason: 'Standard DialogPanel body (the AI service form) between header and footer.',

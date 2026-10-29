@@ -19,6 +19,8 @@ import { AdvancedSettings } from './AdvancedSettings';
 import { AgentMigrationSettings } from './AgentMigrationSettings';
 import { AISettings } from './AISettings';
 import { AppearanceSettings } from './AppearanceSettings';
+import { ClaudeMcpSettings } from './ClaudeMcpSettings';
+import { ClaudePluginsSettings } from './ClaudePluginsSettings';
 import { ConversationImportSettings } from './ConversationImportSettings';
 import type { SettingsCategory } from './constants';
 import { DshPluginsSettings } from './DshPluginsSettings';
@@ -153,6 +155,9 @@ export function SettingsContent({
             <>
               <PiResourcesSettings repoPath={repoPath} />
               <DshPluginsSettings />
+              {/* claude-plugins plan (user 2026-10-29: here, beside the Pi plugins). */}
+              <ClaudePluginsSettings repoPath={repoPath} />
+              <ClaudeMcpSettings repoPath={repoPath} />
               <LegacyAssetsSettings repoPath={repoPath} />
             </>
           )}

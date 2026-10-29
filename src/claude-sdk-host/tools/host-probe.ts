@@ -1072,6 +1072,58 @@ function writeSlashFixture(): void {
   );
 }
 
+/**
+ * claude-plugins plan §6 `mcp`: a stdio MCP server (one `echo` tool, newline-delimited
+ * JSON-RPC) declared twice, in the user layer (`<configDir>/.claude.json`) and in the
+ * repository's `.mcp.json`; each echoes a canary of its own.
+ */
+const MCP_SERVER = `
+const readline = require('node:readline');
+const tag = process.argv[2] || 'echo';
+const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\\n');
+readline.createInterface({ input: process.stdin }).on('line', (line) => {
+  let req;
+  try { req = JSON.parse(line); } catch { return; }
+  if (req.id === undefined) return;
+  if (req.method === 'initialize') {
+    send({ id: req.id, result: { protocolVersion: req.params?.protocolVersion ?? '2025-06-18',
+      capabilities: { tools: {} }, serverInfo: { name: 'probe-' + tag, version: '1.0.0' } } });
+  } else if (req.method === 'tools/list') {
+    send({ id: req.id, result: { tools: [{ name: 'echo', description: 'Echo the text back',
+      inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } }] } });
+  } else if (req.method === 'tools/call') {
+    send({ id: req.id, result: { content: [{ type: 'text',
+      text: 'MCP-ECHO-' + tag + ':' + (req.params?.arguments?.text ?? '') }] } });
+  } else if (req.method === 'ping') {
+    send({ id: req.id, result: {} });
+  } else {
+    send({ id: req.id, error: { code: -32601, message: 'no such method' } });
+  }
+});
+`;
+
+function writeMcpFixture(): void {
+  const script = join(dirname(configDir), `${basename(configDir)}-mcp-echo.cjs`);
+  writeText(script, MCP_SERVER);
+  const server = (tag: string) => ({
+    type: 'stdio',
+    command: process.execPath,
+    args: [script, tag],
+  });
+  const userFile = join(configDir, '.claude.json');
+  let user: Record<string, unknown> = {};
+  try {
+    user = JSON.parse(readFileSync(userFile, 'utf8')) as Record<string, unknown>;
+  } catch {
+    // A fresh config dir.
+  }
+  writeText(userFile, JSON.stringify({ ...user, mcpServers: { 'probe-user': server('user') } }));
+  writeText(
+    join(workspace, '.mcp.json'),
+    JSON.stringify({ mcpServers: { 'probe-proj': server('proj') } })
+  );
+}
+
 /** The file the `slash` fixture's SessionStart hook writes. */
 function slashHookMarker(): string {
   return join(workspace, 'session-start-hook-ran');
@@ -1289,6 +1341,7 @@ async function main(): Promise<void> {
     });
   }
   if (scenarios.includes('slash')) writeSlashFixture();
+  if (scenarios.includes('mcp')) writeMcpFixture();
   startHost();
   await bootstrap();
 
@@ -2621,6 +2674,67 @@ async function main(): Promise<void> {
           );
         }
         await request('worker.setPermissionGear', { logicalSessionId, gear: 'ask' });
+        break;
+      }
+      case 'mcp': {
+        // claude-plugins plan §6: the user layer's and the repository's servers start, and
+        // their tools ask first like any tool.
+        const calls = [
+          // The gateway echoes the last result only: the user layer's goes last.
+          { name: 'mcp__probe-proj__echo', input: { text: 'CANARY-MCP-PROJ' } },
+          { name: 'mcp__probe-user__echo', input: { text: 'CANARY-MCP-USER' } },
+        ];
+        await send(`CC-RUN ${JSON.stringify({ calls })}`);
+        const cards: Event[] = [];
+        let end: Event | undefined;
+        while (!end) {
+          const next = await waitFor(
+            (e) => terminal(e) || (e.type === 'permission.requested' && !cards.includes(e)),
+            'mcp: a card or the turn end',
+            90_000
+          );
+          if (terminal(next)) {
+            end = next;
+            break;
+          }
+          cards.push(next);
+          console.log(`  card: ${JSON.stringify(next.payload)}`);
+          await request('worker.permission.respond', {
+            logicalSessionId,
+            permissionId: next.payload?.permissionId,
+            decision: 'allow',
+          });
+        }
+        show('mcp');
+        const completed = events.filter((e) => e.type === 'tool.completed');
+        const outputOf = (text: string) =>
+          completed.find((e) => JSON.stringify(e.payload?.output ?? '').includes(text));
+        console.log(
+          `  mcp: cards=${cards.map((c) => c.payload?.toolName).join(',')} results=${completed
+            .map((e) =>
+              JSON.stringify(e.payload?.output ?? e.payload?.errorText ?? '').slice(0, 160)
+            )
+            .join(' | ')}`
+        );
+        check('mcp', 'ends in session.completed', end.type === 'session.completed');
+        check(
+          'mcp',
+          'the user layer server tool asks first',
+          cards.some((c) => c.payload?.toolName === 'mcp__probe-user__echo')
+        );
+        check(
+          'mcp',
+          'the user layer server answers',
+          Boolean(outputOf('MCP-ECHO-user:CANARY-MCP-USER'))
+        );
+        // Measured on 2.1.312: a trusted repository's `.mcp.json` server starts without a
+        // separate approval under the SDK (the interactive CLI asks); its tools still ask.
+        check(
+          'mcp',
+          'the repository server answers after its card',
+          cards.some((c) => c.payload?.toolName === 'mcp__probe-proj__echo') &&
+            Boolean(outputOf('MCP-ECHO-proj:CANARY-MCP-PROJ'))
+        );
         break;
       }
       case 'webfetch': {

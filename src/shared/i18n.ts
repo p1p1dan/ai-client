@@ -5041,3 +5041,78 @@ Object.assign(zhTranslations, {
     '对已打开的对话问一句旁问（先打开一个对话）',
   'Drag to move; double-click to put it back': '拖动可移动位置，双击放回原处',
 });
+
+/**
+ * claude-plugins plan: Settings → Extensions → Claude plugins and Claude MCP servers.
+ */
+Object.assign(zhTranslations, {
+  'Claude plugins': 'Claude 插件',
+  'About Claude plugins': '关于 Claude 插件',
+  'For Claude chats only, the same as installing with /plugin in Claude Code. Installed in this app’s own Claude folder; your ~/.claude is not touched.':
+    '只对 Claude 对话生效，和在 Claude Code 里用 /plugin 安装的效果一样。装在本应用自己的 Claude 配置目录里，不碰你的 ~/.claude。',
+  'A plugin can bring hooks and MCP servers, which run programs on this machine. Install only from sources you trust.':
+    '插件可以带钩子和 MCP 服务，它们会在本机运行程序。只装你信任的来源。',
+  'Plugin marketplaces': '插件市场',
+  'Browse plugins': '浏览插件',
+  'Browse Claude plugins': '浏览 Claude 插件',
+  'No Claude plugins yet': '还没有 Claude 插件',
+  'No plugin installed': '还没有安装插件',
+  'Add a plugin marketplace first, then install plugins from it.':
+    '先添加一个插件市场，再从里面挑插件安装。',
+  'Pick plugins from the marketplaces you added.': '从已添加的市场里挑插件安装。',
+  'Add the official marketplace': '添加官方市场',
+  'Cloning the official marketplace…': '正在克隆官方市场…',
+  'Add another marketplace…': '添加其他市场…',
+  'Official marketplace: {{source}}, needs access to GitHub':
+    '官方市场：{{source}}，需要能访问 GitHub',
+  'Declared by the repository': '仓库声明',
+  'Declared by the open repository': '当前仓库声明的',
+  'Change it in the repository’s .claude/settings.json': '要改请到仓库的 .claude/settings.json',
+  'From marketplace': '来自',
+  'Skills {{count}}': '技能 {{count}}',
+  'Commands {{count}}': '命令 {{count}}',
+  'Subagents {{count}}': '子代理 {{count}}',
+  'Hooks {{count}} · run commands': '钩子 {{count}} · 会运行命令',
+  'MCP servers {{count}} · start programs': 'MCP 服务 {{count}} · 会启动程序',
+  'Search by name or description': '搜索名字或说明',
+  'Search plugins': '搜索插件',
+  'Reading the marketplaces…': '正在读取插件市场…',
+  'No plugin matches': '没有匹配的插件',
+  '{{count}} installs': '{{count}} 次安装',
+  'Installing…': '正在安装…',
+  'New Claude chats can use a plugin once it is installed. Hooks and MCP servers a plugin brings run programs on this machine.':
+    '装好后新开的 Claude 对话就能用。插件带的钩子与 MCP 服务会在本机运行程序。',
+  'New Claude chats use the change; chats already open get it the next time they start.':
+    '新开的 Claude 对话会用上改动；已经打开的对话在下次启动时生效。',
+  'Its files and the data it saved are deleted. Claude chats already open keep using it until they next start.':
+    '插件文件和它保存的数据会一起删除。已经打开的 Claude 对话在下次启动前仍会用它。',
+  'Add a marketplace': '添加市场',
+  'Marketplace source': '市场地址',
+  'owner/repo, a git URL or a local folder': 'owner/repo、git 地址或本机目录',
+  'A GitHub marketplace is cloned with git and needs access to GitHub; on an internal network, a shared folder works. Removing a marketplace uninstalls the plugins installed from it.':
+    'GitHub 上的市场用 git 克隆，需要能访问 GitHub；内网可以填共享目录。移除市场会一并卸载从它装的插件。',
+  'Claude MCP servers': 'Claude MCP 服务',
+  'About Claude MCP servers': '关于 Claude MCP 服务',
+  'For Claude chats only. Servers added here are in this app’s own Claude folder; a repository’s .mcp.json and enabled plugins add their own.':
+    '只对 Claude 对话生效。这里添加的服务存在本应用自己的 Claude 配置目录；仓库的 .mcp.json 与已开启的插件还会带来各自的服务。',
+  'A local server is a program that runs on this machine with your permissions. Its tools ask for approval like the built-in ones.':
+    '本机服务是以你的权限在本机运行的程序。它的工具和内置工具一样要经过审批。',
+  'Add a server': '添加服务',
+  'Add an MCP server': '添加 MCP 服务',
+  'No MCP servers': '还没有 MCP 服务',
+  'Add a server, or open a repository whose .mcp.json declares some.':
+    '添加一个服务，或打开一个在 .mcp.json 里声明了服务的仓库。',
+  'From .mcp.json': '来自 .mcp.json',
+  'From plugin {{name}}': '来自插件 {{name}}',
+  'From the open repository and plugins': '来自当前仓库与插件',
+  'Sets {{names}}': '设置了 {{names}}',
+  'Letters, digits, - and _ only': '只能用字母、数字、- 和 _',
+  'A server of this name exists': '已有同名的服务',
+  'Local command': '本机命令',
+  'Arguments, one per line': '参数，每行一个',
+  'Environment variables, KEY=value per line': '环境变量，每行一个 KEY=value',
+  'Headers, Name: value per line': '请求头，每行一个 Name: value',
+  'A line is missing its name': '有一行缺少名字',
+  'Claude chats pass no environment variables of yours to a server; put what it needs here. It is stored in this app’s Claude folder, as Claude Code stores it.':
+    'Claude 对话不会把你的环境变量传给服务，需要的请写在这里。它和 Claude Code 一样存在本应用的 Claude 配置目录里。',
+});

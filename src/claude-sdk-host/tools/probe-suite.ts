@@ -95,6 +95,8 @@ export const GROUPS: readonly Group[] = [
   // dsh-rebase decision 194: the slash menu, a local command's output and command rows in
   // history; its own workspace, since it writes a project skill.
   { name: 'slash', scenarios: ['slash'] },
+  // claude-plugins plan §6: MCP servers of the user layer and the repository.
+  { name: 'mcp', scenarios: ['mcp'] },
 ];
 
 /** What one group's probe output says: its checks, the failed ones, and its verdict line. */

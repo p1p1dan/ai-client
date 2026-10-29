@@ -259,6 +259,21 @@ export const IPC_CHANNELS = {
   // P1-7e e5 (decision 143): Main -> renderer, the new state after a host start.
   DSH_PLUGINS_CHANGED: 'dshPlugins:changed',
 
+  // claude-plugins plan: the Claude chats' plugins and MCP servers, changed by
+  // the bundled CLI in the user layer (`~/.pilab/<profile>/claude`).
+  CLAUDE_PLUGINS_STATE: 'claudePlugins:state',
+  CLAUDE_PLUGINS_AVAILABLE: 'claudePlugins:available',
+  CLAUDE_PLUGINS_INSTALL: 'claudePlugins:install',
+  CLAUDE_PLUGINS_SET_ENABLED: 'claudePlugins:setEnabled',
+  CLAUDE_PLUGINS_UNINSTALL: 'claudePlugins:uninstall',
+  CLAUDE_PLUGINS_UPDATE: 'claudePlugins:update',
+  CLAUDE_PLUGINS_ADD_MARKETPLACE: 'claudePlugins:addMarketplace',
+  CLAUDE_PLUGINS_REMOVE_MARKETPLACE: 'claudePlugins:removeMarketplace',
+  CLAUDE_PLUGINS_UPDATE_MARKETPLACE: 'claudePlugins:updateMarketplace',
+  CLAUDE_MCP_STATE: 'claudeMcp:state',
+  CLAUDE_MCP_ADD: 'claudeMcp:add',
+  CLAUDE_MCP_REMOVE: 'claudeMcp:remove',
+
   // H/19 U2 — copying `~/.pi/agent` into this app's own agent directory.
   AGENT_MIGRATION_INSPECT: 'agentMigration:inspect',
   AGENT_MIGRATION_APPLY: 'agentMigration:apply',

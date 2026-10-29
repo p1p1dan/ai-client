@@ -9,6 +9,7 @@ import { registerAnnouncementHandlers } from './announcements';
 import { registerAppHandlers } from './app';
 import { registerAuthHandlers } from './auth';
 import { registerChatHandlers } from './chat';
+import { registerClaudePluginHandlers } from './claudePlugins';
 import { registerCliHandlers } from './cli';
 import { registerDialogHandlers } from './dialog';
 import { registerDshPluginHandlers } from './dshPlugins';
@@ -87,6 +88,7 @@ export function registerIpcHandlers(): void {
   registerPiResourceHandlers();
   registerLegacyAssetHandlers();
   registerDshPluginHandlers();
+  registerClaudePluginHandlers();
   registerAgentMigrationHandlers();
   registerUserProviderHandlers();
   registerUsageHandlers();

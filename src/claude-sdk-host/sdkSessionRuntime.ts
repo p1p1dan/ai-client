@@ -927,8 +927,9 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       ...(projectTrusted
         ? ({ workspaceTrust: { accepted: true, directory: this.options.cwd } } as Partial<Options>)
         : {}),
-      // Only servers PiLab passes; never a repository's `.mcp.json`.
-      strictMcpConfig: true,
+      // claude-plugins plan §6 (user 2026-10-29: MCP for Claude chats): no `strictMcpConfig`,
+      // so the CLI starts the servers it would anywhere — the user layer's, the trusted
+      // repository's `.mcp.json` under its own approval rules, and enabled plugins'.
       permissionMode: cliPermissionMode(this.permissions),
       // Set once at launch so a later switch to "bypass" is accepted; the mode itself stays ours.
       allowDangerouslySkipPermissions: true,

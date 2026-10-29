@@ -6,6 +6,13 @@ import type { UpdateStatus } from '../shared/types/updater';
 import 'electron-log/preload.js';
 import type { MigrationPlan, MigrationRequest, MigrationResult } from '@shared/agentMigration';
 import type { AnnouncementsResult } from '@shared/announcements';
+import type {
+  ClaudeAvailablePlugin,
+  ClaudeCliResult,
+  ClaudeMcpServerInput,
+  ClaudeMcpState,
+  ClaudePluginsState,
+} from '@shared/claudePlugins';
 import type { DshPluginsState } from '@shared/dshPluginSettings';
 import type { Locale } from '@shared/i18n';
 import type { InspectLegacyAssetsRequest, LegacyAssetNoticeState } from '@shared/legacyAssets';
@@ -1358,6 +1365,41 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.DSH_PLUGINS_CHANGED, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.DSH_PLUGINS_CHANGED, handler);
     },
+  },
+
+  /**
+   * claude-plugins plan: the Claude chats' plugins, marketplaces and MCP servers in the
+   * user layer, each change one bundled-CLI command. `repo` adds what that repository
+   * declares (read-only). Changes reach new Claude chats; open ones at their next start.
+   */
+  claudePlugins: {
+    state: (repo?: string): Promise<ClaudePluginsState> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_STATE, repo),
+    available: (): Promise<ClaudeAvailablePlugin[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_AVAILABLE),
+    install: (id: string): Promise<ClaudeCliResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_INSTALL, id),
+    setEnabled: (id: string, enabled: boolean): Promise<ClaudeCliResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_SET_ENABLED, id, enabled),
+    uninstall: (id: string): Promise<ClaudeCliResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_UNINSTALL, id),
+    update: (id: string): Promise<ClaudeCliResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_UPDATE, id),
+    addMarketplace: (source: string): Promise<ClaudeCliResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_ADD_MARKETPLACE, source),
+    removeMarketplace: (name: string): Promise<ClaudeCliResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_REMOVE_MARKETPLACE, name),
+    updateMarketplace: (name: string): Promise<ClaudeCliResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_UPDATE_MARKETPLACE, name),
+  },
+
+  claudeMcp: {
+    state: (repo?: string): Promise<ClaudeMcpState> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_MCP_STATE, repo),
+    add: (input: ClaudeMcpServerInput): Promise<ClaudeCliResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_MCP_ADD, input),
+    remove: (name: string): Promise<ClaudeCliResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_MCP_REMOVE, name),
   },
 
   /** PiLab's own plugins (plugin-system README §3), not the DSH engine's plugins above. */
