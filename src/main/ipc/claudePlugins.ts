@@ -1,5 +1,5 @@
 /**
- * docs/plantree/plans/claude-plugins — Settings → Extensions → Claude plugins
+ * docs/plantree/plans/claude-plugins — Settings → Plugins → Claude plugins
  * and Claude MCP servers. Every change is one bundled-CLI command against the
  * user layer (`ClaudePluginService`); nothing here writes the CLI's files.
  *

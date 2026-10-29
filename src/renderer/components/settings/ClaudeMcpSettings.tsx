@@ -1,5 +1,5 @@
 /**
- * docs/plantree/plans/claude-plugins §6 — Settings → Extensions → Claude MCP
+ * docs/plantree/plans/claude-plugins §6 — Settings → Plugins → Claude MCP
  * servers. The servers a Claude chat may start: the user layer's (added and
  * removed here, by the bundled CLI's `claude mcp add-json / remove`), the open
  * repository's `.mcp.json` and enabled plugins' (listed only). Values of

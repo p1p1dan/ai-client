@@ -359,7 +359,8 @@ export function createClaudeSdkHostAvailability(deps: {
 
 /** The user layer every SDK chat reads (ruling 19), created owner-only. */
 export function claudeSdkConfigDir(): string {
-  const configDir = claudeSdkConfigDir();
+  const configDir = path.join(getAppStateRoot(), CLAUDE_SDK_HOME_DIR_NAME);
+  ensurePrivateDirectory(configDir);
   return configDir;
 }
 
@@ -477,8 +478,7 @@ export function claudeSdkHostLaunch(generation: number): {
     );
   }
   const dev = claudeSdkHostDevSettings(app.isPackaged, process.env);
-  const configDir = path.join(getAppStateRoot(), CLAUDE_SDK_HOME_DIR_NAME);
-  ensurePrivateDirectory(configDir);
+  const configDir = claudeSdkConfigDir();
 
   const env: Record<string, string> = {};
   for (const [name, value] of Object.entries(process.env)) {

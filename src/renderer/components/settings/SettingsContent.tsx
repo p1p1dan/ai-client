@@ -146,22 +146,28 @@ export function SettingsContent({
               <PiModelManagementSettings providersVersion={providersVersion} />
             </>
           )}
-          {/* dsh-rebase P1-16e (decision 104): skills, then the allowlisted
-              DSH plugins (P1-10c, decision 117), then what the previous
+          {/* dsh-rebase P1-16e (decision 104): skills, then what the previous
               version used that this one no longer loads. The sub-agent page is
               gone (definitions are not loaded), and so is the pi extension
               page (decision 090). */}
           {activeCategory === 'extensions' && (
             <>
               <PiResourcesSettings repoPath={repoPath} />
-              <DshPluginsSettings />
-              {/* claude-plugins plan (user 2026-10-29: here, beside the Pi plugins). */}
-              <ClaudePluginsSettings repoPath={repoPath} />
-              <ClaudeMcpSettings repoPath={repoPath} />
               <LegacyAssetsSettings repoPath={repoPath} />
             </>
           )}
-          {activeCategory === 'plugins' && <PluginsSettings />}
+          {/* User 2026-10-29: every kind of plugin, and MCP, on this one page —
+              the Pi engine's allowlisted plugins (decision 117), the Claude
+              chats' plugins and MCP servers (claude-plugins plan), then
+              PiLab's own `.pilabplug` plugins. */}
+          {activeCategory === 'plugins' && (
+            <>
+              <DshPluginsSettings />
+              <ClaudePluginsSettings repoPath={repoPath} />
+              <ClaudeMcpSettings repoPath={repoPath} />
+              <PluginsSettings />
+            </>
+          )}
           {activeCategory === 'migration' && (
             <>
               <AgentMigrationSettings />

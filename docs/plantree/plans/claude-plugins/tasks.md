@@ -10,7 +10,7 @@
 |---|---|---|---|
 | **0 方案** | 随包 CLI 插件子命令实测 | ✅ | 2.1.300 全流程跑通，JSON 形状记在 README §2 |
 | | 交互预览 | ✅ | `docs/design/2026-10-29-claude-plugins-preview.html` |
-| | 用户选定 | ✅ | 两项都选 A；MCP 只做 Claude；内核只升 Claude SDK（2026-10-29） |
+| | 用户选定 | ✅ | 官方市场不预置；MCP 只做 Claude；内核只升 Claude SDK；插件与 MCP 全放「插件」页（2026-10-29） |
 | **1 升级 Claude SDK** | 0.3.300 → 0.3.312 | ✅ | 内置 CLI 2.1.312；依赖集合不变（112 个） |
 | | 宿主 typecheck、单测、probe-suite、event-record | ✅ | 单测 224 过；probe-suite 11 组全过（改了探针里的 sleep，见 README §7）；event-record 的差异 main 上 0.3.300 同样有，与升级无关 |
 | **2 Main 服务** | `ClaudePluginService` 调 CLI | ✅ | 配置目录、代理、串行执行、超时（`src/main/services/claudePlugins/`） |
@@ -25,6 +25,8 @@
 | | 「Claude MCP 服务」一节，CLI `claude mcp` 管理 | ✅ | 只显示环境变量与请求头的名字 |
 | | MCP 工具的审批卡与工具行实测 | ✅ | 探针里出卡、允许后有结果；界面待真机看 |
 | | 假 MCP 服务器探针 | ✅ | probe-suite 新增 `mcp` 组 |
+| **4b 调整** | 插件、MCP、Pi 插件搬到「插件」页；去掉侧栏「能力」按钮 | ✅ | 用户 2026-10-29 |
+| | 修配置目录函数自己调自己（栈溢出） | ✅ | 新增 `claudeSdkConfigDir.test.ts` |
 | **5 验收** | 本机真机 | ⬜ | 装官方市场插件，新对话里能用它的命令；加一个 MCP 服务，新对话里能调它的工具 |
 | | Windows、加密机 | ⬜ | git 克隆、插件缓存读写 |
 | | 合入 main | ⬜ | 先问用户 |

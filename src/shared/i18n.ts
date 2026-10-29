@@ -5047,6 +5047,7 @@ Object.assign(zhTranslations, {
  */
 Object.assign(zhTranslations, {
   'Claude plugins': 'Claude 插件',
+  'PiLab plugins': 'PiLab 插件',
   'About Claude plugins': '关于 Claude 插件',
   'For Claude chats only, the same as installing with /plugin in Claude Code. Installed in this app’s own Claude folder; your ~/.claude is not touched.':
     '只对 Claude 对话生效，和在 Claude Code 里用 /plugin 安装的效果一样。装在本应用自己的 Claude 配置目录里，不碰你的 ~/.claude。',

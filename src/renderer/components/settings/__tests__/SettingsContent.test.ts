@@ -42,6 +42,8 @@ const panels = [
   'PermissionPolicySettings',
   'PiResourcesSettings',
   'DshPluginsSettings',
+  'ClaudePluginsSettings',
+  'ClaudeMcpSettings',
   'LegacyAssetsSettings',
   'PluginsSettings',
   'KeybindingsSettings',
@@ -84,11 +86,11 @@ describe('settings navigation', () => {
       ['EditorSettings'],
       ['GitSettings', 'AISettings'],
       ['UserProvidersSettings', 'PiModelManagementSettings'],
-      // dsh-rebase P1-16e (decision 104): skills, then the allowlisted DSH
-      // plugins (P1-10c), then the legacy-asset entry; no sub-agent page, no
-      // pi extension page.
-      ['PiResourcesSettings', 'DshPluginsSettings', 'LegacyAssetsSettings'],
-      ['PluginsSettings'],
+      // dsh-rebase P1-16e (decision 104): skills, then the legacy-asset entry;
+      // no sub-agent page, no pi extension page.
+      ['PiResourcesSettings', 'LegacyAssetsSettings'],
+      // User 2026-10-29: every kind of plugin, and MCP, on the Plugins page.
+      ['DshPluginsSettings', 'ClaudePluginsSettings', 'ClaudeMcpSettings', 'PluginsSettings'],
       ['AgentMigrationSettings', 'ConversationImportSettings'],
       ['KeybindingsSettings'],
       ['NetworkSettings', 'RemoteSettings'],

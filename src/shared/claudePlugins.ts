@@ -1,5 +1,5 @@
 /**
- * Settings → Extensions → Claude plugins and Claude MCP servers
+ * Settings → Plugins → Claude plugins and Claude MCP servers
  * (docs/plantree/plans/claude-plugins). What Claude chats load from the user
  * layer (`~/.pilab/<profile>/claude`) and from the open repository. Every
  * change is made by the bundled CLI (`claude plugin … --json`, `claude mcp …`);

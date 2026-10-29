@@ -84,10 +84,13 @@ describe('DSH plugins section (Settings → Extensions)', () => {
     }
   });
 
-  it('sits on the Extensions page between skills and the legacy-asset entry', () => {
+  it('sits on the Plugins page, first, before the Claude sections and PiLab’s own', () => {
+    // User 2026-10-29: every kind of plugin, and MCP, on the Plugins page.
     expect(settingsContent).toMatch(
-      // claude-plugins plan: the Claude plugins and MCP sections come between.
-      /<PiResourcesSettings repoPath=\{repoPath\} \/>\s*<DshPluginsSettings \/>[\s\S]*?<ClaudePluginsSettings repoPath=\{repoPath\} \/>\s*<ClaudeMcpSettings repoPath=\{repoPath\} \/>\s*<LegacyAssetsSettings repoPath=\{repoPath\} \/>/
+      /<DshPluginsSettings \/>\s*<ClaudePluginsSettings repoPath=\{repoPath\} \/>\s*<ClaudeMcpSettings repoPath=\{repoPath\} \/>\s*<PluginsSettings \/>/
+    );
+    expect(settingsContent).toMatch(
+      /<PiResourcesSettings repoPath=\{repoPath\} \/>\s*<LegacyAssetsSettings repoPath=\{repoPath\} \/>/
     );
   });
 });

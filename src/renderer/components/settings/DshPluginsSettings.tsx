@@ -1,6 +1,6 @@
 /**
- * dsh-rebase P1-10c — Settings → Extensions → Plugins (topic §4.4; decisions
- * 108, 110, 115 and 117).
+ * dsh-rebase P1-10c — Settings → Plugins → Pi plugins (topic §4.4; decisions
+ * 108, 110, 115 and 117; on the Plugins page since 2026-10-29).
  *
  * The allowlisted DSH plugins this build ships, one row each: name, version,
  * what it does, where it comes from, what its tools may do (a tool that writes

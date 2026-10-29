@@ -1,6 +1,6 @@
 /**
- * docs/plantree/plans/claude-plugins §3.3 — Settings → Extensions → Claude
- * plugins (user 2026-10-29: on the Extensions page, the official marketplace
+ * docs/plantree/plans/claude-plugins §3.3 — Settings → Plugins → Claude
+ * plugins (user 2026-10-29: on the Plugins page, the official marketplace
  * not preset). What Claude chats load from the user layer, plus what the open
  * repository declares (read-only). Every change is one bundled-CLI command in
  * Main; new Claude chats get it, open ones at their next start.

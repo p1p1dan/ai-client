@@ -291,12 +291,6 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
       'The logout-confirm dialog folds its loss list and CLI-note paragraph INTO DialogHeader (both still precede the closing </DialogHeader>), so they inherit the header’s own p-6 instead of needing a separate padded region.',
   },
   {
-    file: 'components/workspace-shell/LeftDock.tsx',
-    category: 'panel',
-    reason:
-      'dsh-rebase P1-16e: the capabilities dialog is down to the skill count (decision 104), so the self-scrolling list that made it manual is gone; standard DialogPanel body.',
-  },
-  {
     file: 'components/settings/LegacyAssetNotice.tsx',
     category: 'panel',
     reason:
