@@ -4004,7 +4004,9 @@ function decideClaudeSdk(parsed, req) {
             tool: {
               name: 'Bash',
               input: {
-                command: `sleep ${seconds} & sleep ${seconds}; wait; echo slept`,
+                // CLI 2.1.312 blocks a command line that starts with a long `sleep` ("use
+                // Monitor"); behind `sh -c` the same two sleeps run.
+                command: `sh -c 'sleep ${seconds} & sleep ${seconds}; wait'; echo slept`,
                 description: 'Sleep in two processes so Stop has a process tree to end',
               },
             },

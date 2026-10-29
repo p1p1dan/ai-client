@@ -2371,7 +2371,9 @@ async function main(): Promise<void> {
         // turn goes on to its end, and the work keeps running as a background task.
         const viaAgent = scenario === 'tool-background-agent';
         const seconds = 41 + (process.pid % 300) + (viaAgent ? 2_000 : 3_000);
-        const sleep = { command: `sleep ${seconds}`, description: 'Foreground sleep' };
+        // CLI 2.1.312 blocks a foreground command that is a bare long `sleep` ("use Monitor");
+        // behind `sh -c` the same `sleep <seconds>` process runs and is counted.
+        const sleep = { command: `sh -c 'sleep ${seconds}'`, description: 'Foreground sleep' };
         const call = viaAgent
           ? {
               name: 'Agent',
@@ -2474,7 +2476,7 @@ async function main(): Promise<void> {
           calls: [
             {
               name: 'Bash',
-              input: { command: `sleep ${childSeconds}`, description: 'Child sleep' },
+              input: { command: `sh -c 'sleep ${childSeconds}'`, description: 'Child sleep' },
             },
             {
               name: 'Bash',
@@ -2498,7 +2500,7 @@ async function main(): Promise<void> {
             },
             {
               name: 'Bash',
-              input: { command: `sleep ${parentSeconds}`, description: 'Parent sleep' },
+              input: { command: `sh -c 'sleep ${parentSeconds}'`, description: 'Parent sleep' },
             },
           ],
         }).replace('"CC-RUN', '"CC-\\u0052UN');
