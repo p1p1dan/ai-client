@@ -1,4 +1,7 @@
+import { CircleHelp } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export function SettingsPageShell({ title, children }: { title: string; children: ReactNode }) {
@@ -60,5 +63,31 @@ export function SettingsRow({ className, ...props }: ComponentProps<'div'>) {
       )}
       {...props}
     />
+  );
+}
+
+/**
+ * A question mark beside a section title whose hover shows the how-to text,
+ * so the page itself carries no explanatory paragraphs.
+ */
+export function SettingsHelpTip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-muted-foreground"
+            aria-label={label}
+          />
+        }
+      >
+        <CircleHelp />
+      </TooltipTrigger>
+      <TooltipPopup className="max-w-sm">
+        <div className="space-y-1.5 text-small">{children}</div>
+      </TooltipPopup>
+    </Tooltip>
   );
 }

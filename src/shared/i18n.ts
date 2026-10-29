@@ -627,7 +627,6 @@ export const zhTranslations: Record<string, string> = {
   // folders and the delegation switch left with their strings.
   Resources: '资源',
   'Loading resource settings...': '正在读取资源设置…',
-  'Shared skills': '共享技能',
   Recommended: '推荐',
   Skills: '技能',
   // chat-tool-04: body label of the skill approval card (runtime emits
@@ -635,70 +634,38 @@ export const zhTranslations: Record<string, string> = {
   // plural 'Skills' key; the two must not substitute for each other.
   Skill: '技能',
   'Prompt templates': '提示词模板',
-  'Chats load skills from these two folders, and from .dsh/skills and .agents/skills at the root of the project’s repository.':
-    '对话从下面两个目录加载技能，另外还会加载项目仓库根目录下的 .dsh/skills 和 .agents/skills。',
-  'This app’s skills': '本应用的技能',
-  'Your own skills for chats in this app.': '你为本应用的对话准备的技能。',
-  'Also read by other agents that follow the Agent Skills convention.':
-    '其他遵循 Agent Skills 约定的 Agent 也会读取这里。',
-  'How a skill is found': '技能怎样才会被加载',
-  'Each skill is one entry directly inside a skills folder: <name>/SKILL.md, or a single <name>.md. Deeper files are not scanned.':
-    '每个技能是技能目录第一层里的一项：<name>/SKILL.md，或单个 <name>.md。更深层的文件不会被扫描。',
-  'Its frontmatter needs name and description. The name uses lowercase letters, digits and dashes only, such as code-review.':
-    'frontmatter 必须写 name 和 description；name 只能用小写字母、数字和短横线，例如 code-review。',
-  'Type /<name> anywhere in a message to use a skill. Add disable-model-invocation: true to keep the model from using it on its own.':
-    '在消息任意位置输入 /<name> 即可使用技能；加上 disable-model-invocation: true，模型就不会自行调用它。',
   'Opening...': '正在打开…',
 
   // dsh-rebase P1-16e（决策 104）：旧版资产的一次性提示与「设置 > 扩展」里的常驻入口。
   'Some things from the previous version no longer apply': '以下内容在新版中不再生效',
-  'This version runs chats on a new engine. The items below were found on this computer, but it no longer loads them. Nothing was changed or deleted, and the previous version can still use them.':
-    '新版改用了新的对话引擎。下面这些内容在本机找到了，但新版不会再加载。这里只做列出，没有修改或删除任何文件，装回旧版仍可继续使用。',
   'You can see this list again in Settings > Extensions.':
     '之后可以在“设置 > 扩展”里再次查看这份清单。',
   'Open agent folder': '打开 Agent 目录',
   'Custom sub-agents': '自定义子代理',
-  'Sub-agent definition files are no longer loaded. Chats use the built-in sub-agents, which are always available.':
-    '子代理定义文件不再加载。对话改用内置的子代理，始终可用。',
-  'Templates are no longer expanded. To keep one, rewrite it as a skill: save it as {{path}}/<name>/SKILL.md with name and description in its frontmatter, and add disable-model-invocation: true if only you should trigger it. Then type /<name> in a message.':
-    '模板不再展开。想继续使用的，请改写成技能：存为 {{path}}/<name>/SKILL.md，frontmatter 里写上 name 和 description；只想由你手动触发的，再加一行 disable-model-invocation: true。之后在消息里输入 /<name> 即可使用。',
   'Personal instruction file': '用户层指令文件',
-  'The previous version also read this file as your personal rules; this version does not. Put the rules you still want in {{path}}.':
-    '旧版会把这个文件当作你的个人规则一并读取，新版不再读取。需要保留的规则请放进 {{path}}。',
   'MCP servers': 'MCP 服务',
-  'This version does not support MCP yet, so these servers are not started. The files are left as they are.':
-    '新版暂不支持 MCP，这些服务不会启动。配置文件保持原样。',
   'Could not be read': '无法读取',
   'No servers listed': '文件里没有列出服务',
   'Skills that will not load': '不会加载的技能',
-  'A skill loads when it is <name>/SKILL.md or <name>.md directly inside a skills folder, and its frontmatter has a description and a name made of lowercase letters, digits and dashes.':
-    '技能要放在技能目录的第一层（<name>/SKILL.md 或 <name>.md），frontmatter 里要有 description，以及只由小写字母、数字和短横线组成的 name，才会加载。',
   'No name in its frontmatter': 'frontmatter 里缺少 name',
   'Name is not lowercase letters, digits and dashes': 'name 不是小写字母、数字和短横线',
   'Too deep inside the folder': '目录层级太深',
-  'In a folder this version does not scan': '所在目录新版不扫描',
   'Sub-agent delegation': '子代理委派',
   'You had turned sub-agent delegation off. In this version sub-agents are always available.':
     '你曾关闭子代理委派。新版的子代理始终可用。',
   'Items from the previous version': '旧版遗留内容',
-  'What the previous version used that this version no longer loads. This only lists them: nothing is changed or deleted.':
-    '旧版用过、新版不再加载的内容。这里只做列出，不修改或删除任何文件。',
-  'Nothing from the previous version was found.': '没有发现旧版遗留的内容。',
   'Project files were checked in {{path}}.': '已检查 {{path}} 下的项目文件。',
   'Open a workspace to also check its project files.': '打开一个工作区后，还会检查它的项目文件。',
 
   // dsh-rebase P1-10c（决策 117）：「设置 > 扩展」里的白名单插件一节。只有启用开关，
   // 没有安装与删除；切换在对话引擎下次启动时生效（决策 108 第 7 条）。
   // 复用的已有键：Plugins、Loading plugins...、No plugins available、Switched off。
-  'Plugins reviewed by this app and installed with it. Nothing is downloaded, and plugins cannot be added or removed here. Tools a plugin adds go through this app’s approval like the built-in tools.':
-    '经本应用审查、随应用一起安装的插件。不会联网下载，这里也不能添加或删除插件。插件提供的工具和内置工具一样，要经过本应用的审批。',
   'Create, read and update Word, Excel and PowerPoint files in the workspace.':
     '在工作区里创建、读取和修改 Word、Excel、PowerPoint 文件。',
   Loaded: '已加载',
   'Missing from the install': '安装包中缺失',
   'Refused to load': '已拒绝加载',
   'Restart pending': '待重启生效',
-  'Official DSH plugin': 'DSH 官方插件',
   'Third-party plugin, reviewed by this app': '第三方插件，已经过本应用审查',
   'Reviewed {{date}}: approved': '{{date}} 审查：通过',
   'Reviewed {{date}}: approved with conditions': '{{date}} 审查：有条件通过',
@@ -708,13 +675,7 @@ export const zhTranslations: Record<string, string> = {
   'Reason: {{reason}}': '原因：{{reason}}',
   'Loaded, but part of it did not start: {{rows}}': '已加载，但有部分未能启动：{{rows}}',
   'The plugin list could not be read: {{error}}': '无法读取插件清单：{{error}}',
-  'The chat engine could not read the plugin settings when it last started, so it loaded no plugin.':
-    '对话引擎上次启动时没能读取插件设置，因此没有加载任何插件。',
-  'Plugin changes take effect the next time the chat engine starts. If it is running, it restarts on its own once no chat has work in progress.':
-    '插件的改动在对话引擎下次启动时生效；引擎正在运行时，会等所有对话都没有进行中的工作后自动重启。',
   'This version ships without any plugins.': '这个版本没有随附任何插件。',
-  'The chat engine has not started since the app opened, so what it loaded is not shown yet.':
-    '应用打开后对话引擎还没有启动过，所以暂时看不到它加载了什么。',
   'No longer available': '已下架',
   'This version no longer ships these plugins, so they are not loaded.':
     '当前版本已不再提供这些插件，它们不会被加载。',
@@ -3489,8 +3450,6 @@ export const zhTranslations: Record<string, string> = {
   'Connect to {{host}}': '连接 {{host}}',
   'Could not install: {{error}}': '安装失败：{{error}}',
   'Expand {{name}}': '展开{{name}}',
-  'Extra features that are not in the installer, installed from a .pilabplug file. Each plugin runs in its own process and cannot read your model keys. The chat engine’s plugins are under Extensions.':
-    '不在安装包里的额外功能，从 .pilabplug 文件安装。每个插件在自己的进程里运行，拿不到你的模型密钥。对话引擎的插件在「扩展」里。',
   'Failed · retried {{count}} times': '失败 · 已重试 {{count}} 次',
   'Install from file…': '从文件安装…',
   'It will run in its own process and can:': '启用后它会在自己的进程里运行，并且可以：',
@@ -3501,8 +3460,6 @@ export const zhTranslations: Record<string, string> = {
   'Nothing beyond its own settings': '只读写它自己的设置',
   'Only turn on plugins you trust.': '只启用你信得过的插件。',
   Permissions: '权限',
-  'Plugins are .pilabplug files. Use “Install from file…” above.':
-    '插件是 .pilabplug 文件，点上方「从文件安装…」。',
   'Read conversations': '看对话',
   'Restarting…': '正在重启…',
   Services: '服务',
@@ -3519,6 +3476,50 @@ export const zhTranslations: Record<string, string> = {
   'In use on {{label}}; you can only watch here': '正在 {{label}} 上使用，这里只能看进度',
   'In use on {{label}}': '正在 {{label}} 上使用',
   'Take over': '接管',
+
+  // Settings → Extensions / Plugins (2026-10-29): skills grouped by engine (Pi, Claude), how-to
+  // text behind help tips, leftover items folded into one row.
+  'How to write a skill': '怎样写技能',
+  'Pi chats: <name>/SKILL.md or <name>.md directly inside a skills folder. Its frontmatter needs name and description; the name uses lowercase letters, digits and dashes only. Type /<name> in a message to use it; add disable-model-invocation: true to keep the model from using it on its own.':
+    'Pi 对话：技能目录第一层的 <name>/SKILL.md 或 <name>.md，frontmatter 写 name 和 description，name 只用小写字母、数字和短横线。消息里输入 /<name> 使用；加上 disable-model-invocation: true，模型就不会自己调用。',
+  'Claude chats follow Claude Code’s rules: <name>/SKILL.md, plus the skills Claude comes with.':
+    'Claude 对话按 Claude Code 的规则：<name>/SKILL.md；另有 Claude 自带的技能。',
+  'Pi chats read these folders': 'Pi 对话读这些目录',
+  'Claude chats read these folders': 'Claude 对话读这些目录',
+  'This app': '本应用',
+  Shared: '共享',
+  Project: '项目',
+  'Shown once a repository is open': '打开仓库后显示',
+  'Pi plugins': 'Pi 插件',
+  'About Pi plugins': '关于 Pi 插件',
+  'Installed with this app and reviewed by it, for Pi chats only. Tools a plugin adds go through approval like the built-in tools.':
+    '随应用安装、经本应用审查，只在 Pi 对话里可用；插件提供的工具和内置工具一样要经过审批。',
+  'Claude chats load the plugins a repository declares in its .claude settings; they are not managed here.':
+    'Claude 对话会加载仓库 .claude 设置里声明的插件，不在这里管理。',
+  'The Pi engine could not read the plugin settings when it last started, so it loaded no plugin.':
+    'Pi 引擎上次启动时没能读取插件设置，因此没有加载任何插件。',
+  'Plugin changes take effect the next time the Pi engine starts. If it is running, it restarts on its own once no chat has work in progress.':
+    '插件的改动在 Pi 引擎下次启动时生效；引擎正在运行时，会等所有对话都没有进行中的工作后自动重启。',
+  'The Pi engine has not started since the app opened, so what it loaded is not shown yet.':
+    '应用打开后 Pi 引擎还没有启动过，所以暂时看不到它加载了什么。',
+  'Official plugin': '官方插件',
+  'Pi chats no longer load sub-agent definition files and use the built-in sub-agents instead.':
+    'Pi 对话不再加载子代理定义文件，改用内置子代理。',
+  'Templates are no longer expanded. To keep one, rewrite it as a skill in {{path}}.':
+    '模板不再展开。想继续用，就改写成技能放进 {{path}}。',
+  'Pi chats no longer read this file. Put the rules you still want in {{path}}.':
+    'Pi 对话不再读取这个文件，需要保留的规则请放进 {{path}}。',
+  'Neither Pi nor Claude chats start MCP servers. The files are left as they are.':
+    'Pi 和 Claude 对话都不启动 MCP 服务，配置文件保持原样。',
+  'Pi chats load a skill only when it sits directly inside a skills folder and its frontmatter has a valid name and description.':
+    'Pi 对话只加载技能目录第一层、frontmatter 里 name 和 description 合规的技能。',
+  'In a folder Pi chats do not scan': '所在目录 Pi 对话不扫描',
+  'This version runs chats on new engines, Pi and Claude. The items below were found on this computer, but they are no longer loaded. Nothing was changed or deleted, and the previous version can still use them.':
+    '新版改用了新的对话引擎（Pi 和 Claude）。下面这些内容在本机找到了，但新版不会再加载。这里只做列出，没有修改或删除任何文件，装回旧版仍可继续使用。',
+  'Items from the previous version: {{count}}': '旧版遗留内容 {{count}} 项',
+  'No longer loaded. Listed only, nothing is changed.': '新版不再加载，只列出，不改动',
+  'Installed from .pilabplug files. Each plugin runs in its own process and cannot read your model keys.':
+    '从 .pilabplug 文件安装，每个插件单独运行，拿不到你的模型密钥。',
 };
 
 export function normalizeLocale(input?: string): Locale {

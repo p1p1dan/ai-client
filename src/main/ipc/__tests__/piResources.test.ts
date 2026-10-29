@@ -20,6 +20,7 @@ function snapshot() {
     paths: {
       sharedSkills: join(state.root, '.agents', 'skills'),
       appSkills: join(state.root, '.pilab', 'test', 'pi-agent', 'skills'),
+      claudeSkills: join(state.root, '.pilab', 'test', 'claude', 'skills'),
     },
   };
 }
@@ -84,6 +85,12 @@ describe('Pi resource settings IPC', () => {
     );
   });
 
+  it('creates and opens the Claude chats’ skill folder', async () => {
+    await handler(IPC_CHANNELS.PI_RESOURCES_OPEN_CLAUDE_SKILLS)({});
+    expect(existsSync(snapshot().paths.claudeSkills)).toBe(true);
+    expect(openPath).toHaveBeenCalledWith(snapshot().paths.claudeSkills);
+  });
+
   it('returns exact Main-resolved installation paths', async () => {
     await expect(handler(IPC_CHANNELS.PI_RESOURCES_GET_SETTINGS)({})).resolves.toEqual(snapshot());
   });
@@ -94,12 +101,13 @@ describe('Pi resource settings IPC', () => {
    * their channels went with the native worker. Registering them again would
    * be a setting nothing reads.
    */
-  it('registers exactly the read and the two open-folder channels', () => {
+  it('registers exactly the read and the three open-folder channels', () => {
     expect([...handlers.keys()].sort()).toEqual(
       [
         IPC_CHANNELS.PI_RESOURCES_GET_SETTINGS,
         IPC_CHANNELS.PI_RESOURCES_OPEN_SKILLS,
         IPC_CHANNELS.PI_RESOURCES_OPEN_APP_SKILLS,
+        IPC_CHANNELS.PI_RESOURCES_OPEN_CLAUDE_SKILLS,
       ].sort()
     );
     expect(IPC_CHANNELS).not.toHaveProperty('PI_RESOURCES_UPDATE_SETTINGS');

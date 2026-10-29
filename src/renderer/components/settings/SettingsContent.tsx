@@ -151,7 +151,7 @@ export function SettingsContent({
               page (decision 090). */}
           {activeCategory === 'extensions' && (
             <>
-              <PiResourcesSettings />
+              <PiResourcesSettings repoPath={repoPath} />
               <DshPluginsSettings />
               <LegacyAssetsSettings repoPath={repoPath} />
             </>

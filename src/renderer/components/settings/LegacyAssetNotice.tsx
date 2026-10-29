@@ -52,7 +52,7 @@ function skillIssueLabel(issue: LegacySkillIssue, t: TFunction): string {
     case 'nested':
       return t('Too deep inside the folder');
     case 'unscanned-root':
-      return t('In a folder this version does not scan');
+      return t('In a folder Pi chats do not scan');
   }
 }
 
@@ -102,7 +102,7 @@ export function LegacyAssetList({ report }: { report: LegacyAssetReport }) {
           icon={Bot}
           title={t('Custom sub-agents')}
           hint={t(
-            'Sub-agent definition files are no longer loaded. Chats use the built-in sub-agents, which are always available.'
+            'Pi chats no longer load sub-agent definition files and use the built-in sub-agents instead.'
           )}
         >
           {report.subagents.map((entry) => (
@@ -116,7 +116,7 @@ export function LegacyAssetList({ report }: { report: LegacyAssetReport }) {
           icon={FileText}
           title={t('Prompt templates')}
           hint={t(
-            'Templates are no longer expanded. To keep one, rewrite it as a skill: save it as {{path}}/<name>/SKILL.md with name and description in its frontmatter, and add disable-model-invocation: true if only you should trigger it. Then type /<name> in a message.',
+            'Templates are no longer expanded. To keep one, rewrite it as a skill in {{path}}.',
             { path: report.skillsTarget }
           )}
         >
@@ -130,10 +130,9 @@ export function LegacyAssetList({ report }: { report: LegacyAssetReport }) {
         <Category
           icon={ScrollText}
           title={t('Personal instruction file')}
-          hint={t(
-            'The previous version also read this file as your personal rules; this version does not. Put the rules you still want in {{path}}.',
-            { path: report.instructionTarget }
-          )}
+          hint={t('Pi chats no longer read this file. Put the rules you still want in {{path}}.', {
+            path: report.instructionTarget,
+          })}
         >
           <Item path={report.instructionFile} />
         </Category>
@@ -143,9 +142,7 @@ export function LegacyAssetList({ report }: { report: LegacyAssetReport }) {
         <Category
           icon={Plug}
           title={t('MCP servers')}
-          hint={t(
-            'This version does not support MCP yet, so these servers are not started. The files are left as they are.'
-          )}
+          hint={t('Neither Pi nor Claude chats start MCP servers. The files are left as they are.')}
         >
           {report.mcpConfigs.map((entry) => (
             <Item
@@ -168,7 +165,7 @@ export function LegacyAssetList({ report }: { report: LegacyAssetReport }) {
           icon={Library}
           title={t('Skills that will not load')}
           hint={t(
-            'A skill loads when it is <name>/SKILL.md or <name>.md directly inside a skills folder, and its frontmatter has a description and a name made of lowercase letters, digits and dashes.'
+            'Pi chats load a skill only when it sits directly inside a skills folder and its frontmatter has a valid name and description.'
           )}
         >
           {report.skills.map((entry) => (
@@ -285,7 +282,7 @@ export function LegacyAssetNoticePrompt({ repoPath }: { repoPath?: string }) {
           <DialogTitle>{t('Some things from the previous version no longer apply')}</DialogTitle>
           <DialogDescription>
             {t(
-              'This version runs chats on a new engine. The items below were found on this computer, but it no longer loads them. Nothing was changed or deleted, and the previous version can still use them.'
+              'This version runs chats on new engines, Pi and Claude. The items below were found on this computer, but they are no longer loaded. Nothing was changed or deleted, and the previous version can still use them.'
             )}
           </DialogDescription>
         </DialogHeader>

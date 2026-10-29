@@ -1322,6 +1322,9 @@ const electronAPI = {
     /** dsh-rebase P1-16e — `<agentDir>/skills`, next to `openSkills`' `~/.agents/skills`. */
     openAppSkills: (): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_APP_SKILLS),
+    /** `<appStateRoot>/claude/skills`, read by Claude SDK chats. */
+    openClaudeSkills: (): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_CLAUDE_SKILLS),
   },
 
   /**

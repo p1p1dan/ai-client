@@ -282,6 +282,8 @@ export interface PiResourceSettings {
     sharedSkills: string;
     /** `<appAgentDir>/skills`, the host's `customSkillDirs`. */
     appSkills: string;
+    /** `<appStateRoot>/claude/skills`, the user-layer skills of Claude SDK chats. */
+    claudeSkills: string;
   };
 }
 

@@ -44,7 +44,11 @@ import { Ident } from '@/components/ui/ident';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { SETTINGS_CARD_FRAME_CLASS, SettingsSectionBlock } from './SettingsPrimitives';
+import {
+  SETTINGS_CARD_FRAME_CLASS,
+  SettingsHelpTip,
+  SettingsSectionBlock,
+} from './SettingsPrimitives';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
@@ -148,7 +152,7 @@ function PluginRow({
         <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-small text-muted-foreground">
           <span>
             {plugin.kind === 'official'
-              ? t('Official DSH plugin')
+              ? t('Official plugin')
               : t('Third-party plugin, reviewed by this app')}
           </span>
           {plugin.review && (
@@ -283,10 +287,23 @@ export function DshPluginsSettings() {
   return (
     <SettingsSectionBlock
       bare
-      title={t('Plugins')}
-      description={t(
-        'Plugins reviewed by this app and installed with it. Nothing is downloaded, and plugins cannot be added or removed here. Tools a plugin adds go through this app’s approval like the built-in tools.'
-      )}
+      title={
+        <span className="inline-flex items-center gap-1">
+          {t('Pi plugins')}
+          <SettingsHelpTip label={t('About Pi plugins')}>
+            <p>
+              {t(
+                'Installed with this app and reviewed by it, for Pi chats only. Tools a plugin adds go through approval like the built-in tools.'
+              )}
+            </p>
+            <p>
+              {t(
+                'Claude chats load the plugins a repository declares in its .claude settings; they are not managed here.'
+              )}
+            </p>
+          </SettingsHelpTip>
+        </span>
+      }
     >
       {loadError ? (
         <Callout tone="error">{loadError}</Callout>
@@ -302,14 +319,14 @@ export function DshPluginsSettings() {
           {state.selectionInvalid && (
             <Callout tone="warning">
               {t(
-                'The chat engine could not read the plugin settings when it last started, so it loaded no plugin.'
+                'The Pi engine could not read the plugin settings when it last started, so it loaded no plugin.'
               )}
             </Callout>
           )}
           {pending && (
             <Callout tone="info">
               {t(
-                'Plugin changes take effect the next time the chat engine starts. If it is running, it restarts on its own once no chat has work in progress.'
+                'Plugin changes take effect the next time the Pi engine starts. If it is running, it restarts on its own once no chat has work in progress.'
               )}
             </Callout>
           )}
@@ -343,7 +360,7 @@ export function DshPluginsSettings() {
           {plugins.length > 0 && !state.hostReported && (
             <p className="text-small text-muted-foreground">
               {t(
-                'The chat engine has not started since the app opened, so what it loaded is not shown yet.'
+                'The Pi engine has not started since the app opened, so what it loaded is not shown yet.'
               )}
             </p>
           )}

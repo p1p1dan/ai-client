@@ -244,6 +244,8 @@ export const IPC_CHANNELS = {
   PI_RESOURCES_OPEN_SKILLS: 'piResources:openSkills',
   /** dsh-rebase P1-16e — `<agentDir>/skills`, DSH's `customSkillDirs` (decision 101). */
   PI_RESOURCES_OPEN_APP_SKILLS: 'piResources:openAppSkills',
+  /** `<appStateRoot>/claude/skills`, the user-layer skills of Claude SDK chats. */
+  PI_RESOURCES_OPEN_CLAUDE_SKILLS: 'piResources:openClaudeSkills',
 
   // dsh-rebase P1-16e (decision 104) — the read-only "no longer used" notice.
   LEGACY_ASSETS_INSPECT: 'legacyAssets:inspect',

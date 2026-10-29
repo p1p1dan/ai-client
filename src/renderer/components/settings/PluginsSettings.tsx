@@ -25,13 +25,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -418,7 +412,7 @@ export function PluginsSettings() {
       <div className="flex min-w-0 items-start gap-3 px-1">
         <p className="min-w-0 flex-1 text-ui text-muted-foreground">
           {t(
-            'Extra features that are not in the installer, installed from a .pilabplug file. Each plugin runs in its own process and cannot read your model keys. The chat engine’s plugins are under Extensions.'
+            'Installed from .pilabplug files. Each plugin runs in its own process and cannot read your model keys.'
           )}
         </p>
         <Button variant="outline" disabled={installing} onClick={() => void install()}>
@@ -441,9 +435,6 @@ export function PluginsSettings() {
               <Upload />
             </EmptyMedia>
             <EmptyTitle>{t('No plugins installed')}</EmptyTitle>
-            <EmptyDescription>
-              {t('Plugins are .pilabplug files. Use “Install from file…” above.')}
-            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       )}

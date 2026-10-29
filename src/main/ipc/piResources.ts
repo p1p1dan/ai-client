@@ -1,12 +1,14 @@
 import { mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import type { PiResourceSettings } from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
 import { ipcMain, shell } from 'electron';
 import { getPiResourceSettings } from '../services/piModelConfig';
 
 /**
- * Settings → Extensions → Skills (dsh-rebase P1-16e): read the two skill
- * folders and open either. Nothing here writes a setting: the delegation
+ * Settings → Extensions → Skills (dsh-rebase P1-16e): read the skill folders
+ * and open the ones that live under this app (two for Pi chats, one for
+ * Claude chats). Nothing here writes a setting: the delegation
  * switch (decision 105) and the prompt-template folder (decision 103) went,
  * with their `updateSettings` / `openPromptTemplates` channels, in P1-12
  * step 1 (decision 147).
@@ -28,6 +30,16 @@ export function registerPiResourceHandlers(): void {
   // which the DSH host scans as `customSkillDirs` (decision 101).
   ipcMain.handle(IPC_CHANNELS.PI_RESOURCES_OPEN_APP_SKILLS, async (): Promise<void> => {
     const skillsDir = getPiResourceSettings().paths.appSkills;
+    await mkdir(skillsDir, { recursive: true });
+    const error = await shell.openPath(skillsDir);
+    if (error) throw new Error(`Failed to open skills folder: ${error}`);
+  });
+
+  // The user-layer skill folder of Claude SDK chats, `CLAUDE_CONFIG_DIR/skills`.
+  // The config dir itself is private (0700), like the SDK host creates it.
+  ipcMain.handle(IPC_CHANNELS.PI_RESOURCES_OPEN_CLAUDE_SKILLS, async (): Promise<void> => {
+    const skillsDir = getPiResourceSettings().paths.claudeSkills;
+    await mkdir(dirname(skillsDir), { recursive: true, mode: 0o700 });
     await mkdir(skillsDir, { recursive: true });
     const error = await shell.openPath(skillsDir);
     if (error) throw new Error(`Failed to open skills folder: ${error}`);

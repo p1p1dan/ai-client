@@ -143,7 +143,7 @@ describe('LegacyAssetNoticePrompt — the startup dialog', () => {
     expect(text()).toContain('/home/u/.claude/CLAUDE.md');
     expect(text()).toContain('/home/u/.pilab/p/pi-agent/AGENTS.md');
     expect(text()).toContain('github, fs');
-    expect(text()).toContain('In a folder this version does not scan · No name in its frontmatter');
+    expect(text()).toContain('In a folder Pi chats do not scan · No name in its frontmatter');
     expect(text()).toContain('In this version sub-agents are always available.');
     expect(api.markSeen).not.toHaveBeenCalled();
   });
@@ -270,18 +270,22 @@ describe('LegacyAssetsSettings — the permanent entry', () => {
     api.inspect.mockResolvedValue({ report: FOUND, seen: true });
     await render(createElement(LegacyAssetsSettings, { repoPath: '/work/repo' }));
     expect(api.inspect).toHaveBeenCalledWith({ cwd: '/work/repo' });
-    expect(text()).toContain('Items from the previous version');
+    // One folded row with the count; the list opens below it.
+    expect(text()).toContain('Items from the previous version: 6');
+    expect(text()).not.toContain('helper');
+    await act(async () => button('Items from the previous version')?.click());
+    await settle();
     expect(text()).toContain('helper');
     expect(text()).toContain('Project files were checked in /work/repo.');
+    expect(button('Open agent folder')).toBeDefined();
     expect(api.markSeen).not.toHaveBeenCalled();
   });
 
-  it('[LAS-02] says so when nothing was found, and how to include a project', async () => {
+  it('[LAS-02] takes no room when nothing was found', async () => {
     api.inspect.mockResolvedValue({ report: EMPTY, seen: false });
     await render(createElement(LegacyAssetsSettings, {}));
     expect(api.inspect).toHaveBeenCalledWith({});
-    expect(text()).toContain('Nothing from the previous version was found.');
-    expect(text()).toContain('Open a workspace to also check its project files.');
+    expect(text()).toBe('');
     expect(button('Open agent folder')).toBeUndefined();
   });
 
@@ -289,6 +293,6 @@ describe('LegacyAssetsSettings — the permanent entry', () => {
     api.inspect.mockRejectedValue(new Error('disk on fire'));
     await render(createElement(LegacyAssetsSettings, {}));
     expect(text()).toContain('disk on fire');
-    expect(text()).not.toContain('Nothing from the previous version was found.');
+    expect(text()).toContain('Items from the previous version');
   });
 });

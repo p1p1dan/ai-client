@@ -18,9 +18,14 @@ const settingsContent = stripComments(readFileSync(contentPath, 'utf8'), content
  * setting or open a folder nothing reads.
  */
 describe('Skills settings (Resources page, DSH build)', () => {
-  it('shows both skill folders using paths resolved by Main', () => {
+  it('shows each engine’s skill folders using paths resolved by Main', () => {
     expect(component).toContain('snapshot.paths.appSkills');
     expect(component).toContain('snapshot.paths.sharedSkills');
+    expect(component).toContain('snapshot.paths.claudeSkills');
+    expect(component).toContain("t('Pi chats read these folders')");
+    expect(component).toContain("t('Claude chats read these folders')");
+    expect(component).toContain("['.dsh/skills', '.agents/skills']");
+    expect(component).toContain("['.claude/skills']");
     expect(component).not.toContain("'~/.pilab");
     expect(component).not.toContain("'~/.agents");
   });
@@ -29,13 +34,15 @@ describe('Skills settings (Resources page, DSH build)', () => {
     expect(component).toContain('window.electronAPI.piResources.getSettings()');
     expect(component).toContain('window.electronAPI.piResources.openAppSkills()');
     expect(component).toContain('window.electronAPI.piResources.openSkills()');
+    expect(component).toContain('window.electronAPI.piResources.openClaudeSkills()');
   });
 
-  it('states DSH’s skill rules', () => {
-    expect(component).toContain("t('How a skill is found')");
-    expect(component).toContain('<name>/SKILL.md, or a single <name>.md');
+  it('keeps each engine’s skill rules in the title’s help tip, not on the page', () => {
+    expect(component).toContain("<SettingsHelpTip label={t('How to write a skill')}>");
+    expect(component).toContain('<name>/SKILL.md or <name>.md directly inside a skills folder');
     expect(component).toContain('lowercase letters, digits and dashes only');
-    expect(component).toContain('Type /<name> anywhere in a message');
+    expect(component).toContain('Claude chats follow Claude Code’s rules');
+    expect(component).not.toContain("t('How a skill is found')");
   });
 
   it('offers no prompt-template folder (decision 103)', () => {
@@ -65,7 +72,7 @@ describe('Skills settings (Resources page, DSH build)', () => {
   it('lives in the Extensions Settings category next to the legacy-asset entry', () => {
     expect(settingsContent).toContain("id: 'extensions'");
     expect(settingsContent).toContain("activeCategory === 'extensions'");
-    expect(settingsContent).toContain('<PiResourcesSettings />');
+    expect(settingsContent).toContain('<PiResourcesSettings repoPath={repoPath} />');
     expect(settingsContent).toContain('<LegacyAssetsSettings repoPath={repoPath} />');
   });
 

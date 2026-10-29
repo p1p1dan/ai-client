@@ -22,6 +22,7 @@ import {
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { app, net } from 'electron';
 import { cacheControlOnToolsSettings } from '../agent-host/cacheControlOnToolsSetting';
+import { CLAUDE_SDK_HOME_DIR_NAME } from '../agent-host/claudeSdkEngine';
 import { claudeSdkHostAvailable } from '../agent-host/claudeSdkHostAvailability';
 import { promptCacheTtlSettings } from '../agent-host/promptCacheSettings';
 import { providerTimeoutSettings } from '../agent-host/providerTimeoutSettings';
@@ -396,7 +397,8 @@ export function clearManagedPiCredential(): void {
 
 /**
  * Settings → Extensions → Skills: the two skill folders the DSH host reads
- * (dsh-rebase P1-16e, decision 101). The delegation switch, the prompt
+ * (dsh-rebase P1-16e, decision 101), and the user-layer skill folder of Claude
+ * SDK chats (`CLAUDE_CONFIG_DIR/skills`). The delegation switch, the prompt
  * template folders and the user's own `~/.pi/agent` folders left with
  * decisions 103-105 and 116; P1-12 step 1 removed them from this reply.
  */
@@ -406,6 +408,7 @@ export function getPiResourceSettings(): PiResourceSettings {
     paths: {
       sharedSkills: join(getHomeDir(), '.agents', 'skills'),
       appSkills: join(getAppPiAgentDir(), 'skills'),
+      claudeSkills: join(getAppStateRoot(), CLAUDE_SDK_HOME_DIR_NAME, 'skills'),
     },
   };
 }

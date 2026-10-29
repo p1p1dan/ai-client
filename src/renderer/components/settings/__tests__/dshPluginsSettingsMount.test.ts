@@ -133,7 +133,7 @@ async function render(): Promise<void> {
 }
 
 const RESTART_NOTICE =
-  'Plugin changes take effect the next time the chat engine starts. If it is running, it restarts on its own once no chat has work in progress.';
+  'Plugin changes take effect the next time the Pi engine starts. If it is running, it restarts on its own once no chat has work in progress.';
 
 describe('DshPluginsSettings', () => {
   it('[PLS-01] shows each plugin’s name, version, summary, source and review', async () => {
@@ -170,9 +170,11 @@ describe('DshPluginsSettings', () => {
     // The only inputs are the switches' own hidden checkboxes: no install box.
     expect(container.querySelectorAll('input:not([type="checkbox"])')).toHaveLength(0);
     expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
-    // And no button at all: nothing to install, remove or refresh.
-    expect(container.querySelectorAll('button:not([role="switch"])')).toHaveLength(0);
-    expect(text()).toContain('Official DSH plugin');
+    // And no button but the title's help tip: nothing to install, remove or refresh.
+    expect(
+      container.querySelectorAll('button:not([role="switch"]):not([aria-label="About Pi plugins"])')
+    ).toHaveLength(0);
+    expect(text()).toContain('Official plugin');
     // The package description is the fallback for a plugin without our own summary.
     expect(text()).toContain('DSH model-facing Office tools');
   });
@@ -247,7 +249,7 @@ describe('DshPluginsSettings', () => {
     );
     await render();
     expect(text()).toContain(
-      'The chat engine has not started since the app opened, so what it loaded is not shown yet.'
+      'The Pi engine has not started since the app opened, so what it loaded is not shown yet.'
     );
     expect(text()).not.toContain('Switched off');
   });
@@ -306,7 +308,7 @@ describe('DshPluginsSettings', () => {
     api.list.mockResolvedValue(snapshot({ selectionInvalid: true }));
     await render();
     expect(text()).toContain(
-      'The chat engine could not read the plugin settings when it last started, so it loaded no plugin.'
+      'The Pi engine could not read the plugin settings when it last started, so it loaded no plugin.'
     );
   });
 
@@ -360,9 +362,9 @@ describe('DshPluginsSettings', () => {
       snapshot({ hostReported: false, plugins: [plugin({ host: null })] })
     );
     await render();
-    expect(text()).toContain('The chat engine has not started since the app opened');
+    expect(text()).toContain('The Pi engine has not started since the app opened');
     await push(snapshot());
-    expect(text()).not.toContain('The chat engine has not started since the app opened');
+    expect(text()).not.toContain('The Pi engine has not started since the app opened');
     expect(text()).toContain('Switched off');
   });
 
@@ -377,11 +379,13 @@ describe('DshPluginsSettings', () => {
     root = createRoot(container);
   });
 
+  // The engine is named Pi in the UI (2026-10-29); 1.0.x's pi extensions stay unmentioned.
   it('[PLS-14] never mentions pi extensions', async () => {
     api.list.mockResolvedValue(
       snapshot({ delisted: [{ name: 'dsh-gone', reason: null }], hostReported: false })
     );
     await render();
-    expect(text()).not.toMatch(/\bpi\b/i);
+    expect(text()).not.toMatch(/\bpi\s+extensions?\b/i);
+    expect(text()).toContain('Pi plugins');
   });
 });
