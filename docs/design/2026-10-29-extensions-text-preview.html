@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>扩展页与插件页的说明文字（2026-10-29）</title>
+<!--
+  Throwaway preview. Settings > Extensions (the sidebar's 「技能与插件」) and
+  Settings > Plugins still read as if every chat ran on one engine, and carry
+  paragraphs of explanation. Two engines are named Pi and Claude in the UI.
+  Compare 「现状」 with 「改后」; pick where the how-to text goes.
+  Colours are the v2 tokens (globals.css :root / .dark).
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI Variable Text","Segoe UI","Noto Sans",Arial,"PingFang SC","Microsoft YaHei UI","Noto Sans CJK SC",sans-serif;
+  background:#1d1d1b;color:var(--fg);font-size:13px;line-height:1.45;padding:20px}
+svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.s{width:14px;height:14px}
+.bar{display:flex;gap:8px;align-items:center;color:#ddd;margin-bottom:8px;flex-wrap:wrap}
+.bar b{font-weight:600;min-width:84px}
+.bar button{all:unset;cursor:pointer;padding:4px 10px;border-radius:6px;background:#333;color:#eee}
+.bar button.on{background:#c6613f}
+.bar button:disabled{opacity:.35;cursor:default}
+.win{width:1060px;height:720px;margin-top:14px;border-radius:12px;overflow:hidden;background:var(--s0);
+  box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 50px rgba(0,0,0,.45);display:flex}
+.snav{width:200px;flex:none;padding:16px 8px;display:flex;flex-direction:column;gap:1px}
+.snav div{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;color:var(--fg-soft);cursor:pointer}
+.snav div:hover{background:var(--hover)}
+.snav div.on{background:var(--sel);color:var(--fg)}
+.snav svg{color:var(--fg2)}
+.content{flex:1;min-width:0;overflow:auto;background:var(--bg);border-left:1px solid var(--bd);padding:28px 32px 48px}
+.page{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+h2{font-size:18px;line-height:26px;font-weight:600}
+section{display:flex;flex-direction:column;gap:8px}
+.sh{padding:0 4px;display:flex;flex-direction:column;gap:2px}
+.sh h3{font-size:14px;line-height:20px;font-weight:600;display:flex;align-items:center;gap:6px}
+.sh p{color:var(--fg2)}
+.card{border:1px solid var(--bd);border-radius:10px;background:var(--s2)}
+.card>*+*{border-top:1px solid var(--bd)}
+.fold-card{padding:12px;display:flex;flex-direction:column;gap:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.small{font-size:12px;line-height:16px;color:var(--fg2)}
+.ident{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:12px;color:var(--fg-soft);word-break:break-all}
+.btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--input);color:var(--fg);font-size:13px;width:fit-content;background:var(--s3)}
+.btn:hover{background:var(--hover)}
+.btn.sm{height:24px;padding:0 8px;font-size:12px}
+.ghost{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;color:var(--fg2);font-size:12px;border-radius:6px;padding:2px 4px}
+.ghost:hover{color:var(--fg);background:var(--hover)}
+ul.dots{padding-left:20px;display:flex;flex-direction:column;gap:4px}
+h4{font-size:13px;font-weight:600}
+.row{display:flex;align-items:center;gap:12px;padding:10px 14px;min-width:0}
+.row .lab{width:64px;flex:none;color:var(--fg2)}
+.row .ident{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .none{flex:1;color:var(--fg3);font-size:12px}
+.grp{font-size:12px;color:var(--fg2);padding:0 4px;margin-top:4px;display:flex;align-items:center;gap:6px}
+.grp:first-of-type{margin-top:0}
+.eng{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:4px;background:var(--neutral);color:var(--fg-soft);font-size:11px;font-weight:500}
+.plug{display:flex;align-items:flex-start;gap:12px;padding:12px}
+.plug .body{min-width:0;flex:1;display:flex;flex-direction:column;gap:8px}
+.plug .nm{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.plug .nm b{font-weight:600}
+.badge{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 6px;border-radius:5px;font-size:11px;border:1px solid var(--bd);color:var(--fg2)}
+.badge.sec{background:var(--neutral);border-color:transparent}
+.badge.warn{color:#b7791f;border-color:color-mix(in oklab,#b7791f 35%,transparent)}
+.badge.info{color:#3b82c4;border-color:color-mix(in oklab,#3b82c4 35%,transparent)}
+.sw{width:32px;height:18px;border-radius:9px;background:var(--input);position:relative;flex:none;margin-top:2px;cursor:pointer}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s}
+.sw.on{background:var(--brand)}.sw.on::after{left:16px}
+.alert{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:10px;border:1px solid color-mix(in oklab,#3b82c4 30%,transparent);background:color-mix(in oklab,#3b82c4 8%,transparent);color:var(--fg)}
+.alert svg{color:#3b82c4;margin-top:1px}
+.tip{position:relative;display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;color:var(--fg3);cursor:help}
+.tip:hover{color:var(--fg)}
+.tip .pop{display:none;position:absolute;left:24px;top:-6px;z-index:5;width:340px;padding:10px 12px;border-radius:10px;background:var(--s3);
+  box-shadow:0 0 0 1px var(--bd),0 8px 24px rgba(0,0,0,.18);font-size:12px;line-height:18px;font-weight:400;color:var(--fg-soft)}
+.tip:hover .pop{display:block}
+.pop b{color:var(--fg);font-weight:600}
+.pop p+p{margin-top:6px}
+.howto{padding:10px 14px;font-size:12px;line-height:18px;color:var(--fg-soft);display:flex;flex-direction:column;gap:6px}
+.howto b{color:var(--fg);font-weight:600}
+.legacy{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer}
+.legacy:hover{background:var(--hover)}
+.legacy .t{flex:1}
+.legacy .cv{color:var(--fg3);transition:transform .15s}
+.legacy.open .cv{transform:rotate(90deg)}
+.litem{padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:40px 0;color:var(--fg2)}
+.empty .ic{width:36px;height:36px;border-radius:10px;background:var(--neutral);display:grid;place-items:center}
+.empty b{color:var(--fg);font-weight:600}
+.hdr{display:flex;align-items:flex-start;gap:12px;padding:0 4px}
+.hdr p{flex:1;color:var(--fg2)}
+.notes{max-width:1060px;margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:16px;color:#bbb;line-height:1.7}
+.notes b{color:#eee;display:block;margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="bar"><b>版本</b><button data-k="view" data-v="before">现状</button><button data-k="view" data-v="after" class="on">改后</button></div>
+<div class="bar"><b>写法说明放哪</b><button data-k="help" data-v="tip" class="on">a 标题旁的问号，悬停显示（推荐）</button><button data-k="help" data-v="fold">b 卡片底部「怎样写技能」，点开展开</button></div>
+<div class="bar"><b>模拟状态</b><button data-k="legacy" data-v="0" class="on">没有旧版内容</button><button data-k="legacy" data-v="3">有 3 项旧版内容</button>
+  <span style="width:10px"></span><button data-k="pending" data-v="0" class="on">插件无改动</button><button data-k="pending" data-v="1">刚切换过插件</button>
+  <span style="width:10px"></span><button data-k="ws" data-v="1" class="on">已打开仓库</button><button data-k="ws" data-v="0">没有打开仓库</button></div>
+<div class="win"><div class="snav" id="snav"></div><div class="content"><div class="page" id="page"></div></div></div>
+<div class="notes">
+  <div><b>扩展页（侧栏「技能与插件」进来的就是这页）</b>技能按 Pi 对话、Claude 对话分两组，每组一张卡，一行一个目录。原来的说明段、「技能怎样才会被加载」三段规则收进问号或折叠区。Claude 对话读的目录以前页面上完全没提，这次补上。「插件」改名「Pi 插件」，删掉和 Claude 对话矛盾的「不会联网下载」，只在刚切换过时才出现「下次启动生效」的提示。旧版遗留内容没有时整区不出现，有时只占一行，点开看明细。</div>
+  <div><b>插件页（.pilabplug）</b>开头三句缩成一句；删掉「对话引擎的插件在扩展里」（扩展页里只有 Pi 插件，这句会误导）；空状态不再重复开头那句。<br><b style="margin-top:8px">问号 vs 折叠</b>问号最省地方，但悬停才看得到，触控板用户可能发现不了；折叠区一直留一行「怎样写技能」，更好找，代价是多一行字。</div>
+</div>
+<script>
+const ICON={
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  spark:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
+  blocks:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  plug:'<path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  lib:'<path d="M4 4v16M8 4v16M12 4l4 16M17 4l3 16"/>',
+  help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 15.5-6.3L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.3L3 16M3 21v-5h5"/>',
+  pen:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/>',
+  fsearch:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M14 3v5h5M14 3l5 5v3"/><circle cx="17" cy="17" r="3"/><path d="m21 21-1.5-1.5"/>',
+  chev:'<path d="m9 6 6 6-6 6"/>',
+  upload:'<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
+};
+const ic=(n,c='i')=>`<svg class="${c}" viewBox="0 0 24 24">${ICON[n]}</svg>`;
+const st={view:'after',help:'tip',legacy:'0',pending:'0',ws:'1',page:'ext',legacyOpen:false,howto:false,plugOn:false};
+const P='~/.pilab/default';
+const REPO='E:/Projects/ChipTestMachine';
+
+function navHtml(){
+  return [['gear','常规'],['spark','模型'],['blocks','扩展','ext'],['plug','插件','plug']]
+    .map(([i,l,id])=>`<div class="${id===st.page?'on':''}" ${id?`data-page="${id}"`:''}>${ic(i)}${l}</div>`).join('');
+}
+function plugRow(after){
+  const badge=st.plugOn?'<span class="badge sec">已加载</span>':'<span class="badge sec">已关闭</span>';
+  const pend=st.pending==='1'?`<span class="badge info">${ic('refresh','i s')}待重启生效</span>`:'';
+  return `<div class="plug"><div class="body">
+    <div class="nm"><b>dsh-office-tools</b><span class="small">0.3.1</span>${badge}${pend}</div>
+    <p class="small">在工作区里创建、读取和修改 Word、Excel、PowerPoint 文件。</p>
+    <div class="small">${after?'官方插件 · 2026-10-02 审查：通过':'DSH 官方插件　2026-10-02 审查：通过'}</div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <div style="display:flex;gap:8px;align-items:center"><span class="badge warn">${ic('pen','i s')}写入文件</span><span class="ident" style="color:var(--fg2)">office_write, office_edit</span></div>
+      <div style="display:flex;gap:8px;align-items:center"><span class="badge">${ic('fsearch','i s')}读取文件</span><span class="ident" style="color:var(--fg2)">office_read</span></div>
+    </div></div><div class="sw${st.plugOn?' on':''}" id="sw"></div></div>`;
+}
+function legacyBefore(){
+  const n=+st.legacy;
+  const body=n===0?'<p style="color:var(--fg2)">没有发现旧版遗留的内容。</p>':
+    `<div class="card">${legacyItems()}</div>`;
+  return `<section><div class="sh"><h3>旧版遗留内容</h3><p>旧版用过、新版不再加载的内容。这里只做列出，不修改或删除任何文件。</p></div>
+    ${body}<p class="small">${st.ws==='1'?`已检查 ${REPO} 下的项目文件。`:'打开一个工作区后，还会检查它的项目文件。'}</p>
+    ${n?`<button class="btn">${ic('folder','i s')}打开 Agent 目录</button>`:''}</section>`;
+}
+function legacyItems(after){
+  return `<div class="litem"><h4>MCP 服务</h4><span class="small">${after?'Pi 和 Claude 对话都不启动 MCP 服务，配置文件保持原样。':'新版暂不支持 MCP，这些服务不会启动。配置文件保持原样。'}</span><span class="ident">${P}/pi-agent/mcp.json</span></div>
+    <div class="litem"><h4>自定义子代理</h4><span class="small">${after?'Pi 对话不加载这些文件，改用内置子代理。':'子代理定义文件不再加载。对话改用内置的子代理，始终可用。'}</span><span class="ident">${P}/pi-agent/agents/reviewer.md</span></div>
+    <div class="litem"><h4>提示词模板</h4><span class="small">${after?'不再展开。可改写成技能放进 Pi 的技能目录。':'模板不再展开。想继续使用的，请改写成技能：存为 '+P+'/pi-agent/skills/&lt;name&gt;/SKILL.md，frontmatter 里写上 name 和 description；只想由你手动触发的，再加一行 disable-model-invocation: true。之后在消息里输入 /&lt;name&gt; 即可。'}</span><span class="ident">${P}/pi-agent/prompts/commit.md</span></div>`;
+}
+function before(){
+  if(st.page==='plug')return `<h2>插件</h2><section style="gap:12px"><div class="hdr"><p>不在安装包里的额外功能，从 .pilabplug 文件安装。每个插件在自己的进程里运行，拿不到你的模型密钥。对话引擎的插件在「扩展」里。</p><button class="btn">${ic('upload','i s')}从文件安装…</button></div>
+    <div class="empty"><div class="ic">${ic('upload')}</div><b>还没有安装插件</b><span>插件是 .pilabplug 文件，点上方「从文件安装…」。</span></div></section>`;
+  const folder=(t,d,p)=>`<div class="card fold-card"><div style="display:flex;gap:8px;align-items:center">${ic('lib','i s')}<h4>${t}</h4></div><p class="small">${d}</p><span class="ident">${p}</span><button class="btn">${ic('folder','i s')}打开目录</button></div>`;
+  return `<h2>扩展</h2>
+  <section><div class="sh"><h3>技能</h3><p>对话从下面两个目录加载技能，另外还会加载项目仓库根目录下的 .dsh/skills 和 .agents/skills。</p></div>
+    <div class="grid2">${folder('本应用的技能','你为本应用的对话准备的技能。',P+'/pi-agent/skills')}${folder('共享技能','其他遵循 Agent Skills 约定的 Agent 也会读取这里。','~/.agents/skills')}</div>
+    <div style="display:flex;flex-direction:column;gap:4px"><h4>技能怎样才会被加载</h4><ul class="dots small">
+      <li>每个技能是技能目录第一层里的一项：&lt;name&gt;/SKILL.md，或单个 &lt;name&gt;.md。更深层的文件不会被扫描。</li>
+      <li>frontmatter 必须写 name 和 description；name 只能用小写字母、数字和短横线，例如 code-review。</li>
+      <li>在消息任意位置输入 /&lt;name&gt; 即可使用技能；加上 disable-model-invocation: true，模型就不会自行调用它。</li></ul></div></section>
+  <section><div class="sh"><h3>插件</h3><p>经本应用审查、随应用一起安装的插件。不会联网下载，这里也不能添加或删除插件。插件提供的工具和内置工具一样，要经过本应用的审批。</p></div>
+    ${st.pending==='1'?`<div class="alert">${ic('refresh','i s')}<span>插件的改动在对话引擎下次启动时生效；引擎正在运行时，会等所有对话都没有进行中的工作后自动重启。</span></div>`:''}
+    <div class="card">${plugRow(false)}</div></section>
+  ${legacyBefore()}`;
+}
+
+const HOWTO_PI='<b>Pi 对话</b>：技能目录第一层的 &lt;名字&gt;/SKILL.md 或 &lt;名字&gt;.md，frontmatter 写 name 和 description。消息里输入 /&lt;名字&gt; 使用；加 disable-model-invocation: true，模型就不会自己调用。';
+const HOWTO_CC='<b>Claude 对话</b>：按 Claude Code 的规则，&lt;名字&gt;/SKILL.md；另有 Claude 自带的技能。';
+function tip(html){return `<span class="tip">${ic('help','i s')}<span class="pop">${html}</span></span>`;}
+function dirRow(lab,path,open){
+  return `<div class="row"><span class="lab">${lab}</span>${path?`<span class="ident" title="${path}">${path}</span>`:'<span class="none">打开仓库后显示</span>'}${open&&path?`<button class="btn sm">${ic('folder','i s')}打开</button>`:''}</div>`;
+}
+function after(){
+  if(st.page==='plug')return `<h2>插件</h2><section style="gap:12px"><div class="hdr"><p>从 .pilabplug 文件安装，每个插件单独运行，拿不到你的模型密钥。</p><button class="btn">${ic('upload','i s')}从文件安装…</button></div>
+    <div class="empty"><div class="ic">${ic('upload')}</div><b>还没有安装插件</b></div></section>`;
+  const ws=st.ws==='1';
+  const help=st.help==='tip'?tip(`<p>${HOWTO_PI}</p><p>${HOWTO_CC}</p>`):'';
+  const howto=st.help==='fold'?`<button class="ghost" id="howto" style="margin:8px 14px">${ic('chev','i s')}怎样写技能</button>${st.howto?`<div class="howto" style="border-top:none;padding-top:0"><span>${HOWTO_PI}</span><span>${HOWTO_CC}</span></div>`:''}`:'';
+  const n=+st.legacy;
+  const legacy=n===0?'':`<section><div class="card"><div class="legacy${st.legacyOpen?' open':''}" id="legacy">${ic('chev','i s cv')}<span class="t">旧版遗留内容 ${n} 项</span><span class="small">新版不再加载，只列出，不改动</span></div>
+    ${st.legacyOpen?legacyItems(true)+`<div class="litem" style="flex-direction:row"><button class="btn sm">${ic('folder','i s')}打开旧版 Agent 目录</button></div>`:''}</div></section>`;
+  return `<h2>扩展</h2>
+  <section><div class="sh"><h3>技能${help}</h3></div>
+    <div class="grp"><span class="eng">Pi</span>Pi 对话读这些目录</div>
+    <div class="card">${dirRow('本应用',P+'/pi-agent/skills',1)}${dirRow('共享','~/.agents/skills',1)}${dirRow('项目',ws?REPO+'/.dsh/skills　.agents/skills':'',0)}</div>
+    <div class="grp" style="margin-top:8px"><span class="eng">Claude</span>Claude 对话读这些目录</div>
+    <div class="card">${dirRow('本应用',P+'/claude/skills',1)}${dirRow('项目',ws?REPO+'/.claude/skills':'',0)}</div>
+    ${howto?`<div class="card" style="border:none;background:none">${howto}</div>`:''}
+  </section>
+  <section><div class="sh"><h3>Pi 插件${tip('随应用安装、经本应用审查，只在 Pi 对话里可用；插件的工具和内置工具一样要经过审批。<p>Claude 对话会加载仓库 .claude/settings.json 里声明的插件，不在这里管理。</p>')}</h3></div>
+    ${st.pending==='1'?`<div class="alert">${ic('refresh','i s')}<span>Pi 引擎下次启动时生效；正在运行的话，等所有对话都空闲后会自动重启。</span></div>`:''}
+    <div class="card">${plugRow(true)}</div></section>
+  ${legacy}`;
+}
+function render(){
+  document.getElementById('snav').innerHTML=navHtml();
+  document.getElementById('page').innerHTML=st.view==='after'?after():before();
+  document.querySelectorAll('[data-k="help"]').forEach(b=>b.disabled=st.view!=='after');
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-k]');
+  if(b&&!b.disabled){st[b.dataset.k]=b.dataset.v;document.querySelectorAll(`[data-k="${b.dataset.k}"]`).forEach(x=>x.classList.toggle('on',x===b));
+    if(b.dataset.k==='pending'&&b.dataset.v==='1')st.plugOn=true;render();return;}
+  const p=e.target.closest('[data-page]');if(p){st.page=p.dataset.page;render();return;}
+  if(e.target.closest('#legacy')){st.legacyOpen=!st.legacyOpen;render();return;}
+  if(e.target.closest('#howto')){st.howto=!st.howto;render();return;}
+  if(e.target.closest('#sw')){st.plugOn=!st.plugOn;st.pending='1';document.querySelectorAll('[data-k="pending"]').forEach(x=>x.classList.toggle('on',x.dataset.v==='1'));render();}
+});
+const TH={
+  light:{s0:'#f9f9f7',bg:'#fcfcfb',s2:'#ffffff',s3:'#ffffff',fg:'#151515','fg-soft':'#2e2e2e',fg2:'#525252',fg3:'#8a8a8a',bd:'#e5e5e4',input:'#cececd',hover:'#f0f0ef',sel:'#e5e5e4',neutral:'#f0f0ef',brand:'#c6613f'},
+  dark:{s0:'#0b0b0b',bg:'#151515',s2:'#1a1a19',s3:'#20201f',fg:'#f5f5f5','fg-soft':'#d4d4d4',fg2:'#a3a3a3',fg3:'#666666',bd:'#2b2b2b',input:'#424242',hover:'#202020',sel:'#2b2b2b',neutral:'#262626',brand:'#d97757'},
+};
+function theme(n){for(const[k,v]of Object.entries(TH[n]))document.documentElement.style.setProperty('--'+k,v);
+  document.querySelectorAll('[data-th]').forEach(b=>b.classList.toggle('on',b.dataset.th===n));}
+const tb=document.createElement('div');tb.className='bar';tb.innerHTML='<b>主题</b><button data-th="light" class="on">浅色</button><button data-th="dark">深色</button>';
+document.querySelector('.win').before(tb);
+document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>theme(b.dataset.th));
+theme('light');render();
+</script>
+</body>
+</html>
