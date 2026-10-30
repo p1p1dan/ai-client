@@ -70,7 +70,11 @@ describe('getPiResourceSettings', () => {
     const { getPiResourceSettings } = await import('../index');
     const snapshot = getPiResourceSettings();
     expect(Object.keys(snapshot).sort()).toEqual(['managed', 'paths']);
-    expect(Object.keys(snapshot.paths).sort()).toEqual(['appSkills', 'sharedSkills']);
+    expect(Object.keys(snapshot.paths).sort()).toEqual([
+      'appSkills',
+      'claudeSkills',
+      'sharedSkills',
+    ]);
   });
 
   it('exports no native worker environment builder any more', async () => {
