@@ -437,7 +437,8 @@
       "value": "rm -f REVIEW-ERROR-c.txt",
       "result": "deny",
       "resolution": "review_failed",
-      "reviewFailure": "error"
+      "reviewFailure": "error",
+      "reviewFailureDetail": "502 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"fake review upstream failed\"}}"
     }
   },
   {
@@ -452,14 +453,14 @@
         "content": [
           {
             "type": "text",
-            "text": "Error: The automatic safety review could not be completed (error), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review."
+            "text": "Error: The automatic safety review could not be completed (error: 502 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"fake review upstream failed\"}}), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review."
           }
         ],
         "details": {
           "refused": true
         }
       },
-      "error": "Error: The automatic safety review could not be completed (error), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review."
+      "error": "Error: The automatic safety review could not be completed (error: 502 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"fake review upstream failed\"}}), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review."
     }
   },
   {

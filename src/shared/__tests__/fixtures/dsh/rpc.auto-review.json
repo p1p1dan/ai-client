@@ -116,8 +116,8 @@
               "id": "h:id-15:tool-result:toolu_id-12",
               "toolCallId": "toolu_id-12",
               "ok": false,
-              "output": "Error: The automatic safety review could not be completed (error), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review.",
-              "error": "Error: The automatic safety review could not be completed (error), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review.",
+              "output": "Error: The automatic safety review could not be completed (error: 502 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"fake review upstream failed\"}}), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review.",
+              "error": "Error: The automatic safety review could not be completed (error: 502 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"fake review upstream failed\"}}), so this call did not run. This is not a judgment that the action is unsafe. You may issue the same call again as-is later; do not rework it to get around the review.",
               "refused": true
             }
           ],
