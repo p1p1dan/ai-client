@@ -95,7 +95,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { APP_STATE_DIR, LEGACY_APP_STATE_DIR } from '@shared/defaultPaths';
 
 /** Written into the new root once something was actually copied. Presence short-circuits every later boot. */
@@ -510,6 +510,180 @@ export function migratePriorUserData(
     mkdirSync(input.userDataDir, { recursive: true });
     writeFileSync(markerPath, `${new Date().toISOString()}\n`, 'utf-8');
     return { kind: 'migrated', localStorage, sessionIndex: stats };
+  } catch (error) {
+    return { kind: 'failed', error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Windows `HOME` half: a root that landed in somebody else's directory.
+// ---------------------------------------------------------------------------
+
+/**
+ * Written into the relocated root. Its second line is the stray root it came
+ * from. Presence means only the stray leftover still has to be cleaned up.
+ */
+export const HOME_ENV_RELOCATION_MARKER_FILE_NAME = '.relocated-from-home-env';
+
+export interface HomeEnvRelocationInput {
+  /** `%HOME%\.pilab\<profile>` — where builds that read `HOME` first wrote this root. */
+  strayRoot: string;
+  /** `%USERPROFILE%\.pilab\<profile>` — this install's root from now on. */
+  newRoot: string;
+  /** This install's `<userData>`, whose `session-index.json` names files under the root. */
+  userDataDir: string;
+}
+
+export type HomeEnvRelocationOutcome =
+  | { kind: 'skipped'; reason: 'no_stray_root' }
+  | {
+      kind: 'relocated';
+      /** An earlier root at `newRoot` was merged in and then kept aside, never deleted. */
+      keptAside: string | null;
+      /** String values in `session-index.json` re-pointed from the stray root. */
+      indexPathsRewritten: number;
+      strayRemoved: boolean;
+    }
+  | { kind: 'cleaned_up'; strayRemoved: boolean }
+  | { kind: 'failed'; error: string };
+
+function rootPrefixPattern(root: string): RegExp {
+  // Separator- and case-insensitive: the root is built with `/` joins, while
+  // the index rows were written by `path.join` on a Windows build.
+  const lead = /^[\\/]/.test(root) ? String.raw`[\\/]+` : '';
+  const body = root
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .map(escapeRegExp)
+    .join(String.raw`[\\/]+`);
+  return new RegExp(String.raw`^${lead}${body}(?=[\\/]|$)`, 'i');
+}
+
+/** Re-points every string value under `strayRoot` at `newRoot`, anywhere in the tree. */
+function rewriteRootPrefix(
+  value: unknown,
+  prefix: RegExp,
+  newRoot: string,
+  counter: { count: number }
+): unknown {
+  if (typeof value === 'string') {
+    const match = prefix.exec(value);
+    if (!match) return value;
+    counter.count += 1;
+    return join(newRoot, value.slice(match[0].length));
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => rewriteRootPrefix(item, prefix, newRoot, counter));
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        rewriteRootPrefix(item, prefix, newRoot, counter),
+      ])
+    );
+  }
+  return value;
+}
+
+function rewriteSessionIndexRoot(userDataDir: string, strayRoot: string, newRoot: string): number {
+  const file = join(userDataDir, SESSION_INDEX_FILE_NAME);
+  if (!existsSync(file)) return 0;
+  // An index that will not parse THROWS: rows that cannot be read must not be
+  // dropped, and the next boot retries.
+  const rows = readIndexRows(file);
+  const counter = { count: 0 };
+  const next = rewriteRootPrefix(rows, rootPrefixPattern(strayRoot), newRoot, counter);
+  if (counter.count > 0) {
+    const tempFile = `${file}.migrating.tmp`;
+    writeFileSync(tempFile, JSON.stringify(next), 'utf-8');
+    renameSync(tempFile, file);
+  }
+  return counter.count;
+}
+
+/** Best effort: a file another program holds open must not stop the app from starting. */
+function removeStray(strayRoot: string): boolean {
+  try {
+    rmSync(strayRoot, { recursive: true, force: true });
+  } catch {
+    return false;
+  }
+  // `.pilab` itself, when this profile was all it held — the directory the
+  // field report saw appear. Never touched while another profile lives there.
+  const container = dirname(strayRoot);
+  try {
+    if (readdirSync(container).length === 0) rmSync(container, { recursive: true, force: true });
+  } catch {
+    // Already gone, or not ours to judge.
+  }
+  return !existsSync(strayRoot);
+}
+
+/**
+ * Moves a root written under a Windows `HOME` back under the user's profile.
+ *
+ * Cadence SPB sets `HOME` to its own config directory, and every build before
+ * this one put `.pilab` there (see `@shared/userHome`). Unlike every other step
+ * in this file this one MOVES: the field report is precisely that the
+ * directory must stop appearing there, and the stray root is this profile's
+ * alone, so nothing else depends on finding it.
+ *
+ * Order, chosen so a crash at any point is retried cleanly by the next boot:
+ *  1. copy the stray root into a staging directory — `D:` to `C:` cannot be a
+ *     rename — and merge in any root already at `newRoot` (stray wins: it is
+ *     the one every recent boot used);
+ *  2. re-point `session-index.json`, whose rows name `.jsonl` / stub files by
+ *     ABSOLUTE path under the root (idempotent: a re-run finds nothing to do);
+ *  3. marker into staging, then swap staging in; an earlier root is renamed
+ *     aside, never deleted;
+ *  4. delete the stray root, best effort — a leftover is deleted on a later
+ *     boot, recognised by the marker.
+ *
+ * Runs before `migrateAppState`, so a relocated root brings its own
+ * `.migrated-from-aiclient` marker along. Never throws.
+ */
+export function relocateHomeEnvAppState(input: HomeEnvRelocationInput): HomeEnvRelocationOutcome {
+  if (!existsSync(input.strayRoot)) {
+    return { kind: 'skipped', reason: 'no_stray_root' };
+  }
+  if (existsSync(join(input.newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME))) {
+    return { kind: 'cleaned_up', strayRemoved: removeStray(input.strayRoot) };
+  }
+
+  try {
+    const stagingDir = `${input.newRoot}.relocating`;
+    rmSync(stagingDir, { recursive: true, force: true });
+    copyTree(input.strayRoot, stagingDir, '', [], []);
+    const hadRoot = existsSync(input.newRoot);
+    if (hadRoot) {
+      copyTree(input.newRoot, stagingDir, '', [], []);
+    }
+
+    const indexPathsRewritten = rewriteSessionIndexRoot(
+      input.userDataDir,
+      input.strayRoot,
+      input.newRoot
+    );
+
+    writeFileSync(
+      join(stagingDir, HOME_ENV_RELOCATION_MARKER_FILE_NAME),
+      `${new Date().toISOString()}\n${input.strayRoot}\n`,
+      'utf-8'
+    );
+    let keptAside: string | null = null;
+    if (hadRoot) {
+      keptAside = `${input.newRoot}.before-relocation-${Date.now()}`;
+      renameSync(input.newRoot, keptAside);
+    }
+    renameSync(stagingDir, input.newRoot);
+
+    return {
+      kind: 'relocated',
+      keptAside,
+      indexPathsRewritten,
+      strayRemoved: removeStray(input.strayRoot),
+    };
   } catch (error) {
     return { kind: 'failed', error: error instanceof Error ? error.message : String(error) };
   }

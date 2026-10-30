@@ -3,8 +3,8 @@
  * the real agent directory, home and settings plugged into the pure detection.
  */
 
-import { homedir } from 'node:os';
 import { LEGACY_ASSET_NOTICE_SETTING_KEY, type LegacyAssetNoticeState } from '@shared/legacyAssets';
+import { getUserHome } from '../../utils/userHome';
 import { getAppPiAgentDir } from '../piModelConfig';
 import { readSharedSettings } from '../SharedSessionState';
 import { detectLegacyAssets } from './detectLegacyAssets';
@@ -12,7 +12,7 @@ import { nodeLegacyAssetFiles } from './nodeFiles';
 
 /** Same resolution `piModelConfig` uses for `~/.agents/skills`. */
 function homeDir(): string {
-  return process.env.HOME || process.env.USERPROFILE || homedir();
+  return getUserHome();
 }
 
 export function legacyAssetNoticeSeen(settings: Record<string, unknown>): boolean {

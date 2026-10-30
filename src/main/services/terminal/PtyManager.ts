@@ -1,6 +1,5 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import type { TerminalCreateOptions } from '@shared/types';
 import { decodeConsoleOutput } from '@shared/windowsCodePage';
@@ -8,6 +7,7 @@ import * as pty from 'node-pty';
 import pidtree from 'pidtree';
 import pidusage from 'pidusage';
 import { killProcessTree } from '../../utils/processUtils';
+import { getUserHome } from '../../utils/userHome';
 import { getProxyEnvVars } from '../proxy/ProxyConfig';
 import { detectShell, shellDetector } from './ShellDetector';
 
@@ -268,7 +268,7 @@ export function findLoginShell(): { shell: string; args: string[] } {
 
 // GUI apps don't inherit shell PATH, add common paths
 export function getEnhancedPath(): string {
-  const home = process.env.HOME || process.env.USERPROFILE || homedir();
+  const home = getUserHome();
 
   if (isWindows) {
     // Windows: Read full PATH from registry to get user-level PATH
@@ -378,7 +378,7 @@ export class PtyManager {
     if (this.sessions.has(id)) {
       throw new Error(`PTY session already exists: ${id}`);
     }
-    const home = process.env.HOME || process.env.USERPROFILE || homedir();
+    const home = getUserHome();
     const cwd = options.cwd || home;
     const spawnCwd = options.spawnCwd || cwd;
 

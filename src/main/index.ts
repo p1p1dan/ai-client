@@ -48,7 +48,11 @@ import { cleanupAllResources, cleanupAllResourcesSync, registerIpcHandlers } fro
 import { cleanupTempFiles } from './ipc/files';
 import { readSettings } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
-import { migrateAppState, migratePriorUserData } from './services/appStateMigration';
+import {
+  migrateAppState,
+  migratePriorUserData,
+  relocateHomeEnvAppState,
+} from './services/appStateMigration';
 import {
   CREDENTIALS_DIR_NAME,
   getAppStateRoot,
@@ -56,6 +60,7 @@ import {
   getLegacyAppStateRoot,
   getPriorInstallRoots,
   getPriorUserDataDirs,
+  getStrayHomeEnvAppStateRoot,
 } from './services/appStatePaths';
 import {
   createRealVaultCrypto,
@@ -167,7 +172,30 @@ if (isDev) {
   app.setPath('userData', join(app.getPath('appData'), PACKAGED_USER_DATA_DIR_NAME));
 }
 
-// Phase ⓪ — S2, and it must be the FIRST thing after `setPath('userData')`.
+// Phase ⓪, Windows `HOME` — ahead of everything else below. Builds before this
+// one read `HOME` first, and Cadence SPB sets a machine-wide `HOME` to its own
+// config directory, so the whole root sat in there (V1.2.1 field report,
+// 2026-10-30). Moves it under the user profile, re-points the conversation
+// list, and deletes the stray copy. Never throws.
+const strayHomeEnvRoot = getStrayHomeEnvAppStateRoot();
+if (strayHomeEnvRoot) {
+  const relocation = relocateHomeEnvAppState({
+    strayRoot: strayHomeEnvRoot,
+    newRoot: getAppStateRoot(),
+    userDataDir: app.getPath('userData'),
+  });
+  if (relocation.kind === 'relocated') {
+    console.log(
+      `[appState] relocated out of HOME: index-paths=${relocation.indexPathsRewritten} kept-aside=${relocation.keptAside !== null} stray-removed=${relocation.strayRemoved}`
+    );
+  } else if (relocation.kind === 'cleaned_up') {
+    console.log(`[appState] HOME leftover: stray-removed=${relocation.strayRemoved}`);
+  } else if (relocation.kind === 'failed') {
+    console.error(`[appState] relocation out of HOME failed: ${relocation.error}`);
+  }
+}
+
+// Phase ⓪ — S2, first after `setPath('userData')` and the relocation above.
 // `~/.aiclient` became `~/.pilab/<profile>`, and the credential vault moved
 // out of `<userData>` into that same root. Everything below reads one of
 // those paths, so an install that has not been carried across yet would come

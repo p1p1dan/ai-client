@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 import { homedir } from 'node:os';
 import { PLUGIN_IPC, type PluginInstallResult, type PluginView } from '@shared/plugins/view';
 import type { RuntimePermissionSettings } from '@shared/types/runtimePermission';
+import { resolveUserHome } from '@shared/userHome';
 import type { UpdateStatus } from '../shared/types/updater';
 import 'electron-log/preload.js';
 import type { MigrationPlan, MigrationRequest, MigrationResult } from '@shared/agentMigration';
@@ -741,8 +742,9 @@ const electronAPI = {
 
   // Environment
   env: {
-    // In some Windows environments USERPROFILE may be missing, while os.homedir() still resolves.
-    HOME: process.env.HOME || process.env.USERPROFILE || homedir() || '',
+    // Never `HOME` on Windows (Cadence sets one) — see `@shared/userHome`.
+    HOME:
+      resolveUserHome({ platform: process.platform, env: process.env, osHome: homedir() }) || '',
     platform: process.platform as 'darwin' | 'win32' | 'linux',
     appVersion: pkg.version,
   },

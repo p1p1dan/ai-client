@@ -1,4 +1,3 @@
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   applyDshPlanToCatalog,
@@ -21,6 +20,7 @@ import {
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { app, net } from 'electron';
+import { getUserHome } from '../../utils/userHome';
 import { cacheControlOnToolsSettings } from '../agent-host/cacheControlOnToolsSetting';
 import { CLAUDE_SDK_HOME_DIR_NAME } from '../agent-host/claudeSdkEngine';
 import { claudeSdkHostAvailable } from '../agent-host/claudeSdkHostAvailability';
@@ -39,7 +39,7 @@ import { type NativeModelCatalog, resolveNativeModelCatalogWith } from './native
 import { PiModelConfigService } from './PiModelConfigService';
 
 function getHomeDir(): string {
-  return process.env.HOME || process.env.USERPROFILE || homedir();
+  return getUserHome();
 }
 
 /**

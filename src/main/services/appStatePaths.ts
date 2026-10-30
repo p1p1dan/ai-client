@@ -24,18 +24,18 @@ import {
   CREDENTIALS_DIR_NAME,
   PRIOR_USER_DATA_DIR_NAMES,
 } from '@shared/appStateLayout';
+import { strayWindowsHome } from '@shared/userHome';
 import { app } from 'electron';
+import { getUserHome } from '../utils/userHome';
 
 export { CREDENTIALS_DIR_NAME };
 
 /**
- * `$HOME` the way every pre-S2 caller resolved it. `process.env.HOME` first is
- * not decoration: `SharedSessionState`, `RemoteAuthBroker` and
- * `RemoteConnectionManager` all resolved it that way, and a test (or a Windows
- * shell) that overrides `HOME` must keep moving the root with it.
+ * The home the root hangs off. `HOME` first on POSIX, so a test that overrides
+ * it keeps moving the root; never `HOME` on Windows — see `@shared/userHome`.
  */
 function resolveHome(): string {
-  return process.env.HOME || process.env.USERPROFILE || app.getPath('home');
+  return getUserHome() || app.getPath('home');
 }
 
 /** `~/.pilab/<profile>` — the root every local reader and writer should use. */
@@ -46,6 +46,20 @@ export function getAppStateRoot(): string {
 /** `~/.aiclient` — for the migration, and for adoption's "never migrated" fallback. Nothing else. */
 export function getLegacyAppStateRoot(): string {
   return buildLegacyAppStateRoot(resolveHome());
+}
+
+/**
+ * `%HOME%\.pilab\<profile>` on a Windows machine whose `HOME` is not the user's
+ * home (Cadence SPB sets one) — where builds before the fix wrote this root.
+ * `null` when there is no such `HOME`. For `relocateHomeEnvAppState` only.
+ */
+export function getStrayHomeEnvAppStateRoot(): string | null {
+  const stray = strayWindowsHome({
+    platform: process.platform,
+    env: process.env,
+    osHome: app.getPath('home'),
+  });
+  return stray ? buildAppStateRoot(stray, app.getPath('userData')) : null;
 }
 
 /** One earlier `productName`'s pair of roots, as the migration consumes them. */
