@@ -188,3 +188,22 @@ F01 进行中注入 → 点击过程组 `<summary>`（DOM click）→ 再折叠�
 7. 01.5：长用户消息按估算行数折叠（约 223 px，非 300 px），窄栏/放大时估算偏小可能不折叠。
 
 **未覆盖**：Claude SDK 引擎的真实运行（重开会话丢失中断标记——审计确认 `readTranscript` 丢弃 `[Request interrupted by user` 行且不设 incomplete，未修，需要 SDK 环境验证后再改）；触摸输入；IME/DPI；Windows。
+
+## 11. Claude 引擎：中断历史与步骤式显示（2026-10-30 晚）
+
+环境同上，另在 `src/claude-sdk-host` 里 `npm ci`（gitignore）；假网关换 `claude-sdk` 剧本：`P17D_GATEWAY_PLAN=claude-sdk node $GUI gateway-start`（p1-7d 工具新增的环境变量，默认仍是 `dsh-p0-2`）。fake-1 走 Anthropic 协议，新会话进 Agent SDK 引擎（日志 `new chat on the Claude Agent SDK engine`）。`CC-TEXT` 新增 `{"chunkMs":N}`，用来在回复流到一半时停止。
+
+CLI 2.1.300 实测写入的记录（`~/.pilab/…/claude/projects/<cwd>/<id>.jsonl`）：
+
+| 操作 | 记录 | 现场显示 |
+|---|---|---|
+| 命令运行中点停止 | 工具结果 `is_error`「The user doesn't want to proceed…」+ `[Request interrupted by user for tool use]` | 工具「已停止」，回合「这一轮已停止。」 |
+| 审批卡待答时点停止 / 按 Esc | 同上 | 「已拒绝 · 自动：已中止 · 未执行」，「这一轮已停止。」 |
+| 思考或回复中停止 | 只有 `[Request interrupted by user]` | 「这一轮已停止。」 |
+| 审批卡「直接拒绝」 | 工具结果「The user declined this tool call.」，无标记，回合继续 | 「已拒绝」，正常完成 |
+| 排队消息「立刻发送」 | 先 `queue-operation enqueue`，再 `[Request interrupted by user]`，再 dequeue 和用户消息 | 不标停止，正常完成 |
+| 回合中插话（下一步送达） | `queued_command` 附件行（时间是排队时刻），无标记 | 插话开新回合，「用时 1 秒」 |
+
+修复前重新打开：前两种的工具行显示英文原句像失败，没有「已停止」；停在思考中的那一轮什么都不显示；所有回合底部只有「N 次工具调用」，没有「完成于 / 用时」。修复后（`results/cc-reopen-after.txt`，修插话时间之前抓取；插话那一轮随后复测为「完成于 20:58 · 用时 1 秒」）与现场一致，例外见 handoff §10.15。
+
+步骤式显示在 Claude 引擎上核对：三次读取合成「读取了 3 个文件」；两次写文件合成「修改了 2 个文件 +3 −0」；命令结果行「3 passed · 3 行」；失败首行可见。发现失败行露出 CLI 给模型看的 `<tool_use_error>` 标签，已去掉（现场和重开都去）。

@@ -335,3 +335,16 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 - **真实验证**（`shots/steps-*.png`）：F02 67 次调用 → 9 行；真实 DSH 回合 12 次调用 → 5 行（`steps-real-fs-turn-merged.png`）。
 - **引擎中断（预览第 3 态，已做）**：`sessionFailure.ts` 新增 `isEngineInterruption`（`dsh_host_crashed` / `dsh_engine_restarted` / `claude_engine_exited`），卡片改中性样式（暂停图标），标题「这一轮没有完成」，正文「…上面的内容都已保留」，下面一行「正在重新连接…」→「已重新连接」（以 Main 重新绑定会话为准）；「继续」照旧；回合下不再出现红色「失败」；侧栏不标失败。真实验证：流式中途杀宿主 → 中性卡片 + 「已重新连接」（`shots/interrupt-reconnected.png`）。
 - **测试改动**（按新设计改写或更新，未放宽生产规则）：`historyTurnClock`、`timelineClockRemount`、`turnEndReplayMount`、`turnEndOpenInteraction`、`processCompletionInteraction`、`timelineDisclosureFollow`（删 C3-FOLLOW-4，思考改由底部开关验证）、`interjectionDeliveryMount`、`messageTimelineWiring`（WG-WIRE-7/8、行高计数）、`sessionFailure`、`dshStreamReplay`（命令改从展开体读）；新增 `turnSteps.test.ts`。重开会话没有思考计时时底部仍显示可点开的「思考」（修复中发现的缺口）。
+
+### 10.15 2026-10-30 晚：Claude 引擎重开会话的中断显示（R1 收尾，未提交）
+
+- **背景**：此前以为本机跑不了 Claude 引擎；实际在 `src/claude-sdk-host` 里 `npm ci` 后，fake-1（Anthropic 协议）的新会话就走 Agent SDK 引擎，并能连本地假网关（`claude-sdk` 剧本）。实测记录见证据 README §11。
+- **问题**（DEF-015～017）：`sdkSessionRuntime.ts` 的 `readTranscript` 把 CLI 的 `[Request interrupted by user…]` 当杂项丢掉，也没有从记录里取时间。重开后被停的回合像正常结束，工具行显示英文原句像失败，没回复就停的回合什么都不显示，所有回合没有「完成于 / 用时」；失败行露出 `<tool_use_error>` 标签（现场也有）。
+- **修复**（只改 SDK 宿主读历史，渲染层未动）：
+  - 中断标记 → 该回合最后一条回复标 `stopCause: user_stop`；没有回复时补一条空的未完成回复（`stopReason: aborted`），渲染为「这一轮已停止，没有保存任何回复」。与 DSH 历史投影的两种形状相同。
+  - 紧挨着标记前的失败工具结果标 `stopped`（「已停止」）；本应用拒绝的（「The user declined this tool call.」）标 `refused`，停止时仍在审批的（「The turn was stopped.」）标 `notStarted`，CLI 自己的安全检查拒绝标 `refused`。
+  - 「立刻发送」也写同一个标记，靠「标记前已有未出队的 enqueue」认出来，不标停止（现场也不标）。
+  - 每行时间从记录文件取（SDK 的读取接口不给）；回合中插话按送达时刻（它的 `queued_command` 行记的是排队时刻，取它和上一行中较晚的）。
+- **已知差异**：审批卡待答时停止，现场是「已拒绝 · 自动：已中止 · 未执行」，重开后是「已停止」——两种情况 CLI 写的记录完全相同，分不出来。
+- **测试**：`sdkSessionRuntime.test.ts` 新增 `[PILAB-R1-CC-STOP]` 7 项（用实测记录的形状）；SDK 宿主 14 个文件 215 项通过（1 项既有跳过）；`typecheck:claude-sdk-host` 通过。真实界面：同一会话 11 轮，停止、拒绝、Esc、立刻发送、插话、读取合并、修改合并都在重启应用后与现场一致。
+- **工具改动**：`p1-7d-gui.mjs` 支持 `P17D_GATEWAY_PLAN`；`fake-gateway.mjs` 的 `CC-TEXT` 支持 `chunkMs`。

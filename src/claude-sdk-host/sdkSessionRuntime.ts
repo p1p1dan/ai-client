@@ -208,6 +208,17 @@ export const HOST_ONLY_TOOLS = ['RemoteTrigger', 'ListAgents', 'SendMessage', 'W
  * before this (decision 194, `slashCommands.ts`).
  */
 const CLI_MARKER_TEXT = /^(\[Request interrupted by user|<local-command-caveat>)/;
+/**
+ * The row the CLI writes when a turn is interrupted (a Stop, an approval card's Esc, a
+ * Send now — `transcriptExtras` tells that one apart): `[Request interrupted by user]`, or
+ * `… for tool use]` when a call was cut off. Measured on 2.1.300; a declined call
+ * (`DECLINED_TEXT`) writes none and the turn goes on.
+ */
+const CLI_INTERRUPT_MARKER = /^\[Request interrupted by user/;
+/** What a call declined on its approval card reads to the model, and its result row. */
+const DECLINED_TEXT = 'The user declined this tool call.';
+/** What a call still waiting for approval when the turn ended reads to the model. */
+const NOT_STARTED_TEXT = 'The turn was stopped.';
 /** The model of a message the CLI wrote itself (a local command's output, decision 194). */
 const SYNTHETIC_MODEL = '<synthetic>';
 const COMPACT_SUMMARY_PREFIX = 'This session is being continued from a previous conversation';
@@ -475,7 +486,28 @@ function cliRefusalRewrite(text: string): string {
     /auto mode cannot determine|Auto mode could not evaluate|Auto mode is unavailable/i.test(text)
   )
     return cliRefusalText('classifier', 'Classifier unavailable');
-  return text;
+  return cliToolErrorText(text);
+}
+
+/**
+ * A call the CLI could not make (an unknown tool, bad input) comes back wrapped in
+ * `<tool_use_error>`, which is for the model: the row says the words, not the tag.
+ */
+function cliToolErrorText(text: string): string {
+  const wrapped = /^\s*<tool_use_error>([\s\S]*?)<\/tool_use_error>\s*$/.exec(text);
+  return wrapped ? wrapped[1].trim() : text;
+}
+
+/**
+ * PiLab R1: how a failed result read live, for its replay (the live outcome comes off
+ * events the transcript does not keep): declined on its card, refused by the CLI's own
+ * check, or ended unapproved by a Stop. `stopped` comes off the interrupt marker instead.
+ */
+function replayedToolOutcome(raw: string): 'refused' | 'notStarted' | undefined {
+  const text = raw.trim();
+  if (text === DECLINED_TEXT) return 'refused';
+  if (text === NOT_STARTED_TEXT) return 'notStarted';
+  return cliRefusalRewrite(text) !== cliToolErrorText(text) ? 'refused' : undefined;
 }
 
 /**
@@ -651,6 +683,45 @@ function localReply(uuid: string, text: string): HistoryMessage {
     role: 'assistant',
     blocks: [{ type: 'text', id: `${uuid}-text`, text }],
   };
+}
+
+type ReplayedToolResult = Extract<HistoryBlock, { type: 'tool_result' }>;
+
+/** A later row folded into `message` (its tool results, its other content rows). */
+function settleAt(message: HistoryMessage, time: number | undefined): void {
+  if (time === undefined) return;
+  const latest = message.settledAt ?? message.timestamp;
+  if (latest === undefined || time > latest) message.settledAt = time;
+}
+
+/**
+ * PiLab R1: the turn the CLI marked interrupted ends as one the user stopped, as it did
+ * live (`session.stopped`): on its last reply, or on a note when it saved none — the
+ * same two shapes DSH's history gives (`dshHistory/projection.ts`, `onTurnEnd`).
+ */
+function markInterrupted(out: HistoryMessage[], uuid: string, time: number | undefined): void {
+  for (let index = out.length - 1; index >= 0; index -= 1) {
+    const message = out[index];
+    if (message.role === 'user') break;
+    if (message.role !== 'assistant') continue;
+    message.stopCause = 'user_stop';
+    if (message.blocks.length === 0) {
+      message.incomplete = true;
+      message.stopReason = 'aborted';
+    }
+    settleAt(message, time);
+    return;
+  }
+  out.push({
+    id: `h:${uuid}`,
+    entryId: uuid,
+    role: 'assistant',
+    ...(time === undefined ? {} : { timestamp: time }),
+    blocks: [],
+    incomplete: true,
+    stopReason: 'aborted',
+    stopCause: 'user_stop',
+  });
 }
 
 /** The text blocks of an assistant frame, joined. */
@@ -2152,7 +2223,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       this.turn?.toolOutcome.set(input.permissionId, 'refused');
       pending.resolve({
         behavior: 'deny',
-        message: 'The user declined this tool call.',
+        message: DECLINED_TEXT,
         ...(input.decision === 'cancel' ? { interrupt: true } : {}),
       });
     }
@@ -2168,7 +2239,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       type: 'permission.resolved',
       payload: { permissionId, allow: false, decision: 'deny', autoReason: reason },
     });
-    pending.resolve({ behavior: 'deny', message: 'The turn was stopped.', interrupt: true });
+    pending.resolve({ behavior: 'deny', message: NOT_STARTED_TEXT, interrupt: true });
   }
 
   private askQuestion(
@@ -2426,7 +2497,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       type: 'question.resolved',
       payload: { questionId, outcome: 'cancelled', stopped: true },
     });
-    pending.resolve({ behavior: 'deny', message: 'The turn was stopped.', interrupt: true });
+    pending.resolve({ behavior: 'deny', message: NOT_STARTED_TEXT, interrupt: true });
   }
 
   private drainPending(reason: 'aborted' | 'session_closed'): void {
@@ -2594,6 +2665,11 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
    *   is the command's own row (`localOutputs`, by that parent; measured, 2.1.300).
    * - Issue #27: an Edit / Write's review record, off the row's `toolUseResult`, which the
    *   SDK's reader does not pass on (`reviews`, by tool call id).
+   * - PiLab R1: each row's time (`times`, epoch ms by uuid), which the SDK's reader drops
+   *   too: without it a reopened turn could not say when it ended or how long it took.
+   * - PiLab R1: the interrupt markers a Send now wrote (`sendNow`, by uuid). It cuts the
+   *   reply short with the same marker a Stop writes, but its message was already in the
+   *   CLI's queue (an `enqueue` row not yet taken off it); live, that turn did not stop.
    *
    * Every copy is read: a chat that entered a worktree has its file under that worktree's
    * project directory.
@@ -2603,18 +2679,23 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     heads: Set<string>;
     localOutputs: Map<string, { uuid: string; text: string }>;
     reviews: Map<string, SessionFileChange>;
+    times: Map<string, number>;
+    sendNow: Set<string>;
   } {
     const rows = new Set<string>();
     const heads = new Set<string>();
     const localOutputs = new Map<string, { uuid: string; text: string }>();
     const reviews = new Map<string, SessionFileChange>();
-    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return { rows, heads, localOutputs, reviews };
+    const times = new Map<string, number>();
+    const sendNow = new Set<string>();
+    const none = { rows, heads, localOutputs, reviews, times, sendNow };
+    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return none;
     const root = path.join(this.config.configDir, 'projects');
     let dirs: string[] = [];
     try {
       dirs = readdirSync(root);
     } catch {
-      return { rows, heads, localOutputs, reviews };
+      return none;
     }
     for (const dir of dirs) {
       let raw: string;
@@ -2624,6 +2705,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         continue;
       }
       const parsed: Array<{ uuid?: unknown; parentUuid?: unknown; type?: unknown }> = [];
+      let queued = 0;
       for (const line of raw.split(/\r?\n/)) {
         if (!line.trim()) continue;
         try {
@@ -2636,8 +2718,39 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             turnOrigin?: unknown;
             message?: unknown;
             toolUseResult?: unknown;
+            timestamp?: unknown;
+            operation?: unknown;
+            attachment?: unknown;
           };
           parsed.push(row);
+          if (row.type === 'queue-operation') {
+            if (row.operation === 'enqueue') queued += 1;
+            else if (row.operation === 'dequeue' || row.operation === 'remove')
+              queued = Math.max(0, queued - 1);
+          }
+          if (
+            queued > 0 &&
+            row.type === 'user' &&
+            typeof row.uuid === 'string' &&
+            CLI_INTERRUPT_MARKER.test(textOf(record(row.message)?.content).trim())
+          ) {
+            sendNow.add(row.uuid);
+          }
+          if (typeof row.uuid === 'string' && typeof row.timestamp === 'string') {
+            const time = Date.parse(row.timestamp);
+            if (Number.isFinite(time)) {
+              times.set(row.uuid, time);
+              // A message folded into a running turn is its `queued_command` row, which the
+              // SDK's reader names by the message's own uuid (decision 206). The row is dated
+              // when the message was queued; it reached the turn after the row before it.
+              const source = record(row.attachment)?.source_uuid;
+              if (typeof source === 'string') {
+                const before =
+                  typeof row.parentUuid === 'string' ? times.get(row.parentUuid) : undefined;
+                times.set(source, Math.max(time, before ?? time));
+              }
+            }
+          }
           if (row.turnOrigin === 'scheduled' && typeof row.uuid === 'string') rows.add(row.uuid);
           const blocks = record(row.message)?.content;
           if (row.type === 'user' && row.toolUseResult && Array.isArray(blocks)) {
@@ -2674,7 +2787,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         }
       }
     }
-    return { rows, heads, localOutputs, reviews };
+    return none;
   }
 
   /** The CLI's own transcript, projected onto history messages (tool results folded into their call's message). */
@@ -2691,29 +2804,47 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const toolOwner = new Map<string, HistoryMessage>();
     // S-6: rows the CLI wrote for itself, which the SDK's reader does not mark (or drops).
     const scheduled = this.transcriptExtras(ccSessionId);
+    const stamp = (uuid: string) => {
+      const time = scheduled.times.get(uuid);
+      return time === undefined ? {} : { timestamp: time };
+    };
+    // PiLab R1: the results of the rows right before this one, which an interrupt marker cut off.
+    let lastResults: ReplayedToolResult[] = [];
     for (const entry of entries) {
       if (entry.parent_tool_use_id) continue;
+      const previousResults = lastResults;
+      lastResults = [];
+      const time = scheduled.times.get(entry.uuid);
       const message = record(entry.message) ?? {};
       const content = message.content;
       if (entry.type === 'user') {
         if (Array.isArray(content) && content.some((b) => record(b)?.type === 'tool_result')) {
+          lastResults = previousResults;
           for (const block of content) {
             const b = record(block);
             if (!b || b.type !== 'tool_result' || typeof b.tool_use_id !== 'string') continue;
             const owner = toolOwner.get(b.tool_use_id);
+            const failed = b.is_error === true;
             // A refusal of the CLI's own reads as it did live: never its sentence (A-18).
             const raw = textOf(b.content);
-            const text = b.is_error === true ? cliRefusalRewrite(raw) : raw;
+            const text = failed ? cliRefusalRewrite(raw) : raw;
+            const outcome = failed ? replayedToolOutcome(raw) : undefined;
             const review = scheduled.reviews.get(b.tool_use_id);
-            owner?.blocks.push({
+            const result: ReplayedToolResult = {
               type: 'tool_result',
               id: `${b.tool_use_id}-result`,
               toolCallId: b.tool_use_id,
-              ok: b.is_error !== true,
+              ok: !failed,
               output: text,
               ...(review ? { review } : {}),
-              ...(b.is_error === true ? { error: text } : {}),
-            });
+              ...(failed ? { error: text } : {}),
+              ...(outcome ? { [outcome]: true as const } : {}),
+            };
+            if (owner) {
+              owner.blocks.push(result);
+              settleAt(owner, time);
+            }
+            lastResults.push(result);
           }
           continue;
         }
@@ -2728,6 +2859,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             id: `h:${entry.uuid}`,
             entryId: entry.uuid,
             role: 'user',
+            ...stamp(entry.uuid),
             blocks: [{ type: 'text', id: `${entry.uuid}-text`, text: command.line }],
           });
           const output = scheduled.localOutputs.get(entry.uuid);
@@ -2740,7 +2872,18 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           out.push(localReply(entry.uuid, output));
           continue;
         }
-        // The CLI's own bookkeeping rows: an interrupt marker, a local command's caveat.
+        // PiLab R1: an interrupted turn reads as it did live: stopped, and so is the call
+        // the interrupt cut off (the CLI says so with its marker row, nothing else).
+        if (CLI_INTERRUPT_MARKER.test(trimmed)) {
+          if (scheduled.sendNow.has(entry.uuid)) continue;
+          for (const result of previousResults) {
+            if (result.ok || result.refused || result.notStarted) continue;
+            result.stopped = true;
+          }
+          markInterrupted(out, entry.uuid, time);
+          continue;
+        }
+        // The CLI's own bookkeeping rows: a local command's caveat.
         if (!trimmed || CLI_MARKER_TEXT.test(trimmed)) continue;
         // S-6: a turn the CLI started by itself reads as it did live, as an engine turn's
         // head, never as something the user typed: a schedule that came due, or a
@@ -2758,6 +2901,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             entryId: entry.uuid,
             role: 'user',
             origin,
+            ...stamp(entry.uuid),
             blocks: [],
           });
           continue;
@@ -2768,6 +2912,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           id: `h:${entry.uuid}`,
           entryId: entry.uuid,
           role,
+          ...stamp(entry.uuid),
           // Decision 206: a message sent from here keeps the uuid it went to the CLI with
           // (a Ctrl+Enter one too: the SDK's reader names it by its `source_uuid`).
           ...(role === 'user' ? { transcriptId: entry.uuid } : {}),
@@ -2783,6 +2928,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           entryId: entry.uuid,
           role: 'user',
           origin: { kind: 'scheduled' },
+          ...stamp(entry.uuid),
           blocks: [],
         });
       }
@@ -2793,6 +2939,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           id: `h:${entry.uuid}`,
           entryId: entry.uuid,
           role: 'assistant',
+          ...stamp(entry.uuid),
           // Decision 206: the API message id its live step carried.
           ...(typeof message.id === 'string' ? { transcriptId: message.id } : {}),
           ...(typeof message.model === 'string' ? { model: message.model } : {}),
@@ -2800,6 +2947,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         };
         byApiId.set(apiId, target);
         out.push(target);
+      } else {
+        settleAt(target, time);
       }
       if (!Array.isArray(content)) continue;
       for (const [i, block] of content.entries()) {

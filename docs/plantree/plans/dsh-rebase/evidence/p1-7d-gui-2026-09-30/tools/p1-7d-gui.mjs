@@ -395,7 +395,8 @@ function gatewayStart({ reset }) {
       '--port',
       String(GATEWAY_PORT),
       '--plan',
-      'dsh-p0-2',
+      // PiLab R1: `claude-sdk` scripts the Claude engine's `CC-*` scenarios.
+      process.env.P17D_GATEWAY_PLAN ?? 'dsh-p0-2',
       ...(reset ? ['--reset'] : []),
       '--state',
       path.join(SCRATCH, 'gateway.state.json'),

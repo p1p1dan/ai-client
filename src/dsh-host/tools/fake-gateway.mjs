@@ -3930,6 +3930,8 @@ function decideClaudeSdk(parsed, req) {
         {
           thinking: 'The user wants a streamed answer. I will reply in two short sentences.',
           text: 'PiLab × Claude Agent SDK：这一段正文是逐块流式送达的。第二句也在流里。',
+          // PiLab R1: `{"chunkMs":2000}` streams slowly enough to Stop mid-reply.
+          ...(Number.isFinite(params.chunkMs) ? { chunkMs: params.chunkMs } : {}),
         },
         label
       );

@@ -2401,3 +2401,192 @@ describe('compact instructions', () => {
     await own.dispose();
   });
 });
+
+describe('[PILAB-R1-CC-STOP] a reopened chat reads its interrupted turns as it did live', () => {
+  // The rows 2.1.300 wrote for the four ways a turn met a Stop (measured on the fake gateway,
+  // 2026-10-30): the user's message, the reply, the call, the CLI's result, its marker.
+  const REJECTED =
+    "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.";
+  const user = (uuid: string, content: unknown) => ({
+    type: 'user',
+    uuid,
+    message: { role: 'user', content },
+  });
+  const say = (uuid: string, id: string, content: unknown[]) => ({
+    type: 'assistant',
+    uuid,
+    message: { id, content },
+  });
+  const call = (id: string) => ({
+    type: 'tool_use',
+    id,
+    name: 'Bash',
+    input: { command: 'sleep 40' },
+  });
+  const result = (id: string, text: string) => [
+    { type: 'tool_result', tool_use_id: id, is_error: true, content: text },
+  ];
+
+  async function replay(
+    rows: Array<{ uuid: string }>,
+    times: Record<string, string> = {},
+    /** Rows of the file the SDK's reader does not return. */
+    fileOnly: Array<{ uuid: string }> = []
+  ) {
+    const { getSessionMessages } = await import('@anthropic-ai/claude-agent-sdk');
+    const rt = runtime();
+    await rt.bootstrap();
+    const stub = (rt as unknown as { stub: { ccSessionId: string; started: boolean } }).stub;
+    stub.started = true;
+    const dir = join(configDir, 'projects', 'C--repo');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${stub.ccSessionId}.jsonl`),
+      [...rows, ...fileOnly]
+        .map((row) => JSON.stringify({ ...row, timestamp: times[row.uuid] }))
+        .join('\n')
+    );
+    vi.mocked(getSessionMessages).mockResolvedValueOnce(rows as never);
+    const { page } = await rt.history({ logicalSessionId: 'chat-1' });
+    await rt.dispose();
+    return page.messages;
+  }
+
+  it('a Stop during a running call: the turn is stopped, and so is the call', async () => {
+    const messages = await replay([
+      user('u1', 'run it'),
+      say('a1', 'm1', [{ type: 'text', text: 'Starting.' }]),
+      say('a2', 'm1', [call('t1')]),
+      user('r1', result('t1', REJECTED)),
+      user('x1', [{ type: 'text', text: '[Request interrupted by user for tool use]' }]),
+    ]);
+    expect(messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(messages[1]).toMatchObject({ stopCause: 'user_stop' });
+    expect(messages[1]).not.toHaveProperty('incomplete');
+    expect(messages[1]?.blocks.find((b) => b.type === 'tool_result')).toMatchObject({
+      ok: false,
+      stopped: true,
+    });
+  });
+
+  it('a Stop before any reply: the turn ends on the stopped note', async () => {
+    const messages = await replay([
+      user('u1', 'think about it'),
+      user('x1', [{ type: 'text', text: '[Request interrupted by user]' }]),
+      user('u2', 'next'),
+    ]);
+    expect(messages.map((m) => [m.role, m.blocks.length])).toEqual([
+      ['user', 1],
+      ['assistant', 0],
+      ['user', 1],
+    ]);
+    expect(messages[1]).toMatchObject({
+      incomplete: true,
+      stopReason: 'aborted',
+      stopCause: 'user_stop',
+    });
+  });
+
+  it('a Send now cuts the reply with the same marker, but the turn did not stop', async () => {
+    const queue = (operation: string) => ({ type: 'queue-operation', uuid: '', operation });
+    const rows = [
+      user('u1', 'run it'),
+      say('a1', 'm1', [{ type: 'text', text: 'Done: ' }]),
+      queue('enqueue'),
+      user('x1', [{ type: 'text', text: '[Request interrupted by user]' }]),
+      queue('dequeue'),
+      user('u2', 'one more thing'),
+    ];
+    const { getSessionMessages } = await import('@anthropic-ai/claude-agent-sdk');
+    const rt = runtime();
+    await rt.bootstrap();
+    const stub = (rt as unknown as { stub: { ccSessionId: string; started: boolean } }).stub;
+    stub.started = true;
+    const dir = join(configDir, 'projects', 'C--repo');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${stub.ccSessionId}.jsonl`),
+      rows.map((row) => JSON.stringify(row)).join('\n')
+    );
+    vi.mocked(getSessionMessages).mockResolvedValueOnce(
+      rows.filter((row) => row.type !== 'queue-operation') as never
+    );
+    const { page } = await rt.history({ logicalSessionId: 'chat-1' });
+    await rt.dispose();
+    expect(page.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(page.messages.some((m) => m.stopCause || m.incomplete)).toBe(false);
+  });
+
+  it('a declined call is refused and the turn goes on; an earlier failure stays a failure', async () => {
+    const messages = await replay([
+      user('u1', 'run it'),
+      say('a1', 'm1', [call('t0')]),
+      user('r0', result('t0', 'File does not exist.')),
+      say('a2', 'm2', [call('t1')]),
+      user('r1', result('t1', 'The user declined this tool call.')),
+      say('a3', 'm3', [{ type: 'text', text: 'OK, not running it.' }]),
+    ]);
+    const results = messages.flatMap((m) => m.blocks).filter((b) => b.type === 'tool_result');
+    expect(results[0]).not.toHaveProperty('stopped');
+    expect(results[0]).not.toHaveProperty('refused');
+    expect(results[1]).toMatchObject({ refused: true });
+    expect(messages.some((m) => m.stopCause)).toBe(false);
+  });
+
+  it('the row says what the CLI could not do, not its <tool_use_error> tag', async () => {
+    const messages = await replay([
+      user('u1', 'find it'),
+      say('a1', 'm1', [call('t1')]),
+      user(
+        'r1',
+        result('t1', '<tool_use_error>Error: No such tool available: Glob.</tool_use_error>')
+      ),
+    ]);
+    expect(messages[1]?.blocks.find((b) => b.type === 'tool_result')).toMatchObject({
+      output: 'Error: No such tool available: Glob.',
+    });
+  });
+
+  it('each row keeps its time, so the reopened turn says when it ended and for how long', async () => {
+    const messages = await replay(
+      [
+        user('u1', 'run it'),
+        say('a1', 'm1', [{ type: 'text', text: 'Starting.' }]),
+        say('a2', 'm1', [call('t1')]),
+        user('r1', result('t1', REJECTED)),
+        user('x1', [{ type: 'text', text: '[Request interrupted by user for tool use]' }]),
+      ],
+      {
+        u1: '2026-10-30T12:46:37.406Z',
+        a1: '2026-10-30T12:46:38.089Z',
+        a2: '2026-10-30T12:46:38.335Z',
+        r1: '2026-10-30T12:47:26.576Z',
+        x1: '2026-10-30T12:47:26.583Z',
+      }
+    );
+    expect(messages[0]?.timestamp).toBe(Date.parse('2026-10-30T12:46:37.406Z'));
+    expect(messages[1]?.timestamp).toBe(Date.parse('2026-10-30T12:46:38.089Z'));
+    expect(messages[1]?.settledAt).toBe(Date.parse('2026-10-30T12:47:26.583Z'));
+  });
+
+  it('a message folded into a running turn is dated when it reached the turn', async () => {
+    // Its `queued_command` row carries the time it was queued, and follows the row it
+    // was folded in after (measured, 2.1.300).
+    const folded = {
+      type: 'attachment',
+      uuid: 'q1',
+      parentUuid: 'r1',
+      attachment: { type: 'queued_command', prompt: 'and this', source_uuid: 's1' },
+    };
+    const messages = await replay(
+      [user('u1', 'run it'), user('r1', 'result'), user('s1', 'and this')],
+      {
+        u1: '2026-10-30T12:58:08.218Z',
+        r1: '2026-10-30T12:58:43.290Z',
+        q1: '2026-10-30T12:58:16.444Z',
+      },
+      [folded]
+    );
+    expect(messages.at(-1)?.timestamp).toBe(Date.parse('2026-10-30T12:58:43.290Z'));
+  });
+});
