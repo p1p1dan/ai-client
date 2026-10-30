@@ -1294,6 +1294,23 @@ describe('DshSessionRuntime — model and effort per turn (P1-5a, decisions 033,
     });
   });
 
+  it('[PILAB-R2-THINK] Default after the level a chat was opened on is Default, not that level', async () => {
+    const opened = await routed({ model: 'thinker/deep-1', effort: 'high' });
+    await opened.bridge.startSend(turn('t1', { effort: 'high' }));
+    opened.dsh.append({
+      type: 'turn/end',
+      seq: 1,
+      time: 1,
+      data: { turn: 1, reason: { kind: 'completed' } },
+    });
+    await opened.bridge.startSend(turn('t2'));
+    expect(opened.ref()?.current).toEqual({
+      provider: 'thinker~2',
+      model: 'deep-1',
+      reasoningEffort: 'medium',
+    });
+  });
+
   it('[route-turn] an effort the model does not offer is dropped and logged, never sent', async () => {
     const opened = await routed();
     await opened.bridge.startSend(turn('t1', { model: 'thinker/deep-1', effort: 'xhigh' }));

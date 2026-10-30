@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2 用量显示预览</title>
+<style>
+  :root {
+    --background: #fcfcfb; --foreground: #151515; --card: #ffffff; --popover: #ffffff;
+    --primary: #c6613f; --muted-foreground: #525252;
+    --fill-ghost-hover: #f0f0ef; --fill-ghost-selected: #e5e5e4; --secondary: #eeeeed; --fill-neutral: #e9e9e8;
+    --warning: #b07a1e; --border: #e5e5e4; --border-soft: #ededec;
+    --foreground-faint: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
+    --radius-xs: .25rem; --radius-sm: .375rem; --radius-md: .625rem; --radius-lg: .75rem;
+    --text-2xs: .6875rem; --text-small: .75rem; --text-ui: .8125rem; --text-title: 1.125rem;
+  }
+  .dark {
+    --background: #151515; --foreground: #f5f5f5; --card: #1a1a19; --popover: #20201f;
+    --primary: #d97757; --muted-foreground: #a3a3a3; --fill-ghost-hover: #202020;
+    --fill-ghost-selected: #2b2b2b; --secondary: #222222; --fill-neutral: #2a2a29;
+    --warning: #d9a441; --border: #2b2b2b; --border-soft: #262625;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--background); color: var(--foreground);
+    font: var(--text-ui)/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; flex: 1; min-width: 0; }
+  main { max-width: 780px; margin: 0 auto; padding: 8px 16px 64px; }
+  section { padding: 20px 0; border-bottom: 1px solid var(--border); }
+  h2 { font-size: 14px; margin: 0 0 4px; }
+  .why { color: var(--muted-foreground); font-size: var(--text-small); margin: 0 0 12px; }
+  .ctrl { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; font-size: var(--text-small); }
+  .ctrl button { font: inherit; padding: 3px 10px; border-radius: var(--radius-xs); border: 0;
+    background: var(--secondary); color: var(--foreground); cursor: pointer; }
+  .ctrl button[aria-pressed="true"] { background: var(--fill-ghost-selected); font-weight: 600; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .col h3 { font-size: var(--text-small); color: var(--muted-foreground); font-weight: 500; margin: 0 0 6px; }
+  /* the row under the composer */
+  .bar { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 4px 6px;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+  .bar .sp { flex: 1; color: var(--foreground-faint); font-size: var(--text-small); }
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 6px; border: 0; border-radius: var(--radius-sm);
+    background: transparent; color: var(--foreground-faint); font: inherit; font-size: var(--text-small);
+    font-variant-numeric: tabular-nums; cursor: pointer; transition: color .15s ease-out, background-color .15s ease-out; }
+  .chip:hover { background: var(--fill-ghost-hover); color: var(--foreground); }
+  .chip.warn, .chip.warn:hover { color: var(--warning); }
+  .chip svg { width: 14px; height: 14px; transform: rotate(-90deg); flex: none; }
+  /* popover */
+  .pop { margin-top: 8px; background: var(--popover); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / .08); font-size: var(--text-ui); }
+  .pop .top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .pop .lbl { font-size: var(--text-small); color: var(--muted-foreground); }
+  .pop .big { font-size: var(--text-title); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .pop .line { display: flex; justify-content: space-between; gap: 8px; font-size: var(--text-small); margin-top: 10px; }
+  .pop .meter { height: 6px; border-radius: 999px; background: var(--fill-neutral); overflow: hidden; margin-top: 4px; }
+  .pop .meter > div { height: 100%; background: var(--muted-foreground); }
+  .pop .meter.warn > div { background: var(--warning); }
+  .pop .hint { font-size: var(--text-small); color: var(--warning); margin-top: 6px; }
+  .pop .assumed { font-size: var(--text-small); color: var(--muted-foreground); margin-top: 6px; }
+  .sr { font-size: var(--text-small); color: var(--muted-foreground); margin-top: 8px; }
+  .sr code { font-size: var(--text-2xs); background: var(--secondary); padding: 1px 4px; border-radius: var(--radius-xs); }
+  .toast { display: inline-flex; gap: 8px; align-items: center; background: var(--popover); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 6px 12px; box-shadow: 0 4px 16px rgb(0 0 0 / .08); font-size: var(--text-ui); }
+  .toast small { color: var(--muted-foreground); }
+  .note { font-size: var(--text-small); color: var(--muted-foreground); margin-top: 10px; }
+  .note b { color: var(--foreground); font-weight: 600; }
+  .old { opacity: .75; }
+</style>
+</head>
+<body>
+<header>
+  <h1>R2 模型和用量显示：接近上限 · 没设上下文大小 · 切换提示（预览，2026-10-31）</h1>
+  <div class="ctrl" style="margin:0"><button onclick="document.documentElement.classList.toggle('dark')">浅色 / 深色</button></div>
+</header>
+<main>
+
+<section>
+  <h2>① 上下文快满了（用到 80% 及以上）</h2>
+  <p class="why">现在用到 92% 和用到 5% 看起来一样，读屏软件只念「上下文占用」，不念数字。改成：到 80% 时，输入框下方的小圈和百分比改用警示色（不闪、不跳动），点开后在进度条下多一行「接近上限」；读屏念出百分比。右侧栏「上下文」卡片同样处理。<br>拖动看不同占用：</p>
+  <div class="ctrl">
+    <span>占用</span>
+    <input id="pct" type="range" min="0" max="100" value="86" aria-label="模拟占用">
+    <span id="pctv"></span>
+  </div>
+  <div class="pair">
+    <div class="col old"><h3>现在</h3><div id="oldA"></div></div>
+    <div class="col"><h3>改后</h3><div id="newA"></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>② 模型没设上下文大小</h2>
+  <p class="why">没在设置里填「上下文窗口」的模型，现在按引擎默认的 128k 来算，界面写「5.1k / 128.0k」，看起来像真实上限。引擎压缩也是按这个 128k 算的，所以数字照旧显示，只在点开后说明这是默认值，并指向哪里可以改。</p>
+  <div class="pair">
+    <div class="col old"><h3>现在</h3><div id="oldB"></div></div>
+    <div class="col"><h3>改后</h3><div id="newB"></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>③ 回合进行中用 /model、/effort 切换</h2>
+  <p class="why">运行中切换只对下一轮生效（已核实不会打断当前回合），但打 <code>/model</code>、<code>/effort</code> 后弹出的提示没说这一点。按钮上原本就有「对下一轮生效」的说明，提示里补上同样几个字。</p>
+  <div class="pair">
+    <div class="col old"><h3>现在</h3><div class="toast">模型：fake-think</div></div>
+    <div class="col"><h3>改后</h3><div class="toast">模型：fake-think <small>· 下一轮生效</small></div></div>
+  </div>
+  <p class="note">只在有回合正在进行时补这几个字；空闲时切换下一条消息就用新模型，提示保持原样。</p>
+</section>
+
+</main>
+<script>
+const RING = 2 * Math.PI * 5.5;
+const ring = (p) => `<svg viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="1.5"/><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="${RING * p / 100} ${RING}"/></svg>`;
+function fmt(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
+function view({ p, win, used, newer, assumed }) {
+  const warn = newer && p >= 80;
+  const round = Math.round(p);
+  const aria = newer ? `上下文占用 ${round}%${warn ? '，接近上限' : ''}` : '上下文占用';
+  return `
+    <div class="bar"><span class="sp">…输入框下方</span>
+      <button class="chip${warn ? ' warn' : ''}" aria-label="${aria}">${ring(p)}${round}%</button></div>
+    <div class="pop">
+      <div class="top"><div><div class="lbl">上下文窗口</div><div style="font-weight:600">剩余 ${fmt(win - used)} tokens</div></div>
+        <div><div class="big">${newer ? 100 - round : Math.round(100 - p)}%</div><div class="lbl" style="text-align:right">剩余</div></div></div>
+      <div class="line"><span>上下文占用</span><span>${fmt(used)} / ${fmt(win)} · ${round}%</span></div>
+      <div class="meter${warn ? ' warn' : ''}" role="meter" aria-valuenow="${round}"><div style="width:${p}%"></div></div>
+      ${warn ? '<div class="hint">接近上限，快满时会自动压缩较早的内容。</div>' : ''}
+      ${assumed ? (newer ? '<div class="assumed">这个模型没设上下文大小，按默认 128k 计。可在「设置 · 模型」里填写。</div>' : '') : ''}
+    </div>
+    <div class="sr">读屏念：<code>${aria}</code></div>`;
+}
+const pct = document.getElementById('pct');
+function draw() {
+  const p = Number(pct.value);
+  document.getElementById('pctv').textContent = p + '%';
+  const used = Math.round(200000 * p / 100);
+  document.getElementById('oldA').innerHTML = view({ p, win: 200000, used, newer: false });
+  document.getElementById('newA').innerHTML = view({ p, win: 200000, used, newer: true });
+}
+pct.addEventListener('input', draw);
+draw();
+document.getElementById('oldB').innerHTML = view({ p: 4, win: 128000, used: 5142, newer: false, assumed: true });
+document.getElementById('newB').innerHTML = view({ p: 4, win: 128000, used: 5142, newer: true, assumed: true });
+</script>
+</body>
+</html>

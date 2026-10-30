@@ -398,6 +398,8 @@ function gatewayStart({ reset }) {
       // PiLab R1: `claude-sdk` scripts the Claude engine's `CC-*` scenarios.
       process.env.P17D_GATEWAY_PLAN ?? 'dsh-p0-2',
       ...(reset ? ['--reset'] : []),
+      // PiLab R2: `P17D_GATEWAY_CAPTURE=<dir>` keeps every request body as sent.
+      ...(process.env.P17D_GATEWAY_CAPTURE ? ['--capture', process.env.P17D_GATEWAY_CAPTURE] : []),
       '--state',
       path.join(SCRATCH, 'gateway.state.json'),
       '--log',

@@ -1,3 +1,4 @@
+// New in PiLab R1 (FR-05.5): approval cards of both engines.
 /**
  * What an approval card shows for a call's arguments (PiLab R1, FR-05.5): the
  * parameters of the thing being approved, in full up to a size cap — not a

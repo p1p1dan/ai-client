@@ -26,6 +26,7 @@ interface FakeQuery {
   end: () => void;
   setModel: ReturnType<typeof vi.fn>;
   applyFlagSettings: ReturnType<typeof vi.fn>;
+  setMaxThinkingTokens: ReturnType<typeof vi.fn>;
   setPermissionMode: ReturnType<typeof vi.fn>;
   /** The SDK's generic control request (decision 201's `send_now` interrupt goes through it). */
   request: ReturnType<typeof vi.fn>;
@@ -56,6 +57,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       },
       setModel: vi.fn(async () => {}),
       applyFlagSettings: vi.fn(async () => {}),
+      setMaxThinkingTokens: vi.fn(async () => {}),
       setPermissionMode: vi.fn(async () => {}),
       request: vi.fn(async () => ({ response: { send_now: 'delivering' } })),
       askSideQuestion: vi.fn(async () => ({ response: 'side answer', synthetic: false })),
@@ -76,6 +78,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       interrupt: vi.fn(async () => {}),
       setModel: fake.setModel,
       applyFlagSettings: fake.applyFlagSettings,
+      setMaxThinkingTokens: fake.setMaxThinkingTokens,
       setPermissionMode: fake.setPermissionMode,
       request: fake.request,
       askSideQuestion: fake.askSideQuestion,
@@ -124,6 +127,7 @@ function runtime(
     settingSources?: Array<'user' | 'project' | 'local'>;
     homeDir?: string;
     sessionFile?: string;
+    modelThinking?: Record<string, 'none' | 'budget' | 'adaptive'>;
   } = {}
 ) {
   return new ClaudeSdkSessionRuntime(
@@ -142,6 +146,7 @@ function runtime(
       settingsEnv: PINS,
       secrets: [KEY],
       ...(launch.homeDir ? { homeDir: launch.homeDir } : {}),
+      ...(launch.modelThinking ? { modelThinking: launch.modelThinking } : {}),
     },
     () => {}
   );
@@ -2588,5 +2593,188 @@ describe('[PILAB-R1-CC-STOP] a reopened chat reads its interrupted turns as it d
       [folded]
     );
     expect(messages.at(-1)?.timestamp).toBe(Date.parse('2026-10-30T12:58:43.290Z'));
+  });
+});
+
+// ---- PiLab R2 (04.2, 04.7): thinking by the model's own kind; a cut request's usage ----
+
+describe('[PILAB-R2-THINK] thinking and effort as the model takes them', () => {
+  const turnOver = async (q: FakeQuery) => {
+    q.push({ type: 'result', subtype: 'success', is_error: false, result: 'ok' });
+    await flush();
+  };
+  const sendWith = (
+    rt: InstanceType<typeof ClaudeSdkSessionRuntime>,
+    effort?: 'low' | 'medium' | 'high' | 'off'
+  ) =>
+    rt.startSend({
+      logicalSessionId: 'chat-1',
+      requestId: `req-${effort ?? 'default'}`,
+      attemptId: `a-${effort ?? 'default'}`,
+      text: 'hi',
+      ...(effort ? { effort } : {}),
+    });
+
+  it('a model without reasoning is not asked to think, whatever the level', async () => {
+    const rt = runtime('gw/plain', { modelThinking: { plain: 'none' } });
+    await rt.bootstrap();
+    const q = sdk.queries[0] as FakeQuery;
+    expect(q.options.thinking).toEqual({ type: 'disabled' });
+    expect(q.options).not.toHaveProperty('effort');
+    await rt.dispose();
+  });
+
+  it('a budget-thinking model gets a budget, not adaptive thinking, and its level moves it', async () => {
+    const rt = runtime('gw/older', { modelThinking: { older: 'budget' } });
+    await rt.bootstrap();
+    const q = sdk.queries[0] as FakeQuery;
+    expect(q.options.thinking).toEqual({
+      type: 'enabled',
+      budgetTokens: 8192,
+      display: 'summarized',
+    });
+    expect(q.options).not.toHaveProperty('effort');
+    await sendWith(rt, 'high');
+    expect(q.setMaxThinkingTokens).toHaveBeenLastCalledWith(16384);
+    expect(q.applyFlagSettings).not.toHaveBeenCalledWith({ effortLevel: 'high' });
+    await turnOver(q);
+    // Default is Medium's budget, as the menu says.
+    await sendWith(rt);
+    expect(q.setMaxThinkingTokens).toHaveBeenLastCalledWith(8192);
+    await rt.dispose();
+  });
+
+  it('Default after a chosen level goes back to the model default', async () => {
+    const { rt, q } = await started();
+    await sendWith(rt, 'high');
+    expect(q.applyFlagSettings).toHaveBeenLastCalledWith({ effortLevel: 'high' });
+    await turnOver(q);
+    await sendWith(rt);
+    expect(q.applyFlagSettings).toHaveBeenLastCalledWith({ effortLevel: null });
+    await rt.dispose();
+  });
+
+  it('Default on a model the catalog marks adaptive is Medium, as the menu says', async () => {
+    const rt = runtime('gw/claude-opus-5-5', { modelThinking: { 'claude-opus-5-5': 'adaptive' } });
+    await rt.bootstrap();
+    const q = sdk.queries[0] as FakeQuery;
+    expect(q.options.effort).toBe('medium');
+    await sendWith(rt, 'low');
+    expect(q.applyFlagSettings).toHaveBeenLastCalledWith({ effortLevel: 'low' });
+    await turnOver(q);
+    await sendWith(rt);
+    expect(q.applyFlagSettings).toHaveBeenLastCalledWith({ effortLevel: 'medium' });
+    expect(q.setMaxThinkingTokens).not.toHaveBeenCalled();
+    await rt.dispose();
+  });
+
+  it('an unchanged level sends no change', async () => {
+    const { rt, q } = await started();
+    await sendWith(rt);
+    expect(q.applyFlagSettings).not.toHaveBeenCalled();
+    expect(q.setMaxThinkingTokens).not.toHaveBeenCalled();
+    await rt.dispose();
+  });
+});
+
+describe('[PILAB-R2-USAGE] a request cut before its closing usage', () => {
+  type Usage = { unreported?: boolean; input?: number; context?: { tokens: number } };
+  const usages = () =>
+    events
+      .filter((e) => e.type === 'usage.updated')
+      .map((e) => e.payload as Usage)
+      .filter((p) => !(p as { pending?: boolean }).pending);
+  const frame = (event: Record<string, unknown>) => ({
+    type: 'stream_event',
+    parent_tool_use_id: null,
+    event,
+  });
+
+  it('says its usage is unknown, and keeps the last measured occupancy', async () => {
+    const { rt, q } = await started();
+    (rt as unknown as { contextWindow: number }).contextWindow = 200_000;
+    await send(rt);
+    q.push(frame({ type: 'message_start', message: { id: 'm1', usage: { input_tokens: 900 } } }));
+    q.push(
+      frame({
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 40, cache_read_input_tokens: 3000, cache_creation_input_tokens: 0 },
+      })
+    );
+    q.push(frame({ type: 'message_stop' }));
+    q.push({ type: 'result', subtype: 'success', is_error: false, result: 'ok' });
+    await flush();
+    expect(usages().at(-1)).toMatchObject({ input: 900, context: { tokens: 3940 } });
+
+    await rt.startSend({ logicalSessionId: 'chat-1', requestId: 'r2', attemptId: 'a2', text: 'x' });
+    q.push(frame({ type: 'message_start', message: { id: 'm2', usage: { input_tokens: 1200 } } }));
+    await flush();
+    void rt.stop({ logicalSessionId: 'chat-1', reason: 'user' });
+    // The CLI closes the cut stream with a delta of its own (measured on 2.1.300:
+    // no stop_reason, the prompt side and zeros), then the turn.
+    q.push(
+      frame({
+        type: 'message_delta',
+        delta: { stop_reason: null, stop_sequence: null, stop_details: null },
+        usage: {
+          input_tokens: 1200,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          output_tokens: 0,
+        },
+      })
+    );
+    q.push(frame({ type: 'message_stop' }));
+    q.push({ type: 'result', subtype: 'error_during_execution', is_error: true, result: '' });
+    await flush();
+    const last = usages().at(-1);
+    expect(last).toMatchObject({ unreported: true, context: { tokens: 3940 } });
+    expect(usages().filter((u) => u.unreported)).toHaveLength(1);
+    await rt.dispose();
+  });
+
+  it('keeps the occupancy when the window was only learned after that request', async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    q.push(frame({ type: 'message_start', message: { id: 'm1', usage: { input_tokens: 500 } } }));
+    q.push(
+      frame({
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 20 },
+      })
+    );
+    q.push(frame({ type: 'message_stop' }));
+    // The CLI reports the window on the turn's result, after the request settled.
+    q.push({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'ok',
+      modelUsage: { 'claude-opus-5-5': { contextWindow: 100_000 } },
+    });
+    await flush();
+    await rt.startSend({ logicalSessionId: 'chat-1', requestId: 'r2', attemptId: 'a2', text: 'x' });
+    q.push(frame({ type: 'message_start', message: { id: 'm2', usage: { input_tokens: 600 } } }));
+    await flush();
+    void rt.stop({ logicalSessionId: 'chat-1', reason: 'user' });
+    q.push({ type: 'result', subtype: 'error_during_execution', is_error: true, result: '' });
+    await flush();
+    expect(usages().at(-1)).toMatchObject({
+      unreported: true,
+      context: { tokens: 520, contextWindow: 100_000 },
+    });
+    await rt.dispose();
+  });
+
+  it('a turn that ends with its request still open says the same', async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    q.push(frame({ type: 'message_start', message: { id: 'm1', usage: { input_tokens: 1200 } } }));
+    q.push({ type: 'result', subtype: 'success', is_error: false, result: 'ok' });
+    await flush();
+    expect(usages().at(-1)).toMatchObject({ unreported: true });
+    await rt.dispose();
   });
 });

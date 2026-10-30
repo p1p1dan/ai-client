@@ -369,3 +369,9 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 - 注意：拖放不能走 ⊕ 的按路径读取——Main 的 `file:readAttachment` 只认自己对话框给出的路径（`PickedAttachmentAccess`），这是安全边界，不要放宽；拖放用 `File` 本身的内容。
 - 本机测试工具：`tools/composer-r2.mjs r2b <文件>`（CDP `Input.dispatchDragEvent` 可带真实文件路径）。
 
+
+### 10.18 2026-10-31 凌晨：R2 模型和用量显示（未提交）
+
+- 详见台账 §18、DEF-024～028。改动：Claude 引擎按目录的模型思考方式发请求（新启动变量 `AICLIENT_CLAUDE_SDK_MODEL_THINKING`，宿主据此设 CLI 的 `CLAUDE_CODE_MODEL_CAPABILITIES`），「默认」在两引擎都撤销之前的档位，Claude 引擎中途停止记「未知」，未报缓存标 `cacheUnreported`。
+- 复现方法：`P17D_GATEWAY_CAPTURE=<dir>` 让假网关记下请求体；新对话的引擎由开发者设置 `claudeSdkEngineEnabled` 决定，改它要用页面已加载的 settings 模块（`performance` 里带 `?t=` 的那个 URL），直接 `import('/stores/settings/index.ts')` 会拿到另一份副本、改了不生效。
+- 下一步：等用户看预览 `docs/design/2026-10-31-usage-r2-preview.html` 后做 80% 提醒、默认 128k 说明、切换提示；然后按台账进入「差异查看」。

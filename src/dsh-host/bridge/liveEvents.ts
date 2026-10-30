@@ -344,6 +344,9 @@ function turnUsageOf(usage: Row): Row {
   const cacheRead = numberOf(usage.cacheReadTokens) ?? 0;
   const cacheWrite = numberOf(usage.cacheWriteTokens) ?? 0;
   const reasoning = numberOf(usage.reasoningTokens);
+  // PiLab R2 (04.7): no cache count at all is "not reported", not a 0% hit rate.
+  const cacheUnreported =
+    numberOf(usage.cacheReadTokens) === undefined && numberOf(usage.cacheWriteTokens) === undefined;
   return {
     input,
     output,
@@ -351,6 +354,7 @@ function turnUsageOf(usage: Row): Row {
     cacheWrite,
     totalTokens: numberOf(usage.totalTokens) ?? input + output + cacheRead + cacheWrite,
     ...(reasoning !== undefined ? { reasoning } : {}),
+    ...(cacheUnreported ? { cacheUnreported: true } : {}),
   };
 }
 

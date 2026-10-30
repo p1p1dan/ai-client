@@ -49,6 +49,7 @@ import type {
 import {
   CLAUDE_SDK_AUTO_COMPACT_WINDOW_MAX,
   CLAUDE_SDK_AUTO_COMPACT_WINDOW_MIN,
+  type ClaudeSdkThinkingStyle,
   PERMISSION_MODE_REFUSED,
   permissionModeRefusalReason,
 } from '../shared/claudeSdkEngine.ts';
@@ -166,6 +167,11 @@ export interface SdkHostConfig {
    */
   modelWindows?: Readonly<Record<string, number>>;
   /**
+   * PiLab R2 (04.2): how each model thinks, by CLI model id (`claudeSdkModelThinking`).
+   * A model not named keeps the CLI's own default (adaptive thinking).
+   */
+  modelThinking?: Readonly<Record<string, ClaudeSdkThinkingStyle>>;
+  /**
    * Probes only: a stand-in home directory whose `.claude` the CLI's walk up from
    * the cwd must not read either, besides `os.homedir()`'s (S-3 P-5, P-11).
    */
@@ -269,6 +275,15 @@ interface Step {
   blocks: Map<number, StepBlock>;
   promptTokens: { input: number; cacheRead: number; cacheWrite: number };
   output: number;
+  /**
+   * PiLab R2 (04.7): the provider's own `message_delta` brought the request's
+   * closing usage. A request cut before it (Stop mid-stream) never says what it
+   * cost; the CLI closes it with a delta of its own that has no `stop_reason`.
+   */
+  reported?: boolean;
+  /** Its `usage.updated` went out; `local`: a CLI reply of its own, no model request. */
+  settled?: boolean;
+  local?: boolean;
 }
 
 interface Interjection {
@@ -613,11 +628,51 @@ export function isUserHomeDir(
   return isHomeDir(cwd, homeTargets(homes, resolve), resolve);
 }
 
-function effortOptions(
-  effort: SessionEffortLevel | undefined
+/**
+ * PiLab R2 (04.2): the budget a budget-thinking row gets for a level — pi-ai's
+ * table, which the DSH engine sends the same row (`xhigh` / `max` clamp to High;
+ * no level is Medium, as the menu's Default says).
+ */
+export function thinkingBudget(effort: SessionEffortLevel | undefined): number {
+  switch (effort) {
+    case 'minimal':
+      return 1024;
+    case 'low':
+      return 2048;
+    case 'high':
+    case 'xhigh':
+    case 'max':
+      return 16384;
+    default:
+      return 8192;
+  }
+}
+
+/**
+ * The CLI effort for an adaptive request. No level on a row the catalog marks
+ * adaptive is Medium, as the menu's Default says (the CLI's own default is High);
+ * a model the catalog does not describe keeps the CLI's default.
+ */
+function adaptiveLevel(
+  effort: SessionEffortLevel | undefined,
+  style: ClaudeSdkThinkingStyle | undefined
+): Exclude<SessionEffortLevel, 'off' | 'minimal'> | undefined {
+  if (effort === 'minimal') return 'low';
+  if (effort === undefined || effort === 'off') return style === 'adaptive' ? 'medium' : undefined;
+  return effort;
+}
+
+export function effortOptions(
+  effort: SessionEffortLevel | undefined,
+  style?: ClaudeSdkThinkingStyle
 ): Pick<Options, 'effort' | 'thinking'> {
-  if (effort === 'off') return { thinking: { type: 'disabled' } };
-  const level = effort === 'minimal' ? 'low' : effort;
+  if (style === 'none' || effort === 'off') return { thinking: { type: 'disabled' } };
+  if (style === 'budget') {
+    return {
+      thinking: { type: 'enabled', budgetTokens: thinkingBudget(effort), display: 'summarized' },
+    };
+  }
+  const level = adaptiveLevel(effort, style);
   return {
     thinking: { type: 'adaptive', display: 'summarized' },
     ...(level ? { effort: level } : {}),
@@ -797,6 +852,9 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private pumpDone: Promise<void> = Promise.resolve();
   private modelRef: string | undefined;
   private effort: SessionEffortLevel | undefined;
+  /** The thinking style the CLI was last set to (`undefined`: the CLI's own, adaptive). */
+  private appliedThinking: ClaudeSdkThinkingStyle | undefined;
+  private thinkingOff = false;
   private permissions: RuntimePermissionSettings;
   /** The mode the CLI last reported (`system/init`, `system/status`); null while none runs. */
   private cliMode: string | null = null;
@@ -855,6 +913,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private readonly backgroundEdges = new Set<string>();
   private failureSignals: FailureSignals = {};
   private contextWindow = 0;
+  /** The context size of the last request that reported its usage. */
+  private lastContextTokens: number | null = null;
   /** The window the CLI reported per model, before the catalog's cap. */
   private readonly cliWindows = new Map<string, number>();
   /** `<model>:<limit>` of each real-window notice said in this chat: once is enough. */
@@ -960,11 +1020,13 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const homes = [...new Set([homedir(), ...(this.config.homeDir ? [this.config.homeDir] : [])])];
     const projectTrusted =
       this.options.projectTrusted === true && !isUserHomeDir(this.options.cwd, homes);
+    this.appliedThinking = this.thinkingStyle(this.modelRef);
+    this.thinkingOff = this.effort === 'off';
     const options: Options = {
       cwd: this.options.cwd,
       env: this.config.cliEnv,
       ...(model ? { model } : {}),
-      ...effortOptions(this.effort),
+      ...effortOptions(this.effort, this.thinkingStyle(this.modelRef)),
       systemPrompt: { type: 'preset', preset: 'claude_code', append: PILAB_PROMPT_APPEND },
       tools: { type: 'preset', preset: 'claude_code' },
       disallowedTools: HOST_ONLY_TOOLS,
@@ -1161,13 +1223,45 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         this.recordStubModel();
       }
     }
-    if (effort && effort !== this.effort) {
+    // PiLab R2 (04.2): no level is "Default", so a level chosen before is undone.
+    if (effort !== this.effort || this.appliedThinking !== this.thinkingStyle(this.modelRef)) {
       this.effort = effort;
-      const level = effort === 'off' || effort === 'minimal' ? 'low' : effort;
-      await this.applyFlagSettings(q, { effortLevel: level }).catch((error) =>
-        this.log('effort change failed', error)
-      );
+      await this.applyThinking(q).catch((error) => this.log('effort change failed', error));
     }
+  }
+
+  /** How the CLI model behind `ref` thinks, as the catalog declares it. */
+  private thinkingStyle(ref: string | undefined): ClaudeSdkThinkingStyle | undefined {
+    const model = bareModelId(ref);
+    const styles = this.config.modelThinking;
+    return model && styles && Object.hasOwn(styles, model) ? styles[model] : undefined;
+  }
+
+  /**
+   * The thinking and effort of the next request, for the current model and level.
+   * Adaptive (and a model the catalog does not describe) takes the effort as the
+   * CLI's `effortLevel` (`null`: the model's default); a budget row its budget; a
+   * model without reasoning no thinking at all.
+   */
+  private async applyThinking(q: Query): Promise<void> {
+    const style = this.thinkingStyle(this.modelRef);
+    const effort = this.effort;
+    if (style === 'none' || style === 'budget' || effort === 'off') {
+      const tokens = style === 'budget' && effort !== 'off' ? thinkingBudget(effort) : 0;
+      await q.setMaxThinkingTokens(tokens);
+      await this.applyFlagSettings(q, { effortLevel: null });
+    } else {
+      if (
+        this.appliedThinking === 'none' ||
+        this.appliedThinking === 'budget' ||
+        this.thinkingOff
+      ) {
+        await q.setMaxThinkingTokens(null);
+      }
+      await this.applyFlagSettings(q, { effortLevel: adaptiveLevel(effort, style) ?? null });
+    }
+    this.appliedThinking = style;
+    this.thinkingOff = effort === 'off';
   }
 
   /**
@@ -1780,6 +1874,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         const step = turn.step;
         const usage = record(event.usage);
         if (step && usage) {
+          // A provider's closing frame names why the reply ended. The one the CLI
+          // makes up for a request it cut (Stop) names none, and its usage is the
+          // prompt side with zeros: not a report.
+          step.reported = typeof record(event.delta)?.stop_reason === 'string';
           step.output = num(usage.output_tokens) || step.output;
           if (usage.input_tokens !== undefined) step.promptTokens.input = num(usage.input_tokens);
           if (usage.cache_read_input_tokens !== undefined) {
@@ -1856,6 +1954,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       blocks: new Map([[0, { kind: 'text', blockId: `${messageId}-b0` }]]),
       promptTokens: { input: 0, cacheRead: 0, cacheWrite: 0 },
       output: 0,
+      local: true,
     };
     this.emit({ type: 'message.started', payload: { messageId, role: 'assistant' } });
     this.emit({
@@ -2081,6 +2180,12 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   }
 
   private settleStepUsage(step: Step): void {
+    if (step.settled || step.local) return;
+    step.settled = true;
+    if (!step.reported) {
+      this.settleUnreported();
+      return;
+    }
     const { input, cacheRead, cacheWrite } = step.promptTokens;
     const output = step.output;
     const totalTokens = input + cacheRead + cacheWrite + output;
@@ -2089,17 +2194,40 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     this.session.cacheRead += cacheRead;
     this.session.cacheWrite += cacheWrite;
     this.session.totalTokens += totalTokens;
-    const contextTokens = input + cacheRead + cacheWrite + output;
+    this.lastContextTokens = input + cacheRead + cacheWrite + output;
     const payload = buildPiUsagePayload(
       { input, output, cacheRead, cacheWrite, totalTokens, cost: { total: 0 } },
-      this.contextWindow > 0
-        ? {
-            tokens: contextTokens,
-            contextWindow: this.contextWindow,
-            percent: Math.min(100, (contextTokens / this.contextWindow) * 100),
-          }
-        : undefined,
+      this.contextOf(this.lastContextTokens),
       { ...this.session }
+    );
+    if (payload) this.emit({ type: 'usage.updated', payload });
+  }
+
+  /**
+   * PiLab R2 (04.7, T125's rule on this engine): a request cut before its
+   * closing usage. Its cost is unknown, not zero: the payload says so, the
+   * occupancy stays the last measured one, and the running total takes in
+   * nothing it cannot count.
+   */
+  /** Occupancy at `tokens`, against the window as now known; none before one is. */
+  private contextOf(
+    tokens: number
+  ): { tokens: number; contextWindow: number; percent: number } | undefined {
+    if (this.contextWindow <= 0) return undefined;
+    return {
+      tokens,
+      contextWindow: this.contextWindow,
+      percent: Math.min(100, (tokens / this.contextWindow) * 100),
+    };
+  }
+
+  private settleUnreported(): void {
+    const payload = buildPiUsagePayload(
+      { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } },
+      this.lastContextTokens === null ? undefined : this.contextOf(this.lastContextTokens),
+      { ...this.session },
+      null,
+      { unreported: true }
     );
     if (payload) this.emit({ type: 'usage.updated', payload });
   }
@@ -2123,6 +2251,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     if (!turn) return;
     if (turn.stopTimer) clearTimeout(turn.stopTimer);
     this.tracker.stop();
+    // A request still open when the turn ends never reported its usage.
+    if (turn.step) this.settleStepUsage(turn.step);
     this.closeStep();
     this.drainPending(outcome === 'stopped' ? 'aborted' : 'session_closed');
     const type =

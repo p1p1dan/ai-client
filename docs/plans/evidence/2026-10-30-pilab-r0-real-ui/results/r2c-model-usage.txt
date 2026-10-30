@@ -1,0 +1,48 @@
+# PiLab R2 model/usage: request bodies as the fake gateway received them (2026-10-31)
+# capture: P17D_GATEWAY_CAPTURE; 34-45 before the fix, 46+ after. engine: max_tokens 32000 = Claude CLI, 8192 = DSH.
+# fake-1/fake-nowin: no reasoning; fake-think: reasoning, budget thinking; fake-adaptive: adaptive-only.
+
+ 34.json claude-sdk fake-think     thinking={"type": "adaptive", "display": "summarized"} effort="high" | CC-TEXT 第一轮 高
+ 35.json claude-sdk fake-think     thinking={"type": "adaptive", "display": "summarized"} effort="high" | CC-TEXT 第二轮 默认
+ 36.json claude-sdk fake-1         thinking={"type": "adaptive", "display": "summarized"} effort="high" | CC-TEXT 无推理模型
+ 37.json dsh        fake-think     thinking={"type": "enabled", "budget_tokens": 7168, "display": "summarized"} effort=null |  denied tool or path by switching tools.
+ 38.json dsh        fake-think     thinking={"type": "enabled", "budget_tokens": 7168, "display": "summarized"} effort=null | CC-TEXT DSH 第二轮 默认
+ 39.json dsh        fake-think     thinking={"type": "enabled", "budget_tokens": 7168, "display": "summarized"} effort=null | CC-TEXT DSH 选中
+ 40.json dsh        fake-think     thinking={"type": "enabled", "budget_tokens": 2048, "display": "summarized"} effort=null | CC-TEXT DSH 选低
+ 41.json dsh        fake-think     thinking={"type": "enabled", "budget_tokens": 2048, "display": "summarized"} effort=null |  denied tool or path by switching tools.
+ 42.json dsh        fake-think     thinking={"type": "enabled", "budget_tokens": 2048, "display": "summarized"} effort=null | CC-TEXT DSH 新对话 改默认
+ 43.json dsh        fake-nowin     thinking=null effort=null |  denied tool or path by switching tools.
+ 44.json claude-sdk fake-1         thinking={"type": "adaptive", "display": "summarized"} effort="high" | CC-TEXT 第一轮正常
+ 45.json claude-sdk fake-1         thinking={"type": "adaptive", "display": "summarized"} effort="high" | CC-TEXT {"chunkMs":500} 第二轮中途停止
+ 46.json claude-sdk fake-1         thinking=null effort="high" | CC-TEXT 修复后 无推理模型
+ 47.json claude-sdk fake-think     thinking={"type": "adaptive", "display": "summarized"} effort="high" | CC-TEXT 修复后 预算模型 高
+ 48.json claude-sdk fake-think     thinking={"type": "adaptive", "display": "summarized"} effort="high" | CC-TEXT 修复后 预算模型 改默认
+ 49.json claude-sdk fake-think     thinking={"type": "adaptive", "display": "summarized"} effort="high" | CC-TEXT 修复后 预算模型 低
+ 50.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT 再测 无推理模型
+ 51.json claude-sdk fake-think     thinking={"budget_tokens": 16384, "type": "enabled", "display": "summarized"} effort=null | CC-TEXT 再测 预算模型 高
+ 52.json claude-sdk fake-think     thinking={"budget_tokens": 8192, "type": "enabled", "display": "summarized"} effort=null | CC-TEXT 再测 预算模型 改默认
+ 53.json claude-sdk fake-think     thinking={"budget_tokens": 2048, "type": "enabled", "display": "summarized"} effort=null | CC-TEXT 再测 预算模型 低
+ 54.json claude-sdk fake-adaptive  thinking={"type": "adaptive", "display": "summarized"} effort="low" | CC-TEXT 自适应 低
+ 55.json claude-sdk fake-adaptive  thinking={"type": "adaptive", "display": "summarized"} effort="high" | CC-TEXT 自适应 改默认
+ 56.json claude-sdk fake-adaptive  thinking={"type": "adaptive", "display": "summarized"} effort="medium" | CC-TEXT 自适应 中
+ 57.json claude-sdk fake-adaptive  thinking={"type": "adaptive", "display": "summarized"} effort="medium" | CC-TEXT 自适应 新对话默认
+ 58.json claude-sdk fake-adaptive  thinking={"type": "adaptive", "display": "summarized"} effort="high" | CC-TEXT 自适应 高
+ 59.json claude-sdk fake-adaptive  thinking={"type": "adaptive", "display": "summarized"} effort="medium" | CC-TEXT 自适应 回默认
+ 60.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT 停止前一轮
+ 61.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT {"chunkMs":500} 中途停止
+ 62.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT 跟踪 前一轮
+ 63.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT {"chunkMs":500} 跟踪 停止
+ 64.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT 跟踪2 前一轮
+ 65.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT {"chunkMs":500} 跟踪2 停止
+ 66.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT 复测停止 前一轮
+ 67.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT {"chunkMs":500} 复测停止
+ 68.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT 三测停止 第一轮
+ 69.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT 三测停止 第二轮
+ 70.json claude-sdk fake-1         thinking=null effort=null | CC-TEXT {"chunkMs":500} 三测停止
+ 71.json claude-sdk fake-think     thinking={"budget_tokens": 2048, "type": "enabled", "display": "summarized"} effort=null | CC-TEXT DSH复测 低
+ 72.json claude-sdk fake-think     thinking={"budget_tokens": 8192, "type": "enabled", "display": "summarized"} effort=null | CC-TEXT DSH复测 改默认
+ 73.json claude-sdk fake-think     thinking={"budget_tokens": 2048, "type": "enabled", "display": "summarized"} effort=null | CC-TEXT DSH复测 低
+ 74.json claude-sdk fake-think     thinking={"budget_tokens": 8192, "type": "enabled", "display": "summarized"} effort=null | CC-TEXT DSH复测 改默认
+ 75.json dsh        fake-think     thinking={"type": "enabled", "budget_tokens": 2048, "display": "summarized"} effort=null |  denied tool or path by switching tools.
+ 76.json dsh        fake-think     thinking={"type": "enabled", "budget_tokens": 7168, "display": "summarized"} effort=null | CC-TEXT DSH三测 改默认
+ 77.json dsh        fake-1         thinking=null effort=null |  denied tool or path by switching tools.

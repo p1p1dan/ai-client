@@ -80,6 +80,13 @@ export type PiTurnUsage = {
    * absence) as nothing to report; see `formatReasoningTokensClause`.
    */
   reasoning?: number;
+  /**
+   * PiLab R2 (04.7): the provider reported no cache counts at all (dsh-llm's
+   * cache fields are optional; many OpenAI-style providers send none). The
+   * `cacheRead` / `cacheWrite` zeros beside it are placeholders, not a
+   * measured miss. Only ever `true`.
+   */
+  cacheUnreported?: true;
 };
 
 /** `AgentSession.getContextUsage()`, passed through without re-derivation. */
@@ -299,6 +306,7 @@ export function deriveCacheHitRate(usage: PiTurnUsage | null | undefined): numbe
   const cacheRead = tokenCount(usage.cacheRead);
   const cacheWrite = tokenCount(usage.cacheWrite);
   if (input === null || cacheRead === null || cacheWrite === null) return null;
+  if (usage.cacheUnreported === true) return null;
   const promptTokens = input + cacheRead + cacheWrite;
   // No prompt at all: there is no ratio to report.
   if (promptTokens <= 0) return null;
@@ -445,6 +453,7 @@ export function buildPiUsagePayload(
     totalTokens: finiteNumber(source.totalTokens) ?? 0,
     costUsd: finiteNumber(cost?.total) ?? 0,
     ...(reasoning !== null ? { reasoning } : {}),
+    ...(source.cacheUnreported === true ? { cacheUnreported: true as const } : {}),
     ...(context ? { context } : {}),
     // A2: a sibling of the turn totals, never a substitute for them.
     ...(sessionUsage ? { session: sessionUsage } : {}),
@@ -664,6 +673,7 @@ export function readPiUsagePayload(payload: unknown): PiUsagePayload | null {
     totalTokens: finiteNumber(source.totalTokens) ?? 0,
     costUsd: finiteNumber(source.costUsd) ?? 0,
     ...(reasoning !== null ? { reasoning } : {}),
+    ...(source.cacheUnreported === true ? { cacheUnreported: true as const } : {}),
     ...(context ? { context } : {}),
     ...(session ? { session } : {}),
     ...(delegated ? { delegated } : {}),

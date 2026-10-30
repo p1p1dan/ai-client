@@ -6,9 +6,11 @@ import {
   CLAUDE_SDK_AUTO_COMPACT_PERCENT_ENV,
   CLAUDE_SDK_DROP_EMPTY_SYSTEM_ENV,
   CLAUDE_SDK_INHERITED_ENV,
+  CLAUDE_SDK_MODEL_THINKING_ENV,
   CLAUDE_SDK_MODEL_WINDOWS_ENV,
   CLAUDE_SDK_STUB_SUFFIX,
   type ClaudeSdkRoute,
+  type ClaudeSdkThinkingStyle,
   claudeSdkRouteFor,
   effectiveModelRef,
 } from '@shared/claudeSdkEngine';
@@ -369,6 +371,8 @@ export interface ClaudeSdkTransportInput {
   apiKey: string;
   /** The catalog's windows for the route's models (`claudeSdkModelWindows`); empty or absent: none. */
   modelWindows?: Record<string, number>;
+  /** How each of the route's models thinks (`claudeSdkModelThinking`); absent: the CLI's default. */
+  modelThinking?: Record<string, ClaudeSdkThinkingStyle>;
 }
 
 /**
@@ -397,6 +401,9 @@ export function openClaudeSdkTransport(input: ClaudeSdkTransportInput): WorkerTr
     // The catalog's windows the CLI would not know (user 2026-10-18); numbers only.
     ...(input.modelWindows && Object.keys(input.modelWindows).length > 0
       ? { [CLAUDE_SDK_MODEL_WINDOWS_ENV]: JSON.stringify(input.modelWindows) }
+      : {}),
+    ...(input.modelThinking && Object.keys(input.modelThinking).length > 0
+      ? { [CLAUDE_SDK_MODEL_THINKING_ENV]: JSON.stringify(input.modelThinking) }
       : {}),
     // User 2026-10-23: the developer setting as this host starts.
     [CLAUDE_SDK_AUTO_COMPACT_PERCENT_ENV]: String(claudeSdkAutoCompactPercent()),

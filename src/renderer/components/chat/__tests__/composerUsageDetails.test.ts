@@ -142,3 +142,28 @@ it('T125: says the cost is unknown instead of printing a cut request as free', a
     vi.unstubAllGlobals();
   }
 });
+
+it('[PILAB-R2-USAGE] used and remaining add up to 100, and unreported cache counts say so', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  const half: PiUsagePayload = {
+    ...usage,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cacheUnreported: true,
+    context: { tokens: 62500, contextWindow: 500000, percent: 12.5 },
+  };
+  await act(async () =>
+    root.render(createElement(ComposerUsageDetails, { usage: half, tools: '' }))
+  );
+  const text = container.textContent ?? '';
+  // 12.5% used rounds to 13%, so 87% remains — not 88%.
+  expect(text).toContain('13%');
+  expect(text).toContain('87%');
+  expect(text).not.toContain('88%');
+  // No cache counts at all: "Not reported", never a 0 read or a 0% hit rate.
+  expect(text).toContain('Cache readNot reported');
+  expect(text).toContain('Cache hit rateNot reported');
+  await act(async () => root.unmount());
+});

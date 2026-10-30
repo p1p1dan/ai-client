@@ -152,10 +152,11 @@ describe('the shared permission library', () => {
 
   it('says where each module came from, for merging runtime fixes from main', () => {
     // A module added by a later P1-6 step (pwshAnalysis, P1-6d) says which one;
-    // one added after P1-6 names its decision (dangerousCommands, decision 191).
+    // one added after P1-6 names its decision (dangerousCommands, decision 191),
+    // or the PiLab round that added it (approvalPreview, R1).
     const unlabelled = libraryFiles.filter(
       (file) =>
-        !/^\/\/ (Moved from src\/runtime\/\S+\.ts.*\(dsh-rebase P1-6a\)|New in dsh-rebase (?:P1-6[a-e]|decision \d+))/.test(
+        !/^\/\/ (Moved from src\/runtime\/\S+\.ts.*\(dsh-rebase P1-6a\)|New in dsh-rebase (?:P1-6[a-e]|decision \d+)|New in PiLab R\d+)/.test(
           readFileSync(file, 'utf8')
         )
     );
