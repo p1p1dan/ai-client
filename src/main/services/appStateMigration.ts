@@ -85,6 +85,7 @@
  * `app.setPath('userData', …)` and before any service touches a path.
  */
 
+import { randomUUID } from 'node:crypto';
 import {
   copyFileSync,
   existsSync,
@@ -96,7 +97,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join, normalize, resolve } from 'node:path';
 import { APP_STATE_DIR, LEGACY_APP_STATE_DIR } from '@shared/defaultPaths';
 
 /** Written into the new root once something was actually copied. Presence short-circuits every later boot. */
@@ -156,6 +157,10 @@ function copyTree(
 
     if (entry.isDirectory()) {
       copyTree(from, to, entryLabel, copied, skippedExisting);
+      continue;
+    }
+    // Belongs to the root it was written into; see its own note.
+    if (entry.name === HOME_ENV_RELOCATION_MARKER_FILE_NAME) {
       continue;
     }
     // Symlinks and sockets are not things this directory is supposed to hold;
@@ -517,23 +522,33 @@ export function migratePriorUserData(
 }
 
 // ---------------------------------------------------------------------------
-// Windows `HOME` half: a root that landed in somebody else's directory.
+// Windows `HOME` half: roots that landed in somebody else's directory.
 // ---------------------------------------------------------------------------
 
 /**
- * Written into the relocated root. Its second line is the stray root it came
- * from. Presence means the copy is done; a stray root found next to it is a
- * leftover to merge in and delete.
+ * Written into a relocated root: time, the stray root it came from, and a
+ * random token. Presence means the copy is done; a stray root found next to it
+ * is a leftover to merge in and delete. The token is what lets a stray root be
+ * recognised as the relocated root itself, seen through another spelling.
+ * Never carried by `copyTree`, so it stays with the root it was written into.
  */
 export const HOME_ENV_RELOCATION_MARKER_FILE_NAME = '.relocated-from-home-env';
 
+/** `<userData>` file whose import rows name their target `.jsonl` by absolute path. */
+const LEGACY_IMPORT_MANIFEST_FILE_NAME = 'legacy-import-manifest.json';
+
+/** JSON files above this size are left alone: nothing that names a root path is that big. */
+const MAX_REWRITTEN_JSON_BYTES = 8 * 1024 * 1024;
+
 export interface HomeEnvRelocationInput {
-  /** `%HOME%\.pilab\<profile>` — where builds that read `HOME` first wrote this root. */
+  /** `%HOME%\.pilab\<profile>` (or another root under `%HOME%`) that builds reading `HOME` first wrote. */
   strayRoot: string;
-  /** `%USERPROFILE%\.pilab\<profile>` — this install's root from now on. */
+  /** The same root under `%USERPROFILE%` — where it lives from now on. */
   newRoot: string;
-  /** This install's `<userData>`, whose `session-index.json` names files under the root. */
+  /** This install's `<userData>`; its `session-index.json` must be re-pointed, or the move fails. */
   userDataDir: string;
+  /** Earlier releases' `<userData>` directories, whose index is re-pointed best effort. */
+  extraIndexDirs?: string[];
 }
 
 export type HomeEnvRelocationOutcome =
@@ -542,11 +557,14 @@ export type HomeEnvRelocationOutcome =
       kind: 'relocated';
       /** An earlier root at `newRoot` was merged in and then kept aside, never deleted. */
       keptAside: string | null;
-      /** String values in `session-index.json` re-pointed from the stray root. */
+      /** String values in `<userData>` files re-pointed from the stray root. */
       indexPathsRewritten: number;
       strayRemoved: boolean;
     }
   | { kind: 'cleaned_up'; indexPathsRewritten: number; strayRemoved: boolean }
+  /** A leftover next to an already relocated root could not be merged: both kept, the new root stays live. */
+  | { kind: 'leftover_kept'; error: string }
+  /** Nothing changed that the stray root depends on: the caller runs on it this time. */
   | { kind: 'failed'; error: string };
 
 function rootPrefixPattern(root: string): RegExp {
@@ -561,48 +579,116 @@ function rootPrefixPattern(root: string): RegExp {
   return new RegExp(String.raw`^${lead}${body}(?=[\\/]|$)`, 'i');
 }
 
-/** Re-points every string value under `strayRoot` at `newRoot`, anywhere in the tree. */
+/**
+ * The stray root as old builds may have spelled it in a file: `path.join`
+ * normalised (`..` folded) and, for a relative `HOME`, resolved.
+ */
+function rootPrefixPatterns(root: string): RegExp[] {
+  const spellings = new Set([normalize(root), resolve(root)]);
+  return [...spellings].map(rootPrefixPattern);
+}
+
+/** Re-points every string value under the stray root at `newRoot`, anywhere in the tree. */
 function rewriteRootPrefix(
   value: unknown,
-  prefix: RegExp,
+  patterns: RegExp[],
   newRoot: string,
   counter: { count: number }
 ): unknown {
   if (typeof value === 'string') {
-    const match = prefix.exec(value);
-    if (!match) return value;
-    counter.count += 1;
-    return join(newRoot, value.slice(match[0].length));
+    for (const pattern of patterns) {
+      const match = pattern.exec(value);
+      if (!match) continue;
+      counter.count += 1;
+      return join(newRoot, value.slice(match[0].length));
+    }
+    return value;
   }
   if (Array.isArray(value)) {
-    return value.map((item) => rewriteRootPrefix(item, prefix, newRoot, counter));
+    return value.map((item) => rewriteRootPrefix(item, patterns, newRoot, counter));
   }
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [
         key,
-        rewriteRootPrefix(item, prefix, newRoot, counter),
+        rewriteRootPrefix(item, patterns, newRoot, counter),
       ])
     );
   }
   return value;
 }
 
-function rewriteSessionIndexRoot(userDataDir: string, strayRoot: string, newRoot: string): number {
-  const file = join(userDataDir, SESSION_INDEX_FILE_NAME);
-  if (!existsSync(file)) return 0;
-  // An index that will not parse THROWS: rows that cannot be read must not be
-  // dropped, and the next boot retries (`SessionIndexService` sets such a file
-  // aside meanwhile). Rewritten whole, so not even a malformed row is lost.
-  const parsed: unknown = JSON.parse(readFileSync(file, 'utf-8'));
+/**
+ * Re-points one JSON file in place; returns how many strings changed. Throws
+ * on a file that will not parse unless `lenient`, and on a failed write.
+ */
+function rewriteJsonFile(
+  file: string,
+  patterns: RegExp[],
+  newRoot: string,
+  lenient: boolean
+): number {
+  if (!existsSync(file) || statSync(file).size > MAX_REWRITTEN_JSON_BYTES) return 0;
+  const text = readFileSync(file, 'utf-8');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    if (lenient) return 0;
+    throw error;
+  }
   const counter = { count: 0 };
-  const next = rewriteRootPrefix(parsed, rootPrefixPattern(strayRoot), newRoot, counter);
+  const next = rewriteRootPrefix(parsed, patterns, newRoot, counter);
   if (counter.count > 0) {
     const tempFile = `${file}.migrating.tmp`;
-    writeFileSync(tempFile, JSON.stringify(next), 'utf-8');
+    const body = text.includes('\n') ? `${JSON.stringify(next, null, 2)}\n` : JSON.stringify(next);
+    writeFileSync(tempFile, body, 'utf-8');
     renameSync(tempFile, file);
   }
   return counter.count;
+}
+
+/**
+ * Every `*.json` under `dir`: DSH session stubs, the Claude engine's plugin
+ * records and the model-sync state all name files under the root by absolute
+ * path. Files that do not parse are someone else's format and are skipped.
+ */
+function rewriteJsonTree(dir: string, patterns: RegExp[], newRoot: string): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      rewriteJsonTree(path, patterns, newRoot);
+    } else if (entry.isFile() && entry.name.endsWith('.json')) {
+      rewriteJsonFile(path, patterns, newRoot, true);
+    }
+  }
+}
+
+/**
+ * The `<userData>` files that name files under the root. The conversation list
+ * is required — an index that will not parse throws, so its rows are never
+ * dropped and the next boot retries (`SessionIndexService` sets such a file
+ * aside meanwhile). The rest is best effort.
+ */
+function rewriteUserDataPaths(input: HomeEnvRelocationInput, patterns: RegExp[]): number {
+  let count = rewriteJsonFile(
+    join(input.userDataDir, SESSION_INDEX_FILE_NAME),
+    patterns,
+    input.newRoot,
+    false
+  );
+  const optional = [
+    join(input.userDataDir, LEGACY_IMPORT_MANIFEST_FILE_NAME),
+    ...(input.extraIndexDirs ?? []).map((dir) => join(dir, SESSION_INDEX_FILE_NAME)),
+  ];
+  for (const file of optional) {
+    try {
+      count += rewriteJsonFile(file, patterns, input.newRoot, true);
+    } catch {
+      // Best effort: a stale path here costs a duplicate import, not data.
+    }
+  }
+  return count;
 }
 
 /**
@@ -620,52 +706,68 @@ function sameDirectory(a: string, b: string): boolean {
   }
 }
 
+/** The second check, for filesystems whose file index cannot be trusted: our own marker, seen through the stray path. */
+function sameMarker(strayRoot: string, newRoot: string): boolean {
+  try {
+    const seen = readFileSync(join(strayRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME), 'utf-8');
+    return seen === readFileSync(join(newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME), 'utf-8');
+  } catch {
+    return false;
+  }
+}
+
 /** Best effort: a file another program holds open must not stop the app from starting. */
-function removeStray(strayRoot: string): boolean {
+function removeStray(strayRoot: string, newRoot: string): boolean {
+  // Last guard before deleting: if the marker just written is visible here,
+  // this is the relocated root itself.
+  if (sameDirectory(strayRoot, newRoot) || sameMarker(strayRoot, newRoot)) return false;
   try {
     rmSync(strayRoot, { recursive: true, force: true, maxRetries: 3 });
   } catch {
     return false;
   }
-  // `.pilab` itself, when this profile was all it held — the directory the
-  // field report saw appear. Never touched while another profile lives there.
+  // `.pilab` itself, when it held nothing else — the directory the field
+  // report saw appear. Only ever that container: `.aiclient`'s parent is `HOME`.
   const container = dirname(strayRoot);
-  try {
-    if (readdirSync(container).length === 0) rmSync(container, { recursive: true, force: true });
-  } catch {
-    // Already gone, or not ours to judge.
+  if (basename(container) === APP_STATE_DIR) {
+    try {
+      if (readdirSync(container).length === 0) rmSync(container, { recursive: true, force: true });
+    } catch {
+      // Already gone, or not ours to judge.
+    }
   }
   return !existsSync(strayRoot);
 }
 
 /**
  * Steps 1 and 2: a full copy of the stray root, merged with any root already at
- * `newRoot`, swapped in with the marker inside. Returns where an earlier root
- * was kept aside. On a failed swap the earlier root is put back.
+ * `newRoot`, re-pointed, then swapped in with the marker inside. Returns where
+ * an earlier root was kept aside. On a failed swap the earlier root is put back.
  */
-function swapInStrayCopy(input: HomeEnvRelocationInput): string | null {
-  const stagingDir = `${input.newRoot}.relocating`;
+function swapInStrayCopy(strayRoot: string, newRoot: string, patterns: RegExp[]): string | null {
+  const stagingDir = `${newRoot}.relocating`;
   rmSync(stagingDir, { recursive: true, force: true });
-  copyTree(input.strayRoot, stagingDir, '', [], []);
-  const hadRoot = existsSync(input.newRoot);
+  copyTree(strayRoot, stagingDir, '', [], []);
+  const hadRoot = existsSync(newRoot);
   if (hadRoot) {
-    copyTree(input.newRoot, stagingDir, '', [], []);
+    copyTree(newRoot, stagingDir, '', [], []);
   }
+  rewriteJsonTree(stagingDir, patterns, newRoot);
   writeFileSync(
     join(stagingDir, HOME_ENV_RELOCATION_MARKER_FILE_NAME),
-    `${new Date().toISOString()}\n${input.strayRoot}\n`,
+    `${new Date().toISOString()}\n${strayRoot}\n${randomUUID()}\n`,
     'utf-8'
   );
   if (!hadRoot) {
-    renameSync(stagingDir, input.newRoot);
+    renameSync(stagingDir, newRoot);
     return null;
   }
-  const keptAside = `${input.newRoot}.before-relocation-${Date.now()}`;
-  renameSync(input.newRoot, keptAside);
+  const keptAside = `${newRoot}.before-relocation-${Date.now()}`;
+  renameSync(newRoot, keptAside);
   try {
-    renameSync(stagingDir, input.newRoot);
+    renameSync(stagingDir, newRoot);
   } catch (error) {
-    renameSync(keptAside, input.newRoot);
+    renameSync(keptAside, newRoot);
     throw error;
   }
   return keptAside;
@@ -677,64 +779,79 @@ function swapInStrayCopy(input: HomeEnvRelocationInput): string | null {
  * Cadence SPB sets `HOME` to its own config directory, and every build before
  * this one put `.pilab` there (see `@shared/userHome`). Unlike every other step
  * in this file this one MOVES: the field report is precisely that the
- * directory must stop appearing there, and the stray root is this profile's
+ * directory must stop appearing there, and the stray root is this machine's
  * alone, so nothing else depends on finding it.
  *
  * Order, chosen so that until step 3 the stray root is still the complete,
  * consistent copy the caller can fall back to:
  *  1. copy the stray root into a staging directory — `D:` to `C:` cannot be a
- *     rename — and merge in any root already at `newRoot` (stray wins: it is
- *     the one every recent boot used);
+ *     rename — merge in any root already at `newRoot` (stray wins: it is the
+ *     one every recent boot used), and re-point the JSON files inside it;
  *  2. marker into staging, then swap staging in; an earlier root is renamed
  *     aside, never deleted;
- *  3. re-point `session-index.json`, whose rows name `.jsonl` / stub files by
- *     ABSOLUTE path under the root (idempotent);
+ *  3. re-point `session-index.json` (and, best effort, the import manifest),
+ *     whose rows name files under the root by ABSOLUTE path;
  *  4. delete the stray root, best effort.
  *
- * A boot that finds the marker AND a stray root resumes at step 3, after
- * merging the stray into `newRoot` without overwriting: that covers a crash
- * after step 2, a stray file that could not be deleted, and an older build run
- * in between (which writes into `HOME` again) — its new conversations are
- * carried over instead of deleted.
+ * A boot that finds the marker AND a stray root merges the stray in without
+ * overwriting, re-points, and deletes it: that covers a crash after step 2, a
+ * file that could not be deleted, and an older build run in between (which
+ * writes into `HOME` again) — its new conversations are carried over. That
+ * path never falls back: the relocated root is the live one.
  *
- * Runs before `migrateAppState`, so a relocated root brings its own
- * `.migrated-from-aiclient` marker along. Never throws. On `failed` the marker
- * is withdrawn and the stray root left whole, so the caller keeps it for this
- * run (`keepStrayHomeEnvAppStateRoot`) and the next boot starts over from it —
- * a half-done move never shows the user an empty, logged-out app.
+ * Runs before `migrateAppState`, under the single-instance lock. Never throws.
+ * On `failed` the marker is withdrawn and the stray root left whole, so the
+ * caller runs on it this time (`keepStrayHomeEnvAppStateRoot`) and the next
+ * boot starts over — a half-done move never shows an empty, logged-out app.
  */
 export function relocateHomeEnvAppState(input: HomeEnvRelocationInput): HomeEnvRelocationOutcome {
-  if (!existsSync(input.strayRoot)) {
+  const strayRoot = resolve(input.strayRoot);
+  if (!existsSync(strayRoot)) {
     return { kind: 'skipped', reason: 'no_stray_root' };
   }
   // Before anything that deletes: a stray root that IS the new root is not stray.
-  if (sameDirectory(input.strayRoot, input.newRoot)) {
+  if (sameDirectory(strayRoot, input.newRoot) || sameMarker(strayRoot, input.newRoot)) {
     return { kind: 'skipped', reason: 'same_directory' };
   }
 
+  const patterns = rootPrefixPatterns(input.strayRoot);
   const markerPath = join(input.newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME);
-  const resumed = existsSync(markerPath);
-  try {
-    let keptAside: string | null = null;
-    if (resumed) {
-      copyTree(input.strayRoot, input.newRoot, '', [], []);
-    } else {
-      keptAside = swapInStrayCopy(input);
-    }
-    const indexPathsRewritten = rewriteSessionIndexRoot(
-      input.userDataDir,
-      input.strayRoot,
-      input.newRoot
-    );
-    const strayRemoved = removeStray(input.strayRoot);
-    return resumed
-      ? { kind: 'cleaned_up', indexPathsRewritten, strayRemoved }
-      : { kind: 'relocated', keptAside, indexPathsRewritten, strayRemoved };
-  } catch (error) {
+  if (existsSync(markerPath)) {
     try {
-      rmSync(markerPath, { force: true });
-    } catch {
-      // The next boot then resumes instead of starting over; both keep the data.
+      copyTree(strayRoot, input.newRoot, '', [], []);
+      rewriteJsonTree(input.newRoot, patterns, input.newRoot);
+      const indexPathsRewritten = rewriteUserDataPaths(input, patterns);
+      return {
+        kind: 'cleaned_up',
+        indexPathsRewritten,
+        strayRemoved: removeStray(strayRoot, input.newRoot),
+      };
+    } catch (error) {
+      return {
+        kind: 'leftover_kept',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  let swapped = false;
+  try {
+    const keptAside = swapInStrayCopy(strayRoot, input.newRoot, patterns);
+    swapped = true;
+    const indexPathsRewritten = rewriteUserDataPaths(input, patterns);
+    return {
+      kind: 'relocated',
+      keptAside,
+      indexPathsRewritten,
+      strayRemoved: removeStray(strayRoot, input.newRoot),
+    };
+  } catch (error) {
+    if (swapped) {
+      try {
+        rmSync(markerPath, { force: true });
+      } catch {
+        // The next boot then merges the stray in instead; both keep the data.
+      }
     }
     return { kind: 'failed', error: error instanceof Error ? error.message : String(error) };
   }

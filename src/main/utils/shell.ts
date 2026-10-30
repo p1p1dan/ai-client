@@ -9,6 +9,7 @@ import { readSettings } from '../ipc/settings';
 import { findLoginShell, getEnhancedPath } from '../services/terminal/PtyManager';
 import { shellDetector } from '../services/terminal/ShellDetector';
 import { killProcessTree } from './processUtils';
+import { getUserHome } from './userHome';
 
 // Re-export for convenience
 export { killProcessTree } from './processUtils';
@@ -215,7 +216,7 @@ export async function execInPty(command: string, options: ExecInPtyOptions = {})
         name: 'xterm-256color',
         cols: 80,
         rows: 24,
-        cwd: process.env.HOME || process.env.USERPROFILE || '/',
+        cwd: getUserHome() || '/',
         env: {
           ...getEnvForCommand(),
           TERM: 'xterm-256color',

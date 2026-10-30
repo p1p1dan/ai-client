@@ -8,8 +8,9 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { getDefaultTemporaryBasePath } from '@shared/defaultPaths';
 import { IPC_CHANNELS, type TempWorkspaceRemoveResult } from '@shared/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type RemoveHandler = (
   event: unknown,
@@ -118,6 +119,49 @@ describe('TEMP_WORKSPACE_REMOVE with a directory that is already gone', () => {
         await rm(real, { recursive: true, force: true });
       }
     });
+  });
+});
+
+/**
+ * V1.2.1 field report: builds before the Windows `HOME` fix spelled the default
+ * base from Cadence's `HOME`, so their temp sessions sit under it; the renderer
+ * now sends a profile-based base. Those rows must still be removable.
+ */
+describe('TEMP_WORKSPACE_REMOVE for a session created under a Windows HOME', () => {
+  let sandbox: string;
+  const platform = process.platform;
+
+  beforeEach(async () => {
+    sandbox = await mkdtemp(path.join(tmpdir(), 'temp-ws-home-env-'));
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    vi.stubEnv('HOME', path.join(sandbox, 'SPB_Data'));
+    vi.stubEnv('USERPROFILE', path.join(sandbox, 'profile'));
+  });
+
+  afterEach(async () => {
+    Object.defineProperty(process, 'platform', { value: platform });
+    vi.unstubAllEnvs();
+    await rm(sandbox, { recursive: true, force: true });
+  });
+
+  it('removes it although the renderer sends the profile-based base', async () => {
+    const old = path.join(getDefaultTemporaryBasePath(path.join(sandbox, 'SPB_Data'), '/'), 'old');
+    await mkdir(old, { recursive: true });
+    const base = getDefaultTemporaryBasePath(path.join(sandbox, 'profile'), '/');
+
+    const result = await remove({}, old, base);
+
+    expect(result.ok).toBe(true);
+    expect(existsSync(old)).toBe(false);
+  });
+
+  it('still refuses anything else under that HOME', async () => {
+    const other = path.join(sandbox, 'SPB_Data', 'pcbenv', 'x');
+    await mkdir(other, { recursive: true });
+    const base = getDefaultTemporaryBasePath(path.join(sandbox, 'profile'), '/');
+
+    expect(await remove({}, other, base)).toMatchObject({ ok: false, code: 'INVALID_PATH' });
+    expect(existsSync(other)).toBe(true);
   });
 });
 

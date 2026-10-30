@@ -59,18 +59,49 @@ export function getLegacyAppStateRoot(): string {
   return buildLegacyAppStateRoot(resolveHome());
 }
 
+/** One root that builds before the Windows `HOME` fix wrote under `%HOME%`, and where it belongs. */
+export interface StrayHomeEnvRoot {
+  strayRoot: string;
+  newRoot: string;
+  /** This install's own root: the only one the app falls back to when moving it fails. */
+  isProfileRoot: boolean;
+}
+
 /**
- * `%HOME%\.pilab\<profile>` on a Windows machine whose `HOME` is not the user's
- * home (Cadence SPB sets one) — where builds before the fix wrote this root.
- * `null` when there is no such `HOME`. For `relocateHomeEnvAppState` only.
+ * Every root an earlier build may have written under a Windows `HOME` that is
+ * not the user's home (Cadence SPB sets one), paired with its place under the
+ * profile: this install's root first, then the former product names' roots and
+ * `.aiclient`, so `migrateAppState` finds them where it now looks. Empty when
+ * there is no such `HOME`. For `relocateHomeEnvAppState` only.
  */
-export function getStrayHomeEnvAppStateRoot(): string | null {
+export function getStrayHomeEnvRoots(options: {
+  includePriorInstalls: boolean;
+}): StrayHomeEnvRoot[] {
   const stray = strayWindowsHome({
     platform: process.platform,
     env: process.env,
     osHome: app.getPath('home'),
   });
-  return stray ? buildAppStateRoot(stray, app.getPath('userData')) : null;
+  if (!stray) return [];
+  const home = resolveHome();
+  const userData = app.getPath('userData');
+  return [
+    {
+      strayRoot: buildAppStateRoot(stray, userData),
+      newRoot: buildAppStateRoot(home, userData),
+      isProfileRoot: true,
+    },
+    ...(options.includePriorInstalls ? PRIOR_USER_DATA_DIR_NAMES : []).map((name) => ({
+      strayRoot: buildAppStateRoot(stray, name),
+      newRoot: buildAppStateRoot(home, name),
+      isProfileRoot: false,
+    })),
+    {
+      strayRoot: buildLegacyAppStateRoot(stray),
+      newRoot: buildLegacyAppStateRoot(home),
+      isProfileRoot: false,
+    },
+  ];
 }
 
 /** One earlier `productName`'s pair of roots, as the migration consumes them. */

@@ -22,6 +22,7 @@ import { app, BrowserWindow } from 'electron';
 import * as pty from 'node-pty';
 import { killProcessTree } from '../../utils/processUtils';
 import { getEnvForCommand } from '../../utils/shell';
+import { getUserHome } from '../../utils/userHome';
 import { getAppStateRoot } from '../appStatePaths';
 import { readSharedSessionState, readSharedSettings } from '../SharedSessionState';
 import { RemoteAuthBroker } from './RemoteAuthBroker';
@@ -425,7 +426,7 @@ function getAppKnownHostsPath(): string {
 }
 
 function expandHomePath(input: string): string {
-  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const home = getUserHome();
   if (!home) {
     return input;
   }
@@ -2956,7 +2957,7 @@ export class RemoteConnectionManager {
           name: 'xterm-256color',
           cols: 80,
           rows: 24,
-          cwd: process.env.HOME || process.env.USERPROFILE || '/',
+          cwd: getUserHome() || '/',
           env,
         });
       } catch (error) {

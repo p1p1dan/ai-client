@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -16,11 +17,12 @@ import {
   HOME_ENV_RELOCATION_MARKER_FILE_NAME,
   type HomeEnvRelocationInput,
   MIGRATION_MARKER_FILE_NAME,
+  migrateAppState,
   relocateHomeEnvAppState,
   SESSION_INDEX_FILE_NAME,
 } from '../appStateMigration';
 
-const fsFault = vi.hoisted(() => ({ failStagingRename: false }));
+const fsFault = vi.hoisted(() => ({ failStagingRename: false, untrustedFileIndex: false }));
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
@@ -33,6 +35,17 @@ vi.mock('node:fs', async (importOriginal) => {
       }
       actual.renameSync(from, to);
     },
+    // A filesystem whose file index cannot be trusted (some SMB, FAT, ReFS
+    // setups): the identity check sees two different directories.
+    statSync: ((target: string, options?: { bigint?: boolean }) => {
+      if (fsFault.untrustedFileIndex && options?.bigint) {
+        const stats = actual.statSync(target, options as { bigint: true });
+        return Object.assign(Object.create(Object.getPrototypeOf(stats)), stats, {
+          ino: BigInt(Math.floor(Math.random() * 1e9) + 1),
+        });
+      }
+      return actual.statSync(target, options as never);
+    }) as typeof actual.statSync,
   };
 });
 
@@ -64,6 +77,7 @@ describe('relocateHomeEnvAppState', () => {
 
   afterEach(() => {
     fsFault.failStagingRename = false;
+    fsFault.untrustedFileIndex = false;
     rmSync(sandbox, { recursive: true, force: true });
   });
 
@@ -305,5 +319,150 @@ describe('relocateHomeEnvAppState', () => {
       expect(relocateHomeEnvAppState(aliasInput)).toMatchObject({ reason: 'same_directory' });
       expect(existsSync(path.join(input.newRoot, 'credentials', 'vault.json'))).toBe(true);
     });
+  });
+
+  it('re-points the JSON files inside the root, keeping their layout', () => {
+    const stub = path.join(input.strayRoot, 'dsh-home', 'aiclient-sessions', 'a.dsh.json');
+    const jsonl = path.join(input.strayRoot, 'pi-agent', 'sessions', 'a.jsonl');
+    write(jsonl, '{}');
+    write(stub, JSON.stringify({ origin: { file: { path: jsonl } } }));
+    const plugins = path.join(input.strayRoot, 'claude', 'plugins', 'installed_plugins.json');
+    const installPath = path.join(input.strayRoot, 'claude', 'plugins', 'cache', 'p');
+    write(plugins, `${JSON.stringify({ p: { installPath } }, null, 2)}\n`);
+
+    relocateHomeEnvAppState(input);
+
+    const movedStub = path.join(input.newRoot, 'dsh-home', 'aiclient-sessions', 'a.dsh.json');
+    expect(JSON.parse(readFileSync(movedStub, 'utf-8')).origin.file.path).toBe(
+      path.join(input.newRoot, 'pi-agent', 'sessions', 'a.jsonl')
+    );
+    const movedPlugins = readFileSync(
+      path.join(input.newRoot, 'claude', 'plugins', 'installed_plugins.json'),
+      'utf-8'
+    );
+    expect(JSON.parse(movedPlugins).p.installPath).toBe(
+      path.join(input.newRoot, 'claude', 'plugins', 'cache', 'p')
+    );
+    expect(movedPlugins).toContain('\n  ');
+  });
+
+  it('re-points the import manifest, and an earlier release index best effort', () => {
+    const target = path.join(input.strayRoot, 'pi-agent', 'sessions', 'i.jsonl');
+    write(target, '{}');
+    write(
+      path.join(input.userDataDir, 'legacy-import-manifest.json'),
+      JSON.stringify({ entries: [{ targetSessionFile: target }] })
+    );
+    const priorUserData = path.join(sandbox, 'appData', 'jyw-ai-client');
+    write(
+      path.join(priorUserData, SESSION_INDEX_FILE_NAME),
+      JSON.stringify([{ sessionId: 'p', runtimeIdentity: target }])
+    );
+    const brokenUserData = path.join(sandbox, 'appData', 'AiClient');
+    write(path.join(brokenUserData, SESSION_INDEX_FILE_NAME), 'not json');
+
+    expect(
+      relocateHomeEnvAppState({ ...input, extraIndexDirs: [priorUserData, brokenUserData] })
+    ).toMatchObject({ kind: 'relocated', indexPathsRewritten: 2, strayRemoved: true });
+    const moved = path.join(input.newRoot, 'pi-agent', 'sessions', 'i.jsonl');
+    const manifest = JSON.parse(
+      readFileSync(path.join(input.userDataDir, 'legacy-import-manifest.json'), 'utf-8')
+    );
+    expect(manifest.entries[0].targetSessionFile).toBe(moved);
+    const [priorRow] = JSON.parse(
+      readFileSync(path.join(priorUserData, SESSION_INDEX_FILE_NAME), 'utf-8')
+    );
+    expect(priorRow.runtimeIdentity).toBe(moved);
+  });
+
+  it('matches a HOME spelled with `..` the way path.join wrote the rows', () => {
+    const unnormalized = [sandbox, 'elsewhere', '..', 'SPB_Data', APP_STATE_DIR, 'PiLabAi'].join(
+      '/'
+    );
+    const file = path.join(input.strayRoot, 'pi-agent', 'z.jsonl');
+    write(file, 'z');
+    write(
+      path.join(input.userDataDir, SESSION_INDEX_FILE_NAME),
+      JSON.stringify([{ sessionId: 'z', runtimeIdentity: file }])
+    );
+
+    expect(relocateHomeEnvAppState({ ...input, strayRoot: unnormalized })).toMatchObject({
+      kind: 'relocated',
+      indexPathsRewritten: 1,
+      strayRemoved: true,
+    });
+    expect(readFileSync(String(readIndex()[0].runtimeIdentity), 'utf-8')).toBe('z');
+  });
+
+  it('moves `.aiclient` out of HOME without ever touching HOME itself', () => {
+    const bareHome = path.join(sandbox, 'BareHome');
+    write(path.join(bareHome, '.aiclient', 'settings.json'), '{}');
+
+    expect(
+      relocateHomeEnvAppState({
+        ...input,
+        strayRoot: [bareHome, '.aiclient'].join('/'),
+        newRoot: path.join(sandbox, 'profile', '.aiclient'),
+      })
+    ).toMatchObject({ kind: 'relocated', strayRemoved: true });
+    expect(existsSync(bareHome)).toBe(true);
+    expect(existsSync(path.join(sandbox, 'profile', '.aiclient', 'settings.json'))).toBe(true);
+  });
+
+  it('never carries the marker into another root through a migration copy', () => {
+    const legacy = path.join(sandbox, 'profile', '.aiclient');
+    write(path.join(legacy, 'settings.json'), '{}');
+    write(path.join(legacy, HOME_ENV_RELOCATION_MARKER_FILE_NAME), 'legacy');
+
+    migrateAppState({
+      legacyRoot: legacy,
+      legacyCredentialsDir: path.join(sandbox, 'none'),
+      newRoot: input.newRoot,
+      newCredentialsDir: path.join(input.newRoot, 'credentials'),
+    });
+    expect(existsSync(path.join(input.newRoot, 'settings.json'))).toBe(true);
+    expect(existsSync(path.join(input.newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME))).toBe(false);
+  });
+
+  it('when a leftover cannot be merged, keeps both and stays on the relocated root', () => {
+    write(path.join(input.newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME), 'done');
+    write(path.join(input.newRoot, 'credentials', 'vault.json'), 'real');
+    const locked = path.join(input.strayRoot, 'pi-agent', 'locked.jsonl');
+    write(locked, 'x');
+    chmodSync(locked, 0o000);
+
+    try {
+      expect(relocateHomeEnvAppState(input)).toMatchObject({ kind: 'leftover_kept' });
+    } finally {
+      chmodSync(locked, 0o600);
+    }
+    expect(
+      readFileSync(path.join(input.newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME), 'utf-8')
+    ).toBe('done');
+    expect(readFileSync(path.join(input.newRoot, 'credentials', 'vault.json'), 'utf-8')).toBe(
+      'real'
+    );
+    expect(readFileSync(locked, 'utf-8')).toBe('x');
+  });
+
+  it('when the file index lies, its own marker still stops it deleting the root', () => {
+    const profile = path.join(sandbox, 'profile');
+    const alias = path.join(sandbox, 'PROFIL~1');
+    write(path.join(input.newRoot, 'credentials', 'vault.json'), '{"v":1}');
+    symlinkSync(profile, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    fsFault.untrustedFileIndex = true;
+
+    const outcome = relocateHomeEnvAppState({
+      ...input,
+      strayRoot: [alias, APP_STATE_DIR, 'PiLabAi'].join('/'),
+    });
+    expect(outcome).toMatchObject({ kind: 'relocated', strayRemoved: false });
+    expect(readFileSync(path.join(input.newRoot, 'credentials', 'vault.json'), 'utf-8')).toBe(
+      '{"v":1}'
+    );
+    // And the next boot recognises it outright.
+    expect(
+      relocateHomeEnvAppState({ ...input, strayRoot: [alias, APP_STATE_DIR, 'PiLabAi'].join('/') })
+    ).toEqual({ kind: 'skipped', reason: 'same_directory' });
   });
 });

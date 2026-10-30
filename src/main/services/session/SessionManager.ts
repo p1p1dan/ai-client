@@ -11,6 +11,7 @@ import {
   type SessionStateEvent,
 } from '@shared/types';
 import { BrowserWindow, type WebContents } from 'electron';
+import { getUserHome } from '../../utils/userHome';
 import { remoteConnectionManager } from '../remote/RemoteConnectionManager';
 import { isRemoteVirtualPath, parseRemoteVirtualPath } from '../remote/RemotePath';
 import { PtyManager } from '../terminal/PtyManager';
@@ -360,7 +361,7 @@ export class SessionManager {
 
   private createLocal(windowId: number, options: SessionCreateOptions): SessionOpenResult {
     const kind = 'terminal';
-    const cwd = options.cwd || process.env.HOME || process.env.USERPROFILE || '/';
+    const cwd = options.cwd || getUserHome() || '/';
     const sessionId = this.localPtyManager.allocateId();
     const record: ManagedSessionRecord = {
       sessionId,

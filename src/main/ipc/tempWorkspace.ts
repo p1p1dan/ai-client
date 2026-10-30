@@ -10,6 +10,7 @@ import {
   type TempWorkspaceCreateResult,
   type TempWorkspaceRemoveResult,
 } from '@shared/types';
+import { strayWindowsHome } from '@shared/userHome';
 import { ipcMain } from 'electron';
 import { GitService } from '../services/git/GitService';
 import { sessionManager } from '../services/session/SessionManager';
@@ -48,6 +49,20 @@ function resolveBasePath(rawBasePath?: string): string {
     return path.resolve(expandHomePath(rawBasePath.trim(), home, path.sep));
   }
   return getDefaultTemporaryBasePath(home, path.sep);
+}
+
+/**
+ * The default base builds before the Windows `HOME` fix created temp sessions
+ * under: the renderer spelled `~` from a Cadence-style `HOME`. Those rows must
+ * still be removable now that the renderer sends a profile-based base.
+ */
+async function legacyHomeEnvBasePath(): Promise<string | null> {
+  const stray = strayWindowsHome({
+    platform: process.platform,
+    env: process.env,
+    osHome: homedir(),
+  });
+  return stray ? resolveSafePath(getDefaultTemporaryBasePath(stray, path.sep)) : null;
 }
 
 function isSubPath(basePath: string, targetPath: string): boolean {
@@ -178,8 +193,11 @@ export function registerTempWorkspaceHandlers(): void {
     IPC_CHANNELS.TEMP_WORKSPACE_REMOVE,
     async (_event, dirPath: string, rawBasePath?: string): Promise<TempWorkspaceRemoveResult> => {
       try {
-        const basePath = await resolveSafePath(resolveBasePath(rawBasePath));
         const resolvedDirPath = await resolveSafePath(dirPath);
+        const requestedBase = await resolveSafePath(resolveBasePath(rawBasePath));
+        const legacyBase = await legacyHomeEnvBasePath();
+        const basePath =
+          legacyBase && path.dirname(resolvedDirPath) === legacyBase ? legacyBase : requestedBase;
         const rootPath = path.parse(resolvedDirPath).root;
         if (resolvedDirPath === rootPath || !isSubPath(basePath, resolvedDirPath)) {
           return {

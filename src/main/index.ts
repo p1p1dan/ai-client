@@ -60,7 +60,7 @@ import {
   getLegacyAppStateRoot,
   getPriorInstallRoots,
   getPriorUserDataDirs,
-  getStrayHomeEnvAppStateRoot,
+  getStrayHomeEnvRoots,
   keepStrayHomeEnvAppStateRoot,
 } from './services/appStatePaths';
 import {
@@ -173,30 +173,40 @@ if (isDev) {
   app.setPath('userData', join(app.getPath('appData'), PACKAGED_USER_DATA_DIR_NAME));
 }
 
+// Taken here rather than with the window setup below: the relocation that
+// follows moves directories, and two processes started by a double click (or
+// the installer's "run" plus the user's own click) must not both do it.
+// Allowed before `ready`; `<userData>`, which keys the lock, is set above.
+const gotTheLock = app.requestSingleInstanceLock();
+
 // Phase ⓪, Windows `HOME` — ahead of everything else below. Builds before this
 // one read `HOME` first, and Cadence SPB sets a machine-wide `HOME` to its own
 // config directory, so the whole root sat in there (V1.2.1 field report,
-// 2026-10-30). Moves it under the user profile, re-points the conversation
-// list, and deletes the stray copy. Never throws; a failed move keeps this run
-// on the old root and retries next boot.
-const strayHomeEnvRoot = getStrayHomeEnvAppStateRoot();
-if (strayHomeEnvRoot) {
-  const relocation = relocateHomeEnvAppState({
-    strayRoot: strayHomeEnvRoot,
-    newRoot: getAppStateRoot(),
-    userDataDir: app.getPath('userData'),
-  });
-  if (relocation.kind === 'relocated') {
-    console.log(
-      `[appState] relocated out of HOME: index-paths=${relocation.indexPathsRewritten} kept-aside=${relocation.keptAside !== null} stray-removed=${relocation.strayRemoved}`
-    );
-  } else if (relocation.kind === 'cleaned_up') {
-    console.log(
-      `[appState] HOME leftover: index-paths=${relocation.indexPathsRewritten} stray-removed=${relocation.strayRemoved}`
-    );
-  } else if (relocation.kind === 'failed') {
-    console.error(`[appState] relocation out of HOME failed: ${relocation.error}`);
-    keepStrayHomeEnvAppStateRoot(strayHomeEnvRoot);
+// 2026-10-30). Moves it — and older layouts' roots, for the migration below —
+// under the user profile, re-points the files that name it, and deletes the
+// stray copy. Never throws; a failed move keeps this run on the old root and
+// retries next boot.
+if (gotTheLock) {
+  const extraIndexDirs = isDev ? [] : getPriorUserDataDirs();
+  for (const root of getStrayHomeEnvRoots({ includePriorInstalls: !isDev })) {
+    const relocation = relocateHomeEnvAppState({
+      strayRoot: root.strayRoot,
+      newRoot: root.newRoot,
+      userDataDir: app.getPath('userData'),
+      extraIndexDirs,
+    });
+    if (relocation.kind === 'relocated' || relocation.kind === 'cleaned_up') {
+      console.log(
+        `[appState] HOME root ${relocation.kind}: profile=${root.isProfileRoot} index-paths=${relocation.indexPathsRewritten} stray-removed=${relocation.strayRemoved}`
+      );
+    } else if (relocation.kind === 'failed' || relocation.kind === 'leftover_kept') {
+      console.error(
+        `[appState] HOME root ${relocation.kind}: profile=${root.isProfileRoot} ${redactStderrLine(relocation.error)}`
+      );
+      if (relocation.kind === 'failed' && root.isProfileRoot) {
+        keepStrayHomeEnvAppStateRoot(root.strayRoot);
+      }
+    }
   }
 }
 
@@ -341,7 +351,6 @@ app.on('open-url', (event, url) => {
 
 // Handle second instance (single-instance per userData profile).
 // In dev mode, set `AICLIENT_PROFILE` to run multiple isolated instances.
-const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
