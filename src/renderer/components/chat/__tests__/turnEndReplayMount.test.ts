@@ -174,8 +174,11 @@ it('[E2B-10-MOUNT] a compaction after a turn does not count toward that turn’s
   const view = await mountTimeline();
   try {
     const text = view.container.textContent ?? '';
-    expect(text).toContain(zh('Worked for {{seconds}}s', { seconds: 3 }));
-    expect(text).not.toContain(zh('Worked for {{seconds}}s', { seconds: 13 }));
+    // PiLab R1 (2026-10-30): 「用时 N 秒」 on the footer.
+    const took = (seconds: number) =>
+      zh('Took {{duration}}', { duration: zh('{{seconds}}s', { seconds }) });
+    expect(text).toContain(took(3));
+    expect(text).not.toContain(took(13));
     expect(text).toContain(zh('Completed at {{time}}', { time: formatAbsoluteTime(T0 + 3_000) }));
     // The summary itself is still on the timeline, as the reopen shows it —
     // its title in the UI language since decision 144.

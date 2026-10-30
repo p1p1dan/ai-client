@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { toastManager } from '@/components/ui/toast';
 import { useEditor } from '@/hooks/useEditor';
 import { useI18n } from '@/i18n';
+import { reportEditorSaveFailure } from '@/lib/fileSaveFailure';
 import { useEditorStore } from '@/stores/editor';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useSettingsStore } from '@/stores/settings';
@@ -234,8 +235,7 @@ export function EditorColumn() {
         try {
           await saveFile.mutateAsync(path);
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          toastManager.add({ type: 'error', title: t('Save failed'), description: message });
+          reportEditorSaveFailure(path, err, t);
           return 'failed';
         }
       }
@@ -283,7 +283,12 @@ export function EditorColumn() {
     [closePaths, tabs]
   );
 
-  const handleSave = useCallback((path: string) => saveFile.mutate(path), [saveFile]);
+  // Ctrl+S and every auto-save mode land here: a refused write must say so.
+  const handleSave = useCallback(
+    (path: string) =>
+      saveFile.mutate(path, { onError: (error) => reportEditorSaveFailure(path, error, t) }),
+    [saveFile, t]
+  );
   const handleClearPendingCursor = useCallback(() => setPendingCursor(null), [setPendingCursor]);
 
   // A08's「关闭文件」head button closes the ACTIVE tab, through the same

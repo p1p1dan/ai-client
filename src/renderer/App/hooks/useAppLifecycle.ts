@@ -1,9 +1,16 @@
 import type { AppCloseRequestPayload, AppCloseRequestReason } from '@shared/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useI18n } from '@/i18n';
+import {
+  describeFileSaveFailure,
+  flagConflictingDiskContent,
+  isFileContentConflict,
+} from '@/lib/fileSaveFailure';
 import { useEditorStore } from '@/stores/editor';
 import { useSettingsStore } from '@/stores/settings';
 
 export function useAppLifecycle(setCloseDialogOpen: (open: boolean) => void) {
+  const { t } = useI18n();
   const pendingRequestIdRef = useRef<string | null>(null);
   // T065: what the dialog is actually confirming. Main has always said, and
   // this side always asked about quitting the whole app.
@@ -75,22 +82,24 @@ export function useAppLifecycle(setCloseDialogOpen: (open: boolean) => void) {
           return;
         }
 
-        await window.electronAPI.file.write(path, tab.content, tab.encoding);
-        useEditorStore.getState().markFileSaved(path);
+        if (tab.baseContent === undefined) throw new Error('File content baseline is missing');
+        await window.electronAPI.file.write(path, tab.content, tab.encoding, tab.baseContent);
+        useEditorStore.getState().markFileSaved(path, tab.content);
 
         window.electronAPI.app.respondCloseSaveRequest(requestId, {
           ok: true,
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        // Main shows this text in its "Save failed" dialog and keeps the window open.
+        if (isFileContentConflict(err)) void flagConflictingDiskContent(path);
         window.electronAPI.app.respondCloseSaveRequest(requestId, {
           ok: false,
-          error: message,
+          error: describeFileSaveFailure(err, t, { withBannerHint: true }),
         });
       }
     });
     return cleanup;
-  }, []);
+  }, [t]);
 
   return { confirmCloseAndRespond, cancelCloseAndRespond, closeRequestReason };
 }

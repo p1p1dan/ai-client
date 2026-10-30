@@ -615,6 +615,8 @@ export interface ChatSessionsState {
   >;
   /** Latest Main-owned active-branch generation observed for each Pi session. */
   historyBranchRevisions?: Record<string, number>;
+  /** Main transport high watermarks; resume request IDs delimit seq generations. */
+  runtimeEventCursors?: Record<string, { seq: number; resumeRequestId: string | null }>;
 
   /**
    * D08 — type-only widening to `string | null` on this red-line store. No new
@@ -2054,31 +2056,24 @@ function applyRuntimeEventCore(
     }
 
     case 'message.started': {
-      const message: ChatMessage = {
-        id: event.payload.messageId,
-        sessionId,
-        role: event.payload.role,
-        blocks: [],
-        // Round-2 P0 (optional-field addition): absent unless the event
-        // actually carries it, so existing exact-shape assertions elsewhere
-        // are unaffected. F11 (round-2 review fix): `event.payload.model` is
-        // deliberately NOT copied onto the message here — it has zero
-        // renderer consumers (the timeline's model display reads the event's
-        // `model` straight off the wire via `messageMetadata.ts`'s own
-        // registry, never this store) — see that file's `reduceMessageMetadata`.
+      const bucket = state.messages[sessionId] ?? [];
+      const existing = bucket.find((item) => item.id === event.payload.messageId);
+      const metadata = {
         ...(event.payload.attachments ? { attachments: event.payload.attachments } : {}),
-        // P1-4d1 (decision 072 rule 3): same optional-field rule.
         ...(event.payload.origin ? { origin: event.payload.origin } : {}),
-        // Decision 206: same rule.
         ...(event.payload.transcriptId ? { transcriptId: event.payload.transcriptId } : {}),
       };
-      const bucket = state.messages[sessionId] ?? [];
+      const message: ChatMessage = existing
+        ? { ...existing, ...metadata }
+        : {
+            id: event.payload.messageId,
+            sessionId,
+            role: event.payload.role,
+            blocks: [],
+            ...metadata,
+          };
       const messages = withBucket(state, sessionId, upsertMessage(bucket, message));
-      // Decision 138: a user message is a turn starting — the send, a queued
-      // message released, or a turn the engine started itself (a goal round).
-      // Replayed history never arrives this way (`session.history` dates the
-      // row from its own timestamps), so viewing a chat does not move it.
-      if (event.payload.role !== 'user') return { messages };
+      if (existing || event.payload.role !== 'user') return { messages };
       const sessions = touchSessionActivity(state.sessions, sessionId);
       return sessions === state.sessions ? { messages } : { messages, sessions };
     }
@@ -2596,9 +2591,27 @@ export function applyRuntimeEvents(
   const patch: Partial<ChatSessionsState> = {};
   let working = state;
   for (const event of events) {
+    const sessionId = event.sessionId;
+    const cursor = sessionId ? working.runtimeEventCursors?.[sessionId] : undefined;
+    const resumeRequestId = event.type === 'session.resumed' ? event.requestId : undefined;
+    const startsNewGeneration =
+      resumeRequestId !== undefined && resumeRequestId !== cursor?.resumeRequestId;
+    if (sessionId && cursor && !startsNewGeneration && event.seq <= cursor.seq) continue;
+
     const step = applyRuntimeEvent(working, event);
     working = { ...working, ...step };
     Object.assign(patch, step);
+    if (sessionId) {
+      const runtimeEventCursors = {
+        ...working.runtimeEventCursors,
+        [sessionId]: {
+          seq: event.seq,
+          resumeRequestId: resumeRequestId ?? cursor?.resumeRequestId ?? null,
+        },
+      };
+      working.runtimeEventCursors = runtimeEventCursors;
+      patch.runtimeEventCursors = runtimeEventCursors;
+    }
   }
   return patch;
 }
@@ -2660,6 +2673,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
   historyErrors: {},
   historyPagination: {},
   historyBranchRevisions: {},
+  runtimeEventCursors: {},
 
   selectSession: (sessionId) => {
     // H/18 S3: opening a conversation IS reading it. Done here rather than in

@@ -701,6 +701,48 @@ describe('the five modes (S-2 A-1)', () => {
   });
 });
 
+describe('[PILAB-R1-05.5] the approval card carries the parameters being approved', () => {
+  it('an Edit shows old_string, new_string and replace_all; an MCP call shows its arguments', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    const editInput = {
+      file_path: join(configDir, 'x.txt'),
+      old_string: 'A',
+      new_string: 'B',
+      replace_all: true,
+    };
+    void canUse(q)('Edit', editInput, toolOpts('t-edit'));
+    void canUse(q)(
+      'mcp__tracker__create_issue',
+      { repo: 'demo', title: 'T', body: 'line 1\nline 2' },
+      toolOpts('t-mcp')
+    );
+    await flush();
+    const [edit, mcp] = ofType('permission.requested').map(
+      (e) => e.payload.input as Record<string, unknown>
+    );
+    expect(edit.contentLabel).toBe('Arguments');
+    expect(JSON.parse(String(edit.content))).toEqual({
+      old_string: 'A',
+      new_string: 'B',
+      replace_all: true,
+    });
+    expect(mcp.contentLabel).toBe('Arguments');
+    expect(JSON.parse(String(mcp.content))).toEqual({
+      repo: 'demo',
+      title: 'T',
+      body: 'line 1\nline 2',
+    });
+    // What the tool runs with is the CLI's own input, untouched.
+    expect(editInput).toEqual({
+      file_path: join(configDir, 'x.txt'),
+      old_string: 'A',
+      new_string: 'B',
+      replace_all: true,
+    });
+    await rt.dispose();
+  });
+});
+
 describe('what reaches canUseTool is never answered by the host (S-2 A-2, ruling 20)', () => {
   it('in plan mode, on any gear, a change the CLI asks about is the user card (official)', async () => {
     for (const pair of [

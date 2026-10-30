@@ -3,7 +3,12 @@ import path from 'node:path';
 import { CLAUDE_ENGINE_EXITED } from '@shared/claudeSdkEngine';
 import { zhTranslations } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
-import { canContinueSession, deriveSessionFailure, toSessionFailureCode } from '../sessionFailure';
+import {
+  canContinueSession,
+  deriveSessionFailure,
+  isEngineInterruption,
+  toSessionFailureCode,
+} from '../sessionFailure';
 
 /**
  * The 2026-09-21 report: 「停下了很莫名其妙，用户不知道发生了什么为什么报错了，同时
@@ -134,16 +139,23 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       errorCode: 'dsh_host_crashed',
       error: 'Worker exited (code=null signal=SIGKILL)',
     });
-    expect(crashed.title).toBe('The chat engine stopped unexpectedly');
+    // PiLab R1 (user ruling 2026-10-30): an engine interruption reads as a
+    // neutral 「这一轮没有完成」, not as a red failure (`isEngineInterruption`).
+    expect(crashed.title).toBe('This turn did not finish');
+    expect(crashed.reason).toContain('connection to the chat engine was lost');
     expect(crashed.action).toBe('continue');
     expect(crashed.showsDetail).toBe(false);
-    expect(zhTranslations[crashed.title]).toBe('对话引擎意外退出');
+    expect(zhTranslations[crashed.title]).toBe('这一轮没有完成');
+    expect(isEngineInterruption('dsh_host_crashed')).toBe(true);
+    expect(isEngineInterruption('dsh_engine_restarted')).toBe(true);
+    expect(isEngineInterruption('claude_engine_exited')).toBe(true);
+    expect(isEngineInterruption('max_turns')).toBe(false);
     const restarted = deriveSessionFailure({ errorCode: 'dsh_engine_restarted' });
-    expect(restarted.title).toBe('The chat engine was restarted');
+    expect(restarted.title).toBe('This turn did not finish');
     expect(restarted.reason).toContain('another chat');
     expect(restarted.action).toBe('continue');
     expect(restarted.showsDetail).toBe(false);
-    expect(zhTranslations[restarted.title]).toBe('对话引擎已重启');
+    expect(zhTranslations[restarted.title]).toBe('这一轮没有完成');
     // Every other code keeps printing its sentence as evidence.
     expect(deriveSessionFailure({ errorCode: 'stop_error' }).showsDetail).toBe(true);
     expect(deriveSessionFailure({ errorCode: 'something_new' }).showsDetail).toBe(true);
@@ -160,15 +172,18 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       error: 'Claude SDK host exited (code=1 signal=null)',
     });
     expect(view).toMatchObject({
-      title: 'The Agent SDK engine stopped',
-      reason: 'The engine process for this chat exited, so this reply was cut off.',
+      title: 'This turn did not finish',
+      reason:
+        'The engine process for this chat exited and this turn stopped here. Everything above is kept.',
       hint: 'Send your message again to reopen it.',
       action: 'none',
       showsDetail: false,
     });
     expect(canContinueSession(view, true)).toBe(false);
-    expect(zhTranslations[view.title]).toBe('Agent SDK 引擎已退出');
-    expect(zhTranslations[view.reason]).toBe('这个对话的引擎进程退出了，这次回复被打断。');
+    expect(zhTranslations[view.title]).toBe('这一轮没有完成');
+    expect(zhTranslations[view.reason]).toBe(
+      '这个对话的引擎进程退出了，这一轮停在了这里，上面的内容都已保留。'
+    );
     expect(zhTranslations[view.hint]).toBe('再发一次消息即可重新打开。');
     for (const sentence of [view.title, view.reason, view.hint]) {
       expect(sentence).not.toContain('Claude Code');

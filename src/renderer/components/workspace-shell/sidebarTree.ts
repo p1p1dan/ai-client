@@ -18,6 +18,7 @@ import { englishTranslate, type Locale, type Translate, translate } from '@share
 import { PI_AGENT, sessionAgent } from '@shared/types/agentWire';
 import { LEGACY_FORK_TITLE_KEY } from '@shared/types/legacyMigration';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import { isEngineInterruption } from '@/components/chat/sessionFailure';
 import { displaySessionTitle } from '@/components/chat/sessionIndex/sessionTitle';
 import { formatAbsoluteDateTime } from '@/lib/relativeTime';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
@@ -403,7 +404,9 @@ function toRow(session: ChatSession, workspace: ChatWorkspace | undefined): Side
     ...(workspace && isUsableWorkspace(workspace) ? {} : { unbound: true as const }),
     updatedAt: session.updatedAt,
     busy: isBusySessionStatus(session.status),
-    failed: session.status === 'failed',
+    // PiLab R1: an engine interruption is not the chat's failure (neutral card,
+    // reconnects by itself) — no red flag in the sidebar for it.
+    failed: session.status === 'failed' && !isEngineInterruption(session.runtimeErrorCode),
     status: session.status,
     ...(session.legacyDiverged && sessionAgent(session) === PI_AGENT
       ? { legacyDiverged: true as const }

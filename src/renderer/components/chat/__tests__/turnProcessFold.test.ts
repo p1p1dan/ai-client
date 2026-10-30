@@ -34,11 +34,32 @@ function segmentsOf(kinds: readonly TurnItemKind[]): TurnSegment<{ kind: TurnIte
 // the final reply is the last answer segment with NO process after it, and that
 // extraction is the single structural change the turn makes. Notices stay
 // outside throughout (FB4).
-describe('splitTurnWorkGroup — nothing is final until the turn settles', () => {
-  it('[WG-STREAM-1] while streaming, every answer stays inside the group', () => {
+describe('splitTurnWorkGroup — answer independence', () => {
+  it('[WG-PILAB-1] running and settled answers stay outside process-only groups', () => {
+    const segments = segmentsOf(['toolGroup', 'text', 'toolGroup', 'text', 'toolGroup']);
+    for (const settled of [false, true]) {
+      const sections = splitTurnWorkGroup(segments, settled);
+      expect(sections.map((section) => section.kind)).toEqual([
+        'processGroup',
+        'answer',
+        'processGroup',
+        'answer',
+        'processGroup',
+      ]);
+      for (const section of sections) {
+        if (section.kind === 'processGroup') {
+          expect(section.segments.every((segment) => segment.kind === 'process')).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('[WG-STREAM-1] while streaming, answers stay outside the process group', () => {
     const segments = segmentsOf(['text', 'toolGroup', 'text']);
     expect(splitTurnWorkGroup(segments, false)).toEqual([
-      { kind: 'processGroup', segments: [segments[0], segments[1], segments[2]] },
+      { kind: 'answer', segment: segments[0] },
+      { kind: 'processGroup', segments: [segments[1]] },
+      { kind: 'answer', segment: segments[2] },
     ]);
   });
 
@@ -60,7 +81,8 @@ describe('splitTurnWorkGroup — nothing is final until the turn settles', () =>
     // the 「各种调用穿插在 agent 的输出中」 complaint in a new shape.
     const segments = segmentsOf(['text', 'toolGroup']);
     expect(splitTurnWorkGroup(segments, true)).toEqual([
-      { kind: 'processGroup', segments: [segments[0], segments[1]] },
+      { kind: 'answer', segment: segments[0] },
+      { kind: 'processGroup', segments: [segments[1]] },
     ]);
   });
 
@@ -69,6 +91,15 @@ describe('splitTurnWorkGroup — nothing is final until the turn settles', () =>
     expect(splitTurnWorkGroup(segments, true)).toEqual([
       { kind: 'processGroup', segments: [segments[0]] },
       { kind: 'finalAnswer', segment: segments[1] },
+      { kind: 'notice', segment: segments[2] },
+    ]);
+  });
+
+  it('[PILAB-R1-13.6] a turn that ended abnormally has no final answer, every paragraph stays', () => {
+    const segments = segmentsOf(['toolGroup', 'text', 'notice']);
+    expect(splitTurnWorkGroup(segments, true, true)).toEqual([
+      { kind: 'processGroup', segments: [segments[0]] },
+      { kind: 'answer', segment: segments[1] },
       { kind: 'notice', segment: segments[2] },
     ]);
   });
@@ -86,13 +117,13 @@ describe('splitTurnWorkGroup — nothing is final until the turn settles', () =>
     expect(final[0].kind === 'finalAnswer' && final[0].segment).toBe(segments[3]);
   });
 
-  it('[WG-1] three paragraphs: the first two fold, the last is the final reply', () => {
+  it('[WG-1] three paragraphs stay independent, with the last marked as final', () => {
     const segments = segmentsOf(['text', 'toolGroup', 'text', 'toolGroup', 'text']);
     expect(splitTurnWorkGroup(segments, true)).toEqual([
-      {
-        kind: 'processGroup',
-        segments: [segments[0], segments[1], segments[2], segments[3]],
-      },
+      { kind: 'answer', segment: segments[0] },
+      { kind: 'processGroup', segments: [segments[1]] },
+      { kind: 'answer', segment: segments[2] },
+      { kind: 'processGroup', segments: [segments[3]] },
       { kind: 'finalAnswer', segment: segments[4] },
     ]);
   });
@@ -146,20 +177,21 @@ describe('splitTurnWorkGroup — nothing is final until the turn settles', () =>
     }
   });
 
-  it('[WG-8] appending an answer folds the old final in — without moving the group head', () => {
+  it('[WG-8] appending an answer keeps the old final independent without moving the group head', () => {
     const segments = segmentsOf(['text', 'toolGroup', 'text', 'toolGroup', 'text']);
     const before = splitTurnWorkGroup(segments.slice(0, 3), true);
     const after = splitTurnWorkGroup(segments, true);
-    // The group's FIRST segment is unchanged — it is the `groupKey` the
-    // renderer keys on, so expansion state survives a new answer arriving.
-    expect(after[0].kind === 'processGroup' && before[0].kind === 'processGroup').toBe(true);
-    if (after[0].kind === 'processGroup' && before[0].kind === 'processGroup') {
-      expect(after[0].segments[0]).toBe(before[0].segments[0]);
-      const previousFinal = before.at(-1);
-      expect(previousFinal?.kind).toBe('finalAnswer');
-      if (previousFinal?.kind === 'finalAnswer') {
-        expect(after[0].segments).toContain(previousFinal.segment);
-      }
+    const beforeGroup = before.find((section) => section.kind === 'processGroup');
+    const afterGroup = after.find((section) => section.kind === 'processGroup');
+    expect(beforeGroup?.kind).toBe('processGroup');
+    expect(afterGroup?.kind).toBe('processGroup');
+    if (beforeGroup?.kind === 'processGroup' && afterGroup?.kind === 'processGroup') {
+      expect(afterGroup.segments[0]).toBe(beforeGroup.segments[0]);
+    }
+    const previousFinal = before.at(-1);
+    expect(previousFinal?.kind).toBe('finalAnswer');
+    if (previousFinal?.kind === 'finalAnswer') {
+      expect(after).toContainEqual({ kind: 'answer', segment: previousFinal.segment });
     }
   });
 
@@ -172,11 +204,14 @@ describe('splitTurnWorkGroup — nothing is final until the turn settles', () =>
       segmentsOf(['toolGroup', 'text', 'toolGroup', 'toolGroup', 'text']),
       true
     );
-    expect(sections.map((s) => s.kind)).toEqual(['processGroup', 'finalAnswer']);
-    // The group holds everything before the final: the process runs AND the
-    // intermediate prose between them (the two adjacent toolGroups merge into
-    // one process segment, so three segments, not four).
-    expect(sections[0].kind === 'processGroup' && sections[0].segments).toHaveLength(3);
+    expect(sections.map((s) => s.kind)).toEqual([
+      'processGroup',
+      'answer',
+      'processGroup',
+      'finalAnswer',
+    ]);
+    expect(sections[0].kind === 'processGroup' && sections[0].segments).toHaveLength(1);
+    expect(sections[2].kind === 'processGroup' && sections[2].segments).toHaveLength(1);
   });
 
   it('[WG-REAL-3/4] a notice always renders outside, and never splits the group open', () => {
@@ -187,7 +222,12 @@ describe('splitTurnWorkGroup — nothing is final until the turn settles', () =>
       segmentsOf(['toolGroup', 'text', 'toolGroup', 'notice']),
       true
     );
-    expect(sections.map((s) => s.kind)).toEqual(['processGroup', 'notice']);
+    expect(sections.map((s) => s.kind)).toEqual([
+      'processGroup',
+      'answer',
+      'processGroup',
+      'notice',
+    ]);
     expect(
       splitTurnWorkGroup(segmentsOf(['toolGroup', 'notice']), true).map((s) => s.kind)
     ).toEqual(['processGroup', 'notice']);
@@ -196,7 +236,7 @@ describe('splitTurnWorkGroup — nothing is final until the turn settles', () =>
   it('[WG-LONG] twenty-four consecutive calls create one process section, not twenty-four', () => {
     const kinds: TurnItemKind[] = ['text', ...Array<TurnItemKind>(24).fill('toolGroup'), 'text'];
     const sections = splitTurnWorkGroup(segmentsOf(kinds), true);
-    expect(sections.map((s) => s.kind)).toEqual(['processGroup', 'finalAnswer']);
+    expect(sections.map((s) => s.kind)).toEqual(['answer', 'processGroup', 'finalAnswer']);
   });
 });
 

@@ -246,8 +246,8 @@ describe('the review card in its turn', () => {
     ];
     const segments = segmentTurnBody(flattenTurnItems({ id: 'u', user: null, body }));
     const sections = splitTurnWorkGroup(segments, true);
-    expect(sections.map((s) => s.kind)).toEqual(['processGroup', 'finalAnswer']);
-    const final = sections[1];
+    expect(sections.map((s) => s.kind)).toEqual(['answer', 'processGroup', 'finalAnswer']);
+    const final = sections[2];
     expect(final.kind === 'finalAnswer' && final.segment.items.map((i) => i.kind)).toEqual([
       'toolGroup',
       'text',

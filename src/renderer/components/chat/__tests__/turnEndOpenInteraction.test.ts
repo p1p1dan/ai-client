@@ -6,19 +6,16 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
 
 /**
- * Which finished turns keep their process area open (user decision
- * 2026-09-24), read off the DOM of a real `MessageTimeline`.
+ * Every finished turn keeps its steps on screen, read off the DOM of a real
+ * `MessageTimeline`.
  *
- * Only a turn the USER ended — Ctrl+Enter interjection or Stop — opens by
- * default, and it is a default: one click on the head closes it. Every other
- * finished turn folds, including one that ends on a tool call or fails. An
- * unanswered authorization is the one thing that still pins a group open
- * against the click.
- *
- * The regression this guards: 0a836f27 opened every settled turn with no
- * final answer, and did it through `forcedOpen`, which ignores the click — so
- * a turn that ended on a tool call, a failed turn and a replayed one all
- * stayed open and could not be closed.
+ * PiLab R1 (user ruling 2026-10-30, preview
+ * `docs/design/2026-10-30-turn-display-claude-code-preview.html`): the turn
+ * reads as steps with no 「已工作 ›」 fold, so the 2026-09-24 rules about which
+ * finished turn opens its fold by default no longer have a subject. What they
+ * protected still holds and is what this file checks: a turn ended by Ctrl+Enter,
+ * by Stop, on a tool call, by a failure, or waiting on an authorization shows
+ * WHERE it got to — its steps, never behind a closed head.
  */
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate }) }));
 vi.mock('@/stores/settings', () => {
@@ -34,6 +31,7 @@ vi.mock('../useResolvedSessionModel', () => ({ useResolvedSessionModel: () => ()
 vi.mock('../sessionIndex/useResumeSession', () => ({ useResumeSession: () => () => undefined }));
 
 import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
+import { useToolExpansionStore } from '@/stores/toolExpansion';
 import { MessageTimeline } from '../MessageTimeline';
 
 type Blocks = ChatMessage['blocks'];
@@ -87,6 +85,9 @@ async function renderSession(
   extra: Record<string, unknown> = {}
 ) {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  // Expand choices are remembered per session now (FR-11.6); every render here
+  // reuses session `s` and turn `u1`, so each starts with no remembered choice.
+  useToolExpansionStore.setState({ bySession: {} });
   useChatSessionsStore.setState({
     activeSessionId: 's',
     sessions: [{ id: 's', title: 's', projectId: 'p', workspaceId: 'w', status, updatedAt: 0 }],
@@ -116,85 +117,62 @@ async function renderSession(
     container.remove();
     client.clear();
   };
-  /** The process group of the turn anchored on `turnId`. */
-  const group = (turnId: string) => {
-    const details = container.querySelector<HTMLDetailsElement>(
-      `section[data-turn-id="${turnId}"] details`
-    );
-    expect(details, `turn ${turnId} has a process head`).not.toBeNull();
-    return details as HTMLDetailsElement;
+  /** What the turn anchored on `turnId` shows, and whether any of it sits behind a fold. */
+  const turn = (turnId: string) => {
+    const section = container.querySelector(`section[data-turn-id="${turnId}"]`);
+    expect(section, `turn ${turnId} is on screen`).not.toBeNull();
+    return {
+      text: section?.textContent ?? '',
+      folds: section?.querySelectorAll('details').length ?? 0,
+    };
   };
-  // A plain `Event`, not `summary.click()`: happy-dom toggles `<details>` as
-  // the click bubbles THROUGH it, before React's root listener can call
-  // `preventDefault()`, so a MouseEvent click would flip `open` on its own
-  // and mask what the component decided. A browser runs that default action
-  // after dispatch and honours the cancel. React's `onClick` fires for any
-  // `click` event, and happy-dom only toggles for a MouseEvent — so with this,
-  // `details.open` is exactly the component's own `open` prop.
-  const clickHead = (turnId: string) =>
-    act(async () =>
-      group(turnId)
-        .querySelector('summary')
-        ?.dispatchEvent(new Event('click', { bubbles: true }))
-    );
-  return { group, clickHead, render };
+  return { turn, render };
 }
 
-it('[END-OPEN-1] a turn cut off by Ctrl+Enter opens by default, and one click closes it', async () => {
+it('[END-OPEN-1] a turn cut off by Ctrl+Enter shows its steps, not a closed head', async () => {
   for (const [label, body] of [
     ['ends on a tool call', ENDS_ON_TOOL],
     ['ends on prose', ENDS_ON_TEXT],
   ] as const) {
-    const { group, clickHead, render } = await renderSession([
+    const { turn } = await renderSession([
       user('u1', 'Fix the build'),
       assistant('a1', body, { stopCause: 'interjected' }),
       user('u2', 'Use pnpm instead'),
       assistant('a2', [{ id: 'a2:t', type: 'text', text: 'Switching to pnpm.' }]),
     ]);
-    expect(group('u1').open, `${label}: open by default`).toBe(true);
-    await clickHead('u1');
-    expect(group('u1').open, `${label}: the click closes it`).toBe(false);
-    // A later render (a new token, a store write) must not reopen it.
-    await render();
-    expect(group('u1').open, `${label}: and it stays closed`).toBe(false);
-    await clickHead('u1');
-    expect(group('u1').open, `${label}: and reopens on the next click`).toBe(true);
+    expect(turn('u1').folds, `${label}: no fold`).toBe(0);
+    expect(turn('u1').text, `${label}: the step it reached`).toContain('pnpm');
     await cleanup?.();
     cleanup = null;
   }
 });
 
-it('[END-OPEN-2] a turn the user stopped opens by default, and one click closes it', async () => {
+it('[END-OPEN-2] a turn the user stopped shows its steps', async () => {
   for (const [label, extra] of [
     ['live stop stamp', { stopCause: 'user_stop' }],
-    // History written before the run-stop record: `turnEndCause`'s fallback.
     ['legacy aborted reply', { stopReason: 'aborted' }],
   ] as const) {
-    const { group, clickHead } = await renderSession([
+    const { turn } = await renderSession([
       user('u1', 'Fix the build'),
       assistant('a1', ENDS_ON_TOOL, extra),
     ]);
-    expect(group('u1').open, `${label}: open by default`).toBe(true);
-    await clickHead('u1');
-    expect(group('u1').open, `${label}: the click closes it`).toBe(false);
+    expect(turn('u1').folds, `${label}: no fold`).toBe(0);
+    expect(turn('u1').text, `${label}: its steps`).toContain('pnpm test');
     await cleanup?.();
     cleanup = null;
   }
 });
 
-it('[END-OPEN-3] a turn that ended on its own folds; one that failed stays open (2026-10-19)', async () => {
-  // Ended on a tool call, naturally: `answer → tool → end`.
+it('[END-OPEN-3] a turn that ended on a tool call, or failed, shows its steps too', async () => {
   const endsOnTool = await renderSession([
     user('u1', 'Fix the build'),
     assistant('a1', ENDS_ON_TOOL, { stopReason: 'toolUse' }),
   ]);
-  expect(endsOnTool.group('u1').open, 'ended on a tool call').toBe(false);
-  await endsOnTool.clickHead('u1');
-  expect(endsOnTool.group('u1').open, 'and a click still opens it').toBe(true);
+  expect(endsOnTool.turn('u1').folds).toBe(0);
+  expect(endsOnTool.turn('u1').text).toContain('pnpm test');
   await cleanup?.();
   cleanup = null;
 
-  // Failed: the reply errored and the turn carries the error notice.
   const failed = await renderSession(
     [
       user('u1', 'Fix the build'),
@@ -208,15 +186,14 @@ it('[END-OPEN-3] a turn that ended on its own folds; one that failed stays open 
     ],
     'failed'
   );
-  // User, 2026-10-19: a failed turn (a retry that gave up included) keeps its
-  // output where it stopped, like a turn the user stopped.
-  expect(failed.group('u1').open, 'a failed turn').toBe(true);
-  await failed.clickHead('u1');
-  expect(failed.group('u1').open, 'and a click still folds it').toBe(false);
+  expect(failed.turn('u1').folds).toBe(0);
+  expect(failed.turn('u1').text, 'output kept where it stopped (user, 2026-10-19)').toContain(
+    'pnpm test'
+  );
 });
 
-it('[END-OPEN-4] an unanswered authorization still pins the group open against a click', async () => {
-  const { group, clickHead } = await renderSession([
+it('[END-OPEN-4] a step waiting on an authorization is never behind a fold', async () => {
+  const { turn } = await renderSession([
     user('u1', 'Delete the cache'),
     assistant('a1', [
       ...call('c1', 'ls cache'),
@@ -231,7 +208,6 @@ it('[END-OPEN-4] an unanswered authorization still pins the group open against a
       { id: 'c2', type: 'tool_call', toolCallId: 'c2', toolName: 'Bash', toolInput: {} },
     ]),
   ]);
-  expect(group('u1').open).toBe(true);
-  await clickHead('u1');
-  expect(group('u1').open, 'the click cannot bury the Allow/Deny surface').toBe(true);
+  expect(turn('u1').folds).toBe(0);
+  expect(turn('u1').text).toContain('ls cache');
 });

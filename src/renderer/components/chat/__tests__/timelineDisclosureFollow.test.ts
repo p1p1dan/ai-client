@@ -50,7 +50,9 @@ const scrollTops = new WeakMap<Element, number>();
 const isViewport = (el: Element) => el.getAttribute('data-slot') === 'scroll-area-viewport';
 
 function simulatedScrollHeight(viewport: Element): number {
-  const panels = viewport.querySelectorAll('[data-slot="collapsible-panel"]').length;
+  const panels = viewport.querySelectorAll(
+    '[data-slot="collapsible-panel"], [data-slot="turn-thinking-panel"]'
+  ).length;
   const openProcess = [...viewport.querySelectorAll('details')].filter((d) => d.open).length;
   return BASE_HEIGHT + growth + panels * ROW_PANEL_HEIGHT + openProcess * PROCESS_BODY_HEIGHT;
 }
@@ -220,7 +222,9 @@ async function renderTimeline() {
   const bottom = () => vp.scrollHeight - CLIENT_HEIGHT;
   const trigger = (text: string) => {
     const found = [
-      ...container.querySelectorAll<HTMLElement>('[data-slot="collapsible-trigger"]'),
+      ...container.querySelectorAll<HTMLElement>(
+        '[data-slot="collapsible-trigger"], [data-slot="turn-thinking-toggle"]'
+      ),
     ].find((el) => el.textContent?.includes(text));
     expect(found, `a row reading "${text}"`).toBeDefined();
     return found as HTMLElement;
@@ -247,7 +251,9 @@ it('[C3-FOLLOW-1] streaming at the bottom keeps following — the baseline the f
   expect(viewport.scrollTop).toBe(bottom());
 });
 
-it('[C3-FOLLOW-2] opening a thought at the bottom pauses following until the reader scrolls back down', async () => {
+// PiLab R1 (2026-10-30): thinking is no row — it opens from the turn footer's
+// 「思考」, and that disclosure obeys the same rule.
+it('[C3-FOLLOW-2] opening the thinking at the bottom pauses following until the reader scrolls back down', async () => {
   const { viewport, stream, bottom, clickRow, userScrollTo } = await renderTimeline();
   await stream();
   const reading = viewport.scrollTop;
@@ -284,26 +290,6 @@ it('[C3-FOLLOW-3] a tool row obeys the same rule, and closing a row leaves follo
   expect(viewport.scrollTop, 'a close does not pause following').toBe(bottom());
 });
 
-it('[C3-FOLLOW-4] opening the turn process head by a click pauses following too', async () => {
-  const { viewport, container, fireResize, stream, bottom } = await renderTimeline();
-  const summary = container.querySelector('summary');
-  expect(summary, 'the process head').not.toBeNull();
-  // See `turnEndOpenInteraction.test.ts` for why a plain Event, not `.click()`.
-  const clickHead = async () => {
-    await act(async () => summary?.dispatchEvent(new Event('click', { bubbles: true })));
-    await fireResize();
-  };
-  expect(container.querySelector('details')?.open, 'an interjected turn opens by default').toBe(
-    true
-  );
-  await clickHead(); // close — following untouched
-  await stream();
-  expect(viewport.scrollTop).toBe(bottom());
-
-  const reading = viewport.scrollTop;
-  await clickHead(); // open
-  expect(container.querySelector('details')?.open).toBe(true);
-  expect(viewport.scrollTop, 'the opened process is not followed to its end').toBe(reading);
-  await stream();
-  expect(viewport.scrollTop).toBe(reading);
-});
+// [C3-FOLLOW-4] (the turn's 「已工作 ›」 process head) retired with the head
+// itself, PiLab R1 2026-10-30: every step is drawn in place, there is nothing
+// to open, and C3-FOLLOW-2/3 cover the two disclosures that remain.

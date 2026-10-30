@@ -69,6 +69,10 @@ export interface FollowStateInput {
   clientHeight: number;
   /** The scrollHeight recorded on the previous scroll/resize tick. */
   prevScrollHeight: number;
+  /** The scrollTop recorded on the previous tick (rule 0; omitted = rule off). */
+  prevScrollTop?: number;
+  /** The clientHeight recorded on the previous tick (rule 0). */
+  prevClientHeight?: number;
   /** The current follow flag. */
   following: boolean;
 }
@@ -85,6 +89,11 @@ export interface FollowStateInput {
  * amplifier half of the F10 oscillation.
  *
  * Rules, in order:
+ *  0. Moved UP while scrollHeight and clientHeight both held → the user left
+ *     (keyboard ↑ / PageUp, a scrollbar drag, touch — not only the wheel).
+ *     A browser clamp always comes with a changed height, so it never lands
+ *     here; without this rule a 40px ↑ step stays inside the bottom band and
+ *     the next streamed chunk pulls the reader back (PiLab R1, AC-18).
  *  1. Away from the bottom → never following (disarm is always safe: a
  *     clamp-induced event lands AT the bottom, so it can never disarm).
  *  2. At the bottom but `scrollHeight` changed this tick → keep the previous
@@ -113,6 +122,15 @@ export function nextFollowState(
   input: FollowStateInput,
   threshold: number = STICK_TO_BOTTOM_THRESHOLD_PX
 ): boolean {
+  if (
+    input.prevScrollTop !== undefined &&
+    input.prevClientHeight !== undefined &&
+    input.scrollHeight === input.prevScrollHeight &&
+    input.clientHeight === input.prevClientHeight &&
+    input.scrollTop < input.prevScrollTop - 0.5
+  ) {
+    return false;
+  }
   const atBottom = shouldStickToBottom(
     input.scrollTop,
     input.scrollHeight,

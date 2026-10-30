@@ -4,6 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import {
   type AttachmentReadOptions,
   type AttachmentReadResult,
+  FILE_CONTENT_CONFLICT,
   type FileEntry,
   type FileReadResult,
   IPC_CHANNELS,
@@ -579,13 +580,27 @@ export function registerFileHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.FILE_WRITE,
-    async (_, filePath: string, content: string, encoding?: string) => {
+    async (
+      _,
+      filePath: string,
+      content: string,
+      encoding: string | undefined,
+      expectedContent: string
+    ) => {
       if (isRemoteVirtualPath(filePath)) {
-        await remoteRepositoryBackend.writeFile(filePath, content);
+        await remoteRepositoryBackend.writeFile(filePath, content, expectedContent);
         return;
       }
 
+      assertLocalPathWritable(filePath, 'file:write');
       const targetEncoding = encoding || 'utf-8';
+      const current = await readPreviewFile(filePath);
+      if (
+        current.kind !== 'text' ||
+        iconv.decode(current.buffer, targetEncoding) !== expectedContent
+      ) {
+        throw new Error(`${FILE_CONTENT_CONFLICT}: File changed on disk`);
+      }
       const buffer = iconv.encode(content, targetEncoding);
       await writeFile(filePath, buffer);
     }

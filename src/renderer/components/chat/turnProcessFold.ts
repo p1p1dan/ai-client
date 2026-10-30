@@ -20,10 +20,9 @@
  * N 个步骤」. That left prose and process runs alternating down the turn — the
  * user's report was 「各种调用、授权穿插在 agent 的输出中，严重影响我的观感」.
  * That led to a single group containing everything before the last answer.
- * T107 kept every answer visible. Q1 now folds intermediate prose with the
- * process while keeping the last answer and notices outside. The last answer
- * retains its ordinary visual treatment; `countProcessSteps` only controls
- * the fold threshold, while separate counters supply the chips.
+ * Every answer and notice stays outside the process groups. The last answer
+ * retains its final-output divider when it qualifies; `countProcessSteps`
+ * only controls the fold threshold, while separate counters supply the chips.
  */
 
 import type { TurnItem, TurnSegment } from './chatTurn';
@@ -73,6 +72,7 @@ export function turnProcessGroupFolds(items: readonly TurnItem[]): boolean {
 }
 
 export type TurnWorkSection<T> =
+  | { kind: 'answer'; segment: TurnSegment<T> }
   | { kind: 'finalAnswer'; segment: TurnSegment<T> }
   | { kind: 'notice'; segment: TurnSegment<T> }
   | { kind: 'processGroup'; segments: TurnSegment<T>[] };
@@ -112,34 +112,16 @@ export function isFinalAnswerSegment<T>(
 }
 
 /**
- * Fold every process AND non-final answer segment into the process group; the
- * final answer segment stays outside with its ordinary answer styling.
+ * Fold only process; every answer remains visible in original order.
  *
- * Notices remain outside in original order (FB4 — an error after the final
- * reply must never hide earlier prose). No process means no empty group.
- *
- * The no-answer case keeps the existing ordering exception: notices between
- * tool runs render after the single process group.
- *
- * ## `settled` is the whole of decision 033 D1's timing change
- *
- * While the turn streams (`settled === false`) there is **no final answer to
- * find**: the model has not stopped, so any segment picked now is a guess the
- * next tool call invalidates. Everything stays in the group and nothing is lit
- * up early — which is also why contention C from `1e33b7fe` (a colour that
- * flips mid-stream) cannot arise.
- *
- * Once settled, the final answer is `isFinalAnswerSegment`'s, and the group
- * keeps its `groupKey` (first item identity) across the extraction, so the
- * reader's expansion survives the one structural change the turn makes.
- *
- * `settled` is REQUIRED rather than optional with a default: a call site that
- * forgot to thread it would freeze the turn at "streaming" forever, and a type
- * error is the cheaper alarm than a transcript that never separates its reply.
+ * `endedAbnormally` (PiLab R1, FR-13.6 / AC-22): a turn that was stopped,
+ * failed, interrupted or cut off has no final answer — its last paragraph is
+ * whatever had arrived, so it is not labelled 「最终输出」.
  */
 export function splitTurnWorkGroup<T>(
   segments: readonly TurnSegment<T>[],
-  settled: boolean
+  settled: boolean,
+  endedAbnormally = false
 ): TurnWorkSection<T>[] {
   // The LAST answer, then the forward-looking test — in that order. Scanning
   // forward for the first segment that passes `isFinalAnswerSegment` picks the
@@ -152,7 +134,7 @@ export function splitTurnWorkGroup<T>(
   // all), so a failed test here means the turn simply has no final reply — the
   // `answer → 工具 → 结束` shape decision 033 D1 named.
   let finalAnswerIndex = -1;
-  if (settled) {
+  if (settled && !endedAbnormally) {
     for (let index = segments.length - 1; index >= 0; index -= 1) {
       if (segments[index].kind !== 'answer') continue;
       finalAnswerIndex = isFinalAnswerSegment(segments, index) ? index : -1;
@@ -160,9 +142,7 @@ export function splitTurnWorkGroup<T>(
     }
   }
 
-  if (finalAnswerIndex === -1) {
-    // Streaming, or a turn with no final answer at all: ONE group holds every
-    // process and answer segment. Notices still stay outside, in order.
+  if (!segments.some((segment) => segment.kind === 'answer')) {
     const grouped = segments.filter((segment) => segment.kind !== 'notice');
     const sections: TurnWorkSection<T>[] = grouped.length
       ? [{ kind: 'processGroup', segments: grouped }]
@@ -178,10 +158,9 @@ export function splitTurnWorkGroup<T>(
     const segment = segments[index];
     if (segment.kind === 'notice') {
       sections.push({ kind: 'notice', segment });
-    } else if (index === finalAnswerIndex) {
-      sections.push({ kind: 'finalAnswer', segment });
+    } else if (segment.kind === 'answer') {
+      sections.push({ kind: index === finalAnswerIndex ? 'finalAnswer' : 'answer', segment });
     } else {
-      // Process or non-final answer → process group.
       const previous = sections.at(-1);
       if (previous?.kind === 'processGroup') previous.segments.push(segment);
       else sections.push({ kind: 'processGroup', segments: [segment] });

@@ -29,6 +29,7 @@ import { gitQueryKeys } from '@/hooks/gitQueryKeys';
 import { useFileDiff } from '@/hooks/useSourceControl';
 import { useI18n } from '@/i18n';
 import { deferRootUnmount } from '@/lib/deferRootUnmount';
+import { describeFileSaveFailure } from '@/lib/fileSaveFailure';
 import { getXtermTheme, isTerminalThemeDark } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
 import { toMonacoVirtualUri } from '@/lib/monacoModelPath';
@@ -171,6 +172,7 @@ export function DiffViewer({
   // Editing state
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState<string | null>(null);
+  const editBaseContentRef = useRef<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const isDirty = editedContent !== null;
 
@@ -878,9 +880,15 @@ export function DiffViewer({
 
     setIsSaving(true);
     try {
+      if (editBaseContentRef.current === null) throw new Error('File content baseline is missing');
       const absolutePath = `${rootPath}/${file.path}`;
       const { encoding } = await window.electronAPI.file.read(absolutePath);
-      await window.electronAPI.file.write(absolutePath, editedContent, encoding);
+      await window.electronAPI.file.write(
+        absolutePath,
+        editedContent,
+        encoding,
+        editBaseContentRef.current
+      );
 
       await queryClient.invalidateQueries({
         queryKey: gitQueryKeys.fileDiff(rootPath, file.path),
@@ -891,6 +899,7 @@ export function DiffViewer({
 
       setEditedContent(null);
       setIsEditing(false);
+      editBaseContentRef.current = null;
 
       toastManager.add({
         title: t('File saved'),
@@ -900,7 +909,7 @@ export function DiffViewer({
     } catch (error) {
       toastManager.add({
         title: t('Failed to save file'),
-        description: error instanceof Error ? error.message : String(error),
+        description: describeFileSaveFailure(error, t),
         type: 'error',
         timeout: 5000,
       });
@@ -914,14 +923,17 @@ export function DiffViewer({
   }, [handleSave]);
 
   const handleToggleEdit = useCallback(() => {
-    if (isEditing && isDirty) {
-      if (!window.confirm(t('You have unsaved changes. Discard them?'))) {
+    if (isEditing) {
+      if (isDirty && !window.confirm(t('You have unsaved changes. Discard them?'))) {
         return;
       }
       setEditedContent(null);
+      editBaseContentRef.current = null;
+    } else {
+      editBaseContentRef.current = diff?.modified ?? null;
     }
     setIsEditing(!isEditing);
-  }, [isEditing, isDirty, t]);
+  }, [isEditing, isDirty, t, diff?.modified]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -963,6 +975,7 @@ export function DiffViewer({
     setBoundaryHint(null);
     setIsEditing(false);
     setEditedContent(null);
+    editBaseContentRef.current = null;
   }, [file?.path, file?.staged]);
 
   if (!file) {

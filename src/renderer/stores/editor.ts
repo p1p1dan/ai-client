@@ -7,6 +7,7 @@ export interface EditorTab {
   path: string;
   title: string;
   content: string;
+  baseContent?: string;
   isDirty: boolean;
   encoding?: string;
   viewState?: unknown;
@@ -97,10 +98,15 @@ interface EditorState {
   closeAllFiles: () => void;
   setActiveFile: (path: string | null) => void;
   updateFileContent: (path: string, content: string, isDirty?: boolean) => void;
-  markFileSaved: (path: string) => void;
+  markFileSaved: (path: string, savedContent: string) => void;
   markExternalChange: (path: string, externalContent: string) => void;
   applyExternalChange: (path: string) => void;
-  dismissExternalChange: (path: string) => void;
+  /**
+   * The banner's Keep Mine: the user has seen the disk text and chose theirs,
+   * so the baseline moves to exactly that text and the next save may replace
+   * it — but not anything written after it (that is a new conflict).
+   */
+  keepLocalOverExternalChange: (path: string) => void;
   setTabViewState: (path: string, viewState: unknown) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   setPendingCursor: (cursor: PendingCursor | null) => void;
@@ -141,6 +147,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
               ? {
                   ...tab,
                   ...file,
+                  baseContent: file.baseContent ?? file.content,
                   title: file.title ?? tab.title,
                   // Clear external change state on explicit file open (fresh load)
                   hasExternalChange: false,
@@ -156,6 +163,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           ...state.tabs,
           {
             ...file,
+            baseContent: file.baseContent ?? file.content,
             title: file.title ?? getTabTitle(file.path),
           },
         ],
@@ -243,16 +251,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   updateFileContent: (path, content, isDirty = true) =>
     set((state) => ({
-      tabs: state.tabs.map((tab) => (tab.path === path ? { ...tab, content, isDirty } : tab)),
-    })),
-
-  markFileSaved: (path) =>
-    set((state) => ({
       tabs: state.tabs.map((tab) =>
         tab.path === path
-          ? { ...tab, isDirty: false, hasExternalChange: false, externalContent: undefined }
+          ? { ...tab, content, isDirty, ...(isDirty ? {} : { baseContent: content }) }
           : tab
       ),
+    })),
+
+  markFileSaved: (path, savedContent) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.path !== path) return tab;
+        const isDirty = tab.content !== savedContent;
+        return {
+          ...tab,
+          baseContent: savedContent,
+          isDirty,
+          ...(isDirty ? {} : { hasExternalChange: false, externalContent: undefined }),
+        };
+      }),
     })),
 
   markExternalChange: (path, externalContent) =>
@@ -269,6 +286,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           ? {
               ...tab,
               content: tab.externalContent ?? tab.content,
+              baseContent: tab.externalContent ?? tab.content,
               isDirty: false,
               hasExternalChange: false,
               externalContent: undefined,
@@ -277,11 +295,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ),
     })),
 
-  dismissExternalChange: (path) =>
+  keepLocalOverExternalChange: (path) =>
     set((state) => ({
-      tabs: state.tabs.map((tab) =>
-        tab.path === path ? { ...tab, hasExternalChange: false, externalContent: undefined } : tab
-      ),
+      tabs: state.tabs.map((tab) => {
+        if (tab.path !== path) return tab;
+        const baseContent = tab.externalContent ?? tab.baseContent;
+        return {
+          ...tab,
+          baseContent,
+          isDirty: tab.content !== baseContent,
+          hasExternalChange: false,
+          externalContent: undefined,
+        };
+      }),
     })),
 
   setTabViewState: (path, viewState) =>

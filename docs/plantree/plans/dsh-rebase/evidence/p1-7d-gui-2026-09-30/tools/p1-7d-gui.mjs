@@ -745,10 +745,23 @@ async function enter() {
     { label: 'set language zh' }
   );
   await sleep(1500);
-  const entered = await cdp.evaluate(ENTER_MAIN_SURFACE).catch((e) => `ERROR: ${e.message}`);
+  let entered = await cdp.evaluate(ENTER_MAIN_SURFACE).catch((e) => `ERROR: ${e.message}`);
+  // 2026-10-30: the welcome screen no longer renders 「使用本机已有配置」
+  // (LOCAL_SETUP_BUTTON_HIDDEN, 39530fe7), but its handler is still wired, so
+  // take the same `auth.enterApp('local')` route and reload into the app.
+  if (typeof entered === 'string' && entered.includes('no usable welcome entry')) {
+    await evalAsync(
+      `await window.electronAPI.auth.enterApp('local');
+       setTimeout(() => location.reload(), 50);
+       return true;`,
+      { label: "enterApp('local')", timeoutMs: 30_000 }
+    );
+    await sleep(3000);
+    entered = "enterApp('local') (welcome button hidden)";
+  }
   await cdp.waitFor(`document.querySelector('textarea') !== null`, {
-    timeoutMs: 300_000,
-    label: 'composer mounted',
+    timeoutMs: 60_000,
+    label: `composer mounted (entry: ${entered})`,
   });
   const dialogs = [];
   for (let round = 0; round < 6; round += 1) {

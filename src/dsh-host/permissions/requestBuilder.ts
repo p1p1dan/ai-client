@@ -11,6 +11,10 @@
  */
 
 import { resolve } from 'node:path';
+import {
+  argumentsPreview,
+  editArgumentsPreview,
+} from '../../shared/permissions/approvalPreview.ts';
 import type { BashAnalysis } from '../../shared/permissions/bashWalker.ts';
 import {
   createPermissionError,
@@ -68,8 +72,6 @@ export type GatedCall =
   | { kind: 'internal' }
   | { kind: 'gated'; toolClass: DshToolClass | 'unknown'; escalation?: EscalationRequest };
 
-const PREVIEW_MAX_CHARS = 4000;
-
 function stringArg(args: unknown, key: string): string | undefined {
   if (typeof args !== 'object' || args === null) return undefined;
   const value = (args as Record<string, unknown>)[key];
@@ -94,16 +96,6 @@ export function hostOf(url: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function argumentsPreview(args: unknown): string {
-  let text: string;
-  try {
-    text = JSON.stringify(args, null, 2) ?? '';
-  } catch {
-    text = String(args);
-  }
-  return text.length > PREVIEW_MAX_CHARS ? `${text.slice(0, PREVIEW_MAX_CHARS)}…` : text;
 }
 
 /**
@@ -177,12 +169,16 @@ export async function authorizeCall(
         });
         break;
       }
+      // FR-05.5: an edit's card shows what it replaces with what, and whether
+      // it replaces every match — not only the file name.
       const content = call.name === 'write' ? stringArg(args, 'content') : undefined;
-      await target(
-        call.name,
-        stringArg(args, 'file_path') ?? '.',
-        content !== undefined ? { preview: { label: 'Content', text: content } } : {}
-      );
+      const preview =
+        content !== undefined
+          ? { label: 'Content', text: content }
+          : typeof args === 'object' && args !== null
+            ? { label: 'Arguments', text: editArgumentsPreview(args as Record<string, unknown>) }
+            : undefined;
+      await target(call.name, stringArg(args, 'file_path') ?? '.', preview ? { preview } : {});
       break;
     }
     case 'shell': {

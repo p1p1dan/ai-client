@@ -57,6 +57,7 @@ import {
   contextWindowNotice,
 } from '../shared/contextWindowMismatch.ts';
 import { DSH_NOTICE_CUSTOM_TYPE_PREFIX } from '../shared/dshNotices.ts';
+import { argumentsPreview, editArgumentsPreview } from '../shared/permissions/approvalPreview.ts';
 import { buildPiInterimUsagePayload, buildPiUsagePayload } from '../shared/piUsage.ts';
 import {
   decodePlanReviewResponse,
@@ -3255,20 +3256,17 @@ function describeCall(
     };
   }
   if (FILE_CHANGE_TOOLS.has(toolName) && path) {
-    const content =
-      typeof input.content === 'string'
-        ? input.content
-        : typeof input.new_string === 'string'
-          ? input.new_string
-          : undefined;
+    // FR-05.5: a Write shows what it writes; an edit shows everything that
+    // decides what it does (`old_string` / `new_string` / `replace_all`, a
+    // MultiEdit's `edits`) — `new_string` alone hid what was being replaced.
+    const body =
+      toolName === 'Write' && typeof input.content === 'string'
+        ? { content: input.content, contentLabel: 'Content' }
+        : { content: editArgumentsPreview(input), contentLabel: 'Arguments' };
     return {
       kind: 'file_change',
       action: toolName === 'Write' ? 'write_file' : 'edit_file',
-      input: {
-        path,
-        ...(content !== undefined ? { content, contentLabel: 'Content' } : {}),
-        workspace,
-      },
+      input: { path, ...body, workspace },
       detail: {
         kind: 'file_change',
         changes: [{ path, change: toolName === 'Write' ? 'add' : 'update' }],
@@ -3278,5 +3276,10 @@ function describeCall(
   if (toolName === 'Read' && path) {
     return { kind: 'tool', action: 'read_file', input: { path, workspace } };
   }
-  return { kind: 'tool', input: { ...input, workspace } };
+  // Any other tool (MCP included): its arguments ARE the request, so the card
+  // shows them (the card reads `content`, never arbitrary keys).
+  return {
+    kind: 'tool',
+    input: { ...input, content: argumentsPreview(input), contentLabel: 'Arguments', workspace },
+  };
 }

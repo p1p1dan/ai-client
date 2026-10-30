@@ -184,9 +184,9 @@ const FAILURE_VIEWS = {
   // in went away under this turn — a crash, a hang, a lost connection. Main
   // reopens every chat by itself, so nothing stands in the way of a retry.
   dsh_host_crashed: {
-    title: 'The chat engine stopped unexpectedly',
+    title: 'This turn did not finish',
     reason:
-      'The engine that runs your chats exited while this reply was being written, so the reply was cut off. Your chats reconnect by themselves.',
+      'The connection to the chat engine was lost and this turn stopped here. Everything above is kept.',
     hint: 'Continue to ask again.',
     action: 'continue',
     detail: false,
@@ -194,9 +194,9 @@ const FAILURE_VIEWS = {
   // decision 021 ladder B, or the locked card's "Restart engine": the engine
   // was restarted on purpose, for another chat, and took this turn with it.
   dsh_engine_restarted: {
-    title: 'The chat engine was restarted',
+    title: 'This turn did not finish',
     reason:
-      'The engine was restarted to recover another chat, so this reply was interrupted. Your chats reconnect by themselves.',
+      'The chat engine was restarted to recover another chat, and this turn stopped here. Everything above is kept.',
     hint: 'Continue to carry on from here.',
     action: 'continue',
     detail: false,
@@ -207,8 +207,9 @@ const FAILURE_VIEWS = {
   // on that engine yet, and a new message is what reopens the chat. Main's
   // sentence names a process, which the reason already says in words.
   claude_engine_exited: {
-    title: 'The Agent SDK engine stopped',
-    reason: 'The engine process for this chat exited, so this reply was cut off.',
+    title: 'This turn did not finish',
+    reason:
+      'The engine process for this chat exited and this turn stopped here. Everything above is kept.',
     hint: 'Send your message again to reopen it.',
     action: 'none',
     detail: false,
@@ -334,6 +335,24 @@ const FAILURE_CODE_ALIASES: Readonly<Record<string, KnownSessionFailureCode>> = 
  * nothing. `Object.hasOwn`, not `in`: a code of `'constructor'` would otherwise
  * be a hit through the prototype.
  */
+/**
+ * PiLab R1 (user ruling 2026-10-30, preview `2026-10-30-turn-display-claude-
+ * code-preview.html` state 3): the engine went away under the turn — a crash, a
+ * restart for another chat, the Agent SDK process exiting. Not the model's or
+ * the user's failure: drawn as a neutral interruption with a reconnect line
+ * (Claude Code: 「Lost the connection … reconnecting…」 → 「Reconnected.」),
+ * not as a red failure, and the sidebar does not flag the chat as failed.
+ */
+export const ENGINE_INTERRUPTION_CODES: ReadonlySet<string> = new Set([
+  'dsh_host_crashed',
+  'dsh_engine_restarted',
+  'claude_engine_exited',
+]);
+
+export function isEngineInterruption(code: string | undefined | null): boolean {
+  return ENGINE_INTERRUPTION_CODES.has(toSessionFailureCode(code));
+}
+
 export function toSessionFailureCode(code: string | undefined | null): KnownSessionFailureCode {
   if (typeof code !== 'string' || code === '') return 'unknown';
   if (Object.hasOwn(FAILURE_VIEWS, code)) return code as KnownSessionFailureCode;

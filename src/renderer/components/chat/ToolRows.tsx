@@ -91,6 +91,7 @@ import type { ToolDiff } from './toolDiff';
 import { buildDiffView, diffHasLineNumbers } from './toolDiffView';
 import { stoppedToolOutput } from './toolLiveOutputModel';
 import { kilobytesLabel } from './toolOutputHead';
+import type { StepResultLine, StepRowView } from './turnSteps';
 import { formatWorkedForDuration } from './turnTiming';
 
 /**
@@ -302,7 +303,6 @@ function RefToolRowArg({
 }
 
 function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) {
-  const showDiff = useContext(ToolDiffVisibility);
   const { t } = useI18n();
   // P1-7e (problem 20): a call Stop cut short shows what it printed before the
   // stop, while this window still holds its last live tail.
@@ -442,7 +442,15 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
             timeoutMs={view.runningTimeoutMs}
           />
         )}
-      {showDiff && view.diff && (
+      {!view.diff && view.changeStat && (
+        <span data-slot="tool-row-change" className="shrink-0 tabular-nums">
+          <span className="text-success">+{view.changeStat.added}</span>{' '}
+          <span className="text-destructive">−{view.changeStat.removed}</span>
+        </span>
+      )}
+      {/* PiLab R1 (2026-10-30): an edit's +/− counts are part of the step's
+          one line in every surface; only the diff BODY follows the setting. */}
+      {view.diff && (
         <span className="shrink-0 tabular-nums">
           {/* Decision 034: the ordinary settled edit prints the NUMBERS only.
               The label 「已修改」 restated the row's own verb one span to the
@@ -475,8 +483,22 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
   // expand/collapse button) was the shape the user asked to remove. What
   // survives from it is the blank-line filtering, now inside `ToolRowBody`'s
   // 'thinking' case.
+  // PiLab R1 (2026-10-30): what came of the step, one line under it
+  // (`turnSteps.ts`), and a running command's last lines while its body is closed.
+  const resultLine = (view as StepRowView).resultLine;
+  const liveTail =
+    view.running && view.iconKind === 'terminal' && view.toolCallId ? view.toolCallId : null;
+  const after = (open: boolean) => (
+    <>
+      {resultLine && <StepResult line={resultLine} />}
+      {liveTail && !open && <LiveToolOutput toolCallId={liveTail} compact />}
+    </>
+  );
   const row = !view.expandable ? (
-    <div className={rowClass}>{rowContent}</div>
+    <div>
+      <div className={rowClass}>{rowContent}</div>
+      {after(false)}
+    </div>
   ) : (
     <ToolRowCollapsible
       // The seed is re-taken when a row crosses from live to settled — see the
@@ -487,6 +509,7 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
       rowClass={rowClass}
       onOpenFile={onOpenFile}
       sessionId={sessionId}
+      after={after}
     >
       {rowContent}
     </ToolRowCollapsible>
@@ -498,6 +521,36 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
     <div className="flex min-w-0 items-start gap-1">
       <div className="min-w-0 flex-1">{row}</div>
       <MoveToBackgroundButton sessionId={sessionId} toolCallId={view.toolCallId} />
+    </div>
+  );
+}
+
+/** A step `turnSteps.ts` merged from several calls. */
+function isMergedStep(view: ToolRowView): boolean {
+  return view.key.startsWith('lookup:') || view.key.startsWith('edits:');
+}
+
+/** `⎿ 38 passed · 12 行` — the one line under a step (`deriveStepResult`). */
+function StepResult({ line }: { line: StepResultLine }) {
+  return (
+    <div
+      data-slot="step-result"
+      data-tone={line.tone}
+      className={cn(
+        'flex min-w-0 gap-1.5 pl-5 text-chat-process leading-normal',
+        line.tone === 'bad'
+          ? 'text-destructive'
+          : line.tone === 'unknown'
+            ? 'text-warning'
+            : 'text-muted-foreground'
+      )}
+    >
+      <span className="shrink-0 text-foreground-faint" aria-hidden>
+        ⎿
+      </span>
+      <span className="min-w-0 truncate" title={line.text}>
+        {line.text}
+      </span>
     </div>
   );
 }
@@ -586,12 +639,15 @@ function ToolRowCollapsible({
   rowClass,
   onOpenFile,
   sessionId,
+  after,
   children,
 }: {
   view: ToolRowView;
   rowClass: string;
   onOpenFile?: (target: FileLinkTarget) => void;
   sessionId?: string;
+  /** Under the trigger, above the body: the step's result line and live tail. */
+  after?: (open: boolean) => ReactNode;
   children: ReactNode;
 }) {
   const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
@@ -636,6 +692,7 @@ function ToolRowCollapsible({
             seeing both in `docs/examples/process-rows-zcode-style.html`. */}
         {children}
       </CollapsibleTrigger>
+      {after?.(open)}
       <CollapsibleContent className={TOOL_ROW_PANEL_CLASS}>
         <ToolRowBody view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
       </CollapsibleContent>
@@ -891,8 +948,10 @@ function ToolRowPermission({ view }: { view: ToolRowView }) {
   const { t } = useI18n();
   // Compared against the KEY, not the rendered word — the check has to keep
   // working in a locale where the row reads 「已允许」.
-  if (!view.permissionVerb || (view.permissionAutoNote && view.permissionVerb === 'Allowed'))
-    return null;
+  // PiLab R1 (2026-10-30): a plain 「已允许」 is what the user just clicked —
+  // the step's line carries what the call DID, not the approval. A denial, an
+  // automatic answer or a session grant still says so.
+  if (!view.permissionVerb || view.permissionVerb === 'Allowed') return null;
   return (
     <>
       <span className={cn(toolRowPermissionClass(), failedReasonClass(view))}>
@@ -1020,7 +1079,7 @@ const SUBAGENT_FOLLOW_SLACK_PX = 24;
  * is the only `body: 'detail'` producer in the app — the subagent panel — so
  * the bound belongs to it rather than to a generic row.
  */
-function SubagentDetail({ children }: { children: ReactNode }) {
+function SubagentDetail({ children, nested = false }: { children: ReactNode; nested?: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const following = useRef(true);
 
@@ -1033,7 +1092,11 @@ function SubagentDetail({ children }: { children: ReactNode }) {
     <div
       ref={ref}
       data-slot="subagent-detail"
-      className="mt-1 flex max-h-72 flex-col gap-1 overflow-y-auto"
+      className={cn(
+        'mt-1 flex max-h-72 flex-col gap-1 overflow-y-auto overscroll-contain',
+        // A merged step's calls (`turnSteps.ts`) read as ITS detail, not as siblings.
+        nested && 'ml-0.5 border-l border-border-soft pl-3.5'
+      )}
       onScroll={(event) => {
         const node = event.currentTarget;
         following.current =
@@ -1071,7 +1134,7 @@ function ToolRowBody({
   if (view.input && view.body === 'output') {
     return (
       <div className="ml-0.5 border-l border-border-soft pl-3.5">
-        <div className={cn('overflow-auto', view.outputMaxHeightClass)}>
+        <div className={cn('overflow-auto overscroll-contain', view.outputMaxHeightClass)}>
           <pre className="m-0 select-text whitespace-pre-wrap pt-1 font-mono text-code leading-[1.55] text-muted-foreground">
             {view.input}
           </pre>
@@ -1185,7 +1248,7 @@ function ToolRowDiffSegment({
         <span className="text-success">+{diff.added}</span>
         <span className="text-destructive">-{diff.removed}</span>
       </div>
-      <div className="max-h-72 overflow-auto py-1 font-mono text-code leading-[1.55]">
+      <div className="max-h-72 overflow-auto overscroll-contain py-1 font-mono text-code leading-[1.55]">
         {items.map((item) => {
           if (item.kind === 'fold') {
             return (
@@ -1281,7 +1344,7 @@ function ToolRowInputSegment({
     <div className="ml-0.5 border-l border-border-soft pl-3.5">
       <pre
         className={cn(
-          'm-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
+          'm-0 select-text overflow-auto overscroll-contain whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
           maxHeightClass
         )}
       >
@@ -1307,7 +1370,7 @@ function ToolRowOutputSegment({
           <OutputHeadNote omitted={view.outputHeadOmitted} className="pt-1" />
           <pre
             className={cn(
-              'm-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
+              'm-0 select-text overflow-auto overscroll-contain whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
               view.outputMaxHeightClass
             )}
           >
@@ -1317,7 +1380,7 @@ function ToolRowOutputSegment({
       );
     case 'detail':
       return (
-        <SubagentDetail>
+        <SubagentDetail nested={isMergedStep(view)}>
           {(view.detail ?? []).map((row) => (
             <ToolRow
               key={row.key}
@@ -1436,7 +1499,7 @@ function RunningToolClock({ startedAtMs, timeoutMs }: { startedAtMs: number; tim
  * paragraphs does not open gaps — and the page-level full-text flow (decision
  * 038) is kept: no inner height limit.
  */
-function ThinkingBody({ text }: { text: string }) {
+export function ThinkingBody({ text }: { text: string }) {
   const { t } = useI18n();
   const displayText = text
     .split(/\r\n|\n|\r/)

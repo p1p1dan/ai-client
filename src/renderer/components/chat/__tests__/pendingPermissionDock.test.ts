@@ -298,6 +298,22 @@ it('stays answerable when the IPC call fails', async () => {
   const allow = buttonNamed(container, 'Allow');
   expect(allow).toBeDefined();
   expect(allow?.disabled).toBe(false);
+  // [PILAB-R1-05.8] and it says the answer did not go through.
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+    'Could not send your answer. Please try again.'
+  );
+  await act(async () => root.unmount());
+});
+
+it('[PILAB-R1-05.8] says so when the engine did not take the reply (handled: false)', async () => {
+  respondPermission.mockImplementation(async () => ({ handled: false }));
+  askPermission('perm-1', { description: 'run ls' });
+  const { container, root } = mount();
+  await act(async () => root.render(createElement(PendingPermissionDock, { sessionId: 's1' })));
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => buttonNamed(container, 'Allow')?.click());
+  expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  expect(buttonNamed(container, 'Allow')?.disabled).toBe(false);
   await act(async () => root.unmount());
 });
 

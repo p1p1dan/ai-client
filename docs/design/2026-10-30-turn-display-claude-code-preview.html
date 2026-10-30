@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>对话主区信息呈现：当前 vs 建议（参考 Claude Code CLI）</title>
+<style>
+  /* Tokens copied from src/renderer/styles/globals.css (design system v2, light). */
+  :root {
+    --background: #fcfcfb; --surface-0: #f9f9f7; --card: #fff; --foreground: #151515;
+    --muted: #525252; --faint: color-mix(in oklab, #525252 62%, #fcfcfb);
+    --border: #e5e5e4; --input: #cececd; --fill: #eeeeed;
+    --primary: #c6613f; --destructive: #b5452f; --success: #3f7d4e; --warning: #b07a1e;
+    --chat: 13px; --process: 12px; --small: 12px; --ui: 13px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface-0); color: var(--foreground); font: var(--ui)/1.45 var(--sans); }
+  header { padding: 20px 28px 8px; }
+  h1 { font-size: 16px; margin: 0 0 6px; }
+  .lead { color: var(--muted); max-width: 980px; margin: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 16px; padding: 12px 28px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface-0); z-index: 5; }
+  .seg { display: inline-flex; border: 1px solid var(--input); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; padding: 5px 12px; font: inherit; color: var(--muted); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--input); }
+  .seg button.on { background: var(--card); color: var(--foreground); font-weight: 600; }
+  .ctl-label { color: var(--muted); align-self: center; margin-right: 6px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 18px 28px 28px; }
+  .col h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+  .col h2 b { color: var(--foreground); }
+  .pane { background: var(--background); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px 14px; min-height: 560px; }
+  .user { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+  .user span { background: var(--fill); border-radius: 18px 18px 4px 18px; padding: 7px 12px; max-width: 80%; font-size: var(--chat); }
+  .answer { font-size: var(--chat); line-height: 1.43; margin: 8px 0 10px; }
+  .answer code { font-family: var(--mono); font-size: 12px; background: var(--fill); padding: 0 4px; border-radius: 4px; }
+  .final-sep { display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: var(--small); margin: 12px 0 4px; }
+  .final-sep::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+  /* proposed rows */
+  .step { font-size: var(--process); margin: 6px 0; }
+  .step .head { display: flex; align-items: baseline; gap: 6px; cursor: pointer; }
+  .dot { width: 8px; flex: none; color: var(--faint); font-size: 9px; transform: translateY(-1px); }
+  .dot.run { color: var(--primary); animation: pulse 1.2s ease-in-out infinite; }
+  .dot.ok { color: var(--success); } .dot.bad { color: var(--destructive); } .dot.unk { color: var(--warning); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .dot.run { animation: none; } }
+  .verb { color: var(--foreground); font-weight: 600; }
+  .arg { color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
+  .prose { color: var(--muted); }
+  .stat { color: var(--faint); font-variant-numeric: tabular-nums; }
+  .add { color: var(--success); } .del { color: var(--destructive); }
+  .result { display: flex; gap: 6px; color: var(--muted); padding-left: 14px; margin-top: 2px; }
+  .result .elbow { color: var(--faint); font-family: var(--mono); }
+  .result.bad { color: var(--destructive); }
+  .result.unk { color: var(--warning); }
+  .tail { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: pre; padding-left: 28px; line-height: 1.5; }
+  .more { color: var(--faint); padding-left: 28px; font-size: 11.5px; cursor: pointer; }
+  .detail { display: none; margin: 4px 0 6px 28px; padding: 6px 10px; border-left: 2px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: 11.5px; white-space: pre; }
+  .step.open .detail { display: block; }
+  .live { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--process); margin-top: 14px; }
+  .live .spark { color: var(--primary); }
+  .live kbd { font: 11px var(--sans); border: 1px solid var(--input); border-radius: 4px; padding: 0 4px; color: var(--faint); }
+  .footer { color: var(--faint); font-size: var(--small); margin-top: 10px; }
+  .footer a { color: var(--faint); text-decoration: underline dotted; cursor: pointer; }
+  .thought { display: none; margin: 6px 0; padding: 6px 10px; border-left: 2px solid var(--border); color: var(--muted); font-size: var(--process); }
+  .thought.open { display: block; }
+  .oneline { font-size: var(--process); color: var(--muted); cursor: pointer; margin: 6px 0; }
+  .oneline b { color: var(--foreground); }
+  /* current (as-is) rows, matched to today's screenshots */
+  .cur-row { display: flex; gap: 6px; align-items: baseline; font-size: var(--process); color: var(--muted); margin: 5px 0; }
+  .cur-row .ic { width: 14px; color: var(--faint); font-family: var(--mono); font-size: 11px; }
+  .cur-row .a { font-family: var(--mono); font-size: 11.5px; }
+  .cur-row .p { color: var(--faint); font-family: var(--mono); font-size: 11.5px; }
+  .cur-group { font-size: var(--process); color: var(--muted); margin: 10px 0 6px; }
+  .note { margin: 14px 28px 0; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; color: var(--muted); max-width: 1100px; }
+  .note b { color: var(--foreground); }
+  .note ol { margin: 6px 0 0 18px; padding: 0; }
+  .card { border: 1px solid color-mix(in oklab, var(--destructive) 30%, var(--border)); background: color-mix(in oklab, var(--destructive) 6%, var(--card)); border-radius: 10px; padding: 10px 12px; margin-top: 14px; font-size: var(--process); }
+  .card b { color: var(--destructive); }
+  .neutral { border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 9px 12px; margin-top: 12px; font-size: var(--process); color: var(--muted); }
+  .neutral b { color: var(--foreground); }
+  .btn { display: inline-block; margin-top: 6px; border: 1px solid var(--input); border-radius: 6px; padding: 2px 8px; color: var(--foreground); background: var(--card); font-size: 12px; }
+  .sysline { font-size: var(--process); color: var(--faint); margin: 8px 0; }
+  .sysline.good { color: var(--success); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>对话主区信息呈现：当前 vs 建议（参考 Claude Code CLI）</h1>
+  <p class="lead">同一个任务「修复 Windows 上中文用户名导致登录失败」，左边是现在的样子，右边是按 Claude Code CLI 思路的建议。三种状态可切换，右边每一行都可以点开看详情。所有颜色、字号取自当前设计规范 v2。</p>
+</header>
+
+<div class="note">
+  <b>建议的五条规则</b>（Claude Code 2.1.307 的实际做法，已从本机安装包核对）
+  <ol>
+    <li><b>连续的读文件、搜索合成一行</b>：「搜索了 2 处，读取了 5 个文件」；运行中写成「正在读取…」。点开才看到具体是哪些文件。</li>
+    <li><b>改文件、跑命令等每次一行，后面跟一行结果</b>：改文件显示 <span class="add">+6</span> <span class="del">−2</span>；跑命令显示结论（通过/失败数、退出码），失败时再露出最后几行输出和「还有 N 行」。</li>
+    <li><b>思考不占行</b>：运行时底部状态行写「✻ 思考中 12 秒」；结束后只在回合末尾留「思考 18 秒」，点开可看原文。</li>
+    <li><b>正文永远直接可见</b>，最后一段标「最终输出」。</li>
+    <li><b>结束后保留这些摘要行</b>（它们本身就是「做了什么、结果如何」），不再收成一排「已工作 ›」。也可以切换成「结束后收成一行」对比。</li>
+  </ol>
+</div>
+
+<div class="controls">
+  <span><span class="ctl-label">状态</span><span class="seg" id="state">
+    <button data-v="running" class="on">运行中</button><button data-v="done">已完成</button><button data-v="crash">引擎中断（第 5 项）</button>
+  </span></span>
+  <span id="foldCtl"><span class="ctl-label">完成后（仅右侧）</span><span class="seg" id="fold">
+    <button data-v="keep" class="on">保留每步摘要（推荐）</button><button data-v="one">收成一行</button>
+  </span></span>
+</div>
+
+<div class="cols">
+  <section class="col">
+    <h2><b>当前</b> · 与真实应用截图一致</h2>
+    <div class="pane" id="current"></div>
+  </section>
+  <section class="col">
+    <h2><b>建议</b> · 参考 Claude Code CLI</h2>
+    <div class="pane" id="proposed"></div>
+  </section>
+</div>
+
+<script>
+const S = { state: 'running', fold: 'keep' };
+const reads = ['src/auth/login.ts', 'src/auth/paths.ts', 'src/auth/session.ts', 'src/shared/encoding.ts', 'tests/auth/paths.test.ts'];
+
+function currentHTML() {
+  const readRows = (list) => list.map((f) => `<div class="cur-row"><span class="ic">▤</span>读取 <span class="a">${f.split('/').pop()}</span><span class="p">${f.split('/').slice(0, -1).join('/')}/</span></div>`).join('');
+  const think = '<div class="cur-row"><span class="ic">{}</span>思考</div>';
+  const user = '<div class="user"><span>修复 Windows 上中文用户名导致登录失败</span></div>';
+  if (S.state === 'running') {
+    return user + `<div class="cur-group">工作中 ⌄</div>${think}<div class="cur-row"><span class="ic">⌕</span>搜索 <span class="a">resolveUserDir</span></div><div class="cur-row"><span class="ic">⌕</span>搜索 <span class="a">decodeURIComponent</span></div>${readRows(reads)}
+      <div class="answer">问题在 <code>resolveUserDir</code>：Windows 下用户目录按系统代码页返回，没有转成 UTF-8。</div>
+      <div class="cur-group">✻ 工作中 ⌄</div>${think}<div class="cur-row"><span class="ic">✎</span>修改 <span class="a">paths.ts</span><span class="p">src/auth/</span></div>${think}<div class="cur-row"><span class="ic">▣</span>运行中 <span class="a">pnpm test tests/auth</span></div>`;
+  }
+  if (S.state === 'done') {
+    return user + `<div class="cur-group">已工作 ›</div>
+      <div class="answer">问题在 <code>resolveUserDir</code>：Windows 下用户目录按系统代码页返回，没有转成 UTF-8。</div>
+      <div class="cur-group">已工作 ›</div>
+      <div class="final-sep">最终输出</div>
+      <div class="answer">已修复：<code>resolveUserDir</code> 改为用 <code>os.homedir()</code> 的 UTF-8 结果，并补了中文用户名的测试。认证相关测试 38 项全部通过。</div>
+      <div class="cur-row" style="color:var(--faint)">✻ 9 次工具调用</div>`;
+  }
+  return user + `<div class="cur-group">已工作 1 秒</div>
+    <div class="cur-row"><span class="ic">ⓘ</span>引擎意外停止，这一轮没有完成。</div>
+    <div class="final-sep" style="visibility:hidden">.</div>
+    <div class="answer">问题在 <code>resolveUserDir</code>：Windows 下用户目录按系统代码页返回，没有转成 UTF-8。我先改这个函数，再跑认证相关测</div>
+    <div class="cur-row"><span class="ic">▣</span>终端 <span class="a">pnpm test tests/auth</span> · 结果未知</div>
+    <div class="cur-row" style="color:var(--destructive)">✕ 失败</div>
+    <div class="card"><b>⚠ 对话引擎意外退出</b><br>运行对话的引擎在这条回复生成途中退出了，回复因此中断。各个对话会自动重新连上。<br><span class="btn">➤ 继续</span></div>`;
+}
+
+function step(dot, verb, arg, stat, detail, result, extra = '') {
+  return `<div class="step"><div class="head" onclick="this.parentElement.classList.toggle('open')"><span class="dot ${dot}">●</span><span class="verb">${verb}</span>${arg}${stat ? ` <span class="stat">${stat}</span>` : ''}</div>${result ?? ''}${extra}<div class="detail">${detail}</div></div>`;
+}
+const res = (cls, text) => `<div class="result ${cls}"><span class="elbow">⎿</span><span>${text}</span></div>`;
+
+function proposedHTML() {
+  const user = '<div class="user"><span>修复 Windows 上中文用户名导致登录失败</span></div>';
+  const intro = '<div class="answer">我先看一下登录模块的路径处理。</div>';
+  const search = (running) => step(running ? 'run' : '', running ? '正在搜索 2 处、读取 5 个文件…' : '搜索了 2 处，读取了 5 个文件', '', '', `搜索 resolveUserDir（3 处）\n搜索 decodeURIComponent（1 处）\n${reads.map((f) => '读取 ' + f).join('\n')}`);
+  const finding = '<div class="answer">问题在 <code>resolveUserDir</code>：Windows 下用户目录按系统代码页返回，没有转成 UTF-8。</div>';
+  const edit = step('ok', '修改', ' <span class="arg">src/auth/paths.ts</span>', '<span class="add">+6</span> <span class="del">−2</span>', '- const dir = process.env.USERPROFILE;\n+ const dir = os.homedir(); // UTF-8 on every platform\n…', null);
+  const user2 = '';
+  if (S.state === 'running') {
+    const test = step('run', '终端', ' <span class="prose">运行认证相关测试</span>', '', 'pnpm test tests/auth', res('', '运行中 42 秒'), '<div class="tail">✓ paths › 中文用户名\n✓ paths › 空格路径\n· session › 过期刷新</div>');
+    return user + intro + search(false) + finding + edit + test + user2 +
+      `<div class="live"><span class="spark">✻</span> 运行认证相关测试 · 2 分 13 秒 <kbd>Esc</kbd> 中断</div>`;
+  }
+  if (S.state === 'done') {
+    const test = step('ok', '终端', ' <span class="prose">运行认证相关测试</span>', '', 'pnpm test tests/auth\n\n✓ 38 passed (2.1s)', res('', '38 项通过 · 退出码 0'));
+    const finalText = '<div class="final-sep">最终输出</div><div class="answer">已修复：<code>resolveUserDir</code> 改为用 <code>os.homedir()</code> 的 UTF-8 结果，并补了中文用户名的测试。认证相关测试 38 项全部通过。</div>';
+    const footer = `<div class="footer">✻ 完成于 17:05 · 用时 2 分 13 秒 · 9 次工具调用 · <a onclick="document.getElementById('th').classList.toggle('open')">思考 18 秒</a></div><div class="thought" id="th">用户目录来自 USERPROFILE，在中文 Windows 上是 GBK 编码……先确认 login.ts 里谁调用了 resolveUserDir，再看测试有没有覆盖非 ASCII 用户名。</div>`;
+    if (S.fold === 'one') {
+      return user + `<div class="step" id="oneStep"><div class="oneline" onclick="this.parentElement.classList.toggle('open')">› 做了 4 件事：<b>搜索 2 处、读取 5 个文件</b>，<b>修改 paths.ts</b> <span class="add">+6</span> <span class="del">−2</span>，<b>运行测试</b> 38 项通过</div><div class="detail">${'搜索了 2 处，读取了 5 个文件\n修改 src/auth/paths.ts  +6 −2\n终端 运行认证相关测试 → 38 项通过 · 退出码 0'}</div></div>` + finalText + footer;
+    }
+    return user + intro + search(false) + finding + edit + test + finalText + footer;
+  }
+  // crash
+  const test = step('unk', '终端', ' <span class="prose">运行认证相关测试</span>', '', 'pnpm test tests/auth', res('unk', '结果未知：引擎在命令结束前退出了。重新运行前请先确认它是否已经生效。'));
+  return user + intro + search(false) + finding + edit + test +
+    `<div class="sysline">⏸ 与对话引擎的连接中断，这一轮已停在这里，上面的内容都已保留。正在重新连接…</div>
+     <div class="sysline good">✓ 已重新连接</div>
+     <div class="neutral"><b>这一轮没有完成</b> · 可以让它从中断处继续。<br><span class="btn">➤ 继续</span></div>
+     <div class="footer">参考：Claude Code「Lost the connection … reconnecting…」→「Reconnected.」，进行中的工具「outcome is unknown, check whether it took effect」；PI-Desktop「Connection restored」+「Your work is still here」+ Continue。不再用红色「失败」，侧栏图标改为中性。</div>`;
+}
+
+function render() {
+  document.getElementById('current').innerHTML = currentHTML();
+  document.getElementById('proposed').innerHTML = proposedHTML();
+  document.getElementById('foldCtl').classList.toggle('hidden', S.state !== 'done');
+}
+for (const id of ['state', 'fold']) {
+  document.getElementById(id).addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    for (const x of e.currentTarget.querySelectorAll('button')) x.classList.toggle('on', x === b);
+    S[id] = b.dataset.v; render();
+  });
+}
+render();
+</script>
+</body>
+</html>

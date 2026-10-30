@@ -1,0 +1,12 @@
+{
+  "editButton": "编辑文件",
+  "modifiedLines": ["diff-edit-A", ""],
+  "afterExternalLines": ["diff-edit-A", ""],
+  "disk": "B\n",
+  "toasts": "保存文件失败 | Error invoking remote method 'file:write': Error: FILE_CONTENT_CONFLICT: File changed on disk",
+  "problems": [
+    "14:32:27.202 › Error occurred in handler for 'file:write': Error: FILE_CONTENT_CONFLICT: File changed on disk\n    at file://<repo>/out/main/index.js:129006:15\n    at async Session.<anonymous> (node:el",
+    "14:32:27.202 › Error occurred in handler for 'file:write': Error: FILE_CONTENT_CONFLICT: File changed on disk\n    at file://<repo>/out/main/index.js:129006:15\n    at async Session.<anonymous> (node:el"
+  ],
+  "shot": "docs/plans/evidence/2026-10-30-pilab-r0-real-ui/shots/diff-a2b-conflict.png"
+}

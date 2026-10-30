@@ -741,6 +741,8 @@ export interface ToolRowView {
    * `ToolRows.tsx`) — which is the reason it stays untranslated until paint.
    */
   permissionVerb?: string;
+  /** PiLab R1: +/− of a change recorded for the review panel (no inline diff then). */
+  changeStat?: { added: number; removed: number };
   /**
    * FB7: `auto: <reason>` when the Host answered the approval on the user's
    * behalf. Kept as its own field rather than folded into `permissionVerb`
@@ -949,6 +951,8 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // Running Edit/Write arguments are explicitly labelled as a preview;
   // successful Edit results prefer the SDK patch once the call settles.
   const diff = recordedChange ? null : deriveToolDiff(run);
+  // PiLab R1: the recorded change's +/− (its body lives in the review panel).
+  const changeStat = recordedChange?.patch ? patchLineStat(recordedChange.patch) : undefined;
   const expandable = showTodos || showOutputBody || Boolean(inputBody) || Boolean(diff);
 
   // The live clock's origin. `tool.started` is stamped when the call is
@@ -1036,6 +1040,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     input: diff ? undefined : inputBody,
     inputMaxHeightClass: !diff && inputBody ? INPUT_MAX_HEIGHT_CLASS : undefined,
     diff: diff ?? undefined,
+    ...(changeStat ? { changeStat } : {}),
     link,
     hitSource,
     toolName: run.toolName,
@@ -1193,6 +1198,18 @@ function deriveToolInputBody(run: ToolRun): string | undefined {
   return normalizeRawOutput(run.input);
 }
 
+/** +/− lines of a unified patch, its `+++` / `---` file headers excluded. */
+export function patchLineStat(patch: string): { added: number; removed: number } | undefined {
+  let added = 0;
+  let removed = 0;
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) continue;
+    if (line.startsWith('+')) added += 1;
+    else if (line.startsWith('-')) removed += 1;
+  }
+  return added || removed ? { added, removed } : undefined;
+}
+
 /** The shells whose expanded input is the command itself (`deriveShellInputBody`). */
 const SHELL_BODY_TOOL_NAMES: ReadonlySet<string> = new Set([
   RUNTIME_TOOL_NAMES.bash,
@@ -1204,8 +1221,9 @@ const SHELL_BODY_TOOL_NAMES: ReadonlySet<string> = new Set([
  * input — the model's `description` on the first line, then the command
  * exactly as it ran, then any other argument (`workdir`, `timeoutMs`, …).
  *
- * The row itself keeps the command summary (the 2026-09-22 ruling), so this is
- * where DSH's "shown in the UI" description goes. Every line that is not the
+ * The row shows the `description` when there is one (user ruling 2026-10-30;
+ * it was the command summary under the 2026-09-22 ruling); the body keeps it as
+ * its first line so the expanded view reads the same either way. Every line that is not the
  * command is a `#` comment, which both bash and PowerShell read as one: the
  * body stays safe to copy and run as a whole, the copy-and-rerun path
  * decision 033 D6 made this body for. Nothing is re-quoted or escaped — the
@@ -1466,22 +1484,7 @@ export function runningElapsedMs(
   return nowMs >= startedAtMs ? nowMs - startedAtMs : undefined;
 }
 
-/**
- * One tool group -> its top-level rows. One row per entry, in order.
- *
- * A run becomes a tool row (`deriveToolRowView`); a thinking entry becomes a
- * Thought row (`turnTiming.formatThoughtRow`). Nothing is grouped, counted or
- * summarised here any more — see the note inside for why T105's segmentation
- * and decision 031's aggregate row were retired together on 2026-09-22.
- *
- * ## What the FB7 red line turned into
- *
- * A run carrying a `permission` record used to be a SEPARATOR, so that a
- * decision the user had been asked to make could never be summarised as
- * 「12 次工具调用」 behind two clicks. With no aggregate row left, every run is
- * its own row and the property holds by construction — the rule did not lose
- * its reason, it lost the thing it was defending against.
- */
+/** One row per run and one aggregated thought row per tool group. */
 export function deriveToolGroupRows(
   entries: readonly ToolGroupEntry[],
   options: ToolCardOptions & ThinkingRowOptions = {}
@@ -1499,33 +1502,49 @@ export function deriveToolGroupRows(
     t: options.t,
   };
 
+  const thinkingBlocks = entries.flatMap((entry) =>
+    entry.kind === 'thinking' ? [entry.block] : []
+  );
+  const thoughtRow = thinkingBlocks.length
+    ? buildThoughtGroupRow(thinkingBlocks, thinkingOptions)
+    : null;
   const rows: ToolRowView[] = [];
-  const pushStandaloneRow = (item: ToolGroupEntry) => {
-    rows.push(
-      item.kind === 'run'
-        ? deriveToolRowView(item.run, cardOptions)
-        : buildThoughtRow(item.block, thinkingOptions)
-    );
-  };
-  // 2026-09-22 (decision 034, user decision): ONE ROW PER ENTRY. The
-  // segmentation that used to live here — group adjacent calls, collapse two or
-  // more into an aggregate row, break the run on a separator — is retired whole.
-  //
-  // It was decision 031's answer to 「过程条目太碎」, and it did reduce the row
-  // COUNT. What the user reported after living with it is that it did not
-  // reduce the NOISE, because it paid for every folded run with a third
-  // disclosure level: a turn had a process head, an aggregate row inside it,
-  // and a chevron on every row inside that. Compared against zcode — 「为什么
-  // 它的看起来这么简洁清爽呢」 — the difference was never how much is hidden;
-  // zcode hides nothing at this level and reads cleaner because each row is
-  // short, dim and has no control on it.
-  //
-  // So the density fix moved down a layer (icon + two-character type label, a
-  // capped argument, no chevron) and this layer went flat. `turnProcessFold`'s
-  // per-turn head is the one disclosure left, which is also what zcode's
-  // 「已工作 6 分 41 秒 ⌄」 is.
-  for (const entry of entries) pushStandaloneRow(entry);
+  let thoughtWritten = false;
+  for (const entry of entries) {
+    if (entry.kind === 'run') {
+      rows.push(deriveToolRowView(entry.run, cardOptions));
+    } else if (!thoughtWritten) {
+      if (thoughtRow) rows.push(thoughtRow);
+      thoughtWritten = true;
+    }
+  }
   return rows;
+}
+
+function buildThoughtGroupRow(blocks: ChatBlock[], options: ThinkingRowOptions): ToolRowView {
+  const first = blocks[0];
+  const streaming = blocks.some((block) => block.id === options.isStreamingBlockId);
+  let durationMs: number | undefined;
+  if (options.thinkingDurationMs) {
+    let total = 0;
+    for (const block of blocks) {
+      const value = options.thinkingDurationMs(block.id);
+      if (value === undefined || value === null) {
+        total = Number.NaN;
+        break;
+      }
+      total += value;
+    }
+    if (!Number.isNaN(total)) durationMs = total;
+  }
+  return buildThoughtRow(
+    { ...first, text: blocks.map((block) => block.text ?? '').join('\n\n') },
+    {
+      ...options,
+      thinkingDurationMs: durationMs === undefined ? undefined : () => durationMs,
+      isStreamingBlockId: streaming ? first.id : null,
+    }
+  );
 }
 
 function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRowView {
@@ -2438,9 +2457,13 @@ function formatToolArgDetail(
       break;
     }
     case DSH_TOOL_NAMES.pwsh: {
+      // User ruling 2026-10-30 (PiLab R1, FR-05.2), replacing 09-22 / decision
+      // 073 rule 2: the model's `description` is the row when it wrote one; the
+      // command stays the first line of the expanded body.
+      const description = stringField(rec, 'description');
       const command = stringField(rec, 'command');
-      raw = command ? commandSummary(command, 'pwsh') : command;
-      if (raw) kind = 'ident';
+      raw = description ?? (command ? commandSummary(command, 'pwsh') : command);
+      if (raw) kind = description ? 'prose' : 'ident';
       break;
     }
     // The job id is the fallback; the painting leaf adds the job's label
@@ -2640,13 +2663,13 @@ function formatToolArgDetail(
     }
     case PI_TOOL_NAMES.bash:
     case PI_TOOL_NAMES.powershell: {
-      // pi's bash schema has `command` and `timeout` only — no `description`
-      // sibling, so unlike Claude's Bash there is no prose alternative here.
-      // Which is exactly why the `cd` prefix has to go: with no description to
-      // fall back on, the command IS the summary.
+      // DSH's bash carries a `description` (pi's never did): it is the row, as
+      // on Claude's Bash (user ruling 2026-10-30, FR-05.2). Without one the
+      // command IS the summary, which is why the `cd` prefix has to go.
+      const description = stringField(rec, 'description');
       const command = stringField(rec, 'command');
-      raw = command ? commandSummary(command) : command;
-      if (raw) kind = 'ident';
+      raw = description ?? (command ? commandSummary(command) : command);
+      if (raw) kind = description ? 'prose' : 'ident';
       break;
     }
     case 'Read':

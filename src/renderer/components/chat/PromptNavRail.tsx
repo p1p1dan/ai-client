@@ -80,7 +80,12 @@ export function PromptNavRail({ prompts, containerRef }: PromptNavRailProps) {
       const target = root.querySelector<HTMLElement>(`[data-turn-id="${CSS.escape(id)}"]`);
       if (!viewport || !target) return;
       const delta = target.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
-      viewport.scrollTo({ top: Math.max(0, viewport.scrollTop + delta - 12), behavior: 'smooth' });
+      // FR-02.6: no animated jump for a reader who asked the OS for less motion.
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+      viewport.scrollTo({
+        top: Math.max(0, viewport.scrollTop + delta - 12),
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      });
     },
     [containerRef]
   );

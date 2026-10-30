@@ -129,7 +129,7 @@ it('[26-5] a long prompt starts folded; the button opens and folds it', async ()
   const box = () => container.querySelector('article p')?.parentElement as HTMLElement;
   expect(foldButton()?.textContent).toBe('Show more');
   expect(foldButton()?.getAttribute('aria-expanded')).toBe('false');
-  expect(box().className).toContain('max-h-[12lh]');
+  expect(box().className).toContain('max-h-75');
   // Folded is a clip, not a cut: the whole prompt is still in the DOM.
   expect(box().textContent).toContain('line 30');
 
@@ -138,7 +138,7 @@ it('[26-5] a long prompt starts folded; the button opens and folds it', async ()
   expect(box().className).not.toContain('max-h-');
 
   await act(async () => foldButton()?.click());
-  expect(box().className).toContain('max-h-[12lh]');
+  expect(box().className).toContain('max-h-75');
 });
 
 it('[26-5] a short prompt has no fold and no button', async () => {

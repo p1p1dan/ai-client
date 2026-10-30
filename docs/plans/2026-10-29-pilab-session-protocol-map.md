@@ -38,8 +38,7 @@
 | 恢复 | `session.resumed(requestId) → session.history(同 requestId) → session.status` | `WorkerManager.ts:3937-3966`；`runtimeEvents.ts:1123-1169` | 没有独立顶层 restore/snapshot 事件；旧历史经稳定 h: id 和 replay merge 衔接 |
 | 历史页 | `initial/refresh/older/branch`，older 还校验 offset | `chatSessions.ts:1796-1894` | 重放、分页、刷新、断连补洞分别验证，不混为“再渲染一次” |
 
-已确认 DEF-005：重复 `message.started` 当前会清空 blocks。
-已确认 DEF-006：renderer 当前没有按 Main seq 识别同一传输事件，重复 delta 会重复追加。两者由 #11 前置整改。
+DEF-005/006 已于 2026-10-30 在 Linux 工作区完成 #11 自动整改：重复 `message.started` 按 `messageId` 保留 blocks 并合并新增元数据；renderer 按 `sessionId + seq` 忽略同一 Main 传输代际的重放，新 `session.resumed.requestId` 开启新序号代际。不同 seq 的合法相同 delta 仍保留。store、真实 DSH 录制、Main 与 Claude SDK 自动回归通过，真实 Electron 复测待 #2。
 
 ## 4. 工具、授权、问题与终态
 
@@ -71,7 +70,7 @@ F01 额外固定“结果先于调用”序列，用于 #3 核实暂存/关联�
 - `preview.requested` 由 Main 处理；预览窗 `sandbox:true`、无 preload，后台 `showInactive`，关闭清理 watcher/timer：`PreviewWindowManager.ts:60-207`。
 - 独立预览窗直接 `loadFile`，不能据此宣称 Markdown/Mermaid 等已有专用渲染器；编辑器内 Markdown/PDF/Image 预览是另一路径，R3 分别验收。
 - 所有 BrowserWindow 收 RuntimeEvent；桌面专用 snapshot/cursor/since API 未定位。插件 SessionLiveJournal 的能力不能直接当桌面窗口已具备。
-- `FILE_WRITE` 当前无 expected-content/hash/version；DEF-004 由 #10 前置修复。root containment 不是内容基线。
+- `FILE_WRITE` 已于 2026-10-30 在 Linux 工作区接入必填 `expectedContent`：本地 Main 校验，远程在同一 `fs:write` RPC 内校验；冲突以 `FILE_CONTENT_CONFLICT` 拒绝且不写。5 个既有编辑器保存入口均提交读取时基线，root containment 仍不冒充内容基线。自动 A→B/顺序写回归通过，真实窗口与真实远程连接待复测；比较后写入不是原子 CAS。
 
 ## 7. 固定 F01～F08 场景
 

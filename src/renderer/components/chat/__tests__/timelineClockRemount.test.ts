@@ -57,7 +57,8 @@ import { formatAbsoluteTime } from '../messageMetadata';
 
 const SENT_AT = Date.UTC(2026, 8, 30, 9, 0, 0);
 const DONE_AT = SENT_AT + 3_000;
-const WORKED = zh('Worked for {{seconds}}s', { seconds: 3 });
+// PiLab R1 (2026-10-30): the duration reads 「用时 3 秒」 on the turn's footer.
+const WORKED = zh('Took {{duration}}', { duration: zh('{{seconds}}s', { seconds: 3 }) });
 const DONE = zh('Completed at {{time}}', { time: formatAbsoluteTime(DONE_AT) });
 
 /** A finished live turn: no `h:` ids, no `timestamp`, exactly as the store keeps an echo. */

@@ -469,9 +469,22 @@ describe('request construction (design shard 03 §2)', () => {
         preview: { label: 'Content', text: 'hello' },
       })
     );
-    const edit = (await requestFor('edit', { file_path: 'notes.txt', old_string: 'a' })).seen[0];
+    const edit = (
+      await requestFor('edit', {
+        file_path: 'notes.txt',
+        old_string: 'a',
+        new_string: 'b',
+        replace_all: true,
+      })
+    ).seen[0];
     expect(edit).toMatchObject({ tool: 'edit', path: join(ws, 'notes.txt') });
-    expect(edit?.preview).toBeUndefined();
+    // [PILAB-R1-05.5] what the edit replaces, with what, and whether every match.
+    expect(edit?.preview?.label).toBe('Arguments');
+    expect(JSON.parse(String(edit?.preview?.text))).toEqual({
+      old_string: 'a',
+      new_string: 'b',
+      replace_all: true,
+    });
   });
 
   it('analyses bash with tree-sitter and resolves workdir', async () => {

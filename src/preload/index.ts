@@ -388,8 +388,13 @@ const electronAPI = {
     // image/PDF file; anything else resolves `{ ok: false }` without opening.
     openWithSystemViewer: (filePath: string): Promise<SystemViewerOpenResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.FILE_OPEN_WITH_SYSTEM_VIEWER, filePath),
-    write: (filePath: string, content: string, encoding?: string): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.FILE_WRITE, filePath, content, encoding),
+    write: (
+      filePath: string,
+      content: string,
+      encoding: string | undefined,
+      expectedContent: string
+    ): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.FILE_WRITE, filePath, content, encoding, expectedContent),
     saveToTemp: (
       filename: string,
       data: Uint8Array

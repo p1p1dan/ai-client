@@ -1,0 +1,64 @@
+{
+  "mode": "small",
+  "steps": [
+    {
+      "label": "arrowup: user moved up",
+      "scroller": true,
+      "top": 370,
+      "height": 1183,
+      "client": 773,
+      "fromBottom": 40,
+      "jumpButton": null
+    },
+    {
+      "label": "arrowup: after more streaming",
+      "scroller": true,
+      "top": 370,
+      "height": 1257,
+      "client": 773,
+      "fromBottom": 114,
+      "jumpButton": null,
+      "pulledBack": false
+    },
+    {
+      "label": "drag30: user moved up",
+      "scroller": true,
+      "top": 380,
+      "height": 1183,
+      "client": 773,
+      "fromBottom": 30,
+      "jumpButton": null
+    },
+    {
+      "label": "drag30: after more streaming",
+      "scroller": true,
+      "top": 380,
+      "height": 1257,
+      "client": 773,
+      "fromBottom": 104,
+      "jumpButton": null,
+      "pulledBack": false
+    },
+    {
+      "label": "drag60: user moved up",
+      "scroller": true,
+      "top": 350,
+      "height": 1183,
+      "client": 773,
+      "fromBottom": 60,
+      "jumpButton": null
+    },
+    {
+      "label": "drag60: after more streaming",
+      "scroller": true,
+      "top": 350,
+      "height": 1257,
+      "client": 773,
+      "fromBottom": 134,
+      "jumpButton": null,
+      "pulledBack": false
+    }
+  ],
+  "focus": "DIV.h-full overscroll-contain rounded-[inher",
+  "problems": []
+}

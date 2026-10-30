@@ -148,19 +148,21 @@ const PROBES: Readonly<Record<string, Probe>> = {
     icon: 'search',
     arg: 'TODO · *.ts',
   },
+  // User ruling 2026-10-30 (FR-05.2): the model's description is the row; the
+  // command-only shape (no description) is pinned further down.
   bash: {
     input: { command: 'cd /w && npm test', description: 'Run the tests' },
     verb: 'Ran',
     zhVerb: '终端',
     icon: 'terminal',
-    arg: 'npm test',
+    arg: 'Run the tests',
   },
   pwsh: {
     input: { command: 'Set-Location C:\\repo; git status', description: 'Show the status' },
     verb: 'Ran',
     zhVerb: '终端',
     icon: 'terminal',
-    arg: 'git status',
+    arg: 'Show the status',
   },
   run_code: {
     input: { code: 'const rows = await tools.read()', description: 'Count the rows' },

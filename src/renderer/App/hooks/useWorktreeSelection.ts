@@ -5,6 +5,7 @@ import { useCallback, useEffect } from 'react';
 import { toastManager } from '@/components/ui/toast';
 import { gitQueryKeys } from '@/hooks/gitQueryKeys';
 import { useI18n } from '@/i18n';
+import { reportEditorSaveFailure } from '@/lib/fileSaveFailure';
 import { useEditorStore } from '@/stores/editor';
 import { useSettingsStore } from '@/stores/settings';
 import { requestUnsavedChoice } from '@/stores/unsavedPrompt';
@@ -94,15 +95,17 @@ export function useWorktreeSelection(
 
           if (choice === 'save') {
             try {
-              await window.electronAPI.file.write(tab.path, tab.content, tab.encoding);
-              useEditorStore.getState().markFileSaved(tab.path);
+              if (tab.baseContent === undefined)
+                throw new Error('File content baseline is missing');
+              await window.electronAPI.file.write(
+                tab.path,
+                tab.content,
+                tab.encoding,
+                tab.baseContent
+              );
+              useEditorStore.getState().markFileSaved(tab.path, tab.content);
             } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              toastManager.add({
-                type: 'error',
-                title: t('Save failed'),
-                description: message,
-              });
+              reportEditorSaveFailure(tab.path, err, t);
               return;
             }
           } else {

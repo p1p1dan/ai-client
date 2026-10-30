@@ -33,6 +33,7 @@ import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { useCommitDiff } from '@/hooks/useGitHistory';
 import { useI18n } from '@/i18n';
 import { deferRootUnmount } from '@/lib/deferRootUnmount';
+import { reportEditorSaveFailure } from '@/lib/fileSaveFailure';
 import { toMonacoFileUri } from '@/lib/monacoModelPath';
 import { useActiveSessionId } from '@/stores/agentSessions';
 import type { EditorTab, NavEntry, PendingCursor } from '@/stores/editor';
@@ -300,7 +301,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   const setCurrentCursorLine = useEditorStore((state) => state.setCurrentCursorLine);
   const markExternalChange = useEditorStore((state) => state.markExternalChange);
   const applyExternalChange = useEditorStore((state) => state.applyExternalChange);
-  const dismissExternalChange = useEditorStore((state) => state.dismissExternalChange);
+  const keepLocalOverExternalChange = useEditorStore((state) => state.keepLocalOverExternalChange);
   const themeDefinedRef = useRef(false);
   const selectionWidgetRef = useRef<monaco.editor.IContentWidget | null>(null);
   const widgetRootRef = useRef<Root | null>(null);
@@ -537,7 +538,12 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
               // User has unsaved edits: avoid overwriting — mark as conflict for user to decide.
               // Compare against externalContent (not user's content) so consecutive external
               // modifications always update externalContent to the latest value.
-              if (latestContent !== currentTab.externalContent) {
+              // Text equal to the baseline is not a conflict — e.g. what Keep
+              // Mine has just accepted, or this window's own save landing.
+              if (
+                latestContent !== currentTab.externalContent &&
+                latestContent !== currentTab.baseContent
+              ) {
                 markExternalChange(tabPath, latestContent);
               }
             } else {
@@ -1183,8 +1189,15 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
       ) {
         const currentContent = editorRef.current.getValue();
         const tab = tabs.find((t) => t.path === path);
-        onContentChange(path, currentContent, false);
-        await window.electronAPI.file.write(path, currentContent, tab?.encoding);
+        try {
+          if (tab?.baseContent === undefined) throw new Error('File content baseline is missing');
+          await window.electronAPI.file.write(path, currentContent, tab.encoding, tab.baseContent);
+        } catch (error) {
+          // Keep the tab: closing it would drop the edits the save just failed to write.
+          reportEditorSaveFailure(path, error, t);
+          return;
+        }
+        useEditorStore.getState().markFileSaved(path, currentContent);
         hasPendingAutoSaveRef.current = false;
       }
 
@@ -1207,8 +1220,8 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
       onViewStateChange,
       cancelDebouncedSave,
       editorSettings.autoSave,
-      onContentChange,
       tabs,
+      t,
     ]
   );
 
@@ -1404,7 +1417,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
               setEditorValueProgrammatically(editorRef.current, externalContent);
             }
           }}
-          onDismiss={() => dismissExternalChange(activeTab.path)}
+          onDismiss={() => keepLocalOverExternalChange(activeTab.path)}
         />
       )}
 

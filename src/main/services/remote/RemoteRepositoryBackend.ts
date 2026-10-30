@@ -98,11 +98,12 @@ export class RemoteRepositoryBackend {
     });
   }
 
-  async writeFile(filePath: string, content: string): Promise<void> {
+  async writeFile(filePath: string, content: string, expectedContent: string): Promise<void> {
     const { connectionId, remotePath } = toRemotePath(filePath);
     await remoteConnectionManager.call(connectionId, 'fs:write', {
       path: remotePath,
       content,
+      expectedContent,
     });
   }
 

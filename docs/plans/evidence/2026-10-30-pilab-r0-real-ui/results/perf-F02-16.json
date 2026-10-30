@@ -1,0 +1,23 @@
+{
+  "id": "F02",
+  "events": 273,
+  "batchSize": 16,
+  "folds": 18,
+  "foldTotalMs": 794,
+  "foldP50": 0.3,
+  "foldP95": 0.7,
+  "foldMax": 0.7,
+  "longTasks": {
+    "count": 5,
+    "max": 106,
+    "total": 385
+  },
+  "heapMB": {
+    "before": 115.5,
+    "after": 149.8
+  },
+  "domNodes": 1359,
+  "messages": 2,
+  "capturePumpFps": 15.5,
+  "problems": []
+}

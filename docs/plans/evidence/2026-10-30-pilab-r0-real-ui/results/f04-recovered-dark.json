@@ -1,0 +1,57 @@
+{
+  "inject": {
+    "sid": "pilab-replay-f04",
+    "cut": 14,
+    "total": 14,
+    "lastType": "session.status",
+    "foldMs": 1.2000000029802322,
+    "status": "idle",
+    "messages": 2,
+    "pendingPermissions": 0,
+    "pendingQuestions": 0,
+    "active": "pilab-replay-f04",
+    "problems": []
+  },
+  "measure": {
+    "viewport": {
+      "w": 1400,
+      "h": 900,
+      "dpr": 1
+    },
+    "theme": "dark",
+    "turns": 1,
+    "details": 1,
+    "detailsOpen": 0,
+    "summaries": ["已工作"],
+    "statusIcons": [],
+    "toolCallIds": 0,
+    "questionPrompt": false,
+    "failureContinue": false,
+    "turnEnd": [],
+    "subagentRows": 0,
+    "horizontalOverflow": false,
+    "texts": [
+      {
+        "text": "好好",
+        "inDom": 1,
+        "visible": 1
+      },
+      {
+        "text": "好",
+        "inDom": 1,
+        "visible": 1
+      },
+      {
+        "text": "run:repeat-1",
+        "inDom": 0,
+        "visible": 0
+      },
+      {
+        "text": "run:repeat-2",
+        "inDom": 0,
+        "visible": 0
+      }
+    ],
+    "composer": true
+  }
+}

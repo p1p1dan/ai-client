@@ -3,9 +3,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   estimatePromptLines,
+  PROMPT_FOLD_MIN_PX,
   PROMPT_FOLD_THRESHOLD_LINES,
-  PROMPT_FOLDED_LINES,
+  PROMPT_FOLDED_PX,
   promptFolds,
+  promptFoldsAtHeight,
   userBubbleFoldClass,
   userBubbleTextClass,
 } from '../chatTimelineLayout';
@@ -41,15 +43,25 @@ describe('promptFolds', () => {
 });
 
 describe('userBubbleFoldClass', () => {
-  it('clips to the folded line count in the box’s own lines, with the 3rem fade', () => {
+  it('clips to ~300px (FR-01.5) with the 3rem fade', () => {
     const cls = userBubbleFoldClass(true);
-    expect(cls).toContain(`max-h-[${PROMPT_FOLDED_LINES}lh]`);
+    expect(cls).toContain('max-h-75'); // 18.75rem = PROMPT_FOLDED_PX
+    expect(PROMPT_FOLDED_PX).toBe(300);
     expect(cls).toContain('overflow-hidden');
     expect(cls).toContain('calc(100%-3rem)');
-    // `lh` must be the prose line, so the box pins the prose size and leading.
     expect(cls).toContain('text-chat-body');
     expect(cls).toContain('leading-[1.43]');
-    expect(PROMPT_FOLDED_LINES).toBeLessThan(PROMPT_FOLD_THRESHOLD_LINES);
+  });
+
+  it('[PILAB-R1-01.5] folds by measured full height, only when that hides ~2 lines, with hysteresis', () => {
+    expect(promptFoldsAtHeight(PROMPT_FOLD_MIN_PX)).toBe(false);
+    expect(promptFoldsAtHeight(PROMPT_FOLD_MIN_PX + 1)).toBe(true);
+    // A narrow pane that wraps a prompt the text estimate called short still folds.
+    expect(promptFolds('short line\n'.repeat(10))).toBe(false);
+    expect(promptFoldsAtHeight(520)).toBe(true);
+    // Already folded: stays folded down to the folded height, so a width wobble cannot flip it.
+    expect(promptFoldsAtHeight(320, true)).toBe(true);
+    expect(promptFoldsAtHeight(300, true)).toBe(false);
   });
 
   it('open is no class at all, and the text box itself stays a constant (F10)', () => {
@@ -57,7 +69,7 @@ describe('userBubbleFoldClass', () => {
     expect(userBubbleTextClass()).toBe('select-text space-y-2');
   });
 
-  it('nothing in the bubble measures itself', () => {
+  it('the bubble measures only its own full height, never scroll position (F10)', () => {
     const source = readFileSync(
       fileURLToPath(new URL('../MessageTimeline.tsx', import.meta.url)),
       'utf8'
@@ -67,7 +79,13 @@ describe('userBubbleFoldClass', () => {
       source.indexOf('\n}\n', source.indexOf('function UserBubble('))
     );
     expect(bubble).toContain('promptFolds(');
-    for (const banned of ['ResizeObserver', 'scrollHeight', 'getBoundingClientRect', 'useRef']) {
+    expect(bubble).toContain('promptFoldsAtHeight(height, was === true)');
+    for (const banned of [
+      'scrollTop',
+      'getBoundingClientRect',
+      'IntersectionObserver',
+      'clientHeight',
+    ]) {
       expect(bubble, banned).not.toContain(banned);
     }
   });
