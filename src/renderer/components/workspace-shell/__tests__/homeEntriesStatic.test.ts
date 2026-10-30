@@ -94,9 +94,13 @@ describe('the chat column', () => {
   });
 });
 
+// PiLab R2: the card's class also lights it up while a file is dragged over it.
+const CARD_OPEN =
+  "className={cn(composerCardClass(mode, { hasProtrusion }), fileDragOver && 'drop-target')}";
+
 describe('the composer on the home page', () => {
   it('renders the session-mode work bar below the card, as in a conversation', () => {
-    const card = composer.indexOf('<div className={composerCardClass(mode, { hasProtrusion })}');
+    const card = composer.indexOf(CARD_OPEN);
     const sessionBar = composer.indexOf("{mode === 'session' && (\n        <ComposerTargetBar");
     expect(card).toBeGreaterThan(-1);
     expect(sessionBar).toBeGreaterThan(card);
@@ -105,8 +109,6 @@ describe('the composer on the home page', () => {
   it('puts the locked-checkout notice above the card, where the model-missing card sits', () => {
     const noticeAt = composer.indexOf('<HomeSendBlockedNotice');
     expect(noticeAt).toBeGreaterThan(composer.indexOf('<ModelMissingNotice'));
-    expect(noticeAt).toBeLessThan(
-      composer.indexOf('<div className={composerCardClass(mode, { hasProtrusion })}')
-    );
+    expect(noticeAt).toBeLessThan(composer.indexOf(CARD_OPEN));
   });
 });

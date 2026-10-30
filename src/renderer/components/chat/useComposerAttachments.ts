@@ -76,6 +76,14 @@ export interface ComposerAttachments {
    * arrive over IPC instead of off the clipboard.
    */
   ingestPickedPaths: (paths: readonly string[]) => Promise<void>;
+  /**
+   * PiLab R2 (user ruling 2026-10-30): files dropped on the composer. Read the
+   * paste way, off the dropped `File`s themselves: Main reads only the paths
+   * its own dialog handed out (`PickedAttachmentAccess`), and a drop is not
+   * one. `folders` are the dropped entries that are folders, named in the
+   * same one notice as every other skip.
+   */
+  ingestDropped: (files: readonly File[], folders?: readonly string[]) => Promise<void>;
   removeDraft: (id: string) => void;
   /** T-19: bulk remove by id — the commit-point consumption hook uses this to
    *  drop exactly the drafts a turn just carried off (see ChatComposer's
@@ -349,6 +357,17 @@ export function useComposerAttachments(options: {
     [ingestFiles, options.disabled, setReading, t]
   );
 
+  const ingestDropped = useCallback(
+    async (files: readonly File[], folders: readonly string[] = []) => {
+      if (options.disabled || (files.length === 0 && folders.length === 0)) return;
+      await ingestFiles(
+        [...files],
+        folders.map((name) => t('"{{name}}" is not a file — skipped.', { name }))
+      );
+    },
+    [ingestFiles, options.disabled, t]
+  );
+
   const handlePaste = useCallback(
     (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
       if (options.disabled) return;
@@ -454,6 +473,7 @@ export function useComposerAttachments(options: {
     totalBytes,
     handlePaste,
     ingestPickedPaths,
+    ingestDropped,
     removeDraft,
     removeDrafts,
     addDrafts,

@@ -72,6 +72,45 @@ describe('drafts across a restart', () => {
     expect(raw).not.toContain('AAAA');
   });
 
+  it('[PILAB-R2-RESTORE-NOTE] says once what the restart did not bring back', async () => {
+    const first = await loadModule();
+    const store = first.useComposerDraftsStore.getState();
+    store.park('chat-a', {
+      text: 'see the screenshot',
+      attachments: [
+        {
+          id: 'x',
+          kind: 'image',
+          mediaType: 'image/png',
+          name: 'a.png',
+          byteLength: 4,
+          data: 'AAAA',
+        },
+      ],
+    });
+    store.noteLive('chat-b', 'x'.repeat(first.MAX_SAVED_DRAFT_CHARS + 5));
+    store.park('chat-c', { text: 'plain', attachments: [] });
+    first.flushComposerDraftsForTests();
+
+    const second = await loadModule();
+    expect(second.useComposerDraftsStore.getState().parked['chat-a']?.text).toBe(
+      'see the screenshot'
+    );
+    expect(second.takeDraftRestoreNote('chat-a')).toEqual({ lostAttachments: 1, cut: false });
+    expect(second.takeDraftRestoreNote('chat-a')).toBeUndefined();
+    expect(second.takeDraftRestoreNote('chat-b')).toEqual({ lostAttachments: 0, cut: true });
+    expect(second.takeDraftRestoreNote('chat-c')).toBeUndefined();
+  });
+
+  it('[PILAB-R2-RESTORE-NOTE] a draft of attachments only still leaves its note', async () => {
+    const first = await loadModule();
+    first.useComposerDraftsStore.getState().noteLive('chat-a', '', 2);
+    first.flushComposerDraftsForTests();
+    const second = await loadModule();
+    expect(second.useComposerDraftsStore.getState().parked['chat-a']).toBeUndefined();
+    expect(second.takeDraftRestoreNote('chat-a')).toEqual({ lostAttachments: 2, cut: false });
+  });
+
   it('forgets a draft once it is sent (the box empties)', async () => {
     const mod = await loadModule();
     const store = mod.useComposerDraftsStore.getState();

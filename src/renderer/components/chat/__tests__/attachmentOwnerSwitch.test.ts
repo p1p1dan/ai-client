@@ -96,3 +96,27 @@ describe('[PILAB-R2-ATTACH-OWNER] a late file stays with the chat it was picked 
     expect(landed).toEqual([]);
   });
 });
+
+describe('[PILAB-R2-DROP] files dropped on the composer', () => {
+  it('takes the dropped files themselves, and names a dropped folder in the notice', async () => {
+    await render('a');
+    const notes = new File(['dropped text'], 'notes.txt', { type: 'text/plain' });
+    await act(async () => {
+      await hook?.ingestDropped([notes], ['docs']);
+    });
+    expect(hook?.drafts.map((draft) => [draft.name, draft.data])).toEqual([
+      ['notes.txt', 'dropped text'],
+    ]);
+    expect(hook?.notice?.message).toBe('"docs" is not a file — skipped.');
+  });
+
+  it('says why a dropped file was skipped, in the same notice', async () => {
+    await render('a');
+    const archive = new File(['PK'], 'release.zip', { type: 'application/zip' });
+    await act(async () => {
+      await hook?.ingestDropped([archive]);
+    });
+    expect(hook?.drafts).toEqual([]);
+    expect(hook?.notice?.message).toMatch(/release\.zip/);
+  });
+});

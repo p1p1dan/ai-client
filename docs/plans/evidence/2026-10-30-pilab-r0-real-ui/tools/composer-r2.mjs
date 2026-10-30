@@ -210,6 +210,75 @@ async function mentionStep() {
   console.log(JSON.stringify(out, null, 2));
 }
 
+const EXTRAS = `(() => {
+  const ta = document.querySelector('textarea');
+  const card = ta.closest('[class*="drop-target"]') ?? null;
+  const alerts = [...document.querySelectorAll('[role=alert], [data-slot=alert]')]
+    .filter((n) => n.offsetParent !== null)
+    .map((n) => n.innerText.replace(/\\s+/g, ' ').trim());
+  // The composer's @ reference tags (a frameless neutral tag in monospace).
+  const chips = [...document.querySelectorAll('button.font-mono.bg-fill-neutral')]
+    .filter((n) => n.offsetParent !== null)
+    .map((n) => n.innerText.replace(/\\s+/g, ' ').trim() + (n.getAttribute('aria-disabled') ? ' [disabled]' : ''));
+  // Draft attachment chips: their name span carries the full name as a title.
+  const atts = [...document.querySelectorAll('span.truncate[title]')]
+    .filter((n) => n.offsetParent !== null && n.closest('button, div')?.querySelector('svg'))
+    .map((n) => n.getAttribute('title'));
+  return { text: ta.value, dropLit: Boolean(card), alerts, chips, atts };
+})()`;
+
+/**
+ * PiLab R2 second half (user ruling 2026-10-30): a mistyped command asks first,
+ * a reference to nothing is marked, a file dragged from disk becomes an
+ * attachment (CDP `Input.dispatchDragEvent` carries real paths, as the OS does).
+ *   node composer-r2.mjs r2b <file-to-drop>
+ */
+async function r2bStep() {
+  const dropFile = process.argv[3];
+  const cdp = await lib.attach(30_000);
+  const out = [];
+  const record = async (name) => {
+    process.stderr.write(`· ${name}\n`);
+    out.push({ name, ...(await cdp.evaluate(EXTRAS)) });
+  };
+  const press = async (k) => {
+    await key(cdp, 'rawKeyDown', k, { noText: true, params: { windowsVirtualKeyCode: 13 } });
+    await key(cdp, 'keyUp', k);
+    await sleep(600);
+  };
+  const before = await userCount(cdp);
+
+  await focusComposer(cdp, '');
+  await typeText(cdp, '/reveiw 看下这个改动');
+  await press('Enter');
+  await record('typed "/reveiw …", Enter');
+  out.at(-1).sentSoFar = (await userCount(cdp)).users - before.users;
+  await focusComposer(cdp, '');
+
+  await focusComposer(cdp, '');
+  await typeText(cdp, '请对比 @src/main/entry.ts 和 @docs/old-plan.md 以及 @src');
+  await sleep(800);
+  await record('typed three references (one missing)');
+  await focusComposer(cdp, '');
+
+  if (dropFile) {
+    const box = await cdp.evaluate(`(() => {
+      const r = document.querySelector('textarea').getBoundingClientRect();
+      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+    })()`);
+    const data = { items: [], files: [dropFile], dragOperationsMask: 1 };
+    await cdp.send('Input.dispatchDragEvent', { type: 'dragEnter', ...box, data });
+    await cdp.send('Input.dispatchDragEvent', { type: 'dragOver', ...box, data });
+    await sleep(200);
+    await record('file dragged over the composer');
+    await cdp.send('Input.dispatchDragEvent', { type: 'drop', ...box, data });
+    await sleep(1200);
+    await record('file dropped');
+  }
+  cdp.close();
+  console.log(JSON.stringify(out, null, 2));
+}
+
 async function stateStep() {
   const cdp = await lib.attach(30_000);
   const st = await cdp.evaluate(STATE);
@@ -217,7 +286,7 @@ async function stateStep() {
   cdp.close();
 }
 
-const steps = { ime: imeStep, mention: mentionStep, state: stateStep };
+const steps = { ime: imeStep, mention: mentionStep, r2b: r2bStep, extras: async () => { const cdp = await lib.attach(30_000); console.log(JSON.stringify(await cdp.evaluate(EXTRAS), null, 2)); cdp.close(); }, state: stateStep };
 const step = steps[process.argv[2]];
 if (!step) {
   console.error(`usage: composer-r2.mjs ${Object.keys(steps).join('|')}`);

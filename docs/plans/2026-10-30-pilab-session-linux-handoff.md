@@ -361,3 +361,11 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 - **注意**：「立刻在输入法上屏后紧跟普通回车」不算缺陷——Windows/Linux 上那就是用户再按一次回车，应当发送（探针第一次就因此真的发出了一条消息，已从默认探针移除）。
 - **用户裁定**：见台账 §16。做四项：未知命令提示、找不到的引用、拖放附件、重启简短提示（预览 `docs/design/2026-10-30-composer-r2-preview.html`）；不做发送键偏好、中文后 `@`、菜单无障碍角色。
 
+### 10.17 2026-10-30 晚：R2 输入框第二批（用户裁定的四项，未提交）
+
+- 上一批已提交并推送：`84217862`（`origin/feat/pilab-session-experience-r0`）。
+- 本批：未知命令提示、找不到的引用、拖放附件、重启简短提示。详见台账 §17。
+- 关键文件：`ChatComposer.tsx`、`slashCommands.ts`（`unknownSlashCommand`）、`useMissingMentions.ts`（新）、`useComposerAttachments.ts`（`ingestDropped`）、`stores/composerDrafts.ts`（`lost`/`cut`、`takeDraftRestoreNote`）、`App/hooks/useFileDragDrop.ts` + `fileDragDrop.ts`（`data-file-drop-target`）、`styles/globals.css`（`drop-target`）、`shared/i18n.ts`。
+- 注意：拖放不能走 ⊕ 的按路径读取——Main 的 `file:readAttachment` 只认自己对话框给出的路径（`PickedAttachmentAccess`），这是安全边界，不要放宽；拖放用 `File` 本身的内容。
+- 本机测试工具：`tools/composer-r2.mjs r2b <文件>`（CDP `Input.dispatchDragEvent` 可带真实文件路径）。
+

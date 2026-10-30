@@ -32,6 +32,7 @@ import {
   useState,
 } from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
@@ -57,6 +58,7 @@ import { selectCompactPhase, useCompactRunsStore } from '@/stores/compactRuns';
 import {
   mergeOfferedText,
   switchComposerDraft,
+  takeDraftRestoreNote,
   useComposerDraftsStore,
 } from '@/stores/composerDrafts';
 import { useContinueIntentStore } from '@/stores/continueIntent';
@@ -266,12 +268,14 @@ import {
   slashCatalogRequest,
   slashRowsForDisplay,
   typedSlashCommand,
+  unknownSlashCommand,
 } from './slashCommands';
 import { carriedGenerationPreferences } from './slashModelCommand';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useComposerPopupPlacement } from './useComposerPopupPlacement';
 import { readHomeTarget, useHomeTarget } from './useHomeTarget';
 import { useHostStatus } from './useHostStatus';
+import { useMissingMentions } from './useMissingMentions';
 import { usePiModelCatalog } from './usePiModelCatalog';
 import { useQueueRelease } from './useQueueRelease';
 import { useSessionEffort } from './useSessionEffort';
@@ -742,6 +746,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // it on, for the project's skills (decision 175).
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [slashCatalog, setSlashCatalog] = useState<SlashCatalogItem[]>([]);
+  // PiLab R2: whether `slashCatalog` is the engine's answer (not the empty
+  // start, nor a failed read) — only then can a name be called unknown.
+  const [slashCatalogReady, setSlashCatalogReady] = useState(false);
+  // PiLab R2: the draft a "no such command" notice was raised for, and how it
+  // was being sent; sending that same draft again goes ahead.
+  const [unknownCommand, setUnknownCommand] = useState<{
+    text: string;
+    name: string;
+    mode: ComposerSendMode;
+  } | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   /** T-07③ pre-truncation match count, so the popup can say "10 / 304". */
   const [mentionTotal, setMentionTotal] = useState(0);
@@ -923,6 +937,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // twice, and the tab's radius is not worth a duplicated store write.
   const hasProtrusion = composerHasProtrusion({ mode, hasTargetableWorkspace: cwd !== null });
   const mentionChips = useMemo(() => parseMentionChips(value), [value]);
+  const mentionChipPaths = useMemo(() => mentionChips.map((chip) => chip.path), [mentionChips]);
+  const missingMentions = useMissingMentions(mentionChipPaths, effectiveCwd);
   const mentionOpen = mentionQuery !== null && mentionResults.length > 0;
   // pi's commands merged with this window's own. `t` is passed in rather than
   // read inside, so `buildSlashCatalog` stays pure and testable. Decision 175:
@@ -1100,6 +1116,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     dismissNotice: dismissAttachmentNotice,
     getLiveDrafts: getLiveAttachmentDrafts,
     replaceDrafts: replaceAttachmentDrafts,
+    showNotice: showAttachmentNotice,
   } = attachments;
   // dsh-rebase P1-4c2 (decision 096): the engine refused an attachment of a
   // send or an interjection. Said next to the attachments, which stay in the
@@ -1248,11 +1265,32 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // T-19: a stale "queue full" rejection belongs to the session that
     // rejected it, not to whatever session is now active.
     setQueueNotice(null);
+    setUnknownCommand(null);
+    // PiLab R2 (user ruling 2026-10-30): what a restart did not bring back of
+    // this chat's draft, once and briefly.
+    const restoreNote = takeDraftRestoreNote(activeSessionId);
+    if (restoreNote) {
+      const parts = [
+        ...(restoreNote.lostAttachments > 0
+          ? [
+              t('{{count}} attachments added before the restart were not kept; add them again.', {
+                count: restoreNote.lostAttachments,
+              }),
+            ]
+          : []),
+        ...(restoreNote.cut
+          ? [t('The draft was too long; only its first 100,000 characters were kept.')]
+          : []),
+      ];
+      showAttachmentNotice({ tone: 'warning', message: parts.join(' ') });
+    }
   }, [
     activeSessionId,
     dismissAttachmentNotice,
     getLiveAttachmentDrafts,
     replaceAttachmentDrafts,
+    showAttachmentNotice,
+    t,
     updateValue,
   ]);
 
@@ -1260,10 +1298,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // across a restart (the store debounces the write). Refs, not the render's
   // `value`: in the commit that switches chats, the layout effect above has
   // already swapped `valueRef` to the incoming chat's text.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `value` and `activeSessionId` are the triggers; the effect reads their refs.
+  // PiLab R2: with how many attachments it holds, which a restart cannot bring back.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `value`, `activeSessionId` and the attachment list are the triggers; the effect reads their refs.
   useEffect(() => {
-    useComposerDraftsStore.getState().noteLive(draftOwnerRef.current, valueRef.current);
-  }, [value, activeSessionId]);
+    useComposerDraftsStore
+      .getState()
+      .noteLive(draftOwnerRef.current, valueRef.current, getLiveAttachmentDrafts().length);
+  }, [value, activeSessionId, attachments.drafts]);
 
   // P1-7e (problem 1, decision 139): text offered to this chat's composer from
   // outside it — a rewind handing back the prompt it rewound to. Taken only
@@ -1679,6 +1720,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // Ctrl+Enter `/compact` must not interrupt the turn to reach the model.
     if (await runBuiltinSlash(trimmed)) return;
     if (useChatSessionsStore.getState().activeSessionId !== activeSessionId) return;
+    // PiLab R2 (user ruling 2026-10-30): a slip like `/reveiw` would go to the
+    // model as prose. Ask once; the same draft sent again goes ahead.
+    const unknownName = slashCatalogReady
+      ? unknownSlashCommand(trimmed, buildSlashCatalog(slashCatalog, t))
+      : null;
+    if (unknownName && unknownCommand?.text !== trimmed) {
+      setUnknownCommand({ text: trimmed, name: unknownName, mode });
+      return;
+    }
+    if (unknownCommand) setUnknownCommand(null);
     // Decisions 178 and 179: while this window's `/compact` starts the
     // conversation or summarizes, a message waits in the queue like one sent
     // while a turn runs, and goes out once the `/compact` ends — compacted or
@@ -2070,6 +2121,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     };
   }, [mentionQuery, effectiveCwd]);
 
+  // PiLab R2: the notice is about the draft it was raised for; editing it (or
+  // sending something else) retires it.
+  useEffect(() => {
+    if (unknownCommand && value.trim() !== unknownCommand.text) setUnknownCommand(null);
+  }, [value, unknownCommand]);
+
   // R02-c: fetch once per menu opening, not per keystroke — filtering is local.
   // Deliberately NOT debounced like the file search above: this is one in-process
   // RPC to a worker that already holds the list, and the menu should be populated
@@ -2082,6 +2139,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   useEffect(() => {
     if (!slashMenuActive) return;
     let cancelled = false;
+    setSlashCatalogReady(false);
     window.electronAPI.chat
       .getSlashCommands(slashCatalogRequest(activeSessionId, effectiveCwd, chatEngine))
       .then((result) => {
@@ -2095,12 +2153,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               description: command.description ?? '',
             }))
           );
+          setSlashCatalogReady(!result.truncated);
         }
       })
       .catch(() => {
         // The builtins still come through `buildSlashCatalog`, so a worker that
         // cannot answer costs pi's commands, not the whole menu.
-        if (!cancelled) setSlashCatalog([]);
+        if (!cancelled) {
+          setSlashCatalog([]);
+          setSlashCatalogReady(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -4538,6 +4600,29 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // T-19 decision 1/7: a rejected `enqueue()` (queue full / over the attachment
   // byte budget) reuses the same Alert language as the attachment notice
   // above — the draft itself is left untouched by the caller (handleSend).
+  // PiLab R2: one line, the same draft sent again (this button or Enter) goes ahead.
+  const unknownCommandBlock = unknownCommand ? (
+    <Alert variant="warning" className="mt-1 items-center gap-x-2 px-2 py-1 text-small">
+      <TriangleAlert />
+      <AlertTitle className="min-w-0 truncate font-normal">
+        {t('There is no /{{command}} command.', { command: unknownCommand.name })}
+      </AlertTitle>
+      <AlertAction>
+        <Button size="xs" variant="ghost" onClick={() => void handleSend(unknownCommand.mode)}>
+          {t('Send anyway')}
+        </Button>
+        <button
+          type="button"
+          onClick={() => setUnknownCommand(null)}
+          aria-label={t('Dismiss notice')}
+          className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
+        >
+          <X className="size-3" />
+        </button>
+      </AlertAction>
+    </Alert>
+  ) : null;
+
   const queueNoticeBlock = queueNotice ? (
     <Alert variant="warning" className="mt-1 items-center gap-x-2 px-2 py-1 text-small">
       <TriangleAlert />
@@ -4571,6 +4656,52 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       </div>
     ) : null;
 
+  // PiLab R2 (user ruling 2026-10-30): files dragged from the desktop onto the
+  // composer become attachments, as the ⊕ menu's do; the card lights up while
+  // one is over it. Elsewhere in the window a drop still does nothing.
+  const dragDepthRef = useRef(0);
+  const [fileDragOver, setFileDragOver] = useState(false);
+  const carriesFiles = (event: React.DragEvent) =>
+    Array.from(event.dataTransfer?.types ?? []).includes('Files');
+  const composerDropHandlers = {
+    onDragEnter: (event: React.DragEvent) => {
+      if (!carriesFiles(event) || disabled) return;
+      event.preventDefault();
+      dragDepthRef.current += 1;
+      setFileDragOver(true);
+    },
+    onDragOver: (event: React.DragEvent) => {
+      if (!carriesFiles(event) || disabled) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    },
+    onDragLeave: (event: React.DragEvent) => {
+      if (!carriesFiles(event)) return;
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) setFileDragOver(false);
+    },
+    onDrop: (event: React.DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current = 0;
+      setFileDragOver(false);
+      if (disabled) return;
+      // A dropped folder arrives as a File too; its entry says what it is.
+      const files: File[] = [];
+      const folders: string[] = [];
+      for (const item of Array.from(event.dataTransfer.items ?? [])) {
+        if (item.kind !== 'file') continue;
+        const entry = item.webkitGetAsEntry?.();
+        const file = item.getAsFile();
+        if (entry?.isDirectory) folders.push(entry.name);
+        else if (file) files.push(file);
+      }
+      if (files.length === 0 && folders.length === 0) files.push(...event.dataTransfer.files);
+      void attachments.ingestDropped(files, folders);
+      textareaRef.current?.focus();
+    },
+  };
+
   const mentionChipsBlock =
     mentionChips.length > 0 ? (
       <div className="mt-1 flex flex-wrap gap-1">
@@ -4583,7 +4714,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           <button
             key={`${chip.path}-${idx}`}
             type="button"
+            // PiLab R2: a reference to nothing says so (it is still sent as typed).
+            aria-disabled={missingMentions.has(chip.path) || undefined}
+            title={missingMentions.has(chip.path) ? t('No such file') : undefined}
             onClick={() => {
+              if (missingMentions.has(chip.path)) return;
               useFileOpenIntentStore.getState().requestFileOpen({
                 path: chip.path,
                 source: 'mention-chip',
@@ -4591,9 +4726,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             }}
             // Design system v2: a frameless neutral tag inside the composer
             // (§1 rule 1); clay is reserved for primary actions (§1 rule 7).
-            className="rounded-xs bg-fill-neutral px-1.5 py-0.5 font-mono text-code text-foreground transition-colors duration-150 hover:bg-fill-ghost-selected focus-ring"
+            className={cn(
+              'rounded-xs bg-fill-neutral px-1.5 py-0.5 font-mono text-code text-foreground transition-colors duration-150 hover:bg-fill-ghost-selected focus-ring',
+              missingMentions.has(chip.path) && 'cursor-default text-muted-foreground'
+            )}
           >
-            {chip.path}
+            {missingMentions.has(chip.path) ? (
+              <>
+                <span className="line-through decoration-foreground-faint">{chip.path}</span>
+                <span className="ml-1 font-sans text-warning">{t('not found')}</span>
+              </>
+            ) : (
+              chip.path
+            )}
           </button>
         ))}
       </div>
@@ -4606,6 +4751,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const hasComposerExtras = Boolean(
     noticeBlock ||
       queueNoticeBlock ||
+      unknownCommandBlock ||
       attachmentChipsBlock ||
       imageInputHintBlock ||
       mentionChipsBlock
@@ -5188,7 +5334,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           }
         />
       )}
-      <div className={composerCardClass(mode, { hasProtrusion })} ref={composerCardRef}>
+      <div
+        className={cn(composerCardClass(mode, { hasProtrusion }), fileDragOver && 'drop-target')}
+        ref={composerCardRef}
+        // The window's "add repository" drop leaves this one to the composer.
+        data-file-drop-target=""
+        {...composerDropHandlers}
+      >
         {/* T-07 @ file search popup: placed above/below the textarea so an overflow-hidden container cannot clip it */}
         {slashOpen && (
           <div
@@ -5340,6 +5492,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           <div className={composerExtrasClass()}>
             {noticeBlock}
             {queueNoticeBlock}
+            {unknownCommandBlock}
             {attachmentChipsBlock}
             {imageInputHintBlock}
             {mentionChipsBlock}

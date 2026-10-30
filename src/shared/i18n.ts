@@ -2596,6 +2596,14 @@ export const zhTranslations: Record<string, string> = {
     '发送到当前回合（下一步送达）— Ctrl+Enter 排到本回合结束后发送',
   'Send now': '立刻发送',
   'Send now — interrupt the running turn': '立刻发送 — 打断当前回复',
+  'There is no /{{command}} command.': '没有 /{{command}} 这个命令。',
+  'Send anyway': '仍然发送',
+  'No such file': '找不到这个文件',
+  'not found': '找不到',
+  '{{count}} attachments added before the restart were not kept; add them again.':
+    '重启前加的 {{count}} 个附件没有保留，需要重新添加。',
+  'The draft was too long; only its first 100,000 characters were kept.':
+    '草稿太长，只保留了前 10 万字。',
   // dsh-rebase decision 093: Ctrl+Enter joins the running turn at its next step.
   'Awaiting delivery': '待送达',
   'Could not add the message to the running turn: {{error}}': '插话没能送进当前回合：{{error}}',

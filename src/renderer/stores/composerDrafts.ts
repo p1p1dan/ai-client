@@ -62,6 +62,19 @@ export function mergeOfferedText(current: string, offered: string): string {
 export interface SavedComposerDraft {
   text: string;
   at: number;
+  /** PiLab R2: attachments the draft had, which are not saved (their bytes are not). */
+  lost?: number;
+  /** PiLab R2: the text was longer than {@link MAX_SAVED_DRAFT_CHARS} and was cut. */
+  cut?: true;
+}
+
+/**
+ * PiLab R2 (user ruling 2026-10-30): what a restart did not bring back of a
+ * chat's draft, said once in its composer — briefly — when the user is there.
+ */
+export interface DraftRestoreNote {
+  lostAttachments: number;
+  cut: boolean;
 }
 
 interface PersistedComposerDrafts {
@@ -82,11 +95,11 @@ export const COMPOSER_DRAFTS_STORAGE_KEY = 'aiclient-composer-drafts';
 interface ComposerDraftsState {
   parked: Record<string, ComposerDraft>;
   /** The box on screen: whose chat it is and what it holds right now. */
-  live: { key: string; text: string } | null;
+  live: { key: string; text: string; attachments?: number } | null;
   /** When each key's draft was last written (ms); feeds the cap. */
   stamps: Record<string, number>;
   /** The composer's own text changed (or the chat on screen did). */
-  noteLive: (sessionId: string | null, text: string) => void;
+  noteLive: (sessionId: string | null, text: string, attachments?: number) => void;
   offered: Record<string, string>;
   offeredAttachments: Record<string, readonly AttachmentDraft[]>;
   /** Keep a chat's draft while the composer is elsewhere; an empty one is dropped. */
@@ -134,30 +147,48 @@ function without<T>(record: Readonly<Record<string, T>>, key: string): Record<st
  * deleted while the app was closed is never seen; the cap retires it.
  */
 const restoredKeys = new Set<string>();
+const restoreNotes = new Map<string, DraftRestoreNote>();
+
+/** PiLab R2: take (and forget) what the restart lost of this chat's draft. */
+export function takeDraftRestoreNote(sessionId: string | null): DraftRestoreNote | undefined {
+  const key = draftKey(sessionId);
+  const note = restoreNotes.get(key);
+  restoreNotes.delete(key);
+  return note;
+}
 const seenLiveIds = new Set<string>();
 
 /** What goes to disk: parked texts plus the box on screen, newest `MAX_SAVED_DRAFTS`. */
 export function selectSavedDrafts(state: {
   parked: Readonly<Record<string, ComposerDraft>>;
-  live: { key: string; text: string } | null;
+  live: { key: string; text: string; attachments?: number } | null;
   stamps: Readonly<Record<string, number>>;
 }): Record<string, SavedComposerDraft> {
-  const texts = new Map<string, string>();
+  const drafts = new Map<string, { text: string; lost: number }>();
+  const worthSaving = (text: string, lost: number) => text.trim().length > 0 || lost > 0;
   for (const [key, draft] of Object.entries(state.parked)) {
-    if (draft.text.trim().length > 0) texts.set(key, draft.text);
+    if (worthSaving(draft.text, draft.attachments.length)) {
+      drafts.set(key, { text: draft.text, lost: draft.attachments.length });
+    }
   }
   if (state.live) {
-    if (state.live.text.trim().length > 0) texts.set(state.live.key, state.live.text);
-    else texts.delete(state.live.key);
+    const lost = state.live.attachments ?? 0;
+    if (worthSaving(state.live.text, lost))
+      drafts.set(state.live.key, { text: state.live.text, lost });
+    else drafts.delete(state.live.key);
   }
-  const entries = [...texts].map(([key, text]) => ({
+  const entries = [...drafts].map(([key, { text, lost }]) => ({
     key,
-    text: text.slice(0, MAX_SAVED_DRAFT_CHARS),
-    at: state.stamps[key] ?? 0,
+    saved: {
+      text: text.slice(0, MAX_SAVED_DRAFT_CHARS),
+      at: state.stamps[key] ?? 0,
+      ...(lost > 0 ? { lost } : {}),
+      ...(text.length > MAX_SAVED_DRAFT_CHARS ? { cut: true as const } : {}),
+    },
   }));
-  entries.sort((a, b) => b.at - a.at);
+  entries.sort((a, b) => b.saved.at - a.saved.at);
   return Object.fromEntries(
-    entries.slice(0, MAX_SAVED_DRAFTS).map(({ key, text, at }) => [key, { text, at }])
+    entries.slice(0, MAX_SAVED_DRAFTS).map(({ key, saved }) => [key, saved])
   );
 }
 
@@ -167,9 +198,22 @@ export function sanitizeSavedDrafts(value: unknown): Record<string, SavedCompose
   if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return {};
   const out: Record<string, SavedComposerDraft> = {};
   for (const [key, entry] of Object.entries(saved as Record<string, unknown>)) {
-    const candidate = entry as { text?: unknown; at?: unknown } | null;
-    if (typeof candidate?.text !== 'string' || candidate.text.trim().length === 0) continue;
-    out[key] = { text: candidate.text, at: typeof candidate.at === 'number' ? candidate.at : 0 };
+    const candidate = entry as {
+      text?: unknown;
+      at?: unknown;
+      lost?: unknown;
+      cut?: unknown;
+    } | null;
+    if (typeof candidate?.text !== 'string') continue;
+    const lost =
+      typeof candidate.lost === 'number' && candidate.lost > 0 ? Math.floor(candidate.lost) : 0;
+    if (candidate.text.trim().length === 0 && lost === 0) continue;
+    out[key] = {
+      text: candidate.text,
+      at: typeof candidate.at === 'number' ? candidate.at : 0,
+      ...(lost > 0 ? { lost } : {}),
+      ...(candidate.cut === true ? { cut: true as const } : {}),
+    };
   }
   return out;
 }
@@ -245,11 +289,20 @@ export const useComposerDraftsStore = create<ComposerDraftsState>()(
       offered: {},
       offeredAttachments: {},
 
-      noteLive: (sessionId, text) => {
+      noteLive: (sessionId, text, attachments = 0) => {
         const key = draftKey(sessionId);
         const live = get().live;
-        if (live && live.key === key && live.text === text) return;
-        set((state) => ({ live: { key, text }, stamps: { ...state.stamps, [key]: Date.now() } }));
+        if (
+          live &&
+          live.key === key &&
+          live.text === text &&
+          (live.attachments ?? 0) === attachments
+        )
+          return;
+        set((state) => ({
+          live: { key, text, ...(attachments > 0 ? { attachments } : {}) },
+          stamps: { ...state.stamps, [key]: Date.now() },
+        }));
       },
 
       park: (sessionId, draft) => {
@@ -372,9 +425,12 @@ export const useComposerDraftsStore = create<ComposerDraftsState>()(
         const stamps = { ...current.stamps };
         for (const [key, entry] of Object.entries(saved)) {
           if (parked[key]) continue;
-          parked[key] = { text: entry.text, attachments: [] };
+          if (entry.text.trim().length > 0) parked[key] = { text: entry.text, attachments: [] };
           stamps[key] = entry.at;
           restoredKeys.add(key);
+          if (entry.lost || entry.cut) {
+            restoreNotes.set(key, { lostAttachments: entry.lost ?? 0, cut: entry.cut === true });
+          }
         }
         return { ...current, parked, stamps };
       },
@@ -407,6 +463,7 @@ export function switchComposerDraft(input: {
 /** Test-only: module state must not leak between cases. */
 export function resetComposerDraftsForTests(): void {
   restoredKeys.clear();
+  restoreNotes.clear();
   seenLiveIds.clear();
   useComposerDraftsStore.setState({
     parked: {},

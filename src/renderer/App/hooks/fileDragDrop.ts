@@ -72,6 +72,18 @@ export function hasFilePayload(payload: DragPayload | null | undefined): boolean
  * callers must bind a ref rather than relying on an implicit "whole window"
  * fallback, which would change legacy behaviour whenever its sidebar collapses.
  */
+/**
+ * PiLab R2: the element marks itself `data-file-drop-target` when it takes a
+ * dropped file for itself (the composer's attachments); the window-wide
+ * "add repository" drop then leaves that drop alone.
+ */
+export const OWN_DROP_TARGET_ATTRIBUTE = 'data-file-drop-target';
+
+export function isOwnDropTarget(target: EventTarget | null): boolean {
+  const element = target as { closest?: (selector: string) => unknown } | null;
+  return Boolean(element?.closest?.(`[${OWN_DROP_TARGET_ATTRIBUTE}]`));
+}
+
 export function isPointInsideDropZone(
   rect: DropZoneRect | null | undefined,
   point: DragPoint

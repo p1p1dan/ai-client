@@ -214,3 +214,5 @@ CLI 2.1.300 实测写入的记录（`~/.pilab/…/claude/projects/<cwd>/<id>.jso
 
 修复前 `mention` 的结果（未存文件，原样记录）：Tab 后焦点离开、菜单仍开；Home 后回车无反应、菜单仍开；左移两格后回车得到 `see @src/main/entry.ts ry`；选 `My Docs/a-spaced.md` 得到 `@My Docs/a-spaced.md `；`@src\main` 无结果；`请看@中文`、`说明：@entry` 不触发；`mail a@entry` 不触发。修复后见 `results/r2-mention-after.json`：Tab 选中；Home 关闭菜单（随后的回车正常发送）；左移后选中替换整个词；空格路径写成 `@"My Docs/a-spaced.md"`；反斜杠能搜到。`results/r2-ime.json`：四处输入法回车均未发送、未选中菜单项。
 
+R2 第二批（`results/r2b-unknown-cmd-refs.json`）：`r2b` 步骤依次测未知命令、三个引用（一个不存在）、CDP 真实拖放一个本地文件。第一次跑时拖放失败（「读取失败，已跳过」：Main 只读对话框给出的路径）且同时弹出「添加仓库」；两处修复后复测通过。重启提示用真实流程测：拖入附件、输入文字、退出并重启应用、打开同一对话。
+
