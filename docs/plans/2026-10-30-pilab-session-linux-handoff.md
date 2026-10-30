@@ -9,7 +9,7 @@
 
 已完成 R0 第一段：全量复核台账、源码/测试入口、协议映射和 F01～F08 脱敏固定回放。R0 第二段：2026-10-30 下午 Linux 真实 Electron 已打通并完成 F01～F05 状态基线、F07 性能方法、能力矩阵和 #11/#10/R1 的真实复测（§10.9）；真实多窗口、真实远程、Windows/IME/DPI 和发布包性能仍未做。
 
-**本阶段已完成 #11、#10 和 R1 第一阶段的产品行为整改及自动回归；Linux 真实 Electron 复测已覆盖其中的主要场景（§10.9），但多窗口、远程和 Windows 目标机仍缺。** 当前工作区是在 `51fe766a0dfb03a5f52fe0a3aff58c7e0661955a` 上的未提交改动，不能宣称任何相关 FR/AC 已全部通过，也不能宣称 R0 全部完成。最新阶段收尾、PRD 映射见 §10，真实 UI 基线结论与下一入口见 §10.9。
+**2026-10-31 更新：R1、R2 的输入框、模型和用量显示都已提交（最新 `a2762bda`，其中到 `6144ada7` 已推送，`a2762bda` 仅本地提交、未推送）。下一项是 R2「差异查看」。最新阶段收尾与下一步见 §11。** 不能宣称任何相关 FR/AC 已全部通过，也不能宣称 R0 全部完成。2026-10-30 的阶段收尾与 PRD 映射见 §10，真实 UI 基线见 §10.9。
 
 | 任务 | 状态 | 说明 |
 |---|---|---|
@@ -129,7 +129,7 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 - UI/动效遵守 v2，open-claude-ui 是唯一视觉母版；三套 HTML 样张后置统一评审，选定前不做视觉试改。
 - 不提交私人原始日志、`release-artifacts/`、临时预览、依赖目录或无关产物；除非用户另行要求，不推送远端。
 
-## 10. 2026-10-30 Linux 阶段收尾（当前最新）
+## 10. 2026-10-30 Linux 阶段收尾（已被 §11 接替）
 
 ### 10.1 当前任务进行到哪里
 
@@ -220,7 +220,7 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 ### 10.7 尚未解决的风险或问题
 
 1. ~~真实 renderer CDP 无响应是首要阻塞。~~ 已解决（§10.9）。真实 UI 证据目前只有 Linux 开发构建；仍不能把它当成 Windows 目标机或发布包的签核。
-2. **当前改动未提交。** 新会话若直接基于远端分支会漏掉全部本阶段整改；必须进入 §10.1 的 worktree 并先核对 dirty 状态。
+2. ~~当前改动未提交。~~ 2026-10-31：已全部提交（§11.1）；`a2762bda` 未推送，新会话基于远端分支会缺这一提交。
 3. **基线类型检查仍有 TS2352。** 虽不是本阶段新增，但发布门禁尚未全绿。
 4. **真实多窗口和真实远程尚未复测**（单窗口编辑器与 Diff 保存已于 §10.9 复测）。 自动顺序写证明了权威基线语义，不等于真实窗口闭环；比较后写入仍非原子 CAS。
 5. **原始 PRD 副本缺失。** 当前映射来自仓库台账；如需新增/改变验收规则，必须先取得原始材料，不可自行补写。
@@ -370,8 +370,77 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 - 本机测试工具：`tools/composer-r2.mjs r2b <文件>`（CDP `Input.dispatchDragEvent` 可带真实文件路径）。
 
 
-### 10.18 2026-10-31 凌晨：R2 模型和用量显示（未提交）
+### 10.18 2026-10-31 凌晨：R2 模型和用量显示（已提交 `a2762bda`，未推送）
 
 - 详见台账 §18、DEF-024～028。改动：Claude 引擎按目录的模型思考方式发请求（新启动变量 `AICLIENT_CLAUDE_SDK_MODEL_THINKING`，宿主据此设 CLI 的 `CLAUDE_CODE_MODEL_CAPABILITIES`），「默认」在两引擎都撤销之前的档位，Claude 引擎中途停止记「未知」，未报缓存标 `cacheUnreported`。
 - 复现方法：`P17D_GATEWAY_CAPTURE=<dir>` 让假网关记下请求体；新对话的引擎由开发者设置 `claudeSdkEngineEnabled` 决定，改它要用页面已加载的 settings 模块（`performance` 里带 `?t=` 的那个 URL），直接 `import('/stores/settings/index.ts')` 会拿到另一份副本、改了不生效。
 - 下一步：等用户看预览 `docs/design/2026-10-31-usage-r2-preview.html` 后做 80% 提醒、默认 128k 说明、切换提示；然后按台账进入「差异查看」。
+
+
+## 11. 2026-10-31 阶段收尾（当前最新）
+
+### 11.1 进行到哪里
+
+- 工作树与分支同 §10.1；提交链：`a48ffb3c`（R1）→ `6f38997c`（Claude 引擎中断显示）→ `84217862`、`6144ada7`（R2 输入框两批）→ `a2762bda`（R2 模型和用量显示）。前四个已推送到 `origin/feat/pilab-session-experience-r0`；`a2762bda` 只在本地，推送需用户点头。工作区干净。
+- R2 按台账顺序：输入框 ✓、模型和用量显示 ✓（3 处界面改动待用户看预览）、**差异查看（下一项，刚开始）**、工具输出「复制全部 / 查看全部」。
+- 差异查看：已派两路只读源码审计（07.1～07.5 差异正确性与来源；07.6～07.9 流式代码块、高亮、复制），阶段收尾时结果尚未返回、未核对、未写入台账。下一会话需重新做这两路审计（或核对已有结果），不能把它们当结论。
+- 隔离应用和假网关都已关闭；没有遗留进程。
+
+### 11.2 已确认的结论（模型和用量，详见台账 §18）
+
+- 没问题：模型列表来自实际目录；运行中切换只对下一轮生效、不打断当前回合；两引擎缓存口径各自正确、合计不重复；无价格只显示 token；没有「显存」字样；DeepSeek 引擎中途停止显示「本次消耗未知」。
+- 已修（DEF-024～028）：Claude 引擎思考/档位按模型配置；两引擎「默认」撤销之前档位；Claude 引擎中途停止记未知；未报缓存不显示 0%；已用/剩余相加为 100。
+
+### 11.3 重要决定与依据
+
+| 决定 | 原因 / 证据 |
+|---|---|
+| Claude 引擎的思考方式从目录推出三类：不推理 / 预算式（未声明 adaptive 的推理模型）/ 仅 adaptive（`compat.forceAdaptiveThinking`） | 与 DeepSeek 引擎对同一行的发法一致（pi-ai 对未声明 adaptive 的 Anthropic 推理行发预算）；用户在设置里勾 adaptive 时会写这个开关 |
+| 预算表 1024/2048/8192/16384，「默认」= 中 8192 | pi-ai `simple-options.js` 同表；菜单写「默认（模型支持时用中）」 |
+| 用 CLI 的 `CLAUDE_CODE_MODEL_CAPABILITIES` 给非 adaptive 模型写 `-effort,-adaptive_thinking`，并固定在 flag 层 | 实测：只改 query 选项无效，CLI 对不认识的模型名一律 adaptive + 默认 high（请求 47～49）；读 CLI 代码确认它先查这个变量；设上后请求 51～53 正确 |
+| adaptive 模型「默认」发 medium，而不是清空让 CLI 定 | 清空后 CLI 发 high（请求 55），与菜单「默认（中）」不符 |
+| DeepSeek 引擎：没带档位的发送就是「默认」 | 输入框每次都发它显示的档位（`ChatComposer` `toWireEffort`），旧代码退回建对话时的档位（请求 41～42） |
+| 中途停止判据：`message_delta` 是否带 `stop_reason` | 临时跟踪实测：CLI 对被切断的请求自补一帧 `stop_reason: null`、缓存与输出为 0 |
+| 未报缓存加 `cacheUnreported` 标记，而不是把字段改成可缺省 | 改动面小；`PiTurnUsage` 的数字字段被很多处直接相加 |
+| 「显示/隐藏思考过程」开关、Claude 引擎美元花费的价格版本：先不做 | 用户 2026-10-31 裁定「先不用管」 |
+| 阶段收尾不再跑测试 | 用户 2026-10-31 要求，按已有结果汇总 |
+
+### 11.4 试过但失败的方案
+
+| 方案 | 失败原因 |
+|---|---|
+| 只在 Claude 宿主的 query 选项里给 `thinking: enabled + budget` / 去掉 effort | CLI 按自己的模型表覆盖，不认识的模型名仍发 adaptive + high（请求 47～49） |
+| 中途停止只看「有没有收到 `message_delta`」 | CLI 在 Stop 后自己补一帧 `message_delta`（输出 0、缓存 0），照样被当成真实用量 |
+| 未知用量复用上一次结算时存下的上下文对象 | 这个引擎要等第一轮结束才从 CLI 得知窗口，第一轮存下的是空，停止后上下文条消失；改为存 token 数、按当时已知窗口算 |
+| 用 `import('/stores/settings/index.ts')` 切换新对话引擎 | 页面热更新后真正在用的是带 `?t=` 的另一份模块，改了不生效；要从 `performance` 资源列表里取实际 URL |
+| 从 `dev.log` 看 Claude 宿主日志 | 应用重启后宿主输出没再写进这个文件；改用临时跟踪写到 scratch 文件，查完已删 |
+
+### 11.5 关键文件（`a2762bda`）
+
+- Claude 宿主：`src/claude-sdk-host/sdkSessionRuntime.ts`（`thinkingBudget`、`effortOptions`、`applyThinking`、`settleUnreported`、`contextOf`、`Step.reported/settled/local`）、`hostConfig.ts`（解析思考方式、固定能力变量）。
+- 共享：`src/shared/claudeSdkEngine.ts`（`claudeSdkModelThinking`、`parseClaudeSdkModelThinking`、`claudeSdkModelCapabilities`、`CLAUDE_SDK_MODEL_THINKING_ENV`）、`src/shared/piUsage.ts`（`cacheUnreported`）。
+- Main：`src/main/services/agent-host/WorkerManager.ts`、`claudeSdkEngine.ts`（启动变量）。
+- DeepSeek 宿主：`src/dsh-host/bridge/dshSessionRuntime.ts`（`effort` 字段）、`liveEvents.ts`（`cacheUnreported`）。
+- 界面：`ComposerUsageChip.tsx`（缓存「未上报」、剩余取整）、`runPanelModel.ts`。
+- 工具：`p1-7d-gui.mjs` 新增 `P17D_GATEWAY_CAPTURE`。
+- 文档：台账 §3、§7、§18；预览 `docs/design/2026-10-31-usage-r2-preview.html`；证据 `results/r2c-model-usage.txt`。
+
+### 11.6 当前测试结果（提交前最后一次）
+
+- Claude SDK host 14 文件 224 通过 / 1 跳过；DSH host 61 文件 1279 通过（8 文件需真宿主跳过）；shared + Main agent-host 128 文件 2905 通过（权限 18 文件 613 重跑通过）；workspace-shell、stores、用量弹窗 138 文件 2084 通过。
+- `pnpm typecheck` 仅基线 TS2352（`pilabExperience.ts:25`）；两套宿主 typecheck 通过；改动文件 lint 通过；提交钩子通过。
+- 真实应用（隔离环境 + 假网关）复测见台账 §18。
+
+### 11.7 尚未解决的风险
+
+- 用量预览三项待用户裁定：80% 提醒与读屏数值（04.6）、没设上下文大小时「按默认 128k 计」（04.10）、运行中 `/model` `/effort` 提示补「下一轮生效」（04.4）。
+- Claude 引擎请求 `max_tokens` 是 CLI 默认 32000，不是目录里的输出上限，真实服务可能拒绝（未处理）。
+- CLI 认识的真实 Claude 型号走它自己的能力表；真实 Claude、第三方 Anthropic 兼容服务、OpenAI 兼容服务的用量/缓存字段都未实测。
+- 沿用：真实微软拼音、Windows 路径、多窗口、远程保存、高分屏、发布包性能都留到 Windows；Claude 引擎审批卡未决时停止，重开显示「已停止」而非「已拒绝 · 未执行」；AC-04/10/22～27 为「部分通过」。
+
+### 11.8 下一步（按顺序）
+
+1. 若用户确认，推送 `a2762bda`。
+2. 用户看过 `docs/design/2026-10-31-usage-r2-preview.html` 后，按裁定做那三处界面改动。
+3. **R2 差异查看（FR-07，AC-29/30/31）**：按 §11.1 重新做两路只读源码审计，然后用假网关在真实应用里复现（Claude 引擎 `CC-RUN {"calls":[{"name":"Edit",…}]}`，DSH 用 P0/P1 剧本），界面改动先出 HTML 预览。
+4. 然后是工具输出「复制全部 / 查看全部」；R2 完成后到 Windows 统一实测。
