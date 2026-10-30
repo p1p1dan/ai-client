@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { APP_STATE_DIR } from '@shared/defaultPaths';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   HOME_ENV_RELOCATION_MARKER_FILE_NAME,
   type HomeEnvRelocationInput,
@@ -19,6 +19,22 @@ import {
   relocateHomeEnvAppState,
   SESSION_INDEX_FILE_NAME,
 } from '../appStateMigration';
+
+const fsFault = vi.hoisted(() => ({ failStagingRename: false }));
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    // Windows answers EPERM when antivirus or the indexer holds a just-copied file.
+    renameSync: (from: string, to: string) => {
+      if (fsFault.failStagingRename && String(from).endsWith('.relocating')) {
+        throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' });
+      }
+      actual.renameSync(from, to);
+    },
+  };
+});
 
 /**
  * V1.2.1 field report (2026-10-30): Cadence SPB sets `HOME` to its own config
@@ -47,8 +63,13 @@ describe('relocateHomeEnvAppState', () => {
   });
 
   afterEach(() => {
+    fsFault.failStagingRename = false;
     rmSync(sandbox, { recursive: true, force: true });
   });
+
+  function readIndex(): Array<Record<string, unknown>> {
+    return JSON.parse(readFileSync(path.join(input.userDataDir, SESSION_INDEX_FILE_NAME), 'utf-8'));
+  }
 
   it('does nothing when HOME holds no root', () => {
     expect(relocateHomeEnvAppState(input)).toEqual({ kind: 'skipped', reason: 'no_stray_root' });
@@ -153,23 +174,108 @@ describe('relocateHomeEnvAppState', () => {
     expect(readdirSync(path.join(cadenceHome, APP_STATE_DIR))).toEqual(['PiLabAi-dev']);
   });
 
-  it('only deletes a leftover once the root has already been relocated', () => {
+  it('merges a leftover in without overwriting, then deletes it', () => {
     write(path.join(input.newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME), 'done');
     write(path.join(input.newRoot, 'settings.json'), 'new');
     write(path.join(input.strayRoot, 'settings.json'), 'leftover');
 
-    expect(relocateHomeEnvAppState(input)).toEqual({ kind: 'cleaned_up', strayRemoved: true });
+    expect(relocateHomeEnvAppState(input)).toEqual({
+      kind: 'cleaned_up',
+      indexPathsRewritten: 0,
+      strayRemoved: true,
+    });
     expect(readFileSync(path.join(input.newRoot, 'settings.json'), 'utf-8')).toBe('new');
     expect(readdirSync(cadenceHome)).toEqual(['allegro.jrl']);
   });
 
-  it('fails without moving anything when the conversation list cannot be read', () => {
+  it('keeps a conversation an older build wrote into HOME after the move', () => {
+    write(path.join(input.newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME), 'done');
+    const written = path.join(input.strayRoot, 'dsh-home', 'aiclient-sessions', 'late.dsh.json');
+    write(written, 'late');
+    write(
+      path.join(input.userDataDir, SESSION_INDEX_FILE_NAME),
+      JSON.stringify([{ sessionId: 'late', runtimeIdentity: written }])
+    );
+
+    expect(relocateHomeEnvAppState(input)).toMatchObject({
+      kind: 'cleaned_up',
+      indexPathsRewritten: 1,
+    });
+    const [row] = readIndex();
+    expect(readFileSync(String(row.runtimeIdentity), 'utf-8')).toBe('late');
+  });
+
+  it('rewrites the index without dropping a row it does not understand', () => {
     write(path.join(input.strayRoot, 'settings.json'), '{}');
+    write(
+      path.join(input.userDataDir, SESSION_INDEX_FILE_NAME),
+      JSON.stringify([{ note: 'no id', file: `${input.strayRoot}/a` }, { sessionId: 's1' }])
+    );
+
+    expect(relocateHomeEnvAppState(input)).toMatchObject({ indexPathsRewritten: 1 });
+    expect(readIndex()).toEqual([
+      { note: 'no id', file: path.join(input.newRoot, 'a') },
+      { sessionId: 's1' },
+    ]);
+  });
+
+  it('on an unreadable index keeps HOME whole and unmarked, and the next boot finishes', () => {
+    const session = path.join(input.strayRoot, 'pi-agent', 's.jsonl');
+    write(path.join(input.strayRoot, 'settings.json'), 'stray');
+    write(session, 'x');
     write(path.join(input.userDataDir, SESSION_INDEX_FILE_NAME), 'not json');
 
     expect(relocateHomeEnvAppState(input)).toMatchObject({ kind: 'failed' });
-    expect(existsSync(path.join(input.strayRoot, 'settings.json'))).toBe(true);
+    expect(readFileSync(path.join(input.strayRoot, 'settings.json'), 'utf-8')).toBe('stray');
+    expect(existsSync(path.join(input.newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME))).toBe(false);
+
+    // The run falls back to HOME and changes something there.
+    write(path.join(input.strayRoot, 'settings.json'), 'changed-after-failure');
+    // `SessionIndexService` set the corrupt file aside and wrote a fresh one.
+    write(
+      path.join(input.userDataDir, SESSION_INDEX_FILE_NAME),
+      JSON.stringify([{ sessionId: 's', runtimeIdentity: session }])
+    );
+
+    expect(relocateHomeEnvAppState(input)).toMatchObject({
+      kind: 'relocated',
+      indexPathsRewritten: 1,
+      strayRemoved: true,
+    });
+    expect(readFileSync(path.join(input.newRoot, 'settings.json'), 'utf-8')).toBe(
+      'changed-after-failure'
+    );
+    expect(readFileSync(String(readIndex()[0].runtimeIdentity), 'utf-8')).toBe('x');
+  });
+
+  it('on a failed swap puts the earlier root back and leaves the index alone', () => {
+    const strayFile = path.join(input.strayRoot, 'pi-agent', 's.jsonl');
+    write(strayFile, 'x');
+    write(path.join(input.newRoot, 'settings.json'), 'old');
+    const index = JSON.stringify([{ sessionId: 's', runtimeIdentity: strayFile }]);
+    write(path.join(input.userDataDir, SESSION_INDEX_FILE_NAME), index);
+    fsFault.failStagingRename = true;
+
+    expect(relocateHomeEnvAppState(input)).toMatchObject({ kind: 'failed' });
+    expect(readdirSync(input.newRoot)).toEqual(['settings.json']);
+    expect(readFileSync(path.join(input.newRoot, 'settings.json'), 'utf-8')).toBe('old');
+    expect(readFileSync(strayFile, 'utf-8')).toBe('x');
+    expect(readFileSync(path.join(input.userDataDir, SESSION_INDEX_FILE_NAME), 'utf-8')).toBe(
+      index
+    );
+    expect(readdirSync(path.dirname(input.newRoot)).sort()).toEqual([
+      'PiLabAi',
+      'PiLabAi.relocating',
+    ]);
+  });
+
+  it('on a failed first swap leaves no root behind', () => {
+    write(path.join(input.strayRoot, 'settings.json'), 'stray');
+    fsFault.failStagingRename = true;
+
+    expect(relocateHomeEnvAppState(input)).toMatchObject({ kind: 'failed' });
     expect(existsSync(input.newRoot)).toBe(false);
+    expect(readFileSync(path.join(input.strayRoot, 'settings.json'), 'utf-8')).toBe('stray');
   });
 
   describe('when HOME reaches the profile by another spelling (8.3 name, junction, subst)', () => {

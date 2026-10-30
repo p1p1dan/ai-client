@@ -191,7 +191,9 @@ if (strayHomeEnvRoot) {
       `[appState] relocated out of HOME: index-paths=${relocation.indexPathsRewritten} kept-aside=${relocation.keptAside !== null} stray-removed=${relocation.strayRemoved}`
     );
   } else if (relocation.kind === 'cleaned_up') {
-    console.log(`[appState] HOME leftover: stray-removed=${relocation.strayRemoved}`);
+    console.log(
+      `[appState] HOME leftover: index-paths=${relocation.indexPathsRewritten} stray-removed=${relocation.strayRemoved}`
+    );
   } else if (relocation.kind === 'failed') {
     console.error(`[appState] relocation out of HOME failed: ${relocation.error}`);
     keepStrayHomeEnvAppStateRoot(strayHomeEnvRoot);
