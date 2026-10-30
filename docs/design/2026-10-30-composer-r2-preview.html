@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>R2 输入框：拖放附件、未知命令、找不到的引用、简短提示（预览）</title>
+<style>
+  :root {
+    --background: #fcfcfb; --foreground: #151515; --card: #ffffff; --popover: #ffffff;
+    --primary: #c6613f; --muted-foreground: #525252; --clay: #d97757;
+    --fill-ghost-hover: #f0f0ef; --fill-ghost-selected: #e5e5e4; --secondary: #eeeeed;
+    --warning: #b07a1e; --border: #e5e5e4; --input: #cececd;
+    --foreground-faint: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
+    --radius-xs: .25rem; --radius-md: .625rem; --radius-lg: .75rem;
+    --text-small: .75rem; --text-ui: .8125rem; --text-code: .75rem; --text-chat-body: 13px;
+  }
+  .dark {
+    --background: #151515; --foreground: #f5f5f5; --card: #1a1a19; --popover: #20201f;
+    --primary: #d97757; --muted-foreground: #a3a3a3; --fill-ghost-hover: #202020;
+    --fill-ghost-selected: #2b2b2b; --secondary: #222222; --warning: #d9a441; --border: #2b2b2b; --input: #424242;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--background); color: var(--foreground);
+    font: var(--text-ui)/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 16px; align-items: center; }
+  header h1 { font-size: 15px; margin: 0; flex: 1; }
+  main { max-width: 780px; margin: 0 auto; padding: 8px 24px 64px; }
+  section { padding: 20px 0; border-bottom: 1px solid var(--border); }
+  h2 { font-size: 14px; margin: 0 0 4px; }
+  .why { color: var(--muted-foreground); font-size: var(--text-small); margin: 0 0 12px; }
+  .ctrl { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .ctrl button, .ctrl label { font: inherit; font-size: var(--text-small); padding: 3px 10px; border-radius: var(--radius-xs);
+    border: 0; background: var(--secondary); color: var(--foreground); cursor: pointer; }
+  .ctrl button:hover { background: var(--fill-ghost-selected); }
+  /* the composer card */
+  .composer { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 8px 10px; box-shadow: 0 1px 2px rgb(0 0 0 / .04); transition: box-shadow .15s; }
+  .composer.drop { box-shadow: inset 0 0 0 2px var(--clay), inset 0 0 24px -2px rgb(217 119 87 / .20); }
+  .extras { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+  .extras:empty { display: none; }
+  .alert { display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-size: var(--text-small);
+    border: 1px solid color-mix(in oklab, var(--warning) 28%, transparent);
+    background: color-mix(in oklab, var(--warning) 6%, transparent); border-radius: var(--radius-md); }
+  .alert .ico { color: var(--warning); }
+  .alert .msg { flex: 1; min-width: 0; }
+  .alert .act { border: 0; background: transparent; color: var(--foreground); font: inherit; font-size: var(--text-small);
+    padding: 1px 6px; border-radius: var(--radius-xs); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .alert .x { border: 0; background: transparent; color: var(--muted-foreground); cursor: pointer; padding: 0 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .att { display: inline-flex; gap: 6px; align-items: center; background: var(--secondary); border-radius: var(--radius-md);
+    padding: 3px 8px; font-size: var(--text-small); }
+  .att small { color: var(--muted-foreground); }
+  .ref { border: 0; border-radius: var(--radius-xs); background: var(--secondary); padding: 1px 6px;
+    font: var(--text-code) ui-monospace, Menlo, Consolas, monospace; color: var(--foreground); cursor: pointer; }
+  .ref.missing { color: var(--muted-foreground); text-decoration: line-through; text-decoration-color: var(--foreground-faint); }
+  .ref.missing::after { content: " · 找不到"; text-decoration: none; display: inline-block; margin-left: 2px; color: var(--warning);
+    font-family: inherit; }
+  textarea { width: 100%; border: 0; outline: 0; resize: none; background: transparent; color: var(--foreground);
+    font: var(--text-chat-body)/1.5 inherit; min-height: 22px; field-sizing: content; max-height: calc(13px*1.5*8); }
+  .row { display: flex; align-items: center; gap: 6px; }
+  .row .sp { flex: 1; }
+  .round { width: 28px; height: 28px; border-radius: 999px; border: 0; background: var(--primary); color: #fff; cursor: pointer; }
+  .round.ghost { background: var(--secondary); color: var(--foreground); }
+  .timeline { min-height: 28px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .bubble { background: var(--secondary); border-radius: 1.125rem; padding: 6px 12px; font-size: var(--text-chat-body); max-width: 80%; }
+  .note { font-size: var(--text-small); color: var(--muted-foreground); margin-top: 8px; }
+  .note b { color: var(--foreground); font-weight: 600; }
+  kbd { font: 11px ui-monospace, monospace; background: var(--secondary); border-radius: 3px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>R2 输入框：拖放附件 · 未知命令 · 找不到的引用 · 简短提示（预览，2026-10-30）</h1>
+  <div class="ctrl" style="margin:0"><button onclick="document.documentElement.classList.toggle('dark')">浅色 / 深色</button></div>
+</header>
+<main>
+
+<section>
+  <h2>① 把文件拖到输入框</h2>
+  <p class="why">照 Claude 桌面版：文件拖到输入框上方时，框内侧一圈 2px 陶土色描边加一层淡光，不加文字遮罩；松手后成为附件，和点 ⊕ 选文件走同一套检查（大小、个数、二进制），被拒的照常在框里说原因。拖到输入框以外的地方仍然不接收（现状）。<br>可以真的从桌面拖一个文件进来，或点按钮模拟。</p>
+  <div class="ctrl">
+    <button onclick="simDrag(true)">模拟：拖到上方</button>
+    <button onclick="simDrop([{name:'设计说明.md',size:'3.2 KB'}])">模拟：松手（1 个文本）</button>
+    <button onclick="simDrop([{name:'截图.png',size:'812 KB'},{name:'release.zip',size:'4.1 MB',bad:'不支持的文件类型'}])">模拟：松手（图片 + 不支持的）</button>
+    <button onclick="resetDrop()">清空</button>
+  </div>
+  <div class="composer" id="dropBox">
+    <div class="extras" id="dropExtras"></div>
+    <textarea rows="1" placeholder="给 PiLab 发消息…"></textarea>
+    <div class="row"><span class="sp"></span><button class="round">↑</button></div>
+  </div>
+</section>
+
+<section>
+  <h2>② 打错的 <code>/命令</code></h2>
+  <p class="why">发送时第一个词像命令（<code>/</code> 后面是字母，且没有第二个 <code>/</code>），但列表里没有，就先不发，在框里说一句，给一个「仍然发送」；不改文字，再按一次 <kbd>Enter</kbd> 也算仍然发送。<code>/home/pi/a.txt 这个文件是什么</code> 这种以路径开头的不拦。命令列表还没加载出来时不拦。</p>
+  <div class="ctrl">
+    <button onclick="setCmd('/reveiw 看下这个改动')">填入：/reveiw 看下这个改动</button>
+    <button onclick="setCmd('/home/pi/a.txt 这个文件是什么')">填入：/home/pi/a.txt 这个文件是什么</button>
+    <button onclick="setCmd('/compact')">填入：/compact（已有命令）</button>
+  </div>
+  <div class="timeline" id="cmdTimeline"></div>
+  <div class="composer">
+    <div class="extras" id="cmdExtras"></div>
+    <textarea rows="1" id="cmdInput" placeholder="试试输入 /xyz 然后回车"></textarea>
+    <div class="row"><span class="sp"></span><button class="round" onclick="sendCmd()">↑</button></div>
+  </div>
+</section>
+
+<section>
+  <h2>③ 找不到的 <code>@</code> 引用</h2>
+  <p class="why">输入框下面的引用标签，指向的文件不存在时划掉并标「找不到」，点它不再去打开；仍然可以发送（文字原样发出，模型自己会发现）。文件夹、图片等存在的都照常显示——它们本来就能引用。</p>
+  <div class="composer">
+    <textarea rows="2" id="refInput">请对比 @src/main/entry.ts 和 @docs/old-plan.md，参考 @"My Docs/a-spaced.md"</textarea>
+    <div class="extras" style="margin-top:4px"><div class="chips" id="refChips"></div></div>
+    <div class="row"><span class="sp"></span><button class="round">↑</button></div>
+  </div>
+  <p class="note">这个预览里假定 <code>docs/old-plan.md</code> 不存在。改输入框里的文字，标签会跟着变。</p>
+</section>
+
+<section>
+  <h2>④ 重启后的简短提示</h2>
+  <p class="why">只在真的丢了东西时出现一次，一句话，可关掉；文字草稿照常恢复。附件的内容不会写到磁盘上（现状，体积和隐私原因），所以只能告诉用户「要重新添加」。</p>
+  <div class="ctrl">
+    <button onclick="restart('att')">模拟重启：草稿带过 2 个附件</button>
+    <button onclick="restart('long')">模拟重启：草稿超过 10 万字</button>
+    <button onclick="restart('both')">两者都有</button>
+  </div>
+  <div class="composer">
+    <div class="extras" id="rsExtras"></div>
+    <textarea rows="1" id="rsInput" placeholder="（重启后恢复的草稿）"></textarea>
+    <div class="row"><span class="sp"></span><button class="round">↑</button></div>
+  </div>
+</section>
+
+</main>
+<script>
+const alertHtml = (msg, act) =>
+  `<div class="alert"><span class="ico">⚠</span><span class="msg">${msg}</span>${act ? `<button class="act" data-act>${act}</button>` : ''}<button class="x" onclick="this.parentElement.remove()">✕</button></div>`;
+
+// ① drop
+const dropBox = document.getElementById('dropBox');
+const dropExtras = document.getElementById('dropExtras');
+let atts = [];
+function renderAtts(skips = []) {
+  dropExtras.innerHTML = (skips.length ? alertHtml(skips.length === 1 ? skips[0] : `${skips.length} 个附件被跳过：${skips.join('；')}`) : '') +
+    (atts.length ? `<div class="chips">${atts.map((a) => `<span class="att">📄 ${a.name} <small>${a.size}</small></span>`).join('')}</div>` : '');
+}
+function simDrag(on) { dropBox.classList.toggle('drop', on); }
+function simDrop(files) {
+  simDrag(false);
+  const skips = [];
+  for (const f of files) { if (f.bad) skips.push(`「${f.name}」${f.bad}，已跳过。`); else atts.push(f); }
+  renderAtts(skips);
+}
+function resetDrop() { atts = []; renderAtts(); simDrag(false); }
+let depth = 0;
+dropBox.addEventListener('dragenter', (e) => { e.preventDefault(); depth++; simDrag(true); });
+dropBox.addEventListener('dragover', (e) => e.preventDefault());
+dropBox.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; simDrag(false); } });
+dropBox.addEventListener('drop', (e) => {
+  e.preventDefault(); depth = 0;
+  const kb = (n) => n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+  simDrop([...e.dataTransfer.files].map((f) => ({ name: f.name, size: kb(f.size),
+    ...(/\.(zip|exe|dmg|iso)$/i.test(f.name) ? { bad: '不支持的文件类型' } : f.size > 5 * 1048576 ? { bad: '超过 5 MB' } : {}) })));
+});
+
+// ② unknown command
+const KNOWN = ['compact', 'archive', 'btw', 'review', 'init', 'model', 'clear'];
+const cmdInput = document.getElementById('cmdInput');
+const cmdExtras = document.getElementById('cmdExtras');
+const cmdTimeline = document.getElementById('cmdTimeline');
+let warnedFor = null;
+function setCmd(v) { cmdInput.value = v; cmdExtras.innerHTML = ''; warnedFor = null; cmdInput.focus(); }
+function commandName(text) {
+  const m = /^\/([A-Za-z][\w:.-]*)(?=\s|$)/.exec(text.trim());
+  return m ? m[1] : null;
+}
+function deliver(text) {
+  cmdTimeline.insertAdjacentHTML('beforeend', `<div class="bubble">${text.replace(/</g, '&lt;')}</div>`);
+  cmdInput.value = ''; cmdExtras.innerHTML = ''; warnedFor = null;
+}
+function sendCmd() {
+  const text = cmdInput.value.trim();
+  if (!text) return;
+  const name = commandName(text);
+  if (name && !KNOWN.includes(name) && warnedFor !== text) {
+    warnedFor = text;
+    cmdExtras.innerHTML = alertHtml(`没有 /${name} 这个命令。`, '仍然发送');
+    cmdExtras.querySelector('[data-act]').onclick = () => deliver(text);
+    return;
+  }
+  deliver(text);
+}
+cmdInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); sendCmd(); }
+});
+cmdInput.addEventListener('input', () => { if (cmdInput.value.trim() !== warnedFor) { cmdExtras.innerHTML = ''; warnedFor = null; } });
+
+// ③ missing references
+const EXISTS = new Set(['src/main/entry.ts', 'My Docs/a-spaced.md', 'src', 'README.md']);
+const refInput = document.getElementById('refInput');
+const refChips = document.getElementById('refChips');
+function renderRefs() {
+  const chips = [...refInput.value.matchAll(/(?:^|\s)@(?:"([^"\n]+)"|([^\s"]\S*))/g)].map((m) => (m[1] ?? m[2]).replace(/[，。,]+$/, ''));
+  refChips.innerHTML = chips.map((p) => `<button class="ref${EXISTS.has(p) ? '' : ' missing'}" title="${EXISTS.has(p) ? '打开' : '找不到这个文件'}">${p}</button>`).join('');
+}
+refInput.addEventListener('input', renderRefs); renderRefs();
+
+// ④ restart notices
+const rsExtras = document.getElementById('rsExtras');
+const rsInput = document.getElementById('rsInput');
+function restart(kind) {
+  rsInput.value = kind === 'att' ? '帮我看看这两张截图里的报错' : '（一段很长的日志……）';
+  const msgs = [];
+  if (kind !== 'long') msgs.push('重启前加的 2 个附件没有保留，需要重新添加。');
+  if (kind !== 'att') msgs.push('草稿太长，只保留了前 10 万字。');
+  rsExtras.innerHTML = alertHtml(msgs.join(' '));
+}
+</script>
+</body>
+</html>

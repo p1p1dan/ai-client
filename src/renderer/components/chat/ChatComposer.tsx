@@ -596,6 +596,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     text: string;
     drafts: readonly AttachmentDraft[];
   } | null>(null);
+  // Read by the chat-switch effect, which must not re-run when this changes.
+  const retryableRef = useRef(retryable);
+  retryableRef.current = retryable;
   // T-19: rejection message from a failed `enqueue()` (queue full / over the
   // attachment byte budget) — decision 1/7's "reject, never silently drop".
   const [queueNotice, setQueueNotice] = useState<string | null>(null);
@@ -965,6 +968,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     );
     row?.scrollIntoView?.({ block: 'nearest' });
   }, [slashOpen, slashIndex]);
+  // The @ menu's picked row too (PiLab R2).
+  const mentionListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!mentionOpen) return;
+    const row = mentionListRef.current?.querySelector<HTMLElement>(
+      `[data-mention-index="${mentionIndex}"]`
+    );
+    row?.scrollIntoView?.({ block: 'nearest' });
+  }, [mentionOpen, mentionIndex]);
   // F11: both popups are absolutely positioned inside this card and cannot flip
   // themselves, so the card is the anchor and one measurement serves both — a
   // second, independently-resolved placement would let `@` and `/` open toward
@@ -1056,6 +1068,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     }),
   });
   chatEngineRef.current = chatEngine;
+  // PiLab R2 (03.7): a file that finished reading after the user left its chat
+  // waits in that chat's draft — offered to its box (as a withdrawn message's
+  // attachments are), or into the start screen's parked draft.
+  const landInOwnDraft = useCallback((owner: string | null, draft: AttachmentDraft) => {
+    const store = useComposerDraftsStore.getState();
+    if (owner !== null) {
+      store.offerDraft(owner, { text: '', attachments: [draft] });
+      return;
+    }
+    const parked = store.take(null);
+    store.park(null, {
+      text: parked?.text ?? '',
+      attachments: [...(parked?.attachments ?? []), draft],
+    });
+  }, []);
   // T-18 paste attachments. Reads/encoding stay in the hook; every threshold
   // and format decision is a pure function under __tests__.
   // T-19 decision 2.1: paste unlocks whenever the textarea does. A
@@ -1063,7 +1090,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // queue, and a queued message must be able to carry attachments too.
   // U28: `!activeSessionId` no longer locks it either — "nowhere to put this
   // draft" stopped being true once the first send creates the session.
-  const attachments = useComposerAttachments({ disabled: Boolean(disabled) });
+  const attachments = useComposerAttachments({
+    disabled: Boolean(disabled),
+    owner: activeSessionId,
+    // PiLab R2 (03.7): a file still being read when the user left its chat.
+    onLandedElsewhere: landInOwnDraft,
+  });
   const {
     dismissNotice: dismissAttachmentNotice,
     getLiveDrafts: getLiveAttachmentDrafts,
@@ -1202,7 +1234,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (carry) return;
     dismissAttachmentNotice();
     // A Retry armed for the chat arriving on screen (its send failed while the
-    // user was elsewhere) is that chat's own and stays.
+    // user was elsewhere) is that chat's own and stays. PiLab R2 (03.7): one
+    // left unclicked in the chat going away no longer takes the failed message
+    // with it — its text and attachments go back to that chat's draft, as when
+    // the send fails after the user has left (`restoreDraftIfComposerEmpty`).
+    const armed = retryableRef.current;
+    if (armed && armed.sessionId !== activeSessionId) {
+      useComposerDraftsStore
+        .getState()
+        .fillIfEmpty(armed.sessionId, { text: armed.text, attachments: armed.drafts });
+    }
     setRetryable((current) => (current?.sessionId === activeSessionId ? current : null));
     // T-19: a stale "queue full" rejection belongs to the session that
     // rejected it, not to whatever session is now active.
@@ -2002,19 +2043,31 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       setMentionTotal(0);
       return;
     }
+    // PiLab R2: only the newest query's answer lands (an older one may come back later).
+    let current = true;
     const timer = setTimeout(() => {
       window.electronAPI.search
-        .files({ rootPath: effectiveCwd, query: mentionQuery, maxResults: MENTION_PAGE_SIZE })
+        .files({
+          rootPath: effectiveCwd,
+          // Results are workspace-relative POSIX paths: a Windows `\` means `/` here.
+          query: mentionQuery.replace(/\\/g, '/'),
+          maxResults: MENTION_PAGE_SIZE,
+        })
         .then((page) => {
+          if (!current) return;
           setMentionResults(page.items);
           setMentionTotal(page.total);
         })
         .catch(() => {
+          if (!current) return;
           setMentionResults([]);
           setMentionTotal(0);
         });
     }, 150);
-    return () => clearTimeout(timer);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
   }, [mentionQuery, effectiveCwd]);
 
   // R02-c: fetch once per menu opening, not per keystroke — filtering is local.
@@ -4631,6 +4684,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       onCompositionStart={() => {
         composingRef.current = true;
       }}
+      // PiLab R2: the caret moved without typing (Home, arrows, a click): the
+      // @ menu follows it, so it never completes a token the caret has left.
+      onSelect={(event) => {
+        if (composingRef.current || !effectiveCwd) return;
+        const ta = event.currentTarget;
+        const query = extractMentionQuery(ta.value, ta.selectionStart);
+        if (query === mentionQuery) return;
+        setMentionQuery(query);
+        setMentionIndex(0);
+      }}
       onCompositionEnd={(event) => {
         composingRef.current = false;
         const ta = textareaRef.current;
@@ -4743,7 +4806,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             setMentionIndex((i) => (i - 1 + mentionResults.length) % mentionResults.length);
             return;
           }
-          if (event.key === 'Enter' && !event.shiftKey) {
+          // Tab completes the row too, as it does in the slash menu and the official client.
+          if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) {
             event.preventDefault();
             insertMention(mentionResults[mentionIndex]);
             return;
@@ -5201,7 +5265,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             )}
             style={{ maxHeight: popupPlacement.maxHeight }}
           >
-            <div className="min-h-0 flex-1 overflow-y-auto p-1">
+            <div ref={mentionListRef} className="min-h-0 flex-1 overflow-y-auto p-1">
               {mentionResults.map((item, i) => {
                 const lastSep = item.relativePath.lastIndexOf('/');
                 const dirPart = lastSep > 0 ? item.relativePath.slice(0, lastSep) : '';
@@ -5211,6 +5275,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                   <button
                     type="button"
                     key={item.path}
+                    data-mention-index={i}
                     onMouseDown={(event) => {
                       event.preventDefault();
                       insertMention(item);

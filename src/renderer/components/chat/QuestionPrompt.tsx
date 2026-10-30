@@ -17,6 +17,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatBlock } from '@/stores/chatSessions';
+import { isImeComposing } from './imeComposing';
 import {
   buildChatAboutPayload,
   buildOptionRows,
@@ -386,7 +387,8 @@ function QuestionPage({
   const otherSelected = sel.otherSelected[index] ?? false;
   // Plain Enter moves on; Shift+Enter is a newline.
   const onOtherKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    // All of the IME signals the composer checks: a picked candidate is not "done".
+    if (event.key !== 'Enter' || isImeComposing(event, false)) return;
     if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
     event.preventDefault();
     onOtherDone();

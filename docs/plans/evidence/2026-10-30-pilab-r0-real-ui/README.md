@@ -207,3 +207,10 @@ CLI 2.1.300 实测写入的记录（`~/.pilab/…/claude/projects/<cwd>/<id>.jso
 修复前重新打开：前两种的工具行显示英文原句像失败，没有「已停止」；停在思考中的那一轮什么都不显示；所有回合底部只有「N 次工具调用」，没有「完成于 / 用时」。修复后（`results/cc-reopen-after.txt`，修插话时间之前抓取；插话那一轮随后复测为「完成于 20:58 · 用时 1 秒」）与现场一致，例外见 handoff §10.15。
 
 步骤式显示在 Claude 引擎上核对：三次读取合成「读取了 3 个文件」；两次写文件合成「修改了 2 个文件 +3 −0」；命令结果行「3 passed · 3 行」；失败首行可见。发现失败行露出 CLI 给模型看的 `<tool_use_error>` 标签，已去掉（现场和重开都去）。
+
+## 12. R2 输入框（2026-10-30 晚）
+
+工具 `tools/composer-r2.mjs`：`ime`（输入框、`/` 菜单、`@` 菜单里用输入法选词回车）、`mention`（`@` 菜单按键与路径）、`state`。按键与输入法事件都经 CDP `Input.*` 发出，由 Chromium 生成页面事件，与真实输入法一致到 isComposing / keyCode 229 / compositionend 这一层；真实微软拼音仍需 Windows。
+
+修复前 `mention` 的结果（未存文件，原样记录）：Tab 后焦点离开、菜单仍开；Home 后回车无反应、菜单仍开；左移两格后回车得到 `see @src/main/entry.ts ry`；选 `My Docs/a-spaced.md` 得到 `@My Docs/a-spaced.md `；`@src\main` 无结果；`请看@中文`、`说明：@entry` 不触发；`mail a@entry` 不触发。修复后见 `results/r2-mention-after.json`：Tab 选中；Home 关闭菜单（随后的回车正常发送）；左移后选中替换整个词；空格路径写成 `@"My Docs/a-spaced.md"`；反斜杠能搜到。`results/r2-ime.json`：四处输入法回车均未发送、未选中菜单项。
+

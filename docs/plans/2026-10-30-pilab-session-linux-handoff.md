@@ -348,3 +348,16 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 - **已知差异**：审批卡待答时停止，现场是「已拒绝 · 自动：已中止 · 未执行」，重开后是「已停止」——两种情况 CLI 写的记录完全相同，分不出来。
 - **测试**：`sdkSessionRuntime.test.ts` 新增 `[PILAB-R1-CC-STOP]` 7 项（用实测记录的形状）；SDK 宿主 14 个文件 215 项通过（1 项既有跳过）；`typecheck:claude-sdk-host` 通过。真实界面：同一会话 11 轮，停止、拒绝、Esc、立刻发送、插话、读取合并、修改合并都在重启应用后与现场一致。
 - **工具改动**：`p1-7d-gui.mjs` 支持 `P17D_GATEWAY_PLAN`；`fake-gateway.mjs` 的 `CC-TEXT` 支持 `chunkMs`。
+
+### 10.16 2026-10-30 晚：R2 输入框（未提交）
+
+- 第 2 步已提交为 `6f38997c`（本地，未推送）。
+- **审计与复现**：两路只读审计后，用 `docs/plans/evidence/2026-10-30-pilab-r0-real-ui/tools/composer-r2.mjs` 在真实应用里复现（输入法事件、`@` 菜单按键）。详见台账 §16。
+- **修复**：
+  - `fileMention.ts`：`@` 词按 Claude Code 的规则读（行首或空白后；`@"带 空格/的路径"`）；选中时替换整个词；路径有空格自动加引号；标签认引号写法。
+  - `ChatComposer.tsx`：`@` 菜单 Tab 选中；光标移动（`onSelect`）后菜单跟随；搜索把 `\` 当 `/`；只采用最新一次搜索结果；选中行滚进视野；离开对话时没点的「重试」把消息和附件放回该对话草稿。
+  - `useComposerAttachments.ts`：附件记住在哪个对话开始读，切走后读完的交给原对话（`offerDraft`）；读取计数按对话分开。
+  - `QuestionPrompt.tsx`：「其他」输入框用 `isImeComposing`。
+- **注意**：「立刻在输入法上屏后紧跟普通回车」不算缺陷——Windows/Linux 上那就是用户再按一次回车，应当发送（探针第一次就因此真的发出了一条消息，已从默认探针移除）。
+- **用户裁定**：见台账 §16。做四项：未知命令提示、找不到的引用、拖放附件、重启简短提示（预览 `docs/design/2026-10-30-composer-r2-preview.html`）；不做发送键偏好、中文后 `@`、菜单无障碍角色。
+
