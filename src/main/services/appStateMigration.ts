@@ -93,6 +93,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -535,7 +536,7 @@ export interface HomeEnvRelocationInput {
 }
 
 export type HomeEnvRelocationOutcome =
-  | { kind: 'skipped'; reason: 'no_stray_root' }
+  | { kind: 'skipped'; reason: 'no_stray_root' | 'same_directory' }
   | {
       kind: 'relocated';
       /** An earlier root at `newRoot` was merged in and then kept aside, never deleted. */
@@ -602,6 +603,21 @@ function rewriteSessionIndexRoot(userDataDir: string, strayRoot: string, newRoot
   return counter.count;
 }
 
+/**
+ * One directory reached by two spellings — an 8.3 short name, a junction, a
+ * `subst` drive. String comparison cannot see it, and relocating a root onto
+ * itself would end by deleting it. Compared by volume + file index.
+ */
+function sameDirectory(a: string, b: string): boolean {
+  try {
+    const left = statSync(a, { bigint: true });
+    const right = statSync(b, { bigint: true });
+    return left.ino !== 0n && left.ino === right.ino && left.dev === right.dev;
+  } catch {
+    return false;
+  }
+}
+
 /** Best effort: a file another program holds open must not stop the app from starting. */
 function removeStray(strayRoot: string): boolean {
   try {
@@ -641,11 +657,17 @@ function removeStray(strayRoot: string): boolean {
  *     boot, recognised by the marker.
  *
  * Runs before `migrateAppState`, so a relocated root brings its own
- * `.migrated-from-aiclient` marker along. Never throws.
+ * `.migrated-from-aiclient` marker along. Never throws; on `failed` the
+ * caller keeps the stray root for this run (`keepStrayHomeEnvAppStateRoot`),
+ * so a half-done move never shows the user an empty, logged-out app.
  */
 export function relocateHomeEnvAppState(input: HomeEnvRelocationInput): HomeEnvRelocationOutcome {
   if (!existsSync(input.strayRoot)) {
     return { kind: 'skipped', reason: 'no_stray_root' };
+  }
+  // Before anything that deletes: a stray root that IS the new root is not stray.
+  if (sameDirectory(input.strayRoot, input.newRoot)) {
+    return { kind: 'skipped', reason: 'same_directory' };
   }
   if (existsSync(join(input.newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME))) {
     return { kind: 'cleaned_up', strayRemoved: removeStray(input.strayRoot) };

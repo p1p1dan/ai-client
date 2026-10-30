@@ -38,9 +38,20 @@ function resolveHome(): string {
   return getUserHome() || app.getPath('home');
 }
 
+/** Set only when moving a Windows `HOME` root failed — see `keepStrayHomeEnvAppStateRoot`. */
+let keptStrayRoot: string | null = null;
+
 /** `~/.pilab/<profile>` — the root every local reader and writer should use. */
 export function getAppStateRoot(): string {
-  return buildAppStateRoot(resolveHome(), app.getPath('userData'));
+  return keptStrayRoot ?? buildAppStateRoot(resolveHome(), app.getPath('userData'));
+}
+
+/**
+ * Keeps this run on the `HOME` root it could not move, so the user still sees
+ * their login and conversations; the next boot retries the move.
+ */
+export function keepStrayHomeEnvAppStateRoot(root: string): void {
+  keptStrayRoot = root;
 }
 
 /** `~/.aiclient` — for the migration, and for adoption's "never migrated" fallback. Nothing else. */

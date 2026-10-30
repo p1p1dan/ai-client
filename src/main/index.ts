@@ -61,6 +61,7 @@ import {
   getPriorInstallRoots,
   getPriorUserDataDirs,
   getStrayHomeEnvAppStateRoot,
+  keepStrayHomeEnvAppStateRoot,
 } from './services/appStatePaths';
 import {
   createRealVaultCrypto,
@@ -176,7 +177,8 @@ if (isDev) {
 // one read `HOME` first, and Cadence SPB sets a machine-wide `HOME` to its own
 // config directory, so the whole root sat in there (V1.2.1 field report,
 // 2026-10-30). Moves it under the user profile, re-points the conversation
-// list, and deletes the stray copy. Never throws.
+// list, and deletes the stray copy. Never throws; a failed move keeps this run
+// on the old root and retries next boot.
 const strayHomeEnvRoot = getStrayHomeEnvAppStateRoot();
 if (strayHomeEnvRoot) {
   const relocation = relocateHomeEnvAppState({
@@ -192,6 +194,7 @@ if (strayHomeEnvRoot) {
     console.log(`[appState] HOME leftover: stray-removed=${relocation.strayRemoved}`);
   } else if (relocation.kind === 'failed') {
     console.error(`[appState] relocation out of HOME failed: ${relocation.error}`);
+    keepStrayHomeEnvAppStateRoot(strayHomeEnvRoot);
   }
 }
 

@@ -5,6 +5,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -169,5 +170,34 @@ describe('relocateHomeEnvAppState', () => {
     expect(relocateHomeEnvAppState(input)).toMatchObject({ kind: 'failed' });
     expect(existsSync(path.join(input.strayRoot, 'settings.json'))).toBe(true);
     expect(existsSync(input.newRoot)).toBe(false);
+  });
+
+  describe('when HOME reaches the profile by another spelling (8.3 name, junction, subst)', () => {
+    let aliasInput: HomeEnvRelocationInput;
+
+    beforeEach(() => {
+      const profile = path.join(sandbox, 'profile');
+      const alias = path.join(sandbox, 'PROFIL~1');
+      mkdirSync(profile, { recursive: true });
+      symlinkSync(profile, alias, process.platform === 'win32' ? 'junction' : 'dir');
+      aliasInput = { ...input, strayRoot: [alias, APP_STATE_DIR, 'PiLabAi'].join('/') };
+      write(path.join(input.newRoot, 'credentials', 'vault.json'), '{"v":1}');
+    });
+
+    it('leaves the root alone', () => {
+      expect(relocateHomeEnvAppState(aliasInput)).toEqual({
+        kind: 'skipped',
+        reason: 'same_directory',
+      });
+      expect(readFileSync(path.join(input.newRoot, 'credentials', 'vault.json'), 'utf-8')).toBe(
+        '{"v":1}'
+      );
+    });
+
+    it('never mistakes the root for a leftover, even after a relocation', () => {
+      write(path.join(input.newRoot, HOME_ENV_RELOCATION_MARKER_FILE_NAME), 'done');
+      expect(relocateHomeEnvAppState(aliasInput)).toMatchObject({ reason: 'same_directory' });
+      expect(existsSync(path.join(input.newRoot, 'credentials', 'vault.json'))).toBe(true);
+    });
   });
 });
