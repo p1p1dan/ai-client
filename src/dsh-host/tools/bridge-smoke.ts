@@ -1955,12 +1955,17 @@ async function main() {
     // out of band with DSH's text either way, refuses `/plan`, and neither RPC
     // puts an event on the channel.
     // P1-7b adds the bridge's `jobs` (empty: no job yet).
+    // Decision 207 adds DSH 0.2.1's `workingDirectory` after the three keys.
     panelsAnswerCurrentValues:
       JSON.stringify(
         (((report.panels as Message | undefined)?.projections as Message[]) ?? []).map(
           (entry) => entry.key
         )
-      ) === '["todos","goal","subagentCatalog","goalActivation","jobs"]' &&
+      ) === '["todos","goal","subagentCatalog","workingDirectory","goalActivation","jobs"]' &&
+      // Decision 207 §7: DSH 0.2.1's current directory, the workspace until a `cd`.
+      typeof (((report.panels as Message | undefined)?.projections as Message[]) ?? []).find(
+        (entry) => entry.key === 'workingDirectory'
+      )?.view === 'string' &&
       (((report.panels as Message | undefined)?.projections as Message[]) ?? []).find(
         (entry) => entry.key === 'goalActivation'
       )?.view === null &&
