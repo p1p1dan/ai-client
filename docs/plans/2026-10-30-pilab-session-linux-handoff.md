@@ -478,7 +478,7 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 - 正式包、Windows、加密机上的高亮性能未测。
 - 800 行代码块写完时仍有一次约 0.5 s 的卡顿。
 
-## 13. 2026-11-02 阶段收尾：C 批（当前最新）
+## 13. 2026-11-02 阶段收尾：C 批（已被 §14 接替）
 
 ### 13.1 进行到哪里
 - §19 剩下的三批（A 正确性、B 高亮性能、C 新界面）全部完成。C 批见台账 §22：审批卡显示带行号的改动对比（两个引擎），差异视图「复制补丁」（审查面板、差异标签页、对话修改记录框、审批卡）。
@@ -498,4 +498,26 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 ### 13.5 风险与待办
 - 正式包、Windows、加密机未测（加密文件在 DeepSeek 引擎经 fs 服务读，Claude 引擎读到密文时按读不到处理）。
 - 旧问题：写入被拒绝 / 预览时对话行把 2 行新文件数成「+3」。
+
+## 14. 2026-11-02 收尾：合入 main，DSH 升级另开话题（当前最新）
+
+### 14.1 进行到哪里
+- 整合分支 `feat/integrate-2026-11` 收尾并快进合入本地 main（未推送，推送待用户确认）。内容：§19 A/B/C 三批、插件页、对话搜索、HOME 搬迁修复、Claude Agent SDK 0.3.316（`c5860848`，probe-suite 12 组全过）。
+- main 工作目录里原来的 7 个未提交改动（已搬进整合分支）按用户要求备份后清掉：备份在 `/home/pi/backups/ai-client-main-stray-2026-11-02/`（补丁、整文件、README）。未跟踪的 `font/`、`out-agent-host/`、`sharePic/` 没动。
+- DSH 0.2.0-rc.2 → 0.2.1-rc.5 另开话题（用户 2026-11-02）。起点在本地分支 `feat/dsh-0.2.1-rc.5`，工作目录 `/home/pi/code/ai-client-dsh-upgrade`，一个 WIP 提交 `be840f56`（提交时关了钩子，格式检查待补跑）。该目录的 `src/dsh-host/node_modules` 是真正装好的 0.2.1-rc.5（从整合目录挪过去的）。
+
+### 14.2 DSH 0.2.1-rc.5 已知影响（新话题从这里开始）
+- 依赖：`dsh-app-boot` 要求 cordis 4.0.5（及 group 1.0.5 / include 1.0.10 / loader 1.0.6），已改；试点插件 `dsh-office-tools` 仍 1.0.6，其 peer 写到 `<0.3.0-0`，按 semver 不含 0.2.1 预发布版，靠 `overrides`。
+- dsh-base 组合：新增 `working-directory`、`tool-working-directory`、`remote-access`（远程方法的访问策略，不开端口）、`web-deepseek-api`；删除 `tool-ralph`、`skill-badge`。我们补丁定位的行都还在。
+- **换目录**（用户定本次支持）：`working_directory` 工具可 cd；fs / bash / pwsh / fs-search / skill 的相对路径从会话当前目录算；每个会话首次组装提示词时写一条 `working-directory/change`，真正换目录时给模型注入一条通知。我们按 `header.cwd` 算路径的地方：`permissionHost.ts`（3 处）、`fsSearch/grepTool.ts`、`environmentContext.ts`、`permissions/plugin.ts`（提示词变量）、`bridge/dshSessionRuntime.ts`（2 处）。
+- **子代理一律后台**：subagent 工具立即返回 id，完成后通知；子代理用 `send_message` 回报。桥接录制里 `perm-subagent` 的子代理权限卡不再出现在父回合内、`subagent.activity` 变成 `tool.completed`。影响子代理面板、「等待子代理」、决策 203 的停止规则、子代理页。
+- bash 结果改走 `job/registered`；系统提示词多了 `working-directory:current` 一节；消息编号整体后移。
+- 测试（原始输出在 `/home/pi/code/dsh-0.2.1-*.txt`）：全量单测只 3 项失败（工具分类、工具表、插件审计样本）；真引擎集成 56 项挂 2 项：`[190-I-2]` 两个开关都关时的 grep / web_fetch、`[PLN-3]` 计划审查关闭后停止模型；桥接基准 69 处差异。
+- 建议顺序（用户已同意）：真引擎测清影响 → 照决策 189 写决策 207（前后对照 + 换目录 / 子代理后台方案）→ 改界面的两项先出 HTML 预览 → 分阶段实现、每阶段提交。
+
+### 14.3 环境
+- 整合目录与新 main 目录的依赖仍有链接到旧目录的：根 `node_modules`、`out-node-runtime`、`out-dsh-host` → 旧 PiLab 目录；`src/claude-sdk-host/node_modules` 在整合目录里是自装的 0.3.316；`src/dsh-host/node_modules` 在整合目录里是逐项链接到旧 PiLab 目录（0.2.0-rc.2），`@aiclient/dsh-app` 指本目录。
+
+### 14.4 测试
+- 收尾前：全量 796 文件通过（C 批）；Claude SDK 升级后 probe-suite 12 组、Claude 引擎单测 19 文件通过；恢复到 0.2.0-rc.2 后 dsh-host 等 72 文件通过、tsc 0 错、桥接 `--check` 37 场景无差异。
 
