@@ -12,21 +12,27 @@
 import { getDisplayPath } from '@shared/utils/path';
 import { ArrowRight, ChevronRight, FileCode } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DiffLayoutToggle } from '@/components/chat/DiffLayout';
 import { loadOlderHistoryPage } from '@/components/chat/historyPageRequest';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Ident } from '@/components/ui/ident';
-import { toastManager } from '@/components/ui/toast';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useElementWidth } from '@/hooks/useElementWidth';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { useEditorStore } from '@/stores/editor';
+import {
+  type DiffLayout,
+  diffTooNarrowToSplit,
+  effectiveDiffLayout,
+  useDiffLayoutStore,
+} from '@/stores/diffLayout';
+import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { PaneHeaderPortal } from './panes/paneSlots';
 import { ReviewDiff } from './ReviewDiff';
 import type { SessionReviewEntry } from './sessionReview';
-import { sessionReviewDiffTarget } from './sessionReviewDiffTarget';
 import {
   fileForChangeFocus,
   groupReviewByFile,
@@ -34,7 +40,6 @@ import {
   shortenDir,
 } from './sessionReviewFiles';
 import { reviewEntryRows } from './sessionReviewPatch';
-import { readWorkspaceRootPath } from './useWorkspaceRootPath';
 import { WorkspaceChangesList } from './WorkspaceChangesList';
 
 interface SessionReviewPanelProps {
@@ -228,25 +233,18 @@ function ReviewFile({
 }) {
   const { t } = useI18n();
   const latest = file.entries.at(-1) as SessionReviewEntry;
+  // PiLab R2 (FR-07.3): the shared 「上下 / 并排」 choice, unified while the
+  // pane is too narrow to split.
+  const layout = useDiffLayoutStore((state) => state.layout);
+  const [bodyRef, bodyWidth] = useElementWidth<HTMLDivElement>();
+  const shownLayout = effectiveDiffLayout(layout, bodyWidth);
+  // User, 2026-11-02: the button opens the file in the editor, not a diff — the
+  // change itself is already shown right here, and a git diff of the working
+  // tree is not this session's change (it may be blank once staged/committed).
   const openFile = () => {
-    const workspacePath = readWorkspaceRootPath();
-    if (!workspacePath) {
-      toastManager.add({ type: 'info', title: t('Select a Workspace to browse files') });
-      return;
-    }
-    const target = sessionReviewDiffTarget(latest, workspacePath);
-    if (!target) {
-      toastManager.add({
-        type: 'error',
-        title: t('Could not open "{{path}}" — the path is outside the workspace.', {
-          path: latest.path,
-        }),
-      });
-      return;
-    }
-    useEditorStore.getState().openDiffTab(target);
-    // Explicitly ask for the editor pane even when this exact diff tab was
-    // already active: WorkspaceShell's active-path effect cannot observe that
+    useFileOpenIntentStore.getState().requestFileOpen({ path: latest.path, source: 'review' });
+    // Explicitly ask for the editor pane even when this file was already
+    // active: WorkspaceShell's active-path effect cannot observe that
     // repeated click.
     onOpenDiff();
   };
@@ -295,6 +293,7 @@ function ReviewFile({
             </span>
           )}
         </CollapsibleTrigger>
+        {open && !file.unavailable && <DiffLayoutToggle narrow={diffTooNarrowToSplit(bodyWidth)} />}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -307,9 +306,9 @@ function ReviewFile({
       </div>
       <CollapsiblePanel>
         {/* User, 2026-10-23: a small step in, not the 20px it was. */}
-        <div className="flex flex-col gap-1.5 py-1 pl-2">
+        <div ref={bodyRef} className="flex flex-col gap-1.5 py-1 pl-2">
           {file.entries.map((entry) => (
-            <ReviewEntry key={entry.id} entry={entry} />
+            <ReviewEntry key={entry.id} entry={entry} layout={shownLayout} />
           ))}
         </div>
       </CollapsiblePanel>
@@ -317,7 +316,7 @@ function ReviewFile({
   );
 }
 
-function ReviewEntry({ entry }: { entry: SessionReviewEntry }) {
+function ReviewEntry({ entry, layout }: { entry: SessionReviewEntry; layout: DiffLayout }) {
   const { t } = useI18n();
   const rows = useMemo(() => reviewEntryRows(entry), [entry]);
   const unavailable =
@@ -343,7 +342,7 @@ function ReviewEntry({ entry }: { entry: SessionReviewEntry }) {
       {entry.unavailable ? (
         <p className="px-2 py-2 text-small text-muted-foreground">{t(unavailable)}</p>
       ) : rows.length ? (
-        <ReviewDiff rows={rows} />
+        <ReviewDiff rows={rows} layout={layout} />
       ) : (
         <p className="px-2 py-2 text-small text-muted-foreground">{t('No text differences.')}</p>
       )}

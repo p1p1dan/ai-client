@@ -206,6 +206,13 @@ export const zhTranslations: Record<string, string> = {
   'Select Image': '选择图片',
   'Beta Features': 'Beta 功能',
   'Binary file not supported for diff preview': '二进制文件不支持差异预览',
+  'No differences in this file': '这个文件两边内容相同，没有差异',
+  'Diff layout': '差异显示方式',
+  Stacked: '上下显示',
+  'Side by side': '并排显示',
+  'Too narrow, stacked for now': '太窄，暂用上下',
+  'Only line endings differ (CRLF / LF); Git may convert them on commit':
+    '两边只有换行符（CRLF / LF）不同，提交时 Git 可能会自动转换',
   // Issue #13: this block drives the TEMPORARY WORKSPACE feature (the temp
   // directory with an agent/terminal session beside it), not 「临时对话」 — the
   // chat that belongs to no repository. The two read as one thing while both

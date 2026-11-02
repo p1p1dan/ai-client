@@ -1,4 +1,5 @@
 import { DiffEditor } from '@monaco-editor/react';
+import { sameIgnoringLineEndings } from '@shared/textDiff';
 import type { FileDiff } from '@shared/types';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -15,10 +16,13 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { DiffLayoutToggle } from '@/components/chat/DiffLayout';
 import { CommentForm } from '@/components/files/EditorLineComment';
 import { monaco } from '@/components/files/monacoSetup';
+import { Button } from '@/components/ui/button';
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -35,6 +39,8 @@ import { matchesKeybinding } from '@/lib/keybinding';
 import { toMonacoVirtualUri } from '@/lib/monacoModelPath';
 import { cn } from '@/lib/utils';
 import { useActiveSessionId } from '@/stores/agentSessions';
+import { useDiffLayoutStore } from '@/stores/diffLayout';
+import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
@@ -163,6 +169,9 @@ export function DiffViewer({
 }: DiffViewerProps) {
   const sessionId = useActiveSessionId(rootPath);
   const { t } = useI18n();
+  // PiLab R2 (FR-07.3): the shared 「上下 / 并排」 choice; Monaco's own
+  // breakpoint still stacks a narrow tab.
+  const diffLayout = useDiffLayoutStore((state) => state.layout);
   const queryClient = useQueryClient();
   const { terminalTheme, sourceControlKeybindings, editorSettings } = useSettingsStore();
   const navigateToFile = useNavigationStore((s) => s.navigateToFile);
@@ -1031,6 +1040,43 @@ export function DiffViewer({
     );
   }
 
+  // Identical sides (the change was staged or committed since the tab opened,
+  // or only the file mode or line endings changed) would render as a blank editor.
+  if (!isDirty && sameIgnoringLineEndings(diff.original, diff.modified)) {
+    return (
+      <Empty className="h-full">
+        <EmptyMedia variant="icon">
+          <FileCode className="h-4.5 w-4.5" />
+        </EmptyMedia>
+        <EmptyHeader>
+          <EmptyTitle>{file.path}</EmptyTitle>
+          <EmptyDescription>
+            {t(
+              diff.original === diff.modified
+                ? 'No differences in this file'
+                : 'Only line endings differ (CRLF / LF); Git may convert them on commit'
+            )}
+          </EmptyDescription>
+        </EmptyHeader>
+        {!isCommitView && (
+          <EmptyContent>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                useFileOpenIntentStore
+                  .getState()
+                  .requestFileOpen({ path: `${rootPath}/${file.path}`, source: 'diff' })
+              }
+            >
+              {t('Open file')}
+            </Button>
+          </EmptyContent>
+        )}
+      </Empty>
+    );
+  }
+
   const getBoundaryTooltip = () => {
     if (boundaryHint === 'top') {
       return hasPrevFile ? t('Switch to previous file') : t('Already at the first change');
@@ -1045,19 +1091,22 @@ export function DiffViewer({
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex h-9 shrink-0 items-center justify-between border-b px-4">
-        <div className="flex items-center">
-          <span className="text-ui font-medium">{file.path}</span>
+        <div className="flex min-w-0 flex-1 items-center">
+          <span className="min-w-0 truncate text-ui font-medium">{file.path}</span>
           {isCommitView ? (
-            <span className="ml-2 text-small text-muted-foreground">{t('(commit history)')}</span>
+            <span className="ml-2 shrink-0 text-small text-muted-foreground">
+              {t('(commit history)')}
+            </span>
           ) : (
-            <span className="ml-2 text-small text-muted-foreground">
+            <span className="ml-2 shrink-0 text-small text-muted-foreground">
               {file.staged ? t('(staged)') : t('(unstaged)')}
             </span>
           )}
         </div>
 
         {/* Navigation buttons */}
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
+          <DiffLayoutToggle />
           {/* Diff count */}
           {lineChanges && lineChanges.length > 0 && (
             <span className="mr-2 text-small text-muted-foreground">
@@ -1173,7 +1222,7 @@ export function DiffViewer({
             onMount={handleEditorMount}
             options={{
               readOnly: !isEditing,
-              renderSideBySide: true,
+              renderSideBySide: diffLayout === 'split',
               renderSideBySideInlineBreakpoint: sideBySideInlineBreakpoint, // 0 = always side-by-side (default)
               ignoreTrimWhitespace: false,
               renderOverviewRuler: true,

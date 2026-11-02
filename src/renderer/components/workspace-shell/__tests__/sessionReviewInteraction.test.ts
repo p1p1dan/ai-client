@@ -2,18 +2,16 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
-import { isDiffTabActive } from '@/stores/diffTabTarget';
+import { useDiffLayoutStore } from '@/stores/diffLayout';
 import { useEditorStore } from '@/stores/editor';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { SessionReviewPanel } from '../SessionReviewPanel';
 import type { SessionReviewEntry } from '../sessionReview';
 
-vi.mock('../useWorkspaceRootPath', () => ({ readWorkspaceRootPath: () => '/repo' }));
-
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 
-it('expands diffs and opens a real diff tab without touching files', async () => {
+it('expands diffs, and opens the file itself in the editor', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   const element = document.createElement('div');
   document.body.append(element);
@@ -62,27 +60,32 @@ it('expands diffs and opens a real diff tab without touching files', async () =>
     // User, 2026-10-23: one number column (the new line on an added row).
     expect(added?.querySelectorAll('[data-line-number]')).toHaveLength(1);
     expect(added?.querySelector('[data-line-number]')?.textContent).toBe('2');
+    // User, 2026-11-02: the file in the editor, not a diff tab.
     await act(async () =>
       element.querySelector<HTMLButtonElement>('button[aria-label="Open file"]')!.click()
     );
-    expect(useFileOpenIntentStore.getState().intent).toBe(intentBefore);
-    const editor = useEditorStore.getState();
-    expect(editor.activeTabPath).toBe('git-diff://workdir/unstaged/file-0.txt');
-    expect(editor.tabs[0].diffTarget).toEqual({
-      kind: 'workdir',
-      path: 'file-0.txt',
-      staged: false,
-      status: 'M',
-    });
-    expect(isDiffTabActive(editor.tabs, editor.activeTabPath)).toBe(true);
-    // Layout 5d: opening a diff asks for the editor pane; the review stays.
+    const first = useFileOpenIntentStore.getState().intent;
+    expect(first).toMatchObject({ path: '/repo/file-0.txt', source: 'review' });
+    expect(useEditorStore.getState().tabs).toHaveLength(0);
+    // Layout 5d: opening it asks for the editor pane; the review stays.
     expect(onOpenDiff).toHaveBeenCalledOnce();
     expect(triggers[0].getAttribute('aria-expanded')).toBe('true');
+    // A repeated click still fires, for a file that is already open.
     await act(async () =>
       element.querySelector<HTMLButtonElement>('button[aria-label="Open file"]')!.click()
     );
-    expect(useEditorStore.getState().tabs).toHaveLength(1);
+    expect(useFileOpenIntentStore.getState().intent?.requestId).toBeGreaterThan(first!.requestId);
     expect(onOpenDiff).toHaveBeenCalledTimes(2);
+    // PiLab R2 (FR-07.3): an open file carries the 「上下 / 并排」 switch.
+    expect(element.querySelectorAll('button[aria-label="Side by side"]')).toHaveLength(1);
+    await act(async () =>
+      element.querySelector<HTMLButtonElement>('button[aria-label="Side by side"]')!.click()
+    );
+    const newSide = [...element.querySelectorAll('[data-split-side="new"]')].map(
+      (side) => side.textContent
+    );
+    expect(newSide).toEqual(['1pong', '2+abc']);
+    useDiffLayoutStore.setState({ layout: 'unified' });
     // Layout 5d: no header of its own — the pane card has the one close / expand.
     expect(element.querySelector('button[aria-label="Close review"]')).toBeNull();
     expect(element.querySelector('button[aria-label="Expand panel"]')).toBeNull();
@@ -102,6 +105,7 @@ it('expands diffs and opens a real diff tab without touching files', async () =>
     await act(async () => root.unmount());
     element.remove();
     useEditorStore.setState(editorBefore, true);
+    useFileOpenIntentStore.setState({ intent: intentBefore });
     vi.unstubAllGlobals();
   }
 });

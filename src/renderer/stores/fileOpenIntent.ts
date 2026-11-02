@@ -18,7 +18,7 @@ export interface FileOpenIntent {
   /** Monotonic counter so re-clicking the same path still fires consumer effects. */
   requestId: number;
   /** Provenance: which UI surface produced this request. */
-  source: 'tool-row' | 'hit-list' | 'mention-chip' | 'markdown';
+  source: 'tool-row' | 'hit-list' | 'mention-chip' | 'markdown' | 'review' | 'diff';
 }
 
 /** Pure reducer — unit testable independent of the store shell. */

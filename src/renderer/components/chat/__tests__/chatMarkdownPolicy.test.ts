@@ -422,6 +422,43 @@ describe('FB1: splitClosedPrefix / advanceClosedPrefix', () => {
     });
   });
 
+  // PiLab R2 (DEF-029), measured in the real app: the streamed pieces of an
+  // answer that ends on a code block, one flush each.
+  describe('[PILAB-R2-FENCE] a code block stays a code block while it closes', () => {
+    const pieces = ['intro\n\n```ts\nconst a = 1;\n', 'const b = 2;\n', '``', '`\n', '\n\nafter'];
+    const flushes = pieces.map((_, i) => pieces.slice(0, i + 1).join(''));
+
+    it('renders the fence as Markdown at every flush until it settles', () => {
+      let hwm = 0;
+      for (const text of flushes.slice(0, 4)) {
+        const split = advanceClosedPrefix(text, hwm);
+        hwm = split.closedLength;
+        expect(split.openFence).toBeDefined();
+        expect(split.openTail).not.toContain('```');
+      }
+      const settled = advanceClosedPrefix(flushes[4], hwm);
+      expect(settled.segments).toContain('```ts\nconst a = 1;\nconst b = 2;\n```');
+    });
+
+    it('holds back a closing fence that is still arriving', () => {
+      expect(splitClosedPrefix(flushes[2]).openFence).toBe('```ts\nconst a = 1;\nconst b = 2;');
+      // The opening line alone is never held back.
+      expect(splitClosedPrefix('```').openFence).toBe('```');
+    });
+
+    it('shows a closed fence exactly as the segment it becomes', () => {
+      const closed = splitClosedPrefix(`${flushes[3]}\n`).openFence;
+      const settled = splitClosedPrefix(flushes[4]).segments.at(-1);
+      expect(closed).toBe(settled);
+    });
+
+    it('still leaves text after a closed fence to the plain-text rule', () => {
+      const { openTail, openFence } = splitClosedPrefix('```ts\nx\n```\nstill typ');
+      expect(openFence).toBeUndefined();
+      expect(openTail).toContain('```ts');
+    });
+  });
+
   // [FB1-2] The core invariant. Without it the whole §1.3 argument is empty.
   describe('[FB1-2] monotonicity (high-water mark)', () => {
     it('never publishes less than it published before, when a cut is retroactively voided', () => {

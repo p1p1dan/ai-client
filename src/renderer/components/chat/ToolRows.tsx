@@ -37,10 +37,12 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Ident } from '@/components/ui/ident';
 import { StatusIcon } from '@/components/ui/status-icon';
 import { toastManager } from '@/components/ui/toast';
+import { useElementWidth } from '@/hooks/useElementWidth';
 import { useI18n } from '@/i18n';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { diffTooNarrowToSplit, effectiveDiffLayout, useDiffLayoutStore } from '@/stores/diffLayout';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
@@ -56,6 +58,7 @@ import {
   toolRowIconClass,
   turnProcessToneClass,
 } from './chatTimelineLayout';
+import { DiffLayoutToggle, SplitDiffBody } from './DiffLayout';
 import { HitListPopover } from './HitListPopover';
 import { LiveToolOutput } from './LiveToolOutput';
 import {
@@ -88,7 +91,7 @@ import {
   withStoppedOutput,
 } from './toolCard';
 import type { ToolDiff } from './toolDiff';
-import { buildDiffView, diffHasLineNumbers } from './toolDiffView';
+import { buildDiffView, diffHasLineNumbers, splitDiffItems } from './toolDiffView';
 import { stoppedToolOutput } from './toolLiveOutputModel';
 import { kilobytesLabel } from './toolOutputHead';
 import type { StepResultLine, StepRowView } from './turnSteps';
@@ -317,6 +320,12 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
     sessionId ? state.sessions.find((item) => item.id === sessionId)?.engine : undefined
   );
   const backgroundable = canMoveToBackground(view, engine);
+  // Where diffs are hidden (the main timeline shows them in the review pane), a
+  // row whose only body is its diff has nothing to open. It used to toggle open
+  // onto nothing — a refused or stopped Edit (PiLab R2).
+  const showDiff = useContext(ToolDiffVisibility);
+  const diffOnly = Boolean(view.diff) && !view.body && !view.input && !view.todos;
+  const expandable = view.expandable && (showDiff || !diffOnly);
   // The dim rung of the 2026-09-18 reading ladder (see
   // `chatTimelineLayout.ts`). It used to be `text-muted-foreground`, which is
   // the same tier the work-group head above these rows now uses — so the head
@@ -494,7 +503,7 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
       {liveTail && !open && <LiveToolOutput toolCallId={liveTail} compact />}
     </>
   );
-  const row = !view.expandable ? (
+  const row = !expandable ? (
     <div>
       <div className={rowClass}>{rowContent}</div>
       {after(false)}
@@ -1159,7 +1168,11 @@ function ToolRowBody({
   return (
     <>
       {showDiff && view.diff && (
-        <ToolRowDiffSegment diff={view.diff} failed={view.failed} running={view.running} />
+        <ToolRowDiffSegment
+          diff={view.diff}
+          failed={view.failed}
+          previewOnly={view.running || Boolean(view.outcome)}
+        />
       )}
       {view.input && (
         <ToolRowInputSegment input={view.input} maxHeightClass={view.inputMaxHeightClass} />
@@ -1216,11 +1229,17 @@ function OutputHeadNote({
 function ToolRowDiffSegment({
   diff,
   failed,
-  running,
+  previewOnly,
 }: {
   diff: ToolDiff;
   failed: boolean;
-  running: boolean;
+  /**
+   * Still running, or never applied (refused, not started, stopped, unknown):
+   * the diff is only what the arguments ask for. Such a call is not `failed`,
+   * and used to fall through to 「修改成功」 (PiLab R2, DEF-030). Same word as
+   * the row's own label.
+   */
+  previewOnly: boolean;
 }) {
   const { t } = useI18n();
   // Issue #26 item 2: which folded runs the reader opened. Opening one grows
@@ -1229,12 +1248,23 @@ function ToolRowDiffSegment({
   const markUserToggle = useUserDisclosureReport(openFolds.size > 0);
   const items = useMemo(() => buildDiffView(diff.rows, openFolds), [diff.rows, openFolds]);
   const numbered = diffHasLineNumbers(diff.rows);
+  // PiLab R2 (FR-07.3): the shared 「上下 / 并排」 choice, unified while too narrow.
+  const layout = useDiffLayoutStore((state) => state.layout);
+  const [frameRef, frameWidth] = useElementWidth<HTMLDivElement>();
+  const shownLayout = effectiveDiffLayout(layout, frameWidth);
+  const openFold = (key: string) => {
+    markUserToggle();
+    setOpenFolds((previous) => new Set(previous).add(key));
+  };
   return (
-    <div className="mt-1 overflow-hidden rounded-lg border border-border-soft bg-surface-2">
+    <div
+      ref={frameRef}
+      className="mt-1 overflow-hidden rounded-lg border border-border-soft bg-surface-2"
+    >
       <div className="flex h-8 items-center gap-2 border-b border-border-soft px-3 text-small text-muted-foreground tabular-nums">
         <span className="min-w-0 truncate">
           {t(
-            running
+            previewOnly
               ? 'Modification preview'
               : failed
                 ? 'Failed — preview only; application unconfirmed'
@@ -1247,82 +1277,91 @@ function ToolRowDiffSegment({
         </span>
         <span className="text-success">+{diff.added}</span>
         <span className="text-destructive">-{diff.removed}</span>
+        <span className="ml-auto">
+          <DiffLayoutToggle narrow={diffTooNarrowToSplit(frameWidth)} />
+        </span>
       </div>
       <div className="max-h-72 overflow-auto overscroll-contain py-1 font-mono text-code leading-[1.55]">
-        {items.map((item) => {
-          if (item.kind === 'fold') {
-            return (
-              // Issue #26 item 2: an unchanged run, folded; a click opens it in place.
-              <button
-                key={item.key}
-                type="button"
-                data-slot="diff-fold"
-                className="flex w-full items-center gap-2 px-3 py-0.5 text-left font-sans text-small text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
-                onClick={() => {
-                  markUserToggle();
-                  setOpenFolds((previous) => new Set(previous).add(item.key));
-                }}
-              >
-                <ChevronsUpDown className="size-3.5 shrink-0" aria-hidden />
-                {t('{{count}} unchanged lines', { count: item.count })}
-              </button>
-            );
-          }
-          if (item.kind === 'gap') {
+        {shownLayout === 'split' ? (
+          <SplitDiffBody
+            items={splitDiffItems(items)}
+            numbered={numbered}
+            onOpenFold={openFold}
+            insetClass="px-3"
+          />
+        ) : (
+          items.map((item) => {
+            if (item.kind === 'fold') {
+              return (
+                // Issue #26 item 2: an unchanged run, folded; a click opens it in place.
+                <button
+                  key={item.key}
+                  type="button"
+                  data-slot="diff-fold"
+                  className="flex w-full items-center gap-2 px-3 py-0.5 text-left font-sans text-small text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
+                  onClick={() => openFold(item.key)}
+                >
+                  <ChevronsUpDown className="size-3.5 shrink-0" aria-hidden />
+                  {t('{{count}} unchanged lines', { count: item.count })}
+                </button>
+              );
+            }
+            if (item.kind === 'gap') {
+              return (
+                <div
+                  key={item.key}
+                  data-slot="diff-gap"
+                  className="select-none px-3 text-foreground-faint"
+                  aria-hidden
+                >
+                  ⋯
+                </div>
+              );
+            }
+            const { row } = item;
             return (
               <div
+                // Rows are positional and can repeat verbatim (two identical blank
+                // lines are ordinary), so the position IS the identity here.
                 key={item.key}
-                data-slot="diff-gap"
-                className="select-none px-3 text-foreground-faint"
-                aria-hidden
+                className={cn(
+                  'flex',
+                  row.kind === 'add' && 'bg-success/12',
+                  row.kind === 'del' && 'bg-destructive/12'
+                )}
               >
-                ⋯
+                {numbered && (
+                  <>
+                    <span data-slot="diff-old-line" className={DIFF_LINE_NUMBER_CLASS}>
+                      {row.oldLine ?? ''}
+                    </span>
+                    <span data-slot="diff-new-line" className={DIFF_LINE_NUMBER_CLASS}>
+                      {row.newLine ?? ''}
+                    </span>
+                  </>
+                )}
+                <span
+                  className={cn(
+                    'w-6 shrink-0 select-none text-center',
+                    row.kind === 'add' && 'text-success',
+                    row.kind === 'del' && 'text-destructive',
+                    row.kind === 'same' && 'text-muted-foreground/40'
+                  )}
+                >
+                  {row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}
+                </span>
+                <span
+                  className={cn(
+                    'min-w-0 flex-1 select-text whitespace-pre-wrap break-all pr-3 pl-1',
+                    row.kind === 'same' ? 'text-muted-foreground/70' : 'text-foreground'
+                  )}
+                >
+                  {row.text}
+                </span>
               </div>
             );
-          }
-          const { row } = item;
-          return (
-            <div
-              // Rows are positional and can repeat verbatim (two identical blank
-              // lines are ordinary), so the position IS the identity here.
-              key={item.key}
-              className={cn(
-                'flex',
-                row.kind === 'add' && 'bg-success/12',
-                row.kind === 'del' && 'bg-destructive/12'
-              )}
-            >
-              {numbered && (
-                <>
-                  <span data-slot="diff-old-line" className={DIFF_LINE_NUMBER_CLASS}>
-                    {row.oldLine ?? ''}
-                  </span>
-                  <span data-slot="diff-new-line" className={DIFF_LINE_NUMBER_CLASS}>
-                    {row.newLine ?? ''}
-                  </span>
-                </>
-              )}
-              <span
-                className={cn(
-                  'w-6 shrink-0 select-none text-center',
-                  row.kind === 'add' && 'text-success',
-                  row.kind === 'del' && 'text-destructive',
-                  row.kind === 'same' && 'text-muted-foreground/40'
-                )}
-              >
-                {row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}
-              </span>
-              <span
-                className={cn(
-                  'min-w-0 flex-1 select-text whitespace-pre-wrap break-all pr-3 pl-1',
-                  row.kind === 'same' ? 'text-muted-foreground/70' : 'text-foreground'
-                )}
-              >
-                {row.text}
-              </span>
-            </div>
-          );
-        })}
+          })
+        )}
       </div>
     </div>
   );

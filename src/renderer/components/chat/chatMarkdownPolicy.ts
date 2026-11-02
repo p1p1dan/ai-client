@@ -470,7 +470,8 @@ export interface ClosedPrefixSplit {
   /**
    * T12-c (user decision, 2026-08-30: 按 pi-app 的来): the still-OPEN code
    * fence at the end of the tail, to be rendered as Markdown rather than as
-   * plain text.
+   * plain text — or one that just closed with only blank lines after it, until
+   * the next block confirms the cut (PiLab R2, see `fenceAtEnd`).
    *
    * Why this is safe, and why it is a different argument from the blank-line
    * rule above: **inside a fence, content is literal.** Appending lines cannot
@@ -496,15 +497,20 @@ export interface ClosedPrefixSplit {
 }
 
 /**
- * Offset within `tail` where a still-open fence begins, or `null` when the tail
- * ends outside any fence.
+ * Where the fence at the end of `tail` begins, or `null` when the tail ends
+ * outside any fence. `closed` says whether that fence already got its closing
+ * line.
  *
- * Only an UNTERMINATED fence qualifies. A fence that opened and closed inside
- * the tail is followed by text that is ordinary Markdown again, and that text
- * is still in flight — handing it to the parser would re-introduce exactly the
- * mid-construct reinterpretation the blank-line rule exists to prevent.
+ * An UNTERMINATED fence qualifies, and so does one that closed with nothing
+ * but blank lines after it (PiLab R2, DEF-029): the closing fence arrives a
+ * moment before the next block's first line confirms the cut, and in that
+ * window the block used to drop back to backtick-studded plain text — for the
+ * rest of the reply when the answer ends on a code block. A fence followed by
+ * text is still excluded: that text is ordinary Markdown in flight, and handing
+ * it to the parser would re-introduce exactly the mid-construct
+ * reinterpretation the blank-line rule exists to prevent.
  */
-function openFenceOffset(tail: string): number | null {
+function fenceAtEnd(tail: string): { at: number; closed: boolean } | null {
   const lines = tail.split('\n');
   // `fenceStart` IS the open/closed state: an offset while a fence is open,
   // `null` the moment it closes. Tracking the fence object separately and then
@@ -512,6 +518,8 @@ function openFenceOffset(tail: string): number | null {
   // would be dead, because they can never disagree.
   let fence: OpenFence | null = null;
   let fenceStart: number | null = null;
+  // The fence that closed last, while only blank lines have followed it.
+  let closedStart: number | null = null;
   let offset = 0;
 
   for (let i = 0; i < lines.length; i += 1) {
@@ -520,23 +528,37 @@ function openFenceOffset(tail: string): number | null {
       const before = fence;
       fence = stepFence(line, fence);
       if (before === null && fence !== null) fenceStart = offset;
-      else if (fence === null) fenceStart = null;
+      else if (before !== null && fence === null) {
+        closedStart = fenceStart;
+        fenceStart = null;
+      } else if (fence === null) closedStart = null;
     }
     offset += line.length + (i === lines.length - 1 ? 0 : 1);
   }
 
-  return fenceStart;
+  if (fenceStart !== null) return { at: fenceStart, closed: false };
+  if (closedStart !== null) return { at: closedStart, closed: true };
+  return null;
 }
 
-/** Cut a raw tail into its plain part and its still-open fence, if any. */
+/**
+ * A last line that is nothing but fence characters may be a closing fence
+ * still arriving ("``" of "```"). Shown, it is a stray line inside the code
+ * block (and in what its copy button copies); held back, it costs one flush.
+ */
+const PARTIAL_FENCE_LINE = /\n {0,3}(?:`+|~+)$/;
+
+/** Cut a raw tail into its plain part and its fence at the end, if any. */
 function splitOpenTail(rawTail: string): { openTail: string; openFence?: string } {
-  const fenceAt = openFenceOffset(rawTail);
-  if (fenceAt === null) return { openTail: rawTail };
+  const fence = fenceAtEnd(rawTail);
+  if (fence === null) return { openTail: rawTail };
+  const raw = rawTail.slice(fence.at);
   return {
     // Trailing newlines removed for the same reason `segmentClosedText` does
     // it: the gap between the plain part and the fence is the container's job.
-    openTail: rawTail.slice(0, fenceAt).replace(/\n+$/, ''),
-    openFence: rawTail.slice(fenceAt),
+    openTail: rawTail.slice(0, fence.at).replace(/\n+$/, ''),
+    // A closed fence reads exactly as the settled segment it is about to become.
+    openFence: fence.closed ? raw.replace(/\n+$/, '') : raw.replace(PARTIAL_FENCE_LINE, ''),
   };
 }
 

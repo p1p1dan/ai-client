@@ -70,3 +70,13 @@ export function diffLineArrays(a: readonly string[], b: readonly string[]): Tool
   }
   return rows;
 }
+
+/**
+ * Whether two texts differ only in line endings. Git hands back the blob as
+ * stored (LF) while a `core.autocrlf` checkout has CRLF on disk, so a clean
+ * file compares unequal byte for byte; Monaco's diff ignores line endings too
+ * and would show such a pair as a blank editor.
+ */
+export function sameIgnoringLineEndings(a: string, b: string): boolean {
+  return a === b || a.replace(/\r\n/g, '\n') === b.replace(/\r\n/g, '\n');
+}

@@ -3688,7 +3688,7 @@ function ccToolResultTexts(messages) {
 }
 
 /** `[delayMs, event, data]` frames of one paced reply: thinking, text, then one tool call. */
-function ccFrames(model, { thinking, text, tool, chunkMs = 60 }) {
+function ccFrames(model, { thinking, text, pieces, tool, chunkMs = 60 }) {
   const frames = [messageStartFrame(model, 1200)];
   let index = 0;
   if (thinking) {
@@ -3726,7 +3726,7 @@ function ccFrames(model, { thinking, text, tool, chunkMs = 60 }) {
       'content_block_start',
       { type: 'content_block_start', index, content_block: { type: 'text', text: '' } },
     ]);
-    for (const piece of splitInto(text, Math.min(12, Math.max(1, text.length)))) {
+    for (const piece of pieces ?? splitInto(text, Math.min(12, Math.max(1, text.length)))) {
       frames.push([
         chunkMs,
         'content_block_delta',
@@ -3926,6 +3926,18 @@ function decideClaudeSdk(parsed, req) {
       return reply({ text: `CC-RUN done (${calls.length} calls)`, chunkMs: 5 }, label);
     }
     case 'TEXT':
+      // PiLab R2 (FR-07.6): `{"pieces":["…","…"],"chunkMs":3000}` streams exactly these
+      // text deltas, no thinking, so a probe can stop on a half-closed code fence.
+      if (Array.isArray(params.pieces) && params.pieces.every((p) => typeof p === 'string')) {
+        return reply(
+          {
+            text: params.pieces.join(''),
+            pieces: params.pieces,
+            ...(Number.isFinite(params.chunkMs) ? { chunkMs: params.chunkMs } : {}),
+          },
+          label
+        );
+      }
       return reply(
         {
           thinking: 'The user wants a streamed answer. I will reply in two short sentences.',

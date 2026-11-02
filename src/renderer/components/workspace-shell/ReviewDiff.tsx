@@ -12,19 +12,45 @@
  *
  * A single hairline on the left instead of a framed box: the pane card is the
  * one frame (design system v2, 「框只包一层」).
+ *
+ * PiLab R2 (FR-07.3): `layout: 'split'` lays it side by side (`SplitDiffBody`).
  */
 import { ChevronsUpDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { SplitDiffBody } from '@/components/chat/DiffLayout';
 import type { ToolDiffLineRow } from '@/components/chat/toolDiff';
-import { buildDiffView, diffHasLineNumbers } from '@/components/chat/toolDiffView';
+import { buildDiffView, diffHasLineNumbers, splitDiffItems } from '@/components/chat/toolDiffView';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import type { DiffLayout } from '@/stores/diffLayout';
 
-export function ReviewDiff({ rows }: { rows: readonly ToolDiffLineRow[] }) {
+export function ReviewDiff({
+  rows,
+  layout = 'unified',
+}: {
+  rows: readonly ToolDiffLineRow[];
+  layout?: DiffLayout;
+}) {
   const { t } = useI18n();
   const [openFolds, setOpenFolds] = useState<ReadonlySet<string>>(() => new Set());
   const items = useMemo(() => buildDiffView(rows, openFolds), [rows, openFolds]);
   const numbered = diffHasLineNumbers(rows);
+  const openFold = (key: string) => setOpenFolds((previous) => new Set(previous).add(key));
+  if (layout === 'split') {
+    return (
+      <div
+        data-slot="review-diff"
+        className="max-h-96 overflow-auto border-border-soft border-l font-mono text-code leading-[1.55]"
+      >
+        <SplitDiffBody
+          items={splitDiffItems(items)}
+          numbered={numbered}
+          onOpenFold={openFold}
+          insetClass="px-2"
+        />
+      </div>
+    );
+  }
   return (
     <div
       data-slot="review-diff"
@@ -38,7 +64,7 @@ export function ReviewDiff({ rows }: { rows: readonly ToolDiffLineRow[] }) {
               type="button"
               data-slot="diff-fold"
               className="flex w-full items-center gap-2 px-2 py-0.5 text-left font-sans text-small text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
-              onClick={() => setOpenFolds((previous) => new Set(previous).add(item.key))}
+              onClick={() => openFold(item.key)}
             >
               <ChevronsUpDown className="size-3.5 shrink-0" aria-hidden />
               {t('{{count}} unchanged lines', { count: item.count })}
