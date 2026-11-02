@@ -755,7 +755,7 @@ describe('the top of the panel (layout 5b, was decision 183 §1.10, §2.1)', () 
       node.textContent?.startsWith('Search')
     );
     const repositories = buttonText('Repositories');
-    const skills = buttonText('Skills and plugins');
+    const skills = buttonText('Skills');
     expect(newChat?.title).toBe('New chat (opens the home page)');
     // One class for all four: 28px, 13px, frameless, the ghost hover.
     for (const entry of [newChat, searchEntry, repositories, skills]) {

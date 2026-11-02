@@ -1512,7 +1512,7 @@ export function LeftNav({
           onClick={() => useSettingsIntentStore.getState().requestSettings('extensions')}
         >
           <Puzzle className={NAV_ICON_CLASS} />
-          <span className="min-w-0 flex-1 truncate">{t('Skills and plugins')}</span>
+          <span className="min-w-0 flex-1 truncate">{t('Skills')}</span>
         </button>
       </div>
 

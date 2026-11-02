@@ -74,7 +74,7 @@ describe('S1 list and group context menus', () => {
     // both stay.
     const repositories = nav.slice(
       nav.indexOf('<MenuTrigger render={<button type="button" className={NAV_ITEM_CLASS} />}>'),
-      nav.indexOf("{t('Skills and plugins')}")
+      nav.indexOf("{t('Skills')}")
     );
     expect(repositories).toContain("{t('Repositories')}");
     expect(repositories).toContain('onClick={() => onAddRepository?.()}');

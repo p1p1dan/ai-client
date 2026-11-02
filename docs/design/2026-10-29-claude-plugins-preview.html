@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Claude 插件的安装与管理（2026-10-29）</title>
+<!--
+  Throwaway preview. Settings > Extensions gets a 「Claude 插件」 section next to
+  「Pi 插件」: list what Claude chats load, browse a marketplace, install, switch
+  off, uninstall, manage marketplaces. Everything is done by the CLI bundled with
+  the app (`claude plugin … --json`, CLAUDE_CONFIG_DIR = ~/.pilab/<profile>/claude).
+  Plugin names and counts below are real (official marketplace, 2026-10-29).
+  Colours are the v2 tokens (globals.css :root / .dark).
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI Variable Text","Segoe UI","Noto Sans",Arial,"PingFang SC","Microsoft YaHei UI","Noto Sans CJK SC",sans-serif;
+  background:#1d1d1b;color:var(--fg);font-size:13px;line-height:1.45;padding:20px}
+svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.s{width:14px;height:14px}
+.bar{display:flex;gap:8px;align-items:center;color:#ddd;margin-bottom:8px;flex-wrap:wrap}
+.bar b{font-weight:600;min-width:84px}
+.bar button{all:unset;cursor:pointer;padding:4px 10px;border-radius:6px;background:#333;color:#eee}
+.bar button.on{background:#c6613f}
+.win{width:1060px;height:760px;margin-top:14px;border-radius:12px;overflow:hidden;background:var(--s0);position:relative;
+  box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 50px rgba(0,0,0,.45);display:flex}
+.snav{width:200px;flex:none;padding:16px 8px;display:flex;flex-direction:column;gap:1px}
+.snav div{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;color:var(--fg-soft);cursor:pointer}
+.snav div:hover{background:var(--hover)}
+.snav div.on{background:var(--sel);color:var(--fg)}
+.snav svg{color:var(--fg2)}
+.content{flex:1;min-width:0;overflow:auto;background:var(--bg);border-left:1px solid var(--bd);padding:28px 32px 48px}
+.page{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+h2{font-size:18px;line-height:26px;font-weight:600}
+section{display:flex;flex-direction:column;gap:8px}
+.sh{padding:0 4px;display:flex;align-items:center;gap:8px;min-height:28px}
+.sh h3{font-size:14px;line-height:20px;font-weight:600;display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+.card{border:1px solid var(--bd);border-radius:10px;background:var(--s2)}
+.card>*+*{border-top:1px solid var(--bd)}
+.small{font-size:12px;line-height:16px;color:var(--fg2)}
+.ident{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:12px;color:var(--fg-soft);word-break:break-all}
+.btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--input);color:var(--fg);font-size:13px;width:fit-content;background:var(--s3);white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn.sm{height:24px;padding:0 8px;font-size:12px}
+.btn.pri{background:var(--fg);color:var(--bg);border-color:transparent}
+.btn.pri:hover{opacity:.9}
+.btn.dis{opacity:.5;cursor:default}
+.btn.danger{color:#c0392b;border-color:color-mix(in oklab,#c0392b 40%,transparent)}
+.ghost{all:unset;cursor:pointer;display:inline-grid;place-items:center;width:24px;height:24px;color:var(--fg2);border-radius:6px}
+.ghost:hover{color:var(--fg);background:var(--hover)}
+.plug{display:flex;align-items:flex-start;gap:12px;padding:12px;position:relative}
+.plug .body{min-width:0;flex:1;display:flex;flex-direction:column;gap:6px}
+.plug .nm{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.plug .nm b{font-weight:600}
+.plug .acts{display:flex;align-items:center;gap:4px;flex:none}
+.badge{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 6px;border-radius:5px;font-size:11px;border:1px solid var(--bd);color:var(--fg2);white-space:nowrap}
+.badge.sec{background:var(--neutral);border-color:transparent}
+.badge.warn{color:#b7791f;border-color:color-mix(in oklab,#b7791f 35%,transparent)}
+.badge.info{color:#3b82c4;border-color:color-mix(in oklab,#3b82c4 35%,transparent)}
+.badge.err{color:#c0392b;border-color:color-mix(in oklab,#c0392b 35%,transparent)}
+.comps{display:flex;gap:6px;flex-wrap:wrap}
+.sw{width:32px;height:18px;border-radius:9px;background:var(--input);position:relative;flex:none;cursor:pointer;margin-top:3px}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s}
+.sw.on{background:var(--brand)}.sw.on::after{left:16px}
+.sw.ro{opacity:.45;cursor:default}
+.alert{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:10px;border:1px solid color-mix(in oklab,#3b82c4 30%,transparent);background:color-mix(in oklab,#3b82c4 8%,transparent);color:var(--fg)}
+.alert svg{color:#3b82c4;margin-top:1px}
+.alert.err{border-color:color-mix(in oklab,#c0392b 30%,transparent);background:color-mix(in oklab,#c0392b 7%,transparent)}
+.alert.err svg{color:#c0392b}
+.tip{position:relative;display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;color:var(--fg3);cursor:help}
+.tip:hover{color:var(--fg)}
+.tip .pop{display:none;position:absolute;left:24px;top:-6px;z-index:5;width:360px;padding:10px 12px;border-radius:10px;background:var(--s3);
+  box-shadow:0 0 0 1px var(--bd),0 8px 24px rgba(0,0,0,.18);font-size:12px;line-height:18px;font-weight:400;color:var(--fg-soft)}
+.tip .pop p+p{margin-top:6px}
+.tip:hover .pop{display:block}
+.empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:28px 16px;text-align:center}
+.empty .ic{width:36px;height:36px;border-radius:10px;background:var(--neutral);display:grid;place-items:center;color:var(--fg2)}
+.empty b{font-weight:600}
+.menu{position:absolute;right:12px;top:40px;z-index:6;min-width:140px;padding:4px;border-radius:10px;background:var(--s3);box-shadow:0 0 0 1px var(--bd),0 8px 24px rgba(0,0,0,.18)}
+.menu div{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;cursor:pointer}
+.menu div:hover{background:var(--hover)}
+.menu div.red{color:#c0392b}
+.grpl{font-size:12px;color:var(--fg2);padding:0 4px;margin-top:6px}
+/* dialog */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.32);display:grid;place-items:center;z-index:10}
+.dlg{width:620px;max-height:640px;display:flex;flex-direction:column;border-radius:14px;background:var(--s3);box-shadow:0 0 0 1px var(--bd),0 20px 50px rgba(0,0,0,.3)}
+.dlg.sm{width:460px}
+.dh{display:flex;align-items:center;gap:8px;padding:16px 16px 12px}
+.dh h3{flex:1;font-size:15px;font-weight:600}
+.db{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.df{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--bd)}
+.inp{all:unset;box-sizing:border-box;height:30px;padding:0 10px;border-radius:8px;border:1px solid var(--input);background:var(--s2);font-size:13px;color:var(--fg);flex:1;min-width:0;display:flex;align-items:center;gap:6px}
+.inp span{color:var(--fg3)}
+.sel{all:unset;box-sizing:border-box;height:30px;padding:0 8px 0 10px;border-radius:8px;border:1px solid var(--input);background:var(--s2);display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
+.list{overflow:auto;border:1px solid var(--bd);border-radius:10px;max-height:420px}
+.list>*+*{border-top:1px solid var(--bd)}
+.lrow{display:flex;align-items:flex-start;gap:12px;padding:10px 12px}
+.lrow .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.lrow .body b{font-weight:600}
+.lrow .desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.spin{width:12px;height:12px;border-radius:50%;border:2px solid var(--input);border-top-color:var(--fg);animation:r .8s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+.notes{width:1060px;margin-top:14px;color:#ccc;display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:12.5px;line-height:1.6}
+.notes b{color:#fff;display:block;margin-bottom:2px}
+.notes div+div{}
+</style>
+</head>
+<body>
+<div class="bar"><b>放在哪</b><button data-k="place" data-v="ext" class="on">A 扩展页里「Claude 插件」一节（推荐）</button><button data-k="place" data-v="page">B 侧栏单独一页「Claude 插件」</button></div>
+<div class="bar"><b>官方市场</b><button data-k="official" data-v="ask" class="on">A 不预置，空状态里一键添加（推荐）</button><button data-k="official" data-v="preset">B 预置好，第一次打开就去拉</button></div>
+<div class="bar"><b>模拟状态</b><button data-k="have" data-v="0">还没有插件</button><button data-k="have" data-v="1" class="on">已装 3 个</button>
+  <span style="width:10px"></span><button data-k="repo" data-v="0">仓库没声明插件</button><button data-k="repo" data-v="1" class="on">仓库声明了 1 个</button>
+  <span style="width:10px"></span><button data-k="fail" data-v="0" class="on">安装成功</button><button data-k="fail" data-v="1">安装失败（连不上 GitHub）</button></div>
+<div class="win" id="win"><div class="snav" id="snav"></div><div class="content"><div class="page" id="page"></div></div><div id="layer"></div></div>
+<div class="notes">
+  <div><b>谁来做</b>全部交给随包的 CLI（<span class="ident" style="color:#eee">claude plugin … --json</span>），配置目录就是 Claude 对话的用户层 <span class="ident" style="color:#eee">~/.pilab/&lt;配置名&gt;/claude</span>。装、关、卸、加市场的结果和在 Claude Code 里用 /plugin 一样，PiLab 不自己写 settings.json，也不复刻 CLI 的规则。2026-10-29 本机用随包 CLI 2.1.300 跑通了全流程：加官方市场 16 秒（git 克隆），列出 315 个插件，装 code-review 10 秒。</div>
+  <div><b>生效时机</b>改动写进用户层后，新开的 Claude 对话直接生效；已经开着的对话下次启动时生效（CLI 的 /reload-plugins 只适合终端，菜单里本来就不列）。斜杠菜单的清单按文件夹缓存，改完要清掉缓存，否则首页菜单里看不到新插件的命令。</div>
+  <div><b>「里面有什么」</b>每行标出插件带的技能、命令、子代理，以及<b style="display:inline;color:#e0b060">钩子</b>与<b style="display:inline;color:#e0b060">MCP 服务</b>——后两种会在本机运行程序，用黄色标出，和 Pi 插件的「写入文件」一样不会被忽略。数字是装好后读插件目录得到的；浏览列表里还不知道，只显示说明和安装量（CLI 的列表只给这些）。</div>
+  <div><b>仓库声明的插件</b>仓库 .claude/settings.json 里声明的照裁决 18 由 CLI 自己拉取，这里只列出、标「仓库声明」，开关不可点，提示去仓库里改。只管用户层，不往仓库里写东西（安装范围固定为 user）。<br><b style="margin-top:8px">A / B 的取舍</b>放扩展页和「Pi 插件」并排，两种引擎的插件一眼看全，但页面变长；单独一页更宽敞，代价是插件分散在两处，和刚做完的「技能按 Pi / Claude 分组」不一致。官方市场预置省一步，但第一次打开设置就要联网克隆，加密机或断网时会先看到一条错误。</div>
+</div>
+<script>
+const ICON={
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  spark:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
+  blocks:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  plug:'<path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4"/>',
+  puzzle:'<path d="M14 4a2 2 0 1 0-4 0v2H6v4h2a2 2 0 1 1 0 4H6v4h4v-2a2 2 0 1 1 4 0v2h4v-4h-2a2 2 0 1 1 0-4h2V6h-4z"/>',
+  help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 15.5-6.3L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.3L3 16M3 21v-5h5"/>',
+  more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  store:'<path d="M3 9l1.5-5h15L21 9M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0zM5 13v7h14v-7"/>',
+  down:'<path d="m6 9 6 6 6-6"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  alert:'<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  terminal:'<path d="m4 17 6-6-6-6M12 19h8"/>',
+  server:'<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+  lib:'<path d="M4 4v16M8 4v16M12 4l4 16M17 4l3 16"/>',
+  slash:'<path d="M15 4 9 20"/>',
+  bot:'<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 4v4M9 14h.01M15 14h.01"/>',
+  trash:'<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+  upd:'<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+};
+const ic=(n,c='i')=>`<svg class="${c}" viewBox="0 0 24 24">${ICON[n]}</svg>`;
+const st={place:'ext',official:'ask',have:'1',repo:'1',fail:'0',dlg:null,menu:null,pending:false,mk:'claude-plugins-official',q:'',busy:{},done:{},
+  installed:[
+    {id:'code-review',mk:'claude-plugins-official',v:'1.0.1',on:true,desc:'用多个专门的子代理审查拉取请求，按置信度过滤误报。',comp:{skill:0,cmd:1,agent:4}},
+    {id:'github',mk:'claude-plugins-official',v:'1.2.0',on:true,desc:'GitHub 官方 MCP 服务：管理仓库、议题与拉取请求。',comp:{mcp:1}},
+    {id:'hookify',mk:'claude-plugins-official',v:'0.4.0',on:false,desc:'用对话写出 Claude Code 的钩子规则。',comp:{skill:1,cmd:3,hook:1}},
+  ]};
+const MARKETS=[{name:'claude-plugins-official',src:'GitHub · anthropics/claude-plugins-official',n:315},{name:'team-tools',src:'本机目录 · E:/share/team-plugins',n:6}];
+const AVAIL=[
+  ['code-review','用多个专门的子代理审查拉取请求，按置信度过滤误报。',477558],
+  ['github','GitHub 官方 MCP 服务：管理仓库、议题与拉取请求。',345391],
+  ['frontend-design','生成有设计感的前端界面，避免千篇一律的 AI 风格。',301220],
+  ['feature-dev','带探索、架构、审查子代理的功能开发流程。',212004],
+  ['commit-commands','提交、推送、开拉取请求的一组命令。',198700],
+  ['hookify','用对话写出 Claude Code 的钩子规则。',88412],
+  ['pr-review-toolkit','拉取请求审查工具集：注释、测试、类型设计各一个子代理。',140233],
+  ['security-guidance','改代码时提示常见安全问题的钩子。',120554],
+];
+const fmt=n=>n>=10000?(n/10000).toFixed(1)+' 万':String(n);
+function comps(c){
+  const out=[];
+  if(c.skill)out.push(`<span class="badge">${ic('lib','i s')}技能 ${c.skill}</span>`);
+  if(c.cmd)out.push(`<span class="badge">${ic('slash','i s')}命令 ${c.cmd}</span>`);
+  if(c.agent)out.push(`<span class="badge">${ic('bot','i s')}子代理 ${c.agent}</span>`);
+  if(c.hook)out.push(`<span class="badge warn">${ic('terminal','i s')}钩子 ${c.hook} · 会运行命令</span>`);
+  if(c.mcp)out.push(`<span class="badge warn">${ic('server','i s')}MCP 服务 ${c.mcp} · 会启动程序</span>`);
+  return `<div class="comps">${out.join('')}</div>`;
+}
+function navHtml(){
+  const items=[['gear','常规'],['spark','模型'],['blocks','扩展','ext'],...(st.place==='page'?[['puzzle','Claude 插件','cp']]:[]),['plug','插件']];
+  const cur=st.place==='page'?'cp':'ext';
+  return items.map(([i,l,k])=>`<div class="${k===cur?'on':''}">${ic(i)}<span>${l}</span></div>`).join('');
+}
+function row(p,i){
+  const menu=st.menu===i?`<div class="menu"><div data-act="upd">${ic('upd','i s')}检查更新</div><div class="red" data-act="rm" data-i="${i}">${ic('trash','i s')}卸载</div></div>`:'';
+  return `<div class="plug"><div class="body">
+    <div class="nm"><b>${p.id}</b><span class="small">${p.v}</span>${p.on?'':'<span class="badge sec">已关闭</span>'}</div>
+    <p class="small">${p.desc}</p>
+    <div class="small">来自 <span class="ident" style="color:var(--fg2)">${p.mk}</span></div>
+    ${comps(p.comp)}</div>
+    <div class="acts"><div class="sw${p.on?' on':''}" data-sw="${i}"></div><button class="ghost" data-menu="${i}">${ic('more','i s')}</button></div>${menu}</div>`;
+}
+function repoRow(){
+  return `<div class="plug"><div class="body">
+    <div class="nm"><b>chip-test-helpers</b><span class="small">0.2.0</span><span class="badge info">仓库声明</span></div>
+    <p class="small">芯片测试机项目的构建与烧录命令。</p>
+    <div class="small">由 <span class="ident" style="color:var(--fg2)">ChipTestMachine/.claude/settings.json</span> 声明，要关掉请在仓库里改</div>
+    ${comps({cmd:4,hook:1})}</div>
+    <div class="acts"><div class="sw on ro" title="在仓库里改"></div><span style="width:24px"></span></div></div>`;
+}
+function section(asPage){
+  const have=st.have==='1';
+  const tip=`<span class="tip">${ic('help','i s')}<span class="pop"><p>只对 Claude 对话生效，和在 Claude Code 里用 /plugin 安装的效果一样；装在本应用自己的 Claude 配置目录里，不碰你的 ~/.claude。</p><p>插件可以带钩子和 MCP 服务，它们会在本机运行程序，只装你信任的来源。</p></span></span>`;
+  const head=`<div class="sh"><h3>${asPage?'':'Claude 插件'}${asPage?'':tip}</h3>
+    ${have||st.official==='preset'?`<button class="btn sm" data-open="markets">${ic('store','i s')}插件市场</button><button class="btn sm" data-open="browse">${ic('search','i s')}浏览插件</button>`:''}</div>`;
+  const pend=st.pending?`<div class="alert">${ic('refresh','i s')}<span>新开的 Claude 对话会用上改动；已经打开的对话在下次启动时生效。</span></div>`:'';
+  let body;
+  if(!have&&st.official==='ask'){
+    body=`<div class="card"><div class="empty"><div class="ic">${ic('puzzle')}</div><b>还没有 Claude 插件</b>
+      <span class="small">先添加一个插件市场，再从里面挑插件安装。</span>
+      <div style="display:flex;gap:8px;margin-top:4px"><button class="btn pri sm" data-act="addofficial">添加官方市场</button><button class="btn sm" data-open="markets">添加其他市场…</button></div>
+      <span class="small" style="color:var(--fg3)">官方市场：anthropics/claude-plugins-official，需要能访问 GitHub</span></div></div>`;
+  }else if(!have){
+    body=`<div class="card"><div class="empty"><div class="ic">${ic('puzzle')}</div><b>还没有安装插件</b><span class="small">已添加官方市场，共 315 个插件。</span><button class="btn pri sm" data-open="browse">浏览插件</button></div></div>`;
+  }else body=`<div class="card">${st.installed.map(row).join('')}</div>`;
+  const repo=st.repo==='1'?`<div class="grpl">当前仓库声明的</div><div class="card">${repoRow()}</div>`:'';
+  return `<section>${head}${pend}${body}${repo}</section>`;
+}
+function page(){
+  if(st.place==='page')return `<h2>Claude 插件</h2><p class="small" style="margin-top:-16px">只对 Claude 对话生效，装在本应用自己的 Claude 配置目录里。插件的钩子与 MCP 服务会在本机运行程序，只装你信任的来源。</p>${section(true)}`;
+  const piPlug=`<section><div class="sh"><h3>Pi 插件<span class="tip">${ic('help','i s')}</span></h3></div><div class="card"><div class="plug"><div class="body">
+    <div class="nm"><b>dsh-office-tools</b><span class="small">0.3.1</span><span class="badge sec">已关闭</span></div>
+    <p class="small">在工作区里创建、读取和修改 Word、Excel、PowerPoint 文件。</p></div><div class="acts"><div class="sw"></div></div></div></div></section>`;
+  const skills=`<section><div class="sh"><h3>技能<span class="tip">${ic('help','i s')}</span></h3></div><div class="card" style="padding:10px 14px;color:var(--fg3)" ><span class="small">（技能目录两组，同现状，此处省略）</span></div></section>`;
+  return `<h2>扩展</h2>${skills}${piPlug}${section(false)}`;
+}
+function browse(){
+  const m=MARKETS.find(x=>x.name===st.mk);
+  const inst=new Set(st.installed.map(p=>p.id));
+  const q=st.q.trim().toLowerCase();
+  const rows=(st.mk==='team-tools'?[['build-scripts','团队的构建与打包命令。',0],['lint-rules','团队的代码规范检查。',0]]:AVAIL)
+    .filter(([n,d])=>!q||n.includes(q)||d.includes(q))
+    .map(([n,d,c])=>{
+      let act;
+      if(inst.has(n))act=`<span class="badge sec">${ic('check','i s')}已安装</span>`;
+      else if(st.busy[n])act=`<span class="badge"><span class="spin"></span>正在安装…</span>`;
+      else act=`<button class="btn sm" data-install="${n}">安装</button>`;
+      const err=st.done[n]==='err'?`<div class="alert err" style="margin-top:6px">${ic('alert','i s')}<span class="small" style="color:var(--fg)">安装失败：无法访问 github.com（Could not resolve host）。检查网络设置里的代理后重试。</span></div>`:'';
+      return `<div class="lrow"><div class="body"><b>${n}</b><span class="small desc">${d}</span>${c?`<span class="small" style="color:var(--fg3)">${fmt(c)} 次安装</span>`:''}${err}</div><div style="flex:none">${act}</div></div>`;
+    }).join('')||`<div class="lrow"><span class="small">没有匹配的插件</span></div>`;
+  return `<div class="scrim"><div class="dlg">
+    <div class="dh"><h3>浏览 Claude 插件</h3><button class="ghost" data-close="1">${ic('x','i s')}</button></div>
+    <div class="db">
+      <div style="display:flex;gap:8px"><button class="sel" data-act="mk">${ic('store','i s')}${m.name}<span class="small">${m.n} 个</span>${ic('down','i s')}</button>
+        <label class="inp">${ic('search','i s')}<input id="q" value="${st.q}" placeholder="搜索名字或说明" style="all:unset;flex:1"></label></div>
+      <div class="list">${rows}</div>
+      <span class="small">装好后新开的 Claude 对话就能用。插件带的钩子与 MCP 服务会在本机运行程序。</span>
+    </div></div></div>`;
+}
+function markets(){
+  return `<div class="scrim"><div class="dlg sm">
+    <div class="dh"><h3>插件市场</h3><button class="ghost" data-close="1">${ic('x','i s')}</button></div>
+    <div class="db">
+      <div class="card">${MARKETS.map(m=>`<div class="plug" style="align-items:center"><div class="body" style="gap:2px"><b>${m.name}</b><span class="small">${m.src} · ${m.n} 个插件</span></div>
+        <div class="acts"><button class="btn sm">${ic('refresh','i s')}更新</button><button class="btn sm danger">移除</button></div></div>`).join('')}</div>
+      <h4 style="font-size:13px;font-weight:600;margin-top:4px">添加市场</h4>
+      <div style="display:flex;gap:8px"><div class="inp"><span>owner/repo、git 地址或本机目录</span></div><button class="btn">添加</button></div>
+      <span class="small">GitHub 上的市场用 git 克隆，需要能访问 GitHub；内网可以填共享目录。移除市场会一并卸载从它装的插件。</span>
+    </div></div></div>`;
+}
+function confirmRm(){
+  const p=st.installed[st.dlg.i];
+  return `<div class="scrim"><div class="dlg sm">
+    <div class="dh"><h3>卸载「${p.id}」？</h3></div>
+    <div class="db"><span class="small" style="color:var(--fg-soft)">插件文件和它保存的数据会一起删除。已经打开的 Claude 对话在下次启动前仍会用它。</span></div>
+    <div class="df"><button class="btn" data-close="1">取消</button><button class="btn danger" data-act="dorm">卸载</button></div></div></div>`;
+}
+function render(){
+  document.getElementById('snav').innerHTML=navHtml();
+  document.getElementById('page').innerHTML=page();
+  const L=document.getElementById('layer');
+  L.innerHTML=st.dlg==='browse'?browse():st.dlg==='markets'?markets():st.dlg&&st.dlg.rm!==undefined?confirmRm():'';
+  const q=document.getElementById('q');
+  if(q){q.oninput=e=>{st.q=e.target.value;const pos=e.target.selectionStart;render();const n=document.getElementById('q');n.focus();n.setSelectionRange(pos,pos);};}
+}
+function setBar(k,v){st[k]=v;document.querySelectorAll(`[data-k="${k}"]`).forEach(x=>x.classList.toggle('on',x.dataset.v===v));}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-k]');
+  if(b){setBar(b.dataset.k,b.dataset.v);if(b.dataset.k==='fail'){st.done={};}render();return;}
+  const o=e.target.closest('[data-open]');if(o){st.dlg=o.dataset.open;st.menu=null;render();return;}
+  const sw=e.target.closest('[data-sw]');if(sw){const p=st.installed[+sw.dataset.sw];p.on=!p.on;st.pending=true;render();return;}
+  const mn=e.target.closest('[data-menu]');if(mn){const i=+mn.dataset.menu;st.menu=st.menu===i?null:i;render();return;}
+  const ins=e.target.closest('[data-install]');
+  if(ins){const n=ins.dataset.install;st.busy[n]=1;delete st.done[n];render();
+    setTimeout(()=>{delete st.busy[n];
+      if(st.fail==='1'){st.done[n]='err';}
+      else{const a=AVAIL.find(x=>x[0]===n);st.installed.push({id:n,mk:st.mk,v:'1.0.0',on:true,desc:a?a[1]:'',comp:{skill:1,cmd:2}});setBar('have','1');st.pending=true;}
+      render();},1400);return;}
+  const a=e.target.closest('[data-act]');
+  if(a){const k=a.dataset.act;
+    if(k==='addofficial'){a.outerHTML=`<span class="badge"><span class="spin"></span>正在克隆官方市场…</span>`;
+      setTimeout(()=>{if(st.fail==='1'){render();const c=document.querySelector('.empty');c.insertAdjacentHTML('beforeend',`<div class="alert err" style="text-align:left">${ic('alert','i s')}<span class="small" style="color:var(--fg)">添加失败：无法访问 github.com。检查网络设置里的代理，或改填内网共享目录。</span></div>`);}
+        else{setBar('official','preset');st.dlg='browse';render();}},1400);return;}
+    if(k==='mk'){st.mk=st.mk==='claude-plugins-official'?'team-tools':'claude-plugins-official';render();return;}
+    if(k==='rm'){st.dlg={rm:1,i:+a.dataset.i};st.menu=null;render();return;}
+    if(k==='dorm'){st.installed.splice(st.dlg.i,1);st.dlg=null;st.pending=true;if(!st.installed.length)setBar('have','0');render();return;}
+    if(k==='upd'){st.menu=null;render();return;}
+  }
+  if(e.target.classList.contains('scrim')||e.target.closest('[data-close]')){st.dlg=null;render();return;}
+  if(st.menu!==null&&!e.target.closest('.menu')){st.menu=null;render();}
+});
+const TH={
+  light:{s0:'#f9f9f7',bg:'#fcfcfb',s2:'#ffffff',s3:'#ffffff',fg:'#151515','fg-soft':'#2e2e2e',fg2:'#525252',fg3:'#8a8a8a',bd:'#e5e5e4',input:'#cececd',hover:'#f0f0ef',sel:'#e5e5e4',neutral:'#f0f0ef',brand:'#c6613f'},
+  dark:{s0:'#0b0b0b',bg:'#151515',s2:'#1a1a19',s3:'#20201f',fg:'#f5f5f5','fg-soft':'#d4d4d4',fg2:'#a3a3a3',fg3:'#666666',bd:'#2b2b2b',input:'#424242',hover:'#202020',sel:'#2b2b2b',neutral:'#262626',brand:'#d97757'},
+};
+function theme(n){for(const[k,v]of Object.entries(TH[n]))document.documentElement.style.setProperty('--'+k,v);
+  document.querySelectorAll('[data-th]').forEach(b=>b.classList.toggle('on',b.dataset.th===n));}
+const tb=document.createElement('div');tb.className='bar';tb.innerHTML='<b>主题</b><button data-th="light" class="on">浅色</button><button data-th="dark">深色</button>';
+document.getElementById('win').before(tb);
+document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>theme(b.dataset.th));
+theme('light');render();
+</script>
+</body>
+</html>

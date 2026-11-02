@@ -10,7 +10,8 @@
  *   - Home → the chat list's own 「新对话」, which opens the home page;
  *   - collapse → this column's top row (and Ctrl+B); while collapsed, the
  *     title bar offers the expand button;
- *   - Capabilities, Settings → small buttons at the end of the account row.
+ *   - Settings → a small button at the end of the account row (the Capabilities
+ *     button, a skill count, was removed: user 2026-10-29).
  *
  * Layout 5b: the top row is the screenshot's — collapse, then back / forward
  * over the conversations visited in this run (Alt+Left / Alt+Right,
@@ -23,31 +24,20 @@
  */
 
 import type { TempWorkspaceItem } from '@shared/types';
-import { ArrowLeft, ArrowRight, Blocks, PanelLeftClose, Settings } from 'lucide-react';
+import { ArrowLeft, ArrowRight, PanelLeftClose, Settings } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
-import {
-  Dialog,
-  DialogDescription,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useSettingsStore } from '@/stores/settings';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { LeftNav, type SidebarSearchEntry } from './LeftNav';
 import { ShellResizeHandle } from './ShellResizeHandle';
-import { deriveSessionCapabilities } from './sessionCapabilityModel';
 import { clampSidebarWidth } from './shellLayoutModel';
 import { keybindingLabel } from './sidebar/keybindingLabel';
 import { useVisitHistory } from './sidebar/useVisitHistory';
 import { UserFooterPill } from './UserFooterPill';
-import { useSessionCapabilities } from './useSessionCapabilities';
 import { useWorkspaceRootPath } from './useWorkspaceRootPath';
 
 interface LeftDockProps {
@@ -104,7 +94,6 @@ export function LeftDock({
         shortcut: keybindingLabel(searchBinding, window.electronAPI.env.platform),
       }
     : undefined;
-  const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
   const dockRef = useRef<HTMLDivElement>(null);
   const [resizing, setResizing] = useState(false);
 
@@ -188,20 +177,12 @@ export function LeftDock({
         </div>
         <UserFooterPill
           actions={
-            <>
-              <SidebarIconButton
-                label={t('Capabilities')}
-                onClick={() => setCapabilitiesOpen(true)}
-              >
-                <Blocks className="size-4" />
-              </SidebarIconButton>
-              <SidebarIconButton
-                label={`${t('Settings')} (Ctrl+,)`}
-                onClick={() => onOpenSettings?.()}
-              >
-                <Settings className="size-4" />
-              </SidebarIconButton>
-            </>
+            <SidebarIconButton
+              label={`${t('Settings')} (Ctrl+,)`}
+              onClick={() => onOpenSettings?.()}
+            >
+              <Settings className="size-4" />
+            </SidebarIconButton>
           }
         />
       </nav>
@@ -221,8 +202,6 @@ export function LeftDock({
           }}
         />
       )}
-
-      <CapabilitiesDialog open={capabilitiesOpen} onOpenChange={setCapabilitiesOpen} />
     </div>
   );
 }
@@ -258,73 +237,5 @@ function SidebarIconButton({
         {label}
       </TooltipPopup>
     </Tooltip>
-  );
-}
-
-/**
- * T026 — what the active chat's own runtime brought up, with its entry point.
- *
- * This used to be U04's pi extension inventory, then (cutover-03) MCP servers,
- * skills, prompt templates and sub-agent definitions. dsh-rebase P1-16e
- * (decision 104 rule 4) left only the skill count: the DSH engine has no MCP
- * bridge, no templates and no custom sub-agent definitions, and pi extensions
- * are gone altogether (decision 090), so those rows and the sentence about
- * where pi extensions load went with them.
- *
- * `null` (nobody reported) still reads differently from `0` (reported none):
- * see `sessionCapabilityModel`.
- */
-function CapabilitiesDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const { t } = useI18n();
-  const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
-  const { capabilities } = useSessionCapabilities(activeSessionId);
-  const view = deriveSessionCapabilities(capabilities);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Blocks className="h-4 w-4" />
-            {t('Capabilities')}
-          </DialogTitle>
-          <DialogDescription>
-            {/* Per session because skills are resolved from the session's own
-                working directory — an app-wide count would be wrong for any
-                second workspace. */}
-            {t('Skills this chat can use.')}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogPanel>
-          {!view.reported ? (
-            // Not "nothing": nothing has been asked yet, because this chat has no
-            // running worker to have brought anything up.
-            <p className="py-2 text-small text-muted-foreground">
-              {t('Send a message to start this chat and see what it brings up.')}
-            </p>
-          ) : (
-            <CapabilityRow
-              label={t('Skills')}
-              value={view.skills === null ? t('Not reported') : String(view.skills)}
-            />
-          )}
-        </DialogPanel>
-      </DialogPopup>
-    </Dialog>
-  );
-}
-
-function CapabilityRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex h-7 items-center gap-2 rounded-sm bg-fill-neutral px-2">
-      <span className="shrink-0 text-small text-muted-foreground">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-right text-ui tabular-nums">{value}</span>
-    </div>
   );
 }

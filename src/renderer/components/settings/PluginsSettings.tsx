@@ -2,8 +2,8 @@
  * Settings → Plugins (plugin-system README §3, preview.html approved 2026-10-23).
  *
  * PiLab's own plugins: extra features installed from a `.pilabplug`, each
- * running in its own process. Not the chat engine's plugins, which live under
- * Extensions. One card per plugin: name, version, what it reports, one switch;
+ * running in its own process. Last on the Plugins page, after the Pi and Claude
+ * chats' plugins and MCP servers (user 2026-10-29). One card per plugin: name, version, what it reports, one switch;
  * opened, its settings, what it may do, where it connects, its services, and
  * uninstall. A fresh install is off, and switching one on first shows what it
  * asks for.
@@ -409,6 +409,7 @@ export function PluginsSettings() {
 
   return (
     <section className="min-w-0 space-y-3">
+      <h3 className="px-1 text-heading font-semibold">{t('PiLab plugins')}</h3>
       <div className="flex min-w-0 items-start gap-3 px-1">
         <p className="min-w-0 flex-1 text-ui text-muted-foreground">
           {t(

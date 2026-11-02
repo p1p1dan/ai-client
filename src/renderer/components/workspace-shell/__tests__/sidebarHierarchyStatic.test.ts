@@ -104,7 +104,7 @@ describe('levels (decision 183, prototype `.vA`)', () => {
     // 新对话, 搜索, 技能与插件, and 仓库's menu trigger.
     expect(NAV.split('className={NAV_ITEM_CLASS}').length - 1).toBe(4);
     expect(NAV.split('className={NAV_ICON_CLASS}').length - 1).toBe(4);
-    const nav = slice(NAV, "{t('New chat')}</span>", "{t('Skills and plugins')}");
+    const nav = slice(NAV, "{t('New chat')}</span>", "{t('Skills')}");
     expect(nav.indexOf("{t('Search')}")).toBeLessThan(nav.indexOf("{t('Repositories')}"));
     // New chat opens the home page (decision 174); the old disc is gone.
     expect(NAV).toContain('onClick={handleNewSession}');

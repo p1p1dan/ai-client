@@ -141,6 +141,14 @@ export class ClaudeSdkCommandCatalog {
     }
   }
 
+  /**
+   * Forget every folder's list (the user layer changed: a plugin was added or
+   * switched). A listing under way finishes into a dropped entry.
+   */
+  clear(): void {
+    this.entries.clear();
+  }
+
   private refresh(key: string, cwd: string | null): Promise<WorkerCommandsResult> {
     const entry = this.entries.get(key) ?? { at: 0 };
     this.entries.set(key, entry);

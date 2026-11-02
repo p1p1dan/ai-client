@@ -71,6 +71,7 @@ import {
   SESSION_REPLAY_UNAVAILABLE,
 } from '../services/chat/SessionReplayReader';
 import { sessionControl } from '../services/chat/sessionControl';
+import { onClaudeUserLayerChanged } from '../services/claudePlugins/userLayerEvents';
 import { usableWorkspace } from '../services/legacyAssets/detectLegacyAssets';
 import { readSentImage } from './sentAttachmentRead';
 
@@ -1101,6 +1102,8 @@ export function registerChatHandlers(): void {
     },
     log: (message, error) => console.warn(message, error),
   });
+  // claude-plugins plan §4.3: a plugin or MCP server changed in the user layer.
+  onClaudeUserLayerChanged(() => claudeSdkCommandCatalog.clear());
 
   /**
    * R02-b — the composer's command menu.

@@ -251,6 +251,18 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
     reason: 'Standard DialogPanel body (the remote form) between header and footer.',
   },
   {
+    file: 'components/settings/ClaudeMcpSettings.tsx',
+    category: 'panel',
+    reason: 'Standard DialogPanel body (the add-an-MCP-server form) between header and footer.',
+  },
+  {
+    file: 'components/settings/ClaudePluginsSettings.tsx',
+    category: 'panel',
+    occurrences: 2,
+    reason:
+      'Two standard DialogPanel bodies: browsing a marketplace’s plugins, and the marketplace list with its add form.',
+  },
+  {
     file: 'components/settings/ProviderSetupDialog.tsx',
     category: 'panel',
     reason: 'Standard DialogPanel body (the AI service form) between header and footer.',
@@ -283,12 +295,6 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
     category: 'no-body',
     reason:
       'The logout-confirm dialog folds its loss list and CLI-note paragraph INTO DialogHeader (both still precede the closing </DialogHeader>), so they inherit the header’s own p-6 instead of needing a separate padded region.',
-  },
-  {
-    file: 'components/workspace-shell/LeftDock.tsx',
-    category: 'panel',
-    reason:
-      'dsh-rebase P1-16e: the capabilities dialog is down to the skill count (decision 104), so the self-scrolling list that made it manual is gone; standard DialogPanel body.',
   },
   {
     file: 'components/settings/LegacyAssetNotice.tsx',

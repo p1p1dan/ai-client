@@ -19,6 +19,8 @@ import { AdvancedSettings } from './AdvancedSettings';
 import { AgentMigrationSettings } from './AgentMigrationSettings';
 import { AISettings } from './AISettings';
 import { AppearanceSettings } from './AppearanceSettings';
+import { ClaudeMcpSettings } from './ClaudeMcpSettings';
+import { ClaudePluginsSettings } from './ClaudePluginsSettings';
 import { ConversationImportSettings } from './ConversationImportSettings';
 import type { SettingsCategory } from './constants';
 import { DshPluginsSettings } from './DshPluginsSettings';
@@ -80,7 +82,9 @@ export function SettingsContent({
     // Decision 144: named for what the page holds (AI services, model
     // management, request settings), not for the 1.0.x engine. The id stays.
     { id: 'pi', icon: Sparkles, label: t('Models') },
-    { id: 'extensions', icon: Blocks, label: t('Extensions') },
+    // User 2026-10-29: only skills (and the legacy-asset list) are left here, so the
+    // page is named for them; the id stays `extensions` (saved category, intents).
+    { id: 'extensions', icon: Blocks, label: t('Skills') },
     // Plugin-system README §3: PiLab's own plugins, apart from the engine's.
     { id: 'plugins', icon: Plug, label: t('Plugins') },
     { id: 'migration', icon: ArrowRightLeft, label: t('Data migration') },
@@ -144,19 +148,28 @@ export function SettingsContent({
               <PiModelManagementSettings providersVersion={providersVersion} />
             </>
           )}
-          {/* dsh-rebase P1-16e (decision 104): skills, then the allowlisted
-              DSH plugins (P1-10c, decision 117), then what the previous
+          {/* dsh-rebase P1-16e (decision 104): skills, then what the previous
               version used that this one no longer loads. The sub-agent page is
               gone (definitions are not loaded), and so is the pi extension
               page (decision 090). */}
           {activeCategory === 'extensions' && (
             <>
               <PiResourcesSettings repoPath={repoPath} />
-              <DshPluginsSettings />
               <LegacyAssetsSettings repoPath={repoPath} />
             </>
           )}
-          {activeCategory === 'plugins' && <PluginsSettings />}
+          {/* User 2026-10-29: every kind of plugin, and MCP, on this one page —
+              the Pi engine's allowlisted plugins (decision 117), the Claude
+              chats' plugins and MCP servers (claude-plugins plan), then
+              PiLab's own `.pilabplug` plugins. */}
+          {activeCategory === 'plugins' && (
+            <>
+              <DshPluginsSettings />
+              <ClaudePluginsSettings repoPath={repoPath} />
+              <ClaudeMcpSettings repoPath={repoPath} />
+              <PluginsSettings />
+            </>
+          )}
           {activeCategory === 'migration' && (
             <>
               <AgentMigrationSettings />
