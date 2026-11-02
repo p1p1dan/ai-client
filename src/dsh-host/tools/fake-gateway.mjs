@@ -234,6 +234,10 @@
  *                       foreground sleep to stop; the settlement wakes the agent)
  *                       and P1-SUBSTOPCHILD (the child: a command, 6 s by default, that writes
  *                       substop-<tag>.txt once it ran to the end).
+ *                       Decision 207 §8 adds two for the double wake-up: P1-WAKE2 (a
+ *                       continuable subagent; each wake is answered by what woke it)
+ *                       and P1-WAKE2CHILD (the child: `send_message` to its parent,
+ *                       then a final answer paced over 3 s).
  *                       dsh-rebase P1-15 adds four for one-shot completions (decision
  *                       125; the shared-host integration test's completion phase and
  *                       tools/bridge-smoke.ts): P1-COMPLETE-COMMIT (a commit message
@@ -683,7 +687,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS|RUN|CD)/;
+  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|WAKE2CHILD|WAKE2|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS|RUN|CD)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -1796,6 +1800,43 @@ const DSH_P0_2_SCRIPTS = {
       chunks: 10,
       chunkMs: 100,
       tag: 'subchild',
+    };
+  },
+  // Decision 207 §8 item 5 (`subagentWake.integration.test.ts`): a continuable
+  // child reports to its parent with `send_message` before it finishes, so one
+  // child wakes the idle parent twice — its message, then its settlement. The
+  // parent answers each wake by what woke it.
+  'P1-WAKE2'(_round, step, _calls, _triggerText, _history, recent) {
+    if (/Background subagent \S+ finished/.test(recent ?? '')) {
+      return say('P1-WAKE2 heard the settlement.');
+    }
+    if (/Agent \S+ sent a message:/.test(recent ?? '')) {
+      return say('P1-WAKE2 heard the interim report.');
+    }
+    if (step === 0) {
+      return tool('subagent', {
+        description: 'Wake probe',
+        prompt: 'P1-WAKE2CHILD: report once to your parent, then finish.',
+      });
+    }
+    return say('P1-WAKE2 delegated; the child reports back.');
+  },
+  // The child: `send_message` to the parent DSH names in its task, then a
+  // final answer paced over 3 s, so the parent's first wake turn is over
+  // before the settlement arrives. Neither text carries a scenario marker.
+  'P1-WAKE2CHILD'(_round, step, _calls, triggerText) {
+    if (step === 0) {
+      const parent = /Your parent agent id is "([^"]+)"/.exec(triggerText)?.[1];
+      if (!parent) return say('No parent id in the task.');
+      return tool('send_message', { agent_id: parent, message: 'wake2 interim finding' });
+    }
+    return {
+      kind: 'paced-text',
+      status: 200,
+      text: 'Child done: the final finding.',
+      chunks: 30,
+      chunkMs: 100,
+      tag: 'wake2child',
     };
   },
   // dsh-rebase decisions 201/203 (`stopScope.integration.test.ts`): a background
