@@ -1,0 +1,42 @@
+// Drive one hover + copy + view-all check through raw CDP on the app page.
+const list = await (await fetch('http://127.0.0.1:9222/json/list')).json();
+const page = list.find((t) => t.type === 'page');
+const ws = new WebSocket(page.webSocketDebuggerUrl);
+await new Promise((r) => ws.addEventListener('open', r, { once: true }));
+let id = 0;
+const pending = new Map();
+ws.addEventListener('message', (e) => {
+  const m = JSON.parse(e.data);
+  if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
+});
+const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+const evalJs = async (expr) => (await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true })).result.result.value;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const rect = JSON.parse(await evalJs(`(()=>{const b=document.querySelectorAll('[data-slot=tool-output-copy]')[0].parentElement.getBoundingClientRect();return JSON.stringify({x:b.x+b.width/2,y:b.y+40})})()`));
+await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x, y: rect.y });
+await sleep(400);
+const out = {};
+out.hoverOpacity = await evalJs(`getComputedStyle(document.querySelectorAll('[data-slot=tool-output-copy]')[0]).opacity`);
+const shot1 = await send('Page.captureScreenshot', { format: 'png' });
+out.shotHover = shot1.result.data;
+const btn = JSON.parse(await evalJs(`(()=>{const b=document.querySelectorAll('[data-slot=tool-output-copy] button')[0].getBoundingClientRect();return JSON.stringify({x:b.x+b.width/2,y:b.y+b.height/2})})()`));
+await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: btn.x, y: btn.y, button: 'left', clickCount: 1 });
+await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: btn.x, y: btn.y, button: 'left', clickCount: 1 });
+await sleep(300);
+out.copiedLabel = await evalJs(`document.querySelectorAll('[data-slot=tool-output-copy] button')[0].getAttribute('aria-label')`);
+out.clipboard = await evalJs(`navigator.clipboard.readText().then(t=>JSON.stringify({lines:t.split('\\n').filter(Boolean).length, first:t.split('\\n')[0], last:t.trim().split('\\n').at(-1)})).catch(e=>'ERR '+e.message)`);
+await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent==='查看全部').click()`);
+await sleep(600);
+out.dialog = await evalJs(`(()=>{const all=document.querySelector('[data-slot=tool-output-all]');const d=all.closest('[role=dialog]');return JSON.stringify({rows:all.children.length,last:all.lastElementChild.textContent,title:d.querySelector('h2')?.textContent,desc:d.querySelector('p')?.textContent})})()`);
+const shot2 = await send('Page.captureScreenshot', { format: 'png' });
+out.shotDialog = shot2.result.data;
+await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+await sleep(400);
+out.afterEsc = await evalJs(`JSON.stringify({open:!!document.querySelector("[data-slot=tool-output-all]"), focus:document.activeElement?.textContent})`);
+const fs = await import('node:fs');
+fs.writeFileSync(process.argv[2] + '/r2o-output-hover.png', Buffer.from(out.shotHover, 'base64'));
+fs.writeFileSync(process.argv[2] + '/r2o-output-dialog.png', Buffer.from(out.shotDialog, 'base64'));
+delete out.shotHover; delete out.shotDialog;
+console.log(JSON.stringify(out, null, 1));
+ws.close();
