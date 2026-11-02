@@ -127,6 +127,7 @@
       "cacheWrite": 0,
       "totalTokens": 0,
       "costUsd": 0,
+      "cacheUnreported": true,
       "context": {
         "tokens": 0,
         "contextWindow": 0,
@@ -154,8 +155,6 @@
       "action": "write_file",
       "input": {
         "path": "<workspace>/perm-card/perm-allowed.txt",
-        "content": "first write\n",
-        "contentLabel": "Content",
         "workspace": "<workspace>/perm-card"
       },
       "kind": "file_change",
@@ -168,7 +167,8 @@
         "changes": [
           {
             "path": "<workspace>/perm-card/perm-allowed.txt",
-            "change": "add"
+            "change": "add",
+            "diff": "--- /dev/null\n+++ b/perm-allowed.txt\n@@ -0,0 +1,1 @@\n+first write\n"
           }
         ]
       },
@@ -297,6 +297,7 @@
       "cacheWrite": 0,
       "totalTokens": 0,
       "costUsd": 0,
+      "cacheUnreported": true,
       "context": {
         "tokens": 0,
         "contextWindow": 0,
@@ -324,8 +325,6 @@
       "action": "write_file",
       "input": {
         "path": "<workspace>/perm-card/perm-denied.txt",
-        "content": "second write\n",
-        "contentLabel": "Content",
         "workspace": "<workspace>/perm-card"
       },
       "kind": "file_change",
@@ -338,7 +337,8 @@
         "changes": [
           {
             "path": "<workspace>/perm-card/perm-denied.txt",
-            "change": "add"
+            "change": "add",
+            "diff": "--- /dev/null\n+++ b/perm-denied.txt\n@@ -0,0 +1,1 @@\n+second write\n"
           }
         ]
       },
@@ -433,6 +433,7 @@
       "cacheWrite": 0,
       "totalTokens": 0,
       "costUsd": 0,
+      "cacheUnreported": true,
       "context": {
         "tokens": 0,
         "contextWindow": 0,

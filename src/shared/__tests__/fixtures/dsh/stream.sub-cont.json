@@ -126,6 +126,7 @@
       "cacheWrite": 0,
       "totalTokens": 0,
       "costUsd": 0,
+      "cacheUnreported": true,
       "context": {
         "tokens": 0,
         "contextWindow": 0,
@@ -233,6 +234,7 @@
       "cacheWrite": 0,
       "totalTokens": 0,
       "costUsd": 0,
+      "cacheUnreported": true,
       "context": {
         "tokens": 0,
         "contextWindow": 0,
@@ -375,6 +377,7 @@
       "cacheWrite": 0,
       "totalTokens": 0,
       "costUsd": 0,
+      "cacheUnreported": true,
       "context": {
         "tokens": 0,
         "contextWindow": 0,
@@ -466,6 +469,7 @@
       "cacheWrite": 0,
       "totalTokens": 0,
       "costUsd": 0,
+      "cacheUnreported": true,
       "context": {
         "tokens": 0,
         "contextWindow": 0,
@@ -589,6 +593,7 @@
       "cacheWrite": 0,
       "totalTokens": 0,
       "costUsd": 0,
+      "cacheUnreported": true,
       "context": {
         "tokens": 0,
         "contextWindow": 0,
