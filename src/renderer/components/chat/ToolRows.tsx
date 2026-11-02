@@ -25,6 +25,7 @@ import {
 import {
   createContext,
   type ReactNode,
+  type RefObject,
   useContext,
   useLayoutEffect,
   useMemo,
@@ -34,7 +35,15 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Dialog,
+  DialogDescription,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Ident } from '@/components/ui/ident';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { StatusIcon } from '@/components/ui/status-icon';
 import { toastManager } from '@/components/ui/toast';
 import { useElementWidth } from '@/hooks/useElementWidth';
@@ -1141,29 +1150,7 @@ function ToolRowBody({
   // rows: prompt JSON scrolling apart from the report). Input-only and
   // output-only rows keep their original single-window shapes.
   if (view.input && view.body === 'output') {
-    return (
-      <div className="ml-0.5 border-l border-border-soft pl-3.5">
-        <div className={cn('overflow-auto overscroll-contain', view.outputMaxHeightClass)}>
-          <pre className="m-0 select-text whitespace-pre-wrap pt-1 font-mono text-code leading-[1.55] text-muted-foreground">
-            {view.input}
-          </pre>
-          {/* P1-7e (problem 21): when the output lost its start, the rule
-              between input and output sits above the note that says so. */}
-          <OutputHeadNote
-            omitted={view.outputHeadOmitted}
-            className="mt-1 border-t border-border-soft pt-2"
-          />
-          <pre
-            className={cn(
-              'm-0 select-text whitespace-pre-wrap pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
-              view.outputHeadOmitted ? 'pt-1' : 'mt-1 border-t border-border-soft pt-2'
-            )}
-          >
-            {view.output}
-          </pre>
-        </div>
-      </div>
-    );
+    return <ToolOutputBody view={view} />;
   }
   return (
     <>
@@ -1182,6 +1169,186 @@ function ToolRowBody({
       {view.running && view.toolCallId && <LiveToolOutput toolCallId={view.toolCallId} />}
       <ToolRowOutputSegment view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
     </>
+  );
+}
+
+/** Lines in a tool output, a trailing newline not counting as one more. */
+export function toolOutputLineCount(output: string): number {
+  const text = output.replace(/\n+$/, '');
+  return text === '' ? 0 : text.split('\n').length;
+}
+
+/**
+ * A settled call's output (PiLab R2, FR-05.3; user, 2026-11-02, preview
+ * `docs/design/2026-11-02-tool-output-copy-view-preview.html`). The body keeps
+ * its height cap; a copy button — shown while the pointer is over the output,
+ * or a key focuses it — copies all of it, not the part in view. Once the
+ * output is taller than the cap, a line under it gives the line count and
+ * 「查看全部」, which opens the whole of it in a dialog. Only settled calls reach this
+ * body (`showOutputBody` excludes running ones), so nothing is copied half-way.
+ * When the engine kept only the end, the copy is what there is, and the
+ * button's name and the dialog say the start is missing.
+ */
+function ToolOutputBody({ view }: { view: ToolRowView }) {
+  const { t } = useI18n();
+  const output = view.output ?? '';
+  // The element that scrolls: the output's own <pre>, or — when the row shows
+  // its input too (round-10 inspection ⑤) — the one window both share.
+  const scrollRef = useRef<HTMLElement | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  const viewAllRef = useRef<HTMLButtonElement | null>(null);
+  // Measured after layout and again on resize: the cap is a viewport fraction.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure when the text changes
+  useLayoutEffect(() => {
+    const box = scrollRef.current;
+    if (!box) return;
+    const measure = () => setOverflowing(box.scrollHeight > box.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [output]);
+  const count = toolOutputLineCount(output);
+  const copyLabel = view.outputHeadOmitted
+    ? t('Copy all output (start omitted)')
+    : t('Copy all output');
+  return (
+    <div className="group/output relative ml-0.5 border-l border-border-soft pl-3.5">
+      {view.input ? (
+        <div
+          ref={(node) => {
+            scrollRef.current = node;
+          }}
+          className={cn('overflow-auto overscroll-contain', 'pr-8', view.outputMaxHeightClass)}
+        >
+          <pre className="m-0 select-text whitespace-pre-wrap pt-1 font-mono text-code leading-[1.55] text-muted-foreground">
+            {view.input}
+          </pre>
+          {/* P1-7e (problem 21): when the output lost its start, the rule
+            between input and output sits above the note that says so. */}
+          <OutputHeadNote
+            omitted={view.outputHeadOmitted}
+            className="mt-1 border-t border-border-soft pt-2"
+          />
+          <pre
+            className={cn(
+              'm-0 select-text whitespace-pre-wrap pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
+              view.outputHeadOmitted ? 'pt-1' : 'mt-1 border-t border-border-soft pt-2'
+            )}
+          >
+            {view.output}
+          </pre>
+        </div>
+      ) : (
+        <>
+          <OutputHeadNote omitted={view.outputHeadOmitted} className="pt-1" />
+          <pre
+            ref={(node) => {
+              scrollRef.current = node;
+            }}
+            className={cn(
+              'm-0 select-text overflow-auto overscroll-contain whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
+              // Room for the copy button, which sits over the top-right corner.
+              'pr-8',
+              view.outputMaxHeightClass
+            )}
+          >
+            {output}
+          </pre>
+        </>
+      )}
+      <div
+        data-slot="tool-output-copy"
+        className="absolute top-0.5 right-0 rounded-sm bg-background opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/output:opacity-100"
+      >
+        <CopyIconButton text={output} label={copyLabel} copiedLabel={t('Copied')} />
+      </div>
+      {/* User, 2026-11-02: only under an output taller than its box — a short
+          one shows all its lines, and the row head already counts them. */}
+      {overflowing && count > 0 && (
+        <div className="flex items-center gap-2 pb-1.5 text-small text-foreground-faint tabular-nums">
+          <span>{t('{{count}} lines', { count })}</span>
+          <button
+            ref={viewAllRef}
+            type="button"
+            className="rounded-xs text-muted-foreground underline underline-offset-2 transition-colors duration-150 hover:text-foreground focus-ring"
+            onClick={() => setViewing(true)}
+          >
+            {t('View all')}
+          </button>
+        </div>
+      )}
+      {viewing && (
+        <ToolOutputDialog
+          view={view}
+          output={output}
+          copyLabel={copyLabel}
+          returnFocus={viewAllRef}
+          onClose={() => setViewing(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** 「查看全部」: the whole output, numbered, in its own scroll. */
+function ToolOutputDialog({
+  view,
+  output,
+  copyLabel,
+  returnFocus,
+  onClose,
+}: {
+  view: ToolRowView;
+  output: string;
+  copyLabel: string;
+  /** Where focus goes back to on close: the 「查看全部」 that opened it. */
+  returnFocus: RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const lines = useMemo(() => output.replace(/\n+$/, '').split('\n'), [output]);
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogPopup className="sm:max-w-4xl" finalFocus={returnFocus}>
+        <DialogHeader>
+          <DialogTitle className="flex min-w-0 items-center gap-2 pr-16">
+            <span className="shrink-0">{view.title ?? t(view.verb)}</span>
+            {view.title === undefined && view.arg && (
+              <Ident className="min-w-0 truncate font-normal text-muted-foreground">
+                {view.arg}
+              </Ident>
+            )}
+          </DialogTitle>
+          <DialogDescription className="tabular-nums">
+            {t('{{count}} lines', { count: lines.length })}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="absolute end-11 top-3.5">
+          <CopyIconButton text={output} label={copyLabel} copiedLabel={t('Copied')} />
+        </div>
+        {/* As in SubagentConversationDialog: `DialogPanel` cannot cap its height. */}
+        <ScrollArea className="max-h-[70vh] px-6 pb-6">
+          <OutputHeadNote omitted={view.outputHeadOmitted} className="pb-1.5" />
+          <div data-slot="tool-output-all" className="font-mono text-code leading-[1.6]">
+            {lines.map((line, index) => (
+              // Positional: two identical lines are ordinary output.
+              // biome-ignore lint/suspicious/noArrayIndexKey: the position is the identity
+              <div key={index} className="flex">
+                <span className="w-12 shrink-0 select-none pr-3 text-right text-foreground-faint tabular-nums">
+                  {index + 1}
+                </span>
+                <span className="min-w-0 flex-1 select-text whitespace-pre-wrap break-all pr-3 text-foreground">
+                  {line}
+                </span>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </DialogPopup>
+    </Dialog>
   );
 }
 
@@ -1404,19 +1571,7 @@ function ToolRowOutputSegment({
 }) {
   switch (view.body) {
     case 'output':
-      return (
-        <div className="ml-0.5 border-l border-border-soft pl-3.5">
-          <OutputHeadNote omitted={view.outputHeadOmitted} className="pt-1" />
-          <pre
-            className={cn(
-              'm-0 select-text overflow-auto overscroll-contain whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
-              view.outputMaxHeightClass
-            )}
-          >
-            {view.output}
-          </pre>
-        </div>
-      );
+      return <ToolOutputBody view={view} />;
     case 'detail':
       return (
         <SubagentDetail nested={isMergedStep(view)}>
