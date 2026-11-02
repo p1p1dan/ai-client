@@ -7,6 +7,8 @@ export function resolveWorkspaceSearchShortcut(
   bindings: SearchKeybindings
 ): SearchMode | null {
   if (event.defaultPrevented || event.isComposing || event.repeat) return null;
+  // Optional at runtime: a profile saved before chat search has no entry until migrated.
+  if (bindings.searchChats && matchesKeybinding(event, bindings.searchChats)) return 'chat';
   if (matchesKeybinding(event, bindings.searchFiles)) return 'files';
   if (matchesKeybinding(event, bindings.searchContent)) return 'content';
   return null;

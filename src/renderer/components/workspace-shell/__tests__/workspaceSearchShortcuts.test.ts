@@ -19,11 +19,18 @@ function event(overrides: Partial<KeyboardEvent> = {}): KeyboardEvent {
 }
 
 const bindings: SearchKeybindings = {
+  searchChats: { key: 'k', ctrl: true, shift: true },
   searchFiles: { key: 'p', ctrl: true },
   searchContent: { key: 'f', ctrl: true, shift: true },
 };
 
 describe('workspace search entry', () => {
+  it('resolves chat search to the 「对话」 tab', () => {
+    expect(
+      resolveWorkspaceSearchShortcut(event({ key: 'K', code: 'KeyK', shiftKey: true }), bindings)
+    ).toBe('chat');
+  });
+
   it('resolves file and content search using the saved bindings', () => {
     expect(resolveWorkspaceSearchShortcut(event(), bindings)).toBe('files');
     expect(

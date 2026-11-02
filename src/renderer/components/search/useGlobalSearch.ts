@@ -1,7 +1,8 @@
 import type { ContentSearchMatch, ContentSearchResult, FileSearchResult } from '@shared/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export type SearchMode = 'files' | 'content';
+/** `chat` is the chat search tab (`useChatSearch`); this hook runs only the other two. */
+export type SearchMode = 'chat' | 'files' | 'content';
 
 export interface SearchOptions {
   caseSensitive: boolean;
@@ -50,7 +51,7 @@ export function useGlobalSearch(rootPath: string | undefined) {
   const search = useCallback(
     async (query: string, mode: SearchMode, options: SearchOptions) => {
       abortControllerRef.current?.abort();
-      if (!rootPath || !query.trim()) {
+      if (!rootPath || !query.trim() || mode === 'chat') {
         setState((prev) => ({
           ...prev,
           fileResults: [],

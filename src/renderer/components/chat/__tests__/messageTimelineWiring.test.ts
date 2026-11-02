@@ -1146,9 +1146,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * longer break the test without breaking anything real.
    */
   it('[D3-1] T12: the bubble mounts its row and box classes, not inline literals', () => {
-    // ① the row the bubble sits at the end of, and ② the box itself.
+    // ① the row the bubble sits at the end of (plus chat search's anchor
+    // mark, also a named constant), and ② the box itself.
     expect(classNameExpressionOf(jsxNodeAt('UserBubble', ['article']))).toBe(
-      '{userBubbleRowClass()}'
+      '{cn(userBubbleRowClass(), MESSAGE_ANCHOR_CLASS)}'
     );
     // dsh-rebase P1-7a (decision 118): a Ctrl+Enter message the turn has not
     // taken in yet mounts its own box class (dashed, faceless) — still a

@@ -149,7 +149,7 @@ import { useFolderDiffStatsPolling } from './useFolderDiffStats';
  */
 export interface SidebarSearchEntry {
   onOpen: () => void;
-  /** False while there is no workspace to search (a home page with no repository). */
+  /** False disables the entry; chat search keeps it on even without a workspace. */
   enabled: boolean;
   /** The search shortcut as shown, faint at the entry's right. */
   shortcut: string;

@@ -5,38 +5,85 @@ import {
   FileCode,
   FileText,
   Filter,
+  MessageCircle,
   Regex,
   Search,
   WholeWord,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogBackdrop, DialogPortal, DialogViewport } from '@/components/ui/dialog';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
+import { ChatSearchResultList } from './ChatSearchResultList';
 import { SearchPreviewPanel } from './SearchPreviewPanel';
 import { SearchResultList } from './SearchResultList';
+import { type ChatSearchRow, type ChatSearchScopeKind, useChatSearch } from './useChatSearch';
 import { type SearchMode, useGlobalSearch } from './useGlobalSearch';
 
 interface GlobalSearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  rootPath: string | undefined;
+  /**
+   * The current workspace. Without one only the 「对话」 tab works: the file
+   * and content tabs search a workspace's files.
+   */
+  rootPath: string | null | undefined;
   initialMode?: SearchMode;
   onOpenFile: (path: string, line?: number, column?: number, matchLength?: number) => void;
+  /** Chat search: open a chat at its matches (`query` is the text as typed, trimmed). */
+  onOpenChat?: (row: ChatSearchRow, query: string) => void;
+}
+
+/** One mode tab: the v2 selection fill, no frame of its own. */
+function ModeTab({
+  active,
+  disabled,
+  title,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  title?: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      disabled={disabled}
+      title={title}
+      className={cn(
+        'flex items-center gap-1 rounded-sm px-2 py-1 disabled:pointer-events-none disabled:opacity-50',
+        active
+          ? 'bg-fill-ghost-selected text-foreground'
+          : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
+      )}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function GlobalSearchDialog({
   open,
   onOpenChange,
   rootPath,
-  initialMode = 'content',
+  initialMode = 'chat',
   onOpenFile,
+  onOpenChat,
 }: GlobalSearchDialogProps) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dividerY, setDividerY] = useState(50);
+  const [scope, setScope] = useState<ChatSearchScopeKind>('all');
+  const hasRoot = Boolean(rootPath);
 
   const {
     mode,
@@ -53,23 +100,53 @@ export function GlobalSearchDialog({
     moveSelection,
     getSelectedItem,
     reset,
-  } = useGlobalSearch(rootPath);
+  } = useGlobalSearch(rootPath ?? undefined);
+
+  const chat = useChatSearch({
+    query,
+    scope,
+    currentRoot: rootPath ?? null,
+    active: open && mode === 'chat',
+  });
+
+  const openChat = useCallback(
+    (row: ChatSearchRow) => {
+      onOpenChange(false);
+      onOpenChat?.(row, query.trim());
+    },
+    [onOpenChange, onOpenChat, query]
+  );
 
   // Set initial mode when opening
   useEffect(() => {
     if (open) {
-      setMode(initialMode);
+      // The file tabs need a workspace; without one the dialog opens on chats.
+      setMode(initialMode !== 'chat' && !hasRoot ? 'chat' : initialMode);
       setTimeout(() => inputRef.current?.focus(), 50);
     } else {
       reset();
     }
-  }, [open, initialMode, setMode, reset]);
+  }, [open, initialMode, hasRoot, setMode, reset]);
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       // 中文输入法正在输入时不处理
       if (e.nativeEvent.isComposing) return;
+
+      if (mode === 'chat') {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          chat.moveSelection(e.key === 'ArrowDown' ? 1 : -1);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (chat.selectedRow) openChat(chat.selectedRow);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          onOpenChange(false);
+        }
+        return;
+      }
 
       switch (e.key) {
         case 'ArrowDown':
@@ -101,7 +178,7 @@ export function GlobalSearchDialog({
           break;
       }
     },
-    [moveSelection, getSelectedItem, onOpenFile, onOpenChange]
+    [mode, chat, openChat, moveSelection, getSelectedItem, onOpenFile, onOpenChange]
   );
 
   // Resizer handling
@@ -175,7 +252,11 @@ export function GlobalSearchDialog({
                   type="text"
                   className="h-full min-w-0 flex-1 bg-transparent text-ui outline-none placeholder:text-muted-foreground"
                   placeholder={
-                    mode === 'files' ? t('Search file name...') : t('Search in files...')
+                    mode === 'chat'
+                      ? t('Search chat titles and messages')
+                      : mode === 'files'
+                        ? t('Search file name...')
+                        : t('Search in files...')
                   }
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -189,84 +270,100 @@ export function GlobalSearchDialog({
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
-                <div className="mx-1 h-4 w-px bg-border" />
-                {/* Search Options */}
-                <button
-                  type="button"
-                  className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
-                    options.caseSensitive && 'bg-primary/20 text-primary'
-                  )}
-                  onClick={() => setOptions({ caseSensitive: !options.caseSensitive })}
-                  title={t('Match case')}
-                >
-                  <CaseSensitive className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
-                    options.wholeWord && 'bg-primary/20 text-primary'
-                  )}
-                  onClick={() => setOptions({ wholeWord: !options.wholeWord })}
-                  title={t('Match whole word')}
-                >
-                  <WholeWord className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
-                    options.regex && 'bg-primary/20 text-primary'
-                  )}
-                  onClick={() => setOptions({ regex: !options.regex })}
-                  title={t('Use regular expression')}
-                >
-                  <Regex className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
-                    options.useGitignore && 'bg-primary/20 text-primary'
-                  )}
-                  onClick={() => setOptions({ useGitignore: !options.useGitignore })}
-                  title={t('Use .gitignore')}
-                >
-                  <Filter className="h-4 w-4" />
-                </button>
+                {mode !== 'chat' && (
+                  <>
+                    <div className="mx-1 h-4 w-px bg-border" />
+                    {/* Search Options */}
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
+                        options.caseSensitive && 'bg-primary/20 text-primary'
+                      )}
+                      onClick={() => setOptions({ caseSensitive: !options.caseSensitive })}
+                      title={t('Match case')}
+                    >
+                      <CaseSensitive className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
+                        options.wholeWord && 'bg-primary/20 text-primary'
+                      )}
+                      onClick={() => setOptions({ wholeWord: !options.wholeWord })}
+                      title={t('Match whole word')}
+                    >
+                      <WholeWord className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
+                        options.regex && 'bg-primary/20 text-primary'
+                      )}
+                      onClick={() => setOptions({ regex: !options.regex })}
+                      title={t('Use regular expression')}
+                    >
+                      <Regex className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground',
+                        options.useGitignore && 'bg-primary/20 text-primary'
+                      )}
+                      onClick={() => setOptions({ useGitignore: !options.useGitignore })}
+                      title={t('Use .gitignore')}
+                    >
+                      <Filter className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* Mode Tabs + Stats */}
-              <div className="flex h-8 items-center gap-2 px-3 text-small">
-                <button
-                  type="button"
-                  className={cn(
-                    'flex items-center gap-1 rounded px-2 py-1',
-                    mode === 'files'
-                      ? 'bg-primary/20 text-primary'
-                      : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
-                  )}
+              <div className="flex h-9 items-center gap-1 px-3 text-small" role="tablist">
+                <ModeTab active={mode === 'chat'} onClick={() => setMode('chat')}>
+                  <MessageCircle className="size-3.5" />
+                  {t('Chats')}
+                </ModeTab>
+                <ModeTab
+                  active={mode === 'files'}
+                  disabled={!hasRoot}
+                  title={hasRoot ? undefined : t('Open a chat in a repository to search it')}
                   onClick={() => setMode('files')}
                 >
-                  <FileText className="h-3.5 w-3.5" />
+                  <FileText className="size-3.5" />
                   {t('Files')} (P)
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'flex items-center gap-1 rounded px-2 py-1',
-                    mode === 'content'
-                      ? 'bg-primary/20 text-primary'
-                      : 'text-muted-foreground hover:bg-fill-ghost-hover hover:text-foreground'
-                  )}
+                </ModeTab>
+                <ModeTab
+                  active={mode === 'content'}
+                  disabled={!hasRoot}
+                  title={hasRoot ? undefined : t('Open a chat in a repository to search it')}
                   onClick={() => setMode('content')}
                 >
-                  <FileCode className="h-3.5 w-3.5" />
+                  <FileCode className="size-3.5" />
                   {t('Content')} (F)
-                </button>
+                </ModeTab>
                 <div className="flex-1" />
-                {query && !isLoading && (
+                {mode === 'chat' && (
+                  <ToggleGroup
+                    size="sm"
+                    value={[hasRoot ? scope : 'all']}
+                    onValueChange={(value) => {
+                      const next = (value as string[])[0];
+                      if (next === 'all' || next === 'workspace') setScope(next);
+                    }}
+                    aria-label={t('Which chats')}
+                  >
+                    <ToggleGroupItem value="all">{t('All repositories')}</ToggleGroupItem>
+                    <ToggleGroupItem value="workspace" disabled={!hasRoot}>
+                      {t('Current repository')}
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                )}
+                {mode !== 'chat' && query && !isLoading && (
                   <span className="text-muted-foreground">
                     {mode === 'content'
                       ? t('{{count}} matches in {{files}} files', {
@@ -280,33 +377,49 @@ export function GlobalSearchDialog({
             </div>
 
             {/* Results Area */}
-            <div className="flex min-h-0 flex-1 flex-col">
-              {/* Result List */}
-              <div style={{ height: `${dividerY}%` }} className="min-h-0 overflow-hidden">
-                <SearchResultList
-                  mode={mode}
-                  fileResults={fileResults}
-                  contentResults={contentResults}
-                  selectedIndex={selectedIndex}
-                  onSelect={setSelectedIndex}
-                  onOpen={handleItemSelect}
+            {mode === 'chat' ? (
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <ChatSearchResultList
+                  rows={chat.rows}
                   query={query}
+                  recent={chat.recent}
+                  indexing={chat.indexing}
+                  loading={chat.loading}
+                  failed={chat.failed}
+                  selectedIndex={chat.selectedIndex}
+                  onSelect={chat.setSelectedIndex}
+                  onOpen={openChat}
                 />
               </div>
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col">
+                {/* Result List */}
+                <div style={{ height: `${dividerY}%` }} className="min-h-0 overflow-hidden">
+                  <SearchResultList
+                    mode={mode}
+                    fileResults={fileResults}
+                    contentResults={contentResults}
+                    selectedIndex={selectedIndex}
+                    onSelect={setSelectedIndex}
+                    onOpen={handleItemSelect}
+                    query={query}
+                  />
+                </div>
 
-              {/* Resizer */}
-              <div
-                className="group relative h-1 shrink-0 cursor-row-resize bg-border hover:bg-primary/50 transition-colors"
-                onMouseDown={handleDividerMouseDown}
-              >
-                <div className="absolute inset-x-0 -top-1 -bottom-1" />
-              </div>
+                {/* Resizer */}
+                <div
+                  className="group relative h-1 shrink-0 cursor-row-resize bg-border hover:bg-primary/50 transition-colors"
+                  onMouseDown={handleDividerMouseDown}
+                >
+                  <div className="absolute inset-x-0 -top-1 -bottom-1" />
+                </div>
 
-              {/* Preview Panel */}
-              <div style={{ height: `${100 - dividerY}%` }} className="min-h-0 overflow-hidden">
-                <SearchPreviewPanel path={previewPath} line={previewLine} query={query} />
+                {/* Preview Panel */}
+                <div style={{ height: `${100 - dividerY}%` }} className="min-h-0 overflow-hidden">
+                  <SearchPreviewPanel path={previewPath} line={previewLine} query={query} />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Footer */}
             <div className="flex h-8 shrink-0 items-center justify-between border-t px-3 text-small text-muted-foreground">

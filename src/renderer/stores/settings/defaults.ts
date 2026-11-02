@@ -219,6 +219,8 @@ export const defaultSourceControlKeybindings: SourceControlKeybindings = {
 };
 
 export const defaultSearchKeybindings: SearchKeybindings = {
+  // Not meta+K: that is the terminal's clear.
+  searchChats: { key: 'k', meta: true, shift: true },
   searchFiles: { key: 'p', meta: true },
   searchContent: { key: 'f', meta: true, shift: true },
 };

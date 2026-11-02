@@ -56,6 +56,8 @@ export interface SourceControlKeybindings {
 }
 
 export interface SearchKeybindings {
+  /** Chat search: opens the search dialog on its 「对话」 tab (the sidebar's 「搜索」). */
+  searchChats: TerminalKeybinding;
   searchFiles: TerminalKeybinding;
   searchContent: TerminalKeybinding;
 }

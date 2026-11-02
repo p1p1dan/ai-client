@@ -5176,3 +5176,23 @@ Object.assign(zhTranslations, {
   'Claude chats pass no environment variables of yours to a server; put what it needs here. It is stored in this app’s Claude folder, as Claude Code stores it.':
     'Claude 对话不会把你的环境变量传给服务，需要的请写在这里。它和 Claude Code 一样存在本应用的 Claude 配置目录里。',
 });
+
+/** Chat search (docs/plantree/plans/chat-search): the 「对话」 tab and the find bar. */
+Object.assign(zhTranslations, {
+  Chats: '对话',
+  'Search chat titles and messages': '搜索对话的标题和内容',
+  'Which chats': '搜索范围',
+  'All repositories': '全部仓库',
+  'Current repository': '当前仓库',
+  'Recent chats': '最近的对话',
+  'No chats found': '没有找到',
+  'Chat search failed': '搜索对话失败',
+  'Building the search index… {{done}} / {{total}}': '正在建立索引… {{done}} / {{total}}',
+  'You:': '你：',
+  'Assistant:': '助手：',
+  '{{count}} more matches': '还有 {{count}} 处',
+  'Find in chat': '在对话中查找',
+  'Previous match': '上一处',
+  'Next match': '下一处',
+  'Search chats': '搜索对话',
+});

@@ -72,7 +72,9 @@ import {
   useTurnSendStatusStore,
 } from '@/stores/turnSendStatus';
 import { AUTH_REQUIRED_ERROR_VIEW, isAuthRequiredError } from './authRequiredError';
+import { ChatFindBar } from './ChatFindBar';
 import { ChatMarkdown } from './ChatMarkdown';
+import { MESSAGE_ANCHOR_CLASS } from './chatJumpReveal';
 import {
   advanceClosedPrefix,
   chatMarkdownSegmentGapClass,
@@ -262,6 +264,7 @@ import {
   type ThinkingTiming,
 } from './turnTiming';
 import { UserMessageActions } from './UserMessageActions';
+import { useChatJumpReveal } from './useChatJumpReveal';
 import { useMessageMetadata } from './useMessageMetadata';
 import { useResolvedSessionModel } from './useResolvedSessionModel';
 import { useTurnTiming } from './useTurnTiming';
@@ -952,6 +955,13 @@ export function MessageTimeline({
     return () => cancelAnimationFrame(frame);
   }, [endNoticeKey]);
 
+  // Chat search: a jump to one of this chat's messages. Scrolling to it stops
+  // following the bottom, as a reader's own scroll-up would.
+  const stopFollowing = useCallback(() => {
+    stickToBottomRef.current = false;
+  }, []);
+  useChatJumpReveal(sessionId, scrollRootRef, stopFollowing);
+
   if (!sessionId) {
     return (
       <div className="flex flex-1 items-center justify-center text-ui text-muted-foreground">
@@ -1294,6 +1304,8 @@ export function MessageTimeline({
           wrapper, OUTSIDE the ScrollArea, so it hovers over the timeline
           without scrolling with it. Anchors itself to `data-turn-id`. */}
           <PromptNavRail prompts={promptNavItems} containerRef={scrollRootRef} />
+          {/* Chat search: the find bar over the top right, same floating contract. */}
+          <ChatFindBar sessionId={sessionId} />
           {/* T12-d: the bottom anchor. Shape is the app's OWN — `ShellTerminal`
           (and the pi TUI's terminal, until P1-11) has carried this exact
           button for as long as it has had scrollback, and a second
@@ -1655,8 +1667,10 @@ function UserBubble({ message }: { message: ChatMessage }) {
     // role signal now that the answer container has retired (see
     // `chatTimelineLayout.ts`'s note where it used to be defined).
     <article
-      className={userBubbleRowClass()}
+      className={cn(userBubbleRowClass(), MESSAGE_ANCHOR_CLASS)}
       data-awaiting-delivery={awaitingDelivery || undefined}
+      // Chat search's jump anchor (`chatJumpReveal.ts`).
+      data-message-id={message.id}
     >
       <div className={awaitingDelivery ? userBubbleAwaitingClass() : userBubbleClass()}>
         {/* Round-2 P0 (Chat attachments): read-only echo of what this turn sent,
@@ -3565,11 +3579,15 @@ function TurnItemView({
      * `deriveStreamingBlockIds` reads as finished.
      */
     case 'text':
+      // Chat search's jump anchor: the message this prose came from. A message
+      // with several text blocks anchors on its first (`querySelector`).
       return (
-        <TurnTextItem
-          text={item.block.text ?? ''}
-          streaming={!shouldRenderMarkdown({ blockId: item.block.id, streamingBlockId })}
-        />
+        <div data-message-id={item.messageId} className={MESSAGE_ANCHOR_CLASS}>
+          <TurnTextItem
+            text={item.block.text ?? ''}
+            streaming={!shouldRenderMarkdown({ blockId: item.block.id, streamingBlockId })}
+          />
+        </div>
       );
 
     case 'toolGroup':

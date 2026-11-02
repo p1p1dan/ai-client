@@ -171,6 +171,7 @@ export function KeybindingsSettings() {
         bindings={searchKeybindings}
         onChange={setSearchKeybindings}
         labels={[
+          ['searchChats', t('Search chats')],
           ['searchFiles', t('Search files')],
           ['searchContent', t('Search content')],
         ]}

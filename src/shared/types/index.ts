@@ -4,6 +4,7 @@ export * from './ai';
 export * from './app';
 export * from './attachmentIo';
 export * from './auth';
+export * from './chatSearch';
 export * from './file';
 export * from './folder';
 export * from './git';

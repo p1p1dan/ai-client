@@ -35,10 +35,9 @@ import { useShellLayoutStore } from '@/stores/shellLayout';
 import { LeftNav, type SidebarSearchEntry } from './LeftNav';
 import { ShellResizeHandle } from './ShellResizeHandle';
 import { clampSidebarWidth } from './shellLayoutModel';
-import { keybindingLabel } from './sidebar/keybindingLabel';
+import { sidebarSearchEntry } from './sidebar/sidebarSearchEntry';
 import { useVisitHistory } from './sidebar/useVisitHistory';
 import { UserFooterPill } from './UserFooterPill';
-import { useWorkspaceRootPath } from './useWorkspaceRootPath';
 
 interface LeftDockProps {
   /** Allocated sidebar width, straight from the allocator (0 while collapsed). */
@@ -83,16 +82,10 @@ export function LeftDock({
 }: LeftDockProps) {
   const { t } = useI18n();
   const visits = useVisitHistory();
-  // The global search runs over a workspace's files: with none (a home page
-  // with no repository picked) the entry is disabled rather than inert.
-  const searchRoot = useWorkspaceRootPath();
-  const searchBinding = useSettingsStore((state) => state.searchKeybindings.searchFiles);
+  // Chat search: the entry opens the 「对话」 tab, which needs no workspace.
+  const searchBinding = useSettingsStore((state) => state.searchKeybindings.searchChats);
   const search: SidebarSearchEntry | undefined = onOpenSearch
-    ? {
-        onOpen: onOpenSearch,
-        enabled: searchRoot !== null,
-        shortcut: keybindingLabel(searchBinding, window.electronAPI.env.platform),
-      }
+    ? sidebarSearchEntry(onOpenSearch, searchBinding, window.electronAPI.env.platform)
     : undefined;
   const dockRef = useRef<HTMLDivElement>(null);
   const [resizing, setResizing] = useState(false);

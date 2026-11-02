@@ -85,7 +85,11 @@ describe('S04/S06 removed settings', () => {
         prompt: 'custom commit prompt',
       },
     };
-    const migrated = migrateSettings(persisted, current);
+    // A profile saved before chat search has no `searchChats`; the default fills it in.
+    const migrated = migrateSettings(
+      persisted as unknown as Parameters<typeof migrateSettings>[0],
+      current
+    );
 
     for (const key of [...removedKeys, 'claudeCodeIntegration']) {
       expect(migrated).not.toHaveProperty(key);
@@ -94,7 +98,10 @@ describe('S04/S06 removed settings', () => {
     expect(migrated.terminalScrollback).toBe(5000);
     expect(migrated.editorSettings).toEqual(persisted.editorSettings);
     expect(migrated.proxySettings).toEqual(persisted.proxySettings);
-    expect(migrated.searchKeybindings).toEqual(persisted.searchKeybindings);
+    expect(migrated.searchKeybindings).toEqual({
+      ...current.searchKeybindings,
+      ...persisted.searchKeybindings,
+    });
     expect(migrated.commitMessageGenerator).toEqual(persisted.commitMessageGenerator);
     expect(migrated.setTheme).toBe(current.setTheme);
     expect(persisted).toHaveProperty('terminalInput');

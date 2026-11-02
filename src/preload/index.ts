@@ -32,6 +32,8 @@ import type {
   AppCloseRequestPayload,
   AttachmentReadOptions,
   AttachmentReadResult,
+  ChatSearchQuery,
+  ChatSearchResult,
   CloneProgress,
   CloneResult,
   CommitFileChange,
@@ -913,6 +915,12 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.SEARCH_FILES, params),
     content: (params: ContentSearchParams): Promise<ContentSearchResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.SEARCH_CONTENT, params),
+  },
+
+  /** Chat search: find a conversation by what was said in it. */
+  chatSearch: {
+    query: (query: ChatSearchQuery): Promise<ChatSearchResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEARCH_QUERY, query),
   },
 
   // Web Inspector

@@ -321,6 +321,8 @@ export const IPC_CHANNELS = {
   // Search
   SEARCH_FILES: 'search:files',
   SEARCH_CONTENT: 'search:content',
+  /** Chat search: one query over the conversation index (`ChatSearchQuery` → `ChatSearchResult`). */
+  CHAT_SEARCH_QUERY: 'chatSearch:query',
 
   // Usage
   USAGE_GET_STATS: 'usage:getStats',
