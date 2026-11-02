@@ -9,11 +9,15 @@
  * The timeline's change card (`changeFocus`, layout 5c) opens this pane and
  * names a change; the pane expands that change's file and scrolls to it.
  */
+import { patchPath } from '@shared/diffPatch';
 import { getDisplayPath } from '@shared/utils/path';
 import { ArrowRight, ChevronRight, FileCode } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { CopyPatchButton, useSessionWorkspacePath } from '@/components/chat/CopyPatchButton';
 import { DiffLayoutToggle } from '@/components/chat/DiffLayout';
 import { loadOlderHistoryPage } from '@/components/chat/historyPageRequest';
+import { ReviewDiff } from '@/components/chat/ReviewDiff';
+import { reviewEntryRows } from '@/components/chat/sessionReviewPatch';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Ident } from '@/components/ui/ident';
@@ -31,7 +35,6 @@ import {
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { PaneHeaderPortal } from './panes/paneSlots';
-import { ReviewDiff } from './ReviewDiff';
 import type { SessionReviewEntry } from './sessionReview';
 import {
   fileForChangeFocus,
@@ -39,7 +42,6 @@ import {
   type SessionReviewFile,
   shortenDir,
 } from './sessionReviewFiles';
-import { reviewEntryRows } from './sessionReviewPatch';
 import { WorkspaceChangesList } from './WorkspaceChangesList';
 
 interface SessionReviewPanelProps {
@@ -68,6 +70,7 @@ export function SessionReviewPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const files = useMemo(() => groupReviewByFile(entries), [entries]);
+  const workspacePath = useSessionWorkspacePath(sessionId ?? undefined);
   const [openPaths, setOpenPaths] = useState<ReadonlySet<string>>(() => new Set());
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -204,6 +207,7 @@ export function SessionReviewPanel({
                   })
                 }
                 onOpenDiff={onOpenDiff}
+                workspacePath={workspacePath}
               />
             ))}
             {/* P1-7e e6 (problem 42, decision 145): `text-small`, the smallest size
@@ -228,7 +232,9 @@ function ReviewFile({
   focused,
   onOpenChange,
   onOpenDiff,
+  workspacePath,
 }: {
+  workspacePath: string | null;
   file: SessionReviewFile;
   open: boolean;
   focused: boolean;
@@ -242,6 +248,19 @@ function ReviewFile({
   const layout = useDiffLayoutStore((state) => state.layout);
   const [bodyRef, bodyWidth] = useElementWidth<HTMLDivElement>();
   const shownLayout = effectiveDiffLayout(layout, bodyWidth);
+  // PiLab R2 (07.9): 「复制补丁」 copies every recorded change of this file, in
+  // order — a file edited twice is two patches, applied one after the other.
+  const patchFiles = useMemo(
+    () =>
+      file.entries
+        .filter((entry) => !entry.unavailable)
+        .map((entry, index) => ({
+          path: patchPath(entry.path, workspacePath),
+          rows: reviewEntryRows(entry),
+          created: index === 0 && entry.status === 'added',
+        })),
+    [file.entries, workspacePath]
+  );
   // User, 2026-11-02: the button opens the file in the editor, not a diff — the
   // change itself is already shown right here, and a git diff of the working
   // tree is not this session's change (it may be blank once staged/committed).
@@ -298,6 +317,7 @@ function ReviewFile({
           )}
         </CollapsibleTrigger>
         {open && !file.unavailable && <DiffLayoutToggle narrow={diffTooNarrowToSplit(bodyWidth)} />}
+        {open && patchFiles.length > 0 && <CopyPatchButton files={patchFiles} />}
         <Button
           variant="ghost"
           size="icon-xs"

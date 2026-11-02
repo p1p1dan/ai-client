@@ -24,6 +24,7 @@ import type {
   PermissionRequestKind,
   RuntimeEventDraft,
 } from '../types/runtimeEvents.ts';
+import { fileChangeDiffFields } from './approvalDiff.ts';
 import {
   isDangerousShellRequest,
   PERMISSION_TIMEOUT_MS,
@@ -150,12 +151,22 @@ function detailOf(request: ToolPermissionRequest, cwd: string) {
     };
   }
   if (request.tool === 'write' || request.tool === 'edit') {
+    const diff = request.fileDiff;
     return {
       kind: 'file_change' as const,
       changes: [
         {
           path: request.path,
-          change: request.tool === 'write' ? ('add' as const) : ('update' as const),
+          // PiLab R2 (FR-07.2): with the file read, a write over an existing
+          // one is an update; without it, the old guess stands.
+          change: diff
+            ? diff.created
+              ? ('add' as const)
+              : ('update' as const)
+            : request.tool === 'write'
+              ? ('add' as const)
+              : ('update' as const),
+          ...(diff ? fileChangeDiffFields(diff) : {}),
         },
       ],
     };
@@ -216,7 +227,8 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
             input: {
               ...(request.path ? { path: request.path } : {}),
               ...(request.command ? { command: request.command } : {}),
-              ...(request.preview
+              // FR-05.5: a diff replaces the argument text, which says the same less readably.
+              ...(request.preview && !request.fileDiff
                 ? { content: request.preview.text, contentLabel: request.preview.label }
                 : {}),
               workspace: options.cwd,

@@ -20,6 +20,10 @@
  * host loads the esbuild bundle scripts/build-dsh-host.mjs writes over it.
  */
 
+import {
+  APPROVAL_DIFF_MAX_FILE_BYTES,
+  type ApprovalFileRead,
+} from '../../shared/permissions/approvalDiff.ts';
 import { LOOP_GUARD_SERVICE } from '../loopGuard/constants.ts';
 import type {
   DshAgentView,
@@ -159,6 +163,11 @@ export function apply(ctx: PermissionRowContext): void {
     refusalFor: (exec) =>
       (ctx.get?.(LOOP_GUARD_SERVICE) as LoopGuardView | undefined)?.refusalFor(exec),
     log: (...args) => console.error(...args),
+    // FR-05.5: through the fs service, so the approval diff reads a file the
+    // way the edit will (on Windows, encrypted files decrypted by the
+    // encrypted-read row's wrapper).
+    readFile: (path, cwd) =>
+      readForApproval(ctx.get?.('fs') as ApprovalFsView | undefined, path, cwd),
   });
   ctx.on('session/created', (session: DshSessionView | undefined) =>
     host.onSessionCreated(session)
@@ -212,4 +221,31 @@ export function apply(ctx: PermissionRowContext): void {
   });
   hideSandboxSkills(ctx);
   ctx.provide(PERMISSION_HOST_SERVICE, host.api);
+}
+
+/** The slice of the fs service (dsh-fs) an approval diff reads through. */
+export interface ApprovalFsView {
+  resolve(path: string, opts?: { cwd?: string }): Promise<object>;
+  stat(target: object): Promise<{ type: string; size?: number } | undefined>;
+  readText(target: object): Promise<string>;
+}
+
+/** One file for an approval diff; any failure is `unreadable`, never an error. */
+export async function readForApproval(
+  fs: ApprovalFsView | undefined,
+  path: string,
+  cwd: string
+): Promise<ApprovalFileRead> {
+  if (!fs) return { kind: 'unreadable' };
+  try {
+    const target = await fs.resolve(path, { cwd });
+    const info = await fs.stat(target);
+    if (!info) return { kind: 'missing' };
+    if (info.type !== 'file' || (info.size ?? 0) > APPROVAL_DIFF_MAX_FILE_BYTES) {
+      return { kind: 'unreadable' };
+    }
+    return { kind: 'text', text: await fs.readText(target) };
+  } catch {
+    return { kind: 'unreadable' };
+  }
 }

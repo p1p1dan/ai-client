@@ -1,5 +1,5 @@
 import { readStreamingToolArgs } from '../../../shared/streamingToolArgs';
-import { lineDiffRows, type ToolDiffRow } from '../../../shared/textDiff';
+import { lineDiffRows, type ToolDiffLineRow, type ToolDiffRow } from '../../../shared/textDiff';
 import { PI_TOOL_NAMES } from './piToolNames';
 
 /**
@@ -27,28 +27,8 @@ import { PI_TOOL_NAMES } from './piToolNames';
  * A ~35-line textbook algorithm with its own tests is the smaller liability.
  */
 
-export type { ToolDiffRow, ToolDiffRowKind } from '../../../shared/textDiff';
+export type { ToolDiffLineRow, ToolDiffRow, ToolDiffRowKind } from '../../../shared/textDiff';
 export { lineDiffRows } from '../../../shared/textDiff';
-
-/**
- * Issue #26 item 2: a row with its line numbers, where the source knows them —
- * an SDK patch's hunk headers, a whole-file write. An argument preview has no
- * position in the file, so it carries none rather than invented ones.
- */
-export interface ToolDiffLineRow extends ToolDiffRow {
-  /** Line in the old file (`same` / `del`). */
-  oldLine?: number;
-  /** Line in the new file (`same` / `add`). */
-  newLine?: number;
-  /**
-   * PiLab R2 (FR-07.4): the first row of a hunk that is a separate region of
-   * the file. A DSH patch's bare `@@` and a multi-edit's pairs carry no line
-   * numbers, so this is the only way the view knows to put 「⋯」 between them.
-   */
-  hunkStart?: true;
-  /** PiLab R2 (FR-07.5): this line has no newline after it (`\ No newline at end of file`). */
-  noFinalNewline?: true;
-}
 
 export interface ToolDiff {
   /** File the change lands in, when the arguments name one. */

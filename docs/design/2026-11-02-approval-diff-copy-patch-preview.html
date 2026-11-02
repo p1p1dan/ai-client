@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C 批：审批卡显示差异 + 「复制补丁」预览</title>
+<style>
+  :root {
+    --background: #fcfcfb; --foreground: #151515; --card: #ffffff; --popover: #ffffff;
+    --primary: #c6613f; --primary-foreground: #ffffff; --muted-foreground: #525252;
+    --fill-ghost-hover: #f0f0ef; --fill-ghost-selected: #e5e5e4; --fill-neutral: #f4f4f3; --secondary: #eeeeed;
+    --border: #e5e5e4; --border-soft: #ededec; --surface-2: #f7f7f6;
+    --success: #3f7d4e; --destructive: #b5473a; --warning: #9a6a1c;
+    --add-bg: color-mix(in oklab, var(--success) 12%, transparent);
+    --del-bg: color-mix(in oklab, var(--destructive) 12%, transparent);
+    --foreground-faint: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
+    --radius-xs: .25rem; --radius-sm: .375rem; --radius-md: .625rem; --radius-lg: .75rem;
+    --text-2xs: .6875rem; --text-small: .75rem; --text-ui: .8125rem;
+    --mono: 12px/1.55 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  .dark {
+    --background: #151515; --foreground: #f5f5f5; --card: #1a1a19; --popover: #20201f;
+    --primary: #d97757; --muted-foreground: #a3a3a3; --fill-ghost-hover: #202020;
+    --fill-ghost-selected: #2b2b2b; --fill-neutral: #222221; --secondary: #222222; --border: #2b2b2b; --border-soft: #262625;
+    --surface-2: #1e1e1d; --success: #6fbf82; --destructive: #e07a6c; --warning: #d6a64f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--background); color: var(--foreground);
+    font: var(--text-ui)/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; flex: 1; min-width: 0; }
+  main { max-width: 860px; margin: 0 auto; padding: 8px 16px 64px; }
+  section { padding: 20px 0; border-bottom: 1px solid var(--border); }
+  h2 { font-size: 14px; margin: 0 0 4px; }
+  h3 { font-size: var(--text-ui); margin: 16px 0 6px; }
+  .why { color: var(--muted-foreground); font-size: var(--text-small); margin: 0 0 12px; }
+  .ctrl { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; font-size: var(--text-small); }
+  .ctrl button { font: inherit; padding: 3px 10px; border-radius: var(--radius-xs); border: 0;
+    background: var(--secondary); color: var(--foreground); cursor: pointer; }
+  .ctrl button[aria-pressed="true"] { background: var(--fill-ghost-selected); font-weight: 600; }
+  .ctrl .sep { width: 16px; }
+  .note { font-size: var(--text-small); color: var(--muted-foreground); margin-top: 10px; }
+  .note b { color: var(--foreground); font-weight: 600; }
+  .mono { font: var(--mono); }
+
+  .icon { width: 24px; height: 24px; display: inline-grid; place-items: center; border: 0; border-radius: var(--radius-sm); flex: none;
+    background: transparent; color: var(--foreground-faint); cursor: pointer; transition: color .15s ease-out, background-color .15s ease-out; }
+  .icon:hover { background: var(--fill-ghost-hover); color: var(--foreground); }
+  .icon svg { width: 14px; height: 14px; }
+  .icon.done { color: var(--success); }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--radius-sm); background: var(--fill-neutral); font-size: var(--text-2xs); flex: none; }
+  .seg span { padding: 0 6px; border-radius: var(--radius-xs); line-height: 18px; color: var(--muted-foreground); }
+  .seg span.on { background: var(--card); color: var(--foreground); }
+  .add { color: var(--success); } .del { color: var(--destructive); }
+
+  /* diff rows, shared by the card and the three diff surfaces */
+  .rows { font: var(--mono); padding: 4px 0; overflow-x: auto; }
+  .r { display: grid; grid-template-columns: var(--num, 0) var(--num, 0) 16px 1fr; white-space: pre; }
+  .r.plus { background: var(--add-bg); } .r.minus { background: var(--del-bg); }
+  .r .n { text-align: right; padding-right: 8px; color: var(--foreground-faint); user-select: none; }
+  .r .s { user-select: none; color: var(--foreground-faint); text-align: center; }
+  .r.plus .s { color: var(--success); } .r.minus .s { color: var(--destructive); }
+  .r .x { padding-right: 12px; }
+  .gap { font: var(--text-small)/1.8 sans-serif; color: var(--foreground-faint); padding-left: 12px; user-select: none; }
+
+  /* the approval card: one frame, everything inside unframed (design-system §1 rule 1) */
+  .card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); max-height: 400px;
+    display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 2px 8px rgb(0 0 0 / .05); }
+  .card .ch { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; flex: none; }
+  .card .ch .t { font-weight: 600; }
+  .badge { font-size: var(--text-2xs); padding: 1px 6px; border-radius: var(--radius-xs); }
+  .badge.high { background: var(--del-bg); color: var(--destructive); }
+  .card .cb { padding: 0 16px 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  .card .prompt { font-weight: 600; }
+  .card .lbl { font-size: var(--text-small); color: var(--muted-foreground); padding-bottom: 4px; }
+  .card pre.json { margin: 0; max-height: 128px; overflow: auto; background: var(--fill-neutral); border-radius: var(--radius-sm);
+    padding: 8px 10px; font: var(--mono); white-space: pre-wrap; word-break: break-all; }
+  .frow { display: flex; align-items: center; gap: 6px; min-width: 0; height: 24px; }
+  .frow .k { font: 600 var(--text-2xs)/1 ui-monospace, monospace; width: 16px; flex: none; text-align: center; }
+  .frow .k.M { color: var(--warning); } .frow .k.A { color: var(--success); }
+  .frow .p { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--mono); }
+  .frow .c { flex: none; font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+  .card .dfill { background: var(--fill-neutral); border-radius: var(--radius-sm); }
+  .warn { font-size: var(--text-small); color: var(--warning); }
+  .meta { display: flex; gap: 8px; font-size: var(--text-small); color: var(--muted-foreground); }
+  .meta .grow { flex: 1; }
+  .card .cf { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border-soft); flex: none; flex-wrap: wrap; }
+  .card .cf .hint { margin-right: auto; font-size: var(--text-small); color: var(--foreground-faint); }
+  .btn { font: inherit; font-size: var(--text-small); padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--foreground); cursor: pointer; }
+  .btn.sec { background: var(--secondary); border-color: transparent; }
+  .btn.pri { background: var(--primary); border-color: transparent; color: var(--primary-foreground); }
+
+  /* chat tool row diff frame */
+  .trow { display: flex; align-items: center; gap: 6px; height: 26px; color: var(--muted-foreground); }
+  .trow .v { color: var(--foreground); }
+  .frame { border: 1px solid var(--border-soft); border-radius: var(--radius-lg); background: var(--surface-2); overflow: hidden; margin-top: 4px; }
+  .frame .fh { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--border-soft);
+    font-size: var(--text-small); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .frame .fh .lab { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frame .fh .push { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+  /* review panel file row */
+  .rp { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--background); padding: 6px; max-width: 460px; }
+  .rp .fr { display: flex; align-items: center; gap: 6px; height: 28px; padding-left: 4px; border-radius: var(--radius-sm); }
+  .rp .fr:hover { background: var(--fill-ghost-hover); }
+  .rp .fr .nm { font: var(--mono); } .rp .fr .dir { font: var(--mono); color: var(--foreground-faint); font-size: 11px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* diff tab toolbar */
+  .tab { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--card); }
+  .tab .tb { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--border-soft); }
+  .tab .tb .pth { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab .tb .st { font-size: var(--text-small); color: var(--muted-foreground); flex: 1; }
+  .tab .tb .cnt { font-size: var(--text-small); color: var(--muted-foreground); padding: 0 4px; }
+  .clip { margin-top: 12px; }
+  .clip pre { margin: 4px 0 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--fill-neutral); font: var(--mono); white-space: pre; overflow: auto; max-height: 220px; }
+  .tip { position: fixed; pointer-events: none; background: var(--popover); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 3px 8px; font-size: var(--text-small); box-shadow: 0 4px 16px rgb(0 0 0 / .1); display: none; z-index: 5; max-width: 320px; }
+  table { border-collapse: collapse; font-size: var(--text-small); width: 100%; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  th { color: var(--muted-foreground); font-weight: 500; }
+</style>
+</head>
+<body>
+<header>
+  <h1>C 批：审批卡显示改了什么 + 差异「复制补丁」（台账 §19 · 05.5 / 07.9）</h1>
+  <div class="ctrl" style="margin:0">
+    <button id="light" aria-pressed="true">浅色</button><button id="dark" aria-pressed="false">深色</button>
+  </div>
+</header>
+<main>
+  <section>
+    <h2>现状</h2>
+    <p class="why">agent 要改文件时，底部的审批卡把调用参数原样贴成一段 JSON（最多 4000 字，再长就截断，卡里的小框只有 128px 高）。要从 <code>old_string</code> / <code>new_string</code> 里自己比出改了哪几行；<code>replace_all</code> 到底会改几处，卡上看不出来。</p>
+    <div class="card" style="max-width:720px">
+      <div class="ch">${CLOCK}<span class="t">权限</span><span class="badge high">高风险</span></div>
+      <div class="cb">
+        <div class="prompt">edit — 修改工作区文件</div>
+        <div><div class="lbl">参数</div><pre class="json" id="nowJson"></pre></div>
+        <div class="frow"><span class="k M">M</span><span class="p">src/utils/format.ts</span></div>
+        <div class="meta"><span class="grow">项目：demo-app</span><span>若 58 秒内未响应将自动拒绝</span></div>
+      </div>
+      <div class="cf"><span class="hint">Esc 中断</span><button class="btn">直接拒绝</button><button class="btn sec">本会话内允许</button><button class="btn pri">直接允许</button></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>① 审批卡：直接显示要改哪几行</h2>
+    <p class="why">参数那一段换成差异：删的行标红、加的行标绿，文件名那一行兼当差异的标题（改动行数 + 复制按钮）。卡还是一层框，差异不再套框，只铺一层浅底色。卡最高占窗口 40%，差异长了跟卡片正文一起滚，决定按钮一直钉在底部。</p>
+    <div class="ctrl">
+      这次调用：
+      <button data-s="one" aria-pressed="true">改一处</button>
+      <button data-s="all" aria-pressed="false">全部替换</button>
+      <button data-s="multi" aria-pressed="false">一次改两处</button>
+      <button data-s="new" aria-pressed="false">新建文件</button>
+      <button data-s="over" aria-pressed="false">覆盖已有文件</button>
+      <button data-s="miss" aria-pressed="false">找不到要替换的内容</button>
+    </div>
+    <div class="ctrl">
+      差异从哪来：
+      <button data-m="A" aria-pressed="true">A 读当前文件，算出带行号的差异（推荐）</button>
+      <button data-m="B" aria-pressed="false">B 只拿参数里的前后片段</button>
+    </div>
+    <div id="cardHost" style="max-width:720px"></div>
+    <p class="note" id="modeNote"></p>
+  </section>
+
+  <section>
+    <h2>② 三处差异视图加「复制补丁」</h2>
+    <p class="why">标题栏右侧加一个复制图标，悬停写「复制补丁」，点了图标变成绿勾 1.5 秒，不弹提示（和工具输出、代码块的复制同一种画法）。复制的是标准补丁：带文件头、带 +/-、完整包含折叠起来的行，和屏幕上展开了多少无关。下面每个复制按钮都能点，点完在最下面看剪贴板里是什么。</p>
+    <div class="ctrl">
+      这段差异：
+      <button data-n="num" aria-pressed="true">有行号（审查面板、差异标签页、Claude 引擎的修改记录）</button>
+      <button data-n="snip" aria-pressed="false">只有参数片段（DeepSeek 引擎的修改记录）</button>
+    </div>
+
+    <h3>对话里的修改记录</h3>
+    <div class="trow"><span class="v">编辑</span><span class="mono">format.ts</span><span class="add">+2</span><span class="del">-1</span></div>
+    <div class="frame">
+      <div class="fh"><span class="lab" id="frameLabel"></span><span class="add">+2</span><span class="del">-1</span>
+        <span class="push"><span class="seg"><span class="on">上下</span><span>并排</span></span>${COPY}</span></div>
+      <div class="rows" id="frameRows"></div>
+    </div>
+
+    <h3>审查面板的文件行（展开后才出现，和「上下 / 并排」一样）</h3>
+    <div class="rp">
+      <div class="fr">${CHEV}${FILE}<span class="nm">format.ts</span><span class="dir">src/utils</span><span class="add c">+2</span> <span class="del c">−1</span>
+        <span class="seg"><span class="on">上下</span><span>并排</span></span>${COPY}<button class="icon" data-tip="打开文件">${EXT}</button></div>
+      <div class="rows" id="panelRows" style="--num:28px"></div>
+    </div>
+
+    <h3>编辑器里的差异标签页</h3>
+    <div class="tab">
+      <div class="tb"><span class="pth">src/utils/format.ts</span><span class="st">(未暂存)</span>
+        <span class="seg"><span class="on">上下</span><span>并排</span></span>${COPY}<span class="cnt">1/1</span><button class="icon">${UP}</button><button class="icon">${DOWN}</button></div>
+      <div class="rows" id="tabRows" style="--num:28px"></div>
+    </div>
+
+    <div class="clip"><div class="lbl" style="font-size:var(--text-small);color:var(--muted-foreground)">剪贴板里会是（点上面任意一个复制按钮）：</div><pre id="clip">（还没复制）</pre></div>
+    <p class="note" id="snipNote" hidden>只有参数片段时没有行号，补丁的 <code>@@</code> 行没法写出位置，<b>这份补丁不能直接 <code>git apply</code></b>，只适合贴给人看。悬停提示会写成「复制补丁（没有行号，不能直接应用）」。要不要这时候干脆不给按钮，见下表第 5 条。</p>
+  </section>
+
+  <section>
+    <h2>需要你定的</h2>
+    <table>
+      <tr><th>#</th><th>问题</th><th>选项</th><th>我的建议</th></tr>
+      <tr><td>1</td><td>审批卡的差异从哪来</td><td>A 读当前文件，算出带行号和上下文的差异（Claude Code 的做法）；B 只拿参数里的前后片段（PI-Desktop 的做法）</td><td><b>A</b>。能看到在第几行、上下文是什么、全部替换会改几处；覆盖已有文件能看出原来是什么。代价是两个引擎都要改：宿主读文件算好差异，随审批请求一起发过来。读不到时自动退回 B，并写一行说明</td></tr>
+      <tr><td>2</td><td>卡里的差异要不要「上下 / 并排」切换</td><td>要；不要，卡里一直上下</td><td><b>不要</b>。卡跟输入框一样宽，并排太挤；想细看批准后去审查面板</td></tr>
+      <tr><td>3</td><td>卡里的差异多高</td><td>差异自己限高另滚；不单独限高，跟卡片正文一起滚</td><td><b>跟正文一起滚</b>，只有一个滚动区。没改的长段落照对话里的做法折成「⋯ N 行未改动」</td></tr>
+      <tr><td>4</td><td>审批卡上也放「复制补丁」吗</td><td>放；不放</td><td><b>放</b>，所有差异标题一种画法</td></tr>
+      <tr><td>5</td><td>只有参数片段（没行号）时的复制</td><td>照样给，提示里写明不能直接应用；不给按钮</td><td><b>照样给</b>。贴给人看还是有用，比框选（会丢 +/- 和折叠行）强</td></tr>
+      <tr><td>6</td><td>审查面板顶上加「复制全部补丁」（所有文件一份）</td><td>这次做；以后再说</td><td><b>以后再说</b>，这次只做单个文件</td></tr>
+      <tr><td>7</td><td>很大的新建 / 覆盖（几千行）</td><td>—</td><td>卡里最多显示 400 行，下面写「还有 N 行未显示」；不影响批准</td></tr>
+    </table>
+    <p class="note">框选复制时 +/- 不带上、折叠行漏掉的问题（07.9）这次不动框选本身，用「复制补丁」解决。</p>
+  </section>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+const SVG = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ICONS = {
+  CLOCK: '<span style="color:var(--warning);display:inline-grid">' + SVG('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>').replace('<svg', '<svg width="14" height="14"') + '</span>',
+  COPY: '<button class="icon copy" data-tip="复制补丁">' + SVG('<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>') + '</button>',
+  CHECK: SVG('<path d="M20 6 9 17l-5-5"/>'),
+  CHEV: '<span style="display:inline-grid;color:var(--muted-foreground);transform:rotate(90deg)">' + SVG('<path d="m9 18 6-6-6-6"/>').replace('<svg', '<svg width="14" height="14"') + '</span>',
+  FILE: '<span style="display:inline-grid;color:var(--muted-foreground)">' + SVG('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/>').replace('<svg', '<svg width="14" height="14"') + '</span>',
+  EXT: SVG('<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'),
+  UP: SVG('<path d="m18 15-6-6-6 6"/>'),
+  DOWN: SVG('<path d="m6 9 6 6 6-6"/>'),
+};
+const MAIN = document.querySelector("main");
+MAIN.innerHTML = MAIN.innerHTML.replace(/\$\{(\w+)\}/g, (m, k) => ICONS[k] ?? m);
+
+document.getElementById('light').onclick = () => setTheme(false);
+document.getElementById('dark').onclick = () => setTheme(true);
+function setTheme(dark) {
+  document.documentElement.classList.toggle('dark', dark);
+  document.getElementById('light').setAttribute('aria-pressed', String(!dark));
+  document.getElementById('dark').setAttribute('aria-pressed', String(dark));
+}
+
+// ---- sample file and calls ----
+const PATH = 'src/utils/format.ts';
+const ORIG = [
+  "import { clamp } from './math';",
+  '',
+  'export interface FormatOptions {',
+  '  digits?: number;',
+  '  unit?: string;',
+  '}',
+  '',
+  'export function formatBytes(bytes: number, options: FormatOptions = {}): string {',
+  '  const digits = options.digits ?? 1;',
+  '  if (bytes < 1024) return `${bytes} B`;',
+  '  const kb = bytes / 1024;',
+  '  if (kb < 1024) return `${kb.toFixed(digits)} KB`;',
+  '  const mb = kb / 1024;',
+  '  return `${mb.toFixed(digits)} MB`;',
+  '}',
+  '',
+  'export function formatPercent(value: number): string {',
+  '  return `${Math.round(clamp(value, 0, 1) * 100)}%`;',
+  '}',
+  '',
+  'export function formatDuration(ms: number): string {',
+  '  if (ms < 1000) return `${ms} ms`;',
+  '  const seconds = ms / 1000;',
+  '  if (seconds < 60) return `${seconds.toFixed(1)} s`;',
+  '  const minutes = Math.floor(seconds / 60);',
+  '  return `${minutes} min ${Math.round(seconds % 60)} s`;',
+  '}',
+].join('\n');
+
+const ONE = { old_string: '  const mb = kb / 1024;\n  return `${mb.toFixed(digits)} MB`;',
+  new_string: '  const mb = kb / 1024;\n  if (mb < 1024) return `${mb.toFixed(digits)} MB`;\n  return `${(mb / 1024).toFixed(digits)} GB`;' };
+const ALL = { old_string: 'toFixed(digits)', new_string: 'toFixed(precision)', replace_all: true };
+const MULTI = [
+  { old_string: '  const digits = options.digits ?? 1;', new_string: '  const digits = clamp(options.digits ?? 1, 0, 3);' },
+  { old_string: '  if (ms < 1000) return `${ms} ms`;', new_string: '  if (ms < 1000) return `${Math.round(ms)} ms`;' },
+];
+const NEWFILE = { path: 'src/utils/format.test.ts', content: [
+  "import { describe, expect, it } from 'vitest';",
+  "import { formatBytes, formatDuration } from './format';",
+  '',
+  "describe('formatBytes', () => {",
+  "  it('keeps small sizes in bytes', () => expect(formatBytes(512)).toBe('512 B'));",
+  "  it('switches to KB', () => expect(formatBytes(2048)).toBe('2.0 KB'));",
+  '});',
+  '',
+  "describe('formatDuration', () => {",
+  "  it('formats minutes', () => expect(formatDuration(125000)).toBe('2 min 5 s'));",
+  '});',
+].join('\n') };
+const OVER = ORIG
+  .replace("import { clamp } from './math';\n\n", '')
+  .replace('  unit?: string;\n', '  unit?: string;\n  locale?: string;\n')
+  .replace(/export function formatPercent[\s\S]*?\n}\n\n/, '')
+  .replace('  const minutes = Math.floor(seconds / 60);', '  const minutes = Math.floor(seconds / 60);\n  if (minutes >= 60) return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;');
+const MISS = { old_string: '  return `${mb.toFixed(2)} MB`;', new_string: '  return `${mb.toFixed(digits)} MiB`;' };
+
+// ---- line diff (LCS) ----
+function diffLines(a, b) {
+  const A = a === '' ? [] : a.split('\n'), B = b === '' ? [] : b.split('\n');
+  const n = A.length, m = B.length, L = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+    L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const ops = []; let i = 0, j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && A[i] === B[j]) { ops.push({ t: ' ', x: A[i], o: i + 1, n: j + 1 }); i++; j++; }
+    // Removals before additions, the order `git diff` prints them in.
+    else if (i < n && (j >= m || L[i + 1][j] >= L[i][j + 1])) { ops.push({ t: '-', x: A[i], o: i + 1 }); i++; }
+    else { ops.push({ t: '+', x: B[j], n: j + 1 }); j++; }
+  }
+  return ops;
+}
+// Hunks with 3 lines of context, as `git diff` would cut them.
+function hunks(ops, ctx = 3) {
+  const changed = ops.map((op, k) => op.t !== ' ' ? k : -1).filter((k) => k >= 0);
+  const out = [];
+  for (const k of changed) {
+    const lo = Math.max(0, k - ctx), hi = Math.min(ops.length - 1, k + ctx);
+    const last = out[out.length - 1];
+    if (last && lo <= last.hi + 1) last.hi = hi; else out.push({ lo, hi });
+  }
+  return out.map(({ lo, hi }) => ops.slice(lo, hi + 1));
+}
+function counts(ops) {
+  return { add: ops.filter((o) => o.t === '+').length, del: ops.filter((o) => o.t === '-').length };
+}
+function apply(text, edit) {
+  return edit.replace_all ? text.split(edit.old_string).join(edit.new_string) : text.replace(edit.old_string, () => edit.new_string);
+}
+
+// ---- rendering ----
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+function rowHtml(op, numbered) {
+  const cls = op.t === '+' ? 'plus' : op.t === '-' ? 'minus' : '';
+  const n1 = numbered ? (op.o ?? '') : '', n2 = numbered ? (op.n ?? '') : '';
+  return `<div class="r ${cls}"><span class="n">${n1}</span><span class="n">${n2}</span><span class="s">${op.t === ' ' ? '' : op.t}</span><span class="x">${esc(op.x)}</span></div>`;
+}
+// Numbered hunks of a whole-file diff, with the unchanged runs between them folded.
+function numberedRows(ops) {
+  const hs = hunks(ops); let html = ''; let prevEnd = 0;
+  hs.forEach((h, k) => {
+    const first = h[0].o ?? h[0].n, gap = first - 1 - prevEnd;
+    if (gap > 0) html += `<div class="gap">⋯ ${gap} 行未改动</div>`;
+    html += h.map((op) => rowHtml(op, true)).join('');
+    const lastOld = [...h].reverse().find((op) => op.o)?.o ?? prevEnd;
+    prevEnd = lastOld;
+    if (k === hs.length - 1) {
+      const total = ops.filter((op) => op.o).length, tail = total - prevEnd;
+      if (tail > 0) html += `<div class="gap">⋯ ${tail} 行未改动</div>`;
+    }
+  });
+  return html;
+}
+function snippetRows(pairs) {
+  return pairs.map((p, k) => (k ? '<div class="gap">⋯ 下一处修改</div>' : '') +
+    diffLines(p.old_string, p.new_string).map((op) => rowHtml(op, false)).join('')).join('');
+}
+
+function scenario(s) {
+  switch (s) {
+    case 'one': return { tool: 'edit', path: PATH, kind: 'M', args: ONE, before: ORIG, after: apply(ORIG, ONE), pairs: [ONE] };
+    case 'all': {
+      const times = ORIG.split(ALL.old_string).length - 1;
+      return { tool: 'edit', path: PATH, kind: 'M', args: ALL, before: ORIG, after: apply(ORIG, ALL), pairs: [ALL],
+        noteA: `全部替换：文件里共 ${times} 处，下面就是这 ${times} 处。`, noteB: '全部替换：不知道文件里有几处。' };
+    }
+    case 'multi': return { tool: 'edit', path: PATH, kind: 'M', args: { edits: MULTI }, before: ORIG, after: MULTI.reduce(apply, ORIG), pairs: MULTI };
+    case 'new': return { tool: 'write', path: NEWFILE.path, kind: 'A', args: { content: NEWFILE.content }, before: '', after: NEWFILE.content,
+      pairs: [{ old_string: '', new_string: NEWFILE.content }] };
+    case 'over': return { tool: 'write', path: PATH, kind: 'M', args: { content: OVER }, before: ORIG, after: OVER,
+      pairs: [{ old_string: '', new_string: OVER }], noteB: '覆盖已有文件：看不到原来的内容，只能整篇当成新增。' };
+    case 'miss': return { tool: 'edit', path: PATH, kind: 'M', args: MISS, before: ORIG, after: null, pairs: [MISS] };
+  }
+}
+
+let S = 'one', M = 'A';
+function renderCard() {
+  const sc = scenario(S);
+  let label = '', body = '', add = 0, del = 0, numbered = false, warn = '';
+  const useA = M === 'A' && sc.after !== null;
+  if (useA) {
+    const ops = diffLines(sc.before, sc.after); ({ add, del } = counts(ops)); numbered = true;
+    body = numberedRows(ops);
+    if (sc.noteA) warn = sc.noteA;
+  } else {
+    const ops = sc.pairs.flatMap((p) => diffLines(p.old_string, p.new_string)); ({ add, del } = counts(ops));
+    body = snippetRows(sc.pairs);
+    if (M === 'A') warn = '当前文件里找不到要替换的内容，以下按参数里的前后片段显示，没有行号。这次修改执行时多半会失败。';
+    else if (sc.noteB) warn = sc.noteB;
+  }
+  const action = sc.tool === 'write' ? '写入工作区文件' : '修改工作区文件';
+  document.getElementById('cardHost').innerHTML = `
+  <div class="card">
+    <div class="ch">${ICONS.CLOCK}<span class="t">权限</span><span class="badge high">高风险</span></div>
+    <div class="cb">
+      <div class="prompt">${sc.tool} — ${action}</div>
+      <div>
+        <div class="frow"><span class="k ${sc.kind}">${sc.kind}</span><span class="p">${sc.path}</span>
+          <span class="c add">+${add}</span><span class="c del">−${del}</span>${ICONS.COPY}</div>
+        ${warn ? `<div class="warn">${warn}</div>` : ''}
+        <div class="dfill rows" style="--num:${numbered ? '28px' : '0px'};margin-top:4px">${body}</div>
+      </div>
+      <div class="meta"><span class="grow">项目：demo-app</span><span>若 58 秒内未响应将自动拒绝</span></div>
+    </div>
+    <div class="cf"><span class="hint">Esc 中断</span><button class="btn">直接拒绝</button><button class="btn sec">本会话内允许</button><button class="btn pri">直接允许</button></div>
+  </div>`;
+  document.getElementById('modeNote').innerHTML = M === 'A'
+    ? '<b>A：</b>宿主在发审批请求前读一次当前文件，把这次调用套上去算出差异，行号就是文件里的真实行号，前后各带 3 行上下文。只是给人看的预览，真正执行仍按原参数。'
+    : '<b>B：</b>只比较参数里的 <code>old_string</code> 和 <code>new_string</code>，不读文件，没有行号；新建和覆盖都只能整篇显示成新增。改动小，但「在哪改、改几处、原来是什么」都看不到。';
+  bindCopies(document.getElementById('cardHost'), () => patchFor(sc, useA));
+}
+
+// ---- patch text ----
+function unified(path, before, after) {
+  const ops = diffLines(before, after);
+  const head = before === '' ? `--- /dev/null\n+++ b/${path}\n` : `--- a/${path}\n+++ b/${path}\n`;
+  return head + hunks(ops).map((h) => {
+    const olds = h.filter((op) => op.t !== '+'), news = h.filter((op) => op.t !== '-');
+    const oStart = olds[0]?.o ?? (h.find((op) => op.o)?.o ?? 1) - 1, nStart = news[0]?.n ?? 0;
+    return `@@ -${olds.length ? oStart : 0},${olds.length} +${nStart},${news.length} @@\n` + h.map((op) => op.t + op.x).join('\n');
+  }).join('\n') + '\n';
+}
+function snippetPatch(path, pairs) {
+  return `--- a/${path}\n+++ b/${path}\n` + pairs.map((p) => '@@\n' + diffLines(p.old_string, p.new_string).map((op) => op.t + op.x).join('\n')).join('\n') + '\n';
+}
+function patchFor(sc, useA) { return useA ? unified(sc.path, sc.before, sc.after) : snippetPatch(sc.path, sc.pairs); }
+
+function bindCopies(root, text) {
+  root.querySelectorAll('.copy').forEach((btn) => {
+    btn.onclick = () => {
+      const t = text();
+      document.getElementById('clip').textContent = t;
+      navigator.clipboard?.writeText(t).catch(() => {});
+      const old = btn.innerHTML; btn.innerHTML = ICONS.CHECK; btn.classList.add('done');
+      setTimeout(() => { btn.innerHTML = old; btn.classList.remove('done'); }, 1500);
+    };
+  });
+}
+
+// ---- section ②: the three surfaces, all showing the single-edit call ----
+let N = 'num';
+function renderSurfaces() {
+  const sc = scenario('one'), ops = diffLines(sc.before, sc.after);
+  const numbered = N === 'num';
+  document.getElementById('frameLabel').textContent = numbered ? '已应用的修改差异' : '修改成功——按参数预览差异';
+  document.getElementById('frameRows').style.setProperty('--num', numbered ? '28px' : '0px');
+  document.getElementById('frameRows').innerHTML = numbered ? numberedRows(ops) : snippetRows(sc.pairs);
+  document.getElementById('panelRows').innerHTML = numberedRows(ops);
+  document.getElementById('tabRows').innerHTML = numberedRows(ops);
+  document.getElementById('snipNote').hidden = numbered;
+  const frameCopy = document.querySelector('.frame .copy');
+  frameCopy.dataset.tip = numbered ? '复制补丁' : '复制补丁（没有行号，不能直接应用）';
+  bindCopies(document.querySelector('.frame'), () => patchFor(sc, numbered));
+  bindCopies(document.querySelector('.rp'), () => patchFor(sc, true));
+  bindCopies(document.querySelector('.tab'), () => patchFor(sc, true));
+}
+
+function radio(attr, set) {
+  document.querySelectorAll(`[data-${attr}]`).forEach((b) => b.onclick = () => {
+    document.querySelectorAll(`[data-${attr}]`).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    set(b.dataset[attr]);
+  });
+}
+radio('s', (v) => { S = v; renderCard(); });
+radio('m', (v) => { M = v; renderCard(); });
+radio('n', (v) => { N = v; renderSurfaces(); });
+
+const tip = document.getElementById('tip');
+document.addEventListener('mouseover', (e) => {
+  const el = e.target.closest('[data-tip]');
+  if (!el) { tip.style.display = 'none'; return; }
+  const r = el.getBoundingClientRect();
+  tip.textContent = el.dataset.tip; tip.style.display = 'block';
+  tip.style.left = Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2) + 'px'; tip.style.top = (r.bottom + 6) + 'px';
+});
+
+const nowArgs = { old_string: ONE.old_string, new_string: ONE.new_string };
+document.getElementById('nowJson').textContent = JSON.stringify(nowArgs, null, 2);
+renderCard();
+renderSurfaces();
+</script>
+</body>
+</html>

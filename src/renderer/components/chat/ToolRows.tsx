@@ -1,3 +1,4 @@
+import { patchPath } from '@shared/diffPatch';
 import {
   ArrowDownToLine,
   Braces,
@@ -62,6 +63,7 @@ import {
 } from '@/stores/toolExpansion';
 import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
 import { CopyIconButton } from './CopyIconButton';
+import { CopyPatchButton, useSessionWorkspacePath } from './CopyPatchButton';
 import {
   thoughtBodyMaxHeightClass,
   toolRowIconClass,
@@ -1164,6 +1166,7 @@ function ToolRowBody({
           diff={view.diff}
           failed={view.failed}
           previewOnly={view.running || Boolean(view.outcome)}
+          sessionId={sessionId}
         />
       )}
       {view.input && (
@@ -1402,9 +1405,11 @@ function ToolRowDiffSegment({
   diff,
   failed,
   previewOnly,
+  sessionId,
 }: {
   diff: ToolDiff;
   failed: boolean;
+  sessionId?: string;
   /**
    * Still running, or never applied (refused, not started, stopped, unknown):
    * the diff is only what the arguments ask for. Such a call is not `failed`,
@@ -1424,6 +1429,22 @@ function ToolRowDiffSegment({
   const layout = useDiffLayoutStore((state) => state.layout);
   const [frameRef, frameWidth] = useElementWidth<HTMLDivElement>();
   const shownLayout = effectiveDiffLayout(layout, frameWidth);
+  // PiLab R2 (07.9): 「复制补丁」. Write content with nothing to compare against
+  // is taken as a new file, which is what such a patch can express.
+  const root = useSessionWorkspacePath(sessionId);
+  const patchFiles = useMemo(
+    () =>
+      diff.path
+        ? [
+            {
+              path: patchPath(diff.path, root),
+              rows: diff.rows,
+              created: diff.source === 'write-content',
+            },
+          ]
+        : [],
+    [diff.path, diff.rows, diff.source, root]
+  );
   const openFold = (key: string) => {
     markUserToggle();
     setOpenFolds((previous) => new Set(previous).add(key));
@@ -1449,8 +1470,9 @@ function ToolRowDiffSegment({
         </span>
         <span className="text-success">+{diff.added}</span>
         <span className="text-destructive">-{diff.removed}</span>
-        <span className="ml-auto">
+        <span className="ml-auto flex shrink-0 items-center gap-1">
           <DiffLayoutToggle narrow={diffTooNarrowToSplit(frameWidth)} />
+          {patchFiles.length > 0 && <CopyPatchButton files={patchFiles} />}
         </span>
       </div>
       <div className="max-h-72 overflow-auto overscroll-contain py-1 font-mono text-code leading-[1.55]">

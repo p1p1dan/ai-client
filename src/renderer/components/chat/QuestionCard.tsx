@@ -1,3 +1,4 @@
+import { patchPath } from '@shared/diffPatch';
 import type { PermissionDecisionId } from '@shared/types/runtimeEvents';
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -12,8 +13,10 @@ import {
 import { Ident } from '@/components/ui/ident';
 import { StatusIcon } from '@/components/ui/status-icon';
 import { useI18n } from '@/i18n';
+import { cn } from '@/lib/utils';
 import type { ChatBlock } from '@/stores/chatSessions';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
+import { CopyPatchButton } from './CopyPatchButton';
 import {
   DISCUSSED_MARK,
   deriveCardTitle,
@@ -31,6 +34,7 @@ import {
   SKIPPED_MARK,
   STOPPED_MARK,
 } from './questionCardModel';
+import { ReviewDiff } from './ReviewDiff';
 import { derivePermissionOrigin } from './subagentActivityModel';
 import { ToolRow } from './ToolRows';
 
@@ -201,12 +205,17 @@ function FrozenQaCard({ block }: { block: ChatBlock }) {
  * type domains (mono for command/path idents, meta for secondary lines) and
  * emphasis (destructive for grants that outlive the single request).
  *
- * Deliberately NOT rendered: the diff body. The repo's only diff surface is a
- * Monaco `DiffEditor` bound to git paths rather than unified-diff strings, so a
- * real patch view is its own task; until then the file list plus +/- counts is
- * what this card honestly has.
+ * PiLab R2 (FR-05.5): a file's diff is drawn under its row, the way the
+ * review pane draws a change (`ReviewDiff`, always top-and-bottom here: the
+ * card is as narrow as the composer), with 「复制补丁」 on the row.
  */
-function PermissionDetailBody({ detail }: { detail: PermissionDetailView }) {
+function PermissionDetailBody({
+  detail,
+  workspace,
+}: {
+  detail: PermissionDetailView;
+  workspace: string | null;
+}) {
   const { t } = useI18n();
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -217,26 +226,54 @@ function PermissionDetailBody({ detail }: { detail: PermissionDetailView }) {
           {detail.command}
         </Ident>
       )}
-      {detail.files.map((file) => (
-        <div key={file.key} className="flex min-w-0 items-center gap-2">
-          <Badge variant="secondary" className="shrink-0">
-            {file.badge}
-          </Badge>
-          <Ident className="min-w-0 flex-1 truncate text-foreground" title={file.path}>
-            {file.path}
-          </Ident>
-          {file.stat && (
-            <span className="shrink-0 text-small tabular-nums text-foreground-faint">
-              {file.stat}
-            </span>
-          )}
-          {file.truncated && (
-            <span className="shrink-0 text-small text-muted-foreground">
-              {t(PERMISSION_DIFF_CLAMPED_MARK)}
-            </span>
-          )}
-        </div>
-      ))}
+      {detail.files.map((file) => {
+        const diff = detail.diffs?.find((item) => item.key === file.key);
+        return (
+          <div key={file.key} className="flex min-w-0 flex-col gap-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <Badge variant="secondary" className="shrink-0">
+                {file.badge}
+              </Badge>
+              <Ident className="min-w-0 flex-1 truncate text-foreground" title={file.path}>
+                {file.path}
+              </Ident>
+              {file.stat && (
+                <span className="shrink-0 text-small tabular-nums text-foreground-faint">
+                  {file.stat}
+                </span>
+              )}
+              {file.truncated && !diff?.rows && (
+                <span className="shrink-0 text-small text-muted-foreground">
+                  {t(PERMISSION_DIFF_CLAMPED_MARK)}
+                </span>
+              )}
+              {diff?.rows && (
+                <CopyPatchButton
+                  files={[
+                    {
+                      path: patchPath(file.path, workspace),
+                      rows: diff.rows,
+                      created: file.change === 'add',
+                    },
+                  ]}
+                />
+              )}
+            </div>
+            {diff?.notes.map((line) => (
+              <p
+                key={line}
+                className={cn(
+                  'text-small',
+                  diff.failing ? 'text-warning' : 'text-muted-foreground'
+                )}
+              >
+                {line}
+              </p>
+            ))}
+            {diff?.rows && <ReviewDiff rows={diff.rows} frame="card" />}
+          </div>
+        );
+      })}
       {detail.meta.map((line) => (
         <p key={line} className="min-w-0 truncate text-small text-muted-foreground" title={line}>
           {line}
@@ -354,7 +391,7 @@ function PermissionQaCard({
             </Ident>
           </div>
         )}
-        {view.detail && <PermissionDetailBody detail={view.detail} />}
+        {view.detail && <PermissionDetailBody detail={view.detail} workspace={view.workspace} />}
         {/* P1-6d: why this card is up when the gear would have let the call
             through — the command could not be read statically. */}
         {view.askReasonNote && (

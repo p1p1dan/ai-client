@@ -707,8 +707,9 @@ describe('the five modes (S-2 A-1)', () => {
 });
 
 describe('[PILAB-R1-05.5] the approval card carries the parameters being approved', () => {
-  it('an Edit shows old_string, new_string and replace_all; an MCP call shows its arguments', async () => {
+  it('an Edit shows its change as a diff of the file (FR-05.5, PiLab R2); an MCP call shows its arguments', async () => {
     const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    writeFileSync(join(configDir, 'x.txt'), 'A\nmid\nA\n');
     const editInput = {
       file_path: join(configDir, 'x.txt'),
       old_string: 'A',
@@ -722,14 +723,21 @@ describe('[PILAB-R1-05.5] the approval card carries the parameters being approve
       toolOpts('t-mcp')
     );
     await flush();
-    const [edit, mcp] = ofType('permission.requested').map(
-      (e) => e.payload.input as Record<string, unknown>
-    );
-    expect(edit.contentLabel).toBe('Arguments');
-    expect(JSON.parse(String(edit.content))).toEqual({
-      old_string: 'A',
-      new_string: 'B',
-      replace_all: true,
+    const [editEvent, mcpEvent] = ofType('permission.requested');
+    const edit = editEvent?.payload.input as Record<string, unknown>;
+    const mcp = mcpEvent?.payload.input as Record<string, unknown>;
+    // The diff replaces the argument JSON; replace_all shows as its match count.
+    expect(edit.content).toBeUndefined();
+    expect(editEvent?.payload.detail).toEqual({
+      kind: 'file_change',
+      changes: [
+        {
+          path: join(configDir, 'x.txt'),
+          change: 'update',
+          diff: `--- a/${join(configDir, 'x.txt').replace(/\\/g, '/')}\n+++ b/${join(configDir, 'x.txt').replace(/\\/g, '/')}\n@@ -1,3 +1,3 @@\n-A\n+B\n mid\n-A\n+B\n`,
+          replacements: 2,
+        },
+      ],
     });
     expect(mcp.contentLabel).toBe('Arguments');
     expect(JSON.parse(String(mcp.content))).toEqual({

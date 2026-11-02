@@ -661,6 +661,16 @@ export interface PermissionFileChange {
   diff?: string;
   /** The diff above was clamped to `PERMISSION_DIFF_MAX_BYTES`. */
   truncated?: boolean;
+  /**
+   * PiLab R2 (FR-05.5): set when `diff` is the call's own before/after
+   * snippets (bare `@@`, no line numbers) rather than the file's — see
+   * `ApprovalDiffNote` in `shared/permissions/approvalDiff.ts`.
+   */
+  note?: 'unreadable' | 'not-found' | 'ambiguous' | 'no-file';
+  /** A replace-all edit: how many matches the file has. */
+  replacements?: number;
+  /** A replace-all edit whose matches could not be counted (`note` is set). */
+  replaceAll?: boolean;
 }
 
 /**

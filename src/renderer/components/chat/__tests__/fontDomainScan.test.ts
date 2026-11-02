@@ -129,8 +129,9 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   // D34 commit-expand file list: monospace status letters, same rationale as ChangesList.
   'components/workspace-shell/surfaces/GitHistoryList.tsx',
   // Session-owned patch rows use the same monospace diff domain (the pane's
-  // diff body moved to ReviewDiff on 2026-10-23).
-  'components/workspace-shell/ReviewDiff.tsx',
+  // diff body moved to ReviewDiff on 2026-10-23; in chat/ since it also
+  // draws the approval card's diff).
+  'components/chat/ReviewDiff.tsx',
   // The 「工作区」 view's status letters, same rationale as ChangesList.
   'components/workspace-shell/WorkspaceChangesList.tsx',
   'components/ui/code-block.tsx',

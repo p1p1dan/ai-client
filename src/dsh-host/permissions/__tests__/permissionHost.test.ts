@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   type PermissionActivityRecord,
@@ -484,6 +484,37 @@ describe('request construction (design shard 03 §2)', () => {
       old_string: 'a',
       new_string: 'b',
       replace_all: true,
+    });
+  });
+
+  it('[PILAB-R2-APPROVAL-DIFF] an edit carries its diff of the file, read through the fs service', async () => {
+    const { fake, host } = setup();
+    const files = new Map([[join(ws, 'notes.txt'), 'one\ntwo\nthree\n']]);
+    // The slice of dsh-fs `readForApproval` uses; a path is its own target here.
+    fake.services.set('fs', {
+      resolve: async (path: string, opts?: { cwd?: string }) => ({
+        key: resolve(opts?.cwd ?? '', path),
+      }),
+      stat: async (target: { key: string }) =>
+        files.has(target.key) ? { type: 'file', size: files.get(target.key)?.length } : undefined,
+      readText: async (target: { key: string }) => files.get(target.key) ?? '',
+    });
+    const { gate, seen } = recordingGate();
+    host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate });
+    await fake.prepare(
+      call('edit', { file_path: 'notes.txt', old_string: 'two', new_string: 'TWO' }, root(), {
+        callId: 'c',
+      })
+    );
+    expect(seen[0]?.fileDiff).toEqual({
+      diff: '--- a/notes.txt\n+++ b/notes.txt\n@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three\n',
+    });
+    await fake.prepare(
+      call('write', { file_path: 'new.txt', content: 'hi\n' }, root(), { callId: 'd' })
+    );
+    expect(seen[1]?.fileDiff).toEqual({
+      diff: '--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+hi\n'.replace('+1 @@', '+1,1 @@'),
+      created: true,
     });
   });
 

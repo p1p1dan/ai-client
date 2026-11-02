@@ -5,6 +5,26 @@ export interface ToolDiffRow {
   text: string;
 }
 
+/**
+ * Issue #26 item 2: a row with its line numbers, where the source knows them —
+ * an SDK patch's hunk headers, a whole-file write. An argument preview has no
+ * position in the file, so it carries none rather than invented ones.
+ */
+export interface ToolDiffLineRow extends ToolDiffRow {
+  /** Line in the old file (`same` / `del`). */
+  oldLine?: number;
+  /** Line in the new file (`same` / `add`). */
+  newLine?: number;
+  /**
+   * PiLab R2 (FR-07.4): the first row of a hunk that is a separate region of
+   * the file. A DSH patch's bare `@@` and a multi-edit's pairs carry no line
+   * numbers, so this is the only way the view knows to put 「⋯」 between them.
+   */
+  hunkStart?: true;
+  /** PiLab R2 (FR-07.5): this line has no newline after it (`\ No newline at end of file`). */
+  noFinalNewline?: true;
+}
+
 /** Longest common subsequence table over two line arrays. */
 function lcsLengths(a: readonly string[], b: readonly string[]): Uint32Array[] {
   const table: Uint32Array[] = Array.from(
@@ -103,4 +123,48 @@ function diffMiddle(a: readonly string[], b: readonly string[]): ToolDiffRow[] {
  */
 export function sameIgnoringLineEndings(a: string, b: string): boolean {
   return a === b || a.replace(/\r\n/g, '\n') === b.replace(/\r\n/g, '\n');
+}
+
+/** A text's lines, without the empty one a final newline would split off. */
+function textLines(text: string): { lines: string[]; finalNewline: boolean } {
+  if (text === '') return { lines: [], finalNewline: true };
+  const finalNewline = text.endsWith('\n');
+  return { lines: (finalNewline ? text.slice(0, -1) : text).split('\n'), finalNewline };
+}
+
+/**
+ * PiLab R2 (07.9 / FR-05.5): a whole-file diff with each row's line numbers —
+ * what a patch and the approval card's preview are built from. A final newline
+ * ends the last line rather than adding an empty one, and a last line whose
+ * newline is added or dropped reads as changed, the way `git diff` shows it.
+ */
+export function numberedLineDiff(oldText: string, newText: string): ToolDiffLineRow[] {
+  const before = textLines(oldText);
+  const after = textLines(newText);
+  const rows: ToolDiffRow[] = diffLineArrays(before.lines, after.lines);
+  const last = rows.at(-1);
+  if (last?.kind === 'same' && before.finalNewline !== after.finalNewline) {
+    rows.splice(-1, 1, { kind: 'del', text: last.text }, { kind: 'add', text: last.text });
+  }
+  let oldLine = 0;
+  let newLine = 0;
+  const numbered = rows.map((row): ToolDiffLineRow => {
+    if (row.kind === 'add') return { ...row, newLine: ++newLine };
+    if (row.kind === 'del') return { ...row, oldLine: ++oldLine };
+    return { ...row, oldLine: ++oldLine, newLine: ++newLine };
+  });
+  // Mark the row that is each side's last line when that side has no final newline.
+  for (const [side, info, total] of [
+    ['old', before, oldLine],
+    ['new', after, newLine],
+  ] as const) {
+    if (info.finalNewline || total === 0) continue;
+    for (let index = numbered.length - 1; index >= 0; index -= 1) {
+      const row = numbered[index] as ToolDiffLineRow;
+      if ((side === 'old' ? row.oldLine : row.newLine) !== total) continue;
+      row.noFinalNewline = true;
+      break;
+    }
+  }
+  return numbered;
 }

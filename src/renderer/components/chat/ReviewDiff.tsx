@@ -28,12 +28,24 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { DiffLayout } from '@/stores/diffLayout';
 
+/**
+ * The box: the pane's hairline with its own scroll, or (PiLab R2, FR-05.5) the
+ * approval card's neutral fill, which scrolls with the card body (one scroll
+ * region; the card is the frame).
+ */
+const FRAME_CLASS = {
+  pane: 'max-h-96 overflow-auto border-border-soft border-l',
+  card: 'overflow-x-auto rounded-sm bg-fill-neutral py-1',
+} as const;
+
 export function ReviewDiff({
   rows,
   layout = 'unified',
+  frame = 'pane',
 }: {
   rows: readonly ToolDiffLineRow[];
   layout?: DiffLayout;
+  frame?: keyof typeof FRAME_CLASS;
 }) {
   const { t } = useI18n();
   const [openFolds, setOpenFolds] = useState<ReadonlySet<string>>(() => new Set());
@@ -45,7 +57,7 @@ export function ReviewDiff({
     return (
       <div
         data-slot="review-diff"
-        className="max-h-96 overflow-auto border-border-soft border-l font-mono text-code leading-[1.55]"
+        className={cn(FRAME_CLASS[frame], 'font-mono text-code leading-[1.55]')}
       >
         <SplitDiffBody
           items={splitDiffItems(items)}
@@ -60,7 +72,7 @@ export function ReviewDiff({
   return (
     <div
       data-slot="review-diff"
-      className="max-h-96 overflow-auto border-border-soft border-l font-mono text-code leading-[1.55]"
+      className={cn(FRAME_CLASS[frame], 'font-mono text-code leading-[1.55]')}
     >
       {items.map((item) => {
         if (item.kind === 'fold') {

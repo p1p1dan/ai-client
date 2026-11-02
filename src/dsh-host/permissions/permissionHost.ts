@@ -65,7 +65,7 @@ import type {
   DshToolResult,
 } from './dshTypes.ts';
 import { permissionPromptText } from './promptContext.ts';
-import { authorizeCall } from './requestBuilder.ts';
+import { authorizeCall, type GateCallContext } from './requestBuilder.ts';
 import { PermissionRouter } from './router.ts';
 import { filterSearchValue } from './searchFilter.ts';
 import {
@@ -128,6 +128,8 @@ export interface DshPermissionHost {
 
 export interface PermissionHostOptions {
   fs?: PermissionFileSystem;
+  /** FR-05.5: reads a file for an edit's or write's approval diff (see `GateCallContext.readFile`). */
+  readFile?: GateCallContext['readFile'];
   /** The tree-sitter bash parser, loaded on the first bash call. */
   loadParser: () => Promise<BashParser>;
   env?: Record<string, string>;
@@ -424,6 +426,7 @@ export class PermissionHost {
           // pwsh (P1-6d): `$env:NAME` and `$HOME` read the same environment.
           env,
           isTrustedPath: this.isTrustedPath,
+          ...(this.options.readFile ? { readFile: this.options.readFile } : {}),
           ...(route.delegate
             ? {
                 delegation: {

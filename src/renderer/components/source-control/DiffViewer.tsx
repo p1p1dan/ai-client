@@ -1,5 +1,6 @@
 import { DiffEditor } from '@monaco-editor/react';
-import { sameIgnoringLineEndings } from '@shared/textDiff';
+import { formatPatch, patchPath } from '@shared/diffPatch';
+import { numberedLineDiff, sameIgnoringLineEndings } from '@shared/textDiff';
 import type { FileDiff } from '@shared/types';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { CopyIconButton } from '@/components/chat/CopyIconButton';
 import { DiffLayoutToggle } from '@/components/chat/DiffLayout';
 import { CommentForm } from '@/components/files/EditorLineComment';
 import { monaco } from '@/components/files/monacoSetup';
@@ -1107,6 +1109,22 @@ export function DiffViewer({
         {/* Navigation buttons */}
         <div className="flex shrink-0 items-center gap-1">
           <DiffLayoutToggle />
+          {/* PiLab R2 (07.9): the whole file's change as a patch, built on click. */}
+          {diff && diff.original != null && diff.modified != null && (
+            <CopyIconButton
+              text={() =>
+                formatPatch([
+                  {
+                    path: patchPath(file.path, rootPath),
+                    rows: numberedLineDiff(diff.original, diff.modified),
+                    created: diff.original === '',
+                  },
+                ])
+              }
+              label={t('Copy patch')}
+              copiedLabel={t('Copied')}
+            />
+          )}
           {/* Diff count */}
           {lineChanges && lineChanges.length > 0 && (
             <span className="mr-2 text-small text-muted-foreground">

@@ -26,6 +26,15 @@ export function reviewPatchLines(patch: string): ReviewPatchLine[] {
         return { text, kind: 'meta' };
       }
       if (text.startsWith('\\ No newline')) return { text, kind: 'meta' };
+      // A file header (`--- a/x`, `+++ b/x`) sits outside any hunk; inside one
+      // the same text is a removed `-- a/x` or added `++ b/x` line.
+      if (
+        oldRemaining === 0 &&
+        newRemaining === 0 &&
+        (text.startsWith('--- ') || text.startsWith('+++ '))
+      ) {
+        return { text, kind: 'meta' };
+      }
       const kind = text.startsWith('+')
         ? 'add'
         : text.startsWith('-')

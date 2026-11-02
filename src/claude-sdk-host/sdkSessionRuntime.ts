@@ -58,6 +58,13 @@ import {
   contextWindowNotice,
 } from '../shared/contextWindowMismatch.ts';
 import { DSH_NOTICE_CUSTOM_TYPE_PREFIX } from '../shared/dshNotices.ts';
+import {
+  APPROVAL_DIFF_MAX_FILE_BYTES,
+  type ApprovalFileRead,
+  approvalFileDiff,
+  fileChangeDiffFields,
+  literalEditsOf,
+} from '../shared/permissions/approvalDiff.ts';
 import { argumentsPreview, editArgumentsPreview } from '../shared/permissions/approvalPreview.ts';
 import { buildPiInterimUsagePayload, buildPiUsagePayload } from '../shared/piUsage.ts';
 import {
@@ -3519,6 +3526,26 @@ function isExistingFile(file: string, workspace: string): boolean {
   }
 }
 
+/**
+ * FR-05.5: the file an approval diff compares against. Read raw: an encrypted
+ * file's ciphertext is caught by `approvalFileDiff` (its `%TSD-Header-###%`)
+ * and reads as unreadable, never as text that fails to match.
+ */
+function readForApproval(file: string, workspace: string): ApprovalFileRead {
+  const resolved = path.resolve(workspace, file);
+  try {
+    const info = statSync(resolved);
+    if (!info.isFile() || info.size > APPROVAL_DIFF_MAX_FILE_BYTES) return { kind: 'unreadable' };
+    const bytes = readFileSync(resolved);
+    if (bytes.subarray(0, 8000).includes(0)) return { kind: 'unreadable' };
+    return { kind: 'text', text: new TextDecoder('utf-8', { fatal: true }).decode(bytes) };
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ? { kind: 'missing' }
+      : { kind: 'unreadable' };
+  }
+}
+
 function describeCall(
   toolName: string,
   input: Record<string, unknown>,
@@ -3552,10 +3579,24 @@ function describeCall(
       toolName === 'Write' && typeof input.content === 'string'
         ? { content: input.content, contentLabel: 'Content' }
         : { content: editArgumentsPreview(input), contentLabel: 'Arguments' };
+    // FR-05.5: the change against the file as it is now, shown instead of the
+    // arguments. NotebookEdit's cells are not text lines; it keeps them.
+    const fileCall =
+      toolName === 'Write' && typeof input.content === 'string'
+        ? { tool: 'write' as const, content: input.content }
+        : toolName === 'Edit' || toolName === 'MultiEdit'
+          ? (() => {
+              const edits = literalEditsOf(input);
+              return edits ? { tool: 'edit' as const, edits } : undefined;
+            })()
+          : undefined;
+    const fileDiff = fileCall
+      ? approvalFileDiff(path, fileCall, readForApproval(path, workspace))
+      : undefined;
     return {
       kind: 'file_change',
       action: toolName === 'Write' ? 'write_file' : 'edit_file',
-      input: { path, ...body, workspace },
+      input: { path, ...(fileDiff ? {} : body), workspace },
       detail: {
         kind: 'file_change',
         // PiLab R2 (FR-07.2): a Write over an existing file replaces it — an
@@ -3563,7 +3604,14 @@ function describeCall(
         changes: [
           {
             path,
-            change: toolName === 'Write' && !isExistingFile(path, workspace) ? 'add' : 'update',
+            change: fileDiff
+              ? fileDiff.created
+                ? 'add'
+                : 'update'
+              : toolName === 'Write' && !isExistingFile(path, workspace)
+                ? 'add'
+                : 'update',
+            ...(fileDiff ? fileChangeDiffFields(fileDiff) : {}),
           },
         ],
       },

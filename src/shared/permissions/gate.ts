@@ -8,6 +8,7 @@ import {
   type RuntimePermissionSettings,
   resolveRuntimePermission,
 } from '../types/runtimePermission.ts';
+import type { ApprovalFileDiff } from './approvalDiff.ts';
 import {
   AUTO_REVIEW_MAX_CONSECUTIVE_DENIALS,
   AUTO_REVIEW_MAX_TOTAL_DENIALS,
@@ -59,6 +60,11 @@ export interface ToolPermissionRequest {
    * fully described by its path.
    */
   preview?: { label: string; text: string };
+  /**
+   * PiLab R2 (FR-05.5): a write's or edit's change against the file as it is
+   * now; when set, the card shows it in place of `preview`.
+   */
+  fileDiff?: ApprovalFileDiff;
   paths?: readonly string[];
   commands?: readonly string[];
   unresolvedPaths?: boolean;

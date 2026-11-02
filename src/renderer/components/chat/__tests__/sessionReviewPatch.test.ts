@@ -97,4 +97,14 @@ describe('[PILAB-R2-HUNKS] hunk breaks and a missing final newline', () => {
       { kind: 'add', text: 'x', newLine: 1 },
     ]);
   });
+
+  it('[PILAB-R2-APPROVAL-DIFF] file headers before a hunk are not rows; inside one they are', () => {
+    const rows = reviewEntryRows({
+      patch: '--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n--- a/x\n+++ b/x\n',
+    });
+    expect(rows).toEqual([
+      { kind: 'del', text: '-- a/x', oldLine: 1 },
+      { kind: 'add', text: '++ b/x', newLine: 1 },
+    ]);
+  });
 });

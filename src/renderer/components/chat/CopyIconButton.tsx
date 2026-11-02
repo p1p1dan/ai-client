@@ -7,7 +7,7 @@ const COPY_CONFIRM_MS = 1500;
 /**
  * The chat's one ghost copy button (24px, design system v2 §1: ghost inside a
  * framed or frameless object alike): the code block head, the thinking body
- * and the user message's action row.
+ * the user message's action row and the diff heads (「复制补丁」).
  *
  * Clipboard behaviour is `TurnCopyButton`'s: no `execCommand` fallback, silent
  * on refusal (a button that lies about having copied is worse than one that
@@ -18,7 +18,8 @@ export function CopyIconButton({
   label,
   copiedLabel,
 }: {
-  text: string;
+  /** What lands on the clipboard; a function is only run on click (a patch is built then). */
+  text: string | (() => string);
   /** Accessible name at rest, already translated. */
   label: string;
   /** Accessible name while the confirmation shows, already translated. */
@@ -36,7 +37,7 @@ export function CopyIconButton({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(typeof text === 'function' ? text() : text);
     } catch {
       return;
     }

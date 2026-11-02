@@ -12,6 +12,11 @@
 
 import { resolve } from 'node:path';
 import {
+  type ApprovalFileRead,
+  approvalFileDiff,
+  literalEditsOf,
+} from '../../shared/permissions/approvalDiff.ts';
+import {
   argumentsPreview,
   editArgumentsPreview,
 } from '../../shared/permissions/approvalPreview.ts';
@@ -55,6 +60,11 @@ export interface GateCallContext {
   env?: Record<string, string>;
   /** Whose path rules a `pwsh` command is read under; defaults to the host's. */
   platform?: NodeJS.Platform;
+  /**
+   * Read a file as the fs tools see it (decrypted on the encrypted machine),
+   * for an edit's or write's approval diff. Absent: the card shows arguments.
+   */
+  readFile?(path: string, cwd: string): Promise<ApprovalFileRead>;
   /** Paths the host produced itself (spill files): no workspace-boundary ask. */
   isTrustedPath?(path: string): boolean;
   /** Set when a delegate made the call: the card and audit row name it. */
@@ -178,7 +188,23 @@ export async function authorizeCall(
           : typeof args === 'object' && args !== null
             ? { label: 'Arguments', text: editArgumentsPreview(args as Record<string, unknown>) }
             : undefined;
-      await target(call.name, stringArg(args, 'file_path') ?? '.', preview ? { preview } : {});
+      const path = stringArg(args, 'file_path');
+      // FR-05.5: the card shows the change against the file as it is now.
+      const fileCall =
+        content !== undefined
+          ? { tool: 'write' as const, content }
+          : (() => {
+              const edits = literalEditsOf(args);
+              return edits ? { tool: 'edit' as const, edits } : undefined;
+            })();
+      const fileDiff =
+        path && fileCall && context.readFile
+          ? approvalFileDiff(path, fileCall, await context.readFile(path, context.cwd))
+          : undefined;
+      await target(call.name, path ?? '.', {
+        ...(preview ? { preview } : {}),
+        ...(fileDiff ? { fileDiff } : {}),
+      });
       break;
     }
     case 'shell': {

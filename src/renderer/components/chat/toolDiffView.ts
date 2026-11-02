@@ -6,6 +6,7 @@
  * Pure, so the folding rule is tested without a DOM. Which folds are open is
  * the component's state (a set of fold keys); this only reads it.
  */
+import { rowsContinue, rowsHaveLineNumbers } from '../../../shared/diffPatch';
 import type { ToolDiffLineRow } from './toolDiff';
 
 /** Unchanged lines kept on each side of a change (the usual unified-diff context). */
@@ -19,25 +20,7 @@ export type DiffViewItem =
   | { kind: 'gap'; key: string };
 
 /** Does this diff carry line numbers at all? (Argument previews do not.) */
-export function diffHasLineNumbers(rows: readonly ToolDiffLineRow[]): boolean {
-  return rows.some((row) => row.oldLine !== undefined || row.newLine !== undefined);
-}
-
-/** The line after `row` on each side, to tell one hunk from the next. */
-function continues(previous: ToolDiffLineRow, row: ToolDiffLineRow): boolean {
-  if (row.hunkStart) return false;
-  const oldNext =
-    previous.oldLine !== undefined
-      ? previous.oldLine + (previous.kind === 'add' ? 0 : 1)
-      : undefined;
-  const newNext =
-    previous.newLine !== undefined
-      ? previous.newLine + (previous.kind === 'del' ? 0 : 1)
-      : undefined;
-  if (row.oldLine !== undefined && oldNext !== undefined && row.oldLine !== oldNext) return false;
-  if (row.newLine !== undefined && newNext !== undefined && row.newLine !== newNext) return false;
-  return true;
-}
+export const diffHasLineNumbers = rowsHaveLineNumbers;
 
 /**
  * The diff's items in order. A run of unchanged rows keeps `context` rows next
@@ -70,7 +53,7 @@ export function buildDiffView(
     const row = rows[at] as ToolDiffLineRow;
     const previous = rows[at - 1];
     // Only between two rows both on screen: a fold already says lines are hidden.
-    if (previous && items.at(-1)?.key === `row-${at - 1}` && !continues(previous, row)) {
+    if (previous && items.at(-1)?.key === `row-${at - 1}` && !rowsContinue(previous, row)) {
       items.push({ kind: 'gap', key: `gap-${at}` });
     }
     items.push({ kind: 'row', row, key: `row-${at}` });

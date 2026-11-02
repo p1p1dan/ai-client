@@ -331,6 +331,8 @@ export const zhTranslations: Record<string, string> = {
   Conflict: '冲突',
   Copied: '已复制',
   'Copy code': '复制代码',
+  'Copy patch': '复制补丁',
+  'Copy patch (no line numbers; cannot be applied as is)': '复制补丁（没有行号，不能直接应用）',
   'Copied to clipboard': '已复制到剪贴板',
   Copy: '复制',
   'Open Folder': '打开文件夹',
@@ -2855,6 +2857,17 @@ export const zhTranslations: Record<string, string> = {
   'Denied, turn stopped': '已拒绝，本轮已停止',
   Waiting: '等待中',
   'diff clamped': '差异已截断',
+  "Could not read the current file; showing the call's own before and after, without line numbers.":
+    '读不到当前文件，以下按参数里的前后片段显示，没有行号。',
+  "The text to replace is not in the current file, so this edit will most likely fail. Showing the call's own before and after.":
+    '当前文件里找不到要替换的内容，这次修改执行时多半会失败。以下按参数里的前后片段显示。',
+  "The text to replace appears more than once in the current file, so this edit will most likely fail. Showing the call's own before and after.":
+    '要替换的内容在当前文件里出现了不止一处，这次修改执行时多半会失败。以下按参数里的前后片段显示。',
+  'Replace all: {{count}} matches in the file': '全部替换：文件里共 {{count}} 处',
+  "The file does not exist, so this edit will most likely fail. Showing the call's own before and after.":
+    '文件不存在，这次修改执行时多半会失败。以下按参数里的前后片段显示。',
+  'Replace all matches': '全部替换（替换所有匹配处）',
+  'Only the first {{count}} lines of the change are shown': '只显示了改动的前 {{count}} 行',
   'High risk': '高风险',
   'Needs confirmation': '需确认',
   'Low risk': '低风险',

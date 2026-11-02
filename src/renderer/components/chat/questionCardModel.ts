@@ -10,7 +10,9 @@ import type {
 } from '@shared/types/runtimeEvents';
 import type { ChatBlock } from '@/stores/chatSessions';
 import { permissionToolLabel } from './piToolNames';
+import { reviewEntryRows } from './sessionReviewPatch';
 import type { ToolRowView } from './toolCard';
+import type { ToolDiffLineRow } from './toolDiff';
 
 /**
  * T-05 question/permission pure view model. `QuestionCard.tsx` (batch 3)
@@ -852,6 +854,45 @@ export interface PermissionFileRow {
   truncated: boolean;
 }
 
+/** PiLab R2 (FR-05.5): one file's diff, drawn under its row (`PermissionFileRow.key`). */
+export interface PermissionFileDiffView {
+  key: string;
+  /** The diff's rows; null when none arrived or it changes nothing. */
+  rows: ToolDiffLineRow[] | null;
+  /** Lines over the diff, translated: why it is snippets, how many matches. */
+  notes: string[];
+  /** `notes` is a warning: the tool will most likely refuse this edit. */
+  failing: boolean;
+}
+
+/** FR-05.5: why an approval diff is the call's own snippets (`PermissionFileChange.note`). */
+export const PERMISSION_DIFF_NOTES: Readonly<
+  Record<NonNullable<PermissionFileChange['note']>, string>
+> = {
+  unreadable:
+    "Could not read the current file; showing the call's own before and after, without line numbers.",
+  'not-found':
+    "The text to replace is not in the current file, so this edit will most likely fail. Showing the call's own before and after.",
+  ambiguous:
+    "The text to replace appears more than once in the current file, so this edit will most likely fail. Showing the call's own before and after.",
+  'no-file':
+    "The file does not exist, so this edit will most likely fail. Showing the call's own before and after.",
+};
+
+function permissionFileNotes(change: PermissionFileChange, rows: number, t: Translate): string[] {
+  const notes: string[] = [];
+  if (change.note) notes.push(t(PERMISSION_DIFF_NOTES[change.note]));
+  if (change.replacements !== undefined) {
+    notes.push(t('Replace all: {{count}} matches in the file', { count: change.replacements }));
+  } else if (change.replaceAll) {
+    notes.push(t('Replace all matches'));
+  }
+  if (change.truncated && rows > 0) {
+    notes.push(t('Only the first {{count}} lines of the change are shown', { count: rows }));
+  }
+  return notes;
+}
+
 /**
  * `+added/-removed` for one unified diff.
  *
@@ -912,6 +953,8 @@ export interface PermissionDetailView {
   meta: string[];
   /** file_change: one row per touched file, in Host order. */
   files: PermissionFileRow[];
+  /** file_change: the diffs under those rows, where any arrived. */
+  diffs?: PermissionFileDiffView[];
   /**
    * What pressing Allow grants BEYOND the literal request. Emphasised because
    * a user cannot infer any of it from the command or the patch in front of
@@ -983,11 +1026,25 @@ export function derivePermissionDetailView(
     };
   }
 
+  const diffs: PermissionFileDiffView[] = [];
   const files: PermissionFileRow[] = detail.changes.map((change, index) => {
     const stat = countDiffStat(change.diff);
+    const key = `${index}:${change.path}`;
+    const rows = change.diff === undefined ? [] : reviewEntryRows({ patch: change.diff });
+    const changed = rows.some((row) => row.kind !== 'same');
+    const notes = permissionFileNotes(change, changed ? rows.length : 0, t);
+    if (changed || notes.length) {
+      diffs.push({
+        key,
+        rows: changed ? rows : null,
+        notes,
+        failing:
+          change.note === 'not-found' || change.note === 'ambiguous' || change.note === 'no-file',
+      });
+    }
     return {
       // Path alone is not a key: a rename can list the same path twice.
-      key: `${index}:${change.path}`,
+      key,
       path: change.path,
       change: change.change,
       badge: PERMISSION_CHANGE_BADGES[change.change] ?? '?',
@@ -1010,6 +1067,7 @@ export function derivePermissionDetailView(
     command: null,
     meta: [],
     files,
+    ...(diffs.length ? { diffs } : {}),
     warnings,
     notes,
   };
