@@ -79,8 +79,9 @@ import {
   advanceClosedPrefix,
   chatMarkdownSegmentGapClass,
   deriveStreamingBlockIds,
-  keyedClosedSegments,
   shouldRenderMarkdown,
+  streamedSegmentsHold,
+  streamedTextParts,
 } from './chatMarkdownPolicy';
 import {
   CHAT_PROSE_LEADING,
@@ -3090,7 +3091,11 @@ const ChatTurn = memo(function ChatTurn({
         {/* Answers and notices stay outside the process groups; turn-level
             progress remains on the trailing work-zone row (T113). */}
         {workSections.map((section) => {
-          if (section.kind === 'finalAnswer') {
+          // PiLab R2 (07.7): an answer still being written is the SAME element
+          // as the final answer it becomes — one Fragment under one key, the
+          // divider added beside it when the turn settles — so the reply is not
+          // rebuilt (and its code blocks laid out again) at the end of a turn.
+          if (section.kind === 'finalAnswer' || section.kind === 'answer') {
             // Decision 033 D1: the reply keeps its ordinary answer styling (no
             // new border, background or container — D8 is explicit that it
             // differs from intermediate prose by COLOUR alone), and the ONE
@@ -3101,10 +3106,12 @@ const ChatTurn = memo(function ChatTurn({
             // other reason must not grow a second divider.
             return (
               <Fragment key={turnItemKey(section.segment.items[0])}>
-                <div className={turnFinalAnswerDividerClass()}>
-                  <span className="shrink-0">{t('Final output')}</span>
-                  <span className="h-px min-w-0 flex-1 bg-border-soft" aria-hidden />
-                </div>
+                {section.kind === 'finalAnswer' && (
+                  <div className={turnFinalAnswerDividerClass()}>
+                    <span className="shrink-0">{t('Final output')}</span>
+                    <span className="h-px min-w-0 flex-1 bg-border-soft" aria-hidden />
+                  </div>
+                )}
                 {renderSegment(section.segment)}
               </Fragment>
             );
@@ -3498,41 +3505,39 @@ function PlainProse({ text }: { text: string }) {
 /** Exported for its mount test (`turnTextSegmentsMount.test.ts`, CG-4). */
 export function TurnTextItem({ text, streaming }: { text: string; streaming: boolean }) {
   const closedHwmRef = useRef(0);
+  // PiLab R2 (07.7): whether this instance showed the block while it streamed.
+  // Then the end of the stream keeps the segments on screen (when they still
+  // equal the whole, `streamedSegmentsHold`) instead of rebuilding every block
+  // from scratch. History that arrives finished renders whole, as before.
+  const streamedRef = useRef(false);
   const split = useMemo(
-    () => (streaming ? advanceClosedPrefix(text, closedHwmRef.current) : null),
+    () =>
+      streaming || streamedRef.current ? advanceClosedPrefix(text, closedHwmRef.current) : null,
     [text, streaming]
   );
   useEffect(() => {
+    if (streaming) streamedRef.current = true;
     if (split) closedHwmRef.current = split.closedLength;
-  }, [split]);
+  }, [split, streaming]);
 
-  if (!split) return <ChatMarkdown text={text} />;
+  if (!split || (!streaming && !streamedSegmentsHold(text, closedHwmRef.current))) {
+    return <ChatMarkdown text={text} />;
+  }
   return (
     <div className={chatMarkdownSegmentGapClass()}>
-      {/* `key` by content: segments are append-only and their strings are what
-          `ChatMarkdown`'s memo compares anyway, so an index key would be no
-          weaker — but content keys survive a cut point moving without
-          remounting the segments before it. CG-4 (decision 180): with the
-          occurrence counted in, so a paragraph that comes back (`---`, 「示意
-          如下：」) is its own segment, not a second child under the same key. */}
-      {keyedClosedSegments(split.segments).map((segment) => (
-        <ChatMarkdown key={segment.key} text={segment.text} />
-      ))}
-      {split.openTail.length > 0 && <PlainProse text={split.openTail} />}
-      {/* T12-c (user decision, 2026-08-30: 按 pi-app 的来): a code fence that
-          is still being written renders as Markdown, not as plain text — a
-          long code block is most of a coding agent's output, and it used to
-          sit here unformatted for its entire stream.
-
-          Unlike a `segment` this string GROWS, so it re-parses on every flush.
-          That cost is bounded by the current code block rather than by the
-          whole answer, which is the distinction that made the all-in-one
-          approach 39x more expensive (see this component's head note).
-
-          No `key` on content here on purpose: this chunk is meant to update in
-          place as it grows, where the settled segments above are keyed by
-          content precisely because they never do. */}
-      {split.openFence && <ChatMarkdown text={split.openFence} />}
+      {/* One list keyed by position (`streamedTextParts`): settled segments,
+          the plain tail still in flight, and a code fence still being written
+          — rendered as Markdown (T12-c, user decision 2026-08-30: 按 pi-app
+          的来), at the position it will hold once settled, so settling
+          re-renders it in place instead of rebuilding it. Positions are unique
+          (CG-4: a paragraph that comes back is its own child). */}
+      {streamedTextParts(split, !streaming).map((part) =>
+        part.markdown ? (
+          <ChatMarkdown key={part.key} text={part.text} />
+        ) : (
+          <PlainProse key={part.key} text={part.text} />
+        )
+      )}
     </div>
   );
 }

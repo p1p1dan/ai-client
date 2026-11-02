@@ -67,3 +67,32 @@ it('[CG4-MOUNT] a paragraph that comes back is shown again, once each, with no k
     'React key warning'
   ).toBe(false);
 });
+
+async function render(text: string, streaming: boolean) {
+  await act(async () => root?.render(createElement(TurnTextItem, { text, streaming })));
+}
+
+it('[PILAB-R2-SETTLE] a code block is never rebuilt as it settles and the stream ends', async () => {
+  const pieces = ['前言\n\n```ts\nconst a = 1;\n', 'const b = 2;\n', '```\n', '\n后记'];
+  let text = '';
+  let pre: Element | null = null;
+  for (const piece of pieces) {
+    text += piece;
+    await render(text, true);
+    pre ??= container.querySelector('pre');
+    expect(container.querySelector('pre'), `after ${JSON.stringify(piece)}`).toBe(pre);
+  }
+  await render(text, false);
+  expect(pre).not.toBeNull();
+  expect(container.querySelector('pre'), 'after the stream ended').toBe(pre);
+  expect(container.querySelector('pre')?.textContent).toContain('const b = 2;');
+  expect(container.textContent).toContain('后记');
+});
+
+it('[PILAB-R2-SETTLE] a block whose Markdown reaches across segments is re-rendered whole', async () => {
+  const text = '前言[^1]\n\n```ts\nconst a = 1;\n```\n\n[^1]: 出处';
+  await render(text, true);
+  const pre = container.querySelector('pre');
+  await render(text, false);
+  expect(container.querySelector('pre')).not.toBe(pre);
+});

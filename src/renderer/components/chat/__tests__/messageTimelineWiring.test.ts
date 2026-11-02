@@ -1033,11 +1033,12 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    */
   it('[FB1-7] settled segments render one <ChatMarkdown> each, never re-joined', () => {
     const prose = nodeSource(topLevelFunction('TurnTextItem'));
-    // CG-4 (decision 180): keyed by content and occurrence, so a paragraph
-    // that comes back is a child of its own (`keyedClosedSegments`).
-    expect(prose).toContain('keyedClosedSegments(split.segments).map(');
-    expect(prose, 'one element per segment, keyed by its own content').toContain(
-      '<ChatMarkdown key={segment.key} text={segment.text} />'
+    // CG-4 / PiLab R2 (07.7): one child per part, keyed by position
+    // (`streamedTextParts`), so a paragraph that comes back is a child of its
+    // own and a part keeps its key when it settles.
+    expect(prose).toContain('streamedTextParts(split, !streaming).map(');
+    expect(prose, 'one element per part, keyed by its position').toContain(
+      '<ChatMarkdown key={part.key} text={part.text} />'
     );
     expect(prose).not.toContain('key={segment}');
     expect(prose, 'the joined shape is the whole defect').not.toMatch(/segments\s*\.join\(/);
@@ -1051,16 +1052,18 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    */
   it('[FB1-8] a streaming code fence is rendered as Markdown, and separately from the settled segments', () => {
     const prose = nodeSource(topLevelFunction('TurnTextItem'));
-    expect(prose, 'the open fence must reach the parser').toContain(
-      '<ChatMarkdown text={split.openFence} />'
-    );
+    // The open fence reaches the parser as a part of its own: `streamedTextParts`
+    // marks it `markdown: true` (asserted in chatMarkdownPolicy.test.ts), and a
+    // Markdown part renders through `ChatMarkdown`.
+    expect(prose).toMatch(/part\.markdown\s*\?\s*\(?\s*<ChatMarkdown key=\{part\.key\}/);
     // It must NOT be keyed by content: this chunk is meant to update in place
     // as it grows. A content key would remount the code block on every token,
     // which is a new mount (and a lost scroll/selection) per flush.
     expect(prose).not.toContain('key={split.openFence}');
+    expect(prose).not.toContain('key={part.text}');
     // And the plain tail must still exist — the prose before a fence is still
     // in flight and must not be parsed.
-    expect(prose).toContain('<PlainProse text={split.openTail} />');
+    expect(prose).toContain('<PlainProse key={part.key} text={part.text} />');
   });
 
   /**
@@ -1305,7 +1308,9 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(body).toContain(
       "if (section.kind !== 'processGroup') return renderSegment(section.segment);"
     );
-    const finalAt = body.indexOf("if (section.kind === 'finalAnswer') {");
+    const finalAt = body.indexOf(
+      "if (section.kind === 'finalAnswer' || section.kind === 'answer') {"
+    );
     const groupAt = body.indexOf("if (section.kind !== 'processGroup')");
     expect(finalAt).toBeGreaterThan(-1);
     expect(finalAt).toBeLessThan(groupAt);
@@ -1316,6 +1321,9 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // divider is the ONLY thing the final branch adds — no border, background
     // or container around the reply itself (D8 separates it by colour alone).
     expect(finalBranch).toContain('<div className={turnFinalAnswerDividerClass()}>');
+    // Only on the final answer; a plain answer shares the branch so it keeps its
+    // element when it becomes the final one (PiLab R2).
+    expect(finalBranch).toContain("{section.kind === 'finalAnswer' && (");
     expect(finalBranch).toContain("t('Final output')");
     expect(countIn(body, 'turnFinalAnswerDividerClass()')).toBe(1);
     expect(body).toContain('{section.segments.map(renderSegment)}');

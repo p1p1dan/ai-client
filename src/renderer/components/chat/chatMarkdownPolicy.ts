@@ -459,7 +459,10 @@ function segmentClosedText(closed: string): string[] {
  * spacing tier — D25 allows exactly two (14px block / 24px section).
  */
 export function chatMarkdownSegmentGapClass(): string {
-  return 'space-y-2.5';
+  // PiLab R2 (07.7): a segment that opens with a heading gets the section gap
+  // (h1–h3 carry `SECTION_GAP`), so the segments read exactly as the whole
+  // would — a finished block now stays in its segments (`streamedSegmentsHold`).
+  return 'space-y-2.5 [&>*:not(:first-child):has(>:is(h1,h2,h3):first-child)]:mt-5';
 }
 
 export interface ClosedPrefixSplit {
@@ -612,22 +615,80 @@ export function advanceClosedPrefix(text: string, previousHwm: number): ClosedPr
 
 /**
  * CG-4 (dsh-rebase decision 180): the settled segments with a React key each.
- *
  * The key used to be the segment's text alone. A paragraph that comes back
  * in one answer — a `---` rule, 「示意如下：」 — gave two children the same key:
  * React warned once per flush (2,227 times in one real-gateway reply) and may
- * drop or repeat such a child. The key is the text plus how many times that
- * text came before, which keeps what the content key was for — a key that
- * does not change while the segments before it stay as they are, since the
- * list only grows at its end — and is unique.
+ * drop or repeat such a child.
+ *
+ * PiLab R2 (07.7): the key is the segment's position. Segments only ever grow
+ * at the end, so a position never changes hands, and it is the one key the
+ * still-open tail and fence can be given BEFORE they settle (see
+ * `streamedTextParts`) — a content key cannot, since their text is still
+ * growing. That is what keeps a finished code block from being rebuilt.
  */
 export function keyedClosedSegments(segments: readonly string[]): { key: string; text: string }[] {
-  const seen = new Map<string, number>();
-  return segments.map((text) => {
-    const occurrence = seen.get(text) ?? 0;
-    seen.set(text, occurrence + 1);
-    return { key: `${occurrence}:${text}`, text };
-  });
+  return segments.map((text, index) => ({ key: segmentKey(index), text }));
+}
+
+function segmentKey(index: number): string {
+  return `s${index}`;
+}
+
+/** One child of a streamed text block: Markdown, or plain text still in flight. */
+export interface StreamedTextPart {
+  key: string;
+  markdown: boolean;
+  text: string;
+}
+
+/**
+ * PiLab R2 (07.7): the settled segments, the plain tail and the open fence as
+ * ONE keyed list, each keyed by the position it will hold once it settles.
+ *
+ * Before, the open fence was an unkeyed child after the list, and the turn's
+ * end swapped the whole block for one `ChatMarkdown`: a finished code block
+ * was mounted from scratch twice — measured at about 0.5 s each for an
+ * 800-line block, nearly all of it the browser laying out the new spans. With
+ * the fence already at its future position, settling re-renders it in place,
+ * and its rows are the same objects (`chatShiki`'s cache), so nothing is laid
+ * out again. The same shape as PI-Desktop's `Markdown.tsx`, which keys its
+ * blocks by position and never switches structure when a stream ends.
+ *
+ * A fence that follows its paragraph without a blank line settles INTO that
+ * paragraph's segment, so it does move position, and is rebuilt once.
+ * `finished`: the stream is over, so the tail is complete and is Markdown too.
+ */
+export function streamedTextParts(split: ClosedPrefixSplit, finished: boolean): StreamedTextPart[] {
+  const parts: StreamedTextPart[] = keyedClosedSegments(split.segments).map(({ key, text }) => ({
+    key,
+    markdown: true,
+    text,
+  }));
+  if (split.openTail.length > 0) {
+    parts.push({ key: segmentKey(parts.length), markdown: finished, text: split.openTail });
+  }
+  if (split.openFence) {
+    parts.push({ key: segmentKey(parts.length), markdown: true, text: split.openFence });
+  }
+  return parts;
+}
+
+/** A link reference definition or a footnote: Markdown that reaches across segments. */
+const CROSS_SEGMENT_MARKDOWN = /^ {0,3}\[[^\]\n]+\]:|\[\^[^\]\n]+\]/m;
+
+/**
+ * PiLab R2 (07.7): whether a block that finished streaming can stay in the
+ * segments it streamed in, rather than be re-rendered whole.
+ *
+ * Every cut is at a point where rendering the pieces equals rendering the
+ * whole, except two cases, which keep the whole re-render on completion that
+ * D26 accepted: a FROZEN cut (`hwm` past where a fresh scan would cut — the
+ * block it split is joined back), and Markdown that refers across segments
+ * (a `[label]: url` definition, a `[^note]`).
+ */
+export function streamedSegmentsHold(text: string, hwm: number): boolean {
+  if (splitClosedPrefix(text).closedLength < hwm) return false;
+  return !CROSS_SEGMENT_MARKDOWN.test(text);
 }
 
 /** One body message, reduced to what the gate needs (see `deriveStreamingBlockIds`). */

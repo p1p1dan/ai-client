@@ -37,6 +37,8 @@ import {
   shouldHighlightFence,
   shouldRenderMarkdown,
   splitClosedPrefix,
+  streamedSegmentsHold,
+  streamedTextParts,
 } from '../chatMarkdownPolicy';
 import { CHAT_PROSE_LEADING, chatTurnClass, turnBodyClass } from '../chatTimelineLayout';
 import { readDarkClass } from '../useDarkClass';
@@ -574,7 +576,10 @@ describe('FB1: splitClosedPrefix / advanceClosedPrefix', () => {
 describe('[FB1-b] segment gap', () => {
   it('restores the block gap between segments, at the block gap value', () => {
     // Design system v2 §4.2: the block gap is body line x 0.5 = 10px.
-    expect(chatMarkdownSegmentGapClass()).toBe('space-y-2.5');
+    expect(chatMarkdownSegmentGapClass().split(' ')[0]).toBe('space-y-2.5');
+    // …and a segment that opens with a heading gets the section gap, as h1–h3
+    // do inside one document (PiLab R2).
+    expect(chatMarkdownSegmentGapClass()).toContain(':has(>:is(h1,h2,h3):first-child)]:mt-5');
     // Read from the module rather than repeated as a literal: if `BLOCK_GAP`
     // ever moves off 2.5, this fails instead of quietly disagreeing with it.
     const source = readFileSync(
@@ -1780,5 +1785,51 @@ describe('keyedClosedSegments (CG-4)', () => {
     const keyed = keyedClosedSegments(split.segments);
     expect(keyed.filter((segment) => segment.text === '示意如下：')).toHaveLength(2);
     expect(new Set(keyed.map((segment) => segment.key)).size).toBe(keyed.length);
+  });
+});
+
+describe('[PILAB-R2-SETTLE] a streamed block keeps its children when parts settle', () => {
+  const pieces = ['前言\n\n```ts\nconst a = 1;\n', 'const b = 2;\n', '```\n', '\n后记', '还在写'];
+  const flushes = pieces.map((_, i) => pieces.slice(0, i + 1).join(''));
+
+  it('the open fence is keyed by the position it settles into', () => {
+    let hwm = 0;
+    const fenceKeys = new Set<string>();
+    for (const text of flushes) {
+      const split = advanceClosedPrefix(text, hwm);
+      hwm = split.closedLength;
+      for (const part of streamedTextParts(split, false)) {
+        if (part.text.startsWith('```ts')) fenceKeys.add(part.key);
+      }
+    }
+    // Open, closed-but-unconfirmed, then settled: always the same child.
+    expect([...fenceKeys]).toEqual(['s1']);
+  });
+
+  it('a tail in flight is plain, and Markdown once the stream is over', () => {
+    const split = advanceClosedPrefix(flushes[4], 0);
+    expect(streamedTextParts(split, false).at(-1)).toMatchObject({
+      markdown: false,
+      text: '后记还在写',
+    });
+    expect(streamedTextParts(split, true).at(-1)).toMatchObject({
+      markdown: true,
+      text: '后记还在写',
+    });
+  });
+
+  it('keys stay unique when a paragraph comes back', () => {
+    const split = advanceClosedPrefix('---\n\nA\n\n---\n\nA\n\ntail', 0);
+    const keys = streamedTextParts(split, false).map((part) => part.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('a finished block stays in its segments unless a cut froze or Markdown reaches across', () => {
+    const text = flushes[4];
+    expect(streamedSegmentsHold(text, advanceClosedPrefix(text, 0).closedLength)).toBe(true);
+    // A mark past where a fresh scan cuts: that block has to be joined back.
+    expect(streamedSegmentsHold(text, text.length)).toBe(false);
+    expect(streamedSegmentsHold('see [docs][d]\n\n[d]: https://example.com', 0)).toBe(false);
+    expect(streamedSegmentsHold('a claim[^1]\n\n[^1]: the source', 0)).toBe(false);
   });
 });

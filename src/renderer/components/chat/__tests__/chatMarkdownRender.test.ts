@@ -4,6 +4,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { Components } from 'react-markdown';
 import { describe, expect, it, vi } from 'vitest';
 import { ChatMarkdown } from '../ChatMarkdown';
+import {
+  advanceClosedPrefix,
+  streamedSegmentsHold,
+  streamedTextParts,
+} from '../chatMarkdownPolicy';
 
 // The code block's copy label is translated; the store behind `useI18n` needs a window.
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate, locale: 'en' }) }));
@@ -617,5 +622,28 @@ describe('FB9: math renders as native MathML, and only where it was asked for', 
     expect(html).toContain('before');
     expect(html).toContain('after');
     expect(html).not.toContain('<script');
+  });
+});
+
+describe('[PILAB-R2-SETTLE] a finished block kept in its segments shows what the whole would', () => {
+  const answers = [
+    '## 改动\n\n- 第一项\n- 第二项\n\n说明一段。\n\n```ts\nconst a = 1;\n```\n\n后记',
+    '步骤：\n\n1. 打开\n2. 运行\n\n| 列 | 值 |\n|---|---|\n| a | 1 |\n\n> 引用一段\n\n结束。',
+    '先看代码：\n\n```python\nprint(1)\n\nprint(2)\n```\n\n---\n\n**粗体**与 `inline`。',
+  ];
+  const inner = (html: string) => html.replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '');
+
+  it.each(answers.map((text, index) => [index, text]))('answer %i', (_index, text) => {
+    expect(streamedSegmentsHold(text, 0)).toBe(true);
+    const parts = streamedTextParts(advanceClosedPrefix(text, 0), true);
+    expect(parts.length).toBeGreaterThan(1);
+    const pieces = parts.map((part) =>
+      inner(renderToStaticMarkup(createElement(ChatMarkdown, { text: part.text })))
+    );
+    const whole = inner(renderToStaticMarkup(createElement(ChatMarkdown, { text })));
+    // Whitespace between elements only; and a block opening a segment loses its
+    // top margin (`first:mt-0`), which the segment container gives back.
+    const flat = (html: string) => html.replace(/>\s+</g, '><');
+    expect(flat(pieces.join(''))).toBe(flat(whole));
   });
 });
