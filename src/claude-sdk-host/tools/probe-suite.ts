@@ -198,6 +198,23 @@ export async function waitForHealth(url: string, timeoutMs: number): Promise<voi
   }
 }
 
+/**
+ * Stops the fake gateway and waits for it to exit. It saves its state on SIGTERM:
+ * removing the scratch directory before it exits races that write (ENOTEMPTY).
+ */
+export async function stopGateway(gateway: ChildProcess): Promise<void> {
+  if (gateway.exitCode !== null || gateway.signalCode !== null) return;
+  const exited = new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, 5_000);
+    gateway.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  gateway.kill();
+  await exited;
+}
+
 export function run(
   command: string,
   args: string[],
@@ -298,7 +315,7 @@ async function main(): Promise<void> {
       if (passed && !args.keep) rmSync(dir, { recursive: true, force: true });
     }
   } finally {
-    gateway.kill();
+    await stopGateway(gateway);
   }
   const ok = results.length === groups.length && results.every((r) => r.passed);
   const summary = { ok, gateway: url, hostEntry: args.hostEntry ?? 'source', groups: results };

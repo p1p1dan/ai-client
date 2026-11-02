@@ -24,6 +24,7 @@ import {
   longTmpdir,
   readProbeOutput,
   run,
+  stopGateway,
   waitForHealth,
 } from './probe-suite.ts';
 
@@ -146,7 +147,7 @@ async function main(): Promise<void> {
       }
     }
   } finally {
-    gateway.kill();
+    await stopGateway(gateway);
     if (!failed) rmSync(base, { recursive: true, force: true });
     else console.error(`[event-record] kept ${base}`);
   }
