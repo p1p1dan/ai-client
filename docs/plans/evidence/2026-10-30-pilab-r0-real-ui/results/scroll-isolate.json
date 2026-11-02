@@ -1,0 +1,37 @@
+{
+  "mode": "isolate",
+  "steps": [
+    {
+      "label": "A: expanded group 2, scrolled to middle",
+      "scroller": true,
+      "top": 706,
+      "height": 2184,
+      "client": 773,
+      "fromBottom": 705,
+      "jumpButton": "滚动到底部",
+      "open": "010000000000000000000"
+    },
+    {
+      "label": "B: opened",
+      "scroller": false,
+      "open": "000"
+    },
+    {
+      "label": "A: back via sidebar",
+      "scroller": true,
+      "top": 706,
+      "height": 2184,
+      "client": 773,
+      "fromBottom": 705,
+      "jumpButton": "滚动到底部",
+      "clicked": true,
+      "open": "010000000000000000000"
+    },
+    {
+      "label": "B: again",
+      "scroller": false,
+      "open": "000"
+    }
+  ],
+  "problems": []
+}

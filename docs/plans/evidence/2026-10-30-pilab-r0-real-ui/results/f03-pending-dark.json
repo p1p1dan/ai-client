@@ -1,0 +1,47 @@
+{
+  "inject": {
+    "sid": "pilab-replay-f03",
+    "cut": 6,
+    "total": 8,
+    "lastType": "question.requested",
+    "foldMs": 0.19999999925494194,
+    "status": "waiting_question",
+    "messages": 2,
+    "pendingPermissions": 1,
+    "pendingQuestions": 1,
+    "active": "pilab-replay-f03",
+    "problems": []
+  },
+  "measure": {
+    "viewport": {
+      "w": 1400,
+      "h": 900,
+      "dpr": 1
+    },
+    "theme": "dark",
+    "turns": 1,
+    "details": 1,
+    "detailsOpen": 1,
+    "summaries": ["✻ 运行中"],
+    "statusIcons": ["running", "waiting"],
+    "toolCallIds": 0,
+    "questionPrompt": false,
+    "failureContinue": false,
+    "turnEnd": [],
+    "subagentRows": 0,
+    "horizontalOverflow": false,
+    "texts": [
+      {
+        "text": "选择脱敏验证环境",
+        "inDom": 0,
+        "visible": 0
+      },
+      {
+        "text": "pnpm deploy:demo",
+        "inDom": 2,
+        "visible": 2
+      }
+    ],
+    "composer": true
+  }
+}

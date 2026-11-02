@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   hasFilePayload,
   isDragLeavingWindow,
+  isOwnDropTarget,
   isPointInsideDropZone,
   normalizeDroppedRepositoryPath,
 } from './fileDragDrop';
@@ -34,6 +35,12 @@ export function useFileDragDrop(
     }
 
     const handleDragOver = (e: DragEvent) => {
+      // PiLab R2: a surface that takes the file itself (the composer, which
+      // makes it an attachment) is not "add this repository".
+      if (isOwnDropTarget(e.target)) {
+        setIsFileDragOver(false);
+        return;
+      }
       if (!hasFilePayload(e.dataTransfer)) {
         if (!invalidPayloadWarnedRef.current) {
           invalidPayloadWarnedRef.current = true;
@@ -80,6 +87,11 @@ export function useFileDragDrop(
 
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
+      if (isOwnDropTarget(e.target)) {
+        invalidPayloadWarnedRef.current = false;
+        setIsFileDragOver(false);
+        return;
+      }
       // Session boundary: next drag's dragover gets a fresh warning slot.
       invalidPayloadWarnedRef.current = false;
       const wasOver = isFileDragOverRef.current;

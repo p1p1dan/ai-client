@@ -94,8 +94,10 @@ export function useEditor() {
       const currentTabs = useEditorStore.getState().tabs;
       const file = currentTabs.find((f) => f.path === path);
       if (!file) throw new Error('File not found');
-      await window.electronAPI.file.write(path, file.content, file.encoding);
-      markFileSaved(path);
+      if (file.baseContent === undefined) throw new Error('File content baseline is missing');
+      const savedContent = file.content;
+      await window.electronAPI.file.write(path, savedContent, file.encoding, file.baseContent);
+      markFileSaved(path, savedContent);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['file', 'list'] });

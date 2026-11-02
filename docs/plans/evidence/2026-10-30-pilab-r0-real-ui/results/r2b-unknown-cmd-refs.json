@@ -1,0 +1,35 @@
+[
+  {
+    "name": "typed \"/reveiw …\", Enter",
+    "text": "/reveiw 看下这个改动",
+    "dropLit": false,
+    "alerts": ["没有 /reveiw 这个命令。 仍然发送"],
+    "chips": [],
+    "atts": [],
+    "sentSoFar": 0
+  },
+  {
+    "name": "typed three references (one missing)",
+    "text": "请对比 @src/main/entry.ts 和 @docs/old-plan.md 以及 @src",
+    "dropLit": false,
+    "alerts": [],
+    "chips": ["src/main/entry.ts", "docs/old-plan.md找不到 [disabled]", "src"],
+    "atts": []
+  },
+  {
+    "name": "file dragged over the composer",
+    "text": "",
+    "dropLit": false,
+    "alerts": [],
+    "chips": [],
+    "atts": []
+  },
+  {
+    "name": "file dropped",
+    "text": "",
+    "dropLit": false,
+    "alerts": [],
+    "chips": [],
+    "atts": []
+  }
+]

@@ -123,6 +123,8 @@ export interface ChangesCardFile {
   dir: string;
   added: number;
   removed: number;
+  /** PiLab R2: too large or binary — no line counts to show. */
+  uncounted: boolean;
   status: SessionReviewEntry['status'];
 }
 
@@ -130,6 +132,8 @@ export interface ChangesCardView {
   count: number;
   added: number;
   removed: number;
+  /** Whether any change has line counts; when none does, the header shows none. */
+  counted: boolean;
   files: ChangesCardFile[];
   more: number;
 }
@@ -149,9 +153,11 @@ export function deriveChangesCardView(
   if (!entries || entries.length === 0) return null;
   let added = 0;
   let removed = 0;
+  let counted = false;
   for (const entry of entries) {
     added += entry.added;
     removed += entry.removed;
+    if (!entry.unavailable) counted = true;
   }
   const files = entries.slice(0, CHANGES_CARD_FILES).map((entry) => ({
     entryId: entry.id,
@@ -159,12 +165,14 @@ export function deriveChangesCardView(
     ...splitPath(entry.path),
     added: entry.added,
     removed: entry.removed,
+    uncounted: entry.unavailable !== undefined,
     status: entry.status,
   }));
   return {
     count: entries.length,
     added,
     removed,
+    counted,
     files,
     more: entries.length - files.length,
   };

@@ -33,6 +33,12 @@ export interface TurnChangedFile {
   removed: number;
   /** Review entry id of this file's FIRST change in the turn. */
   firstEntryId: string;
+  /**
+   * PiLab R2: no change to this file could be counted (too large, binary,
+   * unreadable). Its 0/0 is not a count, and the card says nothing rather than
+   * 「+0 −0」 — the review panel's `unavailable` rule.
+   */
+  uncounted: boolean;
 }
 
 export interface TurnChangeSummary {
@@ -40,6 +46,8 @@ export interface TurnChangeSummary {
   files: TurnChangedFile[];
   added: number;
   removed: number;
+  /** At least one change was counted; otherwise the card shows no +/−. */
+  counted: boolean;
 }
 
 /**
@@ -61,6 +69,7 @@ export function deriveTurnChanges(body: readonly ChatMessage[]): TurnChangeSumma
       if (existing) {
         existing.added += change.added;
         existing.removed += change.removed;
+        existing.uncounted &&= change.uncounted;
       } else {
         byPath.set(change.path, { ...change, firstEntryId: entryId });
       }
@@ -72,10 +81,13 @@ export function deriveTurnChanges(body: readonly ChatMessage[]): TurnChangeSumma
     files,
     added: files.reduce((sum, file) => sum + file.added, 0),
     removed: files.reduce((sum, file) => sum + file.removed, 0),
+    counted: files.some((file) => !file.uncounted),
   };
 }
 
-function runChange(run: ToolRun): { path: string; added: number; removed: number } | null {
+function runChange(
+  run: ToolRun
+): { path: string; added: number; removed: number; uncounted: boolean } | null {
   const review = reviewFromToolResult(run.result);
   if (review) {
     const lines = review.patch?.split('\n') ?? [];
@@ -83,11 +95,12 @@ function runChange(run: ToolRun): { path: string; added: number; removed: number
       path: review.path,
       added: lines.filter((line) => line.startsWith('+')).length,
       removed: lines.filter((line) => line.startsWith('-')).length,
+      uncounted: Boolean(review.unavailable),
     };
   }
   const preview = deriveToolDiff(run);
   if (!preview?.path) return null;
-  return { path: preview.path, added: preview.added, removed: preview.removed };
+  return { path: preview.path, added: preview.added, removed: preview.removed, uncounted: false };
 }
 
 /** How many file names the card's second line spells before 「等 N 个」. */

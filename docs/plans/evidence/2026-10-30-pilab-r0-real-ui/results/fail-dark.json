@@ -1,0 +1,52 @@
+{
+  "inject": {
+    "sid": "pilab-replay-fail",
+    "cut": 16,
+    "total": 16,
+    "lastType": "session.failed",
+    "foldMs": 0.19999999925494194,
+    "status": "failed",
+    "messages": 2,
+    "pendingPermissions": 0,
+    "pendingQuestions": 0,
+    "active": "pilab-replay-fail",
+    "problems": []
+  },
+  "measure": {
+    "viewport": {
+      "w": 1400,
+      "h": 900,
+      "dpr": 1
+    },
+    "theme": "dark",
+    "turns": 1,
+    "details": 3,
+    "detailsOpen": 3,
+    "summaries": ["已工作", "已工作", "已工作"],
+    "statusIcons": [],
+    "toolCallIds": 0,
+    "questionPrompt": false,
+    "failureContinue": true,
+    "turnEnd": [],
+    "subagentRows": 0,
+    "horizontalOverflow": false,
+    "texts": [
+      {
+        "text": "正文 A",
+        "inDom": 1,
+        "visible": 1
+      },
+      {
+        "text": "正文 B",
+        "inDom": 1,
+        "visible": 1
+      },
+      {
+        "text": "503",
+        "inDom": 1,
+        "visible": 1
+      }
+    ],
+    "composer": true
+  }
+}

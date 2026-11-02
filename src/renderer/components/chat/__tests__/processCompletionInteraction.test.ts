@@ -41,7 +41,7 @@ vi.mock('@/stores/chatSessionActions', async (importOriginal) => ({
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { MessageTimeline } from '../MessageTimeline';
 
-it('closes the process on completion, keeps the final answer outside, and allows reopening', async () => {
+it('the answer stays on screen through completion; the thinking opens from the footer', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   useChatSessionsStore.setState({
     activeSessionId: 's',
@@ -62,6 +62,7 @@ it('closes the process on completion, keeps the final answer outside, and allows
           role: 'assistant',
           blocks: [
             { id: 'th', type: 'thinking', text: 'Reading evidence.' },
+            { id: 'th2', type: 'thinking', text: 'Checking the result.' },
             { id: 'at', type: 'text', text: 'FINAL_RESULT' },
           ],
         },
@@ -87,27 +88,27 @@ it('closes the process on completion, keeps the final answer outside, and allows
     );
   };
   try {
+    // PiLab R1 (user ruling 2026-10-30): thinking is no row and nothing folds —
+    // the answer is on screen running and settled, and the thinking text opens
+    // from the footer's 「思考」 once the turn ends.
     await render('running');
-    expect(container.querySelector('details')?.open).toBe(true);
-    // A manual live-phase expansion must not carry over into completion.
-    await act(async () => container.querySelector('summary')?.click());
-    await act(async () => container.querySelector('summary')?.click());
-    expect(container.querySelector('details')?.open).toBe(true);
+    expect(container.querySelectorAll('details')).toHaveLength(0);
+    expect(container.textContent).not.toContain('Reading evidence.');
+    expect(container.textContent).toContain('FINAL_RESULT');
     await act(async () =>
       useChatSessionsStore.setState((state) => ({
         sessions: state.sessions.map((session) => ({ ...session, status: 'idle' })),
       }))
     );
     await render('idle');
-    const details = container.querySelector('details');
-    expect(details?.open).toBe(false);
-    expect(details?.textContent).not.toContain('FINAL_RESULT');
+    expect(container.querySelectorAll('details')).toHaveLength(0);
     expect(container.textContent).toContain('FINAL_RESULT');
-    expect(container.querySelectorAll('details')).toHaveLength(1);
-    await act(async () => container.querySelector('summary')?.click());
-    expect(details?.open).toBe(true);
-    await render('idle');
-    expect(details?.open).toBe(true);
+    const toggle = container.querySelector<HTMLButtonElement>('[data-slot="turn-thinking-toggle"]');
+    expect(toggle, 'the footer offers the thinking').not.toBeNull();
+    expect(container.textContent).not.toContain('Reading evidence.');
+    await act(async () => toggle?.click());
+    expect(container.textContent).toContain('Reading evidence.');
+    expect(container.textContent).toContain('Checking the result.');
   } finally {
     await act(async () => root.unmount());
     container.remove();

@@ -188,3 +188,36 @@ describe('replaceMention with a directory entry (T-07①)', () => {
  * The hand-typed `@` path is untouched and stays covered above by
  * `extractMentionQuery` (opens the popup) and `replaceMention` (completes it).
  */
+
+describe('[PILAB-R2-MENTION] the @ token as Claude Code reads it', () => {
+  it('writes a path with spaces quoted, and reads the quoted form back', () => {
+    const out = replaceMention('see @a-sp', 9, file('My Docs/a-spaced.md'));
+    expect(out).toEqual({ text: 'see @"My Docs/a-spaced.md" ', cursor: 27 });
+    expect(parseMentionChips(out?.text ?? '')).toEqual([{ path: 'My Docs/a-spaced.md' }]);
+    expect(extractMentionQuery('see @"My Do', 11)).toBe('My Do');
+  });
+
+  it('completes the whole token, not only the part before the caret', () => {
+    // "see @ent|ry": the caret moved left two places before the pick.
+    expect(replaceMention('see @entry', 8, file('src/main/entry.ts'))).toEqual({
+      text: 'see @src/main/entry.ts ',
+      cursor: 23,
+    });
+    expect(replaceMention('see @"My Do|cs" x'.replace('|', ''), 11, file('My Docs/a.md'))).toEqual({
+      text: 'see @"My Docs/a.md" x',
+      cursor: 19,
+    });
+  });
+
+  it('opens after any whitespace, the full-width space included, never inside a word', () => {
+    expect(extractMentionQuery('说明　@x', 5)).toBe('x');
+    expect(extractMentionQuery('a\t@x', 4)).toBe('x');
+    expect(extractMentionQuery('mail a@entry', 12)).toBe(null);
+    expect(extractMentionQuery('请看@中文', 5)).toBe(null);
+  });
+
+  it('a lone quote is not a chip', () => {
+    expect(parseMentionChips('@"unfinished')).toEqual([]);
+    expect(parseMentionChips('@a @b')).toEqual([{ path: 'a' }, { path: 'b' }]);
+  });
+});

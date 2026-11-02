@@ -1,5 +1,6 @@
 import { Script } from 'node:vm';
-import { describe, expect, it } from 'vitest';
+import { FILE_CONTENT_CONFLICT } from '@shared/types/file';
+import { describe, expect, it, vi } from 'vitest';
 import {
   PorcelainV2FileChangesAccumulator,
   parsePorcelainV2Status,
@@ -43,6 +44,13 @@ type RemoteParsers = {
 function extractFunction(source: string, name: string): string {
   const start = source.indexOf(`\nfunction ${name}(`);
   expect(start, `function ${name} in the remote helper`).toBeGreaterThanOrEqual(0);
+  const end = source.indexOf('\n}\n', start);
+  return source.slice(start, end + 3);
+}
+
+function extractAsyncFunction(source: string, name: string): string {
+  const start = source.indexOf(`\nasync function ${name}(`);
+  expect(start, `async function ${name} in the remote helper`).toBeGreaterThanOrEqual(0);
   const end = source.indexOf('\n}\n', start);
   return source.slice(start, end + 3);
 }
@@ -134,5 +142,33 @@ describe('remote helper porcelain v2 parsing', () => {
     const stdout = z(['# branch.oid abc', '# branch.head main']);
     expect(remote.parseFileChanges(stdout).changes).toEqual([]);
     expect(remote.parsePorcelainStatus(stdout)).toMatchObject({ isClean: true, current: 'main' });
+  });
+});
+
+describe('remote helper file write baseline', () => {
+  it('checks and writes in one helper call, refusing a stale baseline', async () => {
+    const source = getRemoteServerSource();
+    const body = [
+      extractFunction(source, 'isLikelyBinary'),
+      extractAsyncFunction(source, 'readFileText'),
+      extractAsyncFunction(source, 'writeFileText'),
+    ].join('\n');
+    const fsp = {
+      readFile: vi.fn(async () => Buffer.from('B')),
+      writeFile: vi.fn(async () => undefined),
+    };
+    const { writeFileText } = new Function(
+      'fsp',
+      'FILE_CONTENT_CONFLICT',
+      `${body}\nreturn { writeFileText };`
+    )(fsp, FILE_CONTENT_CONFLICT) as {
+      writeFileText: (path: string, content: string, expectedContent?: string) => Promise<unknown>;
+    };
+
+    await expect(writeFileText('/remote/a.ts', 'C', 'A')).rejects.toThrow(FILE_CONTENT_CONFLICT);
+    expect(fsp.writeFile).not.toHaveBeenCalled();
+
+    await writeFileText('/remote/a.ts', 'C', 'B');
+    expect(fsp.writeFile).toHaveBeenCalledWith('/remote/a.ts', 'C', 'utf8');
   });
 });

@@ -409,7 +409,7 @@ export function sessionFailureTitleClass(): string {
  * diffs and the subagent panel keep their own windows (`ToolRowOutputSegment`).
  */
 export function thoughtBodyMaxHeightClass(): string {
-  return 'max-h-[46vh] overflow-y-auto';
+  return 'max-h-[46vh] overflow-y-auto overscroll-contain';
 }
 
 /**
@@ -811,13 +811,34 @@ export function userMessageActionRowClass(): string {
 }
 
 /**
- * Issue #26 item 5: a long prompt folds, decided from its TEXT -- never from a
- * measured height (F10: no geometry-dependent state). Above this many
- * estimated lines the bubble starts folded; folded, it shows
- * `PROMPT_FOLDED_LINES` with the reference's 3rem bottom fade.
+ * Issue #26 item 5: the text estimate of whether a long prompt folds -- the
+ * fallback where nothing has layout (see `promptFoldsAtHeight`). Above this many
+ * estimated lines the bubble starts folded; folded, it shows ~300px
+ * (`PROMPT_FOLDED_PX`) with the reference's 3rem bottom fade.
  */
-export const PROMPT_FOLD_THRESHOLD_LINES = 15;
-export const PROMPT_FOLDED_LINES = 12;
+export const PROMPT_FOLD_THRESHOLD_LINES = 18; // ≈ PROMPT_FOLD_MIN_PX at 13px × 1.43
+
+/**
+ * PiLab R1, FR-01.5 (user 2026-10-30「调整一下」): where the page has layout the
+ * fold is decided from the text box's MEASURED full height, so a narrow pane or
+ * zoom cannot leave a long prompt unfolded. Folded height is ~300px; a prompt
+ * folds only when that hides at least ~2 lines (> 340px), so "Show more" never
+ * opens onto a sliver. No F10 cycle: the input is `scrollHeight`, which the
+ * fold's own `max-height` does not change, and nothing reads scroll position.
+ * The text estimate above remains the answer where nothing has layout (tests).
+ */
+export const PROMPT_FOLDED_PX = 300;
+export const PROMPT_FOLD_MIN_PX = 340;
+
+/**
+ * Does a prompt whose full text box is `scrollHeight` px tall fold? With
+ * hysteresis: one already folded stays folded down to `PROMPT_FOLDED_PX`, so a
+ * width wobble (a scrollbar appearing because the fold changed the page height)
+ * cannot flip it back and forth.
+ */
+export function promptFoldsAtHeight(scrollHeight: number, foldedNow = false): boolean {
+  return scrollHeight > (foldedNow ? PROMPT_FOLDED_PX : PROMPT_FOLD_MIN_PX);
+}
 
 /**
  * Width units a bubble line holds: the bubble is at most 80% of the 40rem
@@ -847,14 +868,13 @@ export function promptFolds(text: string): boolean {
 }
 
 /**
- * The prompt text box while folded, or `''` when open. `lh` is the box's own
- * line height, which is why the box pins the prose size and leading: the
- * height is a number of the prompt's lines, not of pixels. The clip is CSS of
+ * The prompt text box while folded, or `''` when open: `max-h-75` is
+ * `PROMPT_FOLDED_PX` (300px). The clip is CSS of
  * a boolean the user toggles; nothing reads it back.
  */
 export function userBubbleFoldClass(folded: boolean): string {
   return folded
-    ? `max-h-[12lh] overflow-hidden text-chat-body ${CHAT_PROSE_LEADING} [mask-image:linear-gradient(to_bottom,black_calc(100%-3rem),transparent)]`
+    ? `max-h-75 overflow-hidden text-chat-body ${CHAT_PROSE_LEADING} [mask-image:linear-gradient(to_bottom,black_calc(100%-3rem),transparent)]`
     : '';
 }
 

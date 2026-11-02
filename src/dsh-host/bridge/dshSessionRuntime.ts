@@ -878,6 +878,12 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   private route = '';
   /** The model the session is on; a turn that names none keeps it. */
   private modelId: string | undefined;
+  /**
+   * The effort the chat's last send asked for. PiLab R2 (04.2): a send with
+   * none is "Default" (the composer always sends the level it shows), so it
+   * no longer falls back to the level the chat was opened on.
+   */
+  private effort: BridgeSessionRuntimeOptions['effort'];
   private readonly router: DshModelRouter;
   /** Read by the agent's prompt assembly and requests (`installModelSelection`). */
   private readonly selection: DshModelSelectionRef = { current: undefined, assembled: undefined };
@@ -1006,6 +1012,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.retired = new DshRetiredHistory(this.query, options.log);
     this.router = new DshModelRouter(() => deps.modelPlan?.(), options.log);
     this.modelId = options.model;
+    this.effort = options.effort;
     this.gateChannel = `${options.logicalSessionId}:${randomUUID()}`;
     this.prompt = createPermissionPrompt({
       sessionId: this.logicalSessionId,
@@ -1499,7 +1506,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
    * plan still opens, to be read; its next send is refused instead.
    */
   private openingSelection(): { provider: string; model: string } {
-    const routed = this.router.trySession(this.modelId, this.options.effort);
+    const routed = this.router.trySession(this.modelId, this.effort);
     if (routed) {
       this.applyRoute(routed);
       return { provider: routed.selection.provider, model: routed.selection.model };
@@ -1511,10 +1518,14 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   }
 
   /** The selection the next step routes to, and the id `message.started` reports. */
-  private applyRoute(routed: DshRoutedModel): void {
+  private applyRoute(
+    routed: DshRoutedModel,
+    effort: BridgeSessionRuntimeOptions['effort'] = this.effort
+  ): void {
     this.selection.current = { ...routed.selection };
     this.modelId = routed.modelId;
     this.route = routed.modelId;
+    this.effort = effort;
   }
 
   /**
@@ -1681,16 +1692,13 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.assertNoOwnTurn();
     await this.bootstrap();
     // Decisions 033, 040: this turn's model and effort, or a refusal before anything is sent.
-    const routed = this.router.session(
-      input.model ?? this.modelId,
-      input.effort ?? this.options.effort
-    );
+    const routed = this.router.session(input.model ?? this.modelId, input.effort);
     // Decisions 099 rule 9, 113: a known command line runs as DSH's command,
     // with no model turn. With attachments it is a message, as the window's
     // own commands treat it.
     const commands = input.attachments?.length ? undefined : this.commandFor(input.text);
     if (commands) {
-      this.applyRoute(routed);
+      this.applyRoute(routed, input.effort);
       const accepted = await this.startCommand(input, commands);
       if (accepted) return accepted;
     }
@@ -1700,7 +1708,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     // The admission awaited the store: a send that came in meanwhile won.
     this.assertNoOwnTurn();
     const agent = this.requireAgent();
-    this.applyRoute(routed);
+    this.applyRoute(routed, input.effort);
     // Decision 202: a turn DSH started itself (a goal round, a job or subagent
     // wake-up) is running, or about to log its `turn/start`. A followup would
     // take that turn over: its `turn/end` would settle this send, and the
@@ -2291,7 +2299,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       );
     }
     // Decisions 033, 040: the session's model and effort, or a refusal.
-    const routed = this.router.session(this.modelId, this.options.effort);
+    const routed = this.router.session(this.modelId, this.effort);
     return askDshSideQuestion({
       llm,
       routed,
@@ -2412,9 +2420,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       );
     }
     const agent = this.requireAgent();
-    this.applyRoute(
-      this.router.session(input.model ?? this.modelId, input.effort ?? this.options.effort)
-    );
+    this.applyRoute(this.router.session(input.model ?? this.modelId, input.effort), input.effort);
     const message = this.deps.createUserMessage({
       content: [{ type: 'text', text: DSH_RETRY_CONTINUATION_TEXT }],
       source: {

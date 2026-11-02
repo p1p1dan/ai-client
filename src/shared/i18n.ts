@@ -206,6 +206,17 @@ export const zhTranslations: Record<string, string> = {
   'Select Image': '选择图片',
   'Beta Features': 'Beta 功能',
   'Binary file not supported for diff preview': '二进制文件不支持差异预览',
+  'No differences in this file': '这个文件两边内容相同，没有差异',
+  'Copy all output': '复制全部输出',
+  'Copy all output (start omitted)': '复制全部输出（开头已被省略）',
+  'View all': '查看全部',
+  '(no newline at end of file)': '（文件末尾没有换行）',
+  'Diff layout': '差异显示方式',
+  Stacked: '上下显示',
+  'Side by side': '并排显示',
+  'Too narrow, stacked for now': '太窄，暂用上下',
+  'Only line endings differ (CRLF / LF); Git may convert them on commit':
+    '两边只有换行符（CRLF / LF）不同，提交时 Git 可能会自动转换',
   // Issue #13: this block drives the TEMPORARY WORKSPACE feature (the temp
   // directory with an agent/terminal session beside it), not 「临时对话」 — the
   // chat that belongs to no repository. The two read as one thing while both
@@ -319,6 +330,7 @@ export const zhTranslations: Record<string, string> = {
   'Committed {{count}} files': '已提交 {{count}} 个文件',
   Conflict: '冲突',
   Copied: '已复制',
+  'Copy code': '复制代码',
   'Copied to clipboard': '已复制到剪贴板',
   Copy: '复制',
   'Open Folder': '打开文件夹',
@@ -1107,6 +1119,10 @@ export const zhTranslations: Record<string, string> = {
   'File read failed': '读取文件失败',
   'File changed externally': '文件已被外部修改',
   'Keep Mine': '保留本地',
+  'The file was changed outside the editor after you opened it, so nothing was written.':
+    '文件在打开后被外部修改过，本次没有写入。',
+  'Choose Reload to take the version on disk, or Keep Mine and save again to overwrite it.':
+    '可在编辑器顶部选「重新加载」使用磁盘上的版本，或选「保留本地」后再次保存覆盖它。',
   Reload: '重新加载',
   'Do you want to save the changes you made to {{file}}?': '要保存对 {{file}} 的更改吗？',
   "Your changes will be lost if you don't save them.": '如果不保存，你的更改将丢失。',
@@ -2553,6 +2569,14 @@ export const zhTranslations: Record<string, string> = {
     '发送到当前回合（下一步送达）— Ctrl+Enter 排到本回合结束后发送',
   'Send now': '立刻发送',
   'Send now — interrupt the running turn': '立刻发送 — 打断当前回复',
+  'There is no /{{command}} command.': '没有 /{{command}} 这个命令。',
+  'Send anyway': '仍然发送',
+  'No such file': '找不到这个文件',
+  'not found': '找不到',
+  '{{count}} attachments added before the restart were not kept; add them again.':
+    '重启前加的 {{count}} 个附件没有保留，需要重新添加。',
+  'The draft was too long; only its first 100,000 characters were kept.':
+    '草稿太长，只保留了前 10 万字。',
   // dsh-rebase decision 093: Ctrl+Enter joins the running turn at its next step.
   'Awaiting delivery': '待送达',
   'Could not add the message to the running turn: {{error}}': '插话没能送进当前回合：{{error}}',
@@ -2750,6 +2774,41 @@ export const zhTranslations: Record<string, string> = {
   '{{pattern}} in {{repo}}': '{{pattern}}（{{repo}}）',
   '{{count}} tool call': '{{count}} 次工具调用',
   '{{count}} tool calls': '{{count}} 次工具调用',
+  // PiLab R1 (2026-10-30): the turn as steps (`turnSteps.ts`).
+  pattern: '处',
+  patterns: '处',
+  file: '个文件',
+  files: '个文件',
+  directory: '个目录',
+  directories: '个目录',
+  'Searched {{count}} {{noun}}': '搜索了 {{count}} {{noun}}',
+  'searched {{count}} {{noun}}': '搜索了 {{count}} {{noun}}',
+  'Searching {{count}} {{noun}}': '正在搜索 {{count}} {{noun}}',
+  'searching {{count}} {{noun}}': '搜索 {{count}} {{noun}}',
+  'Read {{count}} {{noun}}': '读取了 {{count}} {{noun}}',
+  'read {{count}} {{noun}}': '读取了 {{count}} {{noun}}',
+  'Reading {{count}} {{noun}}': '正在读取 {{count}} {{noun}}',
+  'reading {{count}} {{noun}}': '读取 {{count}} {{noun}}',
+  'Listed {{count}} {{noun}}': '列出了 {{count}} {{noun}}',
+  'listed {{count}} {{noun}}': '列出了 {{count}} {{noun}}',
+  'Listing {{count}} {{noun}}': '正在列出 {{count}} {{noun}}',
+  'listing {{count}} {{noun}}': '列出 {{count}} {{noun}}',
+  ', ': '，',
+  'Outcome unknown: the engine stopped before this finished. Check whether it took effect before running it again.':
+    '结果未知：引擎在它结束前停止了。重新运行前请先确认它是否已经生效。',
+  'Took {{duration}}': '用时 {{duration}}',
+  'Large output, open the step to see it': '输出较长，点开查看',
+  'Edited {{count}} {{noun}}': '修改了 {{count}} {{noun}}',
+  'Editing {{count}} {{noun}}': '正在修改 {{count}} {{noun}}',
+  'This turn did not finish': '这一轮没有完成',
+  'The connection to the chat engine was lost and this turn stopped here. Everything above is kept.':
+    '与对话引擎的连接中断，这一轮停在了这里，上面的内容都已保留。',
+  'The chat engine was restarted to recover another chat, and this turn stopped here. Everything above is kept.':
+    '为恢复另一个对话，对话引擎重启了，这一轮停在了这里，上面的内容都已保留。',
+  'The engine process for this chat exited and this turn stopped here. Everything above is kept.':
+    '这个对话的引擎进程退出了，这一轮停在了这里，上面的内容都已保留。',
+  Reconnected: '已重新连接',
+  'Reconnecting…': '正在重新连接…',
   // T108 keeps aggregate counts; the work head still reports step totals.
   // T112 retired the SINGULAR `{{count}} step`: a head now exists only for a
   // group that folded two steps or more, so the one-step wording had no caller

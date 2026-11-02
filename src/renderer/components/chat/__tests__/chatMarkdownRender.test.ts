@@ -1,8 +1,12 @@
+import { englishTranslate } from '@shared/i18n';
 import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Components } from 'react-markdown';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ChatMarkdown } from '../ChatMarkdown';
+
+// The code block's copy label is translated; the store behind `useI18n` needs a window.
+vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate, locale: 'en' }) }));
 
 /**
  * T-29 F-C6: the component map, asserted by RENDERING it.

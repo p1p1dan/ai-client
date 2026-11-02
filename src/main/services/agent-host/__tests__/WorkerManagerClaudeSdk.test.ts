@@ -452,6 +452,8 @@ describe('WorkerManager on the Claude Agent SDK engine (route B, S-1)', () => {
           // Every declared window: the host tells the CLI the smaller ones, and
           // compares a service refusal's limit with all of them.
           modelWindows: { 'claude-opus-5': 200_000, 'claude-sonnet-5': 1_000_000 },
+          // PiLab R2 (04.2): rows declared without reasoning are not asked to think.
+          modelThinking: { 'claude-opus-5': 'none', 'claude-sonnet-5': 'none' },
         },
       ]);
     });

@@ -1,11 +1,12 @@
 import { APP_STATE_DIR } from '@shared/defaultPaths';
+import { FILE_CONTENT_CONFLICT } from '@shared/types/file';
 import {
   GIT_LOG_FIELD_SEPARATOR,
   GIT_LOG_PRETTY_FORMAT,
   GIT_LOG_RECORD_SEPARATOR,
 } from '../git/gitLogFormat';
 
-export const REMOTE_SERVER_VERSION = '0.4.0';
+export const REMOTE_SERVER_VERSION = '0.4.1';
 
 export function getRemoteServerSource(): string {
   return String.raw`#!/usr/bin/env node
@@ -32,6 +33,7 @@ const MAX_SESSION_REPLAY_CHARS = 65536;
 const EXEC_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const EXEC_COMMAND_OUTPUT_LIMIT_CHARS = 2 * 1024 * 1024;
 const REMOTE_PTY_UNAVAILABLE = 'REMOTE_PTY_UNAVAILABLE';
+const FILE_CONTENT_CONFLICT = ${JSON.stringify(FILE_CONTENT_CONFLICT)};
 const REMOTE_SETTINGS_PATH = '${APP_STATE_DIR}/settings.json';
 const REMOTE_SESSION_STATE_PATH = '${APP_STATE_DIR}/session-state.json';
 const RUNTIME_MANIFEST_FILENAME = 'aiclient-remote-runtime-manifest.json';
@@ -297,7 +299,13 @@ async function readFileText(filePath) {
   };
 }
 
-async function writeFileText(filePath, content) {
+async function writeFileText(filePath, content, expectedContent) {
+  if (expectedContent !== undefined) {
+    const current = await readFileText(filePath);
+    if (current.isBinary || current.content !== expectedContent) {
+      throw new Error(FILE_CONTENT_CONFLICT + ': File changed on disk');
+    }
+  }
   await fsp.writeFile(filePath, content, 'utf8');
   return { success: true };
 }
@@ -2643,7 +2651,7 @@ const handlers = {
   'env:test': testEnvironment,
   'fs:list': ({ path }) => listDirectory(path),
   'fs:read': ({ path }) => readFileText(path),
-  'fs:write': ({ path, content }) => writeFileText(path, content),
+  'fs:write': ({ path, content, expectedContent }) => writeFileText(path, content, expectedContent),
   'fs:createFile': ({ path, content, overwrite }) => createFile(path, content, overwrite),
   'fs:createDirectory': ({ path }) => createDirectory(path),
   'fs:rename': ({ fromPath, toPath }) => renamePath(fromPath, toPath),

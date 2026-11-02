@@ -76,6 +76,14 @@ export interface ComposerAttachments {
    * arrive over IPC instead of off the clipboard.
    */
   ingestPickedPaths: (paths: readonly string[]) => Promise<void>;
+  /**
+   * PiLab R2 (user ruling 2026-10-30): files dropped on the composer. Read the
+   * paste way, off the dropped `File`s themselves: Main reads only the paths
+   * its own dialog handed out (`PickedAttachmentAccess`), and a drop is not
+   * one. `folders` are the dropped entries that are folders, named in the
+   * same one notice as every other skip.
+   */
+  ingestDropped: (files: readonly File[], folders?: readonly string[]) => Promise<void>;
   removeDraft: (id: string) => void;
   /** T-19: bulk remove by id — the commit-point consumption hook uses this to
    *  drop exactly the drafts a turn just carried off (see ChatComposer's
@@ -114,14 +122,42 @@ export interface ComposerAttachments {
   replaceDrafts: (drafts: readonly AttachmentDraft[]) => void;
 }
 
-export function useComposerAttachments(options: { disabled: boolean }): ComposerAttachments {
+export function useComposerAttachments(options: {
+  disabled: boolean;
+  /**
+   * PiLab R2 (03.7): whose box this is — the chat on screen (`null` for the
+   * start screen). A read that finishes after the user switched chats belongs
+   * to the chat it started in, never to the one on screen now.
+   */
+  owner?: string | null;
+  /** Where such a late draft goes: its own chat's draft, for when the user goes back. */
+  onLandedElsewhere?: (owner: string | null, draft: AttachmentDraft) => void;
+}): ComposerAttachments {
   // T067 (D26): every refusal below is a sentence the user reads. The budget
   // modules hold the wording as catalog keys; this is where the locale that
   // resolves them enters the pipeline.
   const { t } = useI18n();
   const [drafts, setDrafts] = useState<AttachmentDraft[]>([]);
   const [notice, setNotice] = useState<AttachmentNotice | null>(null);
-  const [reading, setReading] = useState(0);
+  // Per chat (PiLab R2): one chat's reads do not hold another chat's Send.
+  const [readingBy, setReadingBy] = useState<Record<string, number>>({});
+  const owner = options.owner ?? null;
+  const ownerRef = useRef(owner);
+  ownerRef.current = owner;
+  const landedElsewhereRef = useRef(options.onLandedElsewhere);
+  landedElsewhereRef.current = options.onLandedElsewhere;
+  const setReading = useCallback((key: string | null, delta: number) => {
+    const slot = key ?? '';
+    setReadingBy((prev) => {
+      const next = Math.max(0, (prev[slot] ?? 0) + delta);
+      if (next === (prev[slot] ?? 0)) return prev;
+      const out = { ...prev };
+      if (next === 0) delete out[slot];
+      else out[slot] = next;
+      return out;
+    });
+  }, []);
+  const reading = readingBy[owner ?? ''] ?? 0;
   // Admission is decided against the live list, not the render closure: a
   // second paste can land while the first one is still being read.
   const draftsRef = useRef<AttachmentDraft[]>([]);
@@ -138,9 +174,15 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
      * picked path that could never be read). They join this batch's own skips
      * so the user still gets ONE folded notice for one gesture, rather than a
      * second Alert replacing the first.
+     * @param from PiLab R2: the chat the gesture was made in (a picked batch
+     * passes the one it started in, before its own reads).
      */
-    async (files: AttachmentSource[], preSkipped: readonly string[] = []) => {
-      setReading((count) => count + files.length);
+    async (
+      files: AttachmentSource[],
+      preSkipped: readonly string[] = [],
+      from: string | null = ownerRef.current
+    ) => {
+      setReading(from, files.length);
       const skipped: string[] = [...preSkipped];
       try {
         for (const file of files) {
@@ -221,29 +263,32 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
             continue;
           }
 
-          applyDrafts((prev) => [
-            ...prev,
-            {
-              id: nextDraftId(),
-              kind: detected.kind,
-              mediaType: detected.mediaType,
-              name: label,
-              byteLength: bytes.length,
-              data,
-            },
-          ]);
+          const draft: AttachmentDraft = {
+            id: nextDraftId(),
+            kind: detected.kind,
+            mediaType: detected.mediaType,
+            name: label,
+            byteLength: bytes.length,
+            data,
+          };
+          if (ownerRef.current !== from) {
+            landedElsewhereRef.current?.(from, draft);
+            continue;
+          }
+          applyDrafts((prev) => [...prev, draft]);
         }
       } finally {
-        setReading((count) => Math.max(0, count - files.length));
+        setReading(from, -files.length);
         // In `finally` (round-5 C2), not after the block: the notice is the
         // only report this batch ever makes, so an unexpected throw halfway
         // through must still publish the skips collected so far instead of
         // leaving the user with a gesture that silently produced nothing.
         // null on a clean paste, which also clears the previous notice.
-        setNotice(formatSkipNotice(skipped, t));
+        // Not over another chat's box: the switch already dismissed this one's.
+        if (ownerRef.current === from) setNotice(formatSkipNotice(skipped, t));
       }
     },
-    [applyDrafts, t]
+    [applyDrafts, setReading, t]
   );
 
   /**
@@ -276,7 +321,8 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
       // Cancelling the dialog must be a no-op — no notice, no state change.
       if (paths.length === 0) return;
 
-      setReading((count) => count + paths.length);
+      const from = ownerRef.current;
+      setReading(from, paths.length);
       let outcome: PickedBatchOutcome = { reads: [], skipped: [] };
 
       try {
@@ -297,7 +343,7 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
       } finally {
         // Handed over to `ingestFiles` below in the same synchronous run, so
         // the two updates batch and `reading` never renders a false 0.
-        setReading((count) => Math.max(0, count - paths.length));
+        setReading(from, -paths.length);
       }
 
       const sources: AttachmentSource[] = outcome.reads.map((read) => ({
@@ -306,7 +352,18 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
         size: read.byteLength,
         arrayBuffer: async () => toArrayBuffer(read.bytes),
       }));
-      await ingestFiles(sources, outcome.skipped);
+      await ingestFiles(sources, outcome.skipped, from);
+    },
+    [ingestFiles, options.disabled, setReading, t]
+  );
+
+  const ingestDropped = useCallback(
+    async (files: readonly File[], folders: readonly string[] = []) => {
+      if (options.disabled || (files.length === 0 && folders.length === 0)) return;
+      await ingestFiles(
+        [...files],
+        folders.map((name) => t('"{{name}}" is not a file — skipped.', { name }))
+      );
     },
     [ingestFiles, options.disabled, t]
   );
@@ -416,6 +473,7 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
     totalBytes,
     handlePaste,
     ingestPickedPaths,
+    ingestDropped,
     removeDraft,
     removeDrafts,
     addDrafts,

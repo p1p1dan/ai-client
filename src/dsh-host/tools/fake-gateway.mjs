@@ -683,7 +683,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS)/;
+  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS|RUN)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -2061,6 +2061,14 @@ const DSH_P0_2_SCRIPTS = {
     if (step === 0) return tool('glob', { pattern: '**/*' });
     if (step === 1) return tool('grep', { pattern: 'PERM-SECRET' });
     return say('P1-PERM-SEARCH finished.');
+  },
+  // PiLab R2: `P1-RUN {"calls":[{"name":"write","input":{...}}, ...]}` plays the
+  // given DSH tool calls one per step, as `CC-RUN` does for the Claude engine.
+  'P1-RUN'(_round, step, _calls, triggerText) {
+    const p = p04Params(triggerText);
+    const calls = Array.isArray(p.calls) ? p.calls : [];
+    if (step < calls.length) return tool(calls[step].name, calls[step].input ?? {});
+    return say(`P1-RUN done (${calls.length} calls)`);
   },
   // dsh-rebase decision 190 (src/dsh-host/__tests__/toolGaps.integration.test.ts):
   // the enhanced grep in content mode with context, a case-folded file list
@@ -3688,7 +3696,7 @@ function ccToolResultTexts(messages) {
 }
 
 /** `[delayMs, event, data]` frames of one paced reply: thinking, text, then one tool call. */
-function ccFrames(model, { thinking, text, tool, chunkMs = 60 }) {
+function ccFrames(model, { thinking, text, pieces, tool, chunkMs = 60 }) {
   const frames = [messageStartFrame(model, 1200)];
   let index = 0;
   if (thinking) {
@@ -3726,7 +3734,7 @@ function ccFrames(model, { thinking, text, tool, chunkMs = 60 }) {
       'content_block_start',
       { type: 'content_block_start', index, content_block: { type: 'text', text: '' } },
     ]);
-    for (const piece of splitInto(text, Math.min(12, Math.max(1, text.length)))) {
+    for (const piece of pieces ?? splitInto(text, Math.min(12, Math.max(1, text.length)))) {
       frames.push([
         chunkMs,
         'content_block_delta',
@@ -3926,10 +3934,24 @@ function decideClaudeSdk(parsed, req) {
       return reply({ text: `CC-RUN done (${calls.length} calls)`, chunkMs: 5 }, label);
     }
     case 'TEXT':
+      // PiLab R2 (FR-07.6): `{"pieces":["…","…"],"chunkMs":3000}` streams exactly these
+      // text deltas, no thinking, so a probe can stop on a half-closed code fence.
+      if (Array.isArray(params.pieces) && params.pieces.every((p) => typeof p === 'string')) {
+        return reply(
+          {
+            text: params.pieces.join(''),
+            pieces: params.pieces,
+            ...(Number.isFinite(params.chunkMs) ? { chunkMs: params.chunkMs } : {}),
+          },
+          label
+        );
+      }
       return reply(
         {
           thinking: 'The user wants a streamed answer. I will reply in two short sentences.',
           text: 'PiLab × Claude Agent SDK：这一段正文是逐块流式送达的。第二句也在流里。',
+          // PiLab R1: `{"chunkMs":2000}` streams slowly enough to Stop mid-reply.
+          ...(Number.isFinite(params.chunkMs) ? { chunkMs: params.chunkMs } : {}),
         },
         label
       );

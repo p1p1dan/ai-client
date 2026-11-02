@@ -1,0 +1,45 @@
+{
+  "sid": "session-1793340290265-g7e8lxr",
+  "status": "idle",
+  "title": "hello",
+  "hostBound": false,
+  "active": true,
+  "messages": 6,
+  "hash": -264780691,
+  "rows": [
+    {
+      "role": "user",
+      "blocks": ["text:5"],
+      "text": "hello"
+    },
+    {
+      "role": "assistant",
+      "blocks": ["text:35"],
+      "text": "fake gateway: no P0 scenario marker"
+    },
+    {
+      "role": "user",
+      "blocks": ["text:16"],
+      "text": "P1-THINK 恢复基线第二轮"
+    },
+    {
+      "role": "assistant",
+      "blocks": ["thinking:70", "text:37"],
+      "text": "Thought it through: the answer is 42."
+    },
+    {
+      "role": "user",
+      "blocks": ["text:6"],
+      "text": "恢复后第三轮"
+    },
+    {
+      "role": "assistant",
+      "blocks": ["thinking:70", "text:37"],
+      "text": "Thought it through: the answer is 42."
+    }
+  ],
+  "cursor": {
+    "seq": 1,
+    "resumeRequestId": null
+  }
+}

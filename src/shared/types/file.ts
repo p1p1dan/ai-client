@@ -1,3 +1,5 @@
+export const FILE_CONTENT_CONFLICT = 'FILE_CONTENT_CONFLICT';
+
 export interface FileEntry {
   name: string;
   path: string;

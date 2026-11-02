@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { deriveToolDiff, type ToolDiffLineRow } from '../toolDiff';
-import { buildDiffView, DIFF_CONTEXT_LINES, diffHasLineNumbers } from '../toolDiffView';
+import {
+  buildDiffView,
+  DIFF_CONTEXT_LINES,
+  diffHasLineNumbers,
+  splitDiffItems,
+} from '../toolDiffView';
 
 /** Issue #26 item 2: line numbers and folded unchanged runs in the inline diff. */
 
@@ -110,5 +115,43 @@ describe('folding unchanged runs', () => {
     // Hunk 2 starts at line 40: rows 1 -> 2 are not contiguous.
     const items = buildDiffView(rows);
     expect(items.map((item) => item.kind)).toEqual(['row', 'row', 'gap', 'row']);
+  });
+});
+
+describe('[PILAB-R2-SPLIT] splitDiffItems', () => {
+  const del = (n: number, text: string): ToolDiffLineRow => ({ kind: 'del', text, oldLine: n });
+  const add = (n: number, text: string): ToolDiffLineRow => ({ kind: 'add', text, newLine: n });
+
+  it('pairs a replacement across, leaves the longer run one-sided, and keeps folds whole', () => {
+    const rows = [
+      same(1),
+      del(2, 'old a'),
+      del(3, 'old b'),
+      add(2, 'new a'),
+      same(4),
+      add(4, 'only new'),
+      ...Array.from({ length: 10 }, (_, i) => same(i + 5)),
+    ];
+    const split = splitDiffItems(buildDiffView(rows));
+    const pairs = split.filter((item) => item.kind === 'pair');
+    expect(pairs.slice(0, 5).map((p) => [p.left?.text, p.right?.text])).toEqual([
+      ['s1', 's1'],
+      ['old a', 'new a'],
+      ['old b', undefined],
+      ['s4', 's4'],
+      [undefined, 'only new'],
+    ]);
+    expect(split.at(-1)?.kind).toBe('fold');
+    expect(new Set(split.map((item) => item.key)).size).toBe(split.length);
+  });
+
+  it('starts a new pairing when a deletion follows additions', () => {
+    const split = splitDiffItems(
+      buildDiffView([del(1, 'a'), add(1, 'b'), del(2, 'c'), add(2, 'd')])
+    );
+    expect(split.map((p) => (p.kind === 'pair' ? [p.left?.text, p.right?.text] : p.kind))).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
+    ]);
   });
 });

@@ -10,10 +10,10 @@
  * future caller from re-introducing it.
  */
 
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { IPC_CHANNELS } from '@shared/types';
+import { FILE_CONTENT_CONFLICT, IPC_CHANNELS } from '@shared/types';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 
 type Handler = (event: unknown, ...args: unknown[]) => Promise<unknown>;
@@ -74,4 +74,24 @@ it('renames when both ends are absolute paths inside the workspace', async () =>
   await rename({}, source, target);
 
   expect(await readdir(workspace)).toEqual(['renamed.ts']);
+});
+
+it('refuses to overwrite an external A-to-B edit with a stale baseline', async () => {
+  const write = handlers.get(IPC_CHANNELS.FILE_WRITE) as Handler;
+  const target = path.join(workspace, 'external-edit.ts');
+  await writeFile(target, 'A', 'utf8');
+  await writeFile(target, 'B', 'utf8');
+
+  await expect(write({}, target, 'C', 'utf-8', 'A')).rejects.toThrow(FILE_CONTENT_CONFLICT);
+  expect(await readFile(target, 'utf8')).toBe('B');
+});
+
+it('allows a matching baseline and rejects the next stale writer', async () => {
+  const write = handlers.get(IPC_CHANNELS.FILE_WRITE) as Handler;
+  const target = path.join(workspace, 'cross-window.ts');
+  await writeFile(target, 'A', 'utf8');
+
+  await write({}, target, 'C', 'utf-8', 'A');
+  await expect(write({}, target, 'D', 'utf-8', 'A')).rejects.toThrow(FILE_CONTENT_CONFLICT);
+  expect(await readFile(target, 'utf8')).toBe('C');
 });

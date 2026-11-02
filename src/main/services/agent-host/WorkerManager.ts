@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import {
   type ChatEngine,
   CLAUDE_ENGINE_EXITED,
+  claudeSdkModelThinking,
   claudeSdkModelWindows,
   claudeSdkRouteFor,
   MODEL_ENGINE_MISMATCH,
@@ -3514,7 +3515,10 @@ export class WorkerManager {
     entry.sdkRoute = route.route;
     entry.sdkModel = launch.model;
     // The catalog's windows for this route, which the CLI would not read (user 2026-10-18).
-    const modelWindows = claudeSdkModelWindows(readClaudeSdkPlan(source), route.route);
+    const plan = readClaudeSdkPlan(source);
+    const modelWindows = claudeSdkModelWindows(plan, route.route);
+    // PiLab R2 (04.2): how each model thinks, which the CLI would not read either.
+    const modelThinking = claudeSdkModelThinking(plan, route.route);
     const open = this.openClaudeSdkTransport;
     return {
       createTransport: ({ generation, cwd }) =>
@@ -3524,6 +3528,7 @@ export class WorkerManager {
           baseURL: route.baseURL,
           apiKey,
           ...(Object.keys(modelWindows).length > 0 ? { modelWindows } : {}),
+          ...(Object.keys(modelThinking).length > 0 ? { modelThinking } : {}),
         }),
       fingerprint: claudeSdkGatewayFingerprint(route, apiKey),
     };

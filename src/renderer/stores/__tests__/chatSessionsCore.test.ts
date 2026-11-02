@@ -61,7 +61,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
 }
 
 describe('applyRuntimeEvent — message.started', () => {
-  it('creates a new message with empty blocks; a repeat with the same messageId replaces it', () => {
+  it('creates a new message and preserves blocks when the same messageId starts again', () => {
     const state = baseState();
     const started: RuntimeEvent = {
       type: 'message.started',
@@ -76,8 +76,6 @@ describe('applyRuntimeEvent — message.started', () => {
       [SESSION_ID]: [{ id: 'msg-1', sessionId: SESSION_ID, role: 'user', blocks: [] }],
     });
 
-    // Add a block, then re-send message.started with the same messageId — upsert
-    // semantics replace the whole message, so the block is lost (blocks reset).
     const state2 = { ...state, ...patch1 } as ChatSessionsState;
     const delta: RuntimeEvent = {
       type: 'message.delta',
@@ -94,7 +92,37 @@ describe('applyRuntimeEvent — message.started', () => {
 
     const patch3 = applyRuntimeEvent(state3, started);
     expect(patch3.messages).toEqual({
-      [SESSION_ID]: [{ id: 'msg-1', sessionId: SESSION_ID, role: 'user', blocks: [] }],
+      [SESSION_ID]: [
+        {
+          id: 'msg-1',
+          sessionId: SESSION_ID,
+          role: 'user',
+          blocks: [{ id: 'b1', type: 'text', text: 'hello' }],
+        },
+      ],
+    });
+  });
+
+  it('merges newly arrived metadata without clearing existing metadata or blocks', () => {
+    const original = makeMessage({
+      role: 'user',
+      blocks: [{ id: 'b1', type: 'text', text: 'hello' }],
+      attachments: [{ kind: 'image', mediaType: 'image/png', name: 'shot.png' }],
+      transcriptId: 'transcript-1',
+    });
+    const state = baseState({ messages: { [SESSION_ID]: [original] } });
+
+    const patch = applyRuntimeEvent(state, {
+      type: 'message.started',
+      seq: 2,
+      sessionId: SESSION_ID,
+      timestamp: 2,
+      payload: { messageId: 'msg-1', role: 'user', origin: { kind: 'job' } },
+    });
+
+    expect(patch.messages?.[SESSION_ID]?.[0]).toEqual({
+      ...original,
+      origin: { kind: 'job' },
     });
   });
 

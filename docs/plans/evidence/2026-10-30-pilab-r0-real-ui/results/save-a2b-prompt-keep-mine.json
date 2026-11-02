@@ -1,0 +1,66 @@
+{
+  "opened": {
+    "active": true,
+    "content": "A\n",
+    "baseContent": "A\n",
+    "isDirty": false,
+    "hasExternalChange": false,
+    "externalContent": null
+  },
+  "edited": {
+    "active": true,
+    "content": "edit-A\n",
+    "baseContent": "A\n",
+    "isDirty": true,
+    "hasExternalChange": false,
+    "externalContent": null
+  },
+  "afterExternal": {
+    "active": true,
+    "content": "edit-A\n",
+    "baseContent": "A\n",
+    "isDirty": true,
+    "hasExternalChange": false,
+    "externalContent": null
+  },
+  "afterSave": {
+    "active": true,
+    "content": "edit-A\n",
+    "baseContent": "A\n",
+    "isDirty": true,
+    "hasExternalChange": true,
+    "externalContent": "B\n"
+  },
+  "disk": "B\n",
+  "toasts": "保存失败 | 文件在打开后被外部修改过，本次没有写入。 可在编辑器顶部选「重新加载」使用磁盘上的版本，或选「保留本地」后再次保存覆盖它。",
+  "banner": true,
+  "keepMineClicked": true,
+  "afterKeepMine": {
+    "active": true,
+    "content": "edit-A\n",
+    "baseContent": "B\n",
+    "isDirty": true,
+    "hasExternalChange": false,
+    "externalContent": null
+  },
+  "afterKeepMineSave": {
+    "active": true,
+    "content": "edit-A\n",
+    "baseContent": "edit-A\n",
+    "isDirty": false,
+    "hasExternalChange": false,
+    "externalContent": null
+  },
+  "diskAfterKeepMine": "edit-A\n",
+  "problems": [
+    {
+      "kind": "console.error",
+      "text": "15:22:10.919 › Error occurred in handler for 'file:write': Error: FILE_CONTENT_CONFLICT: File changed on disk\n    at file://<repo>/out/main/index.js:129008:15\n    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)"
+    },
+    {
+      "kind": "console.error",
+      "text": "15:22:10.919 › Error occurred in handler for 'file:write': Error: FILE_CONTENT_CONFLICT: File changed on disk\n    at file://<repo>/out/main/index.js:129008:15\n    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)"
+    }
+  ],
+  "shot": "docs/plans/evidence/2026-10-30-pilab-r0-real-ui/shots/save-a2b-conflict.png"
+}

@@ -114,6 +114,21 @@ export function parseSlashLine(value: string): { name: string; args: string } | 
 }
 
 /**
+ * PiLab R2 (user ruling 2026-10-30): the name a draft starts with when it reads
+ * as a command the catalog does not have — a slip like `/reveiw` — so the
+ * composer asks before sending it as prose. Null for a known command, for
+ * prose, and for a path (`/home/pi/a.txt …`: a second `/` in the first word).
+ */
+export function unknownSlashCommand(
+  value: string,
+  catalog: readonly SlashCatalogItem[]
+): string | null {
+  const name = /^\/([A-Za-z][\w:.-]*)(?=$|\s)/.exec(value.trim())?.[1];
+  if (!name) return null;
+  return catalog.some((item) => item.name === name) ? null : name;
+}
+
+/**
  * The command a draft starts with, when the menu knows it: the composer paints
  * its name (`end` is where the name stops) and greys in its argument hint. The
  * name must sit at the first byte and be followed by whitespace or the end, the

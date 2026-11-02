@@ -69,6 +69,72 @@ describe('workspace preview tab behavior', () => {
     expect(state.tabs[1]).toMatchObject({ isTooLarge: true, byteLength: 10_000_000 });
   });
 
+  it('keeps the disk baseline across edits and only advances it on authoritative replacement', () => {
+    useEditorStore.getState().openFile({ path: '/repo/a.ts', content: 'A', isDirty: false });
+    useEditorStore.getState().updateFileContent('/repo/a.ts', 'C', true);
+    expect(useEditorStore.getState().tabs[0]).toMatchObject({ content: 'C', baseContent: 'A' });
+
+    useEditorStore.getState().markExternalChange('/repo/a.ts', 'B');
+    expect(useEditorStore.getState().tabs[0]).toMatchObject({ content: 'C', baseContent: 'A' });
+
+    useEditorStore.getState().markExternalChange('/repo/a.ts', 'B2');
+    useEditorStore.getState().applyExternalChange('/repo/a.ts');
+    expect(useEditorStore.getState().tabs[0]).toMatchObject({
+      content: 'B2',
+      baseContent: 'B2',
+      isDirty: false,
+    });
+
+    useEditorStore.getState().updateFileContent('/repo/a.ts', 'D', false);
+    expect(useEditorStore.getState().tabs[0]).toMatchObject({ content: 'D', baseContent: 'D' });
+  });
+
+  it('Keep Mine moves the baseline to exactly the disk text the user saw, keeping their edit', () => {
+    useEditorStore.getState().openFile({ path: '/repo/a.ts', content: 'A', isDirty: false });
+    useEditorStore.getState().updateFileContent('/repo/a.ts', 'C', true);
+    useEditorStore.getState().markExternalChange('/repo/a.ts', 'B');
+
+    useEditorStore.getState().keepLocalOverExternalChange('/repo/a.ts');
+    expect(useEditorStore.getState().tabs[0]).toMatchObject({
+      content: 'C',
+      baseContent: 'B',
+      isDirty: true,
+      hasExternalChange: false,
+      externalContent: undefined,
+    });
+
+    // A clean tab that chose to keep its text over the disk is dirty again:
+    // saving it is now a deliberate overwrite of B.
+    useEditorStore.getState().openFile({ path: '/repo/b.ts', content: 'A', isDirty: false });
+    useEditorStore.getState().markExternalChange('/repo/b.ts', 'B');
+    useEditorStore.getState().keepLocalOverExternalChange('/repo/b.ts');
+    expect(useEditorStore.getState().tabs[1]).toMatchObject({
+      content: 'A',
+      baseContent: 'B',
+      isDirty: true,
+    });
+  });
+
+  it('advances the baseline to the written snapshot without clearing a concurrent edit', () => {
+    useEditorStore.getState().openFile({ path: '/repo/a.ts', content: 'A', isDirty: false });
+    useEditorStore.getState().updateFileContent('/repo/a.ts', 'C', true);
+    useEditorStore.getState().updateFileContent('/repo/a.ts', 'D', true);
+
+    useEditorStore.getState().markFileSaved('/repo/a.ts', 'C');
+    expect(useEditorStore.getState().tabs[0]).toMatchObject({
+      content: 'D',
+      baseContent: 'C',
+      isDirty: true,
+    });
+
+    useEditorStore.getState().markFileSaved('/repo/a.ts', 'D');
+    expect(useEditorStore.getState().tabs[0]).toMatchObject({
+      content: 'D',
+      baseContent: 'D',
+      isDirty: false,
+    });
+  });
+
   it('keeps unsaved text across a "no workspace yet" round trip — the App remount shape', () => {
     // This is the fact the sign-in confirmation's copy rests on
     // (`components/auth/signInLossModel.ts`): going to the login screen

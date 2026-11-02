@@ -1,0 +1,66 @@
+{
+  "mode": "anchor",
+  "steps": [
+    {
+      "label": "anchor set (reading 阶段正文 2)",
+      "scroller": true,
+      "top": 1907,
+      "height": 2922,
+      "client": 773,
+      "fromBottom": 242,
+      "jumpButton": "滚动到底部",
+      "anchor": {
+        "top": 156,
+        "visible": true
+      }
+    },
+    {
+      "label": "content grew below",
+      "scroller": true,
+      "top": 1907,
+      "height": 3302,
+      "client": 773,
+      "fromBottom": 622,
+      "jumpButton": "滚动到底部",
+      "anchor": {
+        "top": 156,
+        "visible": true
+      },
+      "delta": 0
+    },
+    {
+      "label": "visible group above toggled",
+      "scroller": true,
+      "top": 1907,
+      "height": 3080,
+      "client": 773,
+      "fromBottom": 400,
+      "jumpButton": "滚动到底部",
+      "summaryTop": [185, 185],
+      "delta": 0
+    },
+    {
+      "label": "turn completed (open groups settle)",
+      "scroller": true,
+      "top": 1463,
+      "height": 2380,
+      "client": 773,
+      "fromBottom": 144,
+      "jumpButton": "滚动到底部",
+      "anchor": [
+        {
+          "top": 156,
+          "visible": true
+        },
+        {
+          "top": 156,
+          "visible": true
+        }
+      ],
+      "delta": 0,
+      "openBefore": "000000000000111111",
+      "openAfter": "000000000000001000000"
+    }
+  ],
+  "problems": []
+}

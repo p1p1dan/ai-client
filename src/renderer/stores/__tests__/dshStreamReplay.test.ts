@@ -311,11 +311,17 @@ function historyTriplet(
   mode: 'initial' | 'refresh',
   requestId = `reopen-${sessionId}`
 ): RuntimeEvent[] {
-  const base = { sessionId, requestId, seq: 0, timestamp: T0 };
+  const base = { sessionId, requestId, timestamp: T0 };
   return [
-    { ...base, type: 'session.resumed', payload: { agent: 'dsh', runtimeIdentity: 'stub' } },
     {
       ...base,
+      seq: 1,
+      type: 'session.resumed',
+      payload: { agent: 'dsh', runtimeIdentity: 'stub' },
+    },
+    {
+      ...base,
+      seq: 2,
       type: 'session.history',
       payload: {
         runtimeIdentity: 'stub',
@@ -327,7 +333,7 @@ function historyTriplet(
         hasMore: false,
       },
     },
-    { ...base, type: 'session.status', payload: { status: 'idle' } },
+    { ...base, seq: 3, type: 'session.status', payload: { status: 'idle' } },
   ] as RuntimeEvent[];
 }
 
@@ -515,7 +521,8 @@ scenario('tool', (events, id) => {
     expect(turnsOf(mid, id)[0]?.rows.map(rowSummary)).toEqual([
       { tool: 'bash', verb: 'Running', running: true, failed: false, outcome: null },
     ]);
-    expect(turnsOf(mid, id)[0]?.rows[0]?.arg).toContain('bridge tool row ok');
+    const running = turnsOf(mid, id)[0]?.rows[0];
+    expect(running ? commandOf(running) : undefined).toContain('bridge tool row ok');
 
     const turn = turnsOf(replay(events), id)[0];
     expect(turn?.items).toEqual(['toolGroup', 'text']);
@@ -921,7 +928,7 @@ scenario('auto-compact', (events, id) => {
         type: 'session.stopped',
         sessionId: id,
         requestId: 'turn-AFTER',
-        seq: 0,
+        seq: events.length + 1,
         timestamp: T0,
         payload: { stopCause: 'forced' },
       } as RuntimeEvent,
@@ -1058,7 +1065,7 @@ scenario('crash-resume', (events, id) => {
       type: 'session.status',
       sessionId: id,
       requestId: crashRequest,
-      seq: 0,
+      seq: events.length + 1,
       timestamp: T0,
       payload: { status: 'disconnected' },
     },
@@ -1066,7 +1073,7 @@ scenario('crash-resume', (events, id) => {
       type: 'session.failed',
       sessionId: id,
       requestId: crashRequest,
-      seq: 0,
+      seq: events.length + 2,
       timestamp: T0,
       payload: {
         error: 'DSH host exited (signal SIGKILL)',
@@ -1087,7 +1094,7 @@ scenario('crash-resume', (events, id) => {
     expect(
       deriveSessionFailure({ error: current?.runtimeError, errorCode: current?.runtimeErrorCode })
         .title
-    ).toBe('The chat engine stopped unexpectedly');
+    ).toBe('This turn did not finish'); // PiLab R1: the neutral interruption card
   });
 
   it('after the restart, shows the interrupted note and the outcome-unknown row, once', () => {
@@ -1131,7 +1138,7 @@ scenario('rewind', (events, id) => {
         type: 'session.history',
         sessionId: id,
         requestId: 'rewind-1',
-        seq: 0,
+        seq: recall + 1,
         timestamp: T0,
         payload: {
           runtimeIdentity: 'stub',
@@ -1144,7 +1151,10 @@ scenario('rewind', (events, id) => {
         },
       } as RuntimeEvent,
     ]);
-    state = fold(state, events.slice(recall));
+    state = fold(
+      state,
+      events.slice(recall).map((event, index) => ({ ...event, seq: recall + index + 2 }))
+    );
     const turns = turnsOf(state, id);
     expect(turns.map((turn) => turn.head)).toEqual([
       'alpha REWIND-KEEP-1, no scenario.',
@@ -1717,10 +1727,21 @@ scenario('file-attach', (events, id) => {
 // ---- permissions (P1-6c) --------------------------------------------------------------
 
 /** Each settled card, as its tool row words it once the approval is folded in. */
+/**
+ * The command a shell row ran. PiLab R1 (user ruling 2026-10-30): the row shows
+ * the model's `description` when it wrote one, so the command is read from the
+ * expanded body's first non-comment line (`deriveShellInputBody`), the row arg
+ * otherwise.
+ */
+function commandOf(row: { arg?: string; input?: string }): string | undefined {
+  const line = row.input?.split('\n').find((text) => text && !text.startsWith('#'));
+  return line ?? row.arg;
+}
+
 function decidedRows(state: ChatSessionsState, sessionId: string) {
   return turnsOf(state, sessionId).flatMap((turn) =>
     turn.rows.map((row) => ({
-      command: row.arg,
+      command: commandOf(row),
       verb: row.verb,
       permission: row.permissionVerb ?? null,
       outcome: row.outcome ?? null,
@@ -1788,7 +1809,7 @@ scenario('auto-review', (events, id) => {
     const rows = turnsOf(state, id).flatMap((turn) => turn.rows);
     expect(
       rows.map((row) => ({
-        command: row.arg,
+        command: commandOf(row),
         outcome: row.outcome ?? null,
         review: row.reviewNote ?? null,
         red: row.reviewDenied === true,

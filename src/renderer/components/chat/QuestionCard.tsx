@@ -210,8 +210,10 @@ function PermissionDetailBody({ detail }: { detail: PermissionDetailView }) {
   const { t } = useI18n();
   return (
     <div className="flex min-w-0 flex-col gap-1">
+      {/* FR-05.5: the whole command, every line — an approval of an ellipsis
+          is not an approval of the command. Long ones scroll inside. */}
       {detail.command !== null && (
-        <Ident className="min-w-0 truncate text-foreground" title={detail.command}>
+        <Ident className="block max-h-32 min-w-0 overflow-auto whitespace-pre-wrap break-all text-foreground">
           {detail.command}
         </Ident>
       )}
@@ -268,6 +270,9 @@ function PermissionQaCard({
   const { t } = useI18n();
   const view = derivePermissionCardView(block, canRespond, t);
   const [submitting, setSubmitting] = useState(false);
+  // FR-05.8: a reply that did not reach the engine says so (as QuestionPrompt
+  // does) instead of only unlocking the buttons.
+  const [submitError, setSubmitError] = useState(false);
   // PI-Desktop PermissionCard: tick once a second toward the deadline the
   // engine enforces, and answer `deny` once at zero — the same answer its own
   // abort gives, so whichever lands first reports the same outcome.
@@ -286,7 +291,10 @@ function PermissionQaCard({
     autoDenied.current = true;
     setSubmitting(true);
     void Promise.resolve(onRespond?.('deny')).then((ok) => {
-      if (ok === false) setSubmitting(false);
+      if (ok === false) {
+        setSubmitting(false);
+        setSubmitError(true);
+      }
     });
   }, [secondsLeft, view.waiting, submitting, onRespond]);
   // T-34: "from subagent" chip, fed by the adjacent activity store's
@@ -384,6 +392,11 @@ function PermissionQaCard({
             bottom, so a narrowed choice never reads as the whole choice. */}
         {view.omittedNote && <p className="text-small text-muted-foreground">{view.omittedNote}</p>}
       </DockCardBody>
+      {submitError && !view.waiting && (
+        <p role="alert" className="shrink-0 px-4 pb-2 text-small text-destructive">
+          {t('Could not send your answer. Please try again.')}
+        </p>
+      )}
       {!view.waiting && (
         // Right-aligned and compact: a decision is one press, not a menu, and
         // four full-width rows are what made the old card swallow the screen.
@@ -411,11 +424,13 @@ function PermissionQaCard({
                 const { decision } = option;
                 if (!decision) return;
                 setSubmitting(true);
+                setSubmitError(false);
                 // Same await-and-unlock pattern as Continue/Skip above
                 // (T-05 adversarial fix #4).
                 const ok = await onRespond?.(decision);
                 if (ok === false) {
                   setSubmitting(false);
+                  setSubmitError(true);
                 }
               }}
             >

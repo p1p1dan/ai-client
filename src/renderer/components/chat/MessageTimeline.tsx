@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  CirclePause,
   Clock3,
   Copy,
   FileQuestion,
@@ -63,6 +64,7 @@ import {
 import { useSettingsStore } from '@/stores/settings';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
+import { useToolExpansionStore } from '@/stores/toolExpansion';
 import {
   type PendingReplyWatch,
   selectPendingReply,
@@ -82,6 +84,7 @@ import {
   CHAT_PROSE_LEADING,
   chatTurnClass,
   promptFolds,
+  promptFoldsAtHeight,
   readingColumnSpacingClass,
   sessionFailureTitleClass,
   turnActionsInnerClass,
@@ -92,7 +95,6 @@ import {
   turnCopyButtonClass,
   turnFinalAnswerDividerClass,
   turnHeadClass,
-  turnIntermediateToneClass,
   turnProcessShellClass,
   turnProcessToneClass,
   turnStatusToneClass,
@@ -165,11 +167,12 @@ import { type PromptNavItem, PromptNavRail } from './PromptNavRail';
 import { QuestionCard } from './QuestionCard';
 import { deriveQuestionCardState } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
+import { captureReadingAnchor, type ReadingAnchor, readingAnchorShift } from './readingAnchor';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
 import { continueBlockedReason } from './retryLastTurn';
 import { SentAttachmentChip } from './SentAttachmentChip';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
-import { canContinueSession, deriveSessionFailure } from './sessionFailure';
+import { canContinueSession, deriveSessionFailure, isEngineInterruption } from './sessionFailure';
 import {
   LEGACY_MIGRATION_PROGRESS_DETAIL,
   LEGACY_MIGRATION_PROGRESS_TITLE,
@@ -177,7 +180,12 @@ import {
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
-import { ToolGroup, ToolRowTimelineContext, useUserDisclosureReport } from './ToolRows';
+import {
+  ThinkingBody,
+  ToolGroup,
+  ToolRowTimelineContext,
+  useUserDisclosureReport,
+} from './ToolRows';
 import { TurnCeilingNotice } from './TurnCeilingNotice';
 import { TurnChangeCard } from './TurnChangeCard';
 import { TurnEndNotice } from './TurnEndNotice';
@@ -204,7 +212,12 @@ import {
 // work zone row that replaced the head carries the four figures the user named
 // and token usage is deliberately not among them. Re-wiring them here is a
 // product decision to reopen, not a gap to close.
-import { deriveTurnLivePhase, formatTurnLiveLine, type TurnLiveSend } from './turnLiveHead';
+import {
+  deriveTurnLivePhase,
+  formatTurnLiveLine,
+  type TurnLiveSend,
+  turnElapsedText,
+} from './turnLiveHead';
 import {
   countTurnToolCalls,
   deriveTurnCurrentAction,
@@ -222,6 +235,7 @@ import {
   latestErrorNoticeText,
   type TurnStatus,
 } from './turnStatus';
+import { deriveStepRows, withoutThinking } from './turnSteps';
 // T12-b: `deriveTurnStats` / `formatWorkedForRow` / `THOUGHT_VERB` /
 // `turnHasThinkingOnlyProcess` all fed the retired meta row's completed state.
 // chat-tool-07 corrects what this note used to claim: of those four, only
@@ -257,6 +271,24 @@ import { useTurnTiming } from './useTurnTiming';
  * div (`ui/scroll-area.tsx` tags it `data-slot="scroll-area-viewport"`), not
  * the `ScrollArea` root — that root is a non-scrolling positioning wrapper.
  */
+/**
+ * PiLab R1 (user ruling 2026-10-30): process groups render in place as steps,
+ * with no 「已工作 ›」 fold (`TurnProgressHead` is kept for the switch only).
+ */
+const STEPS_INLINE = true;
+
+/** A turn item that is nothing but thinking: drawn as no step. */
+function isThinkingOnlyItem(item: TurnItem): boolean {
+  return item.kind === 'toolGroup' && item.entries.every((entry) => entry.kind === 'thinking');
+}
+
+/**
+ * PiLab R1, FR-11.6 (user 2026-10-30): where each session was being read, so a
+ * switch away and back returns to it. In memory only (not across restarts); a
+ * session that was following its bottom simply opens at the bottom again.
+ */
+const sessionScrollMemory = new Map<string, { top: number; following: boolean }>();
+
 function findViewport(root: HTMLDivElement | null): HTMLDivElement | null {
   return root?.querySelector<HTMLDivElement>('[data-slot="scroll-area-viewport"]') ?? null;
 }
@@ -390,6 +422,10 @@ export function MessageTimeline({
   const failure = useMemo(
     () => deriveSessionFailure({ error: lastError, errorCode: lastErrorCode }),
     [lastError, lastErrorCode]
+  );
+  const interruption = isEngineInterruption(lastErrorCode);
+  const engineReconnected = useChatSessionsStore((state) =>
+    sessionId ? state.hostBoundSessionIds.includes(sessionId) : false
   );
   const requestContinue = useContinueIntentStore((state) => state.requestContinue);
   const requestCarryOn = useContinueIntentStore((state) => state.requestCarryOn);
@@ -670,6 +706,9 @@ export function MessageTimeline({
   const stickToBottomRef = useRef(true);
   const lastScrollHeightRef = useRef(0);
   const lastScrollTopRef = useRef(0);
+  const lastClientHeightRef = useRef(0);
+  // FR-11.3: where a reader who is not following is looking (`readingAnchor.ts`).
+  const readingAnchorRef = useRef<ReadingAnchor | null>(null);
 
   // T12-d: the jump-to-bottom affordance. Unlike the follow flag this one has
   // to be state — it paints a button — so it is mirrored in a ref and written
@@ -713,9 +752,11 @@ export function MessageTimeline({
     const viewport = findViewport(scrollRootRef.current);
     if (!viewport) return;
     stickToBottomRef.current = true;
+    readingAnchorRef.current = null;
     lastScrollHeightRef.current = viewport.scrollHeight;
     viewport.scrollTop = viewport.scrollHeight;
     lastScrollTopRef.current = viewport.scrollTop;
+    lastClientHeightRef.current = viewport.clientHeight;
     showJumpToBottomRef.current = false;
     setShowJumpToBottom(false);
   }, []);
@@ -731,7 +772,6 @@ export function MessageTimeline({
   // `nextFollowState` so a browser clamp-induced scroll (content shrank, the
   // engine clamped `scrollTop` to the new max and fired `scroll`) cannot
   // re-arm the follower — the F10 amplifier.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId triggers re-querying the viewport node, which base-ui remounts across the null <-> id transition
   useEffect(() => {
     const viewport = findViewport(scrollRootRef.current);
     if (!viewport) return undefined;
@@ -742,6 +782,7 @@ export function MessageTimeline({
     viewport.style.scrollBehavior = 'auto';
     lastScrollHeightRef.current = viewport.scrollHeight;
     lastScrollTopRef.current = viewport.scrollTop;
+    lastClientHeightRef.current = viewport.clientHeight;
     const handleScroll = () => {
       // A queued scroll event can arrive after text grows but before the
       // resize follower runs. Growth at an unchanged position is not scroll-up.
@@ -754,15 +795,34 @@ export function MessageTimeline({
           scrollHeight: viewport.scrollHeight,
           clientHeight: viewport.clientHeight,
           prevScrollHeight: lastScrollHeightRef.current,
+          prevScrollTop: lastScrollTopRef.current,
+          prevClientHeight: lastClientHeightRef.current,
           following: stickToBottomRef.current,
         });
       lastScrollHeightRef.current = viewport.scrollHeight;
       lastScrollTopRef.current = viewport.scrollTop;
+      lastClientHeightRef.current = viewport.clientHeight;
+      readingAnchorRef.current =
+        stickToBottomRef.current || !contentRef.current
+          ? null
+          : captureReadingAnchor(viewport, contentRef.current);
+      if (sessionId) {
+        sessionScrollMemory.set(sessionId, {
+          top: viewport.scrollTop,
+          following: stickToBottomRef.current,
+        });
+      }
       if (!grewWithoutMoving || !stickToBottomRef.current) syncJumpToBottom(viewport);
     };
-    // User intent wins before the next resize delivery.
+    // User intent wins before the next resize delivery — but only a wheel that
+    // scrolls the TIMELINE: one inside a tool-output box that can still scroll
+    // up moves that box (`overscroll-contain`), not the reader (FR-11.4).
     const handleWheel = (event: WheelEvent) => {
-      if (event.deltaY < 0) stickToBottomRef.current = false;
+      if (event.deltaY >= 0) return;
+      for (let el = event.target as Element | null; el && el !== viewport; el = el.parentElement) {
+        if (el.scrollTop > 0 && el.scrollHeight > el.clientHeight) return;
+      }
+      stickToBottomRef.current = false;
     };
     viewport.addEventListener('scroll', handleScroll, { passive: true });
     viewport.addEventListener('wheel', handleWheel, { passive: true });
@@ -772,12 +832,30 @@ export function MessageTimeline({
     };
   }, [sessionId, syncJumpToBottom]);
 
-  // Session switch: always jump to the bottom of the new session's history
-  // and re-arm following — a previous session's scroll-up must not carry
-  // over to a freshly opened one.
+  // Session switch: open at the place this session was last read (FR-11.6), or
+  // at its bottom with following armed — a previous session's scroll-up must
+  // not carry over to ANOTHER session.
   // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId triggers the jump-to-bottom on session switch
   useEffect(() => {
+    // FR-11.6: a session the reader had scrolled up in reopens where they were.
+    const saved = sessionId ? sessionScrollMemory.get(sessionId) : undefined;
+    if (saved && !saved.following) {
+      const viewport = findViewport(scrollRootRef.current);
+      if (viewport) {
+        stickToBottomRef.current = false;
+        viewport.scrollTop = saved.top;
+        lastScrollTopRef.current = viewport.scrollTop;
+        lastScrollHeightRef.current = viewport.scrollHeight;
+        lastClientHeightRef.current = viewport.clientHeight;
+        readingAnchorRef.current = contentRef.current
+          ? captureReadingAnchor(viewport, contentRef.current)
+          : null;
+        syncJumpToBottom(viewport);
+        return;
+      }
+    }
     stickToBottomRef.current = true;
+    readingAnchorRef.current = null;
     // The new session opens at its own bottom, so the affordance starts hidden
     // — carrying the previous session's `true` over would paint a button that
     // has nothing above it to jump past.
@@ -788,6 +866,7 @@ export function MessageTimeline({
       viewport.scrollTop = viewport.scrollHeight;
       lastScrollTopRef.current = viewport.scrollTop;
       lastScrollHeightRef.current = viewport.scrollHeight;
+      lastClientHeightRef.current = viewport.clientHeight;
     }
   }, [sessionId]);
 
@@ -810,9 +889,18 @@ export function MessageTimeline({
       if (!disclosureResize && stickToBottomRef.current) {
         const bottom = Math.max(0, height - viewport.clientHeight);
         if (Math.abs(viewport.scrollTop - bottom) > 1) viewport.scrollTop = bottom;
+      } else if (!disclosureResize && readingAnchorRef.current) {
+        // Not following: layout the reader did not ask for (a turn settling and
+        // folding its groups, a late result, older history) keeps their place.
+        const shift = readingAnchorShift(readingAnchorRef.current);
+        if (shift !== null && Math.abs(shift) > 1) viewport.scrollTop += shift;
+      }
+      if (!stickToBottomRef.current) {
+        readingAnchorRef.current = captureReadingAnchor(viewport, content);
       }
       lastScrollHeightRef.current = height;
       lastScrollTopRef.current = viewport.scrollTop;
+      lastClientHeightRef.current = viewport.clientHeight;
       syncJumpToBottom(viewport);
     });
     observer.observe(content);
@@ -1051,8 +1139,8 @@ export function MessageTimeline({
                   {status === 'failed' && (
                     // Design system v2 §7.7: the session-failed card is the one
                     // notice (`Alert`), not a hand-written red box beside it.
-                    <Alert variant="error" role="alert">
-                      <TriangleAlert />
+                    <Alert variant={interruption ? 'default' : 'error'} role="alert">
+                      {interruption ? <CirclePause /> : <TriangleAlert />}
                       {/* T-30 P-06: only the title carries weight — body and hint
                     fall back to muted-foreground so a session-level failure
                     doesn't stack a second red block on top of the already-red
@@ -1116,6 +1204,16 @@ export function MessageTimeline({
                         what a reader can act on, the sentence is the evidence
                         they forward when they ask for help. */}
                             <p>{t(failure.reason)}</p>
+                            {/* PiLab R1: where the reconnect stands — Main reopens the
+                        chat by itself, and says so with `session.resumed`. */}
+                            {interruption && (
+                              <p
+                                data-slot="engine-reconnect"
+                                className={engineReconnected ? 'text-success' : undefined}
+                              >
+                                {t(engineReconnected ? 'Reconnected' : 'Reconnecting…')}
+                              </p>
+                            )}
                             {/* P1-3c: an engine-process sentence ("Worker exited …")
                         is not evidence a user can forward; the reason says it. */}
                             {lastError && failedCardShowsError && failure.showsDetail && (
@@ -1429,14 +1527,14 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
             <CollapsibleTrigger className="flex h-6 items-center gap-1 rounded-sm hover:text-foreground focus-ring">
               <ChevronRight
                 className={cn(
-                  'size-3.5 shrink-0 transition-transform duration-150',
+                  'size-3.5 shrink-0 transition-transform duration-150 motion-reduce:transition-none',
                   detailOpen && 'rotate-90'
                 )}
               />
               {t('Details')}
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <pre className="max-h-24 select-text overflow-auto whitespace-pre-wrap break-all font-mono text-code">
+              <pre className="max-h-24 select-text overflow-auto overscroll-contain whitespace-pre-wrap break-all font-mono text-code">
                 {view.message}
               </pre>
             </CollapsibleContent>
@@ -1526,9 +1624,26 @@ function UserBubble({ message }: { message: ChatMessage }) {
   const awaitingDelivery = isAwaitingDeliveryMessage(message);
   const ink = awaitingDelivery ? 'text-muted-foreground' : 'text-foreground';
   const withdrawAttemptId = awaitingDeliveryAttemptId(message);
-  // Issue #26 item 5: a long prompt starts folded, decided from its text alone
-  // (F10). The toggle is the user's; nothing measures the bubble.
-  const folds = promptFolds(textBlocks.map((block) => block.text ?? '').join('\n'));
+  // Issue #26 item 5 / FR-01.5: a long prompt starts folded at ~300px. Decided
+  // from the text box's full height once it has layout (before paint), else
+  // from the text estimate (`promptFoldsAtHeight` says why this is cycle-free).
+  const textFolds = promptFolds(textBlocks.map((block) => block.text ?? '').join('\n'));
+  const textBoxRef = useRef<HTMLDivElement>(null);
+  const [measuredFolds, setMeasuredFolds] = useState<boolean | null>(null);
+  useLayoutEffect(() => {
+    const box = textBoxRef.current;
+    if (!box) return undefined;
+    const measure = () => {
+      const height = box.scrollHeight;
+      if (height > 0) setMeasuredFolds((was) => promptFoldsAtHeight(height, was === true));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+  const folds = measuredFolds ?? textFolds;
   const [unfolded, setUnfolded] = useState(false);
   const folded = folds && !unfolded;
 
@@ -1563,7 +1678,7 @@ function UserBubble({ message }: { message: ChatMessage }) {
         {/* T12 retired the geometry-driven clamp with the sticky band. Issue
             #26 item 5 brings back a fold of another kind: decided from the
             text, opened and closed only by the button below. */}
-        <div className={cn(userBubbleTextClass(), userBubbleFoldClass(folded))}>
+        <div ref={textBoxRef} className={cn(userBubbleTextClass(), userBubbleFoldClass(folded))}>
           {textBlocks.map((block) => (
             <p
               key={block.id}
@@ -1648,7 +1763,10 @@ function SupersededSummaryRow({ message }: { message: ChatMessage }) {
     <Collapsible open={open} onOpenChange={setOpen} data-testid="superseded-summary">
       <CollapsibleTrigger className="flex h-7 min-w-0 items-center gap-1 rounded-xs text-small text-muted-foreground hover:text-foreground focus-ring">
         <ChevronRight
-          className={cn('size-3.5 shrink-0 transition-transform duration-150', open && 'rotate-90')}
+          className={cn(
+            'size-3.5 shrink-0 transition-transform duration-150 motion-reduce:transition-none',
+            open && 'rotate-90'
+          )}
         />
         <span className="min-w-0 truncate">
           {t('Context summary · superseded by a later compaction')}
@@ -2010,7 +2128,7 @@ function useTurnClockLine({
 function TurnClockRow({ zone, items }: { zone: TurnWorkZone; items: readonly TurnItem[] }) {
   const { line, spinner } = useTurnClockLine({ zone, clock: true, items });
   return (
-    <div className={turnClockRowClass()}>
+    <div data-slot="turn-live-line" className={turnClockRowClass()}>
       {spinner && <StatusIcon status="running" />}
       <span className="min-w-0 truncate" title={line}>
         {line}
@@ -2094,7 +2212,10 @@ function TurnProgressHead({
           {line}
         </span>
         <ChevronRight
-          className={cn('size-3.5 shrink-0 transition-transform duration-150', open && 'rotate-90')}
+          className={cn(
+            'size-3.5 shrink-0 transition-transform duration-150 motion-reduce:transition-none',
+            open && 'rotate-90'
+          )}
           aria-hidden
         />
       </summary>
@@ -2125,50 +2246,77 @@ function TurnProgressHead({
  * It does not decide whether it renders: `deriveTurnWorkZone` returns `null`
  * for a settled turn that replayed no timing, and the caller drops the row.
  */
-function TurnWorkZoneRow({ zone }: { zone: TurnWorkZone }) {
+function TurnWorkZoneRow({ zone, thinkingText }: { zone: TurnWorkZone; thinkingText: string }) {
   const { t } = useI18n();
+  const [thinkingOpen, setThinkingOpen] = useState(false);
+  // A disclosure like any row: opening it at the bottom of the timeline pauses
+  // following (C3), so the thinking the reader asked for is not scrolled away.
+  const markUserToggle = useUserDisclosureReport(thinkingOpen);
 
-  // Decision 034: the RUNNING state is gone from this row. Its two parts — the
-  // ticking clock and the live action clause — belong to the turn's TOP line,
-  // where zcode puts them and where a reader watching a long wait is already
-  // looking. A running turn renders nothing here at all.
-  //
-  // ⚠️ **The duration does not live here, in any case.** 2026-09-22's first fix
-  // gave it a fallback slot on this row for turns T112 leaves headless, and the
-  // user rejected it on sight — 「不要什么一个折叠头都没有时，落到尾栏，那样展示
-  // 出来的风格都不统一」. `TurnClockRow` is the headless turn's answer, at the
-  // top with every other turn's. What is left down here is the turn's BILL: the
-  // figures that are only knowable once it ends.
+  // Decision 034: the RUNNING state is not drawn here; `TurnClockRow` is the
+  // live line, at the turn's foot (PiLab R1, 2026-10-30).
   if (zone.kind === 'working') return null;
 
-  const clauses = [
+  // PiLab R1 (user ruling 2026-10-30, preview `2026-10-30-turn-display-
+  // claude-code-preview.html`): the turn's bill — when it ended, how long it
+  // took, how many calls, and 「思考 N 秒」, which opens the thinking text
+  // (thinking is no longer a row of its own).
+  const tookClause = (() => {
+    const took = turnElapsedText(t, zone.worked);
+    return took ? t('Took {{duration}}', { duration: took }) : null;
+  })();
+  const head = [
     zone.completedAtMs === null
       ? null
       : t('Completed at {{time}}', { time: formatAbsoluteTime(zone.completedAtMs) }),
+    tookClause,
     zone.toolCalls === null
       ? null
       : t(zone.toolCalls === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
           count: zone.toolCalls,
         }),
-    // Shared with the clock line above, so a minute is written the same way in
-    // both places and the two cannot word 「思考」 differently.
-    formatThinkingClause(zone.thinkingMs, t),
   ].filter((clause): clause is string => !!clause);
-  // Nothing at all when the turn has no bill to present. `deriveTurnWorkZone`
-  // stopped returning `null` for that case so the line above could still name
-  // the state; the silence it used to signal belongs here.
-  if (clauses.length === 0) return null;
+  const hasThinkingText = thinkingText.trim().length > 0;
+  // A reopened turn has the text but no measured time: it still opens, as 「思考」.
+  const thinkingClause =
+    formatThinkingClause(zone.thinkingMs, t) ?? (hasThinkingText ? t('Thought') : null);
+  const canOpenThinking = thinkingClause !== null && hasThinkingText;
+  if (head.length === 0 && !thinkingClause) return null;
 
-  // 「✻」 is this row's BULLET, so it is PREFIXED onto the first clause — the
-  // same shape the clock line uses. Passing it as `joinTurnProgressLine`'s head
-  // instead rendered 「✻ · 完成于 17:06」, a separator with nothing on its left
-  // (2026-09-22).
-  const line = joinTurnProgressLine(`✻ ${clauses[0]}`, clauses.slice(1));
+  const line = head.length ? joinTurnProgressLine(`✻ ${head[0]}`, head.slice(1)) : '✻';
   return (
-    <div className={turnWorkZoneClass()}>
-      <span className="min-w-0 truncate" title={line}>
-        {line}
-      </span>
+    <div className="flex min-w-0 flex-col">
+      <div data-slot="turn-bill" className={turnWorkZoneClass()}>
+        <span className="min-w-0 truncate" title={line}>
+          {line}
+        </span>
+        {thinkingClause &&
+          (canOpenThinking ? (
+            <button
+              type="button"
+              data-slot="turn-thinking-toggle"
+              aria-expanded={thinkingOpen}
+              className="shrink-0 rounded-xs underline decoration-dotted underline-offset-2 hover:text-foreground focus-ring"
+              onClick={() => {
+                markUserToggle();
+                setThinkingOpen((open) => !open);
+              }}
+            >
+              {head.length ? ' · ' : ''}
+              {thinkingClause}
+            </button>
+          ) : (
+            <span className="shrink-0">
+              {head.length ? ' · ' : ''}
+              {thinkingClause}
+            </span>
+          ))}
+      </div>
+      {thinkingOpen && canOpenThinking && (
+        <div data-slot="turn-thinking-panel">
+          <ThinkingBody text={thinkingText} />
+        </div>
+      )}
     </div>
   );
 }
@@ -2294,11 +2442,16 @@ const ChatTurn = memo(function ChatTurn({
   const { t } = useI18n();
   // `null` until the user clicks: "no opinion yet" has to be distinguishable
   // from "chose closed", or the auto-collapse and a deliberate collapse would
-  // be the same state and rule 2 of `turnWorkGroupOpen` could never hold. Held
-  // HERE rather than in the head so it survives shape changes. Choices are
-  // scoped to the running/settled phase: completion closes once, then users
-  // can reopen the completed process without subsequent renders closing it.
-  const [workGroupUserOpen, setWorkGroupUserOpen] = useState<Record<string, boolean>>({});
+  // be the same state and rule 2 of `turnWorkGroupOpen` could never hold. Kept
+  // per session in the tool-expansion store (key `group:<groupKey>`) rather
+  // than in this component, so a choice survives completion AND a switch to
+  // another session and back (PiLab R1, FR-11.6, user 2026-10-30).
+  const groupExpandMemory = useToolExpansionStore((state) => state.bySession[sessionId]);
+  const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
+  const workGroupUserOpen = (groupKey: string): boolean | null => {
+    const remembered = groupExpandMemory?.[`group:${groupKey}`];
+    return typeof remembered === 'boolean' ? remembered : null;
+  };
   // One flatten per turn, feeding both the render and the copy payload (F7):
   // the copy builder's `Turn` overload used to re-run `flattenTurnItems` — and
   // through it `groupTimeline`/`pairToolBlocks` over every block — a second
@@ -2652,9 +2805,24 @@ const ChatTurn = memo(function ChatTurn({
   // dependency on purpose: the split's answer genuinely changes when the turn
   // stops (that one extraction is the turn's only structural change), so a memo
   // keyed on `segments` alone would freeze the streaming shape forever.
+  // FR-13.6 / AC-22: stopped, failed, interrupted or cut off — live and reopened
+  // alike. Such a turn has no final answer and no 「完成于」. Wider than
+  // `endedAbnormally` below (the group's default-open): it also counts a failed
+  // session status and an `incomplete` reply.
+  const noFinalAnswer = useMemo(
+    () =>
+      processSettled &&
+      (turnEndsWithoutReply(turn.body) ||
+        turnEndsOnFailedRequest(turn.body) ||
+        derivedStatus?.kind === 'failed' ||
+        liveTurnEnd(turn.body, turn.user) !== null ||
+        turnEndedByUser(turn.body) ||
+        lastAssistant?.incomplete === true),
+    [processSettled, turn.body, turn.user, derivedStatus?.kind, lastAssistant]
+  );
   const workSections = useMemo(
-    () => splitTurnWorkGroup(segments, processSettled),
-    [segments, processSettled]
+    () => splitTurnWorkGroup(segments, processSettled, noFinalAnswer),
+    [segments, processSettled, noFinalAnswer]
   );
   // User decision 2026-09-24: a turn the USER ended — Ctrl+Enter interjection
   // or Stop, read off its last assistant message (`turnEndCause.ts`, live and
@@ -2726,6 +2894,18 @@ const ChatTurn = memo(function ChatTurn({
   // clock, so this is a per-tick value by definition and a `useMemo` keyed on
   // the tick would only add a comparison.
   const turnThinkingMs = sumTurnThinkingMs(thinkingSpans, { nowMs, live: !processSettled });
+  // PiLab R1: the turn's thinking, opened from the footer's 「思考 N 秒」.
+  const turnThinkingText = useMemo(
+    () =>
+      thinkingEnabled
+        ? turn.body
+            .flatMap((message) => message.blocks)
+            .filter((block) => block.type === 'thinking' && (block.text ?? '').trim())
+            .map((block) => block.text ?? '')
+            .join('\n\n')
+        : '',
+    [turn.body, thinkingEnabled]
+  );
   // `turnElapsedMs === null` is what says no clock exists — a session that was
   // already running when this window opened replays no origin, and the row must
   // not report that as 「工作中 0 秒」. Gated on `turnRunning` rather than
@@ -2762,10 +2942,7 @@ const ChatTurn = memo(function ChatTurn({
     // reads the same before and after a reopen.
     // Decision 156: and once a later turn has taken the card's place, the
     // request it failed on still says so (decision 145 rule 17).
-    endedWithoutReply:
-      turnEndsWithoutReply(turn.body) ||
-      derivedStatus?.kind === 'failed' ||
-      turnEndsOnFailedRequest(turn.body),
+    endedWithoutReply: noFinalAnswer,
     toolCalls: countTurnToolCalls(items),
     thinkingMs: turnThinkingMs,
   });
@@ -2779,23 +2956,24 @@ const ChatTurn = memo(function ChatTurn({
       derivedStatus?.kind === 'awaiting' ||
       derivedStatus?.kind === 'streaming' ||
       derivedStatus?.kind === 'retrying');
-  const status = statusOnClock ? null : derivedStatus;
+  // PiLab R1: an engine interruption is not drawn as a red 「失败」 under the
+  // turn — the neutral card and the turn's 「引擎意外停止」 note already say it.
+  const interruptedByEngine = useChatSessionsStore((state) =>
+    isEngineInterruption(state.sessions.find((item) => item.id === sessionId)?.runtimeErrorCode)
+  );
+  const status =
+    statusOnClock || (derivedStatus?.kind === 'failed' && interruptedByEngine)
+      ? null
+      : derivedStatus;
 
-  const renderSegment = (segment: TurnSegment<TurnItem>, intermediate = false) => {
+  const renderSegment = (segment: TurnSegment<TurnItem>) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
     // remount every later segment the moment a new one opened mid-stream,
     // throwing away the expanded tool bodies inside them.
     const key = `${segment.kind}:${turnItemKey(segment.items[0])}`;
     if (segment.kind === 'answer') {
-      // T12: bare prose. The role signal lives on the user side's shape; the
-      // container ring retired with the box model it belonged to (Q14).
-      //
-      // Intermediate prose (inside the process group, before the final
-      // reply) dims to tier 2 so the eye is drawn to the final answer
-      // below. Standalone answer segments keep the brightest rung.
-      const tone = intermediate ? turnIntermediateToneClass() : turnAnswerToneClass();
       return (
-        <div key={key} className={cn(turnBodyClass(), tone)}>
+        <div key={key} className={cn(turnBodyClass(), turnAnswerToneClass())}>
           {segment.items.map(renderItem)}
         </div>
       );
@@ -2894,9 +3072,8 @@ const ChatTurn = memo(function ChatTurn({
             going to carry it. Above `workSections` rather than woven into them
             because "first" is the whole requirement — a group that is not the
             turn's opening section would otherwise push it down the turn. */}
-        {!clockOnHead && <TurnClockRow zone={workZone} items={items} />}
-        {/* Q1 keeps the final answer and notices outside the process groups;
-            intermediate prose joins the process it describes. Turn-level
+        {!STEPS_INLINE && !clockOnHead && <TurnClockRow zone={workZone} items={items} />}
+        {/* Answers and notices stay outside the process groups; turn-level
             progress remains on the trailing work-zone row (T113). */}
         {workSections.map((section) => {
           if (section.kind === 'finalAnswer') {
@@ -2919,19 +3096,29 @@ const ChatTurn = memo(function ChatTurn({
             );
           }
           if (section.kind !== 'processGroup') return renderSegment(section.segment);
+          // PiLab R1 (user ruling 2026-10-30): the turn reads as steps, Claude
+          // Code's way — every process group is drawn in place, no 「已工作 ›」
+          // fold. Thinking is no row: a group of only thinking draws nothing
+          // (its words are in the footer's 「思考 N 秒」).
+          if (STEPS_INLINE) {
+            const visibleSegments = section.segments.filter(
+              (segment) => !segment.items.every(isThinkingOnlyItem)
+            );
+            if (visibleSegments.length === 0) return null;
+            return (
+              <Fragment key={turnItemKey(section.segments[0].items[0])}>
+                {visibleSegments.map(renderSegment)}
+              </Fragment>
+            );
+          }
           // First-item identity survives appended tools and later answers. Each
           // group remembers its own click, even while authorization pins it open.
           const groupKey = turnItemKey(section.segments[0].items[0]);
-          const groupStateKey = `${groupKey}:${processSettled}`;
           const groupedProcessItems = section.segments.flatMap((segment) => segment.items);
-          // Inside the group, answer segments are INTERMEDIATE prose — dimmed,
-          // so the final answer below stands out.
-          const renderGroupSegment = (segment: TurnSegment<TurnItem>) =>
-            renderSegment(segment, true);
           // While running a lone step stays inline (T112). Completion now folds
           // even that step, so a single thought cannot remain above the final answer.
           if (!processSettled && !turnProcessGroupFolds(groupedProcessItems)) {
-            return <Fragment key={groupKey}>{section.segments.map(renderGroupSegment)}</Fragment>;
+            return <Fragment key={groupKey}>{section.segments.map(renderSegment)}</Fragment>;
           }
           const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);
           const headClock = !clockClaimed;
@@ -2944,15 +3131,10 @@ const ChatTurn = memo(function ChatTurn({
               clock={headClock}
               forcedOpen={groupForcedOpen}
               endedByUser={endedAbnormally}
-              userOpen={workGroupUserOpen[groupStateKey] ?? null}
-              onUserOpenChange={(open) =>
-                setWorkGroupUserOpen((previous) => ({
-                  ...previous,
-                  [groupStateKey]: open,
-                }))
-              }
+              userOpen={workGroupUserOpen(groupKey)}
+              onUserOpenChange={(open) => setToolRowExpanded(sessionId, `group:${groupKey}`, open)}
             >
-              {section.segments.map(renderGroupSegment)}
+              {section.segments.map(renderSegment)}
             </TurnProgressHead>
           );
         })}
@@ -2967,7 +3149,12 @@ const ChatTurn = memo(function ChatTurn({
             the session rather than the turn. This is the 「工作区固定在末尾」 the
             user asked for — the duration stops moving from group to group as a
             turn grows. */}
-        <TurnWorkZoneRow zone={workZone} />
+        {/* PiLab R1: the live line sits at the turn's foot while it runs (as
+            Claude Code's spinner line does), the bill once it ends. */}
+        {STEPS_INLINE && workZone.kind === 'working' && (
+          <TurnClockRow zone={workZone} items={items} />
+        )}
+        <TurnWorkZoneRow zone={workZone} thinkingText={turnThinkingText} />
         {showLiveEnd && liveEnd && (
           <TurnEndNotice turnEnd={liveEnd} afterWork={liveEndAfterWork} live />
         )}
@@ -3502,15 +3689,20 @@ const ToolGroupItem = memo(function ToolGroupItem({
   getToolStartedAtMs: (toolCallId: string) => number | null | undefined;
 }) {
   const { t } = useI18n();
+  // PiLab R1: steps — thinking leaves the list, adjacent lookups merge, and a
+  // call that produced something gets its result line (`turnSteps.ts`).
   const rows = useMemo(
     () =>
-      deriveToolGroupRows(filterThinkingEntries(item.entries, thinkingEnabled), {
-        repoName,
-        thinkingDurationMs: getThinkingDurationMs,
-        isStreamingBlockId: streamingBlockId,
-        toolStartedAtMs: getToolStartedAtMs,
-        t,
-      }),
+      deriveStepRows(
+        deriveToolGroupRows(withoutThinking(filterThinkingEntries(item.entries, thinkingEnabled)), {
+          repoName,
+          thinkingDurationMs: getThinkingDurationMs,
+          isStreamingBlockId: streamingBlockId,
+          toolStartedAtMs: getToolStartedAtMs,
+          t,
+        }),
+        t
+      ),
     [
       item.entries,
       thinkingEnabled,

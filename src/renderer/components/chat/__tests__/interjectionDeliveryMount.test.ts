@@ -158,13 +158,15 @@ async function mount(messages: ChatMessage[], status: Status) {
     [...container.querySelectorAll('section[data-turn-id]')].map((section) =>
       section.getAttribute('data-turn-id')
     );
+  // PiLab R1 (2026-10-30): the turn's state is its live line while it runs
+  // and its bill once it ends — the 「已工作 ›」 fold head is gone, and every
+  // step is drawn in place, so there is no open/closed to report.
   const head = (turnId: string) => {
-    const details = container.querySelector<HTMLDetailsElement>(
-      `section[data-turn-id="${turnId}"] details`
-    );
-    expect(details, `turn ${turnId} has a process head`).not.toBeNull();
-    const summary = details?.querySelector('summary')?.textContent ?? '';
-    return { open: details?.open, summary };
+    const section = container.querySelector(`section[data-turn-id="${turnId}"]`);
+    const live = section?.querySelector('[data-slot="turn-live-line"]');
+    const bill = section?.querySelector('[data-slot="turn-bill"]');
+    expect(live ?? bill, `turn ${turnId} has a state line`).toBeTruthy();
+    return { settled: !live, summary: (live ?? bill)?.textContent ?? '' };
   };
   const awaiting = () => [...container.querySelectorAll('[data-awaiting-delivery]')];
   return { container, show, sections, head, awaiting };
@@ -199,7 +201,7 @@ const RUNNING = expect.stringMatching(/^✻ /);
 
 it('[I8-1] while the interjection waits, the running turn stays open and working', async () => {
   const view = await mount([PROMPT, STEP_1, STEP_2_RUNNING], 'running');
-  expect(view.head('u1')).toEqual({ open: true, summary: RUNNING });
+  expect(view.head('u1')).toEqual({ settled: false, summary: RUNNING });
 
   await interject();
 
@@ -219,7 +221,7 @@ it('[I8-1] while the interjection waits, the running turn stays open and working
   expect(view.sections()).toEqual(['u1']);
   // The turn it waits to join is still running: open, its live line, never "Worked".
   const head = view.head('u1');
-  expect(head.open).toBe(true);
+  expect(head.settled).toBe(false);
   expect(head.summary).toEqual(RUNNING);
   expect(head.summary).not.toContain('Worked');
   expect(view.container.textContent).not.toContain('Worked');
@@ -227,8 +229,8 @@ it('[I8-1] while the interjection waits, the running turn stays open and working
   // The command finishes; DSH has not opened the next step yet. Still running.
   await view.show([PROMPT, STEP_1, STEP_2_DONE], 'running');
   expect(view.sections()).toEqual(['u1']);
-  expect(view.head('u1').open).toBe(true);
-  expect(view.head('u1').summary).not.toContain('Worked');
+  expect(view.head('u1').settled).toBe(false);
+  expect(view.head('u1').summary).toEqual(RUNNING);
   expect(view.awaiting()).toHaveLength(1);
 });
 
@@ -243,10 +245,9 @@ it('[I8-2] once DSH takes it in, the old group folds and the message opens the n
 
   expect(view.awaiting()).toHaveLength(0);
   expect(view.sections()).toEqual(['u1', ECHO.id]);
-  // The step it waited for is done: the group folds as any finished turn's does.
+  // The step it waited for is done: the old turn settles, as any finished turn does.
   const old = view.head('u1');
-  expect(old.open).toBe(false);
-  expect(old.summary).toContain('Worked');
+  expect(old.settled).toBe(true);
   // The new turn: an ordinary bubble, and the turn is the one working now.
   const next = view.container.querySelector(`section[data-turn-id="${ECHO.id}"]`);
   expect(next?.textContent).toContain(INTERJECTION);
@@ -265,9 +266,10 @@ it('[I8-3] a Stop before delivery leaves the bubble waiting, and still no turn o
 
   expect(view.sections()).toEqual(['u1']);
   expect(view.awaiting()).toHaveLength(1);
-  // The stopped turn says "Worked" once — on its own head, not under the bubble.
-  expect(view.head('u1').summary).toContain('Worked');
-  expect(view.container.textContent?.split('Worked').length).toBe(2);
+  // The stopped turn settles once — its own line, not one under the bubble too.
+  expect(view.head('u1').settled).toBe(true);
+  expect(view.container.querySelectorAll('[data-slot="turn-bill"]')).toHaveLength(1);
+  expect(view.container.querySelectorAll('[data-slot="turn-live-line"]')).toHaveLength(0);
 });
 
 // ---- issue #8 §4: 「撤回」 on the awaiting bubble ----------------------------------
@@ -301,7 +303,7 @@ it('[I8-4] the awaiting bubble offers a named, keyboard-reachable withdraw; it h
   expect(useComposerDraftsStore.getState().offered).toEqual({ s: INTERJECTION });
   // The turn it never joined runs on, untouched.
   expect(view.sections()).toEqual(['u1']);
-  expect(view.head('u1')).toEqual({ open: true, summary: RUNNING });
+  expect(view.head('u1')).toEqual({ settled: false, summary: RUNNING });
   expect(toastAdd).not.toHaveBeenCalled();
 });
 

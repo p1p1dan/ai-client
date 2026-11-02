@@ -3,8 +3,8 @@ import { createHighlighterCore, type HighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import themeVitesseDark from 'shiki/themes/vitesse-dark.mjs';
 import themeVitesseLight from 'shiki/themes/vitesse-light.mjs';
+import { useDarkClass } from '@/components/chat/useDarkClass';
 import { cn } from '@/lib/utils';
-import { useSettingsStore } from '@/stores/settings';
 
 // 常用语言的动态导入
 const LANG_LOADERS: Record<string, () => Promise<unknown>> = {
@@ -85,18 +85,9 @@ interface CodeBlockProps {
 }
 
 export function CodeBlock({ code, language, className }: CodeBlockProps) {
-  const theme = useSettingsStore((s) => s.theme);
   const [html, setHtml] = useState<string | null>(null);
-
-  // 解析实际主题（处理 system 和 sync-terminal）
-  const resolvedTheme =
-    theme === 'system'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light'
-      : theme === 'dark' || theme === 'sync-terminal'
-        ? 'dark'
-        : 'light';
+  // The applied class covers a light terminal theme and system theme changes.
+  const resolvedTheme = useDarkClass() ? 'dark' : 'light';
 
   useEffect(() => {
     let cancelled = false;

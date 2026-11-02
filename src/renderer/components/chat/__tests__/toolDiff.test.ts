@@ -225,3 +225,39 @@ it('does not preview a deletion from incomplete streaming arguments', () => {
     deriveToolDiff({ toolName: 'edit', input: { path: 'a.ts', oldText: 'before' } })
   ).toBeNull();
 });
+
+describe('[PILAB-R2-HUNKS] separate regions', () => {
+  it('starts each later argument pair as its own hunk', () => {
+    const diff = deriveToolDiff({
+      toolName: 'MultiEdit',
+      input: {
+        file_path: 'a.ts',
+        edits: [
+          { old_string: 'a', new_string: 'b' },
+          { old_string: 'c', new_string: 'd' },
+        ],
+      },
+      status: 'ok',
+    });
+    expect(diff?.rows.map((row) => Boolean(row.hunkStart))).toEqual([false, false, true, false]);
+  });
+
+  it("reads a recorded patch's hunk breaks and 「No newline」 marker", () => {
+    const diff = deriveToolDiff({
+      toolName: 'Edit',
+      input: { file_path: 'a.ts', old_string: 'x', new_string: 'x' },
+      status: 'ok',
+      result: {
+        details: {
+          patch: '@@ -1 +1 @@\n-a\n+b\n@@ -40 +40 @@\n-x\n\\ No newline at end of file\n+x',
+        },
+      },
+    });
+    expect(diff?.rows).toEqual([
+      { kind: 'del', text: 'a', oldLine: 1 },
+      { kind: 'add', text: 'b', newLine: 1 },
+      { kind: 'del', text: 'x', oldLine: 40, hunkStart: true, noFinalNewline: true },
+      { kind: 'add', text: 'x', newLine: 40 },
+    ]);
+  });
+});

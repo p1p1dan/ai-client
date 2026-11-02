@@ -1,0 +1,62 @@
+{
+  "inject": {
+    "sid": "pilab-replay-f02",
+    "cut": 273,
+    "total": 273,
+    "lastType": "session.completed",
+    "foldMs": 0.8999999985098839,
+    "status": "idle",
+    "messages": 2,
+    "pendingPermissions": 0,
+    "pendingQuestions": 0,
+    "active": "pilab-replay-f02",
+    "problems": []
+  },
+  "measure": {
+    "viewport": {
+      "w": 1400,
+      "h": 900,
+      "dpr": 1
+    },
+    "theme": "light",
+    "turns": 1,
+    "details": 9,
+    "detailsOpen": 0,
+    "summaries": [
+      "已工作",
+      "已工作",
+      "已工作",
+      "已工作",
+      "已工作",
+      "已工作",
+      "已工作",
+      "已工作",
+      "已工作"
+    ],
+    "statusIcons": [],
+    "toolCallIds": 0,
+    "questionPrompt": false,
+    "failureContinue": false,
+    "turnEnd": [],
+    "subagentRows": 0,
+    "horizontalOverflow": false,
+    "texts": [
+      {
+        "text": "阶段正文 1",
+        "inDom": 1,
+        "visible": 1
+      },
+      {
+        "text": "阶段正文 8",
+        "inDom": 1,
+        "visible": 1
+      },
+      {
+        "text": "第 42 段脱敏思考",
+        "inDom": 0,
+        "visible": 0
+      }
+    ],
+    "composer": true
+  }
+}

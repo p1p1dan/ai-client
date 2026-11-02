@@ -1,0 +1,64 @@
+[
+  {
+    "name": "before",
+    "id": "session-1793364274837-4sfbear",
+    "users": 16,
+    "sessions": 14
+  },
+  {
+    "name": "composer: pick with 229 Enter",
+    "text": "你好",
+    "focused": true,
+    "menus": [],
+    "userBubbles": 0,
+    "users": 16,
+    "session": "session-1793364274837-4sfbear"
+  },
+  {
+    "name": "composer: pick with 13 Enter while composing",
+    "text": "你好世界",
+    "focused": true,
+    "menus": [],
+    "userBubbles": 0,
+    "users": 16,
+    "session": "session-1793364274837-4sfbear"
+  },
+  {
+    "name": "slash: menu open",
+    "text": "/",
+    "focused": true,
+    "menus": [
+      "/archive 归档当前对话 内置 /batch 调研并规划大规模改动，再分给 5～30 个各自独立 worktree"
+    ],
+    "userBubbles": 0,
+    "users": 16,
+    "session": "session-1793364274837-4sfbear"
+  },
+  {
+    "name": "slash: pick with 229 Enter",
+    "text": "/测",
+    "focused": true,
+    "menus": [],
+    "userBubbles": 0,
+    "users": 16,
+    "session": "session-1793364274837-4sfbear"
+  },
+  {
+    "name": "mention: menu open",
+    "text": "看看 @",
+    "focused": true,
+    "menus": ["cc-a.txt cc-b.txt dsh-written-r1steps3.txt edit-target.txt m"],
+    "userBubbles": 0,
+    "users": 16,
+    "session": "session-1793364274837-4sfbear"
+  },
+  {
+    "name": "mention: pick with 229 Enter",
+    "text": "看看 @文",
+    "focused": true,
+    "menus": ["中文笔记.md ↑↓ 导航 Enter 选择 Esc 关闭"],
+    "userBubbles": 0,
+    "users": 16,
+    "session": "session-1793364274837-4sfbear"
+  }
+]

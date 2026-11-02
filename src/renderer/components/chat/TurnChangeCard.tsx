@@ -37,10 +37,12 @@ export function TurnChangeCard({ summary }: { summary: TurnChangeSummary }) {
           <span className="min-w-0 truncate">
             {count === 1 ? t('Changed 1 file') : t('Changed {{count}} files', { count })}
           </span>
-          <span className="shrink-0 tabular-nums">
-            <span className="text-success">+{summary.added}</span>{' '}
-            <span className="text-destructive">−{summary.removed}</span>
-          </span>
+          {summary.counted && (
+            <span className="shrink-0 tabular-nums">
+              <span className="text-success">+{summary.added}</span>{' '}
+              <span className="text-destructive">−{summary.removed}</span>
+            </span>
+          )}
         </span>
         <Ident className="min-w-0 truncate text-small text-muted-foreground">
           {more > 0 ? t('{{names}} and {{count}} more', { names, count: more }) : names}

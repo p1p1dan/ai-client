@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { useDarkClass } from '@/components/chat/useDarkClass';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { useSettingsStore } from '@/stores/settings';
 
 const MERMAID_CDN_URL = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 
@@ -41,22 +41,13 @@ interface MermaidRendererProps {
 
 export function MermaidRenderer({ code, className }: MermaidRendererProps) {
   const { t } = useI18n();
-  const theme = useSettingsStore((s) => s.theme);
+  const isDark = useDarkClass();
   const uniqueId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const resolvedTheme =
-    theme === 'system'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light'
-      : theme === 'dark' || theme === 'sync-terminal'
-        ? 'dark'
-        : 'light';
-
-  const mermaidTheme = resolvedTheme === 'dark' ? 'dark' : 'default';
+  const mermaidTheme = isDark ? 'dark' : 'default';
 
   useEffect(() => {
     let cancelled = false;

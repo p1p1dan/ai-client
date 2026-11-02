@@ -1,0 +1,170 @@
+ 用时 1 秒
+
+CC-SLOW {"seconds":40} 跑一个慢命令
+
+开始一个很慢的命令。
+
+终端
+Sleep in two processes so Stop has a process tree to end
+· 已停止
+✻ 用时 49 秒 · 1 次工具调用
+
+这一轮已停止。
+
+CC-SLOW {"seconds":40} 第二次：在审批卡时停止
+
+开始一个很慢的命令。
+
+终端
+Sleep in two processes so Stop has a process tree to end
+· 已停止
+✻ 用时 6 秒 · 1 次工具调用
+
+这一轮已停止。
+
+CC-TEXT {"chunkMs":2500} 第三次：正文流到一半停止
+
+这一轮已停止，没有保存任何回复。
+
+✻ 用时 14 秒
+
+CC-RUN {"calls":[{"name":"Glob","input":{"pattern":"**/*.md"}},{"name":"Read","input":{"file_path":"/tmp/pilab-r0/workspace/README.md"}},{"name":"Grep","input":{"pattern":"PiLab","path":"/tmp/pilab-r0/workspace"}},{"name":"Read","input":{"file_path":"/tmp/pilab-r0/workspace/cc-proto.txt"}},{"name":"Bash","input":{"command":"printf \"a\\nb\\n3 passed\\n\"","description":"Run the checks"}},{"name":"Read","input":{"file_path":"/tmp/pilab-r0/workspace/nope.txt"}}]} 第四次：步骤式显示
+
+搜索
+**/*.md（workspace）
+⎿
+Error: No such tool available: Glob. Glob is not available in this session — find files with `find` via the Bash tool instead.
+读取
+README.md workspace/
+搜索
+PiLab（workspace）
+⎿
+Error: No such tool available: Grep. Grep is not available in this session — search file contents with `grep` via the Bash tool instead.
+读取
+cc-proto.txt workspace/
+⎿
+File does not exist. Note: your current working directory is /tmp/pilab-r0/workspace.
+终端
+Run the checks
+⎿
+3 passed · 3 行
+读取
+nope.txt workspace/
+⎿
+File does not exist. Note: your current working directory is /tmp/pilab-r0/workspace.
+最终输出
+
+CC-RUN done (6 calls)
+
+✻ 完成于 20:49 · 用时 1 秒 · 6 次工具调用
+
+CC-RUN {"calls":[{"name":"Read","input":{"file_path":"/tmp/pilab-r0/workspace/README.md"}},{"name":"Read","input":{"file_path":"/tmp/pilab-r0/workspace/marker.txt"}},{"name":"Bash","input":{"command":"printf \"a\\nb\\n3 passed\\n\"","description":"Run the checks"}},{"name":"Read","input":{"file_path":"/tmp/pilab-r0/workspace/edit-target.txt"}}]} 第五次：读取合并
+
+读取了 3 个文件
+终端
+Run the checks
+⎿
+3 passed · 3 行
+最终输出
+
+CC-RUN done (4 calls)
+
+✻ 完成于 20:49 · 用时 1 秒 · 4 次工具调用
+
+CC-SLOW {"seconds":5} 第六次：直接拒绝
+
+开始一个很慢的命令。
+
+运行
+Sleep in two processes so Stop has a process tree to end
+· 已拒绝
+最终输出
+
+命令结束：The user declined this tool call.
+
+✻ 完成于 20:51 · 用时 6 秒 · 1 次工具调用
+
+CC-SLOW {"seconds":5} 第七次：Esc 中断
+
+开始一个很慢的命令。
+
+终端
+Sleep in two processes so Stop has a process tree to end
+· 已停止
+✻ 用时 23 秒 · 1 次工具调用
+
+这一轮已停止。
+
+CC-SLOW {"seconds":30} 第八次：立即发送插话
+
+开始一个很慢的命令。
+
+终端
+Sleep in two processes so Stop has a process tree to end
+⎿
+slept
+最终输出
+
+命令结束：slept
+
+✻ 完成于 20:57 · 用时 36 秒 · 1 次工具调用
+
+插一句：先停下看看
+
+最终输出
+
+命令结束：slept
+
+✻ 完成于 20:57 · 用时 1 秒
+
+CC-SLOW {"seconds":30} 第九次：立即发送插话
+
+开始一个很慢的命令。
+
+终端
+Sleep in two processes so Stop has a process tree to end
+⎿
+slept
+✻ 完成于 20:58 · 用时 35 秒 · 1 次工具调用
+
+插一句：先停下看看
+
+最终输出
+
+命令结束：slept
+
+✻ 完成于 20:58
+
+CC-SLOW {"seconds":30} 第十次：Ctrl+Enter 后立即发送
+
+开始一个很慢的命令。
+
+终端
+Sleep in two processes so Stop has a process tree to end
+⎿
+slept
+最终输出
+
+命令结束：
+
+✻ 完成于 20:59 · 用时 35 秒 · 1 次工具调用
+
+排队的一句：立即发送
+
+最终输出
+
+命令结束：slept
+
+✻ 完成于 20:59 · 用时 1 秒
+手动审批
+workspace
+master
+fake-1
+环境
+本机
+workspace · /tmp/pilab-r0/workspace
+master
+Agent SDK 引擎
+手动审批
+对话记录 · /tmp/pilab-r0…7f7b72.jsonl
+上下文

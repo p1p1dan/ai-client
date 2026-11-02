@@ -855,6 +855,12 @@ export class GitService {
         gitShow(this.workdir, `HEAD:${filePath}`),
         gitShow(this.workdir, `:${filePath}`),
       ]);
+      // PiLab R2: a staged rename has no `HEAD:<new path>`; compare against
+      // the blob it was renamed from instead of showing the whole file added.
+      if (!original) {
+        const source = await this.stagedRenameSource(filePath);
+        if (source) original = await gitShow(this.workdir, `HEAD:${source}`);
+      }
     } else {
       original = await gitShow(this.workdir, `:${filePath}`);
       if (!original) {
@@ -866,6 +872,31 @@ export class GitService {
     }
 
     return { path: filePath, original, modified };
+  }
+
+  /**
+   * The HEAD path a staged file was renamed from, `null` when it was not.
+   * Rename detection needs both sides in scope, so the diff is not limited to
+   * `filePath`. An empty answer is a valid "no renames".
+   */
+  private async stagedRenameSource(filePath: string): Promise<string | null> {
+    try {
+      const { stdout } = await readGit({
+        what: 'diff',
+        workdir: this.workdir,
+        args: ['diff', '--cached', '--name-status', '-M', '-z', '--diff-filter=R'],
+        lostWhen: 'never',
+      });
+      // `-z`: `R<score>\0<old>\0<new>\0` per rename.
+      const fields = stdout.split('\0');
+      const wanted = filePath.replace(/\\/g, '/');
+      for (let i = 0; i + 2 < fields.length; i += 3) {
+        if (fields[i].startsWith('R') && fields[i + 2] === wanted) return fields[i + 1];
+      }
+    } catch (err) {
+      if (!isGitExitError(err)) throw err;
+    }
+    return null;
   }
 
   async stage(paths: string[]): Promise<void> {

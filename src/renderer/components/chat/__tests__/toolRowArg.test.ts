@@ -64,13 +64,13 @@ describe('ToolRows.tsx <pre> bodies carry font-mono (D25 §2.1 M3a/M3b, static s
   // review) — so the opt-in class is part of the pinned string, not noise.
   it('the structured-input <pre> (ToolRowInputSegment) has font-mono ahead of text-code', () => {
     expect(source).toMatch(
-      /'m-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-\[1\.55\] text-muted-foreground'/
+      /'m-0 select-text overflow-auto overscroll-contain whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-\[1\.55\] text-muted-foreground'/
     );
   });
 
   it('the raw-output <pre> (ToolRowOutputSegment, body === "output") has font-mono ahead of text-code', () => {
     const preClassMatches = source.match(
-      /m-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-\[1\.55\] text-muted-foreground/g
+      /m-0 select-text overflow-auto overscroll-contain whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-\[1\.55\] text-muted-foreground/g
     );
     // Both the input segment and the output segment share the exact same
     // class string -- there must be exactly two occurrences.

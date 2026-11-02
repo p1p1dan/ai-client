@@ -1,0 +1,94 @@
+[
+  {
+    "name": "typed \"see @entry\"",
+    "text": "see @entry",
+    "caret": 10,
+    "focused": true,
+    "popup": ["entry.ts src/main"]
+  },
+  {
+    "name": "then Tab",
+    "text": "see @src/main/entry.ts ",
+    "caret": 23,
+    "focused": true,
+    "popup": null
+  },
+  {
+    "name": "then Home",
+    "text": "see @entry",
+    "caret": 0,
+    "focused": true,
+    "popup": null
+  },
+  {
+    "name": "then Enter (after Home)",
+    "text": "",
+    "caret": 0,
+    "focused": true,
+    "popup": null
+  },
+  {
+    "name": "then ArrowLeft ×2",
+    "text": "see @entry",
+    "caret": 8,
+    "focused": true,
+    "popup": ["entry.ts src/main", "dsh-written-r1steps3.txt", "shell-written-r1steps3.txt"]
+  },
+  {
+    "name": "then Enter (after ArrowLeft ×2)",
+    "text": "see @src/main/entry.ts ",
+    "caret": 23,
+    "focused": true,
+    "popup": null
+  },
+  {
+    "name": "typed \"@a-spaced\" (file under \"My Docs/\")",
+    "text": "@a-spaced",
+    "caret": 9,
+    "focused": true,
+    "popup": ["a-spaced.md My Docs"]
+  },
+  {
+    "name": "then Enter (pick)",
+    "text": "@\"My Docs/a-spaced.md\" ",
+    "caret": 23,
+    "focused": true,
+    "popup": null,
+    "chips": []
+  },
+  {
+    "name": "typed \"请看@中文\" (no space before @)",
+    "text": "请看@中文",
+    "caret": 5,
+    "focused": true,
+    "popup": null
+  },
+  {
+    "name": "typed \"说明：@entry\"",
+    "text": "说明：@entry",
+    "caret": 9,
+    "focused": true,
+    "popup": null
+  },
+  {
+    "name": "typed \"see @src\\main\" (backslash)",
+    "text": "see @src\\main",
+    "caret": 13,
+    "focused": true,
+    "popup": ["main/ src", "entry.ts src/main"]
+  },
+  {
+    "name": "typed \"see @src/main\"",
+    "text": "see @src/main",
+    "caret": 13,
+    "focused": true,
+    "popup": ["main/ src", "entry.ts src/main"]
+  },
+  {
+    "name": "typed \"mail a@entry\" (email-like)",
+    "text": "mail a@entry",
+    "caret": 12,
+    "focused": true,
+    "popup": null
+  }
+]

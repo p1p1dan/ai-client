@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2 差异视图「上下 / 并排」切换预览</title>
+<style>
+  :root {
+    --background: #fcfcfb; --foreground: #151515; --card: #ffffff; --popover: #ffffff;
+    --primary: #c6613f; --muted-foreground: #525252;
+    --fill-ghost-hover: #f0f0ef; --fill-ghost-selected: #e5e5e4; --secondary: #eeeeed;
+    --border: #e5e5e4; --border-soft: #ededec; --surface-2: #f7f7f6;
+    --success: #3f7d4e; --destructive: #b5473a;
+    --add-bg: color-mix(in oklab, var(--success) 12%, transparent);
+    --del-bg: color-mix(in oklab, var(--destructive) 12%, transparent);
+    --foreground-faint: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
+    --radius-xs: .25rem; --radius-sm: .375rem; --radius-md: .625rem; --radius-lg: .75rem;
+    --text-2xs: .6875rem; --text-small: .75rem; --text-ui: .8125rem;
+  }
+  .dark {
+    --background: #151515; --foreground: #f5f5f5; --card: #1a1a19; --popover: #20201f;
+    --primary: #d97757; --muted-foreground: #a3a3a3; --fill-ghost-hover: #202020;
+    --fill-ghost-selected: #2b2b2b; --secondary: #222222; --border: #2b2b2b; --border-soft: #262625;
+    --surface-2: #1e1e1d; --success: #6fbf82; --destructive: #e07a6c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--background); color: var(--foreground);
+    font: var(--text-ui)/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; flex: 1; min-width: 0; }
+  main { max-width: 980px; margin: 0 auto; padding: 8px 16px 64px; }
+  section { padding: 20px 0; border-bottom: 1px solid var(--border); }
+  h2 { font-size: 14px; margin: 0 0 4px; }
+  .why { color: var(--muted-foreground); font-size: var(--text-small); margin: 0 0 12px; }
+  .ctrl { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; font-size: var(--text-small); }
+  .ctrl button { font: inherit; padding: 3px 10px; border-radius: var(--radius-xs); border: 0;
+    background: var(--secondary); color: var(--foreground); cursor: pointer; }
+  .ctrl button[aria-pressed="true"] { background: var(--fill-ghost-selected); font-weight: 600; }
+  .note { font-size: var(--text-small); color: var(--muted-foreground); margin-top: 10px; }
+  .note b { color: var(--foreground); font-weight: 600; }
+
+  /* a diff card: one frame, header split off by a single hairline */
+  .stage { transition: width .2s ease-out; max-width: 100%; }
+  .diff { border: 1px solid var(--border-soft); border-radius: var(--radius-lg); background: var(--surface-2); overflow: hidden; }
+  .dh { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 6px 0 12px;
+    border-bottom: 1px solid var(--border-soft); font-size: var(--text-small); color: var(--muted-foreground); }
+  .dh .path { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground); font-weight: 500; }
+  .dh .add { color: var(--success); } .dh .del { color: var(--destructive); }
+  .dh .n { flex: none; font-variant-numeric: tabular-nums; }
+  /* the toggle: two icon buttons, ghost style, one selected */
+  .seg { flex: none; display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-sm); }
+  .seg button { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: var(--radius-xs);
+    background: transparent; color: var(--foreground-faint); cursor: pointer; transition: color .15s ease-out, background-color .15s ease-out; }
+  .seg button:hover:not(:disabled) { background: var(--fill-ghost-hover); color: var(--foreground); }
+  .seg button[aria-pressed="true"] { background: var(--fill-ghost-selected); color: var(--foreground); }
+  .seg button:disabled { cursor: not-allowed; opacity: .45; }
+  .seg svg { width: 14px; height: 14px; }
+  .tip { flex: none; font-size: var(--text-2xs); color: var(--foreground-faint); }
+
+  .body { font: 12px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace; overflow-x: auto; }
+  .u .ln, .s .ln { display: grid; }
+  .u .ln { grid-template-columns: 36px 36px 14px 1fr; }
+  .ln > span { padding: 0 6px; white-space: pre-wrap; word-break: break-all; }
+  .ln .no { color: var(--foreground-faint); text-align: right; user-select: none; }
+  .ln .mk { user-select: none; padding: 0; text-align: center; }
+  .ln.a { background: var(--add-bg); } .ln.a .mk { color: var(--success); }
+  .ln.d { background: var(--del-bg); } .ln.d .mk { color: var(--destructive); }
+  .gap { color: var(--foreground-faint); padding: 2px 12px; font-size: var(--text-2xs); border-block: 1px dashed var(--border-soft); user-select: none; }
+  .s { display: grid; grid-template-columns: 1fr 1fr; }
+  .s .side + .side { border-left: 1px solid var(--border-soft); }
+  .s .ln { grid-template-columns: 36px 14px 1fr; }
+  .s .ln.e { background: color-mix(in oklab, var(--foreground) 3%, transparent); }
+
+  /* the diff tab (Monaco) header, for placement only */
+  .tab { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); overflow: hidden; }
+  .tab .dh { background: var(--card); }
+  .tab .mono { height: 120px; display: grid; place-items: center; color: var(--foreground-faint); font-size: var(--text-small); }
+  .btn { flex: none; font: inherit; font-size: var(--text-small); height: 24px; padding: 0 8px; border: 0; border-radius: var(--radius-sm);
+    background: transparent; color: var(--muted-foreground); cursor: pointer; }
+  .btn:hover { background: var(--fill-ghost-hover); color: var(--foreground); }
+  table { border-collapse: collapse; font-size: var(--text-small); width: 100%; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  th { color: var(--muted-foreground); font-weight: 500; }
+</style>
+</head>
+<body>
+<header>
+  <h1>R2 差异视图「上下 / 并排」切换（台账 07.3，DEF-032）</h1>
+  <div class="ctrl" style="margin:0">
+    <button id="light" aria-pressed="true">浅色</button><button id="dark" aria-pressed="false">深色</button>
+  </div>
+</header>
+<main>
+  <section>
+    <h2>现状</h2>
+    <p class="why">右侧「改动」面板和子代理对话窗里的差异只有「上下」一种（删在上、加在下）；从面板点「打开文件」进的差异标签页（Monaco）固定「并排」，窗口窄于 700px 时自动变上下。用户没法自己选，两处还不一样。主对话区不显示差异，不在本次范围。</p>
+  </section>
+
+  <section>
+    <h2>① 改动面板里的文件卡：标题栏右端加两个图标按钮</h2>
+    <p class="why">图标用 Lucide <code>rows-2</code>（上下）和 <code>columns-2</code>（并排），悬停写「上下显示」「并排显示」。选择对所有差异生效并记住，重启后保留。点下面的按钮模拟面板宽度。</p>
+    <div class="ctrl">
+      面板宽度：
+      <button data-w="360">360</button><button data-w="480">480</button><button data-w="640" aria-pressed="true">640</button><button data-w="900">900</button>
+    </div>
+    <div class="stage" id="stage" style="width:640px">
+      <div class="diff">
+        <div class="dh">
+          <span class="path">src/renderer/components/workspace-shell/sessionReviewDiffTarget.ts</span>
+          <span class="n add">+3</span><span class="n del">−2</span>
+          <span class="tip" id="narrowTip" hidden>太窄，暂用上下</span>
+          <span class="seg" role="group" aria-label="差异显示方式">
+            <button id="bU" aria-pressed="true" title="上下显示" aria-label="上下显示">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/></svg>
+            </button>
+            <button id="bS" aria-pressed="false" title="并排显示" aria-label="并排显示">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>
+            </button>
+          </span>
+        </div>
+        <div class="body" id="body"></div>
+      </div>
+    </div>
+    <p class="note">窄于 <b>560px</b> 时并排每边不到 30 个字，自动退回上下，「并排」按钮变灰并在旁边写「太窄，暂用上下」；变宽后回到用户选的方式，<b>不改用户的选择</b>。</p>
+  </section>
+
+  <section>
+    <h2>② 差异标签页（Monaco）：同一对按钮放在标题栏</h2>
+    <p class="why">用同一个记住的选择，取代现在写死的「并排」。窄于 700px 时沿用 Monaco 自己的退回规则。</p>
+    <div class="tab">
+      <div class="dh">
+        <span class="path">sessionReviewDiffTarget.ts <span style="color:var(--foreground-faint);font-weight:400">(unstaged)</span></span>
+        <span class="seg" role="group" aria-label="差异显示方式">
+          <button aria-pressed="false" title="上下显示"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/></svg></button>
+          <button aria-pressed="true" title="并排显示"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg></button>
+        </span>
+        <button class="btn">上一处</button><button class="btn">下一处</button>
+      </div>
+      <div class="mono">（Monaco 差异编辑器）</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>需要你定的</h2>
+    <table>
+      <tr><th style="width:28%">问题</th><th>选项</th></tr>
+      <tr><td>选择的作用范围</td><td><b>A（推荐）</b>：所有差异共用一个选择，在哪里点都一起变。<br>B：改动面板和差异标签页各记各的。</td></tr>
+      <tr><td>默认值</td><td><b>A（推荐）</b>：上下（与面板现状一致；差异标签页会从并排变成上下）。<br>B：面板上下、标签页并排，保持各自现状，用户改了才统一。</td></tr>
+      <tr><td>设置页要不要也放</td><td><b>A（推荐）</b>：只在差异标题栏切换，不进设置页。<br>B：设置 → 外观 里再放一项。</td></tr>
+    </table>
+  </section>
+</main>
+<script>
+  const rows = [
+    ['s', 24, 24, "import type { DiffTabWorkdirTarget } from '@/stores/diffTabTarget';"],
+    ['gap'],
+    ['d', 47, null, '      if (diff.original !== diff.modified) {'],
+    ['a', null, 48, '      if (!sameIgnoringLineEndings(diff.original, diff.modified)) {'],
+    ['s', 48, 49, "        return { kind: 'diff', target: { ...target, staged } };"],
+    ['s', 49, 50, '      }'],
+    ['d', 52, null, '    // The diff tab says why the read failed.'],
+    ['a', null, 53, '    // The diff tab says why the read failed (too large, timed out).'],
+    ['a', null, 54, '    // A CRLF checkout of an LF blob is not a change.'],
+  ];
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const line = (k, a, b, text, split) => {
+    const mk = k === 'a' ? '+' : k === 'd' ? '−' : '';
+    return split
+      ? `<div class="ln ${k}"><span class="no">${a ?? b ?? ''}</span><span class="mk">${mk}</span><span>${esc(text)}</span></div>`
+      : `<div class="ln ${k}"><span class="no">${a ?? ''}</span><span class="no">${b ?? ''}</span><span class="mk">${mk}</span><span>${esc(text)}</span></div>`;
+  };
+  function unified() {
+    return '<div class="u">' + rows.map((r) => r[0] === 'gap' ? '<div class="gap">⋯ 22 行未改动</div>' : line(r[0], r[1], r[2], r[3], false)).join('') + '</div>';
+  }
+  function split() {
+    // pair deletions with the additions that follow them, row by row
+    const left = [], right = [];
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (r[0] === 'gap') { left.push('<div class="gap">⋯ 22 行</div>'); right.push('<div class="gap">⋯ 22 行</div>'); continue; }
+      if (r[0] === 's') { left.push(line('s', r[1], null, r[3], true)); right.push(line('s', null, r[2], r[3], true)); continue; }
+      const dels = [], adds = [];
+      while (i < rows.length && rows[i][0] === 'd') dels.push(rows[i++]);
+      while (i < rows.length && rows[i][0] === 'a') adds.push(rows[i++]);
+      i--;
+      for (let j = 0; j < Math.max(dels.length, adds.length); j++) {
+        left.push(dels[j] ? line('d', dels[j][1], null, dels[j][3], true) : '<div class="ln e"><span class="no"></span><span class="mk"></span><span> </span></div>');
+        right.push(adds[j] ? line('a', null, adds[j][2], adds[j][3], true) : '<div class="ln e"><span class="no"></span><span class="mk"></span><span> </span></div>');
+      }
+    }
+    return `<div class="s"><div class="side">${left.join('')}</div><div class="side">${right.join('')}</div></div>`;
+  }
+  let choice = 'u', width = 640;
+  const bU = document.getElementById('bU'), bS = document.getElementById('bS');
+  function render() {
+    const narrow = width < 560;
+    const shown = narrow ? 'u' : choice;
+    document.getElementById('body').innerHTML = shown === 'u' ? unified() : split();
+    bU.setAttribute('aria-pressed', String(shown === 'u'));
+    bS.setAttribute('aria-pressed', String(shown === 's'));
+    bS.disabled = narrow;
+    document.getElementById('narrowTip').hidden = !(narrow && choice === 's');
+  }
+  bU.onclick = () => { choice = 'u'; render(); };
+  bS.onclick = () => { choice = 's'; render(); };
+  document.querySelectorAll('[data-w]').forEach((b) => b.onclick = () => {
+    width = Number(b.dataset.w);
+    document.getElementById('stage').style.width = width + 'px';
+    document.querySelectorAll('[data-w]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    render();
+  });
+  const setTheme = (dark) => {
+    document.documentElement.classList.toggle('dark', dark);
+    document.getElementById('light').setAttribute('aria-pressed', String(!dark));
+    document.getElementById('dark').setAttribute('aria-pressed', String(dark));
+  };
+  document.getElementById('light').onclick = () => setTheme(false);
+  document.getElementById('dark').onclick = () => setTheme(true);
+  render();
+</script>
+</body>
+</html>

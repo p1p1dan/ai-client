@@ -1,0 +1,52 @@
+{
+  "inject": {
+    "sid": "pilab-replay-f02",
+    "cut": 136,
+    "total": 273,
+    "lastType": "tool.completed",
+    "foldMs": 0.3999999985098839,
+    "status": "running",
+    "messages": 2,
+    "pendingPermissions": 0,
+    "pendingQuestions": 0,
+    "active": "pilab-replay-f02",
+    "problems": []
+  },
+  "measure": {
+    "viewport": {
+      "w": 1400,
+      "h": 900,
+      "dpr": 1
+    },
+    "theme": "dark",
+    "turns": 1,
+    "details": 4,
+    "detailsOpen": 4,
+    "summaries": ["✻ 思考中", "工作中", "工作中", "工作中"],
+    "statusIcons": ["running"],
+    "toolCallIds": 0,
+    "questionPrompt": false,
+    "failureContinue": false,
+    "turnEnd": [],
+    "subagentRows": 0,
+    "horizontalOverflow": false,
+    "texts": [
+      {
+        "text": "阶段正文 1",
+        "inDom": 1,
+        "visible": 1
+      },
+      {
+        "text": "阶段正文 4",
+        "inDom": 0,
+        "visible": 0
+      },
+      {
+        "text": "第 1 段脱敏思考",
+        "inDom": 0,
+        "visible": 0
+      }
+    ],
+    "composer": true
+  }
+}

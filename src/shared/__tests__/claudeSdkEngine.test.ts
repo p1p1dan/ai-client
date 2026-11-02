@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   CLAUDE_SDK_ENGINE_SETTING_KEY,
   CLAUDE_SDK_INHERITED_ENV,
+  claudeSdkModelThinking,
   claudeSdkModelWindows,
   claudeSdkRouteFor,
   DEFAULT_CLAUDE_SDK_ENGINE_ENABLED,
   effectiveModelRef,
+  parseClaudeSdkModelThinking,
   parseClaudeSdkModelWindows,
   resolveClaudeSdkEngineEnabled,
 } from '../claudeSdkEngine';
@@ -164,5 +166,62 @@ describe('CLAUDE_SDK_INHERITED_ENV', () => {
       expect(name).toBe(name.toUpperCase());
       expect(name).not.toMatch(/^(ANTHROPIC|CLAUDE)_|KEY|TOKEN|SECRET|PASSWORD|NODE_OPTIONS/);
     }
+  });
+});
+
+describe('[PILAB-R2-THINK] claudeSdkModelThinking (how each model thinks, as the catalog says)', () => {
+  const routes = {
+    routes: {
+      claude: {
+        ...route('anthropic-messages', 'https://gw.example', 'AICLIENT_KEY_CLAUDE'),
+        models: [
+          { id: 'plain', reasoningEfforts: false },
+          { id: 'budget', reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' } },
+          {
+            id: 'adaptive',
+            reasoningEfforts: { low: 'low', high: 'high' },
+            compat: { forceAdaptiveThinking: true },
+          },
+        ],
+      } as DshPlanRoute,
+      vendor: {
+        ...route('anthropic-messages', 'https://vendor.example', 'AICLIENT_KEY_VENDOR'),
+        // The provider declares it once for every model under it.
+        compat: { forceAdaptiveThinking: true },
+        models: [
+          { id: 'inherits', reasoningEfforts: { high: 'high' } },
+          {
+            id: 'opts-out',
+            reasoningEfforts: { high: 'high' },
+            compat: { forceAdaptiveThinking: false },
+          },
+        ],
+      } as DshPlanRoute,
+    },
+  };
+
+  it('none without reasoning, adaptive when forced, budget otherwise', () => {
+    expect(claudeSdkModelThinking(routes, 'claude')).toEqual({
+      plain: 'none',
+      budget: 'budget',
+      adaptive: 'adaptive',
+    });
+  });
+
+  it("a model's own switch wins over its provider's", () => {
+    expect(claudeSdkModelThinking(routes, 'vendor')).toEqual({
+      inherits: 'adaptive',
+      'opts-out': 'budget',
+    });
+    expect(claudeSdkModelThinking(null, 'claude')).toEqual({});
+  });
+
+  it('round-trips through the launch variable and drops anything malformed', () => {
+    const styles = claudeSdkModelThinking(routes, 'claude');
+    expect(parseClaudeSdkModelThinking(JSON.stringify(styles))).toEqual(styles);
+    expect(parseClaudeSdkModelThinking('not json')).toEqual({});
+    expect(parseClaudeSdkModelThinking(JSON.stringify({ a: 'fast', b: 1, '': 'none' }))).toEqual(
+      {}
+    );
   });
 });

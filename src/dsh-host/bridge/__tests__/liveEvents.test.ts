@@ -29,7 +29,7 @@ import {
   isDshSummaryRow,
 } from '../../../shared/dshHistory/types.ts';
 import type { ToolCallPresentation } from '../../../shared/dshToolPresentation.ts';
-import { readPiUsagePayload } from '../../../shared/piUsage.ts';
+import { deriveCacheHitRate, readPiUsagePayload } from '../../../shared/piUsage.ts';
 import type { ClientPrefixEvidence } from '../../../shared/types/requestScope.ts';
 import { TURN_CEILING_CANCEL_REASON } from '../../loopGuard/constants.ts';
 import type { DshCacheStep } from '../historyCache.ts';
@@ -549,6 +549,28 @@ describe('DshLiveEvents — usage (decision 099 rule 1)', () => {
     });
   });
 
+  it('[PILAB-R2-USAGE] a provider that reports no cache counts is "not reported", not a 0% hit rate', () => {
+    const h = harness({
+      usage: {
+        tokenUsage: { uncachedInputTokens: 100, outputTokens: 20 },
+        contextPressure: { pressureTokens: 120, contextWindow: 1000 },
+      },
+      steps: 1,
+    });
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+      usage: { inputTokens: 100, outputTokens: 20 },
+    });
+    const settled = readPiUsagePayload(h.of('usage.updated').at(-1)?.payload);
+    expect(settled).toMatchObject({ input: 100, cacheRead: 0, cacheUnreported: true });
+    expect(deriveCacheHitRate(settled)).toBeNull();
+    // A provider that reported a cache miss still reads as one.
+    expect(deriveCacheHitRate({ ...settled!, cacheUnreported: undefined })).toBe(0);
+  });
+
   it('[D1-USAGE-3] adds the requests outside the loop to the total, counted apart (decision 193 §10)', () => {
     const tokenUsage = {
       uncachedInputTokens: 100,
@@ -739,6 +761,8 @@ describe('DshLiveEvents — usage (decision 099 rule 1)', () => {
       cacheWrite: 0,
       totalTokens: 3,
       costUsd: 0,
+      // PiLab R2: no cache fields at all — the zeros above are not a measured miss.
+      cacheUnreported: true,
     });
   });
 

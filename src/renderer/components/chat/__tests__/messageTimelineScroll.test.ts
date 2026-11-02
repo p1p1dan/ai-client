@@ -62,6 +62,40 @@ describe('nextFollowState (F10-b — the follower step function)', () => {
     ).toBe(true);
   });
 
+  it('[PILAB-R1-11.1] a small move up at stable geometry disarms (↑ key, scrollbar, touch)', () => {
+    // One ↑ step is ~40px: still inside the bottom band, so without rule 0 the
+    // next streamed chunk pulled the reader straight back.
+    expect(
+      nextFollowState({
+        scrollTop: 460,
+        scrollHeight: 1000,
+        clientHeight: 500,
+        prevScrollHeight: 1000,
+        prevScrollTop: 500,
+        prevClientHeight: 500,
+        following: true,
+      })
+    ).toBe(false);
+  });
+
+  it('[PILAB-R1-11.1] a clamp (height or viewport changed) is not a move up', () => {
+    const base = { scrollTop: 460, clientHeight: 500, prevScrollTop: 500, following: true };
+    // content shrank by 40 → browser clamped scrollTop
+    expect(
+      nextFollowState({ ...base, scrollHeight: 960, prevScrollHeight: 1000, prevClientHeight: 500 })
+    ).toBe(true);
+    // the viewport grew by 40 (composer shrank) → clamped
+    expect(
+      nextFollowState({
+        ...base,
+        scrollHeight: 1000,
+        prevScrollHeight: 1000,
+        clientHeight: 540,
+        prevClientHeight: 500,
+      })
+    ).toBe(true);
+  });
+
   it('arriving at the bottom with stable height is user intent: arm', () => {
     expect(
       nextFollowState({

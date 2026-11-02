@@ -65,8 +65,9 @@ export function reviewPatchLines(patch: string): ReviewPatchLine[] {
  * (`buildDiffView`), so an entry becomes `ToolDiffLineRow`s. A preview passes
  * its rows through untouched — they carry the line numbers it has, which the
  * old text round-trip dropped — and a recorded patch keeps its hunk numbers;
- * hunk headers and 「No newline」 markers are not rows (a hunk break shows as
- * the view's own gap).
+ * hunk headers and 「No newline」 markers are not rows: a hunk break marks the
+ * next row `hunkStart` (the view's own gap — a DSH patch's bare `@@` has no
+ * numbers to show it by), and the marker sets `noFinalNewline` on its line.
  */
 export function reviewEntryRows(entry: {
   patch?: string;
@@ -74,14 +75,24 @@ export function reviewEntryRows(entry: {
 }): ToolDiffLineRow[] {
   if (entry.patch === undefined) return [...(entry.preview?.rows ?? [])];
   const rows: ToolDiffLineRow[] = [];
+  let hunkStart = false;
   for (const line of reviewPatchLines(entry.patch)) {
-    if (line.kind === 'meta') continue;
+    if (line.kind === 'meta') {
+      if (line.text.startsWith('@@')) hunkStart = rows.length > 0;
+      else if (line.text.startsWith('\\ No newline')) {
+        const last = rows.at(-1);
+        if (last) last.noFinalNewline = true;
+      }
+      continue;
+    }
     rows.push({
       kind: line.kind === 'context' ? 'same' : line.kind,
       text: line.text.slice(1),
       ...(line.oldLine !== undefined ? { oldLine: line.oldLine } : {}),
       ...(line.newLine !== undefined ? { newLine: line.newLine } : {}),
+      ...(hunkStart ? { hunkStart: true as const } : {}),
     });
+    hunkStart = false;
   }
   return rows;
 }

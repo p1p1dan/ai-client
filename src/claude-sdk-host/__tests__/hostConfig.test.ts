@@ -74,6 +74,32 @@ describe('buildHostConfig', () => {
     expect(windowed.cliEnv).not.toHaveProperty('AICLIENT_CLAUDE_SDK_MODEL_WINDOWS');
   });
 
+  it('[PILAB-R2-THINK] tells the CLI which models have no adaptive thinking or effort, pinned', () => {
+    expect(config.cliEnv).not.toHaveProperty('CLAUDE_CODE_MODEL_CAPABILITIES');
+    const styled = buildHostConfig({
+      inherited: {
+        AICLIENT_CLAUDE_SDK_MODEL_THINKING: JSON.stringify({
+          plain: 'none',
+          older: 'budget',
+          'claude-opus-5-5': 'adaptive',
+        }),
+      },
+      configDir: 'D:stateclaude-sdk-home',
+      settingSources: ['project'],
+      apiKey: KEY,
+      proxy: { url: 'http://127.0.0.1:50123', token: TOKEN },
+    }).config;
+    expect(styled.modelThinking).toEqual({
+      plain: 'none',
+      older: 'budget',
+      'claude-opus-5-5': 'adaptive',
+    });
+    const capabilities = 'plain=-effort,-adaptive_thinking;older=-effort,-adaptive_thinking';
+    expect(styled.cliEnv.CLAUDE_CODE_MODEL_CAPABILITIES).toBe(capabilities);
+    expect(styled.settingsEnv.CLAUDE_CODE_MODEL_CAPABILITIES).toBe(capabilities);
+    expect(styled.cliEnv).not.toHaveProperty('AICLIENT_CLAUDE_SDK_MODEL_THINKING');
+  });
+
   it('hands the CLI Main’s auto-compact percentage, 60 when absent or malformed (user 2026-10-23)', () => {
     expect(config.cliEnv.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBe('60');
     expect(config.settingsEnv.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBe('60');

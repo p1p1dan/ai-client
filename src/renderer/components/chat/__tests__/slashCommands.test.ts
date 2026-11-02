@@ -10,6 +10,7 @@ import {
   resolveSlashAction,
   type SlashCatalogItem,
   typedSlashCommand,
+  unknownSlashCommand,
 } from '../slashCommands.ts';
 
 /**
@@ -220,5 +221,25 @@ describe('typedSlashCommand', () => {
     expect(typedSlashCommand('/forked', catalog)).toBeNull();
     expect(typedSlashCommand(' /fork', catalog)).toBeNull();
     expect(typedSlashCommand('see /fork', catalog)).toBeNull();
+  });
+});
+
+describe('[PILAB-R2-UNKNOWN-CMD] unknownSlashCommand', () => {
+  const catalog: SlashCatalogItem[] = [
+    { name: 'compact', description: '', source: 'builtin' },
+    { name: 'review', description: '', source: 'command' },
+    { name: 'skill:pdf', description: '', source: 'skill' },
+  ];
+  it('names a slip the catalog does not have', () => {
+    expect(unknownSlashCommand('/reveiw look at this', catalog)).toBe('reveiw');
+    expect(unknownSlashCommand('  /xyz', catalog)).toBe('xyz');
+  });
+  it('leaves known commands, paths and prose alone', () => {
+    expect(unknownSlashCommand('/review', catalog)).toBe(null);
+    expect(unknownSlashCommand('/skill:pdf a.pdf', catalog)).toBe(null);
+    expect(unknownSlashCommand('/home/pi/a.txt 这个文件是什么', catalog)).toBe(null);
+    expect(unknownSlashCommand('/', catalog)).toBe(null);
+    expect(unknownSlashCommand('/123', catalog)).toBe(null);
+    expect(unknownSlashCommand('see /xyz', catalog)).toBe(null);
   });
 });

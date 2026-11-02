@@ -59,6 +59,8 @@ beforeEach(() => {
   } as unknown as typeof globalThis.window;
   useChatSessionsStore.setState({
     runtimeReady: false,
+    // Each case starts its seqs at 1 again: the transport cursor must not carry over.
+    runtimeEventCursors: {},
     messages: {},
     sessions: [
       {

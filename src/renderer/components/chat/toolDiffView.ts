@@ -25,6 +25,7 @@ export function diffHasLineNumbers(rows: readonly ToolDiffLineRow[]): boolean {
 
 /** The line after `row` on each side, to tell one hunk from the next. */
 function continues(previous: ToolDiffLineRow, row: ToolDiffLineRow): boolean {
+  if (row.hunkStart) return false;
   const oldNext =
     previous.oldLine !== undefined
       ? previous.oldLine + (previous.kind === 'add' ? 0 : 1)
@@ -93,4 +94,46 @@ export function buildDiffView(
     index = end;
   }
   return items;
+}
+
+/** A split diff's line: the old side on the left, the new on the right; either may be empty. */
+export type SplitDiffItem =
+  | Exclude<DiffViewItem, { kind: 'row' }>
+  | { kind: 'pair'; key: string; left?: ToolDiffLineRow; right?: ToolDiffLineRow };
+
+/**
+ * PiLab R2 (FR-07.3): `buildDiffView`'s items laid side by side. An unchanged
+ * row sits on both sides; a run of deletions pairs, line by line, with the
+ * additions right after it (a replacement reads across), and the longer run
+ * leaves the other side blank. Folds and gaps span both sides.
+ */
+export function splitDiffItems(items: readonly DiffViewItem[]): SplitDiffItem[] {
+  const out: SplitDiffItem[] = [];
+  let dels: Extract<DiffViewItem, { kind: 'row' }>[] = [];
+  let adds: Extract<DiffViewItem, { kind: 'row' }>[] = [];
+  const flush = () => {
+    for (let i = 0; i < Math.max(dels.length, adds.length); i += 1) {
+      const del = dels[i];
+      const add = adds[i];
+      out.push({ kind: 'pair', key: `pair-${(del ?? add)?.key}`, left: del?.row, right: add?.row });
+    }
+    dels = [];
+    adds = [];
+  };
+  for (const item of items) {
+    if (item.kind !== 'row') {
+      flush();
+      out.push(item);
+    } else if (item.row.kind === 'del') {
+      if (adds.length > 0) flush();
+      dels.push(item);
+    } else if (item.row.kind === 'add') {
+      adds.push(item);
+    } else {
+      flush();
+      out.push({ kind: 'pair', key: item.key, left: item.row, right: item.row });
+    }
+  }
+  flush();
+  return out;
 }

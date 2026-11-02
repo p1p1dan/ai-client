@@ -190,6 +190,12 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
       'Decision 203: a subagent’s conversation scrolls inside a ScrollArea capped at max-h-[70vh] with px-6 pb-6 by hand, as AnnouncementDialog does — DialogPanel’s full-growth ScrollArea cannot be capped.',
   },
   {
+    file: 'components/chat/ToolRows.tsx',
+    category: 'manual',
+    reason:
+      'PiLab R2 「查看全部」: a tool’s whole output scrolls inside a ScrollArea capped at max-h-[70vh] with px-6 pb-6 by hand, as SubagentConversationDialog does — DialogPanel’s full-growth ScrollArea cannot be capped.',
+  },
+  {
     file: 'components/chat/SentAttachmentChip.tsx',
     category: 'manual',
     reason:

@@ -12,11 +12,11 @@ import { useSyncExternalStore } from 'react';
  * four are not readable from the `theme` field alone — `system` needs the media
  * query, `sync-terminal` needs `isTerminalThemeDark(terminalTheme)`.
  *
- * Re-deriving that switch in a consumer is how it drifts, and there is already
- * a live example: `ui/code-block.tsx:92-99` maps `sync-terminal` to dark
- * UNCONDITIONALLY, so a light terminal theme gives that component a dark code
- * block on a light UI. Reading the applied class cannot drift, because it is
- * the same bit the rest of the stylesheet cascades off.
+ * Re-deriving that switch in a consumer is how it drifts: `ui/code-block.tsx`
+ * once mapped `sync-terminal` to dark unconditionally, so a light terminal
+ * theme gave it a dark code block on a light UI. Reading the applied class
+ * cannot drift, because it is the same bit the rest of the stylesheet cascades
+ * off.
  *
  * ## Why `useSyncExternalStore`
  *

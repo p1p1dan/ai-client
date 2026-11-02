@@ -108,3 +108,16 @@ describe('normalizeDroppedRepositoryPath', () => {
     expect(normalizeDroppedRepositoryPath(undefined)).toBeNull();
   });
 });
+
+describe('[PILAB-R2-DROP] a surface that takes the file itself', () => {
+  it('is left alone by the window-wide add-repository drop', async () => {
+    const { isOwnDropTarget } = await import('../fileDragDrop');
+    const inside = {
+      closest: (selector: string) => (selector === '[data-file-drop-target]' ? {} : null),
+    };
+    const outside = { closest: () => null };
+    expect(isOwnDropTarget(inside as unknown as EventTarget)).toBe(true);
+    expect(isOwnDropTarget(outside as unknown as EventTarget)).toBe(false);
+    expect(isOwnDropTarget(null)).toBe(false);
+  });
+});

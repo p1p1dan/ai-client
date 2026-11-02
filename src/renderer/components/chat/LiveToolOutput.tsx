@@ -12,7 +12,16 @@ import { useI18n } from '@/i18n';
 import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
 import { kilobytesLabel, startAtLine } from './toolOutputHead';
 
-export function LiveToolOutput({ toolCallId }: { toolCallId: string }) {
+/** `compact`: the last few lines under a running step whose body is closed (PiLab R1). */
+const COMPACT_LINES = 3;
+
+export function LiveToolOutput({
+  toolCallId,
+  compact = false,
+}: {
+  toolCallId: string;
+  compact?: boolean;
+}) {
   const { t } = useI18n();
   const output = useToolLiveOutputStore((state) => state.byCall[toolCallId]);
   const scroller = useRef<HTMLPreElement | null>(null);
@@ -31,6 +40,21 @@ export function LiveToolOutput({ toolCallId }: { toolCallId: string }) {
   }, [text]);
 
   if (!output || !text) return null;
+  if (compact) {
+    const tail = text
+      .split(/\r\n|\n|\r/)
+      .filter((line) => line.trim().length > 0)
+      .slice(-COMPACT_LINES)
+      .join('\n');
+    return (
+      <pre
+        data-testid="live-tool-tail"
+        className="m-0 select-text whitespace-pre-wrap break-all pl-5 text-code leading-[1.5] text-muted-foreground"
+      >
+        {tail}
+      </pre>
+    );
+  }
   return (
     <div className="ml-0.5 border-l border-border pl-3.5" data-testid="live-tool-output">
       <p className="pt-1 text-small text-muted-foreground tabular-nums">
@@ -44,7 +68,7 @@ export function LiveToolOutput({ toolCallId }: { toolCallId: string }) {
           const element = event.currentTarget;
           following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 8;
         }}
-        className="m-0 max-h-40 select-text overflow-auto whitespace-pre-wrap break-words pb-2 text-code text-muted-foreground leading-[1.55]"
+        className="m-0 max-h-40 select-text overflow-auto overscroll-contain whitespace-pre-wrap break-words pb-2 text-code text-muted-foreground leading-[1.55]"
       >
         {text}
       </pre>

@@ -25,6 +25,7 @@ import {
 import {
   createContext,
   type ReactNode,
+  type RefObject,
   useContext,
   useLayoutEffect,
   useMemo,
@@ -34,13 +35,23 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Dialog,
+  DialogDescription,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Ident } from '@/components/ui/ident';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { StatusIcon } from '@/components/ui/status-icon';
 import { toastManager } from '@/components/ui/toast';
+import { useElementWidth } from '@/hooks/useElementWidth';
 import { useI18n } from '@/i18n';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { diffTooNarrowToSplit, effectiveDiffLayout, useDiffLayoutStore } from '@/stores/diffLayout';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
@@ -56,6 +67,12 @@ import {
   toolRowIconClass,
   turnProcessToneClass,
 } from './chatTimelineLayout';
+import {
+  DiffLayoutToggle,
+  lineNumberWidthClass,
+  NoFinalNewlineNote,
+  SplitDiffBody,
+} from './DiffLayout';
 import { HitListPopover } from './HitListPopover';
 import { LiveToolOutput } from './LiveToolOutput';
 import {
@@ -88,9 +105,10 @@ import {
   withStoppedOutput,
 } from './toolCard';
 import type { ToolDiff } from './toolDiff';
-import { buildDiffView, diffHasLineNumbers } from './toolDiffView';
+import { buildDiffView, diffHasLineNumbers, splitDiffItems } from './toolDiffView';
 import { stoppedToolOutput } from './toolLiveOutputModel';
 import { kilobytesLabel } from './toolOutputHead';
+import type { StepResultLine, StepRowView } from './turnSteps';
 import { formatWorkedForDuration } from './turnTiming';
 
 /**
@@ -302,7 +320,6 @@ function RefToolRowArg({
 }
 
 function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) {
-  const showDiff = useContext(ToolDiffVisibility);
   const { t } = useI18n();
   // P1-7e (problem 20): a call Stop cut short shows what it printed before the
   // stop, while this window still holds its last live tail.
@@ -317,6 +334,12 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
     sessionId ? state.sessions.find((item) => item.id === sessionId)?.engine : undefined
   );
   const backgroundable = canMoveToBackground(view, engine);
+  // Where diffs are hidden (the main timeline shows them in the review pane), a
+  // row whose only body is its diff has nothing to open. It used to toggle open
+  // onto nothing — a refused or stopped Edit (PiLab R2).
+  const showDiff = useContext(ToolDiffVisibility);
+  const diffOnly = Boolean(view.diff) && !view.body && !view.input && !view.todos;
+  const expandable = view.expandable && (showDiff || !diffOnly);
   // The dim rung of the 2026-09-18 reading ladder (see
   // `chatTimelineLayout.ts`). It used to be `text-muted-foreground`, which is
   // the same tier the work-group head above these rows now uses — so the head
@@ -442,7 +465,15 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
             timeoutMs={view.runningTimeoutMs}
           />
         )}
-      {showDiff && view.diff && (
+      {!view.diff && view.changeStat && (
+        <span data-slot="tool-row-change" className="shrink-0 tabular-nums">
+          <span className="text-success">+{view.changeStat.added}</span>{' '}
+          <span className="text-destructive">−{view.changeStat.removed}</span>
+        </span>
+      )}
+      {/* PiLab R1 (2026-10-30): an edit's +/− counts are part of the step's
+          one line in every surface; only the diff BODY follows the setting. */}
+      {view.diff && (
         <span className="shrink-0 tabular-nums">
           {/* Decision 034: the ordinary settled edit prints the NUMBERS only.
               The label 「已修改」 restated the row's own verb one span to the
@@ -475,8 +506,22 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
   // expand/collapse button) was the shape the user asked to remove. What
   // survives from it is the blank-line filtering, now inside `ToolRowBody`'s
   // 'thinking' case.
-  const row = !view.expandable ? (
-    <div className={rowClass}>{rowContent}</div>
+  // PiLab R1 (2026-10-30): what came of the step, one line under it
+  // (`turnSteps.ts`), and a running command's last lines while its body is closed.
+  const resultLine = (view as StepRowView).resultLine;
+  const liveTail =
+    view.running && view.iconKind === 'terminal' && view.toolCallId ? view.toolCallId : null;
+  const after = (open: boolean) => (
+    <>
+      {resultLine && <StepResult line={resultLine} />}
+      {liveTail && !open && <LiveToolOutput toolCallId={liveTail} compact />}
+    </>
+  );
+  const row = !expandable ? (
+    <div>
+      <div className={rowClass}>{rowContent}</div>
+      {after(false)}
+    </div>
   ) : (
     <ToolRowCollapsible
       // The seed is re-taken when a row crosses from live to settled — see the
@@ -487,6 +532,7 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
       rowClass={rowClass}
       onOpenFile={onOpenFile}
       sessionId={sessionId}
+      after={after}
     >
       {rowContent}
     </ToolRowCollapsible>
@@ -498,6 +544,36 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
     <div className="flex min-w-0 items-start gap-1">
       <div className="min-w-0 flex-1">{row}</div>
       <MoveToBackgroundButton sessionId={sessionId} toolCallId={view.toolCallId} />
+    </div>
+  );
+}
+
+/** A step `turnSteps.ts` merged from several calls. */
+function isMergedStep(view: ToolRowView): boolean {
+  return view.key.startsWith('lookup:') || view.key.startsWith('edits:');
+}
+
+/** `⎿ 38 passed · 12 行` — the one line under a step (`deriveStepResult`). */
+function StepResult({ line }: { line: StepResultLine }) {
+  return (
+    <div
+      data-slot="step-result"
+      data-tone={line.tone}
+      className={cn(
+        'flex min-w-0 gap-1.5 pl-5 text-chat-process leading-normal',
+        line.tone === 'bad'
+          ? 'text-destructive'
+          : line.tone === 'unknown'
+            ? 'text-warning'
+            : 'text-muted-foreground'
+      )}
+    >
+      <span className="shrink-0 text-foreground-faint" aria-hidden>
+        ⎿
+      </span>
+      <span className="min-w-0 truncate" title={line.text}>
+        {line.text}
+      </span>
     </div>
   );
 }
@@ -586,12 +662,15 @@ function ToolRowCollapsible({
   rowClass,
   onOpenFile,
   sessionId,
+  after,
   children,
 }: {
   view: ToolRowView;
   rowClass: string;
   onOpenFile?: (target: FileLinkTarget) => void;
   sessionId?: string;
+  /** Under the trigger, above the body: the step's result line and live tail. */
+  after?: (open: boolean) => ReactNode;
   children: ReactNode;
 }) {
   const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
@@ -636,6 +715,7 @@ function ToolRowCollapsible({
             seeing both in `docs/examples/process-rows-zcode-style.html`. */}
         {children}
       </CollapsibleTrigger>
+      {after?.(open)}
       <CollapsibleContent className={TOOL_ROW_PANEL_CLASS}>
         <ToolRowBody view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
       </CollapsibleContent>
@@ -891,8 +971,10 @@ function ToolRowPermission({ view }: { view: ToolRowView }) {
   const { t } = useI18n();
   // Compared against the KEY, not the rendered word — the check has to keep
   // working in a locale where the row reads 「已允许」.
-  if (!view.permissionVerb || (view.permissionAutoNote && view.permissionVerb === 'Allowed'))
-    return null;
+  // PiLab R1 (2026-10-30): a plain 「已允许」 is what the user just clicked —
+  // the step's line carries what the call DID, not the approval. A denial, an
+  // automatic answer or a session grant still says so.
+  if (!view.permissionVerb || view.permissionVerb === 'Allowed') return null;
   return (
     <>
       <span className={cn(toolRowPermissionClass(), failedReasonClass(view))}>
@@ -1020,7 +1102,7 @@ const SUBAGENT_FOLLOW_SLACK_PX = 24;
  * is the only `body: 'detail'` producer in the app — the subagent panel — so
  * the bound belongs to it rather than to a generic row.
  */
-function SubagentDetail({ children }: { children: ReactNode }) {
+function SubagentDetail({ children, nested = false }: { children: ReactNode; nested?: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const following = useRef(true);
 
@@ -1033,7 +1115,11 @@ function SubagentDetail({ children }: { children: ReactNode }) {
     <div
       ref={ref}
       data-slot="subagent-detail"
-      className="mt-1 flex max-h-72 flex-col gap-1 overflow-y-auto"
+      className={cn(
+        'mt-1 flex max-h-72 flex-col gap-1 overflow-y-auto overscroll-contain',
+        // A merged step's calls (`turnSteps.ts`) read as ITS detail, not as siblings.
+        nested && 'ml-0.5 border-l border-border-soft pl-3.5'
+      )}
       onScroll={(event) => {
         const node = event.currentTarget;
         following.current =
@@ -1069,14 +1155,84 @@ function ToolRowBody({
   // rows: prompt JSON scrolling apart from the report). Input-only and
   // output-only rows keep their original single-window shapes.
   if (view.input && view.body === 'output') {
-    return (
-      <div className="ml-0.5 border-l border-border-soft pl-3.5">
-        <div className={cn('overflow-auto', view.outputMaxHeightClass)}>
+    return <ToolOutputBody view={view} />;
+  }
+  return (
+    <>
+      {showDiff && view.diff && (
+        <ToolRowDiffSegment
+          diff={view.diff}
+          failed={view.failed}
+          previewOnly={view.running || Boolean(view.outcome)}
+        />
+      )}
+      {view.input && (
+        <ToolRowInputSegment input={view.input} maxHeightClass={view.inputMaxHeightClass} />
+      )}
+      {/* dsh-rebase P1-7b: a running command's live tail (`tool.output`),
+          only while it runs; the settled output below replaces it. */}
+      {view.running && view.toolCallId && <LiveToolOutput toolCallId={view.toolCallId} />}
+      <ToolRowOutputSegment view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
+    </>
+  );
+}
+
+/** Lines in a tool output, a trailing newline not counting as one more. */
+export function toolOutputLineCount(output: string): number {
+  const text = output.replace(/\n+$/, '');
+  return text === '' ? 0 : text.split('\n').length;
+}
+
+/**
+ * A settled call's output (PiLab R2, FR-05.3; user, 2026-11-02, preview
+ * `docs/design/2026-11-02-tool-output-copy-view-preview.html`). The body keeps
+ * its height cap; a copy button — shown while the pointer is over the output,
+ * or a key focuses it — copies all of it, not the part in view. Once the
+ * output is taller than the cap, a line under it gives the line count and
+ * 「查看全部」, which opens the whole of it in a dialog. Only settled calls reach this
+ * body (`showOutputBody` excludes running ones), so nothing is copied half-way.
+ * When the engine kept only the end, the copy is what there is, and the
+ * button's name and the dialog say the start is missing.
+ */
+function ToolOutputBody({ view }: { view: ToolRowView }) {
+  const { t } = useI18n();
+  const output = view.output ?? '';
+  // The element that scrolls: the output's own <pre>, or — when the row shows
+  // its input too (round-10 inspection ⑤) — the one window both share.
+  const scrollRef = useRef<HTMLElement | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  const viewAllRef = useRef<HTMLButtonElement | null>(null);
+  // Measured after layout and again on resize: the cap is a viewport fraction.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure when the text changes
+  useLayoutEffect(() => {
+    const box = scrollRef.current;
+    if (!box) return;
+    const measure = () => setOverflowing(box.scrollHeight > box.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [output]);
+  const count = toolOutputLineCount(output);
+  const copyLabel = view.outputHeadOmitted
+    ? t('Copy all output (start omitted)')
+    : t('Copy all output');
+  return (
+    <div className="group/output relative ml-0.5 border-l border-border-soft pl-3.5">
+      {view.input ? (
+        <div
+          ref={(node) => {
+            scrollRef.current = node;
+          }}
+          className={cn('overflow-auto overscroll-contain', 'pr-8', view.outputMaxHeightClass)}
+        >
           <pre className="m-0 select-text whitespace-pre-wrap pt-1 font-mono text-code leading-[1.55] text-muted-foreground">
             {view.input}
           </pre>
           {/* P1-7e (problem 21): when the output lost its start, the rule
-              between input and output sits above the note that says so. */}
+            between input and output sits above the note that says so. */}
           <OutputHeadNote
             omitted={view.outputHeadOmitted}
             className="mt-1 border-t border-border-soft pt-2"
@@ -1090,22 +1246,114 @@ function ToolRowBody({
             {view.output}
           </pre>
         </div>
+      ) : (
+        <>
+          <OutputHeadNote omitted={view.outputHeadOmitted} className="pt-1" />
+          <pre
+            ref={(node) => {
+              scrollRef.current = node;
+            }}
+            className={cn(
+              'm-0 select-text overflow-auto overscroll-contain whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
+              // Room for the copy button, which sits over the top-right corner.
+              'pr-8',
+              view.outputMaxHeightClass
+            )}
+          >
+            {output}
+          </pre>
+        </>
+      )}
+      <div
+        data-slot="tool-output-copy"
+        className="absolute top-0.5 right-0 rounded-sm bg-background opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/output:opacity-100"
+      >
+        <CopyIconButton text={output} label={copyLabel} copiedLabel={t('Copied')} />
       </div>
-    );
-  }
+      {/* User, 2026-11-02: only under an output taller than its box — a short
+          one shows all its lines, and the row head already counts them. */}
+      {overflowing && count > 0 && (
+        <div className="flex items-center gap-2 pb-1.5 text-small text-foreground-faint tabular-nums">
+          <span>{t('{{count}} lines', { count })}</span>
+          <button
+            ref={viewAllRef}
+            type="button"
+            className="rounded-xs text-muted-foreground underline underline-offset-2 transition-colors duration-150 hover:text-foreground focus-ring"
+            onClick={() => setViewing(true)}
+          >
+            {t('View all')}
+          </button>
+        </div>
+      )}
+      {viewing && (
+        <ToolOutputDialog
+          view={view}
+          output={output}
+          copyLabel={copyLabel}
+          returnFocus={viewAllRef}
+          onClose={() => setViewing(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** 「查看全部」: the whole output, numbered, in its own scroll. */
+function ToolOutputDialog({
+  view,
+  output,
+  copyLabel,
+  returnFocus,
+  onClose,
+}: {
+  view: ToolRowView;
+  output: string;
+  copyLabel: string;
+  /** Where focus goes back to on close: the 「查看全部」 that opened it. */
+  returnFocus: RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const lines = useMemo(() => output.replace(/\n+$/, '').split('\n'), [output]);
   return (
-    <>
-      {showDiff && view.diff && (
-        <ToolRowDiffSegment diff={view.diff} failed={view.failed} running={view.running} />
-      )}
-      {view.input && (
-        <ToolRowInputSegment input={view.input} maxHeightClass={view.inputMaxHeightClass} />
-      )}
-      {/* dsh-rebase P1-7b: a running command's live tail (`tool.output`),
-          only while it runs; the settled output below replaces it. */}
-      {view.running && view.toolCallId && <LiveToolOutput toolCallId={view.toolCallId} />}
-      <ToolRowOutputSegment view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
-    </>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogPopup className="sm:max-w-4xl" finalFocus={returnFocus}>
+        <DialogHeader>
+          <DialogTitle className="flex min-w-0 items-center gap-2 pr-16">
+            <span className="shrink-0">{view.title ?? t(view.verb)}</span>
+            {view.title === undefined && view.arg && (
+              <Ident className="min-w-0 truncate font-normal text-muted-foreground">
+                {view.arg}
+              </Ident>
+            )}
+          </DialogTitle>
+          <DialogDescription className="tabular-nums">
+            {t('{{count}} lines', { count: lines.length })}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="absolute end-11 top-3.5">
+          <CopyIconButton text={output} label={copyLabel} copiedLabel={t('Copied')} />
+        </div>
+        {/* As in SubagentConversationDialog: `DialogPanel` cannot cap its height. */}
+        <ScrollArea className="max-h-[70vh] px-6 pb-6">
+          <OutputHeadNote omitted={view.outputHeadOmitted} className="pb-1.5" />
+          <div data-slot="tool-output-all" className="font-mono text-code leading-[1.6]">
+            {lines.map((line, index) => (
+              // Positional: two identical lines are ordinary output.
+              // biome-ignore lint/suspicious/noArrayIndexKey: the position is the identity
+              <div key={index} className="flex">
+                <span className="w-12 shrink-0 select-none pr-3 text-right text-foreground-faint tabular-nums">
+                  {index + 1}
+                </span>
+                <span className="min-w-0 flex-1 select-text whitespace-pre-wrap break-all pr-3 text-foreground">
+                  {line}
+                </span>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </DialogPopup>
+    </Dialog>
   );
 }
 
@@ -1153,11 +1401,17 @@ function OutputHeadNote({
 function ToolRowDiffSegment({
   diff,
   failed,
-  running,
+  previewOnly,
 }: {
   diff: ToolDiff;
   failed: boolean;
-  running: boolean;
+  /**
+   * Still running, or never applied (refused, not started, stopped, unknown):
+   * the diff is only what the arguments ask for. Such a call is not `failed`,
+   * and used to fall through to 「修改成功」 (PiLab R2, DEF-030). Same word as
+   * the row's own label.
+   */
+  previewOnly: boolean;
 }) {
   const { t } = useI18n();
   // Issue #26 item 2: which folded runs the reader opened. Opening one grows
@@ -1166,12 +1420,23 @@ function ToolRowDiffSegment({
   const markUserToggle = useUserDisclosureReport(openFolds.size > 0);
   const items = useMemo(() => buildDiffView(diff.rows, openFolds), [diff.rows, openFolds]);
   const numbered = diffHasLineNumbers(diff.rows);
+  // PiLab R2 (FR-07.3): the shared 「上下 / 并排」 choice, unified while too narrow.
+  const layout = useDiffLayoutStore((state) => state.layout);
+  const [frameRef, frameWidth] = useElementWidth<HTMLDivElement>();
+  const shownLayout = effectiveDiffLayout(layout, frameWidth);
+  const openFold = (key: string) => {
+    markUserToggle();
+    setOpenFolds((previous) => new Set(previous).add(key));
+  };
   return (
-    <div className="mt-1 overflow-hidden rounded-lg border border-border-soft bg-surface-2">
+    <div
+      ref={frameRef}
+      className="mt-1 overflow-hidden rounded-lg border border-border-soft bg-surface-2"
+    >
       <div className="flex h-8 items-center gap-2 border-b border-border-soft px-3 text-small text-muted-foreground tabular-nums">
         <span className="min-w-0 truncate">
           {t(
-            running
+            previewOnly
               ? 'Modification preview'
               : failed
                 ? 'Failed — preview only; application unconfirmed'
@@ -1184,82 +1449,93 @@ function ToolRowDiffSegment({
         </span>
         <span className="text-success">+{diff.added}</span>
         <span className="text-destructive">-{diff.removed}</span>
+        <span className="ml-auto">
+          <DiffLayoutToggle narrow={diffTooNarrowToSplit(frameWidth)} />
+        </span>
       </div>
-      <div className="max-h-72 overflow-auto py-1 font-mono text-code leading-[1.55]">
-        {items.map((item) => {
-          if (item.kind === 'fold') {
-            return (
-              // Issue #26 item 2: an unchanged run, folded; a click opens it in place.
-              <button
-                key={item.key}
-                type="button"
-                data-slot="diff-fold"
-                className="flex w-full items-center gap-2 px-3 py-0.5 text-left font-sans text-small text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
-                onClick={() => {
-                  markUserToggle();
-                  setOpenFolds((previous) => new Set(previous).add(item.key));
-                }}
-              >
-                <ChevronsUpDown className="size-3.5 shrink-0" aria-hidden />
-                {t('{{count}} unchanged lines', { count: item.count })}
-              </button>
-            );
-          }
-          if (item.kind === 'gap') {
+      <div className="max-h-72 overflow-auto overscroll-contain py-1 font-mono text-code leading-[1.55]">
+        {shownLayout === 'split' ? (
+          <SplitDiffBody
+            items={splitDiffItems(items)}
+            numbered={numbered}
+            numberWidthClass={lineNumberWidthClass(diff.rows)}
+            onOpenFold={openFold}
+            insetClass="px-3"
+          />
+        ) : (
+          items.map((item) => {
+            if (item.kind === 'fold') {
+              return (
+                // Issue #26 item 2: an unchanged run, folded; a click opens it in place.
+                <button
+                  key={item.key}
+                  type="button"
+                  data-slot="diff-fold"
+                  className="flex w-full items-center gap-2 px-3 py-0.5 text-left font-sans text-small text-muted-foreground transition-colors duration-150 hover:bg-fill-ghost-hover hover:text-foreground focus-ring"
+                  onClick={() => openFold(item.key)}
+                >
+                  <ChevronsUpDown className="size-3.5 shrink-0" aria-hidden />
+                  {t('{{count}} unchanged lines', { count: item.count })}
+                </button>
+              );
+            }
+            if (item.kind === 'gap') {
+              return (
+                <div
+                  key={item.key}
+                  data-slot="diff-gap"
+                  className="select-none px-3 text-foreground-faint"
+                  aria-hidden
+                >
+                  ⋯
+                </div>
+              );
+            }
+            const { row } = item;
             return (
               <div
+                // Rows are positional and can repeat verbatim (two identical blank
+                // lines are ordinary), so the position IS the identity here.
                 key={item.key}
-                data-slot="diff-gap"
-                className="select-none px-3 text-foreground-faint"
-                aria-hidden
+                className={cn(
+                  'flex',
+                  row.kind === 'add' && 'bg-success/12',
+                  row.kind === 'del' && 'bg-destructive/12'
+                )}
               >
-                ⋯
+                {numbered && (
+                  <>
+                    <span data-slot="diff-old-line" className={DIFF_LINE_NUMBER_CLASS}>
+                      {row.oldLine ?? ''}
+                    </span>
+                    <span data-slot="diff-new-line" className={DIFF_LINE_NUMBER_CLASS}>
+                      {row.newLine ?? ''}
+                    </span>
+                  </>
+                )}
+                <span
+                  className={cn(
+                    'w-6 shrink-0 select-none text-center',
+                    row.kind === 'add' && 'text-success',
+                    row.kind === 'del' && 'text-destructive',
+                    row.kind === 'same' && 'text-muted-foreground/40'
+                  )}
+                >
+                  {row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}
+                </span>
+                <span
+                  className={cn(
+                    'min-w-0 flex-1 select-text whitespace-pre-wrap break-all pr-3 pl-1',
+                    row.kind === 'same' ? 'text-muted-foreground/70' : 'text-foreground'
+                  )}
+                >
+                  {row.text}
+                  {row.noFinalNewline && <NoFinalNewlineNote />}
+                </span>
               </div>
             );
-          }
-          const { row } = item;
-          return (
-            <div
-              // Rows are positional and can repeat verbatim (two identical blank
-              // lines are ordinary), so the position IS the identity here.
-              key={item.key}
-              className={cn(
-                'flex',
-                row.kind === 'add' && 'bg-success/12',
-                row.kind === 'del' && 'bg-destructive/12'
-              )}
-            >
-              {numbered && (
-                <>
-                  <span data-slot="diff-old-line" className={DIFF_LINE_NUMBER_CLASS}>
-                    {row.oldLine ?? ''}
-                  </span>
-                  <span data-slot="diff-new-line" className={DIFF_LINE_NUMBER_CLASS}>
-                    {row.newLine ?? ''}
-                  </span>
-                </>
-              )}
-              <span
-                className={cn(
-                  'w-6 shrink-0 select-none text-center',
-                  row.kind === 'add' && 'text-success',
-                  row.kind === 'del' && 'text-destructive',
-                  row.kind === 'same' && 'text-muted-foreground/40'
-                )}
-              >
-                {row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}
-              </span>
-              <span
-                className={cn(
-                  'min-w-0 flex-1 select-text whitespace-pre-wrap break-all pr-3 pl-1',
-                  row.kind === 'same' ? 'text-muted-foreground/70' : 'text-foreground'
-                )}
-              >
-                {row.text}
-              </span>
-            </div>
-          );
-        })}
+          })
+        )}
       </div>
     </div>
   );
@@ -1281,7 +1557,7 @@ function ToolRowInputSegment({
     <div className="ml-0.5 border-l border-border-soft pl-3.5">
       <pre
         className={cn(
-          'm-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
+          'm-0 select-text overflow-auto overscroll-contain whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
           maxHeightClass
         )}
       >
@@ -1302,22 +1578,10 @@ function ToolRowOutputSegment({
 }) {
   switch (view.body) {
     case 'output':
-      return (
-        <div className="ml-0.5 border-l border-border-soft pl-3.5">
-          <OutputHeadNote omitted={view.outputHeadOmitted} className="pt-1" />
-          <pre
-            className={cn(
-              'm-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
-              view.outputMaxHeightClass
-            )}
-          >
-            {view.output}
-          </pre>
-        </div>
-      );
+      return <ToolOutputBody view={view} />;
     case 'detail':
       return (
-        <SubagentDetail>
+        <SubagentDetail nested={isMergedStep(view)}>
           {(view.detail ?? []).map((row) => (
             <ToolRow
               key={row.key}
@@ -1436,7 +1700,7 @@ function RunningToolClock({ startedAtMs, timeoutMs }: { startedAtMs: number; tim
  * paragraphs does not open gaps — and the page-level full-text flow (decision
  * 038) is kept: no inner height limit.
  */
-function ThinkingBody({ text }: { text: string }) {
+export function ThinkingBody({ text }: { text: string }) {
   const { t } = useI18n();
   const displayText = text
     .split(/\r\n|\n|\r/)

@@ -40,6 +40,14 @@ export interface ToolDiffLineRow extends ToolDiffRow {
   oldLine?: number;
   /** Line in the new file (`same` / `add`). */
   newLine?: number;
+  /**
+   * PiLab R2 (FR-07.4): the first row of a hunk that is a separate region of
+   * the file. A DSH patch's bare `@@` and a multi-edit's pairs carry no line
+   * numbers, so this is the only way the view knows to put 「⋯」 between them.
+   */
+  hunkStart?: true;
+  /** PiLab R2 (FR-07.5): this line has no newline after it (`\ No newline at end of file`). */
+  noFinalNewline?: true;
 }
 
 export interface ToolDiff {
@@ -146,11 +154,13 @@ export function deriveToolDiff(run: {
     if (patch) {
       const rows: ToolDiffLineRow[] = [];
       let inHunk = false;
+      let hunkStart = false;
       let oldLine = 0;
       let newLine = 0;
       for (const line of patch.split('\n')) {
         if (line.startsWith('@@')) {
           inHunk = true;
+          hunkStart = rows.length > 0;
           const header = HUNK_HEADER.exec(line);
           oldLine = header ? Number(header[1]) : 0;
           newLine = header ? Number(header[2]) : 0;
@@ -158,6 +168,11 @@ export function deriveToolDiff(run: {
         }
         if (line.startsWith('diff ')) {
           inHunk = false;
+          continue;
+        }
+        if (inHunk && line.startsWith('\\ No newline')) {
+          const last = rows.at(-1);
+          if (last) last.noFinalNewline = true;
           continue;
         }
         if (!inHunk || !/^[ +-]/.test(line)) continue;
@@ -169,7 +184,9 @@ export function deriveToolDiff(run: {
           text: line.slice(1),
           ...(numbered && kind !== 'add' ? { oldLine } : {}),
           ...(numbered && kind !== 'del' ? { newLine } : {}),
+          ...(hunkStart ? { hunkStart: true as const } : {}),
         });
+        hunkStart = false;
         if (kind !== 'add') oldLine += oldLine > 0 ? 1 : 0;
         if (kind !== 'del') newLine += newLine > 0 ? 1 : 0;
       }
@@ -178,9 +195,14 @@ export function deriveToolDiff(run: {
     const pairs = editPairs(rec);
     if (pairs.length === 0) return null;
     // Multiple hunks concatenate. They are separate regions of the file, but
-    // pi gives no line numbers to place them by, so inventing a separator with
-    // fake positions would be inventing information.
-    const rows = pairs.flatMap(([before, after]) => lineDiffRows(before, after));
+    // pi gives no line numbers to place them by, so inventing positions would
+    // be inventing information; marking where one ends is not (PiLab R2: the
+    // view's 「⋯」 says only that the next pair is elsewhere).
+    const rows: ToolDiffLineRow[] = pairs.flatMap(([before, after], index) =>
+      lineDiffRows(before, after).map((row, at) =>
+        index > 0 && at === 0 ? { ...row, hunkStart: true as const } : row
+      )
+    );
     return { path, rows, ...countRows(rows), source: 'arguments' };
   }
 

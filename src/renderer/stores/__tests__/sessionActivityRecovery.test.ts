@@ -15,6 +15,8 @@ beforeEach(() => {
   useChatSessionsStore.setState({
     activeSessionId: 's',
     lastError: null,
+    // Each case starts its seqs at 1 again: the transport cursor must not carry over.
+    runtimeEventCursors: {},
     sessions: ['s', 'other'].map((id) => ({
       id,
       workspaceId: 'w',

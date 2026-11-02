@@ -264,17 +264,7 @@ describe('groupTimeline', () => {
   });
 });
 
-/**
- * Decision 034 (2026-09-22, user decision): ONE ROW PER ENTRY.
- *
- * This block used to assert the opposite — decision 031's aggregate row, its
- * segmentation, and the separators that broke it. All of it is retired. The
- * user's own report after living with it: the aggregate cut the row COUNT but
- * not the noise, because it bought every fold with a third disclosure level.
- * The density fix moved down a layer (icon + two-character type label, capped
- * argument, no chevron) and this one went flat.
- */
-describe('deriveToolGroupRows — one row per entry', () => {
+describe('deriveToolGroupRows — runs and one thought entry', () => {
   it('two consecutive runs are two rows, not one aggregate', () => {
     const rows = deriveToolGroupRows([
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
@@ -294,6 +284,24 @@ describe('deriveToolGroupRows — one row per entry', () => {
       runEntry(makeRun('c', 'Write', { file_path: 'c.ts' })),
     ]);
     expect(rows.map((row) => row.verb)).toEqual(['Read', 'Thought', 'Ran', 'Edited']);
+  });
+
+  it('combines thinking into one stable entry without moving or dropping tool runs', () => {
+    const entries = [
+      thinkEntry(thinkingBlock('th1', 'first')),
+      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
+      thinkEntry(thinkingBlock('th2', 'second')),
+      runEntry(makeRun('b', 'Bash', { command: 'ls' })),
+    ];
+    const rows = deriveToolGroupRows(entries, { isStreamingBlockId: 'th2' });
+
+    expect(rows.map((row) => row.verb)).toEqual(['Thinking', 'Read', 'Ran']);
+    expect(rows[0]).toMatchObject({
+      key: 'th1',
+      running: true,
+      body: 'thinking',
+      output: 'first\n\nsecond',
+    });
   });
 
   it('a running call keeps its own present-tense row beside the finished ones', () => {
@@ -377,6 +385,22 @@ describe('buildThoughtRow empty-block behavior (via deriveToolGroupRows)', () =>
     expect(rows).toHaveLength(1);
     expect(rows[0].expandable).toBe(false);
     expect(rows[0].body).toBeUndefined();
+  });
+
+  it('sums thought duration only when every block has a measured value', () => {
+    const entries = [
+      thinkEntry(thinkingBlock('th1', 'first')),
+      thinkEntry(thinkingBlock('th2', 'second')),
+    ];
+    const measured = deriveToolGroupRows(entries, {
+      thinkingDurationMs: (id) => (id === 'th1' ? 7_000 : 5_000),
+    });
+    expect(measured[0].arg).toBe('for 12s');
+
+    const unknown = deriveToolGroupRows(entries, {
+      thinkingDurationMs: (id) => (id === 'th1' ? 7_000 : undefined),
+    });
+    expect(unknown[0].arg).toBeUndefined();
   });
 
   it('marks the Thought row arg as prose (D25 §2.4): "for Ns" is sans, not mono', () => {

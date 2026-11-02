@@ -341,6 +341,7 @@ export function deriveRunPanelView(input: RunPanelInput): RunPanelView {
           cacheWrite: usage.cacheWrite,
           totalTokens: usage.totalTokens,
           costUsd: usage.costUsd,
+          ...(usage.cacheUnreported ? { cacheUnreported: true as const } : {}),
         }
       : null;
 

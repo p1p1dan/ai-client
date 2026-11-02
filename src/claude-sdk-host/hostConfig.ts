@@ -7,8 +7,11 @@
 
 import {
   CLAUDE_SDK_AUTO_COMPACT_PERCENT_ENV,
+  CLAUDE_SDK_MODEL_THINKING_ENV,
   CLAUDE_SDK_MODEL_WINDOWS_ENV,
+  claudeSdkModelCapabilities,
   parseClaudeSdkAutoCompactPercent,
+  parseClaudeSdkModelThinking,
   parseClaudeSdkModelWindows,
 } from '../shared/claudeSdkEngine.ts';
 import { childProxyOverlay, type HostProxySetting, hostProxySecrets } from '../shared/hostProxy.ts';
@@ -54,6 +57,13 @@ export function buildHostConfig(input: HostConfigInput): {
   });
   // Main's catalog windows for this route (user 2026-10-18); malformed ones are dropped.
   const modelWindows = parseClaudeSdkModelWindows(input.inherited[CLAUDE_SDK_MODEL_WINDOWS_ENV]);
+  // PiLab R2 (04.2): how each of the route's models thinks, as the catalog declares it.
+  const modelThinking = parseClaudeSdkModelThinking(input.inherited[CLAUDE_SDK_MODEL_THINKING_ENV]);
+  // Pinned in the flag tier too, so a repository's settings `env` cannot move it.
+  const capabilities = claudeSdkModelCapabilities(modelThinking);
+  const thinkingPins: Record<string, string> = capabilities
+    ? { CLAUDE_CODE_MODEL_CAPABILITIES: capabilities }
+    : {};
   // User 2026-10-23: Main's auto-compact percentage, pinned in the flag tier too so a
   // repository's settings `env` cannot move it.
   const autoCompact = {
@@ -64,6 +74,7 @@ export function buildHostConfig(input: HostConfigInput): {
   return {
     config: {
       ...(Object.keys(modelWindows).length > 0 ? { modelWindows } : {}),
+      ...(Object.keys(modelThinking).length > 0 ? { modelThinking } : {}),
       configDir: input.configDir,
       settingSources: input.settingSources,
       cliPath: input.inherited.AICLIENT_CLAUDE_SDK_CLI?.trim() || undefined,
@@ -83,8 +94,9 @@ export function buildHostConfig(input: HostConfigInput): {
         // Not an inherited name: only the product proxy's overlay sets it, as DSH does.
         ...(overlay.NODE_USE_ENV_PROXY ? { NODE_USE_ENV_PROXY: overlay.NODE_USE_ENV_PROXY } : {}),
         ...autoCompact,
+        ...thinkingPins,
       },
-      settingsEnv: { ...pinned.env, ...autoCompact },
+      settingsEnv: { ...pinned.env, ...autoCompact, ...thinkingPins },
       secrets: [input.apiKey, input.proxy.token, ...hostProxySecrets(input.outboundProxy)],
     },
     credentialedProxies: pinned.credentialedProxies,

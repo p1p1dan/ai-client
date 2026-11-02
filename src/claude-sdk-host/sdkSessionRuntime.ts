@@ -49,6 +49,7 @@ import type {
 import {
   CLAUDE_SDK_AUTO_COMPACT_WINDOW_MAX,
   CLAUDE_SDK_AUTO_COMPACT_WINDOW_MIN,
+  type ClaudeSdkThinkingStyle,
   PERMISSION_MODE_REFUSED,
   permissionModeRefusalReason,
 } from '../shared/claudeSdkEngine.ts';
@@ -57,6 +58,7 @@ import {
   contextWindowNotice,
 } from '../shared/contextWindowMismatch.ts';
 import { DSH_NOTICE_CUSTOM_TYPE_PREFIX } from '../shared/dshNotices.ts';
+import { argumentsPreview, editArgumentsPreview } from '../shared/permissions/approvalPreview.ts';
 import { buildPiInterimUsagePayload, buildPiUsagePayload } from '../shared/piUsage.ts';
 import {
   decodePlanReviewResponse,
@@ -165,6 +167,11 @@ export interface SdkHostConfig {
    */
   modelWindows?: Readonly<Record<string, number>>;
   /**
+   * PiLab R2 (04.2): how each model thinks, by CLI model id (`claudeSdkModelThinking`).
+   * A model not named keeps the CLI's own default (adaptive thinking).
+   */
+  modelThinking?: Readonly<Record<string, ClaudeSdkThinkingStyle>>;
+  /**
    * Probes only: a stand-in home directory whose `.claude` the CLI's walk up from
    * the cwd must not read either, besides `os.homedir()`'s (S-3 P-5, P-11).
    */
@@ -207,6 +214,17 @@ export const HOST_ONLY_TOOLS = ['RemoteTrigger', 'ListAgents', 'SendMessage', 'W
  * before this (decision 194, `slashCommands.ts`).
  */
 const CLI_MARKER_TEXT = /^(\[Request interrupted by user|<local-command-caveat>)/;
+/**
+ * The row the CLI writes when a turn is interrupted (a Stop, an approval card's Esc, a
+ * Send now — `transcriptExtras` tells that one apart): `[Request interrupted by user]`, or
+ * `… for tool use]` when a call was cut off. Measured on 2.1.300; a declined call
+ * (`DECLINED_TEXT`) writes none and the turn goes on.
+ */
+const CLI_INTERRUPT_MARKER = /^\[Request interrupted by user/;
+/** What a call declined on its approval card reads to the model, and its result row. */
+const DECLINED_TEXT = 'The user declined this tool call.';
+/** What a call still waiting for approval when the turn ended reads to the model. */
+const NOT_STARTED_TEXT = 'The turn was stopped.';
 /** The model of a message the CLI wrote itself (a local command's output, decision 194). */
 const SYNTHETIC_MODEL = '<synthetic>';
 const COMPACT_SUMMARY_PREFIX = 'This session is being continued from a previous conversation';
@@ -257,6 +275,15 @@ interface Step {
   blocks: Map<number, StepBlock>;
   promptTokens: { input: number; cacheRead: number; cacheWrite: number };
   output: number;
+  /**
+   * PiLab R2 (04.7): the provider's own `message_delta` brought the request's
+   * closing usage. A request cut before it (Stop mid-stream) never says what it
+   * cost; the CLI closes it with a delta of its own that has no `stop_reason`.
+   */
+  reported?: boolean;
+  /** Its `usage.updated` went out; `local`: a CLI reply of its own, no model request. */
+  settled?: boolean;
+  local?: boolean;
 }
 
 interface Interjection {
@@ -474,7 +501,28 @@ function cliRefusalRewrite(text: string): string {
     /auto mode cannot determine|Auto mode could not evaluate|Auto mode is unavailable/i.test(text)
   )
     return cliRefusalText('classifier', 'Classifier unavailable');
-  return text;
+  return cliToolErrorText(text);
+}
+
+/**
+ * A call the CLI could not make (an unknown tool, bad input) comes back wrapped in
+ * `<tool_use_error>`, which is for the model: the row says the words, not the tag.
+ */
+function cliToolErrorText(text: string): string {
+  const wrapped = /^\s*<tool_use_error>([\s\S]*?)<\/tool_use_error>\s*$/.exec(text);
+  return wrapped ? wrapped[1].trim() : text;
+}
+
+/**
+ * PiLab R1: how a failed result read live, for its replay (the live outcome comes off
+ * events the transcript does not keep): declined on its card, refused by the CLI's own
+ * check, or ended unapproved by a Stop. `stopped` comes off the interrupt marker instead.
+ */
+function replayedToolOutcome(raw: string): 'refused' | 'notStarted' | undefined {
+  const text = raw.trim();
+  if (text === DECLINED_TEXT) return 'refused';
+  if (text === NOT_STARTED_TEXT) return 'notStarted';
+  return cliRefusalRewrite(text) !== cliToolErrorText(text) ? 'refused' : undefined;
 }
 
 /**
@@ -580,11 +628,51 @@ export function isUserHomeDir(
   return isHomeDir(cwd, homeTargets(homes, resolve), resolve);
 }
 
-function effortOptions(
-  effort: SessionEffortLevel | undefined
+/**
+ * PiLab R2 (04.2): the budget a budget-thinking row gets for a level — pi-ai's
+ * table, which the DSH engine sends the same row (`xhigh` / `max` clamp to High;
+ * no level is Medium, as the menu's Default says).
+ */
+export function thinkingBudget(effort: SessionEffortLevel | undefined): number {
+  switch (effort) {
+    case 'minimal':
+      return 1024;
+    case 'low':
+      return 2048;
+    case 'high':
+    case 'xhigh':
+    case 'max':
+      return 16384;
+    default:
+      return 8192;
+  }
+}
+
+/**
+ * The CLI effort for an adaptive request. No level on a row the catalog marks
+ * adaptive is Medium, as the menu's Default says (the CLI's own default is High);
+ * a model the catalog does not describe keeps the CLI's default.
+ */
+function adaptiveLevel(
+  effort: SessionEffortLevel | undefined,
+  style: ClaudeSdkThinkingStyle | undefined
+): Exclude<SessionEffortLevel, 'off' | 'minimal'> | undefined {
+  if (effort === 'minimal') return 'low';
+  if (effort === undefined || effort === 'off') return style === 'adaptive' ? 'medium' : undefined;
+  return effort;
+}
+
+export function effortOptions(
+  effort: SessionEffortLevel | undefined,
+  style?: ClaudeSdkThinkingStyle
 ): Pick<Options, 'effort' | 'thinking'> {
-  if (effort === 'off') return { thinking: { type: 'disabled' } };
-  const level = effort === 'minimal' ? 'low' : effort;
+  if (style === 'none' || effort === 'off') return { thinking: { type: 'disabled' } };
+  if (style === 'budget') {
+    return {
+      thinking: { type: 'enabled', budgetTokens: thinkingBudget(effort), display: 'summarized' },
+    };
+  }
+  const level = adaptiveLevel(effort, style);
   return {
     thinking: { type: 'adaptive', display: 'summarized' },
     ...(level ? { effort: level } : {}),
@@ -650,6 +738,45 @@ function localReply(uuid: string, text: string): HistoryMessage {
     role: 'assistant',
     blocks: [{ type: 'text', id: `${uuid}-text`, text }],
   };
+}
+
+type ReplayedToolResult = Extract<HistoryBlock, { type: 'tool_result' }>;
+
+/** A later row folded into `message` (its tool results, its other content rows). */
+function settleAt(message: HistoryMessage, time: number | undefined): void {
+  if (time === undefined) return;
+  const latest = message.settledAt ?? message.timestamp;
+  if (latest === undefined || time > latest) message.settledAt = time;
+}
+
+/**
+ * PiLab R1: the turn the CLI marked interrupted ends as one the user stopped, as it did
+ * live (`session.stopped`): on its last reply, or on a note when it saved none — the
+ * same two shapes DSH's history gives (`dshHistory/projection.ts`, `onTurnEnd`).
+ */
+function markInterrupted(out: HistoryMessage[], uuid: string, time: number | undefined): void {
+  for (let index = out.length - 1; index >= 0; index -= 1) {
+    const message = out[index];
+    if (message.role === 'user') break;
+    if (message.role !== 'assistant') continue;
+    message.stopCause = 'user_stop';
+    if (message.blocks.length === 0) {
+      message.incomplete = true;
+      message.stopReason = 'aborted';
+    }
+    settleAt(message, time);
+    return;
+  }
+  out.push({
+    id: `h:${uuid}`,
+    entryId: uuid,
+    role: 'assistant',
+    ...(time === undefined ? {} : { timestamp: time }),
+    blocks: [],
+    incomplete: true,
+    stopReason: 'aborted',
+    stopCause: 'user_stop',
+  });
 }
 
 /** The text blocks of an assistant frame, joined. */
@@ -725,6 +852,9 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private pumpDone: Promise<void> = Promise.resolve();
   private modelRef: string | undefined;
   private effort: SessionEffortLevel | undefined;
+  /** The thinking style the CLI was last set to (`undefined`: the CLI's own, adaptive). */
+  private appliedThinking: ClaudeSdkThinkingStyle | undefined;
+  private thinkingOff = false;
   private permissions: RuntimePermissionSettings;
   /** The mode the CLI last reported (`system/init`, `system/status`); null while none runs. */
   private cliMode: string | null = null;
@@ -783,6 +913,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   private readonly backgroundEdges = new Set<string>();
   private failureSignals: FailureSignals = {};
   private contextWindow = 0;
+  /** The context size of the last request that reported its usage. */
+  private lastContextTokens: number | null = null;
   /** The window the CLI reported per model, before the catalog's cap. */
   private readonly cliWindows = new Map<string, number>();
   /** `<model>:<limit>` of each real-window notice said in this chat: once is enough. */
@@ -888,11 +1020,13 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const homes = [...new Set([homedir(), ...(this.config.homeDir ? [this.config.homeDir] : [])])];
     const projectTrusted =
       this.options.projectTrusted === true && !isUserHomeDir(this.options.cwd, homes);
+    this.appliedThinking = this.thinkingStyle(this.modelRef);
+    this.thinkingOff = this.effort === 'off';
     const options: Options = {
       cwd: this.options.cwd,
       env: this.config.cliEnv,
       ...(model ? { model } : {}),
-      ...effortOptions(this.effort),
+      ...effortOptions(this.effort, this.thinkingStyle(this.modelRef)),
       systemPrompt: { type: 'preset', preset: 'claude_code', append: PILAB_PROMPT_APPEND },
       tools: { type: 'preset', preset: 'claude_code' },
       disallowedTools: HOST_ONLY_TOOLS,
@@ -1089,13 +1223,45 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         this.recordStubModel();
       }
     }
-    if (effort && effort !== this.effort) {
+    // PiLab R2 (04.2): no level is "Default", so a level chosen before is undone.
+    if (effort !== this.effort || this.appliedThinking !== this.thinkingStyle(this.modelRef)) {
       this.effort = effort;
-      const level = effort === 'off' || effort === 'minimal' ? 'low' : effort;
-      await this.applyFlagSettings(q, { effortLevel: level }).catch((error) =>
-        this.log('effort change failed', error)
-      );
+      await this.applyThinking(q).catch((error) => this.log('effort change failed', error));
     }
+  }
+
+  /** How the CLI model behind `ref` thinks, as the catalog declares it. */
+  private thinkingStyle(ref: string | undefined): ClaudeSdkThinkingStyle | undefined {
+    const model = bareModelId(ref);
+    const styles = this.config.modelThinking;
+    return model && styles && Object.hasOwn(styles, model) ? styles[model] : undefined;
+  }
+
+  /**
+   * The thinking and effort of the next request, for the current model and level.
+   * Adaptive (and a model the catalog does not describe) takes the effort as the
+   * CLI's `effortLevel` (`null`: the model's default); a budget row its budget; a
+   * model without reasoning no thinking at all.
+   */
+  private async applyThinking(q: Query): Promise<void> {
+    const style = this.thinkingStyle(this.modelRef);
+    const effort = this.effort;
+    if (style === 'none' || style === 'budget' || effort === 'off') {
+      const tokens = style === 'budget' && effort !== 'off' ? thinkingBudget(effort) : 0;
+      await q.setMaxThinkingTokens(tokens);
+      await this.applyFlagSettings(q, { effortLevel: null });
+    } else {
+      if (
+        this.appliedThinking === 'none' ||
+        this.appliedThinking === 'budget' ||
+        this.thinkingOff
+      ) {
+        await q.setMaxThinkingTokens(null);
+      }
+      await this.applyFlagSettings(q, { effortLevel: adaptiveLevel(effort, style) ?? null });
+    }
+    this.appliedThinking = style;
+    this.thinkingOff = effort === 'off';
   }
 
   /**
@@ -1708,6 +1874,10 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         const step = turn.step;
         const usage = record(event.usage);
         if (step && usage) {
+          // A provider's closing frame names why the reply ended. The one the CLI
+          // makes up for a request it cut (Stop) names none, and its usage is the
+          // prompt side with zeros: not a report.
+          step.reported = typeof record(event.delta)?.stop_reason === 'string';
           step.output = num(usage.output_tokens) || step.output;
           if (usage.input_tokens !== undefined) step.promptTokens.input = num(usage.input_tokens);
           if (usage.cache_read_input_tokens !== undefined) {
@@ -1784,6 +1954,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       blocks: new Map([[0, { kind: 'text', blockId: `${messageId}-b0` }]]),
       promptTokens: { input: 0, cacheRead: 0, cacheWrite: 0 },
       output: 0,
+      local: true,
     };
     this.emit({ type: 'message.started', payload: { messageId, role: 'assistant' } });
     this.emit({
@@ -2009,6 +2180,12 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
   }
 
   private settleStepUsage(step: Step): void {
+    if (step.settled || step.local) return;
+    step.settled = true;
+    if (!step.reported) {
+      this.settleUnreported();
+      return;
+    }
     const { input, cacheRead, cacheWrite } = step.promptTokens;
     const output = step.output;
     const totalTokens = input + cacheRead + cacheWrite + output;
@@ -2017,17 +2194,40 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     this.session.cacheRead += cacheRead;
     this.session.cacheWrite += cacheWrite;
     this.session.totalTokens += totalTokens;
-    const contextTokens = input + cacheRead + cacheWrite + output;
+    this.lastContextTokens = input + cacheRead + cacheWrite + output;
     const payload = buildPiUsagePayload(
       { input, output, cacheRead, cacheWrite, totalTokens, cost: { total: 0 } },
-      this.contextWindow > 0
-        ? {
-            tokens: contextTokens,
-            contextWindow: this.contextWindow,
-            percent: Math.min(100, (contextTokens / this.contextWindow) * 100),
-          }
-        : undefined,
+      this.contextOf(this.lastContextTokens),
       { ...this.session }
+    );
+    if (payload) this.emit({ type: 'usage.updated', payload });
+  }
+
+  /**
+   * PiLab R2 (04.7, T125's rule on this engine): a request cut before its
+   * closing usage. Its cost is unknown, not zero: the payload says so, the
+   * occupancy stays the last measured one, and the running total takes in
+   * nothing it cannot count.
+   */
+  /** Occupancy at `tokens`, against the window as now known; none before one is. */
+  private contextOf(
+    tokens: number
+  ): { tokens: number; contextWindow: number; percent: number } | undefined {
+    if (this.contextWindow <= 0) return undefined;
+    return {
+      tokens,
+      contextWindow: this.contextWindow,
+      percent: Math.min(100, (tokens / this.contextWindow) * 100),
+    };
+  }
+
+  private settleUnreported(): void {
+    const payload = buildPiUsagePayload(
+      { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } },
+      this.lastContextTokens === null ? undefined : this.contextOf(this.lastContextTokens),
+      { ...this.session },
+      null,
+      { unreported: true }
     );
     if (payload) this.emit({ type: 'usage.updated', payload });
   }
@@ -2051,6 +2251,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     if (!turn) return;
     if (turn.stopTimer) clearTimeout(turn.stopTimer);
     this.tracker.stop();
+    // A request still open when the turn ends never reported its usage.
+    if (turn.step) this.settleStepUsage(turn.step);
     this.closeStep();
     this.drainPending(outcome === 'stopped' ? 'aborted' : 'session_closed');
     const type =
@@ -2151,7 +2353,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       this.turn?.toolOutcome.set(input.permissionId, 'refused');
       pending.resolve({
         behavior: 'deny',
-        message: 'The user declined this tool call.',
+        message: DECLINED_TEXT,
         ...(input.decision === 'cancel' ? { interrupt: true } : {}),
       });
     }
@@ -2167,7 +2369,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       type: 'permission.resolved',
       payload: { permissionId, allow: false, decision: 'deny', autoReason: reason },
     });
-    pending.resolve({ behavior: 'deny', message: 'The turn was stopped.', interrupt: true });
+    pending.resolve({ behavior: 'deny', message: NOT_STARTED_TEXT, interrupt: true });
   }
 
   private askQuestion(
@@ -2425,7 +2627,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
       type: 'question.resolved',
       payload: { questionId, outcome: 'cancelled', stopped: true },
     });
-    pending.resolve({ behavior: 'deny', message: 'The turn was stopped.', interrupt: true });
+    pending.resolve({ behavior: 'deny', message: NOT_STARTED_TEXT, interrupt: true });
   }
 
   private drainPending(reason: 'aborted' | 'session_closed'): void {
@@ -2593,6 +2795,11 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
    *   is the command's own row (`localOutputs`, by that parent; measured, 2.1.300).
    * - Issue #27: an Edit / Write's review record, off the row's `toolUseResult`, which the
    *   SDK's reader does not pass on (`reviews`, by tool call id).
+   * - PiLab R1: each row's time (`times`, epoch ms by uuid), which the SDK's reader drops
+   *   too: without it a reopened turn could not say when it ended or how long it took.
+   * - PiLab R1: the interrupt markers a Send now wrote (`sendNow`, by uuid). It cuts the
+   *   reply short with the same marker a Stop writes, but its message was already in the
+   *   CLI's queue (an `enqueue` row not yet taken off it); live, that turn did not stop.
    *
    * Every copy is read: a chat that entered a worktree has its file under that worktree's
    * project directory.
@@ -2602,18 +2809,23 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     heads: Set<string>;
     localOutputs: Map<string, { uuid: string; text: string }>;
     reviews: Map<string, SessionFileChange>;
+    times: Map<string, number>;
+    sendNow: Set<string>;
   } {
     const rows = new Set<string>();
     const heads = new Set<string>();
     const localOutputs = new Map<string, { uuid: string; text: string }>();
     const reviews = new Map<string, SessionFileChange>();
-    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return { rows, heads, localOutputs, reviews };
+    const times = new Map<string, number>();
+    const sendNow = new Set<string>();
+    const none = { rows, heads, localOutputs, reviews, times, sendNow };
+    if (!/^[A-Za-z0-9_-]+$/.test(ccSessionId)) return none;
     const root = path.join(this.config.configDir, 'projects');
     let dirs: string[] = [];
     try {
       dirs = readdirSync(root);
     } catch {
-      return { rows, heads, localOutputs, reviews };
+      return none;
     }
     for (const dir of dirs) {
       let raw: string;
@@ -2623,6 +2835,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         continue;
       }
       const parsed: Array<{ uuid?: unknown; parentUuid?: unknown; type?: unknown }> = [];
+      let queued = 0;
       for (const line of raw.split(/\r?\n/)) {
         if (!line.trim()) continue;
         try {
@@ -2635,8 +2848,39 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             turnOrigin?: unknown;
             message?: unknown;
             toolUseResult?: unknown;
+            timestamp?: unknown;
+            operation?: unknown;
+            attachment?: unknown;
           };
           parsed.push(row);
+          if (row.type === 'queue-operation') {
+            if (row.operation === 'enqueue') queued += 1;
+            else if (row.operation === 'dequeue' || row.operation === 'remove')
+              queued = Math.max(0, queued - 1);
+          }
+          if (
+            queued > 0 &&
+            row.type === 'user' &&
+            typeof row.uuid === 'string' &&
+            CLI_INTERRUPT_MARKER.test(textOf(record(row.message)?.content).trim())
+          ) {
+            sendNow.add(row.uuid);
+          }
+          if (typeof row.uuid === 'string' && typeof row.timestamp === 'string') {
+            const time = Date.parse(row.timestamp);
+            if (Number.isFinite(time)) {
+              times.set(row.uuid, time);
+              // A message folded into a running turn is its `queued_command` row, which the
+              // SDK's reader names by the message's own uuid (decision 206). The row is dated
+              // when the message was queued; it reached the turn after the row before it.
+              const source = record(row.attachment)?.source_uuid;
+              if (typeof source === 'string') {
+                const before =
+                  typeof row.parentUuid === 'string' ? times.get(row.parentUuid) : undefined;
+                times.set(source, Math.max(time, before ?? time));
+              }
+            }
+          }
           if (row.turnOrigin === 'scheduled' && typeof row.uuid === 'string') rows.add(row.uuid);
           const blocks = record(row.message)?.content;
           if (row.type === 'user' && row.toolUseResult && Array.isArray(blocks)) {
@@ -2673,7 +2917,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         }
       }
     }
-    return { rows, heads, localOutputs, reviews };
+    return none;
   }
 
   /** The CLI's own transcript, projected onto history messages (tool results folded into their call's message). */
@@ -2690,29 +2934,47 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
     const toolOwner = new Map<string, HistoryMessage>();
     // S-6: rows the CLI wrote for itself, which the SDK's reader does not mark (or drops).
     const scheduled = this.transcriptExtras(ccSessionId);
+    const stamp = (uuid: string) => {
+      const time = scheduled.times.get(uuid);
+      return time === undefined ? {} : { timestamp: time };
+    };
+    // PiLab R1: the results of the rows right before this one, which an interrupt marker cut off.
+    let lastResults: ReplayedToolResult[] = [];
     for (const entry of entries) {
       if (entry.parent_tool_use_id) continue;
+      const previousResults = lastResults;
+      lastResults = [];
+      const time = scheduled.times.get(entry.uuid);
       const message = record(entry.message) ?? {};
       const content = message.content;
       if (entry.type === 'user') {
         if (Array.isArray(content) && content.some((b) => record(b)?.type === 'tool_result')) {
+          lastResults = previousResults;
           for (const block of content) {
             const b = record(block);
             if (!b || b.type !== 'tool_result' || typeof b.tool_use_id !== 'string') continue;
             const owner = toolOwner.get(b.tool_use_id);
+            const failed = b.is_error === true;
             // A refusal of the CLI's own reads as it did live: never its sentence (A-18).
             const raw = textOf(b.content);
-            const text = b.is_error === true ? cliRefusalRewrite(raw) : raw;
+            const text = failed ? cliRefusalRewrite(raw) : raw;
+            const outcome = failed ? replayedToolOutcome(raw) : undefined;
             const review = scheduled.reviews.get(b.tool_use_id);
-            owner?.blocks.push({
+            const result: ReplayedToolResult = {
               type: 'tool_result',
               id: `${b.tool_use_id}-result`,
               toolCallId: b.tool_use_id,
-              ok: b.is_error !== true,
+              ok: !failed,
               output: text,
               ...(review ? { review } : {}),
-              ...(b.is_error === true ? { error: text } : {}),
-            });
+              ...(failed ? { error: text } : {}),
+              ...(outcome ? { [outcome]: true as const } : {}),
+            };
+            if (owner) {
+              owner.blocks.push(result);
+              settleAt(owner, time);
+            }
+            lastResults.push(result);
           }
           continue;
         }
@@ -2727,6 +2989,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             id: `h:${entry.uuid}`,
             entryId: entry.uuid,
             role: 'user',
+            ...stamp(entry.uuid),
             blocks: [{ type: 'text', id: `${entry.uuid}-text`, text: command.line }],
           });
           const output = scheduled.localOutputs.get(entry.uuid);
@@ -2739,7 +3002,18 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           out.push(localReply(entry.uuid, output));
           continue;
         }
-        // The CLI's own bookkeeping rows: an interrupt marker, a local command's caveat.
+        // PiLab R1: an interrupted turn reads as it did live: stopped, and so is the call
+        // the interrupt cut off (the CLI says so with its marker row, nothing else).
+        if (CLI_INTERRUPT_MARKER.test(trimmed)) {
+          if (scheduled.sendNow.has(entry.uuid)) continue;
+          for (const result of previousResults) {
+            if (result.ok || result.refused || result.notStarted) continue;
+            result.stopped = true;
+          }
+          markInterrupted(out, entry.uuid, time);
+          continue;
+        }
+        // The CLI's own bookkeeping rows: a local command's caveat.
         if (!trimmed || CLI_MARKER_TEXT.test(trimmed)) continue;
         // S-6: a turn the CLI started by itself reads as it did live, as an engine turn's
         // head, never as something the user typed: a schedule that came due, or a
@@ -2757,6 +3031,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
             entryId: entry.uuid,
             role: 'user',
             origin,
+            ...stamp(entry.uuid),
             blocks: [],
           });
           continue;
@@ -2767,6 +3042,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           id: `h:${entry.uuid}`,
           entryId: entry.uuid,
           role,
+          ...stamp(entry.uuid),
           // Decision 206: a message sent from here keeps the uuid it went to the CLI with
           // (a Ctrl+Enter one too: the SDK's reader names it by its `source_uuid`).
           ...(role === 'user' ? { transcriptId: entry.uuid } : {}),
@@ -2782,6 +3058,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           entryId: entry.uuid,
           role: 'user',
           origin: { kind: 'scheduled' },
+          ...stamp(entry.uuid),
           blocks: [],
         });
       }
@@ -2792,6 +3069,7 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
           id: `h:${entry.uuid}`,
           entryId: entry.uuid,
           role: 'assistant',
+          ...stamp(entry.uuid),
           // Decision 206: the API message id its live step carried.
           ...(typeof message.id === 'string' ? { transcriptId: message.id } : {}),
           ...(typeof message.model === 'string' ? { model: message.model } : {}),
@@ -2799,6 +3077,8 @@ export class ClaudeSdkSessionRuntime implements BridgeSessionRuntime {
         };
         byApiId.set(apiId, target);
         out.push(target);
+      } else {
+        settleAt(target, time);
       }
       if (!Array.isArray(content)) continue;
       for (const [i, block] of content.entries()) {
@@ -3229,6 +3509,15 @@ function errorText(error: unknown): string {
 }
 
 /** The card body the permission card reads: our own summary, not the raw arguments. */
+/** A file already at `file` (resolved against the workspace); errors read as absent. */
+function isExistingFile(file: string, workspace: string): boolean {
+  try {
+    return statSync(path.resolve(workspace, file)).isFile();
+  } catch {
+    return false;
+  }
+}
+
 function describeCall(
   toolName: string,
   input: Record<string, unknown>,
@@ -3255,28 +3544,37 @@ function describeCall(
     };
   }
   if (FILE_CHANGE_TOOLS.has(toolName) && path) {
-    const content =
-      typeof input.content === 'string'
-        ? input.content
-        : typeof input.new_string === 'string'
-          ? input.new_string
-          : undefined;
+    // FR-05.5: a Write shows what it writes; an edit shows everything that
+    // decides what it does (`old_string` / `new_string` / `replace_all`, a
+    // MultiEdit's `edits`) — `new_string` alone hid what was being replaced.
+    const body =
+      toolName === 'Write' && typeof input.content === 'string'
+        ? { content: input.content, contentLabel: 'Content' }
+        : { content: editArgumentsPreview(input), contentLabel: 'Arguments' };
     return {
       kind: 'file_change',
       action: toolName === 'Write' ? 'write_file' : 'edit_file',
-      input: {
-        path,
-        ...(content !== undefined ? { content, contentLabel: 'Content' } : {}),
-        workspace,
-      },
+      input: { path, ...body, workspace },
       detail: {
         kind: 'file_change',
-        changes: [{ path, change: toolName === 'Write' ? 'add' : 'update' }],
+        // PiLab R2 (FR-07.2): a Write over an existing file replaces it — an
+        // update, not an add; the card's badge used to say 「A」 for both.
+        changes: [
+          {
+            path,
+            change: toolName === 'Write' && !isExistingFile(path, workspace) ? 'add' : 'update',
+          },
+        ],
       },
     };
   }
   if (toolName === 'Read' && path) {
     return { kind: 'tool', action: 'read_file', input: { path, workspace } };
   }
-  return { kind: 'tool', input: { ...input, workspace } };
+  // Any other tool (MCP included): its arguments ARE the request, so the card
+  // shows them (the card reads `content`, never arbitrary keys).
+  return {
+    kind: 'tool',
+    input: { ...input, content: argumentsPreview(input), contentLabel: 'Arguments', workspace },
+  };
 }

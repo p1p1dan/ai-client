@@ -1,0 +1,147 @@
+{
+  "mode": "follow",
+  "steps": [
+    {
+      "label": "wheel: streaming, no user input",
+      "scroller": true,
+      "top": 484,
+      "height": 1257,
+      "client": 773,
+      "fromBottom": 0,
+      "jumpButton": null
+    },
+    {
+      "label": "wheel: user scrolled up",
+      "scroller": true,
+      "top": 184,
+      "height": 1257,
+      "client": 773,
+      "fromBottom": 300,
+      "jumpButton": "滚动到底部"
+    },
+    {
+      "label": "wheel: more streaming after scroll-up",
+      "scroller": true,
+      "top": 184,
+      "height": 1634,
+      "client": 773,
+      "fromBottom": 677,
+      "jumpButton": "滚动到底部",
+      "pulledBack": false,
+      "topDrift": 0
+    },
+    {
+      "label": "wheel: back to latest (jump button)",
+      "scroller": true,
+      "top": 861,
+      "height": 1634,
+      "client": 773,
+      "fromBottom": 0,
+      "jumpButton": null
+    },
+    {
+      "label": "wheel: streaming after return",
+      "scroller": true,
+      "top": 1525,
+      "height": 2298,
+      "client": 773,
+      "fromBottom": 0,
+      "jumpButton": null
+    },
+    {
+      "label": "pageup: streaming, no user input",
+      "scroller": true,
+      "top": 484,
+      "height": 1257,
+      "client": 773,
+      "fromBottom": 0,
+      "jumpButton": null
+    },
+    {
+      "label": "pageup: user scrolled up",
+      "scroller": true,
+      "top": 0,
+      "height": 1257,
+      "client": 773,
+      "fromBottom": 484,
+      "jumpButton": "滚动到底部"
+    },
+    {
+      "label": "pageup: more streaming after scroll-up",
+      "scroller": true,
+      "top": 0,
+      "height": 1634,
+      "client": 773,
+      "fromBottom": 861,
+      "jumpButton": "滚动到底部",
+      "pulledBack": false,
+      "topDrift": 0
+    },
+    {
+      "label": "pageup: back to latest (jump button)",
+      "scroller": true,
+      "top": 861,
+      "height": 1634,
+      "client": 773,
+      "fromBottom": 0,
+      "jumpButton": null
+    },
+    {
+      "label": "pageup: streaming after return",
+      "scroller": true,
+      "top": 1525,
+      "height": 2298,
+      "client": 773,
+      "fromBottom": 0,
+      "jumpButton": null
+    },
+    {
+      "label": "scrollbar: streaming, no user input",
+      "scroller": true,
+      "top": 484,
+      "height": 1257,
+      "client": 773,
+      "fromBottom": 0,
+      "jumpButton": null
+    },
+    {
+      "label": "scrollbar: user scrolled up",
+      "scroller": true,
+      "top": 184,
+      "height": 1257,
+      "client": 773,
+      "fromBottom": 300,
+      "jumpButton": "滚动到底部"
+    },
+    {
+      "label": "scrollbar: more streaming after scroll-up",
+      "scroller": true,
+      "top": 184,
+      "height": 1634,
+      "client": 773,
+      "fromBottom": 677,
+      "jumpButton": "滚动到底部",
+      "pulledBack": false,
+      "topDrift": 0
+    },
+    {
+      "label": "scrollbar: back to latest (jump button)",
+      "scroller": true,
+      "top": 861,
+      "height": 1634,
+      "client": 773,
+      "fromBottom": 0,
+      "jumpButton": null
+    },
+    {
+      "label": "scrollbar: streaming after return",
+      "scroller": true,
+      "top": 1525,
+      "height": 2298,
+      "client": 773,
+      "fromBottom": 0,
+      "jumpButton": null
+    }
+  ],
+  "problems": []
+}

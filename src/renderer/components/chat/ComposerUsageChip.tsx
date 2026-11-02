@@ -25,11 +25,13 @@ export function ComposerUsageDetails({ usage, tools }: { usage: PiUsagePayload; 
   const context = deriveContextOccupancy(usage.context);
   if (!context) return null;
   const cacheRate = deriveCacheHitRate(usage);
+  const cacheCount = (tokens: number) =>
+    usage.cacheUnreported ? t('Not reported') : formatTokenTotal(tokens);
   const rows = [
     [t('Input tokens'), formatTokenTotal(usage.input)],
     [t('Output tokens'), formatTokenTotal(usage.output)],
-    [t('Cache read'), formatTokenTotal(usage.cacheRead)],
-    [t('Cache write'), formatTokenTotal(usage.cacheWrite)],
+    [t('Cache read'), cacheCount(usage.cacheRead)],
+    [t('Cache write'), cacheCount(usage.cacheWrite)],
     [t('Cache hit rate'), cacheRate === null ? t('Not reported') : `${cacheRate}%`],
     [t('Total tokens'), formatTokenTotal(usage.totalTokens)],
   ];
@@ -46,7 +48,8 @@ export function ComposerUsageDetails({ usage, tools }: { usage: PiUsagePayload; 
           </div>
         </div>
         <div className="shrink-0 text-right tabular-nums">
-          <div className="text-title font-semibold">{Math.round(100 - context.percent)}%</div>
+          {/* From the rounded share used, so the two figures add up to 100. */}
+          <div className="text-title font-semibold">{100 - Math.round(context.percent)}%</div>
           <div className="text-small text-muted-foreground">{t('Remaining')}</div>
         </div>
       </div>

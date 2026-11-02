@@ -26,6 +26,7 @@ interface FakeQuery {
   end: () => void;
   setModel: ReturnType<typeof vi.fn>;
   applyFlagSettings: ReturnType<typeof vi.fn>;
+  setMaxThinkingTokens: ReturnType<typeof vi.fn>;
   setPermissionMode: ReturnType<typeof vi.fn>;
   /** The SDK's generic control request (decision 201's `send_now` interrupt goes through it). */
   request: ReturnType<typeof vi.fn>;
@@ -56,6 +57,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       },
       setModel: vi.fn(async () => {}),
       applyFlagSettings: vi.fn(async () => {}),
+      setMaxThinkingTokens: vi.fn(async () => {}),
       setPermissionMode: vi.fn(async () => {}),
       request: vi.fn(async () => ({ response: { send_now: 'delivering' } })),
       askSideQuestion: vi.fn(async () => ({ response: 'side answer', synthetic: false })),
@@ -76,6 +78,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       interrupt: vi.fn(async () => {}),
       setModel: fake.setModel,
       applyFlagSettings: fake.applyFlagSettings,
+      setMaxThinkingTokens: fake.setMaxThinkingTokens,
       setPermissionMode: fake.setPermissionMode,
       request: fake.request,
       askSideQuestion: fake.askSideQuestion,
@@ -124,6 +127,7 @@ function runtime(
     settingSources?: Array<'user' | 'project' | 'local'>;
     homeDir?: string;
     sessionFile?: string;
+    modelThinking?: Record<string, 'none' | 'budget' | 'adaptive'>;
   } = {}
 ) {
   return new ClaudeSdkSessionRuntime(
@@ -142,6 +146,7 @@ function runtime(
       settingsEnv: PINS,
       secrets: [KEY],
       ...(launch.homeDir ? { homeDir: launch.homeDir } : {}),
+      ...(launch.modelThinking ? { modelThinking: launch.modelThinking } : {}),
     },
     () => {}
   );
@@ -698,6 +703,71 @@ describe('the five modes (S-2 A-1)', () => {
       expect(q.options.allowDangerouslySkipPermissions).toBe(true);
       await rt.dispose();
     }
+  });
+});
+
+describe('[PILAB-R1-05.5] the approval card carries the parameters being approved', () => {
+  it('an Edit shows old_string, new_string and replace_all; an MCP call shows its arguments', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    const editInput = {
+      file_path: join(configDir, 'x.txt'),
+      old_string: 'A',
+      new_string: 'B',
+      replace_all: true,
+    };
+    void canUse(q)('Edit', editInput, toolOpts('t-edit'));
+    void canUse(q)(
+      'mcp__tracker__create_issue',
+      { repo: 'demo', title: 'T', body: 'line 1\nline 2' },
+      toolOpts('t-mcp')
+    );
+    await flush();
+    const [edit, mcp] = ofType('permission.requested').map(
+      (e) => e.payload.input as Record<string, unknown>
+    );
+    expect(edit.contentLabel).toBe('Arguments');
+    expect(JSON.parse(String(edit.content))).toEqual({
+      old_string: 'A',
+      new_string: 'B',
+      replace_all: true,
+    });
+    expect(mcp.contentLabel).toBe('Arguments');
+    expect(JSON.parse(String(mcp.content))).toEqual({
+      repo: 'demo',
+      title: 'T',
+      body: 'line 1\nline 2',
+    });
+    // What the tool runs with is the CLI's own input, untouched.
+    expect(editInput).toEqual({
+      file_path: join(configDir, 'x.txt'),
+      old_string: 'A',
+      new_string: 'B',
+      replace_all: true,
+    });
+    await rt.dispose();
+  });
+});
+
+describe('[PILAB-R2-WRITE] a Write over an existing file is an update on the card', () => {
+  it('marks a new file add and an overwrite update', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    writeFileSync(join(configDir, 'there.txt'), 'old\n');
+    void canUse(q)(
+      'Write',
+      { file_path: join(configDir, 'there.txt'), content: 'new\n' },
+      toolOpts('t-over')
+    );
+    void canUse(q)(
+      'Write',
+      { file_path: join(configDir, 'fresh.txt'), content: 'new\n' },
+      toolOpts('t-new')
+    );
+    await flush();
+    const changes = ofType('permission.requested').map(
+      (e) => (e.payload.detail as { changes: { change: string }[] }).changes[0]?.change
+    );
+    expect(changes).toEqual(['update', 'add']);
+    await rt.dispose();
   });
 });
 
@@ -2357,5 +2427,377 @@ describe('compact instructions', () => {
     void own.compact({ instructions: ' keep the API notes ' });
     expect(sentText(own)).toEqual(['/compact keep the API notes']);
     await own.dispose();
+  });
+});
+
+describe('[PILAB-R1-CC-STOP] a reopened chat reads its interrupted turns as it did live', () => {
+  // The rows 2.1.300 wrote for the four ways a turn met a Stop (measured on the fake gateway,
+  // 2026-10-30): the user's message, the reply, the call, the CLI's result, its marker.
+  const REJECTED =
+    "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.";
+  const user = (uuid: string, content: unknown) => ({
+    type: 'user',
+    uuid,
+    message: { role: 'user', content },
+  });
+  const say = (uuid: string, id: string, content: unknown[]) => ({
+    type: 'assistant',
+    uuid,
+    message: { id, content },
+  });
+  const call = (id: string) => ({
+    type: 'tool_use',
+    id,
+    name: 'Bash',
+    input: { command: 'sleep 40' },
+  });
+  const result = (id: string, text: string) => [
+    { type: 'tool_result', tool_use_id: id, is_error: true, content: text },
+  ];
+
+  async function replay(
+    rows: Array<{ uuid: string }>,
+    times: Record<string, string> = {},
+    /** Rows of the file the SDK's reader does not return. */
+    fileOnly: Array<{ uuid: string }> = []
+  ) {
+    const { getSessionMessages } = await import('@anthropic-ai/claude-agent-sdk');
+    const rt = runtime();
+    await rt.bootstrap();
+    const stub = (rt as unknown as { stub: { ccSessionId: string; started: boolean } }).stub;
+    stub.started = true;
+    const dir = join(configDir, 'projects', 'C--repo');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${stub.ccSessionId}.jsonl`),
+      [...rows, ...fileOnly]
+        .map((row) => JSON.stringify({ ...row, timestamp: times[row.uuid] }))
+        .join('\n')
+    );
+    vi.mocked(getSessionMessages).mockResolvedValueOnce(rows as never);
+    const { page } = await rt.history({ logicalSessionId: 'chat-1' });
+    await rt.dispose();
+    return page.messages;
+  }
+
+  it('a Stop during a running call: the turn is stopped, and so is the call', async () => {
+    const messages = await replay([
+      user('u1', 'run it'),
+      say('a1', 'm1', [{ type: 'text', text: 'Starting.' }]),
+      say('a2', 'm1', [call('t1')]),
+      user('r1', result('t1', REJECTED)),
+      user('x1', [{ type: 'text', text: '[Request interrupted by user for tool use]' }]),
+    ]);
+    expect(messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(messages[1]).toMatchObject({ stopCause: 'user_stop' });
+    expect(messages[1]).not.toHaveProperty('incomplete');
+    expect(messages[1]?.blocks.find((b) => b.type === 'tool_result')).toMatchObject({
+      ok: false,
+      stopped: true,
+    });
+  });
+
+  it('a Stop before any reply: the turn ends on the stopped note', async () => {
+    const messages = await replay([
+      user('u1', 'think about it'),
+      user('x1', [{ type: 'text', text: '[Request interrupted by user]' }]),
+      user('u2', 'next'),
+    ]);
+    expect(messages.map((m) => [m.role, m.blocks.length])).toEqual([
+      ['user', 1],
+      ['assistant', 0],
+      ['user', 1],
+    ]);
+    expect(messages[1]).toMatchObject({
+      incomplete: true,
+      stopReason: 'aborted',
+      stopCause: 'user_stop',
+    });
+  });
+
+  it('a Send now cuts the reply with the same marker, but the turn did not stop', async () => {
+    const queue = (operation: string) => ({ type: 'queue-operation', uuid: '', operation });
+    const rows = [
+      user('u1', 'run it'),
+      say('a1', 'm1', [{ type: 'text', text: 'Done: ' }]),
+      queue('enqueue'),
+      user('x1', [{ type: 'text', text: '[Request interrupted by user]' }]),
+      queue('dequeue'),
+      user('u2', 'one more thing'),
+    ];
+    const { getSessionMessages } = await import('@anthropic-ai/claude-agent-sdk');
+    const rt = runtime();
+    await rt.bootstrap();
+    const stub = (rt as unknown as { stub: { ccSessionId: string; started: boolean } }).stub;
+    stub.started = true;
+    const dir = join(configDir, 'projects', 'C--repo');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${stub.ccSessionId}.jsonl`),
+      rows.map((row) => JSON.stringify(row)).join('\n')
+    );
+    vi.mocked(getSessionMessages).mockResolvedValueOnce(
+      rows.filter((row) => row.type !== 'queue-operation') as never
+    );
+    const { page } = await rt.history({ logicalSessionId: 'chat-1' });
+    await rt.dispose();
+    expect(page.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(page.messages.some((m) => m.stopCause || m.incomplete)).toBe(false);
+  });
+
+  it('a declined call is refused and the turn goes on; an earlier failure stays a failure', async () => {
+    const messages = await replay([
+      user('u1', 'run it'),
+      say('a1', 'm1', [call('t0')]),
+      user('r0', result('t0', 'File does not exist.')),
+      say('a2', 'm2', [call('t1')]),
+      user('r1', result('t1', 'The user declined this tool call.')),
+      say('a3', 'm3', [{ type: 'text', text: 'OK, not running it.' }]),
+    ]);
+    const results = messages.flatMap((m) => m.blocks).filter((b) => b.type === 'tool_result');
+    expect(results[0]).not.toHaveProperty('stopped');
+    expect(results[0]).not.toHaveProperty('refused');
+    expect(results[1]).toMatchObject({ refused: true });
+    expect(messages.some((m) => m.stopCause)).toBe(false);
+  });
+
+  it('the row says what the CLI could not do, not its <tool_use_error> tag', async () => {
+    const messages = await replay([
+      user('u1', 'find it'),
+      say('a1', 'm1', [call('t1')]),
+      user(
+        'r1',
+        result('t1', '<tool_use_error>Error: No such tool available: Glob.</tool_use_error>')
+      ),
+    ]);
+    expect(messages[1]?.blocks.find((b) => b.type === 'tool_result')).toMatchObject({
+      output: 'Error: No such tool available: Glob.',
+    });
+  });
+
+  it('each row keeps its time, so the reopened turn says when it ended and for how long', async () => {
+    const messages = await replay(
+      [
+        user('u1', 'run it'),
+        say('a1', 'm1', [{ type: 'text', text: 'Starting.' }]),
+        say('a2', 'm1', [call('t1')]),
+        user('r1', result('t1', REJECTED)),
+        user('x1', [{ type: 'text', text: '[Request interrupted by user for tool use]' }]),
+      ],
+      {
+        u1: '2026-10-30T12:46:37.406Z',
+        a1: '2026-10-30T12:46:38.089Z',
+        a2: '2026-10-30T12:46:38.335Z',
+        r1: '2026-10-30T12:47:26.576Z',
+        x1: '2026-10-30T12:47:26.583Z',
+      }
+    );
+    expect(messages[0]?.timestamp).toBe(Date.parse('2026-10-30T12:46:37.406Z'));
+    expect(messages[1]?.timestamp).toBe(Date.parse('2026-10-30T12:46:38.089Z'));
+    expect(messages[1]?.settledAt).toBe(Date.parse('2026-10-30T12:47:26.583Z'));
+  });
+
+  it('a message folded into a running turn is dated when it reached the turn', async () => {
+    // Its `queued_command` row carries the time it was queued, and follows the row it
+    // was folded in after (measured, 2.1.300).
+    const folded = {
+      type: 'attachment',
+      uuid: 'q1',
+      parentUuid: 'r1',
+      attachment: { type: 'queued_command', prompt: 'and this', source_uuid: 's1' },
+    };
+    const messages = await replay(
+      [user('u1', 'run it'), user('r1', 'result'), user('s1', 'and this')],
+      {
+        u1: '2026-10-30T12:58:08.218Z',
+        r1: '2026-10-30T12:58:43.290Z',
+        q1: '2026-10-30T12:58:16.444Z',
+      },
+      [folded]
+    );
+    expect(messages.at(-1)?.timestamp).toBe(Date.parse('2026-10-30T12:58:43.290Z'));
+  });
+});
+
+// ---- PiLab R2 (04.2, 04.7): thinking by the model's own kind; a cut request's usage ----
+
+describe('[PILAB-R2-THINK] thinking and effort as the model takes them', () => {
+  const turnOver = async (q: FakeQuery) => {
+    q.push({ type: 'result', subtype: 'success', is_error: false, result: 'ok' });
+    await flush();
+  };
+  const sendWith = (
+    rt: InstanceType<typeof ClaudeSdkSessionRuntime>,
+    effort?: 'low' | 'medium' | 'high' | 'off'
+  ) =>
+    rt.startSend({
+      logicalSessionId: 'chat-1',
+      requestId: `req-${effort ?? 'default'}`,
+      attemptId: `a-${effort ?? 'default'}`,
+      text: 'hi',
+      ...(effort ? { effort } : {}),
+    });
+
+  it('a model without reasoning is not asked to think, whatever the level', async () => {
+    const rt = runtime('gw/plain', { modelThinking: { plain: 'none' } });
+    await rt.bootstrap();
+    const q = sdk.queries[0] as FakeQuery;
+    expect(q.options.thinking).toEqual({ type: 'disabled' });
+    expect(q.options).not.toHaveProperty('effort');
+    await rt.dispose();
+  });
+
+  it('a budget-thinking model gets a budget, not adaptive thinking, and its level moves it', async () => {
+    const rt = runtime('gw/older', { modelThinking: { older: 'budget' } });
+    await rt.bootstrap();
+    const q = sdk.queries[0] as FakeQuery;
+    expect(q.options.thinking).toEqual({
+      type: 'enabled',
+      budgetTokens: 8192,
+      display: 'summarized',
+    });
+    expect(q.options).not.toHaveProperty('effort');
+    await sendWith(rt, 'high');
+    expect(q.setMaxThinkingTokens).toHaveBeenLastCalledWith(16384);
+    expect(q.applyFlagSettings).not.toHaveBeenCalledWith({ effortLevel: 'high' });
+    await turnOver(q);
+    // Default is Medium's budget, as the menu says.
+    await sendWith(rt);
+    expect(q.setMaxThinkingTokens).toHaveBeenLastCalledWith(8192);
+    await rt.dispose();
+  });
+
+  it('Default after a chosen level goes back to the model default', async () => {
+    const { rt, q } = await started();
+    await sendWith(rt, 'high');
+    expect(q.applyFlagSettings).toHaveBeenLastCalledWith({ effortLevel: 'high' });
+    await turnOver(q);
+    await sendWith(rt);
+    expect(q.applyFlagSettings).toHaveBeenLastCalledWith({ effortLevel: null });
+    await rt.dispose();
+  });
+
+  it('Default on a model the catalog marks adaptive is Medium, as the menu says', async () => {
+    const rt = runtime('gw/claude-opus-5-5', { modelThinking: { 'claude-opus-5-5': 'adaptive' } });
+    await rt.bootstrap();
+    const q = sdk.queries[0] as FakeQuery;
+    expect(q.options.effort).toBe('medium');
+    await sendWith(rt, 'low');
+    expect(q.applyFlagSettings).toHaveBeenLastCalledWith({ effortLevel: 'low' });
+    await turnOver(q);
+    await sendWith(rt);
+    expect(q.applyFlagSettings).toHaveBeenLastCalledWith({ effortLevel: 'medium' });
+    expect(q.setMaxThinkingTokens).not.toHaveBeenCalled();
+    await rt.dispose();
+  });
+
+  it('an unchanged level sends no change', async () => {
+    const { rt, q } = await started();
+    await sendWith(rt);
+    expect(q.applyFlagSettings).not.toHaveBeenCalled();
+    expect(q.setMaxThinkingTokens).not.toHaveBeenCalled();
+    await rt.dispose();
+  });
+});
+
+describe('[PILAB-R2-USAGE] a request cut before its closing usage', () => {
+  type Usage = { unreported?: boolean; input?: number; context?: { tokens: number } };
+  const usages = () =>
+    events
+      .filter((e) => e.type === 'usage.updated')
+      .map((e) => e.payload as Usage)
+      .filter((p) => !(p as { pending?: boolean }).pending);
+  const frame = (event: Record<string, unknown>) => ({
+    type: 'stream_event',
+    parent_tool_use_id: null,
+    event,
+  });
+
+  it('says its usage is unknown, and keeps the last measured occupancy', async () => {
+    const { rt, q } = await started();
+    (rt as unknown as { contextWindow: number }).contextWindow = 200_000;
+    await send(rt);
+    q.push(frame({ type: 'message_start', message: { id: 'm1', usage: { input_tokens: 900 } } }));
+    q.push(
+      frame({
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 40, cache_read_input_tokens: 3000, cache_creation_input_tokens: 0 },
+      })
+    );
+    q.push(frame({ type: 'message_stop' }));
+    q.push({ type: 'result', subtype: 'success', is_error: false, result: 'ok' });
+    await flush();
+    expect(usages().at(-1)).toMatchObject({ input: 900, context: { tokens: 3940 } });
+
+    await rt.startSend({ logicalSessionId: 'chat-1', requestId: 'r2', attemptId: 'a2', text: 'x' });
+    q.push(frame({ type: 'message_start', message: { id: 'm2', usage: { input_tokens: 1200 } } }));
+    await flush();
+    void rt.stop({ logicalSessionId: 'chat-1', reason: 'user' });
+    // The CLI closes the cut stream with a delta of its own (measured on 2.1.300:
+    // no stop_reason, the prompt side and zeros), then the turn.
+    q.push(
+      frame({
+        type: 'message_delta',
+        delta: { stop_reason: null, stop_sequence: null, stop_details: null },
+        usage: {
+          input_tokens: 1200,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          output_tokens: 0,
+        },
+      })
+    );
+    q.push(frame({ type: 'message_stop' }));
+    q.push({ type: 'result', subtype: 'error_during_execution', is_error: true, result: '' });
+    await flush();
+    const last = usages().at(-1);
+    expect(last).toMatchObject({ unreported: true, context: { tokens: 3940 } });
+    expect(usages().filter((u) => u.unreported)).toHaveLength(1);
+    await rt.dispose();
+  });
+
+  it('keeps the occupancy when the window was only learned after that request', async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    q.push(frame({ type: 'message_start', message: { id: 'm1', usage: { input_tokens: 500 } } }));
+    q.push(
+      frame({
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 20 },
+      })
+    );
+    q.push(frame({ type: 'message_stop' }));
+    // The CLI reports the window on the turn's result, after the request settled.
+    q.push({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'ok',
+      modelUsage: { 'claude-opus-5-5': { contextWindow: 100_000 } },
+    });
+    await flush();
+    await rt.startSend({ logicalSessionId: 'chat-1', requestId: 'r2', attemptId: 'a2', text: 'x' });
+    q.push(frame({ type: 'message_start', message: { id: 'm2', usage: { input_tokens: 600 } } }));
+    await flush();
+    void rt.stop({ logicalSessionId: 'chat-1', reason: 'user' });
+    q.push({ type: 'result', subtype: 'error_during_execution', is_error: true, result: '' });
+    await flush();
+    expect(usages().at(-1)).toMatchObject({
+      unreported: true,
+      context: { tokens: 520, contextWindow: 100_000 },
+    });
+    await rt.dispose();
+  });
+
+  it('a turn that ends with its request still open says the same', async () => {
+    const { rt, q } = await started();
+    await send(rt);
+    q.push(frame({ type: 'message_start', message: { id: 'm1', usage: { input_tokens: 1200 } } }));
+    q.push({ type: 'result', subtype: 'success', is_error: false, result: 'ok' });
+    await flush();
+    expect(usages().at(-1)).toMatchObject({ unreported: true });
+    await rt.dispose();
   });
 });

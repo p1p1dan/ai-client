@@ -193,6 +193,79 @@ export function parseClaudeSdkModelWindows(raw: string | undefined): Record<stri
   return windows;
 }
 
+/** The SDK host's launch variable for {@link claudeSdkModelThinking}: JSON `{model: style}`. */
+export const CLAUDE_SDK_MODEL_THINKING_ENV = 'AICLIENT_CLAUDE_SDK_MODEL_THINKING';
+
+/**
+ * How a model thinks, as the catalog declares it: `none` (no reasoning), `adaptive`
+ * (adaptive-only, `compat.forceAdaptiveThinking`) or `budget` (any other reasoning row).
+ */
+export type ClaudeSdkThinkingStyle = 'none' | 'budget' | 'adaptive';
+
+const THINKING_STYLES: ReadonlySet<string> = new Set(['none', 'budget', 'adaptive']);
+
+/**
+ * PiLab R2 (04.2): the thinking each model on SDK route `routeName` takes, by the
+ * model id the CLI is asked for. The CLI asks every model for adaptive thinking
+ * at its own default effort; a row the catalog declares without reasoning, or
+ * with budget thinking, is sent what the DSH engine sends the same row.
+ */
+export function claudeSdkModelThinking(
+  plan: Pick<DshModelPlan, 'routes'> | null,
+  routeName: string
+): Record<string, ClaudeSdkThinkingStyle> {
+  const route = plan && Object.hasOwn(plan.routes, routeName) ? plan.routes[routeName] : undefined;
+  const styles: Record<string, ClaudeSdkThinkingStyle> = {};
+  for (const model of route?.models ?? []) {
+    if (model.reasoningEfforts === false) {
+      styles[model.id] = 'none';
+      continue;
+    }
+    const own = model.compat?.forceAdaptiveThinking;
+    const forced = own !== undefined ? own === true : route?.compat?.forceAdaptiveThinking === true;
+    styles[model.id] = forced ? 'adaptive' : 'budget';
+  }
+  return styles;
+}
+
+/**
+ * The CLI's per-model capability override (`CLAUDE_CODE_MODEL_CAPABILITIES`,
+ * 2.1.300: `model=cap,-cap;…`) for these styles. The CLI decides thinking and
+ * effort from its own model table, and a name it does not know (a gateway's
+ * model) counts as its newest: adaptive thinking at its default effort, whatever
+ * the query asked. A `none` or `budget` row is told it has neither, so the
+ * thinking the host asks for is what goes out. Adaptive rows are left alone.
+ */
+export function claudeSdkModelCapabilities(
+  styles: Readonly<Record<string, ClaudeSdkThinkingStyle>>
+): string | undefined {
+  const entries = Object.entries(styles)
+    .filter(([model, style]) => style !== 'adaptive' && /^[^;=,*\s]+$/.test(model))
+    .map(([model]) => `${model}=-effort,-adaptive_thinking`);
+  return entries.length > 0 ? entries.join(';') : undefined;
+}
+
+/** {@link CLAUDE_SDK_MODEL_THINKING_ENV} read back; anything malformed is left out, never thrown. */
+export function parseClaudeSdkModelThinking(
+  raw: string | undefined
+): Record<string, ClaudeSdkThinkingStyle> {
+  if (!raw?.trim()) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+  const styles: Record<string, ClaudeSdkThinkingStyle> = {};
+  for (const [model, value] of Object.entries(parsed)) {
+    if (model !== '' && typeof value === 'string' && THINKING_STYLES.has(value)) {
+      styles[model] = value as ClaudeSdkThinkingStyle;
+    }
+  }
+  return styles;
+}
+
 /**
  * User 2026-10-23: where an SDK chat compacts by itself, as a percentage of
  * its auto-compact window. The CLI's `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`

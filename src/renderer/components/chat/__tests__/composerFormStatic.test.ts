@@ -247,7 +247,8 @@ function attributeOf(node: ts.JsxSelfClosingElement, name: string): string | nul
   return null;
 }
 
-const CARD_CLASS = 'composerCardClass(mode, { hasProtrusion })';
+// PiLab R2: the card also lights up while a file is dragged over it.
+const CARD_CLASS = "cn(composerCardClass(mode, { hasProtrusion }), fileDragOver && 'drop-target')";
 
 describe('the composer box is one thin input row, its other controls in the row below', () => {
   // 2026-10-22 (user ruling, Claude Code desktop look): inside the frame there
@@ -307,6 +308,8 @@ describe('the composer box is one thin input row, its other controls in the row 
     expect(meaningfulChildren(stack).map(slotToken)).toEqual([
       'noticeBlock',
       'queueNoticeBlock',
+      // PiLab R2: "no such command", with Send anyway.
+      'unknownCommandBlock',
       'attachmentChipsBlock',
       // T3: the "model will not see this image" warning sits under the chips.
       'imageInputHintBlock',

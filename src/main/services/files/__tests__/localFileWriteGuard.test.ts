@@ -87,6 +87,7 @@ describe('every local write primitive is gated', () => {
   ).replace(/\/\*[\s\S]*?\*\//g, '');
 
   const CHANNELS = [
+    'file:write',
     'file:createDir',
     'file:rename',
     'file:move',

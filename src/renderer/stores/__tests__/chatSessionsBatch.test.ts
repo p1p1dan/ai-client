@@ -1,7 +1,6 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  applyRuntimeEvent,
   applyRuntimeEvents,
   type ChatMessage,
   type ChatSession,
@@ -296,7 +295,7 @@ describe('applyRuntimeEvents — fold semantics', () => {
 
       let manualState: ChatSessionsState = base;
       for (const event of events) {
-        const step = applyRuntimeEvent(manualState, event);
+        const step = applyRuntimeEvents(manualState, [event]);
         manualState = { ...manualState, ...step };
       }
 
@@ -646,6 +645,7 @@ describe('initRuntime — batching (RUNTIME_EVENT_FLUSH_MS / RUNTIME_EVENT_MAX_Q
       hostBoundSessionIds: [],
       lastError: null,
       historyErrors: {},
+      runtimeEventCursors: {},
     });
   });
 

@@ -820,10 +820,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // applies, inside the group and in the streaming tail alike.
   it('F11: the process panel carries the process shell spacing and the dim tone', () => {
     expectCalled('cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass())');
-    // Answer text stays at the ordinary answer tone when it is final; only
-    // grouped, intermediate prose uses the muted tone.
-    expectWired('const tone = intermediate ? turnIntermediateToneClass() : turnAnswerToneClass();');
-    expectCalled('cn(turnBodyClass(), tone)');
+    expectCalled('cn(turnBodyClass(), turnAnswerToneClass())');
+    expectUnwired('turnIntermediateToneClass');
   });
 
   // F12: `waiting_*` must count as in flight for the shell, or the head and the
@@ -1299,9 +1297,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(kinds.slice(0, -2).every((kind) => kind === 'retry' || kind.startsWith('?'))).toBe(true);
   });
 
-  // Q1 keeps the final answer visible; earlier prose joins the process group.
-  // Notices still render independently, and a tool-free turn has no empty fold.
-  it('[WG-WIRE-4] the final answer stays outside and grouped prose uses the intermediate tone', () => {
+  // Every answer stays visible in original order; only process enters a group.
+  it('[WG-WIRE-4] answers stay outside and process groups render only process', () => {
     const body = nodeSource(turnBodyNode());
     expect(body).toContain('workSections.map((section) =>');
     expect(body).toContain(
@@ -1320,10 +1317,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(finalBranch).toContain('<div className={turnFinalAnswerDividerClass()}>');
     expect(finalBranch).toContain("t('Final output')");
     expect(countIn(body, 'turnFinalAnswerDividerClass()')).toBe(1);
-    expect(body).toContain(
-      'const renderGroupSegment = (segment: TurnSegment<TurnItem>) => renderSegment(segment, true);'
-    );
-    expect(body).toContain('{section.segments.map(renderGroupSegment)}');
+    expect(body).toContain('{section.segments.map(renderSegment)}');
+    expect(body).not.toContain('renderGroupSegment');
     // T113 removed the `lastProcessSection === -1` head, which existed so a
     // turn with NO process at all still showed something for a 50-second wait.
     // `TurnWorkZoneRow` covers that turn along with every other one, from the
@@ -1339,7 +1334,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     );
     expect(groupedHead).not.toContain('renderSegment(section.segment)');
     expect(groupedHead).not.toContain('turnFinalAnswerClass()');
-    expect(groupedHead).toContain('{section.segments.map(renderGroupSegment)}');
+    expect(groupedHead).toContain('{section.segments.map(renderSegment)}');
   });
 
   /**
@@ -1360,7 +1355,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('turnProcessGroupFolds(groupedProcessItems)');
     expect(body).toContain('if (!processSettled && !turnProcessGroupFolds(groupedProcessItems)) {');
     expect(body).toContain(
-      '<Fragment key={groupKey}>{section.segments.map(renderGroupSegment)}</Fragment>'
+      '<Fragment key={groupKey}>{section.segments.map(renderSegment)}</Fragment>'
     );
     const branchAt = body.indexOf(
       'if (!processSettled && !turnProcessGroupFolds(groupedProcessItems)) {'
@@ -1453,11 +1448,15 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    */
   it('[WG-WIRE-6] the expand choice is held by the turn, not by the head element', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
+    // PiLab R1 FR-11.6: held per SESSION in the tool-expansion store (key
+    // `group:<groupKey>`), so it also survives a switch away and back.
     expect(turn).toContain(
-      'const [workGroupUserOpen, setWorkGroupUserOpen] = useState<Record<string, boolean>>({});'
+      'const groupExpandMemory = useToolExpansionStore((state) => state.bySession[sessionId]);'
     );
-    expectCalled('userOpen={workGroupUserOpen[groupStateKey] ?? null}');
-    expectCalled('setWorkGroupUserOpen((previous) => ({ ...previous, [groupStateKey]: open, }))');
+    expectCalled('userOpen={workGroupUserOpen(groupKey)}');
+    expectCalled('setToolRowExpanded(sessionId, `group:${groupKey}`, open)');
+    expectUnwired('groupStateKey');
+    expectUnwired('groupKey}:${processSettled}');
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
     expect(head, 'no second copy of the choice inside the element').not.toContain('useState');
   });
@@ -1479,10 +1478,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(countIn(SYNTAX, 'deriveTurnCurrentAction(items)')).toBe(1);
     // Design system v2 §6: the one running icon.
     expect(head).toContain('<StatusIcon status="running"');
-    // Decision 037: when no head is going to carry the clock, the turn draws it
-    // itself — at the TOP, as its first line. The user rejected the tail-row
-    // fallback on sight (「什么情况都让 已工作 x 分 xx 秒 落在顶部」).
-    expect(turn).toContain('{!clockOnHead && <TurnClockRow zone={workZone} items={items} />}');
+    // PiLab R1 (user ruling 2026-10-30, replacing decision 037's top line): the
+    // turn's steps are drawn in place and its live line sits at its FOOT while
+    // it runs, as Claude Code's spinner line does.
+    expect(turn).toContain("{STEPS_INLINE && workZone.kind === 'working' && (");
+    expect(turn).toContain('<TurnClockRow zone={workZone} items={items} />');
     expect(nodeSource(topLevelFunction('TurnClockRow'))).toContain('turnClockRowClass()');
     for (const counter of [
       'countProcessSteps',
@@ -1543,7 +1543,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * `expectCalled`s, because "all of them appear" is exactly the claim that
    * would stay green if they came out shuffled.
    */
-  it('[WG-WIRE-8] the tail row lists the bill, and never the duration', () => {
+  // PiLab R1 (user ruling 2026-10-30): the bill now carries the duration
+  // (「用时」) — decision 037's 「never the duration down here」 is replaced by
+  // the approved preview. Still settled-only, still no narration or tokens.
+  it('[WG-WIRE-8] the tail row lists the bill: when, how long, how many calls, thinking last', () => {
     const row = nodeSource(topLevelFunction('TurnWorkZoneRow'));
     const turn = nodeSource(topLevelFunction('ChatTurn'));
     // A running turn renders nothing here: the ticking clock is the turn's
@@ -1554,16 +1557,17 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // on this row in ANY case — not as a fallback, not behind a flag.
     expect(row).not.toContain('workedHeadText');
     expect(row).not.toContain('workingHeadText');
-    expect(row).not.toContain('clock');
-    // The row takes the zone and nothing else.
-    expect(turn).toContain('<TurnWorkZoneRow zone={workZone} />');
+    // The row takes the zone, plus the thinking text its 「思考」 opens.
+    expect(turn).toContain('<TurnWorkZoneRow zone={workZone} thinkingText={turnThinkingText} />');
     // Still no narration down here.
     expect(row).not.toContain('deriveTurnCurrentAction');
 
     const completedAt = row.indexOf("t('Completed at {{time}}'");
+    const took = row.indexOf("t('Took {{duration}}'");
     const calls = row.indexOf("'{{count}} tool calls'");
     const thinking = row.indexOf('formatThinkingClause(');
     expect(completedAt, 'the completion time is there').toBeGreaterThan(-1);
+    expect(took, 'how long it took').toBeGreaterThan(-1);
     expect(completedAt, 'and the call count follows it').toBeLessThan(calls);
     expect(calls, 'and the thinking time closes the line').toBeLessThan(thinking);
     // The closed list, as a negative: no token clause on this row, ever.
@@ -1575,7 +1579,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // Split in two to keep a `${` out of a plain string (biome
     // `noTemplateCurlyInString`); together they pin the prefix form.
     expect(row).toContain('joinTurnProgressLine(`✻ ');
-    expect(row).toContain(', clauses.slice(1))');
+    expect(row).toContain(', head.slice(1))');
   });
 
   /**
@@ -1838,7 +1842,8 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
   // The turn skeleton reads at the prose rhythm too now (§3.1); the tool rows
   // keep the 1.5 tier, and the code block takes `text-code`'s own line height.
   it('the tool rows retain the 1.5 tier; the turn skeleton takes the prose leading', () => {
-    expect(countIn(DENSITY_CODE, 'leading-normal')).toBe(1);
+    // The tool row, and (PiLab R1) the result line under a step, same tier.
+    expect(countIn(DENSITY_CODE, 'leading-normal')).toBe(2);
     expect(DENSITY_CODE).toContain(`flex flex-col gap-2.5 text-chat-body ${LEAD}`);
     expect(DENSITY_CODE).toContain('text-left text-chat-process leading-normal');
   });
@@ -1859,7 +1864,11 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
  * strongest available form is that the bubble subtree reads no geometry at all.
  */
 describe('T12: the prompt bubble reads no geometry (the invariant FB3 carried)', () => {
-  it('T12: nothing in UserBubble measures the DOM or the scroll position', () => {
+  // PiLab R1 FR-01.5 (user 2026-10-30): the fold now reads the text box's
+  // own full height (`scrollHeight`, which its max-height does not change).
+  // The invariant narrows to what F10 actually needed: nothing here may read
+  // scroll position or a box's position, the input of the old oscillation.
+  it('T12: nothing in UserBubble reads scroll position or a box position', () => {
     const bubble = nodeSource(topLevelFunction('UserBubble'));
     expect(bubble.length, 'the slice must be non-trivial or this proves nothing').toBeGreaterThan(
       200
@@ -1867,13 +1876,13 @@ describe('T12: the prompt bubble reads no geometry (the invariant FB3 carried)',
     for (const probe of [
       'getBoundingClientRect',
       'IntersectionObserver',
-      'ResizeObserver',
-      'scrollHeight',
+      'scrollTop',
       'clientHeight',
       'offsetTop',
-      'useRef',
     ]) {
-      expect(bubble, `the prompt must not be sized by geometry: ${probe}`).not.toContain(probe);
+      expect(bubble, `the prompt must not be sized by scroll geometry: ${probe}`).not.toContain(
+        probe
+      );
     }
   });
 
@@ -1915,7 +1924,8 @@ describe('T12-d: the jump-to-bottom button', () => {
    */
   it('is synced from both the scroll handler and the growth observer', () => {
     const syncs = [...timeline.matchAll(/syncJumpToBottom\(viewport\)/g)];
-    expect(syncs.length, 'scroll alone leaves a streaming turn without a button').toBe(2);
+    // Scroll handler, growth observer, and (FR-11.6) a session reopened where it was read.
+    expect(syncs.length, 'scroll alone leaves a streaming turn without a button').toBe(3);
   });
 
   it('the click re-arms the follower — the one place allowed to', () => {
