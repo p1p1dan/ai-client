@@ -899,6 +899,28 @@ describe('blob reads (diff and conflict views): only git saying "no" reads as em
     );
   });
 
+  it('[PILAB-R2] compares a staged rename against the file it was renamed from', async () => {
+    const repo = initRepo('repo');
+    writeFileSync(path.join(repo, 'f0.txt'), 'a\nb\nc\nd\ne\n');
+    git(repo, 'commit', '-qam', 'body');
+    git(repo, 'mv', 'f0.txt', 'moved.txt');
+    writeFileSync(path.join(repo, 'moved.txt'), 'a\nb\nc\nd\ne\nf\n');
+    git(repo, 'add', 'moved.txt');
+
+    await expect(new GitService(repo).getFileDiff('moved.txt', true)).resolves.toEqual({
+      path: 'moved.txt',
+      original: 'a\nb\nc\nd\ne\n',
+      modified: 'a\nb\nc\nd\ne\nf\n',
+    });
+    // A file that is really new still has no original.
+    writeFileSync(path.join(repo, 'new.txt'), 'x\n');
+    git(repo, 'add', 'new.txt');
+    await expect(new GitService(repo).getFileDiff('new.txt', true)).resolves.toMatchObject({
+      original: '',
+      modified: 'x\n',
+    });
+  });
+
   it('reads conflict stages as empty only when git says the stage is absent', async () => {
     const repo = initRepo('repo');
     const service = new WorktreeService(repo);

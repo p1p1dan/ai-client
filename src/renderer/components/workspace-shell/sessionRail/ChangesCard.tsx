@@ -33,8 +33,12 @@ export function ChangesCard({
           className="flex h-6 items-center gap-1.5 rounded-sm px-1 tabular-nums transition-colors hover:bg-fill-ghost-hover"
           data-rail-changes-open=""
         >
-          <span className="text-success">+{formatLineCount(view.added)}</span>
-          <span className="text-destructive">−{formatLineCount(view.removed)}</span>
+          {view.counted && (
+            <>
+              <span className="text-success">+{formatLineCount(view.added)}</span>
+              <span className="text-destructive">−{formatLineCount(view.removed)}</span>
+            </>
+          )}
         </button>
       }
     >
@@ -51,9 +55,11 @@ export function ChangesCard({
               {file.dir && (
                 <span className="min-w-0 flex-1 truncate text-foreground-faint">{file.dir}</span>
               )}
-              <span className="ml-auto shrink-0 text-foreground-faint tabular-nums">
-                +{file.added} −{file.removed}
-              </span>
+              {!file.uncounted && (
+                <span className="ml-auto shrink-0 text-foreground-faint tabular-nums">
+                  +{file.added} −{file.removed}
+                </span>
+              )}
             </button>
           </li>
         ))}

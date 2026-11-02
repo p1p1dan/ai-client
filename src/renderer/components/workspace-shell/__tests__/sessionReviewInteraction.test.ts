@@ -171,3 +171,42 @@ it('groups changes by file, and the change card expands and marks its file (layo
     vi.unstubAllGlobals();
   }
 });
+
+it('[PILAB-R2] totals no line counts when every change is too large or binary', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  const element = document.createElement('div');
+  document.body.append(element);
+  const root = createRoot(element);
+  const binary: SessionReviewEntry = {
+    id: 'm1:bin',
+    path: '/repo/bin.dat',
+    status: 'added',
+    unavailable: 'binary',
+    added: 0,
+    removed: 0,
+  };
+  const text: SessionReviewEntry = {
+    id: 'm1:a',
+    path: '/repo/a.ts',
+    status: 'modified',
+    patch: '@@ -1 +1,2 @@\n one\n+two',
+    added: 1,
+    removed: 0,
+  };
+  const render = (entries: SessionReviewEntry[]) =>
+    act(async () =>
+      root.render(
+        createElement(SessionReviewPanel, { sessionId: 's', entries, onOpenDiff: vi.fn() })
+      )
+    );
+  try {
+    await render([binary]);
+    expect(element.textContent).not.toContain('+0');
+    await render([text, binary]);
+    expect(element.textContent).toContain('+1 −0 *');
+  } finally {
+    await act(async () => root.unmount());
+    element.remove();
+    vi.unstubAllGlobals();
+  }
+});

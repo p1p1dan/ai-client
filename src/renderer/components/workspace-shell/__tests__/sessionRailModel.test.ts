@@ -112,6 +112,14 @@ describe('deriveChangesCardView', () => {
     expect(view?.files[0]).toMatchObject({ entryId: 'a', path: 'src/app/main.ts' });
   });
 
+  it('[PILAB-R2] shows no line counts for a change it could not count', () => {
+    const binary = { ...entry('b', 'bin.dat', 0, 0), unavailable: 'binary' } as SessionReviewEntry;
+    const mixed = deriveChangesCardView([entry('a', 'a.ts', 2, 1), binary]);
+    expect(mixed).toMatchObject({ counted: true, added: 2, removed: 1 });
+    expect(mixed?.files.map((file) => file.uncounted)).toEqual([false, true]);
+    expect(deriveChangesCardView([binary])?.counted).toBe(false);
+  });
+
   it('formats line counts the way the reference does', () => {
     expect(formatLineCount(10181)).toBe('10,181');
   });

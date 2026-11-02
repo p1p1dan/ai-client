@@ -74,6 +74,8 @@ export function SessionReviewPanel({
   const additions = entries.reduce((sum, entry) => sum + entry.added, 0);
   const deletions = entries.reduce((sum, entry) => sum + entry.removed, 0);
   const incomplete = entries.some((entry) => entry.unavailable || entry.preview);
+  // PiLab R2: changes that are all too large or binary have no counts to total.
+  const counted = entries.some((entry) => !entry.unavailable);
 
   // Layout 5c/5d: the change card names a change; expand its file and bring
   // it into view. Keyed on `seq` so a second click on the same card re-reveals.
@@ -151,17 +153,19 @@ export function SessionReviewPanel({
             <span className="min-w-0 flex-1 truncate">
               {t('Recorded {{count}} changes', { count: entries.length })}
             </span>
-            <span
-              title={
-                incomplete
-                  ? t('Counts include previews; unavailable diffs are excluded.')
-                  : undefined
-              }
-            >
-              <span className="text-success">+{additions}</span>{' '}
-              <span className="text-destructive">−{deletions}</span>
-              {incomplete ? ' *' : ''}
-            </span>
+            {counted && (
+              <span
+                title={
+                  incomplete
+                    ? t('Counts include previews; unavailable diffs are excluded.')
+                    : undefined
+                }
+              >
+                <span className="text-success">+{additions}</span>{' '}
+                <span className="text-destructive">−{deletions}</span>
+                {incomplete ? ' *' : ''}
+              </span>
+            )}
           </div>
           <div ref={listRef} className="min-h-0 flex-1 overflow-auto px-1.5 pb-3">
             {pagination?.hasMore && (

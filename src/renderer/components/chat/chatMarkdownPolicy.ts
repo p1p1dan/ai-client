@@ -553,10 +553,14 @@ function splitOpenTail(rawTail: string): { openTail: string; openFence?: string 
   const fence = fenceAtEnd(rawTail);
   if (fence === null) return { openTail: rawTail };
   const raw = rawTail.slice(fence.at);
+  // Trailing newlines removed for the same reason `segmentClosedText` does
+  // it: the gap between the plain part and the fence is the container's job.
+  const openTail = rawTail.slice(0, fence.at).replace(/\n+$/, '');
+  // An opening line still arriving would show its language growing letter by
+  // letter in the block's head ("t", "ty", "typ"); it waits for its newline.
+  if (!fence.closed && !raw.includes('\n')) return { openTail };
   return {
-    // Trailing newlines removed for the same reason `segmentClosedText` does
-    // it: the gap between the plain part and the fence is the container's job.
-    openTail: rawTail.slice(0, fence.at).replace(/\n+$/, ''),
+    openTail,
     // A closed fence reads exactly as the settled segment it is about to become.
     openFence: fence.closed ? raw.replace(/\n+$/, '') : raw.replace(PARTIAL_FENCE_LINE, ''),
   };

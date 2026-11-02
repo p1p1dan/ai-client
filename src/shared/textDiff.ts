@@ -35,6 +35,30 @@ export function lineDiffRows(oldText: string, newText: string): ToolDiffRow[] {
 }
 
 export function diffLineArrays(a: readonly string[], b: readonly string[]): ToolDiffRow[] {
+  // PiLab R2 (FR-07.4): lines both sides share at the start and end are the
+  // same rows whatever the middle does, so only the middle goes through the
+  // table — a one-line change in a 1001-line file no longer trips the bound
+  // below and turns into 1001 deletions and 1001 additions.
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) head += 1;
+  let tail = 0;
+  while (
+    tail < a.length - head &&
+    tail < b.length - head &&
+    a[a.length - 1 - tail] === b[b.length - 1 - tail]
+  ) {
+    tail += 1;
+  }
+  if (head === 0 && tail === 0) return diffMiddle(a, b);
+  const same = (text: string): ToolDiffRow => ({ kind: 'same', text });
+  return [
+    ...a.slice(0, head).map(same),
+    ...diffMiddle(a.slice(head, a.length - tail), b.slice(head, b.length - tail)),
+    ...a.slice(a.length - tail).map(same),
+  ];
+}
+
+function diffMiddle(a: readonly string[], b: readonly string[]): ToolDiffRow[] {
   // Keep argument previews bounded; large replacements can be shown as a whole hunk.
   if (a.length * b.length > 1_000_000) {
     return [

@@ -92,8 +92,8 @@ describe('deriveTurnChanges (layout 5c)', () => {
     ]);
     expect(summary).not.toBeNull();
     expect(summary?.files).toEqual([
-      { path: 'src/a.ts', added: 3, removed: 2, firstEntryId: 'm1:c1' },
-      { path: 'src/b.ts', added: 3, removed: 0, firstEntryId: 'm1:c2' },
+      { path: 'src/a.ts', added: 3, removed: 2, firstEntryId: 'm1:c1', uncounted: false },
+      { path: 'src/b.ts', added: 3, removed: 0, firstEntryId: 'm1:c2', uncounted: false },
     ]);
     expect(summary?.added).toBe(6);
     expect(summary?.removed).toBe(2);
@@ -122,7 +122,42 @@ describe('deriveTurnChanges (layout 5c)', () => {
         )
       ),
     ]);
-    expect(summary?.files).toEqual([{ path: 'a.ts', added: 1, removed: 1, firstEntryId: 'm:e1' }]);
+    expect(summary?.files).toEqual([
+      { path: 'a.ts', added: 1, removed: 1, firstEntryId: 'm:e1', uncounted: false },
+    ]);
+  });
+
+  it('[PILAB-R2] counts nothing for a change too large or binary to diff, not 0/0', () => {
+    const big = deriveTurnChanges([
+      assistant(
+        'm',
+        reviewed('c1', 'write', {
+          version: 1,
+          path: 'big.bin',
+          status: 'added',
+          unavailable: 'binary',
+        })
+      ),
+    ]);
+    expect(big?.counted).toBe(false);
+    expect(big?.files[0]?.uncounted).toBe(true);
+    const mixed = deriveTurnChanges([
+      assistant('m', [
+        ...reviewed('c1', 'write', {
+          version: 1,
+          path: 'big.bin',
+          status: 'added',
+          unavailable: 'too-large',
+        }),
+        ...reviewed('c2', 'edit', {
+          version: 1,
+          path: 'a.ts',
+          status: 'modified',
+          patch: '@@ -1 +1 @@\n-a\n+b',
+        }),
+      ]),
+    ]);
+    expect(mixed).toMatchObject({ counted: true, added: 1, removed: 1 });
   });
 
   it('agrees with the session review the changes tab shows (same ids, same totals)', () => {
@@ -157,13 +192,16 @@ describe('deriveTurnChanges (layout 5c)', () => {
       added: 1,
       removed: 0,
       firstEntryId: `m:${index}`,
+      uncounted: false,
     }));
     expect(TURN_CHANGE_NAMED_FILES).toBe(2);
-    expect(turnChangeNamedFiles({ files, added: 4, removed: 0 })).toEqual({
+    expect(turnChangeNamedFiles({ files, added: 4, removed: 0, counted: true })).toEqual({
       paths: ['src/a.ts', 'src/b.ts'],
       more: 2,
     });
-    expect(turnChangeNamedFiles({ files: files.slice(0, 1), added: 1, removed: 0 })).toEqual({
+    expect(
+      turnChangeNamedFiles({ files: files.slice(0, 1), added: 1, removed: 0, counted: true })
+    ).toEqual({
       paths: ['src/a.ts'],
       more: 0,
     });

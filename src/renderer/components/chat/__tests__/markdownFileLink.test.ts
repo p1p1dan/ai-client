@@ -1,10 +1,15 @@
 // @vitest-environment happy-dom
+
+import { englishTranslate } from '@shared/i18n';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { ChatMarkdown } from '../ChatMarkdown';
 import { parseMarkdownFileLink } from '../markdownFileLink';
+
+// The code block's copy label is translated; keep the settings store out of this mount.
+vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate, locale: 'en' }) }));
 
 it.each([
   ['src/app.ts#L12-L14', 'src/app.ts', 12, 14],

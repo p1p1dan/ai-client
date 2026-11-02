@@ -748,6 +748,29 @@ describe('[PILAB-R1-05.5] the approval card carries the parameters being approve
   });
 });
 
+describe('[PILAB-R2-WRITE] a Write over an existing file is an update on the card', () => {
+  it('marks a new file add and an overwrite update', async () => {
+    const { rt, q } = await startedOn({ mode: 'agent', gear: 'ask' });
+    writeFileSync(join(configDir, 'there.txt'), 'old\n');
+    void canUse(q)(
+      'Write',
+      { file_path: join(configDir, 'there.txt'), content: 'new\n' },
+      toolOpts('t-over')
+    );
+    void canUse(q)(
+      'Write',
+      { file_path: join(configDir, 'fresh.txt'), content: 'new\n' },
+      toolOpts('t-new')
+    );
+    await flush();
+    const changes = ofType('permission.requested').map(
+      (e) => (e.payload.detail as { changes: { change: string }[] }).changes[0]?.change
+    );
+    expect(changes).toEqual(['update', 'add']);
+    await rt.dispose();
+  });
+});
+
 describe('what reaches canUseTool is never answered by the host (S-2 A-2, ruling 20)', () => {
   it('in plan mode, on any gear, a change the CLI asks about is the user card (official)', async () => {
     for (const pair of [

@@ -17,7 +17,11 @@
  */
 import { ChevronsUpDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { SplitDiffBody } from '@/components/chat/DiffLayout';
+import {
+  lineNumberWidthClass,
+  NoFinalNewlineNote,
+  SplitDiffBody,
+} from '@/components/chat/DiffLayout';
 import type { ToolDiffLineRow } from '@/components/chat/toolDiff';
 import { buildDiffView, diffHasLineNumbers, splitDiffItems } from '@/components/chat/toolDiffView';
 import { useI18n } from '@/i18n';
@@ -35,6 +39,7 @@ export function ReviewDiff({
   const [openFolds, setOpenFolds] = useState<ReadonlySet<string>>(() => new Set());
   const items = useMemo(() => buildDiffView(rows, openFolds), [rows, openFolds]);
   const numbered = diffHasLineNumbers(rows);
+  const numberWidthClass = useMemo(() => lineNumberWidthClass(rows), [rows]);
   const openFold = (key: string) => setOpenFolds((previous) => new Set(previous).add(key));
   if (layout === 'split') {
     return (
@@ -45,6 +50,7 @@ export function ReviewDiff({
         <SplitDiffBody
           items={splitDiffItems(items)}
           numbered={numbered}
+          numberWidthClass={numberWidthClass}
           onOpenFold={openFold}
           insetClass="px-2"
         />
@@ -97,7 +103,10 @@ export function ReviewDiff({
             {numbered && (
               <span
                 data-line-number=""
-                className="w-8 shrink-0 select-none pr-1.5 text-right text-foreground-faint tabular-nums"
+                className={cn(
+                  'shrink-0 select-none pr-1.5 text-right text-foreground-faint tabular-nums',
+                  numberWidthClass
+                )}
               >
                 {row.kind === 'del' ? (row.oldLine ?? '') : (row.newLine ?? row.oldLine ?? '')}
               </span>
@@ -118,6 +127,7 @@ export function ReviewDiff({
               )}
             >
               {row.text}
+              {row.noFinalNewline && <NoFinalNewlineNote />}
             </span>
           </div>
         );

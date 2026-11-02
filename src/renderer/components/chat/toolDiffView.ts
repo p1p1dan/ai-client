@@ -25,6 +25,7 @@ export function diffHasLineNumbers(rows: readonly ToolDiffLineRow[]): boolean {
 
 /** The line after `row` on each side, to tell one hunk from the next. */
 function continues(previous: ToolDiffLineRow, row: ToolDiffLineRow): boolean {
+  if (row.hunkStart) return false;
   const oldNext =
     previous.oldLine !== undefined
       ? previous.oldLine + (previous.kind === 'add' ? 0 : 1)

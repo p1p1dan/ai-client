@@ -1,6 +1,7 @@
 import { Check, Copy } from 'lucide-react';
 import { Fragment, memo, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/i18n';
 import {
   type ChatCodeToken,
   chatCodeTokenStyle,
@@ -80,7 +81,8 @@ export const ChatCodeBlock = memo(function ChatCodeBlock({
   return (
     <div className={chatMarkdownCodeFrameClass()}>
       <div className={chatMarkdownCodeHeadClass()}>
-        <span className="min-w-0 truncate lowercase">{label}</span>
+        {/* A selection across the block copies the code, not its language. */}
+        <span className="min-w-0 select-none truncate lowercase">{label}</span>
         <CodeCopyButton code={code} />
       </div>
       <pre className={chatMarkdownCodeBlockClass()}>
@@ -121,6 +123,7 @@ const COPY_CONFIRM_MS = 1500;
  * fail differently would be worse than one that fails.
  */
 function CodeCopyButton({ code }: { code: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
 
@@ -144,7 +147,7 @@ function CodeCopyButton({ code }: { code: string }) {
     timerRef.current = window.setTimeout(() => setCopied(false), COPY_CONFIRM_MS);
   };
 
-  const label = copied ? 'Copied' : 'Copy code';
+  const label = copied ? t('Copied') : t('Copy code');
   return (
     <Button
       type="button"

@@ -48,13 +48,14 @@ describe('reviewPatchLines', () => {
 });
 
 describe('reviewEntryRows (user, 2026-10-23)', () => {
+  // PiLab R2: the 「No newline」 marker is still not a row, but its line says so.
   it('turns a recorded patch into numbered rows, without hunk headers or markers', () => {
     expect(
       reviewEntryRows({ patch: '@@ -1,2 +1,2 @@\n keep\n-old\n+new\n\\ No newline at end of file' })
     ).toEqual([
       { kind: 'same', text: 'keep', oldLine: 1, newLine: 1 },
       { kind: 'del', text: 'old', oldLine: 2 },
-      { kind: 'add', text: 'new', newLine: 2 },
+      { kind: 'add', text: 'new', newLine: 2, noFinalNewline: true },
     ]);
   });
 
@@ -65,5 +66,35 @@ describe('reviewEntryRows (user, 2026-10-23)', () => {
     ];
     expect(reviewEntryRows({ preview: { rows } })).toEqual(rows);
     expect(reviewEntryRows({})).toEqual([]);
+  });
+});
+
+describe('[PILAB-R2-HUNKS] hunk breaks and a missing final newline', () => {
+  it('breaks between DSH hunks that carry no line numbers', async () => {
+    const { dshFileReview } = await import('@shared/dshFileReview');
+    const review = dshFileReview(
+      'edit',
+      { file_path: '/repo/a.ts' },
+      {
+        diffs: [
+          { path: '/repo/a.ts', oldText: 'a\nb\nc', newText: 'a\nB\nc' },
+          { path: '/repo/a.ts', oldText: 'x\ny\nz', newText: 'x\nY\nz' },
+        ],
+      }
+    );
+    const rows = reviewEntryRows({ patch: review?.patch });
+    const { buildDiffView } = await import('@/components/chat/toolDiffView');
+    const kinds = buildDiffView(rows).map((item) => item.kind);
+    expect(kinds).toEqual(['row', 'row', 'row', 'row', 'gap', 'row', 'row', 'row', 'row']);
+  });
+
+  it('marks the line the 「No newline」 marker follows', () => {
+    const rows = reviewEntryRows({
+      patch: '@@ -1 +1 @@\n-x\n\\ No newline at end of file\n+x',
+    });
+    expect(rows).toEqual([
+      { kind: 'del', text: 'x', oldLine: 1, noFinalNewline: true },
+      { kind: 'add', text: 'x', newLine: 1 },
+    ]);
   });
 });

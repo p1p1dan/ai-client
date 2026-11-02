@@ -442,8 +442,15 @@ describe('FB1: splitClosedPrefix / advanceClosedPrefix', () => {
 
     it('holds back a closing fence that is still arriving', () => {
       expect(splitClosedPrefix(flushes[2]).openFence).toBe('```ts\nconst a = 1;\nconst b = 2;');
-      // The opening line alone is never held back.
-      expect(splitClosedPrefix('```').openFence).toBe('```');
+    });
+
+    it('[PILAB-R2] holds back an opening line until its newline arrives', () => {
+      for (const partial of ['```', '```t', '```typescr']) {
+        const split = splitClosedPrefix(`intro\n\n${partial}`);
+        expect(split.openFence, partial).toBeUndefined();
+        expect(split.openTail, partial).not.toContain('`');
+      }
+      expect(splitClosedPrefix('intro\n\n```typescript\n').openFence).toBe('```typescript\n');
     });
 
     it('shows a closed fence exactly as the segment it becomes', () => {

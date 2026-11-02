@@ -683,7 +683,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS)/;
+  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS|RUN)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -2061,6 +2061,14 @@ const DSH_P0_2_SCRIPTS = {
     if (step === 0) return tool('glob', { pattern: '**/*' });
     if (step === 1) return tool('grep', { pattern: 'PERM-SECRET' });
     return say('P1-PERM-SEARCH finished.');
+  },
+  // PiLab R2: `P1-RUN {"calls":[{"name":"write","input":{...}}, ...]}` plays the
+  // given DSH tool calls one per step, as `CC-RUN` does for the Claude engine.
+  'P1-RUN'(_round, step, _calls, triggerText) {
+    const p = p04Params(triggerText);
+    const calls = Array.isArray(p.calls) ? p.calls : [];
+    if (step < calls.length) return tool(calls[step].name, calls[step].input ?? {});
+    return say(`P1-RUN done (${calls.length} calls)`);
   },
   // dsh-rebase decision 190 (src/dsh-host/__tests__/toolGaps.integration.test.ts):
   // the enhanced grep in content mode with context, a case-folded file list

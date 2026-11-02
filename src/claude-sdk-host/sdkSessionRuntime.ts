@@ -3509,6 +3509,15 @@ function errorText(error: unknown): string {
 }
 
 /** The card body the permission card reads: our own summary, not the raw arguments. */
+/** A file already at `file` (resolved against the workspace); errors read as absent. */
+function isExistingFile(file: string, workspace: string): boolean {
+  try {
+    return statSync(path.resolve(workspace, file)).isFile();
+  } catch {
+    return false;
+  }
+}
+
 function describeCall(
   toolName: string,
   input: Record<string, unknown>,
@@ -3548,7 +3557,14 @@ function describeCall(
       input: { path, ...body, workspace },
       detail: {
         kind: 'file_change',
-        changes: [{ path, change: toolName === 'Write' ? 'add' : 'update' }],
+        // PiLab R2 (FR-07.2): a Write over an existing file replaces it — an
+        // update, not an add; the card's badge used to say 「A」 for both.
+        changes: [
+          {
+            path,
+            change: toolName === 'Write' && !isExistingFile(path, workspace) ? 'add' : 'update',
+          },
+        ],
       },
     };
   }

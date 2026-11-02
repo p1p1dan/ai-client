@@ -67,7 +67,12 @@ import {
   toolRowIconClass,
   turnProcessToneClass,
 } from './chatTimelineLayout';
-import { DiffLayoutToggle, SplitDiffBody } from './DiffLayout';
+import {
+  DiffLayoutToggle,
+  lineNumberWidthClass,
+  NoFinalNewlineNote,
+  SplitDiffBody,
+} from './DiffLayout';
 import { HitListPopover } from './HitListPopover';
 import { LiveToolOutput } from './LiveToolOutput';
 import {
@@ -1453,6 +1458,7 @@ function ToolRowDiffSegment({
           <SplitDiffBody
             items={splitDiffItems(items)}
             numbered={numbered}
+            numberWidthClass={lineNumberWidthClass(diff.rows)}
             onOpenFold={openFold}
             insetClass="px-3"
           />
@@ -1524,6 +1530,7 @@ function ToolRowDiffSegment({
                   )}
                 >
                   {row.text}
+                  {row.noFinalNewline && <NoFinalNewlineNote />}
                 </span>
               </div>
             );

@@ -61,14 +61,41 @@ export function DiffLayoutToggle({ narrow = false }: { narrow?: boolean }) {
   );
 }
 
+/**
+ * PiLab R2 (FR-07.5): after a line with no newline at the end of the file. A
+ * change that only adds or drops that newline otherwise reads as the same line
+ * removed and added again.
+ */
+/**
+ * PiLab R2: the one-number column, wide enough for the diff's largest line
+ * number. `w-8` leaves 26px of text, which a 4-digit number overflows.
+ */
+export function lineNumberWidthClass(rows: readonly ToolDiffLineRow[]): string {
+  let max = 0;
+  for (const row of rows) max = Math.max(max, row.oldLine ?? 0, row.newLine ?? 0);
+  return max >= 10_000 ? 'w-12' : max >= 1_000 ? 'w-10' : 'w-8';
+}
+
+export function NoFinalNewlineNote() {
+  const { t } = useI18n();
+  return (
+    <span className="select-none font-sans text-2xs text-foreground-faint">
+      {' '}
+      {t('(no newline at end of file)')}
+    </span>
+  );
+}
+
 function SplitSide({
   row,
   side,
   numbered,
+  numberWidthClass,
 }: {
   row: ToolDiffLineRow | undefined;
   side: 'old' | 'new';
   numbered: boolean;
+  numberWidthClass: string;
 }) {
   const changed = row && row.kind !== 'same';
   return (
@@ -82,7 +109,12 @@ function SplitSide({
       )}
     >
       {numbered && (
-        <span className="w-8 shrink-0 select-none pr-1.5 text-right text-foreground-faint tabular-nums">
+        <span
+          className={cn(
+            'shrink-0 select-none pr-1.5 text-right text-foreground-faint tabular-nums',
+            numberWidthClass
+          )}
+        >
           {(side === 'old' ? row?.oldLine : row?.newLine) ?? ''}
         </span>
       )}
@@ -101,6 +133,7 @@ function SplitSide({
         )}
       >
         {row?.text ?? ''}
+        {row?.noFinalNewline && <NoFinalNewlineNote />}
       </span>
     </div>
   );
@@ -110,11 +143,14 @@ function SplitSide({
 export function SplitDiffBody({
   items,
   numbered,
+  numberWidthClass = 'w-8',
   onOpenFold,
   insetClass,
 }: {
   items: readonly SplitDiffItem[];
   numbered: boolean;
+  /** `lineNumberWidthClass` of the whole diff, so opening a fold never widens it. */
+  numberWidthClass?: string;
   onOpenFold: (key: string) => void;
   /** Horizontal padding of the fold and gap rows, matching the unified body's. */
   insetClass: string;
@@ -154,8 +190,18 @@ export function SplitDiffBody({
         }
         return (
           <div key={item.key} data-diff-pair="" className="grid grid-cols-2">
-            <SplitSide row={item.left} side="old" numbered={numbered} />
-            <SplitSide row={item.right} side="new" numbered={numbered} />
+            <SplitSide
+              row={item.left}
+              side="old"
+              numbered={numbered}
+              numberWidthClass={numberWidthClass}
+            />
+            <SplitSide
+              row={item.right}
+              side="new"
+              numbered={numbered}
+              numberWidthClass={numberWidthClass}
+            />
           </div>
         );
       })}
