@@ -561,3 +561,23 @@
   - 改动（未提交）：`chatMarkdownPolicy.ts` 段落按位置编号（`keyedClosedSegments`），新增 `streamedTextParts`（已定稿段、在写的纯文本、在写的代码块放进一个列表，代码块提前用上定稿后的编号）与 `streamedSegmentsHold`（结束时可否保持分段：没有冻结的切点、没有链接定义或脚注）；段落容器给以标题开头的段补 24px（与整段渲染一致）。`TurnTextItem` 边写边显示过的块，结束后保持分段，否则仍整段重排。`MessageTimeline` 普通回答与「最终输出」共用一层外壳，结束时只多出分隔线。参考 PI-Desktop `Markdown.tsx`（按位置编号、流式结束不换结构）。
   - 自动：新增 `[PILAB-R2-SETTLE]` 4 项（纯函数）、2 项（挂载：从写到定稿到结束是同一个 `pre` 元素；有脚注时整段重排）、3 项（三种常见回复分段与整段 HTML 相同）；`[FB1-7]`、`[FB1-8]`、`[WG-WIRE-4]` 按新结构更新。`chat/__tests__` 206 文件 3604 项、`workspace-shell` 83 文件 1101 项全部通过；`tsc` 仅基线。
   - 真实应用（800 行，两次）：写完时的长卡顿从两次（各约 0.53 s）降为一次（约 0.5 s，写完前约 0.55 s）；总卡顿 1.8 s → 0.9–1.5 s。剩下这一次是更外层的重建，没有继续查（用户定）。200 行、400 行各只剩一次 0.13 s、0.26 s。
+
+## 22. Linux R2 审批卡显示差异与「复制补丁」（C 批，2026-11-02）
+
+- 预览：`docs/design/2026-11-02-approval-diff-copy-patch-preview.html`。参考：Claude Code 的修改审批读当前文件、显示带行号的差异；PI-Desktop `PermissionCard` 只用参数前后片段、差异块有复制。用户定按预览里的推荐：差异读当前文件算（退路是参数片段并写明原因）、卡里不给「上下 / 并排」、不单独限高（跟卡片正文一起滚）、卡上也放复制、没行号的也给复制（悬停写明不能直接应用）、「复制全部补丁」以后再说、卡里最多 400 行。
+- 改动（`feat/integrate-2026-11`）：
+  - `shared/diffPatch.ts`（新）：差异行 → 标准补丁（按 3 行上下文切段、`--- /dev/null` 新文件、`\ No newline`；没行号的段写裸 `@@`）；`patchPath` 把绝对路径换成相对工作区。`shared/textDiff.ts` 新增 `numberedLineDiff`（整文件带行号的差异，最后一行有无换行算改动）。
+  - `shared/permissions/approvalDiff.ts`（新）：两个引擎共用。按两边编辑工具的匹配规则（字面匹配、CRLF 归一、空 `old_string` 不匹配；Claude 的 Edit 对不存在的文件用空 `old_string` 时视为新建）把调用套到当前文件上，结果放进已有的 `PermissionFileChange.diff`（1.0.x Codex 时代留下的字段，卡片原来只拿它数 +/-）。读不到 / 文件不存在 / 找不到 / 出现多处时退回参数片段，并标 `note`；全部替换带匹配数。加密文件读到 `%TSD-Header-###%` 按读不到处理。
+  - DSH：`requestBuilder` 的 write / edit 经 `readFile` 读文件，`plugin.ts` 用 DSH 的 fs 服务读（Windows 上走加密读取那一层，和编辑本身读到的一样）。Claude：`describeCall` 直接读文件。有差异时卡片不再带参数原文。
+  - 卡片：`questionCardModel` 新增 `diffs`（按文件，含行、说明、是否多半失败），`QuestionCard` 在文件行下画 `ReviewDiff`（新增卡片样式：浅底、不另限高），文件行上放复制。`ReviewDiff.tsx` 与 `sessionReviewPatch.ts` 从 `workspace-shell/` 挪到 `chat/`（chat 不许引用 workspace-shell）。
+  - 「复制补丁」：`CopyPatchButton`（新）放在对话修改记录框、审查面板文件行（展开时）、差异标签页工具栏；补丁在点的时候才生成。
+  - 顺带修：`reviewPatchLines` 把段外的 `--- a/x` / `+++ b/x` 当成删行和加行。
+- 自动：新增 `[PILAB-R2-PATCH]`（含真 `git apply` 7 种情形）、`[PILAB-R2-APPROVAL-DIFF]`（构造、DSH 经 fs 服务、文件头解析）；`[PILAB-R1-05.5]` 的 Claude 用例改为检查差异（原来检查的参数原文正是这次要换掉的）；字体白名单跟随文件挪动。全量 796 文件通过；之后修文件头解析，重跑受影响的 84 文件通过。
+- 桥接基准重录：`stream.perm-card.json` 的写入卡改带差异（本次）；全部录制补上 `cacheUnreported`（`a2762bda` 加的字段当时没重录）。
+- 真实界面（隔离环境 + 假网关；截图 `shots/c-*.png`）：
+  - DeepSeek：改一处显示第 3–10 行、一删两加；卡上复制得到相对路径的补丁，`git apply --check` 通过；新建文件标 A、全为新增；找不到要替换的内容时黄字提示并按片段显示。
+  - Claude：全部替换写「全部替换：文件里共 3 处」，三处都在差异里。
+  - 审查面板：DeepSeek 记录的补丁本身没有行号，按钮写「复制补丁（没有行号，不能直接应用）」。差异标签页（未跟踪文件）复制得到 `/dev/null` 新文件补丁，能打上。
+  - 主对话自 R1 步骤化后不内嵌差异（`showDiff={false}`），对话里的复制按钮只在子代理面板等处出现。
+- 发现：整合工作目录的 `src/dsh-host/node_modules` 是指向旧 PiLab 目录的链接，`@aiclient/dsh-app` → `../../bundle` 因此解析到旧目录，整合后 DeepSeek 引擎跑的一直是 PiLab 分支自己的权限 / 桥接代码（之前的桥接检查和整合后那次界面抽查都受影响，B 批只改界面不受影响）。已改成本目录自己的依赖目录（各包仍链回旧目录，`@aiclient` 指向本目录）。
+- 未做：写入被拒绝 / 预览时对话行把 2 行新文件数成「+3」（旧问题）；正式包、Windows、加密机未测。部分通过：FR-05.5、07.9（以上环境）。

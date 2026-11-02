@@ -452,7 +452,7 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 
 **2026-11-02 补记三（差异小问题 A 批，详见台账 §19 末尾）**：用户定把 §19 剩下的差异小问题分三批：A 正确性修复（不改外观）、B 代码高亮性能（先测量再改）、C 新界面（审批卡显示差异、差异「复制补丁」，先出 HTML 预览）。A 批九项已改完、自动测试全过，并在真实界面抽查过（DeepSeek、Claude 两个引擎；抽查中又修了右侧栏「改动」卡片和改动面板标题的两处「+0 −0」），代码提交 `6b3fb086`，未推送。假网关新增 `P1-RUN`（DSH 工具剧本）。顺带补了 `425fdfb5` 漏登记的弹窗边距清单（这条守卫测试推送后一直是红的）。下一步：用户确认后提交 → B 批先测量 → C 批出预览。
 
-## 12. 2026-11-02 阶段收尾：整合分支与 B 批（当前最新）
+## 12. 2026-11-02 阶段收尾：整合分支与 B 批（已被 §13 接替）
 
 ### 12.1 进行到哪里
 - 工作已移到整合分支 `feat/integrate-2026-11`，工作目录 `/home/pi/code/ai-client-integrate`。它在 main 上合入了 `feat/pilab-session-experience-r0`、`feat/claude-plugins`、`feat/chat-search`（合并提交 `32a81583`、`3b9c6f6c`、`2b366f1a`），已推送到 origin。main 没动；旧的工作目录不要删，新目录的 `node_modules`、`out-dsh-host`、`out-node-runtime`、`src/claude-sdk-host/node_modules`（插件目录里的 0.3.312）、`src/dsh-host/node_modules` 都是指向旧目录的链接（已写进 `.git/info/exclude`）。
@@ -477,3 +477,25 @@ NODE_OPTIONS=--max-old-space-size=1536 pnpm exec vitest run \
 ### 12.5 风险
 - 正式包、Windows、加密机上的高亮性能未测。
 - 800 行代码块写完时仍有一次约 0.5 s 的卡顿。
+
+## 13. 2026-11-02 阶段收尾：C 批（当前最新）
+
+### 13.1 进行到哪里
+- §19 剩下的三批（A 正确性、B 高亮性能、C 新界面）全部完成。C 批见台账 §22：审批卡显示带行号的改动对比（两个引擎），差异视图「复制补丁」（审查面板、差异标签页、对话修改记录框、审批卡）。
+- 桥接基准已重录。
+- 整合工作目录的 `src/dsh-host/node_modules` 已改成本目录自己的目录（各包链回旧 PiLab 目录，`@aiclient/dsh-app` 指向本目录的 `bundle`）。之前它整个链到旧目录，DeepSeek 引擎跑的是旧目录的权限 / 桥接代码。其余几个链接（根 `node_modules`、`out-dsh-host`、`out-node-runtime`、`src/claude-sdk-host/node_modules`）还在。
+
+### 13.2 重要决定
+- 审批卡的差异由宿主读当前文件算，放进已有的 `PermissionFileChange.diff`；读不到或套不上时退回参数片段并写原因。
+- 测试代码没问题时修产品代码，不靠改测试过验证（用户 2026-11-02）。确实过时的测试（检查的正是用户要换掉的行为）才改，并说明。
+
+### 13.3 试过但放弃的
+- 以为 app 跑的是旧的 `out-dsh-host` 包：dev 模式其实直接跑 `src/dsh-host/host.ts`，真正的原因是 `node_modules` 链接，见上。
+
+### 13.4 测试
+- 全量 796 文件通过；修文件头解析后重跑受影响 84 文件通过；两套 tsc 只剩基线 TS2352（`pilabExperience.ts`，10-30 起就有，未改）；桥接冒烟通过、重录后 `--check` 无差异。
+
+### 13.5 风险与待办
+- 正式包、Windows、加密机未测（加密文件在 DeepSeek 引擎经 fs 服务读，Claude 引擎读到密文时按读不到处理）。
+- 旧问题：写入被拒绝 / 预览时对话行把 2 行新文件数成「+3」。
+
