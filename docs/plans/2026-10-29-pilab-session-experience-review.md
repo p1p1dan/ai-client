@@ -85,6 +85,10 @@
 | DEF-026 | S2 | FR-04.7；AC-27 | Claude 引擎回合中途停止：CLI 自己补的收尾帧（无 `stop_reason`，缓存与输出为 0）被当成真实用量 | 用量写成「输出 0、缓存 0」，上下文从 5.1k 掉到 1.2k，缓存命中率 0% | 已修复（§18） |
 | DEF-027 | S3 | FR-04.7、04.8；AC-27 | 供应商不报缓存数时按 0 记 | 弹窗与侧栏写「缓存命中率 0%」，像实测未命中 | 已修复（§18） |
 | DEF-028 | S3 | FR-04.5 | 已用与剩余各自四舍五入 | 「已用 13%」旁写「剩余 88%」 | 已修复（§18） |
+| DEF-029 | S1 | FR-07.6；AC-30 | `chatMarkdownPolicy.ts` `openFenceOffset` 只认未闭合的 fence；收尾 ``` 到达后、下一块首行到达前，整段代码进 `openTail` 由 `PlainProse` 显示（`cutBoundaries` 要等下一行才确认切点） | 流式中已高亮的代码块在收尾时退回带反引号的纯文本；回复以代码块结尾时一直如此，直到回合结束 | 已修复（§19） |
+| DEF-030 | S2 | FR-07.2；AC-29 | `toolCard.ts` 有 `outcome`（拒绝/未执行/停止）时 `failed=false`；`ToolRows.tsx` `ToolRowDiffSegment` 只看 `running`/`failed`。主对话区不显示差异（`MessageTimeline.tsx` `showDiff={false}`），只有子代理对话窗显示 | 子代理对话窗里，未执行或结果未知、又没有输出的 Edit 展开后，抬头写「Successful edit — argument preview」 | 已修复（§19；子代理窗未在真实界面复测） |
+| DEF-031 | S2 | FR-07.2；AC-29 | `sessionReviewDiffTarget.ts` 固定 `staged:false`，`DiffViewer` 无两边相同的空状态 | 改动面板点「打开文件」时，若改动已暂存/提交或只改了权限位，打开的是空白差异页 | 已修复（§19，并入主仓库那份未提交修复并补上换行处理；Windows autocrlf 未实测） |
+| DEF-032 | S2 | FR-07.3；AC-29 | 全仓没有统一/分屏切换与持久化设置；聊天行内与改动面板只有统一视图，`DiffViewer` 固定分屏 | 用户无法选择差异视图方式 | 已修复（§19，按预览推荐项；Linux 真实界面复测，子代理窗未测） |
 
 这些结论只覆盖已读分支，不推断其他路径已经通过。
 
@@ -200,11 +204,11 @@
 | 条款 | 核查重点 | 入口 | 当前结论 | 后续 |
 |---|---|---|---|---|
 | 07.1 | 复用工具差异与 SCM 差异，统一状态和入口 | R06 | 待验证 | #4；AC-29 |
-| 07.2 | 待执行预览/工具结果/当前磁盘差异来源可识别 | R06、F01 | 待验证 | #4；AC-29 |
-| 07.3 | 统一/分屏、窄容器降级、用户选择、无溢出 | R06、R08 | 待验证 | #4；AC-29/40 |
+| 07.2 | 待执行预览/工具结果/当前磁盘差异来源可识别 | R06、F01 | **不通过（读码：DEF-030、DEF-031，§19）** | #4；AC-29 |
+| 07.3 | 统一/分屏、窄容器降级、用户选择、无溢出 | R06、R08 | **部分通过（DEF-032 已实现并在 Linux 真实界面复测；子代理窗、Windows 未测，§19）** | #4；AC-29/40 |
 | 07.4 | 行号/hunk/省略/替换配对/长行定位正确 | R06 | 待验证 | #4；AC-29 |
 | 07.5 | 多文件、hunk、CRLF、EOF、重命名、二进制、大文件 | R06 | 待验证 | #4；AC-29 |
-| 07.6 | 流式按块更新，不完整 fence/hunk 不误解析/清空 | R06、H01 | 待验证 | #4；AC-30 |
+| 07.6 | 流式按块更新，不完整 fence/hunk 不误解析/清空 | R06、H01 | **不通过（读码 + 纯函数探针：DEF-029，§19）** | #4；AC-30 |
 | 07.7 | 合批、高亮不阻塞，无全会话反复解析 | R06 | 待验证 | #4/#7；AC-30 |
 | 07.8 | 高亮样式隔离、主题正常 | R06 | 待验证 | #4/#6；AC-31 |
 | 07.9 | 复制原文/补丁，无 UI 行号，剪贴板成功后反馈 | R06 | 待验证 | #4；AC-31 |
@@ -436,6 +440,48 @@
 - 发现但不在本项：Claude 引擎请求的 `max_tokens` 是 CLI 默认 32000，不是目录里该模型的输出上限（如 8192）。
 - 证据边界：真实 Claude、第三方 Anthropic 兼容服务、OpenAI 兼容服务的缓存/用量字段未测；CLI 认识的真实 Claude 型号走它自己的能力表，未对照；AC-26/27 为「部分通过」。
 
-## 19. Linux R2 差异查看（2026-10-31，刚开始）
+## 19. Linux R2 差异查看（2026-11-02 源码审计、复现与第一批修复）
 
-- 状态：已派两路只读源码审计（07.1～07.5、07.6～07.9），阶段收尾时结果未返回、未核对；本节尚无结论，FR-07 各条与 AC-29/30/31 仍为「待验证」。下一步见交接 §11.8。
+- 执行：Claude；SHA `125b714e`。2026-10-31 的两路审计结果没留下，2026-11-02 重做（07.1～07.5、07.6～07.9），只读，未启动应用。07.6 另把 `advanceClosedPrefix` 单独打包在 node 里跑过一次探针。DEF-029、DEF-030 由本会话对照源码复核；其余条目只经审计代理读码，标「疑」的还要真实界面确认。
+- 已登记缺陷：DEF-029～032（§3）。
+- 审计发现、未登记为缺陷（S2，待真实复现后再定是否登记）：
+  - 07.1 三套渲染：聊天行内 `ToolRowDiffSegment`、改动面板 `ReviewDiff`（两者共用 `buildDiffView`）、SCM / 差异标签页 `DiffViewer`（Monaco）。审批卡不用差异组件，参数按 `JSON.stringify` 显示（`approvalPreview.ts`）。二进制与过大文件的说法各处不同；`TurnChangeCard` 不判断 `unavailable`，过大或二进制的改动显示「+0 −0」。
+  - 07.2 覆盖已有文件的 Write，结果回来前一律显示为整文件新增；Claude 引擎审批请求写死 `change:'add'`。改动面板「打开文件」打开的是 git 当前差异而不是本次会话的改动，标签页只写「(unstaged)」。
+  - 07.3 `DiffViewer` 抬头路径没有 `truncate`，窄窗口加长路径会溢出；`ReviewDiff` 行号栏约 26px，4 位行号可能压到 ± 列（疑）。
+  - 07.4 DSH 补丁的 hunk 只有裸 `@@`、没有行号（`dshFileReview.ts`），面板里相距很远的两段之间没有「⋯」；两边行数乘积超过 1e6 时退化为整段删 + 整段加，计数变成 +1001/−1001 这类；删除在文件开头时 Monaco 定位可能偏（疑）。
+  - 07.5 只差末尾换行的改动显示成一对内容相同的 `-x`/`+x`（`\ No newline` 被丢掉）；重命名在暂存区按新路径取原文，整个文件显示为新增；只差 CRLF 的改动，Monaco 显示空白，行内与面板显示内容相同的删加对（疑）；工作区一侧读取没有大小上限（疑）。
+  - 07.7 高亮在主线程同步执行（`chatShiki.ts` `codeToTokens`），流式中每次 flush 都把整个正在增长的代码块重新切词，长代码块可能卡顿（疑，需 profile）；缓存键是整段代码，流式前缀会把 64 条缓存冲掉；回合结束时整段正文换了根元素重新挂载，所有代码块重新高亮。
+  - 07.6 收尾 fence 只到了两个反引号时，代码块里短暂出现「``」；语言名逐字变化。
+  - 07.8 `ui/code-block.tsx`（代码审查弹窗、Markdown 预览用）把「跟随终端配色」一律当暗色；「跟随系统」只在渲染时读一次，不监听切换。聊天代码块只用逐 token 内联样式，没有全局样式泄漏。
+  - 07.9 代码块复制的是 fence 原文，写入成功后才显示勾，失败静默；按钮文案「Copy code / Copied」是写死的英文。差异视图没有「复制补丁」，框选复制时 +/- 不带、折叠的行被漏掉（Chromium 行为待实测）；流式中未闭合的代码块也能复制半截，而整条回复的复制在流式中是隐藏的。
+- 主仓库 `main` 的未提交修复（日期 2026-10-30 08:51，来源无记录，不在本分支）：会话审阅「打开文件」先查未暂存差异、再查暂存差异，都相同就打开文件；`DiffViewer` 两边相同时显示空状态（「这个文件两边内容相同，没有差异」）。读码判断逻辑正确，但 Windows 默认 `core.autocrlf=true` 下，干净文件的 blob 是 LF、工作区是 CRLF，`===` 判断不相等，仍会打开空白页（疑）。比较前要统一换行，或改看 Monaco 的 `lineChanges` 是否为空。是否并入本分支待用户定。
+- 待真实界面复现（隔离环境 + 假网关）：拒绝一次 Edit 审批后展开该行（DEF-030）；流式输出以代码块结尾的回复（DEF-029，需要逐片可控的假网关剧本，`paced-text` 按长度均分，切不到收尾 fence 中间）；DSH 一次 edit 改相距很远的两处；Write 覆盖已有 300 行文件；超过 64KB 的补丁与二进制 Write 看改动卡片计数；窄窗口 + 长路径 + 4 位行号。CRLF / autocrlf / 重命名留到 Windows。
+- 真实界面复测（2026-11-02，隔离环境 `/tmp/pilab-r0` + 假网关 `claude-sdk` 剧本，Claude 引擎 `fake-1`，截图 `shots/r2d-*.png`）：
+  - 审批卡上的 Edit 参数是 JSON 文本，不是差异（`r2d-approval-card.png`），与 07.1 审计一致。
+  - DEF-030 在主对话区不出现：主对话区的工具行本来就不显示差异（改动在右侧审阅栏看，`6be1d70a` 起），被拒绝的 Edit 展开后只显示拒绝原因「The user declined this tool call.」（`r2d-refused-edit-header.png`）。等级由 S1 降为 S2，只剩子代理对话窗这一处。
+  - DEF-029 已复现：假网关 `CC-TEXT` 新增 `pieces`（逐片给定内容），5 片 `前言⏎⏎```ts⏎const a = 1;⏎` / `const b = 2;⏎` / `` `` `` / `` `⏎ `` / `⏎⏎后记`，每片间隔 3 秒，每 0.7 秒取样（`results/r2d-fence-stream.txt`）。前两片：代码块高亮显示（`pre`=1）。第 3 片只到两个反引号：代码块里多出一行「``」（`r2d-fence-half-ticks.png`）。第 4 片收尾 fence 到达：代码块消失（`pre`=0），整段带反引号显示为纯文本，持续约 3 秒直到「后记」到达（`r2d-fence-closed-plain.png`）；回合结束后恢复为代码块。
+  - 新发现（S3）：审批卡待答时点停止，Edit 行显示「已拒绝 · 自动：已中止 · 未执行」，可以展开（`aria-expanded=true`），展开后什么都没有（`r2d-stopped-edit-header.png`）。
+- 结论：07.2、07.3、07.6 不通过（读码）；07.1、07.4、07.5、07.7、07.8、07.9 待验证；AC-29/30/31 没有一条能判通过。
+- 用户裁定（2026-11-02）：主仓库那份未提交修复挪到本分支并补换行处理；「上下 / 并排」切换先出预览；四处先修。
+- 修复（2026-11-02，`f2d67a58`）：
+  - DEF-029 + 半截收尾 fence：`chatMarkdownPolicy.ts` 的 `fenceAtEnd` 把「已闭合、后面只有空行」的 fence 也交给 `openFence`（显示成它即将变成的已定段落）；仍在写的 fence 末行只有反引号/波浪号时先不显示这一行。fence 后面直接跟正文（中间没有空行）时仍走纯文本，未改。
+  - DEF-030：`ToolRowDiffSegment` 的 `running` 换成 `previewOnly`（运行中或有 outcome），未执行、被拒、停止、结果未知的调用抬头写「修改预览」。
+  - 展开后为空：主对话区（隐藏差异）里只有差异可展开的行不再可展开。
+  - DEF-031：并入主仓库 `main` 那份未提交修复（会话审阅「打开文件」先未暂存、再暂存、都相同就打开文件；`DiffViewer` 两边相同时显示空状态）；新增 `sameIgnoringLineEndings`（`shared/textDiff.ts`），比较时忽略 CRLF/LF，只差换行符时空状态写「两边只有换行符（CRLF / LF）不同，提交时 Git 可能会自动转换」。主仓库工作区里那份改动没有动，仍未提交。
+  - 假网关：`CC-TEXT` 支持 `pieces`（逐片给定内容，无思考）。
+- 修复后验证：
+  - 自动：`chatMarkdownPolicy`、`piMarkdownSplitComparison`、`messageTimelineWiring` 3 文件 182 项；`toolDiffInteraction`、`sessionReviewDiffTarget`、`sessionReviewInteraction` 3 文件 15 项；`chatMarkdownRender`、`markdownFileLink`、`toolCard`、`toolDiff`、`toolDiffView`、`toolRowArg`、`toolRowOutcome`、`toolRowPatternAttachment` 与 `source-control` 9 文件 240 项，全部通过。新增 `[PILAB-R2-FENCE]` 4 项、`[PILAB-R2-DIFF]` 1 项、CRLF 1 项。`tsc --noEmit` 仅基线 TS2352；改动文件 biome 通过。
+  - 真实界面（同上环境）：同一 5 片剧本每 0.7 秒取样，代码块从出现到回合结束一直是代码块，内容只出现过「const a = 1;」「const a = 1;⏎const b = 2;」两种，没有「``」，没有纯文本态（`results/r2d-fence-stream-after.txt`）；审批中停止的 Edit 行不再可展开（`shots/r2d-stopped-edit-after.png`）。
+  - 未验证：子代理对话窗里的抬头、DEF-031 的真实界面与 Windows autocrlf。
+- 用户裁定（2026-11-02 第二次）：切换按预览的三个推荐项（所有差异共用一个选择、默认上下、只在差异标题栏切换）；改动面板的「打开文件」改为在编辑器里打开文件，不再打开差异。
+- 第二批（`f2d67a58`）：
+  - 「打开文件」：`SessionReviewPanel` 直接 `requestFileOpen({ path, source: 'review' })` 并要求编辑器面板。上一批并入的「先未暂存、再暂存、都相同就打开文件」随之不再需要，删除 `sessionReviewDiffTarget.ts` 及其测试；`DiffViewer` 两边相同的空状态（含换行处理）保留，源代码管理打开的差异标签页仍用得到。
+  - DEF-032：新增 `stores/diffLayout.ts`（`localStorage` 持久化，默认上下；窄于 560px 时显示为上下、不改选择）、`hooks/useElementWidth.ts`、`toolDiffView.ts` 的 `splitDiffItems`（删除与紧随的新增逐行配对）、`chat/DiffLayout.tsx`（`DiffLayoutToggle` 用 `ToggleGroup` + Lucide `Rows2`/`Columns2`；`SplitDiffBody`）。接入：改动面板展开的文件行、子代理窗工具行差异抬头、差异标签页标题栏（Monaco `renderSideBySide` 跟随选择，700px 断点不变）。顺带让差异标签页标题的路径可截断（07.3 审计项）。
+  - 自动：新增 `diffLayout.test.ts` 2 项、`[PILAB-R2-SPLIT]` 3 项，改动面板测试改为断言打开文件意图并覆盖切换；`workspace-shell` + `source-control` + 新 store 86 文件 1109 项；`chat/__tests__` 全部 202 文件分 4 批 3568 项，全部通过；`tsc --noEmit` 仅基线 TS2352；改动文件 biome 通过。
+- 真实界面复测（2026-11-02，同上环境；工作区 `git init` 后，Claude 引擎跑一次获批的 Edit：`split-r2.txt` 第 20、21 行改为 3 行）：
+  - 改动面板宽 466px：「并排」灰掉，显示上下。复测时发现，选择是「上下」时按钮没有灰掉：判断写成了「显示方式和选择不同」。已改为只看宽度（`diffTooNarrowToSplit`）。
+  - 展开窗格到 1098px，点「并排」：9 行配对正确（20/21 左删右加，第 22 行只在右边），选择写入 `localStorage`（`shots/r2d-review-split.png`）。还原到 466px 后显示上下，并提示「太窄，暂用上下」，选择不变（`r2d-review-narrow-split-choice.png`）。窄面板里这条提示会把文件名挤短。
+  - 「打开文件」：编辑器打开 `split-r2.txt` 文件本身，不是差异（`r2d-review-open-file.png`）。
+  - 差异标签页（从「工作区」打开）：编辑器宽 1110px 时，选「并排」为左右分屏，点「上下」后 Monaco 变为单栏，选择同步为上下（`r2d-difftab-split.png`、`r2d-difftab-stacked.png`）。编辑器窄于 700px 时，Monaco 自己的断点仍会改为单栏。
+  - 未在真实界面复测：子代理对话窗里的切换与抬头。
+- 结论：07.3 部分通过（统一/分屏、窄容器退回、用户选择已在真实界面复测；子代理窗、溢出全面检查、Windows 未做）；07.2、07.6 已修的条目复测通过，其余审计项仍在，维持原结论。
