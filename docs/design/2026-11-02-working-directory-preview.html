@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>换目录（DSH 0.2.1 的 working_directory）：当前 vs 建议</title>
+<style>
+  /* Tokens copied from src/renderer/styles/globals.css (design system v2, light). */
+  :root {
+    --surface-0: #f9f9f7; --background: #fcfcfb; --surface-2: #fff; --surface-3: #fff; --foreground: #151515;
+    --muted: #525252; --faint: color-mix(in oklab, #525252 62%, #fcfcfb);
+    --border: #e5e5e4; --input: #cececd; --fill: #eeeeed;
+    --primary: #c6613f; --destructive: #b5452f; --success: #3f7d4e; --warning: #b07a1e;
+    --radius-md: 10px; --radius-lg: 12px;
+    --chat: 13px; --process: 12px; --small: 12px; --ui: 13px; --heading: 14px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface-0); color: var(--foreground); font: var(--ui)/1.45 var(--sans); }
+  header { padding: 20px 28px 8px; }
+  h1 { font-size: 16px; margin: 0 0 6px; }
+  .lead { color: var(--muted); max-width: 1040px; margin: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 16px; padding: 12px 28px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface-0); z-index: 5; }
+  .seg { display: inline-flex; border: 1px solid var(--input); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; padding: 5px 12px; font: inherit; color: var(--muted); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--input); }
+  .seg button.on { background: var(--surface-2); color: var(--foreground); font-weight: 600; }
+  .ctl-label { color: var(--muted); margin-right: 6px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 18px 28px 10px; }
+  .col h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+  .col h2 b { color: var(--foreground); }
+  .pane { background: var(--background); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; min-height: 600px; }
+  .timeline { flex: 1; padding: 18px 22px 10px; }
+  .user { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+  .user span { background: var(--fill); border-radius: 18px; padding: 8px 14px; max-width: 80%; font-size: var(--chat); }
+  .answer { font-size: var(--chat); line-height: 1.45; margin: 10px 0; }
+  code, .m { font-family: var(--mono); font-size: 11.5px; }
+  .answer code { background: var(--fill); padding: 0 4px; border-radius: 4px; }
+  .row { display: flex; align-items: baseline; gap: 6px; font-size: var(--process); margin: 6px 0; color: var(--muted); }
+  .ic { width: 14px; flex: none; text-align: center; color: var(--faint); font-family: var(--mono); font-size: 11px; }
+  .ic.ok { color: var(--success); } .ic.bad { color: var(--destructive); }
+  .verb { color: var(--muted); }
+  .arg { color: var(--faint); font-family: var(--mono); font-size: 11.5px; }
+  .arg.link { text-decoration: underline dotted; cursor: pointer; }
+  .res { padding-left: 20px; font-size: var(--process); color: var(--muted); margin: -2px 0 6px; }
+  .res .elbow { color: var(--faint); font-family: var(--mono); margin-right: 4px; }
+  .res.bad { color: var(--destructive); }
+  .notice { font-size: var(--process); color: var(--faint); margin: 8px 0; }
+  .flag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 6px; background: color-mix(in oklab, var(--destructive) 10%, var(--surface-2)); color: var(--destructive); margin-left: 6px; }
+  .tip { display: none; margin: 2px 0 8px 20px; padding: 6px 10px; border-left: 2px solid var(--border); color: var(--muted); font-size: 11.5px; }
+  .tip.show { display: block; }
+  .dock { margin: 0 16px 8px; border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border)); border-radius: var(--radius-md); background: var(--surface-2); box-shadow: 0 1px 2px rgb(0 0 0 / .05); }
+  .dock .h { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-weight: 600; font-size: var(--heading); }
+  .dock .h .pip { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+  .dock .b { padding: 8px 16px 10px; font-size: var(--process); color: var(--muted); }
+  .dock .f { border-top: 1px solid var(--border); padding: 6px 12px; display: flex; justify-content: flex-end; gap: 8px; }
+  .btn { border: 1px solid var(--input); border-radius: 6px; padding: 2px 10px; background: var(--surface-2); font: 12px var(--sans); }
+  .btn.p { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.g { border-color: transparent; background: transparent; color: var(--muted); }
+  .composer { margin: 0 16px 14px; }
+  .box { background: var(--surface-3); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 9px 12px; color: var(--faint); font-size: var(--chat); }
+  .bar { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: var(--ui); color: var(--muted); }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 6px; }
+  .chip.repo { color: var(--muted); }
+  .chip.cwd { color: var(--muted); background: var(--fill); font-family: var(--mono); font-size: 11.5px; }
+  .chip.cwd.out { background: color-mix(in oklab, var(--warning) 12%, var(--surface-2)); color: color-mix(in oklab, var(--warning) 80%, var(--foreground)); }
+  .chip .x { color: var(--faint); font-family: var(--sans); }
+  .spacer { flex: 1; }
+  .note { margin: 0 28px 28px; padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; color: var(--muted); max-width: 1200px; }
+  .note b { color: var(--foreground); }
+  .note ul { margin: 6px 0 0 18px; padding: 0; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>换目录：模型用 <code>working_directory</code> 切换会话的当前目录</h1>
+  <p class="lead">同一个任务「把 web 子包的构建修好，日志在 /tmp/build」。工作区是 <code>~/proj</code>。左边是不改界面、直接升到 DSH 0.2.1 的样子，右边是建议。上方切换剧情和两个可选项；右边带虚线的路径可以点，看会打开哪个文件。颜色、字号取自设计规范 v2。</p>
+</header>
+
+<div class="controls">
+  <span><span class="ctl-label">剧情</span><span class="seg" id="scene">
+    <button data-v="sub" class="on">切到子目录</button><button data-v="out">切到工作区外</button><button data-v="gone">目录被删、自动退回</button>
+  </span></span>
+  <span><span class="ctl-label">当前目录显示在（仅右侧）</span><span class="seg" id="where">
+    <button data-v="bar" class="on">输入框下的标签（推荐）</button><button data-v="none">只在时间线里</button>
+  </span></span>
+  <span><span class="ctl-label">工具行里的路径（仅右侧）</span><span class="seg" id="paths">
+    <button data-v="ws" class="on">相对工作区（推荐）</button><button data-v="cwd">按模型写的原样</button>
+  </span></span>
+</div>
+
+<div class="cols">
+  <section class="col">
+    <h2><b>当前</b> · 不改界面直接升级</h2>
+    <div class="pane"><div class="timeline" id="cur"></div><div id="curDock"></div><div class="composer" id="curBar"></div></div>
+  </section>
+  <section class="col">
+    <h2><b>建议</b></h2>
+    <div class="pane"><div class="timeline" id="pro"></div><div id="proDock"></div><div class="composer" id="proBar"></div></div>
+  </section>
+</div>
+
+<div class="note">
+  <b>建议的规则</b>
+  <ul>
+    <li><b>换目录本身不弹审批卡</b>，换到工作区外也不弹：它不读不写，也不扩大权限。之后在工作区外读文件、跑命令，照常按「访问工作目录之外」询问（右侧「切到工作区外」能看到这张卡）。</li>
+    <li><b>时间线上一行「切换目录 → 路径」</b>，下面一行结果；失败写原因。目录被删时 DSH 自动退回工作区，这一行用轻量通知写明。</li>
+    <li><b>当前目录和工作区不同时</b>，输入框下的工作区旁多一个次要标签；在工作区外时标签用警告色，写全路径。回到工作区就消失。另一个选项是不常驻显示、只看时间线，代价是滚走之后看不出模型在哪儿干活。</li>
+    <li><b>工具行的路径</b>：模型在子目录里写 <code>src/main.ts</code>，推荐显示成相对工作区的 <code>packages/web/src/main.ts</code>，换来换去也不会认错；在工作区外显示完整路径。点开文件按「调用那一刻的目录」解析。另一个选项是照模型写的原样显示，更短，但同名文件分不清。</li>
+    <li><b>左侧的问题</b>：换目录的行显示成通用的「工具 working_directory」；看不出当前目录；点相对路径会按工作区去找，打开错的文件或找不到；权限判断也按工作区算（这一条在第 2 阶段修，界面上看不出来）。</li>
+  </ul>
+</div>
+
+<script>
+const S = { scene: 'sub', where: 'bar', paths: 'ws' };
+const WS = '~/proj';
+function cdTarget() { return S.scene === 'out' ? '/tmp/build' : 'packages/web'; }
+function shown(rel) {
+  // rel is what the model wrote, relative to the current directory
+  if (S.scene === 'out') return `/tmp/build/${rel}`;
+  return S.paths === 'ws' ? `packages/web/${rel}` : rel;
+}
+function current() {
+  const t = cdTarget();
+  let h = `<div class="user"><span>把 web 子包的构建修好，日志在 /tmp/build</span></div>`;
+  h += `<div class="row"><span class="ic">⚙</span><span class="verb">工具</span><span class="arg">working_directory</span></div>`;
+  h += `<div class="row"><span class="ic">▤</span><span class="verb">读取</span><span class="arg link" onclick="curTip()">${S.scene === 'out' ? 'error.log' : 'src/main.ts'}</span></div>`;
+  h += `<div class="tip" id="curTipBox">点开后按工作区解析：<code>${WS}/${S.scene === 'out' ? 'error.log' : 'src/main.ts'}</code> —— <span style="color:var(--destructive)">${S.scene === 'out' ? '文件不存在' : '打开的是根目录的另一个 main.ts，不是模型读的那个'}</span></div>`;
+  if (S.scene === 'gone') h += `<div class="row"><span class="ic">▣</span><span class="verb">运行</span><span class="arg">pnpm build</span></div>`;
+  else h += `<div class="row"><span class="ic">▣</span><span class="verb">运行</span><span class="arg">pnpm build</span></div>`;
+  h += `<div class="answer">${S.scene === 'gone' ? '构建目录被清理后，我回到了项目根继续。' : '找到原因了：入口里引用了已删除的模块。'}</div>`;
+  return h;
+}
+function curTip() { document.getElementById('curTipBox').classList.toggle('show'); }
+function proposed() {
+  const t = cdTarget();
+  let h = `<div class="user"><span>把 web 子包的构建修好，日志在 /tmp/build</span></div>`;
+  h += `<div class="row"><span class="ic ok">✓</span><span class="verb">切换目录</span><span class="arg">→ ${t}</span></div>`;
+  h += `<div class="res"><span class="elbow">└</span>当前目录：<span class="m">${S.scene === 'out' ? '/tmp/build' : WS + '/packages/web'}</span>${S.scene === 'out' ? '<span class="flag">工作区外</span>' : ''}</div>`;
+  const file = S.scene === 'out' ? 'error.log' : 'src/main.ts';
+  h += `<div class="row"><span class="ic">▤</span><span class="verb">读取</span><span class="arg link" onclick="proTip()">${shown(file)}</span></div>`;
+  h += `<div class="tip" id="proTipBox">点开：<code>${S.scene === 'out' ? '/tmp/build/error.log' : WS + '/packages/web/src/main.ts'}</code>（按调用那一刻的目录解析）</div>`;
+  if (S.scene === 'gone') {
+    h += `<div class="row"><span class="ic ok">✓</span><span class="verb">运行</span><span class="arg">pnpm clean</span></div>`;
+    h += `<div class="notice">当前目录 <span class="m">packages/web</span> 已不存在，回到工作区 <span class="m">${WS}</span></div>`;
+    h += `<div class="row"><span class="ic ok">✓</span><span class="verb">运行</span><span class="arg">pnpm build</span></div>`;
+    h += `<div class="answer">构建目录被清理后，我回到了项目根继续。</div>`;
+  } else {
+    h += `<div class="row"><span class="ic ok">✓</span><span class="verb">运行</span><span class="arg">pnpm build</span><span class="arg">· 在 ${S.scene === 'out' ? '/tmp/build' : 'packages/web'}</span></div>`;
+    h += `<div class="answer">找到原因了：入口里引用了已删除的模块。</div>`;
+  }
+  return h;
+}
+function proTip() { document.getElementById('proTipBox').classList.toggle('show'); }
+function bar(withCwd) {
+  let chips = `<span class="chip repo">▢ proj</span><span class="arg">main</span>`;
+  if (withCwd && S.scene !== 'gone') {
+    const out = S.scene === 'out';
+    chips += `<span class="chip cwd${out ? ' out' : ''}" title="会话当前目录">${out ? '工作区外 · /tmp/build' : '↳ packages/web'}</span>`;
+  }
+  return `<div class="box">回复 PiLab…</div><div class="bar">${chips}<span class="spacer"></span><span>完全自动</span><span>fake-1</span></div>`;
+}
+function dock(side) {
+  if (S.scene !== 'out') return '';
+  if (side === 'cur') return `<div class="dock"><div class="h"><span class="pip"></span>访问工作目录之外</div><div class="b">读取 <span class="m">error.log</span></div><div class="f"><button class="btn g">拒绝</button><button class="btn">本会话允许</button><button class="btn p">允许</button></div></div>`;
+  return `<div class="dock"><div class="h"><span class="pip"></span>访问工作目录之外</div><div class="b">读取 <span class="m">/tmp/build/error.log</span><br><span style="color:var(--faint)">换目录本身没有问你；读工作区外的文件照常询问。</span></div><div class="f"><button class="btn g">拒绝</button><button class="btn">本会话允许</button><button class="btn p">允许</button></div></div>`;
+}
+function render() {
+  document.getElementById('cur').innerHTML = current();
+  document.getElementById('pro').innerHTML = proposed();
+  document.getElementById('curDock').innerHTML = dock('cur');
+  document.getElementById('proDock').innerHTML = dock('pro');
+  document.getElementById('curBar').innerHTML = bar(false);
+  document.getElementById('proBar').innerHTML = bar(S.where === 'bar');
+}
+for (const id of ['scene', 'where', 'paths']) {
+  document.getElementById(id).addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    for (const x of e.currentTarget.querySelectorAll('button')) x.classList.toggle('on', x === b);
+    S[id] = b.dataset.v; render();
+  });
+}
+render();
+</script>
+</body>
+</html>
