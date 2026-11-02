@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-perm-gear",
     "requestId": "turn-PERM-GEAR",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/perm-gear"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
     "type": "session.status",
     "payload": {
       "status": "running"

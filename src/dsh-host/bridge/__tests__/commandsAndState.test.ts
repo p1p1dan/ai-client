@@ -1068,6 +1068,8 @@ describe('DshSessionRuntime — session.projection (P1-4d2, decisions 031, 099 r
       'todos',
       'goal',
       'subagentCatalog',
+      // Decision 207 §7, §14 D: DSH 0.2.1's current directory.
+      'workingDirectory',
     ]);
 
     await bridge.startSend(send('turn-GOAL', '/goal'));
@@ -1129,6 +1131,36 @@ describe('DshSessionRuntime — session.projection (P1-4d2, decisions 031, 099 r
       { key: 'todos', view: todos },
       { key: 'goal', view: null },
     ]);
+  });
+
+  it('[207-PROJ-CWD] forwards the current directory: in the baseline, on a change, in worker.panels', async () => {
+    const host = fakeHost();
+    const projections = fakeProjections(host, {
+      todos: null,
+      goal: null,
+      subagentCatalog: [],
+      workingDirectory: '/home/u/proj',
+    });
+    host.services.goals = { get: () => undefined };
+    const emitted: Emitted[] = [];
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+    await bridge.startSend(send('turn-1', 'hello'));
+    expect(
+      emitted.filter((event) => event.type === 'session.projection').map((event) => event.payload)
+    ).toEqual([
+      { key: 'todos', view: null },
+      { key: 'goal', view: null },
+      { key: 'subagentCatalog', view: [] },
+      { key: 'workingDirectory', view: '/home/u/proj' },
+    ]);
+    emitted.length = 0;
+    projections.change('workingDirectory', '/home/u/proj/packages/web');
+    expect(emitted.map((event) => event.payload)).toEqual([
+      { key: 'workingDirectory', view: '/home/u/proj/packages/web' },
+    ]);
+    const answer = await bridge.panels({ logicalSessionId: LOGICAL });
+    expect(answer.projections.map((entry) => entry.key)).toContain('workingDirectory');
   });
 
   it('[D2-PROJ-NONE] a host without projections sends none, and its sends go on', async () => {

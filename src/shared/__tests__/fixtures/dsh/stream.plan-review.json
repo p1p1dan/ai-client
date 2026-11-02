@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-plan-review",
     "requestId": "turn-PLAN-REVIEW",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/plan-review"
+    }
+  },
+  {
+    "sessionId": "rec-plan-review",
+    "requestId": "turn-PLAN-REVIEW",
     "type": "session.status",
     "payload": {
       "status": "running"

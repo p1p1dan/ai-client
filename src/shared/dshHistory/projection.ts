@@ -60,6 +60,7 @@ import type {
   HistoryTurnFailure,
   TurnStopCause,
 } from '../types/sessionHistory.ts';
+import { callDirectory } from '../workingDirectory.ts';
 import { parseToolArguments, toolRowInput } from './toolInput.ts';
 import {
   AICLIENT_INTERJECT_REASON,
@@ -494,6 +495,12 @@ export interface DshHistoryFoldOptions {
    * shows them. Absent: `compactInstructions` answers for it.
    */
   compactCommandInstructions?: (compactionId: string) => string | undefined;
+  /**
+   * Decision 207 §7: the session's workspace (its header cwd). Given, each
+   * tool row after a `working-directory/change` records the directory its
+   * call ran in (`cwd`, `callDirectory`). Absent: no row carries one.
+   */
+  workspace?: string;
 }
 
 /** Decision 180: `command/run`s of `/compact` kept for their compaction, at most this many. */
@@ -546,9 +553,13 @@ export class DshHistoryFold {
    * step's request was refused); one between steps is pressure.
    */
   private stepOpen = false;
+  private readonly workspace: string | undefined;
+  /** Decision 207 §7: the directory the last `working-directory/change` recorded. */
+  private currentDirectory: string | undefined;
 
   constructor(options: DshHistoryFoldOptions = {}) {
     this.liveSessionId = options.liveSessionId;
+    this.workspace = options.workspace;
     this.presentCall = options.presentCall;
     this.compactInstructions = options.compactInstructions;
     this.compactCommandInstructions = options.compactCommandInstructions;
@@ -643,6 +654,11 @@ export class DshHistoryFold {
       case 'turn/end':
         this.onTurnEnd(event);
         return;
+      case 'working-directory/change': {
+        const cwd = stringOf(recordOf(event.data)?.cwd);
+        if (cwd) this.currentDirectory = cwd;
+        return;
+      }
       case 'goal/change': {
         const rounds = recordOf(recordOf(event.data)?.goal)?.maxGoalRounds;
         if (typeof rounds === 'number' && Number.isFinite(rounds)) this.goalRounds = rounds;
@@ -1220,6 +1236,7 @@ export class DshHistoryFold {
           name,
           input: toolRowInput(args),
           ...this.presentationOf(name, args),
+          ...this.callCwd(),
         });
         this.callOwner.set(callId, index);
         this.callNames.set(callId, name);
@@ -1253,6 +1270,18 @@ export class DshHistoryFold {
     if (callId && !this.callArgs.has(callId)) {
       this.callArgs.set(callId, parseToolArguments(data?.arguments));
     }
+  }
+
+  /**
+   * Decision 207 §7: the directory a call the model issues now runs in, as
+   * the live row records it at the same point (`liveEvents.ts`).
+   */
+  private callCwd(): { cwd: string } | Record<string, never> {
+    const cwd =
+      this.workspace && this.currentDirectory
+        ? callDirectory(this.workspace, this.currentDirectory)
+        : undefined;
+    return cwd ? { cwd } : {};
   }
 
   private onToolResult(event: DshLogEvent): void {

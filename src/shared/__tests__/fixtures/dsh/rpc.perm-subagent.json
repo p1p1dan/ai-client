@@ -206,25 +206,6 @@
       "payload": {
         "parentToolCallId": "toolu_id-4",
         "agentId": "id-7",
-        "kind": "started",
-        "description": "Permission probe child",
-        "taskType": "subagent"
-      }
-    },
-    {
-      "type": "subagent.activity",
-      "payload": {
-        "parentToolCallId": "toolu_id-4",
-        "agentId": "id-7",
-        "kind": "status",
-        "status": "running"
-      }
-    },
-    {
-      "type": "subagent.activity",
-      "payload": {
-        "parentToolCallId": "toolu_id-4",
-        "agentId": "id-7",
         "kind": "progress",
         "usage": {
           "totalTokens": 0,

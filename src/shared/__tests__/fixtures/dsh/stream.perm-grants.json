@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-perm-grants",
     "requestId": "turn-PERM-GRANTS",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/perm-grants"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
     "type": "session.status",
     "payload": {
       "status": "running"

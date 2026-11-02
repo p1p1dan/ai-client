@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-jobs-kill",
     "requestId": "turn-JOBKILL",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
     "type": "session.status",
     "payload": {
       "status": "running"

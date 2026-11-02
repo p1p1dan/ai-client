@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-auto-review",
     "requestId": "turn-AUTO-REVIEW",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/auto-review"
+    }
+  },
+  {
+    "sessionId": "rec-auto-review",
+    "requestId": "turn-AUTO-REVIEW",
     "type": "session.status",
     "payload": {
       "status": "running"

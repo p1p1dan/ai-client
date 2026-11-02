@@ -96,6 +96,7 @@ import {
   composeRefArg,
   type FileLinkTarget,
   isDelegationTool,
+  pathInCallDirectory,
   runningElapsedMs,
   shortPath,
   TOOL_RUN_OUTCOME_LABEL,
@@ -1071,10 +1072,17 @@ function ToolRowArg({
   }
 
   if (view.hitSource) {
+    const open = onOpenFile ?? ((target: FileLinkTarget) => openFileTarget(target, 'hit-list'));
+    const hitBase = view.hitBase;
     return (
       <HitListPopover
         source={view.hitSource}
-        onOpenFile={onOpenFile ?? ((target) => openFileTarget(target, 'hit-list'))}
+        // Decision 207 §7: a hit is relative to where the search ran.
+        onOpenFile={
+          hitBase
+            ? (target) => open({ ...target, path: pathInCallDirectory(target.path, hitBase) })
+            : open
+        }
       >
         <span className={argClass}>
           <ArgText arg={view.arg} pattern={view.argPattern} />

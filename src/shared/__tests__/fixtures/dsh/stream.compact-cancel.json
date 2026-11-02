@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-compact-cancel",
     "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/compact-cancel"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
     "type": "session.status",
     "payload": {
       "status": "running"

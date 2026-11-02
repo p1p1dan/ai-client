@@ -62,6 +62,8 @@ export async function readSessionPage(
       liveSessionId: stub.dshSessionId,
       ...(presentCall ? { presentCall } : {}),
       ...compactInstructionsLookups(stubCompactInstructions(stub)),
+      // Decision 207 §7: rows record the directory they ran in.
+      workspace: stub.cwd,
     });
     for (const event of observation.events) fold.push(event);
     return paginateHistory(fold.messages(), request.offset, request.limit);

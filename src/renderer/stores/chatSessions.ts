@@ -322,6 +322,12 @@ export interface ChatBlock {
    * history block on replay. Absent on every call to one of DSH's own tools.
    */
   toolPresentation?: ToolCallPresentation;
+  /**
+   * Decision 207 §7: the directory the call ran in, when the model had
+   * changed it — relative to the workspace inside it, absolute outside it.
+   * Off `tool.started` / `tool.updated` live and the history block on replay.
+   */
+  toolCwd?: string;
   toolOk?: boolean;
   toolOutput?: unknown;
   permissionId?: string;
@@ -1457,6 +1463,7 @@ function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | n
         toolInput: block.input,
         // Decision 131: the title the live row carried, asked again on replay.
         ...(block.presentation ? { toolPresentation: block.presentation } : {}),
+        ...(block.cwd ? { toolCwd: block.cwd } : {}),
       };
     case 'tool_result':
       return {
@@ -2146,6 +2153,7 @@ function applyRuntimeEventCore(
             toolName: event.payload.name,
             toolInput: event.payload.input,
             ...(event.payload.presentation ? { toolPresentation: event.payload.presentation } : {}),
+            ...(event.payload.cwd ? { toolCwd: event.payload.cwd } : {}),
           },
         ],
       };
@@ -2162,7 +2170,9 @@ function applyRuntimeEventCore(
       const hasExecStartedAt = event.payload.execStartedAt !== undefined;
       // Decision 131: a plugin call's title rides with its complete arguments.
       const hasPresentation = event.payload.presentation !== undefined;
-      if (!hasInput && !hasExecStartedAt && !hasPresentation) return {};
+      // Decision 207 §7: the directory rides with the complete arguments.
+      const hasCwd = event.payload.cwd !== undefined;
+      if (!hasInput && !hasExecStartedAt && !hasPresentation && !hasCwd) return {};
       const bucket = state.messages[sessionId] ?? [];
       const existing = bucket.find((item) => item.id === event.payload.messageId);
       if (!existing) return {};
@@ -2178,13 +2188,15 @@ function applyRuntimeEventCore(
       const presentationChanged =
         hasPresentation &&
         !sameToolCallPresentation(current.toolPresentation, event.payload.presentation);
-      if (!inputChanged && !execStartedAtChanged && !presentationChanged) return {};
+      const cwdChanged = hasCwd && current.toolCwd !== event.payload.cwd;
+      if (!inputChanged && !execStartedAtChanged && !presentationChanged && !cwdChanged) return {};
       const blocks = [...existing.blocks];
       blocks[blockIndex] = {
         ...current,
         ...(inputChanged ? { toolInput: event.payload.input } : {}),
         ...(execStartedAtChanged ? { toolExecStartedAt: event.payload.execStartedAt } : {}),
         ...(presentationChanged ? { toolPresentation: event.payload.presentation } : {}),
+        ...(cwdChanged ? { toolCwd: event.payload.cwd } : {}),
       };
       return {
         messages: withBucket(state, sessionId, upsertMessage(bucket, { ...existing, blocks })),

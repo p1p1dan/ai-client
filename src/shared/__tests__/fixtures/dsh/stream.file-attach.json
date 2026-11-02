@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-file-attach",
     "requestId": "turn-FILE-ATTACH",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/file-attach"
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
     "type": "session.status",
     "payload": {
       "status": "running"

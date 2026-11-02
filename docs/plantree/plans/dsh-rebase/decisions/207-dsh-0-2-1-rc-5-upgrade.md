@@ -160,6 +160,8 @@
 - 工具行里的路径显示成相对工作区（在子目录里写的 `src/main.ts` 显示为 `packages/web/src/main.ts`），在工作区外显示完整路径。
 - 工具结果里的相对路径（点击打开文件、搜索命中）按**调用那一刻的目录**解析，不再一律接到工作区上：历史投影按日志顺序记下 `working-directory/change`，给之后的工具行打上当时的目录。
 - 「在 <仓库> 中运行」之类的字样，在工作区外时改为显示实际目录。
+- **动工时核对（2026-11-02）**：现有工具行本来就不显示相对工作区的完整路径，所有文件行一律只显示路径最后两段（`shortPath`）。预览没画出这一点。为了不让换过目录的行和其他行长得不一样：子目录里的行照旧显示最后两段，但点开按调用那一刻的目录解析；工作区外的行显示完整路径。代码里也没有「在 <仓库> 中运行」这句话，对应的是搜索行「模式（仓库名）」的括注：子目录写「仓库名/子目录」，工作区外写实际目录。
+- 调用时的目录由宿主记在每个工具行上（`cwd`）：和工作区相同时不记；在工作区内记相对路径（`packages/web`）；在工作区外记绝对路径。实时事件（`tool.started`）与历史投影（读日志里的 `working-directory/change`）用同一条规则，回放和实时一样。
 
 ## 8 子代理一律后台（用户定按后台重新设计）
 
@@ -272,6 +274,19 @@
 | `dsh-plugin-allowlist` 插件审计坏样本 | 报错写出不满足的依赖（`dsh-llm`、`0.1.5`）和 `(no exemption)`，没有 `undefined` |
 | 桥接冒烟 `agentDirOverlaysReachedFirstRequest` | `<agentDir>/AGENTS.md`、项目 `CLAUDE.md`、技能正文都在第一个请求里 |
 | 桥接录制 `perm-search` | `glob` 与 `grep` 都成功，结果与升级前相同 |
+
+**D. 阶段 3（换目录的界面，2026-11-02 动工前补）**
+
+| 测试 | 规则 | 理想结果 |
+|---|---|---|
+| 宿主转发当前目录（`commandsAndState.test.ts` 新增一项；原有写死三项的快照参数一处随之改成四项） | 会话投影多转发 `workingDirectory` | 开会话的快照读四项（`todos`、`goal`、`subagentCatalog`、`workingDirectory`）；DSH 有这一项时随基线发出，值是绝对路径；变化时再发；`worker.panels` 也带它 |
+| 真宿主三个会话的投影顺序（`dshSharedHost.integration.test.ts` 第 594 行附近，写死三项） | 同上 | 每个会话的基线是 `todos`、`goal`、`subagentCatalog`、`workingDirectory` 四项，仍在第一条消息之前 |
+| 渲染端投影存储（`sessionPanelsModel.test.ts` 新增） | 收下这一项 | `workingDirectory` 事件写进该会话；`null` 也照存 |
+| 输入框下的当前目录标签（新增纯函数测试） | 和工作区相同时不显示；工作区内显示相对路径；工作区外显示完整路径并标成工作区外 | 相同、没有值 → 无标签；`<ws>/packages/web` → 内部、文字 `packages/web`；`/tmp/build` → 外部、文字 `/tmp/build`；`<ws>-other`（前缀相同的兄弟目录）→ 外部；Windows 路径大小写、反斜杠不影响判断 |
+| 调用时目录（共享纯函数 + 历史投影 + 实时事件，新增） | 工具行记下调用那一刻的目录 | 共享函数：相同 → 不记，内部 → 相对路径（用 `/`），外部 → 绝对路径。历史投影：`working-directory/change` 之后的工具行带 `cwd`，之前的不带，回到工作区后不再带。实时 `tool.started` 带同样的值 |
+| 工具行显示与点开（`toolCard` 新增） | 相对路径按调用时目录解析 | 子目录里 `read src/main.ts`：显示仍是 `src/main.ts`，点开目标是 `packages/web/src/main.ts`；工作区外 `read error.log`：显示并点开 `/tmp/build/error.log`；没有 `cwd` 的行与现在完全一样；搜索行括注：子目录 `模式（proj/packages/web）`，工作区外 `模式（/tmp/build）` |
+| 渲染端录制回放（`src/renderer/stores/__tests__/dshStreamReplay.test.ts`，2026-11-02 阶段 3 跑测时补：阶段 1 重录后这个文件没跑到） | 回放读的是录制的实时事件；录制的编号随第 1 阶段的重录变了，测试写死的编号跟着改，意图不变 | `job-notice` 的后台作业、`jobs-kill` 的作业写成 `bash-job-1`（按出现顺序编号）；`steer` 的插话回声 `dsh-user-17`→`dsh-user-19`（前面多两条作业日志）；`perm-subagent` 的卡 `toolu_id-11`→`toolu_id-14`；子代理泳道由录制工具按到达顺序留在实时事件里（第 1 阶段误把它挪到了别处），泳道走完、委派行完成 |
+| 桥接基准重录 | 只允许新增的投影 | 每个场景的投影基线多一条 `workingDirectory`（值是 `<workspace>`）；`worker.panels` 的答复同样多一条；没有场景换目录，所以工具行都不带 `cwd`；其他任何差异按缺陷处理 |
 
 **C. 新增的测试（阶段 1、2）**
 

@@ -1009,7 +1009,9 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       // Decision 179: a `/compact` summary with the instructions it was written with.
       (compactionId) => this.compactInstructionsOf(compactionId),
       // Decision 180: and its command line with what was typed.
-      (compactionId) => this.compactCommandInstructionsOf(compactionId)
+      (compactionId) => this.compactCommandInstructionsOf(compactionId),
+      // Decision 207 §7: the workspace, so a row records the directory it ran in.
+      options.cwd
     );
     this.retired = new DshRetiredHistory(this.query, options.log);
     this.router = new DshModelRouter(() => deps.modelPlan?.(), options.log);
@@ -1042,6 +1044,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.live = new DshLiveEvents({
       emit: (event) => this.emit(event),
       route: () => this.route,
+      workspace: () => this.handle?.agent.session.header?.cwd ?? this.cwd,
       dshSessionId: () => this.dshSessionId,
       turn: () => this.turn,
       openSyntheticTurn: (turn) => {

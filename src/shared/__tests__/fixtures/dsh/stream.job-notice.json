@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-job-notice",
     "requestId": "turn-JOBNOTICE",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-job-notice",
+    "requestId": "turn-JOBNOTICE",
     "type": "session.status",
     "payload": {
       "status": "running"

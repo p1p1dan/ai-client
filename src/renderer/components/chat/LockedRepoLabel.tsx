@@ -1,6 +1,8 @@
-import { Folder, Lock, MessageSquare } from 'lucide-react';
+import type { WorkingDirectoryChip } from '@shared/workingDirectory';
+import { CornerDownRight, Folder, Lock, MessageSquare, TriangleAlert } from 'lucide-react';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
+import { cn } from '@/lib/utils';
 
 interface LockedRepoLabelProps {
   label: string;
@@ -79,6 +81,48 @@ export function TemporaryChatLabel() {
       </TooltipTrigger>
       <TooltipPopup className="max-w-80 text-small">
         {t('Temporary chat — it runs in a private temporary folder')}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/**
+ * Decision 207 §7 (preview `docs/design/2026-11-02-working-directory-preview.html`):
+ * beside the repository, the directory the model changed into with
+ * `working_directory`, while it is not the workspace. Inside the workspace
+ * it is the relative path in the label's own tone; outside it is the full
+ * path in the warning tone. Read-only, like the repository label.
+ */
+export function WorkingDirectoryLabel({ chip }: { chip: WorkingDirectoryChip }) {
+  const { t } = useI18n();
+  const outside = chip.kind === 'outside';
+  const Icon = outside ? TriangleAlert : CornerDownRight;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="note"
+            aria-label={`${t('Current directory')}: ${chip.text}`}
+            className={cn(
+              'inline-flex h-6 min-w-0 cursor-default items-center gap-1 whitespace-nowrap rounded-xs px-1.5 font-mono text-code',
+              outside ? 'bg-warning/8 text-warning' : 'bg-fill-neutral text-muted-foreground'
+            )}
+          />
+        }
+      >
+        <Icon className="size-3 shrink-0" />
+        {outside && (
+          <span className="shrink-0 font-sans text-small">{t('Outside the workspace')}</span>
+        )}
+        <span className="min-w-0 max-w-60 truncate">{chip.text}</span>
+      </TooltipTrigger>
+      <TooltipPopup className="max-w-80 text-small">
+        {outside
+          ? t(
+              'The agent changed directory to outside the workspace; reads, searches and commands there still ask.'
+            )
+          : t('The agent changed directory; relative paths now start here.')}
       </TooltipPopup>
     </Tooltip>
   );

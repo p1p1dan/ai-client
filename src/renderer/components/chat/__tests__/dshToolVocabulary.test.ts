@@ -948,6 +948,62 @@ describe('decision 207: the working_directory row', () => {
   });
 });
 
+describe('decision 207 §14 D: a row whose call ran in a changed directory', () => {
+  const opts = { repoName: 'proj', t: zh };
+
+  it('in a subdirectory: the same short name, opened in that directory', () => {
+    const view = deriveToolRowView(
+      run('read', { file_path: 'src/main.ts' }, { output: 'x', cwd: 'packages/web' }),
+      opts
+    );
+    expect(view.arg).toBe('src/main.ts');
+    expect(view.link).toEqual({ path: 'packages/web/src/main.ts' });
+  });
+
+  it('outside the workspace: the full path, opened there', () => {
+    const view = deriveToolRowView(
+      run('read', { file_path: 'error.log' }, { output: 'x', cwd: '/tmp/build' }),
+      opts
+    );
+    expect(view.arg).toBe('/tmp/build/error.log');
+    expect(view.link).toEqual({ path: '/tmp/build/error.log' });
+    // An absolute argument is left as written.
+    expect(
+      deriveToolRowView(
+        run('read', { file_path: '/etc/hosts' }, { output: 'x', cwd: '/tmp/build' }),
+        opts
+      ).link
+    ).toEqual({ path: '/etc/hosts' });
+  });
+
+  it('a search names where it ran; its hits open from there', () => {
+    const inside = deriveToolRowView(
+      run('grep', { pattern: 'foo' }, { output: 'a.ts', cwd: 'packages/web' }),
+      opts
+    );
+    expect(inside.arg).toBe('foo（proj/packages/web）');
+    expect(inside.hitBase).toBe('packages/web');
+    const outside = deriveToolRowView(
+      run('glob', { pattern: '*.log' }, { output: 'error.log', cwd: '/tmp/build' }),
+      opts
+    );
+    expect(outside.arg).toBe('*.log（/tmp/build）');
+    expect(outside.hitBase).toBe('/tmp/build');
+  });
+
+  it('a row without one is exactly as before', () => {
+    const view = deriveToolRowView(
+      run('read', { file_path: 'src/main.ts' }, { output: 'x' }),
+      opts
+    );
+    expect(view.arg).toBe('src/main.ts');
+    expect(view.link).toEqual({ path: 'src/main.ts' });
+    const search = deriveToolRowView(run('grep', { pattern: 'foo' }, { output: 'a.ts' }), opts);
+    expect(search.arg).toBe('foo（proj）');
+    expect(search).not.toHaveProperty('hitBase');
+  });
+});
+
 describe('decision 190: the grep and web_fetch rows', () => {
   const settled = (toolName: string, input: unknown, output: string) =>
     deriveToolRowView(run(toolName, input, { output }));

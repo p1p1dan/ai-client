@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-image",
     "requestId": "turn-IMAGE",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
     "type": "session.status",
     "payload": {
       "status": "running"

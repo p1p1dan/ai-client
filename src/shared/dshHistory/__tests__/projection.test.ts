@@ -1914,3 +1914,55 @@ describe('projectDshHistory — /compact in the timeline (decision 180)', () => 
     });
   });
 });
+
+describe('projectDshHistory — the directory a call ran in (decision 207 §7, §14 D)', () => {
+  const WS = '/home/u/proj';
+  function cdLog() {
+    const l = log().turn(1).user('u1', 'go');
+    l.assistant(1, 1, 'a1', [toolCall('c1', 'read', { file_path: 'a.ts' })]);
+    l.call(1, 1, 'c1', 'read', { file_path: 'a.ts' });
+    l.result(1, 1, 'r1', 'c1', 'a');
+    l.assistant(1, 2, 'a2', [toolCall('c2', 'working_directory', { cd: 'packages/web' })]);
+    l.call(1, 2, 'c2', 'working_directory', { cd: 'packages/web' });
+    l.add('working-directory/change', { cwd: `${WS}/packages/web` });
+    l.result(1, 2, 'r2', 'c2', `${WS}/packages/web`);
+    l.assistant(1, 3, 'a3', [toolCall('c3', 'read', { file_path: 'src/main.ts' })]);
+    l.call(1, 3, 'c3', 'read', { file_path: 'src/main.ts' });
+    l.result(1, 3, 'r3', 'c3', 'main');
+    l.assistant(1, 4, 'a4', [toolCall('c4', 'working_directory', { cd: '/tmp/build' })]);
+    l.call(1, 4, 'c4', 'working_directory', { cd: '/tmp/build' });
+    l.add('working-directory/change', { cwd: '/tmp/build' });
+    l.result(1, 4, 'r4', 'c4', '/tmp/build');
+    l.assistant(1, 5, 'a5', [toolCall('c5', 'read', { file_path: 'error.log' })]);
+    l.call(1, 5, 'c5', 'read', { file_path: 'error.log' });
+    l.result(1, 5, 'r5', 'c5', 'log');
+    l.add('working-directory/change', { cwd: WS });
+    l.assistant(1, 6, 'a6', [toolCall('c6', 'read', { file_path: 'b.ts' })]);
+    l.call(1, 6, 'c6', 'read', { file_path: 'b.ts' });
+    l.result(1, 6, 'r6', 'c6', 'b');
+    l.end(1, { kind: 'completed' });
+    return l.events;
+  }
+  const cwdOf = (messages: readonly HistoryMessage[]) =>
+    Object.fromEntries(
+      messages
+        .flatMap((message) => message.blocks)
+        .filter((block) => block.type === 'tool_call')
+        .map((block) => [block.toolCallId, (block as { cwd?: string }).cwd])
+    );
+
+  it('stamps the calls after a cd, the cd with the directory it left, and none back in the workspace', () => {
+    expect(cwdOf(projectDshHistory(cdLog(), { workspace: WS }))).toEqual({
+      c1: undefined,
+      c2: undefined,
+      c3: 'packages/web',
+      c4: 'packages/web',
+      c5: '/tmp/build',
+      c6: undefined,
+    });
+  });
+
+  it('stamps nothing without the workspace', () => {
+    expect(Object.values(cwdOf(projectDshHistory(cdLog())))).toEqual(Array(6).fill(undefined));
+  });
+});

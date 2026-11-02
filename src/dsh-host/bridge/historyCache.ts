@@ -95,6 +95,7 @@ export class DshHistoryCache {
   private readonly log: (...args: unknown[]) => void;
   /** Decision 131: the live rows' own presenter, so a plugin call replays with its title. */
   private readonly presentCall: DshToolPresenter | undefined;
+  private readonly workspace: string | undefined;
   /** Decision 173: what the plan says of each route's cache; absent, no chain is kept. */
   private readonly chainOptions: CacheChainOptions | undefined;
   /** Decision 179: the instructions each `/compact` summarized with, by compaction. */
@@ -129,8 +130,11 @@ export class DshHistoryCache {
     presentCall?: DshToolPresenter,
     chainOptions?: CacheChainOptions,
     compactInstructions?: (compactionId: string) => string | undefined,
-    compactCommandInstructions?: (compactionId: string) => string | undefined
+    compactCommandInstructions?: (compactionId: string) => string | undefined,
+    /** Decision 207 §7: the session's workspace, so rows record a changed directory. */
+    workspace?: string
   ) {
+    this.workspace = workspace;
     this.query = query;
     this.log = log;
     this.presentCall = presentCall;
@@ -167,6 +171,7 @@ export class DshHistoryCache {
       ...(this.compactCommandInstructions
         ? { compactCommandInstructions: this.compactCommandInstructions }
         : {}),
+      ...(this.workspace ? { workspace: this.workspace } : {}),
     });
   }
 

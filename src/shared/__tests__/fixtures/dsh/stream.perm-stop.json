@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-perm-stop",
     "requestId": "turn-PERM-STOP",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/perm-stop"
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
     "type": "session.status",
     "payload": {
       "status": "running"

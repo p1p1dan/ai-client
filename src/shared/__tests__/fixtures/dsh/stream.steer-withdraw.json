@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-steer-withdraw",
     "requestId": "turn-STEER-W",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-steer-withdraw",
+    "requestId": "turn-STEER-W",
     "type": "session.status",
     "payload": {
       "status": "running"

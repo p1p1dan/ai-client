@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-perm-plan",
     "requestId": "turn-PERM-PLAN",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/perm-plan"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
     "type": "session.status",
     "payload": {
       "status": "running"

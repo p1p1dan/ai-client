@@ -120,6 +120,7 @@ import type {
   SessionCompactionTrigger,
 } from '../../shared/types/runtimeEvents.ts';
 import type { TurnOrigin } from '../../shared/types/sessionHistory.ts';
+import { callDirectory } from '../../shared/workingDirectory.ts';
 import { cacheChainLogLines, stepPrefixEvidence } from './cacheChainReport.ts';
 import {
   DSH_COMMAND_ERROR_TYPE,
@@ -186,6 +187,11 @@ export interface DshLiveEventsHost {
   emit(event: BridgeDraft): void;
   /** Our `provider/modelId` of the current selection, for `message.started`. */
   route(): string;
+  /**
+   * Decision 207 §7: the session's workspace (its header cwd). Given, rows
+   * after a `working-directory/change` carry the directory their call ran in.
+   */
+  workspace?(): string | undefined;
   /** The DSH session the events come from; live assistant ids name it. */
   dshSessionId(): string;
   turn(): LiveTurn | null;
@@ -559,6 +565,9 @@ export class DshLiveEvents {
    */
   private manual: OpenManualCompaction | undefined;
 
+  /** Decision 207 §7: the directory the last `working-directory/change` recorded. */
+  private currentDirectory: string | undefined;
+
   constructor(host: DshLiveEventsHost) {
     this.host = host;
   }
@@ -655,6 +664,19 @@ export class DshLiveEvents {
    * Decision 131: `{presentation}` for a call whose arguments are complete,
    * when its tool declares a title; `{}` otherwise, and when asking throws.
    */
+  /**
+   * Decision 207 §7: the directory a call the model issues now runs in, as
+   * the history projection records it (`DshHistoryFold.callCwd`).
+   */
+  private callCwd(): { cwd?: string } {
+    const workspace = this.host.workspace?.();
+    const cwd =
+      workspace && this.currentDirectory
+        ? callDirectory(workspace, this.currentDirectory)
+        : undefined;
+    return cwd ? { cwd } : {};
+  }
+
   private presentationOf(name: string, args: unknown): { presentation?: ToolCallPresentation } {
     try {
       const presentation = this.host.presentCall?.(name, args);
@@ -868,6 +890,7 @@ export class DshLiveEvents {
           name,
           input: toolRowInput(args),
           ...presentation,
+          ...this.callCwd(),
         },
       });
       this.flushExecStarted(id);
@@ -880,6 +903,7 @@ export class DshLiveEvents {
         toolCallId: id,
         input: toolRowInput(args),
         ...presentation,
+        ...this.callCwd(),
       },
     });
   }
@@ -924,6 +948,11 @@ export class DshLiveEvents {
       case 'tool/call':
         this.onToolCall(data);
         return;
+      case 'working-directory/change': {
+        const cwd = stringOf(data.cwd);
+        if (cwd) this.currentDirectory = cwd;
+        return;
+      }
       case 'tool/result':
         this.onToolResult(data);
         return;
@@ -1398,6 +1427,7 @@ export class DshLiveEvents {
           name,
           input: toolRowInput(args),
           ...this.presentationOf(name, args),
+          ...this.callCwd(),
         },
       });
       this.flushExecStarted(callId);
@@ -1412,6 +1442,7 @@ export class DshLiveEvents {
         toolCallId: callId,
         input: toolRowInput(args),
         ...this.presentationOf(name, args),
+        ...this.callCwd(),
       },
     });
   }

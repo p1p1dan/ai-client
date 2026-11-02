@@ -91,6 +91,8 @@ function harness(
     auxiliary?: () => AuxiliaryUsage | undefined;
     /** Decision 198: what the session's subagents spent. */
     delegated?: () => DshDelegatedSpend | undefined;
+    /** Decision 207 §7: the session's workspace (its header cwd). */
+    workspace?: string;
   } = {}
 ) {
   const events: Emitted[] = [];
@@ -139,6 +141,7 @@ function harness(
     commandSend: (commandId) => commands.get(commandId),
     now: () => clock,
     ...(options.presentCall ? { presentCall: options.presentCall } : {}),
+    ...(options.workspace ? { workspace: () => options.workspace } : {}),
     ...(options.cacheStep
       ? { cacheStep: options.cacheStep }
       : chain
@@ -300,6 +303,62 @@ describe('DshLiveEvents — streaming tool arguments (decision 099 rule 14)', ()
       name: 'bash',
       input: { command: 'ls' },
     });
+  });
+});
+
+describe('DshLiveEvents — the directory a call ran in (decision 207 §7, §14 D)', () => {
+  const WS = '/home/u/proj';
+  const call = (h: ReturnType<typeof harness>, id: string, name: string, args: unknown) => {
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: {
+        id: `a-${id}`,
+        role: 'assistant',
+        content: [{ type: 'tool-call', id, name, arguments: JSON.stringify(args) }],
+      },
+    });
+    h.durable('tool/call', { turn: 1, step: 1, callId: id, name, arguments: JSON.stringify(args) });
+  };
+
+  it('[207-LIVE-CWD] rows after a cd carry the directory, as the history does', () => {
+    const h = harness({ workspace: WS });
+    call(h, 'c1', 'read', { file_path: 'a.ts' });
+    call(h, 'c2', 'working_directory', { cd: 'packages/web' });
+    h.durable('working-directory/change', { cwd: `${WS}/packages/web` });
+    call(h, 'c3', 'read', { file_path: 'src/main.ts' });
+    h.durable('working-directory/change', { cwd: '/tmp/build' });
+    call(h, 'c4', 'read', { file_path: 'error.log' });
+    const cwds = h.of('tool.started').map((event) => event.payload.cwd);
+    expect(cwds).toEqual([undefined, undefined, 'packages/web', '/tmp/build']);
+    const replayed = projectDshHistory(h.log, { workspace: WS })
+      .flatMap((message) => message.blocks)
+      .filter((block) => block.type === 'tool_call')
+      .map((block) => (block as { cwd?: string }).cwd);
+    expect(replayed).toEqual(cwds);
+  });
+
+  it('[207-LIVE-CWD-STREAM] a streamed row takes the directory with its complete arguments', () => {
+    const h = harness({ workspace: WS });
+    h.durable('working-directory/change', { cwd: `${WS}/packages/web` });
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    h.chunk({ type: 'tool-call-delta', index: 0, id: 'c1', name: 'read', argumentsDelta: '{"fi' });
+    h.chunk({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'tool-call', id: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' },
+    });
+    expect(h.of('tool.updated')[0]?.payload).toMatchObject({
+      toolCallId: 'c1',
+      cwd: 'packages/web',
+    });
+  });
+
+  it('[207-LIVE-CWD-NONE] without the workspace no row carries one', () => {
+    const h = harness();
+    h.durable('working-directory/change', { cwd: '/tmp/build' });
+    call(h, 'c1', 'read', { file_path: 'a.ts' });
+    expect(h.of('tool.started')[0]?.payload).not.toHaveProperty('cwd');
   });
 });
 

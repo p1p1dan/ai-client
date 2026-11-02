@@ -2004,22 +2004,13 @@ async function permSubagentScenario(context: RecordContext, host: Host): Promise
     settled = true;
     await answeringLate;
   }
-  const all = client.events(session.ch).slice(from);
-  const parent = all.filter((event) => event.type !== 'subagent.activity');
-  const lane = all
+  // Everything after the parent's turn, in the order the renderer gets it:
+  // the child's lane and card arrive outside any turn, then the wake-up turn.
+  const after = client.events(session.ch).slice(from + turn.length);
+  const lane = after
     .filter((event) => event.type === 'subagent.activity')
     .map((event) => ({ type: event.type, payload: event.payload }));
-  return finish(
-    context,
-    session,
-    [boot],
-    [
-      turn,
-      parent.filter((event) => event.requestId === undefined),
-      parent.filter((event) => event.requestId === wake),
-    ],
-    { lane }
-  );
+  return finish(context, session, [boot], [turn, after], { lane });
 }
 
 async function permSearchScenario(context: RecordContext, host: Host): Promise<Recording> {

@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-plan-dismiss",
     "requestId": "turn-PLAN-DISMISS",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/plan-dismiss"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
     "type": "session.status",
     "payload": {
       "status": "running"

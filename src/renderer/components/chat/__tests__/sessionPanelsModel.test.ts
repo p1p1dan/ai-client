@@ -84,6 +84,18 @@ describe('sessionPanelsModel — the fold', () => {
     expect(state.bySession.s2?.goal?.goal.phase).toBe('active');
   });
 
+  it('[207-FOLD-CWD] keeps the session’s current directory, null included (decision 207 §14 D)', () => {
+    expect(panelsWith({ key: 'workingDirectory', view: '/home/u/proj/web' }).workingDirectory).toBe(
+      '/home/u/proj/web'
+    );
+    expect(
+      panelsWith(
+        { key: 'workingDirectory', view: '/home/u/proj/web' },
+        { key: 'workingDirectory', view: null }
+      ).workingDirectory
+    ).toBeNull();
+  });
+
   it('[P7A-FOLD-IGNORES] other events keep the state object; a malformed view is not taken', () => {
     const state = reduceSessionPanels(
       initialSessionPanels,

@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-perm-restart",
     "requestId": "turn-PERM-GRANT",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/perm-restart"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
     "type": "session.status",
     "payload": {
       "status": "running"
@@ -446,6 +455,15 @@
     "payload": {
       "key": "subagentCatalog",
       "view": []
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/perm-restart"
     }
   },
   {

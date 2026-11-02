@@ -3903,6 +3903,12 @@ Object.assign(zhTranslations, {
   'Checked directory': '查看当前目录',
   'Checking directory': '查看当前目录中',
   'Check directory': '查看当前目录',
+  'Current directory': '当前目录',
+  'Outside the workspace': '工作区外',
+  'The agent changed directory to outside the workspace; reads, searches and commands there still ask.':
+    '模型切换到了工作区外的目录；在那里读文件、搜索、运行命令仍会照常询问。',
+  'The agent changed directory; relative paths now start here.':
+    '模型切换了当前目录；相对路径从这里算起。',
   'Listing models': '列模型中',
   'List models': '列模型',
   'Used tool': '工具',

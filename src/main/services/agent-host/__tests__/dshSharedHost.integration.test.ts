@@ -591,7 +591,13 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       for (const id of ['s1', 's2', 's3']) {
         const seen = forSession(id);
         const projected = seen.filter((e) => e.type === 'session.projection');
-        expect(projected.map((e) => e.payload?.key)).toEqual(['todos', 'goal', 'subagentCatalog']);
+        // Decision 207 §14 D: DSH 0.2.1's current directory joins the baseline.
+        expect(projected.map((e) => e.payload?.key)).toEqual([
+          'todos',
+          'goal',
+          'subagentCatalog',
+          'workingDirectory',
+        ]);
         expect(seen.indexOf(projected[0] as Event)).toBeLessThan(
           seen.findIndex((e) => e.type === 'message.started')
         );

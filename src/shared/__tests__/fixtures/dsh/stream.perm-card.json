@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-perm-card",
     "requestId": "turn-PERM-CARD",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/perm-card"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
     "type": "session.status",
     "payload": {
       "status": "running"

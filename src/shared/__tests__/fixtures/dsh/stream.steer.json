@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-steer",
     "requestId": "turn-STEER",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
     "type": "session.status",
     "payload": {
       "status": "running"

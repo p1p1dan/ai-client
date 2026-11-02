@@ -3,6 +3,7 @@ import { englishTranslate, type Translate } from '@shared/i18n';
 import { reviewFromToolResult } from '@shared/sessionFileChange';
 import { readStreamingToolArgs } from '@shared/streamingToolArgs';
 import type { DshTodoItem, ToolOutcomeDetails } from '@shared/types/runtimeEvents';
+import { isOutsideCallDirectory } from '@shared/workingDirectory';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import {
@@ -97,6 +98,12 @@ export interface ToolRun {
    */
   presentation?: ToolCallPresentation;
   /**
+   * Decision 207 §7: the directory the call ran in, when the model had
+   * changed it (`ChatBlock.toolCwd`): relative to the workspace inside it,
+   * absolute outside it. Relative path arguments resolve against it.
+   */
+  cwd?: string;
+  /**
    * FB7: the RESOLVED `permission_request` block whose decision settled this
    * call, attached by `joinResolvedPermissions` (never by `pairToolBlocks` --
    * the pairing layer only ever sees one message, and the join's search domain
@@ -149,6 +156,7 @@ export function pairToolBlocks(blocks: readonly ChatBlock[]): ToolRun[] {
         ? { execStartedAtMs: block.toolExecStartedAt }
         : {}),
       ...(block.toolPresentation ? { presentation: block.toolPresentation } : {}),
+      ...(block.toolCwd ? { cwd: block.toolCwd } : {}),
       ...(result?.toolOutput && typeof result.toolOutput === 'object'
         ? { result: result.toolOutput }
         : {}),
@@ -728,6 +736,8 @@ export interface ToolRowView {
   link?: FileLinkTarget;
   /** Grep/Glob row's raw output for the hit-list popover (A07 F②); parsing is `toolHits.parseHitList`'s job. */
   hitSource?: string;
+  /** Decision 207 §7: the directory `hitSource`'s relative paths are in, when not the workspace. */
+  hitBase?: string;
   toolName?: string;
   toolCallId?: string;
   /**
@@ -876,6 +886,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const argRef = presentation ? undefined : deriveToolArgRef(run);
   const link = deriveFileLink(run) ?? undefined;
   const hitSource = isHitListTool(run.toolName) && !outcome ? run.output : undefined;
+  const hitBase = hitSource && run.cwd ? run.cwd : undefined;
   // P1-7e (problem 20): a call Stop cut short has no output of its own on
   // record, only DSH's `Error: tool call aborted`, which the outcome word
   // (「已停止」) already says in the reader's language. What the command printed
@@ -1043,6 +1054,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     ...(changeStat ? { changeStat } : {}),
     link,
     hitSource,
+    ...(hitBase ? { hitBase } : {}),
     toolName: run.toolName,
     toolCallId: run.toolCallId,
     // Both read through the shared derivations rather than re-deriving the
@@ -2361,12 +2373,28 @@ function commandSummary(command: string, dialect: CommandDialect = 'bash'): stri
 function fileArgWithProgress(
   path: string | undefined,
   input: unknown,
-  t: Translate
+  t: Translate,
+  shown: (path: string) => string = shortPath
 ): string | undefined {
   const streaming = readStreamingToolArgs(input);
   if (!path) return undefined;
-  if (!streaming || streaming.lines <= 0) return shortPath(path);
-  return `${shortPath(path)} · ${t('{{count}} lines so far', { count: streaming.lines })}`;
+  if (!streaming || streaming.lines <= 0) return shown(path);
+  return `${shown(path)} · ${t('{{count}} lines so far', { count: streaming.lines })}`;
+}
+
+/**
+ * Decision 207 §7: a path argument where its call ran — joined to the call's
+ * directory (`ToolRun.cwd`) when relative; as written otherwise.
+ */
+export function pathInCallDirectory(path: string, cwd: string | undefined): string {
+  if (!cwd || isAbsoluteToolPath(path)) return path;
+  const base = cwd.replace(/[\\/]+$/, '');
+  const rest = path.replace(/^\.[\\/]/, '');
+  return rest === '.' || rest === '' ? base : `${base}/${rest}`;
+}
+
+function isAbsoluteToolPath(path: string): boolean {
+  return path.startsWith('/') || path.startsWith('~') || /^(?:[A-Za-z]:[\\/]|\\\\)/.test(path);
 }
 
 /** D25 §2.4 arg font-domain classifier -- see `ToolRowView.argKind` doc comment. */
@@ -2423,9 +2451,16 @@ function formatToolArgDetail(
   const rec = asRecord(run.input);
   const repoName = options.repoName;
   const t = options.t ?? englishTranslate;
-  /** "TODO in ai-client" — the one place a search arg names its repo. */
+  // Decision 207 §7: where the call ran, when the model had changed directory.
+  const cwd = run.cwd;
+  const outside = cwd !== undefined && isOutsideCallDirectory(cwd);
+  /** A file argument: its last segments, or in full when the call ran outside the workspace. */
+  const shownPath = (path: string) => (outside ? pathInCallDirectory(path, cwd) : shortPath(path));
+  /** "TODO in ai-client" — the one place a search arg names its repo (or where it ran). */
+  const searchedIn =
+    cwd === undefined ? repoName : outside ? cwd : repoName ? `${repoName}/${cwd}` : cwd;
   const inRepo = (pattern: string) =>
-    repoName ? t('{{pattern}} in {{repo}}', { pattern, repo: repoName }) : pattern;
+    searchedIn ? t('{{pattern}} in {{repo}}', { pattern, repo: searchedIn }) : pattern;
 
   let raw: string | undefined;
   let kind: ToolArgKind | undefined;
@@ -2443,7 +2478,7 @@ function formatToolArgDetail(
       if (path) {
         // P1-7e (problem 12): an attached file by the name it was attached under.
         const attached = attachmentFileName(path);
-        const shown = attached ? t('Attachment · {{name}}', { name: attached }) : shortPath(path);
+        const shown = attached ? t('Attachment · {{name}}', { name: attached }) : shownPath(path);
         const offset = numberField(rec, 'offset');
         if (offset != null) {
           const limit = numberField(rec, 'limit');
@@ -2461,7 +2496,8 @@ function formatToolArgDetail(
       raw = fileArgWithProgress(
         stringField(rec, 'file_path') ?? stringField(rec, 'path'),
         run.input,
-        t
+        t,
+        shownPath
       );
       if (raw) kind = 'ident';
       break;
@@ -2878,8 +2914,10 @@ export function deriveFileLink(run: ToolRun): FileLinkTarget | null {
   )
     return null;
   const rec = asRecord(run.input);
-  const path = stringField(rec, 'path') ?? stringField(rec, 'file_path');
-  if (!path) return null;
+  const written = stringField(rec, 'path') ?? stringField(rec, 'file_path');
+  if (!written) return null;
+  // Decision 207 §7: opened where the call ran.
+  const path = pathInCallDirectory(written, run.cwd);
 
   const target: FileLinkTarget = { path };
   const offset = numberField(rec, 'offset');

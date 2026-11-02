@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-fail",
     "requestId": "turn-FAIL",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
     "type": "session.status",
     "payload": {
       "status": "running"
