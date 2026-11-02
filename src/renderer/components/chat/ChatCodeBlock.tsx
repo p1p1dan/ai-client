@@ -1,5 +1,5 @@
 import { Check, Copy } from 'lucide-react';
-import { Fragment, memo, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import {
@@ -9,7 +9,7 @@ import {
   chatMarkdownCodeFrameClass,
   chatMarkdownCodeHeadClass,
 } from './chatMarkdownPolicy';
-import { highlightChatCode } from './chatShiki';
+import { highlightChatCodeNow, prepareChatHighlight } from './chatShiki';
 import { useDarkClass } from './useDarkClass';
 
 /**
@@ -60,21 +60,31 @@ export const ChatCodeBlock = memo(function ChatCodeBlock({
   language: string | null;
 }) {
   const isDark = useDarkClass();
-  const [lines, setLines] = useState<ChatCodeToken[][] | null>(null);
+  // PiLab R2 (07.7): tokens are read synchronously once the grammar is loaded,
+  // and from this block's previous result, so a flush re-tokenises only the
+  // lines that changed (normally the last one) and keeps the rest's rows by
+  // reference for `CodeLine`'s memo. `ready` bumps when a load finishes. A
+  // light/dark flip still starts from nothing: the previous rows are in the
+  // other theme, and `highlightChatCodeNow` will not reuse them.
+  const [ready, setReady] = useState(0);
+  const previous = useRef<ChatCodeToken[][] | null>(null);
+  const highlighted = useMemo(() => {
+    void ready;
+    return highlightChatCodeNow({ code, language, isDark, previous: previous.current });
+  }, [code, language, isDark, ready]);
+  previous.current = highlighted ?? null;
 
   useEffect(() => {
+    if (highlighted !== undefined) return;
     let cancelled = false;
-    // Drop the previous theme's tokens immediately on a light/dark flip, so the
-    // block falls back to un-coloured text for the frame or two the re-highlight
-    // takes rather than showing dark-theme colours on a light surface.
-    setLines(null);
-    void highlightChatCode({ code, language, isDark }).then((result) => {
-      if (!cancelled) setLines(result);
+    void prepareChatHighlight({ code, language, isDark }).then((loaded) => {
+      if (loaded && !cancelled) setReady((value) => value + 1);
     });
     return () => {
       cancelled = true;
     };
-  }, [code, language, isDark]);
+  }, [highlighted, code, language, isDark]);
+  const lines = highlighted ?? null;
 
   // The info string's first word is the language; the rest is fence metadata.
   const label = language?.trim().split(/\s+/, 1)[0] ?? '';
@@ -91,12 +101,7 @@ export const ChatCodeBlock = memo(function ChatCodeBlock({
             ? lines.map((line, lineIndex) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: token lines have no identity beyond their position
                 <Fragment key={lineIndex}>
-                  {line.map((token, tokenIndex) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: ditto, within a line
-                    <span key={tokenIndex} style={chatCodeTokenStyle(token)}>
-                      {token.content}
-                    </span>
-                  ))}
+                  <CodeLine line={line} />
                   {lineIndex < lines.length - 1 ? '\n' : null}
                 </Fragment>
               ))
@@ -104,6 +109,20 @@ export const ChatCodeBlock = memo(function ChatCodeBlock({
         </code>
       </pre>
     </div>
+  );
+});
+
+/** One line's tokens. Unchanged rows arrive by reference, so they skip re-rendering. */
+const CodeLine = memo(function CodeLine({ line }: { line: ChatCodeToken[] }) {
+  return (
+    <>
+      {line.map((token, tokenIndex) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: ditto, within a line
+        <span key={tokenIndex} style={chatCodeTokenStyle(token)}>
+          {token.content}
+        </span>
+      ))}
+    </>
   );
 });
 

@@ -556,3 +556,111 @@ describe('F-C8: ChatCodeBlock still consumes the token model it is handed', () =
     expect(source).toMatch(/:\s*code\}/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// PiLab R2 (07.7): streaming re-tokenises only the lines that changed
+// ---------------------------------------------------------------------------
+
+describe('[PILAB-R2-HL] incremental tokenising of a growing fence', () => {
+  // Constructs that span lines, so a wrong grammar state would show.
+  const STREAMED = [
+    '/* a block comment',
+    '   that spans lines */',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: TypeScript source as data, not a template
+    'const tpl = `first ${1 + 1}',
+    'second line of the template`;',
+    'function f(a: number): string {',
+    "  return 'x'.repeat(a); // trailing",
+    '}',
+    '',
+    'const after = 2;',
+  ].join('\n');
+
+  async function wholeBlock(code: string, isDark: boolean): Promise<ChatCodeToken[][]> {
+    const [core, engine, dark, light, ts] = await Promise.all([
+      import('shiki/core'),
+      import('shiki/engine/javascript'),
+      import('shiki/themes/vitesse-dark.mjs'),
+      import('shiki/themes/vitesse-light.mjs'),
+      import('shiki/langs/typescript.mjs'),
+    ]);
+    const highlighter = await core.createHighlighterCore({
+      themes: [dark.default, light.default],
+      langs: [ts.default],
+      engine: engine.createJavaScriptRegexEngine(),
+    });
+    const theme = isDark ? CHAT_SHIKI_THEMES.dark : CHAT_SHIKI_THEMES.light;
+    return highlighter.codeToTokens(code, { lang: 'typescript', theme }).tokens.map((line) =>
+      line.map((token) => ({
+        content: token.content,
+        color: token.color,
+        fontStyle: token.fontStyle,
+      }))
+    );
+  }
+
+  it('streamed piece by piece, ends with exactly the whole-block tokens', async () => {
+    clearChatHighlightCache();
+    for (const isDark of [true, false]) {
+      let previous: ChatCodeToken[][] | null = null;
+      // Grow a few characters at a time, so lines are also cut mid-token.
+      for (let end = 1; end <= STREAMED.length; end += 7) {
+        previous = await highlightChatCode({
+          code: STREAMED.slice(0, end),
+          language: 'ts',
+          isDark,
+          previous,
+        });
+      }
+      previous = await highlightChatCode({ code: STREAMED, language: 'ts', isDark, previous });
+      expect(previous).toEqual(await wholeBlock(STREAMED, isDark));
+    }
+  });
+
+  it('keeps unchanged lines by reference and re-tokenises from the first changed one', async () => {
+    clearChatHighlightCache();
+    const first =
+      (await highlightChatCode({ code: 'const a = 1;\nconst b', language: 'ts', isDark: true })) ??
+      [];
+    const next =
+      (await highlightChatCode({
+        code: 'const a = 1;\nconst b = 2;\nconst c = 3;',
+        language: 'ts',
+        isDark: true,
+        previous: first,
+      })) ?? [];
+    expect(next).toHaveLength(3);
+    expect(next[0]).toBe(first[0]);
+    expect(next[1]).not.toBe(first[1]);
+    // The other theme's rows are never reused.
+    const light =
+      (await highlightChatCode({
+        code: 'const a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;',
+        language: 'ts',
+        isDark: false,
+        previous: next,
+      })) ?? [];
+    expect(light[0]).not.toBe(next[0]);
+  });
+
+  it('a growing fence holds one cache slot, so it cannot flush the other fences out', async () => {
+    clearChatHighlightCache();
+    const others = [];
+    for (let i = 0; i < 63; i += 1) {
+      others.push(
+        await highlightChatCode({ code: `const other${i} = ${i};`, language: 'ts', isDark: true })
+      );
+    }
+    let previous: ChatCodeToken[][] | null = null;
+    for (let n = 1; n <= 100; n += 1) {
+      const code = Array.from({ length: n }, (_, i) => `const s${i} = ${i};`).join('\n');
+      previous = await highlightChatCode({ code, language: 'ts', isDark: true, previous });
+    }
+    for (let i = 0; i < 63; i += 1) {
+      expect(
+        await highlightChatCode({ code: `const other${i} = ${i};`, language: 'ts', isDark: true }),
+        `fence ${i} was evicted by the stream`
+      ).toBe(others[i]);
+    }
+  });
+});

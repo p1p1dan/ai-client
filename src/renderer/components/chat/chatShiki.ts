@@ -1,4 +1,4 @@
-import type { HighlighterCore } from 'shiki/core';
+import type { GrammarState, HighlighterCore, ThemedToken } from 'shiki/core';
 import {
   type ChatCodeLanguage,
   type ChatCodeToken,
@@ -76,6 +76,9 @@ export const CHAT_SHIKI_THEMES = {
  */
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 
+/** The same singleton once built, so a loaded grammar can be used without awaiting. */
+let highlighterReady: HighlighterCore | null = null;
+
 /** Grammars already registered on the singleton, so a repeated fence costs nothing. */
 const loadedLanguages = new Set<ChatCodeLanguage>();
 
@@ -138,11 +141,12 @@ async function getHighlighter(): Promise<HighlighterCore> {
         import('shiki/themes/vitesse-dark.mjs'),
         import('shiki/themes/vitesse-light.mjs'),
       ]);
-      return core.createHighlighterCore({
+      highlighterReady = await core.createHighlighterCore({
         themes: [dark.default, light.default],
         langs: [],
         engine: engine.createJavaScriptRegexEngine(),
       });
+      return highlighterReady;
     })();
   }
   return highlighterPromise;
@@ -206,18 +210,52 @@ function writeCache(key: string, lines: ChatCodeToken[][]): void {
 }
 
 /**
- * Highlight one fenced block, or return `null` for "render it plain".
+ * PiLab R2 (07.7): what the next call for the same growing block needs to
+ * re-tokenise only from its first changed line — the source lines and the
+ * grammar state at the end of each, keyed by the token array they produced.
+ * The approach is PI-Desktop's (`apps/desktop/src/lib/shiki.ts`,
+ * `tokenizeIncremental`): a TextMate grammar is line-by-line anyway, so line i
+ * tokenised from line i-1's end state is exactly what the whole block gives.
  *
- * `null` is a normal outcome, not an error: an unknown language, a grammar
- * whose chunk failed to load, and a highlighter that could not be constructed
- * all land here, and the caller's un-highlighted `<pre>` is a correct rendering
- * of the same text in the same box.
+ * Measured before (ledger §21): a streaming 200-line TypeScript block kept the
+ * main thread 42% busy, because every flush re-tokenised the whole block.
  */
-export async function highlightChatCode(input: {
+interface LineState {
+  theme: string;
+  language: ChatCodeLanguage;
+  cacheKey: string;
+  source: string[];
+  states: (GrammarState | undefined)[];
+}
+const lineStates = new WeakMap<ChatCodeToken[][], LineState>();
+
+function toChatTokens(line: ThemedToken[] | undefined): ChatCodeToken[] {
+  return (line ?? []).map((token) => ({
+    content: token.content,
+    color: token.color,
+    fontStyle: token.fontStyle,
+  }));
+}
+
+export interface ChatHighlightInput {
   code: string;
   language: string | null;
   isDark: boolean;
-}): Promise<ChatCodeToken[][] | null> {
+  /**
+   * This block's previous result. Lines up to the first one that differs keep
+   * their token rows BY REFERENCE, so a memoised line renderer skips them.
+   */
+  previous?: ChatCodeToken[][] | null;
+}
+
+/**
+ * Synchronous form: the tokens, `null` for "render it plain", or `undefined`
+ * while the highlighter or this fence's grammar has not loaded yet (call
+ * `prepareChatHighlight`, then ask again).
+ */
+export function highlightChatCodeNow(
+  input: ChatHighlightInput
+): ChatCodeToken[][] | null | undefined {
   const language = normalizeCodeLanguage(input.language);
   if (!language) return null;
   // F-C7: a fence past the budget is rendered plain rather than freezing the
@@ -229,22 +267,71 @@ export async function highlightChatCode(input: {
   const cacheKey = `${theme}\u0000${language}\u0000${input.code}`;
   const cached = readCache(cacheKey);
   if (cached) return cached;
+  if (failedLanguages.has(language)) return null;
+  const highlighter = highlighterReady;
+  if (!highlighter || !loadedLanguages.has(language)) return undefined;
   try {
-    const highlighter = await getHighlighter();
-    if (!(await ensureLanguage(highlighter, language))) return null;
-    const { tokens } = highlighter.codeToTokens(input.code, { lang: language, theme });
-    const lines = tokens.map((line) =>
-      line.map((token) => ({
-        content: token.content,
-        color: token.color,
-        fontStyle: token.fontStyle,
-      }))
-    );
+    // shiki's own line split, so CRLF still comes out as LF lines.
+    const source = input.code.split(/\r?\n/);
+    const before = input.previous ? lineStates.get(input.previous) : undefined;
+    const reuse = before && before.theme === theme && before.language === language ? before : null;
+    let start = 0;
+    if (reuse) {
+      const shared = Math.min(reuse.source.length, source.length);
+      while (start < shared && reuse.source[start] === source[start]) start += 1;
+    }
+    const lines = reuse && input.previous ? input.previous.slice(0, start) : [];
+    const states = reuse ? reuse.states.slice(0, start) : [];
+    for (let index = start; index < source.length; index += 1) {
+      const rows = highlighter.codeToTokensBase(source[index], {
+        lang: language,
+        theme,
+        grammarState: index > 0 ? states[index - 1] : undefined,
+      });
+      lines.push(toChatTokens(rows[0]));
+      states.push(highlighter.getLastGrammarState(rows));
+    }
+    lineStates.set(lines, { theme, language, cacheKey, source, states });
+    // A growing block holds one cache slot: its previous prefix goes, so a
+    // stream cannot flush the other fences out of the 64.
+    if (reuse) highlightCache.delete(reuse.cacheKey);
     writeCache(cacheKey, lines);
     return lines;
   } catch {
     return null;
   }
+}
+
+/**
+ * Load the highlighter and this fence's grammar. `false` when the fence will
+ * render plain anyway, or loading failed — never constructs the highlighter
+ * for a fence that cannot be highlighted.
+ */
+export async function prepareChatHighlight(input: ChatHighlightInput): Promise<boolean> {
+  const language = normalizeCodeLanguage(input.language);
+  if (!language || !shouldHighlightFence(input.code)) return false;
+  try {
+    return await ensureLanguage(await getHighlighter(), language);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Highlight one fenced block, or return `null` for "render it plain".
+ *
+ * `null` is a normal outcome, not an error: an unknown language, a grammar
+ * whose chunk failed to load, and a highlighter that could not be constructed
+ * all land here, and the caller's un-highlighted `<pre>` is a correct rendering
+ * of the same text in the same box.
+ */
+export async function highlightChatCode(
+  input: ChatHighlightInput
+): Promise<ChatCodeToken[][] | null> {
+  const now = highlightChatCodeNow(input);
+  if (now !== undefined) return now;
+  if (!(await prepareChatHighlight(input))) return null;
+  return highlightChatCodeNow(input) ?? null;
 }
 
 /** Test seam: the cache is process-wide, so a suite that measures it must be able to reset it. */
