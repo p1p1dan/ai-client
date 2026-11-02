@@ -80,7 +80,6 @@ export const DSH_BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
   'send_message',
   'interrupt_agent',
   'structured_output',
-  'ralph',
   'get_goal',
   'create_goal',
   'update_goal',

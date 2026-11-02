@@ -59,7 +59,6 @@ export const DSH_TOOL_CLASSES: Readonly<Record<string, DshToolClass>> = Object.f
   send_message: 'internal',
   interrupt_agent: 'internal',
   structured_output: 'internal',
-  ralph: 'internal',
   get_goal: 'internal',
   create_goal: 'internal',
   update_goal: 'internal',
