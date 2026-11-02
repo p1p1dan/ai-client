@@ -1165,6 +1165,7 @@ export const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   [DSH_TOOL_NAMES.present]: [],
   [DSH_TOOL_NAMES.runCode]: ['description'],
   [DSH_TOOL_NAMES.listSubagentModels]: [],
+  [DSH_TOOL_NAMES.workingDirectory]: ['cd'],
   // The office plugin (decision 115): a read names its file and nothing else;
   // a write's content is the body, as `write`'s preview is on its card.
   ...Object.fromEntries(OFFICE_READ_TOOL_NAMES.map((name) => [name, ['path']])),
@@ -1736,7 +1737,7 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
   [DSH_TOOL_NAMES.subagentFork]: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
   // ── dsh-rebase P1-7c: the rest of DSH's tools (plan P1-7 shard 04 §2, §3).
   // `read` / `write` / `edit` / `grep` / `bash` / `skill` share the keys above
-  // (one name, one row), `glob` too. `ralph`, `structured_output` and
+  // (one name, one row), `glob` too. `structured_output` and
   // `plugin_manager` read as the unknown-tool fallback on purpose
   // (`dshToolVocabulary.test.ts` lists them).
   [DSH_TOOL_NAMES.readImage]: {
@@ -1811,6 +1812,13 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
     running: 'Listing models',
     refused: 'List models',
   },
+  // Decision 207 §7: a `cd`; without one the call reads the directory
+  // (`WORKING_DIRECTORY_READ_VERBS`).
+  [DSH_TOOL_NAMES.workingDirectory]: {
+    done: 'Changed directory',
+    running: 'Changing directory',
+    refused: 'Change directory',
+  },
   // Decision 115: the office plugin's reads read a file, its writes write one
   // — the words `read` and `write` already have, so the row says what the
   // gate classified (the file name carries the format).
@@ -1826,6 +1834,13 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
       { done: 'Edited', running: 'Editing', refused: 'Edit' },
     ])
   ),
+};
+
+/** Decision 207 §7: `working_directory` called without `cd` only reads the directory. */
+export const WORKING_DIRECTORY_READ_VERBS: ToolVerbs = {
+  done: 'Checked directory',
+  running: 'Checking directory',
+  refused: 'Check directory',
 };
 
 /**
@@ -1936,8 +1951,9 @@ function presentedArgDetail(presentation: ToolCallPresentation): ToolArgDetail |
 }
 
 /**
- * The row's verb key. `input` is optional and read by two DSH tools only:
- * `update_goal` (its `action`) and a waiting `job_output`.
+ * The row's verb key. `input` is optional and read by three DSH tools only:
+ * `update_goal` (its `action`), a waiting `job_output`, and
+ * `working_directory` (with or without `cd`).
  */
 export function toolVerb(toolName: string, state: ToolVerbState, input?: unknown): string {
   const rec = asRecord(input);
@@ -1949,6 +1965,9 @@ export function toolVerb(toolName: string, state: ToolVerbState, input?: unknown
   }
   if (toolName === DSH_TOOL_NAMES.jobOutput && state === 'running' && rec?.wait === true) {
     return JOB_OUTPUT_WAIT_VERB;
+  }
+  if (toolName === DSH_TOOL_NAMES.workingDirectory && stringField(rec, 'cd') === undefined) {
+    return WORKING_DIRECTORY_READ_VERBS[state];
   }
   const verbs =
     TOOL_VERBS[toolName] ??
@@ -2128,6 +2147,8 @@ export type ToolIconKind =
   | 'workflow'
   | 'mcp'
   | 'deliver'
+  // Decision 207 §7: `working_directory`, the workspace chip's own mark.
+  | 'folder'
   // Route B S-6: the review card's mark, worn by its placeholder row too.
   | 'review';
 
@@ -2196,6 +2217,7 @@ const DSH_ICON_KINDS: Readonly<Record<string, ToolIconKind>> = {
   [DSH_TOOL_NAMES.interruptAgent]: 'delegate',
   [DSH_TOOL_NAMES.listAgents]: 'delegate',
   [DSH_TOOL_NAMES.listSubagentModels]: 'delegate',
+  [DSH_TOOL_NAMES.workingDirectory]: 'folder',
 };
 
 export function toolIconKind(toolName: string): ToolIconKind {
@@ -2572,6 +2594,11 @@ function formatToolArgDetail(
     case DSH_TOOL_NAMES.listSubagentModels:
       // No argument: the verb 「列模型」 is the whole row.
       raw = undefined;
+      break;
+    // The directory it entered, else (no `cd`) the one it read: its result.
+    case DSH_TOOL_NAMES.workingDirectory:
+      raw = stringField(rec, 'cd') ?? (run.output?.trim() || undefined);
+      if (raw) kind = 'ident';
       break;
     case DSH_TOOL_NAMES.askUserQuestion: {
       // `ask`'s rule: the first question stands for the call.

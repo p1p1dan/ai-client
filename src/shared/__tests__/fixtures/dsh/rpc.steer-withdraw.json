@@ -77,7 +77,7 @@
               "text": "STEER-NOTE-K keep this one."
             }
           ],
-          "liveMessageId": "dsh-user-19"
+          "liveMessageId": "dsh-user-21"
         },
         {
           "id": "h:id-12",
@@ -133,7 +133,7 @@
               "text": "P0-SLEEPTOOL {\"token\":\"steer-withdraw\",\"seconds\":30} run a long command; I will stop you."
             }
           ],
-          "liveMessageId": "dsh-user-32"
+          "liveMessageId": "dsh-user-36"
         },
         {
           "id": "h:id-19",
@@ -177,7 +177,7 @@
               "text": "P1-STEER-ONE: which notes reached you?"
             }
           ],
-          "liveMessageId": "dsh-user-44"
+          "liveMessageId": "dsh-user-50"
         },
         {
           "id": "h:id-24",
@@ -208,7 +208,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-24",
-        "fileTailEntryId": "aiclient-rec-steer-withdraw#47"
+        "fileTailEntryId": "aiclient-rec-steer-withdraw#53"
       },
       "nodes": [
         {

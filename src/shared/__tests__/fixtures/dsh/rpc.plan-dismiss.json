@@ -58,53 +58,37 @@
               "type": "tool_result",
               "id": "h:id-7:tool-result:toolu_id-4",
               "toolCallId": "toolu_id-4",
-              "ok": false,
-              "output": "Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message.",
-              "error": "Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
+              "ok": true,
+              "output": "The user dismissed the plan review to reply in their own words; plan mode remains active."
             }
           ],
           "liveMessageId": "dsh-aiclient-rec-plan-dismiss-t1-s1"
         },
         {
-          "id": "h:id-9",
-          "entryId": "id-9",
-          "role": "assistant",
-          "timestamp": "<ms>",
-          "model": "aiclient-gateway/fake-1",
-          "blocks": [
-            {
-              "type": "text",
-              "id": "h:id-9:text:0",
-              "text": "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
-            }
-          ],
-          "liveMessageId": "dsh-aiclient-rec-plan-dismiss-t1-s2"
-        },
-        {
-          "id": "h:id-10",
-          "entryId": "id-10",
+          "id": "h:id-8",
+          "entryId": "id-8",
           "role": "user",
           "timestamp": "<ms>",
           "blocks": [
             {
               "type": "text",
-              "id": "h:id-10:text:0",
+              "id": "h:id-8:text:0",
               "text": "P1-PLAN-DISMISS: present it again."
             }
           ],
-          "liveMessageId": "dsh-user-23"
+          "liveMessageId": "dsh-user-20"
         },
         {
-          "id": "h:id-13",
-          "entryId": "id-13",
+          "id": "h:id-11",
+          "entryId": "id-11",
           "role": "assistant",
           "timestamp": "<ms>",
           "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "tool_call",
-              "id": "h:id-13:tool-call:toolu_id-11",
-              "toolCallId": "toolu_id-11",
+              "id": "h:id-11:tool-call:toolu_id-9",
+              "toolCallId": "toolu_id-9",
               "name": "exit_plan_mode",
               "input": {
                 "plan": "# P1-PLAN-DISMISS: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-DISMISS done\".\n\n## Changes\n1. Write plan-output.txt in the workspace.\n"
@@ -112,34 +96,18 @@
             },
             {
               "type": "tool_result",
-              "id": "h:id-14:tool-result:toolu_id-11",
-              "toolCallId": "toolu_id-11",
-              "ok": false,
-              "output": "Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message.",
-              "error": "Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
+              "id": "h:id-12:tool-result:toolu_id-9",
+              "toolCallId": "toolu_id-9",
+              "ok": true,
+              "output": "The user dismissed the plan review to reply in their own words; plan mode remains active."
             }
           ],
           "liveMessageId": "dsh-aiclient-rec-plan-dismiss-t2-s1"
-        },
-        {
-          "id": "h:id-16",
-          "entryId": "id-16",
-          "role": "assistant",
-          "timestamp": "<ms>",
-          "model": "aiclient-gateway/fake-1",
-          "blocks": [
-            {
-              "type": "text",
-              "id": "h:id-16:text:0",
-              "text": "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
-            }
-          ],
-          "liveMessageId": "dsh-aiclient-rec-plan-dismiss-t2-s2"
         }
       ],
       "offset": 0,
       "limit": 80,
-      "totalCount": 6,
+      "totalCount": 4,
       "hasMore": false
     }
   },
@@ -149,8 +117,8 @@
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-plan-dismiss.dsh.json",
       "workspacePath": "<workspace>/plan-dismiss",
       "leaf": {
-        "activeEntryId": "id-16",
-        "fileTailEntryId": "aiclient-rec-plan-dismiss#31"
+        "activeEntryId": "id-11",
+        "fileTailEntryId": "aiclient-rec-plan-dismiss#25"
       },
       "nodes": [
         {
@@ -179,22 +147,9 @@
           "leaf": false
         },
         {
-          "id": "id-9",
+          "id": "id-8",
           "parentId": "id-6",
           "depth": 2,
-          "entryType": "message",
-          "role": "assistant",
-          "preview": "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in pl…",
-          "timestamp": "<ms>",
-          "childCount": 1,
-          "forkable": true,
-          "active": true,
-          "leaf": false
-        },
-        {
-          "id": "id-10",
-          "parentId": "id-9",
-          "depth": 3,
           "entryType": "message",
           "role": "user",
           "preview": "P1-PLAN-DISMISS: present it again.",
@@ -205,24 +160,11 @@
           "leaf": false
         },
         {
-          "id": "id-13",
-          "parentId": "id-10",
-          "depth": 4,
+          "id": "id-11",
+          "parentId": "id-8",
+          "depth": 3,
           "entryType": "message",
           "role": "assistant",
-          "timestamp": "<ms>",
-          "childCount": 1,
-          "forkable": true,
-          "active": true,
-          "leaf": false
-        },
-        {
-          "id": "id-16",
-          "parentId": "id-13",
-          "depth": 5,
-          "entryType": "message",
-          "role": "assistant",
-          "preview": "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in pl…",
           "timestamp": "<ms>",
           "childCount": 0,
           "forkable": true,
@@ -230,8 +172,8 @@
           "leaf": true
         }
       ],
-      "totalNodes": 6,
-      "returnedNodes": 6,
+      "totalNodes": 4,
+      "returnedNodes": 4,
       "truncated": false
     }
   },

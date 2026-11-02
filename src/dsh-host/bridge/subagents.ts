@@ -278,14 +278,19 @@ export class DshSubagentsTracker {
     });
   }
 
-  /** The call's execution-local result: it names its child, or its run, or its job. */
+  /**
+   * The call's execution-local result: it names its child, or its run, or its
+   * job. DSH 0.2.1 answers every delegation at once with `activation` and the
+   * child's id (decision 207 §4 ⑥).
+   */
   endCall(callId: string, value: unknown): void {
     const index = this.delegations.findIndex((entry) => entry.callId === callId);
     if (index < 0) return;
     const delegation = this.delegations[index] as Delegation;
     const result = recordOf(value);
     const childId =
-      result?.kind === 'continuable' && typeof result.subagentId === 'string'
+      (result?.kind === 'activation' || result?.kind === 'continuable') &&
+      typeof result.subagentId === 'string'
         ? result.subagentId
         : result?.kind === 'foreground' && typeof result.runId === 'string'
           ? this.runs.get(result.runId)

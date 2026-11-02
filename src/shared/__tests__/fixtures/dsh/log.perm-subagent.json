@@ -7,7 +7,7 @@
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 18,
+  "cursor": 26,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -123,6 +123,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>/perm-subagent\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -179,6 +183,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -221,7 +226,7 @@
               "type": "tool-call",
               "id": "toolu_id-4",
               "name": "subagent",
-              "arguments": "{\"description\":\"Permission probe child\",\"prompt\":\"P1-PERM-CHILD: run one bash call, then answer.\",\"run_in_background\":false}"
+              "arguments": "{\"description\":\"Permission probe child\",\"prompt\":\"P1-PERM-CHILD: run one bash call, then answer.\"}"
             }
           ],
           "source": {
@@ -269,7 +274,7 @@
             "id": "toolu_id-4",
             "name": "subagent",
             "args": [
-              "{\"description\":\"Permission probe child\",\"prompt\":\"P1-PERM-CHILD: run one bash call, then answer.\",\"run_in_background\":false}"
+              "{\"description\":\"Permission probe child\",\"prompt\":\"P1-PERM-CHILD: run one bash call, then answer.\"}"
             ]
           },
           {
@@ -282,7 +287,7 @@
                 "type": "tool-call",
                 "id": "toolu_id-4",
                 "name": "subagent",
-                "arguments": "{\"description\":\"Permission probe child\",\"prompt\":\"P1-PERM-CHILD: run one bash call, then answer.\",\"run_in_background\":false}"
+                "arguments": "{\"description\":\"Permission probe child\",\"prompt\":\"P1-PERM-CHILD: run one bash call, then answer.\"}"
               }
             }
           },
@@ -337,7 +342,7 @@
         "step": 1,
         "callId": "toolu_id-4",
         "name": "subagent",
-        "arguments": "{\"description\":\"Permission probe child\",\"prompt\":\"P1-PERM-CHILD: run one bash call, then answer.\",\"run_in_background\":false}"
+        "arguments": "{\"description\":\"Permission probe child\",\"prompt\":\"P1-PERM-CHILD: run one bash call, then answer.\"}"
       }
     },
     {
@@ -348,7 +353,7 @@
         "version": 0,
         "childId": "id-7",
         "childCreatedAt": "<ms>",
-        "mode": "one-shot",
+        "mode": "continuable",
         "label": "Permission probe child"
       }
     },
@@ -369,7 +374,7 @@
           "content": [
             {
               "type": "text",
-              "text": "P1-PERM-CHILD finished."
+              "text": "started subagent id-7"
             }
           ],
           "isError": false,
@@ -409,7 +414,7 @@
           "content": [
             {
               "type": "text",
-              "text": "P1-PERM-SUB finished."
+              "text": "P1-PERM-SUB delegated; the child reports back."
             }
           ],
           "source": {
@@ -454,7 +459,7 @@
             "type": "text-chunks",
             "time0": "<ms>",
             "index": 0,
-            "texts": ["P1-PERM-SUB finished."]
+            "texts": ["P1-PERM-SUB delegated; the child reports back."]
           },
           {
             "type": "chunk",
@@ -464,7 +469,7 @@
               "index": 0,
               "block": {
                 "type": "text",
-                "text": "P1-PERM-SUB finished."
+                "text": "P1-PERM-SUB delegated; the child reports back."
               }
             }
           },
@@ -525,6 +530,232 @@
       "time": "<ms>",
       "data": {
         "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 19,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "Background subagent id-7 finished and will do no further work unless you send it more."
+              },
+              {
+                "type": "text",
+                "text": "Its closing message:"
+              },
+              {
+                "type": "text",
+                "text": "Child done: perm-child-call ran."
+              }
+            ],
+            "source": {
+              "kind": "subagent-settled",
+              "form": "notice",
+              "summary": "Background subagent id-7 finished and will do no further work unless you send it more.",
+              "senderSessionId": "id-7"
+            },
+            "role": "user",
+            "id": "id-11"
+          }
+        ]
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 20,
+      "time": "<ms>",
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 21,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 22,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 23,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Background subagent id-7 finished and will do no further work unless you send it more."
+          },
+          {
+            "type": "text",
+            "text": "Its closing message:"
+          },
+          {
+            "type": "text",
+            "text": "Child done: perm-child-call ran."
+          }
+        ],
+        "source": {
+          "kind": "subagent-settled",
+          "form": "notice",
+          "summary": "Background subagent id-7 finished and will do no further work unless you send it more.",
+          "senderSessionId": "id-7"
+        },
+        "role": "user",
+        "id": "id-11"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 24,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "P1-PERM-SUB heard back from the child."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-12",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "id": "id-13"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "text"
+            }
+          },
+          {
+            "type": "text-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "texts": ["P1-PERM-SUB heard back from the child."]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "text",
+                "text": "P1-PERM-SUB heard back from the child."
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "stop"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-12",
+                  "stopReason": "stop"
+                },
+                "blocks": [
+                  {
+                    "type": "text"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 25,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 26,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
         "reason": {
           "kind": "completed"
         }

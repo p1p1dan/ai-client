@@ -160,8 +160,20 @@ describe('host.ts reads no .env file (HS-01, decision 023)', () => {
 describe('host.ts composition (HS-02, HS-03, decisions 023 and 025)', () => {
   it('restates the required rows off, then the permission gate on, after the home layer and the plan rows', () => {
     expect(host).toMatch(
-      /overlays: \[\s*\.\.\.modelPlanOverlays\(modelPlan\),\s*\.\.\.agentDirOverlays\(agentDir\),\s*\.\.\.requiredDisabledOverlays\(\),\s*\.\.\.requiredEnabledOverlays\(\),\s*\],/
+      /overlays: \[\s*\.\.\.modelPlanOverlays\(modelPlan\),\s*\.\.\.agentDirOverlays\(agentDir, sharedAgentsHome\),\s*\.\.\.requiredDisabledOverlays\(\),\s*\.\.\.requiredEnabledOverlays\(\),\s*\],/
     );
+  });
+
+  // Decision 207 §6, §14 (option A): the shared root is resolved before
+  // DSH_AGENTS_HOME is pointed at <agentDir>, and that before the launch
+  // environment is captured.
+  it('points DSH_AGENTS_HOME at <agentDir> after reading the shared root, before the launch environment', () => {
+    const shared = host.indexOf('const sharedAgentsHome = ');
+    const set = host.indexOf('if (agentDir) process.env.DSH_AGENTS_HOME = agentDir;');
+    const snapshot = host.indexOf('createLaunchEnvironmentSnapshot([');
+    expect(shared).toBeGreaterThan(-1);
+    expect(set).toBeGreaterThan(shared);
+    expect(snapshot).toBeGreaterThan(set);
   });
 
   it("adds each model's compaction policy to the row as the layers left it, before the audit, and logs it (decision 177)", () => {
@@ -498,6 +510,7 @@ describe('decision 190: the tool gaps, each behind its switch', () => {
       'web-fetch-http',
       'tool-web',
       'web-search-deepseek',
+      'web-deepseek-api',
       'tool-fs-search',
     ]) {
       const at = patch.indexOf(`\n- id: ${id}\n`);
@@ -519,6 +532,9 @@ describe('decision 190: the tool gaps, each behind its switch', () => {
     // web_search's DSH backend is the official DeepSeek endpoint: off, and required off.
     expect(patchOf('web-search-deepseek')).toBe('- id: web-search-deepseek\n  disabled: true\n');
     expect(read('lib', 'hostProfile.ts')).toContain("  'web-search-deepseek',");
+    // Decision 207 §4: DSH 0.2.1's DeepSeek search / fetch providers, the same endpoint.
+    expect(patchOf('web-deepseek-api')).toBe('- id: web-deepseek-api\n  disabled: true\n');
+    expect(read('lib', 'hostProfile.ts')).toContain("  'web-deepseek-api',");
   });
 
   it("puts aiclient-fs-search in tool-fs-search's place, with tool-fs-search's config", () => {

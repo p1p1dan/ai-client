@@ -305,7 +305,7 @@
     "requestId": "turn-MARKED",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-31",
+      "messageId": "dsh-user-32",
       "role": "user",
       "attemptId": "attempt-MARKED"
     }
@@ -315,8 +315,8 @@
     "requestId": "turn-MARKED",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-31",
-      "blockId": "dsh-user-31-text",
+      "messageId": "dsh-user-32",
+      "blockId": "dsh-user-32-text",
       "text": "P0-STREAM: stream a paragraph back to me. P1-COMPACT-REFUSE"
     }
   },
@@ -325,7 +325,7 @@
     "requestId": "turn-MARKED",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-31"
+      "messageId": "dsh-user-32"
     }
   },
   {

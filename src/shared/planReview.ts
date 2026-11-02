@@ -264,6 +264,12 @@ export const KEEP_PLANNING_TEXT =
   'The user chose to keep planning; revise the plan and present it again.';
 export const REVIEW_DISMISSED_TEXT =
   'The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message.';
+/**
+ * DSH 0.2.1's `exit_plan_mode` result on a closed review: a success that
+ * concludes the turn (decision 207 §5). Older sessions replay the text above.
+ */
+export const DSH_REVIEW_DISMISSED_TEXT =
+  'The user dismissed the plan review to reply in their own words; plan mode remains active.';
 /** DSH's `exit_plan_mode` result on approval. */
 export const PLAN_APPROVED_TEXT =
   'Plan approved — plan mode exited; carry out the plan starting with your next step.';
@@ -288,8 +294,9 @@ function errorBody(text: string): string {
 
 /**
  * The review outcome a failed `exit_plan_mode` (or reviewed `create_goal`)
- * row carries, or undefined when the failure was something else (not in
- * plan mode, no heading, the turn stopped).
+ * row carries — or a successful one closed on DSH 0.2.1 — or undefined when
+ * the failure was something else (not in plan mode, no heading, the turn
+ * stopped).
  */
 export function planReviewRowOutcome(
   errorText: string | undefined
@@ -301,7 +308,9 @@ export function planReviewRowOutcome(
     return feedback ? { kind: 'keep-planning', feedback } : { kind: 'keep-planning' };
   }
   if (text.startsWith(KEEP_PLANNING_TEXT)) return { kind: 'keep-planning' };
-  if (text.startsWith(REVIEW_DISMISSED_TEXT)) return { kind: 'dismissed' };
+  if (text.startsWith(REVIEW_DISMISSED_TEXT) || text.startsWith(DSH_REVIEW_DISMISSED_TEXT)) {
+    return { kind: 'dismissed' };
+  }
   if (text.startsWith(RUN_WITHOUT_GOAL_TEXT)) return { kind: 'approved-without-goal' };
   if (text.startsWith(GOAL_NOT_SET_PREFIX)) {
     return { kind: 'goal-not-set', reason: text.slice(GOAL_NOT_SET_PREFIX.length).trim() };

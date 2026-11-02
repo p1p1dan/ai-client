@@ -7,7 +7,7 @@
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 37,
+  "cursor": 39,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -123,6 +123,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>/compact-cancel\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -179,6 +183,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -547,8 +552,45 @@
       }
     },
     {
-      "type": "tool/result",
+      "type": "job/registered",
       "seq": 20,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-compact-cancel",
+        "kind": "bash",
+        "label": "echo \"bridge tool row ok\"; pwd; ls -a",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-7",
+          "rootCallId": "toolu_id-7"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 21,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-compact-cancel",
+        "kind": "bash",
+        "label": "echo \"bridge tool row ok\"; pwd; ls -a",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-7",
+          "rootCallId": "toolu_id-7"
+        },
+        "finishedAt": "<ms>",
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 22,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -568,6 +610,9 @@
           ],
           "isError": false,
           "id": "id-10"
+        },
+        "meta": {
+          "cwd": "<workspace>/compact-cancel"
         }
       },
       "sourceEventSeqs": [19],
@@ -575,7 +620,7 @@
     },
     {
       "type": "step/end",
-      "seq": 21,
+      "seq": 23,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -584,7 +629,7 @@
     },
     {
       "type": "step/start",
-      "seq": 22,
+      "seq": 24,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -593,7 +638,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 23,
+      "seq": 25,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -706,7 +751,7 @@
     },
     {
       "type": "step/end",
-      "seq": 24,
+      "seq": 26,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -715,7 +760,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 25,
+      "seq": 27,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -726,7 +771,7 @@
     },
     {
       "type": "command/run",
-      "seq": 26,
+      "seq": 28,
       "time": "<ms>",
       "data": {
         "commandId": "cmd-id-13",
@@ -739,7 +784,7 @@
     },
     {
       "type": "compaction/start",
-      "seq": 27,
+      "seq": 29,
       "time": "<ms>",
       "data": {
         "compactionId": "id-14",
@@ -749,7 +794,7 @@
     },
     {
       "type": "command/done",
-      "seq": 28,
+      "seq": 30,
       "time": "<ms>",
       "data": {
         "commandId": "cmd-id-13",
@@ -759,7 +804,7 @@
     },
     {
       "type": "compaction/end",
-      "seq": 29,
+      "seq": 31,
       "time": "<ms>",
       "data": {
         "compactionId": "id-14",
@@ -770,7 +815,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 30,
+      "seq": 32,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -794,7 +839,7 @@
     },
     {
       "type": "turn/start",
-      "seq": 31,
+      "seq": 33,
       "time": "<ms>",
       "data": {
         "turn": 3
@@ -802,7 +847,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 32,
+      "seq": 34,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -813,7 +858,7 @@
     },
     {
       "type": "step/start",
-      "seq": 33,
+      "seq": 35,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -822,7 +867,7 @@
     },
     {
       "type": "user/message",
-      "seq": 34,
+      "seq": 36,
       "time": "<ms>",
       "data": {
         "content": [
@@ -841,7 +886,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 35,
+      "seq": 37,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -954,7 +999,7 @@
     },
     {
       "type": "step/end",
-      "seq": 36,
+      "seq": 38,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -963,7 +1008,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 37,
+      "seq": 39,
       "time": "<ms>",
       "data": {
         "turn": 3,

@@ -64,6 +64,9 @@ export const DSH_TOOL_CLASSES: Readonly<Record<string, DshToolClass>> = Object.f
   update_goal: 'internal',
   exit_plan_mode: 'internal',
   present: 'internal',
+  // DSH 0.2.1 (decision 207 §7): a cd reads and writes nothing and widens no
+  // access; every later call outside the workspace still meets the boundary.
+  working_directory: 'internal',
   // P1-4d3 (decision 098): asking the user is the interaction itself, never
   // gated, as 1.0.x's `ask` was not (dsh-tool-ask-user, a product bundle row).
   ask_user_question: 'internal',

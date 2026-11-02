@@ -82,33 +82,33 @@
           "liveMessageId": "dsh-compaction-id-7"
         },
         {
-          "id": "h:id-10",
-          "entryId": "id-10",
+          "id": "h:id-11",
+          "entryId": "id-11",
           "role": "assistant",
           "timestamp": "<ms>",
           "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "text",
-              "id": "h:id-10:text:0",
+              "id": "h:id-11:text:0",
               "text": "P1-OVERFLOW one: answered after compaction."
             }
           ],
           "liveMessageId": "dsh-aiclient-rec-overflow-compact-t2-s1"
         },
         {
-          "id": "h:id-11",
-          "entryId": "id-11",
+          "id": "h:id-12",
+          "entryId": "id-12",
           "role": "user",
           "timestamp": "<ms>",
           "blocks": [
             {
               "type": "text",
-              "id": "h:id-11:text:0",
+              "id": "h:id-12:text:0",
               "text": "P0-STREAM: stream a paragraph back to me. P1-COMPACT-REFUSE"
             }
           ],
-          "liveMessageId": "dsh-user-31"
+          "liveMessageId": "dsh-user-32"
         },
         {
           "id": "h:id-14",
@@ -239,7 +239,7 @@
           "leaf": false
         },
         {
-          "id": "id-10",
+          "id": "id-11",
           "parentId": "id-8",
           "depth": 4,
           "entryType": "message",
@@ -252,8 +252,8 @@
           "leaf": false
         },
         {
-          "id": "id-11",
-          "parentId": "id-10",
+          "id": "id-12",
+          "parentId": "id-11",
           "depth": 5,
           "entryType": "message",
           "role": "user",
@@ -266,7 +266,7 @@
         },
         {
           "id": "id-14",
-          "parentId": "id-11",
+          "parentId": "id-12",
           "depth": 6,
           "entryType": "message",
           "role": "assistant",

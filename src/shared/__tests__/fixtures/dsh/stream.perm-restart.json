@@ -461,7 +461,7 @@
     "requestId": "turn-PERM-COVERED",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-28",
+      "messageId": "dsh-user-32",
       "role": "user",
       "attemptId": "attempt-PERM-COVERED"
     }
@@ -471,8 +471,8 @@
     "requestId": "turn-PERM-COVERED",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-28",
-      "blockId": "dsh-user-28-text",
+      "messageId": "dsh-user-32",
+      "blockId": "dsh-user-32-text",
       "text": "P1-PERM-SESSION: echo twice."
     }
   },
@@ -481,7 +481,7 @@
     "requestId": "turn-PERM-COVERED",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-28"
+      "messageId": "dsh-user-32"
     }
   },
   {
@@ -830,7 +830,7 @@
     "requestId": "turn-PERM-ASKED",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-47",
+      "messageId": "dsh-user-55",
       "role": "user",
       "attemptId": "attempt-PERM-ASKED"
     }
@@ -840,8 +840,8 @@
     "requestId": "turn-PERM-ASKED",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-47",
-      "blockId": "dsh-user-47-text",
+      "messageId": "dsh-user-55",
+      "blockId": "dsh-user-55-text",
       "text": "P1-PERM-SESSION: echo twice."
     }
   },
@@ -850,7 +850,7 @@
     "requestId": "turn-PERM-ASKED",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-47"
+      "messageId": "dsh-user-55"
     }
   },
   {

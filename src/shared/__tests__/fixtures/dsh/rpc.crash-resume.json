@@ -26,7 +26,7 @@
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-crash-resume.dsh.json",
       "leaf": {
         "activeEntryId": "id-1:interrupted",
-        "fileTailEntryId": "aiclient-rec-crash-resume#15"
+        "fileTailEntryId": "aiclient-rec-crash-resume#16"
       },
       "initialHistory": {
         "logicalSessionId": "rec-crash-resume",
@@ -67,7 +67,7 @@
                 },
                 {
                   "type": "tool_result",
-                  "id": "h:interrupted-tool-result-toolu_id-4-12:tool-result:toolu_id-4",
+                  "id": "h:interrupted-tool-result-toolu_id-4-13:tool-result:toolu_id-4",
                   "toolCallId": "toolu_id-4",
                   "ok": false,
                   "output": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.",
@@ -148,7 +148,7 @@
             },
             {
               "type": "tool_result",
-              "id": "h:interrupted-tool-result-toolu_id-4-12:tool-result:toolu_id-4",
+              "id": "h:interrupted-tool-result-toolu_id-4-13:tool-result:toolu_id-4",
               "toolCallId": "toolu_id-4",
               "ok": false,
               "output": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.",
@@ -190,7 +190,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-1:interrupted",
-        "fileTailEntryId": "aiclient-rec-crash-resume#15"
+        "fileTailEntryId": "aiclient-rec-crash-resume#16"
       },
       "nodes": [
         {

@@ -65,12 +65,12 @@ function run(toolName: string, input: unknown, overrides: Partial<ToolRun> = {})
 
 /**
  * The DSH tools a row deliberately does not name. They read as the
- * unknown-tool fallback (「工具」 + the tool's name): `ralph` is off in
- * dsh-base (shard 04 §3), `structured_output` is a subagent's own return
- * channel, and `plugin_manager` installs host code our composition never
- * mounts (P1-10: no runtime installs).
+ * unknown-tool fallback (「工具」 + the tool's name): `structured_output` is a
+ * subagent's own return channel, and `plugin_manager` installs host code our
+ * composition never mounts (P1-10: no runtime installs). (`ralph` left DSH in
+ * 0.2.1, decision 207.)
  */
-const FALLBACK_ON_PURPOSE: readonly string[] = ['ralph', 'structured_output', 'plugin_manager'];
+const FALLBACK_ON_PURPOSE: readonly string[] = ['structured_output', 'plugin_manager'];
 
 interface Probe {
   input: Record<string, unknown>;
@@ -273,12 +273,14 @@ const PROBES: Readonly<Record<string, Probe>> = {
     icon: 'tool',
     arg: 'structured_output',
   },
-  ralph: {
-    input: { prompt: 'Keep going' },
-    verb: 'Used tool',
-    zhVerb: '工具',
-    icon: 'tool',
-    arg: 'ralph · Keep going',
+  // Decision 207 §7, §14: DSH 0.2.1's cd.
+  working_directory: {
+    input: { cd: 'packages/web' },
+    output: '/home/u/proj/packages/web',
+    verb: 'Changed directory',
+    zhVerb: '切换目录',
+    icon: 'folder',
+    arg: 'packages/web',
   },
   get_goal: {
     input: {},
@@ -930,6 +932,19 @@ describe('every icon kind has an element', () => {
     expect(source).toContain("t('Exit code {{code}}', { code: view.exitCode })");
     expect(source).toContain("t('to background at {{limit}}'");
     expect(source).toContain("case 'todos':");
+  });
+});
+
+describe('decision 207: the working_directory row', () => {
+  const settled = (input: unknown, output: string) =>
+    deriveToolRowView(run('working_directory', input, { output }));
+
+  it('without cd it reads the directory, and names what it read', () => {
+    const view = settled({}, '/home/u/proj');
+    expect(view.verb).toBe('Checked directory');
+    expect(zh(view.verb)).toBe('查看当前目录');
+    expect(view.iconKind).toBe('folder');
+    expect(view.arg).toBe('/home/u/proj');
   });
 });
 

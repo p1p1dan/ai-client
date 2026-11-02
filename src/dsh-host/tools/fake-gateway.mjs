@@ -2013,21 +2013,27 @@ const DSH_P0_2_SCRIPTS = {
     );
   },
   // dsh-rebase P1-6b: permission plugin experiments (tools/perm-experiments.ts).
-  'P1-PERM-SUB'(_round, step) {
+  // Decision 207 §8: since DSH 0.2.1 every delegation runs in the background;
+  // the child's settlement notice wakes the parent, which answers in plain text.
+  'P1-PERM-SUB'(_round, step, _calls, _triggerText, _history, recent) {
+    if (/Background subagent \S+ finished/.test(recent ?? '')) {
+      return say('P1-PERM-SUB heard back from the child.');
+    }
     if (step === 0) {
       return tool('subagent', {
         description: 'Permission probe child',
         prompt: 'P1-PERM-CHILD: run one bash call, then answer.',
-        run_in_background: false,
       });
     }
-    return say('P1-PERM-SUB finished.');
+    return say('P1-PERM-SUB delegated; the child reports back.');
   },
   'P1-PERM-CHILD'(_round, step) {
     if (step === 0) {
       return tool('bash', { command: 'echo perm-child-call', description: 'Echo from the child' });
     }
-    return say('P1-PERM-CHILD finished.');
+    // No scenario marker in the closing line: the settlement notice quotes it,
+    // and a marker there would make the parent's wake-up run this script.
+    return say('Child done: perm-child-call ran.');
   },
   'P1-PERM-WF'(_round, step) {
     if (step === 0) {
@@ -3377,6 +3383,11 @@ function decideP8(messages) {
   }
   if (trigger < 0) return undefined;
   const triggerText = ownText(messages[trigger]);
+  // Decision 207 §8: a child's settlement notice quotes its closing line,
+  // markers included; the woken parent only acknowledges it.
+  if (/Background subagent \S+ finished/.test(triggerText)) {
+    return { ...say('P8 parent: a subagent reported back.'), label: 'P8-SETTLED' };
+  }
   const scenario = triggerText.match(P8_MARKER)[1];
   const p = firstJsonObject(triggerText) ? p04Params(triggerText) : {};
   let calls = 0;
@@ -3446,14 +3457,25 @@ function decideP8(messages) {
           name: 'subagent',
           input: {
             description: `Fan-out ${i}`,
-            prompt: `P8-CHILD ${i}: answer in one line.`,
-            run_in_background: false,
+            prompt: `P8-CHILD ${i}${p.slow ? ' slow' : ''}: answer in one line.`,
           },
         })),
         'Fanning out.'
       );
     }
     case 'CHILD':
+      // `slow` keeps every child running for about three seconds, so a burst
+      // is still active when its last call meets the activation limit.
+      if (/ slow:/.test(triggerText)) {
+        return {
+          kind: 'paced-text',
+          status: 200,
+          text: 'P8-CHILD done slowly.',
+          chunks: 20,
+          chunkMs: 150,
+          label: label(' slow'),
+        };
+      }
       return { ...say(`P8-CHILD done (${triggerText.slice(0, 40)}).`), label: label() };
     // tools/contention-regression.ts: a paced answer whose every delta carries
     // its send time, so the receiver can tell this process's own stalls apart.
@@ -3473,7 +3495,7 @@ function decideP8(messages) {
           ? `P8-LOOP ${JSON.stringify({ tag: 'child-loop' })} keep reading.`
           : `P8-REPEAT ${JSON.stringify({ tag: 'child', count: p.count ?? 60 })} list the jobs.`;
       return {
-        ...tool('subagent', { description: 'Looping child', prompt, run_in_background: false }),
+        ...tool('subagent', { description: 'Looping child', prompt }),
         label: label(),
       };
     }

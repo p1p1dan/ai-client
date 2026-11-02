@@ -205,7 +205,7 @@ describe('pruneReason keeps every package directory the host loads', () => {
   const keptDirs = [
     'node_modules/@deepseek-ai',
     'node_modules/@deepseek-ai/dsh-base',
-    'node_modules/@deepseek-ai/dsh-skill-badge/assets',
+    'node_modules/@deepseek-ai/dsh-sandbox-windows-acl/assets',
     'node_modules/@aiclient/dsh-app',
     'node_modules/@aiclient/dsh-app/lib',
     'node_modules/koffi',
@@ -341,7 +341,7 @@ describe('pruneReason removes the B-tier payload', () => {
       'node_modules/a/license.txt',
       'node_modules/a/NOTICE',
       'node_modules/a/COPYING.LESSER',
-      'node_modules/@deepseek-ai/dsh-skill-badge/assets/dsh-badge.md',
+      'node_modules/@deepseek-ai/dsh-sandbox-windows-acl/assets/diagnose-windows-sandbox-acl/SKILL.md',
       'node_modules/@img/sharp-libvips-linux-x64/README.md',
       'node_modules/@img/sharp-libvips-linux-x64/versions.json',
       'node_modules/koffi/src/koffi/index.js',
@@ -543,13 +543,6 @@ describe('verifyDshArtifact rejects', () => {
       "export * from '../../bridge/plugin.ts';\n"
     );
     failsWith(/bundle\/lib\/bridge\.js still loads TypeScript sources/);
-  });
-
-  it('a runtime asset lost to the Markdown sweep', () => {
-    fs.rmSync(
-      path.join(tmp, 'node_modules', '@deepseek-ai', 'dsh-skill-badge', 'assets', 'dsh-badge.md')
-    );
-    failsWith(/missing node_modules\/@deepseek-ai\/dsh-skill-badge\/assets\/dsh-badge\.md/);
   });
 
   it.skipIf(process.platform === 'win32')('an executable without its exec bit', () => {
@@ -835,8 +828,8 @@ describe('bridge bundles (decision 011)', () => {
     'aiclient-permissions': ['tools'],
     'aiclient-loop-guard': ['tools'],
     'aiclient-encrypted-read': ['fs'],
-    // Decision 190: dsh-tool-fs-search's own three.
-    'aiclient-fs-search': ['tools', 'systemPrompt', 'subprocess'],
+    // Decision 190: dsh-tool-fs-search's own (decision 207: DSH 0.2.1 adds workingDirectory).
+    'aiclient-fs-search': ['tools', 'systemPrompt', 'subprocess', 'workingDirectory'],
   };
   /** Rows that are a Cordis service class (the default export) instead of `apply`. */
   const SERVICE_ROWS = new Set(['aiclient-credentials']);

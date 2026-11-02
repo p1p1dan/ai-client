@@ -692,8 +692,9 @@ describe('constants pinned to the bridge', () => {
 
   it('the host gets its customSkillDirs from the same <agentDir>', () => {
     const profile = readFileSync(join(REPO, 'src/dsh-host/lib/hostProfile.ts'), 'utf8');
+    // Decision 207 §6: the row also restates the shared ~/.agents (option A).
     expect(profile).toMatch(
-      /\{ id: 'skill-filesystem', config: \{ customSkillDirs: \[`\$\{agentDir\}\/skills`\] \} \},/
+      /id: 'skill-filesystem',\s*config: \{ customSkillDirs: \[`\$\{agentDir\}\/skills`\],/
     );
   });
 });

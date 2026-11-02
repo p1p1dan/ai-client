@@ -1440,11 +1440,15 @@ export interface DshGoalProjection {
   updatedAt: number;
 }
 
-/** One row of `subagentCatalog` (dsh-subagent's `SubagentCatalogEntry`): a direct child session. */
+/**
+ * One row of `subagentCatalog` (dsh-subagent's `SubagentCatalogEntry`): a
+ * direct child session; DSH 0.2.1 adds `external`, an execution with no local
+ * child session.
+ */
 export interface DshSubagentCatalogEntry {
   id: string;
   createdAt: number;
-  mode: 'one-shot' | 'continuable' | 'unknown';
+  mode: 'one-shot' | 'continuable' | 'unknown' | 'external';
   label?: string;
 }
 

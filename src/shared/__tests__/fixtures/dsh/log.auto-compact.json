@@ -7,7 +7,7 @@
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 33,
+  "cursor": 34,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -123,6 +123,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -179,6 +183,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -702,8 +707,50 @@
       "surfaceOp": "append"
     },
     {
-      "type": "request/header",
+      "type": "user/message",
       "seq": 30,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<runtime-context>"
+          }
+        ],
+        "source": {
+          "kind": "runtime-context",
+          "form": "snapshot",
+          "sections": [
+            {
+              "name": "aiclient:environment",
+              "text": "<aiclient:environment>"
+            },
+            {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>\"."
+            },
+            {
+              "name": "sandbox:policy",
+              "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
+            },
+            {
+              "name": "approval:policy",
+              "text": "Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed."
+            },
+            {
+              "name": "aiclient:permission",
+              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: bypass. The user has turned off approval prompts entirely: available tools execute without approval, including shell commands whose operands cannot be resolved statically. Explicit deny rules and the tool whitelist remain enforced, and a denied call is still denied. Never bypass a denied tool or path by switching tools."
+            }
+          ]
+        },
+        "role": "user",
+        "id": "id-12"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "request/header",
+      "seq": 31,
       "time": "<ms>",
       "data": {
         "header": {
@@ -739,6 +786,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -747,7 +795,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 31,
+      "seq": 32,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -771,7 +819,7 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-12",
+                "responseId": "msg_id-13",
                 "stopReason": "stop"
               },
               "blocks": [
@@ -781,7 +829,7 @@
               ]
             }
           },
-          "id": "id-13"
+          "id": "id-14"
         },
         "usage": {
           "inputTokens": 0,
@@ -843,7 +891,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-12",
+                  "responseId": "msg_id-13",
                   "stopReason": "stop"
                 },
                 "blocks": [
@@ -860,7 +908,7 @@
     },
     {
       "type": "step/end",
-      "seq": 32,
+      "seq": 33,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -869,7 +917,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 33,
+      "seq": 34,
       "time": "<ms>",
       "data": {
         "turn": 3,

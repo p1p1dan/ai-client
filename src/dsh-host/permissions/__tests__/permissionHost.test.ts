@@ -676,6 +676,14 @@ describe('request construction (design shard 03 §2)', () => {
     }
   });
 
+  it('never asks about a cd, inside or outside the workspace (decision 207 §7)', async () => {
+    for (const cd of [undefined, 'packages/web', '/tmp/elsewhere']) {
+      const { decision, seen } = await requestFor('working_directory', cd ? { cd } : {});
+      expect(decision.kind, String(cd)).toBe('allow');
+      expect(seen, String(cd)).toEqual([]);
+    }
+  });
+
   it('trusts reads of DSH spill files only', async () => {
     const file = join(spill, 'session-1', 'grep-results.txt');
     expect(isSpillPath(file)).toBe(true);

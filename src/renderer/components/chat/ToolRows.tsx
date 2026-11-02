@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileOutput,
   FileText,
+  Folder,
   Globe,
   Image,
   Layers,
@@ -231,6 +232,7 @@ const ROW_ICONS: Record<string, typeof Wrench> = {
   workflow: Workflow,
   mcp: Plug,
   deliver: FileOutput,
+  folder: Folder,
   review: ScanSearch,
 };
 

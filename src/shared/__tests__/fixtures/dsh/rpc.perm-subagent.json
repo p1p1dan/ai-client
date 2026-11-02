@@ -52,8 +52,7 @@
               "name": "subagent",
               "input": {
                 "description": "Permission probe child",
-                "prompt": "P1-PERM-CHILD: run one bash call, then answer.",
-                "run_in_background": false
+                "prompt": "P1-PERM-CHILD: run one bash call, then answer."
               }
             },
             {
@@ -61,7 +60,7 @@
               "id": "h:id-8:tool-result:toolu_id-4",
               "toolCallId": "toolu_id-4",
               "ok": true,
-              "output": "P1-PERM-CHILD finished."
+              "output": "started subagent id-7"
             }
           ],
           "liveMessageId": "dsh-aiclient-rec-perm-subagent-t1-s1"
@@ -76,15 +75,48 @@
             {
               "type": "text",
               "id": "h:id-10:text:0",
-              "text": "P1-PERM-SUB finished."
+              "text": "P1-PERM-SUB delegated; the child reports back."
             }
           ],
           "liveMessageId": "dsh-aiclient-rec-perm-subagent-t1-s2"
+        },
+        {
+          "id": "h:id-11",
+          "entryId": "id-11",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-11:text:0",
+              "text": "Background subagent id-7 finished and will do no further work unless you send it more."
+            }
+          ],
+          "origin": {
+            "kind": "subagent",
+            "childSessionId": "id-7"
+          },
+          "liveMessageId": "dsh-user-23"
+        },
+        {
+          "id": "h:id-13",
+          "entryId": "id-13",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-13:text:0",
+              "text": "P1-PERM-SUB heard back from the child."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-subagent-t2-s1"
         }
       ],
       "offset": 0,
       "limit": 80,
-      "totalCount": 3,
+      "totalCount": 5,
       "hasMore": false
     }
   },
@@ -94,8 +126,8 @@
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-subagent.dsh.json",
       "workspacePath": "<workspace>/perm-subagent",
       "leaf": {
-        "activeEntryId": "id-10",
-        "fileTailEntryId": "aiclient-rec-perm-subagent#18"
+        "activeEntryId": "id-13",
+        "fileTailEntryId": "aiclient-rec-perm-subagent#26"
       },
       "nodes": [
         {
@@ -129,7 +161,33 @@
           "depth": 2,
           "entryType": "message",
           "role": "assistant",
-          "preview": "P1-PERM-SUB finished.",
+          "preview": "P1-PERM-SUB delegated; the child reports back.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-11",
+          "parentId": "id-10",
+          "depth": 3,
+          "entryType": "message",
+          "role": "user",
+          "preview": "Background subagent id-7 finished and will do no further work u…",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-13",
+          "parentId": "id-11",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-PERM-SUB heard back from the child.",
           "timestamp": "<ms>",
           "childCount": 0,
           "forkable": true,
@@ -137,9 +195,115 @@
           "leaf": true
         }
       ],
-      "totalNodes": 3,
-      "returnedNodes": 3,
+      "totalNodes": 5,
+      "returnedNodes": 5,
       "truncated": false
     }
-  }
+  },
+  "lane": [
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "started",
+        "description": "Permission probe child",
+        "taskType": "subagent"
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "status",
+        "status": "running"
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "progress",
+        "usage": {
+          "totalTokens": 0,
+          "toolUses": 0
+        }
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "tool.started",
+        "toolCallId": "toolu_id-14",
+        "name": "bash",
+        "input": {
+          "command": "echo perm-child-call"
+        }
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "tool.completed",
+        "toolCallId": "toolu_id-14",
+        "ok": true
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "text",
+        "id": "id-7-19-0",
+        "text": "Child done: perm-child-call ran."
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "progress",
+        "usage": {
+          "totalTokens": 0,
+          "toolUses": 0
+        }
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "status",
+        "status": "completed",
+        "endedAt": "<ms>",
+        "usage": {
+          "totalTokens": 0,
+          "toolUses": 0
+        }
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "report",
+        "report": {
+          "status": "completed",
+          "totalTokens": 63,
+          "totalToolUseCount": 1,
+          "stopReason": "completed"
+        }
+      }
+    }
+  ]
 }

@@ -7,7 +7,7 @@
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 47,
+  "cursor": 53,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -123,6 +123,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -179,6 +183,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -339,8 +344,24 @@
       }
     },
     {
-      "type": "agent/inbox/spliced",
+      "type": "job/registered",
       "seq": 12,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-steer-withdraw",
+        "kind": "bash",
+        "label": "sleep 2; echo steer-step-1",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-4",
+          "rootCallId": "toolu_id-4"
+        }
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 13,
       "time": "<ms>",
       "data": {
         "target": "next-step",
@@ -364,7 +385,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 13,
+      "seq": 14,
       "time": "<ms>",
       "data": {
         "target": "next-step",
@@ -376,7 +397,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 14,
+      "seq": 15,
       "time": "<ms>",
       "data": {
         "target": "next-step",
@@ -399,8 +420,29 @@
       }
     },
     {
+      "type": "job/settled",
+      "seq": 16,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-steer-withdraw",
+        "kind": "bash",
+        "label": "sleep 2; echo steer-step-1",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-4",
+          "rootCallId": "toolu_id-4"
+        },
+        "finishedAt": "<ms>",
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
       "type": "tool/result",
-      "seq": 15,
+      "seq": 17,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -420,6 +462,9 @@
           ],
           "isError": false,
           "id": "id-9"
+        },
+        "meta": {
+          "cwd": "<workspace>"
         }
       },
       "sourceEventSeqs": [11],
@@ -427,7 +472,7 @@
     },
     {
       "type": "step/end",
-      "seq": 16,
+      "seq": 18,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -436,7 +481,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 17,
+      "seq": 19,
       "time": "<ms>",
       "data": {
         "target": "next-step",
@@ -447,7 +492,7 @@
     },
     {
       "type": "step/start",
-      "seq": 18,
+      "seq": 20,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -456,7 +501,7 @@
     },
     {
       "type": "user/message",
-      "seq": 19,
+      "seq": 21,
       "time": "<ms>",
       "data": {
         "content": [
@@ -475,7 +520,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 20,
+      "seq": 22,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -594,7 +639,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 21,
+      "seq": 23,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -605,8 +650,45 @@
       }
     },
     {
+      "type": "job/registered",
+      "seq": 24,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-2",
+        "owner": "aiclient-rec-steer-withdraw",
+        "kind": "bash",
+        "label": "echo steer-step-2",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-10",
+          "rootCallId": "toolu_id-10"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 25,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-2",
+        "owner": "aiclient-rec-steer-withdraw",
+        "kind": "bash",
+        "label": "echo steer-step-2",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-10",
+          "rootCallId": "toolu_id-10"
+        },
+        "finishedAt": "<ms>",
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
       "type": "tool/result",
-      "seq": 22,
+      "seq": 26,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -626,14 +708,17 @@
           ],
           "isError": false,
           "id": "id-13"
+        },
+        "meta": {
+          "cwd": "<workspace>"
         }
       },
-      "sourceEventSeqs": [21],
+      "sourceEventSeqs": [23],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 23,
+      "seq": 27,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -642,7 +727,7 @@
     },
     {
       "type": "step/start",
-      "seq": 24,
+      "seq": 28,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -651,7 +736,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 25,
+      "seq": 29,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -764,7 +849,7 @@
     },
     {
       "type": "step/end",
-      "seq": 26,
+      "seq": 30,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -773,7 +858,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 27,
+      "seq": 31,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -784,7 +869,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 28,
+      "seq": 32,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -808,7 +893,7 @@
     },
     {
       "type": "turn/start",
-      "seq": 29,
+      "seq": 33,
       "time": "<ms>",
       "data": {
         "turn": 2
@@ -816,7 +901,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 30,
+      "seq": 34,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -827,7 +912,7 @@
     },
     {
       "type": "step/start",
-      "seq": 31,
+      "seq": 35,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -836,7 +921,7 @@
     },
     {
       "type": "user/message",
-      "seq": 32,
+      "seq": 36,
       "time": "<ms>",
       "data": {
         "content": [
@@ -855,7 +940,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 33,
+      "seq": 37,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -976,7 +1061,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 34,
+      "seq": 38,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -987,8 +1072,24 @@
       }
     },
     {
+      "type": "job/registered",
+      "seq": 39,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-3",
+        "owner": "aiclient-rec-steer-withdraw",
+        "kind": "bash",
+        "label": "echo \"sleep-tool steer-withdraw started\"; sleep 30; echo \"sleep-tool done\"",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-17",
+          "rootCallId": "toolu_id-17"
+        }
+      }
+    },
+    {
       "type": "agent/inbox/spliced",
-      "seq": 35,
+      "seq": 40,
       "time": "<ms>",
       "data": {
         "target": "next-step",
@@ -1011,8 +1112,29 @@
       }
     },
     {
+      "type": "job/settled",
+      "seq": 41,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-3",
+        "owner": "aiclient-rec-steer-withdraw",
+        "kind": "bash",
+        "label": "echo \"sleep-tool steer-withdraw started\"; sleep 30; echo \"sleep-tool done\"",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-17",
+          "rootCallId": "toolu_id-17"
+        },
+        "finishedAt": "<ms>",
+        "status": "killed",
+        "cause": "kill",
+        "producerReported": true,
+        "detail": "signal: SIGTERM; tool call aborted"
+      }
+    },
+    {
       "type": "tool/result",
-      "seq": 36,
+      "seq": 42,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1038,12 +1160,12 @@
           "code": "ABORTED"
         }
       },
-      "sourceEventSeqs": [34],
+      "sourceEventSeqs": [38],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 37,
+      "seq": 43,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1052,7 +1174,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 38,
+      "seq": 44,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1066,7 +1188,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 39,
+      "seq": 45,
       "time": "<ms>",
       "data": {
         "target": "next-step",
@@ -1078,7 +1200,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 40,
+      "seq": 46,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -1102,7 +1224,7 @@
     },
     {
       "type": "turn/start",
-      "seq": 41,
+      "seq": 47,
       "time": "<ms>",
       "data": {
         "turn": 3
@@ -1110,7 +1232,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 42,
+      "seq": 48,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -1121,7 +1243,7 @@
     },
     {
       "type": "step/start",
-      "seq": 43,
+      "seq": 49,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1130,7 +1252,7 @@
     },
     {
       "type": "user/message",
-      "seq": 44,
+      "seq": 50,
       "time": "<ms>",
       "data": {
         "content": [
@@ -1149,7 +1271,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 45,
+      "seq": 51,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1262,7 +1384,7 @@
     },
     {
       "type": "step/end",
-      "seq": 46,
+      "seq": 52,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1271,7 +1393,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 47,
+      "seq": 53,
       "time": "<ms>",
       "data": {
         "turn": 3,

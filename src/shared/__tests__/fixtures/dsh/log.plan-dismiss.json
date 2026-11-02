@@ -7,7 +7,7 @@
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 31,
+  "cursor": 25,
   "events": [
     {
       "type": "plan/mode",
@@ -131,6 +131,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>/plan-dismiss\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -187,6 +191,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -365,10 +370,10 @@
           "content": [
             {
               "type": "text",
-              "text": "Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
+              "text": "The user dismissed the plan review to reply in their own words; plan mode remains active."
             }
           ],
-          "isError": true,
+          "isError": false,
           "id": "id-7"
         }
       },
@@ -385,141 +390,8 @@
       }
     },
     {
-      "type": "step/start",
-      "seq": 15,
-      "time": "<ms>",
-      "data": {
-        "turn": 1,
-        "step": 2
-      }
-    },
-    {
-      "type": "assistant/message",
-      "seq": 16,
-      "time": "<ms>",
-      "data": {
-        "turn": 1,
-        "step": 2,
-        "message": {
-          "role": "assistant",
-          "content": [
-            {
-              "type": "text",
-              "text": "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
-            }
-          ],
-          "source": {
-            "kind": "model",
-            "provider": "aiclient-gateway",
-            "model": "fake-1",
-            "replayState": {
-              "response": {
-                "kind": "pi-ai",
-                "version": 2,
-                "api": "anthropic-messages",
-                "provider": "aiclient-gateway",
-                "model": "fake-1",
-                "responseId": "msg_id-8",
-                "stopReason": "stop"
-              },
-              "blocks": [
-                {
-                  "type": "text"
-                }
-              ]
-            }
-          },
-          "id": "id-9"
-        },
-        "usage": {
-          "inputTokens": 0,
-          "outputTokens": 0,
-          "totalTokens": 0
-        },
-        "stream": [
-          {
-            "type": "chunk",
-            "time": "<ms>",
-            "chunk": {
-              "type": "block-start",
-              "index": 0,
-              "blockType": "text"
-            }
-          },
-          {
-            "type": "text-chunks",
-            "time0": "<ms>",
-            "index": 0,
-            "texts": [
-              "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
-            ]
-          },
-          {
-            "type": "chunk",
-            "time": "<ms>",
-            "chunk": {
-              "type": "block-end",
-              "index": 0,
-              "block": {
-                "type": "text",
-                "text": "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
-              }
-            }
-          },
-          {
-            "type": "chunk",
-            "time": "<ms>",
-            "chunk": {
-              "type": "usage",
-              "usage": {
-                "inputTokens": 0,
-                "outputTokens": 0,
-                "totalTokens": 0
-              }
-            }
-          },
-          {
-            "type": "chunk",
-            "time": "<ms>",
-            "chunk": {
-              "type": "finish",
-              "reason": {
-                "kind": "stop"
-              },
-              "replayState": {
-                "response": {
-                  "kind": "pi-ai",
-                  "version": 2,
-                  "api": "anthropic-messages",
-                  "provider": "aiclient-gateway",
-                  "model": "fake-1",
-                  "responseId": "msg_id-8",
-                  "stopReason": "stop"
-                },
-                "blocks": [
-                  {
-                    "type": "text"
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "surfaceOp": "append"
-    },
-    {
-      "type": "step/end",
-      "seq": 17,
-      "time": "<ms>",
-      "data": {
-        "turn": 1,
-        "step": 2
-      }
-    },
-    {
       "type": "turn/end",
-      "seq": 18,
+      "seq": 15,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -530,7 +402,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 19,
+      "seq": 16,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -547,14 +419,14 @@
               "kind": "user"
             },
             "role": "user",
-            "id": "id-10"
+            "id": "id-8"
           }
         ]
       }
     },
     {
       "type": "turn/start",
-      "seq": 20,
+      "seq": 17,
       "time": "<ms>",
       "data": {
         "turn": 2
@@ -562,7 +434,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 21,
+      "seq": 18,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -573,7 +445,7 @@
     },
     {
       "type": "step/start",
-      "seq": 22,
+      "seq": 19,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -582,7 +454,7 @@
     },
     {
       "type": "user/message",
-      "seq": 23,
+      "seq": 20,
       "time": "<ms>",
       "data": {
         "content": [
@@ -595,13 +467,13 @@
           "kind": "user"
         },
         "role": "user",
-        "id": "id-10"
+        "id": "id-8"
       },
       "surfaceOp": "append"
     },
     {
       "type": "assistant/message",
-      "seq": 24,
+      "seq": 21,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -611,7 +483,7 @@
           "content": [
             {
               "type": "tool-call",
-              "id": "toolu_id-11",
+              "id": "toolu_id-9",
               "name": "exit_plan_mode",
               "arguments": "{\"plan\":\"# P1-PLAN-DISMISS: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-DISMISS done\\\".\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
             }
@@ -627,7 +499,7 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-12",
+                "responseId": "msg_id-10",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -637,7 +509,7 @@
               ]
             }
           },
-          "id": "id-13"
+          "id": "id-11"
         },
         "usage": {
           "inputTokens": 0,
@@ -658,7 +530,7 @@
             "type": "tool-call-chunks",
             "time0": "<ms>",
             "index": 0,
-            "id": "toolu_id-11",
+            "id": "toolu_id-9",
             "name": "exit_plan_mode",
             "args": [
               "{\"plan\":\"# P1-PLAN-DISMISS: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-DISMISS done\\\".\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
@@ -672,7 +544,7 @@
               "index": 0,
               "block": {
                 "type": "tool-call",
-                "id": "toolu_id-11",
+                "id": "toolu_id-9",
                 "name": "exit_plan_mode",
                 "arguments": "{\"plan\":\"# P1-PLAN-DISMISS: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-DISMISS done\\\".\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
               }
@@ -705,7 +577,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-12",
+                  "responseId": "msg_id-10",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -722,19 +594,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 25,
+      "seq": 22,
       "time": "<ms>",
       "data": {
         "turn": 2,
         "step": 1,
-        "callId": "toolu_id-11",
+        "callId": "toolu_id-9",
         "name": "exit_plan_mode",
         "arguments": "{\"plan\":\"# P1-PLAN-DISMISS: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-DISMISS done\\\".\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
       }
     },
     {
       "type": "tool/result",
-      "seq": 26,
+      "seq": 23,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -743,25 +615,25 @@
           "role": "tool",
           "source": {
             "kind": "tool",
-            "callId": "toolu_id-11"
+            "callId": "toolu_id-9"
           },
-          "toolCallId": "toolu_id-11",
+          "toolCallId": "toolu_id-9",
           "content": [
             {
               "type": "text",
-              "text": "Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
+              "text": "The user dismissed the plan review to reply in their own words; plan mode remains active."
             }
           ],
-          "isError": true,
-          "id": "id-14"
+          "isError": false,
+          "id": "id-12"
         }
       },
-      "sourceEventSeqs": [25],
+      "sourceEventSeqs": [22],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 27,
+      "seq": 24,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -769,141 +641,8 @@
       }
     },
     {
-      "type": "step/start",
-      "seq": 28,
-      "time": "<ms>",
-      "data": {
-        "turn": 2,
-        "step": 2
-      }
-    },
-    {
-      "type": "assistant/message",
-      "seq": 29,
-      "time": "<ms>",
-      "data": {
-        "turn": 2,
-        "step": 2,
-        "message": {
-          "role": "assistant",
-          "content": [
-            {
-              "type": "text",
-              "text": "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
-            }
-          ],
-          "source": {
-            "kind": "model",
-            "provider": "aiclient-gateway",
-            "model": "fake-1",
-            "replayState": {
-              "response": {
-                "kind": "pi-ai",
-                "version": 2,
-                "api": "anthropic-messages",
-                "provider": "aiclient-gateway",
-                "model": "fake-1",
-                "responseId": "msg_id-15",
-                "stopReason": "stop"
-              },
-              "blocks": [
-                {
-                  "type": "text"
-                }
-              ]
-            }
-          },
-          "id": "id-16"
-        },
-        "usage": {
-          "inputTokens": 0,
-          "outputTokens": 0,
-          "totalTokens": 0
-        },
-        "stream": [
-          {
-            "type": "chunk",
-            "time": "<ms>",
-            "chunk": {
-              "type": "block-start",
-              "index": 0,
-              "blockType": "text"
-            }
-          },
-          {
-            "type": "text-chunks",
-            "time0": "<ms>",
-            "index": 0,
-            "texts": [
-              "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
-            ]
-          },
-          {
-            "type": "chunk",
-            "time": "<ms>",
-            "chunk": {
-              "type": "block-end",
-              "index": 0,
-              "block": {
-                "type": "text",
-                "text": "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
-              }
-            }
-          },
-          {
-            "type": "chunk",
-            "time": "<ms>",
-            "chunk": {
-              "type": "usage",
-              "usage": {
-                "inputTokens": 0,
-                "outputTokens": 0,
-                "totalTokens": 0
-              }
-            }
-          },
-          {
-            "type": "chunk",
-            "time": "<ms>",
-            "chunk": {
-              "type": "finish",
-              "reason": {
-                "kind": "stop"
-              },
-              "replayState": {
-                "response": {
-                  "kind": "pi-ai",
-                  "version": 2,
-                  "api": "anthropic-messages",
-                  "provider": "aiclient-gateway",
-                  "model": "fake-1",
-                  "responseId": "msg_id-15",
-                  "stopReason": "stop"
-                },
-                "blocks": [
-                  {
-                    "type": "text"
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "surfaceOp": "append"
-    },
-    {
-      "type": "step/end",
-      "seq": 30,
-      "time": "<ms>",
-      "data": {
-        "turn": 2,
-        "step": 2
-      }
-    },
-    {
       "type": "turn/end",
-      "seq": 31,
+      "seq": 25,
       "time": "<ms>",
       "data": {
         "turn": 2,

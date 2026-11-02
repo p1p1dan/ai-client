@@ -512,8 +512,8 @@ function isPackageDir(rel) {
 
 /**
  * Documentation Markdown only: README / CHANGELOG-style names or anything under
- * a `doc` / `docs` directory. Other Markdown may be a runtime asset
- * (@deepseek-ai/dsh-skill-badge reads assets/dsh-badge.md), so it stays.
+ * a `doc` / `docs` directory. Other Markdown may be a runtime asset (a
+ * package's bundled skill, e.g. dsh-sandbox-windows-acl's SKILL.md), so it stays.
  * Licence texts stay, and so does the libvips README, which lists the bundled
  * libraries and their licences (decision 013).
  */
@@ -1101,7 +1101,9 @@ export function auditInstalledPlugins({ outDir, allowlist, closures, dshPin, dsh
     try {
       const issue = dsh.evaluatePluginCompatibility(manifest, {}, dshPin);
       if (issue)
-        fail(`incompatible with DSH ${dshPin}: ${JSON.stringify(issue.peers)} (no exemption)`);
+        fail(
+          `incompatible with DSH ${dshPin}: ${JSON.stringify(issue.requirements)} (no exemption)`
+        );
     } catch (error) {
       fail(`peer check failed: ${error.message}`);
     }
@@ -1212,7 +1214,6 @@ export function requiredFiles(target) {
     'node_modules/@deepseek-ai/dsh-http-proxy/lib/index.js',
     'node_modules/@deepseek-ai/dsh-launch-environment/package.json',
     // Loaded by path at run time, so nothing but this list vouches for them.
-    'node_modules/@deepseek-ai/dsh-skill-badge/assets/dsh-badge.md',
     'node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/worker.cjs',
     'node_modules/@deepseek-ai/dsh-ptc-runtime-node/lib/process.js',
     // P1-6b: the permission row and its bash parser, read by path on the first bash call.

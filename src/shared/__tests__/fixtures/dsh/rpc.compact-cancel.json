@@ -152,7 +152,7 @@
               "text": "P1-AUTOCOMPACT {\"tag\":\"after\"} what do you remember?"
             }
           ],
-          "liveMessageId": "dsh-user-34"
+          "liveMessageId": "dsh-user-36"
         },
         {
           "id": "h:id-17",
@@ -183,7 +183,7 @@
       "workspacePath": "<workspace>/compact-cancel",
       "leaf": {
         "activeEntryId": "id-17",
-        "fileTailEntryId": "aiclient-rec-compact-cancel#37"
+        "fileTailEntryId": "aiclient-rec-compact-cancel#39"
       },
       "nodes": [
         {

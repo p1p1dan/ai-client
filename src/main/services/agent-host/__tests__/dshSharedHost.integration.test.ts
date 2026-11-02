@@ -2631,7 +2631,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       await manager.closeSession('pl2');
     }, 300_000);
 
-    it('[PLN-3] a closed review stops the model; the next message is still in plan mode', async () => {
+    it('[PLN-3] a closed review ends the turn; the next message is still in plan mode', async () => {
       await manager.createSession({
         sessionId: 'pl3',
         workspacePath: workspace,
@@ -2645,6 +2645,15 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       );
       expect(await until(() => reviewsOf('pl3', from).length === 1, 60_000)).toBe(true);
       const questionId = String(reviewsOf('pl3', from)[0]?.payload?.questionId);
+      // Decision 207 §5, §14: since DSH 0.2.1 closing the review concludes the
+      // turn — a successful result and no further model request.
+      const gatewayRequests = () => {
+        const file = join(shared.stateRoot, 'gateway.jsonl');
+        return existsSync(file)
+          ? readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).length
+          : 0;
+      };
+      const requestsBeforeClose = gatewayRequests();
       expect(await manager.respondQuestion({ sessionId: 'pl3', questionId, cancel: true })).toBe(
         true
       );
@@ -2655,8 +2664,9 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
           .map((e) => e.payload)
       ).toEqual([{ questionId, outcome: 'cancelled' }]);
       const closed = forSession('pl3', from).find((e) => e.type === 'tool.completed')?.payload;
-      expect(closed).toMatchObject({ ok: false });
-      expect(String(closed?.error)).toContain('dismissed the plan review');
+      expect(closed).toMatchObject({ ok: true });
+      expect(String(closed?.output)).toContain('dismissed the plan review');
+      expect(gatewayRequests()).toBe(requestsBeforeClose);
       expect(forSession('pl3', from).some((e) => e.type === 'session.permissions')).toBe(false);
       const again = events.length;
       const next = await sendTo('pl3', 'P1-PLAN-DISMISS: present it again.');

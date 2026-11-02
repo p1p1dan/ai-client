@@ -7,7 +7,7 @@
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 25,
+  "cursor": 27,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -123,6 +123,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -179,6 +183,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -341,8 +346,24 @@
       }
     },
     {
-      "type": "tool/result",
+      "type": "job/registered",
       "seq": 12,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-jobs-kill",
+        "kind": "bash",
+        "label": "for i in $(seq 1 600); do echo tick $i; sleep 0.1; done",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-4",
+          "rootCallId": "toolu_id-4"
+        }
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 13,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -357,11 +378,14 @@
           "content": [
             {
               "type": "text",
-              "text": "started background job bash-1"
+              "text": "started background job bash-job-1"
             }
           ],
           "isError": false,
           "id": "id-7"
+        },
+        "meta": {
+          "cwd": "<workspace>"
         }
       },
       "sourceEventSeqs": [11],
@@ -369,7 +393,7 @@
     },
     {
       "type": "step/end",
-      "seq": 13,
+      "seq": 14,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -378,7 +402,7 @@
     },
     {
       "type": "step/start",
-      "seq": 14,
+      "seq": 15,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -387,7 +411,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 15,
+      "seq": 16,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -500,7 +524,7 @@
     },
     {
       "type": "step/end",
-      "seq": 16,
+      "seq": 17,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -509,7 +533,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 17,
+      "seq": 18,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -519,8 +543,29 @@
       }
     },
     {
+      "type": "job/settled",
+      "seq": 19,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-jobs-kill",
+        "kind": "bash",
+        "label": "for i in $(seq 1 600); do echo tick $i; sleep 0.1; done",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-4",
+          "rootCallId": "toolu_id-4"
+        },
+        "finishedAt": "<ms>",
+        "status": "killed",
+        "cause": "kill",
+        "producerReported": true,
+        "detail": "signal: SIGTERM; stopped by the user from the app"
+      }
+    },
+    {
       "type": "agent/inbox/spliced",
-      "seq": 18,
+      "seq": 20,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -530,7 +575,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "background job bash-1 (bash: for i in $(seq 1 600); do echo tick $i; sleep 0.1; done) finished [status: killed, signal: SIGTERM; stopped by the user from the app]. Read its output with job_output."
+                "text": "background job bash-job-1 (bash: for i in $(seq 1 600); do echo tick $i; sleep 0.1; done) finished [status: killed, signal: SIGTERM; stopped by the user from the app]. Read its output with job_output."
               }
             ],
             "source": {
@@ -546,7 +591,7 @@
     },
     {
       "type": "turn/start",
-      "seq": 19,
+      "seq": 21,
       "time": "<ms>",
       "data": {
         "turn": 2
@@ -554,7 +599,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 20,
+      "seq": 22,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -565,7 +610,7 @@
     },
     {
       "type": "step/start",
-      "seq": 21,
+      "seq": 23,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -574,13 +619,13 @@
     },
     {
       "type": "user/message",
-      "seq": 22,
+      "seq": 24,
       "time": "<ms>",
       "data": {
         "content": [
           {
             "type": "text",
-            "text": "background job bash-1 (bash: for i in $(seq 1 600); do echo tick $i; sleep 0.1; done) finished [status: killed, signal: SIGTERM; stopped by the user from the app]. Read its output with job_output."
+            "text": "background job bash-job-1 (bash: for i in $(seq 1 600); do echo tick $i; sleep 0.1; done) finished [status: killed, signal: SIGTERM; stopped by the user from the app]. Read its output with job_output."
           }
         ],
         "source": {
@@ -595,7 +640,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 23,
+      "seq": 25,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -708,7 +753,7 @@
     },
     {
       "type": "step/end",
-      "seq": 24,
+      "seq": 26,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -717,7 +762,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 25,
+      "seq": 27,
       "time": "<ms>",
       "data": {
         "turn": 2,

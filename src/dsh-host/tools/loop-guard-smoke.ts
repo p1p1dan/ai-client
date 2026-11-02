@@ -23,9 +23,13 @@
  *   E1 noup   P1-NOUP, a 503 whose body is a gateway's `no_available_providers`
  *             answer, is NOT retried either (decision 146).
  *   G2        P8-VARIED: 40 distinct `job_output`; cut at the seventeenth.
- *   G3        P8-FANOUT: ten distinct `subagent` calls run, nothing is cut.
+ *   G3        P8-FANOUT: eight distinct `subagent` calls run, nothing is cut;
+ *             G3b: nine slow ones at once, the ninth meets DSH 0.2.1's
+ *             activation limit (eight per tree), the rest run (decision 207).
  *   G7/E3     P8-SUBREPEAT: the child's own degenerate reply is cut in the
- *             child; a child's endless loop meets its own step ceiling.
+ *             child; a child's endless loop meets its own step ceiling. Since
+ *             DSH 0.2.1 the children run in the background: collected once
+ *             each has ended its turn.
  *   G4/E4/E5  P8-LOOP: three read steps, then the wrap-up step carries the
  *             instruction (tools still declared), its escalating bash call is
  *             refused with no approval asked, and the turn ends
@@ -421,13 +425,30 @@ async function hostA(port: number, gatewayRoot: string) {
 
     // G3
     const g3 = await session('p8-g3');
-    facts.g3Turn = await runTurn(host, g3, 'P8-FANOUT {"tag":"g3","count":10} fan out.', 180_000);
+    facts.g3Turn = await runTurn(host, g3, 'P8-FANOUT {"tag":"g3","count":8} fan out.', 180_000);
     const g3View = sessionView(host, g3);
     facts.g3 = {
       toolCalls: g3View.toolCalls,
       toolErrors: g3View.toolResults.filter((result) => result.isError).length,
       attempts: g3View.attempts,
       turnEnds: g3View.turnEnds,
+    };
+    // G3b (decision 207 §8): nine slow children at once, one over the limit.
+    const g3b = await session('p8-g3b');
+    facts.g3bTurn = await runTurn(
+      host,
+      g3b,
+      'P8-FANOUT {"tag":"g3b","count":9,"slow":true} fan out.',
+      180_000
+    );
+    const g3bView = sessionView(host, g3b);
+    facts.g3b = {
+      toolCalls: g3bView.toolCalls,
+      errors: g3bView.toolResults
+        .filter((result) => result.isError)
+        .map((result) => result.text.slice(0, 300)),
+      okResults: g3bView.toolResults.filter((result) => !result.isError).length,
+      turnEnds: g3bView.turnEnds,
     };
 
     // G7 / E3: the cut and the ceiling inside a child.
@@ -446,9 +467,16 @@ async function hostA(port: number, gatewayRoot: string) {
       'P8-SUBREPEAT {"tag":"g7b","child":"LOOP"} delegate.',
       120_000
     );
-    const children = otherSessions(host, known)
-      .filter((id) => !earlierChildren.has(id))
-      .map((id) => ({ id, view: sessionView(host, id) }));
+    // The children run in the background (DSH 0.2.1): wait until both have
+    // ended a turn before reading them.
+    const newChildren = () => otherSessions(host, known).filter((id) => !earlierChildren.has(id));
+    const childDeadline = Date.now() + 120_000;
+    while (Date.now() < childDeadline) {
+      const ids = newChildren();
+      if (ids.length >= 2 && ids.every((id) => sessionView(host, id).turnEnds.length > 0)) break;
+      await sleep(500);
+    }
+    const children = newChildren().map((id) => ({ id, view: sessionView(host, id) }));
     facts.g7 = {
       parent: sessionView(host, g7).turnEnds,
       parentResult: sessionView(host, g7).toolResults.map((result) => ({
@@ -643,10 +671,18 @@ function verdictOf(report: Line): Record<string, boolean> {
     const g3 = a.g3 as Line;
     const g3Ends = (g3.turnEnds ?? []) as Line[];
     v.g3FanOutRuns =
-      (g3.toolCalls as string[]).filter((name) => name === 'subagent').length === 10 &&
+      (g3.toolCalls as string[]).filter((name) => name === 'subagent').length === 8 &&
       g3.toolErrors === 0 &&
       g3.attempts === 0 &&
       reasonOf(g3Ends.at(-1)).kind === 'completed';
+    const g3b = a.g3b as Line;
+    const g3bErrors = (g3b.errors ?? []) as string[];
+    v.g3bNinthMeetsLimit =
+      (g3b.toolCalls as string[]).filter((name) => name === 'subagent').length === 9 &&
+      g3bErrors.length === 1 &&
+      String(g3bErrors[0]).includes('subagent limit reached (active child limit: 8)') &&
+      g3b.okResults === 8 &&
+      reasonOf(((g3b.turnEnds ?? []) as Line[]).at(-1)).kind === 'completed';
     const g7 = a.g7 as Line;
     const children = (g7.children ?? []) as Line[];
     v.g7ChildReplyCut = children.some(

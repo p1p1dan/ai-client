@@ -106,6 +106,7 @@
   - 读工具行结果的 `planReviewRowOutcome` 同时认新旧两种文字（旧会话回放还是旧文字），关闭的行写「审阅已关闭」，不再写「已批准」。
   - **自主**：我们自己做的 `create_goal` 审阅（决策 169）关闭时也照 DSH 结束回合，文字统一成 DSH 的新文字。实现时核对我们拿到的调用对象上有没有 `concludeTurn`；没有就保持现状并记下。
   - Claude 引擎的关闭不变（它走 SDK 的拒绝加中断）。
+  - **实现时核对结果（2026-11-02）**：上游的「结束本回合」只能挂在**成功**结果上，而 `create_goal` 的成功结果文字由它自己的输出格式生成（写的是目标），放不进「审阅已关闭」的说明。所以 `create_goal` 审阅的关闭**保持现状**（失败结果 + 旧文字，模型再回一句后停下），界面读法不受影响。
 - **测试 `[PLN-3]`**：它的意图「关闭后模型停下，下一条消息仍在计划模式」在新版上成立，只是断言写死了 DSH 旧版的「失败 + 旧文字」。按决策 090「默认跟随 DSH」，要把断言改成新契约（成功、新文字、没有多出的模型请求）。**这是改测试，需用户同意**（第 12 节）。
 
 ## 6 用户级说明文件（决策 101）
@@ -250,13 +251,18 @@
 | 测试 | 规则 | 理想结果 |
 |---|---|---|
 | `[PLN-3]` 关闭计划审阅（`dshSharedHost.integration.test.ts`） | 关闭审阅 = 结束本回合、留在计划模式 | 卡片收起，`question.resolved` 为 `cancelled`；`exit_plan_mode` 的工具结果是**成功**，文字含 "dismissed the plan review"；关闭之后本回合**没有新的模型请求**（假网关请求数不增）；没有 `session.permissions`；下一条消息再次出审阅卡 |
-| `planReviewRowOutcome` / 工具行字样（`src/shared/__tests__/planReview.test.ts`、渲染端） | 新旧两种关闭文字都认 | 新文字（成功结果）→「审阅已关闭」；旧文字（失败结果，旧会话回放）→「审阅已关闭」；批准仍是「已批准」；其他成功结果不误判 |
+| `planReviewRowOutcome` / 工具行字样（`src/shared/__tests__/planReview.test.ts`、渲染端；读录制历史的 `src/shared/dshHistory/__tests__/dshHistoryGolden.test.ts` 的 plan-dismiss 一项，2026-11-02 重录后补进本行：两次关闭都是**成功**结果、按结果文字读出「已关闭」） | 新旧两种关闭文字都认 | 新文字（成功结果）→「审阅已关闭」；旧文字（失败结果，旧会话回放）→「审阅已关闭」；批准仍是「已批准」；其他成功结果不误判 |
 | `permissionsClassification` | 已装 DSH 的每个工具都有分类 | `working_directory` 归内部类、不出卡；没有未分类工具，也没有多余条目 |
 | `dshToolVocabulary` | 工具表与分类表一一对应 | 没有 `ralph`；有 `working_directory`，带 `cd` 时动词「切换目录」、参数是目标路径，不带参数时「查看当前目录」 |
 | `perm-subagent` 录制场景 | 子代理后台：父回合先结束，子代理的卡在回合外出现 | 父回合：委派行结束、结果是 `started subagent <id>`、回合 idle；之后出现 `permission.requested`，带 agentId、不带 requestId；答「允许」后子代理的命令执行、子代理结束；DSH 自开一个回合，来源是子代理完成 |
-| 回路守卫冒烟 G3 | 一次派出不超过 8 个 | 派 8 个全部启动、无报错、回合正常结束；另加一项：第 9 个报 `ACTIVATION_LIMIT_REACHED`，不排队 |
-| 回路守卫冒烟 G7 | 守卫对后台子代理同样生效 | 等子代理结束再收集：重复工具调用的子代理被截断（`tool_call_repetition`）、步数上限生效，父会话正常结束 |
-| 桥接基准重录（37 个场景） | 只允许第 4 节与证据第 4 节列出的差异 | 允许：编号整体后移、`working-directory:current` 一节、工具表多 `working_directory`、`job/registered` / `job/settled`、作业 id 变长；`perm-search` 搜索成功、`perm-subagent` 按上一行、`plan-dismiss` 按 `[PLN-3]`。**其他任何差异都按缺陷处理**，修产品代码，不重录 |
+| 回路守卫冒烟 G3 | 一次派出不超过 8 个；守卫不截正常的并发委派 | 一个回合派 8 个：8 个调用全部成功、无报错、回合正常结束。另加 G3b：子代理放慢（每个约 3 秒），一个回合同时派 9 个：恰好 1 个调用失败，结果文字含 DSH 的上限原文 `subagent limit reached (active child limit: 8)`（错误码 `ACTIVATION_LIMIT_REACHED`），其余 8 个成功，回合正常结束，不排队、不重试 |
+| 回路守卫冒烟 G7 | 守卫对后台子代理同样生效 | 父回合结束后，等两个新子会话各自出现回合结束（最多 120 秒）再收集：一个子代理的重复调用回复被截断（1 次请求、0 次工具执行、`tool_call_repetition`）；另一个子代理的无限读取撞到步数上限；两个父会话都正常结束。子代理结束通知唤醒父会话时，假网关只回一句话，不再派活 |
+| `aiclient-fs-search` 的注入（`fsSearch/__tests__/plugin.test.ts`；打包测试 `scripts/__tests__/dsh-host-build-lib.test.mjs` 的 `ROW_INJECT` 也写死了这一项，2026-11-02 跑之前补进本行） | 我们这行替代 `dsh-tool-fs-search`，复用它的 glob，所以注入与它一致 | 注入列表等于已装 `dsh-tool-fs-search` 导出的 `inject`（0.2.1 是 `tools`、`systemPrompt`、`subprocess`、`workingDirectory`），不再写死三项 |
+| `agentDirOverlays` 单元测试（`src/dsh-host/lib/__tests__/hostProfile.test.ts`，2026-11-02 动工时补；`src/main/services/agent-host/__tests__/dshSkillCatalog.test.ts` 的「技能目录取自同一个 `<agentDir>`」写死了技能行的单行原文，跑之前一并补进本行，只改成核对 `customSkillDirs` 仍是 `<agentDir>/skills`） | 0.2.1 的说明行不再接受 `dshHome`，用户级说明改由环境变量 `DSH_AGENTS_HOME=<agentDir>` 指过去（方案 A）；技能行要显式写回原来的 `~/.agents`，否则技能根也会跟着换到 `<agentDir>` | 说明行的配置只有 `maxBytes: 65536`，不带 `dshHome`；技能行是 `customSkillDirs: ['<agentDir>/skills']` 加 `agentsHome: <调用方给的 ~/.agents>`；没给 `<agentDir>` 时两行都不加 |
+| `host.ts` 组合顺序静态测试（`src/dsh-host/__tests__/hostStatic.test.ts`，2026-11-02 动工时补；跑之前补进本节，理由：方案 A 要在改写环境变量之前先算出原来的共享根，所以调用多一个参数，测试写死了旧的调用原文） | 覆盖层顺序不变：模型计划两行 → `<agentDir>` 两行 → 必关的行 → 必开的行，都在用户层之后 | 顺序同前，`<agentDir>` 两行的调用是 `agentDirOverlays(agentDir, sharedAgentsHome)`；另加两条：共享根在设 `DSH_AGENTS_HOME` 之前算出；`DSH_AGENTS_HOME` 在抓启动环境（`createLaunchEnvironmentSnapshot`）之前设好 |
+| 录制工具的编号归一（`src/dsh-host/tools/bridge-record.ts`，2026-11-02 重录后补：0.2.1 的作业 id 是随机的 16 位十六进制，录两次就不一样，对比永远不过） | 随机编号按出现顺序换成固定编号，和 UUID、命令 id 的做法一样；不改任何场景的内容 | 金样本里作业 id 写成 `bash-job-N`（单独计数，不挤占消息等其他编号）；更新后连跑两次 `--check` 都是 0 处差异 |
+| 回退 / 分叉的切点（`src/dsh-host/bridge/__tests__/forkSeed.test.ts`，2026-11-02 重录后补：它按金样本的日志序号写死了切点，0.2.1 每次命令多记 `job/registered`、`job/settled` 两条，之后的序号整体后移） | 切点落在同一个事件上，只是序号变了 | 逐个核对过新旧日志：`tool` 的步骤切点 13→15、回合结束 17→19，`stop-tool` 14→16（仍是用户停止的回合结束），`crash-resume` 14→15，`compact` 31→33（仍是 `/compact` 的 `command/done`），`fail` 与提示词切点不变；种子测试的序号同样后移；切点处的事件类型与内容和升级前相同 |
+| 桥接基准重录（37 个场景） | 只允许第 4 节与证据第 4 节列出的差异 | 允许：编号整体后移、`working-directory:current` 一节、工具表多 `working_directory`、`job/registered` / `job/settled`、作业 id 变长；压缩之后 DSH 内部日志多一条运行环境快照（`runtime-context`，2026-11-02 重录前补：0.2.1 的 `dsh-agent-loop` 在压缩替换掉原来那条环境消息后，下一步重新发一次；只在 `auto-compact`、`overflow-compact` 的 `log.*` 里，应用收到的 `stream.*` / `rpc.*` 不变）；`perm-search` 搜索成功、`perm-subagent` 按上一行、`plan-dismiss` 按 `[PLN-3]`。**其他任何差异都按缺陷处理**，修产品代码，不重录 |
 
 **B. 不改测试、只修产品代码**
 
@@ -274,6 +280,6 @@
 | 用户级说明（方案 A） | 只读 `<agentDir>/AGENTS.md` | 在 `<agentDir>` 与一个假 HOME 的 `~/.agents/` 各放一份带不同标记的 `AGENTS.md`：第一个请求里只有 `<agentDir>` 的标记；`~/.agents/skills` 下的技能仍出现在技能清单里 |
 | 新行关闭 | 任何行都不连 DeepSeek 官方 | `web-deepseek-api` 在 `REQUIRED_DISABLED` 里；用户层补丁打开它也会被重新关掉 |
 | 子代理配对 | 按 id 配对 | 同一回合派两个描述相同的子代理，各自的活动挂在各自的委派行下，不串 |
-| 打包必备清单 | 只要求存在的包 | 清单里没有 `dsh-skill-badge`；对着 0.2.1 的安装目录校验通过 |
+| 打包必备清单（`scripts/__tests__/dsh-host-build-lib.test.mjs`） | 只要求存在的包；文档 Markdown 照删、运行期 Markdown 照留 | 必备清单里没有 `dsh-skill-badge`；保留判定的样例换成 0.2.1 仍有的运行期 Markdown（`dsh-sandbox-windows-acl/assets/…/SKILL.md`，按路径读取的随包技能）；原「必备的 dsh-badge.md 被删时报错」一项随包一起去掉（0.2.1 里没有按路径必读的 Markdown 了，「缺必备文件就报错」由清单里其余文件的用例继续覆盖） |
 | 换目录后的权限（阶段 2） | 相对路径按当前目录，边界按工作区 | ① cd 到工作区外，不带路径的 `glob` / `grep` / `bash` 按「工作区外」询问；② cd 到工作区内的子目录，`read src/a.ts` 判为工作区内、卡片路径是子目录下的那个文件；③ cd 本身不出卡；④ 子代理按自己的当前目录判；⑤ 插件工具仍按工作区解析 |
 | 给模型的环境说明（阶段 2） | 不和 DSH 的当前目录一行冲突 | 环境说明写「工作区（项目根）」，不再写「相对路径按它算」「别处说的工作目录不适用」 |

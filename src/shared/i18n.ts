@@ -3896,6 +3896,13 @@ Object.assign(zhTranslations, {
   'Running code': '代码运行中',
   'Run code': '代码',
   'Listed models': '列模型',
+  // Decision 207 §7: DSH 0.2.1's working_directory.
+  'Changed directory': '切换目录',
+  'Changing directory': '切换目录中',
+  'Change directory': '切换目录',
+  'Checked directory': '查看当前目录',
+  'Checking directory': '查看当前目录中',
+  'Check directory': '查看当前目录',
   'Listing models': '列模型中',
   'List models': '列模型',
   'Used tool': '工具',

@@ -8,6 +8,7 @@ import {
   SEARCH_META_MAX_BYTES,
   SEARCH_STDERR_MAX_BYTES,
   SEARCH_TIMEOUT_MS,
+  inject as upstreamInject,
 } from '@deepseek-ai/dsh-tool-fs-search';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { describeToolSwitches, RICH_GREP_ENV, WEB_FETCH_ENV } from '../../lib/toolSwitches.ts';
@@ -48,9 +49,11 @@ function fakeContext() {
 }
 
 describe('aiclient-fs-search', () => {
-  it("is a row of its own that injects dsh-tool-fs-search's three services", () => {
+  it("is a row of its own that injects dsh-tool-fs-search's own services", () => {
     expect(name).toBe('aiclient-fs-search');
-    expect(inject).toEqual(['tools', 'systemPrompt', 'subprocess']);
+    // It reuses DSH's glob, so it needs whatever that row injects (decision 207 §4 ①).
+    expect(inject).toEqual([...upstreamInject]);
+    expect(inject).toContain('workingDirectory');
   });
 
   it("defaults every limit to dsh-tool-fs-search's own", () => {

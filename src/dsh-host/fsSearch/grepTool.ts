@@ -98,6 +98,10 @@ export interface RichGrepContext {
     getSectionOrder(name: 'TOOL_GREP'): number;
   };
   subprocess: GrepSubprocess;
+  /** DSH 0.2.1: the session's current directory (the model can change it). */
+  workingDirectory?: {
+    ensure(agent: unknown, signal?: AbortSignal): Promise<string>;
+  };
 }
 
 /** The part of a tool execution a search reads. */
