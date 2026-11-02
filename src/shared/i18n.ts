@@ -2837,8 +2837,8 @@ export const zhTranslations: Record<string, string> = {
   'next moves': '后续计划',
 
   // 子 Agent 面板。
-  'From subagent': '来自子 Agent',
-  'From subagent · {{detail}}': '来自子 Agent · {{detail}}',
+  'From subagent': '来自子代理',
+  'From subagent · {{detail}}': '来自子代理 · {{detail}}',
   'Awaiting permission · {{tool}}': '等待授权 · {{tool}}',
   '+{{count}} earlier': '另有 {{count}} 条更早的',
   'activity feed capped — remaining live updates dropped': '活动流已达上限 —— 后续实时更新不再显示',
@@ -3823,6 +3823,15 @@ Object.assign(zhTranslations, {
   Ended: '已结束',
   'Earlier run': '此前运行',
   'The task was not stopped': '任务没有停下',
+  // Decision 207 §8: the session rail's subagents card and the out-of-turn permission card.
+  'Waiting for your approval': '等你确认',
+  'Waiting for your approval: {{tool}}': '等你确认：{{tool}}',
+  Errored: '出错',
+  '{{count}} running': '{{count}} 运行中',
+  '{{count}} waiting for your approval': '{{count}} 等你确认',
+  'Ended {{count}}': '已结束 {{count}}',
+  'The main conversation is idle; approve and this subagent carries on':
+    '主对话空闲中，批准后这个子代理继续',
   'The subagent was not interrupted': '子代理没有被打断',
   'The subagent was not stopped': '子代理没有停下',
   'Recent activity': '最近活动',

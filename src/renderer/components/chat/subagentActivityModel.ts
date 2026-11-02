@@ -976,16 +976,25 @@ export function deriveSubagentPanelRows(
 
 export interface PermissionOriginView {
   label: string;
+  /**
+   * Decision 207 §8 item 2: DSH 0.2.1's background subagents ask while the
+   * main conversation is idle, outside any turn; the card says so.
+   */
+  idleNote?: string;
 }
 
 /** Null in, null out — the chip renders nothing for main-agent requests. */
 export function derivePermissionOrigin(
   origin: SubagentPermissionOrigin | null | undefined,
-  t: Translate = englishTranslate
+  t: Translate = englishTranslate,
+  options: { mainIdle?: boolean } = {}
 ): PermissionOriginView | null {
   if (!origin) return null;
   const detail = origin.description ?? origin.agentType;
   return {
     label: detail ? t('From subagent · {{detail}}', { detail }) : t('From subagent'),
+    ...(options.mainIdle
+      ? { idleNote: t('The main conversation is idle; approve and this subagent carries on') }
+      : {}),
   };
 }

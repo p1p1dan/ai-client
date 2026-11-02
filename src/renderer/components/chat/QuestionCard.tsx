@@ -68,6 +68,8 @@ interface QuestionCardProps {
    * this card stays a renderer. `null`/absent means draw nothing.
    */
   progress?: string | null;
+  /** permission only — decision 207 §8: no turn runs in the session (a background subagent asks). */
+  mainIdle?: boolean;
 }
 
 /**
@@ -118,6 +120,7 @@ export function QuestionCard(props: QuestionCardProps) {
         canRespond={Boolean(props.canRespond)}
         onRespond={props.onRespondPermission}
         progress={props.progress ?? null}
+        mainIdle={props.mainIdle === true}
       />
     );
   }
@@ -298,11 +301,13 @@ function PermissionQaCard({
   canRespond,
   onRespond,
   progress,
+  mainIdle,
 }: {
   block: ChatBlock;
   canRespond: boolean;
   onRespond?: (decision: PermissionDecisionId) => Promise<boolean> | undefined;
   progress: string | null;
+  mainIdle: boolean;
 }) {
   const { t } = useI18n();
   const view = derivePermissionCardView(block, canRespond, t);
@@ -342,9 +347,14 @@ function PermissionQaCard({
   const origin = useSubagentActivityStore((s) =>
     block.permissionId ? (s.permissionOrigin[block.permissionId] ?? null) : null
   );
-  const originView = derivePermissionOrigin(origin, t);
+  const originView = derivePermissionOrigin(origin, t, { mainIdle });
   const originChip = originView ? (
-    <p className="text-small text-muted-foreground">{originView.label}</p>
+    <p className="text-small text-muted-foreground">
+      {originView.label}
+      {originView.idleNote && (
+        <span className="text-foreground-faint">{` · ${originView.idleNote}`}</span>
+      )}
+    </p>
   ) : null;
 
   // 2026-08-10 ruling: a decided permission collapses to a single tool-row

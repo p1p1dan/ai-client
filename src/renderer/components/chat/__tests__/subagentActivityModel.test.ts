@@ -1,3 +1,4 @@
+import { translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
   derivePermissionOrigin,
@@ -700,6 +701,22 @@ describe('derivePermissionOrigin', () => {
     expect(
       derivePermissionOrigin({ parentToolCallId: PARENT, agentType: null, description: null })
     ).toEqual({ label: 'From subagent' });
+  });
+
+  it('decision 207 §8, §14 E: an idle main conversation adds the note; otherwise nothing changes', () => {
+    const origin = { parentToolCallId: PARENT, agentType: null, description: '调研支付' };
+    const zh = (key: string, params?: Record<string, string | number>) =>
+      translate('zh', key, params);
+    expect(derivePermissionOrigin(origin, zh, { mainIdle: true })).toEqual({
+      label: '来自子代理 · 调研支付',
+      idleNote: '主对话空闲中，批准后这个子代理继续',
+    });
+    expect(derivePermissionOrigin(origin, zh, { mainIdle: false })).toEqual({
+      label: '来自子代理 · 调研支付',
+    });
+    expect(derivePermissionOrigin(origin, zh)).toEqual({ label: '来自子代理 · 调研支付' });
+    // A main-agent request has no origin: no chip, no note.
+    expect(derivePermissionOrigin(null, zh, { mainIdle: true })).toBeNull();
   });
 });
 

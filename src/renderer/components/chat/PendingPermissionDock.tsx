@@ -37,7 +37,7 @@
  * unmissable and the conversation above it stays readable and scrollable.
  */
 
-import { useChatSessionsStore } from '../../stores/chatSessions';
+import { statusForNextTurn, useChatSessionsStore } from '../../stores/chatSessions';
 import { QuestionCard } from './QuestionCard';
 import { derivePermissionQueueProgress, permissionDecisionAllows } from './questionCardModel';
 import { useRespondPermission } from './useRespondPermission';
@@ -70,6 +70,11 @@ export function PendingPermissionDock({ sessionId }: { sessionId: string | null 
     );
   });
   const respondPermission = useRespondPermission(sessionId);
+  // Decision 207 §8: a background subagent may ask while no turn runs.
+  const mainIdle = useChatSessionsStore((state) => {
+    const status = statusForNextTurn(state.sessions.find((item) => item.id === sessionId));
+    return status === 'idle' || status === 'completed';
+  });
 
   // A queue entry with no block is a real intermediate state rather than a bug:
   // the same reducer pass writes both, but a reload can drop the bucket while
@@ -90,6 +95,7 @@ export function PendingPermissionDock({ sessionId }: { sessionId: string | null 
       // to the whole array to recompute a constant.
       canRespond
       progress={derivePermissionQueueProgress(pending)}
+      mainIdle={mainIdle}
       // The one place `allow` is derived from the decision (spec §3.2):
       // downstream the two travel together, so a card that says Allowed
       // cannot sit on top of a wire reply that declined.

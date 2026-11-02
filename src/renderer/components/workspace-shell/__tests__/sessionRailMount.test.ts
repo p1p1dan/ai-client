@@ -10,16 +10,31 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useSessionRailStore } from '@/stores/sessionRail';
+import { stopBackgroundTask } from '../panes/BackgroundTasksPane';
 import { SessionBar } from '../SessionBar';
 import { RailCard } from '../sessionRail/RailCard';
 import { SessionRailToggle } from '../sessionRail/SessionRailToggle';
+import { SubagentsCard } from '../sessionRail/SubagentsCard';
 import type { SessionRailVisibility } from '../sessionRail/sessionRailModel';
+import type { SubagentCardRow, SubagentsCardView } from '../sessionRail/subagentsCardModel';
 
 /** A RailCard with a fixed body, built without a `children` prop (lint) and typed. */
 function railCard(props: Omit<ComponentProps<typeof RailCard>, 'children'>) {
   return createElement(RailCard, { ...props, children: 'BODY' } as ComponentProps<typeof RailCard>);
 }
 
+// The subagents card's dialog and the tasks pane's stop pull in stores that
+// read the preload at import (decision 207 §14 E): a minimal bridge.
+const api = vi.hoisted(() => {
+  const chat = { interruptSubagent: async (_payload: unknown) => ({ interrupted: true }) };
+  window.electronAPI = {
+    env: { platform: 'linux' },
+    settings: { read: async () => null, write: async () => undefined },
+    app: { setLanguage: () => undefined, setProxy: () => undefined },
+    chat,
+  } as unknown as typeof window.electronAPI;
+  return { chat };
+});
 const zh = (key: string, params?: Record<string, string | number>) => translate('zh', key, params);
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: zh }) }));
 // SessionBar mounts the tree dialog, whose start path pulls in the settings
@@ -178,5 +193,105 @@ describe('SessionBar ⋮ with the session rail (layout 5e)', () => {
     expect(
       item?.hasAttribute('data-disabled') || item?.getAttribute('aria-disabled') === 'true'
     ).toBe(true);
+  });
+});
+
+describe('SubagentsCard (decision 207 §8, §14 E)', () => {
+  function row(extra: Partial<SubagentCardRow> & { key: string; name: string }): SubagentCardRow {
+    return {
+      childId: extra.key.replace('lane:', 'kid-'),
+      status: 'running',
+      kind: '子代理 · fake-1',
+      detail: '读取 src/auth/session.ts',
+      duration: '1:12',
+      interrupt: null,
+      conversation: true,
+      ...extra,
+    };
+  }
+
+  const login = row({
+    key: 'lane:a',
+    name: '调研登录',
+    interrupt: { type: 'interrupt', childId: 'kid-a' },
+  });
+  const pay = row({
+    key: 'lane:b',
+    name: '调研支付',
+    status: 'completed',
+    detail: '用时 1:40 · 24k tokens · 12 次工具调用',
+    duration: null,
+  });
+
+  function card(view: SubagentsCardView, onInterrupt = vi.fn()) {
+    return createElement(SubagentsCard, { sessionId: 's1', view, onInterrupt });
+  }
+
+  function buttonsNamed(container: HTMLElement, text: string): HTMLButtonElement[] {
+    return [...container.querySelectorAll<HTMLButtonElement>('button')].filter(
+      (button) => button.textContent?.trim() === text
+    );
+  }
+
+  it('the header reads 「子代理」 and the running count; a row has name and status', async () => {
+    const container = await mount(card({ live: [login], ended: [], running: 1, waiting: 0 }));
+    const section = container.querySelector('[data-rail-card="subagents"]');
+    expect(section?.getAttribute('aria-label')).toBe('子代理');
+    expect(section?.textContent).toContain('1 运行中');
+    const rowEl = container.querySelector('[data-subagent-row]');
+    expect(rowEl?.textContent).toContain('调研登录');
+    expect(rowEl?.textContent).toContain('运行中');
+    expect(rowEl?.textContent).toContain('子代理 · fake-1');
+    expect(rowEl?.textContent).toContain('1:12');
+  });
+
+  it('a waiting child puts 「N 等你确认」 in the header', async () => {
+    const waiting = row({ key: 'lane:w', name: '调研发票', status: 'waiting' });
+    const container = await mount(
+      card({ live: [waiting, login], ended: [], running: 1, waiting: 1 })
+    );
+    const header = container.querySelector('[data-rail-card="subagents"] > div');
+    expect(header?.textContent).toContain('1 等你确认');
+    expect(header?.textContent).not.toContain('运行中');
+    expect(container.querySelector('[data-subagent-row="waiting"]')?.textContent).toContain(
+      '等你确认'
+    );
+  });
+
+  it('a click opens 「查看对话」「打断」, another click folds them; 打断 hands over the target', async () => {
+    const onInterrupt = vi.fn();
+    const container = await mount(
+      card({ live: [login], ended: [], running: 1, waiting: 0 }, onInterrupt)
+    );
+    expect(buttonsNamed(container, '查看对话')).toHaveLength(0);
+    const toggle = container.querySelector<HTMLButtonElement>('[data-subagent-row] > button');
+    await act(async () => toggle?.click());
+    expect(buttonsNamed(container, '查看对话')).toHaveLength(1);
+    const interrupt = buttonsNamed(container, '打断');
+    expect(interrupt).toHaveLength(1);
+    await act(async () => interrupt[0]?.click());
+    expect(onInterrupt).toHaveBeenCalledWith({ type: 'interrupt', childId: 'kid-a' });
+    await act(async () => toggle?.click());
+    expect(buttonsNamed(container, '查看对话')).toHaveLength(0);
+  });
+
+  it('ended children fold under 「已结束 N」; opened, an ended row offers only 「查看对话」', async () => {
+    const container = await mount(card({ live: [login], ended: [pay], running: 1, waiting: 0 }));
+    const ended = container.querySelector<HTMLButtonElement>('[data-rail-subagents-ended]');
+    expect(ended?.textContent).toContain('已结束 1');
+    expect(container.textContent).not.toContain('调研支付');
+    await act(async () => ended?.click());
+    const payRow = container.querySelector<HTMLElement>('[data-subagent-row="completed"]');
+    expect(payRow?.textContent).toContain('调研支付');
+    expect(payRow?.textContent).toContain('已完成');
+    await act(async () => payRow?.querySelector<HTMLButtonElement>('button')?.click());
+    expect(buttonsNamed(payRow as HTMLElement, '查看对话')).toHaveLength(1);
+    expect(buttonsNamed(payRow as HTMLElement, '打断')).toHaveLength(0);
+  });
+
+  it('the rail interrupts through the subagent interrupt call, by session and child', async () => {
+    const interruptSubagent = vi.spyOn(api.chat, 'interruptSubagent');
+    await stopBackgroundTask('s1', { type: 'interrupt', childId: 'kid-a' }, zh);
+    expect(interruptSubagent).toHaveBeenCalledWith({ sessionId: 's1', childId: 'kid-a' });
   });
 });
