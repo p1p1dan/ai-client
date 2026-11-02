@@ -66,6 +66,12 @@ describe('the aiclient:environment text', () => {
     expect(text).toContain("Today's date: 2026-10-09 (time zone Asia/Shanghai, UTC+08:00)");
     expect(text).toContain('it does not apply to this session: rely on the facts above');
     expect(text).toContain('If a tool call fails with "unknown tool", that tool does not exist');
+    // Decision 207 §7, §14: the workspace is the project root; DSH's own
+    // "Current working directory" line says where relative paths resolve.
+    expect(text).toContain('- Workspace (the project root;');
+    expect(text).toContain('"Current working directory"');
+    expect(text).not.toContain('resolve against it');
+    expect(text).not.toContain('shell, working directory, user');
     // Paths only through the variables, never spliced into the text.
     expect(text).not.toContain('E:\\code\\proj');
     expect(text).not.toContain('C:\\Users\\tester');
@@ -107,7 +113,7 @@ describe('the aiclient:environment text', () => {
 
   it('drops the working directory line without a header cwd, and the home line without a home', () => {
     const noCwd = environmentPromptText(windows(), agent('aiclient-root'));
-    expect(noCwd).not.toContain('Working directory');
+    expect(noCwd).not.toContain('Workspace');
     expect(noCwd).not.toContain('{{aiclient_cwd}}');
     expect(noCwd).toContain('{{aiclient_home}}');
     const noHome = environmentPromptText(windows({ homedir: '' }), session);
@@ -169,7 +175,7 @@ describe.skipIf(!existsSync(DSH_SYSTEM_PROMPT))(
         tools: [],
         variables: { aiclient_cwd: 'E:\\code\\{{x}}', aiclient_home: 'C:\\Users\\tester' },
       });
-      expect(section?.text).toContain('resolve against it): E:\\code\\{{x}}\n');
+      expect(section?.text).toContain('): E:\\code\\{{x}}\n');
       expect(section?.text).toContain('- Home directory: C:\\Users\\tester\n');
     });
 
@@ -192,10 +198,11 @@ describe.skipIf(!existsSync(DSH_SYSTEM_PROMPT))(
       };
       const withCwd = render(agent('aiclient-root', { cwd: '/home/tester/{{proj}}' }));
       expect(withCwd[0]?.name).toBe(ENVIRONMENT_PROMPT_CONTEXT);
-      expect(withCwd[0]?.text).toContain('resolve against it): /home/tester/{{proj}}\n');
+      expect(withCwd[0]?.text).toContain('- Workspace (the project root;');
+      expect(withCwd[0]?.text).toContain('): /home/tester/{{proj}}\n');
       expect(withCwd[0]?.text).not.toContain('{{aiclient_');
       const withoutCwd = render(agent('aiclient-root'));
-      expect(withoutCwd[0]?.text).not.toContain('Working directory');
+      expect(withoutCwd[0]?.text).not.toContain('Workspace');
       expect(render(undefined)).toEqual([]);
     });
   }

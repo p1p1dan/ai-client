@@ -36,7 +36,7 @@ export const ENVIRONMENT_PROMPT_CONTEXT = 'aiclient:environment';
 export const ENVIRONMENT_PROMPT_CONTEXT_BEFORE = 'SANDBOX_POLICY';
 export const ENVIRONMENT_PROMPT_CONTEXT_GAP = 10;
 
-/** Prompt variable: the calling session's header cwd. */
+/** Prompt variable: the calling session's header cwd (its workspace). */
 export const ENVIRONMENT_CWD_VARIABLE = 'aiclient_cwd';
 /** Prompt variable: the host's home directory. */
 export const ENVIRONMENT_HOME_VARIABLE = 'aiclient_home';
@@ -166,14 +166,16 @@ export function environmentPromptText(
     `- Operating system: ${operatingSystemLine(facts)}`,
     `- Shell tool: ${shellLine(facts.platform)}`,
   ];
+  // Decision 207 §7: DSH 0.2.1 states the current directory itself, and the
+  // model can change it; this line names the project root it started in.
   if (cwd)
     lines.push(
-      `- Working directory (the session workspace; relative paths, and shell commands without \`workdir\`, resolve against it): {{${ENVIRONMENT_CWD_VARIABLE}}}`
+      `- Workspace (the project root; relative paths, and shell commands without \`workdir\`, resolve against the "Current working directory" line instead): {{${ENVIRONMENT_CWD_VARIABLE}}}`
     );
   if (facts.homedir) lines.push(`- Home directory: {{${ENVIRONMENT_HOME_VARIABLE}}}`);
   lines.push(
     `- Today's date: ${localDateText(facts.now(), facts.timeZone())}`,
-    'If any other part of the prompt describes a different environment (operating system, shell, working directory, user or home directory), it does not apply to this session: rely on the facts above.',
+    'If any other part of the prompt describes a different environment (operating system, shell, user or home directory), it does not apply to this session: rely on the facts above.',
     'If a tool call fails with "unknown tool", that tool does not exist in this session; do not retry it under another name or casing.'
   );
   return lines.join('\n');

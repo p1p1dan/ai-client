@@ -683,7 +683,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS|RUN)/;
+  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS|RUN|CD)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -2011,6 +2011,16 @@ const DSH_P0_2_SCRIPTS = {
         ? `P1-PLAN-GOAL stopped: ${String(last.result ?? '').slice(0, 200)}`
         : 'P1-PLAN-GOAL wrote plan-goal.txt.'
     );
+  },
+  // Decision 207 §7: a cd out of the workspace, then a glob with no path
+  // (shared-host [207-CD-1]). `P1-CD {"to":"/abs/dir"}: …`.
+  'P1-CD'(_round, step, calls, triggerText) {
+    if (step === 0) {
+      const object = firstJsonObject(triggerText);
+      return tool('working_directory', { cd: object ? JSON.parse(object).to : '.' });
+    }
+    if (step === 1) return tool('glob', { pattern: '*' });
+    return say(`P1-CD ${calls.map((c) => `${c.name}:${c.isError ? 'error' : 'ok'}`).join(' ')}`);
   },
   // dsh-rebase P1-6b: permission plugin experiments (tools/perm-experiments.ts).
   // Decision 207 §8: since DSH 0.2.1 every delegation runs in the background;

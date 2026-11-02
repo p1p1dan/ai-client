@@ -479,6 +479,8 @@ export interface DshBridgeOptionalServices {
   tools: DshToolRegistryView;
   /** `ctx.planMode` (decision 169): DSH's plan mode, following our gate's. */
   planMode: DshPlanModeView;
+  /** `ctx.workingDirectory` (DSH 0.2.1, decision 207 §7): the session's current directory. */
+  workingDirectory: { ensure(agent: unknown, signal?: AbortSignal): Promise<string> };
   /**
    * `ctx.compaction` (decision 179): read opaquely; its summary hook carries a
    * `/compact`'s instructions, and (decision 181) every summary request names
@@ -1302,7 +1304,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     try {
       const skills = this.ctx.get?.('skills');
       return skills
-        ? (await skills.list(this.skillLookup(agent))).filter(isInvocableSkill).length
+        ? (await skills.list(await this.skillLookup(agent))).filter(isInvocableSkill).length
         : undefined;
     } catch (error) {
       this.options.log?.('[dsh-bridge] skill catalog unreadable', error);
@@ -1310,9 +1312,19 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     }
   }
 
-  /** The lookup dsh-tool-skill makes for this agent: its workspace, its scope. */
-  private skillLookup(agent: DshAgent): { cwd: string; scope: unknown } {
-    return { cwd: agent.session.header?.cwd ?? this.cwd, scope: agent };
+  /**
+   * The lookup dsh-tool-skill makes for this agent: its current directory
+   * (DSH 0.2.1, decision 207 §7), else its workspace; its scope.
+   */
+  private async skillLookup(agent: DshAgent): Promise<{ cwd: string; scope: unknown }> {
+    const workspace = agent.session.header?.cwd ?? this.cwd;
+    let cwd = workspace;
+    try {
+      cwd = (await this.ctx.get?.('workingDirectory')?.ensure(agent)) ?? workspace;
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] current directory not read', error);
+    }
+    return { cwd, scope: agent };
   }
 
   /**
@@ -1856,7 +1868,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
 
   private async userSkills(agent: DshAgent): Promise<readonly DshSkillSummary[]> {
     try {
-      return (await this.ctx.get?.('skills')?.list(this.skillLookup(agent))) ?? [];
+      return (await this.ctx.get?.('skills')?.list(await this.skillLookup(agent))) ?? [];
     } catch (error) {
       this.options.log?.('[dsh-bridge] skill catalog unreadable', error);
       return [];

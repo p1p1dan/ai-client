@@ -129,10 +129,11 @@ async function runRipgrep(
   exec: GrepExecution,
   argv: readonly string[],
   caps: RichGrepCaps,
-  rgPath: () => Promise<string>
+  rgPath: () => Promise<string>,
+  workdirOf: (exec: GrepExecution) => Promise<string>
 ): Promise<RipgrepOutcome> {
   if (exec.signal.aborted) throw new SearchError(ABORTED, 'SEARCH_ABORTED');
-  const workdir = exec.agent?.session.header.cwd ?? process.cwd();
+  const workdir = await workdirOf(exec);
   let handle: ReturnType<GrepSubprocess['spawn']>;
   try {
     handle = subprocess.spawn({
@@ -230,20 +231,31 @@ async function modificationTimes(
   return times;
 }
 
-/** Run one checked call and build its canonical value. */
+/** The session's workspace: where a search runs without a current-directory service. */
+async function workspaceOf(exec: GrepExecution): Promise<string> {
+  return exec.agent?.session.header.cwd ?? process.cwd();
+}
+
+/**
+ * Run one checked call and build its canonical value. `workdirOf` is where
+ * the search runs: the session's current directory (decision 207 §7), else
+ * its workspace.
+ */
 export async function searchGrep(
   subprocess: GrepSubprocess,
   exec: GrepExecution,
   input: GrepInput,
   caps: RichGrepCaps,
-  rgPath: () => Promise<string> = resolveRgPath
+  rgPath: () => Promise<string> = resolveRgPath,
+  workdirOf: (exec: GrepExecution) => Promise<string> = workspaceOf
 ): Promise<GrepValue> {
   const run = await runRipgrep(
     subprocess,
     exec,
     buildGrepArgv(input, GLOB_VCS_EXCLUDES),
     caps,
-    rgPath
+    rgPath,
+    workdirOf
   );
   const display = (path: string) => toWorkdirRelative(path, run.workdir);
   try {
@@ -288,6 +300,14 @@ export function applyRichGrepTool(
     text: ({ scope }) => (ctx.tools.get('grep', scope) === undefined ? '' : GREP_TOOL_GUIDANCE),
   });
   const rgPath = deps.rgPath ?? resolveRgPath;
+  // As dsh-tool-fs-search's glob: DSH 0.2.1's current directory (decision 207 §7).
+  const workingDirectory = ctx.workingDirectory;
+  const workdirOf = workingDirectory
+    ? (exec: GrepExecution) =>
+        exec.agent === undefined
+          ? workspaceOf(exec)
+          : workingDirectory.ensure(exec.agent, exec.signal)
+    : workspaceOf;
   const tool = defineTool({
     name: 'grep',
     description: GREP_TOOL_DESCRIPTION,
@@ -300,7 +320,7 @@ export function applyRichGrepTool(
       ],
     },
     execute: (args, exec) =>
-      searchGrep(ctx.subprocess, exec, parseGrepArgs(args as GrepArgs), caps, rgPath),
+      searchGrep(ctx.subprocess, exec, parseGrepArgs(args as GrepArgs), caps, rgPath, workdirOf),
     presentCall: (args) => presentGrepCall(args as GrepArgs),
   });
   ctx.tools.register(tool);

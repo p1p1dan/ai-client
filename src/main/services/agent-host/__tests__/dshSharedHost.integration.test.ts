@@ -2478,6 +2478,58 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       console.log(`[p1-6b] Stop with a card up settled in ${elapsed} ms`);
       await manager.closeSession('g1');
     }, 180_000);
+
+    it('[207-CD-1] a cd out of the workspace asks nothing; the glob after it is asked about that directory', async () => {
+      const outside = join(shared.stateRoot, 'cd-outside');
+      mkdirSync(outside, { recursive: true });
+      writeFileSync(join(outside, 'far.txt'), 'far\n');
+      await manager.createSession({
+        sessionId: 'g-cd',
+        workspacePath: workspace,
+        ownerWebContentsId: 70,
+      });
+      const from = events.length;
+      attempt += 1;
+      const requestId = await manager.send({
+        sessionId: 'g-cd',
+        attemptId: `attempt-${attempt}`,
+        text: `P1-CD ${JSON.stringify({ to: outside })}: change directory, then list it.`,
+        ownerWebContentsId: 70,
+      });
+      expect(
+        await until(
+          () => forSession('g-cd', from).some((e) => e.type === 'permission.requested'),
+          60_000
+        )
+      ).toBe(true);
+      const card = forSession('g-cd', from).find((e) => e.type === 'permission.requested');
+      expect(card?.payload?.toolName).toBe('glob');
+      expect(JSON.stringify(card?.payload)).toContain(outside);
+      expect(
+        await manager.respondPermission({
+          sessionId: 'g-cd',
+          permissionId: String(card?.payload?.permissionId),
+          decision: 'deny',
+        })
+      ).toBe(true);
+      expect(
+        await until(
+          () =>
+            forSession('g-cd', from).some(
+              (e) =>
+                e.requestId === requestId &&
+                e.type === 'session.status' &&
+                e.payload?.status === 'idle'
+            ),
+          120_000
+        )
+      ).toBe(true);
+      const turn = forSession('g-cd', from);
+      expect(turn.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
+      const results = turn.filter((e) => e.type === 'tool.completed').map((e) => e.payload);
+      expect(results.map((result) => result?.ok)).toEqual([true, false]);
+      await manager.closeSession('g-cd');
+    }, 180_000);
   });
 
   /**

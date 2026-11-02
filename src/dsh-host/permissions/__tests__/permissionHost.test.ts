@@ -1332,7 +1332,7 @@ describe('shell workdir checks (decision 164)', () => {
     const exec = call('bash', { command: 'ls', workdir: 'missing-dir' }, root());
     expect(await host.preExecute(exec, next)).toEqual({
       kind: 'deny',
-      reason: `working directory does not exist: ${join(ws, 'missing-dir')} (the session workspace is ${ws})`,
+      reason: `working directory does not exist: ${join(ws, 'missing-dir')} (the current directory is ${ws})`,
       info: { name: SHELL_WORKDIR_DENIAL, code: 'workdir_missing' },
     });
     expect(next).not.toHaveBeenCalled();
@@ -1367,7 +1367,7 @@ describe('shell workdir checks (decision 164)', () => {
     );
     expect(await host.preExecute(exec, next)).toEqual({
       kind: 'deny',
-      reason: `workdir "/Users/tester/work/monorepo" has no drive letter; on Windows give a full path such as ${ws}, or omit workdir to run in the session workspace`,
+      reason: `workdir "/Users/tester/work/monorepo" has no drive letter; on Windows give a full path such as ${ws}, or omit workdir to run in the current directory`,
       info: { name: SHELL_WORKDIR_DENIAL, code: 'workdir_no_drive' },
     });
     expect(asked).toEqual([]);
@@ -1397,5 +1397,87 @@ describe('shell workdir checks (decision 164)', () => {
       info: { name: 'PermissionDenial' },
     });
     expect(refused.asked).toHaveLength(1);
+  });
+});
+
+describe('decision 207 §7: the session’s current directory (DSH 0.2.1 working_directory)', () => {
+  /** A row whose `workingDirectory.ensure` answers each agent's current directory. */
+  function attached(gearOrGate: PermissionGear | 'record' = 'record') {
+    const { fake, host } = setup();
+    const dirs = new Map<string, string>();
+    fake.services.set('workingDirectory', {
+      ensure: async (caller: { id: string; session: { header: { cwd?: string } } }) =>
+        dirs.get(caller.id) ?? caller.session.header.cwd,
+    });
+    const recorded = recordingGate();
+    const real = gearOrGate === 'record' ? undefined : realGate({ gear: gearOrGate });
+    host.attachGate('c1-1', {
+      dshSessionId: 'aiclient-root',
+      gate: real ? real.gate : recorded.gate,
+    });
+    return { fake, dirs, seen: recorded.seen, asked: real?.asked ?? [] };
+  }
+
+  it('① outside the workspace, a search or command without a path is asked as outside', async () => {
+    const { fake, dirs, asked } = attached('accept-edits');
+    // Control: in the workspace the same calls raise no card.
+    expect((await fake.prepare(call('glob', { pattern: '*' }, root()))).kind).toBe('allow');
+    expect(asked).toHaveLength(0);
+    dirs.set('aiclient-root', outside);
+    for (const [tool, args] of [
+      ['glob', { pattern: '*' }],
+      ['grep', { pattern: 'x' }],
+      ['bash', { command: 'ls' }],
+    ] as const) {
+      await fake.prepare(call(tool, args, root()));
+      expect(asked.at(-1), tool).toMatchObject({ tool, path: outside });
+    }
+    expect(asked).toHaveLength(3);
+  });
+
+  it('② in a workspace subdirectory, a relative read is that directory’s file, inside the workspace', async () => {
+    mkdirSync(join(ws, 'a', 'src'), { recursive: true });
+    writeFileSync(join(ws, 'a', 'src', 'a.ts'), 'export {};\n');
+    const recorded = attached();
+    recorded.dirs.set('aiclient-root', join(ws, 'a'));
+    await recorded.fake.prepare(call('read', { file_path: 'src/a.ts' }, root()));
+    expect(recorded.seen[0]).toMatchObject({ tool: 'read', path: join(ws, 'a', 'src', 'a.ts') });
+    const real = attached('accept-edits');
+    real.dirs.set('aiclient-root', join(ws, 'a'));
+    expect((await real.fake.prepare(call('read', { file_path: 'src/a.ts' }, root()))).kind).toBe(
+      'allow'
+    );
+    expect(real.asked).toHaveLength(0);
+  });
+
+  it('③ the cd itself raises no card, wherever it goes', async () => {
+    const { fake, seen } = attached();
+    for (const cd of ['a', outside]) {
+      expect((await fake.prepare(call('working_directory', { cd }, root()))).kind).toBe('allow');
+    }
+    expect(seen).toEqual([]);
+  });
+
+  it('④ a subagent is judged by its own current directory', async () => {
+    const { fake, dirs, seen } = attached();
+    fake.emit('session/created', {
+      id: 'child',
+      header: { id: 'child', cwd: ws, parentSession: 'aiclient-root' },
+    });
+    const child = agent('child', { cwd: ws, parentSession: 'aiclient-root' });
+    dirs.set('child', join(ws, 'b'));
+    await fake.prepare(call('read', { file_path: 'notes.txt' }, child));
+    await fake.prepare(call('read', { file_path: 'notes.txt' }, root()));
+    expect(seen.map((request) => request.path)).toEqual([
+      join(ws, 'b', 'notes.txt'),
+      join(ws, 'notes.txt'),
+    ]);
+  });
+
+  it('⑤ a plugin tool still resolves against the workspace', async () => {
+    const { fake, dirs, seen } = attached();
+    dirs.set('aiclient-root', join(ws, 'a'));
+    await fake.prepare(call('word_read', { path: 'notes.txt' }, root()));
+    expect(seen[0]).toMatchObject({ tool: 'read', path: join(ws, 'notes.txt') });
   });
 });

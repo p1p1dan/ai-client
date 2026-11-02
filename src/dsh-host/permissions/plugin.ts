@@ -168,6 +168,9 @@ export function apply(ctx: PermissionRowContext): void {
     // encrypted-read row's wrapper).
     readFile: (path, cwd) =>
       readForApproval(ctx.get?.('fs') as ApprovalFsView | undefined, path, cwd),
+    // Decision 207 §7: looked up per call, as the tools themselves resolve it.
+    currentDirectory: async (agent, signal) =>
+      (ctx.get?.('workingDirectory') as WorkingDirectoryView | undefined)?.ensure(agent, signal),
   });
   ctx.on('session/created', (session: DshSessionView | undefined) =>
     host.onSessionCreated(session)
@@ -221,6 +224,11 @@ export function apply(ctx: PermissionRowContext): void {
   });
   hideSandboxSkills(ctx);
   ctx.provide(PERMISSION_HOST_SERVICE, host.api);
+}
+
+/** DSH 0.2.1's session working directory (dsh-working-directory), as the gate reads it. */
+interface WorkingDirectoryView {
+  ensure(agent: unknown, signal?: AbortSignal): Promise<string>;
 }
 
 /** The slice of the fs service (dsh-fs) an approval diff reads through. */
