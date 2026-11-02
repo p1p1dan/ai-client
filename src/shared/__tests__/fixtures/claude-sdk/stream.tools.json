@@ -161,8 +161,6 @@
         "action": "write_file",
         "input": {
           "path": "<ws>/cc-proto.txt",
-          "content": "hello from the claude-sdk plan\n",
-          "contentLabel": "Content",
           "workspace": "<ws>"
         },
         "detail": {
@@ -170,7 +168,8 @@
           "changes": [
             {
               "path": "<ws>/cc-proto.txt",
-              "change": "add"
+              "change": "add",
+              "diff": "--- /dev/null\n+++ b/<ws>/cc-proto.txt\n@@ -0,0 +1,1 @@\n+hello from the claude-sdk plan\n"
             }
           ]
         },
@@ -191,7 +190,22 @@
         "messageId": "<msg#4>",
         "toolCallId": "<call#2>",
         "ok": true,
-        "output": "File created successfully at: <ws>/cc-proto.txt (file state is current in your context — no need to Read it back)"
+        "output": {
+          "content": [
+            {
+              "type": "text",
+              "text": "File created successfully at: <ws>/cc-proto.txt (file state is current in your context — no need to Read it back)"
+            }
+          ],
+          "details": {
+            "review": {
+              "version": 1,
+              "path": "<ws>/cc-proto.txt",
+              "status": "added",
+              "patch": "@@ -0,0 +1,1 @@\n+hello from the claude-sdk plan"
+            }
+          }
+        }
       }
     },
     {
