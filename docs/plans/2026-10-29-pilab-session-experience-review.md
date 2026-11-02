@@ -485,6 +485,25 @@
   - 差异标签页（从「工作区」打开）：编辑器宽 1110px 时，选「并排」为左右分屏，点「上下」后 Monaco 变为单栏，选择同步为上下（`r2d-difftab-split.png`、`r2d-difftab-stacked.png`）。编辑器窄于 700px 时，Monaco 自己的断点仍会改为单栏。
   - 未在真实界面复测：子代理对话窗里的切换与抬头。
 - 结论：07.3 部分通过（统一/分屏、窄容器退回、用户选择已在真实界面复测；子代理窗、溢出全面检查、Windows 未做）；07.2、07.6 已修的条目复测通过，其余审计项仍在，维持原结论。
+- 用户裁定（2026-11-02 第三次）：§19 的其余差异小问题分三批：A 正确性修复（不改界面外观）、B 代码高亮性能（先测量）、C 新界面（审批卡显示差异、差异「复制补丁」，先出预览）。
+- A 批（`6b3fb086`）：
+  - 改动卡片：过大或二进制、没法计数的文件不再算成「+0 −0」（`turnChanges.ts` 的 `uncounted` / `counted`）；整回合都没法计数时卡片不写 +/−。
+  - Claude 引擎审批卡：Write 覆盖已有文件时标「修改」而不是「新增」（`sdkSessionRuntime.ts` 先看文件在不在）。DSH 引擎本来就对。
+  - DSH 补丁里只有裸 `@@` 的几段之间补上「⋯」（`hunkStart`）；`\ No newline at end of file` 不再丢掉，那一行后面写「（文件末尾没有换行）」（`noFinalNewline`，行内、改动面板、并排三处都接上）。
+  - 大文件只改一行时不再退化成整段删加：`textDiff.ts` 先剥掉两边相同的开头和结尾，只对中间部分算差异，1e6 上限只管中间。
+  - 暂存区里的重命名：按新路径取不到原文时，用 `git diff --cached -M --diff-filter=R` 找改名前的路径，再取原文（`GitService.getFileDiff`）；真正新增的文件仍为空原文。
+  - `ui/code-block.tsx`（代码审查弹窗、Markdown 预览）和 `mermaid-renderer.tsx` 改为读界面实际的明暗（`useDarkClass`）：浅色终端配色下不再是暗色代码块，「跟随系统」切换时跟着变。
+  - 聊天代码块：复制按钮文案走翻译（「复制代码」「已复制」）；语言名不可选中，框选跨过代码块时不再带上语言名；流式中开头那行 fence 没收到换行前先不显示，语言名不再逐字变化（代价是代码块晚出现一次刷新）。
+  - 行号栏按这份差异最大的行号加宽（4 位 `w-10`、5 位 `w-12`），改动面板和并排视图都接上。
+  - 判定可接受、不改：两处二进制提示措辞不同但意思一致；Write 运行中预览显示为整文件新增，抬头已写「无修改前内容可供比较」。
+- A 批自动测试：新增 `textDiff.test.ts` 2 项、`gitReadFallback` 重命名 1 项、`diffLineNumberWidth.test.ts` 1 项、`[PILAB-R2]` 开头 fence 1 项、`[PILAB-R2-HUNKS]` 4 项、`[PILAB-R2-WRITE]` 1 项、`turnChanges` 计数 1 项；`chatMarkdownRender`、`markdownFileLink` 因代码块用了翻译而补上 `@/i18n` 桩。`chat/__tests__` 204 文件分 4 批 3576 项全部通过（第 2 批出现过 1 个设置存储的「未处理错误」，测试本身全过；整批重跑与可疑的 5 个文件各跑两次都没再出现，记为偶发）；`workspace-shell` 84 文件 1104 项、`source-control` 5 项、`claude-sdk-host` 225 项（1 跳过）、`main/services/git` 194 项、`shared` + `stores` + `ui` 99 文件 1771 项全部通过；`tsc --noEmit` 仅基线 TS2352，`typecheck:claude-sdk-host` 通过；改动文件 biome 通过。
+- 真实界面抽查（2026-11-02，隔离环境 `/tmp/pilab-r0` + 假网关；截图 `docs/plans/evidence/2026-10-30-pilab-r0-real-ui/shots/r2a-*.png`）：
+  - DeepSeek 引擎（关掉 Claude 引擎开关；假网关 `dsh-p0-2` 剧本新增 `P1-RUN`，按给定顺序调 DSH 工具）：一次 `edit`（`replace_all`）改 far.txt 第 10、190 行，改动面板两段之间有「⋯」；新建 `alpha⏎beta`（末尾无换行），末行写「（文件末尾没有换行）」；新建含 `\0` 的 bin.dat，面板不写计数，只写「二进制内容无法展示文本差异」；对话里的改动卡片「改了 3 个文件 +4 −2」，没把 bin.dat 算成 0（`r2a-dsh-review.png`）。只写一个二进制文件的那一轮，卡片只写「改了 1 个文件」（`r2a-dsh-binary-only.png`）。
+  - 抽查时另发现两处同样的「+0 −0」，已一并修：右侧栏「改动」小卡片的文件行和总数（`sessionRailModel.ts` 加 `uncounted` / `counted`，`ChangesCard.tsx`）；改动面板标题行全是二进制时写「+0 −0 *」（`SessionReviewPanel.tsx` 加 `counted`）。修后在同一界面复看，两处都不再写计数。各补测试 1 项。
+  - Claude 引擎（`claude-sdk` 剧本 `CC-RUN`）：Write 覆盖已有的 existing.txt，审批卡标「M」（`r2a-cc-write-existing-card.png`）；改 long.txt 第 1234 行，面板行号栏 40px，4 位行号没有溢出；改 nonl.txt 最后一行，删、加两行后面都写「（文件末尾没有换行）」（`r2a-cc-review-unified.png`）；面板放大到 1098px 切并排，两边行号栏都是 40px（`r2a-cc-review-split.png`），之后切回上下。
+  - 聊天代码块：复制按钮名「复制代码」；语言名 `user-select: none`；用 CDP 发真实鼠标拖选跨过代码块再复制，剪贴板里没有语言名（`getSelection().toString()` 仍含语言名，但复制出去的内容不含）。
+  - 没在真实界面看：代码审查弹窗、Markdown 预览的明暗跟随（只改为读同一个 `dark` 类）；流式中语言名不再逐字变化（只有自动测试）；1001 行改一行（只有自动测试）；暂存区重命名（Git 自动测试，界面留到 Windows）。
+- 抽查后自动：`workspace-shell` 84 文件 1106 项通过；`tsc --noEmit` 仍只有基线 TS2352；改动文件 biome 通过。
 
 ## 20. Linux R2 工具输出「复制全部 / 查看全部」（2026-11-02）
 
@@ -499,4 +518,5 @@
 - 真实界面（隔离环境 + 假网关 `claude-sdk`，Claude 引擎两次 Bash：300 行与 2 行；驱动 `tools/output-copy-view.mjs` 用 CDP 发真实鼠标/键盘事件）：静止时复制按钮透明度 0；悬停后为 1（`shots/r2o-output-hover.png`）；点复制后剪贴板是 300 行、首行和末行都对，按钮名变「已复制」；长输出底部「300 行 查看全部」，短输出当时只有「2 行」（随后按裁定去掉，见下）；弹窗 300 行、标题「终端 Print 300 lines」、说明「300 行」（`r2o-output-dialog.png`）；Esc 关闭后焦点回到「查看全部」（复测时发现原先焦点没回去，已用 `finalFocus` 修好）。
 - 未验证：DeepSeek 引擎「开头已被省略」的真实输出（只有自动测试）；很长输出（上万行）的弹窗性能；Windows。
 - 用户裁定（2026-11-02）：短输出下面那行「N 行」去掉——行数和「查看全部」只在输出高过限高时出现（短输出的行头已写行数）。这一处只有自动测试，没有再开真实界面。
+- 补漏（2026-11-02，随 §19 A 批）：「查看全部」弹窗没登记进 `dialogPopupPaddingStatic.test.ts` 的弹窗边距清单，`425fdfb5` 推送后这条守卫测试是红的（当时只跑了 `chat/__tests__`）。已补一条 `manual`（与子代理对话窗同理：限高滚动区只能手写 `px-6`）。
 
