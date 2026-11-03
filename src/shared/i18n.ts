@@ -5005,6 +5005,8 @@ Object.assign(zhTranslations, {
   // web_fetch's approval card (questionCardModel.ts): its action, its body's
   // label (the runtime's word for it), and what Allow for session remembers.
   'Fetch a web page': '获取网页',
+  'Switch to a directory outside the workspace (its AGENTS.md, CLAUDE.md and skills are read in)':
+    '切换到工作区外的目录（会读入那里的 AGENTS.md、CLAUDE.md 和技能）',
   URL: '网址',
   'Allow for session remembers {{tool}} for every page on {{host}}':
     '「本会话内允许」会记住 {{tool}} 可访问 {{host}} 的所有页面',

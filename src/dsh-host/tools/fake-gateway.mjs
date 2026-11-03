@@ -775,6 +775,12 @@ const COMPACT_SLOW = 'P1-COMPACT-SLOW';
 const COMPACT_USER_INSTRUCTIONS = /<user-instructions>\n([\s\S]*?)\n<\/user-instructions>/;
 /** The close of a compaction checkpoint's summary (dsh-compaction-basic `SUMMARY_CLOSE_TAG`). */
 const CHECKPOINT_CLOSE = '</compacted-summary>';
+/**
+ * Decision 207 §15: what the AGENTS.md outside the workspace holds in
+ * shared-host [207-CD-*]. Not a scenario marker: the instructions DSH reads
+ * in must not become the request's trigger.
+ */
+const P1_CD_MARKER = 'CD-OUTSIDE-AGENTS-207';
 
 // ---- openai-responses tool loop with a simulated prompt cache (P1-14 usage check) ----
 
@@ -2053,15 +2059,21 @@ const DSH_P0_2_SCRIPTS = {
         : 'P1-PLAN-GOAL wrote plan-goal.txt.'
     );
   },
-  // Decision 207 §7: a cd out of the workspace, then a glob with no path
-  // (shared-host [207-CD-1]). `P1-CD {"to":"/abs/dir"}: …`.
-  'P1-CD'(_round, step, calls, triggerText) {
+  // Decision 207 §7, §15: a cd out of the workspace, then a glob with no path
+  // (shared-host [207-CD-1], [207-CD-2]). `P1-CD {"to":"/abs/dir"}: …`. Each
+  // request is tagged with whether it carried P1_CD_MARKER, which the target
+  // directory's AGENTS.md holds: DSH reads that file in once the cd lands.
+  'P1-CD'(_round, step, calls, triggerText, _history, _recent, _userTexts, messages) {
+    const tag = JSON.stringify(messages).includes(P1_CD_MARKER) ? 'marker' : 'no-marker';
     if (step === 0) {
       const object = firstJsonObject(triggerText);
-      return tool('working_directory', { cd: object ? JSON.parse(object).to : '.' });
+      return { ...tool('working_directory', { cd: object ? JSON.parse(object).to : '.' }), tag };
     }
-    if (step === 1) return tool('glob', { pattern: '*' });
-    return say(`P1-CD ${calls.map((c) => `${c.name}:${c.isError ? 'error' : 'ok'}`).join(' ')}`);
+    if (step === 1) return { ...tool('glob', { pattern: '*' }), tag };
+    return {
+      ...say(`P1-CD ${calls.map((c) => `${c.name}:${c.isError ? 'error' : 'ok'}`).join(' ')}`),
+      tag,
+    };
   },
   // dsh-rebase P1-6b: permission plugin experiments (tools/perm-experiments.ts).
   // Decision 207 §8: since DSH 0.2.1 every delegation runs in the background;

@@ -133,7 +133,8 @@ export function SessionRail({
             return (
               subagentsView && (
                 <SubagentsCard
-                  key={id}
+                  // Per session: an open row or the ended fold is this chat's, not the next one's.
+                  key={`${id}:${sessionId}`}
                   sessionId={sessionId}
                   view={subagentsView}
                   onInterrupt={(target) => void stopBackgroundTask(sessionId, target, t)}

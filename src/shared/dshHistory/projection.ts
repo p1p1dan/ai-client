@@ -497,10 +497,15 @@ export interface DshHistoryFoldOptions {
   compactCommandInstructions?: (compactionId: string) => string | undefined;
   /**
    * Decision 207 §7: the session's workspace (its header cwd). Given, each
-   * tool row after a `working-directory/change` records the directory its
-   * call ran in (`cwd`, `callDirectory`). Absent: no row carries one.
+   * tool row whose call started after a `working-directory/change` records
+   * the directory it ran in (`cwd`, `callDirectory`). Absent: no row carries one.
    */
   workspace?: string;
+  /**
+   * Decision 207 §15 item 5: the workspace's other spellings (its realpath,
+   * when opened through a link), which DSH's resolved directories use.
+   */
+  workspaceAliases?: readonly string[];
 }
 
 /** Decision 180: `command/run`s of `/compact` kept for their compaction, at most this many. */
@@ -554,12 +559,14 @@ export class DshHistoryFold {
    */
   private stepOpen = false;
   private readonly workspace: string | undefined;
+  private readonly workspaceAliases: readonly string[];
   /** Decision 207 §7: the directory the last `working-directory/change` recorded. */
   private currentDirectory: string | undefined;
 
   constructor(options: DshHistoryFoldOptions = {}) {
     this.liveSessionId = options.liveSessionId;
     this.workspace = options.workspace;
+    this.workspaceAliases = options.workspaceAliases ?? [];
     this.presentCall = options.presentCall;
     this.compactInstructions = options.compactInstructions;
     this.compactCommandInstructions = options.compactCommandInstructions;
@@ -1236,7 +1243,6 @@ export class DshHistoryFold {
           name,
           input: toolRowInput(args),
           ...this.presentationOf(name, args),
-          ...this.callCwd(),
         });
         this.callOwner.set(callId, index);
         this.callNames.set(callId, name);
@@ -1270,18 +1276,27 @@ export class DshHistoryFold {
     if (callId && !this.callArgs.has(callId)) {
       this.callArgs.set(callId, parseToolArguments(data?.arguments));
     }
+    // Decision 207 §15 item 5: the directory is the one the call starts in;
+    // an earlier call of the same step may have changed it.
+    const cwd = this.callCwd();
+    const owner = callId ? this.callOwner.get(callId) : undefined;
+    if (!cwd || owner === undefined) return;
+    this.update(owner, (message) => ({
+      ...message,
+      blocks: message.blocks.map((block) =>
+        block.type === 'tool_call' && block.toolCallId === callId ? { ...block, cwd } : block
+      ),
+    }));
   }
 
   /**
-   * Decision 207 §7: the directory a call the model issues now runs in, as
-   * the live row records it at the same point (`liveEvents.ts`).
+   * Decision 207 §7: the directory a call starting now runs in, as the live
+   * row records it at the same point (`liveEvents.ts`).
    */
-  private callCwd(): { cwd: string } | Record<string, never> {
-    const cwd =
-      this.workspace && this.currentDirectory
-        ? callDirectory(this.workspace, this.currentDirectory)
-        : undefined;
-    return cwd ? { cwd } : {};
+  private callCwd(): string | undefined {
+    return this.workspace && this.currentDirectory
+      ? callDirectory(this.workspace, this.currentDirectory, this.workspaceAliases)
+      : undefined;
   }
 
   private onToolResult(event: DshLogEvent): void {

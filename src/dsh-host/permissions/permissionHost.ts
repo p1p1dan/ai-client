@@ -65,7 +65,7 @@ import type {
   DshToolResult,
 } from './dshTypes.ts';
 import { permissionPromptText } from './promptContext.ts';
-import { authorizeCall, type GateCallContext } from './requestBuilder.ts';
+import { authorizeCall, directoryArgumentOf, type GateCallContext } from './requestBuilder.ts';
 import { PermissionRouter } from './router.ts';
 import { filterSearchValue } from './searchFilter.ts';
 import {
@@ -404,14 +404,19 @@ export class PermissionHost {
         reason: PLAN_MODE_RESUME_REASON,
         info: info('plan_mode_goal_resume'),
       };
-    if (classifyTool(exec.name) === 'internal') {
+    // Decision 207 §15: a cd, or a subagent's cwd, is gated; other bookkeeping is not.
+    if (
+      classifyTool(exec.name) === 'internal' &&
+      directoryArgumentOf(exec.name, exec.arguments) === undefined
+    ) {
       this.allowed.add(exec);
       return next();
     }
     // Decision 207 §7: an allowlisted plugin's tool resolves its own paths
     // against the workspace, whatever the session's current directory.
+    const workspace = exec.agent?.session?.header?.cwd ?? route.gate.cwd;
     const cwd = pluginToolClass(exec.name)
-      ? (exec.agent?.session?.header?.cwd ?? route.gate.cwd)
+      ? workspace
       : await this.currentDirectoryOf(exec.agent, route.gate.cwd, exec.signal);
     if (!cwd)
       return {
@@ -431,6 +436,7 @@ export class PermissionHost {
         {
           gate: route.gate.gate,
           cwd,
+          ...(workspace ? { workspace } : {}),
           fs: this.fs,
           analyzeBash: async (command, workdir) =>
             analyzeBash(await this.options.loadParser(), command, workdir, env),

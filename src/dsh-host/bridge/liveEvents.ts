@@ -188,10 +188,18 @@ export interface DshLiveEventsHost {
   /** Our `provider/modelId` of the current selection, for `message.started`. */
   route(): string;
   /**
-   * Decision 207 §7: the session's workspace (its header cwd). Given, rows
-   * after a `working-directory/change` carry the directory their call ran in.
+   * Decision 207 §7: the session's workspace (its header cwd). Given, with
+   * `currentDirectory`, a row whose call starts in another directory
+   * carries that directory.
    */
   workspace?(): string | undefined;
+  /**
+   * Decision 207 §15 item 5: DSH's current directory for the session now, as
+   * its `workingDirectory` projection last reported it and spelled as the
+   * workspace is. A resumed or rewound session is already in it: no
+   * `working-directory/change` of this run says so.
+   */
+  currentDirectory?(): string | undefined;
   /** The DSH session the events come from; live assistant ids name it. */
   dshSessionId(): string;
   turn(): LiveTurn | null;
@@ -565,9 +573,6 @@ export class DshLiveEvents {
    */
   private manual: OpenManualCompaction | undefined;
 
-  /** Decision 207 §7: the directory the last `working-directory/change` recorded. */
-  private currentDirectory: string | undefined;
-
   constructor(host: DshLiveEventsHost) {
     this.host = host;
   }
@@ -665,15 +670,13 @@ export class DshLiveEvents {
    * when its tool declares a title; `{}` otherwise, and when asking throws.
    */
   /**
-   * Decision 207 §7: the directory a call the model issues now runs in, as
-   * the history projection records it (`DshHistoryFold.callCwd`).
+   * Decision 207 §7, §15 item 5: the directory a call starting now runs in,
+   * as the history projection records it (`DshHistoryFold.callCwd`).
    */
   private callCwd(): { cwd?: string } {
     const workspace = this.host.workspace?.();
-    const cwd =
-      workspace && this.currentDirectory
-        ? callDirectory(workspace, this.currentDirectory)
-        : undefined;
+    const directory = this.host.currentDirectory?.();
+    const cwd = workspace && directory ? callDirectory(workspace, directory) : undefined;
     return cwd ? { cwd } : {};
   }
 
@@ -890,7 +893,6 @@ export class DshLiveEvents {
           name,
           input: toolRowInput(args),
           ...presentation,
-          ...this.callCwd(),
         },
       });
       this.flushExecStarted(id);
@@ -903,7 +905,6 @@ export class DshLiveEvents {
         toolCallId: id,
         input: toolRowInput(args),
         ...presentation,
-        ...this.callCwd(),
       },
     });
   }
@@ -948,11 +949,6 @@ export class DshLiveEvents {
       case 'tool/call':
         this.onToolCall(data);
         return;
-      case 'working-directory/change': {
-        const cwd = stringOf(data.cwd);
-        if (cwd) this.currentDirectory = cwd;
-        return;
-      }
       case 'tool/result':
         this.onToolResult(data);
         return;
@@ -1417,6 +1413,9 @@ export class DshLiveEvents {
     if (!this.callArgs.has(callId)) this.callArgs.set(callId, args);
     const messageId = this.stepMessage(Number(data.turn), Number(data.step)).messageId;
     if (!this.toolStep.has(callId)) this.toolStep.set(callId, messageId);
+    // Decision 207 §15 item 5: the call starts now, in the directory an
+    // earlier call of its step may have changed; the row learns it here.
+    const cwd = this.callCwd();
     if (!this.startedTools.has(callId)) {
       this.startedTools.add(callId);
       this.emit({
@@ -1427,22 +1426,24 @@ export class DshLiveEvents {
           name,
           input: toolRowInput(args),
           ...this.presentationOf(name, args),
-          ...this.callCwd(),
         },
       });
       this.flushExecStarted(callId);
+      if (cwd.cwd) {
+        this.emit({ type: 'tool.updated', payload: { messageId, toolCallId: callId, ...cwd } });
+      }
       return;
     }
     // The stream's block end already sent these very arguments.
-    if (this.argStreams.get(callId)?.settled) return;
+    const settled = this.argStreams.get(callId)?.settled === true;
+    if (settled && !cwd.cwd) return;
     this.emit({
       type: 'tool.updated',
       payload: {
         messageId: this.toolStep.get(callId) ?? messageId,
         toolCallId: callId,
-        input: toolRowInput(args),
-        ...this.presentationOf(name, args),
-        ...this.callCwd(),
+        ...(settled ? {} : { input: toolRowInput(args), ...this.presentationOf(name, args) }),
+        ...cwd,
       },
     });
   }

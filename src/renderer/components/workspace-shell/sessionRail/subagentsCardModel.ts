@@ -39,6 +39,12 @@ export interface SubagentCardRow {
   duration: string | null;
   /** 「打断」: a running continuable child on a live worker (the tasks pane's target). */
   interrupt: TaskStop | null;
+  /**
+   * 「停止」: a running one-shot child, stopped as its job (the Claude engine's
+   * background subagents). Decision 207 §15: the Running card no longer lists
+   * subagents, so this card carries the stop the tasks pane offers.
+   */
+  stop: TaskStop | null;
   /** 「查看对话」: the child's own conversation (decision 203 §6), ended ones too. */
   conversation: boolean;
 }
@@ -157,6 +163,7 @@ function cardRow(
       stop?.stop === 'interrupt' && stop.childId
         ? { type: 'interrupt', childId: stop.childId }
         : null,
+    stop: stop?.stop === 'stop' && stop.jobId ? { type: 'stop', jobId: stop.jobId } : null,
     conversation: lane.agentId !== null,
   };
 }

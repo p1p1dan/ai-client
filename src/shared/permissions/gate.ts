@@ -135,6 +135,14 @@ export interface ToolPermissionRequest {
    */
   fileWrite?: boolean;
   /**
+   * Decision 207 §15 (user, 2026-11-03): a call that moves where later calls
+   * run — DSH's `working_directory`, a subagent's `cwd` — to `path`. DSH then
+   * reads that project's AGENTS.md, CLAUDE.md and skills into the next request,
+   * so it is judged like a read of the directory: no card inside the workspace,
+   * a card outside it, allowed in plan mode. `tool` keeps the caller's name.
+   */
+  changeDirectory?: boolean;
+  /**
    * dsh-rebase decision 190: a request to a URL the model chose (`web_fetch`).
    * Its subject is `policyValue`, the host: the tool's policy rules decide
    * on it, and a session grant remembers it. `path` is only the session's
@@ -676,6 +684,7 @@ export class PermissionGate implements PermissionGateService {
       // does not keep. Decision 190: a network fetch reads too.
       (!(
         ['read', 'glob', 'grep', 'skill'].includes(request.tool) ||
+        request.changeDirectory === true ||
         isShellTool(request.tool) ||
         request.network === true
       ) ||
@@ -746,7 +755,7 @@ export class PermissionGate implements PermissionGateService {
     // ones waived above; it must not come back here, or a read of a file the
     // host wrote itself (a spill, an attachment) still raises a card. The
     // tool's own rule (`read: ask`) still asks.
-    if (['read', 'grep', 'glob'].includes(request.tool))
+    if (['read', 'grep', 'glob'].includes(request.tool) || request.changeDirectory === true)
       return (request.trustedPath ? toolDecisions : decisions).includes('ask') ? 'ask' : 'allow';
     if (
       gear === 'accept-edits' &&

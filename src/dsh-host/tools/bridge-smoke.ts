@@ -1078,6 +1078,7 @@ async function main() {
     report.panels = await h.client.request(chH, 'worker.panels', {
       logicalSessionId: INS_SKL_SESSION,
     });
+    report.panelsWorkspace = insSklWorkspace;
     report.commandShow = await h.client.request(chH, 'worker.command', {
       logicalSessionId: INS_SKL_SESSION,
       line: '/goal',
@@ -1962,10 +1963,11 @@ async function main() {
           (entry) => entry.key
         )
       ) === '["todos","goal","subagentCatalog","workingDirectory","goalActivation","jobs"]' &&
-      // Decision 207 §7: DSH 0.2.1's current directory, the workspace until a `cd`.
-      typeof (((report.panels as Message | undefined)?.projections as Message[]) ?? []).find(
+      // Decision 207 §7, §15: DSH 0.2.1's current directory, the workspace until a `cd`.
+      typeof report.panelsWorkspace === 'string' &&
+      (((report.panels as Message | undefined)?.projections as Message[]) ?? []).find(
         (entry) => entry.key === 'workingDirectory'
-      )?.view === 'string' &&
+      )?.view === report.panelsWorkspace &&
       (((report.panels as Message | undefined)?.projections as Message[]) ?? []).find(
         (entry) => entry.key === 'goalActivation'
       )?.view === null &&

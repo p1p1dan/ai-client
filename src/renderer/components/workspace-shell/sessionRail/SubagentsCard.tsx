@@ -28,8 +28,9 @@ const STATUS_WORD: Record<SubagentCardStatus, string> = {
 /**
  * Decision 207 §8 item 3: the session's subagents (DSH 0.2.1 runs them all in
  * the background), after open-claude-ui's CoworkAgentCanvas member rows. A row
- * opens its actions — 「查看对话」 and, while it runs, 「打断」; no instructions
- * are sent to a child (decision 203 §7). Ended ones fold under 「已结束 N」.
+ * opens its actions — 「查看对话」 and, while it runs, 「打断」 (a one-shot
+ * child, the Claude engine's: 「停止」); no instructions are sent to a child
+ * (decision 203 §7). Ended ones fold under 「已结束 N」.
  */
 export function SubagentsCard({
   sessionId,
@@ -78,7 +79,7 @@ export function SubagentsCard({
               type="button"
               aria-expanded={endedOpen}
               onClick={() => setEndedOpen((open) => !open)}
-              className="-mx-1 flex h-6 items-center gap-1 rounded-sm px-1 text-muted-foreground transition-colors hover:bg-fill-ghost-hover hover:text-foreground"
+              className="-mx-1 flex h-6 items-center gap-1 rounded-sm px-1 text-muted-foreground transition-colors focus-ring hover:bg-fill-ghost-hover hover:text-foreground"
               data-rail-subagents-ended=""
             >
               <span className="tabular-nums">
@@ -129,7 +130,8 @@ function SubagentRow({
 }) {
   const { t } = useI18n();
   const open = selected === row.key;
-  const actions = row.conversation || row.interrupt !== null;
+  const control = row.interrupt ?? row.stop;
+  const actions = row.conversation || control !== null;
   return (
     <li className="-mx-1" data-subagent-row={row.status}>
       <button
@@ -137,8 +139,8 @@ function SubagentRow({
         aria-expanded={actions ? open : undefined}
         onClick={() => onSelect(row.key)}
         className={cn(
-          'flex w-full min-w-0 items-start gap-2 rounded-sm px-1 py-1 text-left transition-colors',
-          open ? 'bg-fill-neutral' : 'hover:bg-fill-ghost-hover'
+          'flex w-full min-w-0 items-start gap-2 rounded-sm px-1 py-1 text-left transition-colors focus-ring',
+          open ? 'bg-fill-ghost-selected' : 'hover:bg-fill-ghost-hover'
         )}
       >
         <span className="flex h-4.5 shrink-0 items-center">
@@ -178,16 +180,9 @@ function SubagentRow({
               {t('View conversation')}
             </Button>
           )}
-          {row.interrupt && (
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              onClick={() => {
-                if (row.interrupt) onInterrupt(row.interrupt);
-              }}
-            >
-              {t('Interrupt')}
+          {control && (
+            <Button type="button" size="xs" variant="ghost" onClick={() => onInterrupt(control)}>
+              {control.type === 'interrupt' ? t('Interrupt') : t('Stop')}
             </Button>
           )}
         </div>

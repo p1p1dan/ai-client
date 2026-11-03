@@ -342,20 +342,20 @@ DSH 0.2.1 的做法（读 `dsh-subagent` 得出）：可续聊的子代理的任
 
 | 测试 | 规则 | 理想结果 |
 |---|---|---|
-| 换目录的权限（`permissionHost.test.ts` 新增 `[207-CDASK]`） | 换到工作区外要先问；工作区内不问；换目录不扩大别的权限 | ① 换到工作区内的子目录：不出卡，调用照常执行；② 换到工作区外：出一张卡，工具 `working_directory`、动作 `change_directory`、路径是目标目录；答允许才执行，拒绝则调用失败；③ 经工作区里指向外面的符号链接换过去：同 ②，路径是链接指向的位置；④ 不带 `cd` 的查看：不出卡；⑤ `bypass` 档不出卡；计划模式出卡、不直接拒绝；`auto` 档出卡；⑥「本会话允许」换到 X 之后再换到 X：不出卡；⑦ 子代理（`subagent`、`subagent_fork`）带工作区外的 `cwd`：出同样的卡，工具名是子代理那个；`cwd` 在工作区内或不带：不出卡 |
+| 换目录的权限（`permissionHost.test.ts` 新增 `[207-CDASK]`；原有两项随用户 11-03 的裁定改写：`request construction` 里的「never asks about a cd, inside or outside」与第 7 节那组的 ③「cd 本身不出卡」，改成工作区内不出卡、工作区外出卡，不带 `cd` 的仍不经过判定） | 换到工作区外要先问；工作区内不问；换目录不扩大别的权限 | ① 换到工作区内的子目录：不出卡，调用照常执行；② 换到工作区外：出一张卡，工具 `working_directory`、动作 `change_directory`、路径是目标目录；答允许才执行，拒绝则调用失败；③ 经工作区里指向外面的符号链接换过去：同 ②，路径是链接指向的位置；④ 不带 `cd` 的查看：不出卡；⑤ `bypass` 档不出卡；计划模式出卡、不直接拒绝；`auto` 档出卡；⑥「本会话允许」换到 X 之后再换到 X：不出卡；⑦ 子代理（`subagent`、`subagent_fork`）带工作区外的 `cwd`：出同样的卡，工具名是子代理那个；`cwd` 在工作区内或不带：不出卡 |
 | 卡上的说明（渲染端 `PERMISSION_ACTION_LABELS` 与中文词表） | 卡要说清换过去会读入什么 | `change_directory` 的标题英文 "Switch to a directory outside the workspace (its AGENTS.md, CLAUDE.md and skills are read in)"，中文「切换到工作区外的目录（会读入那里的 AGENTS.md、CLAUDE.md 和技能）」 |
 | 真宿主：换到工作区外，允许（`dshSharedHost.integration.test.ts` 的 `[207-CD-1]` 改写） | 先问换目录；允许之后，不带路径的搜索仍按那个目录询问；换过去就读入那里的说明文件 | 外面的目录里放一份带标记的 `AGENTS.md`。第一张卡是换目录的（工具 `working_directory`，卡里含那个目录），答允许；第二张卡是 `glob` 的、含那个目录，答拒绝；回合正常结束，两个调用依次成功、失败；换目录之后发给假网关的请求里有那个标记 |
 | 真宿主：换到工作区外，拒绝（同文件新增 `[207-CD-2]`） | 拒绝换目录：会话留在工作区，外面的说明文件不读 | 只出换目录这一张卡，答拒绝；换目录的结果是失败；之后的 `glob` 在工作区里执行、不出卡、成功；整轮发给假网关的请求里都没有那个标记 |
 | 不带路径的工具按工作区判（`permissionHost.test.ts` 新增） | 网页抓取、MCP 等不带路径的工具不随当前目录变 | 当前目录在工作区外时，`auto` 档下 `web_fetch` 与 MCP 工具不出卡（与没换目录时相同）；同样情况下不带 `workdir` 的 `bash` 仍按工作区外询问（命令确实在那里跑） |
 | 子代理的审批卡在主回合结束时保留（`src/renderer/stores/__tests__/` 新增） | 主回合结束不清子代理的卡 | 主回合进行中来了一张子代理的卡（带 `agentId`）和一张主代理的卡：主回合正常结束、被停止、失败三种情况下，子代理的卡都还在待审队列里，主代理的卡被清掉；子代理的卡答完（`permission.resolved`）后照常移出队列；没有子代理卡时与现在相同 |
 | Claude 引擎的子代理在右栏能停（`subagentsCardModel.test.ts`、`sessionRailMount.test.ts` 新增） | 「运行中」卡片不再列子代理，子代理卡片要接上它的停止 | Claude 引擎运行中的子代理：点开有「查看对话」「停止」，「停止」调用停后台任务的接口、参数是它的作业编号；DSH 子代理仍是「打断」；结束的行两者都没有；原有用例不变 |
-| 工具行记下的目录（`projection.test.ts`、`liveEvents.test.ts` 新增；D 表「调用时目录」一行随之改） | 记调用真正开始执行（`tool/call`）那一刻的目录 | 同一步 `[换到 sub, read src/a.ts]`：历史与实时里 `read` 那一行都记 `sub`，换目录那一行不记；同一步再换回工作区，之后的行不记；实时在 `tool/call` 时发 `tool.updated` 带目录，`tool.started` 不带；重开会话后（没有新的换目录事件，DSH 的当前目录已是 sub）的调用也记 `sub`，按 DSH 当时的当前目录读，回退之后同理 |
-| 工作区的两种写法（`workingDirectory.test.ts`、`commandsAndState.test.ts` 新增） | 工作区经符号链接打开时，DSH 报解析后的路径，要认成同一个工作区 | 工作区按 `/link/ws` 打开、实际是 `/real/ws`：DSH 报 `/real/ws/packages/web` → 工具行记 `packages/web`，转发给界面的当前目录写成 `/link/ws/packages/web`（输入框标签因此写 `packages/web`）；报 `/real/ws` → 工作区本身，不记；工作区外的路径原样 |
-| 子代理卡片的小修（`sessionRailMount.test.ts` 新增一项；样式两项无测试） | 设计规范 v2：键盘焦点可见、选中用选中色；换会话不带上一会话的展开状态 | 行按钮与「已结束 N」带 `focus-ring`；展开的行用 `fill-ghost-selected`；换到另一个会话再换回来，展开的行与「已结束」都收起 |
+| 工具行记下的目录（`projection.test.ts`、`liveEvents.test.ts` 新增；D 表「调用时目录」一行随之改。2026-11-03 动工时补：`liveEvents.test.ts` 原有的 `[207-LIVE-CWD]`、`[207-LIVE-CWD-STREAM]` 随 D 表的改动改写成在 `tool/call` 时核对；重开会话与回退在宿主侧各补一项，`commandsAndState.test.ts` 的 `[207-PROJ-CWD-RESUME]`、`rewindFork.test.ts` 的 `[207-REWIND-CWD]`） | 记调用真正开始执行（`tool/call`）那一刻的目录 | 同一步 `[换到 sub, read src/a.ts]`：历史与实时里 `read` 那一行都记 `sub`，换目录那一行不记；同一步再换回工作区，之后的行不记；实时在 `tool/call` 时发 `tool.updated` 带目录，`tool.started` 不带；重开会话后（没有新的换目录事件，DSH 的当前目录已是 sub）的调用也记 `sub`，按 DSH 当时的当前目录读，回退之后同理 |
+| 工作区的两种写法（`workingDirectory.test.ts`、`commandsAndState.test.ts` 的 `[207-PROJ-CWD-SPELL]`、`projection.test.ts` 新增） | 工作区经符号链接打开时，DSH 报解析后的路径，要认成同一个工作区 | 工作区按 `/link/ws` 打开、实际是 `/real/ws`：DSH 报 `/real/ws/packages/web` → 工具行记 `packages/web`，转发给界面的当前目录写成 `/link/ws/packages/web`（输入框标签因此写 `packages/web`）；报 `/real/ws` → 工作区本身，不记；工作区外的路径原样 |
+| 子代理卡片的小修（新增静态测试 `sessionRailWiringStatic.test.ts`；样式两项无测试。2026-11-03 动工时改：原写在 `sessionRailMount.test.ts` 里挂载后换会话，但整个右栏要连十来个状态仓库与 IPC，单测挂不起来，改为静态核对 `SessionRail` 给卡片的 key） | 设计规范 v2：键盘焦点可见、选中用选中色；换会话不带上一会话的展开状态 | 行按钮与「已结束 N」带 `focus-ring`；展开的行用 `fill-ghost-selected`；`SessionRail` 里子代理卡片的 key 带会话编号（换会话即重建，展开的行与「已结束」都收起）。另：`sessionRailMount.test.ts` 的造行辅助函数补上新字段的默认值 `stop: null`，断言不动 |
 | 带「..」的路径两种读法都判（老问题，`src/shared/permissions/__tests__/` 新增） | DSH 的读写工具在 Windows 上先按文字退「..」再解析，在 Linux 上先解析链接再退；两种读法都判，任一在工作区外就按工作区外问，任一被拒就拒 | 工作区里 `link` 指向外面时的 `link/../x`（先解析链接在外、按文字在内），与 `deep` 指向工作区里更深两层（如 `a/b/c`，pnpm 的 `node_modules/foo` 就是这样）时的 `deep/../../x`（先解析链接在内、按文字在外），都按工作区外询问；没有 `..`、或 `..` 不经过链接时，与现在完全一样（不多问、不多一条路径） |
 | 命令的工作目录照 DSH 拼（老问题，`permissionHost.test.ts` 新增） | `bash` 的 `workdir` 像 DSH 一样原样接在当前目录后交给系统，判定也按这个；`pwsh` 像 DSH 一样先按文字合并 | `bash` 的 `workdir: "link/.."`（link 指向外面）：按工作区外询问；`pwsh` 同样写法：判在工作区内（DSH 的 pwsh 在工作区里执行）；普通相对目录与现在相同 |
 | 打包必备清单补 Windows 沙箱的随包文件（`scripts/__tests__/dsh-host-build-lib.test.mjs` 新增；C 表「打包必备清单」一行的理由随之更正） | 0.2.1 在 Windows 上按路径读 `dsh-sandbox-windows-acl` 的 `SKILL.md` 与 `.ps1`，缺了沙箱行注册失败 | 目标是 win32 时，必备清单含这两个文件；linux 目标不含 |
-| 插件审计兼容旧字段名（同上文件新增） | 第 4 节 ⑤ 写的「兼容旧名」照实做 | 兼容结果只有旧字段 `peers` 时，报错照样写出不满足的依赖，没有 `undefined` |
+| 插件审计兼容旧字段名（审计的测试在 `scripts/__tests__/dsh-plugin-allowlist.test.mjs`，2026-11-03 动工时改到这个文件新增） | 第 4 节 ⑤ 写的「兼容旧名」照实做 | 兼容结果只有旧字段 `peers` 时，报错照样写出不满足的依赖，没有 `undefined` |
 | 桥接冒烟 `panelsAnswerCurrentValues`（`tools/bridge-smoke.ts`） | 照 D 表写下的理想结果核对，原来只核对是字符串 | `workingDirectory` 等于会话工作区的路径 |
 | 桥接基准与录制回放 | G 表各项都不改录制里应用收到的内容 | 37 个场景 `--check` 0 处差异（没有场景换目录、没有子代理卡跨过主回合结束） |
 
@@ -377,6 +377,11 @@ DSH 0.2.1 的做法（读 `dsh-subagent` 得出）：可续聊的子代理的任
 **老问题（不是这次升级引入的，1.2.1 里也有；用户 2026-11-03 定这次一起修，单独提交）**：
 
 7. **带「..」的路径**：DSH 的读写工具在 Windows 上先按文字退「..」再解析，我们的判定先解析链接；工作区里有目录联接（如 pnpm 的 `node_modules`）时，能写出判在工作区内、实际读到工作区外的路径（读代码得出，Windows 上未实测）。Linux 上 `bash` 的 `workdir` 被我们先按文字合并，DSH 却原样交给系统：`workdir: "link/.."`（link 指向外面）判在工作区内、实际在外面执行（审查实测）。改为两种读法都判，`bash` 的工作目录照 DSH 拼。
+
+**落地（2026-11-03）**：第 1～6 项一个提交，测试记录见阶段看板「阶段 6」。实现上的取舍：
+
+- 第 1 项：换目录与子代理的 `cwd` 按「读那个目录」判（`changeDirectory`），工作区内照旧不问；卡片动作 `change_directory`；「本会话允许」按目录记。真宿主上核实了前提：允许之后的下一次请求就带着外面 `AGENTS.md` 的内容。
+- 第 5 项：实时与历史都在 `tool/call`（调用真正开始）时记目录；实时的当前目录改由宿主按 DSH 的 `workingDirectory` 投影提供（启动、回退、`worker.panels` 读到的与变化推来的），不再自己数 `working-directory/change`，重开与回退因此不丢；转发给界面的目录先改写成工作区的写法。
 
 **记下、本阶段不修（观察项）**：
 

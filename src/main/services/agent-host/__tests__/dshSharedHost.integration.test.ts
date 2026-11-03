@@ -2485,56 +2485,106 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       await manager.closeSession('g1');
     }, 180_000);
 
-    it('[207-CD-1] a cd out of the workspace asks nothing; the glob after it is asked about that directory', async () => {
-      const outside = join(shared.stateRoot, 'cd-outside');
+    /**
+     * Decision 207 §15 (the user, 2026-11-03): a cd out of the workspace asks
+     * first, since DSH reads that directory's AGENTS.md, CLAUDE.md and skills
+     * in. The fake gateway tags each `P1-CD` request with whether it carried
+     * the marker the outside AGENTS.md holds.
+     */
+    const cdScenario = async (sessionId: string, owner: number) => {
+      const outside = join(shared.stateRoot, `cd-outside-${sessionId}`);
       mkdirSync(outside, { recursive: true });
       writeFileSync(join(outside, 'far.txt'), 'far\n');
+      writeFileSync(join(outside, 'AGENTS.md'), '# Outside notes\nCD-OUTSIDE-AGENTS-207\n');
       await manager.createSession({
-        sessionId: 'g-cd',
+        sessionId,
         workspacePath: workspace,
-        ownerWebContentsId: 70,
+        ownerWebContentsId: owner,
       });
       const from = events.length;
+      const logFrom = gatewayLog().length;
       attempt += 1;
       const requestId = await manager.send({
-        sessionId: 'g-cd',
+        sessionId,
         attemptId: `attempt-${attempt}`,
         text: `P1-CD ${JSON.stringify({ to: outside })}: change directory, then list it.`,
-        ownerWebContentsId: 70,
+        ownerWebContentsId: owner,
       });
-      expect(
-        await until(
-          () => forSession('g-cd', from).some((e) => e.type === 'permission.requested'),
-          60_000
-        )
-      ).toBe(true);
-      const card = forSession('g-cd', from).find((e) => e.type === 'permission.requested');
-      expect(card?.payload?.toolName).toBe('glob');
-      expect(JSON.stringify(card?.payload)).toContain(outside);
-      expect(
-        await manager.respondPermission({
-          sessionId: 'g-cd',
-          permissionId: String(card?.payload?.permissionId),
-          decision: 'deny',
-        })
-      ).toBe(true);
-      expect(
-        await until(
+      const cards = () =>
+        forSession(sessionId, from).filter((e) => e.type === 'permission.requested');
+      const answer = async (index: number, decision: 'allow' | 'deny') => {
+        expect(await until(() => cards().length > index, 60_000)).toBe(true);
+        const card = cards()[index];
+        expect(
+          await manager.respondPermission({
+            sessionId,
+            permissionId: String(card?.payload?.permissionId),
+            decision,
+          })
+        ).toBe(true);
+        return card?.payload;
+      };
+      const idle = () =>
+        until(
           () =>
-            forSession('g-cd', from).some(
+            forSession(sessionId, from).some(
               (e) =>
                 e.requestId === requestId &&
                 e.type === 'session.status' &&
                 e.payload?.status === 'idle'
             ),
           120_000
-        )
-      ).toBe(true);
-      const turn = forSession('g-cd', from);
-      expect(turn.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
-      const results = turn.filter((e) => e.type === 'tool.completed').map((e) => e.payload);
-      expect(results.map((result) => result?.ok)).toEqual([true, false]);
+        );
+      /** Each `P1-CD` request in order: its step and whether it carried the marker. */
+      const requests = () =>
+        gatewayLog()
+          .slice(logFrom)
+          .map((line) => String(line.decision ?? ''))
+          .filter((label) => label.startsWith('P1-CD:'))
+          .map((label) => label.replace(/^P1-CD:(\S+) r\d+ (s\d+)$/, '$2 $1'));
+      const results = () =>
+        forSession(sessionId, from)
+          .filter((e) => e.type === 'tool.completed')
+          .map((e) => e.payload?.ok);
+      return { outside, cards, answer, idle, requests, results };
+    };
+    const gatewayLog = () => {
+      const file = join(shared.stateRoot, 'gateway.jsonl');
+      return existsSync(file)
+        ? readFileSync(file, 'utf8')
+            .trim()
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => JSON.parse(line) as Record<string, unknown>)
+        : [];
+    };
+
+    it('[207-CD-1] a cd out of the workspace asks first; allowed, the glob after it is asked about that directory, whose AGENTS.md is read in', async () => {
+      const cd = await cdScenario('g-cd', 70);
+      const first = await cd.answer(0, 'allow');
+      expect(first?.toolName).toBe('working_directory');
+      expect(first?.action).toBe('change_directory');
+      expect(JSON.stringify(first)).toContain(cd.outside);
+      const second = await cd.answer(1, 'deny');
+      expect(second?.toolName).toBe('glob');
+      expect(JSON.stringify(second)).toContain(cd.outside);
+      expect(await cd.idle()).toBe(true);
+      expect(cd.cards()).toHaveLength(2);
+      expect(cd.results()).toEqual([true, false]);
+      expect(cd.requests()).toEqual(['s0 no-marker', 's1 marker', 's2 marker']);
       await manager.closeSession('g-cd');
+    }, 180_000);
+
+    it('[207-CD-2] a cd out of the workspace refused: the session stays home and the AGENTS.md out there is never read', async () => {
+      const cd = await cdScenario('g-cd2', 71);
+      const first = await cd.answer(0, 'deny');
+      expect(first?.toolName).toBe('working_directory');
+      expect(await cd.idle()).toBe(true);
+      // The glob ran in the workspace, unasked.
+      expect(cd.cards()).toHaveLength(1);
+      expect(cd.results()).toEqual([false, true]);
+      expect(cd.requests()).toEqual(['s0 no-marker', 's1 no-marker', 's2 no-marker']);
+      await manager.closeSession('g-cd2');
     }, 180_000);
   });
 

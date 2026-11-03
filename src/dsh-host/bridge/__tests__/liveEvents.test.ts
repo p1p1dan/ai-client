@@ -93,6 +93,13 @@ function harness(
     delegated?: () => DshDelegatedSpend | undefined;
     /** Decision 207 §7: the session's workspace (its header cwd). */
     workspace?: string;
+    /**
+     * Decision 207 §15 item 5: DSH's current directory as the session opens
+     * (a resumed one already in a subdirectory). Each `working-directory/change`
+     * moves it before the translation sees the event, as the projection the
+     * runtime follows does.
+     */
+    directory?: string;
   } = {}
 ) {
   const events: Emitted[] = [];
@@ -102,6 +109,7 @@ function harness(
   let clock = 1_000;
   let seq = 0;
   let pendingCommand = options.command;
+  let directory = options.directory;
   const commands = new Map<string, CommandSendView>();
   const chain = options.chain ? initCacheChain() : undefined;
   let lastStep: { seq: number; verdict: CacheStepVerdict } | undefined;
@@ -142,6 +150,7 @@ function harness(
     now: () => clock,
     ...(options.presentCall ? { presentCall: options.presentCall } : {}),
     ...(options.workspace ? { workspace: () => options.workspace } : {}),
+    currentDirectory: () => directory,
     ...(options.cacheStep
       ? { cacheStep: options.cacheStep }
       : chain
@@ -162,6 +171,7 @@ function harness(
     seq += 1;
     const event = { type, seq, time: 1_790_000_000_000 + seq, data };
     log.push(event);
+    if (type === 'working-directory/change' && typeof data.cwd === 'string') directory = data.cwd;
     // The history cache folds the event first (`dshSessionRuntime.ts`).
     if (chain && options.chain) {
       const verdict = applyCacheChain(chain, event, options.chain);
@@ -188,6 +198,10 @@ function harness(
     },
     setTurn: (next: LiveTurn | null) => {
       turn = next;
+    },
+    /** Decision 207 §15 item 5: DSH's directory moved without an event of this run (a rewind). */
+    setDirectory: (next: string | undefined) => {
+      directory = next;
     },
     of: (type: string) => events.filter((event) => event.type === type),
   };
@@ -306,7 +320,7 @@ describe('DshLiveEvents — streaming tool arguments (decision 099 rule 14)', ()
   });
 });
 
-describe('DshLiveEvents — the directory a call ran in (decision 207 §7, §14 D)', () => {
+describe('DshLiveEvents — the directory a call ran in (decision 207 §7, §14 D, §15 item 5)', () => {
   const WS = '/home/u/proj';
   const call = (h: ReturnType<typeof harness>, id: string, name: string, args: unknown) => {
     h.durable('assistant/message', {
@@ -320,8 +334,25 @@ describe('DshLiveEvents — the directory a call ran in (decision 207 §7, §14 
     });
     h.durable('tool/call', { turn: 1, step: 1, callId: id, name, arguments: JSON.stringify(args) });
   };
+  /** The directory each row was told, by call id; a row told none is absent. */
+  const told = (h: ReturnType<typeof harness>) =>
+    Object.fromEntries(
+      [...h.of('tool.started'), ...h.of('tool.updated')]
+        .filter((event) => event.payload.cwd !== undefined)
+        .map((event) => [event.payload.toolCallId, event.payload.cwd])
+    );
+  const replayed = (h: ReturnType<typeof harness>) =>
+    Object.fromEntries(
+      projectDshHistory(h.log, { workspace: WS })
+        .flatMap((message) => message.blocks)
+        .filter((block) => block.type === 'tool_call')
+        .flatMap((block) => {
+          const cwd = (block as { cwd?: string }).cwd;
+          return cwd === undefined ? [] : [[block.toolCallId, cwd]];
+        })
+    );
 
-  it('[207-LIVE-CWD] rows after a cd carry the directory, as the history does', () => {
+  it('[207-LIVE-CWD] a call started after a cd is told the directory when it starts, as the history records it', () => {
     const h = harness({ workspace: WS });
     call(h, 'c1', 'read', { file_path: 'a.ts' });
     call(h, 'c2', 'working_directory', { cd: 'packages/web' });
@@ -329,16 +360,24 @@ describe('DshLiveEvents — the directory a call ran in (decision 207 §7, §14 
     call(h, 'c3', 'read', { file_path: 'src/main.ts' });
     h.durable('working-directory/change', { cwd: '/tmp/build' });
     call(h, 'c4', 'read', { file_path: 'error.log' });
-    const cwds = h.of('tool.started').map((event) => event.payload.cwd);
-    expect(cwds).toEqual([undefined, undefined, 'packages/web', '/tmp/build']);
-    const replayed = projectDshHistory(h.log, { workspace: WS })
-      .flatMap((message) => message.blocks)
-      .filter((block) => block.type === 'tool_call')
-      .map((block) => (block as { cwd?: string }).cwd);
-    expect(replayed).toEqual(cwds);
+    // `tool.started` carries none: the `tool/call`'s `tool.updated` does.
+    expect(h.of('tool.started').map((event) => event.payload.cwd)).toEqual(
+      Array(4).fill(undefined)
+    );
+    expect(
+      h
+        .of('tool.updated')
+        .filter((event) => event.payload.cwd !== undefined)
+        .map((e) => e.payload)
+    ).toEqual([
+      { messageId: STEP_1, toolCallId: 'c3', cwd: 'packages/web' },
+      { messageId: STEP_1, toolCallId: 'c4', cwd: '/tmp/build' },
+    ]);
+    expect(told(h)).toEqual({ c3: 'packages/web', c4: '/tmp/build' });
+    expect(replayed(h)).toEqual(told(h));
   });
 
-  it('[207-LIVE-CWD-STREAM] a streamed row takes the directory with its complete arguments', () => {
+  it('[207-LIVE-CWD-STREAM] a streamed row is told the directory when its call starts, not with its arguments', () => {
     const h = harness({ workspace: WS });
     h.durable('working-directory/change', { cwd: `${WS}/packages/web` });
     h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
@@ -348,17 +387,95 @@ describe('DshLiveEvents — the directory a call ran in (decision 207 §7, §14 
       index: 0,
       block: { type: 'tool-call', id: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' },
     });
+    expect(h.of('tool.updated')).toHaveLength(1);
     expect(h.of('tool.updated')[0]?.payload).toMatchObject({
+      toolCallId: 'c1',
+      input: { file_path: 'a.ts' },
+    });
+    expect(h.of('tool.updated')[0]?.payload).not.toHaveProperty('cwd');
+    h.durable('tool/call', {
+      turn: 1,
+      step: 1,
+      callId: 'c1',
+      name: 'read',
+      arguments: '{"file_path":"a.ts"}',
+    });
+    // Only the directory: the block end already sent these very arguments.
+    expect(h.of('tool.updated').at(-1)?.payload).toEqual({
+      messageId: STEP_1,
       toolCallId: 'c1',
       cwd: 'packages/web',
     });
+  });
+
+  it('[207-LIVE-CWD-STEP] one step [cd sub, read, cd back, read]: each row the directory its call started in', () => {
+    const h = harness({ workspace: WS });
+    const calls = [
+      { type: 'tool-call', id: 'c1', name: 'working_directory', arguments: '{"cd":"sub"}' },
+      { type: 'tool-call', id: 'c2', name: 'read', arguments: '{"file_path":"src/a.ts"}' },
+      { type: 'tool-call', id: 'c3', name: 'working_directory', arguments: '{"cd":".."}' },
+      { type: 'tool-call', id: 'c4', name: 'read', arguments: '{"file_path":"b.ts"}' },
+    ];
+    // The model streams all four before any runs: no row knows a directory yet.
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    calls.forEach((block, index) => {
+      h.chunk({ type: 'block-end', index, block });
+    });
+    expect(told(h)).toEqual({});
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: 'a-1', role: 'assistant', content: calls },
+    });
+    const run = (index: number, change?: string) => {
+      const block = calls[index] as (typeof calls)[number];
+      h.durable('tool/call', {
+        turn: 1,
+        step: 1,
+        callId: block.id,
+        name: block.name,
+        arguments: block.arguments,
+      });
+      if (change) h.durable('working-directory/change', { cwd: change });
+      h.durable('tool/result', {
+        turn: 1,
+        step: 1,
+        message: {
+          id: `r-${block.id}`,
+          role: 'tool',
+          toolCallId: block.id,
+          content: [{ type: 'text', text: 'ok' }],
+        },
+      });
+    };
+    run(0, `${WS}/sub`);
+    run(1);
+    run(2, WS);
+    run(3);
+    // The cd ran in the workspace; the read and the cd back in sub; the last read back home.
+    expect(told(h)).toEqual({ c2: 'sub', c3: 'sub' });
+    expect(replayed(h)).toEqual(told(h));
+  });
+
+  it('[207-LIVE-CWD-RESUME] a reopened session already in sub, and one a rewind moved: DSH’s directory then', () => {
+    // Reopened: no cd in this run, DSH's directory is sub already.
+    const h = harness({ workspace: WS, directory: `${WS}/sub` });
+    call(h, 'c1', 'read', { file_path: 'a.ts' });
+    expect(told(h)).toEqual({ c1: 'sub' });
+    // A rewind to before the cd: the child session is in the workspace.
+    h.setDirectory(WS);
+    call(h, 'c2', 'read', { file_path: 'a.ts' });
+    // And one to after another cd: the child is in that directory.
+    h.setDirectory('/tmp/build');
+    call(h, 'c3', 'read', { file_path: 'error.log' });
+    expect(told(h)).toEqual({ c1: 'sub', c3: '/tmp/build' });
   });
 
   it('[207-LIVE-CWD-NONE] without the workspace no row carries one', () => {
     const h = harness();
     h.durable('working-directory/change', { cwd: '/tmp/build' });
     call(h, 'c1', 'read', { file_path: 'a.ts' });
-    expect(h.of('tool.started')[0]?.payload).not.toHaveProperty('cwd');
+    expect(told(h)).toEqual({});
   });
 });
 

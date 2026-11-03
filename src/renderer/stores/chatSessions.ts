@@ -557,6 +557,12 @@ interface PendingPermission {
    * `PermissionRequestedEvent.payload.queueDepth`.
    */
   queueDepth?: number;
+  /**
+   * The subagent asking, from `permission.requested`. Decision 207 §15: such a
+   * card is parked in the delegate, not in the main turn, so the main turn
+   * ending must not take it off the queue (see `withoutSessionPermissions`).
+   */
+  agentId?: string;
 }
 
 interface PendingQuestion {
@@ -1018,12 +1024,22 @@ function isBetweenRuns(state: ChatSessionsState, sessionId: string): boolean {
   return status === 'idle' || status === 'completed';
 }
 
-/** Drop every parked prompt of one session (terminal events). Same identity rule as {@link withoutPermission}. */
+/**
+ * Drop the parked prompts of one session's main turn (terminal events). Same
+ * identity rule as {@link withoutPermission}.
+ *
+ * A subagent's card stays (decision 207 §15): since DSH 0.2.1 every delegate
+ * runs in the background, so the main turn often ends — or is stopped, which
+ * leaves delegates running — while a delegate is still parked on its gate.
+ * `permission.resolved` takes it off once that gate settles.
+ */
 function withoutSessionPermissions(
   state: ChatSessionsState,
   sessionId: string
 ): Pick<ChatSessionsState, 'pendingPermissions'> | Record<string, never> {
-  const next = state.pendingPermissions.filter((item) => item.sessionId !== sessionId);
+  const next = state.pendingPermissions.filter(
+    (item) => item.sessionId !== sessionId || item.agentId !== undefined
+  );
   if (next.length === state.pendingPermissions.length) return {};
   return { pendingPermissions: next };
 }
@@ -2170,7 +2186,7 @@ function applyRuntimeEventCore(
       const hasExecStartedAt = event.payload.execStartedAt !== undefined;
       // Decision 131: a plugin call's title rides with its complete arguments.
       const hasPresentation = event.payload.presentation !== undefined;
-      // Decision 207 §7: the directory rides with the complete arguments.
+      // Decision 207 §7, §15 item 5: the directory comes when the call starts, on its own.
       const hasCwd = event.payload.cwd !== undefined;
       if (!hasInput && !hasExecStartedAt && !hasPresentation && !hasCwd) return {};
       const bucket = state.messages[sessionId] ?? [];
@@ -2415,6 +2431,7 @@ function applyRuntimeEventCore(
                 ...(event.payload.queueDepth !== undefined
                   ? { queueDepth: event.payload.queueDepth }
                   : {}),
+                ...(event.payload.agentId ? { agentId: event.payload.agentId } : {}),
               },
             ],
         // A delegate asking while no turn runs is one a Ctrl+Enter run left

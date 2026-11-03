@@ -119,6 +119,8 @@ function kindOf(tool: string): PermissionRequestKind {
  */
 function actionOf(request: ToolPermissionRequest): PermissionRequestAction | undefined {
   if (request.hostAsk?.sandbox) return 'escalate_sandbox';
+  // Decision 207 §15: a move out of the workspace, whichever tool asks for it.
+  if (request.changeDirectory === true) return 'change_directory';
   // Decision 190: the URL itself is the card's body (`preview`).
   if (request.network === true) return 'fetch_url';
   const tool = request.tool;

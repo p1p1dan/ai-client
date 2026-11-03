@@ -205,6 +205,7 @@ describe('SubagentsCard (decision 207 §8, §14 E)', () => {
       detail: '读取 src/auth/session.ts',
       duration: '1:12',
       interrupt: null,
+      stop: null,
       conversation: true,
       ...extra,
     };
@@ -287,6 +288,27 @@ describe('SubagentsCard (decision 207 §8, §14 E)', () => {
     await act(async () => payRow?.querySelector<HTMLButtonElement>('button')?.click());
     expect(buttonsNamed(payRow as HTMLElement, '查看对话')).toHaveLength(1);
     expect(buttonsNamed(payRow as HTMLElement, '打断')).toHaveLength(0);
+  });
+
+  it('decision 207 §15: a Claude-engine child offers 「停止」, handing over its job', async () => {
+    const onInterrupt = vi.fn();
+    const research = row({
+      key: 'lane:c',
+      name: '调研发票',
+      stop: { type: 'stop', jobId: 'task-c' },
+    });
+    const container = await mount(
+      card({ live: [research], ended: [], running: 1, waiting: 0 }, onInterrupt)
+    );
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-subagent-row] > button')?.click()
+    );
+    expect(buttonsNamed(container, '查看对话')).toHaveLength(1);
+    expect(buttonsNamed(container, '打断')).toHaveLength(0);
+    const stop = buttonsNamed(container, '停止');
+    expect(stop).toHaveLength(1);
+    await act(async () => stop[0]?.click());
+    expect(onInterrupt).toHaveBeenCalledWith({ type: 'stop', jobId: 'task-c' });
   });
 
   it('the rail interrupts through the subagent interrupt call, by session and child', async () => {

@@ -256,4 +256,50 @@ describe('deriveSubagentsCardView', () => {
     });
     expect(dead?.live[0]?.interrupt).toBeNull();
   });
+
+  it('decision 207 §15: a one-shot child (the Claude engine) is stopped as its job; a DSH child is still interrupted', () => {
+    const lanes = [
+      // The SDK names the lane and its job by the same task id.
+      lane({ parentToolCallId: 'c1', agentId: 'task-1', ordinal: 0 }),
+      lane({ parentToolCallId: 'c2', agentId: 'kid-2', ordinal: 1 }),
+      lane({ parentToolCallId: 'c3', agentId: 'task-3', status: 'completed', endedAt: 9_000 }),
+    ];
+    const view = deriveSubagentsCardView({
+      panels: panels({
+        subagentCatalog: [{ id: 'kid-2', createdAt: 1, mode: 'continuable' as const }],
+        jobs: [
+          {
+            id: 'task-1',
+            kind: 'subagent',
+            label: 'Research',
+            status: 'running',
+            startedAt: 2_000,
+          },
+          {
+            id: 'task-3',
+            kind: 'subagent',
+            label: 'Done',
+            status: 'completed',
+            startedAt: 2_000,
+            finishedAt: 9_000,
+          },
+        ],
+      }),
+      lanes,
+      now: NOW,
+    });
+    const byKey = Object.fromEntries(
+      [...(view?.live ?? []), ...(view?.ended ?? [])].map((row) => [row.key, row])
+    );
+    expect(byKey['lane:c1']).toMatchObject({
+      conversation: true,
+      interrupt: null,
+      stop: { type: 'stop', jobId: 'task-1' },
+    });
+    expect(byKey['lane:c2']).toMatchObject({
+      interrupt: { type: 'interrupt', childId: 'kid-2' },
+      stop: null,
+    });
+    expect(byKey['lane:c3']).toMatchObject({ interrupt: null, stop: null });
+  });
 });

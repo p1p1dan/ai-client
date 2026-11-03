@@ -409,7 +409,8 @@ export interface ToolStartedEvent extends RuntimeEventBase {
     /**
      * Decision 207 §7: the directory the call runs in, when the model had
      * changed it (`callDirectory`): relative to the workspace inside it,
-     * absolute outside it.
+     * absolute outside it. The DSH bridge sends it on the `tool.updated` of
+     * the call's start instead (§15 item 5).
      */
     cwd?: string;
   };
@@ -574,6 +575,10 @@ export type PermissionRequestKind = 'tool' | 'exec' | 'file_change';
  *
  * `fetch_url` (dsh-rebase decision 190): `web_fetch` asks to fetch the URL on
  * the card.
+ *
+ * `change_directory` (decision 207 §15): `working_directory`, or a subagent's
+ * `cwd`, moves to the directory on the card, outside the workspace; DSH then
+ * reads that project's AGENTS.md, CLAUDE.md and skills.
  */
 export type PermissionRequestAction =
   | 'run_command'
@@ -581,7 +586,8 @@ export type PermissionRequestAction =
   | 'edit_file'
   | 'read_file'
   | 'escalate_sandbox'
-  | 'fetch_url';
+  | 'fetch_url'
+  | 'change_directory';
 
 /**
  * S2 (c): agent-neutral decision vocabulary, four wide. `decisions.ts`
@@ -1201,7 +1207,7 @@ export interface ToolUpdatedEvent extends RuntimeEventBase {
     /**
      * Decision 207 §7: the directory the call runs in, when the model had
      * changed it (`callDirectory`): relative to the workspace inside it,
-     * absolute outside it.
+     * absolute outside it. Sent when the call starts (§15 item 5).
      */
     cwd?: string;
     messageId: string;

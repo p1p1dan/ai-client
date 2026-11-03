@@ -227,6 +227,27 @@ describe('auditInstalledPlugins: bad samples', () => {
     );
   });
 
+  it('decision 207 §15: an older dsh-app-boot that names the unmet peers `peers` is reported the same', () => {
+    writePlugin();
+    const older = {
+      ...dsh,
+      evaluatePluginCompatibility: () => ({
+        name: PLUGIN,
+        version: '1.0.0',
+        peers: { '@deepseek-ai/dsh-llm': '0.1.5' },
+      }),
+    };
+    const text = auditInstalledPlugins({
+      outDir: tmp,
+      allowlist: { schema: 1, plugins: [entry()] },
+      closures: {},
+      dshPin: PIN,
+      dsh: older,
+    }).failures.join('\n');
+    expect(text).toMatch(/incompatible with DSH .*dsh-llm.*0\.1\.5.*\(no exemption\)/);
+    expect(text).not.toMatch(/undefined/);
+  });
+
   it('a UI plugin, a bin, or a package that is not a bundle', () => {
     writePlugin({ manifest: { dsh: { client: './client.js' }, bin: { fixture: 'bin.js' } } });
     const text = failuresOf();

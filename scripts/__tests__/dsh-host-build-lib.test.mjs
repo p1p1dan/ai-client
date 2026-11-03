@@ -415,6 +415,25 @@ describe('pruneTree over a whole fixture', () => {
     buildArtifact(tmp, WIN);
     expect(() => verifyDshArtifact({ outDir: tmp, target: WIN })).not.toThrow();
   });
+
+  it('decision 207 §15: a win32 tree must carry the Windows sandbox diagnosis skill; a linux one need not', () => {
+    const acl =
+      'node_modules/@deepseek-ai/dsh-sandbox-windows-acl/assets/diagnose-windows-sandbox-acl';
+    const assets = [`${acl}/SKILL.md`, `${acl}/scripts/diagnose-windows-sandbox-acl.ps1`];
+    expect(requiredFiles(WIN)).toEqual(expect.arrayContaining(assets));
+    expect(requiredFiles(LINUX).filter((rel) => rel.includes('dsh-sandbox-windows-acl'))).toEqual(
+      []
+    );
+    // The pruner keeps them, and a tree without the script fails verification.
+    buildArtifact(tmp, WIN);
+    pruneTree(tmp, WIN);
+    for (const rel of assets)
+      expect(fs.existsSync(path.join(tmp, ...rel.split('/'))), rel).toBe(true);
+    fs.rmSync(path.join(tmp, ...assets[1].split('/')));
+    expect(() => verifyDshArtifact({ outDir: tmp, target: WIN })).toThrow(
+      /diagnose-windows-sandbox-acl\.ps1/
+    );
+  });
 });
 
 describe('verifyDshArtifact rejects', () => {

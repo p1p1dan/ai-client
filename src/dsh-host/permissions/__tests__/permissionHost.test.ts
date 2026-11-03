@@ -676,11 +676,24 @@ describe('request construction (design shard 03 §2)', () => {
     }
   });
 
-  it('never asks about a cd, inside or outside the workspace (decision 207 §7)', async () => {
-    for (const cd of [undefined, 'packages/web', '/tmp/elsewhere']) {
-      const { decision, seen } = await requestFor('working_directory', cd ? { cd } : {});
-      expect(decision.kind, String(cd)).toBe('allow');
-      expect(seen, String(cd)).toEqual([]);
+  it('a cd is judged as a read of its directory; a query is not judged (decision 207 §15)', async () => {
+    const query = await requestFor('working_directory', {});
+    expect(query.decision.kind).toBe('allow');
+    expect(query.seen).toEqual([]);
+    for (const [cd, path] of [
+      ['packages/web', join(ws, 'packages', 'web')],
+      [outside, outside],
+    ]) {
+      const { decision, seen } = await requestFor('working_directory', { cd });
+      expect(decision.kind, cd).toBe('allow');
+      expect(seen, cd).toEqual([
+        expect.objectContaining({
+          tool: 'working_directory',
+          path,
+          policySurface: 'read',
+          changeDirectory: true,
+        }),
+      ]);
     }
   });
 
@@ -1450,12 +1463,14 @@ describe('decision 207 §7: the session’s current directory (DSH 0.2.1 working
     expect(real.asked).toHaveLength(0);
   });
 
-  it('③ the cd itself raises no card, wherever it goes', async () => {
-    const { fake, seen } = attached();
-    for (const cd of ['a', outside]) {
-      expect((await fake.prepare(call('working_directory', { cd }, root()))).kind).toBe('allow');
-    }
-    expect(seen).toEqual([]);
+  it('③ the cd itself raises no card inside the workspace, one outside it (decision 207 §15)', async () => {
+    const { fake, asked } = attached('ask');
+    expect((await fake.prepare(call('working_directory', { cd: 'a' }, root()))).kind).toBe('allow');
+    expect(asked).toHaveLength(0);
+    expect((await fake.prepare(call('working_directory', { cd: outside }, root()))).kind).toBe(
+      'allow'
+    );
+    expect(asked).toEqual([expect.objectContaining({ tool: 'working_directory', path: outside })]);
   });
 
   it('④ a subagent is judged by its own current directory', async () => {
@@ -1479,5 +1494,102 @@ describe('decision 207 §7: the session’s current directory (DSH 0.2.1 working
     dirs.set('aiclient-root', join(ws, 'a'));
     await fake.prepare(call('word_read', { path: 'notes.txt' }, root()));
     expect(seen[0]).toMatchObject({ tool: 'read', path: join(ws, 'notes.txt') });
+  });
+
+  it('decision 207 §15: a call that names no path is judged at the workspace, wherever the session moved', async () => {
+    const { fake, dirs, asked } = attached('auto');
+    dirs.set('aiclient-root', outside);
+    expect(
+      (await fake.prepare(call('web_fetch', { url: 'https://example.com/a' }, root()))).kind
+    ).toBe('allow');
+    expect((await fake.prepare(call('mcp_docs_search', { query: 'x' }, root()))).kind).toBe(
+      'allow'
+    );
+    expect(asked).toHaveLength(0);
+    // A command does run there: still asked about as outside.
+    await fake.prepare(call('bash', { command: 'ls' }, root()));
+    expect(asked).toEqual([expect.objectContaining({ tool: 'bash', path: outside })]);
+  });
+});
+
+describe('[207-CDASK] decision 207 §15: a move out of the workspace asks first', () => {
+  function gated(options: Parameters<typeof realGate>[0] = {}) {
+    const { fake, host } = setup();
+    const real = realGate(options);
+    host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate: real.gate });
+    return { fake, asked: real.asked };
+  }
+  const cd = (target: string | undefined, callId = 'c') =>
+    call('working_directory', target === undefined ? {} : { cd: target }, root(), { callId });
+
+  it('① into a workspace subdirectory: no card, the call runs', async () => {
+    const { fake, asked } = gated();
+    expect((await fake.prepare(cd('a'))).kind).toBe('allow');
+    expect(asked).toHaveLength(0);
+  });
+
+  it('② out of the workspace: one card naming the directory; allow runs it, deny refuses it', async () => {
+    const allowed = gated();
+    expect((await allowed.fake.prepare(cd(outside))).kind).toBe('allow');
+    expect(allowed.asked).toEqual([
+      expect.objectContaining({ tool: 'working_directory', path: outside, changeDirectory: true }),
+    ]);
+    const denied = gated({ answer: () => 'deny' });
+    expect((await denied.fake.prepare(cd(outside))).kind).toBe('deny');
+    expect(denied.asked).toHaveLength(1);
+  });
+
+  it('③ through a workspace symlink that points out: asked about where it lands', async () => {
+    const link = join(ws, 'link-out');
+    symlinkSync(outside, link);
+    try {
+      const { fake, asked } = gated();
+      await fake.prepare(cd('link-out'));
+      expect(asked).toEqual([
+        expect.objectContaining({ tool: 'working_directory', path: outside }),
+      ]);
+    } finally {
+      unlinkSync(link);
+    }
+  });
+
+  it('④ a query (no cd) is not judged at all', async () => {
+    const { fake, asked } = gated();
+    expect((await fake.prepare(cd(undefined))).kind).toBe('allow');
+    expect(asked).toHaveLength(0);
+  });
+
+  it('⑤ bypass asks nothing; plan mode and auto ask rather than refuse', async () => {
+    const bypass = gated({ gear: 'bypass' });
+    expect((await bypass.fake.prepare(cd(outside))).kind).toBe('allow');
+    expect(bypass.asked).toHaveLength(0);
+    for (const options of [{ mode: 'plan' as const }, { gear: 'auto' as const }]) {
+      const { fake, asked } = gated(options);
+      expect((await fake.prepare(cd(outside))).kind, JSON.stringify(options)).toBe('allow');
+      expect(asked, JSON.stringify(options)).toHaveLength(1);
+      // Inside the workspace, neither asks.
+      await fake.prepare(cd('a', 'c2'));
+      expect(asked, JSON.stringify(options)).toHaveLength(1);
+    }
+  });
+
+  it('⑥ allowed for the session, the same move asks no more', async () => {
+    const { fake, asked } = gated({ answer: () => 'allow-session' });
+    await fake.prepare(cd(outside, 'c1'));
+    await fake.prepare(cd(outside, 'c2'));
+    expect(asked).toHaveLength(1);
+  });
+
+  it('⑦ a subagent sent out of the workspace asks the same; inside or no cwd, not', async () => {
+    for (const tool of ['subagent', 'subagent_fork']) {
+      const { fake, asked } = gated();
+      await fake.prepare(call(tool, { prompt: 'p', cwd: outside }, root(), { callId: 'c1' }));
+      expect(asked, tool).toEqual([
+        expect.objectContaining({ tool, path: outside, changeDirectory: true }),
+      ]);
+      await fake.prepare(call(tool, { prompt: 'p', cwd: 'a' }, root(), { callId: 'c2' }));
+      await fake.prepare(call(tool, { prompt: 'p' }, root(), { callId: 'c3' }));
+      expect(asked, tool).toHaveLength(1);
+    }
   });
 });
