@@ -345,6 +345,27 @@ describe('turn spacing arithmetic (F-B9)', () => {
     // The hover strip's scope survives the swap.
     expect(terminalChatTurnClass()).toContain('group/turn');
   });
+
+  /**
+   * Decision 208 (user, 2026-11-03: 「主题不明显」): the answer is the one thing
+   * in the body ink. A step reads in the faint ink thinking uses, its tool name
+   * one rung up (design system v2 §7.4), and the body ink comes back on hover;
+   * its `⎿` lines are faint too, but a failure keeps its red.
+   */
+  it('decision 208: the terminal style draws steps below the prose, in the faint ink', () => {
+    const line = layout.terminalStepLineClass();
+    expect(line).toContain('text-foreground-faint');
+    expect(line).toContain('hover:text-foreground');
+    expect(line).not.toMatch(/(^| )text-foreground( |$)/);
+    expect(layout.terminalStepLabelClass()).toContain('text-muted-foreground');
+    expect(layout.terminalStepLabelClass()).toContain('group-hover/step:text-foreground');
+    expect(layout.terminalStepArgClass()).toBe('text-inherit');
+    expect(layout.terminalResultClass('muted')).toContain('text-foreground-faint');
+    expect(layout.terminalResultClass('bad')).toContain('text-destructive');
+    expect(layout.terminalThoughtLineClass()).toContain('text-foreground-faint');
+    // The prose sets no ink of its own: it keeps the body ink.
+    expect(terminalProseClass()).not.toMatch(/(^| )text-(foreground|muted)/);
+  });
 });
 
 /**

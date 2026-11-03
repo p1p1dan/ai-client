@@ -821,24 +821,32 @@ export function terminalProseClass(): string {
 /**
  * A step's line, `Bash(检查改动)`: inline flow, so a long description wraps
  * under itself rather than truncating, as the CLI's does.
+ *
+ * User, 2026-11-03: in the body ink the steps weighed as much as the answer
+ * (「主题不明显」), so a step reads in the faint ink thinking uses, with the
+ * tool's name one rung up (design system v2 §7.4: name in the secondary ink,
+ * argument in the faint one). Faint is about 3.2:1 on the canvas, so hovering
+ * a line brings it back to the body ink to read. The bullets keep their colours
+ * and a failure its red: those are what a scan looks for.
  */
 export function terminalStepLineClass(): string {
-  return `block w-full rounded-xs text-left font-mono text-chat-body ${CHAT_PROSE_LEADING} wrap-anywhere text-foreground hover:bg-fill-ghost-hover focus-ring`;
+  return `group/step block w-full rounded-xs text-left font-mono text-chat-body ${CHAT_PROSE_LEADING} wrap-anywhere text-foreground-faint hover:bg-fill-ghost-hover hover:text-foreground focus-ring`;
 }
 
-/** The tool's name on a step line: bold, in the body ink. */
+/** The tool's name on a step line: bold, in the secondary ink; the body ink on hover. */
 export function terminalStepLabelClass(): string {
-  return 'font-semibold text-foreground';
+  return 'font-semibold text-muted-foreground group-hover/step:text-foreground';
 }
 
-/** The step's description, between the parentheses: plain body ink, wrapping. */
+/** The step's description, between the parentheses: the line's own ink, wrapping. */
 export function terminalStepArgClass(): string {
-  return 'text-foreground';
+  return 'text-inherit';
 }
 
 /**
- * The `⎿` lines under a step: the process size and the mono stack; muted, or
- * red for a failure or refusal, or the warning ink for an unknown outcome.
+ * The `⎿` lines under a step: the process size and the mono stack; faint like
+ * the step above them, or red for a failure or refusal, or the warning ink for
+ * an unknown outcome.
  */
 export function terminalResultClass(tone: 'muted' | 'bad' | 'unknown'): string {
   const ink =
@@ -846,7 +854,7 @@ export function terminalResultClass(tone: 'muted' | 'bad' | 'unknown'): string {
       ? 'text-destructive'
       : tone === 'unknown'
         ? 'text-warning'
-        : 'text-muted-foreground';
+        : 'text-foreground-faint';
   return `flex min-w-0 gap-2 font-mono text-chat-process leading-normal ${ink}`;
 }
 

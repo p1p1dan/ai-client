@@ -692,8 +692,8 @@ function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps)
       )}
       {/* The tail words are separate spans with no spaces of their own (a
           flex gap spaces them on today's row); in this inline line their own
-          inline-flex row spaces them, in the muted ink. */}
-      <span className="ml-1.5 inline-flex min-w-0 flex-wrap items-baseline gap-x-1.5 align-baseline text-muted-foreground">
+          inline-flex row spaces them, in the line's own ink. */}
+      <span className="ml-1.5 inline-flex min-w-0 flex-wrap items-baseline gap-x-1.5 align-baseline">
         {view.verb === REVIEWING_VERB && (
           <span className={toolRowPermissionClass()}>· {t(REVIEWING_VERB)}</span>
         )}
@@ -794,7 +794,7 @@ function TerminalRunningLine({ liveToolCallId }: { liveToolCallId: string | null
       <LiveToolOutput
         toolCallId={liveToolCallId}
         compact
-        className="pl-0"
+        className="pl-0 text-foreground-faint"
         lead={
           <span aria-hidden className="shrink-0 text-foreground-faint">
             ⎿
