@@ -365,6 +365,34 @@ describe('turn spacing arithmetic (F-B9)', () => {
     expect(layout.terminalThoughtLineClass()).toContain('text-foreground-faint');
     // The prose sets no ink of its own: it keeps the body ink.
     expect(terminalProseClass()).not.toMatch(/(^| )text-(foreground|muted)/);
+    // User, 2026-11-03: the tool's name is not bold.
+    expect(layout.terminalStepLabelClass()).not.toMatch(/font-(semibold|bold|medium)/);
+  });
+
+  /**
+   * Decision 208 (user, 2026-11-03: the mono stack read 「怪怪的」 next to Claude's
+   * desktop app): measured on Windows, a mono line put its Latin, digits and
+   * spaces in Cascadia Mono and its Chinese in YaHei UI. The terminal style's
+   * words take the app's sans; mono is left to code — the mark column (a drawn
+   * glyph), a command's output under `⎿`, and inline code's own face.
+   */
+  it('decision 208: the terminal style sets its words in the app’s sans, and only code in mono', () => {
+    for (const [name, value] of [
+      ['terminalProseClass', terminalProseClass()],
+      ['terminalStepLineClass', layout.terminalStepLineClass()],
+      ['terminalStepLabelClass', layout.terminalStepLabelClass()],
+      ['terminalStepArgClass', layout.terminalStepArgClass()],
+      ['terminalThoughtLineClass', layout.terminalThoughtLineClass()],
+      ['terminalLiveLineClass', layout.terminalLiveLineClass()],
+    ] as const) {
+      expect(value, name).not.toContain('font-mono');
+    }
+    // Inline code keeps its own face and size (`CodeInline`), no longer forced
+    // to the prose's.
+    expect(terminalProseClass()).not.toContain('font-size:inherit');
+    expect(layout.terminalResultClass('muted')).toContain('font-mono');
+    expect(layout.terminalResultNoteClass()).toBe('font-sans');
+    expect(layout.terminalGutterClass()).toContain('font-mono');
   });
 });
 

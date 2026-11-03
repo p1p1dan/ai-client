@@ -132,10 +132,18 @@ describe('deriveTerminalStepResult', () => {
         bash({ outcome: 'refused', reviewDenied: true, reviewNote: '安全审查服务出错' }),
         zh
       )
-    ).toEqual({ lines: ['已拒绝 · 安全审查服务出错'], tone: 'bad', hidden: 0 });
+    ).toEqual({ lines: ['已拒绝 · 安全审查服务出错'], tone: 'bad', hidden: 0, note: true });
     expect(
       deriveTerminalStepResult(bash({ permissionVerb: PERMISSION_DENIED }), zh)?.lines
     ).toEqual([zhTranslations[PERMISSION_DENIED]]);
+  });
+
+  // Decision 208 (user, 2026-11-03): our own words under a step are set in the
+  // app's sans; a call's own output keeps the mono face.
+  it('marks our own words as a note, never a call’s output', () => {
+    expect(deriveTerminalStepResult(bash({ outcome: 'outcomeUnknown' }), zh)?.note).toBe(true);
+    expect(deriveTerminalStepResult(bash({ output }), zh)?.note).toBeUndefined();
+    expect(deriveTerminalStepResult(bash({ output, failed: true }), zh)?.note).toBeUndefined();
   });
 
   it('running, not run and stopped calls get no line; an unknown outcome gets the warning', () => {

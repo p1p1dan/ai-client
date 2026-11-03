@@ -138,6 +138,8 @@ export interface TerminalStepResult {
   tone: TerminalResultTone;
   /** Lines the preview leaves out; `… +N lines` opens the whole output. */
   hidden: number;
+  /** Words of ours (a refusal, a warning), not the call's own output: set in sans. */
+  note?: true;
 }
 
 /** The CLI's preview depth: three lines under a step. */
@@ -174,7 +176,12 @@ export function deriveTerminalStepResult(
     );
     const reason =
       view.permissionAutoNote ?? view.reviewNote ?? meaningfulLines(view.output)[0] ?? '';
-    return { lines: [reason ? `${word} · ${clipLine(reason)}` : word], tone: 'bad', hidden: 0 };
+    return {
+      lines: [reason ? `${word} · ${clipLine(reason)}` : word],
+      tone: 'bad',
+      hidden: 0,
+      note: true,
+    };
   }
   if (view.outcome === 'outcomeUnknown') {
     return {
@@ -185,6 +192,7 @@ export function deriveTerminalStepResult(
       ],
       tone: 'unknown',
       hidden: 0,
+      note: true,
     };
   }
   if (view.outcome) return null;
@@ -196,7 +204,12 @@ export function deriveTerminalStepResult(
   }
   if (view.iconKind !== 'terminal' || all.length === 0) return null;
   if (all.every((line) => SPILLED.test(line))) {
-    return { lines: [t('Large output, open the step to see it')], tone: 'muted', hidden: 0 };
+    return {
+      lines: [t('Large output, open the step to see it')],
+      tone: 'muted',
+      hidden: 0,
+      note: true,
+    };
   }
   const shown = all.slice(-TERMINAL_RESULT_LINES).map(clipLine);
   return {

@@ -69,6 +69,7 @@ import {
   stepRunPanelClass,
   stepRunSummaryClass,
   terminalResultClass,
+  terminalResultNoteClass,
   terminalStepArgClass,
   terminalStepLabelClass,
   terminalStepLineClass,
@@ -809,7 +810,7 @@ function TerminalRunningLine({ liveToolCallId }: { liveToolCallId: string | null
       <span aria-hidden className="shrink-0 text-foreground-faint">
         ⎿
       </span>
-      <span>{t('Running')}…</span>
+      <span className={terminalResultNoteClass()}>{t('Running')}…</span>
     </div>
   );
 }
@@ -831,7 +832,12 @@ function TerminalStepResult({
       <span aria-hidden className="shrink-0 text-foreground-faint">
         ⎿
       </span>
-      <div className="min-w-0 flex-1 select-text whitespace-pre-wrap wrap-anywhere">
+      <div
+        className={cn(
+          'min-w-0 flex-1 select-text whitespace-pre-wrap wrap-anywhere',
+          result.note && terminalResultNoteClass()
+        )}
+      >
         {result.lines.join('\n')}
         {/* User ruling 2026-11-03: affordances like this stay in English. */}
         {result.hidden > 0 &&

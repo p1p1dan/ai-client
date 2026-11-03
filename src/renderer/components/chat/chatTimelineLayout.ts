@@ -774,9 +774,16 @@ export function turnChangeCardClass(): string {
  * ## Decision 208: the two transcript styles (user ruling 2026-11-03)
  *
  * Terminal style is Claude Code's CLI: a bullet column, every block a blank
- * line apart, the assistant's side in the mono stack. Its rhythm keeps the
- * ladder the standard tiers keep (between turns > prompt to first block >
- * between blocks): 32 > 24 > 20, the 20 being the CLI's one blank line.
+ * line apart. Its rhythm keeps the ladder the standard tiers keep (between
+ * turns > prompt to first block > between blocks): 32 > 24 > 20, the 20 being
+ * the CLI's one blank line.
+ *
+ * Its type is the app's own sans (user, 2026-11-03: the mono stack read 「怪怪
+ * 的」 next to Claude's desktop app). Measured on Windows, a mono line set its
+ * Latin, digits and spaces in Cascadia Mono and its Chinese in YaHei UI, so
+ * every gap around a number was a mono space and the two scripts never sat
+ * together. Mono stays where the text is code: inline code, code blocks, and a
+ * command's output under `⎿`.
  *
  * Desktop style is Claude Code's desktop app: each run of steps one muted line
  * that opens to the rows. It uses the standard tiers.
@@ -804,18 +811,19 @@ export function terminalBlockClass(): string {
 
 /**
  * The bullet column: two mono cells at the body size, so `2ch` is one width in
- * every block whatever the content's own size.
+ * every block whatever the content's own size. It holds only the drawn mark.
  */
 export function terminalGutterClass(): string {
   return `w-[2ch] shrink-0 select-none font-mono text-chat-body ${CHAT_PROSE_LEADING}`;
 }
 
 /**
- * Terminal style prose: the mono stack, and inline code as coloured ink with no
- * chip (user ruling: terminal style only).
+ * Terminal style prose: the app's sans, as everywhere else, and inline code as
+ * coloured ink with no chip (user ruling: terminal style only); the code keeps
+ * its own mono face and size (`CodeInline`).
  */
 export function terminalProseClass(): string {
-  return 'min-w-0 flex-1 font-mono [&_[data-slot=code-inline]]:bg-transparent [&_[data-slot=code-inline]]:px-0 [&_[data-slot=code-inline]]:text-inline-code [&_[data-slot=code-inline]]:[font-size:inherit]';
+  return 'min-w-0 flex-1 [&_[data-slot=code-inline]]:bg-transparent [&_[data-slot=code-inline]]:px-0 [&_[data-slot=code-inline]]:text-inline-code';
 }
 
 /**
@@ -830,23 +838,33 @@ export function terminalProseClass(): string {
  * and a failure its red: those are what a scan looks for.
  */
 export function terminalStepLineClass(): string {
-  return `group/step block w-full rounded-xs text-left font-mono text-chat-body ${CHAT_PROSE_LEADING} wrap-anywhere text-foreground-faint hover:bg-fill-ghost-hover hover:text-foreground focus-ring`;
+  return `group/step block w-full rounded-xs text-left text-chat-body ${CHAT_PROSE_LEADING} wrap-anywhere text-foreground-faint hover:bg-fill-ghost-hover hover:text-foreground focus-ring`;
 }
 
-/** The tool's name on a step line: bold, in the secondary ink; the body ink on hover. */
+/**
+ * The tool's name on a step line: the secondary ink, one rung above the line,
+ * at the regular weight (user, 2026-11-03: no bold); the body ink on hover.
+ */
 export function terminalStepLabelClass(): string {
-  return 'font-semibold text-muted-foreground group-hover/step:text-foreground';
+  return 'text-muted-foreground group-hover/step:text-foreground';
 }
 
-/** The step's description, between the parentheses: the line's own ink, wrapping. */
+/**
+ * What sits between a step's parentheses: the line's own ink and face. A path
+ * or command too — set in mono (D25's rule for identifiers in sans text), it
+ * read a weight heavier than the line around it (Cascadia Mono at the code
+ * size), and the step line is one quiet line.
+ */
 export function terminalStepArgClass(): string {
   return 'text-inherit';
 }
 
 /**
- * The `⎿` lines under a step: the process size and the mono stack; faint like
- * the step above them, or red for a failure or refusal, or the warning ink for
- * an unknown outcome.
+ * The `⎿` lines under a step, at the process size; faint like the step above
+ * them, or red for a failure or refusal, or the warning ink for an unknown
+ * outcome. The row is mono, for the `⎿` and a command's output; a line that is
+ * a note rather than output (a refusal's reason, a warning, 「运行中…」) sets
+ * its words in sans (`terminalResultNoteClass`).
  */
 export function terminalResultClass(tone: 'muted' | 'bad' | 'unknown'): string {
   const ink =
@@ -858,18 +876,23 @@ export function terminalResultClass(tone: 'muted' | 'bad' | 'unknown'): string {
   return `flex min-w-0 gap-2 font-mono text-chat-process leading-normal ${ink}`;
 }
 
+/** The words of a `⎿` line that is a note, not output: the app's sans. */
+export function terminalResultNoteClass(): string {
+  return 'font-sans';
+}
+
 /** A tool group's steps in terminal style: each a block, a blank line apart. */
 export function terminalStepStackClass(): string {
   return 'flex flex-col gap-5';
 }
 
 /**
- * Terminal style thinking, `∴ 思考了 12 秒` (user ruling 2026-11-03): one dim
- * line where the thinking happened, as the CLI's transcript draws it; the whole
- * line opens to the text.
+ * Terminal style thinking, `∴ Thought for 12s` (user rulings 2026-11-03): one
+ * dim line where the thinking happened, as the CLI's transcript draws it; the
+ * whole line opens to the text.
  */
 export function terminalThoughtLineClass(): string {
-  return `block w-full rounded-xs text-left font-mono text-chat-body ${CHAT_PROSE_LEADING} italic text-foreground-faint hover:bg-fill-ghost-hover hover:text-muted-foreground focus-ring`;
+  return `block w-full rounded-xs text-left text-chat-body ${CHAT_PROSE_LEADING} italic text-foreground-faint hover:bg-fill-ghost-hover hover:text-muted-foreground focus-ring`;
 }
 
 /**
@@ -878,7 +901,7 @@ export function terminalThoughtLineClass(): string {
  * is doing in the brand ink (the 「思考中」 hint, design system v2 §1 rule 7).
  */
 export function terminalLiveLineClass(): string {
-  return `flex min-w-0 items-baseline font-mono text-chat-body ${CHAT_PROSE_LEADING} text-primary`;
+  return `flex min-w-0 items-baseline text-chat-body ${CHAT_PROSE_LEADING} text-primary`;
 }
 
 /**

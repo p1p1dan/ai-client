@@ -116,14 +116,19 @@ async function renderSession(
 }
 
 describe('decision 208: the transcript style setting', () => {
-  it('terminal: prose and steps sit in bullet blocks, in the mono stack, with no fold', async () => {
+  it('terminal: prose and steps sit in bullet blocks, in the app’s sans, with no fold', async () => {
     const { turn } = await renderSession('terminal');
     const section = turn();
     const blocks = section.querySelectorAll('[data-slot="terminal-block"]');
     // Two paragraphs and two steps.
     expect(blocks.length).toBe(4);
     expect(section.querySelectorAll('[data-shape="bullet"][data-status="success"]').length).toBe(2);
-    expect(section.querySelector('.font-mono [data-message-id]')).not.toBeNull();
+    // User, 2026-11-03: the mono stack read odd next to Claude's desktop app, so
+    // the prose and the step lines take the app's sans; only the mark column and
+    // code stay mono.
+    expect(section.querySelector('[data-message-id]')).not.toBeNull();
+    expect(section.querySelector('.font-mono [data-message-id]')).toBeNull();
+    expect(section.querySelector('[class*="group/step"].font-mono')).toBeNull();
     expect(section.textContent).toContain('Bash(List branches)');
     expect(section.querySelectorAll('details').length).toBe(0);
     expect(section.textContent).not.toContain('Final output');
