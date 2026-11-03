@@ -1,3 +1,4 @@
+import { translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import type { ToolRowView } from '../toolCard';
 import {
@@ -140,7 +141,8 @@ describe('[D208-ADJACENT] the terminal style merges adjacent calls only', () => 
     // Before the first read and after the last: lines of their own.
     expect(steps.map((step) => step.key)).toEqual(['th0', 'lookup:r1', 'th2', 't1']);
     expect(steps[1].detail?.map((detail) => detail.key)).toEqual(['r1', 'th1', 'r2']);
-    expect(steps[1].title).toBe('Thought for 3s, read 2 files');
+    // The lead stays English (user ruling 2026-11-03), set apart from the counts.
+    expect(steps[1].title).toBe('Thought for 3s · Read 2 files');
   });
 
   it('leaves the thinking unsaid in the title when nothing measured it', () => {
@@ -157,16 +159,28 @@ describe('[D208-ADJACENT] the terminal style merges adjacent calls only', () => 
   });
 });
 
+/**
+ * User ruling 2026-11-03: a thought's words are English and never translated,
+ * as the tool names are — `Thought for 12s`, as the CLI and the desktop app say.
+ */
 describe('[D208-THOUGHT] a thought row’s words', () => {
-  it('says how long it thought, 「思考中…」 while it does, and 「思考」 when unmeasured', () => {
-    expect(thoughtForText(12_400, t)).toBe('Thought for 12s');
-    expect(thoughtForText(65_000, t)).toBe('Thought for 1m 5s');
+  it('says how long it thought, `Thinking…` while it does, and `Thought` when unmeasured', () => {
+    expect(thoughtForText(12_400)).toBe('Thought for 12s');
+    expect(thoughtForText(65_000)).toBe('Thought for 1m 5s');
     // Under a second still reads one, as the CLI's `Math.max(1, …)`.
-    expect(thoughtForText(200, t)).toBe('Thought for 1s');
-    expect(thoughtForText(undefined, t)).toBeNull();
+    expect(thoughtForText(200)).toBe('Thought for 1s');
+    expect(thoughtForText(undefined)).toBeNull();
     const base = row('th', 'thinking', { verb: 'Thought' });
-    expect(thoughtWords({ ...base, thoughtMs: 3_000 }, t)).toBe('Thought for 3s');
-    expect(thoughtWords({ ...base, running: true }, t)).toBe('Thinking…');
-    expect(thoughtWords(base, t)).toBe('Thought');
+    expect(thoughtWords({ ...base, thoughtMs: 3_000 })).toBe('Thought for 3s');
+    expect(thoughtWords({ ...base, running: true })).toBe('Thinking…');
+    expect(thoughtWords(base)).toBe('Thought');
+  });
+
+  it('sets the English lead apart from counts in the reader’s language', () => {
+    const zh = (key: string, params?: Record<string, string | number>) =>
+      translate('zh', key, params);
+    expect(lookupSummary({ search: 1, read: 2, list: 0 }, false, zh, 'Thought for 3s')).toBe(
+      'Thought for 3s · 搜索了 1 处，读取了 2 个文件'
+    );
   });
 });

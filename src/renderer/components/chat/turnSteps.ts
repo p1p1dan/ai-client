@@ -28,8 +28,7 @@
  */
 
 import type { ToolGroupEntry, ToolRowView } from './toolCard';
-import { turnElapsedText } from './turnLiveHead';
-import { splitWorkedForDuration } from './turnTiming';
+import { formatWorkedForDuration } from './turnTiming';
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -73,21 +72,23 @@ export function isThoughtRow(row: ToolRowView): boolean {
   return row.iconKind === 'thinking';
 }
 
-/** 「思考了 12 秒」, or `null` when nothing measured the thinking. */
-export function thoughtForText(ms: number | null | undefined, t: Translate): string | null {
-  if (typeof ms !== 'number') return null;
-  const duration = turnElapsedText(t, splitWorkedForDuration(ms));
-  return duration ? t('Thought for {{duration}}', { duration }) : null;
+/**
+ * `Thought for 12s`, or `null` when nothing measured the thinking. English and
+ * never translated, as the tool names are (user ruling 2026-11-03): the CLI
+ * and the desktop app both word it so.
+ */
+export function thoughtForText(ms: number | null | undefined): string | null {
+  return typeof ms === 'number' ? `Thought for ${formatWorkedForDuration(ms)}` : null;
 }
 
-/** What a thought row says in either transcript style: 「思考中…」, 「思考了 12 秒」 or 「思考」. */
-export function thoughtWords(row: ToolRowView, t: Translate): string {
-  if (row.running) return `${t('Thinking')}…`;
-  return thoughtForText(row.thoughtMs, t) ?? t('Thought');
+/** What a thought row says in the timeline: `Thinking…`, `Thought for 12s`, or `Thought` unmeasured. */
+export function thoughtWords(row: ToolRowView): string {
+  if (row.running) return 'Thinking…';
+  return thoughtForText(row.thoughtMs) ?? 'Thought';
 }
 
-/** The thinking inside a merged step, as its leading clause, when all of it was measured. */
-function thoughtsLead(detail: readonly ToolRowView[], t: Translate): string | null {
+/** The thinking inside a merged step, as its lead, when all of it was measured. */
+function thoughtsLead(detail: readonly ToolRowView[]): string | null {
   const thoughts = detail.filter(isThoughtRow);
   if (thoughts.length === 0) return null;
   let total = 0;
@@ -95,13 +96,18 @@ function thoughtsLead(detail: readonly ToolRowView[], t: Translate): string | nu
     if (typeof thought.thoughtMs !== 'number') return null;
     total += thought.thoughtMs;
   }
-  return thoughtForText(total, t);
+  return thoughtForText(total);
+}
+
+/** The thinking lead before a sentence in the reader's language, set apart rather than joined. */
+export function withThoughtLead(lead: string | null | undefined, text: string): string {
+  return lead ? `${lead} · ${text}` : text;
 }
 
 /**
  * 「搜索了 2 处，读取了 5 个文件」 / 「正在搜索 2 处，读取 5 个文件…」. A `lead`
- * clause goes first, as the CLI's collapsed group says 「Thought for 3s,
- * searched for 2 patterns」.
+ * goes first, as the CLI's collapsed group says `Thought for 3s, searched for
+ * 2 patterns`; it stays English, so ` · ` sets it apart from the counts.
  */
 export function lookupSummary(
   counts: { search: number; read: number; list: number },
@@ -109,7 +115,7 @@ export function lookupSummary(
   t: Translate,
   lead?: string | null
 ): string {
-  const parts: string[] = lead ? [lead] : [];
+  const parts: string[] = [];
   const add = (count: number, kind: 'search' | 'read' | 'list') => {
     if (count <= 0) return;
     const first = parts.length === 0;
@@ -148,7 +154,7 @@ export function lookupSummary(
   add(counts.read, 'read');
   add(counts.list, 'list');
   const text = parts.join(t(', '));
-  return running ? `${text}…` : text;
+  return withThoughtLead(lead, running ? `${text}…` : text);
 }
 
 /**
@@ -166,7 +172,7 @@ function mergeLookups(
   return {
     key: `lookup:${rows[0].key}`,
     verb: '',
-    title: lookupSummary(counts, running, t, running ? null : thoughtsLead(detail, t)),
+    title: lookupSummary(counts, running, t, running ? null : thoughtsLead(detail)),
     iconKind: counts.search > 0 ? 'search' : counts.read > 0 ? 'read' : 'list',
     running,
     failed: false,
@@ -194,15 +200,15 @@ function mergeEdits(
   }
   const running = rows.some((row) => row.running);
   const noun = t(files.size === 1 ? 'file' : 'files');
-  const lead = running ? null : thoughtsLead(detail, t);
   return {
     key: `edits:${rows[0].key}`,
     verb: '',
     title: running
       ? `${t('Editing {{count}} {{noun}}', { count: files.size, noun })}…`
-      : lead
-        ? [lead, t('edited {{count}} {{noun}}', { count: files.size, noun })].join(t(', '))
-        : t('Edited {{count}} {{noun}}', { count: files.size, noun }),
+      : withThoughtLead(
+          thoughtsLead(detail),
+          t('Edited {{count}} {{noun}}', { count: files.size, noun })
+        ),
     iconKind: 'edit',
     running,
     failed: false,

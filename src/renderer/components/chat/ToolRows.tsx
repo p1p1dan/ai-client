@@ -543,7 +543,11 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
   // Decision 208: in the timeline, the tool's own English name — for a row that
   // names a tool. A settled permission card's row leads with the DECISION
   // (「已允许」 / 「已拒绝」) and names no tool of its own; it keeps that word.
-  const englishLabel = useContext(EnglishToolLabelsContext) && Boolean(view.toolName);
+  const inTimeline = useContext(EnglishToolLabelsContext);
+  const englishLabel = inTimeline && Boolean(view.toolName);
+  // User ruling 2026-11-03: a thought reads in English there too, its time in
+  // the words (`Thought for 12s`), as on the run line above it.
+  const englishThought = inTimeline && isThoughtRow(view);
   // The dim rung of the 2026-09-18 reading ladder (see
   // `chatTimelineLayout.ts`). It used to be `text-muted-foreground`, which is
   // the same tier the work-group head above these rows now uses — so the head
@@ -583,8 +587,10 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
         </span>
       ) : (
         <>
-          <span className={verbClass}>{englishLabel ? stepLabel(view) : t(view.verb)}</span>
-          {view.argRef ? (
+          <span className={verbClass}>
+            {englishThought ? thoughtWords(view) : englishLabel ? stepLabel(view) : t(view.verb)}
+          </span>
+          {englishThought ? null : view.argRef ? (
             <RefToolRowArg view={view} argRef={view.argRef} sessionId={sessionId} />
           ) : (
             <ToolRowArg view={view} onOpenFile={onOpenFile} />
@@ -747,14 +753,14 @@ function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps)
 }
 
 /**
- * Decision 208 (user ruling 2026-11-03): thinking where it happened, as the
- * CLI's transcript draws it — a dim `∴` and 「思考了 12 秒」 (「思考中…」 while
- * it streams). The whole line opens to the text; it starts closed, as every
- * thought has since 2026-09-23.
+ * Decision 208 (user rulings 2026-11-03): thinking where it happened, as the
+ * CLI's transcript draws it — a dim `∴` and `Thought for 12s` (`Thinking…`
+ * while it streams), in English like the tool names. The whole line opens to
+ * the model's own text, shown as written; it starts closed, as every thought
+ * has since 2026-09-23.
  */
 function TerminalThoughtRow({ view, sessionId }: { view: ToolRowView; sessionId?: string }) {
-  const { t } = useI18n();
-  const words = thoughtWords(view, t);
+  const words = thoughtWords(view);
   return (
     <TerminalBlock bullet="thought">
       {view.expandable ? (
@@ -938,7 +944,7 @@ function DesktopStepRun({
       : null;
 
   // Decision 208 (user ruling 2026-11-03): a run of nothing but thinking is the
-  // desktop app's 「思考了 N 秒 ›」, and it opens to the text itself.
+  // desktop app's `Thought for Ns ›`, and it opens to the text itself.
   const thoughtText = summary.thoughtOnly
     ? run.rows
         .map((row) => row.output ?? '')
@@ -951,7 +957,7 @@ function DesktopStepRun({
     label = (
       <span className="min-w-0 truncate text-shimmer">
         {isThoughtRow(summary.running) ? (
-          `${t('Thinking')}…`
+          thoughtWords(summary.running)
         ) : (
           <>
             {stepLabel(summary.running)}

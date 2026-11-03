@@ -11,7 +11,7 @@
 
 import { isRefusedStep, isSpecialStepRow, stepLabel } from './stepPresentation';
 import type { ToolRowView } from './toolCard';
-import { isThoughtRow, thoughtForText } from './turnSteps';
+import { isThoughtRow, thoughtForText, withThoughtLead } from './turnSteps';
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -66,7 +66,7 @@ function flattenSteps(rows: readonly ToolRowView[]): ToolRowView[] {
 
 export interface StepRunSummary {
   /**
-   * 「思考了 4 秒，运行了 3 条命令，读取了 2 个文件」; for one call, its own
+   * 「Thought for 4s · 运行了 3 条命令，读取了 2 个文件」; for one call, its own
    * label and description instead.
    */
   text: string;
@@ -84,22 +84,19 @@ export interface StepRunSummary {
 }
 
 /**
- * The run's thinking as its leading clause, as the CLI's collapsed group says
- * 「Thought for 4s, read 2 files」: only when all of it was measured, except a
- * run of nothing but thinking, which still says 「思考」.
+ * The run's thinking as its lead, as the CLI's collapsed group says `Thought
+ * for 4s, read 2 files` — in English, like the tool names (user ruling
+ * 2026-11-03). Only when all of it was measured, except a run of nothing but
+ * thinking, which still says `Thought`.
  */
-function thoughtsClause(
-  thoughts: readonly ToolRowView[],
-  alone: boolean,
-  t: Translate
-): string | null {
+function thoughtsClause(thoughts: readonly ToolRowView[], alone: boolean): string | null {
   if (thoughts.length === 0) return null;
   let total = 0;
   for (const thought of thoughts) {
-    if (typeof thought.thoughtMs !== 'number') return alone ? t('Thought') : null;
+    if (typeof thought.thoughtMs !== 'number') return alone ? 'Thought' : null;
     total += thought.thoughtMs;
   }
-  return thoughtForText(total, t) ?? (alone ? t('Thought') : null);
+  return thoughtForText(total) ?? (alone ? 'Thought' : null);
 }
 
 type Clause = 'command' | 'read' | 'search' | 'list' | 'edit' | 'tool';
@@ -173,8 +170,7 @@ export function summarizeStepRun(rows: readonly ToolRowView[], t: Translate): St
   }
   counts.edit = editedFiles.size;
 
-  const lead = thoughtsClause(thoughts, calls.length === 0, t);
-  const parts: string[] = lead ? [lead] : [];
+  const parts: string[] = [];
   for (const clause of CLAUSE_ORDER) {
     const count = counts[clause];
     if (count <= 0) continue;
@@ -182,9 +178,11 @@ export function summarizeStepRun(rows: readonly ToolRowView[], t: Translate): St
     const [one, many] = CLAUSE_NOUNS[clause];
     parts.push(t(parts.length === 0 ? first : later, { count, noun: t(count === 1 ? one : many) }));
   }
+  const countsText = parts.join(t(', '));
+  const lead = thoughtsClause(thoughts, calls.length === 0);
 
   const summary: StepRunSummary = {
-    text: parts.join(t(', ')),
+    text: countsText ? withThoughtLead(lead, countsText) : (lead ?? ''),
     refused: calls.filter((call) => !call.running && isRefusedStep(call)).length,
     failed: calls.filter(
       (call) =>

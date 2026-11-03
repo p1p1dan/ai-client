@@ -202,7 +202,9 @@ describe('decision 208: terminal style thinking and paths', () => {
     const [thought, read] = await renderEntries();
     expect(thought.querySelector('[data-slot="terminal-thought-mark"]')).not.toBeNull();
     expect(thought.querySelector('[data-shape="bullet"]')).toBeNull();
-    expect(thought.textContent).toContain(zh('Thought for {{duration}}', { duration: '12 秒' }));
+    // English, like the tool names (user ruling 2026-11-03).
+    expect(thought.textContent).toContain('Thought for 12s');
+    expect(thought.textContent).not.toContain(zh('Thought'));
     expect(container.textContent).not.toContain('先看入口文件');
     // The step after it keeps its bullet.
     expect(read.querySelector('[data-shape="bullet"]')).not.toBeNull();

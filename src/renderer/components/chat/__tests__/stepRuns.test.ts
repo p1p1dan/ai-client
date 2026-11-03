@@ -117,8 +117,9 @@ describe('summarizeStepRun', () => {
 /**
  * Decision 208 (user ruling 2026-11-03): thinking sits in its run, where it
  * happened. The run says it first, as the CLI's collapsed group does
- * (「Thought for 4s, read 2 files」); a run of only thinking is the desktop
- * app's 「思考了 N 秒 ›」.
+ * (`Thought for 4s, read 2 files`); a run of only thinking is the desktop
+ * app's `Thought for Ns ›`. The thinking's words stay English (user ruling
+ * 2026-11-03), set apart from the counts by ` · `.
  */
 describe('summarizeStepRun with thinking', () => {
   const thought = (fields: Partial<ToolRowView> = {}) =>
@@ -129,7 +130,7 @@ describe('summarizeStepRun with thinking', () => {
       [thought({ thoughtMs: 3_000 }), bash(), thought({ thoughtMs: 1_000 }), read('a.ts')],
       zh
     );
-    expect(summary.text).toBe('思考了 4 秒，运行了 1 条命令，读取了 1 个文件');
+    expect(summary.text).toBe('Thought for 4s · 运行了 1 条命令，读取了 1 个文件');
     expect(summary.thoughtOnly).toBeUndefined();
     expect(summary.single).toBeUndefined();
   });
@@ -140,9 +141,9 @@ describe('summarizeStepRun with thinking', () => {
 
   it('a run of only thinking says so, measured or not', () => {
     const measured = summarizeStepRun([thought({ thoughtMs: 5_000 })], zh);
-    expect(measured.text).toBe('思考了 5 秒');
+    expect(measured.text).toBe('Thought for 5s');
     expect(measured.thoughtOnly).toBe(true);
-    expect(summarizeStepRun([thought()], zh).text).toBe('思考');
+    expect(summarizeStepRun([thought()], zh).text).toBe('Thought');
     expect(summarizeStepRun([thought()], englishTranslate).text).toBe('Thought');
   });
 

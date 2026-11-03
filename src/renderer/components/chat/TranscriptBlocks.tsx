@@ -16,8 +16,9 @@ export const TranscriptStyleContext = createContext<ChatTranscriptStyle | null>(
  * Decision 208 (user ruling 2026-11-03): inside the timeline a tool row leads
  * with the tool's own English name (`stepLabel`), never a translated verb —
  * also the rows a desktop run opens to and a settled permission card's row, so
- * one view never says `Bash` in one line and 「终端」 in the next. `false`
- * outside the timeline keeps today's words there.
+ * one view never says `Bash` in one line and 「终端」 in the next. A thought row
+ * says `Thought for 12s` there for the same reason. `false` outside the
+ * timeline keeps today's words there.
  */
 export const EnglishToolLabelsContext = createContext(false);
 

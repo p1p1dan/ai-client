@@ -13,6 +13,7 @@ import type { ChatBlock } from '@/stores/chatSessions';
 import { useToolExpansionStore } from '@/stores/toolExpansion';
 import { ToolGroup } from '../ToolRows';
 import {
+  EnglishToolLabelsContext,
   type StepRunDisposition,
   StepRunDispositionContext,
   TranscriptStyleContext,
@@ -150,11 +151,11 @@ describe('decision 208: desktop style runs', () => {
 /**
  * Decision 208 (user ruling 2026-11-03): thinking sits in its run, where it
  * happened — said first on the run's line, as the CLI's collapsed group says
- * it, and a stretch of only thinking is the desktop app's 「思考了 N 秒 ›」,
+ * it, and a stretch of only thinking is the desktop app's `Thought for Ns ›`,
  * opening straight to the text.
  */
 describe('decision 208: desktop style thinking', () => {
-  async function renderThinking(withCall: boolean) {
+  async function renderThinking(withCall: boolean, inTimeline = false) {
     const entries = [
       {
         kind: 'thinking' as const,
@@ -175,9 +176,13 @@ describe('decision 208: desktop style thinking', () => {
     await act(async () =>
       root.render(
         createElement(
-          TranscriptStyleContext.Provider,
-          { value: 'desktop' },
-          createElement(ToolGroup, { rows, sessionId: 's' })
+          EnglishToolLabelsContext.Provider,
+          { value: inTimeline },
+          createElement(
+            TranscriptStyleContext.Provider,
+            { value: 'desktop' },
+            createElement(ToolGroup, { rows, sessionId: 's' })
+          )
         )
       )
     );
@@ -190,13 +195,23 @@ describe('decision 208: desktop style thinking', () => {
 
   it('a run says its thinking first, and opens to the thought in place', async () => {
     const run = await renderThinking(true);
-    expect(run.querySelector('summary')?.textContent).toContain('思考了 5 秒，运行了 1 条命令');
+    expect(run.querySelector('summary')?.textContent).toContain('Thought for 5s · 运行了 1 条命令');
     expect(run.open).toBe(false);
   });
 
-  it('a stretch of only thinking is 「思考了 N 秒 ›」 and opens to the text itself', async () => {
+  it('in the timeline the thought row inside the run reads as the run line does', async () => {
+    const run = await renderThinking(true, true);
+    const rows = [...run.querySelectorAll<HTMLElement>('.group\\/row')].map(
+      (row) => row.textContent ?? ''
+    );
+    expect(rows[0]).toContain('Thought for 5s');
+    expect(rows[0]).not.toContain(zh('Thought'));
+    expect(rows[1]).toContain('Bash');
+  });
+
+  it('a stretch of only thinking is `Thought for Ns ›` and opens to the text itself', async () => {
     const run = await renderThinking(false);
-    expect(run.querySelector('summary')?.textContent).toContain('思考了 5 秒');
+    expect(run.querySelector('summary')?.textContent).toContain('Thought for 5s');
     const body = run.querySelector('[data-slot="thinking-text"]');
     expect(body?.textContent).toContain('先确认分支');
     // No row inside to open a second time.
