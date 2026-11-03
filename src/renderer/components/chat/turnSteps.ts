@@ -163,15 +163,21 @@ const RESULT_MAX_CHARS = 140;
 /** Engine placeholders that say nothing about the result. */
 const NO_OUTPUT = /^\((no output|empty)\)$/i;
 /** DSH's note for an output it spilled to a temp file: not shown, it names a scratch path. */
-const SPILLED = /^\(Omitted \d+ bytes\b/;
+export const SPILLED = /^\(Omitted \d+ bytes\b/;
+/**
+ * Claude Code's own note after a command that left the working directory: it
+ * says nothing about the result, yet it is the LAST line of such an output, so
+ * a preview of the end showed only it (the 2026-11-03 field screenshots).
+ */
+const CWD_RESET = /^Shell cwd was reset to /;
 
-function meaningfulLines(text: string | undefined): string[] {
+export function meaningfulLines(text: string | undefined): string[] {
   if (!text) return [];
   return text
     .replace(ANSI, '')
     .split(/\r\n|\n|\r/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !NO_OUTPUT.test(line));
+    .filter((line) => line.length > 0 && !NO_OUTPUT.test(line) && !CWD_RESET.test(line));
 }
 
 function clip(line: string): string {

@@ -35,6 +35,32 @@ describe('StatusIcon', () => {
     expect(labelled).toContain('aria-label="Failed"');
     expect(labelled).toContain('role="img"');
   });
+
+  describe('decision 208: the bullet shape', () => {
+    const bullet = (status: RunStatus) =>
+      renderToStaticMarkup(h(StatusIcon, { shape: 'bullet', status }));
+
+    it.each(statuses)('draws "%s" as a pseudo-element dot with no text of its own', (status) => {
+      const html = bullet(status);
+      expect(html).toContain(`data-status="${status}"`);
+      expect(html).toContain('data-shape="bullet"');
+      // The quotes come out entity-escaped from the static renderer.
+      expect(html).toMatch(/before:content-\[(?:'|&#x27;)●(?:'|&#x27;)\]/);
+      // Never a glyph inside: copied and searched text must not pick it up.
+      expect(html).toMatch(/<span[^>]*><\/span>$/);
+      expect(html).toContain('aria-hidden="true"');
+    });
+
+    it('colours: success green, failed red, running neutral and blinking', () => {
+      expect(bullet('success')).toContain('text-success');
+      expect(bullet('failed')).toContain('text-destructive');
+      const running = bullet('running');
+      expect(running).toContain('text-foreground-faint');
+      expect(running).toContain('animate-blink');
+      expect(running).toContain('motion-reduce:animate-none');
+      expect(running).not.toMatch(/text-(info|status-running)/);
+    });
+  });
 });
 
 describe('DockCard', () => {

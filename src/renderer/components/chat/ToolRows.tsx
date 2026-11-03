@@ -66,6 +66,13 @@ import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
 import { CopyIconButton } from './CopyIconButton';
 import { CopyPatchButton, useSessionWorkspacePath } from './CopyPatchButton';
 import {
+  stepRunPanelClass,
+  stepRunSummaryClass,
+  terminalResultClass,
+  terminalStepArgClass,
+  terminalStepLabelClass,
+  terminalStepLineClass,
+  terminalStepStackClass,
   thoughtBodyMaxHeightClass,
   toolRowIconClass,
   turnProcessToneClass,
@@ -89,14 +96,31 @@ import {
   type ReviewFinding,
   type ReviewFindings,
 } from './reviewFindings';
+import {
+  deriveTerminalStepResult,
+  isDelegationRow,
+  isSpecialStepRow,
+  type SuppressedTails,
+  stepBulletStatus,
+  stepLabel,
+  type TerminalStepResult as TerminalStepResultView,
+  terminalSuppressedTails,
+} from './stepPresentation';
+import { partitionStepRuns, type StepRun, summarizeStepRun } from './stepRuns';
 import { deriveSubagentPanelRows, subagentHeaderLiveness } from './subagentActivityModel';
 import { TodoList } from './TodoCard';
+import {
+  EnglishToolLabelsContext,
+  StepRunDispositionContext,
+  TerminalBlock,
+  TranscriptStyleContext,
+} from './TranscriptBlocks';
 import { canMoveToBackground } from './toolBackground';
 import {
   composeRefArg,
   type FileLinkTarget,
-  isDelegationTool,
   pathInCallDirectory,
+  REVIEWING_VERB,
   runningElapsedMs,
   shortPath,
   TOOL_RUN_OUTCOME_LABEL,
@@ -112,6 +136,7 @@ import type { ToolDiff } from './toolDiff';
 import { buildDiffView, diffHasLineNumbers, splitDiffItems } from './toolDiffView';
 import { stoppedToolOutput } from './toolLiveOutputModel';
 import { kilobytesLabel } from './toolOutputHead';
+import { turnWorkGroupOpen } from './turnProcessFold';
 import type { StepResultLine, StepRowView } from './turnSteps';
 import { formatWorkedForDuration } from './turnTiming';
 
@@ -162,12 +187,39 @@ interface ToolGroupProps {
 /** Renders one `.ct` group — the A07 unit that wraps a contiguous tool/thinking stream. */
 export function ToolGroup({ rows, onOpenFile, sessionId, showDiff }: ToolGroupProps) {
   const inherited = useContext(ToolDiffVisibility);
+  // Decision 208: the reader's transcript style; `null` outside the timeline,
+  // which keeps today's rows (dialogs, a permission card's row, an open run).
+  const style = useContext(TranscriptStyleContext);
   if (rows.length === 0) return null;
-  return (
+  let body: ReactNode;
+  if (style === 'terminal') {
+    body = (
+      <div className={terminalStepStackClass()}>
+        {rows.map((row) =>
+          isSpecialStepRow(row) ? (
+            // Findings, a delegation's lane, a todo list: their own drawing, in
+            // the text column, with no bullet.
+            <TerminalBlock key={row.key} bullet={null}>
+              <ToolRow view={row} depth={0} onOpenFile={onOpenFile} sessionId={sessionId} />
+            </TerminalBlock>
+          ) : (
+            <TerminalStepRow
+              key={row.key}
+              view={row}
+              onOpenFile={onOpenFile}
+              sessionId={sessionId}
+            />
+          )
+        )}
+      </div>
+    );
+  } else if (style === 'desktop') {
+    body = <DesktopStepGroup rows={rows} onOpenFile={onOpenFile} sessionId={sessionId} />;
+  } else {
     // T-30 P-17: no own margin — the parent turn body owns the item-to-item
     // gap (`turnBodyClass()`); a margin here would stack on top of it (and on
     // ReadingColumn's turn-to-turn space-y-5) instead of replacing it.
-    <ToolDiffVisibility.Provider value={showDiff ?? inherited}>
+    body = (
       <div className="flex flex-col gap-1">
         {rows.map((row) => (
           <ToolRow
@@ -179,7 +231,10 @@ export function ToolGroup({ rows, onOpenFile, sessionId, showDiff }: ToolGroupPr
           />
         ))}
       </div>
-    </ToolDiffVisibility.Provider>
+    );
+  }
+  return (
+    <ToolDiffVisibility.Provider value={showDiff ?? inherited}>{body}</ToolDiffVisibility.Provider>
   );
 }
 
@@ -267,7 +322,7 @@ export function ToolRow(props: ToolRowProps) {
       />
     );
   }
-  if (view.toolName && isDelegationTool(view.toolName) && view.toolCallId) {
+  if (isDelegationRow(view) && view.toolCallId) {
     // dsh-rebase P1-7b: `data-tool-call-id` is how the subagents window's
     // 「定位」 finds this row (`locateToolRow`), which marks it for a moment.
     return (
@@ -297,10 +352,13 @@ function RefToolRowArg({
   view,
   argRef,
   sessionId,
+  className,
 }: {
   view: ToolRowView;
   argRef: ToolArgRef;
   sessionId?: string;
+  /** Replaces the row's own argument class (the terminal style's, decision 208). */
+  className?: string;
 }) {
   const panelLabel = useSessionPanelsStore((state) => {
     if (!sessionId) return undefined;
@@ -318,14 +376,18 @@ function RefToolRowArg({
   const composed = composeRefArg(view, argRef, panelLabel ?? laneLabel);
   if (!composed.text) return null;
   return (
-    <span className={toolRowArgClass({ failed: view.failed, argKind: composed.kind })}>
+    <span className={className ?? toolRowArgClass({ failed: view.failed, argKind: composed.kind })}>
       {composed.text}
     </span>
   );
 }
 
-function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) {
-  const { t } = useI18n();
+/**
+ * What every drawing of a call needs before it draws: the output a Stop kept,
+ * and whether the call can open or move to the background. Shared by today's
+ * row and the terminal style's step (decision 208).
+ */
+function useToolRowState(derived: ToolRowView, sessionId: string | undefined) {
   // P1-7e (problem 20): a call Stop cut short shows what it printed before the
   // stop, while this window still holds its last live tail.
   const kept = useToolLiveOutputStore((state) =>
@@ -345,60 +407,26 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
   const showDiff = useContext(ToolDiffVisibility);
   const diffOnly = Boolean(view.diff) && !view.body && !view.input && !view.todos;
   const expandable = view.expandable && (showDiff || !diffOnly);
-  // The dim rung of the 2026-09-18 reading ladder (see
-  // `chatTimelineLayout.ts`). It used to be `text-muted-foreground`, which is
-  // the same tier the work-group head above these rows now uses — so the head
-  // and the rows it summarises were indistinguishable, and the "importance is
-  // brightness" rule the user asked for had only two steps instead of three.
-  // The row ARG has been on this token since T-05; this aligns the verb with
-  // it, which is also what the reference client does.
-  //
-  // T104: the whole row moved from `text-chat-body` to `text-chat-process`.
-  // Tool rows used to share the body tier with the prose they interrupt, which
-  // is exactly the "process is not distinguishable from content" complaint
-  // (the head/arg tier split above only separated them by brightness). This
-  // token is runtime-configurable, so the row follows the reader's process
-  // size setting.
-  //
-  // Design system v2 §7.4: frameless, one line; the tool name is the muted ink
-  // at 500, everything after it (argument, counts, clock) the faint ink. A
-  // failed row no longer turns red as a whole (§6) -- see `ToolRowIcon` and
-  // `failedReasonClass`.
-  const rowClass = cn(
-    'group/row flex w-full items-baseline gap-1.5 rounded-xs text-left text-chat-process leading-normal focus-ring',
-    turnProcessToneClass()
-  );
-  const verbClass = 'shrink-0 font-medium text-muted-foreground group-hover/row:text-foreground';
+  return { view, backgroundable, expandable };
+}
 
-  const rowContent = (
+/**
+ * The words after a row's verb and argument: how the call ended, where its
+ * work went, what it found, its clock and its line counts. Every slot keeps its
+ * `data-slot`; the terminal style leaves out the ones its `⎿` line already says
+ * (decision 208).
+ */
+function ToolRowTails({ view, omit }: { view: ToolRowView; omit?: SuppressedTails }) {
+  const { t } = useI18n();
+  return (
     <>
-      {/* Decision 034: the aggregate row is gone, so every row words itself
-          from its own closed-vocabulary verb — there is no count branch left. */}
-      <ToolRowIcon view={view} />
-      {/* dsh-rebase decision 131: a plugin's own title for the call says what
-          the verb and the argument would, in the plugin's words (never
-          translated, decision 073 rule 1). */}
-      {view.title !== undefined ? (
-        <span data-slot="tool-row-title" className={toolRowTitleClass(view)}>
-          {view.title}
-        </span>
-      ) : (
-        <>
-          <span className={verbClass}>{t(view.verb)}</span>
-          {view.argRef ? (
-            <RefToolRowArg view={view} argRef={view.argRef} sessionId={sessionId} />
-          ) : (
-            <ToolRowArg view={view} onOpenFile={onOpenFile} />
-          )}
-        </>
-      )}
-      <ToolRowPermission view={view} />
+      {!omit?.permission && <ToolRowPermission view={view} />}
       {/* N5: a call that never did its work says so in words — 「已拒绝」 for a
           runtime refusal, 「未执行」 for one the run ended before. Same slot and
           class as the permission word, since both say how the call ended.
           dsh-rebase P1-4d1: a call refused by the card the user answered
           already says so in its permission word, and says it once. */}
-      {view.outcome && !(view.outcome === 'refused' && view.permissionVerb) && (
+      {view.outcome && !omit?.outcome && !(view.outcome === 'refused' && view.permissionVerb) && (
         <span
           data-slot="tool-row-outcome"
           className={cn(toolRowPermissionClass(), failedReasonClass(view))}
@@ -407,7 +435,7 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
         </span>
       )}
       {/* Decision 192: what the review model did with the call, already worded. */}
-      {view.reviewNote && (
+      {view.reviewNote && !omit?.review && (
         <span data-slot="tool-row-review" className={toolRowPermissionNoteClass()}>
           · {view.reviewNote}
         </span>
@@ -504,6 +532,65 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
       )}
     </>
   );
+}
+
+function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) {
+  const { t } = useI18n();
+  const { view, backgroundable, expandable } = useToolRowState(derived, sessionId);
+  // Decision 208: in the timeline, the tool's own English name — for a row that
+  // names a tool. A settled permission card's row leads with the DECISION
+  // (「已允许」 / 「已拒绝」) and names no tool of its own; it keeps that word.
+  const englishLabel = useContext(EnglishToolLabelsContext) && Boolean(view.toolName);
+  // The dim rung of the 2026-09-18 reading ladder (see
+  // `chatTimelineLayout.ts`). It used to be `text-muted-foreground`, which is
+  // the same tier the work-group head above these rows now uses — so the head
+  // and the rows it summarises were indistinguishable, and the "importance is
+  // brightness" rule the user asked for had only two steps instead of three.
+  // The row ARG has been on this token since T-05; this aligns the verb with
+  // it, which is also what the reference client does.
+  //
+  // T104: the whole row moved from `text-chat-body` to `text-chat-process`.
+  // Tool rows used to share the body tier with the prose they interrupt, which
+  // is exactly the "process is not distinguishable from content" complaint
+  // (the head/arg tier split above only separated them by brightness). This
+  // token is runtime-configurable, so the row follows the reader's process
+  // size setting.
+  //
+  // Design system v2 §7.4: frameless, one line; the tool name is the muted ink
+  // at 500, everything after it (argument, counts, clock) the faint ink. A
+  // failed row no longer turns red as a whole (§6) -- see `ToolRowIcon` and
+  // `failedReasonClass`.
+  const rowClass = cn(
+    'group/row flex w-full items-baseline gap-1.5 rounded-xs text-left text-chat-process leading-normal focus-ring',
+    turnProcessToneClass()
+  );
+  const verbClass = 'shrink-0 font-medium text-muted-foreground group-hover/row:text-foreground';
+
+  const rowContent = (
+    <>
+      {/* Decision 034: the aggregate row is gone, so every row words itself
+          from its own closed-vocabulary verb — there is no count branch left. */}
+      <ToolRowIcon view={view} />
+      {/* dsh-rebase decision 131: a plugin's own title for the call says what
+          the verb and the argument would, in the plugin's words (never
+          translated, decision 073 rule 1). */}
+      {view.title !== undefined ? (
+        <span data-slot="tool-row-title" className={toolRowTitleClass(view)}>
+          {view.title}
+        </span>
+      ) : (
+        <>
+          <span className={verbClass}>{englishLabel ? stepLabel(view) : t(view.verb)}</span>
+          {view.argRef ? (
+            <RefToolRowArg view={view} argRef={view.argRef} sessionId={sessionId} />
+          ) : (
+            <ToolRowArg view={view} onOpenFile={onOpenFile} />
+          )}
+        </>
+      )}
+      <ToolRowTails view={view} />
+    </>
+  );
 
   // 2026-09-23 (user decision: thoughts start collapsed and a click opens the
   // whole text): a thought row is an ordinary collapsible row again — the
@@ -549,6 +636,349 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
     <div className="flex min-w-0 items-start gap-1">
       <div className="min-w-0 flex-1">{row}</div>
       <MoveToBackgroundButton sessionId={sessionId} toolCallId={view.toolCallId} />
+    </div>
+  );
+}
+
+/**
+ * Decision 208, terminal style: one step as Claude Code's CLI draws it — a
+ * bullet coloured by how the call went, the tool's own English name with what
+ * it was for in parentheses, the call's tail words, then up to three `⎿` lines
+ * of what came of it. A click, or `… +N lines`, opens today's body (the whole
+ * output, the input), as on any row.
+ */
+function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps) {
+  const { t } = useI18n();
+  const { view, backgroundable, expandable } = useToolRowState(derived, sessionId);
+  const result = useMemo(() => deriveTerminalStepResult(view, t), [view, t]);
+  const omit = terminalSuppressedTails(view);
+  const hasArg = view.title === undefined && Boolean(view.arg || view.argRef);
+
+  const line = (
+    <>
+      {/* User ruling 2026-11-03: the tool's own name, never translated. */}
+      <span className={terminalStepLabelClass()}>{stepLabel(view)}</span>
+      {hasArg && (
+        <>
+          (
+          {view.argRef ? (
+            <RefToolRowArg
+              view={view}
+              argRef={view.argRef}
+              sessionId={sessionId}
+              className={terminalStepArgClass()}
+            />
+          ) : (
+            <ToolRowArg view={view} onOpenFile={onOpenFile} className={terminalStepArgClass()} />
+          )}
+          )
+        </>
+      )}
+      {/* The tail words are separate spans with no spaces of their own (a
+          flex gap spaces them on today's row); in this inline line their own
+          inline-flex row spaces them, in the muted ink. */}
+      <span className="ml-1.5 inline-flex min-w-0 flex-wrap items-baseline gap-x-1.5 align-baseline text-muted-foreground">
+        {view.verb === REVIEWING_VERB && (
+          <span className={toolRowPermissionClass()}>· {t(REVIEWING_VERB)}</span>
+        )}
+        <ToolRowTails view={view} omit={omit} />
+      </span>
+    </>
+  );
+
+  const liveTail =
+    view.running && view.iconKind === 'terminal' && view.toolCallId ? view.toolCallId : null;
+  const after = (open: boolean, setOpen?: (next: boolean) => void) => {
+    // Open, the body shows everything the preview would.
+    if (open) return null;
+    return (
+      <>
+        {result && (
+          <TerminalStepResult
+            result={result}
+            onShowAll={expandable && setOpen ? () => setOpen(true) : undefined}
+          />
+        )}
+        {view.running && <TerminalRunningLine liveToolCallId={liveTail} />}
+      </>
+    );
+  };
+
+  const body = !expandable ? (
+    <div>
+      <div className={terminalStepLineClass()}>{line}</div>
+      {after(false)}
+    </div>
+  ) : (
+    <ToolRowCollapsible
+      key={view.running ? 'live' : 'settled'}
+      view={view}
+      rowClass={terminalStepLineClass()}
+      onOpenFile={onOpenFile}
+      sessionId={sessionId}
+      after={after}
+    >
+      {line}
+    </ToolRowCollapsible>
+  );
+
+  return (
+    <TerminalBlock bullet={stepBulletStatus(view)}>
+      {backgroundable && sessionId && view.toolCallId ? (
+        <div className="flex min-w-0 items-start gap-1">
+          <div className="min-w-0 flex-1">{body}</div>
+          <MoveToBackgroundButton sessionId={sessionId} toolCallId={view.toolCallId} />
+        </div>
+      ) : (
+        body
+      )}
+    </TerminalBlock>
+  );
+}
+
+/**
+ * Decision 208: what a step still running says under it — the command's live
+ * last lines once they arrive (DSH sends them), 「⎿ 运行中…」 until then, as the
+ * CLI's `Running…` (the Claude engine sends none, so that is all it shows).
+ */
+function TerminalRunningLine({ liveToolCallId }: { liveToolCallId: string | null }) {
+  const { t } = useI18n();
+  const hasTail = useToolLiveOutputStore((state) =>
+    liveToolCallId ? Boolean(state.byCall[liveToolCallId]?.text) : false
+  );
+  if (liveToolCallId && hasTail) {
+    return (
+      <LiveToolOutput
+        toolCallId={liveToolCallId}
+        compact
+        className="pl-0"
+        lead={
+          <span aria-hidden className="shrink-0 text-foreground-faint">
+            ⎿
+          </span>
+        }
+        leadClassName={terminalResultClass('muted')}
+      />
+    );
+  }
+  return (
+    <div data-slot="terminal-step-running" className={terminalResultClass('muted')}>
+      <span aria-hidden className="shrink-0 text-foreground-faint">
+        ⎿
+      </span>
+      <span>{t('Running')}…</span>
+    </div>
+  );
+}
+
+/** Decision 208: `⎿` and up to three lines of what came of a step, then `… +N lines`. */
+function TerminalStepResult({
+  result,
+  onShowAll,
+}: {
+  result: TerminalStepResultView;
+  onShowAll?: () => void;
+}) {
+  return (
+    <div
+      data-slot="terminal-step-result"
+      data-tone={result.tone}
+      className={terminalResultClass(result.tone)}
+    >
+      <span aria-hidden className="shrink-0 text-foreground-faint">
+        ⎿
+      </span>
+      <div className="min-w-0 flex-1 select-text whitespace-pre-wrap wrap-anywhere">
+        {result.lines.join('\n')}
+        {/* User ruling 2026-11-03: affordances like this stay in English. */}
+        {result.hidden > 0 &&
+          (onShowAll ? (
+            <button
+              type="button"
+              className="block cursor-pointer rounded-xs text-left text-muted-foreground hover:text-foreground hover:underline focus-ring"
+              onClick={onShowAll}
+            >
+              … +{result.hidden} lines
+            </button>
+          ) : (
+            <span className="block text-muted-foreground">… +{result.hidden} lines</span>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Decision 208, desktop style: a tool group as runs, each one muted line that
+ * opens to today's rows. A special row keeps its own drawing between runs.
+ */
+function DesktopStepGroup({
+  rows,
+  onOpenFile,
+  sessionId,
+}: {
+  rows: ToolRowView[];
+  onOpenFile?: (target: FileLinkTarget) => void;
+  sessionId?: string;
+}) {
+  const entries = useMemo(() => partitionStepRuns(rows), [rows]);
+  return (
+    <div className="flex flex-col gap-2">
+      {entries.map((entry) =>
+        entry.kind === 'special' ? (
+          <ToolRow
+            key={entry.row.key}
+            view={entry.row}
+            depth={0}
+            onOpenFile={onOpenFile}
+            sessionId={sessionId}
+          />
+        ) : (
+          <DesktopStepRun
+            key={entry.key}
+            run={entry}
+            onOpenFile={onOpenFile}
+            sessionId={sessionId}
+          />
+        )
+      )}
+    </div>
+  );
+}
+
+/**
+ * One run of the desktop style: 「运行了 3 条命令，读取了 2 个文件 ›」, or while
+ * a call works, that call's own words under a passing light.
+ *
+ * A native `<details>` whose children stay mounted, so chat search and the
+ * subagents window's 「定位」 (both open the `details` around a target) reach
+ * the rows inside a closed run. Open state follows `turnWorkGroupOpen`: an
+ * unanswered card pins it open, the reader's last click otherwise (kept per
+ * session under `group:<key>`), then the section's default. Keyed by the run
+ * alone, never by running/settled, so the end of a turn does not re-seed it.
+ */
+function DesktopStepRun({
+  run,
+  onOpenFile,
+  sessionId,
+}: {
+  run: StepRun;
+  onOpenFile?: (target: FileLinkTarget) => void;
+  sessionId?: string;
+}) {
+  const { t } = useI18n();
+  const disposition = useContext(StepRunDispositionContext);
+  const memoryKey = `group:${run.key}`;
+  const remembered = useToolExpansionStore((state) =>
+    sessionId ? state.bySession[sessionId]?.[memoryKey] : undefined
+  );
+  const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
+  // Outside a session there is nothing to remember into; the click still counts.
+  const [localOpen, setLocalOpen] = useState<boolean | null>(null);
+  const userOpen = typeof remembered === 'boolean' ? remembered : localOpen;
+  const open = turnWorkGroupOpen({
+    forcedOpen: disposition === 'forced',
+    userOpen,
+    settled: true,
+    endedByUser: disposition === 'open',
+  });
+  const markUserToggle = useUserDisclosureReport(open);
+  // `open` is the one driver. A `<details>` that toggled itself anyway (an
+  // environment that ignores the summary's `preventDefault`) is put back, or a
+  // refused close would leave the DOM and the state disagreeing for good.
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  useLayoutEffect(() => {
+    const element = detailsRef.current;
+    if (element && element.open !== open) element.open = open;
+  });
+  const summary = useMemo(() => summarizeStepRun(run.rows, t), [run.rows, t]);
+  const engine = useChatSessionsStore((state) =>
+    sessionId ? state.sessions.find((item) => item.id === sessionId)?.engine : undefined
+  );
+  const movable =
+    summary.running?.toolCallId && sessionId && canMoveToBackground(summary.running, engine)
+      ? summary.running.toolCallId
+      : null;
+
+  let label: ReactNode;
+  if (summary.running) {
+    label = (
+      <span className="min-w-0 truncate text-shimmer">
+        {stepLabel(summary.running)}
+        {summary.running.arg ? ` ${summary.running.arg}` : ''}
+      </span>
+    );
+  } else if (summary.single) {
+    label = (
+      <span className="min-w-0 truncate">
+        <span className="font-medium">{summary.single.label}</span>
+        {summary.single.description ? (
+          <span className="text-foreground-faint"> {summary.single.description}</span>
+        ) : null}
+      </span>
+    );
+  } else {
+    label = <span className="min-w-0 truncate">{summary.text}</span>;
+  }
+
+  const details = (
+    <details
+      ref={detailsRef}
+      open={open}
+      data-slot="step-run"
+      data-run-key={run.key}
+      className="min-w-0"
+    >
+      <summary
+        className={stepRunSummaryClass()}
+        onClick={(event) => {
+          // Controlled: the native toggle would fight `open` above.
+          event.preventDefault();
+          markUserToggle();
+          const next = !open;
+          setLocalOpen(next);
+          if (sessionId) setToolRowExpanded(sessionId, memoryKey, next);
+        }}
+      >
+        {label}
+        {summary.change && !summary.running && (
+          <span className="shrink-0 tabular-nums">
+            <span className="text-success">+{summary.change.added}</span>{' '}
+            <span className="text-destructive">−{summary.change.removed}</span>
+          </span>
+        )}
+        {summary.refused > 0 && (
+          <span className="shrink-0 text-destructive">
+            {summary.single ? t('Refused') : t('{{count}} refused', { count: summary.refused })}
+          </span>
+        )}
+        {summary.failed > 0 && (
+          <span className="shrink-0 text-destructive">
+            {summary.single ? t('Failed') : t('{{count}} failed', { count: summary.failed })}
+          </span>
+        )}
+        <ChevronRight
+          aria-hidden
+          className={cn(
+            'size-3.5 shrink-0 transition-transform duration-150 motion-reduce:transition-none',
+            open && 'rotate-90'
+          )}
+        />
+      </summary>
+      <div className={stepRunPanelClass()}>
+        {/* Today's rows inside: the provider resets the style for them. */}
+        <TranscriptStyleContext.Provider value={null}>
+          <ToolGroup rows={run.rows} onOpenFile={onOpenFile} sessionId={sessionId} />
+        </TranscriptStyleContext.Provider>
+      </div>
+    </details>
+  );
+
+  if (!movable || !sessionId) return details;
+  return (
+    <div className="flex min-w-0 items-start gap-1">
+      <div className="min-w-0 flex-1">{details}</div>
+      <MoveToBackgroundButton sessionId={sessionId} toolCallId={movable} />
     </div>
   );
 }
@@ -674,8 +1104,12 @@ function ToolRowCollapsible({
   rowClass: string;
   onOpenFile?: (target: FileLinkTarget) => void;
   sessionId?: string;
-  /** Under the trigger, above the body: the step's result line and live tail. */
-  after?: (open: boolean) => ReactNode;
+  /**
+   * Under the trigger, above the body: the step's result line and live tail.
+   * `setOpen` opens or closes the row the way a click does (reported, and
+   * remembered) — the terminal style's `… +N lines` (decision 208).
+   */
+  after?: (open: boolean, setOpen: (next: boolean) => void) => ReactNode;
   children: ReactNode;
 }) {
   const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
@@ -692,15 +1126,13 @@ function ToolRowCollapsible({
   // report the follower scrolled its header out from under the click.
   const [open, setOpen] = useState(initialOpen);
   const markUserToggle = useUserDisclosureReport(open);
+  const changeOpen = (next: boolean) => {
+    markUserToggle();
+    setOpen(next);
+    if (sessionId) setToolRowExpanded(sessionId, view.key, next);
+  };
   return (
-    <Collapsible
-      open={open}
-      onOpenChange={(next) => {
-        markUserToggle();
-        setOpen(next);
-        if (sessionId) setToolRowExpanded(sessionId, view.key, next);
-      }}
-    >
+    <Collapsible open={open} onOpenChange={changeOpen}>
       <CollapsibleTrigger
         className={rowClass}
         // A Read row nests a real <button> inside the trigger for its
@@ -720,7 +1152,7 @@ function ToolRowCollapsible({
             seeing both in `docs/examples/process-rows-zcode-style.html`. */}
         {children}
       </CollapsibleTrigger>
-      {after?.(open)}
+      {after?.(open, changeOpen)}
       <CollapsibleContent className={TOOL_ROW_PANEL_CLASS}>
         <ToolRowBody view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
       </CollapsibleContent>
@@ -1042,12 +1474,15 @@ function ArgText({ arg, pattern }: { arg: string; pattern?: boolean }) {
 function ToolRowArg({
   view,
   onOpenFile,
+  className,
 }: {
   view: ToolRowView;
   onOpenFile?: (target: FileLinkTarget) => void;
+  /** Replaces the row's own argument class (the terminal style's, decision 208). */
+  className?: string;
 }) {
   if (!view.arg) return null;
-  const argClass = toolRowArgClass(view);
+  const argClass = className ?? toolRowArgClass(view);
 
   if (view.link) {
     const link = view.link;

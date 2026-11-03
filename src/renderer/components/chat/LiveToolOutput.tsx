@@ -7,8 +7,9 @@
  * and stops once they scroll up.
  */
 
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { type ReactNode, useLayoutEffect, useMemo, useRef } from 'react';
 import { useI18n } from '@/i18n';
+import { cn } from '@/lib/utils';
 import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
 import { kilobytesLabel, startAtLine } from './toolOutputHead';
 
@@ -18,9 +19,21 @@ const COMPACT_LINES = 3;
 export function LiveToolOutput({
   toolCallId,
   compact = false,
+  className,
+  lead,
+  leadClassName,
 }: {
   toolCallId: string;
   compact?: boolean;
+  /** Compact only: merged onto the tail's `<pre>`. */
+  className?: string;
+  /**
+   * Compact only: drawn before the tail, in a row of `leadClassName`, and only
+   * when there is a tail — the terminal style's `⎿` (decision 208), which must
+   * not stand alone before the first output arrives.
+   */
+  lead?: ReactNode;
+  leadClassName?: string;
 }) {
   const { t } = useI18n();
   const output = useToolLiveOutputStore((state) => state.byCall[toolCallId]);
@@ -46,13 +59,23 @@ export function LiveToolOutput({
       .filter((line) => line.trim().length > 0)
       .slice(-COMPACT_LINES)
       .join('\n');
-    return (
+    const pre = (
       <pre
         data-testid="live-tool-tail"
-        className="m-0 select-text whitespace-pre-wrap break-all pl-5 text-code leading-[1.5] text-muted-foreground"
+        className={cn(
+          'm-0 select-text whitespace-pre-wrap break-all pl-5 text-code leading-[1.5] text-muted-foreground',
+          className
+        )}
       >
         {tail}
       </pre>
+    );
+    if (!lead) return pre;
+    return (
+      <div className={leadClassName}>
+        {lead}
+        {pre}
+      </div>
     );
   }
   return (

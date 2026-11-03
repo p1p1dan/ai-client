@@ -642,15 +642,16 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * discriminant. `i18nCoverage.test.ts` can only scan literals, so a
    * `t(label.key)` would ship an untranslated head and no gate would notice.
    */
-  it('[WG-WIRE-2] the clock line words itself from literal catalog keys, in ONE place', () => {
+  it('[WG-WIRE-2] the running clock line words itself from literal catalog keys, in ONE place', () => {
     const line = nodeSource(topLevelFunction('useTurnClockLine'));
-    const head = nodeSource(topLevelFunction('TurnProgressHead'));
     const plain = nodeSource(topLevelFunction('TurnClockRow'));
     // Decision 034: the line words itself from the turn's CLOCK, through the
-    // two helpers that own the four duration keys each. It prints no count of
-    // its own — the step count and the call count were both cut by the user.
+    // helper that owns the four duration keys. It prints no count of its own.
     expect(line).toContain('workingHeadText(t, zone.elapsed)');
-    expect(line).toContain('workedHeadText(t, zone.worked)');
+    // Decision 208: the settled half went with the process head; the settled
+    // turn's line is `TurnWorkZoneRow`'s bill.
+    expectUnwired('workedHeadText(');
+    expectUnwired('TurnProgressHead');
     for (const retired of [
       "'{{count}} steps processed'",
       "'{{count}} tool calls'",
@@ -659,16 +660,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     ]) {
       expect(line, `the clock line no longer counts anything: ${retired}`).not.toContain(retired);
     }
-    // ⚠️ Decision 037: TWO elements draw this line — the fold head's summary and
-    // the plain row for turns T112 leaves headless — and NEITHER may word it
-    // itself. Two call sites building 「已工作 N 秒」 from the same keys is how
-    // 「风格都不统一」 comes back without anyone deciding it should.
-    for (const element of [head, plain]) {
-      expect(element).toContain('useTurnClockLine({');
-      expect(element).not.toContain('workedHeadText(');
-      expect(element).not.toContain('workingHeadText(');
-      expect(element).not.toContain('joinTurnProgressLine(');
-    }
+    // The row that draws the line never words it itself.
+    expect(plain).toContain('useTurnClockLine({');
+    expect(plain).not.toContain('workingHeadText(');
+    expect(plain).not.toContain('joinTurnProgressLine(');
   });
 
   /**
@@ -744,43 +739,29 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * eventually disagree with the module's, and the disagreement would show up
    * as a buried Allow/Deny card.
    */
-  it('[FB6-4] an unanswered authorization pins the work group open, and its card never unmounts', () => {
+  it('[FB6-4] an unanswered authorization pins its runs open, and its card never unmounts', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
+    // Decision 208: the T107 red line rides the desktop style's runs now. The
+    // predicate feeds the section's disposition; `DesktopStepRun` (ToolRows.tsx)
+    // opens through `turnWorkGroupOpen` with it, and the terminal style has no
+    // fold at all.
     expectCalled('turnWorkGroupAwaitsUser(section.segments)');
-    expectCalled('forcedOpen={groupForcedOpen}');
-    // T105: `settled` left this call's arguments. It is still a prop of the
-    // head (spinner, label, current-action clause) — it just no longer decides
-    // whether the group is open. 2026-09-21 flipped that default from closed
-    // to open; T107 restores closed process groups with prose outside.
-    //
-    // 2026-09-24 added a fourth fact, `endedByUser` (Ctrl+Enter / Stop), and it
-    // is a DEFAULT, not a force: `turnWorkGroupOpen` ranks it below the user's
-    // click (`[WG-OPEN-5]`). What did NOT change is that `forcedOpen` is fed by
-    // the authorization predicate alone — the 0a836f27 cut OR-ed "settled with
-    // no final answer" into it, which pinned every such turn open for good.
-    expectCalled(
-      "turnWorkGroupOpen({ forcedOpen, userOpen, settled: zone.kind === 'worked', endedByUser, })"
+    expect(turn).toContain(
+      "const disposition: StepRunDisposition = turnWorkGroupAwaitsUser(section.segments) ? 'forced'"
     );
-    expectWired('const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);');
-    // 2026-10-19 (user): a turn that failed or was cut off opens the same way.
-    expectCalled('endedByUser={endedAbnormally}');
+    // 2026-09-24 / 10-19 (user): a turn that did not finish starts its last
+    // section open — a default the reader's click still overrides.
+    expect(turn).toContain(
+      "processSettled && endedAbnormally && sectionIndex === lastProcessSectionIndex ? 'open' : 'closed'"
+    );
     expectCalled('turnEndedByUser(turn.body)');
     expectCalled('liveTurnEnd(turn.body, turn.user)');
     expectUnwired('interruptedWithoutAnswer');
-
-    const group = nodeSource(topLevelFunction('TurnProgressHead'));
-    expect(group, 'the panel renders its children unconditionally').toContain(
-      `<div className={cn(turnProcessShellClass(), 'pt-2')}>{children}</div>`
-    );
-    expect(group, 'the open bit must be the derived one, not a second rule').toContain(
-      "const open = turnWorkGroupOpen({ forcedOpen, userOpen, settled: zone.kind === 'worked', endedByUser, });"
-    );
-    // Base UI's panel carries `overflow-hidden` (COLLAPSIBLE_PANEL_BASE_CLASS),
-    // which creates a containing block — the standing prohibition on the turn
-    // chrome. The group is a native <details> for that reason.
-    expect(group, 'no collapse component, and no overflow clip with it').not.toContain(
-      '<Collapsible'
-    );
+    // Every process segment renders unconditionally, and the turn carries no
+    // collapse component (Base UI's panel clips: `overflow-hidden`).
+    expect(turn).toContain('{visibleSegments.map(renderSegment)}');
+    expect(turn).not.toContain('<Collapsible');
+    expectUnwired('TurnProgressHead');
     expect(turn, 'the predicate lives in turnProcessFold.ts, not inlined here').not.toContain(
       "item.kind === 'permission' || item.kind === 'question'"
     );
@@ -819,8 +800,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // ladder's dim rung to the same call — the panel is the one place that tone
   // applies, inside the group and in the streaming tail alike.
   it('F11: the process panel carries the process shell spacing and the dim tone', () => {
-    expectCalled('cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass())');
-    expectCalled('cn(turnBodyClass(), turnAnswerToneClass())');
+    // Decision 208: the terminal style adds its blank line as the last argument.
+    expectCalled(
+      'turnProcessShellClass(), turnBodyClass(), turnProcessToneClass(), terminal && terminalBlockGapClass()'
+    );
+    expectCalled('turnBodyClass(), turnAnswerToneClass(), terminal && terminalBlockGapClass()');
     expectUnwired('turnIntermediateToneClass');
   });
 
@@ -1264,7 +1248,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // The process branch keeps its own shell — spacing and tone only, no face,
     // no edge. (2026-09-18 added the third argument; the claim is unchanged.)
     expect(renderSegment).toContain(
-      'cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass())'
+      'turnProcessShellClass(), turnBodyClass(), turnProcessToneClass(), terminal && terminalBlockGapClass()'
     );
   });
 
@@ -1304,46 +1288,21 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // Every answer stays visible in original order; only process enters a group.
   it('[WG-WIRE-4] answers stay outside and process groups render only process', () => {
     const body = nodeSource(turnBodyNode());
-    expect(body).toContain('workSections.map((section) =>');
+    expect(body).toContain('workSections.map((section, sectionIndex) =>');
     expect(body).toContain(
       "if (section.kind !== 'processGroup') return renderSegment(section.segment);"
     );
-    const finalAt = body.indexOf(
-      "if (section.kind === 'finalAnswer' || section.kind === 'answer') {"
-    );
-    const groupAt = body.indexOf("if (section.kind !== 'processGroup')");
-    expect(finalAt).toBeGreaterThan(-1);
-    expect(finalAt).toBeLessThan(groupAt);
-    const finalBranch = body.slice(finalAt, groupAt);
-    expect(finalBranch).toContain('{renderSegment(section.segment)}');
-    expect(finalBranch).not.toContain('turnFinalAnswerClass');
-    // Decision 033 D1: the extraction announces itself with a divider, and the
-    // divider is the ONLY thing the final branch adds — no border, background
-    // or container around the reply itself (D8 separates it by colour alone).
-    expect(finalBranch).toContain('<div className={turnFinalAnswerDividerClass()}>');
-    // Only on the final answer; a plain answer shares the branch so it keeps its
-    // element when it becomes the final one (PiLab R2).
-    expect(finalBranch).toContain("{section.kind === 'finalAnswer' && (");
-    expect(finalBranch).toContain("t('Final output')");
-    expect(countIn(body, 'turnFinalAnswerDividerClass()')).toBe(1);
-    expect(body).toContain('{section.segments.map(renderSegment)}');
+    // Decision 208: no 「最终输出」 divider in either style — the reply is the
+    // turn's last paragraph, as in the CLI and the desktop app. The answer
+    // keeps its element when it becomes the final one (PiLab R2): it is the
+    // same `renderSegment` call, keyed by its first item.
+    expectUnwired('turnFinalAnswerDividerClass');
+    expectUnwired("t('Final output')");
+    expectUnwired('TurnProgressHead');
+    expect(body).toContain('{visibleSegments.map(renderSegment)}');
     expect(body).not.toContain('renderGroupSegment');
-    // T113 removed the `lastProcessSection === -1` head, which existed so a
-    // turn with NO process at all still showed something for a 50-second wait.
-    // `TurnWorkZoneRow` covers that turn along with every other one, from the
-    // same clock — keeping both would put two progress lines on the turn whose
-    // whole complaint was that it had none. `index` went with it: nothing in
-    // this map cares which group is last any more.
-    expect(body).not.toContain('lastProcessSection');
     expect(body).not.toContain('collapsible=');
     expect(body).not.toContain('workGroup.finalAnswer');
-    const groupedHead = body.slice(
-      body.indexOf('key={groupKey}'),
-      body.indexOf('</TurnProgressHead>', body.indexOf('key={groupKey}'))
-    );
-    expect(groupedHead).not.toContain('renderSegment(section.segment)');
-    expect(groupedHead).not.toContain('turnFinalAnswerClass()');
-    expect(groupedHead).toContain('{section.segments.map(renderSegment)}');
   });
 
   /**
@@ -1359,23 +1318,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * head, or the group would render both. `indexOf` on the flattened body is
    * what says so.
    */
-  it('[WG-WIRE-4b] a running single-step group renders inline; completion gives it a fold head', () => {
-    const body = nodeSource(turnBodyNode());
-    expectCalled('turnProcessGroupFolds(groupedProcessItems)');
-    expect(body).toContain('if (!processSettled && !turnProcessGroupFolds(groupedProcessItems)) {');
-    expect(body).toContain(
-      '<Fragment key={groupKey}>{section.segments.map(renderSegment)}</Fragment>'
-    );
-    const branchAt = body.indexOf(
-      'if (!processSettled && !turnProcessGroupFolds(groupedProcessItems)) {'
-    );
-    expect(branchAt, 'the branch exists').toBeGreaterThan(-1);
-    expect(branchAt, 'and it returns before any head is built').toBeLessThan(
-      body.indexOf('<TurnProgressHead key={groupKey}')
-    );
-    // The fold rule lives in one place: a second threshold spelled here would
-    // be the fork this test exists to prevent.
-    expect(countIn(body, 'countProcessSteps(')).toBe(0);
+  // [WG-WIRE-4b] retired with the fold (decision 208): every process group is
+  // drawn in place, so there is no threshold left to place before a head.
+  it('[WG-WIRE-4b] retired: no fold threshold remains in the timeline', () => {
+    expectUnwired('turnProcessGroupFolds(');
+    expectUnwired('countProcessSteps(');
   });
 
   /**
@@ -1447,27 +1394,14 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * The user's click outlives the element that took it.
-   *
-   * `TurnProgressHead` swaps between a `<details>` and a plain row as
-   * `collapsible` flips, which a turn does the moment it makes its first tool
-   * call. A `useState` inside the head would be discarded by that swap — so a
-   * reader who expanded the group would watch it slam shut on the next tool
-   * call, which is rule 2 of `turnWorkGroupOpen` failing silently.
+   * Decision 208: the turn no longer holds a group's open state — the desktop
+   * style's runs keep the reader's click themselves, per session, under the
+   * same `group:<key>` entry of the tool-expansion store (`DesktopStepRun`).
    */
-  it('[WG-WIRE-6] the expand choice is held by the turn, not by the head element', () => {
-    const turn = nodeSource(topLevelFunction('ChatTurn'));
-    // PiLab R1 FR-11.6: held per SESSION in the tool-expansion store (key
-    // `group:<groupKey>`), so it also survives a switch away and back.
-    expect(turn).toContain(
-      'const groupExpandMemory = useToolExpansionStore((state) => state.bySession[sessionId]);'
-    );
-    expectCalled('userOpen={workGroupUserOpen(groupKey)}');
-    expectCalled('setToolRowExpanded(sessionId, `group:${groupKey}`, open)');
+  it('[WG-WIRE-6] the expand choice moved to the desktop runs', () => {
+    expectUnwired('groupExpandMemory');
+    expectUnwired('workGroupUserOpen');
     expectUnwired('groupStateKey');
-    expectUnwired('groupKey}:${processSettled}');
-    const head = nodeSource(topLevelFunction('TurnProgressHead'));
-    expect(head, 'no second copy of the choice inside the element').not.toContain('useState');
   });
 
   /**
@@ -1475,66 +1409,25 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * group folded, and how many of them were tool calls. T113's boundary is
    * unchanged — turn-level timing and usage never ride a process-group head.
    */
-  it('[WG-WIRE-7] the head carries the turn clock, and exactly one head gets it', () => {
-    const head = nodeSource(topLevelFunction('TurnProgressHead'));
+  it('[WG-WIRE-7] the running turn carries one clock line, at its foot', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
-    // Decision 034 moved the clock and the live action clause UP from the work
-    // zone row; decision 037 moved both one step further, into the shared
-    // derivation the head and the headless turn's row both read. Exactly one
-    // copy of the live clause exists.
     const line = nodeSource(topLevelFunction('useTurnClockLine'));
+    // Exactly one copy of the live clause exists.
     expect(countIn(line, 'deriveTurnCurrentAction(items)')).toBe(1);
     expect(countIn(SYNTAX, 'deriveTurnCurrentAction(items)')).toBe(1);
+    // PiLab R1 (user ruling 2026-10-30): the live line sits at the turn's FOOT
+    // while it runs, as Claude Code's spinner line does. Decision 208 removed
+    // the flag that once kept a top clock reachable.
+    expect(turn).toContain(
+      "{workZone.kind === 'working' && <TurnClockRow zone={workZone} items={items} />}"
+    );
+    expectUnwired('STEPS_INLINE');
+    expectUnwired('clockClaimed');
+    expectUnwired('clockOnHead');
+    const row = nodeSource(topLevelFunction('TurnClockRow'));
+    expect(row).toContain('turnClockRowClass()');
     // Design system v2 §6: the one running icon.
-    expect(head).toContain('<StatusIcon status="running"');
-    // PiLab R1 (user ruling 2026-10-30, replacing decision 037's top line): the
-    // turn's steps are drawn in place and its live line sits at its FOOT while
-    // it runs, as Claude Code's spinner line does.
-    expect(turn).toContain("{STEPS_INLINE && workZone.kind === 'working' && (");
-    expect(turn).toContain('<TurnClockRow zone={workZone} items={items} />');
-    expect(nodeSource(topLevelFunction('TurnClockRow'))).toContain('turnClockRowClass()');
-    for (const counter of [
-      'countProcessSteps',
-      'countTurnToolCalls',
-      'chips.map(',
-      'countProcessGroupThinking',
-      'countProcessGroupExplanations',
-    ]) {
-      expect(head, `the head counts nothing: ${counter}`).not.toContain(counter);
-    }
-    // ⚠️ The T107 defect, as a wiring assertion: two groups in one turn must
-    // not both print the turn's duration. The latch is what guarantees it, and
-    // a refactor that drops it fails HERE rather than on screen.
-    //
-    // ⚠️ **The latch gates the NUMBER, never the ZONE.** It handed the head
-    // `zone={zoneClaimed ? null : workZone}` for one day, and a head with no
-    // zone had no line — a chevron with no text, which is half of the
-    // 2026-09-22 report 「现在折叠头和尾栏都没了」. Every head gets the zone and
-    // can therefore always name the STATE; only the first gets the seconds.
-    expect(turn).toContain('let clockClaimed = false;');
-    expect(turn).toContain('const headClock = !clockClaimed;');
-    expect(turn).toContain('clockClaimed = true;');
-    expect(turn).toContain('zone={workZone}');
-    expect(turn).toContain('clock={headClock}');
-    expect(turn, 'the zone is never withheld from a head').not.toContain('zone={null}');
-    // …and the shared derivation honours it: no clock, no number, no spinner,
-    // no live clause — just the state word.
-    expect(line).toContain('if (!clock) {');
-    expect(line).toContain('const spinner = running && clock;');
-    expect(line).toContain('const liveAction = spinner ? deriveTurnCurrentAction(items) : null;');
-    // Every OTHER turn-level figure is still out of this element — the head
-    // reports a clock, not a bill.
-    for (const gone of [
-      'workedMs',
-      'elapsedSeconds',
-      'tokens',
-      'thinkingMs',
-      'hasReplyContent',
-      'collapsible',
-      'turnProgressClauses',
-    ]) {
-      expect(head, `the group head must not carry ${gone}`).not.toContain(gone);
-    }
+    expect(row).toContain('<StatusIcon status="running"');
   });
 
   /**
@@ -1851,8 +1744,10 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
   // The turn skeleton reads at the prose rhythm too now (§3.1); the tool rows
   // keep the 1.5 tier, and the code block takes `text-code`'s own line height.
   it('the tool rows retain the 1.5 tier; the turn skeleton takes the prose leading', () => {
-    // The tool row, and (PiLab R1) the result line under a step, same tier.
-    expect(countIn(DENSITY_CODE, 'leading-normal')).toBe(2);
+    // The tool row, and (PiLab R1) the result line under a step, same tier;
+    // decision 208 adds two more process-tier lines: the terminal style's `⎿`
+    // lines and the desktop style's run line.
+    expect(countIn(DENSITY_CODE, 'leading-normal')).toBe(4);
     expect(DENSITY_CODE).toContain(`flex flex-col gap-2.5 text-chat-body ${LEAD}`);
     expect(DENSITY_CODE).toContain('text-left text-chat-process leading-normal');
   });

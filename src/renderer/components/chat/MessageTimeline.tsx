@@ -4,6 +4,7 @@ import {
   isDshSummaryRow,
   supersededSummaryIds,
 } from '@shared/dshHistory/types';
+import { resolveChatTranscriptStyle } from '@shared/types/chatTranscriptStyle';
 import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
   ArrowDown,
@@ -28,7 +29,6 @@ import {
 } from 'lucide-react';
 import {
   createContext,
-  Fragment,
   memo,
   useCallback,
   useContext,
@@ -64,7 +64,6 @@ import {
 import { useSettingsStore } from '@/stores/settings';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
-import { useToolExpansionStore } from '@/stores/toolExpansion';
 import {
   type PendingReplyWatch,
   selectPendingReply,
@@ -90,18 +89,20 @@ import {
   promptFoldsAtHeight,
   readingColumnSpacingClass,
   sessionFailureTitleClass,
+  terminalBlockGapClass,
+  terminalChatTurnClass,
+  terminalProseClass,
+  terminalReadingColumnSpacingClass,
   turnActionsInnerClass,
   turnActionsSlotClass,
   turnAnswerToneClass,
   turnBodyClass,
   turnClockRowClass,
   turnCopyButtonClass,
-  turnFinalAnswerDividerClass,
   turnHeadClass,
   turnProcessShellClass,
   turnProcessToneClass,
   turnStatusToneClass,
-  turnWorkGroupSummaryClass,
   turnWorkZoneClass,
   userBubbleAwaitingClass,
   userBubbleClass,
@@ -181,6 +182,7 @@ import {
   LEGACY_MIGRATION_PROGRESS_TITLE,
 } from './sessionIndex/legacyMigration';
 import { useResumeSession } from './sessionIndex/useResumeSession';
+import { terminalItemGutter } from './stepPresentation';
 import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
 import {
@@ -189,6 +191,13 @@ import {
   ToolRowTimelineContext,
   useUserDisclosureReport,
 } from './ToolRows';
+import {
+  EnglishToolLabelsContext,
+  type StepRunDisposition,
+  StepRunDispositionContext,
+  TerminalBlock,
+  TranscriptStyleContext,
+} from './TranscriptBlocks';
 import { TurnCeilingNotice } from './TurnCeilingNotice';
 import { TurnChangeCard } from './TurnChangeCard';
 import { TurnEndNotice } from './TurnEndNotice';
@@ -227,9 +236,7 @@ import {
   deriveTurnWorkZone,
   splitTurnWorkGroup,
   type TurnWorkZone,
-  turnProcessGroupFolds,
   turnWorkGroupAwaitsUser,
-  turnWorkGroupOpen,
 } from './turnProcessFold';
 import { formatThinkingClause, joinTurnProgressLine, sumTurnThinkingMs } from './turnProgress';
 import {
@@ -275,12 +282,6 @@ import { useTurnTiming } from './useTurnTiming';
  * div (`ui/scroll-area.tsx` tags it `data-slot="scroll-area-viewport"`), not
  * the `ScrollArea` root — that root is a non-scrolling positioning wrapper.
  */
-/**
- * PiLab R1 (user ruling 2026-10-30): process groups render in place as steps,
- * with no 「已工作 ›」 fold (`TurnProgressHead` is kept for the switch only).
- */
-const STEPS_INLINE = true;
-
 /** A turn item that is nothing but thinking: drawn as no step. */
 function isThinkingOnlyItem(item: TurnItem): boolean {
   return item.kind === 'toolGroup' && item.entries.every((entry) => entry.kind === 'thinking');
@@ -546,6 +547,10 @@ export function MessageTimeline({
   );
   const { get: getMeta } = useMessageMetadata(sessionId);
   const { getThinking, getToolStartedAtMs } = useTurnTiming(sessionId);
+  // Decision 208: how the transcript draws a turn's steps; anything unknown is the default.
+  const transcriptStyle = resolveChatTranscriptStyle(
+    useSettingsStore((state) => state.chatTranscriptStyle)
+  );
 
   // Issue #8 (decision 172): a Ctrl+Enter message DSH has not taken in yet is
   // drawn after the turns, not as one — the running turn stays the last turn,
@@ -1001,128 +1006,136 @@ export function MessageTimeline({
           callback, so a tick reaches a running row's elapsed tail as a context
           update and re-renders that one leaf, not the tool groups around it. */}
           <ToolRowTimelineContext follow={preserveDisclosurePosition} nowMs={nowMs}>
-            <ScrollArea className="min-h-0 flex-1" scrollFade="bottom">
-              {/* Padding stays outside ReadingColumn — inside it would shave 24px off
+            <TranscriptStyleContext.Provider value={transcriptStyle}>
+              <EnglishToolLabelsContext.Provider value>
+                <ScrollArea className="min-h-0 flex-1" scrollFade="bottom">
+                  {/* Padding stays outside ReadingColumn — inside it would shave 24px off
             the documented 45rem/60rem (D25 §3.4) reading width (T-22 spec §2.13). */}
-              <div className={TIMELINE_PADDING_CLASS} ref={contentRef}>
-                {/* T-05 (A07 `.tl` :846): 20px turn spacing. T-31 §5.4 had split it
+                  <div className={TIMELINE_PADDING_CLASS} ref={contentRef}>
+                    {/* T-05 (A07 `.tl` :846): 20px turn spacing. T-31 §5.4 had split it
               into 10 here + 10 of sticky-band padding; T12 retired the band, so
               the whole beat is back in one place (F-B9). */}
-                <ReadingColumn className={readingColumnSpacingClass()}>
-                  {historyPagination?.hasMore && (
-                    <div className="flex justify-center">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={loadingOlderHistory || nextTurnStatus !== 'idle'}
-                        onClick={() => void loadOlderHistory()}
-                      >
-                        {loadingOlderHistory ? <Spinner className="size-3.5" /> : <RefreshCw />}
-                        {t('Load earlier messages')}
-                      </Button>
-                    </div>
-                  )}
-                  {historyNotice.kind === 'loading' && pendingSendStatus == null ? (
-                    // The transcript is on its way. Reads as the timeline warming
-                    // up rather than as a statement about this chat — the 「还没有
-                    // 消息」 copy below is reserved for a chat that really is empty.
-                    // Gated on the pending send like that copy: a message the user
-                    // just sent has its own head below, and outranks both.
-                    <p
-                      className="flex items-center gap-2 text-ui text-muted-foreground"
-                      role="status"
-                    >
-                      <Spinner className="size-3.5" />
-                      {t('Loading this conversation…')}
-                    </p>
-                  ) : historyNotice.kind === 'empty' && pendingSendStatus == null ? (
-                    // Decision 144: says what to do, not which process answers it.
-                    <p className="text-ui text-muted-foreground">
-                      {t('No messages yet. Send a message to start.')}
-                    </p>
-                  ) : (
-                    turns.map((turn, index) => {
-                      // DA-6 (decision 180): a `/compact` the user ran, after the
-                      // turn before it and that turn's line, as no turn of its own.
-                      if (turn.kind === 'compaction') {
-                        return (
-                          <ManualCompactionTurn
-                            key={turn.id}
-                            turn={turn}
-                            sessionId={sessionId}
-                            thinkingEnabled={thinkingEnabled}
-                            repoName={repoName}
-                            getThinkingDurationMs={getThinkingDurationMs}
-                          />
-                        );
+                    <ReadingColumn
+                      className={
+                        transcriptStyle === 'terminal'
+                          ? terminalReadingColumnSpacingClass()
+                          : readingColumnSpacingClass()
                       }
-                      // F7: the two ticking props are handed ONLY to the turn that
-                      // can read them. Every other turn keeps byte-identical props
-                      // across a tick, which is what lets `React.memo` on `ChatTurn`
-                      // hold and returns the per-second derivation cost to
-                      // O(in-flight turn) instead of O(whole session).
-                      const isLastTurn = index === lastTurnIndex;
-                      return (
-                        <ChatTurn
-                          key={turn.id}
-                          turn={turn}
-                          sessionId={sessionId}
-                          isLastTurn={isLastTurn}
-                          sessionStatus={status}
-                          inFlightSession={inFlightSession}
-                          sendStatus={isLastTurn ? attachedSendStatus : null}
-                          // F2 §4.5: same last-turn-only discipline as `nowMs` — a
-                          // pending reply belongs to the turn the send opened.
-                          pendingReply={isLastTurn ? pendingReply : null}
-                          statusOwnedByPendingHead={pendingSendStatus != null}
-                          baselineKnown={sendBaseline != null}
-                          baselineMessageId={sendBaseline?.messageId ?? null}
-                          // T-33: session-scoped retry belongs to the turn actually
-                          // in flight — the pending head below while the user echo
-                          // has not landed, the last turn otherwise. Nulled for every
-                          // other turn for the same reason the two ticking props are
-                          // (F7): a retry tick must not break `memo` session-wide.
-                          retry={isLastTurn && pendingSendStatus == null ? sessionRetry : null}
-                          // T093: narrowed exactly like `retry` above — the name is
-                          // only ever read next to it, so handing it to every turn
-                          // would break `memo` for a string nobody else renders.
-                          retryDelegateName={
-                            isLastTurn && pendingSendStatus == null ? retryDelegateName : null
+                    >
+                      {historyPagination?.hasMore && (
+                        <div className="flex justify-center">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={loadingOlderHistory || nextTurnStatus !== 'idle'}
+                            onClick={() => void loadOlderHistory()}
+                          >
+                            {loadingOlderHistory ? <Spinner className="size-3.5" /> : <RefreshCw />}
+                            {t('Load earlier messages')}
+                          </Button>
+                        </div>
+                      )}
+                      {historyNotice.kind === 'loading' && pendingSendStatus == null ? (
+                        // The transcript is on its way. Reads as the timeline warming
+                        // up rather than as a statement about this chat — the 「还没有
+                        // 消息」 copy below is reserved for a chat that really is empty.
+                        // Gated on the pending send like that copy: a message the user
+                        // just sent has its own head below, and outranks both.
+                        <p
+                          className="flex items-center gap-2 text-ui text-muted-foreground"
+                          role="status"
+                        >
+                          <Spinner className="size-3.5" />
+                          {t('Loading this conversation…')}
+                        </p>
+                      ) : historyNotice.kind === 'empty' && pendingSendStatus == null ? (
+                        // Decision 144: says what to do, not which process answers it.
+                        <p className="text-ui text-muted-foreground">
+                          {t('No messages yet. Send a message to start.')}
+                        </p>
+                      ) : (
+                        turns.map((turn, index) => {
+                          // DA-6 (decision 180): a `/compact` the user ran, after the
+                          // turn before it and that turn's line, as no turn of its own.
+                          if (turn.kind === 'compaction') {
+                            return (
+                              <ManualCompactionTurn
+                                key={turn.id}
+                                turn={turn}
+                                sessionId={sessionId}
+                                thinkingEnabled={thinkingEnabled}
+                                repoName={repoName}
+                                getThinkingDurationMs={getThinkingDurationMs}
+                              />
+                            );
                           }
-                          nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}
-                          getMetadata={getMeta}
-                          thinkingEnabled={thinkingEnabled}
-                          repoName={repoName}
-                          getThinkingDurationMs={getThinkingDurationMs}
-                          getToolStartedAtMs={isLastTurn ? getToolStartedAtMs : NO_TOOL_STARTS}
-                          // The progress head needs the SPAN, not just the settled
-                          // duration: a thought that has started and not finished is
-                          // the whole point of a live 「思考 N 秒」 clause, and
-                          // `durationMs` is null for exactly that case. Already
-                          // `useCallback`-stable at its source, so the memo holds.
-                          getThinkingTiming={getThinking}
+                          // F7: the two ticking props are handed ONLY to the turn that
+                          // can read them. Every other turn keeps byte-identical props
+                          // across a tick, which is what lets `React.memo` on `ChatTurn`
+                          // hold and returns the per-second derivation cost to
+                          // O(in-flight turn) instead of O(whole session).
+                          const isLastTurn = index === lastTurnIndex;
+                          return (
+                            <ChatTurn
+                              key={turn.id}
+                              turn={turn}
+                              sessionId={sessionId}
+                              isLastTurn={isLastTurn}
+                              sessionStatus={status}
+                              inFlightSession={inFlightSession}
+                              sendStatus={isLastTurn ? attachedSendStatus : null}
+                              // F2 §4.5: same last-turn-only discipline as `nowMs` — a
+                              // pending reply belongs to the turn the send opened.
+                              pendingReply={isLastTurn ? pendingReply : null}
+                              statusOwnedByPendingHead={pendingSendStatus != null}
+                              baselineKnown={sendBaseline != null}
+                              baselineMessageId={sendBaseline?.messageId ?? null}
+                              // T-33: session-scoped retry belongs to the turn actually
+                              // in flight — the pending head below while the user echo
+                              // has not landed, the last turn otherwise. Nulled for every
+                              // other turn for the same reason the two ticking props are
+                              // (F7): a retry tick must not break `memo` session-wide.
+                              retry={isLastTurn && pendingSendStatus == null ? sessionRetry : null}
+                              // T093: narrowed exactly like `retry` above — the name is
+                              // only ever read next to it, so handing it to every turn
+                              // would break `memo` for a string nobody else renders.
+                              retryDelegateName={
+                                isLastTurn && pendingSendStatus == null ? retryDelegateName : null
+                              }
+                              nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}
+                              getMetadata={getMeta}
+                              thinkingEnabled={thinkingEnabled}
+                              repoName={repoName}
+                              getThinkingDurationMs={getThinkingDurationMs}
+                              getToolStartedAtMs={isLastTurn ? getToolStartedAtMs : NO_TOOL_STARTS}
+                              // The progress head needs the SPAN, not just the settled
+                              // duration: a thought that has started and not finished is
+                              // the whole point of a live 「思考 N 秒」 clause, and
+                              // `durationMs` is null for exactly that case. Already
+                              // `useCallback`-stable at its source, so the memo holds.
+                              getThinkingTiming={getThinking}
+                            />
+                          );
+                        })
+                      )}
+                      {pendingSendStatus && (
+                        <PendingTurnHead
+                          sessionId={sessionId}
+                          sendStatus={pendingSendStatus}
+                          retry={sessionRetry}
+                          retryDelegateName={retryDelegateName}
+                          nowMs={nowMs}
                         />
-                      );
-                    })
-                  )}
-                  {pendingSendStatus && (
-                    <PendingTurnHead
-                      sessionId={sessionId}
-                      sendStatus={pendingSendStatus}
-                      retry={sessionRetry}
-                      retryDelegateName={retryDelegateName}
-                      nowMs={nowMs}
-                    />
-                  )}
-                  {/* Issue #8 (decision 172): Ctrl+Enter messages DSH has not taken
+                      )}
+                      {/* Issue #8 (decision 172): Ctrl+Enter messages DSH has not taken
                 in yet, at the end of the timeline (decision 111 rule 12) and in
                 no turn. The turn they wait to join keeps running above them;
                 each echo opens its turn where DSH took the message in. */}
-                  {awaitingDelivery.map((message) => (
-                    <UserBubble key={message.id} message={message} />
-                  ))}
-                  {/* dsh-rebase P1-7e (problem 25, decision 139): the history card
+                      {awaitingDelivery.map((message) => (
+                        <UserBubble key={message.id} message={message} />
+                      ))}
+                      {/* dsh-rebase P1-7e (problem 25, decision 139): the history card
                 and the migration notice sit at the END of the timeline, beside
                 the session-failed card below, not above the first turn. Both
                 usually answer something the user just did — sending in an old
@@ -1130,113 +1143,113 @@ export function MessageTimeline({
                 and the user is at the bottom when they do it: drawn first, a
                 chat with history put them hundreds of pixels out of sight. In
                 an empty chat the two places are the same place. */}
-                  {historyNotice.kind === 'error' && (
-                    // Keyed by session: detail/retry state must not follow the user
-                    // across sessions when React reuses this slot.
-                    <HistoryErrorNotice
-                      key={sessionId}
-                      view={historyNotice.error}
-                      sessionId={sessionId}
-                      status={status}
-                    />
-                  )}
-                  {historyNotice.kind === 'migrating' && <LegacyMigrationProgressNotice />}
-                  {/* T-31 §9-ζ: stays SESSION-level and stays here, after the last
+                      {historyNotice.kind === 'error' && (
+                        // Keyed by session: detail/retry state must not follow the user
+                        // across sessions when React reuses this slot.
+                        <HistoryErrorNotice
+                          key={sessionId}
+                          view={historyNotice.error}
+                          sessionId={sessionId}
+                          status={status}
+                        />
+                      )}
+                      {historyNotice.kind === 'migrating' && <LegacyMigrationProgressNotice />}
+                      {/* T-31 §9-ζ: stays SESSION-level and stays here, after the last
                 turn. Folding it into the failing turn would leave a
                 session-level failure (one that belongs to no turn) with
                 nowhere to render, and would move a block T-30 batch 1 already
                 landed as P-06. The failed turn gets its own short head label
                 instead (`deriveTurnStatus` -> 'Failed'). */}
-                  {status === 'failed' && (
-                    // Design system v2 §7.7: the session-failed card is the one
-                    // notice (`Alert`), not a hand-written red box beside it.
-                    <Alert variant={interruption ? 'default' : 'error'} role="alert">
-                      {interruption ? <CirclePause /> : <TriangleAlert />}
-                      {/* T-30 P-06: only the title carries weight — body and hint
+                      {status === 'failed' && (
+                        // Design system v2 §7.7: the session-failed card is the one
+                        // notice (`Alert`), not a hand-written red box beside it.
+                        <Alert variant={interruption ? 'default' : 'error'} role="alert">
+                          {interruption ? <CirclePause /> : <TriangleAlert />}
+                          {/* T-30 P-06: only the title carries weight — body and hint
                     fall back to muted-foreground so a session-level failure
                     doesn't stack a second red block on top of the already-red
                     failed tool rows above it. P1-7e (decision 142): the title
                     is body ink now; the red is the card's border and tint. */}
-                      {/* 2026-09-21: the title used to be the bare words 「Session
+                          {/* 2026-09-21: the title used to be the bare words 「Session
                     failed」, which is the label of the sensor, not of the
                     event. It is now the KIND of stop ("Stopped at the
                     tool-call ceiling" / "The model's reply was cut off"), with
                     a reason line and a next step under it. The user's report
                     was 「停下了很莫名其妙」, and the fix for that is naming what
                     happened, not repeating that something did. */}
-                      <AlertTitle className={sessionFailureTitleClass()}>
-                        {t(failure.title)}
-                      </AlertTitle>
-                      <AlertDescription className="items-start gap-1">
-                        {lastError && isAuthRequiredError(lastError) ? (
-                          // D47 S5 §3: spawn-gate rejection (resolveSpawnGateDecision,
-                          // @shared/authGate) — retrying won't help without a fresh
-                          // login, so this replaces the raw diagnostic + Retry hint
-                          // with mapped copy and a re-login action instead.
-                          <>
-                            <p>{t(AUTH_REQUIRED_ERROR_VIEW.message)}</p>
-                            <Button
-                              size="xs"
-                              variant="ghost"
-                              className="-ml-2"
-                              onClick={() => void requestSignIn()}
-                              disabled={signInRequesting}
-                            >
-                              {signInRequesting ? <Spinner className="size-3.5" /> : null}
-                              {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
-                            </Button>
-                          </>
-                        ) : lastError && isModelMissingError(lastError) ? (
-                          // H/21 P0: the session's recorded model is not in this app's
-                          // model directory (H/19 U1 gave the app its own agent dir).
-                          // Same reasoning as the auth branch above — resending cannot
-                          // work until the model exists here, so the generic "可从下方
-                          // 输入框重发上条消息" hint would be wrong, and the only useful
-                          // affordance is the migration that puts the model there.
-                          <>
-                            <p>{t(MODEL_MISSING_ERROR_VIEW.message)}</p>
-                            <p>{t(MODEL_MISSING_ERROR_VIEW.hint)}</p>
-                            <Button
-                              size="xs"
-                              variant="ghost"
-                              className="-ml-2"
-                              onClick={() =>
-                                requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)
-                              }
-                            >
-                              {t(MODEL_MISSING_ERROR_VIEW.actionLabel)}
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            {/* 2026-09-21: WHY it stopped, before the raw sentence that
+                          <AlertTitle className={sessionFailureTitleClass()}>
+                            {t(failure.title)}
+                          </AlertTitle>
+                          <AlertDescription className="items-start gap-1">
+                            {lastError && isAuthRequiredError(lastError) ? (
+                              // D47 S5 §3: spawn-gate rejection (resolveSpawnGateDecision,
+                              // @shared/authGate) — retrying won't help without a fresh
+                              // login, so this replaces the raw diagnostic + Retry hint
+                              // with mapped copy and a re-login action instead.
+                              <>
+                                <p>{t(AUTH_REQUIRED_ERROR_VIEW.message)}</p>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  className="-ml-2"
+                                  onClick={() => void requestSignIn()}
+                                  disabled={signInRequesting}
+                                >
+                                  {signInRequesting ? <Spinner className="size-3.5" /> : null}
+                                  {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
+                                </Button>
+                              </>
+                            ) : lastError && isModelMissingError(lastError) ? (
+                              // H/21 P0: the session's recorded model is not in this app's
+                              // model directory (H/19 U1 gave the app its own agent dir).
+                              // Same reasoning as the auth branch above — resending cannot
+                              // work until the model exists here, so the generic "可从下方
+                              // 输入框重发上条消息" hint would be wrong, and the only useful
+                              // affordance is the migration that puts the model there.
+                              <>
+                                <p>{t(MODEL_MISSING_ERROR_VIEW.message)}</p>
+                                <p>{t(MODEL_MISSING_ERROR_VIEW.hint)}</p>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  className="-ml-2"
+                                  onClick={() =>
+                                    requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)
+                                  }
+                                >
+                                  {t(MODEL_MISSING_ERROR_VIEW.actionLabel)}
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                {/* 2026-09-21: WHY it stopped, before the raw sentence that
                         says what the provider said. The two are different
                         kinds of fact and the card needs both — the reason is
                         what a reader can act on, the sentence is the evidence
                         they forward when they ask for help. */}
-                            <p>{t(failure.reason)}</p>
-                            {/* PiLab R1: where the reconnect stands — Main reopens the
+                                <p>{t(failure.reason)}</p>
+                                {/* PiLab R1: where the reconnect stands — Main reopens the
                         chat by itself, and says so with `session.resumed`. */}
-                            {interruption && (
-                              <p
-                                data-slot="engine-reconnect"
-                                className={engineReconnected ? 'text-success' : undefined}
-                              >
-                                {t(engineReconnected ? 'Reconnected' : 'Reconnecting…')}
-                              </p>
-                            )}
-                            {/* P1-3c: an engine-process sentence ("Worker exited …")
+                                {interruption && (
+                                  <p
+                                    data-slot="engine-reconnect"
+                                    className={engineReconnected ? 'text-success' : undefined}
+                                  >
+                                    {t(engineReconnected ? 'Reconnected' : 'Reconnecting…')}
+                                  </p>
+                                )}
+                                {/* P1-3c: an engine-process sentence ("Worker exited …")
                         is not evidence a user can forward; the reason says it. */}
-                            {lastError && failedCardShowsError && failure.showsDetail && (
-                              // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
-                              // content family as ChatComposer's destructive banner — mono.
-                              // Round-10 ③: suppressed when the latest error notice above
-                              // already prints this exact failure (see failedCardShowsError).
-                              <p className="select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
-                                {lastError}
-                              </p>
-                            )}
-                            {/* F3 fast-fix batch, superseded 2026-09-21: this used to be
+                                {lastError && failedCardShowsError && failure.showsDetail && (
+                                  // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
+                                  // content family as ChatComposer's destructive banner — mono.
+                                  // Round-10 ③: suppressed when the latest error notice above
+                                  // already prints this exact failure (see failedCardShowsError).
+                                  <p className="select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
+                                    {lastError}
+                                  </p>
+                                )}
+                                {/* F3 fast-fix batch, superseded 2026-09-21: this used to be
                         affordance-neutral on purpose — "whether this failure
                         armed the composer's Retry or restored the draft is
                         decided by queueRelease's outcome, so the card must not
@@ -1252,53 +1265,58 @@ export function MessageTimeline({
                         reason re-sending cannot fix), the card says what to do
                         in words instead of offering the button. What is gone
                         is the case where it did nothing at all. */}
-                            {canContinueSession(failure, resumeMessageId != null) ? (
-                              // T135 / decision 045: retries the failed turn itself
-                              // (no second copy of the prompt), and only once the
-                              // failure has settled — see `retryLastTurn.ts`.
-                              // Decision 140: a failure retrying usually repeats
-                              // keeps its hint beside a button that says so.
-                              <>
-                                {failure.hintWithContinue && <p>{t(failure.hint)}</p>}
-                                <FailureContinueButton
-                                  blockedReason={continueBlockedReason({
-                                    failureSettled,
-                                    sendInFlight: sendStatus != null,
-                                  })}
-                                  label={failure.continueLabel}
-                                  onContinue={() =>
-                                    resumeMessageId && requestContinue(sessionId, resumeMessageId)
-                                  }
-                                />
+                                {canContinueSession(failure, resumeMessageId != null) ? (
+                                  // T135 / decision 045: retries the failed turn itself
+                                  // (no second copy of the prompt), and only once the
+                                  // failure has settled — see `retryLastTurn.ts`.
+                                  // Decision 140: a failure retrying usually repeats
+                                  // keeps its hint beside a button that says so.
+                                  <>
+                                    {failure.hintWithContinue && <p>{t(failure.hint)}</p>}
+                                    <FailureContinueButton
+                                      blockedReason={continueBlockedReason({
+                                        failureSettled,
+                                        sendInFlight: sendStatus != null,
+                                      })}
+                                      label={failure.continueLabel}
+                                      onContinue={() =>
+                                        resumeMessageId &&
+                                        requestContinue(sessionId, resumeMessageId)
+                                      }
+                                    />
+                                  </>
+                                ) : (
+                                  <p>{t(failure.hint)}</p>
+                                )}
+                                {pendingPermissions.some(
+                                  (item) => item.sessionId === sessionId
+                                ) && (
+                                  <Button
+                                    size="xs"
+                                    variant="ghost"
+                                    className="-ml-2"
+                                    onClick={() => void stopChatSession(sessionId)}
+                                  >
+                                    {t('Stop')}
+                                  </Button>
+                                )}
                               </>
-                            ) : (
-                              <p>{t(failure.hint)}</p>
                             )}
-                            {pendingPermissions.some((item) => item.sessionId === sessionId) && (
-                              <Button
-                                size="xs"
-                                variant="ghost"
-                                className="-ml-2"
-                                onClick={() => void stopChatSession(sessionId)}
-                              >
-                                {t('Stop')}
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  {/* decision 040: a run that paused at the turn ceiling COMPLETED —
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      {/* decision 040: a run that paused at the turn ceiling COMPLETED —
                 its wrap-up summary is the last reply above — so this is a
                 neutral notice beside it, not the failed card. Idle only: the
                 store clears the cause as soon as the next run starts. */}
-                  {sessionId && status === 'idle' && stopCause === 'turn_limit' && (
-                    <TurnCeilingNotice onContinue={() => requestCarryOn(sessionId)} />
-                  )}
-                </ReadingColumn>
-              </div>
-            </ScrollArea>
+                      {sessionId && status === 'idle' && stopCause === 'turn_limit' && (
+                        <TurnCeilingNotice onContinue={() => requestCarryOn(sessionId)} />
+                      )}
+                    </ReadingColumn>
+                  </div>
+                </ScrollArea>
+              </EnglishToolLabelsContext.Provider>
+            </TranscriptStyleContext.Provider>
           </ToolRowTimelineContext>
           {/* Round-13 (user request 17): the prompt-history rail. Same floating
           contract as the jump button below — mounted inside this `relative`
@@ -2001,147 +2019,38 @@ interface ChatTurnProps {
  * -stable at their source.
  */
 /**
- * A process group's head: one line, and one fact — how many steps are behind
- * it.
- *
- * ## One shape now, and where the second one went
- *
- * Until T113 this element had two. With work to hide it was a `<details>`
- * whose `<summary>` carried the line and a chevron; with nothing to hide it
- * was a plain chevron-less row. That second shape existed for the case the
- * 2026-09-18 field report was actually about: a one-word prompt that takes 50
- * seconds produces no thinking block and no tool call, so a head rendered only
- * "when the group has members" left that turn showing NOTHING for the whole
- * wait. `TurnWorkZoneRow` covers that now, one line lower and for every turn
- * including a tool-free one — and T112 stopped rendering a head at all for a
- * group of fewer than two steps, so nothing reaches this function without
- * something to disclose. The shape with nothing to disclose has no case left.
- *
- * What has not changed is why the copy and the affordance are one line: an
- * affordance that expands to nothing is worse than no affordance, which is the
- * same judgement `splitTurnWorkGroup` makes when it refuses an empty group.
- *
- * ## The head says nothing about the TURN any more
- *
- * T107 handed the LAST group's head the whole turn's duration, usage and
- * thinking time (`workedMs={lastGroup ? workedMs : null}`), to avoid reporting
- * one duration once per group. The cost was two different scopes wearing
- * identical lines — 「已处理 3 个步骤」 above, 「已工作 47 秒」 below, both a
- * chevron row — and the user's report on it was 「最后一个理应显示 N 个步骤的
- * 地方却显示工作区，有点不协调」. T113 splits them by scope: this head is
- * group-scoped always, and every turn-scoped figure is on the work zone row at
- * the end of the turn. That is also why `settled` is gone from here — the
- * spinner and the live action clause went with the clock they belonged to.
- *
- * ## 2026-09-22 (decision 033 D1/D2/D4/D5): one head, one number, open by default
- *
- * The user's list reworked this element again, and the four changes are one
- * design:
- *
- *  - **D5 — the words follow the system language.** The binding was
- *    `englishTranslate`, an exception decision 031 D7 granted to the OLD head
- *    shape (an English step-count line). That shape is gone, so the exception
- *    lost its carrier and the head binds `useI18n()` like every other row on
- *    this surface. Two guards retired with it ([HEAD-EN-1], [HEAD-EN-2]).
- *  - **D1 — counts, not chips.** The chips named what the group HELD
- *    (thinking / N tool calls / N explanations); the user asked for a COUNT of
- *    the work instead: 「已处理 N 个步骤」, the same number
- *    `turnProcessGroupFolds` already thresholds on. This element was the only
- *    caller `countProcessGroupThinking` / `countProcessGroupExplanations` ever
- *    had, so both retired with the chips rather than staying as exports
- *    nothing renders.
- *  - **D4 — pinned and findable.** `turnWorkGroupSummaryClass()` carries the
- *    sticky pin; see that function for why the pin is legal here, why it had to
- *    leave the thought header (D3), and why the accent face that shipped with
- *    it on the first pass was withdrawn hours later. The right-hand tool-call
- *    count is D4's other half (「滚动中也能看到进度」) and is the ONE place this
- *    head still reads a second figure.
- *  - **D2 — open by default.** Not this element's decision
- *    (`turnWorkGroupOpen` owns it), but it is why this file's copy no longer
- *    says "starts collapsed".
- *
- * ## Why a native `<details>` with `preventDefault`
- *
- * Two constraints meet here. The panel must be fully CONTROLLED — an
- * unanswered authorization card forces the group open regardless of what anyone
- * clicked — and it must not introduce
- * `overflow-hidden`, which is what rules out the Base UI `Collapsible`
- * (`COLLAPSIBLE_PANEL_BASE_CLASS` carries it; see `turnProcessShellClass()`).
- *
- * `<details>` toggles ITSELF on a summary click, before React hears about it,
- * so a plain `open={…}` prop desynchronises the moment a click is refused: the
- * DOM closes, the computed value stays `true`, React sees no prop change and
- * never puts it back. `preventDefault()` on the summary removes the native
- * toggle entirely, leaving `open` as the single driver — and keyboard Enter /
- * Space on a `<summary>` dispatch a click, so the affordance stays reachable
- * without inventing any ARIA.
- *
- * The children stay mounted when collapsed (that is what `<details>` does), so
- * collapsing never discards a tool row's expanded body.
- */
-/**
- * The turn's clock line, in one place, for the two elements that draw it.
- *
- * Decision 037: the duration is the turn's FIRST line in every case — 「什么情况
- * 都让 已工作 x 分 xx 秒 落在顶部」 — but only a folding group has a head to put
- * it on (T112 refuses a fold below two steps). So there are two carriers: the
- * `<summary>` of `TurnProgressHead`, and the plain `TurnClockRow` for the turns
- * T112 leaves headless.
- *
- * ⚠️ **Both must read this function and neither may word the line itself.** The
- * user's rejection of the first fix was about exactly this — 「那样展示出来的
- * 风格都不统一」 — and two call sites each building 「已工作 N 秒」 from the same
- * catalog keys is how that comes back without anyone deciding it should.
- *
- * `clock` is the T107 latch, not a visibility flag: a head that is not the
- * turn's first still names the STATE (「工作中」 /「已工作」, the bare forms of
- * the same two keys) and only withholds the seconds. Rendering nothing there is
- * what left an empty row on 2026-09-22.
+ * The running turn's line at its foot, as Claude Code's spinner line sits
+ * (PiLab R1): 「✻ 工作中 47 秒」, or what the turn is doing right now
+ * (`turnLiveHead.ts`). Once the turn ends `TurnWorkZoneRow` says the bill.
  */
 function useTurnClockLine({
   zone,
-  clock,
   items,
 }: {
   zone: TurnWorkZone;
-  clock: boolean;
   /** Read only for the live action clause, and only while the clock ticks. */
   items: readonly TurnItem[];
 }): { line: string; spinner: boolean } {
   const { t } = useI18n();
   const send = useContext(TurnSendContext);
-  const running = zone.kind === 'working';
-  const spinner = running && clock;
-  const liveAction = spinner ? deriveTurnCurrentAction(items) : null;
-  if (!clock) {
-    return { line: running ? workingHeadText(t, null) : workedHeadText(t, null), spinner };
-  }
-  if (zone.kind === 'working') {
-    // S-6 feedback 11c (user, 2026-10-17): verb first, one line (`turnLiveHead.ts`).
-    // A clock with no subject reads as a stopwatch, so when nothing more specific is
-    // known the line still says 「工作中」.
-    const live = deriveTurnLivePhase({ send, items, action: liveAction });
-    return {
-      line:
-        live.kind === 'working'
-          ? `✻ ${workingHeadText(t, zone.elapsed)}`
-          : formatTurnLiveLine(t, live, zone.elapsed),
-      spinner,
-    };
-  }
-  return { line: workedHeadText(t, zone.worked), spinner };
+  const liveAction = zone.kind === 'working' ? deriveTurnCurrentAction(items) : null;
+  if (zone.kind !== 'working') return { line: '', spinner: false };
+  // S-6 feedback 11c (user, 2026-10-17): verb first, one line (`turnLiveHead.ts`).
+  // A clock with no subject reads as a stopwatch, so when nothing more specific is
+  // known the line still says 「工作中」.
+  const live = deriveTurnLivePhase({ send, items, action: liveAction });
+  return {
+    line:
+      live.kind === 'working'
+        ? `✻ ${workingHeadText(t, zone.elapsed)}`
+        : formatTurnLiveLine(t, live, zone.elapsed),
+    spinner: true,
+  };
 }
 
-/**
- * The clock line for a turn with nothing to fold (decision 037).
- *
- * Same words, same class, no chevron and no `<details>` — because there is
- * genuinely nothing behind it: T112 renders a one-step group in place, so a
- * disclosure here would expand to nothing. That threshold is untouched by this
- * element; what it fixes is the clock's dependence on a fold existing.
- */
+/** The running turn's foot line (PiLab R1); `useTurnClockLine` words it. */
 function TurnClockRow({ zone, items }: { zone: TurnWorkZone; items: readonly TurnItem[] }) {
-  const { line, spinner } = useTurnClockLine({ zone, clock: true, items });
+  const { line, spinner } = useTurnClockLine({ zone, items });
   return (
     <div data-slot="turn-live-line" className={turnClockRowClass()}>
       {spinner && <StatusIcon status="running" />}
@@ -2149,93 +2058,6 @@ function TurnClockRow({ zone, items }: { zone: TurnWorkZone; items: readonly Tur
         {line}
       </span>
     </div>
-  );
-}
-
-function TurnProgressHead({
-  items,
-  zone,
-  clock,
-  forcedOpen,
-  endedByUser,
-  userOpen,
-  onUserOpenChange,
-  children,
-}: {
-  /** The whole turn's items — the live action clause reads the newest call. */
-  items: readonly TurnItem[];
-  /** The turn's state, always. What this head is allowed to SAY about it is `clock`. */
-  zone: TurnWorkZone;
-  /**
-   * May this head print the turn's DURATION? True for the turn's first folding
-   * group and no other.
-   *
-   * That is T107's defect restated as a prop: two groups wearing the same
-   * duration is what 「最后一个理应显示 N 个步骤的地方却显示工作区，有点不协调」
-   * was about, and a turn grows a second group whenever a notice lands
-   * mid-process.
-   *
-   * ⚠️ It gates the NUMBER, not the line. Passing `zone: null` here is what the
-   * first cut did, and it made every non-first head a chevron with no text —
-   * the same blank row the missing clock produced (2026-09-22). A head always
-   * knows what state the turn is in; only one of them knows it in seconds.
-   */
-  clock: boolean;
-  /** An unanswered permission/question is inside: the group may not close. */
-  forcedOpen: boolean;
-  /** The turn did not finish (Stop, Ctrl+Enter, a failure): open once settled, until clicked. */
-  endedByUser: boolean;
-  userOpen: boolean | null;
-  onUserOpenChange: (open: boolean) => void;
-  children: React.ReactNode;
-}) {
-  const open = turnWorkGroupOpen({
-    forcedOpen,
-    userOpen,
-    settled: zone.kind === 'worked',
-    endedByUser,
-  });
-
-  // Decision 034: the head reports the turn's CLOCK, and nothing else. The step
-  // count and the call count that used to sit here were cut by the user on
-  // sight (「折叠头就不要那个 73 次工具调用了。也不要显示什么已处理 xxx 个步骤」)
-  // — they described the fold, and what a reader watches during a long wait is
-  // whether the turn is still moving.
-  //
-  // Without the clock it reports the STATE and stops there — 「工作中」 /
-  // 「已工作」, the bare forms of the very same two keys. That case is a head
-  // that is not the turn's first, and a turn whose span nothing measured; both
-  // used to render an empty row, which is what the user saw as 「折叠头没了」.
-  const { line, spinner } = useTurnClockLine({ zone, clock, items });
-  // The head is a disclosure like any row inside it: opening it by a click at
-  // the bottom of a live turn pauses bottom-following (C3), so the process the
-  // reader asked to see is not scrolled away by the next paragraph.
-  const markUserToggle = useUserDisclosureReport(open);
-
-  return (
-    <details className={turnBodyClass()} open={open}>
-      <summary
-        className={turnWorkGroupSummaryClass()}
-        onClick={(event) => {
-          event.preventDefault();
-          markUserToggle();
-          onUserOpenChange(!open);
-        }}
-      >
-        {spinner && <StatusIcon status="running" />}
-        <span className="min-w-0 truncate" title={line}>
-          {line}
-        </span>
-        <ChevronRight
-          className={cn(
-            'size-3.5 shrink-0 transition-transform duration-150 motion-reduce:transition-none',
-            open && 'rotate-90'
-          )}
-          aria-hidden
-        />
-      </summary>
-      <div className={cn(turnProcessShellClass(), 'pt-2')}>{children}</div>
-    </details>
   );
 }
 
@@ -2363,33 +2185,6 @@ function workingHeadText(
 }
 
 /**
- * 「已工作 54 秒」 / 「已工作 1 分 6 秒」 — the settled twin of the above.
- *
- * Three literal keys and not one `{{duration}}` slot, for the reason the whole
- * turn-timing vocabulary carries: English writes "1m 6s" and Chinese writes
- * 「1 分 6 秒」, so the unit words belong to the CATALOG.
- *
- * The bare fourth (`Worked`, 「已工作」) answers two callers, and it is a
- * sentence rather than a zero: a head that is not the turn's first, which must
- * not repeat the number, and a turn whose span nothing measured. The second one
- * is why this function used to have no bare form at all — `deriveTurnWorkZone`
- * signalled it by returning `null`, which deleted the head's whole line
- * (2026-09-22).
- */
-function workedHeadText(
-  t: (key: string, params?: Record<string, string | number>) => string,
-  worked: { minutes: number; seconds: number } | null
-): string {
-  if (!worked) return t('Worked');
-  if (worked.minutes === 0) return t('Worked for {{seconds}}s', { seconds: worked.seconds });
-  if (worked.seconds === 0) return t('Worked for {{minutes}}m', { minutes: worked.minutes });
-  return t('Worked for {{minutes}}m {{seconds}}s', {
-    minutes: worked.minutes,
-    seconds: worked.seconds,
-  });
-}
-
-/**
  * dsh-rebase decision 180, after the 2026-10-11 acceptance (DA-6): the rows
  * of a `/compact` the user ran — its command line, then its row (running,
  * the summary, or a note why there is none). `groupMessagesIntoTurns` gives
@@ -2413,21 +2208,33 @@ const ManualCompactionTurn = memo(function ManualCompactionTurn({
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
 }) {
   const items = useMemo(() => flattenTurnItems(turn), [turn]);
+  const terminal = useContext(TranscriptStyleContext) === 'terminal';
   return (
-    <section className={chatTurnClass()}>
-      <div className={turnBodyClass()}>
-        {items.map((item) => (
-          <TurnItemView
-            key={turnItemKey(item)}
-            item={item}
-            sessionId={sessionId}
-            thinkingEnabled={thinkingEnabled}
-            repoName={repoName}
-            streamingBlockId={null}
-            getThinkingDurationMs={getThinkingDurationMs}
-            getToolStartedAtMs={NO_TOOL_STARTS}
-          />
-        ))}
+    <section className={terminal ? terminalChatTurnClass() : chatTurnClass()}>
+      <div className={cn(turnBodyClass(), terminal && terminalBlockGapClass())}>
+        {items.map((item) => {
+          const view = (
+            <TurnItemView
+              key={turnItemKey(item)}
+              item={item}
+              sessionId={sessionId}
+              thinkingEnabled={thinkingEnabled}
+              repoName={repoName}
+              streamingBlockId={null}
+              getThinkingDurationMs={getThinkingDurationMs}
+              getToolStartedAtMs={NO_TOOL_STARTS}
+            />
+          );
+          // Decision 208: the compaction's rows line up with the text column
+          // of the turns around it (its `/compact` line stays the user's own).
+          const gutter = terminal ? terminalItemGutter(item) : null;
+          if (gutter === null) return view;
+          return (
+            <TerminalBlock key={turnItemKey(item)} bullet={gutter === 'text' ? 'text' : null}>
+              {gutter === 'text' ? <div className={terminalProseClass()}>{view}</div> : view}
+            </TerminalBlock>
+          );
+        })}
       </div>
     </section>
   );
@@ -2455,18 +2262,8 @@ const ChatTurn = memo(function ChatTurn({
   getThinkingTiming,
 }: ChatTurnProps) {
   const { t } = useI18n();
-  // `null` until the user clicks: "no opinion yet" has to be distinguishable
-  // from "chose closed", or the auto-collapse and a deliberate collapse would
-  // be the same state and rule 2 of `turnWorkGroupOpen` could never hold. Kept
-  // per session in the tool-expansion store (key `group:<groupKey>`) rather
-  // than in this component, so a choice survives completion AND a switch to
-  // another session and back (PiLab R1, FR-11.6, user 2026-10-30).
-  const groupExpandMemory = useToolExpansionStore((state) => state.bySession[sessionId]);
-  const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
-  const workGroupUserOpen = (groupKey: string): boolean | null => {
-    const remembered = groupExpandMemory?.[`group:${groupKey}`];
-    return typeof remembered === 'boolean' ? remembered : null;
-  };
+  // Decision 208: the reader's transcript style, provided by `MessageTimeline`.
+  const terminal = useContext(TranscriptStyleContext) === 'terminal';
   // One flatten per turn, feeding both the render and the copy payload (F7):
   // the copy builder's `Turn` overload used to re-run `flattenTurnItems` — and
   // through it `groupTimeline`/`pairToolBlocks` over every block — a second
@@ -2781,20 +2578,36 @@ const ChatTurn = memo(function ChatTurn({
     [turn.body, isLastTurn, sessionStatus]
   );
 
-  const renderItem = (item: TurnItem) => (
-    <TurnItemView
-      key={turnItemKey(item)}
-      item={item}
-      sessionId={sessionId}
-      thinkingEnabled={thinkingEnabled}
-      repoName={repoName}
-      streamingBlockId={streamingBlockIdForItem(item, streamingBlockIdByMessage)}
-      getThinkingDurationMs={getThinkingDurationMs}
-      getToolStartedAtMs={rowToolStartedAtMs}
-      endNoteAfterWork={item.kind === 'notice' && endNotesAfterWork.has(item.messageId)}
-      endNoteCovered={item.kind === 'notice' && item.messageId === coveredEndNoteId}
-    />
-  );
+  const renderItem = (item: TurnItem) => {
+    const endNoteCovered = item.kind === 'notice' && item.messageId === coveredEndNoteId;
+    const view = (
+      <TurnItemView
+        key={turnItemKey(item)}
+        item={item}
+        sessionId={sessionId}
+        thinkingEnabled={thinkingEnabled}
+        repoName={repoName}
+        streamingBlockId={streamingBlockIdForItem(item, streamingBlockIdByMessage)}
+        getThinkingDurationMs={getThinkingDurationMs}
+        getToolStartedAtMs={rowToolStartedAtMs}
+        endNoteAfterWork={item.kind === 'notice' && endNotesAfterWork.has(item.messageId)}
+        endNoteCovered={endNoteCovered}
+      />
+    );
+    // Decision 208, terminal style: prose and the items that are not steps sit
+    // in a block with the bullet column (a tool group's steps draw their own).
+    const gutter = terminal ? terminalItemGutter(item, { endNoteCovered }) : null;
+    if (gutter === null) return view;
+    return (
+      <TerminalBlock
+        key={turnItemKey(item)}
+        bullet={gutter === 'text' ? 'text' : null}
+        hideBullet={gutter === 'text' && item.kind === 'text' && !(item.block.text ?? '').trim()}
+      >
+        {gutter === 'text' ? <div className={terminalProseClass()}>{view}</div> : view}
+      </TerminalBlock>
+    );
+  };
 
   // Between two assistant messages (a tool result or permission wait splits
   // them) the last one already carries a latency while the turn is still in
@@ -2988,7 +2801,14 @@ const ChatTurn = memo(function ChatTurn({
     const key = `${segment.kind}:${turnItemKey(segment.items[0])}`;
     if (segment.kind === 'answer') {
       return (
-        <div key={key} className={cn(turnBodyClass(), turnAnswerToneClass())}>
+        <div
+          key={key}
+          className={cn(
+            turnBodyClass(),
+            turnAnswerToneClass(),
+            terminal && terminalBlockGapClass()
+          )}
+        >
           {segment.items.map(renderItem)}
         </div>
       );
@@ -2997,7 +2817,7 @@ const ChatTurn = memo(function ChatTurn({
       // `NoticeMessage` brings its own Alert border, so a notice stays OUT of
       // the answer container — nesting the two would be a box in a box.
       return (
-        <div key={key} className={turnBodyClass()}>
+        <div key={key} className={cn(turnBodyClass(), terminal && terminalBlockGapClass())}>
           {segment.items.map(renderItem)}
         </div>
       );
@@ -3024,45 +2844,33 @@ const ChatTurn = memo(function ChatTurn({
     return (
       <div
         key={key}
-        className={cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass())}
+        className={cn(
+          turnProcessShellClass(),
+          turnBodyClass(),
+          turnProcessToneClass(),
+          terminal && terminalBlockGapClass()
+        )}
       >
         {segment.items.map(renderItem)}
       </div>
     );
   };
 
-  // Does ANY group in this turn draw a head? T112 refuses a fold below two
-  // steps, so 思考 → 输出, 单工具 → 输出 and a bare paragraph have none — and
-  // decision 034 had put the clock exclusively on the head, which is how those
-  // shapes ended up reporting no duration at all (2026-09-22). When the answer
-  // is no, `TurnClockRow` draws the same line at the TOP of the turn instead
-  // (decision 037 — the first fix put it on the tail row and the user rejected
-  // the split: 「什么情况都让 已工作 x 分 xx 秒 落在顶部」).
-  //
-  // The same predicate the map below uses, deliberately: a second rule here
-  // could disagree with it and leave the turn with two clocks or none.
-  const clockOnHead = workSections.some(
-    (section) =>
-      section.kind === 'processGroup' &&
-      (processSettled ||
-        turnProcessGroupFolds(section.segments.flatMap((segment) => segment.items)))
+  // Decision 208, desktop style: the last process section of a turn that did
+  // not finish starts open (user rulings 2026-09-24 / 10-19), so the output stays
+  // where it stopped.
+  const lastProcessSectionIndex = workSections.findLastIndex(
+    (section) => section.kind === 'processGroup'
   );
-
-  // Decision 034: the turn's clock rides the FIRST process head that actually
-  // folds, and no other. A latch rather than an index test because a section
-  // can decline to render a head at all (`turnProcessGroupFolds`), and keying
-  // on `index === 0` would hand the clock to a group that never draws one —
-  // leaving the turn with no visible clock while it runs.
-  //
-  // Reset on every render and consumed during the same synchronous map, so it
-  // never outlives the pass that sets it.
-  let clockClaimed = false;
 
   return (
     // `data-turn-id` is the prompt rail's jump anchor: the turn's section, not
     // the user bubble inside it, so a jump always lands with the QUESTION at
     // the top of the viewport even when its reply is long.
-    <section data-turn-id={turn.id} className={chatTurnClass()}>
+    <section
+      data-turn-id={turn.id}
+      className={terminal ? terminalChatTurnClass() : chatTurnClass()}
+    >
       {/* T12: an ordinary first row, not a pinned band. The `sticky top-0`
           wrapper that used to be here is gone along with the clamp and the
           toggle it forced (`chatTimelineLayout.ts` head note). What it bought —
@@ -3082,81 +2890,34 @@ const ChatTurn = memo(function ChatTurn({
         ) : (
           <UserBubble message={turn.user} />
         ))}
-      <div className={turnBodyClass()}>
-        {/* Decision 037: the turn's clock, first line, whenever no fold head is
-            going to carry it. Above `workSections` rather than woven into them
-            because "first" is the whole requirement — a group that is not the
-            turn's opening section would otherwise push it down the turn. */}
-        {!STEPS_INLINE && !clockOnHead && <TurnClockRow zone={workZone} items={items} />}
+      <div className={cn(turnBodyClass(), terminal && terminalBlockGapClass())}>
         {/* Answers and notices stay outside the process groups; turn-level
-            progress remains on the trailing work-zone row (T113). */}
-        {workSections.map((section) => {
-          // PiLab R2 (07.7): an answer still being written is the SAME element
-          // as the final answer it becomes — one Fragment under one key, the
-          // divider added beside it when the turn settles — so the reply is not
-          // rebuilt (and its code blocks laid out again) at the end of a turn.
-          if (section.kind === 'finalAnswer' || section.kind === 'answer') {
-            // Decision 033 D1: the reply keeps its ordinary answer styling (no
-            // new border, background or container — D8 is explicit that it
-            // differs from intermediate prose by COLOUR alone), and the ONE
-            // thing added is the divider that announces the extraction. It is
-            // rendered here rather than inside `renderSegment` because it
-            // belongs to the placement decision `splitTurnWorkGroup` made, not
-            // to the segment: a turn whose final answer sits mid-flow for any
-            // other reason must not grow a second divider.
-            return (
-              <Fragment key={turnItemKey(section.segment.items[0])}>
-                {section.kind === 'finalAnswer' && (
-                  <div className={turnFinalAnswerDividerClass()}>
-                    <span className="shrink-0">{t('Final output')}</span>
-                    <span className="h-px min-w-0 flex-1 bg-border-soft" aria-hidden />
-                  </div>
-                )}
-                {renderSegment(section.segment)}
-              </Fragment>
-            );
-          }
+            progress remains on the trailing work-zone row (T113). Decision 208:
+            no 「最终输出」 divider in either style — the CLI and the desktop app
+            both read the reply as the turn's last paragraph. */}
+        {workSections.map((section, sectionIndex) => {
           if (section.kind !== 'processGroup') return renderSegment(section.segment);
-          // PiLab R1 (user ruling 2026-10-30): the turn reads as steps, Claude
-          // Code's way — every process group is drawn in place, no 「已工作 ›」
-          // fold. Thinking is no row: a group of only thinking draws nothing
-          // (its words are in the footer's 「思考 N 秒」).
-          if (STEPS_INLINE) {
-            const visibleSegments = section.segments.filter(
-              (segment) => !segment.items.every(isThinkingOnlyItem)
-            );
-            if (visibleSegments.length === 0) return null;
-            return (
-              <Fragment key={turnItemKey(section.segments[0].items[0])}>
-                {visibleSegments.map(renderSegment)}
-              </Fragment>
-            );
-          }
-          // First-item identity survives appended tools and later answers. Each
-          // group remembers its own click, even while authorization pins it open.
-          const groupKey = turnItemKey(section.segments[0].items[0]);
-          const groupedProcessItems = section.segments.flatMap((segment) => segment.items);
-          // While running a lone step stays inline (T112). Completion now folds
-          // even that step, so a single thought cannot remain above the final answer.
-          if (!processSettled && !turnProcessGroupFolds(groupedProcessItems)) {
-            return <Fragment key={groupKey}>{section.segments.map(renderSegment)}</Fragment>;
-          }
-          const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);
-          const headClock = !clockClaimed;
-          clockClaimed = true;
+          // PiLab R1 (user ruling 2026-10-30): the turn reads as steps, every
+          // process group drawn in place. Thinking is no row: a group of only
+          // thinking draws nothing (its words are in the footer's 「思考 N 秒」).
+          const visibleSegments = section.segments.filter(
+            (segment) => !segment.items.every(isThinkingOnlyItem)
+          );
+          if (visibleSegments.length === 0) return null;
+          // Decision 208, desktop style: how this section's runs start. An
+          // unanswered card pins them open (the T107 red line).
+          const disposition: StepRunDisposition = turnWorkGroupAwaitsUser(section.segments)
+            ? 'forced'
+            : processSettled && endedAbnormally && sectionIndex === lastProcessSectionIndex
+              ? 'open'
+              : 'closed';
           return (
-            <TurnProgressHead
-              key={groupKey}
-              items={items}
-              zone={workZone}
-              clock={headClock}
-              forcedOpen={groupForcedOpen}
-              endedByUser={endedAbnormally}
-              userOpen={workGroupUserOpen(groupKey)}
-              onUserOpenChange={(open) => setToolRowExpanded(sessionId, `group:${groupKey}`, open)}
+            <StepRunDispositionContext.Provider
+              key={turnItemKey(section.segments[0].items[0])}
+              value={disposition}
             >
-              {section.segments.map(renderSegment)}
-            </TurnProgressHead>
+              {visibleSegments.map(renderSegment)}
+            </StepRunDispositionContext.Provider>
           );
         })}
         {/* Layout 5c (ruling L3): once the turn settles, its file edits read as
@@ -3172,9 +2933,7 @@ const ChatTurn = memo(function ChatTurn({
             turn grows. */}
         {/* PiLab R1: the live line sits at the turn's foot while it runs (as
             Claude Code's spinner line does), the bill once it ends. */}
-        {STEPS_INLINE && workZone.kind === 'working' && (
-          <TurnClockRow zone={workZone} items={items} />
-        )}
+        {workZone.kind === 'working' && <TurnClockRow zone={workZone} items={items} />}
         <TurnWorkZoneRow zone={workZone} thinkingText={turnThinkingText} />
         {showLiveEnd && liveEnd && (
           <TurnEndNotice turnEnd={liveEnd} afterWork={liveEndAfterWork} live />

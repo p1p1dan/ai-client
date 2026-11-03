@@ -10,6 +10,10 @@ import { normalizeLocale } from '@shared/i18n';
 import { EMPTY_CHAT_AGENT_DEFAULTS } from '@shared/models/chatAgentDefaults';
 import { DEFAULT_CACHE_CONTROL_ON_TOOLS } from '@shared/types/cacheControlOnTools';
 import {
+  DEFAULT_CHAT_TRANSCRIPT_STYLE,
+  isChatTranscriptStyle,
+} from '@shared/types/chatTranscriptStyle';
+import {
   CHAT_TYPOGRAPHY_SCALE_VERSION,
   DEFAULT_CHAT_BODY_FONT_SIZE,
   DEFAULT_CHAT_FONT_FAMILY,
@@ -222,6 +226,8 @@ export function getInitialState() {
     chatBodyFontSize: DEFAULT_CHAT_BODY_FONT_SIZE,
     chatProcessFontSize: DEFAULT_CHAT_PROCESS_FONT_SIZE,
     chatTypographyScaleVersion: CHAT_TYPOGRAPHY_SCALE_VERSION,
+    // Decision 208: the CLI's way, the user's pick for the default.
+    chatTranscriptStyle: DEFAULT_CHAT_TRANSCRIPT_STYLE,
 
     // AI Features
     commitMessageGenerator: defaultCommitMessageGeneratorSettings,
@@ -408,6 +414,9 @@ export const useSettingsStore = create<SettingsState>()(
           const { body, process } = resolveChatProcessWrite(size, state.chatBodyFontSize);
           return { chatBodyFontSize: body, chatProcessFontSize: process };
         }),
+      setChatTranscriptStyle: (chatTranscriptStyle) => {
+        if (isChatTranscriptStyle(chatTranscriptStyle)) set({ chatTranscriptStyle });
+      },
 
       // AI Feature Setters
       setCommitMessageGenerator: (settings) =>

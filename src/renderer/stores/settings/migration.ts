@@ -1,5 +1,6 @@
 import { resolveClaudeSdkAutoCompactPercent } from '@shared/claudeSdkEngine';
 import { sanitizeChatAgentDefaults } from '@shared/models/chatAgentDefaults';
+import { isChatTranscriptStyle } from '@shared/types/chatTranscriptStyle';
 import { CHAT_TYPOGRAPHY_SCALE_VERSION } from '@shared/types/chatTypography';
 import { checkRequestUserAgent, isRequestUserAgentMode } from '@shared/types/requestUserAgent';
 import type { SettingsState, TerminalKeybinding, XtermKeybindings } from './types';
@@ -353,6 +354,10 @@ export function migrateSettings(
       persisted.sidebarListTitleEnabled,
       currentState.sidebarListTitleEnabled
     ),
+    // Decision 208: a value from a newer build, or a hand edit, reads as the default.
+    chatTranscriptStyle: isChatTranscriptStyle(persisted.chatTranscriptStyle)
+      ? persisted.chatTranscriptStyle
+      : currentState.chatTranscriptStyle,
 
     // S-6 feedback 10: the same rule Main gates by (`resolveDeveloperModeEnabled`).
     developerModeEnabled: sanitizeBoolean(

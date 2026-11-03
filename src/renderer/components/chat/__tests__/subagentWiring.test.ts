@@ -63,8 +63,10 @@ function load(relative: string, kind: ts.ScriptKind) {
 describe('ToolRows.tsx — subagent panel mount', () => {
   const { callSites, syntax } = load('../ToolRows.tsx', ts.ScriptKind.TSX);
 
-  it('mounts SubagentActivity behind the isDelegationTool gate, keyed by the row toolCallId', () => {
-    expect(syntax).toContain('isDelegationTool(view.toolName)');
+  it('mounts SubagentActivity behind the delegation gate, keyed by the row toolCallId', () => {
+    // Decision 208: the gate is `isDelegationRow` (stepPresentation.ts), one
+    // definition shared with the transcript styles' special rows.
+    expect(syntax).toContain('isDelegationRow(view) && view.toolCallId');
     expect(callSites).toContain('SubagentActivity');
     expect(callSites).toContain('parentToolCallId={view.toolCallId}');
     expect(callSites).toContain('parentRunning={view.running}');

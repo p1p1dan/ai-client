@@ -6,9 +6,10 @@
  *  1. `ensureChatMessageLoaded` pages older history through the timeline's
  *     own "load earlier messages" path (`loadOlderHistoryPage`) until the
  *     message is in the session's bucket, or there is nothing older;
- *  2. `revealChatMessage` finds its `data-message-id` anchor, opens a folded
- *     work group around it the way `locateToolRow` does, and scrolls only the
- *     timeline's viewport by geometry (as `PromptNavRail.jumpTo`);
+ *  2. `revealChatMessage` finds its `data-message-id` anchor, opens a closed
+ *     `<details>` around it the way `locateToolRow` does (decision 208: only
+ *     a desktop-style run is one, and prose never sits inside a run), and
+ *     scrolls only the timeline's viewport by geometry (as `PromptNavRail.jumpTo`);
  *  3. it marks the anchor `data-located` for a moment, which the anchor's
  *     class shows as the selection colour.
  */

@@ -20,9 +20,12 @@
  * N 个步骤」. That left prose and process runs alternating down the turn — the
  * user's report was 「各种调用、授权穿插在 agent 的输出中，严重影响我的观感」.
  * That led to a single group containing everything before the last answer.
- * Every answer and notice stays outside the process groups. The last answer
- * retains its final-output divider when it qualifies; `countProcessSteps`
- * only controls the fold threshold, while separate counters supply the chips.
+ * Every answer and notice stays outside the process groups.
+ *
+ * Decision 208 (2026-11-03): no transcript style folds a turn any more (steps
+ * render in place since PiLab R1) and the 「最终输出」 divider is gone. The
+ * split still orders the sections, and `turnWorkGroupAwaitsUser` /
+ * `turnWorkGroupOpen` now decide the desktop style's runs (`DesktopStepRun`).
  */
 
 import type { TurnItem, TurnSegment } from './chatTurn';
@@ -42,33 +45,6 @@ export function countProcessSteps(items: readonly TurnItem[]): number {
     if (item.kind === 'permissionActivity') return total + item.blocks.length;
     return total + 1;
   }, 0);
-}
-
-/**
- * Does this process group earn a fold at all?
- *
- * T112 (user decision 2026-09-21): 「如果只有一条，就直接显示，如果有多条一起，
- * 那就合并为 N 个步骤」. A single step behind a disclosure costs a click to read
- * one line that already fits, and the head hiding it would read 「1 个步骤」 —
- * the row itself, counted.
- *
- * This is the rule the TOOL ROWS have had since sign-off ②/A07 `:2348`
- * (`toolCard.ts`'s `deriveToolGroupRows`: "恰好 1 条不聚合"), applied one level
- * out to the group that wraps them. Measured in STEPS rather than items, so the
- * threshold is exactly the number the head would otherwise have printed.
- *
- * Zero counts as "no fold" alongside one, and that is not a new case: a group
- * with nothing to count already had no head, because `deriveTurnWorkGroupLabel`
- * returns `null` there. It renders in place either way.
- *
- * The authorization red line moves only in the safe direction: a group that
- * does not fold is unconditionally on screen, so an unanswered
- * permission/question that happens to be the group's only step becomes MORE
- * reachable, never less. `turnWorkGroupAwaitsUser` still governs every group
- * that does fold.
- */
-export function turnProcessGroupFolds(items: readonly TurnItem[]): boolean {
-  return countProcessSteps(items) > 1;
 }
 
 export type TurnWorkSection<T> =
@@ -222,7 +198,8 @@ export interface TurnWorkGroupOpenInput {
 /**
  * Authorization wins; manual choices apply within the current turn phase;
  * otherwise running groups are open and settled ones fold, except a settled
- * turn the user ended.
+ * turn the user ended. Decision 208: the desktop style's runs call it with
+ * `settled: true`, so a run starts closed unless pinned or defaulted open.
  */
 export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
   if (input.forcedOpen) return true;

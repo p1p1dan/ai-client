@@ -18,9 +18,52 @@ interface StatusIconProps extends Omit<React.ComponentProps<'span'>, 'children'>
   status: RunStatus;
   /** Accessible name; omit when an adjacent label already says it. */
   label?: string;
+  /**
+   * Decision 208: `bullet` is the terminal transcript's `●`, coloured by the
+   * same states. It takes the font and size of where it sits (the transcript's
+   * bullet column) and is drawn as a pseudo-element, so it never reaches copied
+   * or searched text.
+   */
+  shape?: 'icon' | 'bullet';
 }
 
-function StatusIcon({ status, label, className, ...props }: StatusIconProps) {
+const BULLET_TONE: Record<RunStatus, string> = {
+  // Neutral and blinking, as the CLI's dot for a call still in flight.
+  running: 'text-foreground-faint animate-blink motion-reduce:animate-none',
+  waiting: 'text-primary animate-breathe motion-reduce:animate-none',
+  success: 'text-success',
+  failed: 'text-destructive',
+  stopped: 'text-foreground-faint',
+  idle: 'text-foreground-faint',
+};
+
+function StatusIcon({ status, label, shape = 'icon', className, ...props }: StatusIconProps) {
+  if (shape === 'bullet') {
+    const bulletClass = cn("before:content-['●']", BULLET_TONE[status], className);
+    if (label) {
+      return (
+        <span
+          aria-label={label}
+          className={bulletClass}
+          data-shape="bullet"
+          data-slot="status-icon"
+          data-status={status}
+          role="img"
+          {...props}
+        />
+      );
+    }
+    return (
+      <span
+        aria-hidden
+        className={bulletClass}
+        data-shape="bullet"
+        data-slot="status-icon"
+        data-status={status}
+        {...props}
+      />
+    );
+  }
   const glyph = (
     <>
       {status === 'running' && (

@@ -34,6 +34,8 @@
   --color-foreground-soft: var(--foreground-soft);
   /* Decision 183: the sidebar's "not started" ring. Do not add /N. */
   --color-muted-foreground-faint: var(--muted-foreground-faint);
+  /* Decision 208: inline code in the terminal transcript, ink without a chip. Do not add /N. */
+  --color-inline-code: var(--inline-code);
 
   /* Design system v2 (§2): four surfaces, two border strengths, ghost fills. */
   --color-surface-0: var(--surface-0);
@@ -188,6 +190,17 @@
   --animate-marquee: marquee 4s linear infinite alternate;
   /* Design system v2 §6: the "waiting on you" dot. */
   --animate-breathe: breathe 2.4s ease-in-out infinite;
+  /* Decision 208: the terminal transcript's running bullet, on and off as the CLI's is. */
+  --animate-blink: blink 1.2s steps(1) infinite;
+
+  @keyframes blink {
+    0%, 49% {
+      opacity: 1;
+    }
+    50%, 100% {
+      opacity: 0.2;
+    }
+  }
 
   @keyframes skeleton {
     to {
@@ -268,6 +281,8 @@
     --warning-foreground: #ffffff;
     --info: #3a6ea5;
     --info-foreground: #ffffff;
+    /* Decision 208: inline code ink in the terminal transcript (5:1 on the canvas) */
+    --inline-code: #4b5de8;
     /* directory icons keep their yellow (icon colour rule) */
     --folder: oklch(0.6333 0.1295 85.81);
     /* 10%: every closed frame and divider */
@@ -330,6 +345,7 @@
     --warning-foreground: #151515;
     --info: #7aa5d6;
     --info-foreground: #151515;
+    --inline-code: #b1b9f9;
     --folder: oklch(0.7346 0.1462 87.46);
     --border: #2b2b2b;
     --input: #424242;
@@ -555,6 +571,39 @@
 }
 @utility elev-popover {
   box-shadow: var(--elev-popover);
+}
+
+/*
+ * Decision 208: the desktop transcript's line for a run that is still working
+ * -- a light passing over faint text, as Claude's desktop app draws a working
+ * step. Reduced motion keeps the words, still and in the muted ink.
+ */
+@utility text-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--foreground-faint) 0%,
+    var(--foreground) 45%,
+    var(--foreground-faint) 90%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 1.8s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    background-image: none;
+    color: var(--muted-foreground);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
 }
 
 /* PiLab R2: a surface a dragged file can be dropped on (the composer), while

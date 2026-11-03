@@ -245,6 +245,10 @@ describe('T104: chat typography settings section', () => {
       expect(text).toContain(zhTranslations['Message text size']);
       expect(text).toContain(zhTranslations['Process text size']);
       expect(text).toContain(zhTranslations['Font family']);
+      // Decision 208: the display style row, in the catalog's words.
+      expect(text).toContain(zhTranslations['Conversation display']);
+      expect(text).toContain(zhTranslations['Terminal style']);
+      expect(text).toContain(zhTranslations['Desktop style']);
       // The two size inputs carry the range as their own attributes.
       const numeric = Array.from(
         container.querySelectorAll<HTMLInputElement>('input[type="number"]')
@@ -316,6 +320,32 @@ describe('T104: chat typography settings section', () => {
         el.style.fontFamily.includes('Georgia')
       );
       expect(sans.length).toBe(2);
+    } finally {
+      await cleanup();
+    }
+  });
+  it('decision 208: the display style toggle starts on terminal and writes desktop', async () => {
+    useSettingsStore.setState({ ...DEFAULTS, chatTranscriptStyle: 'terminal' });
+    const { container, cleanup } = await mountSection();
+    try {
+      // Either locale: the platform decides the default one in this environment.
+      const labels = (key: string) => [key, zhTranslations[key]];
+      const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).filter(
+        (button) =>
+          [...labels('Terminal style'), ...labels('Desktop style')].includes(
+            button.textContent ?? ''
+          )
+      );
+      expect(buttons.length, 'one button per style').toBe(2);
+      expect(labels('Terminal style')).toContain(buttons[0]?.textContent);
+      expect(buttons.map((button) => button.getAttribute('aria-pressed'))).toEqual([
+        'true',
+        'false',
+      ]);
+      await act(async () => {
+        buttons[1]?.click();
+      });
+      expect(useSettingsStore.getState().chatTranscriptStyle).toBe('desktop');
     } finally {
       await cleanup();
     }
