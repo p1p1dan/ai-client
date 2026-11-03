@@ -558,7 +558,7 @@ interface PendingPermission {
    */
   queueDepth?: number;
   /**
-   * The subagent asking, from `permission.requested`. Decision 207 §15: such a
+   * The delegate asking, from `permission.requested`. Decision 207 §15: such a
    * card is parked in the delegate, not in the main turn, so the main turn
    * ending must not take it off the queue (see `withoutSessionPermissions`).
    */
@@ -1028,7 +1028,7 @@ function isBetweenRuns(state: ChatSessionsState, sessionId: string): boolean {
  * Drop the parked prompts of one session's main turn (terminal events). Same
  * identity rule as {@link withoutPermission}.
  *
- * A subagent's card stays (decision 207 §15): since DSH 0.2.1 every delegate
+ * A delegate's card stays (decision 207 §15): since DSH 0.2.1 every delegate
  * runs in the background, so the main turn often ends — or is stopped, which
  * leaves delegates running — while a delegate is still parked on its gate.
  * `permission.resolved` takes it off once that gate settles.
