@@ -29,6 +29,8 @@ Role: implementation-status。更新日期：2026-10-14。只放当前阶段、�
 
 ## Next Target
 
+**DSH 升到 0.2.1-rc.5（2026-11-03，[决策 207](decisions/207-dsh-0-2-1-rc-5-upgrade.md)，阶段看板 [dsh-0.2.1-upgrade-tasks.md](dsh-0.2.1-upgrade-tasks.md)）**：已合入本地 main（`2aade4bf`），未推送。测试包 `1.2.2-test.1` 从测试分支 `test/1.2.2-test.1` 手动触发 CI；用户装测试包实测确认后，再推 main 并发 1.2.2（发版说明要补这次升级）。决策 207 里标「自主」的条目与第 15 节的观察项待用户看。
+
 **2026-10-14**：1.1.0 已发布，下文第 0～3 项的测试包流程结束；第 4 项「P1-14 其余」除最后一条的「合入 main 发版」外仍有效，在 main 上继续。决策审批（第 3 项）照旧待用户。
 
 **DSH 升到 0.2.0-rc.2（2026-10-14，[决策 189](decisions/189-dsh-0-2-0-rc-2-upgrade.md)，待审批；未推送）**：在 worktree 分支 `claude/upbeat-darwin-fbd177` 上，`c379fe25`、`f8aadf0a` 加文档提交，见 Last Landed。
