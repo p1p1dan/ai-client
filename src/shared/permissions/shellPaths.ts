@@ -37,6 +37,11 @@ function isSkippableIoError(error: unknown): boolean {
 /** A `..` that is a whole segment, not part of a name like `..rc`. */
 const PARENT_SEGMENT = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
 
+/** Whether `path` climbs with a whole `..` segment somewhere. */
+export function hasParentSegment(path: string): boolean {
+  return PARENT_SEGMENT.test(path);
+}
+
 /** Windows accepts both separators; on POSIX a backslash is a legal name character. */
 const SEGMENT_SEPARATOR = sep === '\\' ? /[\\/]/ : /\//;
 
@@ -62,6 +67,26 @@ export async function canonicalPath(
   // path carrying a `..` segment is resolved one segment at a time instead.
   if (PARENT_SEGMENT.test(absolute)) return walkSegments(io, absolute);
   return existingAncestor(io, absolute);
+}
+
+/**
+ * Decision 207 §15 item 7: the other reading of a path that climbs with `..`,
+ * when it lands elsewhere — the `..` folded as text first, then resolved, as
+ * win32 does and DSH's file tools do there. `canonicalPath` resolves each
+ * link before the `..` that follows it, as POSIX does; a `..` that crosses a
+ * link (or a pnpm junction) can put the two in different places, and the
+ * gate judges both. Undefined when there is no `..` or both agree.
+ */
+async function foldedReading(
+  io: Pick<PermissionFileSystem, 'realpath'>,
+  cwd: string,
+  input: string,
+  physical: string
+): Promise<string | undefined> {
+  const absolute = isAbsolute(input) ? input : `${cwd}${sep}${input}`;
+  if (!PARENT_SEGMENT.test(absolute)) return undefined;
+  const folded = await existingAncestor(io, resolve(absolute));
+  return folded === physical ? undefined : folded;
 }
 
 async function existingAncestor(
@@ -170,6 +195,10 @@ function splitRoot(absolute: string): { root: string; segments: string[] } {
  * canonical resolution, then the gate. The target is resolved once more after
  * the approval, because the wait for a person can be long and a symlink swapped
  * during it would otherwise be opened under an approval given for another file.
+ *
+ * A target that climbs with `..` across a link is judged by both readings
+ * (`foldedReading`): the other one joins `paths`, so it is asked about,
+ * denied and remembered like the rest.
  */
 export async function authorizeTarget(
   context: {
@@ -194,13 +223,15 @@ export async function authorizeTarget(
   const lexical = resolve(context.cwd, input);
   if (pathPolicy(lexical) === 'deny') throw createError('tool_denied', `access denied: ${lexical}`);
   const path = await canonicalPath(context.fs, context.cwd, input);
+  const folded = await foldedReading(context.fs, context.cwd, input, path);
+  const paths = folded ? [...(shell?.paths ?? []), folded] : shell?.paths;
   await context.authorize(
     {
       tool,
       toolCallId,
       path,
       command,
-      paths: shell?.paths,
+      paths,
       commands: shell?.commands,
       unresolvedPaths: shell?.unresolvedPaths,
       exploration: shell?.exploration,
@@ -212,7 +243,7 @@ export async function authorizeTarget(
   );
   signal?.throwIfAborted();
   const current = await canonicalPath(context.fs, context.cwd, input);
-  if (current !== path)
+  if (current !== path || (await foldedReading(context.fs, context.cwd, input, current)) !== folded)
     throw createError(
       'path_changed',
       'path changed during approval; retry to authorize the new target'

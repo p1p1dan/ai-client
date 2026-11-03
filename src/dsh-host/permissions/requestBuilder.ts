@@ -33,9 +33,11 @@ import { analyzePwsh, PWSH_TOOL } from '../../shared/permissions/pwshAnalysis.ts
 import {
   authorizeTarget,
   checkShellPaths,
+  hasParentSegment,
   type PermissionFileSystem,
 } from '../../shared/permissions/shellPaths.ts';
 import { classifyTool, type DshToolClass, pluginToolClass } from './classification.ts';
+import { shellWorkdirTarget } from './shellWorkdir.ts';
 
 /** The part of a DSH call the mapping reads. */
 export interface GatedCallInput {
@@ -147,9 +149,13 @@ export async function authorizeCall(
   // Only reads and searches may land on a host-produced file (a spill the model
   // was told to read); decided on the canonical path the path step hands over.
   const trustable = toolClass === 'read' || toolClass === 'search';
+  // Every reading of the target must be one (decision 207 §15 item 7: a `..`
+  // across a link adds the other reading to `paths`).
+  const trusted = (request: ToolPermissionRequest) =>
+    [request.path, ...(request.paths ?? [])].every((path) => context.isTrustedPath?.(path));
   const extra = (request: ToolPermissionRequest): ToolPermissionRequest => ({
     ...request,
-    ...(trustable && context.isTrustedPath?.(request.path) ? { trustedPath: true } : {}),
+    ...(trustable && trusted(request) ? { trustedPath: true } : {}),
     ...(context.delegation ? { delegation: context.delegation } : {}),
   });
   const target = (
@@ -238,7 +244,15 @@ export async function authorizeCall(
     }
     case 'shell': {
       const command = stringArg(args, 'command') ?? '';
-      const workdir = resolve(context.cwd, stringArg(args, 'workdir') ?? '.');
+      const given = stringArg(args, 'workdir');
+      // Decision 207 §15 item 7: judged where DSH spawns it (`shellWorkdirTarget`):
+      // its bash hands `<cwd>/<workdir>` to the system as written, which
+      // resolves a link before the `..` after it; its pwsh folds the `..`
+      // first. Only a `..` tells the two apart, so any other is folded as before.
+      const workdir =
+        given !== undefined && hasParentSegment(given)
+          ? shellWorkdirTarget(call.name, given, context.cwd, context.platform ?? process.platform)
+          : resolve(context.cwd, given ?? '.');
       // Both shells: operands expanded and checked against the deny list,
       // before the approval and again after it. The policy surface is `bash`
       // for either (the gate's default for a shell tool).

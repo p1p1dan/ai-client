@@ -1593,3 +1593,54 @@ describe('[207-CDASK] decision 207 §15: a move out of the workspace asks first'
     }
   });
 });
+
+describe('[207-WORKDIR] decision 207 §15 item 7: a command is judged where DSH runs it', () => {
+  const link = () => join(ws, 'link-wd');
+  beforeAll(() => {
+    // `link-wd/..` is `outside` by the link, the workspace by the text.
+    mkdirSync(join(outside, 'inner'), { recursive: true });
+    symlinkSync(join(outside, 'inner'), link());
+  });
+  afterAll(() => {
+    unlinkSync(link());
+  });
+  function gated() {
+    const { fake, host } = setup();
+    const real = realGate({ gear: 'auto' });
+    host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate: real.gate });
+    return { fake, asked: real.asked };
+  }
+
+  it('bash hands `<cwd>/link-wd/..` to the system, which resolves the link first: asked as outside', async () => {
+    const { fake, asked } = gated();
+    await fake.prepare(call('bash', { command: 'ls', workdir: 'link-wd/..' }, root()));
+    expect(asked).toEqual([expect.objectContaining({ tool: 'bash', path: outside })]);
+  });
+
+  it('pwsh folds the same spelling first: it runs in the workspace, no card', async () => {
+    const { fake, asked } = gated();
+    expect(
+      (
+        await fake.prepare(
+          call('pwsh', { command: 'Get-ChildItem', workdir: 'link-wd/..' }, root())
+        )
+      ).kind
+    ).toBe('allow');
+    expect(asked).toEqual([]);
+  });
+
+  it('a plain relative workdir: as before', async () => {
+    const { fake, asked } = gated();
+    expect((await fake.prepare(call('bash', { command: 'ls', workdir: 'a' }, root()))).kind).toBe(
+      'allow'
+    );
+    expect(asked).toEqual([]);
+    // A `..` that crosses no link: one reading, the same one.
+    const recorded = setup();
+    const { gate, seen } = recordingGate();
+    recorded.host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate });
+    await recorded.fake.prepare(call('bash', { command: 'ls', workdir: 'a/../b' }, root()));
+    expect(seen[0]).toMatchObject({ path: join(ws, 'b') });
+    expect(seen[0]?.paths ?? []).toEqual([]);
+  });
+});
