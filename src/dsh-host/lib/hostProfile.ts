@@ -33,6 +33,8 @@ export const REQUIRED_DISABLED: readonly string[] = [
   'plugin-package-inventory-deepseek',
   'session-log-deepseek',
   'web-search-deepseek',
+  // DSH 0.2.1 (decision 207 §4): DeepSeek's search / fetch providers on api.deepseek.com.
+  'web-deepseek-api',
   // P1-5b (decision 034): dsh-credentials-local keeps keys in plain text in
   // $DSH_HOME/.credentials.yaml; aiclient-credentials pulls them from Main.
   'credentials',
@@ -152,22 +154,26 @@ const AGENT_INSTRUCTIONS_MAX_BYTES = 65536;
 
 /**
  * The `agent-instructions` and `skill-filesystem` overlays that point DSH's
- * own instruction and skill loading at `<agentDir>` (decision 101 rule 2):
- * `dshHome` for the workspace-instruction baseline (`<agentDir>/AGENTS.md`),
- * `customSkillDirs` for the user's skills (`<agentDir>/skills`, rank 300 by
- * `dsh-skill-filesystem`'s own root table). None when the host was handed no
- * path — e.g. the packaged smoke, or a profile started outside Main — so both
- * rows keep DSH's own `$DSH_HOME`-relative defaults unchanged.
+ * own instruction and skill loading at `<agentDir>` (decision 101 rule 2).
+ * Since DSH 0.2.1 the instruction row takes no home of its own: host.ts sets
+ * `DSH_AGENTS_HOME=<agentDir>` so `<agentDir>/AGENTS.md` is the user-level
+ * file and the real `~/.agents/AGENTS.md` is not read (decision 207 §6,
+ * option A). That variable also moves the skill row's shared root, so the
+ * row restates `agentsHome` (the `~/.agents` it read before) next to
+ * `customSkillDirs` for `<agentDir>/skills` (rank 300). None when the host
+ * was handed no path — e.g. the packaged smoke, or a profile started outside
+ * Main — so both rows keep DSH's own defaults unchanged.
  */
 export function agentDirOverlays(
-  agentDir: string | undefined
+  agentDir: string | undefined,
+  sharedAgentsHome: string
 ): Array<{ id: string; config: Record<string, unknown> }> {
   if (!agentDir) return [];
   return [
+    { id: 'agent-instructions', config: { maxBytes: AGENT_INSTRUCTIONS_MAX_BYTES } },
     {
-      id: 'agent-instructions',
-      config: { maxBytes: AGENT_INSTRUCTIONS_MAX_BYTES, dshHome: agentDir },
+      id: 'skill-filesystem',
+      config: { customSkillDirs: [`${agentDir}/skills`], agentsHome: sharedAgentsHome },
     },
-    { id: 'skill-filesystem', config: { customSkillDirs: [`${agentDir}/skills`] } },
   ];
 }

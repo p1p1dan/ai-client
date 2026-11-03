@@ -591,6 +591,9 @@ async function main() {
   const AGENTS_DIR_MARKER = 'AICLIENT-INS1-AGENTDIR-3f7a91';
   const PROJECT_MARKER = 'AICLIENT-INS1-PROJECT-9c2e04';
   const SKILL_BODY_MARKER = 'AICLIENT-SKL1-BODY-5b1dc7';
+  // Decision 207 §6 (option A): the shared agents root's AGENTS.md
+  // (`~/.agents`, DSH 0.2.1) must not reach the model; its skills still list.
+  const AGENTS_HOME_MARKER = 'AICLIENT-AGENTS-HOME-7d41b8';
   try {
     // ---- A: new session, persisted before its first turn, then the P0-3 turns
     const a = startHost('A');
@@ -975,9 +978,29 @@ async function main() {
     // default dsh-agent-instructions and dsh-skill-filesystem both use.
     mkdirSync(join(insSklWorkspace, '.git'), { recursive: true, mode: 0o700 });
     writeFileSync(join(insSklWorkspace, 'CLAUDE.md'), `# Project notes\n${PROJECT_MARKER}\n`);
+    // H's own HOME, so its `~/.agents` fixture reaches no other host.
+    const insSklHome = join(box.root, 'ins-skl-home');
+    const agentsHomeSkillDir = join(insSklHome, '.agents', 'skills', 'ins-agents-home');
+    mkdirSync(agentsHomeSkillDir, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(insSklHome, '.agents', 'AGENTS.md'),
+      `# Shared agent notes\n${AGENTS_HOME_MARKER}\n`
+    );
+    writeFileSync(
+      join(agentsHomeSkillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: ins-agents-home',
+        'description: Decision 207 bridge-smoke fixture skill under ~/.agents/skills.',
+        '---',
+        '',
+        'A skill from the shared agents root.',
+        '',
+      ].join('\n')
+    );
     const insSklChild = spawn(nodeBin, ['--expose-internals', hostEntry], {
       cwd: hostCwd,
-      env: { ...env, AICLIENT_PERMISSION_AGENT_DIR: insSklAgentDir },
+      env: { ...env, HOME: insSklHome, AICLIENT_PERMISSION_AGENT_DIR: insSklAgentDir },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
     const insSklClient = new HostClient(insSklChild);
@@ -1043,7 +1066,7 @@ async function main() {
       chH,
       INS_SKL_SESSION,
       'INS-SKL-RECALL',
-      `P0-RECALL {"markers":["${AGENTS_DIR_MARKER}","${PROJECT_MARKER}","${SKILL_BODY_MARKER}"]}`
+      `P0-RECALL {"markers":["${AGENTS_DIR_MARKER}","${PROJECT_MARKER}","${SKILL_BODY_MARKER}","${AGENTS_HOME_MARKER}"]}`
     );
     // P1-4d2: a known command line runs as DSH's command, with no model turn.
     await runTurn(h, chH, INS_SKL_SESSION, 'COMMAND-GOAL', '/goal');
@@ -1055,6 +1078,7 @@ async function main() {
     report.panels = await h.client.request(chH, 'worker.panels', {
       logicalSessionId: INS_SKL_SESSION,
     });
+    report.panelsWorkspace = insSklWorkspace;
     report.commandShow = await h.client.request(chH, 'worker.command', {
       logicalSessionId: INS_SKL_SESSION,
       line: '/goal',
@@ -1886,10 +1910,13 @@ async function main() {
     // P1-16a (decision 101): <agentDir>'s AGENTS.md, the project CLAUDE.md
     // (INS-1) and a skill's `/name`-injected body (SKL-1) all reached the
     // model by the end of the session's first request.
+    // Decision 207 §6 (option A): and `~/.agents/AGENTS.md` did not.
     agentDirOverlaysReachedFirstRequest:
       (turns['INS-SKL-RECALL'] as { reply?: string } | undefined)?.reply?.includes(
-        `present=${AGENTS_DIR_MARKER},${PROJECT_MARKER},${SKILL_BODY_MARKER} missing=-`
+        `present=${AGENTS_DIR_MARKER},${PROJECT_MARKER},${SKILL_BODY_MARKER} missing=${AGENTS_HOME_MARKER}`
       ) === true,
+    // Decision 207 §6: the skills under `~/.agents/skills` still list, as on 0.2.0.
+    agentsHomeSkillsStillListed: menuNames.includes('skill:ins-agents-home'),
     // P1-4d2 (decisions 099 rules 9-12, 113): DSH's commands minus the hidden
     // and window-owned ones, the skill by its bare name; the inventory counts
     // skills alone; `/compact` takes instructions (decision 179); a command
@@ -1929,12 +1956,18 @@ async function main() {
     // out of band with DSH's text either way, refuses `/plan`, and neither RPC
     // puts an event on the channel.
     // P1-7b adds the bridge's `jobs` (empty: no job yet).
+    // Decision 207 adds DSH 0.2.1's `workingDirectory` after the three keys.
     panelsAnswerCurrentValues:
       JSON.stringify(
         (((report.panels as Message | undefined)?.projections as Message[]) ?? []).map(
           (entry) => entry.key
         )
-      ) === '["todos","goal","subagentCatalog","goalActivation","jobs"]' &&
+      ) === '["todos","goal","subagentCatalog","workingDirectory","goalActivation","jobs"]' &&
+      // Decision 207 §7, §15: DSH 0.2.1's current directory, the workspace until a `cd`.
+      typeof report.panelsWorkspace === 'string' &&
+      (((report.panels as Message | undefined)?.projections as Message[]) ?? []).find(
+        (entry) => entry.key === 'workingDirectory'
+      )?.view === report.panelsWorkspace &&
       (((report.panels as Message | undefined)?.projections as Message[]) ?? []).find(
         (entry) => entry.key === 'goalActivation'
       )?.view === null &&

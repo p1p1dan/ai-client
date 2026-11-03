@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-perm-deny",
     "requestId": "turn-PERM-DENY",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/perm-deny"
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
     "type": "session.status",
     "payload": {
       "status": "running"

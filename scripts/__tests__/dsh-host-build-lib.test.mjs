@@ -205,7 +205,7 @@ describe('pruneReason keeps every package directory the host loads', () => {
   const keptDirs = [
     'node_modules/@deepseek-ai',
     'node_modules/@deepseek-ai/dsh-base',
-    'node_modules/@deepseek-ai/dsh-skill-badge/assets',
+    'node_modules/@deepseek-ai/dsh-sandbox-windows-acl/assets',
     'node_modules/@aiclient/dsh-app',
     'node_modules/@aiclient/dsh-app/lib',
     'node_modules/koffi',
@@ -341,7 +341,7 @@ describe('pruneReason removes the B-tier payload', () => {
       'node_modules/a/license.txt',
       'node_modules/a/NOTICE',
       'node_modules/a/COPYING.LESSER',
-      'node_modules/@deepseek-ai/dsh-skill-badge/assets/dsh-badge.md',
+      'node_modules/@deepseek-ai/dsh-sandbox-windows-acl/assets/diagnose-windows-sandbox-acl/SKILL.md',
       'node_modules/@img/sharp-libvips-linux-x64/README.md',
       'node_modules/@img/sharp-libvips-linux-x64/versions.json',
       'node_modules/koffi/src/koffi/index.js',
@@ -414,6 +414,25 @@ describe('pruneTree over a whole fixture', () => {
   it('passes a win32 tree', () => {
     buildArtifact(tmp, WIN);
     expect(() => verifyDshArtifact({ outDir: tmp, target: WIN })).not.toThrow();
+  });
+
+  it('decision 207 §15: a win32 tree must carry the Windows sandbox diagnosis skill; a linux one need not', () => {
+    const acl =
+      'node_modules/@deepseek-ai/dsh-sandbox-windows-acl/assets/diagnose-windows-sandbox-acl';
+    const assets = [`${acl}/SKILL.md`, `${acl}/scripts/diagnose-windows-sandbox-acl.ps1`];
+    expect(requiredFiles(WIN)).toEqual(expect.arrayContaining(assets));
+    expect(requiredFiles(LINUX).filter((rel) => rel.includes('dsh-sandbox-windows-acl'))).toEqual(
+      []
+    );
+    // The pruner keeps them, and a tree without the script fails verification.
+    buildArtifact(tmp, WIN);
+    pruneTree(tmp, WIN);
+    for (const rel of assets)
+      expect(fs.existsSync(path.join(tmp, ...rel.split('/'))), rel).toBe(true);
+    fs.rmSync(path.join(tmp, ...assets[1].split('/')));
+    expect(() => verifyDshArtifact({ outDir: tmp, target: WIN })).toThrow(
+      /diagnose-windows-sandbox-acl\.ps1/
+    );
   });
 });
 
@@ -543,13 +562,6 @@ describe('verifyDshArtifact rejects', () => {
       "export * from '../../bridge/plugin.ts';\n"
     );
     failsWith(/bundle\/lib\/bridge\.js still loads TypeScript sources/);
-  });
-
-  it('a runtime asset lost to the Markdown sweep', () => {
-    fs.rmSync(
-      path.join(tmp, 'node_modules', '@deepseek-ai', 'dsh-skill-badge', 'assets', 'dsh-badge.md')
-    );
-    failsWith(/missing node_modules\/@deepseek-ai\/dsh-skill-badge\/assets\/dsh-badge\.md/);
   });
 
   it.skipIf(process.platform === 'win32')('an executable without its exec bit', () => {
@@ -835,8 +847,8 @@ describe('bridge bundles (decision 011)', () => {
     'aiclient-permissions': ['tools'],
     'aiclient-loop-guard': ['tools'],
     'aiclient-encrypted-read': ['fs'],
-    // Decision 190: dsh-tool-fs-search's own three.
-    'aiclient-fs-search': ['tools', 'systemPrompt', 'subprocess'],
+    // Decision 190: dsh-tool-fs-search's own (decision 207: DSH 0.2.1 adds workingDirectory).
+    'aiclient-fs-search': ['tools', 'systemPrompt', 'subprocess', 'workingDirectory'],
   };
   /** Rows that are a Cordis service class (the default export) instead of `apply`. */
   const SERVICE_ROWS = new Set(['aiclient-credentials']);

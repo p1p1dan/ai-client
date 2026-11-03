@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-sub-cont",
     "requestId": "turn-SUBCONT",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
     "type": "session.status",
     "payload": {
       "status": "running"

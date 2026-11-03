@@ -3,6 +3,7 @@ import { englishTranslate, type Translate } from '@shared/i18n';
 import { reviewFromToolResult } from '@shared/sessionFileChange';
 import { readStreamingToolArgs } from '@shared/streamingToolArgs';
 import type { DshTodoItem, ToolOutcomeDetails } from '@shared/types/runtimeEvents';
+import { isOutsideCallDirectory } from '@shared/workingDirectory';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import {
@@ -97,6 +98,12 @@ export interface ToolRun {
    */
   presentation?: ToolCallPresentation;
   /**
+   * Decision 207 §7: the directory the call ran in, when the model had
+   * changed it (`ChatBlock.toolCwd`): relative to the workspace inside it,
+   * absolute outside it. Relative path arguments resolve against it.
+   */
+  cwd?: string;
+  /**
    * FB7: the RESOLVED `permission_request` block whose decision settled this
    * call, attached by `joinResolvedPermissions` (never by `pairToolBlocks` --
    * the pairing layer only ever sees one message, and the join's search domain
@@ -149,6 +156,7 @@ export function pairToolBlocks(blocks: readonly ChatBlock[]): ToolRun[] {
         ? { execStartedAtMs: block.toolExecStartedAt }
         : {}),
       ...(block.toolPresentation ? { presentation: block.toolPresentation } : {}),
+      ...(block.toolCwd ? { cwd: block.toolCwd } : {}),
       ...(result?.toolOutput && typeof result.toolOutput === 'object'
         ? { result: result.toolOutput }
         : {}),
@@ -728,6 +736,8 @@ export interface ToolRowView {
   link?: FileLinkTarget;
   /** Grep/Glob row's raw output for the hit-list popover (A07 F②); parsing is `toolHits.parseHitList`'s job. */
   hitSource?: string;
+  /** Decision 207 §7: the directory `hitSource`'s relative paths are in, when not the workspace. */
+  hitBase?: string;
   toolName?: string;
   toolCallId?: string;
   /**
@@ -876,6 +886,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const argRef = presentation ? undefined : deriveToolArgRef(run);
   const link = deriveFileLink(run) ?? undefined;
   const hitSource = isHitListTool(run.toolName) && !outcome ? run.output : undefined;
+  const hitBase = hitSource && run.cwd ? run.cwd : undefined;
   // P1-7e (problem 20): a call Stop cut short has no output of its own on
   // record, only DSH's `Error: tool call aborted`, which the outcome word
   // (「已停止」) already says in the reader's language. What the command printed
@@ -1043,6 +1054,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     ...(changeStat ? { changeStat } : {}),
     link,
     hitSource,
+    ...(hitBase ? { hitBase } : {}),
     toolName: run.toolName,
     toolCallId: run.toolCallId,
     // Both read through the shared derivations rather than re-deriving the
@@ -1165,6 +1177,7 @@ export const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   [DSH_TOOL_NAMES.present]: [],
   [DSH_TOOL_NAMES.runCode]: ['description'],
   [DSH_TOOL_NAMES.listSubagentModels]: [],
+  [DSH_TOOL_NAMES.workingDirectory]: ['cd'],
   // The office plugin (decision 115): a read names its file and nothing else;
   // a write's content is the body, as `write`'s preview is on its card.
   ...Object.fromEntries(OFFICE_READ_TOOL_NAMES.map((name) => [name, ['path']])),
@@ -1736,7 +1749,7 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
   [DSH_TOOL_NAMES.subagentFork]: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
   // ── dsh-rebase P1-7c: the rest of DSH's tools (plan P1-7 shard 04 §2, §3).
   // `read` / `write` / `edit` / `grep` / `bash` / `skill` share the keys above
-  // (one name, one row), `glob` too. `ralph`, `structured_output` and
+  // (one name, one row), `glob` too. `structured_output` and
   // `plugin_manager` read as the unknown-tool fallback on purpose
   // (`dshToolVocabulary.test.ts` lists them).
   [DSH_TOOL_NAMES.readImage]: {
@@ -1811,6 +1824,13 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
     running: 'Listing models',
     refused: 'List models',
   },
+  // Decision 207 §7: a `cd`; without one the call reads the directory
+  // (`WORKING_DIRECTORY_READ_VERBS`).
+  [DSH_TOOL_NAMES.workingDirectory]: {
+    done: 'Changed directory',
+    running: 'Changing directory',
+    refused: 'Change directory',
+  },
   // Decision 115: the office plugin's reads read a file, its writes write one
   // — the words `read` and `write` already have, so the row says what the
   // gate classified (the file name carries the format).
@@ -1826,6 +1846,13 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
       { done: 'Edited', running: 'Editing', refused: 'Edit' },
     ])
   ),
+};
+
+/** Decision 207 §7: `working_directory` called without `cd` only reads the directory. */
+export const WORKING_DIRECTORY_READ_VERBS: ToolVerbs = {
+  done: 'Checked directory',
+  running: 'Checking directory',
+  refused: 'Check directory',
 };
 
 /**
@@ -1936,8 +1963,9 @@ function presentedArgDetail(presentation: ToolCallPresentation): ToolArgDetail |
 }
 
 /**
- * The row's verb key. `input` is optional and read by two DSH tools only:
- * `update_goal` (its `action`) and a waiting `job_output`.
+ * The row's verb key. `input` is optional and read by three DSH tools only:
+ * `update_goal` (its `action`), a waiting `job_output`, and
+ * `working_directory` (with or without `cd`).
  */
 export function toolVerb(toolName: string, state: ToolVerbState, input?: unknown): string {
   const rec = asRecord(input);
@@ -1949,6 +1977,9 @@ export function toolVerb(toolName: string, state: ToolVerbState, input?: unknown
   }
   if (toolName === DSH_TOOL_NAMES.jobOutput && state === 'running' && rec?.wait === true) {
     return JOB_OUTPUT_WAIT_VERB;
+  }
+  if (toolName === DSH_TOOL_NAMES.workingDirectory && stringField(rec, 'cd') === undefined) {
+    return WORKING_DIRECTORY_READ_VERBS[state];
   }
   const verbs =
     TOOL_VERBS[toolName] ??
@@ -2128,6 +2159,8 @@ export type ToolIconKind =
   | 'workflow'
   | 'mcp'
   | 'deliver'
+  // Decision 207 §7: `working_directory`, the workspace chip's own mark.
+  | 'folder'
   // Route B S-6: the review card's mark, worn by its placeholder row too.
   | 'review';
 
@@ -2196,6 +2229,7 @@ const DSH_ICON_KINDS: Readonly<Record<string, ToolIconKind>> = {
   [DSH_TOOL_NAMES.interruptAgent]: 'delegate',
   [DSH_TOOL_NAMES.listAgents]: 'delegate',
   [DSH_TOOL_NAMES.listSubagentModels]: 'delegate',
+  [DSH_TOOL_NAMES.workingDirectory]: 'folder',
 };
 
 export function toolIconKind(toolName: string): ToolIconKind {
@@ -2339,12 +2373,28 @@ function commandSummary(command: string, dialect: CommandDialect = 'bash'): stri
 function fileArgWithProgress(
   path: string | undefined,
   input: unknown,
-  t: Translate
+  t: Translate,
+  shown: (path: string) => string = shortPath
 ): string | undefined {
   const streaming = readStreamingToolArgs(input);
   if (!path) return undefined;
-  if (!streaming || streaming.lines <= 0) return shortPath(path);
-  return `${shortPath(path)} · ${t('{{count}} lines so far', { count: streaming.lines })}`;
+  if (!streaming || streaming.lines <= 0) return shown(path);
+  return `${shown(path)} · ${t('{{count}} lines so far', { count: streaming.lines })}`;
+}
+
+/**
+ * Decision 207 §7: a path argument where its call ran — joined to the call's
+ * directory (`ToolRun.cwd`) when relative; as written otherwise.
+ */
+export function pathInCallDirectory(path: string, cwd: string | undefined): string {
+  if (!cwd || isAbsoluteToolPath(path)) return path;
+  const base = cwd.replace(/[\\/]+$/, '');
+  const rest = path.replace(/^\.[\\/]/, '');
+  return rest === '.' || rest === '' ? base : `${base}/${rest}`;
+}
+
+function isAbsoluteToolPath(path: string): boolean {
+  return path.startsWith('/') || path.startsWith('~') || /^(?:[A-Za-z]:[\\/]|\\\\)/.test(path);
 }
 
 /** D25 §2.4 arg font-domain classifier -- see `ToolRowView.argKind` doc comment. */
@@ -2401,9 +2451,16 @@ function formatToolArgDetail(
   const rec = asRecord(run.input);
   const repoName = options.repoName;
   const t = options.t ?? englishTranslate;
-  /** "TODO in ai-client" — the one place a search arg names its repo. */
+  // Decision 207 §7: where the call ran, when the model had changed directory.
+  const cwd = run.cwd;
+  const outside = cwd !== undefined && isOutsideCallDirectory(cwd);
+  /** A file argument: its last segments, or in full when the call ran outside the workspace. */
+  const shownPath = (path: string) => (outside ? pathInCallDirectory(path, cwd) : shortPath(path));
+  /** "TODO in ai-client" — the one place a search arg names its repo (or where it ran). */
+  const searchedIn =
+    cwd === undefined ? repoName : outside ? cwd : repoName ? `${repoName}/${cwd}` : cwd;
   const inRepo = (pattern: string) =>
-    repoName ? t('{{pattern}} in {{repo}}', { pattern, repo: repoName }) : pattern;
+    searchedIn ? t('{{pattern}} in {{repo}}', { pattern, repo: searchedIn }) : pattern;
 
   let raw: string | undefined;
   let kind: ToolArgKind | undefined;
@@ -2421,7 +2478,7 @@ function formatToolArgDetail(
       if (path) {
         // P1-7e (problem 12): an attached file by the name it was attached under.
         const attached = attachmentFileName(path);
-        const shown = attached ? t('Attachment · {{name}}', { name: attached }) : shortPath(path);
+        const shown = attached ? t('Attachment · {{name}}', { name: attached }) : shownPath(path);
         const offset = numberField(rec, 'offset');
         if (offset != null) {
           const limit = numberField(rec, 'limit');
@@ -2439,7 +2496,8 @@ function formatToolArgDetail(
       raw = fileArgWithProgress(
         stringField(rec, 'file_path') ?? stringField(rec, 'path'),
         run.input,
-        t
+        t,
+        shownPath
       );
       if (raw) kind = 'ident';
       break;
@@ -2572,6 +2630,11 @@ function formatToolArgDetail(
     case DSH_TOOL_NAMES.listSubagentModels:
       // No argument: the verb 「列模型」 is the whole row.
       raw = undefined;
+      break;
+    // The directory it entered, else (no `cd`) the one it read: its result.
+    case DSH_TOOL_NAMES.workingDirectory:
+      raw = stringField(rec, 'cd') ?? (run.output?.trim() || undefined);
+      if (raw) kind = 'ident';
       break;
     case DSH_TOOL_NAMES.askUserQuestion: {
       // `ask`'s rule: the first question stands for the call.
@@ -2851,8 +2914,10 @@ export function deriveFileLink(run: ToolRun): FileLinkTarget | null {
   )
     return null;
   const rec = asRecord(run.input);
-  const path = stringField(rec, 'path') ?? stringField(rec, 'file_path');
-  if (!path) return null;
+  const written = stringField(rec, 'path') ?? stringField(rec, 'file_path');
+  if (!written) return null;
+  // Decision 207 §7: opened where the call ran.
+  const path = pathInCallDirectory(written, run.cwd);
 
   const target: FileLinkTarget = { path };
   const offset = numberField(rec, 'offset');

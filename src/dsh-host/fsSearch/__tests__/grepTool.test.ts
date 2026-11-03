@@ -95,7 +95,10 @@ interface Registered {
   sections: Array<{ name: string; order: number; text: (assembly: object) => string }>;
 }
 
-function mount(subprocess: GrepSubprocess = nodeSubprocess()): Registered {
+function mount(
+  subprocess: GrepSubprocess = nodeSubprocess(),
+  workingDirectory?: RichGrepContext['workingDirectory']
+): Registered {
   const registered = { sections: [] } as unknown as Registered;
   const ctx = {
     tools: {
@@ -109,6 +112,7 @@ function mount(subprocess: GrepSubprocess = nodeSubprocess()): Registered {
       getSectionOrder: (name: string) => (name === 'TOOL_GREP' ? 4242 : 0),
     },
     subprocess,
+    ...(workingDirectory ? { workingDirectory } : {}),
   } as unknown as RichGrepContext;
   applyRichGrepTool(ctx, CAPS, { rgPath: async () => RG });
   return registered;
@@ -154,6 +158,25 @@ beforeAll(() => {
 
 afterAll(() => {
   rmSync(workspace, { recursive: true, force: true });
+});
+
+describe('decision 207 §7: the session’s current directory', () => {
+  it('searches from the current directory, and names files relative to it', async () => {
+    const seen: string[] = [];
+    const registered = mount(nodeSubprocess(), {
+      ensure: async () => {
+        seen.push('ensure');
+        return join(workspace, 'src');
+      },
+    });
+    const { text } = await grep({ pattern: 'foo' }, registered);
+    expect(seen).toEqual(['ensure']);
+    expect(text).toBe(['Found 2 files', '', p('sub/b.js'), 'a.ts'].join('\n'));
+  });
+
+  it('without the service, still the workspace', async () => {
+    expect((await grep({ pattern: 'alpha' })).text).toBe(`Found 1 file\n\n${p('src/a.ts')}`);
+  });
 });
 
 describe('the tool and its prompt section', () => {

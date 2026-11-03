@@ -5,9 +5,9 @@ import type { TaskRow, TaskStop } from '../panes/backgroundTasksModel';
 import { RailCard } from './RailCard';
 
 /**
- * Layout 5e: background commands and subagents running now, each with its
- * live duration and a stop button (a continuable subagent is interrupted). A
- * row opens the background-tasks pane. Not drawn while nothing runs.
+ * Layout 5e: background commands and workflows running now, each with its
+ * live duration and a stop button. Subagents have their own card (decision
+ * 207 §8). A row opens the background-tasks pane. Not drawn while nothing runs.
  */
 export function RunningCard({
   rows,

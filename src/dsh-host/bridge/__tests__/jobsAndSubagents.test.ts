@@ -538,6 +538,24 @@ describe('DshSubagentsTracker — lanes of the session’s children (P1-7b, deci
     ]);
   });
 
+  it('[207-SUB-ACTIVATION] DSH 0.2.1: two calls with one description, each paired by its activation result', () => {
+    const h = children();
+    h.tracker.beginCall('call-1', 'subagent', { description: 'Same' });
+    h.tracker.beginCall('call-2', 'subagent', { description: 'Same' });
+    // DSH established call-2's child first: the label guess gives it to call-1.
+    h.catalog('child-b', 'Same');
+    h.catalog('child-a', 'Same', 'continuable', 2);
+    // 0.2.1 answers every delegation at once with its activation (decision 207 §4 ⑥).
+    h.tracker.endCall('call-2', { kind: 'activation', subagentId: 'child-b' });
+    h.tracker.endCall('call-1', { kind: 'activation', subagentId: 'child-a' });
+    h.child('child-a', 'tool/call', { callId: 'x', name: 'grep', arguments: {} });
+    h.child('child-b', 'tool/call', { callId: 'y', name: 'grep', arguments: {} });
+    expect(h.activity.slice(-2).map((payload) => payload.parentToolCallId)).toEqual([
+      'call-1',
+      'call-2',
+    ]);
+  });
+
   it('[P7B-SUB-OTHERS] another session’s children and a delegate’s own calls are not this session’s lanes', () => {
     const h = children();
     h.child('child-x', 'tool/call', { callId: 'x', name: 'grep', arguments: {} });

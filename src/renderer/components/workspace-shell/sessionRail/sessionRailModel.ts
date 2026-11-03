@@ -7,6 +7,7 @@
  */
 import { deriveCacheHitRate, deriveContextOccupancy, type PiUsagePayload } from '@shared/piUsage';
 import { chatEngineForDisplay } from '@/components/chat/chatEngineView';
+import type { TaskRow } from '../panes/backgroundTasksModel';
 import type { SessionReviewEntry } from '../sessionReview';
 
 /** The rail's own width, cards included (the reference's panel is ~260px). */
@@ -21,6 +22,7 @@ export type SessionRailCardId =
   | 'environment'
   | 'changes'
   | 'todo'
+  | 'subagents'
   | 'servers'
   | 'running'
   | 'context';
@@ -31,6 +33,8 @@ export const SESSION_RAIL_CARDS: readonly SessionRailCardId[] = [
   'context',
   'changes',
   'todo',
+  // Decision 207 §8: DSH 0.2.1's subagents all run in the background.
+  'subagents',
   // The local addresses running commands announced, above the commands themselves.
   'servers',
   'running',
@@ -41,6 +45,7 @@ export const SESSION_RAIL_CARD_DEFAULT_OPEN: Readonly<Record<SessionRailCardId, 
   environment: true,
   changes: true,
   todo: true,
+  subagents: true,
   servers: true,
   running: true,
   context: false,
@@ -316,6 +321,8 @@ export function visibleRailCards(input: {
   context: boolean;
   changes: boolean;
   todo: boolean;
+  /** Decision 207 §8: the session has started a subagent. */
+  subagents?: boolean;
   servers: number;
   running: number;
 }): SessionRailCardId[] {
@@ -324,8 +331,18 @@ export function visibleRailCards(input: {
     context: input.context,
     changes: input.changes,
     todo: input.todo,
+    subagents: input.subagents === true,
     servers: input.servers > 0,
     running: input.running > 0,
   };
   return SESSION_RAIL_CARDS.filter((id) => shown[id]);
+}
+
+/**
+ * The running card's rows: commands and workflows only. Subagents have their
+ * own card (decision 207 §8, decision 206's 「不重复」); the tasks pane keeps
+ * listing them.
+ */
+export function railRunningRows(rows: readonly TaskRow[]): TaskRow[] {
+  return rows.filter((row) => row.kind !== 'subagent');
 }

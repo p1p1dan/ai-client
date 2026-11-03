@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-job-notice",
     "requestId": "turn-JOBNOTICE",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-job-notice",
+    "requestId": "turn-JOBNOTICE",
     "type": "session.status",
     "payload": {
       "status": "running"
@@ -163,7 +172,7 @@
       "key": "jobs",
       "view": [
         {
-          "id": "bash-2",
+          "id": "bash-job-1",
           "kind": "bash",
           "label": "sleep 3; echo job-notice-done",
           "status": "running",
@@ -184,12 +193,12 @@
         "content": [
           {
             "type": "text",
-            "text": "started background job bash-2"
+            "text": "started background job bash-job-1"
           }
         ],
         "details": {
           "backgroundJob": {
-            "id": "bash-2"
+            "id": "bash-job-1"
           }
         }
       }
@@ -301,7 +310,7 @@
     "requestId": "dsh-turn-aiclient-rec-job-notice-2",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-22",
+      "messageId": "dsh-user-24",
       "role": "user",
       "origin": {
         "kind": "job"
@@ -313,8 +322,8 @@
     "requestId": "dsh-turn-aiclient-rec-job-notice-2",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-22",
-      "blockId": "dsh-user-22-text",
+      "messageId": "dsh-user-24",
+      "blockId": "dsh-user-24-text",
       "text": "bash sleep 3; echo job-notice-done [status: completed, exit code: 0]"
     }
   },
@@ -323,7 +332,7 @@
     "requestId": "dsh-turn-aiclient-rec-job-notice-2",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-22"
+      "messageId": "dsh-user-24"
     }
   },
   {

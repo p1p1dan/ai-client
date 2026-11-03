@@ -61,7 +61,7 @@
               "id": "h:id-7:tool-result:toolu_id-4",
               "toolCallId": "toolu_id-4",
               "ok": true,
-              "output": "started background job bash-1"
+              "output": "started background job bash-job-1"
             }
           ],
           "liveMessageId": "dsh-aiclient-rec-jobs-kill-t1-s1"
@@ -96,7 +96,7 @@
           "origin": {
             "kind": "job"
           },
-          "liveMessageId": "dsh-user-22"
+          "liveMessageId": "dsh-user-24"
         },
         {
           "id": "h:id-12",
@@ -127,7 +127,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-12",
-        "fileTailEntryId": "aiclient-rec-jobs-kill#25"
+        "fileTailEntryId": "aiclient-rec-jobs-kill#27"
       },
       "nodes": [
         {
@@ -214,7 +214,7 @@
     },
     "afterKill": [
       {
-        "id": "bash-1",
+        "id": "bash-job-1",
         "kind": "bash",
         "status": "killed"
       }

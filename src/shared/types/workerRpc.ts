@@ -1354,6 +1354,8 @@ const PANEL_PROJECTION_KEYS: Readonly<Record<SessionProjectionKey, true>> = {
   todos: true,
   goal: true,
   subagentCatalog: true,
+  // Decision 207 §7: DSH 0.2.1's current directory.
+  workingDirectory: true,
   goalActivation: true,
   jobs: true,
 };

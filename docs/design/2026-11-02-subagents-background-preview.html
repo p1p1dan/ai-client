@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>子代理一律后台（DSH 0.2.1）：对话右栏的「子代理」卡片 · v3</title>
+<style>
+  /* Tokens copied from src/renderer/styles/globals.css (design system v2, light). */
+  :root {
+    --surface-0: #f9f9f7; --background: #fcfcfb; --surface-2: #fff; --surface-3: #fff; --foreground: #151515;
+    --muted: #525252; --faint: color-mix(in oklab, #525252 62%, #fcfcfb);
+    --border: #e5e5e4; --input: #cececd; --fill: #eeeeed; --ghost-hover: rgb(0 0 0 / .04);
+    --primary: #c6613f; --destructive: #b5452f; --success: #3f7d4e; --warning: #b07a1e;
+    --radius-md: 10px; --radius-lg: 12px;
+    --chat: 13px; --process: 12px; --small: 12px; --ui: 13px; --heading: 14px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface-0); color: var(--foreground); font: var(--ui)/1.45 var(--sans); }
+  header { padding: 20px 28px 8px; }
+  h1 { font-size: 16px; margin: 0 0 6px; }
+  .lead { color: var(--muted); max-width: 1180px; margin: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 14px; padding: 12px 28px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface-0); z-index: 5; }
+  .seg { display: inline-flex; border: 1px solid var(--input); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; padding: 5px 10px; font: inherit; color: var(--muted); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--input); }
+  .seg button.on { background: var(--surface-2); color: var(--foreground); font-weight: 600; }
+  .ctl-label { color: var(--muted); margin-right: 6px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 18px 28px 10px; }
+  .col h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+  .col h2 b { color: var(--foreground); }
+  .pane { background: var(--background); border: 1px solid var(--border); border-radius: 12px; display: flex; min-height: 640px; overflow: hidden; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .timeline { flex: 1; padding: 16px 18px 10px; }
+  .rail { width: 260px; flex: none; border-left: 1px solid var(--border); background: var(--surface-0); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .user { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+  .user span { background: var(--fill); border-radius: 18px; padding: 8px 14px; max-width: 85%; font-size: var(--chat); }
+  .answer { font-size: var(--chat); line-height: 1.45; margin: 10px 0; }
+  .m { font-family: var(--mono); font-size: 11.5px; }
+  .row { display: flex; align-items: baseline; gap: 6px; font-size: var(--process); margin: 6px 0; color: var(--muted); }
+  .ic { width: 14px; flex: none; text-align: center; color: var(--faint); font-family: var(--mono); font-size: 11px; }
+  .ic.ok { color: var(--success); } .ic.bad { color: var(--destructive); } .ic.wait { color: var(--primary); }
+  .spin { display: inline-block; width: 11px; height: 11px; border: 1.5px solid var(--input); border-top-color: var(--muted); border-radius: 50%; animation: spin 0.9s linear infinite; flex: none; align-self: center; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes breathe { 50% { opacity: .35; } }
+  .pip { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); animation: breathe 2s ease-in-out infinite; flex: none; align-self: center; }
+  .sq { width: 9px; height: 9px; border: 1.5px solid var(--muted); border-radius: 2px; flex: none; align-self: center; }
+  @media (prefers-reduced-motion: reduce) { .spin, .pip { animation: none !important; } }
+  .arg { color: var(--faint); font-family: var(--mono); font-size: 11.5px; }
+  .word { color: var(--faint); } .word.run { color: var(--muted); } .word.wait { color: var(--primary); }
+  .lane { margin: 2px 0 8px 20px; padding-left: 10px; border-left: 2px solid var(--border); font-size: 11.5px; color: var(--faint); }
+  .res { padding-left: 20px; font-size: var(--process); color: var(--muted); margin: -2px 0 6px; }
+  .res.bad { color: var(--destructive); }
+  .res .elbow { color: var(--faint); font-family: var(--mono); margin-right: 4px; }
+  .origin { font-size: var(--process); color: var(--faint); margin: 14px 0 6px; display: flex; align-items: center; gap: 8px; }
+  .origin::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+  .usermsg-raw { display: flex; justify-content: flex-end; margin: 10px 0; }
+  .usermsg-raw span { background: var(--fill); border-radius: 18px; padding: 8px 14px; max-width: 85%; font-size: 12px; font-family: var(--mono); color: var(--muted); }
+  .done { font-size: var(--small); color: var(--faint); margin: 6px 0 2px; }
+  .dock { margin: 0 12px 8px; border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border)); border-radius: var(--radius-md); background: var(--surface-2); box-shadow: 0 1px 2px rgb(0 0 0 / .05); }
+  .dock .h { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-weight: 600; font-size: var(--heading); }
+  .dock .b { padding: 6px 14px 8px; font-size: var(--process); color: var(--muted); }
+  .dock .f { border-top: 1px solid var(--border); padding: 6px 12px; display: flex; justify-content: flex-end; gap: 8px; }
+  .from { font-weight: 400; color: var(--faint); font-size: var(--process); }
+  .btn { border: 1px solid var(--input); border-radius: 6px; padding: 2px 10px; background: var(--surface-2); font: 12px var(--sans); }
+  .btn.p { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.g { border-color: transparent; background: transparent; color: var(--muted); }
+  .composer { margin: 0 12px 12px; }
+  .box { background: var(--surface-3); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 9px 12px; color: var(--faint); font-size: var(--chat); display: flex; align-items: center; }
+  .box .send { margin-left: auto; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--fill); color: var(--muted); font-size: 12px; position: relative; }
+  .box .send.stop { background: var(--foreground); color: #fff; }
+  .tooltip { position: absolute; right: 0; bottom: 32px; white-space: nowrap; background: var(--foreground); color: #fff; font-size: 11.5px; padding: 3px 8px; border-radius: 6px; }
+  /* rail cards (RailCard: 32px header, 12px semibold title, md radius, surface-2) */
+  .card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); }
+  .card .h { height: 32px; display: flex; align-items: center; gap: 4px; padding: 0 10px; font-size: var(--small); font-weight: 600; }
+  .card .h .chev { color: var(--muted); font-size: 9px; }
+  .card .h .sum { margin-left: auto; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; display: flex; gap: 6px; align-items: center; }
+  .card .b { padding: 0 10px 8px; font-size: var(--small); }
+  .rrow { display: flex; align-items: center; gap: 8px; height: 24px; color: var(--foreground); }
+  .rrow .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rrow .d { color: var(--faint); font-variant-numeric: tabular-nums; }
+  /* subagent card rows, after open-claude-ui CoworkAgentCanvas: name + status word, role line, current task line */
+  .agent { display: flex; gap: 8px; padding: 6px; margin: 0 -6px; border-radius: 8px; cursor: pointer; }
+  .agent:hover { background: var(--ghost-hover); }
+  .agent.sel { background: var(--fill); }
+  .agent .av { width: 22px; height: 22px; border-radius: 6px; background: var(--fill); display: grid; place-items: center; font-size: 11px; color: var(--muted); flex: none; margin-top: 1px; }
+  .agent .body { flex: 1; min-width: 0; }
+  .agent .l1 { display: flex; align-items: center; gap: 6px; }
+  .agent .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .agent .st { font-size: 11px; flex: none; display: flex; align-items: center; gap: 4px; color: var(--muted); }
+  .agent .st.wait { color: var(--primary); } .agent .st.ok { color: var(--success); }
+  .agent .l2 { color: var(--faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent .l3 { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+  .agent .acts { display: none; gap: 10px; margin-top: 4px; }
+  .agent.sel .acts { display: flex; }
+  .agent .acts span { color: var(--muted); font-size: 11.5px; text-decoration: underline dotted; }
+  .sep { border-top: 1px solid var(--border); margin: 6px 0 4px; }
+  .ended { color: var(--muted); font-size: 11.5px; cursor: pointer; padding: 2px 0; }
+  .lim { color: var(--destructive); font-size: 11.5px; padding: 4px 0 2px; }
+  .modal { position: fixed; inset: 0; background: rgb(0 0 0 / .25); display: none; align-items: center; justify-content: center; z-index: 20; }
+  .modal.show { display: flex; }
+  .modal .win { width: 520px; max-height: 70vh; overflow: auto; background: var(--surface-3); border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 8px 30px rgb(0 0 0 / .15); }
+  .modal .wh { height: 40px; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .modal .wh span { margin-left: auto; color: var(--muted); font-weight: 400; cursor: pointer; }
+  .modal .wb { padding: 12px 16px; font-size: var(--chat); }
+  .sidebar { margin: 0 28px 14px; display: flex; gap: 20px; }
+  .sb { background: var(--surface-0); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; width: 280px; font-size: var(--ui); }
+  .sb .it { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; background: var(--fill); }
+  .sb .it .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sb h3 { margin: 0 0 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .note { margin: 0 28px 28px; padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; color: var(--muted); max-width: 1200px; }
+  .note b { color: var(--foreground); }
+  .note ul { margin: 6px 0 0 18px; padding: 0; }
+  .warnline { color: var(--warning); font-size: 11.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>子代理：对话右栏里单独一张「子代理」卡片（v3）</h1>
+  <p class="lead">用户 2026-11-02：子代理要在对话侧栏里以单独的卡片展示。参考 open-claude-ui 的多代理看板（<span class="m">code-examples/CoworkAgentCanvas.tsx</span>）：每个子代理一行，写名字、状态（运行中 / 等你确认 / 已完成 / 出错）、它是什么、正在做什么；点一行看详情。任务同上：「调研登录和支付两块的代码，各派一个子代理」。左边是现在的右栏（子代理和命令混在「运行中」卡片里），右边是建议。上方切换时刻和两个可选项；右边的子代理行可以点。</p>
+</header>
+
+<div class="controls">
+  <span><span class="ctl-label">时刻</span><span class="seg" id="t">
+    <button data-v="1" class="on">① 派出</button><button data-v="2">② 主回合结束、子代理在跑</button><button data-v="3">③ 子代理要权限</button><button data-v="4">④ 一个完成、自动继续</button><button data-v="5">⑤ 第 9 个超限</button>
+  </span></span>
+  <span><span class="ctl-label">已结束的子代理（仅右侧）</span><span class="seg" id="ended">
+    <button data-v="fold" class="on">留在卡片里、折起（推荐）</button><button data-v="drop">从卡片移走</button>
+  </span></span>
+  <span><span class="ctl-label">停止按钮提示</span><span class="seg" id="tip">
+    <button data-v="off" class="on">不显示</button><button data-v="on">悬停停止按钮</button>
+  </span></span>
+</div>
+
+<div class="cols">
+  <section class="col">
+    <h2><b>当前</b> · 子代理和命令同在「运行中」卡片</h2>
+    <div class="pane"><div class="main"><div class="timeline" id="cur"></div><div id="curDock"></div><div class="composer" id="curBox"></div></div><div class="rail" id="curRail"></div></div>
+  </section>
+  <section class="col">
+    <h2><b>建议</b> · 单独的「子代理」卡片</h2>
+    <div class="pane"><div class="main"><div class="timeline" id="pro"></div><div id="proDock"></div><div class="composer" id="proBox"></div></div><div class="rail" id="proRail"></div></div>
+  </section>
+</div>
+
+<div class="sidebar">
+  <div class="sb"><h3>左侧会话列表里这个对话（当前）</h3><div class="it" id="sbCur"></div></div>
+  <div class="sb"><h3>左侧会话列表里这个对话（建议）</h3><div class="it" id="sbPro"></div></div>
+</div>
+
+<div class="note">
+  <b>建议的规则</b>
+  <ul>
+    <li><b>右栏新增「子代理」卡片</b>，排在「待办」之后、「服务」「运行中」之前；本会话没派过子代理就不画。卡头写「子代理」，右端是「2 运行中」；有等你确认的写「1 等你确认」并配橙色圆点。</li>
+    <li><b>每个子代理一行，三层</b>（照 open-claude-ui 的成员行）：第一层名字加状态字（运行中 / 等你确认 / 已完成 / 出错 / 已打断）；第二层是它是什么（子代理类型或「分叉」、模型）；第三层是它此刻在做什么（最近一次工具调用，如「读取 src/pay/charge.ts」）和时长，结束后换成用时与用量。</li>
+    <li><b>点一行展开操作</b>：「查看对话」（决策 203 的子对话页）、「打断」。open-claude-ui 有「发送协同指令」；DSH 能给子代理发消息，但决策 203 定过只读，<b>这次不做</b>，以后要放开另行决定。</li>
+    <li><b>「运行中」卡片只留命令与工作流</b>，不再列子代理，免得同一个子代理出现两次（决策 206 的「不重复」）。顶栏「后台任务」按钮与面板不变。</li>
+    <li><b>已结束的子代理</b>：推荐留在卡片里、折成一行「已结束 N ›」，点开能再看对话；另一个选项是直接移走（决策 206 第 5 项当时是这么要求子代理窗的，这里请再确认一次）。</li>
+    <li><b>子代理要权限、主对话空闲</b>：停靠卡标题后写「来自子代理 · 调研支付」，身子里补一句「主对话空闲中，批准后这个子代理继续」；卡片里那一行变成「等你确认」；左侧会话列表这个对话亮「等你处理」。</li>
+    <li><b>子代理完成</b>：DSH 自己开一个回合，开头一条分隔线「子代理「调研支付」已完成，自动继续」，DSH 给模型的英文通知不展示。<span class="warnline">真实模型下子代理结束前还会用 send_message 汇报一次，同一个子代理可能唤醒两次。</span></li>
+    <li><b>停止按钮</b>只停主回合，子代理继续（决策 203）。<b>同时最多 8 个</b>：第 9 个在时间线和卡片里都写「没有启动：同时最多 8 个」。</li>
+  </ul>
+</div>
+
+<div class="modal" id="modal"><div class="win"><div class="wh" id="mTitle"></div><div class="wb" id="mBody"></div></div></div>
+
+<script>
+const S = { t: '1', ended: 'fold', tip: 'off', sel: null, openEnded: false };
+const A = { key: 'A', name: '调研登录', id: '4a40d6', kind: '子代理 · fake-1', task: '读取 src/auth/session.ts', dur: '1:12', tok: '18k' };
+const B = { key: 'B', name: '调研支付', id: '9c1e27', kind: '子代理 · fake-1', task: '搜索 "charge("', dur: '1:40', tok: '24k' };
+const user = `<div class="user"><span>调研登录和支付两块的代码，各派一个子代理</span></div>`;
+const spin = `<span class="spin"></span>`;
+
+function stateOf(x) {
+  if (S.t === '3' && x === B) return 'wait';
+  if (S.t === '4' && x === B) return 'ok';
+  return 'run';
+}
+function lane(x) {
+  return stateOf(x) === 'ok' ? `<div class="lane">读取 3 个文件 · 搜索 2 处 · 结论已交回</div>` : `<div class="lane">${x.task}…</div>`;
+}
+function timeline(side) {
+  const t = S.t;
+  let h = user;
+  for (const x of [A, B]) {
+    const s = stateOf(x);
+    if (side === 'pro' && s === 'wait') h += `<div class="row"><span class="ic wait">●</span>子代理<span class="arg">${x.name}</span><span class="word wait">等你确认</span></div>`;
+    else h += `<div class="row"><span class="ic ${s === 'ok' ? 'ok' : ''}">${s === 'ok' ? '✓' : '⧉'}</span>子代理<span class="arg">${x.name}</span><span class="word ${s === 'ok' ? '' : 'run'}">${s === 'ok' ? '完成' : '后台运行中'}</span></div>`;
+    if (side === 'cur') h += `<div class="res"><span class="elbow">└</span><span class="m">started subagent ${x.id}…</span></div>`;
+    h += lane(x);
+  }
+  if (t === '1') return h + `<div class="row">${spin}思考中 3 秒</div>`;
+  h += `<div class="answer">已经派出两个子代理，分别看登录和支付，结果回来后我再汇总。</div><div class="done">已工作 6 秒</div>`;
+  if (t === '4') {
+    if (side === 'cur') h += `<div class="usermsg-raw"><span>Background subagent ${B.id}… finished and will do no further work unless you send it more. …</span></div><div class="row warnline">↑ 是否会以用户气泡出现，未实查</div>`;
+    else h += `<div class="origin">子代理「${B.name}」已完成，自动继续</div>`;
+    h += `<div class="answer">支付这块的结论：……（登录还在跑，回来后再补）</div>`;
+  }
+  if (t === '5') {
+    h += `<div class="row"><span class="ic bad">✕</span>子代理<span class="arg">调研发票</span></div>`;
+    h += side === 'cur'
+      ? `<div class="res bad"><span class="elbow">└</span>subagent limit reached (active child limit: 8); wait for an existing child to finish…</div>`
+      : `<div class="res bad"><span class="elbow">└</span>没有启动：同时最多 8 个子代理。等已有的完成后再派。</div>`;
+  }
+  return h;
+}
+function dock(side) {
+  if (S.t !== '3') return '';
+  if (side === 'cur') return `<div class="dock"><div class="h"><span class="pip"></span>允许运行命令？<span class="from">代子 Agent ${B.name} 请求</span></div><div class="b"><span class="m">grep -rn "charge(" src/pay</span></div><div class="f"><button class="btn g">拒绝</button><button class="btn">本会话允许</button><button class="btn p">允许</button></div></div>`;
+  return `<div class="dock"><div class="h"><span class="pip"></span>允许运行命令？<span class="from">来自子代理 · ${B.name}</span></div><div class="b"><span class="m">grep -rn "charge(" src/pay</span><br><span style="color:var(--faint)">主对话空闲中，批准后这个子代理继续。</span></div><div class="f"><button class="btn g">拒绝</button><button class="btn">本会话允许</button><button class="btn p">允许</button></div></div>`;
+}
+function box() {
+  const running = S.t === '1';
+  const tip = S.tip === 'on' && running ? `<span class="tooltip">停止当前回合 — 后台子代理继续运行</span>` : '';
+  return `<div class="box">${running ? '回合进行中 —— Enter 并入当前回合…' : '回复 PiLab…'}${running ? `<span class="send stop">■${tip}</span>` : '<span class="send">↑</span>'}</div>`;
+}
+const envCard = `<div class="card"><div class="h">环境 <span class="chev">▾</span></div><div class="b"><div class="rrow"><span class="t">proj · main</span></div></div></div>`;
+function runningCard(side) {
+  const rows = [`<div class="rrow">${spin}<span class="t">pnpm test --watch</span><span class="d">3:05</span><span class="sq"></span></div>`];
+  if (side === 'cur') {
+    for (const x of [A, B]) {
+      if (stateOf(x) === 'ok') continue;
+      rows.push(`<div class="rrow">${spin}<span class="t">${x.name}</span><span class="d">${x.dur}</span><span class="sq"></span></div>`);
+    }
+  }
+  return `<div class="card"><div class="h">运行中 <span class="chev">▾</span><span class="sum">${rows.length}</span></div><div class="b">${rows.join('')}</div></div>`;
+}
+function agentRow(x) {
+  const s = stateOf(x);
+  const st = { run: `<span class="st">${spin}运行中</span>`, wait: `<span class="st wait"><span class="pip"></span>等你确认</span>`, ok: `<span class="st ok">✓ 已完成</span>` }[s];
+  const l3 = s === 'ok' ? `用时 ${x.dur} · ${x.tok} tokens · 12 次工具调用` : s === 'wait' ? `等你确认：运行命令 grep -rn "charge("` : `${x.task} · ${x.dur}`;
+  const acts = s === 'ok' ? `<span onclick="openConv(event,'${x.key}')">查看对话</span>` : `<span onclick="openConv(event,'${x.key}')">查看对话</span><span>打断</span>`;
+  return `<div class="agent${S.sel === x.key ? ' sel' : ''}" onclick="sel('${x.key}')"><div class="av">⧉</div><div class="body"><div class="l1"><span class="name">${x.name}</span>${st}</div><div class="l2">${x.kind}</div><div class="l3">${l3}</div><div class="acts">${acts}</div></div></div>`;
+}
+function subagentCard() {
+  const live = [A, B].filter((x) => stateOf(x) !== 'ok');
+  const ended = [A, B].filter((x) => stateOf(x) === 'ok');
+  const waiting = live.filter((x) => stateOf(x) === 'wait').length;
+  const sum = waiting ? `<span class="pip"></span>${waiting} 等你确认` : `${live.length} 运行中`;
+  let body = live.map(agentRow).join('');
+  if (S.t === '5') body += `<div class="lim">调研发票 · 没有启动：同时最多 8 个</div>`;
+  if (ended.length && S.ended === 'fold') {
+    body += `<div class="sep"></div><div class="ended" onclick="toggleEnded()">已结束 ${ended.length} ${S.openEnded ? '▾' : '›'}</div>`;
+    if (S.openEnded) body += ended.map(agentRow).join('');
+  }
+  return `<div class="card"><div class="h">子代理 <span class="chev">▾</span><span class="sum">${sum}</span></div><div class="b">${body}</div></div>`;
+}
+function rail(side) {
+  return envCard + (side === 'pro' ? subagentCard() : '') + runningCard(side);
+}
+function sidebarItem(side) {
+  const t = S.t;
+  let right = '';
+  if (t === '1') right = spin;
+  else if (t === '3') right = side === 'pro' ? '<span class="pip"></span>' : '<span title="未实查" style="color:var(--faint)">?</span>';
+  else if (t !== '5') right = side === 'pro' ? `<span style="color:var(--faint);font-size:11.5px;display:flex;gap:4px;align-items:center">${spin}子代理</span>` : '';
+  return `<span class="t">调研登录和支付</span>${right}`;
+}
+function sel(k) { S.sel = S.sel === k ? null : k; render(); }
+function toggleEnded() { S.openEnded = !S.openEnded; render(); }
+function openConv(e, k) {
+  e.stopPropagation();
+  const x = k === 'A' ? A : B;
+  document.getElementById('mTitle').innerHTML = `${x.name} · 子对话（只读）<span onclick="closeConv()">关闭</span>`;
+  document.getElementById('mBody').innerHTML = `<div class="user"><span>调研${x === A ? '登录' : '支付'}模块的代码结构，结束前把结论交回。</span></div><div class="row"><span class="ic ok">✓</span>读取<span class="arg">src/${x === A ? 'auth' : 'pay'}/index.ts</span></div><div class="row"><span class="ic ok">✓</span>搜索<span class="arg">${x === A ? 'session' : 'charge('}</span></div><div class="answer">（子代理的思考、回复与每次工具调用，即决策 203 第 6 节的子对话页）</div>`;
+  document.getElementById('modal').classList.add('show');
+}
+function closeConv() { document.getElementById('modal').classList.remove('show'); }
+function render() {
+  for (const side of ['cur', 'pro']) {
+    document.getElementById(side).innerHTML = timeline(side);
+    document.getElementById(side + 'Dock').innerHTML = dock(side);
+    document.getElementById(side + 'Box').innerHTML = box();
+    document.getElementById(side + 'Rail').innerHTML = rail(side);
+  }
+  document.getElementById('sbCur').innerHTML = sidebarItem('cur');
+  document.getElementById('sbPro').innerHTML = sidebarItem('pro');
+}
+for (const id of ['t', 'ended', 'tip']) {
+  document.getElementById(id).addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    for (const x of e.currentTarget.querySelectorAll('button')) x.classList.toggle('on', x === b);
+    S[id] = b.dataset.v; render();
+  });
+}
+render();
+</script>
+</body>
+</html>

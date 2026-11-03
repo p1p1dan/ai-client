@@ -179,7 +179,9 @@
  *                      `worker.setPermissions` then forgets the grant, on disk
  *                      too, and the next `echo` is asked again
  *   perm-subagent S16  ask: a subagent's bash call is asked on the chat's card,
- *                      naming the delegate
+ *                      naming the delegate; since DSH 0.2.1 (decision 207 §8)
+ *                      the child runs in the background, so its card comes up
+ *                      after the parent's turn, and its settlement wakes a turn
  *   perm-search   S17  bypass: glob and grep results without `.env` and
  *                      `server.key`
  * S5–S8, S11 and S12 (gear rules, a parallel burst, a shortened deadline) are
@@ -255,6 +257,8 @@ const MIN_AVAILABLE_MB = 900;
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 /** DSH command ids: a per-process random token and a counter (`cmd-babe6845-1`). */
 const COMMAND_ID = /\bcmd-[0-9a-f]{8}-\d+\b/g;
+/** DSH 0.2.1 job ids: a shell name and 16 random hex digits (`bash-d6314690bf264bae`). */
+const JOB_ID = /\b(bash|pwsh)-[0-9a-f]{16}\b/g;
 /** Wall-clock milliseconds inside a string. */
 const EPOCH_MS = /\b1\d{12}\b/g;
 /**
@@ -292,6 +296,7 @@ const SHOWN_SOURCES = new Set([
 
 class Normalizer {
   private readonly ids = new Map<string, string>();
+  private readonly jobs = new Map<string, string>();
   private readonly paths: Array<[string, string]>;
 
   /** `paths`: absolute path -> placeholder; longer paths are replaced first. */
@@ -308,7 +313,18 @@ class Normalizer {
       .replace(FILLER, '<filler>')
       .replace(UUID, (uuid) => this.id(uuid.toLowerCase()))
       .replace(COMMAND_ID, (command) => `cmd-${this.id(command)}`)
+      .replace(JOB_ID, (job, shell: string) => `${shell}-${this.job(job)}`)
       .replace(EPOCH_MS, '<ms>');
+  }
+
+  /** Job ids count on their own, so the other ids keep their numbers. */
+  private job(key: string): string {
+    let minted = this.jobs.get(key);
+    if (!minted) {
+      minted = `job-${this.jobs.size + 1}`;
+      this.jobs.set(key, minted);
+    }
+    return minted;
   }
 
   private id(key: string): string {
@@ -1941,13 +1957,60 @@ async function permSubagentScenario(context: RecordContext, host: Host): Promise
     cwd,
     permissions: ASK_PERMISSIONS,
   });
+  const { client } = session.host;
+  const from = client.events(session.ch).length;
+  // Decision 207 §8, §14: the delegation returns at once and the parent's
+  // turn ends; the child's card arrives outside any turn, is allowed, and
+  // the child's settlement opens a turn DSH starts itself.
   const turn = await context.turn(
     session,
     'PERM-SUB',
     'P1-PERM-SUB: delegate one command.',
     answering(session, 'PERM-SUB', () => 'allow')
   );
-  return finish(context, session, [boot], [turn]);
+  const wake = `dsh-turn-${session.dshSessionId}-2`;
+  const answered = new Set<unknown>();
+  let settled = false;
+  const answeringLate = (async () => {
+    while (!settled) {
+      await client.until(
+        session.ch,
+        (events) =>
+          events
+            .slice(from)
+            .some(
+              (event) =>
+                event.type === 'permission.requested' &&
+                !answered.has(payloadOf(event).permissionId)
+            ),
+        1_000
+      );
+      for (const card of client.events(session.ch).slice(from)) {
+        if (card.type !== 'permission.requested') continue;
+        const { permissionId } = payloadOf(card);
+        if (answered.has(permissionId)) continue;
+        answered.add(permissionId);
+        await client.request(session.ch, 'worker.permission.respond', {
+          logicalSessionId: session.logicalSessionId,
+          permissionId,
+          decision: 'allow',
+        });
+      }
+    }
+  })();
+  try {
+    await wakeIdle(session, from, wake);
+  } finally {
+    settled = true;
+    await answeringLate;
+  }
+  // Everything after the parent's turn, in the order the renderer gets it:
+  // the child's lane and card arrive outside any turn, then the wake-up turn.
+  const after = client.events(session.ch).slice(from + turn.length);
+  const lane = after
+    .filter((event) => event.type === 'subagent.activity')
+    .map((event) => ({ type: event.type, payload: event.payload }));
+  return finish(context, session, [boot], [turn, after], { lane });
 }
 
 async function permSearchScenario(context: RecordContext, host: Host): Promise<Recording> {

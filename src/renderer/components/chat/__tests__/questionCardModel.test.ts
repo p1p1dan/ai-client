@@ -1600,6 +1600,12 @@ describe('permission action copy (T023)', () => {
     ['escalate_sandbox', 'Run once with wider sandbox permissions', '以更宽的沙箱权限运行一次'],
     // dsh-rebase decision 190: web_fetch asks to fetch the URL on the card.
     ['fetch_url', 'Fetch a web page', '获取网页'],
+    // Decision 207 §15: a cd (or a subagent's cwd) out of the workspace.
+    [
+      'change_directory',
+      'Switch to a directory outside the workspace (its AGENTS.md, CLAUDE.md and skills are read in)',
+      '切换到工作区外的目录（会读入那里的 AGENTS.md、CLAUDE.md 和技能）',
+    ],
   ];
 
   // dsh-rebase P1-7c (plan P1-7 shard 04 §6): the shells go by their product

@@ -3,6 +3,7 @@
  * when it shows, which cards it draws, and what each card derives.
  */
 import { describe, expect, it } from 'vitest';
+import { deriveBackgroundTasksView } from '../panes/backgroundTasksModel';
 import {
   CHANGES_CARD_FILES,
   deriveChangesCardView,
@@ -10,6 +11,7 @@ import {
   deriveEnvironmentRows,
   type EnvironmentInput,
   formatLineCount,
+  railRunningRows,
   resolveCardOpen,
   resolveKnownEngine,
   resolveSessionRailVisibility,
@@ -287,5 +289,69 @@ describe('visibleRailCards', () => {
         running: 0,
       })
     ).toEqual(['context', 'todo']);
+  });
+});
+
+describe('the subagents card (decision 207 §8, §14 E)', () => {
+  const base = {
+    environmentRows: 2,
+    context: true,
+    changes: true,
+    todo: true,
+    servers: 1,
+    running: 1,
+  };
+
+  it('after the todo card, before servers and running; absent or false draws as before', () => {
+    expect(visibleRailCards({ ...base, subagents: true })).toEqual([
+      'environment',
+      'context',
+      'changes',
+      'todo',
+      'subagents',
+      'servers',
+      'running',
+    ]);
+    const before = ['environment', 'context', 'changes', 'todo', 'servers', 'running'];
+    expect(visibleRailCards({ ...base, subagents: false })).toEqual(before);
+    expect(visibleRailCards(base)).toEqual(before);
+  });
+
+  it('the running card keeps commands and workflows; the tasks pane still lists the subagent', () => {
+    const tasks = deriveBackgroundTasksView({
+      panels: {
+        live: true,
+        seq: {},
+        jobs: [
+          { id: 'bash-1', kind: 'bash', label: 'pnpm test', status: 'running', startedAt: 1_000 },
+          { id: 'wf-1', kind: 'workflow', label: 'Release', status: 'running', startedAt: 2_000 },
+        ],
+      },
+      lanes: [
+        {
+          parentToolCallId: 'c1',
+          sessionId: 's1',
+          agentId: 'kid-1',
+          agentType: null,
+          description: 'Research pay',
+          status: 'running',
+          taskType: 'subagent',
+          startedAt: 3_000,
+          endedAt: null,
+          rows: [],
+          droppedRows: 0,
+          progress: null,
+          usage: null,
+          report: null,
+          pendingPermission: null,
+          capped: false,
+          ordinal: 0,
+        },
+      ],
+      hidden: [],
+      now: 10_000,
+    });
+    expect(tasks.running.map((row) => row.kind)).toEqual(['command', 'workflow', 'subagent']);
+    expect(railRunningRows(tasks.running).map((row) => row.kind)).toEqual(['command', 'workflow']);
   });
 });

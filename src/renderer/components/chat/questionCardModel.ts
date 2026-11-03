@@ -1127,6 +1127,9 @@ export const PERMISSION_ACTION_LABELS: Readonly<Record<PermissionRequestAction, 
   escalate_sandbox: 'Run once with wider sandbox permissions',
   // dsh-rebase decision 190: web_fetch; the URL is the card's body.
   fetch_url: 'Fetch a web page',
+  // Decision 207 §15: the path on the card is where the session would move.
+  change_directory:
+    'Switch to a directory outside the workspace (its AGENTS.md, CLAUDE.md and skills are read in)',
 };
 
 /**

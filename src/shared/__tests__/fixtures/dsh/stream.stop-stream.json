@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-stop-stream",
     "requestId": "turn-STOP-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
     "type": "session.status",
     "payload": {
       "status": "running"

@@ -123,6 +123,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -179,6 +183,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -537,8 +542,50 @@
       }
     },
     {
-      "type": "request/header",
+      "type": "user/message",
       "seq": 23,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<runtime-context>"
+          }
+        ],
+        "source": {
+          "kind": "runtime-context",
+          "form": "snapshot",
+          "sections": [
+            {
+              "name": "aiclient:environment",
+              "text": "<aiclient:environment>"
+            },
+            {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>\"."
+            },
+            {
+              "name": "sandbox:policy",
+              "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
+            },
+            {
+              "name": "approval:policy",
+              "text": "Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed."
+            },
+            {
+              "name": "aiclient:permission",
+              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: bypass. The user has turned off approval prompts entirely: available tools execute without approval, including shell commands whose operands cannot be resolved statically. Explicit deny rules and the tool whitelist remain enforced, and a denied call is still denied. Never bypass a denied tool or path by switching tools."
+            }
+          ]
+        },
+        "role": "user",
+        "id": "id-9"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "request/header",
+      "seq": 24,
       "time": "<ms>",
       "data": {
         "header": {
@@ -574,6 +621,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -582,7 +630,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 24,
+      "seq": 25,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -606,7 +654,7 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-9",
+                "responseId": "msg_id-10",
                 "stopReason": "stop"
               },
               "blocks": [
@@ -616,7 +664,7 @@
               ]
             }
           },
-          "id": "id-10"
+          "id": "id-11"
         },
         "usage": {
           "inputTokens": 0,
@@ -678,7 +726,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-9",
+                  "responseId": "msg_id-10",
                   "stopReason": "stop"
                 },
                 "blocks": [
@@ -695,7 +743,7 @@
     },
     {
       "type": "step/end",
-      "seq": 25,
+      "seq": 26,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -704,7 +752,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 26,
+      "seq": 27,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -715,7 +763,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 27,
+      "seq": 28,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -732,14 +780,14 @@
               "kind": "user"
             },
             "role": "user",
-            "id": "id-11"
+            "id": "id-12"
           }
         ]
       }
     },
     {
       "type": "turn/start",
-      "seq": 28,
+      "seq": 29,
       "time": "<ms>",
       "data": {
         "turn": 3
@@ -747,7 +795,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 29,
+      "seq": 30,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -758,7 +806,7 @@
     },
     {
       "type": "step/start",
-      "seq": 30,
+      "seq": 31,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -767,7 +815,7 @@
     },
     {
       "type": "user/message",
-      "seq": 31,
+      "seq": 32,
       "time": "<ms>",
       "data": {
         "content": [
@@ -778,44 +826,6 @@
         ],
         "source": {
           "kind": "user"
-        },
-        "role": "user",
-        "id": "id-11"
-      },
-      "surfaceOp": "append"
-    },
-    {
-      "type": "user/message",
-      "seq": 32,
-      "time": "<ms>",
-      "data": {
-        "content": [
-          {
-            "type": "text",
-            "text": "<runtime-context>"
-          }
-        ],
-        "source": {
-          "kind": "runtime-context",
-          "form": "snapshot",
-          "sections": [
-            {
-              "name": "aiclient:environment",
-              "text": "<aiclient:environment>"
-            },
-            {
-              "name": "sandbox:policy",
-              "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
-            },
-            {
-              "name": "approval:policy",
-              "text": "Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed."
-            },
-            {
-              "name": "aiclient:permission",
-              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: bypass. The user has turned off approval prompts entirely: available tools execute without approval, including shell commands whose operands cannot be resolved statically. Explicit deny rules and the tool whitelist remain enforced, and a denied call is still denied. Never bypass a denied tool or path by switching tools."
-            }
-          ]
         },
         "role": "user",
         "id": "id-12"

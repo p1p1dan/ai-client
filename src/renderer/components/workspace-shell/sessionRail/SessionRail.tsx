@@ -16,12 +16,15 @@ import { ContextCard } from './ContextCard';
 import { EnvironmentCard, useEnvironmentRows } from './EnvironmentCard';
 import { RunningCard } from './RunningCard';
 import { ServersCard } from './ServersCard';
+import { SubagentsCard } from './SubagentsCard';
 import {
   deriveChangesCardView,
   deriveContextCardView,
+  railRunningRows,
   SESSION_RAIL_WIDTH,
   visibleRailCards,
 } from './sessionRailModel';
+import { deriveSubagentsCardView } from './subagentsCardModel';
 import { TodoRailCard } from './TodoRailCard';
 import { useJobServers } from './useJobServers';
 
@@ -38,7 +41,7 @@ export interface SessionRailProps {
 /**
  * Layout 5e (ui-cohesion §6, ruling L5): the session details panel — a 260px
  * column right of the chat, cards stacked 8px apart, scrolling when tall.
- * Environment, context, changes, todo, running; a card with nothing to say
+ * Environment, context, changes, todo, subagents, servers, running; a card with nothing to say
  * is not drawn. Whether the rail is on screen at all is the shell's call
  * (`resolveSessionRailVisibility`).
  */
@@ -79,8 +82,12 @@ export function SessionRail({
       (panels.jobs ?? []).some((job) => job.status === 'running' || job.status === 'stopping'));
   const now = useSubwindowClock(anyRunning);
   const running = useMemo(
-    () => deriveBackgroundTasksView({ panels, lanes, hidden, now }).running,
+    () => railRunningRows(deriveBackgroundTasksView({ panels, lanes, hidden, now }).running),
     [panels, lanes, hidden, now]
+  );
+  const subagentsView = useMemo(
+    () => deriveSubagentsCardView({ panels, lanes, now, t }),
+    [panels, lanes, now, t]
   );
 
   const servers = useJobServers(sessionId, panels?.jobs, panels?.live === true);
@@ -90,6 +97,7 @@ export function SessionRail({
     context: contextView !== null,
     changes: changesView !== null,
     todo: todoView !== null,
+    subagents: subagentsView !== null,
     servers: servers.length,
     running: running.length,
   });
@@ -121,6 +129,18 @@ export function SessionRail({
             );
           case 'todo':
             return todoView && <TodoRailCard key={id} view={todoView} />;
+          case 'subagents':
+            return (
+              subagentsView && (
+                <SubagentsCard
+                  // Per session: an open row or the ended fold is this chat's, not the next one's.
+                  key={`${id}:${sessionId}`}
+                  sessionId={sessionId}
+                  view={subagentsView}
+                  onInterrupt={(target) => void stopBackgroundTask(sessionId, target, t)}
+                />
+              )
+            );
           case 'servers':
             return <ServersCard key={id} rows={servers} />;
           case 'running':

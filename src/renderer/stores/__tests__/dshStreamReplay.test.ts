@@ -1279,7 +1279,7 @@ scenario('job-notice', (events, id) => {
       hidden: [],
     });
     expect(view.rows.map((row) => [row.jobId, row.kind, row.status])).toEqual([
-      ['bash-2', 'command', 'running'],
+      ['bash-job-1', 'command', 'running'],
     ]);
   });
 });
@@ -1291,7 +1291,7 @@ scenario('jobs-kill', (events, id) => {
     const panels = foldPanels(events);
     const running = deriveJobsWindowView({ panels: panels.bySession[id], lanes: [], hidden: [] });
     expect(running.rows.map((row) => [row.jobId, row.status, row.stop])).toEqual([
-      ['bash-1', 'running', 'stop'],
+      ['bash-job-1', 'running', 'stop'],
     ]);
     expect(rpc.jobs.kill.outcome).toBe('requested');
     // The window asks again (`worker.panels`) and takes the answer. The
@@ -1312,7 +1312,7 @@ scenario('jobs-kill', (events, id) => {
     );
     const killed = deriveJobsWindowView({ panels: after.bySession[id], lanes: [], hidden: [] });
     expect(killed.rows.map((row) => [row.jobId, row.status, row.stop, row.removable])).toEqual([
-      ['bash-1', 'killed', null, true],
+      ['bash-job-1', 'killed', null, true],
     ]);
   });
 
@@ -1521,7 +1521,7 @@ scenario('steer', (events, id) => {
       }
     }
     expect(usePendingUserMessagesStore.getState().bySession[id]?.[0]?.authoritativeMessageId).toBe(
-      'dsh-user-17'
+      'dsh-user-19'
     );
   });
 
@@ -1577,7 +1577,7 @@ scenario('steer', (events, id) => {
     });
     // The echo is in the store (started, text, completed): it opens the new
     // turn where DSH took the message in.
-    expect(timeline(echo + 3, { ...awaiting, authoritativeMessageId: 'dsh-user-17' })).toEqual({
+    expect(timeline(echo + 3, { ...awaiting, authoritativeMessageId: 'dsh-user-19' })).toEqual({
       turns: ['P1-STEER: two tool steps.', 'STEER-NOTE-A also report the step count.'],
       lastTurnRows: [],
       waiting: [],
@@ -1942,7 +1942,7 @@ scenario('perm-subagent', (events, id) => {
   it('names the subagent on the card it raised', () => {
     const requested = events.findIndex((event) => event.type === 'permission.requested');
     const lanes = foldLanes(events.slice(0, requested + 1));
-    const origin = lanes.permissionOrigin['toolu_id-11'];
+    const origin = lanes.permissionOrigin['toolu_id-14'];
     expect(derivePermissionOrigin(origin)?.label).toBe('From subagent · Permission probe child');
   });
 

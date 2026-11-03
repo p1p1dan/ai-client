@@ -156,7 +156,11 @@ import {
   loadPermissionPolicy,
   type PermissionPolicyFiles,
 } from '../../shared/permissions/policy.ts';
-import { type SyncRealpath, workspaceSpellings } from '../../shared/permissions/workspace.ts';
+import {
+  type SyncRealpath,
+  workspaceAliases,
+  workspaceSpellings,
+} from '../../shared/permissions/workspace.ts';
 import {
   GOAL_NOT_SET_PREFIX,
   PLAN_APPROVAL_HOLD_REASON,
@@ -251,6 +255,7 @@ import {
   type WorkerToolBackgroundResult,
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
+import { workspaceSpelled } from '../../shared/workingDirectory.ts';
 import { gatewaySessionUuid } from '../lib/sessionMetadata.ts';
 import type { AttachedGate, DshPermissionHost } from '../permissions/permissionHost.ts';
 import { admitUserContent, type DshAttachmentStore, type DshUserContent } from './attachments.ts';
@@ -479,6 +484,8 @@ export interface DshBridgeOptionalServices {
   tools: DshToolRegistryView;
   /** `ctx.planMode` (decision 169): DSH's plan mode, following our gate's. */
   planMode: DshPlanModeView;
+  /** `ctx.workingDirectory` (DSH 0.2.1, decision 207 §7): the session's current directory. */
+  workingDirectory: { ensure(agent: unknown, signal?: AbortSignal): Promise<string> };
   /**
    * `ctx.compaction` (decision 179): read opaquely; its summary hook carries a
    * `/compact`'s instructions, and (decision 181) every summary request names
@@ -953,6 +960,14 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
    * it drops whatever a slot sends before that (`WorkerManager.handleWorkerEvent`).
    */
   private projectionBaseline: SessionProjectionPayload[] | null = null;
+  /**
+   * Decision 207 §15 item 5: DSH's current directory for the open session,
+   * as its `workingDirectory` projection was last read or forwarded, in the
+   * workspace's spelling. The live rows read it when a call starts.
+   */
+  private workingDirectory: string | undefined;
+  /** The workspace's other spellings, by the workspace they were worked out for. */
+  private aliases: { workspace: string; aliases: readonly string[] } | undefined;
   /** P1-7b: the session's background jobs and its running commands' output (`jobs.ts`). */
   private readonly jobs: DshJobsTracker;
   /** P1-7b: the session's children on the timeline (`subagents.ts`). */
@@ -1007,7 +1022,11 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       // Decision 179: a `/compact` summary with the instructions it was written with.
       (compactionId) => this.compactInstructionsOf(compactionId),
       // Decision 180: and its command line with what was typed.
-      (compactionId) => this.compactCommandInstructionsOf(compactionId)
+      (compactionId) => this.compactCommandInstructionsOf(compactionId),
+      // Decision 207 §7: the workspace, so a row records the directory it ran in,
+      // by the spelling DSH reports it in too (§15 item 5).
+      options.cwd,
+      () => this.workspaceAliasesOf(options.cwd)
     );
     this.retired = new DshRetiredHistory(this.query, options.log);
     this.router = new DshModelRouter(() => deps.modelPlan?.(), options.log);
@@ -1040,6 +1059,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.live = new DshLiveEvents({
       emit: (event) => this.emit(event),
       route: () => this.route,
+      workspace: () => this.workspacePath(),
+      currentDirectory: () => this.workingDirectory,
       dshSessionId: () => this.dshSessionId,
       turn: () => this.turn,
       openSyntheticTurn: (turn) => {
@@ -1302,7 +1323,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     try {
       const skills = this.ctx.get?.('skills');
       return skills
-        ? (await skills.list(this.skillLookup(agent))).filter(isInvocableSkill).length
+        ? (await skills.list(await this.skillLookup(agent))).filter(isInvocableSkill).length
         : undefined;
     } catch (error) {
       this.options.log?.('[dsh-bridge] skill catalog unreadable', error);
@@ -1310,9 +1331,19 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     }
   }
 
-  /** The lookup dsh-tool-skill makes for this agent: its workspace, its scope. */
-  private skillLookup(agent: DshAgent): { cwd: string; scope: unknown } {
-    return { cwd: agent.session.header?.cwd ?? this.cwd, scope: agent };
+  /**
+   * The lookup dsh-tool-skill makes for this agent: its current directory
+   * (DSH 0.2.1, decision 207 §7), else its workspace; its scope.
+   */
+  private async skillLookup(agent: DshAgent): Promise<{ cwd: string; scope: unknown }> {
+    const workspace = agent.session.header?.cwd ?? this.cwd;
+    let cwd = workspace;
+    try {
+      cwd = (await this.ctx.get?.('workingDirectory')?.ensure(agent)) ?? workspace;
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] current directory not read', error);
+    }
+    return { cwd, scope: agent };
   }
 
   /**
@@ -1856,7 +1887,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
 
   private async userSkills(agent: DshAgent): Promise<readonly DshSkillSummary[]> {
     try {
-      return (await this.ctx.get?.('skills')?.list(this.skillLookup(agent))) ?? [];
+      return (await this.ctx.get?.('skills')?.list(await this.skillLookup(agent))) ?? [];
     } catch (error) {
       this.options.log?.('[dsh-bridge] skill catalog unreadable', error);
       return [];
@@ -3394,8 +3425,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
         .get?.('sessionProjections')
         ?.snapshot(session, SESSION_PROJECTION_KEYS).values;
       if (!values) return [];
-      return SESSION_PROJECTION_KEYS.filter((key) => key in values).map(
-        (key) => ({ key, view: values[key] }) as SessionProjectionPayload
+      return SESSION_PROJECTION_KEYS.filter((key) => key in values).map((key) =>
+        this.noteProjection({ key, view: values[key] } as SessionProjectionPayload)
       );
     } catch (error) {
       this.options.log?.('[dsh-bridge] session projections unreadable', error);
@@ -3434,7 +3465,44 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   ): void {
     if (this.disposed || !this.result || session?.id !== this.dshSessionId) return;
     if (!(SESSION_PROJECTION_KEYS as readonly string[]).includes(key)) return;
-    this.forwardProjection({ key, view: value } as SessionProjectionPayload);
+    this.forwardProjection(this.noteProjection({ key, view: value } as SessionProjectionPayload));
+  }
+
+  /**
+   * Decision 207 §15 item 5: a `workingDirectory` value read or forwarded,
+   * spelled as the workspace is (DSH resolves where a cd lands, so a
+   * workspace opened through a link reads as itself), and kept for the live
+   * rows. Any other key as it came.
+   */
+  private noteProjection(payload: SessionProjectionPayload): SessionProjectionPayload {
+    if (payload.key !== 'workingDirectory') return payload;
+    if (typeof payload.view !== 'string') {
+      this.workingDirectory = undefined;
+      return payload;
+    }
+    const workspace = this.workspacePath();
+    const view = workspaceSpelled(workspace, payload.view, this.workspaceAliasesOf(workspace));
+    this.workingDirectory = view;
+    return { key: 'workingDirectory', view };
+  }
+
+  /** The open session's workspace: its header cwd, else the one it was opened with. */
+  private workspacePath(): string {
+    return this.handle?.agent.session.header?.cwd ?? this.cwd;
+  }
+
+  /** `workspaceAliases`, worked out once per workspace by the gate's own resolver. */
+  private workspaceAliasesOf(workspace: string): readonly string[] {
+    if (this.aliases?.workspace !== workspace) {
+      this.aliases = {
+        workspace,
+        aliases: workspaceAliases(
+          workspace,
+          this.deps.realpathSync ?? ((path) => realpathSync.native(path))
+        ),
+      };
+    }
+    return this.aliases.aliases;
   }
 
   /**

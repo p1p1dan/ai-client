@@ -1914,3 +1914,120 @@ describe('projectDshHistory — /compact in the timeline (decision 180)', () => 
     });
   });
 });
+
+describe('projectDshHistory — the directory a call ran in (decision 207 §7, §14 D)', () => {
+  const WS = '/home/u/proj';
+  function cdLog() {
+    const l = log().turn(1).user('u1', 'go');
+    l.assistant(1, 1, 'a1', [toolCall('c1', 'read', { file_path: 'a.ts' })]);
+    l.call(1, 1, 'c1', 'read', { file_path: 'a.ts' });
+    l.result(1, 1, 'r1', 'c1', 'a');
+    l.assistant(1, 2, 'a2', [toolCall('c2', 'working_directory', { cd: 'packages/web' })]);
+    l.call(1, 2, 'c2', 'working_directory', { cd: 'packages/web' });
+    l.add('working-directory/change', { cwd: `${WS}/packages/web` });
+    l.result(1, 2, 'r2', 'c2', `${WS}/packages/web`);
+    l.assistant(1, 3, 'a3', [toolCall('c3', 'read', { file_path: 'src/main.ts' })]);
+    l.call(1, 3, 'c3', 'read', { file_path: 'src/main.ts' });
+    l.result(1, 3, 'r3', 'c3', 'main');
+    l.assistant(1, 4, 'a4', [toolCall('c4', 'working_directory', { cd: '/tmp/build' })]);
+    l.call(1, 4, 'c4', 'working_directory', { cd: '/tmp/build' });
+    l.add('working-directory/change', { cwd: '/tmp/build' });
+    l.result(1, 4, 'r4', 'c4', '/tmp/build');
+    l.assistant(1, 5, 'a5', [toolCall('c5', 'read', { file_path: 'error.log' })]);
+    l.call(1, 5, 'c5', 'read', { file_path: 'error.log' });
+    l.result(1, 5, 'r5', 'c5', 'log');
+    l.add('working-directory/change', { cwd: WS });
+    l.assistant(1, 6, 'a6', [toolCall('c6', 'read', { file_path: 'b.ts' })]);
+    l.call(1, 6, 'c6', 'read', { file_path: 'b.ts' });
+    l.result(1, 6, 'r6', 'c6', 'b');
+    l.end(1, { kind: 'completed' });
+    return l.events;
+  }
+  const cwdOf = (messages: readonly HistoryMessage[]) =>
+    Object.fromEntries(
+      messages
+        .flatMap((message) => message.blocks)
+        .filter((block) => block.type === 'tool_call')
+        .map((block) => [block.toolCallId, (block as { cwd?: string }).cwd])
+    );
+
+  it('stamps the calls after a cd, the cd with the directory it left, and none back in the workspace', () => {
+    expect(cwdOf(projectDshHistory(cdLog(), { workspace: WS }))).toEqual({
+      c1: undefined,
+      c2: undefined,
+      c3: 'packages/web',
+      c4: 'packages/web',
+      c5: '/tmp/build',
+      c6: undefined,
+    });
+  });
+
+  it('stamps nothing without the workspace', () => {
+    expect(Object.values(cwdOf(projectDshHistory(cdLog())))).toEqual(Array(6).fill(undefined));
+  });
+
+  it('§15 item 5: one step [cd sub, read, cd back, read] stamps each call with the directory it started in', () => {
+    const l = log().turn(1).user('u1', 'go');
+    l.assistant(1, 1, 'a1', [
+      toolCall('c1', 'working_directory', { cd: 'sub' }),
+      toolCall('c2', 'read', { file_path: 'src/a.ts' }),
+      toolCall('c3', 'working_directory', { cd: '..' }),
+      toolCall('c4', 'read', { file_path: 'b.ts' }),
+    ]);
+    l.call(1, 1, 'c1', 'working_directory', { cd: 'sub' });
+    l.add('working-directory/change', { cwd: `${WS}/sub` });
+    l.result(1, 1, 'r1', 'c1', `${WS}/sub`);
+    l.call(1, 1, 'c2', 'read', { file_path: 'src/a.ts' });
+    l.result(1, 1, 'r2', 'c2', 'a');
+    l.call(1, 1, 'c3', 'working_directory', { cd: '..' });
+    l.add('working-directory/change', { cwd: WS });
+    l.result(1, 1, 'r3', 'c3', WS);
+    l.call(1, 1, 'c4', 'read', { file_path: 'b.ts' });
+    l.result(1, 1, 'r4', 'c4', 'b');
+    l.end(1, { kind: 'completed' });
+    expect(cwdOf(projectDshHistory(l.events, { workspace: WS }))).toEqual({
+      c1: undefined,
+      c2: 'sub',
+      c3: 'sub',
+      c4: undefined,
+    });
+  });
+
+  it('§15 item 5: a later turn with no cd of its own (a reopened session) stamps the directory DSH is in', () => {
+    const l = log().turn(1).user('u1', 'go');
+    l.assistant(1, 1, 'a1', [toolCall('c1', 'working_directory', { cd: 'sub' })]);
+    l.call(1, 1, 'c1', 'working_directory', { cd: 'sub' });
+    l.add('working-directory/change', { cwd: `${WS}/sub` });
+    l.result(1, 1, 'r1', 'c1', `${WS}/sub`);
+    l.end(1, { kind: 'completed' });
+    l.turn(2).user('u2', 'again');
+    l.assistant(2, 1, 'a2', [toolCall('c2', 'read', { file_path: 'a.ts' })]);
+    l.call(2, 1, 'c2', 'read', { file_path: 'a.ts' });
+    l.result(2, 1, 'r2', 'c2', 'a');
+    l.end(2, { kind: 'completed' });
+    expect(cwdOf(projectDshHistory(l.events, { workspace: WS }))).toEqual({
+      c1: undefined,
+      c2: 'sub',
+    });
+  });
+
+  it('§15 item 5: a workspace opened through a link reads DSH’s resolved directories as itself', () => {
+    const l = log().turn(1).user('u1', 'go');
+    const step = (n: number, id: string, change: string) => {
+      l.assistant(1, n, `a${n}`, [toolCall(id, 'read', { file_path: 'a.ts' })]);
+      l.add('working-directory/change', { cwd: change });
+      l.call(1, n, id, 'read', { file_path: 'a.ts' });
+      l.result(1, n, `r${n}`, id, 'a');
+    };
+    step(1, 'c1', '/real/ws/packages/web');
+    step(2, 'c2', '/real/ws');
+    step(3, 'c3', '/real/ws-other');
+    l.end(1, { kind: 'completed' });
+    const options = { workspace: '/link/ws', workspaceAliases: ['/real/ws'] };
+    expect(cwdOf(projectDshHistory(l.events, options))).toEqual({
+      c1: 'packages/web',
+      c2: undefined,
+      c3: '/real/ws-other',
+    });
+  });
+});

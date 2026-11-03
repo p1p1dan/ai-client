@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-auto-compact",
     "requestId": "turn-FILL-A",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-auto-compact",
+    "requestId": "turn-FILL-A",
     "type": "session.status",
     "payload": {
       "status": "running"

@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-steer",
     "requestId": "turn-STEER",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
     "type": "session.status",
     "payload": {
       "status": "running"
@@ -178,7 +187,7 @@
     "requestId": "turn-STEER",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-17",
+      "messageId": "dsh-user-19",
       "role": "user",
       "attemptId": "interject-STEER"
     }
@@ -188,8 +197,8 @@
     "requestId": "turn-STEER",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-17",
-      "blockId": "dsh-user-17-text",
+      "messageId": "dsh-user-19",
+      "blockId": "dsh-user-19-text",
       "text": "STEER-NOTE-A also report the step count."
     }
   },
@@ -198,7 +207,7 @@
     "requestId": "turn-STEER",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-17"
+      "messageId": "dsh-user-19"
     }
   },
   {

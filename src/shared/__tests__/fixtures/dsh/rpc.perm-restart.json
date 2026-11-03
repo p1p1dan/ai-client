@@ -26,7 +26,7 @@
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-restart.dsh.json",
       "leaf": {
         "activeEntryId": "id-13",
-        "fileTailEntryId": "aiclient-rec-perm-restart#23"
+        "fileTailEntryId": "aiclient-rec-perm-restart#27"
       },
       "initialHistory": {
         "logicalSessionId": "rec-perm-restart",
@@ -232,7 +232,7 @@
               "text": "P1-PERM-SESSION: echo twice."
             }
           ],
-          "liveMessageId": "dsh-user-28"
+          "liveMessageId": "dsh-user-32"
         },
         {
           "id": "h:id-17",
@@ -315,7 +315,7 @@
               "text": "P1-PERM-SESSION: echo twice."
             }
           ],
-          "liveMessageId": "dsh-user-47"
+          "liveMessageId": "dsh-user-55"
         },
         {
           "id": "h:id-28",
@@ -404,7 +404,7 @@
       "workspacePath": "<workspace>/perm-restart",
       "leaf": {
         "activeEntryId": "id-35",
-        "fileTailEntryId": "aiclient-rec-perm-restart#60"
+        "fileTailEntryId": "aiclient-rec-perm-restart#68"
       },
       "nodes": [
         {

@@ -144,6 +144,17 @@ describe('a review read back from its tool row and its notice', () => {
     ).toEqual({ kind: 'keep-planning', feedback: 'Split it.' });
     expect(planReviewRowOutcome(`Error: ${KEEP_PLANNING_TEXT}`)).toEqual({ kind: 'keep-planning' });
     expect(planReviewRowOutcome(REVIEW_DISMISSED_TEXT)).toEqual({ kind: 'dismissed' });
+    // Decision 207 §5: DSH 0.2.1 closes the review with a successful result in its own words.
+    expect(
+      planReviewRowOutcome(
+        'The user dismissed the plan review to reply in their own words; plan mode remains active.'
+      )
+    ).toEqual({ kind: 'dismissed' });
+    expect(
+      planReviewRowOutcome(
+        `Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message.`
+      )
+    ).toEqual({ kind: 'dismissed' });
     expect(planReviewRowOutcome(`Error: ${RUN_WITHOUT_GOAL_TEXT}`)).toEqual({
       kind: 'approved-without-goal',
     });

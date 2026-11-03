@@ -33,9 +33,11 @@ import { analyzePwsh, PWSH_TOOL } from '../../shared/permissions/pwshAnalysis.ts
 import {
   authorizeTarget,
   checkShellPaths,
+  hasParentSegment,
   type PermissionFileSystem,
 } from '../../shared/permissions/shellPaths.ts';
 import { classifyTool, type DshToolClass, pluginToolClass } from './classification.ts';
+import { shellWorkdirTarget } from './shellWorkdir.ts';
 
 /** The part of a DSH call the mapping reads. */
 export interface GatedCallInput {
@@ -48,8 +50,16 @@ export interface GatedCallInput {
 /** Everything a call is judged against, resolved for the calling agent. */
 export interface GateCallContext {
   gate: Pick<PermissionGateService, 'authorize'>;
-  /** The calling session's workspace (its header cwd). */
+  /**
+   * The calling session's current directory (decision 207 §7): relative paths
+   * resolve against it.
+   */
   cwd: string;
+  /**
+   * The calling session's workspace (its header cwd), where a call that names
+   * no path is judged (decision 207 §15). Absent: `cwd`.
+   */
+  workspace?: string;
   fs: PermissionFileSystem;
   /** Analyse one bash command line (tree-sitter), relative to `cwd`. */
   analyzeBash(command: string, cwd: string): Promise<BashAnalysis>;
@@ -88,6 +98,18 @@ function stringArg(args: unknown, key: string): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+/**
+ * Decision 207 §15 (user, 2026-11-03): the directory a call moves the session,
+ * or a delegate, into — `working_directory`'s `cd`, a subagent's `cwd`. DSH
+ * then reads that project's AGENTS.md, CLAUDE.md and skills into the next
+ * request, so a move out of the workspace asks first. Undefined: no move.
+ */
+export function directoryArgumentOf(name: string, args: unknown): string | undefined {
+  if (name === 'working_directory') return stringArg(args, 'cd');
+  if (name === 'subagent' || name === 'subagent_fork') return stringArg(args, 'cwd');
+  return undefined;
+}
+
 function escalationOf(args: unknown): EscalationRequest | undefined {
   const mode = stringArg(args, 'sandbox_permissions');
   if (mode === undefined) return undefined;
@@ -119,16 +141,21 @@ export async function authorizeCall(
   context: GateCallContext
 ): Promise<GatedCall> {
   const toolClass = classifyTool(call.name);
-  if (toolClass === 'internal') return { kind: 'internal' };
+  const directory = directoryArgumentOf(call.name, call.arguments);
+  if (toolClass === 'internal' && directory === undefined) return { kind: 'internal' };
   const createError = context.createError ?? createPermissionError;
   const args = call.arguments;
   const escalation = escalationOf(args);
   // Only reads and searches may land on a host-produced file (a spill the model
   // was told to read); decided on the canonical path the path step hands over.
   const trustable = toolClass === 'read' || toolClass === 'search';
+  // Every reading of the target must be one (decision 207 §15 item 7: a `..`
+  // across a link adds the other reading to `paths`).
+  const trusted = (request: ToolPermissionRequest) =>
+    [request.path, ...(request.paths ?? [])].every((path) => context.isTrustedPath?.(path));
   const extra = (request: ToolPermissionRequest): ToolPermissionRequest => ({
     ...request,
-    ...(trustable && context.isTrustedPath?.(request.path) ? { trustedPath: true } : {}),
+    ...(trustable && trusted(request) ? { trustedPath: true } : {}),
     ...(context.delegation ? { delegation: context.delegation } : {}),
   });
   const target = (
@@ -157,6 +184,14 @@ export async function authorizeCall(
       }
     );
   };
+
+  const workspace = context.workspace ?? context.cwd;
+  if (directory !== undefined) {
+    // Judged like a read of the directory: the user's `read` rules, no card
+    // inside the workspace (see `ToolPermissionRequest.changeDirectory`).
+    await target(call.name, directory, { policySurface: 'read', changeDirectory: true });
+    return { kind: 'gated', toolClass };
+  }
 
   // P1-10d: an allowlisted plugin's read or write names its file in its own argument.
   const plugin = pluginToolClass(call.name);
@@ -209,7 +244,15 @@ export async function authorizeCall(
     }
     case 'shell': {
       const command = stringArg(args, 'command') ?? '';
-      const workdir = resolve(context.cwd, stringArg(args, 'workdir') ?? '.');
+      const given = stringArg(args, 'workdir');
+      // Decision 207 §15 item 7: judged where DSH spawns it (`shellWorkdirTarget`):
+      // its bash hands `<cwd>/<workdir>` to the system as written, which
+      // resolves a link before the `..` after it; its pwsh folds the `..`
+      // first. Only a `..` tells the two apart, so any other is folded as before.
+      const workdir =
+        given !== undefined && hasParentSegment(given)
+          ? shellWorkdirTarget(call.name, given, context.cwd, context.platform ?? process.platform)
+          : resolve(context.cwd, given ?? '.');
       // Both shells: operands expanded and checked against the deny list,
       // before the approval and again after it. The policy surface is `bash`
       // for either (the gate's default for a shell tool).
@@ -241,12 +284,18 @@ export async function authorizeCall(
       // remembers it, so approving one page of a site does not approve every
       // site. A URL that does not parse is its own subject; the fetch refuses it.
       const url = stringArg(args, 'url') ?? '';
-      await target(call.name, '.', {
-        policySurface: call.name,
-        policyValue: hostOf(url) ?? url,
-        network: true,
-        preview: { label: 'URL', text: url },
-      });
+      // Decision 207 §15: no path, so judged at the workspace, wherever the session moved.
+      await target(
+        call.name,
+        '.',
+        {
+          policySurface: call.name,
+          policyValue: hostOf(url) ?? url,
+          network: true,
+          preview: { label: 'URL', text: url },
+        },
+        workspace
+      );
       break;
     }
     case 'opaque': {
@@ -264,11 +313,17 @@ export async function authorizeCall(
     }
     default:
       // generic and unknown (unclassified plugin) tools: the policy's per-tool rule, `'*': 'ask'`.
-      await target(call.name, '.', {
-        policySurface: call.name,
-        policyValue: call.name,
-        preview: { label: 'Arguments', text: argumentsPreview(args) },
-      });
+      // Judged at the workspace like a fetch (decision 207 §15): an MCP call names no path.
+      await target(
+        call.name,
+        '.',
+        {
+          policySurface: call.name,
+          policyValue: call.name,
+          preview: { label: 'Arguments', text: argumentsPreview(args) },
+        },
+        workspace
+      );
   }
   return { kind: 'gated', toolClass, ...(escalation ? { escalation } : {}) };
 }

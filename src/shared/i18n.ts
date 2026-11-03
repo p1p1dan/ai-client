@@ -2837,8 +2837,8 @@ export const zhTranslations: Record<string, string> = {
   'next moves': '后续计划',
 
   // 子 Agent 面板。
-  'From subagent': '来自子 Agent',
-  'From subagent · {{detail}}': '来自子 Agent · {{detail}}',
+  'From subagent': '来自子代理',
+  'From subagent · {{detail}}': '来自子代理 · {{detail}}',
   'Awaiting permission · {{tool}}': '等待授权 · {{tool}}',
   '+{{count}} earlier': '另有 {{count}} 条更早的',
   'activity feed capped — remaining live updates dropped': '活动流已达上限 —— 后续实时更新不再显示',
@@ -3823,6 +3823,15 @@ Object.assign(zhTranslations, {
   Ended: '已结束',
   'Earlier run': '此前运行',
   'The task was not stopped': '任务没有停下',
+  // Decision 207 §8: the session rail's subagents card and the out-of-turn permission card.
+  'Waiting for your approval': '等你确认',
+  'Waiting for your approval: {{tool}}': '等你确认：{{tool}}',
+  Errored: '出错',
+  '{{count}} running': '{{count}} 运行中',
+  '{{count}} waiting for your approval': '{{count}} 等你确认',
+  'Ended {{count}}': '已结束 {{count}}',
+  'The main conversation is idle; approve and this subagent carries on':
+    '主对话空闲中，批准后这个子代理继续',
   'The subagent was not interrupted': '子代理没有被打断',
   'The subagent was not stopped': '子代理没有停下',
   'Recent activity': '最近活动',
@@ -3896,6 +3905,19 @@ Object.assign(zhTranslations, {
   'Running code': '代码运行中',
   'Run code': '代码',
   'Listed models': '列模型',
+  // Decision 207 §7: DSH 0.2.1's working_directory.
+  'Changed directory': '切换目录',
+  'Changing directory': '切换目录中',
+  'Change directory': '切换目录',
+  'Checked directory': '查看当前目录',
+  'Checking directory': '查看当前目录中',
+  'Check directory': '查看当前目录',
+  'Current directory': '当前目录',
+  'Outside the workspace': '工作区外',
+  'The agent changed directory to outside the workspace; reads, searches and commands there still ask.':
+    '模型切换到了工作区外的目录；在那里读文件、搜索、运行命令仍会照常询问。',
+  'The agent changed directory; relative paths now start here.':
+    '模型切换了当前目录；相对路径从这里算起。',
   'Listing models': '列模型中',
   'List models': '列模型',
   'Used tool': '工具',
@@ -4983,6 +5005,8 @@ Object.assign(zhTranslations, {
   // web_fetch's approval card (questionCardModel.ts): its action, its body's
   // label (the runtime's word for it), and what Allow for session remembers.
   'Fetch a web page': '获取网页',
+  'Switch to a directory outside the workspace (its AGENTS.md, CLAUDE.md and skills are read in)':
+    '切换到工作区外的目录（会读入那里的 AGENTS.md、CLAUDE.md 和技能）',
   URL: '网址',
   'Allow for session remembers {{tool}} for every page on {{host}}':
     '「本会话内允许」会记住 {{tool}} 可访问 {{host}} 的所有页面',

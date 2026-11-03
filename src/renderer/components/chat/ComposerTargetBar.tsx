@@ -1,11 +1,13 @@
+import { workingDirectoryChip } from '@shared/workingDirectory';
 import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useHomeDraftStore } from '@/stores/homeDraft';
+import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { BranchColumn, type BranchColumnDraft } from './BranchColumn';
 import { buildBranchColumn, buildRepoColumn } from './composerColumns';
 import { isTargetableWorkspace } from './composerTarget';
-import { LockedRepoLabel, TemporaryChatLabel } from './LockedRepoLabel';
+import { LockedRepoLabel, TemporaryChatLabel, WorkingDirectoryLabel } from './LockedRepoLabel';
 import type { MiddleColumnMode } from './middleColumnLayout';
 import {
   composerBarTrailingClass,
@@ -114,6 +116,14 @@ export function ComposerTargetBar({
     activeWorkspaceId: target.workspace?.id ?? null,
     mode,
   });
+  // Decision 207 §7: where the model changed directory to, while it is not the workspace.
+  const workingDirectory = useSessionPanelsStore((state) =>
+    activeSessionId ? state.bySession[activeSessionId]?.workingDirectory : undefined
+  );
+  const cwdChip =
+    mode === 'session' && !onHome
+      ? workingDirectoryChip(target.workspace?.path ?? repoColumn.currentPath, workingDirectory)
+      : undefined;
 
   const branchColumn = buildBranchColumn({
     sessions,
@@ -200,6 +210,7 @@ export function ComposerTargetBar({
           reason={t('This conversation is bound to its repository — start a new chat to change it')}
         />
       )}
+      {cwdChip && <WorkingDirectoryLabel chip={cwdChip} />}
       {temporaryChat && <TemporaryChatLabel />}
 
       {/* Column 2 — branch. The only control here that mutates the repository;

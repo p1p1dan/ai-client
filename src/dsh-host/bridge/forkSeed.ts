@@ -7,8 +7,8 @@
  * `@deepseek-ai/dsh-llm` (scripts/dsh-host-build-lib.mjs `BRIDGE_EXTERNALS`).
  * `buildDshForkSeed` is therefore a copy of `buildForkSeed` and its
  * `openTurnClosers` / `ToolCallRecovery` from `@deepseek-ai/dsh-session`
- * 0.2.0-rc.2: the prefix, the inherited marker, and `forked` closers for an
- * open tail.
+ * 0.2.1-rc.5 (unchanged since 0.2.0-rc.2): the prefix, the inherited
+ * marker, and `forked` closers for an open tail.
  * `forkSeed.test.ts` compares the two whenever the DSH package is installed,
  * and `agents.create` validates every seed it is handed.
  *

@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-compact-instructions",
     "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/compact-instructions"
+    }
+  },
+  {
+    "sessionId": "rec-compact-instructions",
+    "requestId": "turn-STREAM",
     "type": "session.status",
     "payload": {
       "status": "running"

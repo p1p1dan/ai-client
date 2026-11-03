@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-fork",
     "requestId": "turn-BASE",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
     "type": "session.status",
     "payload": {
       "status": "running"
@@ -293,6 +302,15 @@
     "payload": {
       "key": "subagentCatalog",
       "view": []
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
     }
   },
   {

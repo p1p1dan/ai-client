@@ -234,6 +234,10 @@
  *                       foreground sleep to stop; the settlement wakes the agent)
  *                       and P1-SUBSTOPCHILD (the child: a command, 6 s by default, that writes
  *                       substop-<tag>.txt once it ran to the end).
+ *                       Decision 207 §8 adds two for the double wake-up: P1-WAKE2 (a
+ *                       continuable subagent; each wake is answered by what woke it)
+ *                       and P1-WAKE2CHILD (the child: `send_message` to its parent,
+ *                       then a final answer paced over 3 s).
  *                       dsh-rebase P1-15 adds four for one-shot completions (decision
  *                       125; the shared-host integration test's completion phase and
  *                       tools/bridge-smoke.ts): P1-COMPLETE-COMMIT (a commit message
@@ -683,7 +687,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS|RUN)/;
+  /P1-(AUTO-REVIEW-REFUSE|AUTO-REVIEW|FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP-PWSH|ENVDUMP|THINK|USAGE|AUTOCOMPACT|OVERFLOW|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|SUBSTOPCHILD|SUBSTOP|WAKE2CHILD|WAKE2|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN|TOOLGAPS|RUN|CD)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -771,6 +775,12 @@ const COMPACT_SLOW = 'P1-COMPACT-SLOW';
 const COMPACT_USER_INSTRUCTIONS = /<user-instructions>\n([\s\S]*?)\n<\/user-instructions>/;
 /** The close of a compaction checkpoint's summary (dsh-compaction-basic `SUMMARY_CLOSE_TAG`). */
 const CHECKPOINT_CLOSE = '</compacted-summary>';
+/**
+ * Decision 207 §15: what the AGENTS.md outside the workspace holds in
+ * shared-host [207-CD-*]. Not a scenario marker: the instructions DSH reads
+ * in must not become the request's trigger.
+ */
+const P1_CD_MARKER = 'CD-OUTSIDE-AGENTS-207';
 
 // ---- openai-responses tool loop with a simulated prompt cache (P1-14 usage check) ----
 
@@ -1798,6 +1808,43 @@ const DSH_P0_2_SCRIPTS = {
       tag: 'subchild',
     };
   },
+  // Decision 207 §8 item 5 (`subagentWake.integration.test.ts`): a continuable
+  // child reports to its parent with `send_message` before it finishes, so one
+  // child wakes the idle parent twice — its message, then its settlement. The
+  // parent answers each wake by what woke it.
+  'P1-WAKE2'(_round, step, _calls, _triggerText, _history, recent) {
+    if (/Background subagent \S+ finished/.test(recent ?? '')) {
+      return say('P1-WAKE2 heard the settlement.');
+    }
+    if (/Agent \S+ sent a message:/.test(recent ?? '')) {
+      return say('P1-WAKE2 heard the interim report.');
+    }
+    if (step === 0) {
+      return tool('subagent', {
+        description: 'Wake probe',
+        prompt: 'P1-WAKE2CHILD: report once to your parent, then finish.',
+      });
+    }
+    return say('P1-WAKE2 delegated; the child reports back.');
+  },
+  // The child: `send_message` to the parent DSH names in its task, then a
+  // final answer paced over 3 s, so the parent's first wake turn is over
+  // before the settlement arrives. Neither text carries a scenario marker.
+  'P1-WAKE2CHILD'(_round, step, _calls, triggerText) {
+    if (step === 0) {
+      const parent = /Your parent agent id is "([^"]+)"/.exec(triggerText)?.[1];
+      if (!parent) return say('No parent id in the task.');
+      return tool('send_message', { agent_id: parent, message: 'wake2 interim finding' });
+    }
+    return {
+      kind: 'paced-text',
+      status: 200,
+      text: 'Child done: the final finding.',
+      chunks: 30,
+      chunkMs: 100,
+      tag: 'wake2child',
+    };
+  },
   // dsh-rebase decisions 201/203 (`stopScope.integration.test.ts`): a background
   // subagent runs a long command while its parent sleeps in the foreground, so
   // a Stop lands mid-turn. `tag=<word>` names the file the child writes once
@@ -2012,22 +2059,44 @@ const DSH_P0_2_SCRIPTS = {
         : 'P1-PLAN-GOAL wrote plan-goal.txt.'
     );
   },
+  // Decision 207 §7, §15: a cd out of the workspace, then a glob with no path
+  // (shared-host [207-CD-1], [207-CD-2]). `P1-CD {"to":"/abs/dir"}: …`. Each
+  // request is tagged with whether it carried P1_CD_MARKER, which the target
+  // directory's AGENTS.md holds: DSH reads that file in once the cd lands.
+  'P1-CD'(_round, step, calls, triggerText, _history, _recent, _userTexts, messages) {
+    const tag = JSON.stringify(messages).includes(P1_CD_MARKER) ? 'marker' : 'no-marker';
+    if (step === 0) {
+      const object = firstJsonObject(triggerText);
+      return { ...tool('working_directory', { cd: object ? JSON.parse(object).to : '.' }), tag };
+    }
+    if (step === 1) return { ...tool('glob', { pattern: '*' }), tag };
+    return {
+      ...say(`P1-CD ${calls.map((c) => `${c.name}:${c.isError ? 'error' : 'ok'}`).join(' ')}`),
+      tag,
+    };
+  },
   // dsh-rebase P1-6b: permission plugin experiments (tools/perm-experiments.ts).
-  'P1-PERM-SUB'(_round, step) {
+  // Decision 207 §8: since DSH 0.2.1 every delegation runs in the background;
+  // the child's settlement notice wakes the parent, which answers in plain text.
+  'P1-PERM-SUB'(_round, step, _calls, _triggerText, _history, recent) {
+    if (/Background subagent \S+ finished/.test(recent ?? '')) {
+      return say('P1-PERM-SUB heard back from the child.');
+    }
     if (step === 0) {
       return tool('subagent', {
         description: 'Permission probe child',
         prompt: 'P1-PERM-CHILD: run one bash call, then answer.',
-        run_in_background: false,
       });
     }
-    return say('P1-PERM-SUB finished.');
+    return say('P1-PERM-SUB delegated; the child reports back.');
   },
   'P1-PERM-CHILD'(_round, step) {
     if (step === 0) {
       return tool('bash', { command: 'echo perm-child-call', description: 'Echo from the child' });
     }
-    return say('P1-PERM-CHILD finished.');
+    // No scenario marker in the closing line: the settlement notice quotes it,
+    // and a marker there would make the parent's wake-up run this script.
+    return say('Child done: perm-child-call ran.');
   },
   'P1-PERM-WF'(_round, step) {
     if (step === 0) {
@@ -3377,6 +3446,11 @@ function decideP8(messages) {
   }
   if (trigger < 0) return undefined;
   const triggerText = ownText(messages[trigger]);
+  // Decision 207 §8: a child's settlement notice quotes its closing line,
+  // markers included; the woken parent only acknowledges it.
+  if (/Background subagent \S+ finished/.test(triggerText)) {
+    return { ...say('P8 parent: a subagent reported back.'), label: 'P8-SETTLED' };
+  }
   const scenario = triggerText.match(P8_MARKER)[1];
   const p = firstJsonObject(triggerText) ? p04Params(triggerText) : {};
   let calls = 0;
@@ -3446,14 +3520,25 @@ function decideP8(messages) {
           name: 'subagent',
           input: {
             description: `Fan-out ${i}`,
-            prompt: `P8-CHILD ${i}: answer in one line.`,
-            run_in_background: false,
+            prompt: `P8-CHILD ${i}${p.slow ? ' slow' : ''}: answer in one line.`,
           },
         })),
         'Fanning out.'
       );
     }
     case 'CHILD':
+      // `slow` keeps every child running for about three seconds, so a burst
+      // is still active when its last call meets the activation limit.
+      if (/ slow:/.test(triggerText)) {
+        return {
+          kind: 'paced-text',
+          status: 200,
+          text: 'P8-CHILD done slowly.',
+          chunks: 20,
+          chunkMs: 150,
+          label: label(' slow'),
+        };
+      }
       return { ...say(`P8-CHILD done (${triggerText.slice(0, 40)}).`), label: label() };
     // tools/contention-regression.ts: a paced answer whose every delta carries
     // its send time, so the receiver can tell this process's own stalls apart.
@@ -3473,7 +3558,7 @@ function decideP8(messages) {
           ? `P8-LOOP ${JSON.stringify({ tag: 'child-loop' })} keep reading.`
           : `P8-REPEAT ${JSON.stringify({ tag: 'child', count: p.count ?? 60 })} list the jobs.`;
       return {
-        ...tool('subagent', { description: 'Looping child', prompt, run_in_background: false }),
+        ...tool('subagent', { description: 'Looping child', prompt }),
         label: label(),
       };
     }

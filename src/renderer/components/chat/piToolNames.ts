@@ -69,7 +69,7 @@ export const RUNTIME_TOOL_NAMES = {
 } as const;
 
 /**
- * dsh-rebase P1-7c: the DSH tools (pinned 0.2.0-rc.2) whose names neither
+ * dsh-rebase P1-7c: the DSH tools (pinned 0.2.1-rc.5) whose names neither
  * table above carries, by the `name:` literal of each tool's own definition.
  * The shared names (`read`, `write`, `edit`, `glob`, `grep`, `bash`, `skill`)
  * stay in {@link RUNTIME_TOOL_NAMES}: one name, one row treatment. Argument
@@ -108,6 +108,8 @@ export const DSH_TOOL_NAMES = {
   present: 'present',
   runCode: 'run_code',
   listSubagentModels: 'list_subagent_models',
+  // DSH 0.2.1 (decision 207 §7): the session's cd.
+  workingDirectory: 'working_directory',
 } as const;
 
 /**

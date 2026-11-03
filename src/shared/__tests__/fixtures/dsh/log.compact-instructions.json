@@ -8,7 +8,7 @@
     "delegationDepth": 0
   },
   "inheritedEventCount": 0,
-  "cursor": 32,
+  "cursor": 34,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -124,6 +124,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>/compact-instructions\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -180,6 +184,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -548,8 +553,45 @@
       }
     },
     {
-      "type": "tool/result",
+      "type": "job/registered",
       "seq": 20,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-compact-instructions",
+        "kind": "bash",
+        "label": "echo \"bridge tool row ok\"; pwd; ls -a",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-7",
+          "rootCallId": "toolu_id-7"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 21,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-compact-instructions",
+        "kind": "bash",
+        "label": "echo \"bridge tool row ok\"; pwd; ls -a",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-7",
+          "rootCallId": "toolu_id-7"
+        },
+        "finishedAt": "<ms>",
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 22,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -569,6 +611,9 @@
           ],
           "isError": false,
           "id": "id-10"
+        },
+        "meta": {
+          "cwd": "<workspace>/compact-instructions"
         }
       },
       "sourceEventSeqs": [19],
@@ -576,7 +621,7 @@
     },
     {
       "type": "step/end",
-      "seq": 21,
+      "seq": 23,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -585,7 +630,7 @@
     },
     {
       "type": "step/start",
-      "seq": 22,
+      "seq": 24,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -594,7 +639,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 23,
+      "seq": 25,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -707,7 +752,7 @@
     },
     {
       "type": "step/end",
-      "seq": 24,
+      "seq": 26,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -716,7 +761,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 25,
+      "seq": 27,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -727,7 +772,7 @@
     },
     {
       "type": "command/run",
-      "seq": 26,
+      "seq": 28,
       "time": "<ms>",
       "data": {
         "commandId": "cmd-id-13",
@@ -740,7 +785,7 @@
     },
     {
       "type": "compaction/start",
-      "seq": 27,
+      "seq": 29,
       "time": "<ms>",
       "data": {
         "compactionId": "id-14",
@@ -750,7 +795,7 @@
     },
     {
       "type": "compaction/summary",
-      "seq": 28,
+      "seq": 30,
       "time": "<ms>",
       "data": {
         "compactionId": "id-14",
@@ -770,9 +815,9 @@
         "llmStreamCall": true,
         "shadowedRange": {
           "start": 5,
-          "end": 20
+          "end": 22
         },
-        "shadowedSeqs": [5, 6, 10, 17, 18, 20],
+        "shadowedSeqs": [5, 6, 10, 17, 18, 22],
         "shadowedTokenCount": 0,
         "provider": "aiclient-gateway",
         "model": "fake-1",
@@ -786,7 +831,7 @@
     },
     {
       "type": "user/message",
-      "seq": 29,
+      "seq": 31,
       "time": "<ms>",
       "data": {
         "content": [
@@ -811,16 +856,16 @@
         "role": "user",
         "id": "id-15"
       },
-      "sourceEventSeqs": [27, 28, 5, 6, 10, 17, 18, 20],
+      "sourceEventSeqs": [29, 30, 5, 6, 10, 17, 18, 22],
       "surfaceOp": {
         "op": "replace",
         "startSeq": 5,
-        "endSeq": 20
+        "endSeq": 22
       }
     },
     {
       "type": "compaction/end",
-      "seq": 30,
+      "seq": 32,
       "time": "<ms>",
       "data": {
         "compactionId": "id-14",
@@ -830,18 +875,18 @@
     },
     {
       "type": "command/done",
-      "seq": 31,
+      "seq": 33,
       "time": "<ms>",
       "data": {
         "commandId": "cmd-id-13",
         "kind": "success",
         "text": "Compacted 6 history items (~0 tokens).",
-        "sourceEventSeq": 28
+        "sourceEventSeq": 30
       }
     },
     {
       "type": "session/end-seed",
-      "seq": 32,
+      "seq": 34,
       "time": "<ms>",
       "data": {}
     }

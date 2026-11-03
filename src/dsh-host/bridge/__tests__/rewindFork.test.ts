@@ -435,6 +435,95 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
     ]);
   });
 
+  it('[207-REWIND-CWD] a call after a rewind records the child’s directory, not the retired session’s (decision 207 §15 item 5)', async () => {
+    const stubFile = writeRootStub();
+    const dsh = fakeDsh({ [ROOT]: TWO_TURNS });
+    const child = `${ROOT}_r2`;
+    // The root went on into sub after u2; the child, cut before that, is in the workspace.
+    const directoryOf: Record<string, string> = { [ROOT]: `${CWD}/sub`, [child]: CWD };
+    const jobs = dsh.ctx.get;
+    (dsh.ctx as { get?: unknown }).get = (name: string) =>
+      name === 'sessionProjections'
+        ? {
+            snapshot: (session: { id: string }) => ({
+              values: { workingDirectory: directoryOf[session.id] },
+            }),
+            onChanged: () => () => undefined,
+          }
+        : jobs?.(name as 'jobs');
+    const emitted: Array<{ type: string; payload?: unknown }> = [];
+    const runtime = new DshSessionRuntime(
+      dsh.ctx,
+      {
+        logicalSessionId: LOGICAL,
+        cwd: CWD,
+        projectTrusted: true,
+        sessionFile: stubFile,
+        emit: (event) => emitted.push(event),
+      },
+      {
+        createUserMessage: () => ({ id: 'user-message-1' }),
+        now: () => T + 1_000,
+        home,
+        writeStub: dsh.writeStub,
+        disposeTimeoutMs: 50,
+        modelPlan: () => TEST_PLAN,
+      }
+    );
+    await runtime.bootstrap();
+    const startRead = (id: string, callId: string) => {
+      const seq = (dsh.logs.get(id)?.at(-1)?.seq ?? 0) + 1;
+      const call = { type: 'tool-call', id: callId, name: 'read', arguments: '{"file_path":"a"}' };
+      dsh.append(
+        id,
+        at(seq, 'assistant/message', {
+          turn: 3,
+          step: 1,
+          message: { id: `a-${callId}`, role: 'assistant', content: [call] },
+        })
+      );
+      dsh.append(
+        id,
+        at(seq + 1, 'tool/call', {
+          turn: 3,
+          step: 1,
+          callId,
+          name: 'read',
+          arguments: call.arguments,
+        })
+      );
+    };
+    const told = () =>
+      emitted.flatMap((event) => {
+        const payload = event.payload as { toolCallId?: string; cwd?: string } | undefined;
+        return event.type === 'tool.updated' && payload?.cwd !== undefined
+          ? [[payload.toolCallId, payload.cwd]]
+          : [];
+      });
+    startRead(ROOT, 'c1');
+    expect(told()).toEqual([['c1', 'sub']]);
+
+    await rewind(runtime, 'u2');
+    expect(
+      emitted
+        .filter(
+          (event) =>
+            event.type === 'session.projection' &&
+            (event.payload as { key?: string }).key === 'workingDirectory'
+        )
+        .at(-1)?.payload
+    ).toEqual({ key: 'workingDirectory', view: CWD });
+    startRead(child, 'c2');
+    expect(
+      emitted.some(
+        (event) =>
+          event.type === 'tool.started' &&
+          (event.payload as { toolCallId?: string }).toolCallId === 'c2'
+      )
+    ).toBe(true);
+    expect(told()).toEqual([['c1', 'sub']]);
+  });
+
   it('[rewind-step] keeps a model step and returns no prompt', async () => {
     const stubFile = writeRootStub();
     const dsh = fakeDsh({ [ROOT]: TWO_TURNS });

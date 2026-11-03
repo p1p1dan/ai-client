@@ -136,6 +136,9 @@ describe('DSH tool classification (decision 047)', () => {
       'internal',
       'internal',
     ]);
+    // Decision 207 §7: a cd reads and writes nothing and widens no access; every
+    // later call outside the workspace still meets the boundary.
+    expect(classifyTool('working_directory')).toBe('internal');
     // Decision 098: asking the user is the interaction, never gated (1.0.x's `ask` was not).
     expect(classifyTool('ask_user_question')).toBe('internal');
     expect(['run_code', 'workflow', 'plugin_manager'].map(classifyTool)).toEqual([

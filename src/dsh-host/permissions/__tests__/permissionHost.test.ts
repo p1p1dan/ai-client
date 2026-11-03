@@ -676,6 +676,27 @@ describe('request construction (design shard 03 §2)', () => {
     }
   });
 
+  it('a cd is judged as a read of its directory; a query is not judged (decision 207 §15)', async () => {
+    const query = await requestFor('working_directory', {});
+    expect(query.decision.kind).toBe('allow');
+    expect(query.seen).toEqual([]);
+    for (const [cd, path] of [
+      ['packages/web', join(ws, 'packages', 'web')],
+      [outside, outside],
+    ]) {
+      const { decision, seen } = await requestFor('working_directory', { cd });
+      expect(decision.kind, cd).toBe('allow');
+      expect(seen, cd).toEqual([
+        expect.objectContaining({
+          tool: 'working_directory',
+          path,
+          policySurface: 'read',
+          changeDirectory: true,
+        }),
+      ]);
+    }
+  });
+
   it('trusts reads of DSH spill files only', async () => {
     const file = join(spill, 'session-1', 'grep-results.txt');
     expect(isSpillPath(file)).toBe(true);
@@ -1324,7 +1345,7 @@ describe('shell workdir checks (decision 164)', () => {
     const exec = call('bash', { command: 'ls', workdir: 'missing-dir' }, root());
     expect(await host.preExecute(exec, next)).toEqual({
       kind: 'deny',
-      reason: `working directory does not exist: ${join(ws, 'missing-dir')} (the session workspace is ${ws})`,
+      reason: `working directory does not exist: ${join(ws, 'missing-dir')} (the current directory is ${ws})`,
       info: { name: SHELL_WORKDIR_DENIAL, code: 'workdir_missing' },
     });
     expect(next).not.toHaveBeenCalled();
@@ -1359,7 +1380,7 @@ describe('shell workdir checks (decision 164)', () => {
     );
     expect(await host.preExecute(exec, next)).toEqual({
       kind: 'deny',
-      reason: `workdir "/Users/tester/work/monorepo" has no drive letter; on Windows give a full path such as ${ws}, or omit workdir to run in the session workspace`,
+      reason: `workdir "/Users/tester/work/monorepo" has no drive letter; on Windows give a full path such as ${ws}, or omit workdir to run in the current directory`,
       info: { name: SHELL_WORKDIR_DENIAL, code: 'workdir_no_drive' },
     });
     expect(asked).toEqual([]);
@@ -1389,5 +1410,237 @@ describe('shell workdir checks (decision 164)', () => {
       info: { name: 'PermissionDenial' },
     });
     expect(refused.asked).toHaveLength(1);
+  });
+});
+
+describe('decision 207 §7: the session’s current directory (DSH 0.2.1 working_directory)', () => {
+  /** A row whose `workingDirectory.ensure` answers each agent's current directory. */
+  function attached(gearOrGate: PermissionGear | 'record' = 'record') {
+    const { fake, host } = setup();
+    const dirs = new Map<string, string>();
+    fake.services.set('workingDirectory', {
+      ensure: async (caller: { id: string; session: { header: { cwd?: string } } }) =>
+        dirs.get(caller.id) ?? caller.session.header.cwd,
+    });
+    const recorded = recordingGate();
+    const real = gearOrGate === 'record' ? undefined : realGate({ gear: gearOrGate });
+    host.attachGate('c1-1', {
+      dshSessionId: 'aiclient-root',
+      gate: real ? real.gate : recorded.gate,
+    });
+    return { fake, dirs, seen: recorded.seen, asked: real?.asked ?? [] };
+  }
+
+  it('① outside the workspace, a search or command without a path is asked as outside', async () => {
+    const { fake, dirs, asked } = attached('accept-edits');
+    // Control: in the workspace the same calls raise no card.
+    expect((await fake.prepare(call('glob', { pattern: '*' }, root()))).kind).toBe('allow');
+    expect(asked).toHaveLength(0);
+    dirs.set('aiclient-root', outside);
+    for (const [tool, args] of [
+      ['glob', { pattern: '*' }],
+      ['grep', { pattern: 'x' }],
+      ['bash', { command: 'ls' }],
+    ] as const) {
+      await fake.prepare(call(tool, args, root()));
+      expect(asked.at(-1), tool).toMatchObject({ tool, path: outside });
+    }
+    expect(asked).toHaveLength(3);
+  });
+
+  it('② in a workspace subdirectory, a relative read is that directory’s file, inside the workspace', async () => {
+    mkdirSync(join(ws, 'a', 'src'), { recursive: true });
+    writeFileSync(join(ws, 'a', 'src', 'a.ts'), 'export {};\n');
+    const recorded = attached();
+    recorded.dirs.set('aiclient-root', join(ws, 'a'));
+    await recorded.fake.prepare(call('read', { file_path: 'src/a.ts' }, root()));
+    expect(recorded.seen[0]).toMatchObject({ tool: 'read', path: join(ws, 'a', 'src', 'a.ts') });
+    const real = attached('accept-edits');
+    real.dirs.set('aiclient-root', join(ws, 'a'));
+    expect((await real.fake.prepare(call('read', { file_path: 'src/a.ts' }, root()))).kind).toBe(
+      'allow'
+    );
+    expect(real.asked).toHaveLength(0);
+  });
+
+  it('③ the cd itself raises no card inside the workspace, one outside it (decision 207 §15)', async () => {
+    const { fake, asked } = attached('ask');
+    expect((await fake.prepare(call('working_directory', { cd: 'a' }, root()))).kind).toBe('allow');
+    expect(asked).toHaveLength(0);
+    expect((await fake.prepare(call('working_directory', { cd: outside }, root()))).kind).toBe(
+      'allow'
+    );
+    expect(asked).toEqual([expect.objectContaining({ tool: 'working_directory', path: outside })]);
+  });
+
+  it('④ a subagent is judged by its own current directory', async () => {
+    const { fake, dirs, seen } = attached();
+    fake.emit('session/created', {
+      id: 'child',
+      header: { id: 'child', cwd: ws, parentSession: 'aiclient-root' },
+    });
+    const child = agent('child', { cwd: ws, parentSession: 'aiclient-root' });
+    dirs.set('child', join(ws, 'b'));
+    await fake.prepare(call('read', { file_path: 'notes.txt' }, child));
+    await fake.prepare(call('read', { file_path: 'notes.txt' }, root()));
+    expect(seen.map((request) => request.path)).toEqual([
+      join(ws, 'b', 'notes.txt'),
+      join(ws, 'notes.txt'),
+    ]);
+  });
+
+  it('⑤ a plugin tool still resolves against the workspace', async () => {
+    const { fake, dirs, seen } = attached();
+    dirs.set('aiclient-root', join(ws, 'a'));
+    await fake.prepare(call('word_read', { path: 'notes.txt' }, root()));
+    expect(seen[0]).toMatchObject({ tool: 'read', path: join(ws, 'notes.txt') });
+  });
+
+  it('decision 207 §15: a call that names no path is judged at the workspace, wherever the session moved', async () => {
+    const { fake, dirs, asked } = attached('auto');
+    dirs.set('aiclient-root', outside);
+    expect(
+      (await fake.prepare(call('web_fetch', { url: 'https://example.com/a' }, root()))).kind
+    ).toBe('allow');
+    expect((await fake.prepare(call('mcp_docs_search', { query: 'x' }, root()))).kind).toBe(
+      'allow'
+    );
+    expect(asked).toHaveLength(0);
+    // A command does run there: still asked about as outside.
+    await fake.prepare(call('bash', { command: 'ls' }, root()));
+    expect(asked).toEqual([expect.objectContaining({ tool: 'bash', path: outside })]);
+  });
+});
+
+describe('[207-CDASK] decision 207 §15: a move out of the workspace asks first', () => {
+  function gated(options: Parameters<typeof realGate>[0] = {}) {
+    const { fake, host } = setup();
+    const real = realGate(options);
+    host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate: real.gate });
+    return { fake, asked: real.asked };
+  }
+  const cd = (target: string | undefined, callId = 'c') =>
+    call('working_directory', target === undefined ? {} : { cd: target }, root(), { callId });
+
+  it('① into a workspace subdirectory: no card, the call runs', async () => {
+    const { fake, asked } = gated();
+    expect((await fake.prepare(cd('a'))).kind).toBe('allow');
+    expect(asked).toHaveLength(0);
+  });
+
+  it('② out of the workspace: one card naming the directory; allow runs it, deny refuses it', async () => {
+    const allowed = gated();
+    expect((await allowed.fake.prepare(cd(outside))).kind).toBe('allow');
+    expect(allowed.asked).toEqual([
+      expect.objectContaining({ tool: 'working_directory', path: outside, changeDirectory: true }),
+    ]);
+    const denied = gated({ answer: () => 'deny' });
+    expect((await denied.fake.prepare(cd(outside))).kind).toBe('deny');
+    expect(denied.asked).toHaveLength(1);
+  });
+
+  it('③ through a workspace symlink that points out: asked about where it lands', async () => {
+    const link = join(ws, 'link-out');
+    symlinkSync(outside, link);
+    try {
+      const { fake, asked } = gated();
+      await fake.prepare(cd('link-out'));
+      expect(asked).toEqual([
+        expect.objectContaining({ tool: 'working_directory', path: outside }),
+      ]);
+    } finally {
+      unlinkSync(link);
+    }
+  });
+
+  it('④ a query (no cd) is not judged at all', async () => {
+    const { fake, asked } = gated();
+    expect((await fake.prepare(cd(undefined))).kind).toBe('allow');
+    expect(asked).toHaveLength(0);
+  });
+
+  it('⑤ bypass asks nothing; plan mode and auto ask rather than refuse', async () => {
+    const bypass = gated({ gear: 'bypass' });
+    expect((await bypass.fake.prepare(cd(outside))).kind).toBe('allow');
+    expect(bypass.asked).toHaveLength(0);
+    for (const options of [{ mode: 'plan' as const }, { gear: 'auto' as const }]) {
+      const { fake, asked } = gated(options);
+      expect((await fake.prepare(cd(outside))).kind, JSON.stringify(options)).toBe('allow');
+      expect(asked, JSON.stringify(options)).toHaveLength(1);
+      // Inside the workspace, neither asks.
+      await fake.prepare(cd('a', 'c2'));
+      expect(asked, JSON.stringify(options)).toHaveLength(1);
+    }
+  });
+
+  it('⑥ allowed for the session, the same move asks no more', async () => {
+    const { fake, asked } = gated({ answer: () => 'allow-session' });
+    await fake.prepare(cd(outside, 'c1'));
+    await fake.prepare(cd(outside, 'c2'));
+    expect(asked).toHaveLength(1);
+  });
+
+  it('⑦ a subagent sent out of the workspace asks the same; inside or no cwd, not', async () => {
+    for (const tool of ['subagent', 'subagent_fork']) {
+      const { fake, asked } = gated();
+      await fake.prepare(call(tool, { prompt: 'p', cwd: outside }, root(), { callId: 'c1' }));
+      expect(asked, tool).toEqual([
+        expect.objectContaining({ tool, path: outside, changeDirectory: true }),
+      ]);
+      await fake.prepare(call(tool, { prompt: 'p', cwd: 'a' }, root(), { callId: 'c2' }));
+      await fake.prepare(call(tool, { prompt: 'p' }, root(), { callId: 'c3' }));
+      expect(asked, tool).toHaveLength(1);
+    }
+  });
+});
+
+describe('[207-WORKDIR] decision 207 §15 item 7: a command is judged where DSH runs it', () => {
+  const link = () => join(ws, 'link-wd');
+  beforeAll(() => {
+    // `link-wd/..` is `outside` by the link, the workspace by the text.
+    mkdirSync(join(outside, 'inner'), { recursive: true });
+    symlinkSync(join(outside, 'inner'), link());
+  });
+  afterAll(() => {
+    unlinkSync(link());
+  });
+  function gated() {
+    const { fake, host } = setup();
+    const real = realGate({ gear: 'auto' });
+    host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate: real.gate });
+    return { fake, asked: real.asked };
+  }
+
+  it('bash hands `<cwd>/link-wd/..` to the system, which resolves the link first: asked as outside', async () => {
+    const { fake, asked } = gated();
+    await fake.prepare(call('bash', { command: 'ls', workdir: 'link-wd/..' }, root()));
+    expect(asked).toEqual([expect.objectContaining({ tool: 'bash', path: outside })]);
+  });
+
+  it('pwsh folds the same spelling first: it runs in the workspace, no card', async () => {
+    const { fake, asked } = gated();
+    expect(
+      (
+        await fake.prepare(
+          call('pwsh', { command: 'Get-ChildItem', workdir: 'link-wd/..' }, root())
+        )
+      ).kind
+    ).toBe('allow');
+    expect(asked).toEqual([]);
+  });
+
+  it('a plain relative workdir: as before', async () => {
+    const { fake, asked } = gated();
+    expect((await fake.prepare(call('bash', { command: 'ls', workdir: 'a' }, root()))).kind).toBe(
+      'allow'
+    );
+    expect(asked).toEqual([]);
+    // A `..` that crosses no link: one reading, the same one.
+    const recorded = setup();
+    const { gate, seen } = recordingGate();
+    recorded.host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate });
+    await recorded.fake.prepare(call('bash', { command: 'ls', workdir: 'a/../b' }, root()));
+    expect(seen[0]).toMatchObject({ path: join(ws, 'b') });
+    expect(seen[0]?.paths ?? []).toEqual([]);
   });
 });

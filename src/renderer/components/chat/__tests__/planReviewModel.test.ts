@@ -183,6 +183,14 @@ describe('a settled review', () => {
         'Error: exit_plan_mode is only available in plan mode'
       )
     ).toBeUndefined();
+    // Decision 207 §5: DSH 0.2.1 closes the review with a successful result.
+    expect(
+      planReviewRowWord(
+        'exit_plan_mode',
+        'ok',
+        'The user dismissed the plan review to reply in their own words; plan mode remains active.'
+      )
+    ).toEqual({ key: 'Review closed' });
     expect(planReviewRowWord('exit_plan_mode', 'running', undefined)).toBeUndefined();
     expect(planReviewRowWord('write', 'ok', 'ok')).toBeUndefined();
     // create_goal: a goal set is an ordinary result; the review's other answers are words.

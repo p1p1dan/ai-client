@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-stream",
     "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-stream",
+    "requestId": "turn-STREAM",
     "type": "session.status",
     "payload": {
       "status": "running"

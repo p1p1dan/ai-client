@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-tool",
     "requestId": "turn-TOOL",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-tool",
+    "requestId": "turn-TOOL",
     "type": "session.status",
     "payload": {
       "status": "running"

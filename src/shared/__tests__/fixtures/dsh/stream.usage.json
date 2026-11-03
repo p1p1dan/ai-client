@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-usage",
     "requestId": "turn-USAGE",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "session.status",
     "payload": {
       "status": "running"
@@ -287,7 +296,7 @@
     "requestId": "turn-USAGE-2",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-22",
+      "messageId": "dsh-user-24",
       "role": "user",
       "attemptId": "attempt-USAGE-2"
     }
@@ -297,8 +306,8 @@
     "requestId": "turn-USAGE-2",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-22",
-      "blockId": "dsh-user-22-text",
+      "messageId": "dsh-user-24",
+      "blockId": "dsh-user-24-text",
       "text": "epsilon, no scenario."
     }
   },
@@ -307,7 +316,7 @@
     "requestId": "turn-USAGE-2",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-22"
+      "messageId": "dsh-user-24"
     }
   },
   {

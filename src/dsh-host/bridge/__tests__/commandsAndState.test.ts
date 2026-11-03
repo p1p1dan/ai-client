@@ -1068,6 +1068,8 @@ describe('DshSessionRuntime — session.projection (P1-4d2, decisions 031, 099 r
       'todos',
       'goal',
       'subagentCatalog',
+      // Decision 207 §7, §14 D: DSH 0.2.1's current directory.
+      'workingDirectory',
     ]);
 
     await bridge.startSend(send('turn-GOAL', '/goal'));
@@ -1129,6 +1131,113 @@ describe('DshSessionRuntime — session.projection (P1-4d2, decisions 031, 099 r
       { key: 'todos', view: todos },
       { key: 'goal', view: null },
     ]);
+  });
+
+  it('[207-PROJ-CWD] forwards the current directory: in the baseline, on a change, in worker.panels', async () => {
+    const host = fakeHost();
+    const projections = fakeProjections(host, {
+      todos: null,
+      goal: null,
+      subagentCatalog: [],
+      workingDirectory: '/home/u/proj',
+    });
+    host.services.goals = { get: () => undefined };
+    const emitted: Emitted[] = [];
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+    await bridge.startSend(send('turn-1', 'hello'));
+    expect(
+      emitted.filter((event) => event.type === 'session.projection').map((event) => event.payload)
+    ).toEqual([
+      { key: 'todos', view: null },
+      { key: 'goal', view: null },
+      { key: 'subagentCatalog', view: [] },
+      { key: 'workingDirectory', view: '/home/u/proj' },
+    ]);
+    emitted.length = 0;
+    projections.change('workingDirectory', '/home/u/proj/packages/web');
+    expect(emitted.map((event) => event.payload)).toEqual([
+      { key: 'workingDirectory', view: '/home/u/proj/packages/web' },
+    ]);
+    const answer = await bridge.panels({ logicalSessionId: LOGICAL });
+    expect(answer.projections.map((entry) => entry.key)).toContain('workingDirectory');
+  });
+
+  /** One call of turn 1 the model issues and DSH starts (decision 207 §15 item 5). */
+  const startCall = (host: ReturnType<typeof fakeHost>, callId: string) => {
+    const call = { type: 'tool-call', id: callId, name: 'read', arguments: '{"file_path":"a.ts"}' };
+    host.append('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: `a-${callId}`, role: 'assistant', content: [call] },
+    });
+    host.append('tool/call', { turn: 1, step: 1, callId, name: 'read', arguments: call.arguments });
+  };
+  const toldCwd = (emitted: Emitted[]) =>
+    emitted
+      .filter((event) => event.type === 'tool.updated' && event.payload?.cwd !== undefined)
+      .map((event) => [event.payload?.toolCallId, event.payload?.cwd]);
+
+  it('[207-PROJ-CWD-SPELL] a workspace opened through a link: DSH’s resolved directory goes out, and is recorded, as the workspace spells it', async () => {
+    const host = fakeHost();
+    const values: Record<string, unknown> = {
+      todos: null,
+      goal: null,
+      subagentCatalog: [],
+      workingDirectory: '/real/repo',
+    };
+    const projections = fakeProjections(host, values);
+    host.services.goals = { get: () => undefined };
+    const emitted: Emitted[] = [];
+    // The workspace `/repo` is a link to `/real/repo`, where DSH resolves every cd.
+    const bridge = runtime(host.ctx, emitted, {
+      realpathSync: (path) => (path === CWD ? '/real/repo' : path),
+    });
+    await bridge.bootstrap();
+    await bridge.startSend(send('turn-1', 'hello'));
+    const forwarded = () =>
+      emitted
+        .filter(
+          (event) =>
+            event.type === 'session.projection' && event.payload?.key === 'workingDirectory'
+        )
+        .map((event) => event.payload?.view);
+    expect(forwarded()).toEqual([CWD]);
+    startCall(host, 'c1');
+
+    projections.change('workingDirectory', '/real/repo/packages/web');
+    expect(forwarded()).toEqual([CWD, '/repo/packages/web']);
+    startCall(host, 'c2');
+    projections.change('workingDirectory', '/tmp/build');
+    expect(forwarded().at(-1)).toBe('/tmp/build');
+    startCall(host, 'c3');
+    expect(toldCwd(emitted)).toEqual([
+      ['c2', 'packages/web'],
+      ['c3', '/tmp/build'],
+    ]);
+
+    values.workingDirectory = '/real/repo/packages/web';
+    const answer = await bridge.panels({ logicalSessionId: LOGICAL });
+    expect(answer.projections.find((entry) => entry.key === 'workingDirectory')?.view).toBe(
+      '/repo/packages/web'
+    );
+  });
+
+  it('[207-PROJ-CWD-RESUME] a session reopened in a subdirectory: its calls record it, with no cd of this run', async () => {
+    const host = fakeHost();
+    fakeProjections(host, {
+      todos: null,
+      goal: null,
+      subagentCatalog: [],
+      workingDirectory: `${CWD}/sub`,
+    });
+    host.services.goals = { get: () => undefined };
+    const emitted: Emitted[] = [];
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+    await bridge.startSend(send('turn-1', 'hello'));
+    startCall(host, 'c1');
+    expect(toldCwd(emitted)).toEqual([['c1', 'sub']]);
   });
 
   it('[D2-PROJ-NONE] a host without projections sends none, and its sends go on', async () => {

@@ -77,7 +77,7 @@
               "text": "STEER-NOTE-A also report the step count."
             }
           ],
-          "liveMessageId": "dsh-user-17"
+          "liveMessageId": "dsh-user-19"
         },
         {
           "id": "h:id-11",
@@ -135,7 +135,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-14",
-        "fileTailEntryId": "aiclient-rec-steer#25"
+        "fileTailEntryId": "aiclient-rec-steer#29"
       },
       "nodes": [
         {

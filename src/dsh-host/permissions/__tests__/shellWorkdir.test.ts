@@ -52,7 +52,7 @@ describe('the existence check (after the gate)', () => {
     const decision = await linux('bash', { workdir: 'nope' });
     expect(decision).toEqual({
       kind: 'deny',
-      reason: `working directory does not exist: ${ws}/nope (the session workspace is ${ws})`,
+      reason: `working directory does not exist: ${ws}/nope (the current directory is ${ws})`,
       info: { name: SHELL_WORKDIR_DENIAL, code: 'workdir_missing' },
     });
     expect(decision?.info?.name).not.toBe('PermissionDenial');
@@ -76,12 +76,12 @@ describe('the existence check (after the gate)', () => {
     expect((await linux('bash', { workdir: 'file.txt/x' }))?.info?.code).toBe('workdir_missing');
   });
 
-  it('refuses a call without workdir when the session workspace is gone', async () => {
+  it('refuses a call without workdir when the current directory is gone', async () => {
     const gone = realpathSync(mkdtempSync(join(tmpdir(), 'shell-workdir-gone-')));
     rmSync(gone, { recursive: true });
     expect(await linux('bash', {}, gone)).toEqual({
       kind: 'deny',
-      reason: `the session workspace does not exist: ${gone}; it may have been moved or deleted`,
+      reason: `the current directory does not exist: ${gone}; it may have been moved or deleted`,
       info: { name: SHELL_WORKDIR_DENIAL, code: 'workdir_missing' },
     });
   });
@@ -89,7 +89,7 @@ describe('the existence check (after the gate)', () => {
   it('says that "~" is not expanded', async () => {
     const decision = await linux('bash', { workdir: '~/x' });
     expect(decision?.reason).toBe(
-      `working directory does not exist: ${ws}/~/x (the session workspace is ${ws}); "~" is not expanded in workdir, give the full path`
+      `working directory does not exist: ${ws}/~/x (the current directory is ${ws}); "~" is not expanded in workdir, give the full path`
     );
   });
 
@@ -161,7 +161,7 @@ describe('the syntax check (before the gate)', () => {
     expect(check('/Users/tester/work/monorepo')).toEqual({
       kind: 'deny',
       reason:
-        'workdir "/Users/tester/work/monorepo" has no drive letter; on Windows give a full path such as E:\\code\\proj, or omit workdir to run in the session workspace',
+        'workdir "/Users/tester/work/monorepo" has no drive letter; on Windows give a full path such as E:\\code\\proj, or omit workdir to run in the current directory',
       info: { name: SHELL_WORKDIR_DENIAL, code: 'workdir_no_drive' },
     });
     expect(check('\\work')?.info?.code).toBe('workdir_no_drive');

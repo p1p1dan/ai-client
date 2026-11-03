@@ -52,7 +52,7 @@ import type { PermissionFileSystem } from '../../shared/permissions/shellPaths.t
 import { canonicalSpelling, type SyncRealpath } from '../../shared/permissions/workspace.ts';
 import { isGoalResumeCall, PLAN_MODE_RESUME_REASON } from '../../shared/planReview.ts';
 import { TURN_CEILING_REFUSAL_CODE } from '../loopGuard/constants.ts';
-import { classifyTool } from './classification.ts';
+import { classifyTool, pluginToolClass } from './classification.ts';
 import type {
   DshAgentView,
   DshApprovalOutcome,
@@ -65,7 +65,7 @@ import type {
   DshToolResult,
 } from './dshTypes.ts';
 import { permissionPromptText } from './promptContext.ts';
-import { authorizeCall, type GateCallContext } from './requestBuilder.ts';
+import { authorizeCall, directoryArgumentOf, type GateCallContext } from './requestBuilder.ts';
 import { PermissionRouter } from './router.ts';
 import { filterSearchValue } from './searchFilter.ts';
 import {
@@ -157,6 +157,13 @@ export interface PermissionHostOptions {
   platform?: NodeJS.Platform;
   /** How the shell `workdir` check reads the disk; defaults to node:fs. */
   workdirProbe?: WorkdirProbe;
+  /**
+   * DSH 0.2.1 (decision 207 §7): the calling session's current directory
+   * (`workingDirectory.ensure`), which relative paths resolve against; the
+   * workspace stays the gate's own boundary. Absent or failing, the
+   * session's workspace (`header.cwd`).
+   */
+  currentDirectory?: (agent: DshAgentView, signal?: AbortSignal) => Promise<string | undefined>;
   log?: (...args: unknown[]) => void;
 }
 
@@ -397,11 +404,20 @@ export class PermissionHost {
         reason: PLAN_MODE_RESUME_REASON,
         info: info('plan_mode_goal_resume'),
       };
-    if (classifyTool(exec.name) === 'internal') {
+    // Decision 207 §15: a cd, or a subagent's cwd, is gated; other bookkeeping is not.
+    if (
+      classifyTool(exec.name) === 'internal' &&
+      directoryArgumentOf(exec.name, exec.arguments) === undefined
+    ) {
       this.allowed.add(exec);
       return next();
     }
-    const cwd = exec.agent?.session?.header?.cwd ?? route.gate.cwd;
+    // Decision 207 §7: an allowlisted plugin's tool resolves its own paths
+    // against the workspace, whatever the session's current directory.
+    const workspace = exec.agent?.session?.header?.cwd ?? route.gate.cwd;
+    const cwd = pluginToolClass(exec.name)
+      ? workspace
+      : await this.currentDirectoryOf(exec.agent, route.gate.cwd, exec.signal);
     if (!cwd)
       return {
         kind: 'deny',
@@ -420,6 +436,7 @@ export class PermissionHost {
         {
           gate: route.gate.gate,
           cwd,
+          ...(workspace ? { workspace } : {}),
           fs: this.fs,
           analyzeBash: async (command, workdir) =>
             analyzeBash(await this.options.loadParser(), command, workdir, env),
@@ -472,8 +489,9 @@ export class PermissionHost {
     if (classifyTool(exec.name) !== 'search' || result.isError || result.value === undefined)
       return next();
     const route = this.routeOf(exec.agent);
-    const cwd = exec.agent?.session?.header?.cwd ?? route?.gate.cwd;
-    if (!route || !cwd) return next();
+    if (!route) return next();
+    const cwd = await this.currentDirectoryOf(exec.agent, route.gate.cwd, exec.signal);
+    if (!cwd) return next();
     const filtered = filterSearchValue(exec.name, exec.callId, result.value, cwd, route.gate.gate);
     if (!filtered) return next();
     // Deliberately no next(): the listeners after this one include
@@ -499,7 +517,8 @@ export class PermissionHost {
     // One card per call: the user already answered this call's card.
     if (record?.verdict === 'deny') return 'rejected';
     if (record?.verdict === 'allow' && record.prompted) return 'allowed-once';
-    const cwd = request.agent?.session?.header?.cwd ?? route.gate.cwd ?? '.';
+    const cwd =
+      (await this.currentDirectoryOf(request.agent, route.gate.cwd, request.signal)) ?? '.';
     const reason = request.displayReason?.en ?? request.reason;
     const ask: ToolPermissionRequest = {
       tool: request.toolName,
@@ -527,6 +546,25 @@ export class PermissionHost {
       if (denialSource(error)) return 'rejected';
       this.options.log?.('[aiclient-permissions] approval answer failed', error);
       return 'unavailable';
+    }
+  }
+
+  /**
+   * Where the caller's relative paths resolve (decision 207 §7): its current
+   * directory, else its workspace, else the attached gate's.
+   */
+  private async currentDirectoryOf(
+    agent: DshAgentView | undefined,
+    fallback: string | undefined,
+    signal?: AbortSignal
+  ): Promise<string | undefined> {
+    const workspace = agent?.session?.header?.cwd ?? fallback;
+    if (!agent || !this.options.currentDirectory) return workspace;
+    try {
+      return (await this.options.currentDirectory(agent, signal)) ?? workspace;
+    } catch (error) {
+      this.options.log?.('[aiclient-permissions] current directory not read', error);
+      return workspace;
     }
   }
 

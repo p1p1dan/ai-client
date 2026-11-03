@@ -395,6 +395,15 @@ for (const file of new Set([resolve(process.cwd(), '.env'), resolve(home, '.env'
 // none (e.g. the packaged smoke): the two overlays below are then omitted, and
 // `agent-instructions` / `skill-filesystem` keep DSH's own defaults.
 const agentDir = process.env[AGENT_DIR_ENV]?.trim() || undefined;
+// Decision 207 §6 (option A): DSH 0.2.1 reads the user-level AGENTS.md from
+// $DSH_AGENTS_HOME (else ~/.agents, shared with other agent tools). Point it
+// at <agentDir>, so the app's own file is read and ~/.agents/AGENTS.md is
+// not; the skill row keeps the shared root it resolved before
+// (`agentDirOverlays`). Set before the launch environment is captured below.
+const sharedAgentsHome = resolve(
+  process.env.DSH_AGENTS_HOME?.trim() || join(os.homedir(), '.agents')
+);
+if (agentDir) process.env.DSH_AGENTS_HOME = agentDir;
 
 const appBoot = await import('@deepseek-ai/dsh-app-boot');
 const { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } = await import(
@@ -549,7 +558,7 @@ const profileContext = {
   // joins them once the patches are composed (below).
   overlays: [
     ...modelPlanOverlays(modelPlan),
-    ...agentDirOverlays(agentDir),
+    ...agentDirOverlays(agentDir, sharedAgentsHome),
     ...requiredDisabledOverlays(),
     ...requiredEnabledOverlays(),
   ],

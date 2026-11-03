@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-fail-retry",
     "requestId": "turn-FAILONCE",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-FAILONCE",
     "type": "session.status",
     "payload": {
       "status": "running"

@@ -7,7 +7,7 @@
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 25,
+  "cursor": 29,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -123,6 +123,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -179,6 +183,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -339,8 +344,24 @@
       }
     },
     {
-      "type": "agent/inbox/spliced",
+      "type": "job/registered",
       "seq": 12,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-steer",
+        "kind": "bash",
+        "label": "sleep 2; echo steer-step-1",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-4",
+          "rootCallId": "toolu_id-4"
+        }
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 13,
       "time": "<ms>",
       "data": {
         "target": "next-step",
@@ -363,8 +384,29 @@
       }
     },
     {
+      "type": "job/settled",
+      "seq": 14,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-steer",
+        "kind": "bash",
+        "label": "sleep 2; echo steer-step-1",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-4",
+          "rootCallId": "toolu_id-4"
+        },
+        "finishedAt": "<ms>",
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
       "type": "tool/result",
-      "seq": 13,
+      "seq": 15,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -384,6 +426,9 @@
           ],
           "isError": false,
           "id": "id-8"
+        },
+        "meta": {
+          "cwd": "<workspace>"
         }
       },
       "sourceEventSeqs": [11],
@@ -391,7 +436,7 @@
     },
     {
       "type": "step/end",
-      "seq": 14,
+      "seq": 16,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -400,7 +445,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 15,
+      "seq": 17,
       "time": "<ms>",
       "data": {
         "target": "next-step",
@@ -411,7 +456,7 @@
     },
     {
       "type": "step/start",
-      "seq": 16,
+      "seq": 18,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -420,7 +465,7 @@
     },
     {
       "type": "user/message",
-      "seq": 17,
+      "seq": 19,
       "time": "<ms>",
       "data": {
         "content": [
@@ -439,7 +484,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 18,
+      "seq": 20,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -558,7 +603,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 19,
+      "seq": 21,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -569,8 +614,45 @@
       }
     },
     {
+      "type": "job/registered",
+      "seq": 22,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-2",
+        "owner": "aiclient-rec-steer",
+        "kind": "bash",
+        "label": "echo steer-step-2",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-9",
+          "rootCallId": "toolu_id-9"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 23,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-2",
+        "owner": "aiclient-rec-steer",
+        "kind": "bash",
+        "label": "echo steer-step-2",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-9",
+          "rootCallId": "toolu_id-9"
+        },
+        "finishedAt": "<ms>",
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
       "type": "tool/result",
-      "seq": 20,
+      "seq": 24,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -590,14 +672,17 @@
           ],
           "isError": false,
           "id": "id-12"
+        },
+        "meta": {
+          "cwd": "<workspace>"
         }
       },
-      "sourceEventSeqs": [19],
+      "sourceEventSeqs": [21],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 21,
+      "seq": 25,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -606,7 +691,7 @@
     },
     {
       "type": "step/start",
-      "seq": 22,
+      "seq": 26,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -615,7 +700,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 23,
+      "seq": 27,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -728,7 +813,7 @@
     },
     {
       "type": "step/end",
-      "seq": 24,
+      "seq": 28,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -737,7 +822,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 25,
+      "seq": 29,
       "time": "<ms>",
       "data": {
         "turn": 1,

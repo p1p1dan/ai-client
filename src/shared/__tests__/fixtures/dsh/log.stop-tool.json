@@ -7,7 +7,7 @@
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 14,
+  "cursor": 16,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -123,6 +123,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -179,6 +183,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -341,8 +346,45 @@
       }
     },
     {
-      "type": "tool/result",
+      "type": "job/registered",
       "seq": 12,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-stop-tool",
+        "kind": "bash",
+        "label": "echo \"sleep-tool stop-tool started\"; sleep 30; echo \"sleep-tool done\"",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-4",
+          "rootCallId": "toolu_id-4"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 13,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-stop-tool",
+        "kind": "bash",
+        "label": "echo \"sleep-tool stop-tool started\"; sleep 30; echo \"sleep-tool done\"",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-4",
+          "rootCallId": "toolu_id-4"
+        },
+        "finishedAt": "<ms>",
+        "status": "killed",
+        "cause": "kill",
+        "producerReported": true,
+        "detail": "signal: SIGTERM; tool call aborted"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 14,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -373,7 +415,7 @@
     },
     {
       "type": "step/end",
-      "seq": 13,
+      "seq": 15,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -382,7 +424,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 14,
+      "seq": 16,
       "time": "<ms>",
       "data": {
         "turn": 1,

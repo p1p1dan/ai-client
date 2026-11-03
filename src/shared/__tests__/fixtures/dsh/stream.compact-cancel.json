@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-compact-cancel",
     "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/compact-cancel"
+    }
+  },
+  {
+    "sessionId": "rec-compact-cancel",
+    "requestId": "turn-STREAM",
     "type": "session.status",
     "payload": {
       "status": "running"
@@ -415,7 +424,7 @@
     "requestId": "turn-AFTER",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-34",
+      "messageId": "dsh-user-36",
       "role": "user",
       "attemptId": "attempt-AFTER"
     }
@@ -425,8 +434,8 @@
     "requestId": "turn-AFTER",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-34",
-      "blockId": "dsh-user-34-text",
+      "messageId": "dsh-user-36",
+      "blockId": "dsh-user-36-text",
       "text": "P1-AUTOCOMPACT {\"tag\":\"after\"} what do you remember?"
     }
   },
@@ -435,7 +444,7 @@
     "requestId": "turn-AFTER",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-34"
+      "messageId": "dsh-user-36"
     }
   },
   {

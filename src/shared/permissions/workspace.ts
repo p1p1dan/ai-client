@@ -45,3 +45,13 @@ export function workspaceSpellings(cwd: string, realpath: SyncRealpath): Workspa
   const canonical = canonicalSpelling(lexical, realpath);
   return { cwd: canonical, cwdAliases: canonical === lexical ? [] : [lexical] };
 }
+
+/**
+ * The other spellings of the workspace `cwd` names, for the timeline
+ * (decision 207 §15 item 5): its canonical one, when it differs. DSH reports
+ * a directory the model changed to in that spelling.
+ */
+export function workspaceAliases(cwd: string, realpath: SyncRealpath): string[] {
+  const canonical = canonicalSpelling(cwd, realpath);
+  return canonical === cwd ? [] : [canonical];
+}

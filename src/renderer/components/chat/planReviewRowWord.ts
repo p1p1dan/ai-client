@@ -36,8 +36,11 @@ export function planReviewRowWord(
   output: string | undefined
 ): PlanReviewWord | undefined {
   if (!REVIEW_TOOLS.has(toolName) || status === 'running') return undefined;
-  if (status === 'ok') return PLAN_TOOLS.has(toolName) ? { key: 'Plan approved' } : undefined;
   const outcome = planReviewRowOutcome(output);
+  // DSH 0.2.1 closes an `exit_plan_mode` review with a successful result (decision 207 §5).
+  if (status === 'ok' && outcome?.kind !== 'dismissed') {
+    return PLAN_TOOLS.has(toolName) ? { key: 'Plan approved' } : undefined;
+  }
   switch (outcome?.kind) {
     case 'keep-planning':
       return outcome.feedback

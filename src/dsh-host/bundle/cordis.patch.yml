@@ -81,6 +81,11 @@
 - id: web-search-deepseek
   disabled: true
 
+# DSH 0.2.1 (decision 207 §4): the DeepSeek Search and Fetch providers, the
+# same official endpoint; `web` keeps `fetchProvider: http` above.
+- id: web-deepseek-api
+  disabled: true
+
 # grep: dsh-tool-fs-search registers glob and grep as one row and cannot
 # leave grep out, so aiclient-fs-search takes the row's place: DSH's glob
 # unchanged, and our grep (output modes, context lines, case folding, file

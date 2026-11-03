@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-steer-withdraw",
     "requestId": "turn-STEER-W",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-steer-withdraw",
+    "requestId": "turn-STEER-W",
     "type": "session.status",
     "payload": {
       "status": "running"
@@ -178,7 +187,7 @@
     "requestId": "turn-STEER-W",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-19",
+      "messageId": "dsh-user-21",
       "role": "user",
       "attemptId": "interject-KEEP"
     }
@@ -188,8 +197,8 @@
     "requestId": "turn-STEER-W",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-19",
-      "blockId": "dsh-user-19-text",
+      "messageId": "dsh-user-21",
+      "blockId": "dsh-user-21-text",
       "text": "STEER-NOTE-K keep this one."
     }
   },
@@ -198,7 +207,7 @@
     "requestId": "turn-STEER-W",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-19"
+      "messageId": "dsh-user-21"
     }
   },
   {
@@ -410,7 +419,7 @@
     "requestId": "turn-STOP-W",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-32",
+      "messageId": "dsh-user-36",
       "role": "user",
       "attemptId": "attempt-STOP-W"
     }
@@ -420,8 +429,8 @@
     "requestId": "turn-STOP-W",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-32",
-      "blockId": "dsh-user-32-text",
+      "messageId": "dsh-user-36",
+      "blockId": "dsh-user-36-text",
       "text": "P0-SLEEPTOOL {\"token\":\"steer-withdraw\",\"seconds\":30} run a long command; I will stop you."
     }
   },
@@ -430,7 +439,7 @@
     "requestId": "turn-STOP-W",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-32"
+      "messageId": "dsh-user-36"
     }
   },
   {
@@ -590,7 +599,7 @@
     "requestId": "turn-STEER-ONE-W",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-44",
+      "messageId": "dsh-user-50",
       "role": "user",
       "attemptId": "attempt-STEER-ONE-W"
     }
@@ -600,8 +609,8 @@
     "requestId": "turn-STEER-ONE-W",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-44",
-      "blockId": "dsh-user-44-text",
+      "messageId": "dsh-user-50",
+      "blockId": "dsh-user-50-text",
       "text": "P1-STEER-ONE: which notes reached you?"
     }
   },
@@ -610,7 +619,7 @@
     "requestId": "turn-STEER-ONE-W",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-44"
+      "messageId": "dsh-user-50"
     }
   },
   {

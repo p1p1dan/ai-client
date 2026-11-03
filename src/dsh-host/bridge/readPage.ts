@@ -15,9 +15,11 @@
  * no agent of the session is open here.
  */
 
+import { realpathSync } from 'node:fs';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { DshHistoryFold } from '../../shared/dshHistory/projection.ts';
 import type { DshToolPresenter } from '../../shared/dshToolPresentation.ts';
+import { workspaceAliases } from '../../shared/permissions/workspace.ts';
 import type { SessionHistoryPage } from '../../shared/types/sessionHistory.ts';
 import { BridgeSessionError } from './bridgeErrors.ts';
 import { mapOpenError } from './dshSessionRuntime.ts';
@@ -62,6 +64,10 @@ export async function readSessionPage(
       liveSessionId: stub.dshSessionId,
       ...(presentCall ? { presentCall } : {}),
       ...compactInstructionsLookups(stubCompactInstructions(stub)),
+      // Decision 207 §7: rows record the directory they ran in, by the
+      // spelling DSH reports it in too (§15 item 5).
+      workspace: stub.cwd,
+      workspaceAliases: workspaceAliases(stub.cwd, (path) => realpathSync.native(path)),
     });
     for (const event of observation.events) fold.push(event);
     return paginateHistory(fold.messages(), request.offset, request.limit);

@@ -120,6 +120,7 @@ import type {
   SessionCompactionTrigger,
 } from '../../shared/types/runtimeEvents.ts';
 import type { TurnOrigin } from '../../shared/types/sessionHistory.ts';
+import { callDirectory } from '../../shared/workingDirectory.ts';
 import { cacheChainLogLines, stepPrefixEvidence } from './cacheChainReport.ts';
 import {
   DSH_COMMAND_ERROR_TYPE,
@@ -186,6 +187,19 @@ export interface DshLiveEventsHost {
   emit(event: BridgeDraft): void;
   /** Our `provider/modelId` of the current selection, for `message.started`. */
   route(): string;
+  /**
+   * Decision 207 §7: the session's workspace (its header cwd). Given, with
+   * `currentDirectory`, a row whose call starts in another directory
+   * carries that directory.
+   */
+  workspace?(): string | undefined;
+  /**
+   * Decision 207 §15 item 5: DSH's current directory for the session now, as
+   * its `workingDirectory` projection last reported it and spelled as the
+   * workspace is. A resumed or rewound session is already in it: no
+   * `working-directory/change` of this run says so.
+   */
+  currentDirectory?(): string | undefined;
   /** The DSH session the events come from; live assistant ids name it. */
   dshSessionId(): string;
   turn(): LiveTurn | null;
@@ -655,6 +669,17 @@ export class DshLiveEvents {
    * Decision 131: `{presentation}` for a call whose arguments are complete,
    * when its tool declares a title; `{}` otherwise, and when asking throws.
    */
+  /**
+   * Decision 207 §7, §15 item 5: the directory a call starting now runs in,
+   * as the history projection records it (`DshHistoryFold.callCwd`).
+   */
+  private callCwd(): { cwd?: string } {
+    const workspace = this.host.workspace?.();
+    const directory = this.host.currentDirectory?.();
+    const cwd = workspace && directory ? callDirectory(workspace, directory) : undefined;
+    return cwd ? { cwd } : {};
+  }
+
   private presentationOf(name: string, args: unknown): { presentation?: ToolCallPresentation } {
     try {
       const presentation = this.host.presentCall?.(name, args);
@@ -1388,6 +1413,9 @@ export class DshLiveEvents {
     if (!this.callArgs.has(callId)) this.callArgs.set(callId, args);
     const messageId = this.stepMessage(Number(data.turn), Number(data.step)).messageId;
     if (!this.toolStep.has(callId)) this.toolStep.set(callId, messageId);
+    // Decision 207 §15 item 5: the call starts now, in the directory an
+    // earlier call of its step may have changed; the row learns it here.
+    const cwd = this.callCwd();
     if (!this.startedTools.has(callId)) {
       this.startedTools.add(callId);
       this.emit({
@@ -1401,17 +1429,21 @@ export class DshLiveEvents {
         },
       });
       this.flushExecStarted(callId);
+      if (cwd.cwd) {
+        this.emit({ type: 'tool.updated', payload: { messageId, toolCallId: callId, ...cwd } });
+      }
       return;
     }
     // The stream's block end already sent these very arguments.
-    if (this.argStreams.get(callId)?.settled) return;
+    const settled = this.argStreams.get(callId)?.settled === true;
+    if (settled && !cwd.cwd) return;
     this.emit({
       type: 'tool.updated',
       payload: {
         messageId: this.toolStep.get(callId) ?? messageId,
         toolCallId: callId,
-        input: toolRowInput(args),
-        ...this.presentationOf(name, args),
+        ...(settled ? {} : { input: toolRowInput(args), ...this.presentationOf(name, args) }),
+        ...cwd,
       },
     });
   }

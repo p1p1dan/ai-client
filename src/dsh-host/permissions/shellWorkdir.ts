@@ -96,7 +96,7 @@ export function workdirSyntaxDenial(
   if (workdir === undefined || !DRIVELESS_ROOT.test(workdir)) return undefined;
   return deny(
     'workdir_no_drive',
-    `workdir "${workdir}" has no drive letter; on Windows give a full path such as ${sessionCwd}, or omit workdir to run in the session workspace`
+    `workdir "${workdir}" has no drive letter; on Windows give a full path such as ${sessionCwd}, or omit workdir to run in the current directory`
   );
 }
 
@@ -121,9 +121,9 @@ export async function workdirExistenceDenial(
     if (workdir === undefined)
       return deny(
         'workdir_missing',
-        `the session workspace does not exist: ${target}; it may have been moved or deleted`
+        `the current directory does not exist: ${target}; it may have been moved or deleted`
       );
-    const workspace = target === sessionCwd ? '' : ` (the session workspace is ${sessionCwd})`;
+    const workspace = target === sessionCwd ? '' : ` (the current directory is ${sessionCwd})`;
     const tilde = workdir.startsWith('~')
       ? '; "~" is not expanded in workdir, give the full path'
       : '';

@@ -81,6 +81,8 @@ describe('requiredDisabledOverlays (HS-02, decision 023 rule 3)', () => {
       'llm-deepseek',
       'session-log-deepseek',
       'web-search-deepseek',
+      // Decision 207 §4: DSH 0.2.1's DeepSeek search / fetch providers (api.deepseek.com).
+      'web-deepseek-api',
     ]) {
       expect(REQUIRED_DISABLED).toContain(id);
     }
@@ -138,15 +140,20 @@ describe('agentDirOverlays (P1-16a, decision 101 rule 2)', () => {
     expect(AGENT_DIR_ENV).toBe('AICLIENT_PERMISSION_AGENT_DIR');
   });
 
-  it('restates the agent-instructions budget alongside dshHome, and points skill-filesystem at <agentDir>/skills', () => {
-    expect(agentDirOverlays('/state/pi-agent')).toEqual([
-      { id: 'agent-instructions', config: { maxBytes: 65536, dshHome: '/state/pi-agent' } },
-      { id: 'skill-filesystem', config: { customSkillDirs: ['/state/pi-agent/skills'] } },
+  // Decision 207 §6, §14 (option A): DSH 0.2.1 takes the user-level root from
+  // DSH_AGENTS_HOME, so the skill row restates the shared ~/.agents it read before.
+  it('restates the agent-instructions budget, and points skill-filesystem at <agentDir>/skills and the shared ~/.agents', () => {
+    expect(agentDirOverlays('/state/pi-agent', '/home/u/.agents')).toEqual([
+      { id: 'agent-instructions', config: { maxBytes: 65536 } },
+      {
+        id: 'skill-filesystem',
+        config: { customSkillDirs: ['/state/pi-agent/skills'], agentsHome: '/home/u/.agents' },
+      },
     ]);
   });
 
   it('emits nothing when the host was handed no path, so DSH keeps its own defaults', () => {
-    expect(agentDirOverlays(undefined)).toEqual([]);
-    expect(agentDirOverlays('')).toEqual([]);
+    expect(agentDirOverlays(undefined, '/home/u/.agents')).toEqual([]);
+    expect(agentDirOverlays('', '/home/u/.agents')).toEqual([]);
   });
 });

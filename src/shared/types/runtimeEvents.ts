@@ -406,6 +406,13 @@ export interface ToolStartedEvent extends RuntimeEventBase {
      * one of DSH's own tools; the row reads it (`deriveToolRowView`).
      */
     presentation?: ToolCallPresentation;
+    /**
+     * Decision 207 §7: the directory the call runs in, when the model had
+     * changed it (`callDirectory`): relative to the workspace inside it,
+     * absolute outside it. The DSH bridge sends it on the `tool.updated` of
+     * the call's start instead (§15 item 5).
+     */
+    cwd?: string;
   };
 }
 
@@ -568,6 +575,10 @@ export type PermissionRequestKind = 'tool' | 'exec' | 'file_change';
  *
  * `fetch_url` (dsh-rebase decision 190): `web_fetch` asks to fetch the URL on
  * the card.
+ *
+ * `change_directory` (decision 207 §15): `working_directory`, or a subagent's
+ * `cwd`, moves to the directory on the card, outside the workspace; DSH then
+ * reads that project's AGENTS.md, CLAUDE.md and skills.
  */
 export type PermissionRequestAction =
   | 'run_command'
@@ -575,7 +586,8 @@ export type PermissionRequestAction =
   | 'edit_file'
   | 'read_file'
   | 'escalate_sandbox'
-  | 'fetch_url';
+  | 'fetch_url'
+  | 'change_directory';
 
 /**
  * S2 (c): agent-neutral decision vocabulary, four wide. `decisions.ts`
@@ -1192,6 +1204,12 @@ export interface ToolUpdatedEvent extends RuntimeEventBase {
   type: 'tool.updated';
   sessionId: string;
   payload: {
+    /**
+     * Decision 207 §7: the directory the call runs in, when the model had
+     * changed it (`callDirectory`): relative to the workspace inside it,
+     * absolute outside it. Sent when the call starts (§15 item 5).
+     */
+    cwd?: string;
     messageId: string;
     toolCallId: string;
     /**
@@ -1398,11 +1416,17 @@ export interface SubagentActivityEvent extends RuntimeEventBase {
 /**
  * dsh-rebase decisions 031 and 099 rule 11 (P1-4d2): the DSH session
  * projections the renderer draws, forwarded as DSH computes them
- * (`ctx.sessionProjections`). Only these three keys cross the bridge;
+ * (`ctx.sessionProjections`). Only these keys cross the bridge (DSH 0.2.1's
+ * `workingDirectory`, decision 207 §7, joined the first three);
  * `permissions`, `sandboxMode` and `plan` are constant or off in our
  * composition. The keys the bridge makes itself are {@link BRIDGE_PROJECTION_KEYS}.
  */
-export const SESSION_PROJECTION_KEYS = ['todos', 'goal', 'subagentCatalog'] as const;
+export const SESSION_PROJECTION_KEYS = [
+  'todos',
+  'goal',
+  'subagentCatalog',
+  'workingDirectory',
+] as const;
 
 /**
  * dsh-rebase decision 072 rule 1, P1-7a (decision 118): keys no DSH
@@ -1440,11 +1464,15 @@ export interface DshGoalProjection {
   updatedAt: number;
 }
 
-/** One row of `subagentCatalog` (dsh-subagent's `SubagentCatalogEntry`): a direct child session. */
+/**
+ * One row of `subagentCatalog` (dsh-subagent's `SubagentCatalogEntry`): a
+ * direct child session; DSH 0.2.1 adds `external`, an execution with no local
+ * child session.
+ */
 export interface DshSubagentCatalogEntry {
   id: string;
   createdAt: number;
-  mode: 'one-shot' | 'continuable' | 'unknown';
+  mode: 'one-shot' | 'continuable' | 'unknown' | 'external';
   label?: string;
 }
 
@@ -1493,6 +1521,8 @@ export type SessionProjectionPayload =
   | { key: 'todos'; view: DshTodoItem[] | null }
   | { key: 'goal'; view: DshGoalProjection | null }
   | { key: 'subagentCatalog'; view: DshSubagentCatalogEntry[] }
+  /** DSH 0.2.1: the session's absolute current directory; `null` before one is recorded. */
+  | { key: 'workingDirectory'; view: string | null }
   | { key: 'goalActivation'; view: DshGoalActivation | null }
   | { key: 'jobs'; view: DshJobSummary[] };
 

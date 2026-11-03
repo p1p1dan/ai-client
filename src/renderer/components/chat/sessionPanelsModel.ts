@@ -36,6 +36,8 @@ export interface SessionPanels {
   goal?: DshGoalProjection | null;
   goalActivation?: DshGoalActivation | null;
   subagentCatalog?: DshSubagentCatalogEntry[];
+  /** DSH 0.2.1 (decision 207 §7): the session's absolute current directory; the composer chip reads it. */
+  workingDirectory?: string | null;
   /** P1-7b: the session's background jobs (the bridge's `jobs`); the jobs window reads them. */
   jobs?: DshJobSummary[];
   /**
@@ -189,6 +191,12 @@ function withProjection(panels: SessionPanels, payload: SessionProjectionPayload
     case 'subagentCatalog': {
       const subagentCatalog = readCatalog(payload.view);
       return subagentCatalog === undefined ? panels : { ...panels, subagentCatalog };
+    }
+    case 'workingDirectory': {
+      const view = payload.view;
+      return view === null || typeof view === 'string'
+        ? { ...panels, workingDirectory: view }
+        : panels;
     }
     case 'jobs': {
       const jobs = readJobs(payload.view);

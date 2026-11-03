@@ -59,12 +59,16 @@ export const DSH_TOOL_CLASSES: Readonly<Record<string, DshToolClass>> = Object.f
   send_message: 'internal',
   interrupt_agent: 'internal',
   structured_output: 'internal',
-  ralph: 'internal',
   get_goal: 'internal',
   create_goal: 'internal',
   update_goal: 'internal',
   exit_plan_mode: 'internal',
   present: 'internal',
+  // DSH 0.2.1 (decision 207 §7): a cd widens no access; every later call
+  // outside the workspace still meets the boundary. One that leaves the
+  // workspace is gated all the same (§15: DSH reads that project's
+  // instructions), as is a subagent's `cwd` — `directoryArgumentOf`.
+  working_directory: 'internal',
   // P1-4d3 (decision 098): asking the user is the interaction itself, never
   // gated, as 1.0.x's `ask` was not (dsh-tool-ask-user, a product bundle row).
   ask_user_question: 'internal',

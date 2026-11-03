@@ -50,6 +50,12 @@ export type HistoryBlock =
        * live row got it (the bridge asks the same `presentCall` on replay).
        */
       presentation?: ToolCallPresentation;
+      /**
+       * Decision 207 §7: the directory the call ran in, when the model had
+       * changed it (`callDirectory`): relative to the workspace inside it,
+       * absolute outside it.
+       */
+      cwd?: string;
     }
   | {
       type: 'tool_result';

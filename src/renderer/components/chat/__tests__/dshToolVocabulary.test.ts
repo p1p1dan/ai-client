@@ -65,12 +65,12 @@ function run(toolName: string, input: unknown, overrides: Partial<ToolRun> = {})
 
 /**
  * The DSH tools a row deliberately does not name. They read as the
- * unknown-tool fallback (「工具」 + the tool's name): `ralph` is off in
- * dsh-base (shard 04 §3), `structured_output` is a subagent's own return
- * channel, and `plugin_manager` installs host code our composition never
- * mounts (P1-10: no runtime installs).
+ * unknown-tool fallback (「工具」 + the tool's name): `structured_output` is a
+ * subagent's own return channel, and `plugin_manager` installs host code our
+ * composition never mounts (P1-10: no runtime installs). (`ralph` left DSH in
+ * 0.2.1, decision 207.)
  */
-const FALLBACK_ON_PURPOSE: readonly string[] = ['ralph', 'structured_output', 'plugin_manager'];
+const FALLBACK_ON_PURPOSE: readonly string[] = ['structured_output', 'plugin_manager'];
 
 interface Probe {
   input: Record<string, unknown>;
@@ -273,12 +273,14 @@ const PROBES: Readonly<Record<string, Probe>> = {
     icon: 'tool',
     arg: 'structured_output',
   },
-  ralph: {
-    input: { prompt: 'Keep going' },
-    verb: 'Used tool',
-    zhVerb: '工具',
-    icon: 'tool',
-    arg: 'ralph · Keep going',
+  // Decision 207 §7, §14: DSH 0.2.1's cd.
+  working_directory: {
+    input: { cd: 'packages/web' },
+    output: '/home/u/proj/packages/web',
+    verb: 'Changed directory',
+    zhVerb: '切换目录',
+    icon: 'folder',
+    arg: 'packages/web',
   },
   get_goal: {
     input: {},
@@ -930,6 +932,75 @@ describe('every icon kind has an element', () => {
     expect(source).toContain("t('Exit code {{code}}', { code: view.exitCode })");
     expect(source).toContain("t('to background at {{limit}}'");
     expect(source).toContain("case 'todos':");
+  });
+});
+
+describe('decision 207: the working_directory row', () => {
+  const settled = (input: unknown, output: string) =>
+    deriveToolRowView(run('working_directory', input, { output }));
+
+  it('without cd it reads the directory, and names what it read', () => {
+    const view = settled({}, '/home/u/proj');
+    expect(view.verb).toBe('Checked directory');
+    expect(zh(view.verb)).toBe('查看当前目录');
+    expect(view.iconKind).toBe('folder');
+    expect(view.arg).toBe('/home/u/proj');
+  });
+});
+
+describe('decision 207 §14 D: a row whose call ran in a changed directory', () => {
+  const opts = { repoName: 'proj', t: zh };
+
+  it('in a subdirectory: the same short name, opened in that directory', () => {
+    const view = deriveToolRowView(
+      run('read', { file_path: 'src/main.ts' }, { output: 'x', cwd: 'packages/web' }),
+      opts
+    );
+    expect(view.arg).toBe('src/main.ts');
+    expect(view.link).toEqual({ path: 'packages/web/src/main.ts' });
+  });
+
+  it('outside the workspace: the full path, opened there', () => {
+    const view = deriveToolRowView(
+      run('read', { file_path: 'error.log' }, { output: 'x', cwd: '/tmp/build' }),
+      opts
+    );
+    expect(view.arg).toBe('/tmp/build/error.log');
+    expect(view.link).toEqual({ path: '/tmp/build/error.log' });
+    // An absolute argument is left as written.
+    expect(
+      deriveToolRowView(
+        run('read', { file_path: '/etc/hosts' }, { output: 'x', cwd: '/tmp/build' }),
+        opts
+      ).link
+    ).toEqual({ path: '/etc/hosts' });
+  });
+
+  it('a search names where it ran; its hits open from there', () => {
+    const inside = deriveToolRowView(
+      run('grep', { pattern: 'foo' }, { output: 'a.ts', cwd: 'packages/web' }),
+      opts
+    );
+    expect(inside.arg).toBe('foo（proj/packages/web）');
+    expect(inside.hitBase).toBe('packages/web');
+    const outside = deriveToolRowView(
+      run('glob', { pattern: '*.log' }, { output: 'error.log', cwd: '/tmp/build' }),
+      opts
+    );
+    expect(outside.arg).toBe('*.log（/tmp/build）');
+    expect(outside.hitBase).toBe('/tmp/build');
+  });
+
+  it('a row without one is exactly as before', () => {
+    const view = deriveToolRowView(
+      run('read', { file_path: 'src/main.ts' }, { output: 'x' }),
+      opts
+    );
+    expect(view.arg).toBe('src/main.ts');
+    expect(view.link).toEqual({ path: 'src/main.ts' });
+    const search = deriveToolRowView(run('grep', { pattern: 'foo' }, { output: 'a.ts' }), opts);
+    expect(search.arg).toBe('foo（proj）');
+    expect(search).not.toHaveProperty('hitBase');
   });
 });
 

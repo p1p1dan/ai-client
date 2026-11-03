@@ -124,6 +124,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -180,6 +184,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -458,6 +463,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -725,6 +731,10 @@
                   "text": "<aiclient:environment>"
                 },
                 {
+                  "name": "working-directory:current",
+                  "text": "Current working directory: \"<workspace>\"."
+                },
+                {
                   "name": "sandbox:policy",
                   "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
                 },
@@ -781,6 +791,7 @@
                 "update_goal",
                 "web_fetch",
                 "workflow",
+                "working_directory",
                 "write"
               ]
             },

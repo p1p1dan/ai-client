@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-perm-search",
     "requestId": "turn-PERM-SEARCH",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>/perm-search"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
     "type": "session.status",
     "payload": {
       "status": "running"

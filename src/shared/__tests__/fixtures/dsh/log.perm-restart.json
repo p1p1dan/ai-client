@@ -8,7 +8,7 @@
     "delegationDepth": 0
   },
   "inheritedEventCount": 0,
-  "cursor": 60,
+  "cursor": 68,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -124,6 +124,10 @@
               "text": "<aiclient:environment>"
             },
             {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"<workspace>/perm-restart\"."
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -180,6 +184,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -340,8 +345,45 @@
       }
     },
     {
-      "type": "tool/result",
+      "type": "job/registered",
       "seq": 12,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-perm-restart",
+        "kind": "bash",
+        "label": "echo perm-session-first",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-4",
+          "rootCallId": "toolu_id-4"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 13,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-1",
+        "owner": "aiclient-rec-perm-restart",
+        "kind": "bash",
+        "label": "echo perm-session-first",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-4",
+          "rootCallId": "toolu_id-4"
+        },
+        "finishedAt": "<ms>",
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 14,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -361,6 +403,9 @@
           ],
           "isError": false,
           "id": "id-7"
+        },
+        "meta": {
+          "cwd": "<workspace>/perm-restart"
         }
       },
       "sourceEventSeqs": [11],
@@ -368,7 +413,7 @@
     },
     {
       "type": "step/end",
-      "seq": 13,
+      "seq": 15,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -377,7 +422,7 @@
     },
     {
       "type": "step/start",
-      "seq": 14,
+      "seq": 16,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -386,7 +431,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 15,
+      "seq": 17,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -505,7 +550,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 16,
+      "seq": 18,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -516,8 +561,45 @@
       }
     },
     {
+      "type": "job/registered",
+      "seq": 19,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-2",
+        "owner": "aiclient-rec-perm-restart",
+        "kind": "bash",
+        "label": "echo perm-session-second",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-8",
+          "rootCallId": "toolu_id-8"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 20,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-2",
+        "owner": "aiclient-rec-perm-restart",
+        "kind": "bash",
+        "label": "echo perm-session-second",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-8",
+          "rootCallId": "toolu_id-8"
+        },
+        "finishedAt": "<ms>",
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
       "type": "tool/result",
-      "seq": 17,
+      "seq": 21,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -537,14 +619,17 @@
           ],
           "isError": false,
           "id": "id-11"
+        },
+        "meta": {
+          "cwd": "<workspace>/perm-restart"
         }
       },
-      "sourceEventSeqs": [16],
+      "sourceEventSeqs": [18],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 18,
+      "seq": 22,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -553,7 +638,7 @@
     },
     {
       "type": "step/start",
-      "seq": 19,
+      "seq": 23,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -562,7 +647,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 20,
+      "seq": 24,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -675,7 +760,7 @@
     },
     {
       "type": "step/end",
-      "seq": 21,
+      "seq": 25,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -684,7 +769,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 22,
+      "seq": 26,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -695,13 +780,13 @@
     },
     {
       "type": "session/end-seed",
-      "seq": 23,
+      "seq": 27,
       "time": "<ms>",
       "data": {}
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 24,
+      "seq": 28,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -725,7 +810,7 @@
     },
     {
       "type": "turn/start",
-      "seq": 25,
+      "seq": 29,
       "time": "<ms>",
       "data": {
         "turn": 2
@@ -733,7 +818,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 26,
+      "seq": 30,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -744,7 +829,7 @@
     },
     {
       "type": "step/start",
-      "seq": 27,
+      "seq": 31,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -753,7 +838,7 @@
     },
     {
       "type": "user/message",
-      "seq": 28,
+      "seq": 32,
       "time": "<ms>",
       "data": {
         "content": [
@@ -772,7 +857,7 @@
     },
     {
       "type": "request/header",
-      "seq": 29,
+      "seq": 33,
       "time": "<ms>",
       "data": {
         "header": {
@@ -808,6 +893,7 @@
             "update_goal",
             "web_fetch",
             "workflow",
+            "working_directory",
             "write"
           ]
         },
@@ -816,7 +902,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 30,
+      "seq": 34,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -935,7 +1021,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 31,
+      "seq": 35,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -946,8 +1032,45 @@
       }
     },
     {
+      "type": "job/registered",
+      "seq": 36,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-3",
+        "owner": "aiclient-rec-perm-restart",
+        "kind": "bash",
+        "label": "echo perm-session-first",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-15",
+          "rootCallId": "toolu_id-15"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 37,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-3",
+        "owner": "aiclient-rec-perm-restart",
+        "kind": "bash",
+        "label": "echo perm-session-first",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-15",
+          "rootCallId": "toolu_id-15"
+        },
+        "finishedAt": "<ms>",
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
       "type": "tool/result",
-      "seq": 32,
+      "seq": 38,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -967,14 +1090,17 @@
           ],
           "isError": false,
           "id": "id-18"
+        },
+        "meta": {
+          "cwd": "<workspace>/perm-restart"
         }
       },
-      "sourceEventSeqs": [31],
+      "sourceEventSeqs": [35],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 33,
+      "seq": 39,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -983,7 +1109,7 @@
     },
     {
       "type": "step/start",
-      "seq": 34,
+      "seq": 40,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -992,7 +1118,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 35,
+      "seq": 41,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1111,7 +1237,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 36,
+      "seq": 42,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1122,8 +1248,45 @@
       }
     },
     {
+      "type": "job/registered",
+      "seq": 43,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-4",
+        "owner": "aiclient-rec-perm-restart",
+        "kind": "bash",
+        "label": "echo perm-session-second",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-19",
+          "rootCallId": "toolu_id-19"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 44,
+      "time": "<ms>",
+      "data": {
+        "jobId": "bash-job-4",
+        "owner": "aiclient-rec-perm-restart",
+        "kind": "bash",
+        "label": "echo perm-session-second",
+        "startedAt": "<ms>",
+        "toolCall": {
+          "callId": "toolu_id-19",
+          "rootCallId": "toolu_id-19"
+        },
+        "finishedAt": "<ms>",
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
       "type": "tool/result",
-      "seq": 37,
+      "seq": 45,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1143,14 +1306,17 @@
           ],
           "isError": false,
           "id": "id-22"
+        },
+        "meta": {
+          "cwd": "<workspace>/perm-restart"
         }
       },
-      "sourceEventSeqs": [36],
+      "sourceEventSeqs": [42],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 38,
+      "seq": 46,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1159,7 +1325,7 @@
     },
     {
       "type": "step/start",
-      "seq": 39,
+      "seq": 47,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1168,7 +1334,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 40,
+      "seq": 48,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1281,7 +1447,7 @@
     },
     {
       "type": "step/end",
-      "seq": 41,
+      "seq": 49,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1290,7 +1456,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 42,
+      "seq": 50,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1301,7 +1467,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 43,
+      "seq": 51,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -1325,7 +1491,7 @@
     },
     {
       "type": "turn/start",
-      "seq": 44,
+      "seq": 52,
       "time": "<ms>",
       "data": {
         "turn": 3
@@ -1333,7 +1499,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 45,
+      "seq": 53,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -1344,7 +1510,7 @@
     },
     {
       "type": "step/start",
-      "seq": 46,
+      "seq": 54,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1353,7 +1519,7 @@
     },
     {
       "type": "user/message",
-      "seq": 47,
+      "seq": 55,
       "time": "<ms>",
       "data": {
         "content": [
@@ -1372,7 +1538,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 48,
+      "seq": 56,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1491,7 +1657,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 49,
+      "seq": 57,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1503,7 +1669,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 50,
+      "seq": 58,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1530,12 +1696,12 @@
           "reason": "user-denied"
         }
       },
-      "sourceEventSeqs": [49],
+      "sourceEventSeqs": [57],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 51,
+      "seq": 59,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1544,7 +1710,7 @@
     },
     {
       "type": "step/start",
-      "seq": 52,
+      "seq": 60,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1553,7 +1719,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 53,
+      "seq": 61,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1672,7 +1838,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 54,
+      "seq": 62,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1684,7 +1850,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 55,
+      "seq": 63,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1711,12 +1877,12 @@
           "reason": "user-denied"
         }
       },
-      "sourceEventSeqs": [54],
+      "sourceEventSeqs": [62],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 56,
+      "seq": 64,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1725,7 +1891,7 @@
     },
     {
       "type": "step/start",
-      "seq": 57,
+      "seq": 65,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1734,7 +1900,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 58,
+      "seq": 66,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1847,7 +2013,7 @@
     },
     {
       "type": "step/end",
-      "seq": 59,
+      "seq": 67,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1856,7 +2022,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 60,
+      "seq": 68,
       "time": "<ms>",
       "data": {
         "turn": 3,

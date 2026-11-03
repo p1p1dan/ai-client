@@ -38,8 +38,11 @@ import { applyRichGrepTool, type RichGrepCaps, type RichGrepContext } from './gr
 /** Stable Cordis plugin name and bundle row id. */
 export const name = 'aiclient-fs-search';
 
-/** dsh-tool-fs-search's own: the registry, prompt assembly and the spawn seam. */
-export const inject = ['tools', 'systemPrompt', 'subprocess'];
+/**
+ * dsh-tool-fs-search's own: the registry, prompt assembly, the spawn seam and
+ * (DSH 0.2.1) the session's working directory, which its glob reads.
+ */
+export const inject = ['tools', 'systemPrompt', 'subprocess', 'workingDirectory'];
 
 /** dsh-tool-fs-search's config, field for field. */
 export interface FsSearchSettings {

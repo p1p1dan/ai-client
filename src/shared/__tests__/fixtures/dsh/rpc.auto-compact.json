@@ -111,15 +111,15 @@
           "liveMessageId": "dsh-user-29"
         },
         {
-          "id": "h:id-13",
-          "entryId": "id-13",
+          "id": "h:id-14",
+          "entryId": "id-14",
           "role": "assistant",
           "timestamp": "<ms>",
           "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "text",
-              "id": "h:id-13:text:0",
+              "id": "h:id-14:text:0",
               "text": "P1-AUTOCOMPACT c: answered from the summary."
             }
           ],
@@ -138,8 +138,8 @@
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-auto-compact.dsh.json",
       "workspacePath": "<workspace>",
       "leaf": {
-        "activeEntryId": "id-13",
-        "fileTailEntryId": "aiclient-rec-auto-compact#33"
+        "activeEntryId": "id-14",
+        "fileTailEntryId": "aiclient-rec-auto-compact#34"
       },
       "nodes": [
         {
@@ -221,7 +221,7 @@
           "leaf": false
         },
         {
-          "id": "id-13",
+          "id": "id-14",
           "parentId": "id-9",
           "depth": 6,
           "entryType": "message",

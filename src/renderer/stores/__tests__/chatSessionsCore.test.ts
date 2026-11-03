@@ -1685,6 +1685,76 @@ describe('applyRuntimeEvent — run stop causes (Ctrl+Enter vs Stop)', () => {
   });
 });
 
+describe('applyRuntimeEvent — a subagent card outlives the main turn (decision 207 §15)', () => {
+  const subagentCard = {
+    sessionId: SESSION_ID,
+    permissionId: 'perm-sub',
+    messageId: 'asst-1',
+    agentId: 'agent-1',
+  };
+  const mainCard = { sessionId: SESSION_ID, permissionId: 'perm-main', messageId: 'asst-1' };
+
+  function runningWithBoth(): ChatSessionsState {
+    return baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: {
+        [SESSION_ID]: [
+          makeMessage({ id: 'user-1', role: 'user' }),
+          makeMessage({ id: 'asst-1', blocks: [{ id: 'b1', type: 'text', text: 'working' }] }),
+        ],
+      },
+      pendingPermissions: [subagentCard, mainCard],
+    });
+  }
+
+  it('the queue entry keeps the asking subagent', () => {
+    const state = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'asst-1' })] },
+    });
+    const patch = applyRuntimeEvent(state, {
+      type: 'permission.requested',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-sub', toolName: 'bash', agentId: 'agent-1' },
+    });
+    expect(patch.pendingPermissions).toEqual([
+      expect.objectContaining({ permissionId: 'perm-sub', agentId: 'agent-1' }),
+    ]);
+  });
+
+  it.each([
+    ['completed', { type: 'session.completed' as const }],
+    ['stopped by the user', { type: 'session.stopped' as const }],
+    ['failed', { type: 'session.failed' as const, payload: { error: 'upstream down' } }],
+  ])('the main turn %s: only the main agent card is cleared', (_label, terminal) => {
+    const patch = applyRuntimeEvent(runningWithBoth(), {
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      ...terminal,
+    } as RuntimeEvent);
+    expect(patch.pendingPermissions).toEqual([subagentCard]);
+  });
+
+  it('answering the subagent card later takes it off the queue', () => {
+    const idle = baseState({
+      sessions: [makeSession({ status: 'idle' })],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'asst-1' })] },
+      pendingPermissions: [subagentCard],
+    });
+    const patch = applyRuntimeEvent(idle, {
+      type: 'permission.resolved',
+      seq: 2,
+      sessionId: SESSION_ID,
+      timestamp: 2,
+      payload: { permissionId: 'perm-sub', allow: true, decision: 'allow' },
+    });
+    expect(patch.pendingPermissions).toEqual([]);
+  });
+});
+
 describe('applyRuntimeEvent — session.status recentSessionIds', () => {
   it('moves an existing sessionId to the front and dedupes', () => {
     const state = baseState({ recentSessionIds: ['other-1', SESSION_ID, 'other-2'] });

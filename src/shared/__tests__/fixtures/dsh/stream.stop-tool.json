@@ -29,6 +29,15 @@
   {
     "sessionId": "rec-stop-tool",
     "requestId": "turn-STOP-TOOL",
+    "type": "session.projection",
+    "payload": {
+      "key": "workingDirectory",
+      "view": "<workspace>"
+    }
+  },
+  {
+    "sessionId": "rec-stop-tool",
+    "requestId": "turn-STOP-TOOL",
     "type": "session.status",
     "payload": {
       "status": "running"

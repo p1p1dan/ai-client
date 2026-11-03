@@ -468,9 +468,10 @@ describe('what the recordings show a user', () => {
     const reviews = calls(messages, 'exit_plan_mode');
     // Two turns, each presenting the plan: exit_plan_mode works in plan mode only.
     expect(reviews).toHaveLength(2);
+    // Decision 207 §5: since DSH 0.2.1 a closed review is a successful result.
     for (const review of reviews) {
-      expect(review.result).toMatchObject({ ok: false });
-      expect(planReviewRowOutcome(review.result.error)).toEqual({ kind: 'dismissed' });
+      expect(review.result).toMatchObject({ ok: true });
+      expect(planReviewRowOutcome(review.result.output)).toEqual({ kind: 'dismissed' });
     }
     expect(messages.some((message) => message.role === 'system')).toBe(false);
   });
