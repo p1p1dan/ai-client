@@ -694,6 +694,12 @@ export interface ToolRowView {
   /** dsh-rebase P1-7c: `todo_write`'s list, for the `todos` body (the todo card's `TodoList`). */
   todos?: readonly DshTodoItem[];
   /**
+   * Decision 208: a settled thought row's measured span, which each transcript
+   * style words itself (「思考了 12 秒」). Absent when nothing measured it — a
+   * reopened turn replays no thinking time — never a guessed number.
+   */
+  thoughtMs?: number;
+  /**
    * Route B S-6: a `ReportFindings` call's report, once its input is whole and the call
    * did not fail. `ToolRow` draws the review card for it instead of the row.
    */
@@ -1497,16 +1503,27 @@ export function runningElapsedMs(
   return nowMs >= startedAtMs ? nowMs - startedAtMs : undefined;
 }
 
-/** One row per run and one aggregated thought row per tool group. */
+/**
+ * One row per run, and the group's thinking as thought rows: by default ONE,
+ * at the first thought, with the whole group's text and time.
+ */
 export function deriveToolGroupRows(
   entries: readonly ToolGroupEntry[],
-  options: ToolCardOptions & ThinkingRowOptions = {}
+  options: ToolCardOptions &
+    ThinkingRowOptions & {
+      /**
+       * Decision 208 (user ruling 2026-11-03): `inPlace` gives each stretch of
+       * consecutive thinking a row of its own where it happened, as the CLI's
+       * transcript and the desktop app draw thinking. `group` is the default.
+       */
+      thoughts?: 'group' | 'inPlace';
+    } = {}
 ): ToolRowView[] {
-  // Only the two thinking-only fields are split off. Everything else —
+  // Only the thinking-only fields are split off. Everything else —
   // `toolStartedAtMs` included — stays on `cardOptions` for the tool rows: an
   // earlier cut destructured the clock inputs out here and then dropped them,
   // so no running row in the timeline ever showed its elapsed.
-  const { thinkingDurationMs, isStreamingBlockId, ...cardOptions } = options;
+  const { thinkingDurationMs, isStreamingBlockId, thoughts = 'group', ...cardOptions } = options;
   // `t` belongs to both halves: the rest-spread keeps it on `cardOptions` for
   // the tool rows, and it is named again here so thought rows get it too.
   const thinkingOptions: ThinkingRowOptions = {
@@ -1514,6 +1531,25 @@ export function deriveToolGroupRows(
     isStreamingBlockId,
     t: options.t,
   };
+
+  if (thoughts === 'inPlace') {
+    const rows: ToolRowView[] = [];
+    let pending: ChatBlock[] = [];
+    const flush = () => {
+      if (pending.length > 0) rows.push(buildThoughtGroupRow(pending, thinkingOptions));
+      pending = [];
+    };
+    for (const entry of entries) {
+      if (entry.kind === 'thinking') {
+        pending.push(entry.block);
+        continue;
+      }
+      flush();
+      rows.push(deriveToolRowView(entry.run, cardOptions));
+    }
+    flush();
+    return rows;
+  }
 
   const thinkingBlocks = entries.flatMap((entry) =>
     entry.kind === 'thinking' ? [entry.block] : []
@@ -1595,6 +1631,7 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
     expandable: showBody,
     body: showBody ? 'thinking' : undefined,
     output: showBody ? block.text : undefined,
+    ...(typeof durationMs === 'number' && !streaming ? { thoughtMs: durationMs } : {}),
   };
 }
 

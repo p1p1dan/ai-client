@@ -39,9 +39,10 @@ export const StepRunDispositionContext = createContext<StepRunDisposition>('clos
  * One block of the terminal style: the bullet column, then the content.
  *
  * `bullet`: `text` is the prose dot in the body ink, a `RunStatus` a step's
- * coloured dot, `null` an empty column so the content still lines up with the
- * text. The dot is a pseudo-element in an `aria-hidden` column, so copying or
- * searching the transcript never picks it up.
+ * coloured dot, `thought` the CLI's dim `∴` before thinking, `null` an empty
+ * column so the content still lines up with the text. The mark is a
+ * pseudo-element in an `aria-hidden` column, so copying or searching the
+ * transcript never picks it up.
  */
 export function TerminalBlock({
   bullet,
@@ -49,7 +50,7 @@ export function TerminalBlock({
   className,
   children,
 }: {
-  bullet: RunStatus | 'text' | null;
+  bullet: RunStatus | 'text' | 'thought' | null;
   /** Keeps the column but draws nothing, e.g. for prose that has not started yet. */
   hideBullet?: boolean;
   className?: string;
@@ -58,7 +59,15 @@ export function TerminalBlock({
   return (
     <div className={cn(terminalBlockClass(), className)} data-slot="terminal-block">
       <span aria-hidden className={terminalGutterClass()}>
-        {bullet === null || bullet === 'text' ? (
+        {bullet === 'thought' ? (
+          <span
+            data-slot="terminal-thought-mark"
+            className={cn(
+              "text-foreground-faint italic before:content-['∴']",
+              hideBullet && 'invisible'
+            )}
+          />
+        ) : bullet === null || bullet === 'text' ? (
           // A blank column still holds a glyph (invisible), so the block's
           // baseline is the first line's in every case.
           <span

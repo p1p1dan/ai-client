@@ -355,6 +355,50 @@ describe('deriveToolGroupRows — runs and one thought entry', () => {
   });
 });
 
+/**
+ * Decision 208 (user ruling 2026-11-03): the timeline draws thinking where it
+ * happened, as the CLI's transcript and the desktop app do — a thought row per
+ * stretch of consecutive thinking, not one per group.
+ */
+describe("[D208-THOUGHTS] deriveToolGroupRows with thoughts: 'inPlace'", () => {
+  const durations: Record<string, number> = { th1: 2_000, th2: 3_000, th3: 4_000 };
+  const entries = [
+    thinkEntry(thinkingBlock('th1', 'first')),
+    runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
+    thinkEntry(thinkingBlock('th2', 'second')),
+    thinkEntry(thinkingBlock('th3', 'third')),
+    runEntry(makeRun('b', 'Bash', { command: 'ls' })),
+  ];
+
+  it('gives each stretch of thinking its own row, in place, with its own time', () => {
+    const rows = deriveToolGroupRows(entries, {
+      thoughts: 'inPlace',
+      thinkingDurationMs: (id) => durations[id],
+    });
+    expect(rows.map((row) => row.key)).toEqual(['th1', 'a', 'th2', 'b']);
+    expect(rows[0]).toMatchObject({ iconKind: 'thinking', output: 'first', thoughtMs: 2_000 });
+    // Two thoughts with nothing between them are one row, their time summed.
+    expect(rows[2]).toMatchObject({ output: 'second\n\nthird', thoughtMs: 7_000 });
+  });
+
+  it('measures nothing it was not told, and nothing while the thought streams', () => {
+    const rows = deriveToolGroupRows(entries, {
+      thoughts: 'inPlace',
+      thinkingDurationMs: (id) => (id === 'th3' ? null : durations[id]),
+      isStreamingBlockId: 'th1',
+    });
+    expect(rows[0].running).toBe(true);
+    expect(rows[0].thoughtMs).toBeUndefined();
+    // One unmeasured block leaves the row's time unknown, never a partial sum.
+    expect(rows[2].thoughtMs).toBeUndefined();
+  });
+
+  it('keeps the default: one thought row per group, at its first thought', () => {
+    const rows = deriveToolGroupRows(entries);
+    expect(rows.map((row) => row.key)).toEqual(['th1', 'a', 'b']);
+  });
+});
+
 // Design system v2 §1 rule 6: same concept, same icon in both engines.
 describe('icon parity between the Claude SDK and DSH tools', () => {
   it.each([

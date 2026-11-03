@@ -69,6 +69,18 @@ const KIND_LABELS: Readonly<Partial<Record<NonNullable<ToolRowView['iconKind']>,
   mcp: 'MCP',
 };
 
+/** The table's name for a tool, `MCP` for a server's tool, or `null` when neither knows it. */
+function knownStepName(toolName: string): string | null {
+  if (Object.hasOwn(STEP_LABELS, toolName)) return STEP_LABELS[toolName] as string;
+  if (toolName.startsWith(MCP_TOOL_PREFIX)) return 'MCP';
+  return null;
+}
+
+/** A tool's step name from its raw name alone (the running turn's live line). */
+export function stepNameOf(toolName: string): string {
+  return knownStepName(toolName) ?? (toolName || 'Tool');
+}
+
 /**
  * The bold word a step leads with. A merged step or a plugin's own title is
  * printed as it is (the title already says what happened); otherwise the
@@ -77,8 +89,8 @@ const KIND_LABELS: Readonly<Partial<Record<NonNullable<ToolRowView['iconKind']>,
 export function stepLabel(view: ToolRowView): string {
   if (view.title !== undefined) return view.title;
   const name = view.toolName ?? '';
-  if (Object.hasOwn(STEP_LABELS, name)) return STEP_LABELS[name] as string;
-  if (name.startsWith(MCP_TOOL_PREFIX)) return 'MCP';
+  const known = knownStepName(name);
+  if (known !== null) return known;
   const byKind = view.iconKind ? KIND_LABELS[view.iconKind] : undefined;
   return byKind ?? (name || 'Tool');
 }

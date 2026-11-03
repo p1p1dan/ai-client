@@ -113,3 +113,42 @@ describe('summarizeStepRun', () => {
     expect(translate('zh', '{{count}} refused', { count: 2 })).toBe('2 条被拒');
   });
 });
+
+/**
+ * Decision 208 (user ruling 2026-11-03): thinking sits in its run, where it
+ * happened. The run says it first, as the CLI's collapsed group does
+ * (「Thought for 4s, read 2 files」); a run of only thinking is the desktop
+ * app's 「思考了 N 秒 ›」.
+ */
+describe('summarizeStepRun with thinking', () => {
+  const thought = (fields: Partial<ToolRowView> = {}) =>
+    row({ verb: 'Thought', iconKind: 'thinking', body: 'thinking', output: '想一想', ...fields });
+
+  it('says the thinking first, and counts no thought as a call', () => {
+    const summary = summarizeStepRun(
+      [thought({ thoughtMs: 3_000 }), bash(), thought({ thoughtMs: 1_000 }), read('a.ts')],
+      zh
+    );
+    expect(summary.text).toBe('思考了 4 秒，运行了 1 条命令，读取了 1 个文件');
+    expect(summary.thoughtOnly).toBeUndefined();
+    expect(summary.single).toBeUndefined();
+  });
+
+  it('leaves unmeasured thinking unsaid beside calls (a reopened turn)', () => {
+    expect(summarizeStepRun([thought(), bash()], zh).text).toBe('运行了 1 条命令');
+  });
+
+  it('a run of only thinking says so, measured or not', () => {
+    const measured = summarizeStepRun([thought({ thoughtMs: 5_000 })], zh);
+    expect(measured.text).toBe('思考了 5 秒');
+    expect(measured.thoughtOnly).toBe(true);
+    expect(summarizeStepRun([thought()], zh).text).toBe('思考');
+    expect(summarizeStepRun([thought()], englishTranslate).text).toBe('Thought');
+  });
+
+  it('a thought still streaming is the run’s running step', () => {
+    const live = thought({ running: true });
+    const summary = summarizeStepRun([read('a.ts'), live], zh);
+    expect(summary.running).toBe(live);
+  });
+});

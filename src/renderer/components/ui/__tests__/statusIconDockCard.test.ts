@@ -61,6 +61,27 @@ describe('StatusIcon', () => {
       expect(running).not.toMatch(/text-(info|status-running)/);
     });
   });
+
+  // Decision 208, second round (user ruling 2026-11-03): the terminal live
+  // line's star, the CLI spinner's glyphs cycling on a pseudo-element.
+  describe('decision 208: the star shape', () => {
+    const star = (status: RunStatus) =>
+      renderToStaticMarkup(h(StatusIcon, { shape: 'star', status }));
+
+    it('running cycles in the brand ink and stops for reduced motion; no glyph of its own', () => {
+      const html = star('running');
+      expect(html).toContain('data-shape="star"');
+      expect(html).toMatch(/before:content-\[(?:'|&#x27;)✻(?:'|&#x27;)\]/);
+      expect(html).toContain('text-primary');
+      expect(html).toContain('before:animate-star');
+      expect(html).toContain('motion-reduce:before:animate-none');
+      expect(html).toMatch(/<span[^>]*><\/span>$/);
+    });
+
+    it('a settled star does not move', () => {
+      expect(star('success')).not.toContain('animate-star');
+    });
+  });
 });
 
 describe('DockCard', () => {

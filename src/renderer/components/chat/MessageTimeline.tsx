@@ -91,6 +91,8 @@ import {
   sessionFailureTitleClass,
   terminalBlockGapClass,
   terminalChatTurnClass,
+  terminalGutterClass,
+  terminalLiveLineClass,
   terminalProseClass,
   terminalReadingColumnSpacingClass,
   turnActionsInnerClass,
@@ -182,15 +184,10 @@ import {
   LEGACY_MIGRATION_PROGRESS_TITLE,
 } from './sessionIndex/legacyMigration';
 import { useResumeSession } from './sessionIndex/useResumeSession';
-import { terminalItemGutter } from './stepPresentation';
+import { stepNameOf, terminalItemGutter } from './stepPresentation';
 import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
-import {
-  ThinkingBody,
-  ToolGroup,
-  ToolRowTimelineContext,
-  useUserDisclosureReport,
-} from './ToolRows';
+import { ToolGroup, ToolRowTimelineContext } from './ToolRows';
 import {
   EnglishToolLabelsContext,
   type StepRunDisposition,
@@ -201,7 +198,12 @@ import {
 import { TurnCeilingNotice } from './TurnCeilingNotice';
 import { TurnChangeCard } from './TurnChangeCard';
 import { TurnEndNotice } from './TurnEndNotice';
-import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
+import {
+  deriveToolGroupRows,
+  formatToolArg,
+  REVIEWING_VERB,
+  type ToolGroupEntry,
+} from './toolCard';
 import { deriveTurnChanges } from './turnChanges';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import { turnEndedByUser } from './turnEndCause';
@@ -226,6 +228,8 @@ import {
 // product decision to reopen, not a gap to close.
 import {
   deriveTurnLivePhase,
+  formatTerminalLiveActivity,
+  formatTerminalLiveTail,
   formatTurnLiveLine,
   type TurnLiveSend,
   turnElapsedText,
@@ -245,7 +249,7 @@ import {
   latestErrorNoticeText,
   type TurnStatus,
 } from './turnStatus';
-import { deriveStepRows, withoutThinking } from './turnSteps';
+import { deriveStepRows } from './turnSteps';
 // T12-b: `deriveTurnStats` / `formatWorkedForRow` / `THOUGHT_VERB` /
 // `turnHasThinkingOnlyProcess` all fed the retired meta row's completed state.
 // chat-tool-07 corrects what this note used to claim: of those four, only
@@ -278,22 +282,17 @@ import { useResolvedSessionModel } from './useResolvedSessionModel';
 import { useTurnTiming } from './useTurnTiming';
 
 /**
- * The base-ui `ScrollArea`'s actual scrollable node is the inner Viewport
- * div (`ui/scroll-area.tsx` tags it `data-slot="scroll-area-viewport"`), not
- * the `ScrollArea` root — that root is a non-scrolling positioning wrapper.
- */
-/** A turn item that is nothing but thinking: drawn as no step. */
-function isThinkingOnlyItem(item: TurnItem): boolean {
-  return item.kind === 'toolGroup' && item.entries.every((entry) => entry.kind === 'thinking');
-}
-
-/**
  * PiLab R1, FR-11.6 (user 2026-10-30): where each session was being read, so a
  * switch away and back returns to it. In memory only (not across restarts); a
  * session that was following its bottom simply opens at the bottom again.
  */
 const sessionScrollMemory = new Map<string, { top: number; following: boolean }>();
 
+/**
+ * The base-ui `ScrollArea`'s actual scrollable node is the inner Viewport
+ * div (`ui/scroll-area.tsx` tags it `data-slot="scroll-area-viewport"`), not
+ * the `ScrollArea` root — that root is a non-scrolling positioning wrapper.
+ */
 function findViewport(root: HTMLDivElement | null): HTMLDivElement | null {
   return root?.querySelector<HTMLDivElement>('[data-slot="scroll-area-viewport"]') ?? null;
 }
@@ -2030,27 +2029,54 @@ function useTurnClockLine({
   zone: TurnWorkZone;
   /** Read only for the live action clause, and only while the clock ticks. */
   items: readonly TurnItem[];
-}): { line: string; spinner: boolean } {
+}): { line: string; spinner: boolean; activity: string; tail: string } {
   const { t } = useI18n();
   const send = useContext(TurnSendContext);
   const liveAction = zone.kind === 'working' ? deriveTurnCurrentAction(items) : null;
-  if (zone.kind !== 'working') return { line: '', spinner: false };
+  if (zone.kind !== 'working') return { line: '', spinner: false, activity: '', tail: '' };
   // S-6 feedback 11c (user, 2026-10-17): verb first, one line (`turnLiveHead.ts`).
   // A clock with no subject reads as a stopwatch, so when nothing more specific is
   // known the line still says 「工作中」.
   const live = deriveTurnLivePhase({ send, items, action: liveAction });
+  // Decision 208, terminal style: the running step in its own words — what its
+  // parentheses say — and the review word while the safety review judges it.
+  const stepWords =
+    live.kind !== 'tool' || !liveAction
+      ? null
+      : liveAction.verb === REVIEWING_VERB
+        ? t(REVIEWING_VERB)
+        : (formatToolArg(liveAction.run, { t }) ?? stepNameOf(liveAction.run.toolName));
   return {
     line:
       live.kind === 'working'
         ? `✻ ${workingHeadText(t, zone.elapsed)}`
         : formatTurnLiveLine(t, live, zone.elapsed),
     spinner: true,
+    activity: formatTerminalLiveActivity(t, live, stepWords),
+    tail: formatTerminalLiveTail(t, zone.elapsed),
   };
 }
 
 /** The running turn's foot line (PiLab R1); `useTurnClockLine` words it. */
 function TurnClockRow({ zone, items }: { zone: TurnWorkZone; items: readonly TurnItem[] }) {
-  const { line, spinner } = useTurnClockLine({ zone, items });
+  const { line, spinner, activity, tail } = useTurnClockLine({ zone, items });
+  const terminal = useContext(TranscriptStyleContext) === 'terminal';
+  if (terminal) {
+    // Decision 208 (user ruling 2026-11-03, the comparison mockup's ①):
+    // 「✻ 跑测试… (12 秒 · esc 中断)」 — the CLI's star in the bullet column, what
+    // the turn is doing, how long, and how to stop it (Esc in the composer).
+    return (
+      <div data-slot="turn-live-line" className={terminalLiveLineClass()}>
+        <span aria-hidden className={terminalGutterClass()}>
+          <StatusIcon status="running" shape="star" />
+        </span>
+        <span className="min-w-0 truncate" title={activity}>
+          {activity}
+        </span>
+        <span className="shrink-0 whitespace-pre text-foreground-faint"> {tail}</span>
+      </div>
+    );
+  }
   return (
     <div data-slot="turn-live-line" className={turnClockRowClass()}>
       {spinner && <StatusIcon status="running" />}
@@ -2083,12 +2109,8 @@ function TurnClockRow({ zone, items }: { zone: TurnWorkZone; items: readonly Tur
  * It does not decide whether it renders: `deriveTurnWorkZone` returns `null`
  * for a settled turn that replayed no timing, and the caller drops the row.
  */
-function TurnWorkZoneRow({ zone, thinkingText }: { zone: TurnWorkZone; thinkingText: string }) {
+function TurnWorkZoneRow({ zone }: { zone: TurnWorkZone }) {
   const { t } = useI18n();
-  const [thinkingOpen, setThinkingOpen] = useState(false);
-  // A disclosure like any row: opening it at the bottom of the timeline pauses
-  // following (C3), so the thinking the reader asked for is not scrolled away.
-  const markUserToggle = useUserDisclosureReport(thinkingOpen);
 
   // Decision 034: the RUNNING state is not drawn here; `TurnClockRow` is the
   // live line, at the turn's foot (PiLab R1, 2026-10-30).
@@ -2096,8 +2118,9 @@ function TurnWorkZoneRow({ zone, thinkingText }: { zone: TurnWorkZone; thinkingT
 
   // PiLab R1 (user ruling 2026-10-30, preview `2026-10-30-turn-display-
   // claude-code-preview.html`): the turn's bill — when it ended, how long it
-  // took, how many calls, and 「思考 N 秒」, which opens the thinking text
-  // (thinking is no longer a row of its own).
+  // took, how many calls, and 「思考 N 秒」. Decision 208 (user ruling
+  // 2026-11-03): that last figure is a total and opens nothing; each thought
+  // is read where it happened, as the CLI and the desktop app draw thinking.
   const tookClause = (() => {
     const took = turnElapsedText(t, zone.worked);
     return took ? t('Took {{duration}}', { duration: took }) : null;
@@ -2113,46 +2136,21 @@ function TurnWorkZoneRow({ zone, thinkingText }: { zone: TurnWorkZone; thinkingT
           count: zone.toolCalls,
         }),
   ].filter((clause): clause is string => !!clause);
-  const hasThinkingText = thinkingText.trim().length > 0;
-  // A reopened turn has the text but no measured time: it still opens, as 「思考」.
-  const thinkingClause =
-    formatThinkingClause(zone.thinkingMs, t) ?? (hasThinkingText ? t('Thought') : null);
-  const canOpenThinking = thinkingClause !== null && hasThinkingText;
+  // Unmeasured (a reopened turn) is omitted, never printed as a guess.
+  const thinkingClause = formatThinkingClause(zone.thinkingMs, t);
   if (head.length === 0 && !thinkingClause) return null;
 
   const line = head.length ? joinTurnProgressLine(`✻ ${head[0]}`, head.slice(1)) : '✻';
   return (
-    <div className="flex min-w-0 flex-col">
-      <div data-slot="turn-bill" className={turnWorkZoneClass()}>
-        <span className="min-w-0 truncate" title={line}>
-          {line}
+    <div data-slot="turn-bill" className={turnWorkZoneClass()}>
+      <span className="min-w-0 truncate" title={line}>
+        {line}
+      </span>
+      {thinkingClause && (
+        <span className="shrink-0">
+          {head.length ? ' · ' : ''}
+          {thinkingClause}
         </span>
-        {thinkingClause &&
-          (canOpenThinking ? (
-            <button
-              type="button"
-              data-slot="turn-thinking-toggle"
-              aria-expanded={thinkingOpen}
-              className="shrink-0 rounded-xs underline decoration-dotted underline-offset-2 hover:text-foreground focus-ring"
-              onClick={() => {
-                markUserToggle();
-                setThinkingOpen((open) => !open);
-              }}
-            >
-              {head.length ? ' · ' : ''}
-              {thinkingClause}
-            </button>
-          ) : (
-            <span className="shrink-0">
-              {head.length ? ' · ' : ''}
-              {thinkingClause}
-            </span>
-          ))}
-      </div>
-      {thinkingOpen && canOpenThinking && (
-        <div data-slot="turn-thinking-panel">
-          <ThinkingBody text={thinkingText} />
-        </div>
       )}
     </div>
   );
@@ -2722,18 +2720,6 @@ const ChatTurn = memo(function ChatTurn({
   // clock, so this is a per-tick value by definition and a `useMemo` keyed on
   // the tick would only add a comparison.
   const turnThinkingMs = sumTurnThinkingMs(thinkingSpans, { nowMs, live: !processSettled });
-  // PiLab R1: the turn's thinking, opened from the footer's 「思考 N 秒」.
-  const turnThinkingText = useMemo(
-    () =>
-      thinkingEnabled
-        ? turn.body
-            .flatMap((message) => message.blocks)
-            .filter((block) => block.type === 'thinking' && (block.text ?? '').trim())
-            .map((block) => block.text ?? '')
-            .join('\n\n')
-        : '',
-    [turn.body, thinkingEnabled]
-  );
   // `turnElapsedMs === null` is what says no clock exists — a session that was
   // already running when this window opened replays no origin, and the row must
   // not report that as 「工作中 0 秒」. Gated on `turnRunning` rather than
@@ -2898,12 +2884,9 @@ const ChatTurn = memo(function ChatTurn({
         {workSections.map((section, sectionIndex) => {
           if (section.kind !== 'processGroup') return renderSegment(section.segment);
           // PiLab R1 (user ruling 2026-10-30): the turn reads as steps, every
-          // process group drawn in place. Thinking is no row: a group of only
-          // thinking draws nothing (its words are in the footer's 「思考 N 秒」).
-          const visibleSegments = section.segments.filter(
-            (segment) => !segment.items.every(isThinkingOnlyItem)
-          );
-          if (visibleSegments.length === 0) return null;
+          // process group drawn in place. Decision 208 (user ruling
+          // 2026-11-03): thinking too, where it happened — a group of only
+          // thinking is its `∴` line, or the desktop style's 「思考了 N 秒 ›」.
           // Decision 208, desktop style: how this section's runs start. An
           // unanswered card pins them open (the T107 red line).
           const disposition: StepRunDisposition = turnWorkGroupAwaitsUser(section.segments)
@@ -2916,7 +2899,7 @@ const ChatTurn = memo(function ChatTurn({
               key={turnItemKey(section.segments[0].items[0])}
               value={disposition}
             >
-              {visibleSegments.map(renderSegment)}
+              {section.segments.map(renderSegment)}
             </StepRunDispositionContext.Provider>
           );
         })}
@@ -2934,7 +2917,7 @@ const ChatTurn = memo(function ChatTurn({
         {/* PiLab R1: the live line sits at the turn's foot while it runs (as
             Claude Code's spinner line does), the bill once it ends. */}
         {workZone.kind === 'working' && <TurnClockRow zone={workZone} items={items} />}
-        <TurnWorkZoneRow zone={workZone} thinkingText={turnThinkingText} />
+        <TurnWorkZoneRow zone={workZone} />
         {showLiveEnd && liveEnd && (
           <TurnEndNotice turnEnd={liveEnd} afterWork={liveEndAfterWork} live />
         )}
@@ -3471,19 +3454,24 @@ const ToolGroupItem = memo(function ToolGroupItem({
   getToolStartedAtMs: (toolCallId: string) => number | null | undefined;
 }) {
   const { t } = useI18n();
-  // PiLab R1: steps — thinking leaves the list, adjacent lookups merge, and a
-  // call that produced something gets its result line (`turnSteps.ts`).
+  const terminal = useContext(TranscriptStyleContext) === 'terminal';
+  // PiLab R1: steps — lookups merge, and a call that produced something gets
+  // its result line (`turnSteps.ts`). Decision 208 (user ruling 2026-11-03):
+  // thinking stays where it happened, and the terminal style merges only
+  // adjacent calls, as the CLI does.
   const rows = useMemo(
     () =>
       deriveStepRows(
-        deriveToolGroupRows(withoutThinking(filterThinkingEntries(item.entries, thinkingEnabled)), {
+        deriveToolGroupRows(filterThinkingEntries(item.entries, thinkingEnabled), {
           repoName,
           thinkingDurationMs: getThinkingDurationMs,
           isStreamingBlockId: streamingBlockId,
           toolStartedAtMs: getToolStartedAtMs,
           t,
+          thoughts: 'inPlace',
         }),
-        t
+        t,
+        { merge: terminal ? 'adjacent' : 'stretch' }
       ),
     [
       item.entries,
@@ -3493,6 +3481,7 @@ const ToolGroupItem = memo(function ToolGroupItem({
       streamingBlockId,
       getToolStartedAtMs,
       t,
+      terminal,
     ]
   );
   return <ToolGroup rows={rows} sessionId={sessionId} showDiff={false} />;

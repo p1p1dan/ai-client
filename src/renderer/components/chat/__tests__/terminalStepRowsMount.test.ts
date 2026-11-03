@@ -158,3 +158,62 @@ describe('decision 208: terminal style steps', () => {
     }
   });
 });
+
+/**
+ * Decision 208 (user ruling 2026-11-03): thinking is drawn where it happened —
+ * a dim `∴` line that opens to the text — and a path reads as written.
+ */
+describe('decision 208: terminal style thinking and paths', () => {
+  async function renderEntries() {
+    const blocks: ChatBlock[] = [
+      call('r1', 'Read', { file_path: 'F:/repo/src/app/main.ts' }),
+      { id: 'r1-r', type: 'tool_result', toolCallId: 'r1', toolOk: true, toolOutput: 'x' },
+    ];
+    const entries = [
+      {
+        kind: 'thinking' as const,
+        block: { id: 'th1', type: 'thinking' as const, text: '先看入口文件' },
+        blockIndex: 0,
+      },
+      ...pairToolBlocks(blocks).map((run) => ({ kind: 'run' as const, run })),
+    ];
+    const rows = deriveStepRows(
+      deriveToolGroupRows(entries, {
+        t: zh,
+        thoughts: 'inPlace',
+        thinkingDurationMs: () => 12_000,
+      }),
+      zh,
+      { merge: 'adjacent' }
+    );
+    await act(async () =>
+      root.render(
+        createElement(
+          TranscriptStyleContext.Provider,
+          { value: 'terminal' },
+          createElement(ToolGroup, { rows, sessionId: 's' })
+        )
+      )
+    );
+    return [...container.querySelectorAll<HTMLElement>('[data-slot="terminal-block"]')];
+  }
+
+  it('a thought is a dim ∴ line where it happened, closed until clicked', async () => {
+    const [thought, read] = await renderEntries();
+    expect(thought.querySelector('[data-slot="terminal-thought-mark"]')).not.toBeNull();
+    expect(thought.querySelector('[data-shape="bullet"]')).toBeNull();
+    expect(thought.textContent).toContain(zh('Thought for {{duration}}', { duration: '12 秒' }));
+    expect(container.textContent).not.toContain('先看入口文件');
+    // The step after it keeps its bullet.
+    expect(read.querySelector('[data-shape="bullet"]')).not.toBeNull();
+    const trigger = thought.querySelector<HTMLElement>('[data-slot="collapsible-trigger"]');
+    await act(async () => trigger?.click());
+    expect(container.textContent).toContain('先看入口文件');
+  });
+
+  it('a path reads as written, not name first', async () => {
+    const [, read] = await renderEntries();
+    expect(read.textContent).toContain('Read(app/main.ts)');
+    expect(read.textContent).not.toContain('main.ts app/');
+  });
+});

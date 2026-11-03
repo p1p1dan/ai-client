@@ -856,6 +856,24 @@ export function terminalStepStackClass(): string {
 }
 
 /**
+ * Terminal style thinking, `∴ 思考了 12 秒` (user ruling 2026-11-03): one dim
+ * line where the thinking happened, as the CLI's transcript draws it; the whole
+ * line opens to the text.
+ */
+export function terminalThoughtLineClass(): string {
+  return `block w-full rounded-xs text-left font-mono text-chat-body ${CHAT_PROSE_LEADING} italic text-foreground-faint hover:bg-fill-ghost-hover hover:text-muted-foreground focus-ring`;
+}
+
+/**
+ * Terminal style: the running turn's foot line, 「✻ 跑测试… (12 秒 · esc 中断)」,
+ * as the comparison mockup's ① draws it — the star column, then what the turn
+ * is doing in the brand ink (the 「思考中」 hint, design system v2 §1 rule 7).
+ */
+export function terminalLiveLineClass(): string {
+  return `flex min-w-0 items-baseline font-mono text-chat-body ${CHAT_PROSE_LEADING} text-primary`;
+}
+
+/**
  * Desktop style: a run's one line. Muted ink at the process size, regular
  * weight, never pinned; `list-none` because it is a `<summary>`.
  */

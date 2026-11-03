@@ -73,6 +73,7 @@ import {
   terminalStepLabelClass,
   terminalStepLineClass,
   terminalStepStackClass,
+  terminalThoughtLineClass,
   thoughtBodyMaxHeightClass,
   toolRowIconClass,
   turnProcessToneClass,
@@ -137,7 +138,7 @@ import { buildDiffView, diffHasLineNumbers, splitDiffItems } from './toolDiffVie
 import { stoppedToolOutput } from './toolLiveOutputModel';
 import { kilobytesLabel } from './toolOutputHead';
 import { turnWorkGroupOpen } from './turnProcessFold';
-import type { StepResultLine, StepRowView } from './turnSteps';
+import { isThoughtRow, type StepResultLine, type StepRowView, thoughtWords } from './turnSteps';
 import { formatWorkedForDuration } from './turnTiming';
 
 /**
@@ -196,7 +197,9 @@ export function ToolGroup({ rows, onOpenFile, sessionId, showDiff }: ToolGroupPr
     body = (
       <div className={terminalStepStackClass()}>
         {rows.map((row) =>
-          isSpecialStepRow(row) ? (
+          isThoughtRow(row) ? (
+            <TerminalThoughtRow key={row.key} view={row} sessionId={sessionId} />
+          ) : isSpecialStepRow(row) ? (
             // Findings, a delegation's lane, a todo list: their own drawing, in
             // the text column, with no bullet.
             <TerminalBlock key={row.key} bullet={null}>
@@ -669,7 +672,14 @@ function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps)
               className={terminalStepArgClass()}
             />
           ) : (
-            <ToolRowArg view={view} onOpenFile={onOpenFile} className={terminalStepArgClass()} />
+            // User ruling 2026-11-03: the path as written, `Write(src/a.ts)`,
+            // as the CLI prints it — not today's name-first reordering.
+            <ToolRowArg
+              view={view}
+              onOpenFile={onOpenFile}
+              className={terminalStepArgClass()}
+              asWritten
+            />
           )}
           )
         </>
@@ -731,6 +741,33 @@ function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps)
         </div>
       ) : (
         body
+      )}
+    </TerminalBlock>
+  );
+}
+
+/**
+ * Decision 208 (user ruling 2026-11-03): thinking where it happened, as the
+ * CLI's transcript draws it — a dim `∴` and 「思考了 12 秒」 (「思考中…」 while
+ * it streams). The whole line opens to the text; it starts closed, as every
+ * thought has since 2026-09-23.
+ */
+function TerminalThoughtRow({ view, sessionId }: { view: ToolRowView; sessionId?: string }) {
+  const { t } = useI18n();
+  const words = thoughtWords(view, t);
+  return (
+    <TerminalBlock bullet="thought">
+      {view.expandable ? (
+        <ToolRowCollapsible
+          key={view.running ? 'live' : 'settled'}
+          view={view}
+          rowClass={terminalThoughtLineClass()}
+          sessionId={sessionId}
+        >
+          {words}
+        </ToolRowCollapsible>
+      ) : (
+        <div className={terminalThoughtLineClass()}>{words}</div>
       )}
     </TerminalBlock>
   );
@@ -900,12 +937,27 @@ function DesktopStepRun({
       ? summary.running.toolCallId
       : null;
 
+  // Decision 208 (user ruling 2026-11-03): a run of nothing but thinking is the
+  // desktop app's 「思考了 N 秒 ›」, and it opens to the text itself.
+  const thoughtText = summary.thoughtOnly
+    ? run.rows
+        .map((row) => row.output ?? '')
+        .filter((text) => text.trim())
+        .join('\n\n')
+    : '';
+
   let label: ReactNode;
   if (summary.running) {
     label = (
       <span className="min-w-0 truncate text-shimmer">
-        {stepLabel(summary.running)}
-        {summary.running.arg ? ` ${summary.running.arg}` : ''}
+        {isThoughtRow(summary.running) ? (
+          `${t('Thinking')}…`
+        ) : (
+          <>
+            {stepLabel(summary.running)}
+            {summary.running.arg ? ` ${summary.running.arg}` : ''}
+          </>
+        )}
       </span>
     );
   } else if (summary.single) {
@@ -919,6 +971,15 @@ function DesktopStepRun({
     );
   } else {
     label = <span className="min-w-0 truncate">{summary.text}</span>;
+  }
+
+  // Thinking with no text to show (an empty block) has nothing to open.
+  if (summary.thoughtOnly && !thoughtText) {
+    return (
+      <div data-slot="step-run" data-run-key={run.key} className={stepRunSummaryClass()}>
+        {label}
+      </div>
+    );
   }
 
   const details = (
@@ -966,10 +1027,14 @@ function DesktopStepRun({
         />
       </summary>
       <div className={stepRunPanelClass()}>
-        {/* Today's rows inside: the provider resets the style for them. */}
-        <TranscriptStyleContext.Provider value={null}>
-          <ToolGroup rows={run.rows} onOpenFile={onOpenFile} sessionId={sessionId} />
-        </TranscriptStyleContext.Provider>
+        {summary.thoughtOnly ? (
+          <ThinkingBody text={thoughtText} />
+        ) : (
+          // Today's rows inside: the provider resets the style for them.
+          <TranscriptStyleContext.Provider value={null}>
+            <ToolGroup rows={run.rows} onOpenFile={onOpenFile} sessionId={sessionId} />
+          </TranscriptStyleContext.Provider>
+        )}
       </div>
     </details>
   );
@@ -1475,14 +1540,18 @@ function ToolRowArg({
   view,
   onOpenFile,
   className,
+  asWritten = false,
 }: {
   view: ToolRowView;
   onOpenFile?: (target: FileLinkTarget) => void;
   /** Replaces the row's own argument class (the terminal style's, decision 208). */
   className?: string;
+  /** Decision 208, terminal style: a path reads as written, never name first. */
+  asWritten?: boolean;
 }) {
   if (!view.arg) return null;
   const argClass = className ?? toolRowArgClass(view);
+  const pattern = asWritten || view.argPattern;
 
   if (view.link) {
     const link = view.link;
@@ -1501,7 +1570,7 @@ function ToolRowArg({
           (onOpenFile ?? ((target: FileLinkTarget) => openFileTarget(target, 'tool-row')))(link);
         }}
       >
-        <ArgText arg={view.arg} pattern={view.argPattern} />
+        <ArgText arg={view.arg} pattern={pattern} />
       </button>
     );
   }
@@ -1520,7 +1589,7 @@ function ToolRowArg({
         }
       >
         <span className={argClass}>
-          <ArgText arg={view.arg} pattern={view.argPattern} />
+          <ArgText arg={view.arg} pattern={pattern} />
         </span>
       </HitListPopover>
     );

@@ -72,16 +72,21 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function renderSession(style: 'terminal' | 'desktop', extra: Partial<ChatMessage> = {}) {
+async function renderSession(
+  style: 'terminal' | 'desktop',
+  extra: Partial<ChatMessage> = {},
+  options: { blocks?: Blocks; running?: boolean } = {}
+) {
   settings.state.chatTranscriptStyle = style;
+  const status = options.running ? 'running' : 'idle';
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   useToolExpansionStore.setState({ bySession: {} });
   useChatSessionsStore.setState({
     activeSessionId: 's',
-    sessions: [
-      { id: 's', title: 's', projectId: 'p', workspaceId: 'w', status: 'idle', updatedAt: 0 },
-    ],
-    messages: { s: [user('u1', 'Which branches can go?'), assistant('a1', TURN, extra)] },
+    sessions: [{ id: 's', title: 's', projectId: 'p', workspaceId: 'w', status, updatedAt: 0 }],
+    messages: {
+      s: [user('u1', 'Which branches can go?'), assistant('a1', options.blocks ?? TURN, extra)],
+    },
     lastError: null,
     pendingPermissions: [],
     pendingQuestions: [],
@@ -96,7 +101,7 @@ async function renderSession(style: 'terminal' | 'desktop', extra: Partial<ChatM
         createElement(
           QueryClientProvider,
           { client },
-          createElement(MessageTimeline, { sessionId: 's', status: 'idle', thinkingEnabled: true })
+          createElement(MessageTimeline, { sessionId: 's', status, thinkingEnabled: true })
         )
       )
     );
@@ -162,5 +167,86 @@ describe('decision 208: the transcript style setting', () => {
   it('an unknown stored value draws the terminal style', async () => {
     const { turn } = await renderSession('classic' as never);
     expect(turn().querySelector('[data-slot="terminal-block"]')).not.toBeNull();
+  });
+});
+
+/**
+ * Decision 208, second round (user ruling 2026-11-03): the terminal style's
+ * live line names the running step, its reads merge only when adjacent, and
+ * thinking in both styles is drawn where it happened.
+ */
+describe('decision 208: aligned with the comparison mockup', () => {
+  const read = (id: string, path: string): Blocks => [
+    {
+      id,
+      type: 'tool_call',
+      toolCallId: id,
+      toolName: 'Read',
+      toolInput: { file_path: path },
+    },
+    { id: `${id}:r`, type: 'tool_result', toolCallId: id, toolOk: true, toolOutput: 'x' },
+  ];
+  const LOOKS: Blocks = [
+    { id: 'th', type: 'thinking', text: 'Which file holds the list?' },
+    ...read('r1', '/repo/a.ts'),
+    ...call('c1', 'List branches'),
+    ...read('r2', '/repo/b.ts'),
+    { id: 'tx', type: 'text', text: 'Done.' },
+  ];
+
+  it('terminal: the running step names itself on the live line, with how to stop it', async () => {
+    const running: Blocks = [
+      {
+        id: 'c9',
+        type: 'tool_call',
+        toolCallId: 'c9',
+        toolName: 'Bash',
+        toolInput: { command: 'pnpm test', description: 'Run the tests' },
+      },
+    ];
+    const { turn } = await renderSession('terminal', {}, { blocks: running, running: true });
+    const line = turn().querySelector('[data-slot="turn-live-line"]');
+    expect(line?.textContent).toContain('Run the tests…');
+    expect(line?.textContent).toContain('esc to interrupt');
+    expect(line?.querySelector('[data-shape="star"][data-status="running"]')).not.toBeNull();
+  });
+
+  it('desktop: the live line keeps its words', async () => {
+    const running: Blocks = [
+      {
+        id: 'c9',
+        type: 'tool_call',
+        toolCallId: 'c9',
+        toolName: 'Bash',
+        toolInput: { command: 'pnpm test', description: 'Run the tests' },
+      },
+    ];
+    const { turn } = await renderSession('desktop', {}, { blocks: running, running: true });
+    const line = turn().querySelector('[data-slot="turn-live-line"]');
+    expect(line?.textContent).not.toContain('esc to interrupt');
+    expect(line?.querySelector('[data-shape="star"]')).toBeNull();
+  });
+
+  it('terminal: reads apart are steps apart, and the thinking is a ∴ line before them', async () => {
+    const { turn } = await renderSession('terminal', {}, { blocks: LOOKS });
+    const blocks = [...turn().querySelectorAll<HTMLElement>('[data-slot="terminal-block"]')];
+    const words = blocks.map((block) => block.textContent ?? '');
+    // ∴ thought, Read, Bash, Read, the reply.
+    expect(blocks[0]?.querySelector('[data-slot="terminal-thought-mark"]')).not.toBeNull();
+    expect(words[1]).toContain('Read(repo/a.ts)');
+    expect(words[2]).toContain('Bash(List branches)');
+    expect(words[3]).toContain('Read(repo/b.ts)');
+    expect(words[4]).toContain('Done.');
+    expect(turn().querySelector('[data-slot="turn-thinking-toggle"]')).toBeNull();
+  });
+
+  it('desktop: the stretch is one run that says its thinking first', async () => {
+    const { turn } = await renderSession('desktop', {}, { blocks: LOOKS });
+    const runs = turn().querySelectorAll('details[data-slot="step-run"]');
+    expect(runs).toHaveLength(1);
+    // Unmeasured here (no thinking events), so the thinking goes unsaid on the
+    // line and sits inside, in place.
+    expect(runs[0]?.querySelector('summary')?.textContent).toContain('Ran 1 command, read 2 files');
+    expect(runs[0]?.textContent).toContain('Thought');
   });
 });

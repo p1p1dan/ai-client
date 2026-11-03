@@ -192,6 +192,8 @@
   --animate-breathe: breathe 2.4s ease-in-out infinite;
   /* Decision 208: the terminal transcript's running bullet, on and off as the CLI's is. */
   --animate-blink: blink 1.2s steps(1) infinite;
+  /* Decision 208: the terminal live line's star, cycling the CLI spinner's glyphs. */
+  --animate-star: star 1.2s steps(1) infinite;
 
   @keyframes blink {
     0%, 49% {
@@ -199,6 +201,27 @@
     }
     50%, 100% {
       opacity: 0.2;
+    }
+  }
+
+  @keyframes star {
+    0% {
+      content: "·";
+    }
+    10%, 90% {
+      content: "✢";
+    }
+    20%, 80% {
+      content: "✳";
+    }
+    30%, 70% {
+      content: "✶";
+    }
+    40%, 60% {
+      content: "✻";
+    }
+    50% {
+      content: "✽";
     }
   }
 

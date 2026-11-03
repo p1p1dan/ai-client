@@ -146,3 +146,60 @@ describe('decision 208: desktop style runs', () => {
     expect(first.open).toBe(false);
   });
 });
+
+/**
+ * Decision 208 (user ruling 2026-11-03): thinking sits in its run, where it
+ * happened — said first on the run's line, as the CLI's collapsed group says
+ * it, and a stretch of only thinking is the desktop app's 「思考了 N 秒 ›」,
+ * opening straight to the text.
+ */
+describe('decision 208: desktop style thinking', () => {
+  async function renderThinking(withCall: boolean) {
+    const entries = [
+      {
+        kind: 'thinking' as const,
+        block: { id: 'th1', type: 'thinking' as const, text: '先确认分支' },
+        blockIndex: 0,
+      },
+      ...(withCall
+        ? pairToolBlocks([
+            call('b1', 'Bash', { command: 'git status', description: '查看改动' }),
+            done('b1'),
+          ]).map((run) => ({ kind: 'run' as const, run }))
+        : []),
+    ];
+    const rows = deriveStepRows(
+      deriveToolGroupRows(entries, { t: zh, thoughts: 'inPlace', thinkingDurationMs: () => 5_000 }),
+      zh
+    );
+    await act(async () =>
+      root.render(
+        createElement(
+          TranscriptStyleContext.Provider,
+          { value: 'desktop' },
+          createElement(ToolGroup, { rows, sessionId: 's' })
+        )
+      )
+    );
+    const runs = [
+      ...container.querySelectorAll<HTMLDetailsElement>('details[data-slot="step-run"]'),
+    ];
+    expect(runs).toHaveLength(1);
+    return runs[0] as HTMLDetailsElement;
+  }
+
+  it('a run says its thinking first, and opens to the thought in place', async () => {
+    const run = await renderThinking(true);
+    expect(run.querySelector('summary')?.textContent).toContain('思考了 5 秒，运行了 1 条命令');
+    expect(run.open).toBe(false);
+  });
+
+  it('a stretch of only thinking is 「思考了 N 秒 ›」 and opens to the text itself', async () => {
+    const run = await renderThinking(false);
+    expect(run.querySelector('summary')?.textContent).toContain('思考了 5 秒');
+    const body = run.querySelector('[data-slot="thinking-text"]');
+    expect(body?.textContent).toContain('先确认分支');
+    // No row inside to open a second time.
+    expect(run.querySelector('[data-slot="collapsible-trigger"]')).toBeNull();
+  });
+});

@@ -758,8 +758,12 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('liveTurnEnd(turn.body, turn.user)');
     expectUnwired('interruptedWithoutAnswer');
     // Every process segment renders unconditionally, and the turn carries no
-    // collapse component (Base UI's panel clips: `overflow-hidden`).
-    expect(turn).toContain('{visibleSegments.map(renderSegment)}');
+    // collapse component (Base UI's panel clips: `overflow-hidden`). Decision
+    // 208 (user ruling 2026-11-03): a segment of only thinking is drawn too —
+    // the filter that hid it is gone with the footer's thinking toggle.
+    expect(turn).toContain('{section.segments.map(renderSegment)}');
+    expectUnwired('visibleSegments');
+    expectUnwired('isThinkingOnlyItem');
     expect(turn).not.toContain('<Collapsible');
     expectUnwired('TurnProgressHead');
     expect(turn, 'the predicate lives in turnProcessFold.ts, not inlined here').not.toContain(
@@ -1299,7 +1303,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectUnwired('turnFinalAnswerDividerClass');
     expectUnwired("t('Final output')");
     expectUnwired('TurnProgressHead');
-    expect(body).toContain('{visibleSegments.map(renderSegment)}');
+    expect(body).toContain('{section.segments.map(renderSegment)}');
     expect(body).not.toContain('renderGroupSegment');
     expect(body).not.toContain('collapsible=');
     expect(body).not.toContain('workGroup.finalAnswer');
@@ -1459,8 +1463,13 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // on this row in ANY case — not as a fallback, not behind a flag.
     expect(row).not.toContain('workedHeadText');
     expect(row).not.toContain('workingHeadText');
-    // The row takes the zone, plus the thinking text its 「思考」 opens.
-    expect(turn).toContain('<TurnWorkZoneRow zone={workZone} thinkingText={turnThinkingText} />');
+    // Decision 208 (user ruling 2026-11-03): the row takes the zone alone. Its
+    // 「思考 N 秒」 is a total and opens nothing — each thought is read where it
+    // happened, as neither the CLI nor the desktop app gathers them at the end.
+    expect(turn).toContain('<TurnWorkZoneRow zone={workZone} />');
+    expect(row).not.toContain('ThinkingBody');
+    expect(row).not.toContain('turn-thinking-toggle');
+    expectUnwired('turnThinkingText');
     // Still no narration down here.
     expect(row).not.toContain('deriveTurnCurrentAction');
 

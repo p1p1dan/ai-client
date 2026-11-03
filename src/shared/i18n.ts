@@ -5250,4 +5250,8 @@ Object.assign(zhTranslations, {
   'called {{count}} {{noun}}': '调用了 {{count}} {{noun}}',
   '{{count}} refused': '{{count}} 条被拒',
   '{{count}} failed': '{{count}} 条失败',
+  // Decision 208 (user ruling 2026-11-03): thinking where it happened, and the
+  // terminal style's live line.
+  'Thought for {{duration}}': '思考了 {{duration}}',
+  'esc to interrupt': 'esc 中断',
 });

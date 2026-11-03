@@ -277,4 +277,12 @@ describe('decision 208: transcript style tokens', () => {
     expect(shimmer).toMatch(/prefers-reduced-motion: reduce[\s\S]*?animation: none;/);
     expect(source).toMatch(/@keyframes shimmer \{/);
   });
+
+  it('the live line star steps through the CLI spinner glyphs and back', () => {
+    expect(themeBlock).toContain('--animate-star: star 1.2s steps(1) infinite;');
+    const keyframes = themeBlock.slice(themeBlock.indexOf('@keyframes star {'));
+    for (const glyph of ['·', '✢', '✳', '✶', '✻', '✽']) {
+      expect(keyframes).toContain(`content: "${glyph}";`);
+    }
+  });
 });

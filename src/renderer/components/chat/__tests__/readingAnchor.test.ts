@@ -86,5 +86,6 @@ describe('[PILAB-R1-11.4 / 02.6] inner scroll boxes and reduced motion', () => {
   it('decision 208: the blinking bullet and the shimmer stop for reduced motion', () => {
     const statusIcon = read(path.join('..', 'ui', 'status-icon.tsx'));
     expect(statusIcon).toContain('animate-blink motion-reduce:animate-none');
+    expect(statusIcon).toContain('before:animate-star motion-reduce:before:animate-none');
   });
 });
