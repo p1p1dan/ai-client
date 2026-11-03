@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createLegacyHistoryEvents,
-  pilabReplayScenarios,
-} from './fixtures/pilabExperience';
+import { createLegacyHistoryEvents, pilabReplayScenarios } from './fixtures/pilabExperience';
 
 const scenario = (id: string) => {
   const found = pilabReplayScenarios.find((item) => item.id === id);
@@ -13,7 +10,14 @@ const scenario = (id: string) => {
 describe('PiLab experience replay fixtures', () => {
   it('provides all F01-F08 scenarios with deterministic, session-scoped event identities', () => {
     expect(pilabReplayScenarios.map((item) => item.id)).toEqual([
-      'F01', 'F02', 'F03', 'F04', 'F05', 'F06', 'F07', 'F08',
+      'F01',
+      'F02',
+      'F03',
+      'F04',
+      'F05',
+      'F06',
+      'F07',
+      'F08',
     ]);
     for (const item of pilabReplayScenarios) {
       const first = item.createEvents();
@@ -46,13 +50,16 @@ describe('PiLab experience replay fixtures', () => {
 
   it('F04 separates legal equal deltas from equal commands with different call ids', () => {
     const events = scenario('F04').createEvents();
-    const deltas = events.filter((event) => event.type === 'message.delta' && event.payload.text === '好');
+    const deltas = events.filter(
+      (event) => event.type === 'message.delta' && event.payload.text === '好'
+    );
     expect(deltas).toHaveLength(2);
     expect(deltas[0].seq).not.toBe(deltas[1].seq);
     const calls = events.filter((event) => event.type === 'tool.started');
     expect(calls.map((event) => event.payload.toolCallId)).toEqual(['repeat-1', 'repeat-2']);
     expect(calls.map((event) => event.payload.input)).toEqual([
-      { command: 'pnpm test' }, { command: 'pnpm test' },
+      { command: 'pnpm test' },
+      { command: 'pnpm test' },
     ]);
   });
 
