@@ -365,8 +365,8 @@ describe('turn spacing arithmetic (F-B9)', () => {
     expect(layout.terminalThoughtLineClass()).toContain('text-foreground-faint');
     // The prose sets no ink of its own: it keeps the body ink.
     expect(terminalProseClass()).not.toMatch(/(^| )text-(foreground|muted)/);
-    // User, 2026-11-03: the tool's name is not bold.
-    expect(layout.terminalStepLabelClass()).not.toMatch(/font-(semibold|bold|medium)/);
+    // User, 2026-11-03: the tool's name is bold again, now in the sans.
+    expect(layout.terminalStepLabelClass()).toContain('font-semibold');
   });
 
   /**

@@ -842,11 +842,12 @@ export function terminalStepLineClass(): string {
 }
 
 /**
- * The tool's name on a step line: the secondary ink, one rung above the line,
- * at the regular weight (user, 2026-11-03: no bold); the body ink on hover.
+ * The tool's name on a step line: bold, in the secondary ink one rung above
+ * the line; the body ink on hover. User, 2026-11-03: the bold went while the
+ * line was mono and came back, kept, once it took the app's sans.
  */
 export function terminalStepLabelClass(): string {
-  return 'text-muted-foreground group-hover/step:text-foreground';
+  return 'font-semibold text-muted-foreground group-hover/step:text-foreground';
 }
 
 /**
