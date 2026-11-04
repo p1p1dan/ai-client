@@ -168,6 +168,8 @@ export const IPC_CHANNELS = {
   WINDOW_IS_FULLSCREEN: 'window:isFullScreen',
   WINDOW_FULLSCREEN_CHANGED: 'window:fullScreenChanged',
   WINDOW_GET_REPOSITORY_RUNTIME_CONTEXT: 'window:getRepositoryRuntimeContext',
+  // Decision 209 §2: a web page the conversation created, in the preview window
+  PREVIEW_OPEN_HTML: 'preview:openHtml',
   // Dialog
   DIALOG_OPEN_DIRECTORY: 'dialog:openDirectory',
   DIALOG_OPEN_FILE: 'dialog:openFile',

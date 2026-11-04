@@ -287,6 +287,37 @@ describe('visibleRailCards', () => {
   });
 });
 
+describe('the outputs card (decision 209 §2)', () => {
+  const base = {
+    environmentRows: 2,
+    context: true,
+    changes: true,
+    todo: true,
+    servers: 1,
+    running: 1,
+  };
+
+  it('under the context card, above the changes card; absent or false draws as before', () => {
+    expect(visibleRailCards({ ...base, outputs: true })).toEqual([
+      'environment',
+      'context',
+      'outputs',
+      'changes',
+      'todo',
+      'servers',
+      'running',
+    ]);
+    const before = ['environment', 'context', 'changes', 'todo', 'servers', 'running'];
+    expect(visibleRailCards({ ...base, outputs: false })).toEqual(before);
+    expect(visibleRailCards(base)).toEqual(before);
+  });
+
+  it('starts open, and its fold is kept like the others', () => {
+    expect(resolveCardOpen({}, 'outputs')).toBe(true);
+    expect(sanitizeCardOpen({ outputs: false, bogus: true })).toEqual({ outputs: false });
+  });
+});
+
 describe('the subagents card (decision 207 §8, §14 E)', () => {
   const base = {
     environmentRows: 2,

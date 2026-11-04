@@ -21,6 +21,7 @@ export const SESSION_RAIL_MIN_CHAT_WIDTH = 480;
 
 export type SessionRailCardId =
   | 'environment'
+  | 'outputs'
   | 'changes'
   | 'todo'
   | 'subagents'
@@ -32,6 +33,9 @@ export type SessionRailCardId =
 export const SESSION_RAIL_CARDS: readonly SessionRailCardId[] = [
   'environment',
   'context',
+  // Decision 209 §2: the documents the conversation created (the reference's
+  // order: environment, context, connectors, outputs, changes…).
+  'outputs',
   'changes',
   'todo',
   // Decision 207 §8: DSH 0.2.1's subagents all run in the background.
@@ -44,6 +48,7 @@ export const SESSION_RAIL_CARDS: readonly SessionRailCardId[] = [
 /** Open unless the user folded it; the context card starts folded (the reference). */
 export const SESSION_RAIL_CARD_DEFAULT_OPEN: Readonly<Record<SessionRailCardId, boolean>> = {
   environment: true,
+  outputs: true,
   changes: true,
   todo: true,
   subagents: true,
@@ -317,6 +322,8 @@ export function deriveContextCardView(input: {
 export function visibleRailCards(input: {
   environmentRows: number;
   context: boolean;
+  /** Decision 209 §2: the conversation created a document. */
+  outputs?: boolean;
   changes: boolean;
   todo: boolean;
   /** Decision 207 §8: the session has started a subagent. */
@@ -327,6 +334,7 @@ export function visibleRailCards(input: {
   const shown: Record<SessionRailCardId, boolean> = {
     environment: input.environmentRows > 0,
     context: input.context,
+    outputs: input.outputs === true,
     changes: input.changes,
     todo: input.todo,
     subagents: input.subagents === true,

@@ -67,6 +67,7 @@ import type {
   MergeConflict,
   MergeConflictContent,
   MergeState,
+  PreviewOpenHtmlResult,
   ProxySettings,
   PullRequest,
   RecentEditorProject,
@@ -791,6 +792,11 @@ const electronAPI = {
   },
 
   // Window controls (for frameless window on Windows/Linux)
+  // Decision 209 §2: a web page the conversation created, in the preview window.
+  preview: {
+    openHtml: (path: string): Promise<PreviewOpenHtmlResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_OPEN_HTML, path),
+  },
   window: {
     minimize: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.WINDOW_MINIMIZE),
     maximize: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.WINDOW_MAXIMIZE),

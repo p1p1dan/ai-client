@@ -33,6 +33,7 @@ import { registerPiPermissionHandlers } from './piPermissions';
 import { registerPiResourceHandlers } from './piResources';
 import { registerPiRuntimeHandlers } from './piRuntime';
 import { killAllPluginsSync, registerPluginHandlers, stopAllPlugins } from './plugins';
+import { registerPreviewHandlers } from './preview';
 import { registerRemoteHandlers } from './remote';
 import { registerSearchHandlers } from './search';
 import {
@@ -95,6 +96,7 @@ export function registerIpcHandlers(): void {
   registerUsageHandlers();
   registerAnnouncementHandlers();
   registerChatSearchHandlers();
+  registerPreviewHandlers();
   sweepScratchWorkspacesOnStartup();
   installChatEngineModelSource();
 }

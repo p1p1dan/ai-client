@@ -36,3 +36,13 @@ export interface FileReadResult {
 export type SystemViewerOpenResult =
   | { ok: true }
   | { ok: false; reason: 'rejected' | 'failed'; error?: string };
+
+/**
+ * Decision 209 §2: opening a web page the conversation created in the app's
+ * preview window. `not-html` = not an absolute local `.html` / `.htm` path;
+ * `missing` = no such file; `failed` = the window could not load it
+ * (`error` is diagnostic text only).
+ */
+export type PreviewOpenHtmlResult =
+  | { ok: true }
+  | { ok: false; reason: 'not-html' | 'missing' | 'failed'; error?: string };

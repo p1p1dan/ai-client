@@ -9,11 +9,13 @@ import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSessionSubwindowsStore } from '@/stores/sessionSubwindows';
 import { stopBackgroundTask } from '../panes/BackgroundTasksPane';
 import { deriveBackgroundTasksView } from '../panes/backgroundTasksModel';
-import type { SessionReviewEntry } from '../sessionReview';
+import { deriveSessionReview, type SessionReviewEntry } from '../sessionReview';
 import type { PaneKind } from '../workPanelModel';
 import { ChangesCard } from './ChangesCard';
 import { ContextCard } from './ContextCard';
 import { EnvironmentCard, useEnvironmentRows } from './EnvironmentCard';
+import { OutputsCard } from './OutputsCard';
+import { deriveSessionOutputs } from './outputsModel';
 import { RunningCard } from './RunningCard';
 import { ServersCard } from './ServersCard';
 import { SubagentsCard } from './SubagentsCard';
@@ -41,7 +43,7 @@ export interface SessionRailProps {
 /**
  * Layout 5e (ui-cohesion §6, ruling L5): the session details panel — a 260px
  * column right of the chat, cards stacked 8px apart, scrolling when tall.
- * Environment, context, changes, todo, subagents, servers, running; a card with nothing to say
+ * Environment, context, outputs, changes, todo, subagents, servers, running; a card with nothing to say
  * is not drawn. Whether the rail is on screen at all is the shell's call
  * (`resolveSessionRailVisibility`).
  */
@@ -65,6 +67,20 @@ export function SessionRail({
   );
 
   const changesView = useMemo(() => deriveChangesCardView(reviewEntries), [reviewEntries]);
+
+  // Decision 209 §2: read from the history on its own, so the 「会话改动」
+  // setting (which gates `reviewEntries`) has no say. The review derivation
+  // caches per message, so this costs nothing the changes card has not paid.
+  const messages = useChatSessionsStore((state) => state.messages[sessionId]);
+  const outputs = useMemo(
+    () => deriveSessionOutputs(deriveSessionReview(messages ?? [])),
+    [messages]
+  );
+  const workspacePath = useChatSessionsStore((state) => {
+    const session = state.sessions.find((entry) => entry.id === sessionId);
+    const workspace = state.workspaces.find((entry) => entry.id === session?.workspaceId);
+    return workspace?.path?.trim() ? workspace.path : null;
+  });
 
   const panels = useSessionPanelsStore((state) => state.bySession[sessionId]);
   const ensureHydrated = useSessionPanelsStore((state) => state.ensureHydrated);
@@ -95,6 +111,7 @@ export function SessionRail({
   const cards = visibleRailCards({
     environmentRows: environmentRows.length,
     context: contextView !== null,
+    outputs: outputs.length > 0,
     changes: changesView !== null,
     todo: todoView !== null,
     subagents: subagentsView !== null,
@@ -115,6 +132,8 @@ export function SessionRail({
             return <EnvironmentCard key={id} rows={environmentRows} />;
           case 'context':
             return contextView && <ContextCard key={id} sessionId={sessionId} view={contextView} />;
+          case 'outputs':
+            return <OutputsCard key={id} rows={outputs} workspacePath={workspacePath} />;
           case 'changes':
             return (
               changesView && (

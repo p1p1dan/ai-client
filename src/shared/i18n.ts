@@ -5105,6 +5105,8 @@ Object.assign(zhTranslations, {
   'Hide session rail': '隐藏会话侧栏',
   'Show session rail': '显示会话侧栏',
   'The window is too narrow for the session rail': '窗口太窄，会话侧栏已隐藏',
+  Outputs: '产出',
+  'The file is no longer there': '文件已不在',
   'Built-in engine': '内置引擎',
   Compact: '压缩',
   'Commit changes': '提交改动',
