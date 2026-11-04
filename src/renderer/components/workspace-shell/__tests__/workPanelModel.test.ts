@@ -20,6 +20,7 @@ import {
   RESERVED_PANE_KINDS,
   resolvePaneView,
   sanitizePaneSplits,
+  stackPaneView,
   surfaceIdForPane,
   swapPanes,
   toggleExpandedPane,
@@ -307,5 +308,52 @@ describe('deriveTerminalButtonState', () => {
     expect(deriveTerminalButtonState({ available: true, alive: false, visible: false })).toBe(
       'closed'
     );
+  });
+});
+
+describe('stackPaneView — two columns do not fit (decision 209 §5)', () => {
+  const view = (panes: PaneKind[], focused: PaneKind | null = null) =>
+    ({ panes, expanded: null, focused: focused ?? panes.at(-1) ?? null, columns: 2 }) as const;
+
+  it('keeps the two most recently focused, in slot order, in one column', () => {
+    const stacked = stackPaneView(view(['changes', 'files', 'terminal'], 'changes'), [
+      'files',
+      'terminal',
+      'changes',
+    ]);
+    expect(stacked.panes).toEqual(['changes', 'terminal']);
+    expect(stacked.columns).toBe(1);
+    expect(stacked.focused).toBe('changes');
+    const grid = derivePaneGrid(stacked);
+    expect(grid.get('changes')).toEqual({ column: 0, row: 0, columns: 1, rows: 2 });
+    expect(grid.get('terminal')).toEqual({ column: 0, row: 1, columns: 1, rows: 2 });
+  });
+
+  it('two panes: both stay, one above the other', () => {
+    const stacked = stackPaneView(view(['changes', 'files']), ['changes', 'files']);
+    expect(stacked.panes).toEqual(['changes', 'files']);
+    expect([...derivePaneGrid(stacked).values()].every((slot) => slot.column === 0)).toBe(true);
+  });
+
+  it('panes that never took focus fill in newest slot first', () => {
+    expect(stackPaneView(view(['changes', 'files', 'git', 'run']), []).panes).toEqual([
+      'git',
+      'run',
+    ]);
+  });
+
+  it('leaves an expanded or single-pane view alone', () => {
+    const single = { panes: ['files'], expanded: null, focused: 'files', columns: 1 } as const;
+    expect(stackPaneView({ ...single, panes: [...single.panes] }, ['files']).panes).toEqual([
+      'files',
+    ]);
+    const expanded = { ...view(['changes', 'files']), expanded: 'files' as const };
+    expect(stackPaneView(expanded, ['files'])).toBe(expanded);
+  });
+
+  it('the ordinary grid is unchanged when no column count is given', () => {
+    expect(
+      derivePaneGrid({ panes: ['changes', 'files'], expanded: null }).get('files')?.column
+    ).toBe(1);
   });
 });

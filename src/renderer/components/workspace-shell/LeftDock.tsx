@@ -47,6 +47,12 @@ interface LeftDockProps {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onCommitWidth: (width: number) => void;
+  /**
+   * The drag's clamp. Decision 209 §5: the shell passes one that also stops
+   * where a narrow window stops the dock, so a drag never commits a width
+   * the window cannot show. Defaults to the sidebar's own range.
+   */
+  clampWidth?: (width: number) => number;
   onDragFrame?: (width: number) => void;
   onResizingChange?: (resizing: boolean) => void;
   onOpenSettings?: () => void;
@@ -70,6 +76,7 @@ export function LeftDock({
   collapsed,
   onToggleCollapsed,
   onCommitWidth,
+  clampWidth = clampSidebarWidth,
   onDragFrame,
   onResizingChange,
   onOpenSettings,
@@ -110,6 +117,10 @@ export function LeftDock({
   // both sides of the boundary in one paint. The px fallback keeps
   // standalone mounts (tests) on the prop.
   const dockWidthVar = `var(--shell-sidebar-w, ${dockWidth}px)`;
+  // Decision 209 §5: a narrow window squeezes the dock below the committed
+  // width; the list follows it rather than being cut at the edge. Collapsed,
+  // it keeps the committed width so the collapse slides it out unreflowed.
+  const navWidth = collapsed ? sidebarWidth : Math.min(sidebarWidth, dockWidth);
 
   return (
     <div
@@ -130,7 +141,7 @@ export function LeftDock({
         className="flex h-full min-w-0 flex-col border-r border-border-soft"
         // The committed width, not the animating one; during a drag the
         // painted variable instead, so the list follows the pointer.
-        style={{ width: resizing ? '100%' : `${sidebarWidth}px` }}
+        style={{ width: resizing ? '100%' : `${navWidth}px` }}
       >
         {/* The window's top line with SessionBar (h-9): collapse, back,
             forward; the empty rest drags the frameless window. */}
@@ -186,7 +197,7 @@ export function LeftDock({
           ariaLabel={t('Resize sidebar')}
           width={sidebarWidth}
           targetRef={dockRef}
-          clamp={clampSidebarWidth}
+          clamp={clampWidth}
           onCommit={onCommitWidth}
           onDragFrame={onDragFrame}
           onResizingChange={(next) => {

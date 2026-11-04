@@ -95,22 +95,24 @@ describe('side chat model', () => {
     expect(sideQuestionHistory(state.entries, 'q1')).toEqual([]);
   });
 
-  it('docks only while the chat keeps its room; otherwise floats', () => {
+  it('docks only while there is room for it; otherwise floats', () => {
+    // Decision 209 §4: the room is `fitShell`'s answer (panes squeezed first),
+    // with this column as the slot — see shellFitModel.test.ts.
     const base = { open: true, sessionOpen: true };
-    const roomy = SIDE_CHAT_DOCK_WIDTH + SIDE_CHAT_MIN_CHAT_WIDTH;
-    expect(resolveSideChatPlacement({ ...base, form: 'float', chatWidth: 2000 })).toBe('float');
-    expect(resolveSideChatPlacement({ ...base, form: 'dock', chatWidth: roomy })).toBe('dock');
-    expect(resolveSideChatPlacement({ ...base, form: 'dock', chatWidth: roomy - 1 })).toBe('float');
-    expect(resolveSideChatPlacement({ ...base, open: false, form: 'dock', chatWidth: 2000 })).toBe(
+    expect(resolveSideChatPlacement({ ...base, form: 'float', dockFits: true })).toBe('float');
+    expect(resolveSideChatPlacement({ ...base, form: 'dock', dockFits: true })).toBe('dock');
+    expect(resolveSideChatPlacement({ ...base, form: 'dock', dockFits: false })).toBe('float');
+    expect(resolveSideChatPlacement({ ...base, open: false, form: 'dock', dockFits: true })).toBe(
       'hidden'
     );
     expect(
-      resolveSideChatPlacement({ ...base, sessionOpen: false, form: 'float', chatWidth: 2000 })
+      resolveSideChatPlacement({ ...base, sessionOpen: false, form: 'float', dockFits: true })
     ).toBe('hidden');
+    expect(SIDE_CHAT_DOCK_WIDTH + SIDE_CHAT_MIN_CHAT_WIDTH).toBe(860);
   });
 
   it('a docked side chat takes the session rail’s place', () => {
-    const input = { userShown: true, sessionOpen: true, panesOpen: 0, chatWidth: 2000 };
+    const input = { userShown: true, sessionOpen: true, fits: true };
     expect(resolveSessionRailVisibility({ ...input, sideChatDocked: true })).toEqual({
       visible: false,
       hidden: 'side-chat',

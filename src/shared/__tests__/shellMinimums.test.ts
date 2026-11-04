@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { SHELL_MIN_HEIGHT, SHELL_MIN_WIDTH } from '../shellMinimums';
 
 /**
- * U25: the window minimum and the layout floors must not drift apart.
+ * U25 / decision 209: the window minimum and the layout floors must not drift apart.
  *
- * `shellMinimums.ts` states a number Main enforces, derived from three constants
+ * `shellMinimums.ts` states a number Main enforces, derived from two constants
  * the renderer owns. Nothing in the type system connects the two — so this does,
  * by reading the renderer's own source. If someone widens `EDITOR_MIN_WIDTH` and
  * the window minimum stays put, the overflow this whole task removed comes back,
@@ -42,25 +42,26 @@ function readConst(source: string, name: string): number {
     }, 0);
 }
 
-describe('U25 shell minimums', () => {
-  it('SHELL_MIN_WIDTH equals the widest layout floor the shell can demand', () => {
+describe('U25 / decision 209 shell minimums', () => {
+  it('SHELL_MIN_WIDTH is the expanded sidebar floor plus the chat floor (decision 209 §5)', () => {
     const chatMin = readConst(centerModel, 'CHAT_MIN_WIDTH');
-    const editorMin = readConst(centerModel, 'EDITOR_MIN_WIDTH');
     const sidebarMin = readConst(shellModel, 'SIDEBAR_MIN_WIDTH');
-
-    // The EXPANDED sidebar minimum, not the collapsed rail: sizing to the rail
-    // would put the overflow back the moment the user opens a panel.
-    expect(SHELL_MIN_WIDTH).toBe(sidebarMin + chatMin + editorMin);
+    // The EXPANDED sidebar minimum, not the collapsed one: sizing to the
+    // collapsed sidebar would cut the chat the moment the user opens it.
+    // Panes no longer need room beside the chat — they stack into one column,
+    // then lie over the chat as a drawer (shellFitModel.test.ts) — so the
+    // pane floor is no longer a term (it was 960 = 240 + 400 + 320).
+    expect(SHELL_MIN_WIDTH).toBe(sidebarMin + chatMin);
+    expect(SHELL_MIN_WIDTH).toBe(640);
   });
 
   it('is wide enough for the collapsed-sidebar case with room to spare', () => {
     // Layout 5a: a collapsed sidebar reserves nothing (no rail any more).
     const collapsed = readConst(centerModel, 'SIDEBAR_COLLAPSED_RESERVE');
     const chatMin = readConst(centerModel, 'CHAT_MIN_WIDTH');
-    const editorMin = readConst(centerModel, 'EDITOR_MIN_WIDTH');
 
     expect(collapsed).toBe(0);
-    expect(SHELL_MIN_WIDTH).toBeGreaterThan(collapsed + chatMin + editorMin);
+    expect(SHELL_MIN_WIDTH).toBeGreaterThan(collapsed + chatMin);
   });
 
   it('the window actually asks for these, not its own numbers', () => {
@@ -69,6 +70,7 @@ describe('U25 shell minimums', () => {
     expect(window).toContain('minHeight: SHELL_MIN_HEIGHT');
     // The literal it replaced — small enough to overflow the center row.
     expect(window).not.toContain('minWidth: 685');
-    expect(SHELL_MIN_HEIGHT).toBe(600);
+    // Decision 209 §5: 600 → 480 (the rows between title bar and composer scroll).
+    expect(SHELL_MIN_HEIGHT).toBe(480);
   });
 });

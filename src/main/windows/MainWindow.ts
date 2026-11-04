@@ -177,10 +177,9 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
     height: state.height,
     x: state.x,
     y: state.y,
-    // U25: derived, not a guess — see `shellMinimums.ts`. The old 685 let the
-    // window get narrow enough that the editor toolbar's expand/close buttons
-    // were laid out past the right edge, because the shell's allocator
-    // deliberately overflows instead of compressing below its content floors.
+    // U25 / decision 209: derived, not a guess — see `shellMinimums.ts`. The
+    // shell now squeezes the sidebar, stacks the panes or lays them over the
+    // chat before anything could run past the right edge.
     minWidth: SHELL_MIN_WIDTH,
     minHeight: SHELL_MIN_HEIGHT,
     // macOS: hiddenInset 保留 traffic lights 按钮

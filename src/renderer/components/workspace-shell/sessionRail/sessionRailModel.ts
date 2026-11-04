@@ -13,10 +13,11 @@ import type { SessionReviewEntry } from '../sessionReview';
 /** The rail's own width, cards included (the reference's panel is ~260px). */
 export const SESSION_RAIL_WIDTH = 260;
 /**
- * The narrowest chat that keeps the rail: the reading column (45rem) needs
- * room to breathe beside it. Below this the rail hides by itself.
+ * The narrowest conversation left beside the rail. Below this the rail hides
+ * by itself. Decision 209 §4: 600 → 480, so the rail and an open pane fit
+ * together on an ordinary laptop window (1536 wide: 508 + 260 + 496).
  */
-export const SESSION_RAIL_MIN_CHAT_WIDTH = 600;
+export const SESSION_RAIL_MIN_CHAT_WIDTH = 480;
 
 export type SessionRailCardId =
   | 'environment'
@@ -51,7 +52,7 @@ export const SESSION_RAIL_CARD_DEFAULT_OPEN: Readonly<Record<SessionRailCardId, 
   context: false,
 };
 
-export type SessionRailHiddenReason = 'user' | 'no-session' | 'panes' | 'side-chat' | 'narrow';
+export type SessionRailHiddenReason = 'user' | 'no-session' | 'side-chat' | 'narrow';
 
 export interface SessionRailVisibility {
   visible: boolean;
@@ -63,30 +64,27 @@ export interface SessionRailVisibility {
  * Whether the rail shows. One rule, in this order:
  *  - no conversation open (the home page) — nothing to describe;
  *  - the user hid it;
- *  - any pane card is open — the rail yields to the panes (ruling L5). The
- *    panes already take the room right of the chat, and a rail between them
- *    would squeeze the chat from both sides; one rule, no width bands;
  *  - the side chat is docked (layout 5f) — it takes the rail's place;
- *  - the chat column would end up narrower than `SESSION_RAIL_MIN_CHAT_WIDTH`.
+ *  - it does not fit: `fitShell` (decision 209 §4) found no way to leave the
+ *    conversation `SESSION_RAIL_MIN_CHAT_WIDTH` beside it, even with the panes
+ *    squeezed to their floor.
  *
- * `chatWidth` is the allocator's chat column width (`resolveShellAllocation`),
- * read per render — nothing here is stored.
+ * Decision 209 §4 overturns ruling L5's 「打开右侧工作面板时让位」: an open pane
+ * no longer hides the rail; the rail sits between the conversation and the
+ * panes, as in the reference. Nothing here is stored (F10).
  */
 export function resolveSessionRailVisibility(input: {
   userShown: boolean;
   sessionOpen: boolean;
-  panesOpen: number;
-  chatWidth: number;
   /** Layout 5f: the side chat is on screen as a docked column. */
   sideChatDocked?: boolean;
+  /** `fitShell(...).slotFits` with the rail as the slot. */
+  fits: boolean;
 }): SessionRailVisibility {
   if (!input.sessionOpen) return { visible: false, hidden: 'no-session' };
   if (!input.userShown) return { visible: false, hidden: 'user' };
-  if (input.panesOpen > 0) return { visible: false, hidden: 'panes' };
   if (input.sideChatDocked) return { visible: false, hidden: 'side-chat' };
-  if (input.chatWidth - SESSION_RAIL_WIDTH < SESSION_RAIL_MIN_CHAT_WIDTH) {
-    return { visible: false, hidden: 'narrow' };
-  }
+  if (!input.fits) return { visible: false, hidden: 'narrow' };
   return { visible: true, hidden: null };
 }
 

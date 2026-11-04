@@ -139,6 +139,12 @@ export interface PaneActions {
 interface PaneAreaProps {
   /** `resolvePaneView`: what is on screen. */
   view: PaneView;
+  /**
+   * Decision 209 §5: the panes do not fit beside the chat, so the area lies
+   * over it as a drawer at the row's right edge (the allocator's
+   * `editorOverlay`); the conversation keeps the whole row underneath.
+   */
+  overlay?: boolean;
   splits: PaneSplits;
   actions: PaneActions;
   /** Width while nothing is open, so parked terminals keep a real box. */
@@ -163,6 +169,7 @@ const SPLIT_HANDLE_CLASS =
 
 export function PaneArea({
   view,
+  overlay = false,
   splits,
   actions,
   parkedWidth,
@@ -294,8 +301,10 @@ export function PaneArea({
         'transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none',
         !open && 'pointer-events-none invisible absolute inset-y-0 right-0',
         open && view.expanded && 'absolute inset-0 z-20',
-        open && !view.expanded && 'relative min-w-0 shrink-0'
+        open && !view.expanded && overlay && 'absolute inset-y-0 right-0 z-20 elev-lg',
+        open && !view.expanded && !overlay && 'relative min-w-0 shrink-0'
       )}
+      data-pane-drawer={open && !view.expanded && overlay ? '' : undefined}
       style={
         !open
           ? { width: `${parkedWidth}px` }

@@ -94,8 +94,12 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
     const area = code(join(SHELL_DIR, 'PaneArea.tsx'));
     const card = code(join(SHELL_DIR, 'PaneCard.tsx'));
-    expect(shell).toContain('const paneView = resolvePaneView(');
+    // Decision 209 §5: what the user has open, then what fits on screen —
+    // still derived once, by the shell, and handed down.
+    expect(shell).toContain('const requestedPaneView = resolvePaneView(');
+    expect(shell).toContain('const paneView = fit.view;');
     expect(shell).toContain('view={paneView}');
+    expect(shell).toContain('overlay={allocation.editorOverlay}');
     expect(area).toContain('const open = view.panes.length > 0;');
     expect(area).not.toContain('useShellLayoutStore');
     expect(card).not.toContain('useShellLayoutStore');
@@ -160,7 +164,13 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // container, so focusing something inside a clipped column would scroll
     // chat off screen.
     expect(shell).toContain('className="relative flex min-w-0 flex-1 overflow-clip"');
-    expect(shell).toContain('const allocation = resolveShellAllocation(allocationInput);');
+    // Decision 209: the fit (pane stacking, the rail's slot) asks the same
+    // allocator, and the shell keeps the input that produced the widths so
+    // the drag paths repaint from it.
+    expect(shell).toContain('const allocation = fit.allocation;');
+    expect(shell).toContain('const allocationInput = fit.input;');
+    const fitModel = code(join(SHELL_DIR, 'shellFitModel.ts'));
+    expect(fitModel).toContain('allocation: resolveShellAllocation(allocationInput)');
     // Columns read variables, never numbers: that is what lets a drag repaint
     // all of them by writing one node, with zero React renders.
     expect(shell).toContain(`style={{ width: 'var(--shell-center-w)' }}`);
@@ -174,6 +184,20 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     expect(shell).toContain("'--shell-chat-w': `${allocation.chatWidth}px`");
     // No column may shrink, or it would absorb what compression should handle.
     expect(shell).not.toMatch(/flexShrink: 1/);
+  });
+
+  it('a squeezed sidebar keeps its list whole, and its drag stops at the squeeze (decision 209 §5)', () => {
+    const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
+    const dock = code(join(SHELL_DIR, 'LeftDock.tsx'));
+    // The list is laid out at the width on screen, not the stored one, or a
+    // narrow window would cut its right edge (round-11's clipped chrome).
+    expect(dock).toContain(
+      'const navWidth = collapsed ? sidebarWidth : Math.min(sidebarWidth, dockWidth);'
+    );
+    // The drag asks the allocator, so it never commits a width that cannot show.
+    expect(dock).toContain('clamp={clampWidth}');
+    expect(shell).toContain('clampWidth={clampSidebarDrag}');
+    expect(shell).toContain('sidebarWidth: clampSidebarWidth(candidate),');
   });
 
   it('a drag repaints through the model and commits once (round 12 perf)', () => {

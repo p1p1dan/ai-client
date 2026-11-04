@@ -97,18 +97,20 @@ describe('SessionRailToggle', () => {
     expect(button?.getAttribute('aria-label')).toBe('显示会话侧栏');
   });
 
-  it('disabled, with the reason, while a pane holds the room', async () => {
+  // Decision 209 §4: an open pane no longer hides the rail; a window too
+  // narrow for it (even with the panes squeezed) does.
+  it('disabled, with the reason, while the window is too narrow for it', async () => {
     const onToggle = vi.fn();
     const container = await mount(
       createElement(SessionRailToggle, {
-        visibility: { visible: false, hidden: 'panes' },
+        visibility: { visible: false, hidden: 'narrow' },
         onToggle,
       })
     );
     const button = container.querySelector<HTMLButtonElement>('[data-session-rail-toggle]');
     expect(button?.disabled).toBe(true);
     expect(button?.getAttribute('aria-label')).toBe(
-      zh('The session rail makes room while a pane is open')
+      zh('The window is too narrow for the session rail')
     );
     await act(async () => button?.click());
     expect(onToggle).not.toHaveBeenCalled();

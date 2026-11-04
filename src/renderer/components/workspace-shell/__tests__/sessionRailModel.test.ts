@@ -24,12 +24,10 @@ import {
 } from '../sessionRail/sessionRailModel';
 import type { SessionReviewEntry } from '../sessionReview';
 
-const WIDE = SESSION_RAIL_WIDTH + SESSION_RAIL_MIN_CHAT_WIDTH;
-
 describe('resolveSessionRailVisibility', () => {
-  const base = { userShown: true, sessionOpen: true, panesOpen: 0, chatWidth: 1200 };
+  const base = { userShown: true, sessionOpen: true, fits: true };
 
-  it('shows beside an open chat that is wide enough, with no pane open', () => {
+  it('shows beside an open chat that has room for it', () => {
     expect(resolveSessionRailVisibility(base)).toEqual({ visible: true, hidden: null });
   });
 
@@ -44,30 +42,27 @@ describe('resolveSessionRailVisibility', () => {
     });
   });
 
-  it('yields to any open pane, however wide the window', () => {
-    expect(resolveSessionRailVisibility({ ...base, panesOpen: 1, chatWidth: 4000 })).toEqual({
-      visible: false,
-      hidden: 'panes',
-    });
-  });
-
-  it('hides when the chat would get narrower than its floor', () => {
-    expect(resolveSessionRailVisibility({ ...base, chatWidth: WIDE }).visible).toBe(true);
-    expect(resolveSessionRailVisibility({ ...base, chatWidth: WIDE - 1 })).toEqual({
+  it('decision 209 §4: no longer yields to open panes — only to the width', () => {
+    // The old `panes` reason is gone; whether it fits beside the panes is
+    // `fitShell`'s answer (shellFitModel.test.ts).
+    expect(resolveSessionRailVisibility({ ...base, fits: false })).toEqual({
       visible: false,
       hidden: 'narrow',
     });
-    // Chat column hidden (a diff tab took the row): width 0.
-    expect(resolveSessionRailVisibility({ ...base, chatWidth: 0 }).hidden).toBe('narrow');
+  });
+
+  it('leaves 480 to the conversation (decision 209 §4: was 600)', () => {
+    expect(SESSION_RAIL_WIDTH).toBe(260);
+    expect(SESSION_RAIL_MIN_CHAT_WIDTH).toBe(480);
   });
 
   it('the toggle acts only when the user choice is what decides', () => {
-    const at = (over: Partial<typeof base>) =>
+    const at = (over: Partial<typeof base> & { sideChatDocked?: boolean }) =>
       sessionRailToggleEnabled(resolveSessionRailVisibility({ ...base, ...over }));
     expect(at({})).toBe(true);
     expect(at({ userShown: false })).toBe(true);
-    expect(at({ panesOpen: 2 })).toBe(false);
-    expect(at({ chatWidth: 500 })).toBe(false);
+    expect(at({ fits: false })).toBe(false);
+    expect(at({ sideChatDocked: true })).toBe(false);
   });
 });
 

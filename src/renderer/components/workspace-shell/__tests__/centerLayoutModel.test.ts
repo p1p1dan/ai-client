@@ -5,6 +5,7 @@ import {
   deriveEditorOpen,
   EDITOR_MIN_WIDTH,
   maxPanelWidth,
+  PANE_DRAWER_PEEK,
   PANEL_MIN_USEFUL_WIDTH,
   RAIL_RESERVE,
   resolveChatColumnWidth,
@@ -12,6 +13,7 @@ import {
   resolveShellChrome,
   SIDEBAR_COLLAPSED_RESERVE,
 } from '../centerLayoutModel';
+import { SIDEBAR_MIN_WIDTH } from '../shellLayoutModel';
 import { PANE_MIN_WIDTH } from '../workPanelModel';
 
 // Layout 5d: the 5a panel's 480 default is the one-column card width.
@@ -207,10 +209,23 @@ const roomFor = (shellWidth: number, sidebar = SIDEBAR) =>
   shellWidth - sidebar - RAIL_RESERVE - CHAT_MIN_WIDTH;
 
 describe('resolveShellAllocation — sidebar and chat are satisfied first', () => {
-  it('grants the sidebar its full width at every shell width', () => {
-    for (const shellWidth of [2000, 1200, 900, 700, 500, 300]) {
+  it('grants the sidebar its full width while the chat floor fits beside it', () => {
+    for (const shellWidth of [2000, 1200, 900, 700, SIDEBAR + CHAT_MIN_WIDTH]) {
       expect(alloc({ shellWidth }).sidebarWidth).toBe(SIDEBAR);
     }
+  });
+
+  it('decision 209 §5: a narrower window squeezes the sidebar first, down to its floor', () => {
+    // 660 - 400 = 260 left for a 280 sidebar.
+    expect(alloc({ shellWidth: 660 }).sidebarWidth).toBe(660 - CHAT_MIN_WIDTH);
+    // Never below its own floor: past that the chat floor is what overflows.
+    for (const shellWidth of [640, 500, 300]) {
+      expect(alloc({ shellWidth }).sidebarWidth).toBe(SIDEBAR_MIN_WIDTH);
+    }
+    // The chat keeps its floor all the way down to the window minimum.
+    const atMinimum = alloc({ shellWidth: SIDEBAR_MIN_WIDTH + CHAT_MIN_WIDTH, editorOpen: true });
+    expect(atMinimum.chatWidth).toBe(CHAT_MIN_WIDTH);
+    expect(atMinimum.overflowWidth).toBe(0);
   });
 
   it('grants the collapsed sidebar its reserve (0 since layout 5a), never more', () => {
@@ -326,13 +341,13 @@ describe('resolveShellAllocation — the panel compresses, it is never cut', () 
   });
 
   it('only chat and the editor can ever overflow, and only past their floors', () => {
-    // 500 - 280 - 0 (D34: no rail reserve) = 220 for a 400px chat floor: the
-    // panel is long gone, and what is left over is chat`s own overflow inside
-    // the clipped row.
+    // 500 is under the window minimum: the sidebar is down to its floor (240,
+    // decision 209 §5), leaving 260 for a 400px chat floor. The panel is long
+    // gone, and what is left over is chat`s own overflow inside the clipped row.
     const result = alloc({ shellWidth: 500 });
     expect(result.panelWidth).toBe(0);
     expect(result.chatWidth).toBe(CHAT_MIN_WIDTH);
-    expect(result.overflowWidth).toBe(CHAT_MIN_WIDTH - (500 - SIDEBAR - RAIL_RESERVE));
+    expect(result.overflowWidth).toBe(CHAT_MIN_WIDTH - (500 - SIDEBAR_MIN_WIDTH - RAIL_RESERVE));
   });
 
   it('widening the panel by drag only ever compresses it back, never hides it', () => {
@@ -392,6 +407,63 @@ describe('resolveShellAllocation — the round-11 report still holds', () => {
     // or the editor.
     expect(after.panelWidth).toBe(0);
     expect(after.panelSuppressed).toBe(true);
+  });
+});
+
+describe('resolveShellAllocation — panes that do not fit cover the chat (decision 209 §5)', () => {
+  const drawer = (shellWidth: number, editorWidth = WORK_PANEL_DEFAULT_WIDTH) =>
+    alloc({ shellWidth, editorOpen: true, editorWidth, panelVisible: false });
+
+  it('side by side while chat and the panes both hold their floors', () => {
+    const fits = drawer(SIDEBAR + CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH);
+    expect(fits.editorOverlay).toBe(false);
+    expect(fits.chatWidth + fits.editorWidth).toBe(fits.centerWidth);
+  });
+
+  it('one pixel narrower, the panes lie over the chat instead of running off the edge', () => {
+    const shellWidth = SIDEBAR + CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH - 1;
+    const result = drawer(shellWidth);
+    expect(result.editorOverlay).toBe(true);
+    expect(result.overflowWidth).toBe(0);
+    // The chat keeps the whole row under the drawer.
+    expect(result.chatWidth).toBe(shellWidth - SIDEBAR);
+    expect(result.centerWidth).toBe(shellWidth - SIDEBAR);
+    // The drawer keeps its preferred width; the rest of the conversation shows.
+    expect(result.editorWidth).toBe(WORK_PANEL_DEFAULT_WIDTH);
+  });
+
+  it('a drawer wider than the row would allow leaves a strip of the chat showing', () => {
+    const result = drawer(SIDEBAR_MIN_WIDTH + CHAT_MIN_WIDTH);
+    expect(result.editorOverlay).toBe(true);
+    expect(result.chatWidth).toBe(CHAT_MIN_WIDTH);
+    expect(result.editorWidth).toBe(CHAT_MIN_WIDTH - PANE_DRAWER_PEEK);
+  });
+
+  it('the drawer takes the preferred width when that leaves more of the chat', () => {
+    const result = drawer(700, 340);
+    expect(result.editorOverlay).toBe(true);
+    expect(result.editorWidth).toBe(340);
+  });
+
+  it('never below the panes` floor, even when that covers the whole chat', () => {
+    // Two columns' floor on the narrowest window (the fit stacks them first;
+    // the allocator alone still keeps the floor).
+    const result = alloc({
+      shellWidth: SIDEBAR_MIN_WIDTH + CHAT_MIN_WIDTH,
+      editorOpen: true,
+      editorWidth: 864,
+      editorMinWidth: 664,
+      panelVisible: false,
+    });
+    expect(result.editorOverlay).toBe(true);
+    expect(result.editorWidth).toBe(664);
+    expect(result.chatWidth).toBe(CHAT_MIN_WIDTH);
+  });
+
+  it('only with the chat showing: the editor alone keeps the row', () => {
+    const result = alloc({ shellWidth: 700, editorOpen: true, chatVisible: false });
+    expect(result.editorOverlay).toBe(false);
+    expect(result.editorWidth).toBe(result.centerWidth);
   });
 });
 

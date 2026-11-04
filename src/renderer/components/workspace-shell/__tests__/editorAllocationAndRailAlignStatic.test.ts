@@ -29,7 +29,9 @@ describe('U26 (D13) the editor is never suppressed (design system v2 / layout 5a
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
     // Layout 5d: the pane area's width is allocated whenever a pane shows,
     // and the editor pane exists whenever a file is open or an intent waits.
-    expect(shell).toContain('editorOpen: paneView.columns > 0,');
+    // Decision 209: the allocation for the panes is built by the shell's fit.
+    const fitModel = code(join(SHELL_DIR, 'shellFitModel.ts'));
+    expect(fitModel).toContain('editorOpen: view.columns > 0,');
     expect(shell).toContain('editorOpen: editorOpen || fileIntentPending,');
     expect(shell).not.toContain('isTui');
   });
@@ -70,8 +72,10 @@ describe('P1-11 the terminal is a pane card (layout 5d)', () => {
     // One grip, on the area's left edge, for every pane.
     expect(area).toContain('side="left"');
     expect(shell).not.toContain('REVIEW_MIN_WIDTH');
-    // The floor is per column count (320 a card), never per pane kind.
-    expect(shell).toContain('editorMinWidth: paneAreaMinWidth(paneColumns),');
+    // The floor is per column count (320 a card), never per pane kind —
+    // counted on screen, after a narrow window stacks two columns (decision 209).
+    const fitModel = code(join(SHELL_DIR, 'shellFitModel.ts'));
+    expect(fitModel).toContain('editorMinWidth: paneAreaMinWidth(columns),');
   });
 
   it('hides without unmounting and without collapsing to zero width', () => {

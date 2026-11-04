@@ -379,15 +379,50 @@ export interface PaneSlot {
 }
 
 /**
+ * Decision 209 §5: two columns do not fit, so the panes stack in one — the
+ * two most recently focused, in slot order, one above the other. The others
+ * stay open (and mounted) off screen; focusing one (its title-bar button)
+ * brings it up. Derived per render like the rest of the view, never written
+ * back: a wider window shows every pane again.
+ */
+export function stackPaneView(view: PaneView, focus: readonly PaneKind[]): PaneView {
+  if (view.expanded || view.panes.length < 2) return view;
+  const recent: PaneKind[] = [];
+  for (let index = focus.length - 1; index >= 0; index -= 1) {
+    const kind = focus[index] as PaneKind;
+    if (view.panes.includes(kind) && !recent.includes(kind)) recent.push(kind);
+  }
+  // Panes that never took focus come last, newest slot first.
+  for (let index = view.panes.length - 1; index >= 0; index -= 1) {
+    const kind = view.panes[index] as PaneKind;
+    if (!recent.includes(kind)) recent.push(kind);
+  }
+  const kept = new Set(recent.slice(0, 2));
+  return {
+    panes: view.panes.filter((kind) => kept.has(kind)),
+    expanded: null,
+    focused: view.focused && kept.has(view.focused) ? view.focused : (recent[0] ?? null),
+    columns: 1,
+  };
+}
+
+/**
  * Slot order 0..3 → column 0 row 0, column 1 row 0, column 0 row 1,
- * column 1 row 1. An expanded pane gets the whole area alone.
+ * column 1 row 1. An expanded pane gets the whole area alone. A stacked view
+ * (`columns: 1` with two panes, `stackPaneView`) puts both in column 0.
  */
 export function derivePaneGrid(
-  view: Pick<PaneView, 'panes' | 'expanded'>
+  view: Pick<PaneView, 'panes' | 'expanded'> & Partial<Pick<PaneView, 'columns'>>
 ): Map<PaneKind, PaneSlot> {
   const grid = new Map<PaneKind, PaneSlot>();
   if (view.expanded) {
     grid.set(view.expanded, { column: 0, row: 0, columns: 1, rows: 1 });
+    return grid;
+  }
+  if (view.columns === 1 && view.panes.length >= 2) {
+    view.panes.slice(0, 2).forEach((kind, index) => {
+      grid.set(kind, { column: 0, row: index as 0 | 1, columns: 1, rows: 2 });
+    });
     return grid;
   }
   const panes = view.panes.slice(0, MAX_OPEN_PANES);

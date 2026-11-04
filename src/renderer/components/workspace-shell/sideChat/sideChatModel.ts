@@ -157,19 +157,19 @@ export type SideChatPlacement = 'hidden' | 'float' | 'dock';
 
 /**
  * Where the side chat is on screen. Docked only while the chat keeps
- * `SIDE_CHAT_MIN_CHAT_WIDTH` beside it; narrower, the docked side chat floats
+ * `SIDE_CHAT_MIN_CHAT_WIDTH` beside it — `dockFits` is the shell's
+ * `fitShell(...).slotFits` with the docked column as the slot (decision 209
+ * §4: open panes are squeezed first). Narrower, the docked side chat floats
  * until there is room again (nothing is stored).
  */
 export function resolveSideChatPlacement(input: {
   open: boolean;
   form: SideChatForm;
   sessionOpen: boolean;
-  chatWidth: number;
+  dockFits: boolean;
 }): SideChatPlacement {
   if (!input.open || !input.sessionOpen) return 'hidden';
-  if (input.form === 'dock' && input.chatWidth - SIDE_CHAT_DOCK_WIDTH >= SIDE_CHAT_MIN_CHAT_WIDTH) {
-    return 'dock';
-  }
+  if (input.form === 'dock' && input.dockFits) return 'dock';
   return 'float';
 }
 

@@ -40,12 +40,20 @@ import { SessionRail } from './sessionRail/SessionRail';
 import { SessionRailToggle, sessionRailToggleLabel } from './sessionRail/SessionRailToggle';
 import {
   resolveSessionRailVisibility,
+  SESSION_RAIL_MIN_CHAT_WIDTH,
+  SESSION_RAIL_WIDTH,
   sessionRailToggleEnabled,
 } from './sessionRail/sessionRailModel';
 import { deriveSessionReview, type SessionReviewEntry } from './sessionReview';
+import { fitShell, type ShellSlot } from './shellFitModel';
+import { clampSidebarWidth } from './shellLayoutModel';
 import { SideChat } from './sideChat/SideChat';
 import { SideChatToggle } from './sideChat/SideChatToggle';
-import { resolveSideChatPlacement } from './sideChat/sideChatModel';
+import {
+  resolveSideChatPlacement,
+  SIDE_CHAT_DOCK_WIDTH,
+  SIDE_CHAT_MIN_CHAT_WIDTH,
+} from './sideChat/sideChatModel';
 import { resolveTerminalWorkspace } from './surfaces/terminalWorkspace';
 import { useCapacityReclaimNotice } from './useCapacityReclaimNotice';
 import { useEditorWorktreeSync } from './useEditorWorktreeSync';
@@ -59,6 +67,11 @@ import {
   paneAreaMinWidth,
   resolvePaneView,
 } from './workPanelModel';
+
+/** Decision 209 §4: the session rail as the slot right of the conversation. */
+const RAIL_SLOT: ShellSlot = { width: SESSION_RAIL_WIDTH, minChat: SESSION_RAIL_MIN_CHAT_WIDTH };
+/** Layout 5f: a docked side chat takes the same slot, wider. */
+const DOCK_SLOT: ShellSlot = { width: SIDE_CHAT_DOCK_WIDTH, minChat: SIDE_CHAT_MIN_CHAT_WIDTH };
 
 const NO_REVIEW_ENTRIES: SessionReviewEntry[] = [];
 
@@ -218,14 +231,11 @@ export function WorkspaceShell({
     setupTerminalOpened,
     sessionOpen: activeSessionId !== null,
   });
-  const paneView = resolvePaneView(
+  // What the user has open. `fitShell` (below, once the width is known) may
+  // stack it into one column on a narrow window (decision 209 §5).
+  const requestedPaneView = resolvePaneView(
     { panes, focus: paneFocus, expanded: expandedPane },
     availablePanes
-  );
-  const visiblePanes = paneView.panes;
-  const togglePaneOnScreen = useCallback(
-    (kind: PaneKind) => togglePane(kind, visiblePanes),
-    [togglePane, visiblePanes]
   );
   const paneActions = useMemo<PaneActions>(
     () => ({
@@ -301,10 +311,6 @@ export function WorkspaceShell({
     temporaryWorkspaceEnabled,
   });
 
-  // A08: global shell shortcuts (Ctrl/Cmd+B/1-5, layout 5d's Ctrl/Cmd+\\).
-  // Only live while this component is mounted, i.e. only for the new shell.
-  useShellShortcuts({ paneView });
-
   // Layout 5f: a side chat belongs to the conversation it reads; opening
   // another one discards it.
   useEffect(() => {
@@ -340,6 +346,83 @@ export function WorkspaceShell({
     return () => observer.disconnect();
   }, []);
 
+  // Layout 5a: `panelOpen: false` keeps the allocator's last term retired.
+  // D35 round 2: a diff tab takes the whole center row only while the editor
+  // is the one pane on screen — beside other panes it stays a card.
+  const editorPaneAlone =
+    requestedPaneView.expanded === 'editor' ||
+    (requestedPaneView.panes.length === 1 && requestedPaneView.panes[0] === 'editor');
+  const chrome = resolveShellChrome({
+    sidebarUserCollapsed: sidebarCollapsed,
+    panelOpen: false,
+    manualChat,
+    diffTabActive: editorPaneAlone && diffTabActive,
+  });
+  const chatVisible = chrome.chatVisible;
+
+  /**
+   * Decision 209 (§4, §5): one fit for the whole center row — the panes'
+   * arrangement (stacked into one column, or a drawer over the chat, on a
+   * narrow window), the allocator's widths, and whether the column right of
+   * the conversation fits: a docked side chat, else the session rail (open
+   * panes are squeezed to their floor for it first). One column of panes, or
+   * two: each count keeps its own area width.
+   */
+  const sideChatWantsDock = sideChatOpen && sideChatForm === 'dock' && activeSessionId !== null;
+  const railWanted = sessionRailShown && activeSessionId !== null;
+  const fitInput = {
+    base: {
+      shellWidth,
+      sidebarWidth,
+      sidebarCollapsed: chrome.sidebarCollapsed,
+      chatVisible,
+      panelVisible: false,
+      panelWidth: 0,
+    },
+    view: requestedPaneView,
+    focus: paneFocus,
+    paneWidths: { 1: paneAreaWidth, 2: paneAreaSplitWidth },
+  };
+  let fit = fitShell({
+    ...fitInput,
+    slot: sideChatWantsDock ? DOCK_SLOT : railWanted ? RAIL_SLOT : null,
+  });
+  // A docked side chat with no room floats (layout 5f), leaving the slot to the rail.
+  const sideChatDocked = sideChatWantsDock && fit.slotFits;
+  let railFits = !sideChatWantsDock && fit.slotFits;
+  if (sideChatWantsDock && !sideChatDocked && railWanted) {
+    fit = fitShell({ ...fitInput, slot: RAIL_SLOT });
+    railFits = fit.slotFits;
+  }
+  const slotOnScreen = sideChatDocked ? DOCK_SLOT : railFits ? RAIL_SLOT : null;
+  const paneView = fit.view;
+  const visiblePanes = paneView.panes;
+  const paneColumns = paneView.columns === 2 ? 2 : 1;
+  const allocationInput = fit.input;
+  const allocation = fit.allocation;
+  /**
+   * While the slot holds its place by squeezing the panes, a drag cannot widen
+   * them past the point where it would have to leave (what you drag is what
+   * stays; hiding the rail gives the room back).
+   */
+  const paneDragLimit =
+    slotOnScreen && paneView.columns > 0 && !allocation.editorOverlay
+      ? Math.max(
+          paneAreaMinWidth(paneColumns),
+          allocation.centerWidth - slotOnScreen.width - slotOnScreen.minChat
+        )
+      : null;
+
+  const togglePaneOnScreen = useCallback(
+    (kind: PaneKind) => togglePane(kind, visiblePanes),
+    [togglePane, visiblePanes]
+  );
+
+  // A08: global shell shortcuts (Ctrl/Cmd+B/1-5, layout 5d's Ctrl/Cmd+\\).
+  // Only live while this component is mounted, i.e. only for the new shell.
+  // Decision 209: the panes ON SCREEN, after narrowing.
+  useShellShortcuts({ paneView });
+
   const terminalVisible = visiblePanes.includes('terminal');
   const terminalState = deriveTerminalButtonState({
     available: terminalCwd !== null,
@@ -356,33 +439,6 @@ export function WorkspaceShell({
     openPane('terminal');
   }, [terminalCwd, terminalVisible, closePane, openPane]);
 
-  // Layout 5a: `panelOpen: false` keeps the allocator's last term retired.
-  // D35 round 2: a diff tab takes the whole center row only while the editor
-  // is the one pane on screen — beside other panes it stays a card.
-  const editorPaneAlone =
-    paneView.expanded === 'editor' || (visiblePanes.length === 1 && visiblePanes[0] === 'editor');
-  const chrome = resolveShellChrome({
-    sidebarUserCollapsed: sidebarCollapsed,
-    panelOpen: false,
-    manualChat,
-    diffTabActive: editorPaneAlone && diffTabActive,
-  });
-  const chatVisible = chrome.chatVisible;
-
-  // One column of panes, or two: each count keeps its own area width.
-  const paneColumns = paneView.columns === 2 ? 2 : 1;
-  const allocationInput = {
-    shellWidth,
-    sidebarWidth,
-    sidebarCollapsed: chrome.sidebarCollapsed,
-    chatVisible,
-    editorOpen: paneView.columns > 0,
-    editorWidth: paneColumns === 2 ? paneAreaSplitWidth : paneAreaWidth,
-    editorMinWidth: paneAreaMinWidth(paneColumns),
-    panelVisible: false,
-    panelWidth: 0,
-  };
-  const allocation = resolveShellAllocation(allocationInput);
   /**
    * Where the empty pane area waits: the width it would have if a pane
    * opened. A parked terminal keeps a real box (no FitAddon collapse to two
@@ -426,6 +482,8 @@ export function WorkspaceShell({
   // renders that happen between drags (they must not re-subscribe pointers).
   const allocationInputRef = useRef(allocationInput);
   allocationInputRef.current = allocationInput;
+  const paneDragLimitRef = useRef(paneDragLimit);
+  paneDragLimitRef.current = paneDragLimit;
 
   const paintSidebarDrag = useCallback(
     (nextSidebarWidth: number) => {
@@ -435,6 +493,16 @@ export function WorkspaceShell({
     },
     [paintAllocation]
   );
+  // Decision 209 §5: the sidebar's drag stops where a narrow window stops the
+  // dock (`resolveSidebarWidth`), so what the drag commits is what shows.
+  const clampSidebarDrag = useCallback(
+    (candidate: number) =>
+      resolveShellAllocation({
+        ...allocationInputRef.current,
+        sidebarWidth: clampSidebarWidth(candidate),
+      }).sidebarWidth,
+    []
+  );
   const paintPanelDrag = useCallback(
     (nextPanelWidth: number) => {
       paintAllocation(
@@ -443,11 +511,14 @@ export function WorkspaceShell({
     },
     [paintAllocation]
   );
-  const clampPanelDrag = useCallback(
-    (candidate: number) =>
-      resolveShellAllocation({ ...allocationInputRef.current, editorWidth: candidate }).editorWidth,
-    []
-  );
+  const clampPanelDrag = useCallback((candidate: number) => {
+    const width = resolveShellAllocation({
+      ...allocationInputRef.current,
+      editorWidth: candidate,
+    }).editorWidth;
+    const limit = paneDragLimitRef.current;
+    return limit === null ? width : Math.min(width, limit);
+  }, []);
 
   // A08 §06-4: the override was scoped to the open file, so closing it clears
   // it. Guarded on the current value so this only writes on the closing edge.
@@ -459,9 +530,9 @@ export function WorkspaceShell({
 
   /**
    * Layout 5e (ruling L5): the session rail sits inside the chat column, right
-   * of the conversation. Derived per render from the user's choice, the panes
-   * on screen and the allocator's chat width — never stored (F10). It yields
-   * to any open pane, and hides when the chat would get too narrow.
+   * of the conversation. Derived per render from the user's choice and the
+   * fit above — never stored (F10). Decision 209 §4: it stays beside open
+   * panes, and hides only when the conversation would get too narrow.
    */
   /**
    * Layout 5f (ruling L6): the side chat floats over the chat's bottom-right
@@ -472,14 +543,13 @@ export function WorkspaceShell({
     open: sideChatOpen,
     form: sideChatForm,
     sessionOpen: activeSessionId !== null,
-    chatWidth: chatVisible ? allocation.chatWidth : 0,
+    dockFits: sideChatDocked,
   });
   const sessionRail = resolveSessionRailVisibility({
     userShown: sessionRailShown,
     sessionOpen: activeSessionId !== null,
-    panesOpen: visiblePanes.length,
-    chatWidth: chatVisible ? allocation.chatWidth : 0,
     sideChatDocked: sideChatPlacement === 'dock',
+    fits: railFits,
   });
   const sessionRailLabel = t(sessionRailToggleLabel(sessionRail));
   const sessionRailMenuDisabled = !sessionRailToggleEnabled(sessionRail);
@@ -522,6 +592,7 @@ export function WorkspaceShell({
         collapsed={sidebarCollapsed}
         onToggleCollapsed={toggleSidebar}
         onCommitWidth={setSidebarWidth}
+        clampWidth={clampSidebarDrag}
         onDragFrame={paintSidebarDrag}
         onResizingChange={setSidebarResizing}
         onOpenSettings={onOpenSettings}
@@ -624,6 +695,7 @@ export function WorkspaceShell({
             */}
             <PaneArea
               view={paneView}
+              overlay={allocation.editorOverlay}
               splits={paneSplits}
               actions={paneActions}
               parkedWidth={parkedPaneWidth}

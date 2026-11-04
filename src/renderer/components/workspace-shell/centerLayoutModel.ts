@@ -7,6 +7,8 @@
  * Pure so vitest (node env, `.ts` only) can cover it.
  */
 
+import { SIDEBAR_MIN_WIDTH } from './shellLayoutModel';
+
 /** A08 a08:1421 — the chat floor its degradation thresholds were built from. */
 export const CHAT_MIN_WIDTH = 400;
 /**
@@ -119,12 +121,15 @@ export type ManualOverride = boolean | null;
  *     user's flags and computes nothing. No input can make a column disappear
  *     except the user's own toggle.
  *  2. **Sidebar and chat are satisfied first**, from the left, always at or
- *     above their widths/floors.
+ *     above their floors. Decision 209 §5: a sidebar wider than its floor
+ *     gives way to the chat's floor on a narrow window.
  *  3. **Everything else is clipped by the right edge**, not collapsed
  *     (`resolveShellAllocation`). Chat and the editor compress to their floors
  *     first; past that the panel goes off the edge, then the editor. Widening
  *     the window reveals it again, proportionally — no thresholds, no
- *     hysteresis, no state.
+ *     hysteresis, no state. Decision 209 §5 replaces the editor's part: panes
+ *     that do not fit beside the chat lie over it as a drawer
+ *     (`editorOverlay`), so nothing runs off the window any more.
  *
  * The reserve constants below survive both models: they are just widths.
  */
@@ -253,7 +258,11 @@ export interface ResolveShellAllocationInput {
 }
 
 export interface ShellAllocation {
-  /** Priority 1 — granted in full, always. */
+  /**
+   * Priority 1 — the user's width whenever the chat's floor fits beside it;
+   * on a narrower window it gives way down to `SIDEBAR_MIN_WIDTH` first
+   * (decision 209 §5, `resolveSidebarWidth`).
+   */
   sidebarWidth: number;
   /** The chat+editor row. Never below `contentFloor` for what is shown. */
   centerWidth: number;
@@ -273,10 +282,45 @@ export interface ShellAllocation {
    */
   panelSuppressed: boolean;
   /**
-   * px of chat+editor past the row's right edge. Only ever non-zero on a
-   * window too narrow for their floors — the panel is already at 0 by then.
+   * px of chat+editor past the row's right edge. Since decision 209 only ever
+   * non-zero below the window minimum (`SHELL_MIN_WIDTH`): a sidebar wider
+   * than its floor gives way first, and panes that do not fit beside the chat
+   * cover it instead (`editorOverlay`).
    */
   overflowWidth: number;
+  /**
+   * Decision 209 §5: the panes did not fit beside the chat's floor, so they
+   * lie OVER the chat as a drawer at the row's right edge, `editorWidth` wide,
+   * and the chat keeps the whole row. Never true while they fit.
+   */
+  editorOverlay: boolean;
+}
+
+/**
+ * Decision 209 §5: how much of the conversation stays visible left of a pane
+ * drawer, so it reads as something lying over the chat rather than a page
+ * that replaced it.
+ */
+export const PANE_DRAWER_PEEK = 56;
+
+/**
+ * Decision 209 §5: the sidebar keeps the user's width while the chat's floor
+ * fits beside it, and gives way down to its own floor when it does not — a
+ * narrow window squeezes the sidebar before anything is cut or covered. The
+ * stored width is untouched, so widening the window brings it back.
+ */
+export function resolveSidebarWidth(input: {
+  shellWidth: number | null;
+  sidebarWidth: number;
+  sidebarCollapsed: boolean;
+  /** What the center row needs at least: the chat's floor, or the editor's alone. */
+  centerFloor: number;
+}): number {
+  if (input.sidebarCollapsed) return SIDEBAR_COLLAPSED_RESERVE;
+  const wanted = Math.max(0, input.sidebarWidth);
+  if (!isFiniteNumber(input.shellWidth) || input.shellWidth <= 0) return wanted;
+  const room = input.shellWidth - RAIL_RESERVE - input.centerFloor;
+  return Math.min(wanted, Math.max(Math.min(SIDEBAR_MIN_WIDTH, wanted), room));
 }
 
 /**
@@ -312,10 +356,17 @@ export function resolveShellAllocation(input: ResolveShellAllocationInput): Shel
     panelWidth,
   } = input;
 
-  const sidebar = sidebarCollapsed ? SIDEBAR_COLLAPSED_RESERVE : Math.max(0, sidebarWidth);
   const preferred = panelVisible ? Math.max(0, panelWidth) : 0;
   const editorMinWidth = input.editorMinWidth ?? EDITOR_MIN_WIDTH;
   const floors = contentFloor({ chatWanted: chatVisible, editorOpen, editorMinWidth });
+  // Decision 209 §5: with the chat showing, panes that do not fit cover it,
+  // so the row only has to hold the chat's floor; the editor alone holds its own.
+  const sidebar = resolveSidebarWidth({
+    shellWidth,
+    sidebarWidth,
+    sidebarCollapsed,
+    centerFloor: chatVisible ? CHAT_MIN_WIDTH : editorOpen ? editorMinWidth : 0,
+  });
 
   const build = (centerWidth: number, panel: number, overflowWidth: number): ShellAllocation => {
     let chatWidth = 0;
@@ -341,6 +392,7 @@ export function resolveShellAllocation(input: ResolveShellAllocationInput): Shel
       panelCompressed: panelVisible && panel < preferred,
       panelSuppressed: panelVisible && panel === 0,
       overflowWidth,
+      editorOverlay: false,
     };
   };
 
@@ -355,6 +407,28 @@ export function resolveShellAllocation(input: ResolveShellAllocationInput): Shel
   // rather than being deleted, so a future column filling this role again
   // only needs to change the constant.
   const row = Math.max(0, shellWidth - sidebar - RAIL_RESERVE);
+  // Decision 209 §5 (overturns round-11's clipping for the panes): when the
+  // panes cannot sit beside the chat's floor, they lie over the chat as a
+  // drawer — the chat keeps the whole row, the drawer leaves a strip of it
+  // showing, and nothing runs off the window's edge.
+  if (chatVisible && editorOpen && row < CHAT_MIN_WIDTH + editorMinWidth) {
+    const centerWidth = Math.max(CHAT_MIN_WIDTH, row);
+    const drawer = Math.min(
+      Math.max(preferredEditorWidth, editorMinWidth),
+      Math.max(editorMinWidth, centerWidth - PANE_DRAWER_PEEK)
+    );
+    return {
+      sidebarWidth: sidebar,
+      centerWidth,
+      chatWidth: centerWidth,
+      editorWidth: Math.round(drawer),
+      panelWidth: 0,
+      panelCompressed: panelVisible && preferred > 0,
+      panelSuppressed: panelVisible,
+      overflowWidth: Math.max(0, centerWidth - row),
+      editorOverlay: true,
+    };
+  }
   // Chat and the editor are served first; whatever is left is what the panel
   // may have. This is the priority rule, unchanged from round-11 — only the
   // panel's response to losing changed (compress, was clip).

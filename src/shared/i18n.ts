@@ -5104,7 +5104,6 @@ Object.assign(zhTranslations, {
   'Session details': '会话详情',
   'Hide session rail': '隐藏会话侧栏',
   'Show session rail': '显示会话侧栏',
-  'The session rail makes room while a pane is open': '右侧面板打开时，会话侧栏让位',
   'The window is too narrow for the session rail': '窗口太窄，会话侧栏已隐藏',
   'Built-in engine': '内置引擎',
   Compact: '压缩',

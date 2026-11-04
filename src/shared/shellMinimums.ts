@@ -1,51 +1,43 @@
 /**
- * U25 — the narrowest window the shell can be laid out in without spilling.
+ * U25 → decision 209 — the narrowest window the shell can be laid out in
+ * without spilling.
  *
- * `resolveShellAllocation` gives chat and the editor a width FLOOR each and, when
- * the row cannot satisfy both, deliberately overflows rather than compressing
- * (`overflowWidth` records how much). That is the right call for content — a
- * panel squeezed to a sliver reads as broken — but it means the rightmost chrome
- * in the editor's toolbar (expand, close) can end up outside the viewport, which
- * is what the user hit: buttons that could be neither seen nor clicked.
+ * U25 (user ruling 2026-09-06): 「不要在窗口太小的时候出现图标挤兑异常的现象就行
+ * （限制最小画幅）」. Back then the allocator let the panes run off the right
+ * edge when chat and the panes could not both hold their floors, so the window
+ * was stopped at sidebar + chat + one pane (960).
  *
- * The user's ruling (2026-09-06) was to stop the window before that point rather
- * than teach every toolbar to compress: 「不要在窗口太小的时候出现图标挤兑异常的
- * 现象就行（限制最小画幅）」.
- *
- * ## Why the sidebar's EXPANDED minimum is in the sum
- *
- * The sidebar can collapse entirely (layout 5a removed the rail it used to
- * leave behind), and then the shell fits in 720px. Sizing the window to that
- * would leave the overflow reachable again the moment the user opens the
- * sidebar — which they cannot be expected to predict. The floor is therefore
- * the narrowest window in which EVERY legal layout state fits, not the
- * narrowest one some state fits in.
+ * Decision 209 §5 (user, 2026-11-04: 「当前会话窗口的尺寸限制的太死了，有时我想把窗口
+ * 缩小一点都没办法」) keeps the requirement — nothing spills, no button ends up
+ * out of reach — and meets it in the layout instead of the window:
+ *  - a sidebar wider than its floor gives way first (`resolveSidebarWidth`);
+ *  - panes that do not fit beside the chat stack into one column, then lie
+ *    over the chat as a drawer (`fitShell`, the allocator's `editorOverlay`);
+ *  - title-bar buttons that do not fit move into its ⋮ menu.
+ * So the floor is the sidebar's minimum plus the chat's: the narrowest window
+ * in which EVERY legal layout state still fits (the expanded sidebar beside the
+ * chat), which was U25's rule for choosing the number and still is.
  *
  * ## Kept in `shared/` on purpose
  *
  * The numbers it is derived from live in the renderer's layout models, and the
  * window that has to honour it is created in Main. A copy on either side would
  * be a second source of truth for the same measurement, and the two would drift
- * silently — the failure would look like "buttons off-screen again" months
- * later. `shellMinimums.test.ts` asserts this value against the renderer
+ * silently. `shellMinimums.test.ts` asserts this value against the renderer
  * constants it claims to be derived from, so a change to any of them fails
  * there rather than in a screenshot.
  */
 
-/** `SIDEBAR_MIN_WIDTH` (`shellLayoutModel.ts`); layout 5a: no rail on top. */
+/** `SIDEBAR_MIN_WIDTH` (`shellLayoutModel.ts`). */
 const SIDEBAR_MIN_WIDTH = 240;
-/**
- * `CHAT_MIN_WIDTH` + `EDITOR_MIN_WIDTH` (`centerLayoutModel.ts`'s
- * `contentFloor`); layout 5a: the work panel's 320px floor.
- */
-const CENTER_ROW_FLOOR = 400 + 320;
+/** `CHAT_MIN_WIDTH` (`centerLayoutModel.ts`): panes cover the chat rather than sit beside it. */
+const CENTER_ROW_FLOOR = 400;
 
 export const SHELL_MIN_WIDTH = SIDEBAR_MIN_WIDTH + CENTER_ROW_FLOOR;
 
 /**
- * Unchanged by U25 and not derived from anything: no vertical overflow was
- * reported, and the shell's rows (title bars, composer) already scroll or
- * truncate rather than spill. Exported alongside the width so the window's two
- * minimums are read from one place.
+ * Decision 209 §5: 600 → 480. Not derived from anything: the shell's rows
+ * (title bar, composer) hold their height, and everything between them — the
+ * conversation, the sidebar list, the rail, the pane cards — scrolls.
  */
-export const SHELL_MIN_HEIGHT = 600;
+export const SHELL_MIN_HEIGHT = 480;

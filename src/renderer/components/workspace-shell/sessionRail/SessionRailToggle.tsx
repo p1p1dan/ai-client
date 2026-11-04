@@ -9,8 +9,6 @@ export function sessionRailToggleLabel(visibility: SessionRailVisibility): strin
   switch (visibility.hidden) {
     case null:
       return 'Hide session rail';
-    case 'panes':
-      return 'The session rail makes room while a pane is open';
     case 'narrow':
       return 'The window is too narrow for the session rail';
     case 'side-chat':
@@ -23,8 +21,9 @@ export function sessionRailToggleLabel(visibility: SessionRailVisibility): strin
 /**
  * Layout 5e: the title bar's session rail button (SessionBar's 5a slot,
  * leftmost in the right-hand group). Pressed while the rail is on screen.
- * While the panes or the width hide it, the button is disabled and says why —
- * a click there could change nothing on screen.
+ * While the width or a docked side chat hides it, the button is disabled and
+ * says why — a click there could change nothing on screen. (Decision 209 §4:
+ * an open pane no longer does.)
  */
 export function SessionRailToggle({
   visibility,
@@ -35,10 +34,7 @@ export function SessionRailToggle({
 }) {
   const { t } = useI18n();
   const label = t(sessionRailToggleLabel(visibility));
-  const blocked =
-    visibility.hidden === 'panes' ||
-    visibility.hidden === 'narrow' ||
-    visibility.hidden === 'side-chat';
+  const blocked = visibility.hidden === 'narrow' || visibility.hidden === 'side-chat';
   if (blocked) {
     // A disabled button gets no pointer events: the wrapper carries the reason.
     return (
