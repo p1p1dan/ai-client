@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Ident } from '@/components/ui/ident';
 import {
   Menu,
+  MenuCheckboxItem,
   MenuGroup,
   MenuGroupLabel,
   MenuItem,
@@ -38,6 +39,7 @@ import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
 import { openHome } from '@/stores/homeDraft';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
+import { type BarButton, resolveBarOverflow } from './sessionBarOverflow';
 import type { PaneKind, TerminalButtonState } from './workPanelModel';
 
 const NO_PANES: readonly PaneKind[] = [];
@@ -95,6 +97,16 @@ interface SessionBarProps {
     disabled: boolean;
     onToggle: () => void;
   };
+  /**
+   * Decision 209 §5: the side chat's ⋮ entry, for when its button does not
+   * fit on the bar. Already translated.
+   */
+  sideChat?: { open: boolean; label: string; onToggle: () => void };
+  /**
+   * Decision 209 §5: the bar's width (the center row's), so buttons that do
+   * not fit move into ⋮. Null or absent = unmeasured: every button stays.
+   */
+  barWidth?: number | null;
 }
 
 /**
@@ -167,6 +179,11 @@ function BarIconButton({
  * tasks button opens the tasks pane; the floating sub-windows (chat/) are no
  * longer opened from here.
  *
+ * Decision 209 §5: buttons that do not fit move into ⋮ from the right
+ * (`resolveBarOverflow`), as ticked entries at the top of the menu; the
+ * rail's and the background tasks' entries are already there and are not
+ * repeated.
+ *
  * Unchanged from D12: the close ✕ does NOT come back here. "End this
  * conversation" lives in the sidebar row's context menu.
  */
@@ -182,6 +199,8 @@ export function SessionBar({
   sessionRailToggle,
   sideChatToggle,
   sessionRail,
+  sideChat,
+  barWidth = null,
 }: SessionBarProps) {
   const { t } = useI18n();
 
@@ -235,6 +254,29 @@ export function SessionBar({
       ? `${t('Session changes')} +${review.added} −${review.removed}`
       : t('Session changes')
     : '';
+
+  // Shown while something runs or its pane is open; the ⋮ entry always is.
+  const tasksOpen = openPanes.includes('tasks');
+  const backgroundWork = useBackgroundWorkCounts(activeSessionId);
+  const tasksCount = backgroundWork.jobs + backgroundWork.agents;
+  const terminalShown = Boolean(activeSessionId && terminalState && onToggleTerminal);
+  const buttons: BarButton[] = [];
+  if (sessionRailToggle) buttons.push('rail');
+  if (sideChatToggle) buttons.push('side-chat');
+  if (terminalShown) buttons.push('terminal');
+  if (review && onTogglePane) buttons.push('changes');
+  if (onTogglePane) buttons.push('files');
+  if (activeSessionId && onTogglePane && (tasksCount > 0 || tasksOpen)) buttons.push('tasks');
+  const bar = resolveBarOverflow({
+    width: barWidth,
+    buttons,
+    expandSidebar: sidebarCollapsed && Boolean(onExpandSidebar),
+    windowControls: WINDOW_CONTROLS_SHOWN,
+  });
+  const onBar = (button: BarButton) => bar.inline.includes(button);
+  const inMenu = (button: BarButton) => bar.overflow.includes(button);
+  // The rail and the background tasks already have their ⋮ entries.
+  const menuToggles = bar.overflow.filter((button) => button !== 'rail' && button !== 'tasks');
 
   return (
     // `overflow-hidden`: the bar ends at the center row's edge whatever its
@@ -295,17 +337,17 @@ export function SessionBar({
         )}
       </div>
 
-      {sessionRailToggle && (
+      {onBar('rail') && (
         <>
           {sessionRailToggle}
           <span aria-hidden className="mx-1 h-4.5 w-px shrink-0 bg-border-soft" />
         </>
       )}
-      {sideChatToggle}
-      {activeSessionId && terminalState && onToggleTerminal && (
+      {onBar('side-chat') && sideChatToggle}
+      {onBar('terminal') && terminalState && onToggleTerminal && (
         <TerminalButton state={terminalState} onToggle={onToggleTerminal} />
       )}
-      {review && onTogglePane && (
+      {onBar('changes') && review && onTogglePane && (
         <BarIconButton
           label={reviewLabel}
           pressed={openPanes.includes('changes')}
@@ -321,7 +363,7 @@ export function SessionBar({
           )}
         </BarIconButton>
       )}
-      {onTogglePane && (
+      {onBar('files') && onTogglePane && (
         <BarIconButton
           label={t('Files')}
           pressed={openPanes.includes('files')}
@@ -331,10 +373,10 @@ export function SessionBar({
           <FolderOpen className="size-4" />
         </BarIconButton>
       )}
-      {activeSessionId && onTogglePane && (
+      {onBar('tasks') && onTogglePane && (
         <BackgroundTasksButton
-          sessionId={activeSessionId}
-          open={openPanes.includes('tasks')}
+          count={tasksCount}
+          open={tasksOpen}
           onToggle={() => onTogglePane('tasks')}
         />
       )}
@@ -344,6 +386,27 @@ export function SessionBar({
           <MoreVertical className="size-4" />
         </MenuTrigger>
         <MenuPopup align="end" className="min-w-56">
+          {/* Decision 209 §5: the buttons the bar had no room for, where
+              they sat, ticked while their pane (or the side chat) is open. */}
+          {menuToggles.length > 0 && (
+            <>
+              <MenuGroup data-bar-overflow="">
+                {menuToggles.map((button) => (
+                  <BarOverflowItem
+                    key={button}
+                    button={button}
+                    openPanes={openPanes}
+                    onTogglePane={onTogglePane}
+                    terminalState={terminalState}
+                    onToggleTerminal={onToggleTerminal}
+                    reviewLabel={reviewLabel}
+                    sideChat={sideChat}
+                  />
+                ))}
+              </MenuGroup>
+              <MenuSeparator />
+            </>
+          )}
           {onOpenPane && (
             <MenuGroup>
               <MenuItem onClick={() => onOpenPane('git')}>
@@ -362,6 +425,12 @@ export function SessionBar({
                 <MenuItem onClick={() => onOpenPane('tasks')} data-pane-item="tasks">
                   <Layers />
                   {t('Background tasks')}
+                  {/* The button's running count, while the button is in here. */}
+                  {inMenu('tasks') && tasksCount > 0 && (
+                    <Badge size="sm" className="ms-auto rounded-full tabular-nums">
+                      {tasksCount}
+                    </Badge>
+                  )}
                 </MenuItem>
               )}
             </MenuGroup>
@@ -442,14 +511,18 @@ const NO_HIDDEN_JOBS: readonly string[] = [];
  * 126 rule 2). A dot marks a shell that is running out of sight, so hiding
  * the terminal never hides a process.
  */
-function TerminalButton({ state, onToggle }: { state: TerminalButtonState; onToggle: () => void }) {
-  const { t } = useI18n();
-  const unavailable = state === 'unavailable';
-  const label = unavailable
+function terminalLabel(state: TerminalButtonState, t: (key: string) => string): string {
+  return state === 'unavailable'
     ? t('This conversation has no folder to open a terminal in')
     : state === 'hidden'
       ? t('Terminal (still running)')
       : t('Terminal');
+}
+
+function TerminalButton({ state, onToggle }: { state: TerminalButtonState; onToggle: () => void }) {
+  const { t } = useI18n();
+  const unavailable = state === 'unavailable';
+  const label = terminalLabel(state, t);
   const icon = (
     <>
       <SquareTerminal className="size-4" />
@@ -493,10 +566,13 @@ function TerminalButton({ state, onToggle }: { state: TerminalButtonState; onTog
   );
 }
 
-function useBackgroundWorkCounts(sessionId: string): { jobs: number; agents: number } {
-  const panels = useSessionPanelsStore((state) => state.bySession[sessionId]);
+function useBackgroundWorkCounts(sessionId: string | null): { jobs: number; agents: number } {
+  const panels = useSessionPanelsStore((state) =>
+    sessionId ? state.bySession[sessionId] : undefined
+  );
   const allLanes = useSubagentActivityStore((state) => state.lanes);
   return useMemo(() => {
+    if (!sessionId) return { jobs: 0, agents: 0 };
     const lanes = Object.values(allLanes).filter((lane) => lane.sessionId === sessionId);
     return {
       jobs: deriveJobsWindowView({ panels, lanes, hidden: NO_HIDDEN_JOBS }).running,
@@ -508,22 +584,20 @@ function useBackgroundWorkCounts(sessionId: string): { jobs: number; agents: num
 /**
  * Layout 5d: one 「后台任务」 button for the tasks pane (background commands,
  * workflows and subagents — the pane lists both kinds the two floating
- * sub-windows used to). Shown only while something runs or the pane is open,
- * with the running count; the ⋮ menu always offers it.
+ * sub-windows used to). Shown only while something runs or the pane is open
+ * (the bar decides, decision 209 §5), with the running count; the ⋮ menu
+ * always offers it.
  */
 function BackgroundTasksButton({
-  sessionId,
+  count,
   open,
   onToggle,
 }: {
-  sessionId: string;
+  count: number;
   open: boolean;
   onToggle: () => void;
 }) {
   const { t } = useI18n();
-  const { jobs, agents } = useBackgroundWorkCounts(sessionId);
-  const count = jobs + agents;
-  if (count === 0 && !open) return null;
   return (
     <BarIconButton
       label={t('Background tasks')}
@@ -538,5 +612,68 @@ function BackgroundTasksButton({
         </Badge>
       )}
     </BarIconButton>
+  );
+}
+
+/**
+ * Decision 209 §5: a bar button that moved into ⋮ — the same toggle, ticked
+ * while what it opens is on screen. The menu closes on a click, as the
+ * button's own click would leave nothing more to do there.
+ */
+function BarOverflowItem({
+  button,
+  openPanes,
+  onTogglePane,
+  terminalState,
+  onToggleTerminal,
+  reviewLabel,
+  sideChat,
+}: {
+  button: Exclude<BarButton, 'rail' | 'tasks'>;
+  openPanes: readonly PaneKind[];
+  onTogglePane?: (kind: PaneKind) => void;
+  terminalState?: TerminalButtonState;
+  onToggleTerminal?: () => void;
+  reviewLabel: string;
+  sideChat?: { open: boolean; label: string; onToggle: () => void };
+}) {
+  const { t } = useI18n();
+  if (button === 'side-chat') {
+    if (!sideChat) return null;
+    return (
+      <MenuCheckboxItem
+        checked={sideChat.open}
+        onCheckedChange={sideChat.onToggle}
+        closeOnClick
+        data-bar-overflow-item={button}
+      >
+        {sideChat.label}
+      </MenuCheckboxItem>
+    );
+  }
+  if (button === 'terminal') {
+    if (!terminalState || !onToggleTerminal) return null;
+    return (
+      <MenuCheckboxItem
+        checked={terminalState === 'open'}
+        disabled={terminalState === 'unavailable'}
+        onCheckedChange={onToggleTerminal}
+        closeOnClick
+        data-bar-overflow-item={button}
+      >
+        {terminalLabel(terminalState, t)}
+      </MenuCheckboxItem>
+    );
+  }
+  if (!onTogglePane) return null;
+  return (
+    <MenuCheckboxItem
+      checked={openPanes.includes(button)}
+      onCheckedChange={() => onTogglePane(button)}
+      closeOnClick
+      data-bar-overflow-item={button}
+    >
+      {button === 'changes' ? reviewLabel : t('Files')}
+    </MenuCheckboxItem>
   );
 }

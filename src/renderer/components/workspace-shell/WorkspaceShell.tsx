@@ -48,7 +48,7 @@ import { deriveSessionReview, type SessionReviewEntry } from './sessionReview';
 import { fitShell, type ShellSlot } from './shellFitModel';
 import { clampSidebarWidth } from './shellLayoutModel';
 import { SideChat } from './sideChat/SideChat';
-import { SideChatToggle } from './sideChat/SideChatToggle';
+import { SideChatToggle, sideChatShortcutLabel } from './sideChat/SideChatToggle';
 import {
   resolveSideChatPlacement,
   SIDE_CHAT_DOCK_WIDTH,
@@ -563,6 +563,8 @@ export function WorkspaceShell({
     [sessionRail.visible, sessionRailLabel, sessionRailMenuDisabled, toggleSessionRail]
   );
 
+  const isMac = window.electronAPI?.env?.platform === 'darwin';
+
   const commitPaneAreaWidth = useCallback(
     (width: number) => setPaneAreaWidth(paneColumns, width),
     [setPaneAreaWidth, paneColumns]
@@ -637,11 +639,22 @@ export function WorkspaceShell({
                 <SideChatToggle
                   open={sideChatOpen}
                   onToggle={() => toggleSideChat(activeSessionId)}
-                  isMac={window.electronAPI?.env?.platform === 'darwin'}
+                  isMac={isMac}
                 />
               ) : undefined
             }
             sessionRail={sessionRailMenu}
+            sideChat={
+              activeSessionId
+                ? {
+                    open: sideChatOpen,
+                    label: `${t('Side chat')} (${sideChatShortcutLabel(isMac)})`,
+                    onToggle: () => toggleSideChat(activeSessionId),
+                  }
+                : undefined
+            }
+            // Decision 209 §5: the bar spans the center row.
+            barWidth={shellWidth === null ? null : allocation.centerWidth}
           />
           <div className="relative flex min-h-0 flex-1">
             <div
