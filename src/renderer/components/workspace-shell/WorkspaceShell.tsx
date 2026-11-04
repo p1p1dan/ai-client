@@ -45,7 +45,7 @@ import {
   sessionRailToggleEnabled,
 } from './sessionRail/sessionRailModel';
 import { deriveSessionReview, type SessionReviewEntry } from './sessionReview';
-import { fitShell, type ShellSlot } from './shellFitModel';
+import { fitShellColumn, type ShellSlot } from './shellFitModel';
 import { clampSidebarWidth } from './shellLayoutModel';
 import { SideChat } from './sideChat/SideChat';
 import { SideChatToggle, sideChatShortcutLabel } from './sideChat/SideChatToggle';
@@ -381,17 +381,15 @@ export function WorkspaceShell({
     focus: paneFocus,
     paneWidths: { 1: paneAreaWidth, 2: paneAreaSplitWidth },
   };
-  let fit = fitShell({
+  // A docked side chat holds the column even with no room beside the
+  // conversation (it lies over it then); the rail does not come back.
+  const fit = fitShellColumn({
     ...fitInput,
-    slot: sideChatWantsDock ? DOCK_SLOT : railWanted ? RAIL_SLOT : null,
+    dock: sideChatWantsDock ? DOCK_SLOT : null,
+    rail: railWanted ? RAIL_SLOT : null,
   });
-  // A docked side chat with no room floats (layout 5f), leaving the slot to the rail.
-  const sideChatDocked = sideChatWantsDock && fit.slotFits;
-  let railFits = !sideChatWantsDock && fit.slotFits;
-  if (sideChatWantsDock && !sideChatDocked && railWanted) {
-    fit = fitShell({ ...fitInput, slot: RAIL_SLOT });
-    railFits = fit.slotFits;
-  }
+  const sideChatDocked = fit.dockFits;
+  const railFits = fit.railFits;
   const slotOnScreen = sideChatDocked ? DOCK_SLOT : railFits ? RAIL_SLOT : null;
   const paneView = fit.view;
   const visiblePanes = paneView.panes;
@@ -545,7 +543,8 @@ export function WorkspaceShell({
   const sessionRail = resolveSessionRailVisibility({
     userShown: sessionRailShown,
     sessionOpen: activeSessionId !== null,
-    sideChatDocked: sideChatPlacement === 'dock',
+    // Beside the conversation or lying over it: either way the rail yields.
+    sideChatDocked: sideChatPlacement === 'dock' || sideChatPlacement === 'dock-over',
     fits: railFits,
   });
   const sessionRailLabel = t(sessionRailToggleLabel(sessionRail));
@@ -684,7 +683,14 @@ export function WorkspaceShell({
                       home={<HomeView />}
                     />
                   </SessionRailPresenceContext.Provider>
-                  {sideChatPlacement === 'dock-over' && <SideChat placement="dock-over" />}
+                  {sideChatPlacement === 'dock-over' && (
+                    <SideChat
+                      placement="dock-over"
+                      // The panes' drawer covers the same edge; the side chat
+                      // stays on top of it rather than vanishing underneath.
+                      overDrawer={allocation.editorOverlay && !paneView.expanded}
+                    />
+                  )}
                 </div>
                 {sessionRail.visible && activeSessionId && (
                   <SessionRail

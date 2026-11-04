@@ -118,8 +118,17 @@ function EntryView({ entry, onRetry }: { entry: SideChatEntry; onRetry: () => vo
  *
  * It stays on the conversation it was opened on (ruling 4): the title names
  * it, and a note says so while the main window shows another one.
+ *
+ * `overDrawer`: lying over the chat while the panes cover it as a drawer too
+ * (a narrow window); the side chat goes on top, else it would vanish under it.
  */
-export function SideChat({ placement }: { placement: 'window' | 'dock' | 'dock-over' }) {
+export function SideChat({
+  placement,
+  overDrawer = false,
+}: {
+  placement: 'window' | 'dock' | 'dock-over';
+  overDrawer?: boolean;
+}) {
   const { t } = useI18n();
   const sessionId = useSideChatStore((state) => state.sessionId);
   const entries = useSideChatStore((state) => state.entries);
@@ -187,7 +196,9 @@ export function SideChat({ placement }: { placement: 'window' | 'dock' | 'dock-o
         inWindow && 'h-full border border-border-soft',
         placement === 'dock' && 'shrink-0 border-border-soft border-l',
         placement === 'dock-over' &&
-          'absolute inset-y-0 right-0 z-20 border-border-soft border-l elev-lg'
+          'absolute inset-y-0 right-0 border-border-soft border-l elev-lg',
+        // The drawer (PaneArea) is `z-20` and later in the row.
+        placement === 'dock-over' && (overDrawer ? 'z-30' : 'z-20')
       )}
       style={inWindow ? undefined : { width: SIDE_CHAT_DOCK_WIDTH }}
     >

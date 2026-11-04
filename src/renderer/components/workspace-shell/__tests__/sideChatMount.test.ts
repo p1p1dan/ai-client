@@ -5,10 +5,13 @@
  * own window's content (decision 209 §3) and the docked column, asking from
  * its box, closing it. Rendered with the real Chinese catalog.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { translate } from '@shared/i18n';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { stripComments } from '@/components/chat/__tests__/stripComments';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import {
   type SideChatTransport,
@@ -35,6 +38,10 @@ vi.mock('@/components/chat/sessionStartDeps', () => ({
 vi.mock('@/components/chat/MessageTimeline', () => ({
   TurnTextItem: ({ text }: { text: string }) => createElement('div', { 'data-md': '' }, text),
 }));
+
+const SHELL_DIR = join(process.cwd(), 'src/renderer/components/workspace-shell');
+const code = (file: string) =>
+  stripComments(readFileSync(join(SHELL_DIR, file), 'utf8'), join(SHELL_DIR, file));
 
 let root: Root | null = null;
 let asked: Array<{ request: SideQuestionRequest; resolve: (o: SideQuestionOutcome) => void }> = [];
@@ -152,7 +159,8 @@ describe('the side chat window', () => {
     );
     expect(useSideChatStore.getState()).toMatchObject({ open: false, entries: [] });
 
-    useSideChatStore.getState().openFor('s1');
+    // Still mounted (drawing nothing): reopening re-renders it.
+    await act(async () => useSideChatStore.getState().openFor('s1'));
     await act(async () => root?.render(createElement(SideChat, { placement: 'window' })));
     await act(async () => {
       container
@@ -196,6 +204,24 @@ describe('the conversation it reads (decision 209 ruling 4)', () => {
     const section = container.querySelector<HTMLElement>('[data-side-chat]');
     expect(section?.className).toContain('absolute');
     expect(section?.style.width).toBe('380px');
+    // The panes beside it keep their resize handle above it (PaneArea's `z-20`, later).
+    expect(section?.className.split(' ')).toContain('z-20');
+  });
+
+  it('stays on top while the panes cover the chat as a drawer too', async () => {
+    // Real-app check, decision 209: at 1000 wide with the editor open, the
+    // drawer (same layer, later in the row) hid the docked side chat entirely.
+    expect(code('PaneArea.tsx')).toContain("overlay && 'absolute inset-y-0 right-0 z-20 elev-lg'");
+    expect(code('WorkspaceShell.tsx')).toContain(
+      'overDrawer={allocation.editorOverlay && !paneView.expanded}'
+    );
+    useSideChatStore.getState().openFor('s1');
+    const container = await mount(
+      createElement(SideChat, { placement: 'dock-over', overDrawer: true })
+    );
+    const classes = container.querySelector<HTMLElement>('[data-side-chat]')?.className.split(' ');
+    expect(classes).toContain('z-30');
+    expect(classes).not.toContain('z-20');
   });
 });
 
@@ -210,5 +236,15 @@ describe('the session rail toggle while the side chat is docked', () => {
     const button = container.querySelector<HTMLButtonElement>('[data-session-rail-toggle]');
     expect(button?.disabled).toBe(true);
     expect(button?.getAttribute('aria-label')).toBe('旁问停靠在右侧时，会话侧栏让位');
+  });
+
+  it('yields whether the side chat sits beside the conversation or lies over it', () => {
+    // Real-app check, decision 209: at 1100 wide with no panes the rail came
+    // back, and the side chat lay over a conversation squeezed beside it.
+    const shell = code('WorkspaceShell.tsx');
+    expect(shell).toContain(
+      "sideChatDocked: sideChatPlacement === 'dock' || sideChatPlacement === 'dock-over'"
+    );
+    expect(shell).toContain('const railFits = fit.railFits;');
   });
 });

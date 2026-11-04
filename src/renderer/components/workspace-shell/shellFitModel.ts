@@ -101,3 +101,29 @@ export function fitShell(input: ShellFitInput): ShellFit {
   }
   return { view, ...fit, slotFits: false };
 }
+
+export interface ShellColumnFit extends ShellFit {
+  /** A docked side chat fits beside the conversation (else it lies over it). */
+  dockFits: boolean;
+  /** The session rail is on screen as far as room goes. */
+  railFits: boolean;
+}
+
+/**
+ * Decision 209 §4: the column right of the conversation holds one thing. A
+ * docked side chat takes it whether it fits beside the conversation or has
+ * to lie over it: the rail stays off either way, so the side chat never lies
+ * over a conversation squeezed between the sidebar and the rail. Without a
+ * docked side chat, the column is the rail's while it fits.
+ */
+export function fitShellColumn(
+  input: Omit<ShellFitInput, 'slot'> & { dock: ShellSlot | null; rail: ShellSlot | null }
+): ShellColumnFit {
+  const { dock, rail, ...rest } = input;
+  const fit = fitShell({ ...rest, slot: dock ?? rail });
+  return {
+    ...fit,
+    dockFits: dock !== null && fit.slotFits,
+    railFits: dock === null && fit.slotFits,
+  };
+}

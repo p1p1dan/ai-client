@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHAT_MIN_WIDTH, PANE_DRAWER_PEEK } from '../centerLayoutModel';
 import { SESSION_RAIL_MIN_CHAT_WIDTH, SESSION_RAIL_WIDTH } from '../sessionRail/sessionRailModel';
-import { fitShell, type ShellFitInput, type ShellSlot } from '../shellFitModel';
+import { fitShell, fitShellColumn, type ShellFitInput, type ShellSlot } from '../shellFitModel';
 import { SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH } from '../shellLayoutModel';
 import { SIDE_CHAT_DOCK_WIDTH, SIDE_CHAT_MIN_CHAT_WIDTH } from '../sideChat/sideChatModel';
 import {
@@ -117,6 +117,50 @@ describe('fitShell — the rail beside open panes (decision 209 §4)', () => {
       },
     });
     expect(hidden.slotFits).toBe(false);
+  });
+});
+
+describe('fitShellColumn — one thing right of the conversation (decision 209 §4)', () => {
+  const at = (shellWidth: number, panes: PaneKind[], dock: ShellSlot | null) =>
+    fitShellColumn({
+      base: {
+        shellWidth,
+        sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
+        sidebarCollapsed: false,
+        chatVisible: true,
+        panelVisible: false,
+        panelWidth: 0,
+      },
+      view: view(panes),
+      focus: panes,
+      paneWidths: PANE_AREA_DEFAULT_WIDTH,
+      dock,
+      rail: RAIL,
+    });
+
+  it('a docked side chat that fits takes the column; the rail stays off', () => {
+    const edge = SIDEBAR_DEFAULT_WIDTH + SIDE_CHAT_DOCK_WIDTH + SIDE_CHAT_MIN_CHAT_WIDTH;
+    expect(at(edge, [], DOCK)).toMatchObject({ dockFits: true, railFits: false });
+  });
+
+  it('with no room beside the conversation it lies over it, and the rail does not come back', () => {
+    // Real-app check: at 1100 the rail would fit, and the side chat lay over a
+    // conversation squeezed between the sidebar and the rail.
+    const narrow = SIDEBAR_DEFAULT_WIDTH + SIDE_CHAT_DOCK_WIDTH + SIDE_CHAT_MIN_CHAT_WIDTH - 1;
+    expect(narrow).toBeGreaterThan(SIDEBAR_DEFAULT_WIDTH + SESSION_RAIL_WIDTH + 480);
+    const result = at(narrow, [], DOCK);
+    expect(result).toMatchObject({ dockFits: false, railFits: false });
+    // Nothing is squeezed or shrunk for a column that is not beside the chat.
+    expect(result.allocation.chatWidth).toBe(narrow - SIDEBAR_DEFAULT_WIDTH);
+    expect(at(narrow, ['changes'], DOCK).allocation.editorWidth).toBe(
+      fitAt(narrow, ['changes'], null).allocation.editorWidth
+    );
+  });
+
+  it('without a docked side chat the column is the rail’s while it fits', () => {
+    const edge = SIDEBAR_DEFAULT_WIDTH + SESSION_RAIL_WIDTH + SESSION_RAIL_MIN_CHAT_WIDTH;
+    expect(at(edge, [], null)).toMatchObject({ dockFits: false, railFits: true });
+    expect(at(edge - 1, [], null)).toMatchObject({ dockFits: false, railFits: false });
   });
 });
 
