@@ -4,16 +4,21 @@
  * beside it. It reads the main conversation and writes nothing back; closing
  * it discards it (Claude Code desktop does not save side chats either).
  *
- * Two forms: a floating window over the chat's bottom-right corner (the
- * default), or docked as a column right of the chat, where the session rail
- * would be. Which one is on screen is derived per render (`resolveSideChatPlacement`).
+ * Two forms (decision 209 §3, overturning L6's corner window): a window of its
+ * own (the default) that can go anywhere on any screen and stays on top of the
+ * main window, or docked as a column right of the chat, where the session rail
+ * would be. Which one is on screen is derived per render
+ * (`resolveSideChatPlacement`).
+ *
+ * It belongs to the conversation it was opened on, and stays on it while the
+ * main window shows another (decision 209 ruling 4); only one is open at a time.
  *
  * No React, no store, no IPC: node-env tests assert every rule here.
  */
 import type { WorkerSideQuestionTurn } from '@shared/types/workerRpc';
 import { WORKER_SIDE_QUESTION_MAX_TURNS } from '@shared/types/workerRpc';
 
-export type SideChatForm = 'float' | 'dock';
+export type SideChatForm = 'window' | 'dock';
 
 export type SideChatEntryStatus = 'pending' | 'answered' | 'no-answer' | 'failed';
 
@@ -35,17 +40,17 @@ export interface SideChatState {
   entries: SideChatEntry[];
 }
 
-/** The floating window (the reference's ~380×440 corner window). */
-export const SIDE_CHAT_FLOAT_WIDTH = 380;
-export const SIDE_CHAT_FLOAT_HEIGHT = 440;
 /** The docked column's width. */
 export const SIDE_CHAT_DOCK_WIDTH = 380;
-/** The narrowest chat left beside a docked side chat; below it the side chat floats. */
+/**
+ * The narrowest chat left beside a docked side chat; below it the docked
+ * column lies over the chat instead (decision 209 §4, §5).
+ */
 export const SIDE_CHAT_MIN_CHAT_WIDTH = 480;
 
 export const INITIAL_SIDE_CHAT: SideChatState = {
   open: false,
-  form: 'float',
+  form: 'window',
   sessionId: null,
   entries: [],
 };
@@ -66,9 +71,14 @@ export function closeSideChat(state: SideChatState): SideChatState {
   return { open: false, form: state.form, sessionId: null, entries: [] };
 }
 
-/** Ctrl+; and the title-bar button: close an open one, else open on the conversation. */
+/**
+ * Ctrl+;, the title-bar button and `/btw` (decision 209 §3): open on this
+ * conversation → close; open on another one → move to this one (what was
+ * asked there is discarded, one side chat at a time); closed → open on it.
+ * With no conversation open, only closing is possible.
+ */
 export function toggleSideChat(state: SideChatState, sessionId: string | null): SideChatState {
-  if (state.open) return closeSideChat(state);
+  if (state.open && (state.sessionId === sessionId || !sessionId)) return closeSideChat(state);
   return sessionId ? openSideChat(state, sessionId) : state;
 }
 
@@ -77,14 +87,18 @@ export function setSideChatForm(state: SideChatState, form: SideChatForm): SideC
 }
 
 /**
- * The open conversation changed: a side chat about another one is discarded
- * (it would otherwise read a conversation that is no longer on screen).
+ * Decision 209 ruling 4: switching the main window to another conversation
+ * leaves the side chat where it is. It closes only when its own conversation
+ * is gone from the list (deleted or archived) — `liveSessionIds` is the
+ * session tree's, as the other session-scoped stores prune against.
  */
-export function followActiveSession(
+export function pruneSideChat(
   state: SideChatState,
-  activeSessionId: string | null
+  liveSessionIds: readonly string[]
 ): SideChatState {
-  return state.open && state.sessionId !== activeSessionId ? closeSideChat(state) : state;
+  return state.open && state.sessionId !== null && !liveSessionIds.includes(state.sessionId)
+    ? closeSideChat(state)
+    : state;
 }
 
 /** One question waits for its answer; the box sends nothing more meanwhile. */
@@ -153,52 +167,25 @@ export function sideQuestionHistory(
   return turns.slice(-WORKER_SIDE_QUESTION_MAX_TURNS);
 }
 
-export type SideChatPlacement = 'hidden' | 'float' | 'dock';
+/**
+ * `window`: its own window. `dock`: the column right of the chat.
+ * `dock-over`: docked, but the chat is too narrow to keep
+ * `SIDE_CHAT_MIN_CHAT_WIDTH` beside it, so the column lies over the chat's
+ * right edge (decision 209 §4, §5).
+ */
+export type SideChatPlacement = 'hidden' | 'window' | 'dock' | 'dock-over';
 
 /**
- * Where the side chat is on screen. Docked only while the chat keeps
- * `SIDE_CHAT_MIN_CHAT_WIDTH` beside it — `dockFits` is the shell's
- * `fitShell(...).slotFits` with the docked column as the slot (decision 209
- * §4: open panes are squeezed first). Narrower, the docked side chat floats
- * until there is room again (nothing is stored).
+ * Where the side chat is on screen. `dockFits` is the shell's
+ * `fitShell(...).slotFits` with the docked column as the slot (open panes are
+ * squeezed first). Nothing is stored: a wider window docks it again.
  */
 export function resolveSideChatPlacement(input: {
   open: boolean;
   form: SideChatForm;
-  sessionOpen: boolean;
   dockFits: boolean;
 }): SideChatPlacement {
-  if (!input.open || !input.sessionOpen) return 'hidden';
-  if (input.form === 'dock' && input.dockFits) return 'dock';
-  return 'float';
-}
-
-/** The floating window's drag offset from its resting corner (bottom-right), in px. */
-export interface SideChatFloatOffset {
-  x: number;
-  y: number;
-}
-
-/** Keep this many px between the floating window and the chat area's edges. */
-export const SIDE_CHAT_FLOAT_MARGIN = 16;
-
-/**
- * Clamp a drag offset so the floating window stays inside its container.
- * The window rests at the container's bottom-right corner, `margin` px in;
- * a negative x moves it left, a negative y moves it up. Pure: the caller
- * measures both boxes once per pointer move, while dragging only.
- */
-export function clampSideChatFloatOffset(
-  offset: SideChatFloatOffset,
-  container: { width: number; height: number },
-  panel: { width: number; height: number },
-  margin: number = SIDE_CHAT_FLOAT_MARGIN
-): SideChatFloatOffset {
-  const maxLeft = Math.max(0, container.width - panel.width - 2 * margin);
-  const maxUp = Math.max(0, container.height - panel.height - 2 * margin);
-  // `+ 0` folds -0 to 0 (no room to move: -0 from `-maxLeft`).
-  return {
-    x: Math.min(0, Math.max(-maxLeft, offset.x)) + 0,
-    y: Math.min(0, Math.max(-maxUp, offset.y)) + 0,
-  };
+  if (!input.open) return 'hidden';
+  if (input.form === 'window') return 'window';
+  return input.dockFits ? 'dock' : 'dock-over';
 }

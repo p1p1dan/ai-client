@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { resolveSessionRailVisibility } from '../sessionRail/sessionRailModel';
 import {
   addSideQuestion,
-  clampSideChatFloatOffset,
   closeSideChat,
-  followActiveSession,
   INITIAL_SIDE_CHAT,
   openSideChat,
   pendingSideQuestionIds,
+  pruneSideChat,
   resolveSideChatPlacement,
   SIDE_CHAT_DOCK_WIDTH,
   SIDE_CHAT_MIN_CHAT_WIDTH,
@@ -19,13 +18,14 @@ import {
 } from '../sideChat/sideChatModel';
 
 /**
- * Layout 5f (ui-cohesion ruling L6): the side chat's rules — open / float /
- * dock / close, which conversation it reads, and that closing discards it.
+ * Layout 5f (ui-cohesion ruling L6), reshaped by decision 209 §3: the side
+ * chat's rules — open / its own window / dock / close, which conversation it
+ * reads (it stays on it, ruling 4), and that closing discards it.
  */
 describe('side chat model', () => {
-  it('opens on the conversation, empty and floating by default', () => {
+  it('opens on the conversation, empty and in its own window by default', () => {
     const open = openSideChat(INITIAL_SIDE_CHAT, 's1');
-    expect(open).toEqual({ open: true, form: 'float', sessionId: 's1', entries: [] });
+    expect(open).toEqual({ open: true, form: 'window', sessionId: 's1', entries: [] });
     // Already open on it: the very same state.
     expect(openSideChat(open, 's1')).toBe(open);
   });
@@ -44,21 +44,27 @@ describe('side chat model', () => {
     });
   });
 
-  it('toggles: open closes, closed opens on the conversation, nothing without one', () => {
+  it('toggles (decision 209 §3): on this conversation closes, on another moves, closed opens', () => {
     const open = toggleSideChat(INITIAL_SIDE_CHAT, 's1');
     expect(open.open).toBe(true);
     expect(toggleSideChat(open, 's1').open).toBe(false);
+    const asked = addSideQuestion(open, 's1', 'q1', 'why?');
+    const moved = toggleSideChat(asked, 's2');
+    expect(moved).toMatchObject({ open: true, sessionId: 's2', entries: [] });
+    // No conversation open: only closing is possible.
+    expect(toggleSideChat(asked, null).open).toBe(false);
     expect(toggleSideChat(INITIAL_SIDE_CHAT, null)).toBe(INITIAL_SIDE_CHAT);
   });
 
-  it('belongs to one conversation: another one starts a fresh side chat', () => {
+  it('belongs to one conversation and stays on it until that one is gone (ruling 4)', () => {
     const asked = addSideQuestion(INITIAL_SIDE_CHAT, 's1', 'q1', 'why?');
     const other = openSideChat(asked, 's2');
     expect(other.sessionId).toBe('s2');
     expect(other.entries).toEqual([]);
-    // Switching the open conversation discards it.
-    expect(followActiveSession(asked, 's2').open).toBe(false);
-    expect(followActiveSession(asked, 's1')).toBe(asked);
+    // Another conversation on screen changes nothing; its own leaving the list closes it.
+    expect(pruneSideChat(asked, ['s1', 's2'])).toBe(asked);
+    expect(pruneSideChat(asked, ['s2']).open).toBe(false);
+    expect(pruneSideChat(INITIAL_SIDE_CHAT, [])).toBe(INITIAL_SIDE_CHAT);
   });
 
   it('a question waits, then settles; one at a time', () => {
@@ -95,19 +101,15 @@ describe('side chat model', () => {
     expect(sideQuestionHistory(state.entries, 'q1')).toEqual([]);
   });
 
-  it('docks only while there is room for it; otherwise floats', () => {
+  it('docks while there is room for it; otherwise lies over the chat', () => {
     // Decision 209 §4: the room is `fitShell`'s answer (panes squeezed first),
     // with this column as the slot — see shellFitModel.test.ts.
-    const base = { open: true, sessionOpen: true };
-    expect(resolveSideChatPlacement({ ...base, form: 'float', dockFits: true })).toBe('float');
+    const base = { open: true };
+    expect(resolveSideChatPlacement({ ...base, form: 'window', dockFits: true })).toBe('window');
+    expect(resolveSideChatPlacement({ ...base, form: 'window', dockFits: false })).toBe('window');
     expect(resolveSideChatPlacement({ ...base, form: 'dock', dockFits: true })).toBe('dock');
-    expect(resolveSideChatPlacement({ ...base, form: 'dock', dockFits: false })).toBe('float');
-    expect(resolveSideChatPlacement({ ...base, open: false, form: 'dock', dockFits: true })).toBe(
-      'hidden'
-    );
-    expect(
-      resolveSideChatPlacement({ ...base, sessionOpen: false, form: 'float', dockFits: true })
-    ).toBe('hidden');
+    expect(resolveSideChatPlacement({ ...base, form: 'dock', dockFits: false })).toBe('dock-over');
+    expect(resolveSideChatPlacement({ open: false, form: 'dock', dockFits: true })).toBe('hidden');
     expect(SIDE_CHAT_DOCK_WIDTH + SIDE_CHAT_MIN_CHAT_WIDTH).toBe(860);
   });
 
@@ -122,35 +124,5 @@ describe('side chat model', () => {
     expect(
       resolveSessionRailVisibility({ ...input, userShown: false, sideChatDocked: true }).hidden
     ).toBe('user');
-  });
-});
-
-describe('clampSideChatFloatOffset (user, 2026-10-22: the floating side chat can be dragged)', () => {
-  const container = { width: 1000, height: 800 };
-  const panel = { width: 380, height: 440 };
-
-  it('lets the window move left and up inside the container', () => {
-    expect(clampSideChatFloatOffset({ x: -200, y: -100 }, container, panel)).toEqual({
-      x: -200,
-      y: -100,
-    });
-  });
-
-  it('never moves it past its resting corner (right / bottom)', () => {
-    expect(clampSideChatFloatOffset({ x: 50, y: 30 }, container, panel)).toEqual({ x: 0, y: 0 });
-  });
-
-  it('stops at the far edges, keeping the margin', () => {
-    // 1000 - 380 - 2*16 = 588; 800 - 440 - 2*16 = 328
-    expect(clampSideChatFloatOffset({ x: -5000, y: -5000 }, container, panel)).toEqual({
-      x: -588,
-      y: -328,
-    });
-  });
-
-  it('pins it to the corner when the container is too small to move in', () => {
-    expect(
-      clampSideChatFloatOffset({ x: -10, y: -10 }, { width: 300, height: 300 }, panel)
-    ).toEqual({ x: 0, y: 0 });
   });
 });

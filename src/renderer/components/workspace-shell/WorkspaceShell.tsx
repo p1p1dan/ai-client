@@ -49,6 +49,7 @@ import { fitShell, type ShellSlot } from './shellFitModel';
 import { clampSidebarWidth } from './shellLayoutModel';
 import { SideChat } from './sideChat/SideChat';
 import { SideChatToggle, sideChatShortcutLabel } from './sideChat/SideChatToggle';
+import { SideChatWindow } from './sideChat/SideChatWindow';
 import {
   resolveSideChatPlacement,
   SIDE_CHAT_DOCK_WIDTH,
@@ -311,11 +312,6 @@ export function WorkspaceShell({
     temporaryWorkspaceEnabled,
   });
 
-  // Layout 5f: a side chat belongs to the conversation it reads; opening
-  // another one discards it.
-  useEffect(() => {
-    useSideChatStore.getState().followSession(activeSessionId);
-  }, [activeSessionId]);
   const workspaceSearch = useWorkspaceSearch();
 
   // m7: per-workspace editor tab isolation. Must live somewhere ALWAYS mounted
@@ -368,7 +364,9 @@ export function WorkspaceShell({
    * panes are squeezed to their floor for it first). One column of panes, or
    * two: each count keeps its own area width.
    */
-  const sideChatWantsDock = sideChatOpen && sideChatForm === 'dock' && activeSessionId !== null;
+  // Decision 209 ruling 4: the side chat stays open on its own conversation
+  // whichever one (or the home page) the main window shows.
+  const sideChatWantsDock = sideChatOpen && sideChatForm === 'dock';
   const railWanted = sessionRailShown && activeSessionId !== null;
   const fitInput = {
     base: {
@@ -535,14 +533,13 @@ export function WorkspaceShell({
    * panes, and hides only when the conversation would get too narrow.
    */
   /**
-   * Layout 5f (ruling L6): the side chat floats over the chat's bottom-right
-   * corner, or docks right of it in the rail's place (the rail yields). Like
-   * the rail, derived per render: docked but too narrow, it floats.
+   * Layout 5f / decision 209 §3: the side chat is a window of its own, or
+   * docks right of the chat in the rail's place (the rail yields). Like the
+   * rail, derived per render: docked but too narrow, it lies over the chat.
    */
   const sideChatPlacement = resolveSideChatPlacement({
     open: sideChatOpen,
     form: sideChatForm,
-    sessionOpen: activeSessionId !== null,
     dockFits: sideChatDocked,
   });
   const sessionRail = resolveSessionRailVisibility({
@@ -676,9 +673,9 @@ export function WorkspaceShell({
                   Layout 5e: the session rail rides at the column's right
                   edge, and the composer hides what the rail shows. */}
               <div className="flex min-h-0 min-w-0 flex-1">
-                {/* Layout 5f: always this wrapper, so the floating side chat
-                    lays over the conversation alone and opening it never
-                    remounts ChatWorkspace. */}
+                {/* Layout 5f: always this wrapper, so a docked side chat with
+                    no room lies over the conversation alone and opening it
+                    never remounts ChatWorkspace. */}
                 <div className="relative flex min-h-0 min-w-0 flex-1">
                   <SessionRailPresenceContext.Provider value={sessionRail.visible}>
                     <ChatWorkspace
@@ -687,7 +684,7 @@ export function WorkspaceShell({
                       home={<HomeView />}
                     />
                   </SessionRailPresenceContext.Provider>
-                  {sideChatPlacement === 'float' && <SideChat placement="float" />}
+                  {sideChatPlacement === 'dock-over' && <SideChat placement="dock-over" />}
                 </div>
                 {sessionRail.visible && activeSessionId && (
                   <SessionRail
@@ -698,6 +695,8 @@ export function WorkspaceShell({
                   />
                 )}
                 {sideChatPlacement === 'dock' && <SideChat placement="dock" />}
+                {/* Decision 209 §3: drawn into its own window through a portal. */}
+                {sideChatPlacement === 'window' && <SideChatWindow />}
               </div>
             </div>
             {/*

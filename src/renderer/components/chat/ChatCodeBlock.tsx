@@ -153,9 +153,12 @@ function CodeCopyButton({ code }: { code: string }) {
     []
   );
 
-  const handleCopy = async () => {
+  const handleCopy = async (button: HTMLElement) => {
+    // Decision 209 §3: the clipboard of the window the button is in. With the
+    // side chat's own window focused, the main page may not write it.
+    const clipboard = button.ownerDocument.defaultView?.navigator.clipboard ?? navigator.clipboard;
     try {
-      await navigator.clipboard.writeText(code);
+      await clipboard.writeText(code);
     } catch {
       // A button that lies about having copied is worse than one that appears
       // to do nothing (TurnCopyButton's rule, kept identical here).
@@ -173,7 +176,7 @@ function CodeCopyButton({ code }: { code: string }) {
       variant="ghost"
       size="icon-xs"
       className="shrink-0"
-      onClick={() => void handleCopy()}
+      onClick={(event) => void handleCopy(event.currentTarget)}
       aria-label={label}
       title={label}
     >

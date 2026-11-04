@@ -1,5 +1,6 @@
 import { translate } from '@shared/i18n';
 import { app, BrowserWindow, Menu, shell } from 'electron';
+import { appWindowOf } from '../windows/sideChatWindow';
 import { getCurrentLocale } from './i18n';
 
 export type MenuAction = 'open-settings' | 'toggle-devtools';
@@ -9,7 +10,8 @@ interface MenuOptions {
 }
 
 function getActiveWindow(): BrowserWindow | null {
-  return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
+  // Decision 209 §3: with the side chat's window focused, the menu still means the main window.
+  return appWindowOf(BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null);
 }
 
 export function buildAppMenu(options: MenuOptions = {}): Menu {

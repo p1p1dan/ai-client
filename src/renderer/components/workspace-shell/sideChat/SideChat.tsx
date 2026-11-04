@@ -1,42 +1,50 @@
 import { ArrowUp, PanelRight, PictureInPicture2, X } from 'lucide-react';
-import {
-  type KeyboardEvent,
-  type ReactNode,
-  type PointerEvent as ReactPointerEvent,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { userBubbleClass, userBubbleRowClass } from '@/components/chat/chatTimelineLayout';
 import { TurnTextItem } from '@/components/chat/MessageTimeline';
+import { displaySessionTitle } from '@/components/chat/sessionIndex/sessionTitle';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useSideChatStore } from '@/stores/sideChat';
 import { barIconClass } from '../SessionBar';
-import {
-  clampSideChatFloatOffset,
-  SIDE_CHAT_DOCK_WIDTH,
-  SIDE_CHAT_FLOAT_HEIGHT,
-  SIDE_CHAT_FLOAT_WIDTH,
-  type SideChatEntry,
-  type SideChatFloatOffset,
-  sideChatBusy,
-} from './sideChatModel';
+import { SIDE_CHAT_DOCK_WIDTH, type SideChatEntry, sideChatBusy } from './sideChatModel';
 
 function HeaderButton({
   label,
   onClick,
   children,
   data,
+  nativeTitle = false,
 }: {
   label: string;
   onClick: () => void;
   children: ReactNode;
   data?: Record<string, string>;
+  /**
+   * Decision 209 §3: in the side chat's own window a tooltip would be drawn
+   * into the MAIN window (its portal's document), so the button says its
+   * name the native way there.
+   */
+  nativeTitle?: boolean;
 }) {
+  if (nativeTitle) {
+    return (
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={onClick}
+        className={barIconClass(false)}
+        {...data}
+      >
+        {children}
+      </button>
+    );
+  }
   return (
     <Tooltip>
       <TooltipTrigger
@@ -102,15 +110,16 @@ function EntryView({ entry, onRetry }: { entry: SideChatEntry; onRetry: () => vo
 
 /**
  * Layout 5f (ui-cohesion §6, ruling L6): the side chat. A quick question about
- * the conversation on screen, answered here and never added to it; closing
- * discards it. `float`: a window over the chat's bottom-right corner (the
- * default, the reference's); `dock`: a column right of the chat, in the
- * session rail's place.
+ * a conversation, answered here and never added to it; closing discards it.
+ * Decision 209 §3 forms: `window`, a window of its own (the default; drawn
+ * into by `SideChatWindow`); `dock`, a column right of the chat, in the
+ * session rail's place; `dock-over`, that column lying over the chat's right
+ * edge while the chat is too narrow to keep it beside it.
  *
- * Split view (ruling L7, another conversation in this container) is not here
- * yet: the title is plain text, not the reference's picker.
+ * It stays on the conversation it was opened on (ruling 4): the title names
+ * it, and a note says so while the main window shows another one.
  */
-export function SideChat({ placement }: { placement: 'float' | 'dock' }) {
+export function SideChat({ placement }: { placement: 'window' | 'dock' | 'dock-over' }) {
   const { t } = useI18n();
   const sessionId = useSideChatStore((state) => state.sessionId);
   const entries = useSideChatStore((state) => state.entries);
@@ -118,24 +127,23 @@ export function SideChat({ placement }: { placement: 'float' | 'dock' }) {
   const close = useSideChatStore((state) => state.close);
   const setForm = useSideChatStore((state) => state.setForm);
   const ask = useSideChatStore((state) => state.ask);
+  const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
+  const sessionTitle = useChatSessionsStore(
+    (state) => state.sessions.find((session) => session.id === sessionId)?.title ?? null
+  );
   const [draft, setDraft] = useState('');
-  // Floating form only: where the user dragged the window, relative to its
-  // bottom-right resting corner. Local state, so a close (unmount) resets it.
-  const [offset, setOffset] = useState<SideChatFloatOffset>({ x: 0, y: 0 });
-  const panelRef = useRef<HTMLElement>(null);
-  const dragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    from: SideChatFloatOffset;
-  } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const inWindow = placement === 'window';
 
-  // A new side chat (opened, or reopened on another conversation) takes the keyboard.
+  // A new side chat (opened, or moved to another conversation) takes the
+  // keyboard — in its own window, that window first.
   useEffect(() => {
-    if (sessionId) inputRef.current?.focus();
-  }, [sessionId]);
+    if (!sessionId) return;
+    const input = inputRef.current;
+    if (inWindow) input?.ownerDocument.defaultView?.focus();
+    input?.focus();
+  }, [sessionId, inWindow]);
 
   // The newest question and its answer stay in view.
   const lastEntry = entries[entries.length - 1];
@@ -161,43 +169,11 @@ export function SideChat({ placement }: { placement: 'float' | 'dock' }) {
     }
   };
 
-  const docked = placement === 'dock';
-
-  // Drag the floating window by its header (buttons excluded). Geometry is
-  // read on pointer events only, never kept as state (F10).
-  const onHeaderPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
-    if (docked || event.button !== 0) return;
-    if ((event.target as HTMLElement).closest('button')) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      from: offset,
-    };
-  };
-  const onHeaderPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
-    const drag = dragRef.current;
-    const panel = panelRef.current;
-    const container = panel?.offsetParent as HTMLElement | null;
-    if (!drag || drag.pointerId !== event.pointerId || !panel || !container) return;
-    setOffset(
-      clampSideChatFloatOffset(
-        {
-          x: drag.from.x + event.clientX - drag.startX,
-          y: drag.from.y + event.clientY - drag.startY,
-        },
-        { width: container.clientWidth, height: container.clientHeight },
-        { width: panel.offsetWidth, height: panel.offsetHeight }
-      )
-    );
-  };
-  const endDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
-  };
+  const conversation = sessionTitle === null ? null : displaySessionTitle(sessionTitle, t);
+  // Ruling 4: it reads its own conversation, which may not be the one on screen.
+  const elsewhere = sessionId !== activeSessionId;
   return (
     <section
-      ref={panelRef}
       aria-label={t('Side chat')}
       data-side-chat={placement}
       onKeyDown={(event) => {
@@ -207,60 +183,47 @@ export function SideChat({ placement }: { placement: 'float' | 'dock' }) {
         }
       }}
       className={cn(
-        'flex min-h-0 flex-col',
-        docked
-          ? 'shrink-0 border-border-soft border-l bg-surface-1'
-          : 'absolute right-4 bottom-4 z-20 max-h-[calc(100%-2rem)] max-w-[calc(100%-2rem)] rounded-2xl bg-surface-3 elev-popover'
+        'flex min-h-0 flex-col bg-surface-1',
+        inWindow && 'h-full border border-border-soft',
+        placement === 'dock' && 'shrink-0 border-border-soft border-l',
+        placement === 'dock-over' &&
+          'absolute inset-y-0 right-0 z-20 border-border-soft border-l elev-lg'
       )}
-      style={
-        docked
-          ? { width: SIDE_CHAT_DOCK_WIDTH }
-          : {
-              width: SIDE_CHAT_FLOAT_WIDTH,
-              height: SIDE_CHAT_FLOAT_HEIGHT,
-              transform:
-                offset.x || offset.y ? `translate(${offset.x}px, ${offset.y}px)` : undefined,
-            }
-      }
+      style={inWindow ? undefined : { width: SIDE_CHAT_DOCK_WIDTH }}
     >
       <header
         className={cn(
           'flex h-10 shrink-0 items-center gap-1 border-border-soft border-b pr-2 pl-3.5',
-          !docked && 'cursor-grab touch-none select-none active:cursor-grabbing'
+          // Frameless: the header is what the window is dragged by.
+          inWindow && 'drag-region select-none'
         )}
-        data-side-chat-drag-handle={docked ? undefined : ''}
-        title={docked ? undefined : t('Drag to move; double-click to put it back')}
-        onPointerDown={onHeaderPointerDown}
-        onPointerMove={onHeaderPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onDoubleClick={(event) => {
-          if (!docked && !(event.target as HTMLElement).closest('button'))
-            setOffset({ x: 0, y: 0 });
-        }}
       >
-        <span className="min-w-0 flex-1 truncate text-ui text-foreground">{t('Side chat')}</span>
-        {docked ? (
+        <span className="min-w-0 flex-1 truncate text-ui text-foreground" data-side-chat-title="">
+          {conversation ? `${t('Side chat')} · ${conversation}` : t('Side chat')}
+        </span>
+        {inWindow ? (
           <HeaderButton
-            label={t('Float as a window')}
-            onClick={() => setForm('float')}
-            data={{ 'data-side-chat-form': 'float' }}
+            label={t('Dock to the main window')}
+            onClick={() => setForm('dock')}
+            data={{ 'data-side-chat-form': 'dock' }}
+            nativeTitle
           >
-            <PictureInPicture2 className="size-4" />
+            <PanelRight className="size-4" />
           </HeaderButton>
         ) : (
           <HeaderButton
-            label={t('Dock to the right')}
-            onClick={() => setForm('dock')}
-            data={{ 'data-side-chat-form': 'dock' }}
+            label={t('Pop out as a window')}
+            onClick={() => setForm('window')}
+            data={{ 'data-side-chat-form': 'window' }}
           >
-            <PanelRight className="size-4" />
+            <PictureInPicture2 className="size-4" />
           </HeaderButton>
         )}
         <HeaderButton
           label={t('Close side chat')}
           onClick={close}
           data={{ 'data-side-chat-close': '' }}
+          nativeTitle={inWindow}
         >
           <X className="size-4" />
         </HeaderButton>
@@ -270,6 +233,16 @@ export function SideChat({ placement }: { placement: 'float' | 'dock' }) {
           'It can read this conversation up to now. Nothing here is added to it, and closing discards it.'
         )}
       </p>
+      {elsewhere && conversation && (
+        <p
+          className="shrink-0 px-3.5 pt-1 text-small text-foreground-faint"
+          data-side-chat-elsewhere=""
+        >
+          {t('It reads “{{title}}”, not the conversation open in the main window.', {
+            title: conversation,
+          })}
+        </p>
+      )}
       <div
         ref={listRef}
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3.5 py-2.5"

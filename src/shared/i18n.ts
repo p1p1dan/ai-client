@@ -5120,8 +5120,10 @@ Object.assign(zhTranslations, {
 Object.assign(zhTranslations, {
   'Side chat': '旁问',
   'Close side chat': '关闭旁问',
-  'Dock to the right': '停靠到右侧',
-  'Float as a window': '收回小窗',
+  'Dock to the main window': '停靠到主窗口右侧',
+  'Pop out as a window': '弹出成独立窗口',
+  'It reads “{{title}}”, not the conversation open in the main window.':
+    '它读的是「{{title}}」，不是主窗口正开着的对话。',
   'It can read this conversation up to now. Nothing here is added to it, and closing discards it.':
     '能看到主对话到现在为止的内容，这里的问答不会写回主对话，关掉即丢弃。',
   'Ask a side question without interrupting…': '问一句，不打断主对话…',

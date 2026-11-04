@@ -1,6 +1,7 @@
 /**
  * Layout 5f (ui-cohesion §6, ruling L6): the side chat's state — open or not,
- * floating or docked, the conversation it reads and what was asked in it.
+ * its own window or docked (decision 209 §3), the conversation it reads and
+ * what was asked in it.
  *
  * Nothing here is persisted: closing the side chat discards it (Claude Code
  * desktop does not save side chats either). Only the form outlives a close,
@@ -13,10 +14,10 @@ import { create } from 'zustand';
 import {
   addSideQuestion,
   closeSideChat,
-  followActiveSession,
   INITIAL_SIDE_CHAT,
   openSideChat,
   pendingSideQuestionIds,
+  pruneSideChat,
   type SideChatForm,
   type SideChatState,
   type SideQuestionOutcome,
@@ -90,8 +91,8 @@ interface SideChatStore extends SideChatState {
   close: () => void;
   toggleFor: (sessionId: string | null) => void;
   setForm: (form: SideChatForm) => void;
-  /** The open conversation changed. */
-  followSession: (activeSessionId: string | null) => void;
+  /** The session tree changed: a side chat whose conversation left it closes. */
+  pruneSessions: (liveSessionIds: readonly string[]) => void;
   /** Ask on `sessionId` (opening the side chat on it). False when one is still waiting. */
   ask: (sessionId: string, question: string) => boolean;
 }
@@ -113,7 +114,7 @@ export const useSideChatStore = create<SideChatStore>()((set, get) => {
     close: () => replace(closeSideChat(get())),
     toggleFor: (sessionId) => replace(toggleSideChat(get(), sessionId)),
     setForm: (form) => replace(setSideChatForm(get(), form)),
-    followSession: (activeSessionId) => replace(followActiveSession(get(), activeSessionId)),
+    pruneSessions: (liveSessionIds) => replace(pruneSideChat(get(), liveSessionIds)),
     ask: (sessionId, question) => {
       const text = question.trim();
       const current = get();

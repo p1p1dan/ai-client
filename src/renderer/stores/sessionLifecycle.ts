@@ -8,6 +8,7 @@ import { usePendingUserMessagesStore } from './pendingUserMessages';
 import { useSessionPanelsStore } from './sessionPanels';
 import { useSessionRuntimeFactsStore } from './sessionRuntimeFacts';
 import { useSessionSubwindowsStore } from './sessionSubwindows';
+import { useSideChatStore } from './sideChat';
 import { useSubagentActivityStore } from './subagentActivity';
 import { useToolExpansionStore } from './toolExpansion';
 import { useToolLiveOutputStore } from './toolLiveOutput';
@@ -110,6 +111,8 @@ export function pruneSessionScopedRendererState(sessionIds: readonly string[]): 
   // dsh-rebase P1-7b: the live output of running commands and the jobs window's put-away list.
   useToolLiveOutputStore.getState().pruneSessions(sessionIds);
   useSessionSubwindowsStore.getState().pruneSessions(sessionIds);
+  // Decision 209 ruling 4: the side chat outlives a switch, not its conversation.
+  useSideChatStore.getState().pruneSessions(sessionIds);
   // dsh-rebase P1-7e: the turn clock's live stamps (problem 16) and the parked
   // composer drafts (problem 33) of chats that are gone.
   useMessageMetadataStore.getState().pruneSessions(sessionIds);

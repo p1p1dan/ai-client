@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 /**
  * Layout 5f (ui-cohesion §6, ruling L6): the side chat on screen — its
- * title-bar button (right of the rail's divider, before the terminal), the
- * floating window and the docked column, asking from its box, closing it.
- * Rendered with the real Chinese catalog.
+ * title-bar button (right of the rail's divider, before the terminal), its
+ * own window's content (decision 209 §3) and the docked column, asking from
+ * its box, closing it. Rendered with the real Chinese catalog.
  */
 import { translate } from '@shared/i18n';
 import { act, createElement } from 'react';
@@ -106,12 +106,16 @@ describe('the title bar’s side chat button', () => {
 });
 
 describe('the side chat window', () => {
-  it('floats with the note, asks from its box, and shows the answer', async () => {
+  it('fills its own window with the note, asks from its box, and shows the answer', async () => {
     useSideChatStore.getState().openFor('s1');
-    const container = await mount(createElement(SideChat, { placement: 'float' }));
+    const container = await mount(createElement(SideChat, { placement: 'window' }));
     const section = container.querySelector<HTMLElement>('[data-side-chat]');
-    expect(section?.getAttribute('data-side-chat')).toBe('float');
-    expect(section?.className).toContain('absolute');
+    expect(section?.getAttribute('data-side-chat')).toBe('window');
+    expect(section?.className).toContain('h-full');
+    // Frameless: the header drags the window; its buttons name themselves natively.
+    expect(section?.querySelector('header')?.className).toContain('drag-region');
+    const dock = container.querySelector<HTMLButtonElement>('[data-side-chat-form="dock"]');
+    expect(dock?.title).toBe('停靠到主窗口右侧');
     expect(container.textContent).toContain('关掉即丢弃');
     const input = container.querySelector<HTMLTextAreaElement>('[data-side-chat-input]');
     expect(document.activeElement).toBe(input);
@@ -131,31 +135,67 @@ describe('the side chat window', () => {
     );
   });
 
-  it('docks and floats back from its header; ✕ and Esc close and discard it', async () => {
+  it('docks and pops out again from its header; ✕ and Esc close and discard it', async () => {
     useSideChatStore.getState().ask('s1', 'q?');
-    const container = await mount(createElement(SideChat, { placement: 'float' }));
+    const container = await mount(createElement(SideChat, { placement: 'window' }));
     await act(async () =>
       container.querySelector<HTMLButtonElement>('[data-side-chat-form="dock"]')?.click()
     );
     expect(useSideChatStore.getState().form).toBe('dock');
     await act(async () => root?.render(createElement(SideChat, { placement: 'dock' })));
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[data-side-chat-form="float"]')?.click()
+      container.querySelector<HTMLButtonElement>('[data-side-chat-form="window"]')?.click()
     );
-    expect(useSideChatStore.getState().form).toBe('float');
+    expect(useSideChatStore.getState().form).toBe('window');
     await act(async () =>
       container.querySelector<HTMLButtonElement>('[data-side-chat-close]')?.click()
     );
     expect(useSideChatStore.getState()).toMatchObject({ open: false, entries: [] });
 
     useSideChatStore.getState().openFor('s1');
-    await act(async () => root?.render(createElement(SideChat, { placement: 'float' })));
+    await act(async () => root?.render(createElement(SideChat, { placement: 'window' })));
     await act(async () => {
       container
         .querySelector('[data-side-chat-input]')
         ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     expect(useSideChatStore.getState().open).toBe(false);
+  });
+});
+
+describe('the conversation it reads (decision 209 ruling 4)', () => {
+  it('names it in the title, and says so while the main window shows another', async () => {
+    useChatSessionsStore.setState({
+      activeSessionId: 's1',
+      sessions: [
+        {
+          id: 's1',
+          projectId: 'p',
+          workspaceId: 'w',
+          title: '登录改版',
+          status: 'idle',
+          updatedAt: 0,
+        },
+        { id: 's2', projectId: 'p', workspaceId: 'w', title: '别的', status: 'idle', updatedAt: 0 },
+      ],
+    } as never);
+    useSideChatStore.getState().openFor('s1');
+    const container = await mount(createElement(SideChat, { placement: 'dock' }));
+    expect(container.querySelector('[data-side-chat-title]')?.textContent).toBe('旁问 · 登录改版');
+    expect(container.querySelector('[data-side-chat-elsewhere]')).toBeNull();
+    await act(async () => useChatSessionsStore.setState({ activeSessionId: 's2' }));
+    expect(useSideChatStore.getState()).toMatchObject({ open: true, sessionId: 's1' });
+    expect(container.querySelector('[data-side-chat-elsewhere]')?.textContent).toBe(
+      '它读的是「登录改版」，不是主窗口正开着的对话。'
+    );
+  });
+
+  it('lies over the chat while docked with no room beside it', async () => {
+    useSideChatStore.getState().openFor('s1');
+    const container = await mount(createElement(SideChat, { placement: 'dock-over' }));
+    const section = container.querySelector<HTMLElement>('[data-side-chat]');
+    expect(section?.className).toContain('absolute');
+    expect(section?.style.width).toBe('380px');
   });
 });
 

@@ -24,6 +24,11 @@ import { sessionManager } from '../services/session/SessionManager';
 
 import { autoUpdaterService } from '../services/updater/AutoUpdater';
 import { closeRequestReason } from './closeRequestReason';
+import {
+  isSideChatWindow,
+  sideChatWindowOpenResponse,
+  watchSideChatWindows,
+} from './sideChatWindow';
 
 /**
  * D47 S5 §1.4 — Main's own call site for the shared `resolveGateDecision`
@@ -508,7 +513,8 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
         .filter((other) => other !== win)
         .map((other) => ({
           destroyed: other.isDestroyed(),
-          preview: previewWindowManager.isPreviewWindow(other),
+          // Decision 209 §3: the side chat's window closes with this one too.
+          preview: previewWindowManager.isPreviewWindow(other) || isSideChatWindow(other),
         }))
     );
     void confirmCloseWithReason(reason).then((confirmed) => {
@@ -518,13 +524,18 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
     });
   });
 
-  // Open external links in browser
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  // Open external links in browser. Decision 209 §3: the side chat's own
+  // window is the one window this page may open.
+  win.webContents.setWindowOpenHandler((details) => {
+    const sideChat = sideChatWindowOpenResponse(details, win);
+    if (sideChat) return sideChat;
+    const { url } = details;
     if (url.startsWith('https:') || url.startsWith('http:')) {
       shell.openExternal(url);
     }
     return { action: 'deny' };
   });
+  watchSideChatWindows(win);
 
   // Load renderer
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {

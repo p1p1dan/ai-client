@@ -98,6 +98,7 @@ import {
 import { webInspectorServer } from './services/webInspector';
 import log, { initLogger } from './utils/logger';
 import { registerProcessGoneLogging } from './utils/processGoneLogging';
+import { appWindowOf, isSideChatWindow } from './windows/sideChatWindow';
 import { openLocalWindow } from './windows/WindowManager';
 
 let mainWindow: BrowserWindow | null = null;
@@ -292,7 +293,7 @@ function parseAppUrl(url: string): string | null {
 
 // Send open path event to renderer
 function sendOpenPath(path: string): void {
-  const windows = BrowserWindow.getAllWindows();
+  const windows = BrowserWindow.getAllWindows().filter((window) => !isSideChatWindow(window));
   if (windows.length > 0) {
     const win = windows[0];
     win.focus();
@@ -1027,5 +1028,6 @@ process.on('SIGINT', () => handleShutdownSignal('SIGINT'));
 process.on('SIGTERM', () => handleShutdownSignal('SIGTERM'));
 process.on('SIGHUP', () => handleShutdownSignal('SIGHUP'));
 function getAnyWindow(): BrowserWindow | null {
-  return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
+  // Decision 209 §3: the side chat's window answers for the main window it belongs to.
+  return appWindowOf(BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null);
 }

@@ -80,11 +80,24 @@ describe('side chat store', () => {
     expect(useSideChatStore.getState().entries).toEqual([]);
   });
 
-  it('switching conversations discards it too', () => {
+  // Decision 209 ruling 4 (was: switching conversations discarded it).
+  it('outlives a switch; closes, telling the engine, once its conversation is gone', () => {
     useSideChatStore.getState().ask('s1', 'why?');
-    useSideChatStore.getState().followSession('s2');
+    useSideChatStore.getState().pruneSessions(['s1', 's2']);
+    expect(useSideChatStore.getState()).toMatchObject({ open: true, sessionId: 's1' });
+    expect(cancelled).toHaveLength(0);
+    useSideChatStore.getState().pruneSessions(['s2']);
     expect(useSideChatStore.getState().open).toBe(false);
     expect(cancelled).toHaveLength(1);
+  });
+
+  it('Ctrl+; on another conversation moves it there, dropping what was asked', () => {
+    useSideChatStore.getState().ask('s1', 'why?');
+    useSideChatStore.getState().toggleFor('s2');
+    expect(useSideChatStore.getState()).toMatchObject({ open: true, sessionId: 's2', entries: [] });
+    expect(cancelled).toHaveLength(1);
+    useSideChatStore.getState().toggleFor('s2');
+    expect(useSideChatStore.getState().open).toBe(false);
   });
 
   it('a failure is said in words, the engine’s refusal apart', async () => {
