@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<title>会话侧栏「产出」、旁问独立窗口、侧栏与卡片窗并存、窗口最小尺寸：现在 vs 建议</title>
+<style>
+  /* Tokens copied from src/renderer/styles/globals.css (design system v2). */
+  :root {
+    --surface-0: #f9f9f7; --surface-1: #fcfcfb; --surface-2: #fff; --surface-3: #fff;
+    --fg: #151515; --muted: #525252; --faint: color-mix(in oklab, #525252 62%, #fcfcfb);
+    --border: #e5e5e4; --input: #cececd; --hover: #f0f0ef; --fill: #eeeeed;
+    --primary: #c6613f; --danger: #b5452f; --ok: #3f7d4e; --warn: #b07a1e;
+    --elev-popover: 0 0 0 1px var(--border), 0 8px 24px rgb(0 0 0 / .12), 0 2px 6px rgb(0 0 0 / .08);
+    --os-shadow: 0 0 0 1px rgb(0 0 0 / .16), 0 18px 48px rgb(0 0 0 / .26), 0 4px 12px rgb(0 0 0 / .14);
+    --wall: linear-gradient(135deg, #d9dde3, #c4cad3);
+    --page: #f1f1ef;
+    --r-sm: 6px; --r-md: 10px; --r-lg: 12px; --r-2xl: 16px;
+    --t-ui: 13px; --t-small: 12px; --t-heading: 14px; --t-chat: 13px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  [data-theme=dark] {
+    --surface-0: #0b0b0b; --surface-1: #151515; --surface-2: #1a1a19; --surface-3: #20201f;
+    --fg: #f5f5f5; --muted: #a3a3a3; --faint: color-mix(in oklab, #a3a3a3 62%, #151515);
+    --border: #2b2b2b; --input: #424242; --hover: #202020; --fill: #222222;
+    --primary: #d97757; --danger: #e5735c; --ok: #73b585;
+    --elev-popover: inset 0 0 0 1px rgb(255 255 255 / .1), 0 8px 28px rgb(0 0 0 / .65), 0 2px 8px rgb(0 0 0 / .45);
+    --os-shadow: 0 0 0 1px rgb(255 255 255 / .12), 0 18px 48px rgb(0 0 0 / .6), 0 4px 12px rgb(0 0 0 / .4);
+    --wall: linear-gradient(135deg, #252930, #191c21);
+    --page: #0e0e0e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--fg); font: var(--t-ui)/1.45 var(--sans); }
+  button { font: inherit; color: inherit; }
+  code { font-family: var(--mono); font-size: 11.5px; background: var(--fill); padding: 0 4px; border-radius: 4px; }
+
+  /* ── page chrome ─────────────────────────────────────────── */
+  .top { padding: 18px 28px 6px; }
+  .top h1 { font-size: 16px; margin: 0 0 6px; }
+  .lead { color: var(--muted); margin: 0; max-width: 1180px; }
+  .controls { position: sticky; top: 0; z-index: 200; background: var(--page); border-bottom: 1px solid var(--border); padding: 10px 28px; display: flex; flex-direction: column; gap: 8px; }
+  .crow { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+  .lbl { color: var(--muted); margin-right: 6px; }
+  .seg { display: inline-flex; border: 1px solid var(--input); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+  .seg button { border: 0; background: transparent; padding: 4px 11px; color: var(--muted); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--input); }
+  .seg button.on { background: var(--surface-2); color: var(--fg); font-weight: 600; }
+  .seg.dim { opacity: .45; pointer-events: none; }
+  .act { border: 1px solid var(--input); background: var(--surface-2); border-radius: 8px; padding: 4px 11px; cursor: pointer; }
+  .act:hover { background: var(--hover); }
+  input[type=range] { width: 190px; vertical-align: middle; accent-color: var(--primary); }
+  .read { font-variant-numeric: tabular-nums; min-width: 92px; display: inline-block; }
+  .stat { padding: 8px 28px 0; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 28px; }
+  .stat b { color: var(--fg); font-weight: 600; }
+  .stat .bad { color: var(--danger); }
+  .stat .good { color: var(--ok); }
+
+  /* ── the simulated desktop ───────────────────────────────── */
+  #stageWrap { margin: 8px 28px 0; position: relative; overflow: hidden; border-radius: 10px; border: 1px solid var(--border); }
+  #desktop { position: absolute; left: 0; top: 0; transform-origin: 0 0; background: var(--wall); }
+  .taskbar { position: absolute; left: 0; right: 0; bottom: 0; height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 14px; background: color-mix(in oklab, var(--surface-0) 82%, transparent); border-top: 1px solid var(--border); z-index: 90; }
+  .tb { height: 28px; padding: 0 10px; border-radius: 6px; border: 0; background: transparent; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: var(--fg); }
+  .tb:hover { background: var(--hover); }
+  .tb.on { background: var(--fill); box-shadow: inset 0 -2px 0 var(--primary); }
+  .tb .dot { width: 14px; height: 14px; border-radius: 4px; background: var(--primary); }
+  .tb .dot.sc { background: var(--muted); }
+  .deskhint { position: absolute; right: 18px; bottom: 50px; color: color-mix(in oklab, var(--fg) 45%, transparent); font-size: 12px; z-index: 1; pointer-events: none; }
+
+  .win { position: absolute; display: flex; background: var(--surface-1); border-radius: 8px; box-shadow: var(--os-shadow); overflow: hidden; z-index: 10; }
+  .oswin { position: absolute; display: flex; flex-direction: column; background: var(--surface-3); border-radius: 8px; box-shadow: var(--os-shadow); overflow: hidden; }
+  .resize { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 55%, var(--input) 55%, var(--input) 62%, transparent 62%, transparent 72%, var(--input) 72%, var(--input) 79%, transparent 79%); }
+
+  /* ── app: sidebar ────────────────────────────────────────── */
+  .sb { flex: none; display: flex; flex-direction: column; background: var(--surface-0); border-right: 1px solid var(--border); min-width: 0; }
+  .sb-top { height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 12px; }
+  .brand { font-weight: 600; flex: 1; }
+  .sb-new { margin: 2px 8px 8px; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: var(--r-sm); color: var(--fg); cursor: default; }
+  .sb-new:hover { background: var(--hover); }
+  .sb-h { padding: 6px 14px 4px; font-size: 12px; color: var(--faint); }
+  .sb-row { height: 28px; margin: 0 8px; padding: 0 8px; border-radius: var(--r-sm); display: flex; align-items: center; gap: 8px; cursor: pointer; min-width: 0; }
+  .sb-row:hover { background: var(--hover); }
+  .sb-row.on { background: var(--fill); }
+  .sb-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sb-row .br { flex: none; font-size: 12px; color: var(--faint); }
+  .sb-foot { margin-top: auto; padding: 8px 12px; display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--fill); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: var(--fg); }
+
+  /* ── app: center ─────────────────────────────────────────── */
+  .center { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  .bar { height: 36px; flex: none; display: flex; align-items: center; gap: 4px; padding-left: 8px; overflow: hidden; cursor: default; }
+  .bar .title { min-width: 0; flex: 0 1 auto; display: flex; align-items: center; gap: 2px; height: 28px; padding: 0 6px; border-radius: var(--r-sm); }
+  .bar .title span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar .grow { flex: 1; min-width: 8px; align-self: stretch; }
+  .ib { width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; position: relative; }
+  .ib:hover { background: var(--hover); color: var(--fg); }
+  .ib.on { background: var(--fill); color: var(--fg); }
+  .ib.off { opacity: .4; cursor: not-allowed; }
+  .ib svg { width: 16px; height: 16px; }
+  .vsep { width: 1px; height: 16px; background: var(--border); margin: 0 4px; flex: none; }
+  .wc { display: flex; flex: none; margin-left: 2px; }
+  .wc span { width: 46px; height: 36px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+  .wc span:last-child:hover { background: #c42b1c; color: #fff; }
+  .menu { position: absolute; top: 34px; width: 210px; background: var(--surface-3); border-radius: var(--r-md); box-shadow: var(--elev-popover); padding: 4px; z-index: 60; }
+  .mi { height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+  .mi:hover { background: var(--hover); }
+  .mi svg { width: 14px; height: 14px; color: var(--muted); }
+  .mi .k { margin-left: auto; color: var(--faint); font-size: 12px; }
+  .mi.off { opacity: .45; cursor: default; }
+  .msep { height: 1px; background: var(--border); margin: 4px 0; }
+  .mh { padding: 4px 8px 2px; font-size: 11px; color: var(--faint); }
+
+  .row { flex: 1; min-height: 0; display: flex; position: relative; overflow: hidden; }
+  .chat { flex: none; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  .tl { flex: 1; min-height: 0; overflow: hidden; padding: 14px 20px 6px; }
+  .col { max-width: 640px; margin: 0 auto; }
+  .ub { display: flex; justify-content: flex-end; margin: 4px 0 12px; }
+  .ub span { background: var(--fill); border-radius: 18px; padding: 7px 13px; max-width: 85%; font-size: var(--t-chat); }
+  .ans { font-size: var(--t-chat); margin: 8px 0; }
+  .step { display: flex; gap: 6px; align-items: baseline; color: var(--muted); font-size: 12px; margin: 4px 0; }
+  .step i { font-style: normal; color: var(--faint); font-family: var(--mono); font-size: 11px; }
+  .step .p { font-family: var(--mono); font-size: 11.5px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .composer { flex: none; padding: 0 16px 10px; }
+  .composer .col { max-width: 640px; }
+  .cbox { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-3); color: var(--faint); }
+  .cbox .ph { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .send { width: 24px; height: 24px; border-radius: 50%; background: var(--fill); display: inline-flex; align-items: center; justify-content: center; color: var(--muted); flex: none; }
+  .send svg { width: 14px; height: 14px; }
+  .cmeta { display: flex; gap: 10px; padding: 5px 6px 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+
+  /* ── session rail ────────────────────────────────────────── */
+  .rail { flex: none; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding: 8px 8px 8px 0; }
+  .rail.edge { padding-left: 0; }
+  .card { flex: none; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
+  .card.anno { outline: 1.5px dashed var(--primary); outline-offset: 2px; }
+  .card-h { height: 32px; display: flex; align-items: center; gap: 4px; padding: 0 10px 0 4px; }
+  .card-t { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: var(--r-sm); font-size: 12px; font-weight: 600; cursor: pointer; border: 0; background: transparent; }
+  .card-t:hover { background: var(--hover); }
+  .card-t svg { width: 12px; height: 12px; color: var(--muted); transition: transform .15s; }
+  .card-t.shut svg { transform: rotate(-90deg); }
+  .card-s { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .card-s .add { color: var(--ok); } .card-s .rem { color: var(--danger); }
+  .card-b { padding: 0 10px 8px; font-size: 12px; }
+  .rr { height: 24px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .rr .ri { width: 14px; height: 14px; flex: none; display: inline-flex; color: var(--muted); }
+  .rr .ri svg { width: 14px; height: 14px; }
+  .rr .rt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rr .tail { flex: none; color: var(--faint); }
+  .rr.click { cursor: pointer; margin: 0 -6px; padding: 0 6px; border-radius: var(--r-sm); }
+  .rr.click:hover { background: var(--hover); }
+  .newtag { font-size: 10px; font-weight: 600; color: var(--primary); border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+  .meter { height: 4px; border-radius: 2px; background: var(--fill); overflow: hidden; margin: 4px 0 2px; }
+  .meter span { display: block; height: 100%; width: 34%; background: var(--muted); }
+
+  /* ── pane cards ──────────────────────────────────────────── */
+  .panes { flex: none; display: grid; gap: 8px; padding: 8px; min-height: 0; }
+  .panes.overlay { position: absolute; top: 0; right: 0; bottom: 0; z-index: 15; background: var(--surface-1); box-shadow: -14px 0 28px rgb(0 0 0 / .14); }
+  .pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
+  .pane-h { height: 36px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .pane-h .pt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .pane-h svg { width: 14px; height: 14px; color: var(--muted); flex: none; }
+  .pane-b { flex: 1; min-height: 0; overflow: hidden; padding: 8px 12px; font-size: 12px; }
+  .dl { font-family: var(--mono); font-size: 11.5px; font-variant-ligatures: none; white-space: pre; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
+  .dl.a { background: color-mix(in oklab, var(--ok) 12%, transparent); }
+  .dl.r { background: color-mix(in oklab, var(--danger) 12%, transparent); }
+  .md h3 { font-size: 14px; margin: 2px 0 6px; } .md p { margin: 4px 0; } .md ul { margin: 4px 0 4px 18px; padding: 0; }
+  .imgph { height: 120px; border-radius: 8px; border: 1px solid var(--border); background: repeating-linear-gradient(45deg, var(--fill), var(--fill) 8px, transparent 8px, transparent 16px); display: flex; align-items: center; justify-content: center; color: var(--muted); }
+
+  /* ── side chat (all three forms share the inside) ────────── */
+  .sc { display: flex; flex-direction: column; min-height: 0; }
+  .sc.float { position: absolute; right: 16px; bottom: 16px; z-index: 20; border-radius: var(--r-2xl); background: var(--surface-3); box-shadow: var(--elev-popover); max-width: calc(100% - 32px); max-height: calc(100% - 32px); }
+  .sc.dock { flex: none; border-left: 1px solid var(--border); background: var(--surface-1); }
+  .sc.dock.ov { position: absolute; top: 0; right: 0; bottom: 0; z-index: 16; box-shadow: -14px 0 28px rgb(0 0 0 / .14); }
+  .sc-h { height: 40px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 6px 0 14px; border-bottom: 1px solid var(--border); }
+  .sc-h.drag { cursor: grab; user-select: none; }
+  .sc-h .st { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sc-hint { flex: none; padding: 8px 14px 0; font-size: 12px; color: var(--faint); }
+  .sc-hint .other { color: var(--warn); }
+  .sc-list { flex: 1; min-height: 0; overflow: hidden; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .sc-in { flex: none; margin: 0 10px 10px; display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--faint); }
+  .sc-in .txt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+  .toast { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); z-index: 150; background: var(--fg); color: var(--surface-1); padding: 6px 12px; border-radius: 8px; font-size: 12px; white-space: nowrap; }
+  .gone { display: none !important; }
+
+  /* ── notes ───────────────────────────────────────────────── */
+  .notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 16px 28px 32px; max-width: 1500px; }
+  .note { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; color: var(--muted); }
+  .note h2 { font-size: 14px; margin: 0 0 6px; color: var(--fg); }
+  .note b { color: var(--fg); }
+  .note ul { margin: 4px 0 0 18px; padding: 0; }
+  .note li { margin: 3px 0; }
+  .note .q { color: var(--primary); font-weight: 600; }
+  @media (max-width: 1100px) { .notes { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>会话侧栏「产出」· 旁问独立窗口 · 侧栏与卡片窗并存 · 窗口最小尺寸</h1>
+  <p class="lead">下面是一块模拟桌面，主窗口就是应用（颜色、字号取自设计规范 v2）。「方案」切换<b>现在</b>和<b>建议</b>，滑块改窗口大小。窗口里的按钮都能点：标题栏的会话侧栏、旁问、终端、改动、文件按钮，侧栏里的对话，「产出」卡里的文件。主窗口和旁问窗口都可以拖着标题栏移动，旁问窗口右下角还能拉大拉小。虚线框标的是新增的部分。</p>
+</div>
+
+<div class="controls">
+  <div class="crow">
+    <span><span class="lbl">方案</span><span class="seg" data-k="mode"><button data-v="cur">现在</button><button data-v="pro">建议</button></span></span>
+    <span><span class="lbl">窗口宽</span><input type="range" id="w" min="480" max="1920" step="8" /> <span class="read" id="wRead"></span></span>
+    <span><span class="lbl">窗口高</span><input type="range" id="h" min="400" max="980" step="8" /> <span class="read" id="hRead"></span></span>
+    <span><span class="lbl">主题</span><span class="seg" data-k="theme"><button data-v="light">亮</button><button data-v="dark">暗</button></span></span>
+  </div>
+  <div class="crow">
+    <span><span class="lbl">① 产出收哪些</span><span class="seg pro-only" data-k="scope"><button data-v="docs">只收文档类（推荐）</button><button data-v="all">新建的文件都收</button></span></span>
+    <span><span class="lbl">网页类产出点开</span><span class="seg pro-only" data-k="htmlOpen"><button data-v="preview">应用的预览窗口（推荐）</button><button data-v="browser">系统浏览器</button></span></span>
+  </div>
+  <div class="crow">
+    <span><span class="lbl">② 旁问窗口的层级</span><span class="seg pro-only" data-k="scLayer"><button data-v="owned">浮在主窗口上面（推荐）</button><button data-v="free">完全独立</button></span></span>
+    <span><span class="lbl">切到别的对话时</span><span class="seg pro-only" data-k="scSwitch"><button data-v="keep">旁问留在原对话（推荐）</button><button data-v="close">关掉旁问（现在的做法）</button></span></span>
+  </div>
+  <div class="crow">
+    <span><span class="lbl">③ 和卡片窗同开时，会话侧栏放在</span><span class="seg pro-only" data-k="railPos"><button data-v="chat">贴着对话（参考的做法，推荐）</button><button data-v="edge">窗口最右边</button></span></span>
+    <span><span class="lbl">演示</span>
+      <button class="act" data-a="toggleSc">打开 / 关掉旁问（Ctrl+;）</button>
+      <button class="act" data-a="clickMain">点一下主窗口</button>
+      <button class="act" data-a="minMain">最小化 / 还原主窗口</button>
+      <button class="act" data-a="reset">复位</button>
+    </span>
+  </div>
+</div>
+
+<div class="stat" id="stat"></div>
+<div id="stageWrap"><div id="desktop"></div></div>
+
+<div class="notes">
+  <section class="note">
+    <h2>① 会话侧栏加「产出」卡（Outputs）</h2>
+    <ul>
+      <li><b>收什么</b>：本次对话里模型<b>新建</b>的文件。改已有文件的不算，那些在「改动」卡里。建议只收<b>拿来看的</b>：文档（md、txt、pdf、docx）、网页（html）、图片、表格（csv、xlsx）、演示稿；代码和配置不收。</li>
+      <li><b>为什么只收文档类</b>：推测参考就是这么收的，官方文档没写规则。你截图里的两份是决策 208 的文档和对比稿，它们是和 10 个新代码文件同一次提交加进来的，截图里看得到的只有这两份。上面「新建的文件都收」可以看另一种。</li>
+      <li><b>位置与顺序</b>：上下文卡下面、改动卡上面。参考的卡片顺序是环境、上下文、连接器、产出、改动、服务、后台任务。卡里最新的排在上面；一份都没有就不显示这张卡，切到「修复窗口最小尺寸」那个对话可以看到。</li>
+      <li><b>点开</b>：Markdown、图片、代码在编辑器卡片里打开。网页默认在应用的预览窗口打开，就是 <code>browser_preview</code> 用的那个独立窗口：文件改了会自动刷新，页面不能调用应用。另一个选项是交给系统浏览器。右键菜单有「复制路径」「在文件夹中显示」；文件后来被删了，点开时提示「文件已不在」。</li>
+      <li><b>旧对话也有</b>：重新打开的对话从历史里的工具结果算出来，两个引擎的写文件结果都带「新建」标记，不用新增数据来源。</li>
+      <li><b>不在这次范围</b>：截图标题右边的 ⠿ 是参考里拖动卡片排序用的手柄；参考还能右键卡片标题，选显示哪些卡。这两样要的话另说。</li>
+    </ul>
+  </section>
+  <section class="note">
+    <h2>② 旁问改成独立窗口</h2>
+    <ul>
+      <li><b>现在</b>：浮在对话区右下角，只能在对话区里拖，越不过会话侧栏和卡片窗；或者停靠在对话右边。把「方案」切到「现在」，拖一下就能看到。</li>
+      <li><b>建议</b>：浮动小窗改成<b>真正的系统窗口</b>。它能拖到主窗口外面、拖到另一块屏幕上；主窗口移动、缩放、开关卡片窗、进设置页，它都不跟着动；窗口边可以拉大拉小，位置和大小会记住。停靠在右侧那种保留：参考里旁问就开在对话旁边的窗格里，而参考的窗格可以弹出成独立窗口。停靠时，旁问标题栏上有「弹出成独立窗口」按钮。</li>
+      <li><span class="q">要你定</span>：<b>层级</b>。「浮在主窗口上面」：永远不会被主窗口挡住，主窗口最小化时它一起收起。「完全独立」：任务栏上单独一项，点主窗口时它会被盖到后面。用「点一下主窗口」「最小化」两个演示按钮对比。</li>
+      <li><span class="q">要你定</span>：<b>切到别的对话时</b>。「留在原对话」：旁问继续读原来那个对话，标题写着是哪个。「关掉」：旁问被丢弃，这是现在的做法。点左边侧栏里的另一个对话试试。</li>
+      <li><b>不变</b>：只读主对话到当前为止的内容，问答不写回主对话，关掉就丢弃；Ctrl+; 和 <code>/btw</code> 打开。另外，在另一个对话里按 Ctrl+; 时，旁问会换到那个对话，原来的问答丢弃，同一时间只有一个旁问。</li>
+    </ul>
+  </section>
+  <section class="note">
+    <h2>③ 会话侧栏和右侧卡片窗并存</h2>
+    <ul>
+      <li><b>现在</b>：只要开了任何一张卡片窗（改动、文件、终端…），会话侧栏就让出位置、自动隐藏，标题栏上它的开关也变灰，这是 10-22 定的 L5。</li>
+      <li><b>建议</b>：两者同时显示。<span class="q">要你定</span>侧栏放在哪：一种是<b>贴着对话右边</b>，卡片窗在它右边，参考也是这样，侧栏属于对话那一栏；另一种是<b>放到窗口最右边</b>，卡片窗夹在对话和侧栏中间，好处是开关卡片窗时侧栏不挪位置，代价是它离对话远了。</li>
+      <li><b>放不下时</b>：先把卡片窗压到最窄（一列 320）；对话还是会窄于 480 的话，侧栏才自己收起，这时开关变灰并提示「窗口太窄」，窗口拉宽后它自己回来。原来侧栏旁边的对话最少要 600，降到 480，并存才放得下。旁问停靠时仍然占侧栏的位置。</li>
+      <li><b>看效果</b>：一打开就是窗口宽 1536（1920 的屏幕缩放 125% 时最大化的宽度），开着一张「改动」卡：对话 508、会话侧栏 260、卡片窗 496，三者都在。把宽度拖到 1280，侧栏会自己收起；开两张卡片窗时，窗口要宽到 1680 左右侧栏才放得下。</li>
+    </ul>
+  </section>
+  <section class="note">
+    <h2>④ 窗口最小尺寸</h2>
+    <ul>
+      <li><b>现在</b>：最小 960 × 600。来由是 9 月 6 日你定的「不要在窗口太小的时候出现图标挤兑异常的现象就行（限制最小画幅）」：当时窗口一窄，右侧面板就被挤出窗口，按钮点不到，于是按「侧栏 + 对话 + 一张卡片窗」最窄时的宽度把窗口定死了。而且现在的 960 其实没挡住：侧栏默认 272 宽、卡片窗两边还各留 8px 边距，到了 960 宽，开一张卡片窗右边仍会被裁掉 48px，开两张裁掉 376px，卡片的关闭按钮就在被裁掉的那块里。把「方案」切到「现在」、宽度拖到 960 就能看到。</li>
+      <li><b>建议</b>：降到 <b>640 × 480</b>，也就是侧栏最窄 240 加对话最窄 400。这样 Windows 笔记本缩放到 125%、150% 时也能左右分屏。「不出现图标挤兑」靠下面四条保证，不再靠把窗口定死：
+        <ul>
+          <li>卡片窗放不下时不再被挤出窗口，而是<b>盖在对话上面</b>，像抽屉，左边露出一条对话，关掉就回到对话。Claude 桌面版的更新说明里提到过，窄窗口时侧面板是盖在对话上的。</li>
+          <li>标题栏的按钮放不下时，<b>挪进 ⋮ 菜单</b>（参考就是这样）。</li>
+          <li>侧栏被拖得比 240 宽时，窗口变窄会先把侧栏压回 240。</li>
+          <li>会话侧栏、停靠的旁问照 ③ 的规则自己收起。</li>
+        </ul>
+      </li>
+      <li><b>高度</b>：从 600 降到 480。对话、侧栏、卡片里的内容本来就会滚动。</li>
+      <li><span class="q">要你定</span>：最小宽度还要不要更窄，比如 480。那样侧栏展开时只能盖在对话上，会多一种窄窗口形态。</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+// ── icons (Lucide paths) ────────────────────────────────────
+const P = {
+  chev: '<path d="m6 9 6 6 6-6"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  fileText: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  fileCode: '<path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/>',
+  panelRight: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>',
+  panelLeftOpen: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>',
+  panelLeftClose: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>',
+  msg: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  term: '<path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>',
+  diff: '<path d="M12 3v14"/><path d="M5 10h14"/><path d="M5 21h14"/>',
+  folderOpen: '<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>',
+  popout: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  pip: '<path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4"/><rect width="10" height="7" x="12" y="13" rx="2"/>',
+  branch: '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+  monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
+  cpu: '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  circle: '<circle cx="12" cy="12" r="9"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  up: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+  min: '<path d="M5 12h14"/>',
+  max: '<rect width="14" height="14" x="5" y="5" rx="1"/>',
+  expand: '<path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>',
+};
+const ic = (n, s = 16) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
+
+// ── numbers from the code (ruled values) and the proposal ──
+const C = {
+  SB_MIN: 240, SB_DEF: 272, CHAT_MIN: 400, RAIL: 260,
+  RAIL_CHAT_CUR: 600, RAIL_CHAT_PRO: 480,
+  PANE1: 496, PANE1_MIN: 336, PANE2: 864, PANE2_MIN: 664,
+  DOCK: 380, DOCK_CHAT_MIN: 480,
+  MIN_W_CUR: 960, MIN_H_CUR: 600, MIN_W_PRO: 640, MIN_H_PRO: 480,
+  SC_W: 380, SC_H: 440,
+};
+
+// ── fixture conversations ───────────────────────────────────
+const SESS = {
+  A: {
+    title: '会话侧栏加产出卡、旁问独立窗口', branch: 'feat/rail',
+    ask: '会话侧栏加一个产出栏目，旁问改成独立窗口', steps: [['Read', 'sessionRail/SessionRail.tsx'], ['Write', 'docs/…/209-session-rail-windows.md'], ['Write', 'docs/design/2026-11-04-rail-preview.html'], ['Bash', 'pnpm vitest run sessionRail']],
+    answer: '方案写进了决策 209，预览页也做好了，四处要你定的选项都标在页面上。',
+    changes: { add: 412, rem: 37, files: [['SessionRail.tsx', 'src/…/sessionRail', 38, 6], ['OutputsCard.tsx', 'src/…/sessionRail', 96, 0], ['shellMinimums.ts', 'src/shared', 9, 14]], more: 4 },
+    outputs: [
+      { name: '2026-11-04-rail-preview.html', dir: 'docs/design/', kind: 'html' },
+      { name: '209-session-rail-windows.md', dir: 'docs/plantree/plans/dsh-rebase/decisions/', kind: 'md' },
+      { name: 'outputFiles.ts', dir: 'src/renderer/components/workspace-shell/sessionRail/', kind: 'code' },
+      { name: 'narrow-640.png', dir: '/tmp/shots/', kind: 'img' },
+      { name: 'OutputsCard.tsx', dir: 'src/renderer/components/workspace-shell/sessionRail/', kind: 'code' },
+    ],
+    todo: [2, 5],
+  },
+  B: {
+    title: '修复窗口最小尺寸', branch: 'main',
+    ask: '窗口最小尺寸太大了，看看为什么', steps: [['Grep', 'SHELL_MIN_WIDTH'], ['Read', 'src/shared/shellMinimums.ts'], ['Edit', 'src/shared/shellMinimums.ts']],
+    answer: '最小宽度来自「侧栏 + 对话 + 卡片窗」三个下限相加，改法见上面的说明。',
+    changes: { add: 9, rem: 14, files: [['shellMinimums.ts', 'src/shared', 9, 14]], more: 0 },
+    outputs: [{ name: 'shellMinimums.test.ts', dir: 'src/shared/__tests__/', kind: 'code' }],
+    todo: null,
+  },
+  C: {
+    title: 'DSH 0.2.1 升级收尾', branch: 'main',
+    ask: '把升级的结论整理成决策文档', steps: [['Read', 'evidence §12'], ['Write', 'decisions/207-dsh-0-2-1-rc-5-upgrade.md']],
+    answer: '决策 207 写好了，全量验证都过了。',
+    changes: { add: 120, rem: 3, files: [['207-dsh-0-2-1-rc-5-upgrade.md', 'docs/…/decisions', 120, 3]], more: 0 },
+    outputs: [{ name: '207-dsh-0-2-1-rc-5-upgrade.md', dir: 'docs/plantree/plans/dsh-rebase/decisions/', kind: 'md' }],
+    todo: null,
+  },
+};
+const KIND_ICON = { md: 'fileText', html: 'globe', img: 'image', code: 'fileCode' };
+
+// ── state ───────────────────────────────────────────────────
+const S0 = () => ({
+  mode: 'pro', theme: 'light', w: 1536, h: 760,
+  sidebar: true, panes: ['changes'], railShown: true, railPos: 'chat',
+  scOpen: true, scSession: 'A', formCur: 'float', formPro: 'window',
+  scX: null, scY: null, scW: C.SC_W, scH: C.SC_H, fx: 0, fy: 0,
+  scLayer: 'owned', scSwitch: 'keep', scope: 'docs', htmlOpen: 'preview',
+  active: 'A', focus: 'main', mainMin: false, appX: 32, appY: 26,
+  cards: { env: true, ctx: false, out: true, chg: true, todo: true },
+  editor: null, preview: null, pvX: null, pvY: null, menu: false, toast: '', note: '',
+});
+let S = S0();
+const pro = () => S.mode === 'pro';
+
+function outputsOf(id) {
+  const all = SESS[id].outputs;
+  return S.scope === 'all' ? all : all.filter((o) => o.kind !== 'code');
+}
+function visiblePanes() {
+  return S.panes.filter((p) => p !== 'editor' || S.editor);
+}
+
+// ── layout model (mirrors resolveShellAllocation + the proposal) ──
+function layout() {
+  const P_ = pro();
+  const minW = P_ ? C.MIN_W_PRO : C.MIN_W_CUR, minH = P_ ? C.MIN_H_PRO : C.MIN_H_CUR;
+  const W = Math.max(S.w, minW), H = Math.max(S.h, minH);
+  const L = { W, H, minW, minH, clampW: S.w < minW, clampH: S.h < minH, overflow: 0, paneMode: 'none', paneW: 0, rail: { visible: false, reason: null }, sc: 'hidden' };
+  L.sb = S.sidebar ? (P_ ? Math.max(C.SB_MIN, Math.min(C.SB_DEF, W - C.CHAT_MIN)) : C.SB_DEF) : 0;
+  const row = W - L.sb; L.row = row;
+  const n = visiblePanes().length, cols = Math.min(2, n);
+  const pref = cols === 2 ? C.PANE2 : C.PANE1, floor = cols === 2 ? C.PANE2_MIN : C.PANE1_MIN;
+  const scOpen = S.scOpen && S.scSession;
+  const form = P_ ? S.formPro : S.formCur;
+  const dockWanted = scOpen && form === 'dock';
+
+  if (!P_) {
+    let chat = row, pane = 0;
+    if (cols) {
+      chat = Math.max(C.CHAT_MIN, row - pref);
+      pane = Math.max(floor, row - chat);
+      L.overflow = Math.max(0, chat + pane - row);
+      L.paneMode = 'side';
+    }
+    L.paneW = pane;
+    if (scOpen) L.sc = dockWanted && chat - C.DOCK >= C.DOCK_CHAT_MIN ? 'dock' : 'float';
+    if (!S.railShown) L.rail.reason = 'user';
+    else if (cols) L.rail.reason = 'panes';
+    else if (L.sc === 'dock') L.rail.reason = 'side-chat';
+    else if (chat - C.RAIL < C.RAIL_CHAT_CUR) L.rail.reason = 'narrow';
+    else L.rail.visible = true;
+    L.chatCol = chat;
+    L.chatW = chat - (L.rail.visible ? C.RAIL : 0) - (L.sc === 'dock' ? C.DOCK : 0);
+    return L;
+  }
+
+  const slotW = dockWanted ? C.DOCK : S.railShown ? C.RAIL : 0;
+  const slotMin = dockWanted ? C.DOCK_CHAT_MIN : C.RAIL_CHAT_PRO;
+  if (cols && row - floor < C.CHAT_MIN) {
+    L.paneMode = 'overlay';
+    // a drawer over the chat: a strip of the conversation stays visible beside it
+    L.paneW = Math.min(pref, Math.max(Math.min(floor, row), row - 56));
+    L.chatW = row; L.chatCol = row;
+    L.rail.reason = !S.railShown ? 'user' : dockWanted ? 'side-chat' : 'narrow';
+    if (scOpen) L.sc = dockWanted ? 'overlay' : 'window';
+    return L;
+  }
+  let pane = 0, slot = 0;
+  if (cols) {
+    if (slotW && row - floor - slotW >= slotMin) { slot = slotW; pane = Math.min(pref, row - slotW - slotMin); }
+    else pane = Math.min(pref, row - C.CHAT_MIN);
+    pane = Math.max(pane, floor);
+    L.paneMode = 'side';
+  } else if (slotW && row - slotW >= slotMin) slot = slotW;
+  L.paneW = pane;
+  if (scOpen) L.sc = dockWanted ? (slot ? 'dock' : 'overlay') : 'window';
+  if (!S.railShown) L.rail.reason = 'user';
+  else if (dockWanted) L.rail.reason = 'side-chat';
+  else if (!slot) L.rail.reason = 'narrow';
+  else L.rail.visible = true;
+  L.chatW = row - pane - slot;
+  L.chatCol = L.chatW;
+  return L;
+}
+
+// ── title bar: which buttons fit (the proposal moves the rest into ⋮) ──
+function barButtons(L) {
+  const has = (k) => visiblePanes().includes(k);
+  const railOff = !pro() && (L.rail.reason === 'panes' || L.rail.reason === 'side-chat' || L.rail.reason === 'narrow');
+  const railOffPro = pro() && (L.rail.reason === 'narrow' || L.rail.reason === 'side-chat');
+  const all = [
+    { id: 'rail', icon: 'panelRight', label: L.rail.visible ? '隐藏会话侧栏' : '显示会话侧栏', on: L.rail.visible, off: railOff || railOffPro,
+      why: L.rail.reason === 'panes' ? '有卡片窗时会话侧栏让位（现在的规则）' : L.rail.reason === 'narrow' ? '窗口太窄，放不下会话侧栏' : L.rail.reason === 'side-chat' ? '旁问停靠占了它的位置' : '' },
+    { id: 'sc', icon: 'msg', label: '旁问（Ctrl+;）', on: S.scOpen },
+    { id: 'terminal', icon: 'term', label: '终端', on: has('terminal') },
+    { id: 'changes', icon: 'diff', label: '改动', on: has('changes') },
+    { id: 'files', icon: 'folderOpen', label: '文件', on: has('files') },
+  ];
+  if (!pro()) return { shown: all, hidden: [] };
+  const fixed = 8 + (S.sidebar ? 0 : 32) + 120 + 32 + 138 + 9;
+  let room = L.row - fixed;
+  const shown = [], hidden = [];
+  // keep from the left; what does not fit goes into ⋮ (rightmost first)
+  const fits = Math.max(0, Math.floor(room / 32));
+  all.forEach((b, i) => (i < fits ? shown : hidden).push(b));
+  return { shown, hidden };
+}
+
+// ── rendering ───────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+
+function sidebarHTML(L) {
+  if (!S.sidebar) return '';
+  const rows = Object.entries(SESS).map(([id, s]) =>
+    `<div class="sb-row ${id === S.active ? 'on' : ''}" data-a="session" data-id="${id}" title="${esc(s.title)}"><span class="t">${esc(s.title)}</span><span class="br">${esc(s.branch)}</span></div>`).join('');
+  return `<aside class="sb" style="width:${L.sb}px">
+    <div class="sb-top drag" data-drag="app"><span class="brand">PiLab</span><button class="ib" data-a="sidebar" title="收起侧栏（Ctrl+B）">${ic('panelLeftClose')}</button></div>
+    <div class="sb-new">${ic('plus', 14)}<span>新对话</span></div>
+    <div class="sb-h">ai-client</div>${rows}
+    <div class="sb-foot"><span class="avatar">Pi</span><span>Pi</span></div>
+  </aside>`;
+}
+
+function barHTML(L) {
+  const { shown, hidden } = barButtons(L);
+  const btn = (b) => `<button class="ib ${b.on ? 'on' : ''} ${b.off ? 'off' : ''}" data-a="bar" data-id="${b.id}" title="${esc(b.off && b.why ? b.why : b.label)}">${ic(b.icon)}</button>`;
+  let right = '';
+  shown.forEach((b) => { right += btn(b); if (b.id === 'rail') right += '<span class="vsep"></span>'; });
+  right += `<button class="ib ${S.menu ? 'on' : ''}" data-a="menu" title="更多">${ic('more')}</button>`;
+  let menu = '';
+  if (S.menu) {
+    const items = hidden.map((b) => `<div class="mi ${b.off ? 'off' : ''}" data-a="bar" data-id="${b.id}">${ic(b.icon)}<span>${esc(b.label)}</span>${b.on ? '<span class="k">已开</span>' : ''}</div>`).join('');
+    menu = `<div class="menu" style="right:${138 + 4}px">${hidden.length ? `<div class="mh">放不下的按钮</div>${items}<div class="msep"></div>` : ''}
+      <div class="mi">${ic('branch')}<span>Git</span></div><div class="mi">${ic('cpu')}<span>运行</span></div><div class="mi">${ic('circle')}<span>上下文</span></div><div class="mi">${ic('term')}<span>后台任务</span></div></div>`;
+  }
+  return `<div class="bar" data-drag="app">
+    ${S.sidebar ? '' : `<button class="ib" data-a="sidebar" title="展开侧栏（Ctrl+B）">${ic('panelLeftOpen')}</button>`}
+    <div class="title"><span>${esc(SESS[S.active].title)}</span>${ic('chev', 12)}</div>
+    <div class="grow"></div>${right}
+    <div class="wc"><span>${ic('min', 14)}</span><span>${ic('max', 12)}</span><span>${ic('x', 14)}</span></div>
+    ${menu}
+  </div>`;
+}
+
+function chatHTML(L, extra = '') {
+  const s = SESS[S.active];
+  const steps = s.steps.map(([v, p]) => `<div class="step"><i>●</i><span>${v}</span><span class="p">${esc(p)}</span></div>`).join('');
+  return `<div class="chat" style="width:${L.chatW}px" data-chat>
+    <div class="tl"><div class="col">
+      <div class="ub"><span>${esc(s.ask)}</span></div>${steps}
+      <div class="ans">${esc(s.answer)}</div>
+    </div></div>
+    <div class="composer"><div class="col"><div class="cbox"><span class="ph">接着说点什么…</span><span class="send">${ic('up')}</span></div>
+      <div class="cmeta"><span>Auto</span><span>Opus 5.5 · High</span><span>◔ 34%</span></div></div></div>
+    ${extra}
+  </div>`;
+}
+
+function card(id, title, summary, body, anno = false) {
+  const open = S.cards[id];
+  return `<section class="card ${anno ? 'anno' : ''}"><div class="card-h"><button class="card-t ${open ? '' : 'shut'}" data-a="card" data-id="${id}">${title}${ic('chev', 12)}</button>${summary ? `<span class="card-s">${summary}</span>` : ''}</div>${open ? `<div class="card-b">${body}</div>` : ''}</section>`;
+}
+
+function railHTML(L) {
+  const s = SESS[S.active];
+  let h = card('env', '环境', '', `<div class="rr"><span class="ri">${ic('monitor')}</span><span class="rt">本机</span></div><div class="rr"><span class="ri">${ic('folder')}</span><span class="rt">ai-client</span></div><div class="rr"><span class="ri">${ic('branch')}</span><span class="rt">${esc(s.branch)}</span></div>`);
+  h += card('ctx', '上下文', '34%', `<div class="meter"><span></span></div><div class="rr"><span class="rt">68k / 200k tokens</span></div>`);
+  if (pro()) {
+    const outs = outputsOf(S.active);
+    if (outs.length) {
+      const rows = outs.map((o, i) => `<div class="rr click" data-a="output" data-i="${SESS[S.active].outputs.indexOf(o)}" title="${esc(o.dir + o.name)}"><span class="ri">${ic(KIND_ICON[o.kind])}</span><span class="rt">${esc(o.name)}</span></div>`).join('');
+      h += card('out', `产出<span class="newtag">新</span>`, '', rows, true);
+    }
+  }
+  const ch = s.changes;
+  const files = ch.files.map(([n, d, a, r]) => `<div class="rr"><span class="ri">${ic('fileText')}</span><span class="rt">${esc(n)}</span><span class="tail"><span style="color:var(--ok)">+${a}</span> <span style="color:var(--danger)">−${r}</span></span></div>`).join('');
+  h += card('chg', '改动', `<span class="add">+${ch.add}</span> <span class="rem">−${ch.rem}</span>`, files + (ch.more ? `<div class="rr"><span class="rt" style="color:var(--faint)">还有 ${ch.more} 个</span></div>` : ''));
+  if (s.todo) h += card('todo', '待办', `${s.todo[0]} / ${s.todo[1]}`, `<div class="rr"><span class="ri" style="color:var(--ok)">${ic('check')}</span><span class="rt">读现有会话侧栏</span></div><div class="rr"><span class="ri" style="color:var(--ok)">${ic('check')}</span><span class="rt">写预览页</span></div><div class="rr"><span class="ri">${ic('circle')}</span><span class="rt">等用户定选项</span></div>`);
+  return `<aside class="rail ${S.railPos === 'edge' && pro() ? 'edge' : ''}" style="width:${C.RAIL}px">${h}</aside>`;
+}
+
+function paneHTML(kind) {
+  const s = SESS[S.active];
+  const head = (icon, title) => `<div class="pane-h">${ic(icon)}<span class="pt">${title}</span><button class="ib" title="放大">${ic('expand', 14)}</button><button class="ib" data-a="closePane" data-id="${kind}" title="关闭">${ic('x', 14)}</button></div>`;
+  if (kind === 'changes') {
+    return `<div class="pane">${head('diff', `本次对话的改动 <span style="color:var(--ok)">+${s.changes.add}</span> <span style="color:var(--danger)">−${s.changes.rem}</span>`)}<div class="pane-b">
+      <div class="dl" style="color:var(--muted)">src/…/sessionRail/SessionRail.tsx</div>
+      <div class="dl">  const cards = visibleRailCards({</div><div class="dl r">-   changes: changesView !== null,</div><div class="dl a">+   outputs: outputsView !== null,</div><div class="dl a">+   changes: changesView !== null,</div><div class="dl">    todo: todoView !== null,</div></div></div>`;
+  }
+  if (kind === 'files') {
+    return `<div class="pane">${head('folderOpen', '文件 · ai-client')}<div class="pane-b">${['▾ docs', '  ▸ design', '  ▸ plantree', '▾ src', '  ▸ main', '  ▸ renderer', '  ▸ shared', '  package.json'].map((l) => `<div class="dl">${l}</div>`).join('')}</div></div>`;
+  }
+  if (kind === 'terminal') {
+    return `<div class="pane">${head('term', '终端 · ai-client')}<div class="pane-b"><div class="dl">$ pnpm typecheck</div><div class="dl" style="color:var(--ok)">✓ done in 41s</div><div class="dl">$ █</div></div></div>`;
+  }
+  if (kind === 'editor' && S.editor) {
+    const o = S.editor;
+    let body = '';
+    if (o.kind === 'md') body = `<div class="md"><h3>决策 209：会话侧栏与窗口</h3><p>四项需求：产出卡、旁问独立窗口、侧栏与卡片窗并存、窗口最小尺寸。</p><ul><li>产出只收文档类</li><li>旁问浮在主窗口上面</li></ul></div>`;
+    else if (o.kind === 'img') body = `<div class="imgph">图片预览 · ${esc(o.name)}</div>`;
+    else body = ['export function deriveOutputs(', '  entries: SessionReviewEntry[]', '): OutputRow[] {', "  return entries.filter((e) => e.status === 'added')", '}'].map((l) => `<div class="dl">${esc(l)}</div>`).join('');
+    return `<div class="pane">${head(KIND_ICON[o.kind], `编辑器 · ${esc(o.name)}`)}<div class="pane-b">${body}</div></div>`;
+  }
+  return '';
+}
+
+function panesHTML(L) {
+  const kinds = visiblePanes();
+  if (!kinds.length) return '';
+  const cols = Math.min(2, kinds.length), rows = kinds.length > 2 ? 2 : 1;
+  const cls = L.paneMode === 'overlay' ? 'panes overlay' : 'panes';
+  return `<div class="${cls}" style="width:${L.paneW}px;grid-template-columns:repeat(${cols},minmax(0,1fr));grid-template-rows:repeat(${rows},minmax(0,1fr))">${kinds.map(paneHTML).join('')}</div>`;
+}
+
+function sideChatInner(form) {
+  const s = SESS[S.scSession] ? S.scSession : S.active;
+  const other = s !== S.active;
+  const title = form === 'window' ? `旁问 · ${esc(SESS[s].title)}` : '旁问';
+  let buttons = '';
+  if (form === 'window') buttons = `<button class="ib" data-a="scForm" data-v="dock" title="停靠到主窗口右侧">${ic('panelRight')}</button>`;
+  else if (form === 'dock' && pro()) buttons = `<button class="ib" data-a="scForm" data-v="window" title="弹出成独立窗口">${ic('popout')}</button>`;
+  else if (form === 'dock') buttons = `<button class="ib" data-a="scForm" data-v="float" title="浮动小窗">${ic('pip')}</button>`;
+  else buttons = `<button class="ib" data-a="scForm" data-v="dock" title="停靠到右侧">${ic('panelRight')}</button>`;
+  buttons += `<button class="ib" data-a="scClose" title="关闭旁问">${ic('x')}</button>`;
+  const drag = form === 'window' ? 'data-drag="sc"' : form === 'float' ? 'data-drag="scf"' : '';
+  return `<div class="sc-h ${drag ? 'drag' : ''}" ${drag} title="${form === 'float' ? '只能在对话区里拖' : form === 'window' ? '拖到哪里都行' : ''}"><span class="st">${title}</span>${buttons}</div>
+    <div class="sc-hint">${other ? `<span class="other">读的是「${esc(SESS[s].title)}」，不是主窗口里正开着的对话。</span>` : '能读这个对话到现在为止的内容；这里的问答不会写进对话，关掉就丢弃。'}</div>
+    <div class="sc-list"><div class="ub" style="margin:0"><span>产出卡和改动卡有什么区别？</span></div>
+      <div class="ans" style="margin:0">改动卡列出这次对话改过的所有文件；产出卡只列新建的、拿来看的文件，比如文档和预览页。</div></div>
+    <div class="sc-in"><span class="txt">顺手问一句，不打断主对话…</span><span class="send">${ic('up')}</span></div>`;
+}
+
+function render() {
+  document.documentElement.dataset.theme = S.theme;
+  const L = layout();
+  // controls
+  document.querySelectorAll('.seg[data-k]').forEach((seg) => {
+    const k = seg.dataset.k;
+    seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', String(S[k]) === b.dataset.v));
+    if (seg.classList.contains('pro-only')) seg.classList.toggle('dim', !pro());
+  });
+  $('w').value = S.w; $('h').value = S.h;
+  $('wRead').textContent = `${S.w}px`; $('hRead').textContent = `${S.h}px`;
+
+  // the app window
+  const kinds = visiblePanes();
+  const scInChat = L.sc === 'float' ? `<section class="sc float" style="width:${C.SC_W}px;height:${C.SC_H}px;transform:translate(${S.fx}px,${S.fy}px)">${sideChatInner('float')}</section>` : '';
+  const chat = chatHTML(L, '');
+  const rail = L.rail.visible ? railHTML(L) : '';
+  const dock = L.sc === 'dock' ? `<section class="sc dock" style="width:${C.DOCK}px">${sideChatInner('dock')}</section>` : '';
+  const dockOv = L.sc === 'overlay' ? `<section class="sc dock ov" style="width:${Math.min(C.DOCK, L.row)}px">${sideChatInner('dock')}</section>` : '';
+  const panes = panesHTML(L);
+  let rowInner;
+  if (!pro()) {
+    // current: [chat column: conversation (+ floating side chat) | rail | docked side chat] [panes]
+    rowInner = `<div style="display:flex;flex:none;width:${L.chatCol}px;min-height:0"><div style="position:relative;display:flex;min-width:0;flex:none;width:${L.chatW}px" data-chatarea>${chat.replace('data-chat>', 'data-chat>')}${scInChat}</div>${rail}${dock}</div>${panes}`;
+  } else if (L.paneMode === 'overlay') {
+    rowInner = `${chat}${panes}${dockOv}`;
+  } else if (S.railPos === 'edge') {
+    rowInner = `${chat}${panes}${rail}${dock}${dockOv}`;
+  } else {
+    rowInner = `${chat}${rail}${dock}${dockOv}${panes}`;
+  }
+  const appHidden = S.mainMin;
+  const app = `<div class="win ${appHidden ? 'gone' : ''}" id="app" style="left:${S.appX}px;top:${S.appY}px;width:${L.W}px;height:${L.H}px;z-index:${pro() && S.scLayer === 'free' && S.focus === 'sc' ? 10 : 20}" data-a="focusMain">
+    ${sidebarHTML(L)}<div class="center">${barHTML(L)}<div class="row">${rowInner}</div></div></div>`;
+
+  // desktop size and the side chat window
+  const wrapW = $('stageWrap').clientWidth;
+  const deskW = Math.max(wrapW, S.appX + L.W + 470);
+  const deskH = Math.max(S.appY + L.H + 70, 560);
+  let scWin = '';
+  if (L.sc === 'window') {
+    if (S.scX === null) { S.scX = S.appX + L.W - 80; S.scY = Math.max(S.appY + 40, S.appY + L.H - C.SC_H - 40); }
+    S.scX = Math.max(0, Math.min(S.scX, deskW - 120)); S.scY = Math.max(0, Math.min(S.scY, deskH - 80));
+    const hidden = S.mainMin && S.scLayer === 'owned';
+    const z = S.scLayer === 'owned' ? 40 : S.focus === 'sc' ? 40 : 5;
+    scWin = `<section class="oswin sc ${hidden ? 'gone' : ''}" id="scWin" data-a="focusSc" style="left:${S.scX}px;top:${S.scY}px;width:${S.scW}px;height:${S.scH}px;z-index:${z}">${sideChatInner('window')}<div class="resize" data-resize="sc"></div></section>`;
+  }
+  let pvWin = '';
+  if (S.preview) {
+    if (S.pvX === null) { S.pvX = S.appX + 140; S.pvY = S.appY + 70; }
+    pvWin = `<section class="oswin" style="left:${S.pvX}px;top:${S.pvY}px;width:560px;height:360px;z-index:45">
+      <div class="sc-h drag" data-drag="pv"><span class="st">预览 · ${esc(S.preview.name)}</span><button class="ib" data-a="pvClose" title="关闭">${ic('x')}</button></div>
+      <div style="flex:1;padding:16px 18px;color:var(--muted)"><div style="font-size:15px;color:var(--fg);font-weight:600;margin-bottom:6px">会话侧栏预览</div>这是模型生成的网页，在独立的预览窗口里打开：文件改了会自动刷新，页面不能调用应用。<div class="imgph" style="margin-top:12px;height:150px">页面内容</div></div></section>`;
+  }
+  const task = [`<button class="tb ${!S.mainMin && S.focus === 'main' ? 'on' : ''}" data-a="tbMain"><span class="dot"></span>PiLab</button>`];
+  if (L.sc === 'window' && S.scLayer === 'free') task.push(`<button class="tb ${S.focus === 'sc' ? 'on' : ''}" data-a="tbSc"><span class="dot sc"></span>旁问 · ${esc(SESS[S.scSession].title)}</button>`);
+  const desk = $('desktop');
+  desk.style.width = deskW + 'px'; desk.style.height = deskH + 'px';
+  desk.innerHTML = `<div class="deskhint">桌面（主窗口外面）</div>${app}${scWin}${pvWin}<div class="taskbar">${task.join('')}</div>${S.toast ? `<div class="toast">${esc(S.toast)}</div>` : ''}`;
+  const scale = Math.min(1, wrapW / deskW);
+  desk.style.transform = `scale(${scale})`;
+  $('stageWrap').style.height = deskH * scale + 'px';
+  S._scale = scale; S._deskW = deskW; S._deskH = deskH;
+
+  // status line
+  const reason = { user: '你关掉了', panes: '有卡片窗时让位', 'side-chat': '旁问停靠占了它的位置', narrow: `放不下（对话会窄于 ${pro() ? C.RAIL_CHAT_PRO : C.RAIL_CHAT_CUR}）` };
+  const parts = [];
+  parts.push(`窗口 <b>${L.W} × ${L.H}</b>`);
+  if (L.clampW || L.clampH) parts.push(`<span class="bad">拖不到 ${S.w} × ${S.h}：${pro() ? '建议' : '现在'}最小 ${L.minW} × ${L.minH}</span>`);
+  parts.push(`侧栏 <b>${L.sb || '收起'}</b>`);
+  parts.push(`对话 <b>${L.chatW}</b>`);
+  parts.push(`会话侧栏 ${L.rail.visible ? `<b class="good">${C.RAIL}</b>` : `<b>藏起</b>（${reason[L.rail.reason] || '—'}）`}`);
+  if (kinds.length) parts.push(`卡片窗 <b>${L.paneW}</b>${L.paneMode === 'overlay' ? '（<b>盖在对话上</b>）' : ''}${L.overflow ? `（<span class="bad">右边 ${L.overflow}px 被窗口边裁掉</span>）` : ''}`);
+  if (S.scOpen) parts.push(`旁问 <b>${{ float: '对话区里的小窗', dock: '停靠在右侧', overlay: '停靠（窄窗口里盖在对话上）', window: '独立窗口', hidden: '—' }[L.sc]}</b>`);
+  const bh = barButtons(L).hidden.length;
+  if (bh) parts.push(`标题栏 <b>${bh}</b> 个按钮挪进了 ⋮`);
+  if (S.note) parts.push(`<span class="good">${esc(S.note)}</span>`);
+  $('stat').innerHTML = parts.join(' · ');
+}
+
+// ── interactions ────────────────────────────────────────────
+function flash(text) {
+  S.toast = text; render();
+  clearTimeout(flash.t); flash.t = setTimeout(() => { S.toast = ''; render(); }, 2200);
+}
+function togglePane(kind) {
+  const i = S.panes.indexOf(kind);
+  if (i >= 0) S.panes.splice(i, 1);
+  else { S.panes.push(kind); if (S.panes.length > 4) S.panes.shift(); }
+}
+function openSideChat() {
+  S.scOpen = true; S.scSession = S.active; S.fx = 0; S.fy = 0; S.focus = 'sc';
+}
+/** Ctrl+; / the title-bar button: close it, or move it onto this conversation (one side chat at a time). */
+function toggleSideChat() {
+  if (S.scOpen && S.scSession === S.active) S.scOpen = false;
+  else { if (S.scOpen) S.note = '旁问换到了这个对话，原来的问答丢弃'; openSideChat(); }
+}
+
+document.addEventListener('click', (e) => {
+  const seg = e.target.closest('.seg[data-k] button');
+  if (seg) {
+    const k = seg.parentElement.dataset.k; S[k] = seg.dataset.v; S.menu = false;
+    if (k === 'mode') { S.fx = 0; S.fy = 0; }
+    render(); return;
+  }
+  const el = e.target.closest('[data-a]');
+  if (!el) { if (S.menu) { S.menu = false; render(); } return; }
+  const a = el.dataset.a;
+  if (a !== 'menu' && a !== 'focusMain' && a !== 'focusSc') S.menu = false;
+  S.note = '';
+  switch (a) {
+    case 'session': {
+      if (el.dataset.id === S.active) break;
+      S.active = el.dataset.id; S.editor = null; S.panes = S.panes.filter((p) => p !== 'editor');
+      if (S.scOpen) {
+        if (!pro() || S.scSwitch === 'close') { S.scOpen = false; S.note = '切换对话：旁问被关掉、丢弃'; }
+        else S.note = '切换对话：旁问留在原来那个对话上';
+      }
+      break;
+    }
+    case 'sidebar': S.sidebar = !S.sidebar; break;
+    case 'menu': S.menu = !S.menu; break;
+    case 'bar': {
+      const id = el.dataset.id;
+      if (el.classList.contains('off')) { const L = layout(); flash(barButtons(L).shown.concat(barButtons(L).hidden).find((b) => b.id === id)?.why || '现在不能用'); return; }
+      if (id === 'rail') S.railShown = !S.railShown;
+      else if (id === 'sc') toggleSideChat();
+      else togglePane(id);
+      S.menu = false;
+      break;
+    }
+    case 'card': S.cards[el.dataset.id] = !S.cards[el.dataset.id]; break;
+    case 'output': {
+      const o = SESS[S.active].outputs[Number(el.dataset.i)];
+      if (o.kind === 'html') {
+        if (S.htmlOpen === 'preview') { S.preview = o; S.pvX = null; }
+        else { flash(`已交给系统浏览器打开 ${o.name}`); return; }
+      } else {
+        S.editor = o; if (!S.panes.includes('editor')) { S.panes.push('editor'); if (S.panes.length > 4) S.panes.shift(); }
+      }
+      break;
+    }
+    case 'closePane': S.panes = S.panes.filter((p) => p !== el.dataset.id); if (el.dataset.id === 'editor') S.editor = null; break;
+    case 'scForm': if (pro()) S.formPro = el.dataset.v; else S.formCur = el.dataset.v; S.fx = 0; S.fy = 0; break;
+    case 'scClose': S.scOpen = false; break;
+    case 'pvClose': S.preview = null; break;
+    case 'toggleSc': toggleSideChat(); break;
+    case 'clickMain': S.focus = 'main'; S.mainMin = false;
+      S.note = pro() && layout().sc === 'window' ? (S.scLayer === 'owned' ? '点了主窗口：旁问仍然在它上面' : '点了主窗口：旁问被盖到后面（拖开就能看到）') : '';
+      break;
+    case 'minMain': S.mainMin = !S.mainMin;
+      if (S.mainMin && pro() && layout().sc === 'window') S.note = S.scLayer === 'owned' ? '主窗口最小化：旁问一起收起' : '主窗口最小化：旁问还在桌面上';
+      break;
+    case 'tbMain': S.mainMin = !S.mainMin ? (S.focus === 'main') : false; S.focus = 'main'; break;
+    case 'tbSc': S.focus = 'sc'; break;
+    case 'focusMain': if (S.focus !== 'main') { S.focus = 'main'; render(); } return;
+    case 'focusSc': if (S.focus !== 'sc') { S.focus = 'sc'; render(); } return;
+    case 'reset': { const keep = { mode: S.mode, theme: S.theme }; S = Object.assign(S0(), keep); break; }
+  }
+  render();
+});
+
+// drag: main window by its title bar, the side chat window anywhere on the
+// desktop, the in-chat floating side chat only inside the chat area.
+let drag = null;
+document.addEventListener('pointerdown', (e) => {
+  const rz = e.target.closest('[data-resize]');
+  const h = e.target.closest('[data-drag]');
+  if (!rz && (!h || e.target.closest('button'))) return;
+  const sc = S._scale || 1;
+  if (rz) drag = { kind: 'rz', x: e.clientX, y: e.clientY, w: S.scW, h: S.scH, sc };
+  else {
+    const k = h.dataset.drag;
+    if (k === 'app') drag = { kind: k, x: e.clientX, y: e.clientY, ox: S.appX, oy: S.appY, sc };
+    if (k === 'sc') { drag = { kind: k, x: e.clientX, y: e.clientY, ox: S.scX, oy: S.scY, sc }; S.focus = 'sc'; }
+    if (k === 'pv') drag = { kind: k, x: e.clientX, y: e.clientY, ox: S.pvX, oy: S.pvY, sc };
+    if (k === 'scf') {
+      const area = h.closest('[data-chatarea]'), panel = h.closest('.sc');
+      drag = { kind: k, x: e.clientX, y: e.clientY, ox: S.fx, oy: S.fy, sc, cw: area.clientWidth, ch: area.clientHeight, pw: panel.offsetWidth, ph: panel.offsetHeight };
+    }
+  }
+  if (drag) { e.preventDefault(); }
+});
+document.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const dx = (e.clientX - drag.x) / drag.sc, dy = (e.clientY - drag.y) / drag.sc;
+  if (drag.kind === 'app') { S.appX = Math.max(0, Math.round(drag.ox + dx)); S.appY = Math.max(0, Math.round(drag.oy + dy)); S.focus = 'main'; }
+  if (drag.kind === 'sc') { S.scX = Math.round(drag.ox + dx); S.scY = Math.round(drag.oy + dy); }
+  if (drag.kind === 'pv') { S.pvX = Math.round(drag.ox + dx); S.pvY = Math.round(drag.oy + dy); }
+  if (drag.kind === 'rz') { S.scW = Math.max(320, Math.round(drag.w + dx)); S.scH = Math.max(280, Math.round(drag.h + dy)); }
+  if (drag.kind === 'scf') {
+    // clampSideChatFloatOffset: the window never leaves the chat area
+    const m = 16, maxL = Math.max(0, drag.cw - drag.pw - 2 * m), maxU = Math.max(0, drag.ch - drag.ph - 2 * m);
+    S.fx = Math.min(0, Math.max(-maxL, Math.round(drag.ox + dx)));
+    S.fy = Math.min(0, Math.max(-maxU, Math.round(drag.oy + dy)));
+  }
+  render();
+});
+document.addEventListener('pointerup', () => { drag = null; });
+
+$('w').addEventListener('input', (e) => { S.w = Number(e.target.value); render(); });
+$('h').addEventListener('input', (e) => { S.h = Number(e.target.value); render(); });
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === ';') { e.preventDefault(); S.note = ''; toggleSideChat(); render(); }
+});
+window.addEventListener('resize', render);
+for (const [k, v] of new URLSearchParams(location.hash.slice(1))) {
+  if (k === 'panes') S.panes = v ? v.split(',') : [];
+  else if (['w', 'h', 'appX', 'appY', 'scX', 'scY'].includes(k)) S[k] = Number(v);
+  else if (['sidebar', 'scOpen', 'railShown', 'mainMin'].includes(k)) S[k] = v === '1';
+  else if (k in S) S[k] = v;
+}
+render();
+</script>
+</body>
+</html>
