@@ -29,9 +29,9 @@ Role: implementation-status。更新日期：2026-10-14。只放当前阶段、�
 
 ## Next Target
 
-**会话侧栏「产出」卡、旁问独立窗口、侧栏与卡片窗并存、最小窗口 640×480（2026-11-04，[决策 209](decisions/209-session-rail-outputs-side-chat-window-narrow-shell.md)，清单 [rail-windows-tasks.md](../ui-cohesion/rail-windows-tasks.md)）**：五个阶段做完，快进合入 main 并推送。测试包 `1.2.2-test.2` 从测试分支 `test/1.2.2-test.2` 手动触发 CI（只改版本号，main 仍是 1.2.2）。待用户装测试包实测，并审批决策 209 §8.4 的自主细节。决策 208（`feat/chat-transcript-style`）没有合入，不在这个测试包里。
+**会话侧栏「产出」卡、旁问独立窗口、侧栏与卡片窗并存、最小窗口 640×480（2026-11-04，[决策 209](decisions/209-session-rail-outputs-side-chat-window-narrow-shell.md)，清单 [rail-windows-tasks.md](../ui-cohesion/rail-windows-tasks.md)）**：五个阶段做完，快进合入 main 并推送；用户装测试包 `1.2.2-test.2` 实测后，**2026-11-04 发布 `v1.2.2`**（Build run 41801924785 全部通过，release 标为 latest，1.2.x 用户经自动更新收到）。决策 209 §8.4 的自主细节待用户审批。决策 208（`feat/chat-transcript-style`）没有合入，不在 1.2.2 里。
 
-**DSH 升到 0.2.1-rc.5（2026-11-03，[决策 207](decisions/207-dsh-0-2-1-rc-5-upgrade.md)，阶段看板 [dsh-0.2.1-upgrade-tasks.md](dsh-0.2.1-upgrade-tasks.md)）**：已合入 main（`2aade4bf`），main 已推送（2026-11-04 核对 origin/main 含此提交），1.2.2 未发版。测试包 `1.2.2-test.1` 从测试分支 `test/1.2.2-test.1` 手动触发 CI；用户装测试包实测确认后发 1.2.2（发版说明要补这次升级）。决策 207 里标「自主」的条目与第 15 节的观察项待用户看。
+**DSH 升到 0.2.1-rc.5（2026-11-03，[决策 207](decisions/207-dsh-0-2-1-rc-5-upgrade.md)，阶段看板 [dsh-0.2.1-upgrade-tasks.md](dsh-0.2.1-upgrade-tasks.md)）**：已合入 main（`2aade4bf`），已推送，随 1.2.2 发布（2026-11-04，发版说明已补这次升级）。测试包 `1.2.2-test.1` 从测试分支 `test/1.2.2-test.1` 手动触发 CI。决策 207 里标「自主」的条目与第 15 节的观察项待用户看。
 
 **2026-10-14**：1.1.0 已发布，下文第 0～3 项的测试包流程结束；第 4 项「P1-14 其余」除最后一条的「合入 main 发版」外仍有效，在 main 上继续。决策审批（第 3 项）照旧待用户。
 
