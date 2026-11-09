@@ -1025,6 +1025,11 @@ export const zhTranslations: Record<string, string> = {
   'Update failed': '更新失败',
   'The update is downloading. You can continue working.': '正在下载更新，你可以继续工作。',
   'The update could not be completed. You can retry.': '更新未能完成，可以重试。',
+  // Decision 213: the stall watchdog's error (`UPDATE_DOWNLOAD_STALLED`) and the
+  // reminder's close button, which hides it until the app restarts.
+  'The download made no progress for 5 minutes and was stopped.':
+    '下载已有 5 分钟没有进展，已停止。',
+  'Hide until next launch': '下次启动再提醒',
   'Download update': '下载更新',
   'Use your system package manager or install a newer package to update.':
     '请通过系统软件包管理器或安装新版软件包更新。',

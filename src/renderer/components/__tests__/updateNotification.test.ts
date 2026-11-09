@@ -3,7 +3,7 @@ import type { UpdateStatus } from '@shared/types/updater';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
-import { subscribeUpdater, useUpdaterStore } from '@/stores/updater';
+import { showUpdateReminder, subscribeUpdater, useUpdaterStore } from '@/stores/updater';
 import { UpdateNotification } from '../UpdateNotification';
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
@@ -111,4 +111,46 @@ it('does not let an old snapshot overwrite a live update and shares one subscrip
   expect(cleanup).not.toHaveBeenCalled();
   second();
   expect(cleanup).toHaveBeenCalledOnce();
+});
+
+it('hides until the next launch, stays hidden for a newer version, and a manual check brings it back', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  useUpdaterStore.setState({ status: null, reminderHidden: false });
+  let receive!: (status: UpdateStatus) => void;
+  window.electronAPI = {
+    env: { platform: 'linux' },
+    updater: {
+      onStatus: (callback: (status: UpdateStatus) => void) => {
+        receive = callback;
+        return () => {};
+      },
+      getStatus: async () => ({ status: 'downloading', info: { version: '2' } }),
+    },
+  } as unknown as typeof window.electronAPI;
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const entry = () => container.querySelector<HTMLButtonElement>('[role="status"] button');
+  try {
+    await act(async () => root.render(createElement(UpdateNotification)));
+    expect(entry()?.textContent).toBe('Downloading update · v2');
+    const hide = container.querySelector<HTMLButtonElement>(
+      '[role="status"] button[aria-label="Hide until next launch"]'
+    );
+    await act(async () => hide!.click());
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    // Decision 213: a newer version landing later in this launch stays quiet.
+    await act(async () => receive({ status: 'downloaded', info: { version: '3' } }));
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    // A manual check in Settings brings the pill back without popping the dialog.
+    await act(async () => showUpdateReminder());
+    expect(entry()?.textContent).toBe('Update ready · v3');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    useUpdaterStore.setState({ reminderHidden: false });
+    vi.unstubAllGlobals();
+  }
 });

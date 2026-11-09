@@ -23,7 +23,7 @@ import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
-import { useUpdaterStatus } from '@/stores/updater';
+import { showUpdateReminder, updateErrorText, useUpdaterStatus } from '@/stores/updater';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 // Parse shell arguments string, supporting single/double quotes for paths with spaces
@@ -62,9 +62,18 @@ export function GeneralSettings() {
     }
     setTempPathDialogOpen(true);
   }, [setDefaultTemporaryPath]);
+  // Decision 213: the check also runs while an update is ready (a newer one
+  // replaces it), where the status stays `downloaded`; this keeps the spinner
+  // up until the check returns.
+  const [checkRequested, setCheckRequested] = React.useState(false);
   const handleCheckForUpdates = React.useCallback(() => {
-    window.electronAPI.updater.checkForUpdates();
+    showUpdateReminder();
+    setCheckRequested(true);
+    Promise.resolve(window.electronAPI.updater.checkForUpdates())
+      .catch(() => undefined)
+      .finally(() => setCheckRequested(false));
   }, []);
+  const checking = updateStatus?.status === 'checking' || checkRequested;
 
   return (
     <div className="space-y-6">
@@ -161,7 +170,10 @@ export function GeneralSettings() {
                 </span>
               )}
               {updateStatus?.status === 'downloaded' && (
-                <span className="text-small text-success">({t('Update ready')})</span>
+                <span className="text-small text-success">
+                  ({t('Update ready')}
+                  {updateStatus.info?.version ? `: v${updateStatus.info.version}` : ''})
+                </span>
               )}
               {updateStatus?.status === 'unsupported' && (
                 <span className="text-small text-muted-foreground">
@@ -171,13 +183,14 @@ export function GeneralSettings() {
               {updateStatus?.status === 'not-available' && (
                 <span className="text-small text-muted-foreground">({t('Up to date')})</span>
               )}
+              {/* With a version found, the failure was the download, not the check. */}
               {updateStatus?.status === 'error' && (
                 <span
                   className="text-small text-destructive truncate max-w-[420px]"
-                  title={updateStatus.error || ''}
+                  title={updateErrorText(updateStatus.error, t) || ''}
                 >
-                  ({t('Check failed')}
-                  {updateStatus.error ? `: ${updateStatus.error}` : ''})
+                  ({t(updateStatus.info ? 'Update failed' : 'Check failed')}
+                  {updateStatus.error ? `: ${updateErrorText(updateStatus.error, t)}` : ''})
                 </span>
               )}
             </div>
@@ -186,16 +199,13 @@ export function GeneralSettings() {
               size="sm"
               onClick={handleCheckForUpdates}
               disabled={
-                updateStatus?.status === 'checking' ||
+                checking ||
                 updateStatus?.status === 'downloading' ||
-                updateStatus?.status === 'downloaded' ||
                 updateStatus?.status === 'unsupported'
               }
             >
-              <RefreshCw
-                className={`mr-2 h-4 w-4 ${updateStatus?.status === 'checking' ? 'animate-spin' : ''}`}
-              />
-              {updateStatus?.status === 'checking' ? t('Checking...') : t('Check for updates')}
+              <RefreshCw className={`mr-2 h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
+              {checking ? t('Checking...') : t('Check for updates')}
             </Button>
           </div>
         </SettingsRow>

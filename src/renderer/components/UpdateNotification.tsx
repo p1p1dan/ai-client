@@ -1,8 +1,13 @@
-import { Download, RefreshCw } from 'lucide-react';
+import { Download, RefreshCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useModalQueueSlot } from '@/hooks/useModalQueueSlot';
 import { useI18n } from '@/i18n';
-import { useUpdaterStatus } from '@/stores/updater';
+import {
+  hideUpdateReminder,
+  updateErrorText,
+  useUpdaterStatus,
+  useUpdaterStore,
+} from '@/stores/updater';
 import { ReleaseNotes } from './ReleaseNotes';
 import { Button } from './ui/button';
 import {
@@ -25,21 +30,36 @@ import {
  * order, and this one is lowest — an update can always be started later from
  * the status pill below, which stays visible and clickable regardless of
  * whose turn it is.
+ *
+ * ## Hiding it until the next launch (decision 213)
+ *
+ * The pill's close button hides pill and dialog for the rest of this launch,
+ * a newer version included; the next launch shows them again. A manual check
+ * in Settings brings them back sooner. There is no skipping of a version.
  */
 export function UpdateNotification() {
   const { t } = useI18n();
   const status = useUpdaterStatus();
+  const hidden = useUpdaterStore((state) => state.reminderHidden);
   const [open, setOpen] = useState(false);
   const [actionError, setActionError] = useState('');
   const phase = status?.status;
   const version = status?.info?.version;
   useEffect(() => {
-    if (phase === 'downloaded' && version) setOpen(true);
+    // Read, not subscribed: bringing the pill back must not pop the dialog.
+    if (phase === 'downloaded' && version && !useUpdaterStore.getState().reminderHidden)
+      setOpen(true);
   }, [phase, version]);
+  // `open` is never true while hidden: the close button clears it, and the
+  // effect above and the pill (not rendered while hidden) are what set it.
   const canShow = useModalQueueSlot('updateNotification', open);
   // A failed check (offline, unreachable feed) stays on the settings page; the
   // reminder only carries errors for a version already found.
-  if (!status?.info || !['available', 'downloading', 'downloaded', 'error'].includes(status.status))
+  if (
+    hidden ||
+    !status?.info ||
+    !['available', 'downloading', 'downloaded', 'error'].includes(status.status)
+  )
     return null;
 
   const downloaded = status.status === 'downloaded';
@@ -84,6 +104,19 @@ export function UpdateNotification() {
           {version ? ` · v${version}` : ''}
           {status.progress ? ` · ${Math.floor(status.progress.percent)}%` : ''}
         </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0"
+          aria-label={t('Hide until next launch')}
+          title={t('Hide until next launch')}
+          onClick={() => {
+            setOpen(false);
+            hideUpdateReminder();
+          }}
+        >
+          <X className="size-3" />
+        </Button>
       </div>
       <Dialog open={open && canShow} onOpenChange={setOpen}>
         <DialogPopup className="sm:max-w-md">
@@ -118,7 +151,7 @@ export function UpdateNotification() {
               )}
               {(actionError || status.error) && (
                 <p role="alert" className="break-words text-small text-destructive">
-                  {actionError || status.error}
+                  {actionError || updateErrorText(status.error, t)}
                 </p>
               )}
               {status.info?.releaseNotes && (
