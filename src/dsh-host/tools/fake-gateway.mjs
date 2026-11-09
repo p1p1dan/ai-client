@@ -322,7 +322,9 @@
  *                       request identified itself (`key=` / `bearer=` digests, `headers=` the
  *                       header names), for the host probe's repository-env checks.
  *                       Route B S-2 adds `CC-RUN {"calls":[{"name":"Write","input":{...}}, ...]}`:
- *                       one scripted tool call per step, in order, then a `CC-RUN done` line,
+ *                       one scripted tool call per step, in order, then a `CC-RUN done` line
+ *                       (decision 211: optional `"think":"…"`, `"thinkMs":n` and `"leadMs":n`
+ *                       give every step a paced thought and a wait before it answers),
  *                       for the per-mode permission probes. It also answers Auto mode's
  *                       safety-check requests (non-streaming, measured on 2.1.300): allow,
  *                       or block when the newest `CC-RUN` prompt in the checked transcript
@@ -3780,9 +3782,15 @@ function ccToolResultTexts(messages) {
   return out;
 }
 
-/** `[delayMs, event, data]` frames of one paced reply: thinking, text, then one tool call. */
-function ccFrames(model, { thinking, text, pieces, tool, chunkMs = 60 }) {
-  const frames = [messageStartFrame(model, 1200)];
+/**
+ * `[delayMs, event, data]` frames of one paced reply: thinking, text, then one tool call.
+ * `leadMs` holds the reply back before its first frame (a model still working out its
+ * answer); `thinkMs` paces the thinking apart from the rest (`chunkMs`).
+ */
+function ccFrames(model, { thinking, text, pieces, tool, chunkMs = 60, thinkMs, leadMs = 0 }) {
+  const start = messageStartFrame(model, 1200);
+  if (leadMs > 0) start[0] = leadMs;
+  const frames = [start];
   let index = 0;
   if (thinking) {
     frames.push([
@@ -3796,7 +3804,7 @@ function ccFrames(model, { thinking, text, pieces, tool, chunkMs = 60 }) {
     ]);
     for (const piece of splitInto(thinking, 8)) {
       frames.push([
-        chunkMs,
+        thinkMs ?? chunkMs,
         'content_block_delta',
         { type: 'content_block_delta', index, delta: { type: 'thinking_delta', thinking: piece } },
       ]);
@@ -4015,8 +4023,16 @@ function decideClaudeSdk(parsed, req) {
     case 'RUN': {
       // Route B S-2: the probe scripts the calls itself, one per step.
       const calls = Array.isArray(params.calls) ? params.calls : [];
-      if (step < calls.length) return reply({ tool: calls[step], chunkMs: 5 }, label);
-      return reply({ text: `CC-RUN done (${calls.length} calls)`, chunkMs: 5 }, label);
+      // Decision 211's GUI check: optional pacing, so a probe can catch every step
+      // waiting (`leadMs`) and thinking (`think`, its pieces `thinkMs` apart).
+      const pace = {
+        chunkMs: 5,
+        ...(typeof params.think === 'string' ? { thinking: params.think } : {}),
+        ...(Number.isFinite(params.thinkMs) ? { thinkMs: params.thinkMs } : {}),
+        ...(Number.isFinite(params.leadMs) ? { leadMs: params.leadMs } : {}),
+      };
+      if (step < calls.length) return reply({ tool: calls[step], ...pace }, label);
+      return reply({ text: `CC-RUN done (${calls.length} calls)`, ...pace }, label);
     }
     case 'TEXT':
       // PiLab R2 (FR-07.6): `{"pieces":["…","…"],"chunkMs":3000}` streams exactly these

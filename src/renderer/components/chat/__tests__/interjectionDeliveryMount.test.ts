@@ -163,12 +163,16 @@ async function mount(messages: ChatMessage[], status: Status) {
   // PiLab R1 (2026-10-30): the turn's state is its live line while it runs
   // and its bill once it ends — the 「已工作 ›」 fold head is gone, and every
   // step is drawn in place, so there is no open/closed to report.
+  // Decision 211: while it runs, that state is the live run when one carries it.
   const head = (turnId: string) => {
     const section = container.querySelector(`section[data-turn-id="${turnId}"]`);
-    const live = section?.querySelector('[data-slot="turn-live-line"]');
+    const live =
+      section?.querySelector('[data-slot="turn-live-line"]') ??
+      section?.querySelector('[data-turn-live-host]');
     const bill = section?.querySelector('[data-slot="turn-bill"]');
     expect(live ?? bill, `turn ${turnId} has a state line`).toBeTruthy();
-    return { settled: !live, summary: (live ?? bill)?.textContent ?? '' };
+    const shown = live ? (live.querySelector('summary') ?? live) : bill;
+    return { settled: !live, summary: shown?.textContent ?? '' };
   };
   const awaiting = () => [...container.querySelectorAll('[data-awaiting-delivery]')];
   return { container, show, sections, head, awaiting };
@@ -195,11 +199,15 @@ const deliver = () =>
   });
 
 /**
- * A running turn's line: 「✻ 」 and what it is doing, verb first (S-6 feedback 11c,
- * `turnLiveHead.ts`): 「✻ Running …」 while a tool runs, 「✻ Working …」 as the fallback.
- * A settled one reads 「Worked …」 instead.
+ * A running turn's state: its live run, in the running step's own words, while a
+ * tool runs (decision 211: `Bash sleep 120; pnpm test`, no second line saying it
+ * again); what it is doing, verb first, on a line of its own when nothing is live
+ * (S-6 feedback 11c, `turnLiveHead.ts`: `Thinking… 3s`, `Working…`). A settled one
+ * reads 「Worked …」 instead.
  */
-const RUNNING = expect.stringMatching(/^✻ /);
+const RUNNING = expect.stringMatching(
+  /^(Connecting|Thinking|Replying|Working|Running)…|^Bash sleep 120; pnpm test$/
+);
 
 it('[I8-1] while the interjection waits, the running turn stays open and working', async () => {
   const view = await mount([PROMPT, STEP_1, STEP_2_RUNNING], 'running');
@@ -256,7 +264,11 @@ it('[I8-2] once DSH takes it in, the old group folds and the message opens the n
   expect(next?.querySelector('[data-awaiting-delivery]')).toBeNull();
   expect(next?.querySelector('p')?.className).toContain('text-foreground');
   expect(next?.querySelector('p')?.className).not.toContain('text-muted-foreground');
-  expect(next?.textContent).toContain('✻ ');
+  // Working now: its live thought carries the status (decision 211), once.
+  expect(
+    next?.querySelectorAll('[data-slot="turn-live-line"], [data-turn-live-host]')
+  ).toHaveLength(1);
+  expect(next?.textContent).toContain('Thinking…');
   expect(next?.textContent).not.toContain('Worked');
 });
 

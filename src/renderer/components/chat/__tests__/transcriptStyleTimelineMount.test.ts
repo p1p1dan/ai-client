@@ -199,37 +199,84 @@ describe('decision 208: aligned with the comparison mockup', () => {
     { id: 'tx', type: 'text', text: 'Done.' },
   ];
 
-  it('terminal: the running step names itself on the live line, with how to stop it', async () => {
-    const running: Blocks = [
-      {
-        id: 'c9',
-        type: 'tool_call',
-        toolCallId: 'c9',
-        toolName: 'Bash',
-        toolInput: { command: 'pnpm test', description: 'Run the tests' },
-      },
-    ];
-    const { turn } = await renderSession('terminal', {}, { blocks: running, running: true });
-    const line = turn().querySelector('[data-slot="turn-live-line"]');
-    expect(line?.textContent).toContain('Run the tests…');
-    expect(line?.textContent).toContain('esc to interrupt');
-    expect(line?.querySelector('[data-shape="star"][data-status="running"]')).not.toBeNull();
+  const RUNNING_CALL: Blocks = [
+    {
+      id: 'c9',
+      type: 'tool_call',
+      toolCallId: 'c9',
+      toolName: 'Bash',
+      toolInput: { command: 'pnpm test', description: 'Run the tests' },
+    },
+  ];
+
+  // Decision 211 (user, 2026-11-09): the running step says what the turn is
+  // doing; a second line saying it again is gone.
+  it('terminal: the running step carries how long and how to stop it, once', async () => {
+    const { turn } = await renderSession('terminal', {}, { blocks: RUNNING_CALL, running: true });
+    expect(turn().querySelector('[data-slot="turn-live-line"]')).toBeNull();
+    const tails = turn().querySelectorAll('[data-slot="turn-live-tail"]');
+    expect(tails).toHaveLength(1);
+    expect(tails[0]?.textContent).toContain('esc to interrupt');
+    const host = tails[0]?.closest('[data-turn-live-host]');
+    expect(host?.getAttribute('data-slot')).toBe('terminal-block');
+    expect(host?.textContent).toContain('Bash(Run the tests)');
+    // It reads as the line of its own did: the working star, not the step's dot.
+    expect(host?.querySelector('[data-shape="star"][data-status="running"]')).not.toBeNull();
+    expect(host?.querySelector('[data-shape="bullet"]')).toBeNull();
   });
 
-  it('desktop: the live line keeps its words', async () => {
-    const running: Blocks = [
-      {
-        id: 'c9',
-        type: 'tool_call',
-        toolCallId: 'c9',
-        toolName: 'Bash',
-        toolInput: { command: 'pnpm test', description: 'Run the tests' },
-      },
-    ];
-    const { turn } = await renderSession('desktop', {}, { blocks: running, running: true });
+  it('terminal: with nothing live, the turn says it on a line of its own', async () => {
+    // The call came back; the model has not said anything since.
+    const { turn } = await renderSession(
+      'terminal',
+      {},
+      { blocks: call('c1', 'List branches'), running: true }
+    );
     const line = turn().querySelector('[data-slot="turn-live-line"]');
+    expect(line?.textContent).toContain('Thinking…');
+    expect(line?.textContent).toContain('esc to interrupt');
+    expect(line?.querySelector('[data-shape="star"][data-status="running"]')).not.toBeNull();
+    expect(turn().querySelectorAll('[data-turn-live-host]')).toHaveLength(0);
+    // It follows the steps, as the foot line did.
+    const blocks = [...turn().querySelectorAll('[data-slot="terminal-block"]')];
+    const last = blocks.at(-1);
+    expect(last && line && last.compareDocumentPosition(line)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
+  it('terminal: a reply streaming leaves the line at the turn’s foot', async () => {
+    const { turn } = await renderSession(
+      'terminal',
+      {},
+      {
+        blocks: [...call('c1', 'List branches'), { id: 'tx', type: 'text', text: 'Six' }],
+        running: true,
+      }
+    );
+    expect(turn().querySelectorAll('[data-slot="turn-live-line"]')).toHaveLength(1);
+    expect(turn().querySelectorAll('[data-turn-live-host]')).toHaveLength(0);
+  });
+
+  it('desktop: the live run carries the turn; no line of its own', async () => {
+    const { turn } = await renderSession('desktop', {}, { blocks: RUNNING_CALL, running: true });
+    expect(turn().querySelector('[data-slot="turn-live-line"]')).toBeNull();
+    const host = turn().querySelector('[data-turn-live-host]');
+    expect(host?.getAttribute('data-slot')).toBe('step-run');
+    expect(host?.querySelector('summary')?.textContent).toContain('Run the tests');
+  });
+
+  it('desktop: with nothing live, the line of its own keeps its words', async () => {
+    const { turn } = await renderSession(
+      'desktop',
+      {},
+      { blocks: call('c1', 'List branches'), running: true }
+    );
+    const line = turn().querySelector('[data-slot="turn-live-line"]');
+    expect(line?.textContent).toContain('Thinking');
     expect(line?.textContent).not.toContain('esc to interrupt');
     expect(line?.querySelector('[data-shape="star"]')).toBeNull();
+    expect(turn().querySelectorAll('[data-turn-live-host]')).toHaveLength(0);
   });
 
   it('terminal: reads apart are steps apart, and the thinking is a ∴ line before them', async () => {

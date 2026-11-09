@@ -6,7 +6,11 @@
 
 **代码**：分支 `feat/chat-transcript-style`，基于 origin/main `197e75e1`，已推送；2026-11-08 合入 main（`f2a677cd`）并推送，不在 1.2.2 里，随测试包 `1.2.3-test.1` 出包。
 
-**后续修订**：[决策 210](210-step-output-preview-head.md)（2026-11-08）把第 3.2 节的「终端命令取末尾最多 3 行」改为取开头几行，经典步骤行不再给正常跑完的命令加结果行。
+**后续修订**：
+
+- [决策 210](210-step-output-preview-head.md)（2026-11-08）把第 3.2 节的「终端命令取末尾最多 3 行」改为取开头几行，经典步骤行不再给正常跑完的命令加结果行。
+- [决策 211](211-turn-live-status-once.md)（2026-11-09）把第 3 处「运行中的那一行」改为挂在正在进行的那一行上，没有这样的行才单独一行；计时改写 `12s`，用词统一英文（`Thinking…`）。
+- [决策 212](212-subagent-one-line.md)（2026-11-09）：子代理不再是「照旧画」的特殊行，两种样式都只占一行，点开是它的对话。
 
 **证据**：
 - 两轮可回放对比稿 [`ui-cohesion/transcript-density-options.html`](../../ui-cohesion/transcript-density-options.html)；

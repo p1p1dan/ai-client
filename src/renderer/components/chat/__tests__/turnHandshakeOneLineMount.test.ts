@@ -32,7 +32,8 @@ vi.hoisted(() => {
 vi.mock('@/utils/logging', () => ({ updateRendererLogging: vi.fn() }));
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate, locale: 'en' }) }));
 // Decision 208: the one line below is the desktop style's words; the terminal
-// style's own line (「✻ 思考中… (2 秒 · esc 中断)」) has its twins at the end.
+// style's own line (`✻ Thinking… (2s · esc 中断)`, decision 211's words) has its
+// twins at the end.
 const settings = vi.hoisted(() => ({
   state: { showToolDiff: false, chatTranscriptStyle: 'desktop' as 'desktop' | 'terminal' },
 }));
@@ -48,7 +49,9 @@ vi.mock('../sessionIndex/useResumeSession', () => ({
   useResumeSession: () => ({ resume: async () => false }),
 }));
 
-const CONNECTING = 'Connecting to the chat engine…';
+// Decision 211 (user, 2026-11-09): the live words are the CLI's English verbs,
+// the thought row's own `Thinking…`; 「正在连接对话引擎…」 / 「思考中」 are gone.
+const CONNECTING = 'Connecting…';
 
 let root: Root | undefined;
 let container: HTMLDivElement;
@@ -163,7 +166,7 @@ describe('a send still connecting, in the timeline', () => {
       .map((node) => node.getAttribute('title') ?? '')
       .filter((title) => title.includes(CONNECTING));
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^✻ Connecting to the chat engine… \d+s$/);
+    expect(lines[0]).toMatch(/^Connecting… \d+s$/);
     expect(count(CONNECTING)).toBe(1);
     expect(text()).not.toContain(`${CONNECTING} · `);
   });
@@ -173,8 +176,8 @@ describe('a send still connecting, in the timeline', () => {
     expect(text()).not.toContain(CONNECTING);
     const lines = [...container.querySelectorAll('span[title]')]
       .map((node) => node.getAttribute('title') ?? '')
-      .filter((title) => title.startsWith('✻ '));
-    expect(lines).toEqual([expect.stringMatching(/^✻ Thinking \d+s$/)]);
+      .filter((title) => title.startsWith('Thinking'));
+    expect(lines).toEqual([expect.stringMatching(/^Thinking… \d+s$/)]);
     // The status row that repeated the sent count and its own seconds is gone.
     // 2026-10-19 (user): the one line carries no ↑ count.
     expect(count('↑ 5 chars')).toBe(0);
@@ -182,17 +185,19 @@ describe('a send still connecting, in the timeline', () => {
 
   it('[THS-03] a slow wait keeps its second row: the hint the one line cannot carry', async () => {
     await sent('awaiting', 50);
-    expect(text()).toMatch(/✻ Thinking \d+s/);
+    expect(text()).toMatch(/Thinking… \d+s/);
     expect(text()).toContain('Still waiting · 50s');
     expect(text()).toContain('gateway latency varies');
   });
 
   it('[THS-04] the pending head of a first send says the same one line', async () => {
     await sent('awaiting', 2, false);
-    expect(text()).toMatch(/✻ Thinking \d+s/);
+    expect(text()).toMatch(/Thinking… \d+s/);
+    expect(container.querySelectorAll('[data-slot="turn-live-line"]')).toHaveLength(1);
     // 2026-10-19 (user): the one line carries no ↑ count.
     expect(count('↑ 5 chars')).toBe(0);
     expect(text()).not.toMatch(/ · \d+s$/);
+    expect(text()).not.toContain('思考中');
   });
 });
 
@@ -209,8 +214,14 @@ describe('a send still connecting, in the terminal style', () => {
 
   it('[THS-T1] connecting, on one line, with the clock and the stop key after it', async () => {
     await sent('handshake');
-    expect(liveLine()).toMatch(/^Connecting to the chat engine… \(\d+s · esc to interrupt\)$/);
+    expect(liveLine()).toMatch(/^Connecting… \(\d+s · esc to interrupt\)$/);
     expect(count(CONNECTING)).toBe(1);
+  });
+
+  it('[THS-T4] the pending head of a first send draws the very same line', async () => {
+    await sent('awaiting', 2, false);
+    expect(container.querySelectorAll('[data-slot="turn-live-line"]')).toHaveLength(1);
+    expect(liveLine()).toMatch(/^Thinking… \(\d+s · esc to interrupt\)$/);
   });
 
   it('[THS-T2] then thinking, on the same line', async () => {

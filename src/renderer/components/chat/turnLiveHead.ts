@@ -2,11 +2,13 @@
  * Route B S-6 feedback 11c (user, 2026-10-17): a running turn says what it is doing on
  * ONE line, verb first, the way the Claude Code status line does:
  *
- *   ✻ 正在连接对话引擎… 1 秒
- *   ✻ 思考中 3 秒                    (waiting for the first byte, or thinking)
- *   ✻ 回复中 12 秒                    (the reply streaming)
- *   ✻ 运行中 20 秒                    (a tool running: its own verb)
- *   ✻ 工作中 30 秒                    (nothing more specific is known)
+ *   Connecting… 1s
+ *   Thinking… 3s                     (waiting for the first byte, or thinking)
+ *   Replying… 12s                    (the reply streaming)
+ *   Running… 20s                     (a tool running: its own verb)
+ *   Working… 30s                     (nothing more specific is known)
+ *
+ * (Decision 211 made the words English and the clock `12s`; they were 「思考中 3 秒」.)
  *
  * It used to be 「✻ 工作中 N 秒」 over a second status row (「思索中… · ↑ 15 字符 · 2s」)
  * whose seconds counted the same wait again. That row is drawn now only when it says
@@ -16,7 +18,11 @@
  * User, 2026-10-19: no ↑/↓ counts on this line. They read as token figures that
  * did not match the Claude client's and never moved after the send.
  *
- * Pure: the clock line (`useTurnClockLine`) derives the phase and words it.
+ * Decision 211 (user, 2026-11-09): the clock reads `12s` / `4m 18s`, the thought
+ * row's units, and the line is drawn only when no row is live — otherwise the
+ * clock rides on that row (`turnLiveStatus.tsx`).
+ *
+ * Pure: the turn's clock (`useTurnLiveClock`) derives the phase and words it.
  */
 
 import type { TurnItem } from './chatTurn';
@@ -71,7 +77,7 @@ export function deriveTurnLivePhase(input: {
   return { kind: 'working' };
 }
 
-/** 「3 秒」, 「1 分」, 「1 分 5 秒」; null when nothing measured the turn. */
+/** 「3 秒」, 「1 分」, 「1 分 5 秒」 (the settled turn's bill); null when nothing measured the turn. */
 export function turnElapsedText(t: Translate, elapsed: WorkedForParts | null): string | null {
   if (!elapsed) return null;
   if (elapsed.minutes === 0) return t('{{seconds}}s', { seconds: elapsed.seconds });
@@ -79,58 +85,69 @@ export function turnElapsedText(t: Translate, elapsed: WorkedForParts | null): s
   return t('{{minutes}}m {{seconds}}s', { minutes: elapsed.minutes, seconds: elapsed.seconds });
 }
 
-/** The verb, as a literal catalog key per phase (the i18n coverage gate scans literals). */
-function phaseVerb(t: Translate, phase: Exclude<TurnLivePhase, { kind: 'working' }>): string {
+/**
+ * Decision 211: the running turn's clock, `12s`, `4m`, `4m 18s`, in the
+ * thought row's units (`Thought for 12s`) — the clock now rides on that row
+ * and on the step rows, and keeps one form wherever it is drawn. Null when
+ * nothing measured the turn.
+ */
+export function liveClockText(elapsed: WorkedForParts | null): string | null {
+  if (!elapsed) return null;
+  if (elapsed.minutes === 0) return `${elapsed.seconds}s`;
+  return elapsed.seconds === 0 ? `${elapsed.minutes}m` : `${elapsed.minutes}m ${elapsed.seconds}s`;
+}
+
+/**
+ * What the turn is doing, in the words of the thought row (`Thinking…`) and of
+ * the CLI's spinner verbs: English, never translated, always ending on 「…」.
+ * A running step says it in its own words (`stepWords`: what its parentheses
+ * say), else its verb.
+ *
+ * Decision 211 (user, 2026-11-09: 「怎么又有思考中又有 thinking？肯定得统一啊」):
+ * the line of its own used to say 「思考中…」 while the live thought row above it
+ * said `Thinking…`, and the status moves between the two. One word, wherever
+ * it is drawn.
+ */
+function liveWords(phase: TurnLivePhase, stepWords: string | null = null): string {
   switch (phase.kind) {
     case 'connecting':
-      return t('Connecting to the chat engine…');
+      return 'Connecting…';
     case 'thinking':
-      return t('Thinking');
+      return 'Thinking…';
     case 'replying':
-      return t('Replying');
+      return 'Replying…';
     case 'tool':
-      return t(phase.verb);
+      return `${stepWords ?? phase.verb}…`;
+    case 'working':
+      // A clock with no subject reads as a stopwatch: the fallback still names itself.
+      return 'Working…';
   }
 }
 
-/** The whole line for a phase other than the fallback, which the clock line words itself. */
-export function formatTurnLiveLine(
-  t: Translate,
-  phase: Exclude<TurnLivePhase, { kind: 'working' }>,
-  elapsed: WorkedForParts | null
-): string {
-  const clock = turnElapsedText(t, elapsed);
-  return `✻ ${phaseVerb(t, phase)}${clock ? ` ${clock}` : ''}`;
+/**
+ * Desktop style: the line of its own, `Thinking… 12s` after the running icon —
+ * the same words and clock a live run carries (decision 211), so no `✻` of its
+ * own beside the icon.
+ */
+export function formatTurnLiveLine(phase: TurnLivePhase, elapsed: WorkedForParts | null): string {
+  const clock = liveClockText(elapsed);
+  return `${liveWords(phase)}${clock ? ` ${clock}` : ''}`;
 }
 
 /**
  * Decision 208, terminal style (user ruling 2026-11-03, the comparison
- * mockup's ①): what the live line says the turn is doing — the running step in
- * its own words (`stepWords`: what the step's parentheses say), else the phase
- * — always ending on 「…」, as the CLI's spinner line does.
+ * mockup's ①): what the live line says the turn is doing (`liveWords`).
  */
-export function formatTerminalLiveActivity(
-  t: Translate,
-  phase: TurnLivePhase,
-  stepWords: string | null
-): string {
-  switch (phase.kind) {
-    case 'connecting':
-      return t('Connecting to the chat engine…');
-    case 'thinking':
-      return `${t('Thinking')}…`;
-    case 'replying':
-      return `${t('Replying')}…`;
-    case 'tool':
-      return `${stepWords ?? t(phase.verb)}…`;
-    case 'working':
-      return `${t('Working')}…`;
-  }
+export function formatTerminalLiveActivity(phase: TurnLivePhase, stepWords: string | null): string {
+  return liveWords(phase, stepWords);
 }
 
-/** The live line's closing words: 「(12 秒 · esc 中断)」, or 「(esc 中断)」 with no clock. */
+/**
+ * The status's closing words: 「(12s · esc 中断)」, or 「(esc 中断)」 with no
+ * clock — at the end of the live row (decision 211), or of the line of its own.
+ */
 export function formatTerminalLiveTail(t: Translate, elapsed: WorkedForParts | null): string {
-  const clock = turnElapsedText(t, elapsed);
+  const clock = liveClockText(elapsed);
   const interrupt = t('esc to interrupt');
   return `(${clock ? `${clock} · ${interrupt}` : interrupt})`;
 }

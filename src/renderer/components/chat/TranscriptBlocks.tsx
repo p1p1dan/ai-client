@@ -40,27 +40,37 @@ export const StepRunDispositionContext = createContext<StepRunDisposition>('clos
  * One block of the terminal style: the bullet column, then the content.
  *
  * `bullet`: `text` is the prose dot in the body ink, a `RunStatus` a step's
- * coloured dot, `thought` the CLI's dim `∴` before thinking, `null` an empty
- * column so the content still lines up with the text. The mark is a
- * pseudo-element in an `aria-hidden` column, so copying or searching the
- * transcript never picks it up.
+ * coloured dot, `thought` the CLI's dim `∴` before thinking, `live` the CLI's
+ * working star on the row that carries the running turn's status (decision
+ * 211), `null` an empty column so the content still lines up with the text.
+ * The mark is a pseudo-element in an `aria-hidden` column, so copying or
+ * searching the transcript never picks it up.
  */
 export function TerminalBlock({
   bullet,
   hideBullet = false,
+  liveHost = false,
   className,
   children,
 }: {
-  bullet: RunStatus | 'text' | 'thought' | null;
+  bullet: RunStatus | 'text' | 'thought' | 'live' | null;
   /** Keeps the column but draws nothing, e.g. for prose that has not started yet. */
   hideBullet?: boolean;
+  /** Decision 211: this block carries the running turn's status. */
+  liveHost?: boolean;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <div className={cn(terminalBlockClass(), className)} data-slot="terminal-block">
+    <div
+      className={cn(terminalBlockClass(), className)}
+      data-slot="terminal-block"
+      data-turn-live-host={liveHost ? '' : undefined}
+    >
       <span aria-hidden className={terminalGutterClass()}>
-        {bullet === 'thought' ? (
+        {bullet === 'live' ? (
+          <StatusIcon shape="star" status="running" className={cn(hideBullet && 'invisible')} />
+        ) : bullet === 'thought' ? (
           <span
             data-slot="terminal-thought-mark"
             className={cn(

@@ -26,8 +26,10 @@ import {
 } from 'lucide-react';
 import {
   createContext,
+  lazy,
   type ReactNode,
   type RefObject,
+  Suspense,
   useContext,
   useLayoutEffect,
   useMemo,
@@ -68,6 +70,7 @@ import { CopyPatchButton, useSessionWorkspacePath } from './CopyPatchButton';
 import {
   stepRunPanelClass,
   stepRunSummaryClass,
+  terminalLiveWordsClass,
   terminalResultClass,
   terminalResultNoteClass,
   terminalStepArgClass,
@@ -85,6 +88,7 @@ import {
   NoFinalNewlineNote,
   SplitDiffBody,
 } from './DiffLayout';
+import { deriveDelegationLine } from './delegationLine';
 import { HitListPopover } from './HitListPopover';
 import { LiveToolOutput } from './LiveToolOutput';
 import {
@@ -138,6 +142,14 @@ import type { ToolDiff } from './toolDiff';
 import { buildDiffView, diffHasLineNumbers, splitDiffItems } from './toolDiffView';
 import { stoppedToolOutput } from './toolLiveOutputModel';
 import { kilobytesLabel } from './toolOutputHead';
+import {
+  liveRowHostIndex,
+  liveRunHostIndex,
+  TurnLiveLine,
+  TurnLiveRunClock,
+  TurnLiveSlotContext,
+  TurnLiveTail,
+} from './turnLiveStatus';
 import { turnWorkGroupOpen } from './turnProcessFold';
 import { isThoughtRow, type StepResultLine, type StepRowView, thoughtWords } from './turnSteps';
 import { formatWorkedForDuration } from './turnTiming';
@@ -192,17 +204,34 @@ export function ToolGroup({ rows, onOpenFile, sessionId, showDiff }: ToolGroupPr
   // Decision 208: the reader's transcript style; `null` outside the timeline,
   // which keeps today's rows (dialogs, a permission card's row, an open run).
   const style = useContext(TranscriptStyleContext);
-  if (rows.length === 0) return null;
+  // Decision 211: the running turn's last group says what the turn is doing —
+  // on its live row, or as a line at its end when no row can carry it.
+  const liveSlot = useContext(TurnLiveSlotContext) && style !== null;
+  if (rows.length === 0) return liveSlot ? <TurnLiveLine /> : null;
   let body: ReactNode;
   if (style === 'terminal') {
+    const host = liveSlot ? liveRowHostIndex(rows) : -1;
     body = (
       <div className={terminalStepStackClass()}>
-        {rows.map((row) =>
+        {rows.map((row, index) =>
           isThoughtRow(row) ? (
-            <TerminalThoughtRow key={row.key} view={row} sessionId={sessionId} />
+            <TerminalThoughtRow
+              key={row.key}
+              view={row}
+              sessionId={sessionId}
+              liveStatus={index === host}
+            />
+          ) : isDelegationRow(row) ? (
+            // Decision 212: a subagent is one step like the others.
+            <TerminalDelegationRow
+              key={row.key}
+              view={row}
+              sessionId={sessionId}
+              liveStatus={index === host}
+            />
           ) : isSpecialStepRow(row) ? (
-            // Findings, a delegation's lane, a todo list: their own drawing, in
-            // the text column, with no bullet.
+            // Findings, a todo list: their own drawing, in the text column,
+            // with no bullet.
             <TerminalBlock key={row.key} bullet={null}>
               <ToolRow view={row} depth={0} onOpenFile={onOpenFile} sessionId={sessionId} />
             </TerminalBlock>
@@ -212,13 +241,22 @@ export function ToolGroup({ rows, onOpenFile, sessionId, showDiff }: ToolGroupPr
               view={row}
               onOpenFile={onOpenFile}
               sessionId={sessionId}
+              liveStatus={index === host}
             />
           )
         )}
+        {liveSlot && host === -1 && <TurnLiveLine />}
       </div>
     );
   } else if (style === 'desktop') {
-    body = <DesktopStepGroup rows={rows} onOpenFile={onOpenFile} sessionId={sessionId} />;
+    body = (
+      <DesktopStepGroup
+        rows={rows}
+        onOpenFile={onOpenFile}
+        sessionId={sessionId}
+        liveSlot={liveSlot}
+      />
+    );
   } else {
     // T-30 P-17: no own margin — the parent turn body owns the item-to-item
     // gap (`turnBodyClass()`); a margin here would stack on top of it (and on
@@ -238,7 +276,10 @@ export function ToolGroup({ rows, onOpenFile, sessionId, showDiff }: ToolGroupPr
     );
   }
   return (
-    <ToolDiffVisibility.Provider value={showDiff ?? inherited}>{body}</ToolDiffVisibility.Provider>
+    <ToolDiffVisibility.Provider value={showDiff ?? inherited}>
+      {/* A group nested in these rows (an open run, a lane) is never the slot. */}
+      <TurnLiveSlotContext.Provider value={false}>{body}</TurnLiveSlotContext.Provider>
+    </ToolDiffVisibility.Provider>
   );
 }
 
@@ -657,17 +698,29 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
  * of what came of it. A click, or `… +N lines`, opens today's body (the whole
  * output, the input), as on any row.
  */
-function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps) {
+function TerminalStepRow({
+  view: derived,
+  onOpenFile,
+  sessionId,
+  liveStatus = false,
+}: ToolRowProps & {
+  /** Decision 211: this row carries the running turn's status, 「(12s · esc 中断)」. */
+  liveStatus?: boolean;
+}) {
   const { t } = useI18n();
   const { view, backgroundable, expandable } = useToolRowState(derived, sessionId);
   const result = useMemo(() => deriveTerminalStepResult(view, t), [view, t]);
   const omit = terminalSuppressedTails(view);
   const hasArg = view.title === undefined && Boolean(view.arg || view.argRef);
+  // Decision 211: while this row carries the turn's status, its words take the
+  // brand ink the line of its own had.
+  const live = liveStatus && terminalLiveWordsClass();
+  const argClass = cn(terminalStepArgClass(), live);
 
   const line = (
     <>
       {/* User ruling 2026-11-03: the tool's own name, never translated. */}
-      <span className={terminalStepLabelClass()}>{stepLabel(view)}</span>
+      <span className={cn(terminalStepLabelClass(), live)}>{stepLabel(view)}</span>
       {hasArg && (
         <>
           (
@@ -676,17 +729,12 @@ function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps)
               view={view}
               argRef={view.argRef}
               sessionId={sessionId}
-              className={terminalStepArgClass()}
+              className={argClass}
             />
           ) : (
             // User ruling 2026-11-03: the path as written, `Write(src/a.ts)`,
             // as the CLI prints it — not today's name-first reordering.
-            <ToolRowArg
-              view={view}
-              onOpenFile={onOpenFile}
-              className={terminalStepArgClass()}
-              asWritten
-            />
+            <ToolRowArg view={view} onOpenFile={onOpenFile} className={argClass} asWritten />
           )}
           )
         </>
@@ -700,6 +748,7 @@ function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps)
         )}
         <ToolRowTails view={view} omit={omit} />
       </span>
+      {liveStatus && <TurnLiveTail />}
     </>
   );
 
@@ -721,16 +770,17 @@ function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps)
     );
   };
 
+  const lineClass = cn(terminalStepLineClass(), live);
   const body = !expandable ? (
     <div>
-      <div className={terminalStepLineClass()}>{line}</div>
+      <div className={lineClass}>{line}</div>
       {after(false)}
     </div>
   ) : (
     <ToolRowCollapsible
       key={view.running ? 'live' : 'settled'}
       view={view}
-      rowClass={terminalStepLineClass()}
+      rowClass={lineClass}
       onOpenFile={onOpenFile}
       sessionId={sessionId}
       after={after}
@@ -740,7 +790,8 @@ function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps)
   );
 
   return (
-    <TerminalBlock bullet={stepBulletStatus(view)}>
+    // Decision 211: the CLI's working star marks the row the turn is on.
+    <TerminalBlock bullet={liveStatus ? 'live' : stepBulletStatus(view)} liveHost={liveStatus}>
       {backgroundable && sessionId && view.toolCallId ? (
         <div className="flex min-w-0 items-start gap-1">
           <div className="min-w-0 flex-1">{body}</div>
@@ -760,23 +811,226 @@ function TerminalStepRow({ view: derived, onOpenFile, sessionId }: ToolRowProps)
  * the model's own text, shown as written; it starts closed, as every thought
  * has since 2026-09-23.
  */
-function TerminalThoughtRow({ view, sessionId }: { view: ToolRowView; sessionId?: string }) {
-  const words = thoughtWords(view);
+function TerminalThoughtRow({
+  view,
+  sessionId,
+  liveStatus = false,
+}: {
+  view: ToolRowView;
+  sessionId?: string;
+  /** Decision 211: `Thinking… (10m 37s · esc 中断)` — the running turn's status rides here. */
+  liveStatus?: boolean;
+}) {
+  const thought = thoughtWords(view);
+  const words = liveStatus ? (
+    <>
+      {thought}
+      <TurnLiveTail />
+    </>
+  ) : (
+    thought
+  );
+  // Decision 211: while it carries the turn's status it reads as the line of
+  // its own did — the working star, the brand ink — and goes back to the dim
+  // `∴` once the thought is done.
+  const lineClass = cn(terminalThoughtLineClass(), liveStatus && terminalLiveWordsClass());
   return (
-    <TerminalBlock bullet="thought">
+    <TerminalBlock bullet={liveStatus ? 'live' : 'thought'} liveHost={liveStatus}>
       {view.expandable ? (
         <ToolRowCollapsible
           key={view.running ? 'live' : 'settled'}
           view={view}
-          rowClass={terminalThoughtLineClass()}
+          rowClass={lineClass}
           sessionId={sessionId}
         >
           {words}
         </ToolRowCollapsible>
       ) : (
-        <div className={terminalThoughtLineClass()}>{words}</div>
+        <div className={lineClass}>{words}</div>
       )}
     </TerminalBlock>
+  );
+}
+
+/**
+ * Decision 212 (user, 2026-11-09): what a subagent call's line needs — its
+ * words (`deriveDelegationLine`), and the child's conversation, opened in place
+ * by a click as the session rail's 「查看对话」 does.
+ */
+function useDelegationLine(view: ToolRowView) {
+  const { t } = useI18n();
+  const lane = useSubagentActivityStore((state) =>
+    view.toolCallId ? (state.lanes[view.toolCallId] ?? null) : null
+  );
+  const line = useMemo(() => deriveDelegationLine(view, lane, t), [view, lane, t]);
+  const [viewing, setViewing] = useState(false);
+  return { line, lane, viewing, setViewing };
+}
+
+// Loaded on the first click: the dialog draws a child's turns with this
+// file's `ToolGroup`, so a static import would close an import cycle.
+const SubagentConversationDialog = lazy(() =>
+  import('./SubagentConversationDialog').then((module) => ({
+    default: module.SubagentConversationDialog,
+  }))
+);
+
+function DelegationConversation(props: {
+  sessionId: string;
+  childId: string;
+  title: string;
+  running: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Suspense fallback={null}>
+      <SubagentConversationDialog {...props} />
+    </Suspense>
+  );
+}
+
+/**
+ * Decision 212, terminal style: a subagent as one step, as the CLI draws a
+ * `Task` — `● Explore(Map the calib code)` over one `⎿` line: what it is doing
+ * now, or `Done (12 tool uses · 45k tokens · 1m 3s)`. No icon, no list of its
+ * own steps (they stay in the 「子代理」 card and its conversation); a click
+ * opens the conversation. While it holds the turn it carries the turn's status
+ * (decision 211), as any running step does.
+ */
+function TerminalDelegationRow({
+  view,
+  sessionId,
+  liveStatus = false,
+}: {
+  view: ToolRowView;
+  sessionId?: string;
+  liveStatus?: boolean;
+}) {
+  const { t } = useI18n();
+  const { line, lane, viewing, setViewing } = useDelegationLine(view);
+  const live = liveStatus && terminalLiveWordsClass();
+  const opens = Boolean(line.childId && sessionId);
+  const head = (
+    <>
+      <span className={cn(terminalStepLabelClass(), live)}>{line.name}</span>
+      {line.description && (
+        <>
+          (<span className={cn(terminalStepArgClass(), live)}>{line.description}</span>)
+        </>
+      )}
+      {line.background && (
+        <span className={cn('ml-1.5', toolRowPermissionClass())}>
+          · {t('Running in background')}
+        </span>
+      )}
+      {liveStatus && <TurnLiveTail />}
+    </>
+  );
+  const lineClass = cn(terminalStepLineClass(), live);
+  return (
+    <TerminalBlock bullet={liveStatus ? 'live' : stepBulletStatus(view)} liveHost={liveStatus}>
+      {/* `data-tool-call-id`: the subagents window's 「定位」 finds the row by it. */}
+      <div
+        data-slot="delegation-step"
+        data-tool-call-id={view.toolCallId}
+        className="rounded-sm transition-colors duration-250 data-[located]:bg-fill-ghost-selected"
+      >
+        {opens ? (
+          <button type="button" className={lineClass} onClick={() => setViewing(true)}>
+            {head}
+          </button>
+        ) : (
+          <div className={lineClass}>{head}</div>
+        )}
+        {line.result && (
+          <div className={terminalResultClass(line.result.tone)}>
+            <span aria-hidden className="shrink-0 text-foreground-faint">
+              ⎿
+            </span>
+            <span className={cn('min-w-0 truncate', terminalResultNoteClass())}>
+              {line.result.text}
+            </span>
+          </div>
+        )}
+      </div>
+      {viewing && line.childId && sessionId && (
+        <DelegationConversation
+          sessionId={sessionId}
+          childId={line.childId}
+          title={line.description ?? line.name}
+          running={lane?.status === 'running'}
+          onClose={() => setViewing(false)}
+        />
+      )}
+    </TerminalBlock>
+  );
+}
+
+/**
+ * Decision 212, desktop style: a subagent as one line between the runs, in a
+ * run's own look — its name and what it was asked, then how it ended; while
+ * it holds the turn, the running icon, the passing light and the turn's clock
+ * (decision 211). A click opens its conversation.
+ */
+function DesktopDelegationRow({
+  view,
+  sessionId,
+  liveClock = false,
+}: {
+  view: ToolRowView;
+  sessionId?: string;
+  liveClock?: boolean;
+}) {
+  const { line, lane, viewing, setViewing } = useDelegationLine(view);
+  const running = view.running || lane?.status === 'running';
+  const opens = Boolean(line.childId && sessionId);
+  const body = (
+    <>
+      {liveClock && <StatusIcon status="running" />}
+      <span className={cn('min-w-0 truncate', running && 'text-shimmer')}>
+        <span className="font-medium">{line.name}</span>
+        {line.description ? (
+          <span className="text-foreground-faint"> {line.description}</span>
+        ) : null}
+      </span>
+      {liveClock && <TurnLiveRunClock />}
+      {!running && line.result && (
+        <span
+          className={cn(
+            'shrink-0 truncate',
+            line.result.tone === 'bad' ? 'text-destructive' : 'text-foreground-faint'
+          )}
+        >
+          {line.result.text}
+        </span>
+      )}
+      {opens && <ChevronRight aria-hidden className="size-3.5 shrink-0" />}
+    </>
+  );
+  return (
+    <div
+      data-slot="delegation-step"
+      data-tool-call-id={view.toolCallId}
+      data-turn-live-host={liveClock ? '' : undefined}
+      className="min-w-0 rounded-sm transition-colors duration-250 data-[located]:bg-fill-ghost-selected"
+    >
+      {opens ? (
+        <button type="button" className={stepRunSummaryClass()} onClick={() => setViewing(true)}>
+          {body}
+        </button>
+      ) : (
+        <div className={stepRunSummaryClass()}>{body}</div>
+      )}
+      {viewing && line.childId && sessionId && (
+        <DelegationConversation
+          sessionId={sessionId}
+          childId={line.childId}
+          title={line.description ?? line.name}
+          running={lane?.status === 'running'}
+          onClose={() => setViewing(false)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -865,32 +1119,48 @@ function DesktopStepGroup({
   rows,
   onOpenFile,
   sessionId,
+  liveSlot = false,
 }: {
   rows: ToolRowView[];
   onOpenFile?: (target: FileLinkTarget) => void;
   sessionId?: string;
+  /** Decision 211: the running turn's last group — its live run carries the clock. */
+  liveSlot?: boolean;
 }) {
   const entries = useMemo(() => partitionStepRuns(rows), [rows]);
+  const host = liveSlot ? liveRunHostIndex(entries) : -1;
   return (
     <div className="flex flex-col gap-2">
-      {entries.map((entry) =>
+      {entries.map((entry, index) =>
         entry.kind === 'special' ? (
-          <ToolRow
-            key={entry.row.key}
-            view={entry.row}
-            depth={0}
-            onOpenFile={onOpenFile}
-            sessionId={sessionId}
-          />
+          isDelegationRow(entry.row) ? (
+            // Decision 212: a subagent is one line between the runs.
+            <DesktopDelegationRow
+              key={entry.row.key}
+              view={entry.row}
+              sessionId={sessionId}
+              liveClock={index === host}
+            />
+          ) : (
+            <ToolRow
+              key={entry.row.key}
+              view={entry.row}
+              depth={0}
+              onOpenFile={onOpenFile}
+              sessionId={sessionId}
+            />
+          )
         ) : (
           <DesktopStepRun
             key={entry.key}
             run={entry}
             onOpenFile={onOpenFile}
             sessionId={sessionId}
+            liveClock={index === host}
           />
         )
       )}
+      {liveSlot && host === -1 && <TurnLiveLine />}
     </div>
   );
 }
@@ -910,10 +1180,16 @@ function DesktopStepRun({
   run,
   onOpenFile,
   sessionId,
+  liveClock = false,
 }: {
   run: StepRun;
   onOpenFile?: (target: FileLinkTarget) => void;
   sessionId?: string;
+  /**
+   * Decision 211: the running turn's clock after this run's live words, as the
+   * desktop app's live line reads (`Reading a.ts 4m 18s`).
+   */
+  liveClock?: boolean;
 }) {
   const { t } = useI18n();
   const disposition = useContext(StepRunDispositionContext);
@@ -961,16 +1237,22 @@ function DesktopStepRun({
   let label: ReactNode;
   if (summary.running) {
     label = (
-      <span className="min-w-0 truncate text-shimmer">
-        {isThoughtRow(summary.running) ? (
-          thoughtWords(summary.running)
-        ) : (
-          <>
-            {stepLabel(summary.running)}
-            {summary.running.arg ? ` ${summary.running.arg}` : ''}
-          </>
-        )}
-      </span>
+      <>
+        {/* Decision 211: as the desktop app's live line — the spinner, the
+            words under their passing light, then the turn's clock. */}
+        {liveClock && <StatusIcon status="running" />}
+        <span className="min-w-0 truncate text-shimmer">
+          {isThoughtRow(summary.running) ? (
+            thoughtWords(summary.running)
+          ) : (
+            <>
+              {stepLabel(summary.running)}
+              {summary.running.arg ? ` ${summary.running.arg}` : ''}
+            </>
+          )}
+        </span>
+        {liveClock && <TurnLiveRunClock />}
+      </>
     );
   } else if (summary.single) {
     label = (
@@ -985,10 +1267,18 @@ function DesktopStepRun({
     label = <span className="min-w-0 truncate">{summary.text}</span>;
   }
 
+  // Decision 211: marks the run that carries the running turn's status.
+  const liveHost = liveClock ? '' : undefined;
+
   // Thinking with no text to show (an empty block) has nothing to open.
   if (summary.thoughtOnly && !thoughtText) {
     return (
-      <div data-slot="step-run" data-run-key={run.key} className={stepRunSummaryClass()}>
+      <div
+        data-slot="step-run"
+        data-run-key={run.key}
+        data-turn-live-host={liveHost}
+        className={stepRunSummaryClass()}
+      >
         {label}
       </div>
     );
@@ -1000,6 +1290,7 @@ function DesktopStepRun({
       open={open}
       data-slot="step-run"
       data-run-key={run.key}
+      data-turn-live-host={liveHost}
       className="min-w-0"
     >
       <summary

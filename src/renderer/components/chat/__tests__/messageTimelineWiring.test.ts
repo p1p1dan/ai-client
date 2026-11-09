@@ -627,7 +627,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // Decision 037 moved the wording out of the head and into the derivation
     // both carriers read, so the binding under guard moved with it. The rule is
     // unchanged; only the function that holds `t` is different.
-    const head = nodeSource(topLevelFunction('useTurnClockLine'));
+    const head = nodeSource(topLevelFunction('useTurnLiveClock'));
     expect(head).toContain('const { t } = useI18n();');
     expect(head).not.toContain('englishTranslate');
     expect(SYNTAX).not.toContain("import { englishTranslate } from '@shared/i18n';");
@@ -643,11 +643,15 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * `t(label.key)` would ship an untranslated head and no gate would notice.
    */
   it('[WG-WIRE-2] the running clock line words itself from literal catalog keys, in ONE place', () => {
-    const line = nodeSource(topLevelFunction('useTurnClockLine'));
-    const plain = nodeSource(topLevelFunction('TurnClockRow'));
+    const line = nodeSource(topLevelFunction('useTurnLiveClock'));
     // Decision 034: the line words itself from the turn's CLOCK, through the
-    // helper that owns the four duration keys. It prints no count of its own.
-    expect(line).toContain('workingHeadText(t, zone.elapsed)');
+    // formatters that own the duration. It prints no count of its own.
+    // Decision 211: one set of words and one clock form wherever it is drawn —
+    // the running turn and the pending head word themselves the same way.
+    expect(line).toContain('turnLiveClockOf(t, live, elapsed, stepWords)');
+    expect(countIn(SYNTAX, 'turnLiveClockOf(')).toBe(2);
+    expectUnwired('formatTurnLiveLine(');
+    expectUnwired('workingHeadText(');
     // Decision 208: the settled half went with the process head; the settled
     // turn's line is `TurnWorkZoneRow`'s bill.
     expectUnwired('workedHeadText(');
@@ -660,10 +664,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     ]) {
       expect(line, `the clock line no longer counts anything: ${retired}`).not.toContain(retired);
     }
-    // The row that draws the line never words it itself.
-    expect(plain).toContain('useTurnClockLine({');
-    expect(plain).not.toContain('workingHeadText(');
-    expect(plain).not.toContain('joinTurnProgressLine(');
+    // Decision 211: nothing in this file draws the line; `turnLiveStatus.tsx`
+    // does, from these words, wherever the turn's status is carried.
+    expectUnwired('TurnClockRow');
+    expectUnwired('useTurnClockLine');
+    expect(line).not.toContain('joinTurnProgressLine(');
   });
 
   /**
@@ -1415,23 +1420,25 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    */
   it('[WG-WIRE-7] the running turn carries one clock line, at its foot', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
-    const line = nodeSource(topLevelFunction('useTurnClockLine'));
+    const line = nodeSource(topLevelFunction('useTurnLiveClock'));
     // Exactly one copy of the live clause exists.
     expect(countIn(line, 'deriveTurnCurrentAction(items)')).toBe(1);
     expect(countIn(SYNTAX, 'deriveTurnCurrentAction(items)')).toBe(1);
     // PiLab R1 (user ruling 2026-10-30): the live line sits at the turn's FOOT
     // while it runs, as Claude Code's spinner line does. Decision 208 removed
-    // the flag that once kept a top clock reachable.
-    expect(turn).toContain(
-      "{workZone.kind === 'working' && <TurnClockRow zone={workZone} items={items} />}"
-    );
+    // the flag that once kept a top clock reachable. Decision 211 (user,
+    // 2026-11-09): only when the turn does not end on a tool group — that
+    // group says it itself, on its live row or at its end — so it is said once.
+    // Nor while the reply streams in: Claude Code hides its spinner line then.
+    expect(turn).toContain('useTurnLiveClock({ zone: workZone, items })');
+    expect(turn).toContain('{footLine && <TurnLiveLine live={liveClock} />}');
+    expect(turn).toContain('!liveSlotItem');
+    expect(turn).toContain('replyStreaming(');
+    expect(turn).toContain('<TurnLiveSlotContext.Provider key={turnItemKey(item)} value={slot}>');
+    expect(turn).toContain('<TurnLiveClockContext.Provider value={slot ? liveClock : null}>');
     expectUnwired('STEPS_INLINE');
     expectUnwired('clockClaimed');
     expectUnwired('clockOnHead');
-    const row = nodeSource(topLevelFunction('TurnClockRow'));
-    expect(row).toContain('turnClockRowClass()');
-    // Design system v2 §6: the one running icon.
-    expect(row).toContain('<StatusIcon status="running"');
   });
 
   /**

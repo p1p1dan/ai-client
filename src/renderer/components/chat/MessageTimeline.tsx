@@ -91,15 +91,12 @@ import {
   sessionFailureTitleClass,
   terminalBlockGapClass,
   terminalChatTurnClass,
-  terminalGutterClass,
-  terminalLiveLineClass,
   terminalProseClass,
   terminalReadingColumnSpacingClass,
   turnActionsInnerClass,
   turnActionsSlotClass,
   turnAnswerToneClass,
   turnBodyClass,
-  turnClockRowClass,
   turnCopyButtonClass,
   turnHeadClass,
   turnProcessShellClass,
@@ -228,12 +225,18 @@ import {
 // product decision to reopen, not a gap to close.
 import {
   deriveTurnLivePhase,
-  formatTerminalLiveActivity,
-  formatTerminalLiveTail,
-  formatTurnLiveLine,
+  type TurnLivePhase,
   type TurnLiveSend,
   turnElapsedText,
 } from './turnLiveHead';
+import {
+  replyStreaming,
+  type TurnLiveClock,
+  TurnLiveClockContext,
+  TurnLiveLine,
+  TurnLiveSlotContext,
+  turnLiveClockOf,
+} from './turnLiveStatus';
 import {
   countTurnToolCalls,
   deriveTurnCurrentAction,
@@ -2018,72 +2021,45 @@ interface ChatTurnProps {
  * -stable at their source.
  */
 /**
- * The running turn's line at its foot, as Claude Code's spinner line sits
- * (PiLab R1): 「✻ 工作中 47 秒」, or what the turn is doing right now
- * (`turnLiveHead.ts`). Once the turn ends `TurnWorkZoneRow` says the bill.
+ * What the running turn's status says (PiLab R1's foot line, `turnLiveHead.ts`):
+ * 「思考中…」 or what the turn is doing right now, how long, and how to stop it.
+ * `null` once the turn ends, when `TurnWorkZoneRow` says the bill instead.
+ *
+ * Decision 211: ONE place draws it — the live row, or a line of its own when no
+ * row is live (`turnLiveStatus.tsx`) — so this only words it, once a second.
  */
-function useTurnClockLine({
+function useTurnLiveClock({
   zone,
   items,
 }: {
   zone: TurnWorkZone;
   /** Read only for the live action clause, and only while the clock ticks. */
   items: readonly TurnItem[];
-}): { line: string; spinner: boolean; activity: string; tail: string } {
+}): TurnLiveClock | null {
   const { t } = useI18n();
   const send = useContext(TurnSendContext);
-  const liveAction = zone.kind === 'working' ? deriveTurnCurrentAction(items) : null;
-  if (zone.kind !== 'working') return { line: '', spinner: false, activity: '', tail: '' };
+  const working = zone.kind === 'working';
+  const elapsed = working ? zone.elapsed : null;
+  const liveAction = working ? deriveTurnCurrentAction(items) : null;
   // S-6 feedback 11c (user, 2026-10-17): verb first, one line (`turnLiveHead.ts`).
   // A clock with no subject reads as a stopwatch, so when nothing more specific is
   // known the line still says 「工作中」.
-  const live = deriveTurnLivePhase({ send, items, action: liveAction });
+  const live = working ? deriveTurnLivePhase({ send, items, action: liveAction }) : null;
   // Decision 208, terminal style: the running step in its own words — what its
   // parentheses say — and the review word while the safety review judges it.
   const stepWords =
-    live.kind !== 'tool' || !liveAction
+    live?.kind !== 'tool' || !liveAction
       ? null
       : liveAction.verb === REVIEWING_VERB
         ? t(REVIEWING_VERB)
         : (formatToolArg(liveAction.run, { t }) ?? stepNameOf(liveAction.run.toolName));
-  return {
-    line:
-      live.kind === 'working'
-        ? `✻ ${workingHeadText(t, zone.elapsed)}`
-        : formatTurnLiveLine(t, live, zone.elapsed),
-    spinner: true,
-    activity: formatTerminalLiveActivity(t, live, stepWords),
-    tail: formatTerminalLiveTail(t, zone.elapsed),
-  };
-}
-
-/** The running turn's foot line (PiLab R1); `useTurnClockLine` words it. */
-function TurnClockRow({ zone, items }: { zone: TurnWorkZone; items: readonly TurnItem[] }) {
-  const { line, spinner, activity, tail } = useTurnClockLine({ zone, items });
-  const terminal = useContext(TranscriptStyleContext) === 'terminal';
-  if (terminal) {
-    // Decision 208 (user ruling 2026-11-03, the comparison mockup's ①):
-    // 「✻ 跑测试… (12 秒 · esc 中断)」 — the CLI's star in the bullet column, what
-    // the turn is doing, how long, and how to stop it (Esc in the composer).
-    return (
-      <div data-slot="turn-live-line" className={terminalLiveLineClass()}>
-        <span aria-hidden className={terminalGutterClass()}>
-          <StatusIcon status="running" shape="star" />
-        </span>
-        <span className="min-w-0 truncate" title={activity}>
-          {activity}
-        </span>
-        <span className="shrink-0 whitespace-pre text-foreground-faint"> {tail}</span>
-      </div>
-    );
-  }
-  return (
-    <div data-slot="turn-live-line" className={turnClockRowClass()}>
-      {spinner && <StatusIcon status="running" />}
-      <span className="min-w-0 truncate" title={line}>
-        {line}
-      </span>
-    </div>
+  const words = live ? turnLiveClockOf(t, live, elapsed, stepWords) : null;
+  const { line = '', activity = '', tail = '', clock = null } = words ?? {};
+  // One object per change of wording, not per render: the leaves that read it
+  // re-render on the tick, and nothing else does.
+  return useMemo(
+    () => (working ? { line, activity, tail, clock } : null),
+    [working, line, activity, tail, clock]
   );
 }
 
@@ -2112,8 +2088,8 @@ function TurnClockRow({ zone, items }: { zone: TurnWorkZone; items: readonly Tur
 function TurnWorkZoneRow({ zone }: { zone: TurnWorkZone }) {
   const { t } = useI18n();
 
-  // Decision 034: the RUNNING state is not drawn here; `TurnClockRow` is the
-  // live line, at the turn's foot (PiLab R1, 2026-10-30).
+  // Decision 034: the RUNNING state is not drawn here. Decision 211: the live
+  // row carries it, or `TurnLiveLine` at the turn's foot (PiLab R1, 2026-10-30).
   if (zone.kind === 'working') return null;
 
   // PiLab R1 (user ruling 2026-10-30, preview `2026-10-30-turn-display-
@@ -2154,32 +2130,6 @@ function TurnWorkZoneRow({ zone }: { zone: TurnWorkZone }) {
       )}
     </div>
   );
-}
-
-/**
- * 「工作中」 / 「工作中 47 秒」 / 「工作中 1 分 6 秒」.
- *
- * A function rather than a fourth nested ternary at the call site, and its four
- * keys are literals so `i18nCoverage.test.ts` can see them. The bare form is
- * for a turn running with no clock of its own — a session that was already in
- * flight when this window opened replays no `message.started`, and 「工作中 0
- * 秒」 would be a number nobody measured.
- *
- * T113 moved its caller from the group head to the work zone row, which is why
- * `t` is a parameter: the row hands it the localized translator and the same
- * four keys render 「工作中 47 秒」.
- */
-function workingHeadText(
-  t: (key: string, params?: Record<string, string | number>) => string,
-  elapsed: { minutes: number; seconds: number } | null
-): string {
-  if (!elapsed) return t('Working');
-  if (elapsed.minutes === 0) return t('Working {{seconds}}s', { seconds: elapsed.seconds });
-  if (elapsed.seconds === 0) return t('Working {{minutes}}m', { minutes: elapsed.minutes });
-  return t('Working {{minutes}}m {{seconds}}s', {
-    minutes: elapsed.minutes,
-    seconds: elapsed.seconds,
-  });
 }
 
 /**
@@ -2592,6 +2542,20 @@ const ChatTurn = memo(function ChatTurn({
         endNoteCovered={endNoteCovered}
       />
     );
+    // Decision 211: every tool group sits under the slot, so the running turn's
+    // last one can carry its status — and stop, once a later item comes —
+    // without a remount (the element keeps its type either way). Only that one
+    // gets the ticking words; every other group holds a still `null`.
+    if (item.kind === 'toolGroup') {
+      const slot = item === liveSlotItem;
+      return (
+        <TurnLiveSlotContext.Provider key={turnItemKey(item)} value={slot}>
+          <TurnLiveClockContext.Provider value={slot ? liveClock : null}>
+            {view}
+          </TurnLiveClockContext.Provider>
+        </TurnLiveSlotContext.Provider>
+      );
+    }
     // Decision 208, terminal style: prose and the items that are not steps sit
     // in a block with the bullet column (a tool group's steps draw their own).
     const gutter = terminal ? terminalItemGutter(item, { endNoteCovered }) : null;
@@ -2779,6 +2743,21 @@ const ChatTurn = memo(function ChatTurn({
     statusOnClock || (derivedStatus?.kind === 'failed' && interruptedByEngine)
       ? null
       : derivedStatus;
+  // Decision 211 (user, 2026-11-09): the running turn says what it is doing
+  // once. When its last item is a tool group, that group carries the status
+  // — on its live row, or as a line at its end (`turnLiveStatus.tsx`);
+  // otherwise the line sits at the turn's foot, as before, except while the
+  // reply streams there (Claude Code hides its spinner line then too).
+  const liveClock = useTurnLiveClock({ zone: workZone, items });
+  const lastItem = items[items.length - 1];
+  const liveSlotItem = liveClock && lastItem?.kind === 'toolGroup' ? lastItem : undefined;
+  const footLine =
+    liveClock !== null &&
+    !liveSlotItem &&
+    !replyStreaming(
+      lastItem,
+      lastItem ? streamingBlockIdForItem(lastItem, streamingBlockIdByMessage) : null
+    );
 
   const renderSegment = (segment: TurnSegment<TurnItem>) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
@@ -2915,8 +2894,10 @@ const ChatTurn = memo(function ChatTurn({
             user asked for — the duration stops moving from group to group as a
             turn grows. */}
         {/* PiLab R1: the live line sits at the turn's foot while it runs (as
-            Claude Code's spinner line does), the bill once it ends. */}
-        {workZone.kind === 'working' && <TurnClockRow zone={workZone} items={items} />}
+            Claude Code's spinner line does), the bill once it ends. Decision
+            211: only when the turn does not end on a tool group, which then
+            says it itself, nor on the reply streaming in. */}
+        {footLine && <TurnLiveLine live={liveClock} />}
         <TurnWorkZoneRow zone={workZone} />
         {showLiveEnd && liveEnd && (
           <TurnEndNotice turnEnd={liveEnd} afterWork={liveEndAfterWork} live />
@@ -3042,25 +3023,26 @@ function PendingTurnHead({
   if (!status && !retryBanner) return null;
   // S-6 feedback 11c (user, 2026-10-17): the same one line a running turn shows, verb
   // first (`turnLiveHead.ts`), counted from the send; the slow and stalled hints keep
-  // their own wording.
-  const live =
+  // their own wording. Decision 211: drawn by the same line, in either style, so the
+  // words and its shape do not change when the turn takes over.
+  const phase: TurnLivePhase | null =
     status?.kind === 'handshake'
-      ? formatTurnLiveLine(t, { kind: 'connecting' }, pendingElapsed(sendStatus, nowMs))
+      ? { kind: 'connecting' }
       : status?.kind === 'awaiting' || status?.kind === 'retrying'
-        ? formatTurnLiveLine(
-            t,
-            { kind: 'thinking', promptChars: sendStatus.promptChars },
-            pendingElapsed(sendStatus, nowMs)
-          )
+        ? { kind: 'thinking', promptChars: sendStatus.promptChars }
         : null;
-  const shown = status && live ? { ...status, text: live } : status;
+  const live = phase ? turnLiveClockOf(t, phase, pendingElapsed(sendStatus, nowMs)) : null;
   return (
     <>
       {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
-      {shown && (
-        <div className={turnHeadClass()}>
-          <TurnStatusContent status={shown} />
-        </div>
+      {live ? (
+        <TurnLiveLine live={live} />
+      ) : (
+        status && (
+          <div className={turnHeadClass()}>
+            <TurnStatusContent status={status} />
+          </div>
+        )
       )}
     </>
   );

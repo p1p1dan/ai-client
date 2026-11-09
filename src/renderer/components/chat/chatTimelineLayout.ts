@@ -906,6 +906,30 @@ export function terminalLiveLineClass(): string {
 }
 
 /**
+ * Decision 211: the running turn's status after the live row's words (or the
+ * line's), 「(12s · esc 中断)」 — faint, upright and regular even on the italic
+ * thought line, and never the part a narrow line gives up.
+ */
+export function terminalLiveTailClass(): string {
+  return 'shrink-0 whitespace-pre font-normal not-italic text-foreground-faint';
+}
+
+/** Decision 211, desktop style: the turn's clock after a live run's words, `4m 18s`. */
+export function turnLiveClockClass(): string {
+  return 'shrink-0 tabular-nums text-foreground-faint';
+}
+
+/**
+ * Decision 211: the words of the row that carries the running turn's status,
+ * in the brand ink and upright, as the line of its own reads (「思考中…」, the
+ * 「思考中」 hint of design system v2 §1 rule 7). The row goes back to its own
+ * ink once it settles, as the CLI's active row goes dim when done.
+ */
+export function terminalLiveWordsClass(): string {
+  return 'text-primary not-italic';
+}
+
+/**
  * Desktop style: a run's one line. Muted ink at the process size, regular
  * weight, never pinned; `list-none` because it is a `<summary>`.
  */
