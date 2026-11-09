@@ -307,7 +307,6 @@ describe('progress-row catalog coverage', () => {
     expect(zh('Thinking')).toBe('思考中');
     expect(zh('{{count}} tool call', { count: 1 })).toBe('1 次工具调用');
     expect(zh('{{count}} tool calls', { count: 2 })).toBe('2 次工具调用');
-    expect(zh('Final output')).toBe('最终输出');
   });
 
   const en = englishTranslate;

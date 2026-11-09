@@ -1,0 +1,977 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>对话区回放 · 工具与正文（第二版）</title>
+<style>
+  /* Tokens follow docs/design-system.md v2 (reference values). */
+  :root {
+    --surface-0: #f9f9f7;
+    --surface-1: #fcfcfb;
+    --surface-2: #f4f3ef;
+    --surface-3: #ffffff;
+    --fg: #151515;
+    --fg-2: #525252;
+    --fg-3: #8a8a8a;
+    --border-soft: color-mix(in oklab, var(--fg) 10%, var(--surface-1));
+    --border-strong: color-mix(in oklab, var(--fg) 20%, var(--surface-1));
+    --hover: color-mix(in oklab, var(--fg) 5%, var(--surface-1));
+    --fill-neutral: color-mix(in oklab, var(--fg) 6%, var(--surface-1));
+    --primary: #c6613f;
+    --success: #4f8a5b;
+    --warning: #b9822b;
+    --destructive: #c4483e;
+    --info: #5b7fa6;
+    --code-fg: #5769f7;
+    --mono: ui-monospace, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", monospace;
+  }
+  .dark {
+    --surface-0: #0b0b0b;
+    --surface-1: #151515;
+    --surface-2: #1a1a19;
+    --surface-3: #20201f;
+    --fg: #f5f5f5;
+    --fg-2: #a3a3a3;
+    --fg-3: #666666;
+    --primary: #d97757;
+    --success: #6fae7c;
+    --warning: #d9a24a;
+    --destructive: #e0675c;
+    --info: #7f9fc4;
+    --code-fg: #b1b9f9;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; display: flex; flex-direction: column; overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+    background: var(--surface-0); color: var(--fg); font-size: 13px; line-height: 1.43;
+  }
+  svg.i { width: 14px; height: 14px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.125em; }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: .15; } }
+  @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+  code { font-family: var(--mono); font-size: 12px; background: var(--fill-neutral); padding: 0 4px; border-radius: 4px; }
+  .faint { color: var(--fg-3); }
+  .soft { color: var(--fg-2); }
+  .ok { color: var(--success); }
+  .warn { color: var(--warning); }
+  .err { color: var(--destructive); }
+  .num { font-variant-numeric: tabular-nums; }
+  .clickable { cursor: pointer; }
+  .chev { transition: transform .15s; color: var(--fg-3); }
+  .open > .chev, .open .chev.own { transform: rotate(90deg); }
+
+  /* ---------- page chrome ---------- */
+  .top { flex-shrink: 0; border-bottom: 1px solid var(--border-soft); padding: 8px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .top .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .top .title { font-size: 14px; font-weight: 600; margin-right: 4px; }
+  .seg { display: inline-flex; background: var(--fill-neutral); border-radius: 8px; padding: 2px; gap: 2px; flex-wrap: wrap; }
+  .seg button, .btn {
+    border: 0; background: transparent; color: var(--fg-2); font: inherit; font-size: 13px;
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .seg button:hover, .btn:hover { color: var(--fg); }
+  .seg button.on { background: var(--surface-3); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .btn { background: var(--fill-neutral); }
+  .btn.on { color: var(--fg); background: var(--surface-3); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .btn.primary { background: var(--primary); color: #fff; }
+  .btn.primary:hover { color: #fff; filter: brightness(1.05); }
+  select { font: inherit; font-size: 13px; color: var(--fg); background: var(--surface-3); border: 1px solid var(--border-soft); border-radius: 6px; padding: 3px 6px; }
+  .cmp { color: var(--fg-2); display: inline-flex; gap: 6px; align-items: center; }
+  #scrub { flex: 1; min-width: 160px; accent-color: var(--primary); }
+  .time { font-family: var(--mono); font-size: 12px; color: var(--fg-2); white-space: nowrap; }
+  .main { flex: 1; display: flex; min-height: 0; }
+  .stage { flex: 1; display: flex; gap: 12px; padding: 12px; min-width: 0; justify-content: center; }
+  .notes { width: 360px; flex-shrink: 0; border-left: 1px solid var(--border-soft); overflow-y: auto; padding: 14px 18px 40px; font-size: 13px; color: var(--fg-2); }
+  .notes[hidden] { display: none; }
+  .notes h2 { font-size: 14px; color: var(--fg); margin: 0 0 6px; }
+  .notes h3 { font-size: 13px; color: var(--fg); margin: 16px 0 6px; }
+  .notes ul { padding-left: 18px; margin: 6px 0; }
+  .notes li { margin: 4px 0; }
+  .notes .pick { color: var(--primary); font-weight: 600; }
+  .notes hr { border: 0; border-top: 1px solid var(--border-soft); margin: 16px 0; }
+
+  /* ---------- pane ---------- */
+  .pane {
+    flex: 1 1 0; max-width: 760px; min-width: 330px; display: flex; flex-direction: column; position: relative;
+    background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden;
+  }
+  .pane-head { height: 32px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border-soft); font-size: 12px; color: var(--fg-2); }
+  .pane-head b { color: var(--fg); font-weight: 600; }
+  .pane-head .st { margin-left: auto; color: var(--fg-3); }
+  .vp { flex: 1; overflow-y: auto; min-height: 0; }
+  .content { padding: 18px 24px 28px; }
+  .turn + .turn { margin-top: 28px; }
+  .jump {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: 64px; z-index: 3;
+    border: 1px solid var(--border-soft); background: var(--surface-3); color: var(--fg-2); border-radius: 999px;
+    font: inherit; font-size: 12px; padding: 3px 10px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.08);
+  }
+  .jump[hidden] { display: none; }
+  .composer-wrap { flex-shrink: 0; padding: 0 16px 10px; }
+  .composer {
+    height: 38px; border: 1px solid var(--border-soft); background: var(--surface-3); border-radius: 12px;
+    display: flex; align-items: center; gap: 10px; padding: 0 8px 0 12px; color: var(--fg-3);
+  }
+  .composer .send { margin-left: auto; width: 24px; height: 24px; border-radius: 6px; background: color-mix(in oklab, var(--primary) 55%, var(--surface-3)); }
+  .composer-meta { display: flex; gap: 14px; font-size: 12px; color: var(--fg-3); padding: 6px 4px 0; }
+  .user { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+  .user > div { background: var(--fill-neutral); border-radius: 18px; padding: 10px 16px; max-width: 80%; }
+  .tbl { margin-top: 8px; }
+  .tbl p { margin: 8px 0; }
+  .tbl table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+  .tbl td, .tbl th { border-bottom: 1px solid var(--border-soft); padding: 5px 8px; text-align: left; vertical-align: top; }
+  .tbl th { color: var(--fg-2); font-weight: 500; }
+  .caret { display: inline-block; width: 7px; height: 13px; background: var(--fg-3); vertical-align: -2px; margin-left: 1px; animation: blink 1s steps(1) infinite; }
+  .hl { background: color-mix(in oklab, var(--primary) 14%, transparent); border-radius: 6px; }
+
+  /* ---------- 现状 ---------- */
+  .vn .head { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--fg-3); padding: 2px 6px; margin: 0 -6px 2px; border-radius: 6px; }
+  .vn .head.clickable:hover { background: var(--hover); }
+  .vn .say { margin: 10px 0 6px; }
+  .vn .t { font-size: 12px; color: var(--fg-3); display: flex; gap: 6px; align-items: center; margin-top: 5px; min-width: 0; }
+  .vn .t .verb { color: var(--fg-2); flex-shrink: 0; }
+  .vn .t .d { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vn .t .d.mono { font-family: var(--mono); }
+  .vn .t2 { font-size: 11.5px; color: var(--fg-2); padding-left: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vn .t2::before { content: "└ "; color: var(--fg-3); }
+  .vn .t2.err { color: var(--destructive); }
+  .vn .divider { display: flex; align-items: center; gap: 8px; color: var(--fg-3); font-size: 12px; margin: 12px 0 8px; }
+  .vn .divider::after { content: ""; flex: 1; border-top: 1px solid var(--border-soft); }
+  .vn .end { font-size: 12px; color: var(--fg-3); margin-top: 10px; }
+
+  /* ---------- ① 终端原味 ---------- */
+  .v1 { font-family: var(--mono); font-size: 12.5px; line-height: 1.6; }
+  .v1 code { background: none; padding: 0; font-size: inherit; color: var(--code-fg); }
+  .v1 .u { background: var(--fill-neutral); color: var(--fg-2); padding: 2px 10px; margin: 0 -10px 4px; white-space: pre-wrap; }
+  .v1 .blk { display: flex; margin-top: 1.6em; }
+  .v1 .dot { width: 2ch; flex-shrink: 0; }
+  .v1 .dot.text { color: var(--fg); }
+  .v1 .dot.ok { color: var(--success); }
+  .v1 .dot.err, .v1 .dot.warn { color: var(--destructive); }
+  .v1 .dot.run { color: var(--fg-3); animation: blink 1.2s steps(1) infinite; }
+  .v1 .body { min-width: 0; flex: 1; white-space: pre-wrap; word-break: break-word; }
+  .v1 .body.clickable:hover { background: var(--hover); }
+  .v1 .res { display: flex; color: var(--fg-3); }
+  .v1 .res .elb { white-space: pre; flex-shrink: 0; }
+  .v1 .res .lines { min-width: 0; flex: 1; white-space: pre-wrap; word-break: break-all; }
+  .v1 .res .lines .e { color: var(--destructive); }
+  .v1 .more { cursor: pointer; }
+  .v1 .more:hover { color: var(--fg-2); }
+  .v1 .live { margin-top: 1.6em; color: var(--primary); }
+  .v1 .live .dim, .v1 .doneline { color: var(--fg-3); }
+  .v1 .doneline { margin-top: 1.6em; }
+  .v1 .tbl table { font-family: var(--mono); }
+
+  /* ---------- ② 终端结构 · 界面字体 (also ⑤ and ④'s log) ---------- */
+  /* Dots, colours, block spacing and inline code follow ① (user ruling 2026-11-03). */
+  .v2 code { background: none; padding: 0; font-size: 12.5px; color: var(--code-fg); }
+  .v2 .blk { display: flex; margin-top: 20px; align-items: flex-start; border-radius: 6px; }
+  .v2 .blk:first-child { margin-top: 0; }
+  .v2 .dot { width: 16px; flex-shrink: 0; font-family: var(--mono); font-size: 12.5px; line-height: 18.6px; color: var(--fg-3); }
+  .v2 .dot::before { content: "●"; }
+  .v2 .dot.text { color: var(--fg); }
+  .v2 .dot.ok { color: var(--success); }
+  .v2 .dot.err { color: var(--destructive); }
+  .v2 .dot.run { color: var(--fg-3); animation: blink 1.2s steps(1) infinite; }
+  .v2 .body { min-width: 0; flex: 1; }
+  .v2 .tl { display: flex; gap: 6px; min-width: 0; align-items: baseline; }
+  .v2 .tl.clickable:hover .arg { color: var(--fg); }
+  .v2 .name { font-weight: 600; color: var(--fg); flex-shrink: 0; }
+  .v2 .arg { color: var(--fg-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v2 .arg.mono { font-family: var(--mono); font-size: 12px; }
+  .v2 .tl .tail { flex-shrink: 0; font-size: 12px; color: var(--fg-3); }
+  .v2 .res { display: flex; gap: 6px; margin-top: 2px; font-family: var(--mono); font-size: 12px; line-height: 17px; color: var(--fg-3); }
+  .v2 .res .elb { flex-shrink: 0; font-family: system-ui, sans-serif; }
+  .v2 .res .lines { min-width: 0; flex: 1; }
+  .v2 .res .ln { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .v2 .res .ln.e { color: var(--destructive); }
+  .v2 .res .ln.w { color: var(--destructive); font-family: system-ui, sans-serif; }
+  .v2 .res .exp { white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
+  .v2 .more { cursor: pointer; }
+  .v2 .more:hover { color: var(--fg-2); text-decoration: underline; }
+  .v2 .live { margin-top: 14px; display: flex; gap: 8px; align-items: center; color: var(--primary); }
+  .v2 .live .dim { color: var(--fg-3); }
+  .v2 .end { margin-top: 14px; color: var(--fg-3); font-size: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .star { display: inline-block; width: 1.1em; text-align: center; }
+
+  /* step strip (⑤) */
+  .strip { display: inline-flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+  .sq { width: 9px; height: 9px; border-radius: 2px; background: var(--fg-3); cursor: pointer; display: inline-block; }
+  .sq:hover { outline: 2px solid var(--border-strong); outline-offset: 1px; }
+  .sq.ok { background: var(--success); }
+  .sq.warn { background: var(--warning); }
+  .sq.err { background: var(--destructive); }
+  .sq.bg { background: var(--info); }
+  .sq.run { animation: blink 1.2s steps(1) infinite; }
+  .dock { margin: 0 16px 8px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface-2); padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .dock .r1 { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .dock .r1 .what { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--fg-2); }
+  .dock .r1 .what b { color: var(--fg); font-weight: 600; margin-right: 4px; }
+  .dock .r1 .right { flex-shrink: 0; color: var(--fg-3); font-size: 12px; }
+  .dock .said { font-size: 12px; color: var(--fg-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-top: 1px solid var(--border-soft); padding-top: 6px; }
+  .dock .said b { font-weight: 500; color: var(--fg-3); margin-right: 6px; }
+  .dock .v2dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--fg-3); animation: blink 1.2s steps(1) infinite; }
+
+  /* ---------- ③ 桌面版式 ---------- */
+  .v3 .say { margin-top: 14px; }
+  .v3 .say:first-child { margin-top: 0; }
+  .v3 .grp { margin-top: 10px; display: flex; align-items: center; gap: 6px; color: var(--fg-2); padding: 2px 6px; margin-left: -6px; border-radius: 6px; width: fit-content; max-width: calc(100% + 6px); }
+  .v3 .grp:hover { background: var(--hover); }
+  .v3 .grp .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .v3 .grp .lbl .verb { color: var(--fg-2); }
+  .v3 .grp .lbl .d { color: var(--fg-3); }
+  .v3 .shimmer { background: linear-gradient(90deg, var(--fg-3) 0%, var(--fg) 45%, var(--fg-3) 90%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 1.8s linear infinite; }
+  .v3 .rows { margin: 2px 0 0 4px; border-left: 1px solid var(--border-soft); padding-left: 12px; }
+  .v3 .row { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--fg-3); padding: 2px 4px; margin-left: -4px; border-radius: 6px; min-width: 0; }
+  .v3 .row:hover { background: var(--hover); }
+  .v3 .row .d { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v3 .row .verb { color: var(--fg-2); flex-shrink: 0; }
+  .v3 .pre { font-family: var(--mono); font-size: 11.5px; color: var(--fg-3); white-space: pre-wrap; word-break: break-all; margin: 2px 0 6px 20px; }
+  .v3 .live { margin-top: 12px; display: flex; gap: 8px; align-items: center; color: var(--primary); }
+
+  /* ---------- ④ 进展卡 ---------- */
+  .v4 .card { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface-2); }
+  .v4.card { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface-2); }
+  .v4.card .h { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 12px; color: var(--fg-2); border-bottom: 1px solid var(--border-soft); }
+  .v4.card .h .r { margin-left: auto; color: var(--fg-3); }
+  .v4.card .b { padding: 10px 12px; }
+  .v4 .now { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .v4 .now .d { color: var(--fg); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v4 .latest { color: var(--fg-2); margin: 6px 0 0 22px; }
+  .v4 .recent { margin-top: 10px; border-top: 1px solid var(--border-soft); padding-top: 8px; }
+  .v4 .recent .row { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--fg-3); padding: 2px 0; min-width: 0; }
+  .v4 .recent .row .d { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v4 .more, .summary { font-size: 12px; color: var(--fg-2); display: inline-flex; gap: 6px; align-items: center; padding: 2px 6px; margin-left: -6px; border-radius: 6px; }
+  .v4 .more { margin-top: 6px; }
+  .v4 .more:hover, .summary:hover { background: var(--hover); }
+  .log4 { margin: 10px 0 4px; padding-left: 12px; border-left: 1px solid var(--border-soft); }
+  .final4 { margin-top: 12px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="row">
+    <span class="title">对话区回放 · 第二版</span>
+    <div class="seg" id="vSeg"></div>
+    <label class="cmp">对照 <select id="cmpSel"></select></label>
+    <div class="seg" id="themeSeg"><button data-theme="light" class="on">亮</button><button data-theme="dark">暗</button></div>
+    <button class="btn" id="notesBtn">说明</button>
+  </div>
+  <div class="row">
+    <button class="btn primary" id="playBtn"></button>
+    <button class="btn" id="restartBtn">从头播</button>
+    <button class="btn" id="endBtn">跳到结束</button>
+    <div class="seg" id="speedSeg"><button data-s="1" class="on">1×</button><button data-s="2">2×</button><button data-s="4">4×</button></div>
+    <input type="range" id="scrub" min="0" step="10" value="0" />
+    <span class="time" id="timeLbl"></span>
+  </div>
+</header>
+<div class="main">
+  <div class="stage" id="stage"></div>
+  <aside class="notes" id="notes"></aside>
+</div>
+
+<script>
+// ---------------------------------------------------------------- sample data
+// Rewritten from the 2026-11-03 field screenshots (branch cleanup session).
+// Two reads and one search were added so the grouping rules have something to show.
+const TIME_SCALE = 6;   // shown seconds per playback second at 1x
+const CHAR_MS = 26;     // streaming speed at 1x
+const GAP = 220;
+
+const say = (text) => ({ k: 'say', text });
+const tool = (kind, desc, o = {}) => ({ k: 'tool', kind, desc, run: 1400, status: 'ok', out: [], total: 0, ...o });
+const fin = (text, table) => ({ k: 'final', text, table });
+const DENY = { status: 'denied', reason: '安全审查服务出错', run: 1100 };
+
+const TABLE1 = `
+<p><b>分支全景（8 个本地分支，3 类来源）</b></p>
+<table>
+<tr><th>分支</th><th>状态</th><th>结论</th></tr>
+<tr><td><code>main</code></td><td>刚更新到 1.2.0（<code>47409075</code>）</td><td>保留</td></tr>
+<tr><td><code>code-snapshot</code></td><td>当前所在分支，跟踪 <code>gitlab/code-snapshot</code></td><td>保留</td></tr>
+<tr><td><code>feat/dsh-p0-probe</code> 等 3 个</td><td>已合入 main，各挂着一个临时 worktree</td><td>可清理</td></tr>
+<tr><td><code>main-clean</code> 等 3 个</td><td>快照实验分支，内容已在 gitlab 远程或 main 里</td><td>可清理</td></tr>
+</table>
+<p>共 6 个分支、3 个临时 worktree 可以清理。要我执行吗？</p>`;
+
+const TABLE2 = `
+<p><b>清理结果</b></p>
+<table>
+<tr><th>项目</th><th>结果</th></tr>
+<tr><td>6 个本地分支</td><td><span class="ok">已删除</span></td></tr>
+<tr><td>3 个 worktree 注册</td><td><span class="ok">已移除</span></td></tr>
+<tr><td>p0-probe 调查材料</td><td><span class="ok">已备份</span>（51/51 文件）</td></tr>
+<tr><td>2 个残留目录</td><td><span class="err">未删</span>：审查服务拦截，请手动删除</td></tr>
+</table>`;
+
+const TURNS = [
+  {
+    key: 't1', history: true, real: 100, endedAt: '17:01',
+    user: '本地怎么这么多分支，有哪些是可以清理的？',
+    events: [
+      say('我来全面盘点一下本地分支的情况：'),
+      tool('term', '列出所有本地分支及其跟踪状态', { cmd: 'git branch -vv', out: ['  code-snapshot 6dcc19ee [gitlab/code-snapshot] fix(permissions): …', '  feat/dsh-p0-probe 3f2a9c1 [origin/feat/dsh-p0-probe] …', '* main 47409075 [origin/main] docs: 1.2.0 已发布'], total: 13, head: 'main' }),
+      tool('term', '按提交时间列出分支及上游状态', { out: ['new-root|2026-09-24|67999784||', 'publish-main|2026-09-20|526d86e9||', 'main-clean|2026-09-18|1c0de551||'], total: 8 }),
+      tool('term', '查看 worktree 列表和分支祖先关系', { out: ['main-clean in code-snapshot: 1', 'E:/code/GitTmp/ai-client-p0-probe  3f2a9c1 [feat/dsh-p0-probe]', 'E:/code/GitTmp/ai-client-p1-13c  801cac53 [feat/dsh-p1-13c]'], total: 9 }),
+      tool('term', '统计各分支相对 main 的独有提交数', { out: ['code-snapshot : 1 unique commits, 2643 commits behind main', 'feat/dsh-p0-probe : 0 unique commits', 'feat/dsh-p1-13c : 0 unique commits'], total: 5 }),
+      say('分支脉络基本清楚了，再确认几个关键细节——远程 dsh 分支是否还有未合入 main 的内容，以及各快照分支的实际构成：'),
+      tool('term', '检查远程 dsh 分支独有提交及快照分支构成', { out: ['94452f8b feat: PiLab Ai 代码快照', 'origin/feat/dsh-p0-probe: 0 commits not in main', 'origin/feat/dsh-p1-13c: (no upstream)'], total: 9 }),
+      fin('全部查清了。给你完整的盘点：', TABLE1),
+    ],
+  },
+  {
+    key: 't2', history: false, endedAt: '17:09',
+    user: '确认，按你列的全部清理掉。',
+    events: [
+      say('好，开始执行全部清理。先检查三个 worktree 有没有未提交的改动（避免误删有价值的东西）：'),
+      tool('term', '检查三个 worktree 的未提交改动', { run: 1600, cmd: "foreach ($w in 'p0-probe','p1-13c','p1-13d') { git -C ..\\ai-client-$w status --porcelain }", out: ['dirty entries: 0', 'untracked in ai-client-p0-probe:', '  ?? REPORT-p0-probe.md', '  ?? notes/compact-double-summary/'], total: 8 }),
+      say('`p1-13c` 和 `p1-13d` 干净，但 `p0-probe` 里有 **2 个未跟踪的调查文件**（不在 git 里，删了就没了）。快速看一下内容再决定：'),
+      tool('read', 'REPORT-p0-probe.md', { run: 500, total: 44 }),
+      tool('read', 'notes/compact-double-summary/README.md', { run: 500, total: 120 }),
+      say('这些是有价值的调查材料（`/compact` 双摘要 bug 的完整取证、会话日志、分析脚本、issue 草稿、REPORT），不在 git 里，直接删 worktree 会永久丢失。先看下大小，然后备份到当前工作区再清理：'),
+      tool('term', '查看调查目录大小和 handover 子目录', { run: 1300, out: ['usage-logs-2026-10-10-135640.csv', 'session-2026-10-09.jsonl', 'analyze-compact.mjs', 'Total: 48.8 MB'], total: 23 }),
+      say('48.8 MB，不大。备份到当前工作区后执行清理：'),
+      tool('term', '备份 p0-probe 调查材料到当前工作区', DENY),
+      say('安全审查服务暂时出错（不是拒绝）。按规则原样重试一次：'),
+      tool('term', '备份 p0-probe 调查材料到当前工作区', { run: 1700, out: ['backup files: 51 / source files: 51', 'target: .evidence\\p0-probe'], total: 2 }),
+      say('备份完成（51/51 文件）。现在移除三个 worktree 并删除分支：'),
+      tool('term', '移除三个临时 worktree', { run: 2000, status: 'bg', out: ['已转入后台：pwsh-18'], head: 'The command keeps running in the background. You will be notified when it finishes; read newer output with jo…' }),
+      say('移除 worktree 涉及大量文件删除，转入后台执行中。等待它完成：'),
+      tool('bg', 'pwsh-18', { run: 2600, out: ['Removing worktree ai-client-p0-probe … done', 'Removing worktree ai-client-p1-13c …', 'Remove-Item : Directory not empty'], total: 6 }),
+      say('p1-13c 目录删除遇到「Directory not empty」错误（Windows 常见问题，可能有文件被占用或只读）。任务还在继续处理其余 worktree，先等它跑完：'),
+      tool('bg', 'pwsh-18', { run: 2400, out: ['Removing worktree ai-client-p1-13d … partial', 'git worktree prune … done', 'exit 0'], total: 9 }),
+      say('worktree 注册已全部移除（`worktree list` 只剩主目录），但 p1-13c 和 p1-13d 两个目录有残留文件没删干净。先看看残留的是什么：'),
+      tool('search', '「验收记录|异常分析」', { run: 600, out: ['找到 22 个文件'], total: 22 }),
+      tool('term', '对比三个目录中取证文件的完整性', { run: 1400, out: ['E:\\code\\GitTmp\\ai-client : 验收记录=True 异常分析=True', 'ai-client-p1-13c : 0 unique files', 'ai-client-p1-13d : 0 unique files'], total: 7 }),
+      say('当前工作区副本完整（取证文件 22 个、两个 md 都在），残留目录没有独有内容，可以放心删除。先删分支：'),
+      tool('term', '删除六个已确认清理的本地分支', DENY),
+      say('审查服务对这条组合命令持续报错。我改为逐条执行——每条删除仍会经过安全审查，只是命令更简单：'),
+      tool('term', '删除三个已合入 main 的 dsh 分支', { run: 1500, status: 'error', out: ['Deleted branch feat/dsh-p0-probe (was 3f2a9c1).', 'Deleted branch feat/dsh-p1-13d (was 8b1e0d4).', "error: the branch 'feat/dsh-p1-13c' is not fully merged.", '[exit code: 1]'], total: 11, head: '[exit code: 1]' }),
+      say('`p0-probe` 和 `p1-13d` 已删。`p1-13c` 被拒是因为它没有上游，且 `-d` 只认当前 HEAD（code-snapshot 是独立历史）——之前已验证它**确实已合入 main**。再确认一次然后用 `-D` 删：'),
+      tool('term', '确认 p1-13c 已合入 main', { run: 1000, cmd: 'git branch --contains 801cac53', out: ['801cac53 feat(dsh-host): P1-13c Windows 加密文件读回退', '  main'], total: 2 }),
+      say('确认已合入。现在删除剩余四个分支：'),
+      tool('term', '强删 p1-13c 及三个快照实验分支', { run: 1300, cmd: 'git branch -D feat/dsh-p1-13c main-clean new-root publish-main', out: ['Deleted branch feat/dsh-p1-13c (was 801cac53).', 'Deleted branch main-clean (was 1c0de551).', 'Deleted branch new-root (was 67999784).', 'Deleted branch publish-main (was 526d86e9).'], total: 4, head: 'Deleted branch publish-main (was 526d86e9).' }),
+      say('六个分支全部删除完成。最后清理两个残留目录：'),
+      tool('term', '删除两个残留 worktree 目录', DENY),
+      say('审查服务又出错，原样重试：'),
+      tool('term', '删除两个残留 worktree 目录', DENY),
+      say('再拆简单点，一次删一个：'),
+      tool('term', '删除残留目录 ai-client-p1-13c', DENY),
+      say('`Remove-Item` 连续被审查服务卡住。先做个只读检查，顺便给审查服务恢复的时间：'),
+      tool('term', '统计残留目录大小并确认 git 最终状态', DENY),
+      say('连只读命令也被卡住了——确认是审查服务本身不稳定，与命令内容无关。稍后重试：'),
+      tool('term', '查看当前分支列表', { run: 900, cmd: 'git branch -vv', out: ['  code-snapshot 6dcc19ee [gitlab/code-snapshot] …', '* main 47409075 [origin/main] docs: 1.2.0 已发布'], total: 2, head: 'main 47409075 [origin/main] docs: 1.2.0 已发布' }),
+      say('审查服务恢复了。分支状态确认：只剩 `main` 和 `code-snapshot`。再试一次删残留目录：'),
+      tool('term', '删除残留目录 ai-client-p1-13c', DENY),
+      fin('外部路径删除操作已重试多次均被审查服务错误拦截（工作区内命令正常，是服务端问题）。git 层面的清理已全部完成，不再用其他方式绕过。总结如下：', TABLE2),
+    ],
+  },
+];
+
+for (const turn of TURNS) {
+  let t = turn.history ? 0 : 700;
+  turn.evs = turn.events.map((ev, i) => {
+    const dur = ev.k === 'tool' ? ev.run : Math.max(450, [...ev.text].length * CHAR_MS);
+    const e = { ...ev, id: `${turn.key}-${i}`, start: t, dur, end: t + dur };
+    t = e.end + GAP;
+    return e;
+  });
+  turn.total = t;
+}
+const TOTAL = TURNS[1].total + 300;
+
+/** What a turn looks like at playback time `t` (history turns are always finished). */
+function stateOf(turn, t) {
+  if (turn.history) t = Infinity;
+  const running = t < turn.total;
+  const blocks = [];
+  for (const e of turn.evs) {
+    if (e.start > t) break;
+    if (e.k === 'tool') {
+      const done = t >= e.end;
+      blocks.push({
+        type: 'tool', id: e.id, kind: e.kind, desc: e.desc, cmd: e.cmd, out: e.out, total: e.total,
+        head: e.head ?? e.out[0], reason: e.reason, status: done ? e.status : 'running',
+        elapsed: ((Math.min(t, e.end) - e.start) / 1000) * TIME_SCALE,
+      });
+    } else {
+      const chars = [...e.text];
+      const n = t >= e.end ? chars.length : Math.max(0, Math.floor((t - e.start) / CHAR_MS));
+      blocks.push({
+        type: 'say', id: e.id, text: chars.slice(0, n).join(''), streaming: t < e.end,
+        isFinal: e.k === 'final' && !running, table: e.k === 'final' && t >= e.end ? e.table : '',
+      });
+    }
+  }
+  const tools = blocks.filter((b) => b.type === 'tool');
+  return {
+    key: turn.key, user: turn.user, blocks, running, endedAt: turn.endedAt, history: turn.history,
+    elapsed: turn.history ? turn.real : (Math.min(t, turn.total) / 1000) * TIME_SCALE,
+    calls: tools.length,
+    denied: tools.filter((b) => b.status === 'denied').length,
+    failed: tools.filter((b) => b.status === 'error').length,
+  };
+}
+
+// ---------------------------------------------------------------- helpers
+const ICON = {
+  term: '<path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2"/>',
+  read: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  bg: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  ban: '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
+  chev: '<path d="m9 18 6-6-6-6"/>',
+  spin: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+  list: '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
+};
+const svg = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24">${ICON[name]}</svg>`;
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const md = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+const VERB = { term: '终端', read: '读取', search: '搜索', bg: '后台输出' };
+const STAR = ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'];
+const star = () => `<span class="star">${STAR[Math.floor(performance.now() / 120) % STAR.length]}</span>`;
+function dur(sec) {
+  sec = Math.round(sec);
+  return sec < 60 ? `${sec} 秒` : `${Math.floor(sec / 60)} 分 ${sec % 60} 秒`;
+}
+function durShort(sec) {
+  sec = Math.round(sec);
+  return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`;
+}
+const clockOf = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+const caret = (b) => (b.streaming ? '<span class="caret"></span>' : '');
+const userBubble = (s) => `<div class="user"><div>${esc(s.user)}</div></div>`;
+const finalTable = (b) => (b.table ? `<div class="tbl">${b.table}</div>` : '');
+
+/** What the turn is doing right now, for live lines and the dock. */
+function activity(s) {
+  const last = s.blocks[s.blocks.length - 1];
+  if (!last) return { kind: null, text: '思考中' };
+  if (last.type === 'tool' && last.status === 'running') return { kind: last.kind, text: last.desc, tool: last };
+  if (last.type === 'say' && last.streaming) return { kind: 'say', text: '正在写说明' };
+  return { kind: null, text: '思考中' };
+}
+const lastSay = (s) => [...s.blocks].reverse().find((b) => b.type === 'say');
+
+/** CLI rule: two or more consecutive reads/searches become one block. */
+function groupReads(blocks) {
+  const out = [];
+  for (const b of blocks) {
+    const prev = out[out.length - 1];
+    const isRS = b.type === 'tool' && (b.kind === 'read' || b.kind === 'search');
+    if (isRS && prev && (prev.type === 'rgroup' || (prev.type === 'tool' && (prev.kind === 'read' || prev.kind === 'search')))) {
+      if (prev.type === 'rgroup') prev.items.push(b);
+      else out[out.length - 1] = { type: 'rgroup', id: prev.id, items: [prev, b] };
+    } else out.push(b);
+  }
+  return out;
+}
+/** Desktop rule: every run of consecutive calls becomes one line. */
+function groupAll(blocks) {
+  const out = [];
+  for (const b of blocks) {
+    const prev = out[out.length - 1];
+    if (b.type === 'tool' && prev && prev.type === 'tgroup') prev.items.push(b);
+    else if (b.type === 'tool') out.push({ type: 'tgroup', id: b.id, items: [b] });
+    else out.push(b);
+  }
+  return out;
+}
+function readGroupLabel(items, running) {
+  const r = items.filter((b) => b.kind === 'read').length;
+  const s = items.filter((b) => b.kind === 'search').length;
+  const parts = [];
+  if (s) parts.push(`${running ? '正在搜索' : '搜索了'} ${s} 次`);
+  if (r) parts.push(`${running ? (parts.length ? '读取' : '正在读取') : '读取了'} ${r} 个文件`);
+  return parts.join('，') + (running ? '…' : '');
+}
+function sqClass(b) {
+  return { running: 'run', ok: 'ok', denied: 'err', error: 'err', bg: 'ok' }[b.status];
+}
+function stripOf(s) {
+  return `<span class="strip">${s.blocks.filter((b) => b.type === 'tool').map((b) =>
+    `<i class="sq ${sqClass(b)}" data-jump="${b.id}" title="${esc(`${VERB[b.kind]} ${b.desc}`)}"></i>`).join('')}</span>`;
+}
+const bidOf = (b) => (b.items ? b.items.map((x) => x.id).join(' ') : b.id);
+
+// ---------------------------------------------------------------- 现状
+function rNow(s, ctx) {
+  let h = userBubble(s);
+  const proc = s.blocks.filter((b) => !b.isFinal);
+  const fin = s.blocks.find((b) => b.isFinal);
+  const key = `proc-${s.key}`;
+  const open = s.running || ctx.open(key);
+  if (proc.length) {
+    h += s.running
+      ? `<div class="head">${svg('spin', 'spin')}工作中 ${dur(s.elapsed)}</div>`
+      : `<div class="head clickable ${open ? 'open' : ''}" data-toggle="${key}">${svg('chev', 'chev')}已工作 ${dur(s.elapsed)}</div>`;
+  }
+  if (open) {
+    for (const b of proc) {
+      if (b.type === 'say') { h += `<div class="say" data-bid="${b.id}">${md(b.text)}${caret(b)}</div>`; continue; }
+      const verb = b.status === 'denied' ? '运行' : VERB[b.kind];
+      const icon = b.status === 'running' ? svg('spin', 'spin') : b.status === 'error' ? `<span class="err">${svg('x')}</span>` : svg(b.kind);
+      const tail = b.status === 'denied' ? ' · 已拒绝' : b.status === 'error' ? ' · 退出码 1' : '';
+      h += `<div class="t" data-bid="${b.id}">${icon}<span class="verb">${verb}</span><span class="d ${b.kind === 'read' ? 'mono' : ''}">${esc(b.desc)}${tail}</span></div>`;
+      if (b.status !== 'running' && b.status !== 'denied' && b.head && b.kind !== 'bg' && b.kind !== 'read') {
+        h += `<div class="t2 ${b.status === 'error' ? 'err' : ''}">${esc(b.head)}${b.total ? ` · ${b.total} 行` : ''}</div>`;
+      }
+    }
+  }
+  if (fin) h += `<div class="divider">最终输出</div><div data-bid="${fin.id}">${md(fin.text)}${finalTable(fin)}</div><div class="end">完成于 ${s.endedAt}</div>`;
+  return h;
+}
+
+// ---------------------------------------------------------------- ① 终端原味
+function rCli(s, ctx) {
+  let h = `<div class="u">&gt; ${esc(s.user)}</div>`;
+  for (const b of groupReads(s.blocks)) {
+    if (b.type === 'say') {
+      h += `<div class="blk" data-bid="${b.id}"><span class="dot text">●</span><div class="body">${md(b.text)}${caret(b)}${finalTable(b)}</div></div>`;
+    } else if (b.type === 'rgroup') {
+      const running = b.items.some((x) => x.status === 'running');
+      const key = `g-${b.id}`;
+      h += `<div class="blk" data-bid="${bidOf(b)}"><span class="dot ${running ? 'run' : 'ok'}">●</span><div class="body clickable" data-toggle="${key}">${readGroupLabel(b.items, running)}<span class="faint">（点击展开）</span></div></div>`;
+      if (ctx.open(key)) {
+        h += `<div class="res"><span class="elb">  ⎿  </span><div class="lines">${b.items.map((x) =>
+          `${VERB[x.kind]} ${esc(x.desc)} · ${x.kind === 'read' ? `${x.total} 行` : esc(x.out[0] || '')}`).join('\n')}</div></div>`;
+      }
+    } else {
+      h += cliTool(b, ctx);
+    }
+  }
+  const a = activity(s);
+  if (s.running) h += `<div class="live">${star()} ${esc(a.text)}… <span class="dim">(${durShort(s.elapsed)} · esc 中断)</span></div>`;
+  else h += `<div class="doneline">${STAR[4]} 用时 ${durShort(s.elapsed)}</div>`;
+  return h;
+}
+function cliTool(b, ctx) {
+  const dot = b.status === 'running' ? 'run' : b.status === 'denied' || b.status === 'error' ? 'err' : 'ok';
+  const key = `o-${b.id}`;
+  const open = ctx.open(key);
+  let lines;
+  let more = '';
+  if (b.status === 'running') lines = `运行中…${b.elapsed >= 3 ? ` (${durShort(b.elapsed)})` : ''}`;
+  else if (b.status === 'denied') lines = `<span class="e">已拒绝：${esc(b.reason)}</span>`;
+  else if (b.status === 'bg') lines = '已转入后台运行（pwsh-18）';
+  else if (b.kind === 'read') lines = `读取了 ${b.total} 行`;
+  else if (open) {
+    lines = [...(b.cmd ? [`$ ${b.cmd}`] : []), ...b.out].map(esc).join('\n');
+    if (b.total > b.out.length) lines += `\n<span class="more" data-toggle="${key}">…（示意稿只录了 ${b.out.length} 行，点击收起）</span>`;
+    else lines += `\n<span class="more" data-toggle="${key}">（点击收起）</span>`;
+  } else {
+    const shown = b.status === 'error' ? b.out.slice(-3) : b.out.slice(0, 3);
+    lines = shown.map((l) => (/error|exit code/i.test(l) ? `<span class="e">${esc(l)}</span>` : esc(l))).join('\n');
+    const rest = Math.max(b.total, b.out.length) - shown.length;
+    if (rest > 0) more = `\n<span class="more" data-toggle="${key}">… +${rest} 行（点击展开）</span>`;
+  }
+  return `<div class="blk" data-bid="${b.id}"><span class="dot ${dot}">●</span><div class="body"><b>${VERB[b.kind]}</b>(${esc(b.desc)})</div></div>`
+    + `<div class="res"><span class="elb">  ⎿  </span><div class="lines">${lines}${more}</div></div>`;
+}
+
+// ---------------------------------------------------------------- ② 终端结构 · 界面字体
+function r2(s, ctx, opts = {}) {
+  let h = userBubble(s);
+  h += log2(s.blocks, ctx);
+  if (s.running) {
+    if (opts.live !== false) {
+      const a = activity(s);
+      h += `<div class="live">${star()}<span>${esc(a.text)}…</span><span class="dim num">${durShort(s.elapsed)}</span></div>`;
+    }
+  } else {
+    const bits = [`用时 ${dur(s.elapsed)}`, `${s.calls} 次调用`];
+    if (s.denied) bits.push(`<span class="err">${s.denied} 次被拒</span>`);
+    if (s.failed) bits.push(`<span class="err">${s.failed} 次失败</span>`);
+    h += `<div class="end">${STAR[4]} ${bits.join(' · ')}${opts.strip ? stripOf(s) : ''}</div>`;
+  }
+  return h;
+}
+function log2(blocks, ctx) {
+  let h = '';
+  for (const b of groupReads(blocks)) {
+    if (b.type === 'say') {
+      h += `<div class="blk" data-bid="${b.id}"><span class="dot text"></span><div class="body">${md(b.text)}${caret(b)}${finalTable(b)}</div></div>`;
+    } else if (b.type === 'rgroup') {
+      const running = b.items.some((x) => x.status === 'running');
+      const key = `g-${b.id}`;
+      const open = ctx.open(key);
+      h += `<div class="blk" data-bid="${bidOf(b)}"><span class="dot ${running ? 'run' : 'ok'}"></span><div class="body">`
+        + `<div class="tl clickable" data-toggle="${key}"><span class="name">${readGroupLabel(b.items, running)}</span><span class="tail">${open ? '收起' : '展开'}</span></div>`;
+      if (open) {
+        h += `<div class="res"><span class="elb">⎿</span><div class="lines">${b.items.map((x) =>
+          `<div class="ln">${VERB[x.kind]} ${esc(x.desc)} · ${x.kind === 'read' ? `${x.total} 行` : esc(x.out[0] || '')}</div>`).join('')}</div></div>`;
+      }
+      h += '</div></div>';
+    } else {
+      h += tool2(b, ctx);
+    }
+  }
+  return h;
+}
+function tool2(b, ctx) {
+  const dot = { running: 'run', ok: 'ok', denied: 'err', error: 'err', bg: 'ok' }[b.status];
+  const key = `o-${b.id}`;
+  const open = ctx.open(key);
+  const canOpen = b.out.length > 0 && b.status !== 'running' && b.status !== 'denied' && b.kind !== 'read';
+  let lines;
+  if (b.status === 'running') lines = `<div class="ln">运行中…${b.elapsed >= 3 ? ` ${durShort(b.elapsed)}` : ''}</div>`;
+  else if (b.status === 'denied') lines = `<div class="ln w">已拒绝 · ${esc(b.reason)}</div>`;
+  else if (b.status === 'bg') lines = '<div class="ln">已转入后台 · pwsh-18</div>';
+  else if (b.kind === 'read') lines = `<div class="ln">读取了 ${b.total} 行</div>`;
+  else if (open) {
+    lines = `<div class="exp">${[...(b.cmd ? [`$ ${b.cmd}`] : []), ...b.out].map(esc).join('\n')}${b.total > b.out.length ? `\n…（示意稿只录了 ${b.out.length} 行）` : ''}</div>`
+      + `<div class="ln"><span class="more" data-toggle="${key}">收起</span></div>`;
+  } else {
+    const shown = b.status === 'error' ? b.out.slice(-2) : b.out.slice(0, 2);
+    lines = shown.map((l) => `<div class="ln ${/error|exit code/i.test(l) ? 'e' : ''}">${esc(l)}</div>`).join('');
+    const rest = Math.max(b.total, b.out.length) - shown.length;
+    if (rest > 0) lines += `<div class="ln"><span class="more" data-toggle="${key}">… +${rest} 行</span></div>`;
+  }
+  const arg = b.kind === 'read' || b.kind === 'bg' ? 'mono' : '';
+  return `<div class="blk" data-bid="${b.id}"><span class="dot ${dot}"></span><div class="body">`
+    + `<div class="tl ${canOpen ? 'clickable' : ''}" ${canOpen ? `data-toggle="${key}"` : ''}><span class="name">${VERB[b.kind]}</span><span class="arg ${arg}">${esc(b.desc)}</span></div>`
+    + `<div class="res"><span class="elb">⎿</span><div class="lines">${lines}</div></div></div></div>`;
+}
+
+// ---------------------------------------------------------------- ③ 桌面版式
+function r3(s, ctx) {
+  let h = userBubble(s);
+  for (const b of groupAll(s.blocks)) {
+    if (b.type === 'say') { h += `<div class="say" data-bid="${b.id}">${md(b.text)}${caret(b)}${finalTable(b)}</div>`; continue; }
+    const key = `g-${b.id}`;
+    const open = ctx.open(key);
+    const cur = b.items.find((x) => x.status === 'running');
+    let label;
+    if (cur) label = `<span class="shimmer">${VERB[cur.kind]} ${esc(cur.desc)}</span>`;
+    else if (b.items.length === 1) label = `<span class="verb">${VERB[b.items[0].kind]}</span> <span class="d">${esc(b.items[0].desc)}</span>`;
+    else label = `<span class="verb">${deskSummary(b.items)}</span>`;
+    const denied = b.items.filter((x) => x.status === 'denied').length;
+    const failed = b.items.filter((x) => x.status === 'error').length;
+    let tail = '';
+    if (denied) tail += ` <span class="warn">${b.items.length === 1 ? '已拒绝' : `${denied} 条被拒`}</span>`;
+    if (failed) tail += ' <span class="err">失败</span>';
+    h += `<div class="grp clickable ${open ? 'open' : ''}" data-toggle="${key}" data-bid="${bidOf(b)}"><span class="lbl">${label}</span>${tail}${svg('chev', 'chev own')}</div>`;
+    if (open) {
+      h += '<div class="rows">';
+      for (const x of b.items) {
+        const okey = `o-${x.id}`;
+        const icon = x.status === 'running' ? svg('spin', 'spin') : x.status === 'denied' ? `<span class="warn">${svg('ban')}</span>` : x.status === 'error' ? `<span class="err">${svg('x')}</span>` : svg(x.kind);
+        h += `<div class="row clickable" data-toggle="${okey}">${icon}<span class="verb">${VERB[x.kind]}</span><span class="d">${esc(x.desc)}</span></div>`;
+        if (ctx.open(okey)) {
+          const text = x.status === 'denied' ? `已拒绝：${x.reason}` : x.kind === 'read' ? `读取了 ${x.total} 行` : [...(x.cmd ? [`$ ${x.cmd}`] : []), ...x.out].join('\n');
+          h += `<div class="pre">${esc(text)}</div>`;
+        }
+      }
+      h += '</div>';
+    }
+  }
+  if (s.running) h += `<div class="live">${star()}<span class="shimmer">${esc(activity(s).text)}</span></div>`;
+  return h;
+}
+function deskSummary(items) {
+  const n = (k) => items.filter((x) => x.kind === k).length;
+  const parts = [];
+  if (n('term')) parts.push(`运行了 ${n('term')} 条命令`);
+  if (n('read')) parts.push(`读取了 ${n('read')} 个文件`);
+  if (n('search')) parts.push(`搜索了 ${n('search')} 次`);
+  if (n('bg')) parts.push(`查看了 ${n('bg')} 次后台输出`);
+  return parts.join('，');
+}
+
+// ---------------------------------------------------------------- ④ 进展卡（上一版 D）
+function r4(s, ctx) {
+  let h = userBubble(s);
+  const tools = s.blocks.filter((b) => b.type === 'tool');
+  const key = `log-${s.key}`;
+  const open = ctx.open(key);
+  if (s.running) {
+    const said = lastSay(s);
+    const a = activity(s);
+    h += `<div class="v4 card"><div class="h">${svg('spin', 'spin')}<span>正在处理</span><span class="r num">第 ${tools.length} 步 · 已用 ${clockOf(s.elapsed)} · ${s.denied} 次被拒</span></div><div class="b">`;
+    if (a.tool) h += `<div class="now">${svg(a.kind)}<span class="soft">${VERB[a.kind]}</span><span class="d">${esc(a.text)}</span></div>`;
+    else h += `<div class="now"><span class="faint">${esc(a.text)}…</span></div>`;
+    if (said) h += `<div class="latest">${md(said.text)}${caret(said)}</div>`;
+    const recent = tools.filter((b) => b !== a.tool).slice(-4).reverse();
+    if (recent.length) {
+      h += '<div class="recent">';
+      for (const b of recent) {
+        const icon = b.status === 'denied' ? `<span class="warn">${svg('ban')}</span>` : b.status === 'error' ? `<span class="err">${svg('x')}</span>` : svg(b.kind);
+        h += `<div class="row">${icon}<span class="d">${esc(b.desc)}</span>${b.status === 'denied' ? '<span class="warn">已拒绝</span>' : ''}</div>`;
+      }
+      h += '</div>';
+    }
+    h += `<div class="more clickable" data-toggle="${key}">${svg('list')}${open ? '收起记录' : `查看全部 ${tools.length} 步`}</div></div></div>`;
+    if (open) h += `<div class="log4 v2">${log2(s.blocks, ctx)}</div>`;
+  } else {
+    const fin = s.blocks.find((b) => b.isFinal);
+    const bits = [`处理了 ${tools.length} 步`, `用时 ${dur(s.elapsed)}`];
+    if (s.denied) bits.push(`${s.denied} 次被拒`);
+    if (s.failed) bits.push(`${s.failed} 次失败`);
+    h += `<div class="summary clickable ${open ? 'open' : ''}" data-toggle="${key}">${svg('chev', 'chev')}${bits.join(' · ')}</div>`;
+    if (open) h += `<div class="log4 v2">${log2(s.blocks.filter((b) => !b.isFinal), ctx)}</div>`;
+    if (fin) h += `<div class="final4" data-bid="${fin.id}">${md(fin.text)}${finalTable(fin)}</div>`;
+  }
+  return h;
+}
+
+// ---------------------------------------------------------------- ⑤ 终端结构 + 实时条
+function r5(s, ctx) { return r2(s, ctx, { live: false, strip: true }); }
+function dock5(s, ctx) {
+  if (!s.running) return '';
+  const a = activity(s);
+  const said = lastSay(s);
+  const what = a.tool
+    ? `<b>${VERB[a.kind]}</b>${esc(a.text)} <span class="faint num">· ${durShort(a.tool.elapsed)}</span>`
+    : `<span>${esc(a.text)}…</span>`;
+  let h = `<div class="dock"><div class="r1"><span class="v2dot"></span><span class="what">${what}</span><span class="right num">第 ${s.calls} 步 · ${clockOf(s.elapsed)}${s.denied ? ` · <span class="err">${s.denied} 次被拒</span>` : ''}</span></div>`;
+  h += `<div>${stripOf(s)}</div>`;
+  if (!ctx.follow && said) h += `<div class="said"><b>刚才说</b>${esc(said.text.replace(/[`*]/g, ''))}</div>`;
+  return h + '</div>';
+}
+
+const VARIANTS = {
+  now: { name: '现状', cls: 'vn', render: rNow },
+  cli: { name: '① 终端原味', cls: 'v1', render: rCli },
+  term: { name: '② 终端结构', cls: 'v2', render: r2 },
+  desk: { name: '③ 桌面版式', cls: 'v3', render: r3 },
+  card: { name: '④ 进展卡', cls: 'v4', render: r4 },
+  dock: { name: '⑤ 终端 + 实时条', cls: 'v2', render: r5, dock: dock5 },
+};
+
+// ---------------------------------------------------------------- notes
+const NOTES_TOP = `
+<h2>这一版改了什么</h2>
+<ul>
+<li>按你的偏好：以 Claude Code <b>终端版</b>为主，桌面版为辅，也加了一个我们自己的设计（⑤）。</li>
+<li>所有新方案在回合结束后<b>都不折叠过程</b>。两个参考都不折，上一版说桌面版会折是我说错了。</li>
+<li><b>能回放</b>：上面一轮是已经结束的历史；下面一轮从你发出消息开始，一条条播出来。可以暂停、拖进度条、加速，也可以边播边往上翻，看各方案在你读历史时怎么提示进展。</li>
+<li>示例照截图里那一轮改写，加了两次读文件和一次搜索，好演示合并规则。工具行沿用 10-30 定的「显示模型写的说明」，命令本身点开才看到。</li>
+</ul>
+<h3>回放时可以试</h3>
+<ul>
+<li>播到一半往上翻，看最新进展还能不能看到。</li>
+<li>「对照」里选一个方案，两边同步播放。</li>
+<li>点「… +N 行」、带箭头的行、⑤ 里的小方块。</li>
+</ul>
+<hr />`;
+const NOTES = {
+  now: `
+<h2>现状</h2>
+<ul>
+<li>工具行缩成 12px 灰字，和正文挤在一起；每条再加一行「└ 输出首行 · N 行」。</li>
+<li>旁白和结论字号、颜色一样，分不出主次；间距处处相同。</li>
+<li>同一种命令，跑完叫「终端」，被拒叫「运行」。</li>
+<li>回合结束后过程折成「已工作 N 分 N 秒」，结论放在「最终输出」下面。</li>
+</ul>
+<p class="faint">按截图和代码里的文案还原，细节可能有出入。</p>`,
+  cli: `
+<h2>① 终端原味</h2>
+<p>照搬终端版：</p>
+<ul>
+<li>每块前一个圆点：正文用文字色；工具运行中灰色闪烁，成功变绿，失败或被拒变红。</li>
+<li>工具名加粗，说明放括号里；结果另起一行，用 <code>⎿</code> 引出，最多 3 行，多的写「… +N 行」。</li>
+<li>连续的读文件、搜索合成一行。块与块之间空一行。全部等宽字体。</li>
+<li>最下面一行「✻ 正在做什么…（用时 · esc 中断）」；结束后留一行「✻ 用时」。</li>
+</ul>
+<p><b>好处</b>：结构最清楚，扫左边一列圆点就知道发生了几件事、哪件出了问题。</p>
+<p><b>代价</b>：中文字形其实和 ② 一样（等宽字体里没有中文，会退回微软雅黑），变的是英文、数字、路径改成等宽，宽约一成；再加上行距更松、每条输出最多 3 行且长行会折行，同一轮比 ② 长约两成。</p>`,
+  term: `
+<h2>② 终端结构 · 界面字体 <span class="pick">（按你的意见调过）</span></h2>
+<p>骨架、圆点、颜色、间距、行内代码都和 ① 一样，只换了字体和几处排版。</p>
+<h3>和 ① 一样的</h3>
+<ul>
+<li>每块前一个同样大小的 ●：正文是文字色；工具运行中灰色闪烁，成功绿，失败或被拒红。</li>
+<li>块与块之间空一整行（约 20px）。</li>
+<li>行内代码用彩色字（亮色下蓝紫），不加底色。</li>
+<li>读文件、搜索连着的合成一行。</li>
+</ul>
+<h3>和 ① 不一样的</h3>
+<ul>
+<li>界面字体：中文字形本来就一样，英文、数字、路径不再等宽。</li>
+<li>工具行写成「<b>终端</b> 说明」，没有括号；说明用次文字色，单行，过长截断。</li>
+<li>输出预览最多 2 行、不折行，每条工具最多占 4 行；整行工具行都能点开，展开的输出放在最高 220px 的滚动框里。</li>
+<li>用户消息、表格跟应用样式；回合末尾那行带上调用、被拒、失败次数。</li>
+</ul>
+<p><b>代价</b>：比现状长一些（每条工具多一两行结果）；要改工具行组件和过程组外壳，并撤掉回合结束后的折叠。</p>`,
+  desk: `
+<h2>③ 桌面版式</h2>
+<ul>
+<li>不画圆点；正文照常。两段正文之间的所有调用合成一行灰字，例如「运行了 4 条命令」，被拒、失败用颜色字标在行尾；点开看每一条，再点看输出。</li>
+<li>跑着时那一行换成闪光字，显示正在做的事；末尾一行闪光的进度。</li>
+</ul>
+<p><b>代价</b>：这一轮几乎每条命令前都有一句说明，能合并的连续调用很少，效果接近「现状去掉输出行」。上面那一轮（4 条命令连着）才看得出合并的好处。</p>`,
+  card: `
+<h2>④ 进展卡（上一版 D）</h2>
+<ul>
+<li>跑着时整轮只有一张卡：正在做的事、最新一句说明、最近 4 步；完整记录收在「查看全部 N 步」里。</li>
+<li>结束后折成一行摘要，结论在下面（D 的做法本身就是折叠）。</li>
+</ul>
+<p><b>回放时留意</b>：卡片高度随说明长短跳动；想看第 5 步的输出要先点开记录；上面那一轮历史只剩一行摘要。这几处就是它不够实用的地方，⑤ 是针对这些改的。</p>`,
+  dock: `
+<h2>⑤ 终端结构 + 实时条 <span class="pick">（D 的实用版，新）</span></h2>
+<ul>
+<li>记录照 ② 全部保留、不折叠。</li>
+<li>跑着时，输入框上方停一条<b>实时条</b>：正在做什么、这一步跑了多久、第几步、总用时；下面一排小方块，一格一次调用，按结果上色，和圆点同一套颜色（<span class="ok">绿 = 成功</span>，<span class="err">红 = 失败或被拒</span>，灰闪 = 进行中）。</li>
+<li>往上翻历史时，实时条多出一行，显示模型刚说的最后一句；点任一小方块跳到那一步。</li>
+<li>回合结束后实时条收起，这排方块留在这一轮末尾，当作这一轮的<b>缩略图</b>：一眼看出是一路顺利，还是卡在哪儿反复被拒；点红块直接跳过去。</li>
+</ul>
+<p><b>代价</b>：输入框上方多占约 50px（只在运行时）；调用上百次时，方块要换成按比例压缩的一条色带。</p>
+<h3>建议</h3>
+<p>先做 ②；实时条和方块缩略图是独立的增强，可以接着做。</p>`,
+};
+
+// ---------------------------------------------------------------- player
+const clock = { t: 0, playing: true, speed: 1, last: performance.now() };
+const expanded = new Set();
+let variant = 'term';
+let compare = 'none';
+let panes = [];
+
+function buildPanes() {
+  const stage = document.getElementById('stage');
+  const keys = compare !== 'none' && compare !== variant ? [compare, variant] : [variant];
+  stage.innerHTML = '';
+  panes = keys.map((v) => {
+    const root = document.createElement('div');
+    root.className = 'pane';
+    root.innerHTML = `<div class="pane-head"><b>${VARIANTS[v].name}</b><span class="st"></span></div>
+      <div class="vp"><div class="content"></div></div>
+      <button class="jump" hidden>↓ 回到最新</button>
+      <div class="dockwrap"></div>
+      <div class="composer-wrap"><div class="composer"><span>+</span><span>继续输入…</span><span class="send"></span></div>
+      <div class="composer-meta"><span>全自动</span><span>ai-client</span><span>code-snapshot</span><span style="margin-left:auto">glm-5.3 高</span></div></div>`;
+    stage.appendChild(root);
+    const p = {
+      variant: v, root, follow: true, hl: null,
+      vp: root.querySelector('.vp'), content: root.querySelector('.content'),
+      dock: root.querySelector('.dockwrap'), jump: root.querySelector('.jump'), st: root.querySelector('.st'),
+    };
+    p.vp.addEventListener('scroll', () => {
+      p.follow = p.vp.scrollTop + p.vp.clientHeight >= p.vp.scrollHeight - 24;
+      p.jump.hidden = p.follow;
+    });
+    p.jump.addEventListener('click', () => { p.follow = true; render(true); });
+    root.addEventListener('pointerdown', (e) => {
+      const j = e.target.closest('[data-jump]');
+      if (j) { e.preventDefault(); jumpTo(p, j.dataset.jump); return; }
+      const tg = e.target.closest('[data-toggle]');
+      if (tg) {
+        e.preventDefault();
+        const k = `${p.variant}:${tg.dataset.toggle}`;
+        expanded.has(k) ? expanded.delete(k) : expanded.add(k);
+        if (!p.follow) p.keepTop = p.vp.scrollTop;
+        render(true);
+      }
+    });
+    return p;
+  });
+  document.getElementById('notes').innerHTML = NOTES_TOP + NOTES[variant];
+  render(true);
+}
+
+function jumpTo(p, id) {
+  p.follow = false;
+  p.hl = { id, until: performance.now() + 1600 };
+  render(true);
+  const el = p.vp.querySelector(`[data-bid~="${id}"]`);
+  if (el) el.scrollIntoView({ block: 'center' });
+}
+
+function renderPane(p, states) {
+  const v = VARIANTS[p.variant];
+  const ctx = { open: (k) => expanded.has(`${p.variant}:${k}`), follow: p.follow };
+  p.content.className = `content ${v.cls}`;
+  p.content.innerHTML = states.map((s) => `<section class="turn">${v.render(s, ctx)}</section>`).join('');
+  p.dock.innerHTML = v.dock ? v.dock(states[1], ctx) : '';
+  if (p.hl && performance.now() < p.hl.until) {
+    const el = p.content.querySelector(`[data-bid~="${p.hl.id}"]`);
+    if (el) el.classList.add('hl');
+  }
+  if (p.follow) p.vp.scrollTop = p.vp.scrollHeight;
+  else if (p.keepTop !== undefined) { p.vp.scrollTop = p.keepTop; p.keepTop = undefined; }
+  p.jump.hidden = p.follow;
+  // Sit above whatever is docked over the composer.
+  p.jump.style.bottom = `${p.root.querySelector('.composer-wrap').offsetHeight + p.dock.offsetHeight + 8}px`;
+  const s = states[1];
+  p.st.textContent = s.running ? `运行中 · 第 ${s.calls} 步 · ${clockOf(s.elapsed)}` : `已结束 · ${s.calls} 次调用 · ${clockOf(s.elapsed)}`;
+}
+
+let lastRender = 0;
+function render(force) {
+  const now = performance.now();
+  if (!force && now - lastRender < 90) return;
+  lastRender = now;
+  const states = TURNS.map((tr) => stateOf(tr, clock.t));
+  for (const p of panes) renderPane(p, states);
+  document.getElementById('scrub').value = String(Math.round(clock.t));
+  const shown = (Math.min(clock.t, TURNS[1].total) / 1000) * TIME_SCALE;
+  document.getElementById('timeLbl').textContent =
+    `${clockOf(clock.t / 1000)} / ${clockOf(TOTAL / 1000)}　（这一轮 ${clockOf(shown)}）`;
+  document.getElementById('playBtn').innerHTML = clock.playing ? `${svg('pause')}暂停` : `${svg('play')}${clock.t >= TOTAL ? '重播' : '播放'}`;
+}
+
+function tick(now) {
+  if (clock.playing) {
+    clock.t = Math.min(TOTAL, clock.t + (now - clock.last) * clock.speed);
+    if (clock.t >= TOTAL) { clock.playing = false; render(true); } else render(false);
+  } else if (now - lastRender > 120) {
+    // Keep the CLI spinner glyphs turning while paused without rebuilding the DOM.
+    document.querySelectorAll('.star').forEach((el) => { el.textContent = STAR[Math.floor(now / 120) % STAR.length]; });
+  }
+  clock.last = now;
+  requestAnimationFrame(tick);
+}
+
+// ---------------------------------------------------------------- controls
+const vSeg = document.getElementById('vSeg');
+vSeg.innerHTML = Object.entries(VARIANTS).map(([k, v]) => `<button data-v="${k}" class="${k === variant ? 'on' : ''}">${v.name}</button>`).join('');
+vSeg.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  variant = b.dataset.v;
+  vSeg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  buildPanes();
+});
+const cmpSel = document.getElementById('cmpSel');
+cmpSel.innerHTML = '<option value="none">不对照</option>' + Object.entries(VARIANTS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+cmpSel.addEventListener('change', () => { compare = cmpSel.value; buildPanes(); });
+document.getElementById('themeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.documentElement.classList.toggle('dark', b.dataset.theme === 'dark');
+  document.querySelectorAll('#themeSeg button').forEach((x) => x.classList.toggle('on', x === b));
+});
+const notesEl = document.getElementById('notes');
+const notesBtn = document.getElementById('notesBtn');
+notesEl.hidden = window.innerWidth < 1180;
+notesBtn.classList.toggle('on', !notesEl.hidden);
+notesBtn.addEventListener('click', () => { notesEl.hidden = !notesEl.hidden; notesBtn.classList.toggle('on', !notesEl.hidden); });
+document.getElementById('playBtn').addEventListener('click', () => {
+  if (clock.t >= TOTAL) { clock.t = 0; panes.forEach((p) => { p.follow = true; }); }
+  clock.playing = !clock.playing;
+  render(true);
+});
+document.getElementById('restartBtn').addEventListener('click', () => {
+  clock.t = 0; clock.playing = true; panes.forEach((p) => { p.follow = true; }); render(true);
+});
+document.getElementById('endBtn').addEventListener('click', () => { clock.t = TOTAL; clock.playing = false; render(true); });
+document.getElementById('speedSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  clock.speed = Number(b.dataset.s);
+  document.querySelectorAll('#speedSeg button').forEach((x) => x.classList.toggle('on', x === b));
+});
+const scrub = document.getElementById('scrub');
+scrub.max = String(TOTAL);
+scrub.addEventListener('input', () => { clock.t = Number(scrub.value); clock.playing = false; render(true); });
+
+buildPanes();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

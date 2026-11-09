@@ -41,8 +41,9 @@
  * process-group head would fight over the same `top-0` inside one stacking
  * context, and chose to keep the consideration header pinned instead (`D4`) and
  * give the thought row a prominent BACKGROUND LINE (`D3`). So the permission is
- * read back to one element again, and it is now the process-group head
- * (`turnWorkGroupSummaryClass()`).
+ * read back to one element again: the process-group head. Decision 208
+ * (2026-11-03) retired that head with the fold, so the timeline now pins
+ * nothing at all.
  *
  * What does NOT change, and is why this section is kept rather than deleted:
  * **the condition.** F10's oscillation needs a cycle, and the cycle needs a
@@ -327,30 +328,6 @@ export function turnIntermediateToneClass(): string {
 }
 
 /**
- * Decision 033 D1: the hairline + label that separates the turn's process group
- * from its FINAL reply.
- *
- * It exists because the extraction has to be VISIBLE. The user's own words for
- * the shape were 「确定流式完毕后，输出分割线，把最终输出提出折叠头」 — the divider
- * is named there as part of the mechanism, not as decoration. Without it, a
- * reply that pops out of an already-open group reads as content moving for no
- * reason; with it, the single structural change a turn makes announces itself.
- *
- * Rendered only when a `finalAnswer` section actually exists, which is exactly
- * when `splitTurnWorkGroup` was given `settled: true` AND found an answer with no
- * process after it. So it cannot appear mid-stream, and a settled turn that ends
- * on a tool call or an error notice has none — correctly, since nothing was
- * extracted for it to announce.
- *
- * No `bg-*` and no `sticky`: it is a separator in the flow. Keeping it
- * non-sticky is what leaves `turnWorkGroupSummaryClass()` the timeline's single
- * pinned element, which is the property the rewritten T096 group asserts.
- */
-export function turnFinalAnswerDividerClass(): string {
-  return 'flex min-w-0 items-center gap-2 pt-1 text-small text-muted-foreground';
-}
-
-/**
  * Tier 3 — thinking and terminal rows. Dimmer than the head that summarises them. */
 export function turnProcessToneClass(): string {
   return 'text-foreground-faint';
@@ -413,115 +390,19 @@ export function thoughtBodyMaxHeightClass(): string {
 }
 
 /**
- * Tier 2 — a process group's head: 「已处理 10 个步骤」 plus the chevron, and
- * since T113 (2026-09-21) that is ALL it ever says.
- *
- * It used to carry the turn's own clock and totals too — 「工作中 47 秒 · ↑ 12.0k
- * tokens · ↓ 1.3k tokens · 思考 20 秒」 running, 「已工作 57 秒」 settled — but
- * only on whichever group happened to be last, so two scopes wore the same
- * line. Those figures moved to `turnWorkZoneClass()` below. The SIZE ruling
- * recorded here did not move with them; see that function for why it applies
- * to both.
- *
- * `list-none` + `marker:content-none` strips the `<summary>` disclosure
- * triangle, which points the wrong way in half the browsers that draw it and
- * cannot be styled; the chevron beside the text is the affordance instead.
- * `cursor-pointer` because a `<summary>` does not get one by default.
- *
- * `text-ui` (14px) — raised from `text-meta` (13px) by user decision
- * 2026-09-19, together with `turnHeadClass()` below, which is the same line in
- * its other shape. The two must move together or the turn appears to change
- * type size when a work group forms mid-turn.
- *
- * ⚠️ Registered deviation from `docs/design-system.md`'s Typography table,
- * which files a status line under `meta`. The tier that table describes is
- * passive chrome — timestamps, footers, the app's own status bar — read once or
- * not at all. THIS line is what the reader watches for the whole length of a
- * wait (it is often the only thing on screen for 20s), and at 13px it was
- * reported as too small to be that. It stays a token, not an arbitrary value,
- * so the domain scale still owns the number.
- *
- * `tabular-nums` joined it on 2026-09-18, when the head started carrying a
- * ticking clock: the same reason `turnHeadClass()` below has always had it, and
- * the same defect it prevents — a proportional `1` makes the row re-measure
- * every second underneath a stick-to-bottom follower.
- *
- * ## 2026-09-22 (decision 033 D4, revised same day): pinned, not painted
- *
- * The user's report was 「有时候内容多了根本找不到折叠头」, and the pin is the
- * whole of the answer. The accent face D4 also asked for was BUILT and then
- * withdrawn by the same user on sight: 「还是和工具调用一样吧，工具头也是，这个
- * 背景块太丑了」. So the row keeps `sticky top-0 z-10` and gives up
- * `bg-accent` + `border` + `rounded-sm` + horizontal padding.
- *
- * **`sticky top-0 z-10`** is the direct fix for "cannot find it". This is now
- * the timeline's ONE pinned element (D3 took the pin off the thought header,
- * whose `sticky top-0 z-10` was competing for the same slot), so the stacking
- * argument in the head note is unchanged — the competition is still scoped to
- * the scrollport's own stacking context, and the docks, the jump-to-bottom
- * button and `ChatWorkspace`'s overlay all live outside it.
- *
- * ⚠️ **The pin is legal for exactly one reason**: this row's height does not
- * vary with scroll state. It is the same string pinned and unpinned, and it
- * carries no `scroll-state()` query, no clamp, no max-height. That is F10's
- * second link and its absence is what keeps the oscillation unreachable — see
- * the head note, which also records why the pin cannot simply be moved to an
- * element that clamps itself.
- *
- * **`bg-background` is the one thing the pin still requires, and it is not
- * decoration.** A transparent sticky row lets the rows it is stuck over show
- * THROUGH it, which is the user's own standing ruling against
- * (「吸顶后不得出现内容穿插在折叠按钮后面」). `--background` is the surface the
- * timeline already paints, so the band is opaque without reading as a block —
- * exactly what 「太丑了」 ruled out. Do not "simplify" it away: the defect it
- * prevents only appears while scrolling a long group, which is the one state
- * a static render never enters.
- *
- * No `px-*`: with no visible face left, horizontal padding would only push the
- * head's text out of alignment with the prose column under it.
- *
- * Deliberately NOT added: any `h-*` or `shrink-0`. The row's intrinsic height
- * already satisfies the height rule, and pinning a pixel height would make the
- * head a different height from `turnHeadClass()`, its other shape.
- */
-export function turnWorkGroupSummaryClass(): string {
-  return `sticky top-0 z-10 ${TURN_CLOCK_ROW_BASE} cursor-pointer list-none marker:content-none`;
-}
-
-/**
- * The same row when there is nothing to fold behind it (decision 037).
- *
- * The turn's duration sits at the TOP of the turn in every case — 「什么情况都
- * 让 已工作 x 分 xx 秒 落在顶部」 — but a head only exists where a group folds,
- * and T112 refuses a fold below two steps. This is that line for the turns
- * T112 leaves headless. Every class that has a LOOK comes from the shared
- * constant below, so the two cannot drift: 「那样展示出来的风格都不统一」 is the
- * failure this construction exists to make impossible.
- *
- * ⚠️ **It is NOT pinned, and that is not an oversight.** T096 allows exactly one
- * sticky surface in the timeline (see `chatTimelineLayout.test.ts` and the F10
- * oscillation note at the top of this file), and the pin buys this row nothing:
- * it heads a group of at most one step, so there is no long body to scroll past
- * while keeping the clock in view. `sticky` / `z-10` change nothing about how
- * the line LOOKS when it is not stuck, so the unified appearance is intact.
+ * The running turn's line at its foot (PiLab R1), 「✻ 工作中 47 秒」. Not pinned:
+ * decision 208 left the timeline with no sticky surface at all (the process
+ * head that held T096's one pin went with the fold).
  */
 export function turnClockRowClass(): string {
   return TURN_CLOCK_ROW_BASE;
 }
 
 /**
- * ⚠️ Shared by the two functions above and by nothing else. Edit it, not them:
- * a change made to one call site instead of here is how the folded and the
- * unfolded turn start looking like different products.
- *
- * Holds every class that AFFECTS THE LOOK. The pin (`sticky top-0 z-10`) is
- * deliberately outside it — see `turnClockRowClass` for why only one of the two
- * carries it.
- *
- * Design system v2 §7.3 supersedes the `text-ui` ruling recorded above: the
- * head is the process tier (`text-chat-process`, user-adjustable) at 500 in
- * the muted ink, frameless. The status and work-zone rows below take the same
- * size in the faint ink (§7, turn status line).
+ * The clock row's look. Design system v2 §7.3: the process tier
+ * (`text-chat-process`, user-adjustable) in the muted ink, frameless. The
+ * status and work-zone rows below take the same size in the faint ink (§7,
+ * turn status line).
  */
 // Layout 5c (2026-10-22 screenshot): one faint summary line at regular weight
 // with the `›` at its end; `font-medium` (v2 §7.3) is dropped.
@@ -552,9 +433,8 @@ const TURN_CLOCK_ROW_BASE =
  * row that can wrap can change HEIGHT every second underneath a
  * stick-to-bottom follower.
  *
- * `text-ui` for the reason recorded on `turnWorkGroupSummaryClass()` above,
- * including the recorded deviation: this row and that one are the same line in
- * two shapes and share one size.
+ * The process tier, like the clock row: this row and that one are the same
+ * line in two states and share one size.
  */
 export function turnHeadClass(): string {
   return 'flex min-w-0 items-center gap-1.5 text-chat-process tabular-nums text-foreground-faint';
@@ -572,8 +452,8 @@ export function turnHeadClass(): string {
  *    head to 14px for: it is what the reader watches for the whole length of a
  *    wait, and 13px was reported as too small to be that. The registered
  *    deviation from `docs/design-system.md`'s Typography table (which files a
- *    status line under `meta`) is recorded on `turnWorkGroupSummaryClass()` and
- *    covers this row for the same reason. The three must move together or the
+ *    status line under `meta`) was recorded on the process head (retired by
+ *    decision 208) and covers this row for the same reason. The three must move together or the
  *    turn appears to change type size between its head and its tail.
  *  - `tabular-nums` — the row ticks once a second while the turn runs, and a
  *    proportional `1` re-measures the row underneath a stick-to-bottom
@@ -888,4 +768,152 @@ export function userBubbleFoldClass(folded: boolean): string {
  */
 export function turnChangeCardClass(): string {
   return 'flex w-full max-w-md min-w-0 items-center gap-2.5 rounded-md border border-border-soft bg-surface-2 px-2.5 py-1 text-left transition-colors duration-150 ease-out hover:border-border-strong focus-ring';
+}
+
+/*
+ * ## Decision 208: the two transcript styles (user ruling 2026-11-03)
+ *
+ * Terminal style is Claude Code's CLI: a bullet column, every block a blank
+ * line apart. Its rhythm keeps the ladder the standard tiers keep (between
+ * turns > prompt to first block > between blocks): 32 > 24 > 20, the 20 being
+ * the CLI's one blank line.
+ *
+ * Its type is the app's own sans (user, 2026-11-03: the mono stack read 「怪怪
+ * 的」 next to Claude's desktop app). Measured on Windows, a mono line set its
+ * Latin, digits and spaces in Cascadia Mono and its Chinese in YaHei UI, so
+ * every gap around a number was a mono space and the two scripts never sat
+ * together. Mono stays where the text is code: inline code, code blocks, and a
+ * command's output under `⎿`.
+ *
+ * Desktop style is Claude Code's desktop app: each run of steps one muted line
+ * that opens to the rows. It uses the standard tiers.
+ */
+
+/** Terminal style: between turns, 32px. */
+export function terminalReadingColumnSpacingClass(): string {
+  return 'space-y-8';
+}
+
+/** Terminal style: the turn's `<section>`; keeps `group/turn` for the hover strip. */
+export function terminalChatTurnClass(): string {
+  return 'group/turn flex flex-col gap-6';
+}
+
+/** Terminal style: between blocks, the CLI's blank line (20px). Merged over `turnBodyClass()`. */
+export function terminalBlockGapClass(): string {
+  return 'gap-5';
+}
+
+/** One terminal block: the bullet column, then the content, on the first line's baseline. */
+export function terminalBlockClass(): string {
+  return 'flex min-w-0 items-baseline';
+}
+
+/**
+ * The bullet column: two mono cells at the body size, so `2ch` is one width in
+ * every block whatever the content's own size. It holds only the drawn mark.
+ */
+export function terminalGutterClass(): string {
+  return `w-[2ch] shrink-0 select-none font-mono text-chat-body ${CHAT_PROSE_LEADING}`;
+}
+
+/**
+ * Terminal style prose: the app's sans, as everywhere else, and inline code as
+ * coloured ink with no chip (user ruling: terminal style only); the code keeps
+ * its own mono face and size (`CodeInline`).
+ */
+export function terminalProseClass(): string {
+  return 'min-w-0 flex-1 [&_[data-slot=code-inline]]:bg-transparent [&_[data-slot=code-inline]]:px-0 [&_[data-slot=code-inline]]:text-inline-code';
+}
+
+/**
+ * A step's line, `Bash(检查改动)`: inline flow, so a long description wraps
+ * under itself rather than truncating, as the CLI's does.
+ *
+ * User, 2026-11-03: in the body ink the steps weighed as much as the answer
+ * (「主题不明显」), so a step reads in the faint ink thinking uses, with the
+ * tool's name one rung up (design system v2 §7.4: name in the secondary ink,
+ * argument in the faint one). Faint is about 3.2:1 on the canvas, so hovering
+ * a line brings it back to the body ink to read. The bullets keep their colours
+ * and a failure its red: those are what a scan looks for.
+ */
+export function terminalStepLineClass(): string {
+  return `group/step block w-full rounded-xs text-left text-chat-body ${CHAT_PROSE_LEADING} wrap-anywhere text-foreground-faint hover:bg-fill-ghost-hover hover:text-foreground focus-ring`;
+}
+
+/**
+ * The tool's name on a step line: bold, in the secondary ink one rung above
+ * the line; the body ink on hover. User, 2026-11-03: the bold went while the
+ * line was mono and came back, kept, once it took the app's sans.
+ */
+export function terminalStepLabelClass(): string {
+  return 'font-semibold text-muted-foreground group-hover/step:text-foreground';
+}
+
+/**
+ * What sits between a step's parentheses: the line's own ink and face. A path
+ * or command too — set in mono (D25's rule for identifiers in sans text), it
+ * read a weight heavier than the line around it (Cascadia Mono at the code
+ * size), and the step line is one quiet line.
+ */
+export function terminalStepArgClass(): string {
+  return 'text-inherit';
+}
+
+/**
+ * The `⎿` lines under a step, at the process size; faint like the step above
+ * them, or red for a failure or refusal, or the warning ink for an unknown
+ * outcome. The row is mono, for the `⎿` and a command's output; a line that is
+ * a note rather than output (a refusal's reason, a warning, 「运行中…」) sets
+ * its words in sans (`terminalResultNoteClass`).
+ */
+export function terminalResultClass(tone: 'muted' | 'bad' | 'unknown'): string {
+  const ink =
+    tone === 'bad'
+      ? 'text-destructive'
+      : tone === 'unknown'
+        ? 'text-warning'
+        : 'text-foreground-faint';
+  return `flex min-w-0 gap-2 font-mono text-chat-process leading-normal ${ink}`;
+}
+
+/** The words of a `⎿` line that is a note, not output: the app's sans. */
+export function terminalResultNoteClass(): string {
+  return 'font-sans';
+}
+
+/** A tool group's steps in terminal style: each a block, a blank line apart. */
+export function terminalStepStackClass(): string {
+  return 'flex flex-col gap-5';
+}
+
+/**
+ * Terminal style thinking, `∴ Thought for 12s` (user rulings 2026-11-03): one
+ * dim line where the thinking happened, as the CLI's transcript draws it; the
+ * whole line opens to the text.
+ */
+export function terminalThoughtLineClass(): string {
+  return `block w-full rounded-xs text-left text-chat-body ${CHAT_PROSE_LEADING} italic text-foreground-faint hover:bg-fill-ghost-hover hover:text-muted-foreground focus-ring`;
+}
+
+/**
+ * Terminal style: the running turn's foot line, 「✻ 跑测试… (12 秒 · esc 中断)」,
+ * as the comparison mockup's ① draws it — the star column, then what the turn
+ * is doing in the brand ink (the 「思考中」 hint, design system v2 §1 rule 7).
+ */
+export function terminalLiveLineClass(): string {
+  return `flex min-w-0 items-baseline text-chat-body ${CHAT_PROSE_LEADING} text-primary`;
+}
+
+/**
+ * Desktop style: a run's one line. Muted ink at the process size, regular
+ * weight, never pinned; `list-none` because it is a `<summary>`.
+ */
+export function stepRunSummaryClass(): string {
+  return 'flex w-fit max-w-full min-w-0 cursor-pointer list-none items-center gap-1.5 rounded-xs text-chat-process leading-normal text-muted-foreground marker:content-none hover:bg-fill-ghost-hover focus-ring';
+}
+
+/** Desktop style: the opened run, its rows behind one hairline. */
+export function stepRunPanelClass(): string {
+  return 'mt-1 ml-0.5 border-l border-border-soft pl-3.5';
 }

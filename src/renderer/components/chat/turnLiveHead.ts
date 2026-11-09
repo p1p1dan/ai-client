@@ -102,3 +102,35 @@ export function formatTurnLiveLine(
   const clock = turnElapsedText(t, elapsed);
   return `✻ ${phaseVerb(t, phase)}${clock ? ` ${clock}` : ''}`;
 }
+
+/**
+ * Decision 208, terminal style (user ruling 2026-11-03, the comparison
+ * mockup's ①): what the live line says the turn is doing — the running step in
+ * its own words (`stepWords`: what the step's parentheses say), else the phase
+ * — always ending on 「…」, as the CLI's spinner line does.
+ */
+export function formatTerminalLiveActivity(
+  t: Translate,
+  phase: TurnLivePhase,
+  stepWords: string | null
+): string {
+  switch (phase.kind) {
+    case 'connecting':
+      return t('Connecting to the chat engine…');
+    case 'thinking':
+      return `${t('Thinking')}…`;
+    case 'replying':
+      return `${t('Replying')}…`;
+    case 'tool':
+      return `${stepWords ?? t(phase.verb)}…`;
+    case 'working':
+      return `${t('Working')}…`;
+  }
+}
+
+/** The live line's closing words: 「(12 秒 · esc 中断)」, or 「(esc 中断)」 with no clock. */
+export function formatTerminalLiveTail(t: Translate, elapsed: WorkedForParts | null): string {
+  const clock = turnElapsedText(t, elapsed);
+  const interrupt = t('esc to interrupt');
+  return `(${clock ? `${clock} · ${interrupt}` : interrupt})`;
+}

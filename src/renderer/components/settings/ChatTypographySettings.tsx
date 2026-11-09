@@ -1,3 +1,4 @@
+import { isChatTranscriptStyle } from '@shared/types/chatTranscriptStyle';
 import {
   CHAT_BODY_FONT_SIZE_MAX,
   CHAT_BODY_FONT_SIZE_MIN,
@@ -7,6 +8,7 @@ import {
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
@@ -82,6 +84,8 @@ export function ChatTypographySection() {
     setChatProcessFontSize,
     displaySerifEnabled,
     setDisplaySerifEnabled,
+    chatTranscriptStyle,
+    setChatTranscriptStyle,
   } = useSettingsStore();
   const { t } = useI18n();
 
@@ -217,6 +221,28 @@ export function ChatTypographySection() {
             aria-label={t('Process text size')}
           />
           <span className="text-ui text-muted-foreground">px</span>
+        </div>
+      </SettingsRow>
+      {/* Decision 208: how the transcript draws a turn's steps. */}
+      <SettingsRow>
+        <span className="text-ui font-medium">{t('Conversation display')}</span>
+        <div className="min-w-0 space-y-1.5">
+          <ToggleGroup
+            aria-label={t('Conversation display')}
+            value={[chatTranscriptStyle]}
+            onValueChange={(value) => {
+              const next = (value as string[])[0];
+              if (isChatTranscriptStyle(next)) setChatTranscriptStyle(next);
+            }}
+          >
+            <ToggleGroupItem value="terminal">{t('Terminal style')}</ToggleGroupItem>
+            <ToggleGroupItem value="desktop">{t('Desktop style')}</ToggleGroupItem>
+          </ToggleGroup>
+          <p className="text-small text-muted-foreground">
+            {t(
+              'Terminal style lists every step with its result; desktop style folds each run of steps into one line.'
+            )}
+          </p>
         </div>
       </SettingsRow>
       <div className="flex items-center justify-between gap-3">

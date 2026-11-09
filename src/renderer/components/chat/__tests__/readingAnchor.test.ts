@@ -74,9 +74,18 @@ describe('[PILAB-R1-11.4 / 02.6] inner scroll boxes and reduced motion', () => {
   });
 
   it('chevrons and the prompt rail honour prefers-reduced-motion', () => {
+    // Decision 208: the process head's chevron went with the fold; the desktop
+    // style's run chevron (ToolRows.tsx) took its place.
     expect(
       read('MessageTimeline.tsx').match(/duration-150 motion-reduce:transition-none/g)
-    ).toHaveLength(3);
+    ).toHaveLength(2);
+    expect(read('ToolRows.tsx')).toContain('duration-150 motion-reduce:transition-none');
     expect(read('PromptNavRail.tsx')).toContain("behavior: reduceMotion ? 'auto' : 'smooth'");
+  });
+
+  it('decision 208: the blinking bullet and the shimmer stop for reduced motion', () => {
+    const statusIcon = read(path.join('..', 'ui', 'status-icon.tsx'));
+    expect(statusIcon).toContain('animate-blink motion-reduce:animate-none');
+    expect(statusIcon).toContain('before:animate-star motion-reduce:before:animate-none');
   });
 });

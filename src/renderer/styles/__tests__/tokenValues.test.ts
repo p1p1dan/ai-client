@@ -241,3 +241,48 @@ describe('--font-math (FB9): a system fallback chain, never a bundled face', () 
     expect(source.split('var(--font-math)').length - 1).toBe(1);
   });
 });
+
+/**
+ * Decision 208: the terminal transcript's inline code ink, the running bullet's
+ * blink and the desktop transcript's shimmer. The ink is a literal pair (light
+ * 5:1 on the canvas, so the preview's #5769f7 at 4.3:1 was darkened), alpha-free
+ * so the background-image mode cannot thin it, and the sync-terminal mode
+ * repoints and clears it with the rest of the palette.
+ */
+describe('decision 208: transcript style tokens', () => {
+  const themeBlock = extractBlock('@theme');
+  const ghostty = readFileSync(path.join(__dirname, '..', '..', 'lib', 'ghosttyTheme.ts'), 'utf8');
+
+  it('--inline-code is one literal per theme, with no alpha', () => {
+    expect(rootBlock).toContain('--inline-code: #4b5de8;');
+    expect(darkBlock).toContain('--inline-code: #b1b9f9;');
+    expect(source.split('--inline-code:').length - 1).toBe(2);
+  });
+
+  it('@theme bridges it, so Tailwind emits text-inline-code', () => {
+    expect(themeBlock).toContain('--color-inline-code: var(--inline-code);');
+  });
+
+  it('the follow-terminal-colours mode sets it and clears it', () => {
+    expect(ghostty).toMatch(
+      /setProperty\('--inline-code', isDark \? theme\.brightBlue : theme\.blue\)/
+    );
+    expect(ghostty).toMatch(/'--ring',\s*'--inline-code',\s*\]/);
+  });
+
+  it('the blink is a two-step on/off and the shimmer stops for reduced motion', () => {
+    expect(themeBlock).toContain('--animate-blink: blink 1.2s steps(1) infinite;');
+    expect(themeBlock).toMatch(/@keyframes blink \{/);
+    const shimmer = source.slice(source.indexOf('@utility text-shimmer {'));
+    expect(shimmer).toMatch(/prefers-reduced-motion: reduce[\s\S]*?animation: none;/);
+    expect(source).toMatch(/@keyframes shimmer \{/);
+  });
+
+  it('the live line star steps through the CLI spinner glyphs and back', () => {
+    expect(themeBlock).toContain('--animate-star: star 1.2s steps(1) infinite;');
+    const keyframes = themeBlock.slice(themeBlock.indexOf('@keyframes star {'));
+    for (const glyph of ['·', '✢', '✳', '✶', '✻', '✽']) {
+      expect(keyframes).toContain(`content: "${glyph}";`);
+    }
+  });
+});

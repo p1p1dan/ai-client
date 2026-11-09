@@ -91,6 +91,7 @@ describe('Appearance settings survive a restart', () => {
     s.setBackgroundBrightness(1.2);
     s.setBackgroundSaturation(0.8);
     s.setBackgroundSizeMode('contain');
+    s.setChatTranscriptStyle('desktop');
     const expected = {
       theme: 'system',
       chatFontFamily: 'Fira Sans',
@@ -108,11 +109,25 @@ describe('Appearance settings survive a restart', () => {
       backgroundBrightness: 1.2,
       backgroundSaturation: 0.8,
       backgroundSizeMode: 'contain',
+      chatTranscriptStyle: 'desktop',
     };
     await vi.waitFor(() => expect(persistedState()).toMatchObject(expected));
 
     const second = await launch();
     expect(second.getState()).toMatchObject(expected);
+  });
+
+  it('decision 208: an unknown persisted transcript style reads as the terminal style', async () => {
+    disk.value = { 'aiclient-settings': { state: { chatTranscriptStyle: 'classic' }, version: 0 } };
+    const store = await launch();
+    expect(store.getState().chatTranscriptStyle).toBe('terminal');
+  });
+
+  it('decision 208: the setter ignores a value that is not a transcript style', async () => {
+    const store = await launch();
+    store.getState().setChatTranscriptStyle('desktop');
+    store.getState().setChatTranscriptStyle('classic' as never);
+    expect(store.getState().chatTranscriptStyle).toBe('desktop');
   });
 
   it('an unrecognised persisted theme falls back to the default instead of being applied', async () => {

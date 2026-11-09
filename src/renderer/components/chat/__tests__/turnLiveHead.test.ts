@@ -2,7 +2,13 @@ import { englishTranslate, zhTranslations } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import type { TurnItem } from '../chatTurn';
 import type { ToolRun } from '../toolCard';
-import { deriveTurnLivePhase, formatTurnLiveLine, turnElapsedText } from '../turnLiveHead';
+import {
+  deriveTurnLivePhase,
+  formatTerminalLiveActivity,
+  formatTerminalLiveTail,
+  formatTurnLiveLine,
+  turnElapsedText,
+} from '../turnLiveHead';
 import type { TurnCurrentAction } from '../turnProcessFold';
 
 // S-6 feedback 11c (user, 2026-10-17): the running turn's one line, verb first.
@@ -120,5 +126,39 @@ describe('formatTurnLiveLine', () => {
       '✻ Replying 3s'
     );
     expect(turnElapsedText(englishTranslate, null)).toBeNull();
+  });
+});
+
+/**
+ * Decision 208, terminal style (user ruling 2026-11-03, the comparison
+ * mockup's ①): 「✻ 跑测试… (12 秒 · esc 中断)」 — the running step in its own
+ * words, how long, and how to stop it.
+ */
+describe('[D208-LIVE] the terminal style live line', () => {
+  it('names the running step in its own words, else the phase', () => {
+    expect(formatTerminalLiveActivity(zh, { kind: 'tool', verb: 'Running' }, '跑测试')).toBe(
+      '跑测试…'
+    );
+    // A step with nothing to say for itself falls back to its verb.
+    expect(formatTerminalLiveActivity(zh, { kind: 'tool', verb: 'Running' }, null)).toBe(
+      `${zh('Running')}…`
+    );
+    expect(formatTerminalLiveActivity(zh, { kind: 'thinking', promptChars: 0 }, null)).toBe(
+      '思考中…'
+    );
+    expect(formatTerminalLiveActivity(zh, { kind: 'replying', replyChars: 3 }, null)).toBe(
+      '回复中…'
+    );
+    expect(formatTerminalLiveActivity(zh, { kind: 'working' }, null)).toBe('工作中…');
+    // The connecting key already ends on its ellipsis: never two.
+    expect(formatTerminalLiveActivity(zh, { kind: 'connecting' }, null)).toBe(
+      zh('Connecting to the chat engine…')
+    );
+  });
+
+  it('closes on how long and how to stop it, and on the stop alone with no clock', () => {
+    expect(formatTerminalLiveTail(zh, { minutes: 0, seconds: 12 })).toBe('(12 秒 · esc 中断)');
+    expect(formatTerminalLiveTail(zh, { minutes: 1, seconds: 5 })).toBe('(1 分 5 秒 · esc 中断)');
+    expect(formatTerminalLiveTail(zh, null)).toBe('(esc 中断)');
   });
 });

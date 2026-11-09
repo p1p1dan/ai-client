@@ -50,7 +50,6 @@ vi.mock('../useResolvedSessionModel', () => ({ useResolvedSessionModel: () => ()
 vi.mock('../sessionIndex/useResumeSession', () => ({ useResumeSession: () => () => undefined }));
 
 import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
-import { turnClockRowClass, turnWorkGroupSummaryClass } from '../chatTimelineLayout';
 import { MessageTimeline } from '../MessageTimeline';
 
 const SENT_AT = Date.UTC(2026, 8, 22, 9, 0, 0);
@@ -206,30 +205,8 @@ it('[CLOCK-BILL-1] every shape of turn states its duration once, in the footer a
   }
 });
 
-/**
- * One row, one look. 「那样展示出来的风格都不统一」 is the failure this pins, so
- * the assertion is on the CLASS SETS and not on a screenshot: every token the
- * plain row carries is a token the fold head carries, and the difference is a
- * closed, named list.
- *
- * Three of the five extras are what a `<summary>` needs to stop looking like a
- * `<summary>`. The other two are the pin, which T096 grants to exactly one
- * surface in the timeline and which changes nothing about the line's
- * appearance — see `turnClockRowClass`.
- */
-it('[CLOCK-TOP-3] the unfolded clock row wears the folded head class, minus a closed list', () => {
-  const summary = turnWorkGroupSummaryClass().split(' ');
-  const plain = turnClockRowClass().split(' ');
-  expect(plain.every((token) => summary.includes(token))).toBe(true);
-  expect(summary.filter((token) => !plain.includes(token)).sort()).toEqual([
-    'cursor-pointer',
-    'list-none',
-    'marker:content-none',
-    'sticky',
-    'top-0',
-    'z-10',
-  ]);
-});
+// [CLOCK-TOP-3] retired with the fold head (decision 208): the clock row has
+// no folded twin left to match.
 
 it('[CLOCK-ONCE-1] a turn prints its duration once', async () => {
   const { container, unmount } = await renderHistory(historyTurn(true));

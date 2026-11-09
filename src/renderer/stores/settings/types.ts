@@ -2,6 +2,7 @@ import type { Locale } from '@shared/i18n';
 import type { ChatAgentDefaults } from '@shared/models/chatAgentDefaults';
 import type { ConnectionProfile, GitHostMapping, ProxySettings, ShellConfig } from '@shared/types';
 import type { CommonAISettings } from '@shared/types/ai';
+import type { ChatTranscriptStyle } from '@shared/types/chatTranscriptStyle';
 import type { PromptCacheTtl } from '@shared/types/promptCacheTtl';
 import type { RequestUserAgentMode } from '@shared/types/requestUserAgent';
 
@@ -337,6 +338,11 @@ export interface SettingsState {
    * reset has not run yet; see `migrateSettings`.
    */
   chatTypographyScaleVersion: number;
+  /**
+   * Decision 208: how the transcript draws a turn's steps, `terminal` (the
+   * CLI's bullets and `⎿` lines) or `desktop` (one summary line per run).
+   */
+  chatTranscriptStyle: ChatTranscriptStyle;
 
   // AI Features
   commitMessageGenerator: CommitMessageGeneratorSettings;
@@ -457,6 +463,8 @@ export interface SettingsState {
    */
   setChatBodyFontSize: (size: number) => void;
   setChatProcessFontSize: (size: number) => void;
+  /** Decision 208: ignores a value that is not one of `CHAT_TRANSCRIPT_STYLES`. */
+  setChatTranscriptStyle: (style: ChatTranscriptStyle) => void;
 
   // Setters - AI Features
   setCommitMessageGenerator: (settings: Partial<CommitMessageGeneratorSettings>) => void;

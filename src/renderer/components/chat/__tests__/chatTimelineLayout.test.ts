@@ -7,6 +7,13 @@ import * as layout from '../chatTimelineLayout';
 import {
   chatTurnClass,
   readingColumnSpacingClass,
+  stepRunPanelClass,
+  stepRunSummaryClass,
+  terminalBlockClass,
+  terminalBlockGapClass,
+  terminalChatTurnClass,
+  terminalProseClass,
+  terminalReadingColumnSpacingClass,
   turnActionsInnerClass,
   turnActionsSlotClass,
   turnAnswerToneClass,
@@ -17,7 +24,6 @@ import {
   turnProcessShellClass,
   turnProcessToneClass,
   turnStatusToneClass,
-  turnWorkGroupSummaryClass,
   userBubbleAwaitingClass,
   userBubbleClass,
   userBubbleRowClass,
@@ -134,70 +140,52 @@ describe('T096: one pinned surface, and its height never moves with the scroll',
    * here — which is the half of the rule that "the turn chrome is clean" does
    * not cover.
    */
-  it('the process head is the only sticky surface in the timeline', () => {
+  /**
+   * Decision 208: the pinned process head went with the fold (steps render in
+   * place since PiLab R1, and neither transcript style folds a turn), so the
+   * count T096 held at one is now zero. A new pin has to come back through
+   * this test, with the F10 height rule above.
+   */
+  it('decision 208: nothing in the timeline is pinned', () => {
     const pinned = Object.entries(layout)
       .filter(([, value]) => typeof value === 'function' && value.length === 0)
       .map(([name, value]) => [name, (value as () => string)()] as const)
       .filter(([, cls]) => /(?:^|\s)(?:sticky|fixed)(?:\s|$)/.test(cls))
       .map(([name]) => name);
-    expect(pinned).toEqual(['turnWorkGroupSummaryClass']);
+    expect(pinned).toEqual([]);
 
     // …and no inline class string on the chain pins anything either. Every file
-    // is scanned with comments blanked, so the prose above (and in the modules
-    // themselves) explaining WHY sticky is allowed cannot satisfy the scan.
-    for (const relative of ['ToolRows.tsx', 'MessageTimeline.tsx', 'ReadingColumn.tsx']) {
+    // is scanned with comments blanked, so prose about the old pin cannot
+    // satisfy the scan.
+    for (const relative of [
+      'ToolRows.tsx',
+      'MessageTimeline.tsx',
+      'ReadingColumn.tsx',
+      'TranscriptBlocks.tsx',
+    ]) {
       const offenders = classTokens(readSource(relative)).filter((token) => PIN_TOKEN.test(token));
-      expect(
-        offenders,
-        `${relative}: the pin belongs in turnWorkGroupSummaryClass(), not in a class literal`
-      ).toEqual([]);
+      expect(offenders, `${relative}: the timeline pins nothing`).toEqual([]);
     }
-    // The one legal reference: `MessageTimeline.tsx` reaches the pin by calling
-    // the function above, on the process head's `<summary>` and nowhere else.
-    const timeline = readSource('MessageTimeline.tsx');
-    expect(timeline).toContain('className={turnWorkGroupSummaryClass()}');
-    expect(timeline.split('turnWorkGroupSummaryClass()').length - 1).toBe(1);
+    expect(readSource('MessageTimeline.tsx')).not.toContain('stepRunSummaryClass');
     // …and the retired pin left no caller behind on the thinking row.
     expect(readSource('ToolRows.tsx')).not.toContain('thoughtFoldHeaderClass');
   });
 
   /**
-   * The user's ruling was 「不要透视效果，吸顶后不得出现内容穿插在折叠按钮后面」.
-   * A `backdrop-blur` is still see-through, and an `/NN` alpha suffix is
-   * see-through by definition — so both are banned, and the background has to
-   * be a theme token rather than a literal colour so the two themes stay one
-   * decision.
+   * Decision 208, desktop style: a run's line is the desktop app's — one muted
+   * line, no face of its own (the user cut the old head's `bg-accent`, border
+   * and rounding on sight, 「这个背景块太丑了」), and nothing that could resize
+   * it as the reader scrolls.
    */
-  it('the sticky process head has an opaque themed background and no backdrop filter', () => {
-    const cls = turnWorkGroupSummaryClass();
-    expect(cls).toContain('bg-background');
-    expect(cls, 'a translucent background IS the defect, not the feature').not.toMatch(
-      /bg-\S+\/\d/
-    );
-    expect(cls, 'a blur is still see-through').not.toMatch(/backdrop-|blur-/);
-    expect(cls, 'no raw colour: the header must follow the theme token').not.toMatch(
-      /bg-(?:white|black|\[)/
-    );
-    // Pinned above its own body, and nothing else — see the function's note on
-    // why the competition is scoped to the scrollport's stacking context.
-    expect(cls).toMatch(/(?:^|\s)sticky(?:\s|$)/);
-    expect(cls).toMatch(/(?:^|\s)top-0(?:\s|$)/);
-    expect(cls).toMatch(/(?:^|\s)z-10(?:\s|$)/);
-
-    // The height half of the T096 rule, as a prohibition. Anything here that
-    // could resize the header — a clamp, a height cap, a scroll-state query —
-    // re-opens F10 even though the class itself looks harmless.
-    for (const banned of ['line-clamp', 'max-h-', 'min-h-', 'h-[', 'scroll-state']) {
-      expect(cls, `height must not vary under the pin: ${banned}`).not.toContain(banned);
-    }
-    // No face of its own. D4 shipped `bg-accent` + border + rounding and the
-    // user cut all three on sight (「这个背景块太丑了」); `bg-background` stays
-    // because a transparent sticky row shows the content sliding under it,
-    // which is the ruling quoted above. Anything louder is a regression of the
-    // second ruling, not of the first.
-    expect(cls, 'the head is pinned, not painted').not.toContain('bg-accent');
+  it('decision 208: the desktop run line is a plain line, never pinned or painted', () => {
+    const cls = stepRunSummaryClass();
+    expect(cls).not.toMatch(/(?:^|\s)(?:sticky|fixed)(?:\s|$)/);
+    expect(cls).not.toMatch(/(?:^|\s)z-\d+(?:\s|$)/);
+    expect(cls, 'only the ghost hover, never a face').not.toMatch(/(?:^|\s)bg-/);
     expect(cls).not.toMatch(/(?:^|\s)border(?:-|\s|$)/);
-    expect(cls).not.toMatch(/(?:^|\s)rounded-/);
+    for (const banned of ['line-clamp', 'max-h-', 'min-h-', 'h-[', 'scroll-state']) {
+      expect(cls, `height must not vary: ${banned}`).not.toContain(banned);
+    }
   });
 
   /**
@@ -230,7 +218,13 @@ describe('T096: one pinned surface, and its height never moves with the scroll',
       ['turnBodyClass', turnBodyClass()],
       ['turnProcessShellClass', turnProcessShellClass()],
       ['turnProcessToneClass', turnProcessToneClass()],
-      ['turnWorkGroupSummaryClass', turnWorkGroupSummaryClass()],
+      ['stepRunSummaryClass', stepRunSummaryClass()],
+      ['stepRunPanelClass', stepRunPanelClass()],
+      ['terminalReadingColumnSpacingClass', terminalReadingColumnSpacingClass()],
+      ['terminalChatTurnClass', terminalChatTurnClass()],
+      ['terminalBlockGapClass', terminalBlockGapClass()],
+      ['terminalBlockClass', terminalBlockClass()],
+      ['terminalProseClass', terminalProseClass()],
     ];
     for (const [name, cls] of chain) {
       for (const [property, pattern] of CLIPPING_PATTERNS) {
@@ -335,6 +329,70 @@ describe('turn spacing arithmetic (F-B9)', () => {
     expect(within).toBe(10);
     expect(between).toBeGreaterThan(toTurnLine);
     expect(toTurnLine).toBeGreaterThan(within);
+  });
+
+  /**
+   * Decision 208: the terminal style spends the CLI's blank line (20px) between
+   * blocks, so its other two beats move up to keep the ladder: 32 > 24 > 20.
+   */
+  it('decision 208: the terminal style keeps the ladder — 32 between turns, 24 to the first block, 20 between blocks', () => {
+    const between = spacingPx(terminalReadingColumnSpacingClass(), 'space-y');
+    const toFirst = spacingPx(terminalChatTurnClass(), 'gap');
+    const within = spacingPx(cn(turnBodyClass(), terminalBlockGapClass()), 'gap');
+    expect([between, toFirst, within]).toEqual([32, 24, 20]);
+    expect(between).toBeGreaterThan(toFirst);
+    expect(toFirst).toBeGreaterThan(within);
+    // The hover strip's scope survives the swap.
+    expect(terminalChatTurnClass()).toContain('group/turn');
+  });
+
+  /**
+   * Decision 208 (user, 2026-11-03: 「主题不明显」): the answer is the one thing
+   * in the body ink. A step reads in the faint ink thinking uses, its tool name
+   * one rung up (design system v2 §7.4), and the body ink comes back on hover;
+   * its `⎿` lines are faint too, but a failure keeps its red.
+   */
+  it('decision 208: the terminal style draws steps below the prose, in the faint ink', () => {
+    const line = layout.terminalStepLineClass();
+    expect(line).toContain('text-foreground-faint');
+    expect(line).toContain('hover:text-foreground');
+    expect(line).not.toMatch(/(^| )text-foreground( |$)/);
+    expect(layout.terminalStepLabelClass()).toContain('text-muted-foreground');
+    expect(layout.terminalStepLabelClass()).toContain('group-hover/step:text-foreground');
+    expect(layout.terminalStepArgClass()).toBe('text-inherit');
+    expect(layout.terminalResultClass('muted')).toContain('text-foreground-faint');
+    expect(layout.terminalResultClass('bad')).toContain('text-destructive');
+    expect(layout.terminalThoughtLineClass()).toContain('text-foreground-faint');
+    // The prose sets no ink of its own: it keeps the body ink.
+    expect(terminalProseClass()).not.toMatch(/(^| )text-(foreground|muted)/);
+    // User, 2026-11-03: the tool's name is bold again, now in the sans.
+    expect(layout.terminalStepLabelClass()).toContain('font-semibold');
+  });
+
+  /**
+   * Decision 208 (user, 2026-11-03: the mono stack read 「怪怪的」 next to Claude's
+   * desktop app): measured on Windows, a mono line put its Latin, digits and
+   * spaces in Cascadia Mono and its Chinese in YaHei UI. The terminal style's
+   * words take the app's sans; mono is left to code — the mark column (a drawn
+   * glyph), a command's output under `⎿`, and inline code's own face.
+   */
+  it('decision 208: the terminal style sets its words in the app’s sans, and only code in mono', () => {
+    for (const [name, value] of [
+      ['terminalProseClass', terminalProseClass()],
+      ['terminalStepLineClass', layout.terminalStepLineClass()],
+      ['terminalStepLabelClass', layout.terminalStepLabelClass()],
+      ['terminalStepArgClass', layout.terminalStepArgClass()],
+      ['terminalThoughtLineClass', layout.terminalThoughtLineClass()],
+      ['terminalLiveLineClass', layout.terminalLiveLineClass()],
+    ] as const) {
+      expect(value, name).not.toContain('font-mono');
+    }
+    // Inline code keeps its own face and size (`CodeInline`), no longer forced
+    // to the prose's.
+    expect(terminalProseClass()).not.toContain('font-size:inherit');
+    expect(layout.terminalResultClass('muted')).toContain('font-mono');
+    expect(layout.terminalResultNoteClass()).toBe('font-sans');
+    expect(layout.terminalGutterClass()).toContain('font-mono');
   });
 });
 
@@ -481,16 +539,14 @@ describe('turnHeadClass', () => {
    */
   it('shares one size token with the work-group head, and it is the process tier', () => {
     expect(turnHeadClass()).toContain('text-chat-process');
-    expect(turnWorkGroupSummaryClass()).toContain('text-chat-process');
+    expect(stepRunSummaryClass()).toContain('text-chat-process');
     expect(turnHeadClass(), 'the old tiers must not linger on one of the pair').not.toMatch(
       /(?:^|\s)text-(?:ui|meta)(?:\s|$)/
     );
-    expect(turnWorkGroupSummaryClass()).not.toMatch(/(?:^|\s)text-(?:ui|meta)(?:\s|$)/);
+    expect(stepRunSummaryClass()).not.toMatch(/(?:^|\s)text-(?:ui|meta)(?:\s|$)/);
     // Layout 5c (2026-10-22 screenshot): the folded process line is one faint
     // summary at regular weight (§7.3's 500 weight dropped).
-    expect(turnWorkGroupSummaryClass()).not.toMatch(
-      /(?:^|\s)font-(?:medium|semibold|bold)(?:\s|$)/
-    );
+    expect(stepRunSummaryClass()).not.toMatch(/(?:^|\s)font-(?:medium|semibold|bold)(?:\s|$)/);
   });
 });
 
@@ -726,7 +782,7 @@ describe('reading ladder (2026-09-18)', () => {
   it('[LADDER-1] the three rungs are pairwise different colours, and all three are tokens', () => {
     const answer = turnAnswerToneClass();
     const process = turnProcessToneClass();
-    const head = turnWorkGroupSummaryClass();
+    const head = stepRunSummaryClass();
     // Written as three CONTAINMENT claims rather than "3 distinct `text-*`
     // tokens": the head also carries `text-ui`, a SIZE, so a naive
     // first-match extraction reads the size as the colour and the whole check
@@ -749,7 +805,7 @@ describe('reading ladder (2026-09-18)', () => {
     expect(turnProcessToneClass()).toBe('text-foreground-faint');
     // The head sits between them, on the same tier as the status row it
     // replaced at the end of a completed turn.
-    expect(turnWorkGroupSummaryClass()).toContain('text-muted-foreground');
+    expect(stepRunSummaryClass()).toContain('text-muted-foreground');
   });
 
   /**
@@ -776,7 +832,7 @@ describe('reading ladder (2026-09-18)', () => {
   });
 
   it('[LADDER-3] the group head strips the native disclosure marker', () => {
-    const head = turnWorkGroupSummaryClass();
+    const head = stepRunSummaryClass();
     // Without both of these a `<summary>` draws a triangle that cannot be
     // styled and points the wrong way in half the browsers that draw one.
     expect(head).toContain('list-none');
@@ -796,7 +852,7 @@ describe('reading ladder (2026-09-18)', () => {
       chatTurnClass(),
       turnBodyClass(),
       turnProcessShellClass(),
-      turnWorkGroupSummaryClass(),
+      stepRunSummaryClass(),
       turnAnswerToneClass(),
       turnProcessToneClass(),
     ]) {

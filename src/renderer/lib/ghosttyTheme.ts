@@ -336,6 +336,9 @@ export function applyTerminalThemeToApp(themeName: string, syncDarkMode = true):
 
   // Ring - accent based
   root.style.setProperty('--ring', isDark ? theme.brightBlue : theme.blue);
+
+  // Decision 208: the terminal transcript's inline code takes the terminal's own blue.
+  root.style.setProperty('--inline-code', isDark ? theme.brightBlue : theme.blue);
 }
 
 // Clear terminal theme colors from app (restore CSS defaults)
@@ -368,6 +371,7 @@ export function clearTerminalThemeFromApp(): void {
     '--border',
     '--input',
     '--ring',
+    '--inline-code',
   ];
 
   for (const v of cssVars) {

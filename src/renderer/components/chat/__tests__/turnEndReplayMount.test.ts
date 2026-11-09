@@ -129,8 +129,8 @@ it('[E2B-7-MOUNT] a failed turn reopens on a note that says why, with no reply a
     expect(text).toContain('这一轮没有完成：模型服务返回了错误，没有保存任何回复。');
     expect(text).toContain('P1-FAIL: the fake upstream failed this request');
     expect(view.container.querySelector('[data-testid="turn-end-notice"]')).not.toBeNull();
-    // Not a reply: no 「最终输出」 divider, no English sentence, no 「完成于」.
-    expect(text).not.toContain(zh('Final output'));
+    // Not a reply: no English sentence, no 「完成于」 (decision 208 retired the
+    // 「最终输出」 divider altogether).
     expect(text).not.toContain('No reply was saved');
     expect(text).not.toContain('Response interrupted');
     expect(text).not.toContain(

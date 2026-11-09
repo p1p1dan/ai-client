@@ -23,8 +23,10 @@ import { afterEach, expect, it, vi } from 'vitest';
  * attempt id → the next step's output.
  */
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate }) }));
+// Decision 208: these read the desktop style's live line (「✻ Running …」); what
+// they lock — when the running turn settles — is the same in both styles.
 vi.mock('@/stores/settings', () => {
-  const state = { showToolDiff: false };
+  const state = { showToolDiff: false, chatTranscriptStyle: 'desktop' };
   return {
     useSettingsStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), {
       getState: () => state,

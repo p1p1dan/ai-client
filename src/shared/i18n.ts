@@ -3285,12 +3285,6 @@ export const zhTranslations: Record<string, string> = {
   'Worked for {{seconds}}s': '已工作 {{seconds}} 秒',
   'Worked for {{minutes}}m {{seconds}}s': '已工作 {{minutes}} 分 {{seconds}} 秒',
   'Worked for {{minutes}}m': '已工作 {{minutes}} 分',
-  // Decision 033 D1: the divider's label, printed above the reply that was
-  // extracted out of the process group once the turn stopped streaming. A NOUN
-  // PHRASE (what the block below is), not a verb — the group's head already says
-  // what the turn DID (「已处理 N 个步骤」), so a verb here would read as a second
-  // status line about the same turn.
-  'Final output': '最终输出',
   // `{{count}} steps processed` lived here for one day. Decision 033 D1 put it
   // on the process head; decision 034 took the head's step count off on the
   // user's 「也不要显示什么已处理 xxx 个步骤」, and the head reports the turn's
@@ -5235,4 +5229,31 @@ Object.assign(zhTranslations, {
   'Previous match': '上一处',
   'Next match': '下一处',
   'Search chats': '搜索对话',
+});
+
+/**
+ * Decision 208 (user ruling 2026-11-03): the transcript's two display styles.
+ * Tool names (Bash, Read, Search…) and `… +N lines` stay English on purpose and
+ * never go through `t()`; only the setting and the desktop style's sentences do.
+ */
+Object.assign(zhTranslations, {
+  'Conversation display': '对话显示方式',
+  'Terminal style': '终端式',
+  'Desktop style': '桌面式',
+  'Terminal style lists every step with its result; desktop style folds each run of steps into one line.':
+    '终端式逐条列出每一步和它的结果；桌面式把连续的步骤收成一行。',
+  command: '条命令',
+  commands: '条命令',
+  tool: '个工具',
+  tools: '个工具',
+  'Ran {{count}} {{noun}}': '运行了 {{count}} {{noun}}',
+  'ran {{count}} {{noun}}': '运行了 {{count}} {{noun}}',
+  'edited {{count}} {{noun}}': '修改了 {{count}} {{noun}}',
+  'Called {{count}} {{noun}}': '调用了 {{count}} {{noun}}',
+  'called {{count}} {{noun}}': '调用了 {{count}} {{noun}}',
+  '{{count}} refused': '{{count}} 条被拒',
+  '{{count}} failed': '{{count}} 条失败',
+  // Decision 208 (user ruling 2026-11-03): the terminal style's live line. A
+  // thought's own words (`Thought for 12s`) stay English, as the tool names do.
+  'esc to interrupt': 'esc 中断',
 });

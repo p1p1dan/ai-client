@@ -50,9 +50,7 @@ const scrollTops = new WeakMap<Element, number>();
 const isViewport = (el: Element) => el.getAttribute('data-slot') === 'scroll-area-viewport';
 
 function simulatedScrollHeight(viewport: Element): number {
-  const panels = viewport.querySelectorAll(
-    '[data-slot="collapsible-panel"], [data-slot="turn-thinking-panel"]'
-  ).length;
+  const panels = viewport.querySelectorAll('[data-slot="collapsible-panel"]').length;
   const openProcess = [...viewport.querySelectorAll('details')].filter((d) => d.open).length;
   return BASE_HEIGHT + growth + panels * ROW_PANEL_HEIGHT + openProcess * PROCESS_BODY_HEIGHT;
 }
@@ -222,9 +220,7 @@ async function renderTimeline() {
   const bottom = () => vp.scrollHeight - CLIENT_HEIGHT;
   const trigger = (text: string) => {
     const found = [
-      ...container.querySelectorAll<HTMLElement>(
-        '[data-slot="collapsible-trigger"], [data-slot="turn-thinking-toggle"]'
-      ),
+      ...container.querySelectorAll<HTMLElement>('[data-slot="collapsible-trigger"]'),
     ].find((el) => el.textContent?.includes(text));
     expect(found, `a row reading "${text}"`).toBeDefined();
     return found as HTMLElement;
@@ -251,8 +247,9 @@ it('[C3-FOLLOW-1] streaming at the bottom keeps following — the baseline the f
   expect(viewport.scrollTop).toBe(bottom());
 });
 
-// PiLab R1 (2026-10-30): thinking is no row — it opens from the turn footer's
-// 「思考」, and that disclosure obeys the same rule.
+// Decision 208 (user ruling 2026-11-03): the thinking opens from its own line,
+// where it happened (it opened from the turn footer's 「思考」 under PiLab R1),
+// and that disclosure obeys the same rule.
 it('[C3-FOLLOW-2] opening the thinking at the bottom pauses following until the reader scrolls back down', async () => {
   const { viewport, stream, bottom, clickRow, userScrollTo } = await renderTimeline();
   await stream();

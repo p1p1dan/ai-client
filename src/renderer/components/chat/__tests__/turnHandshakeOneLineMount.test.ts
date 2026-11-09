@@ -31,14 +31,17 @@ vi.hoisted(() => {
 });
 vi.mock('@/utils/logging', () => ({ updateRendererLogging: vi.fn() }));
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate, locale: 'en' }) }));
-vi.mock('@/stores/settings', () => {
-  const state = { showToolDiff: false };
-  return {
-    useSettingsStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), {
-      getState: () => state,
-    }),
-  };
-});
+// Decision 208: the one line below is the desktop style's words; the terminal
+// style's own line (「✻ 思考中… (2 秒 · esc 中断)」) has its twins at the end.
+const settings = vi.hoisted(() => ({
+  state: { showToolDiff: false, chatTranscriptStyle: 'desktop' as 'desktop' | 'terminal' },
+}));
+vi.mock('@/stores/settings', () => ({
+  useSettingsStore: Object.assign(
+    (selector: (s: typeof settings.state) => unknown) => selector(settings.state),
+    { getState: () => settings.state }
+  ),
+}));
 vi.mock('@/stores/runtimeEventBus', () => ({ subscribeRuntimeEvent: () => () => undefined }));
 vi.mock('../useResolvedSessionModel', () => ({ useResolvedSessionModel: () => () => 'glm/glm-5' }));
 vi.mock('../sessionIndex/useResumeSession', () => ({
@@ -113,6 +116,7 @@ const count = (needle: string) => text().split(needle).length - 1;
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  settings.state.chatTranscriptStyle = 'desktop';
   resetHistoryLoadingForTests();
   useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReplies: {} });
   usePendingUserMessagesStore.setState({ bySession: {} });
@@ -189,5 +193,36 @@ describe('a send still connecting, in the timeline', () => {
     // 2026-10-19 (user): the one line carries no ↑ count.
     expect(count('↑ 5 chars')).toBe(0);
     expect(text()).not.toMatch(/ · \d+s$/);
+  });
+});
+
+/**
+ * Decision 208, terminal style (user ruling 2026-11-03, the comparison
+ * mockup's ①): the same one line, in the CLI's words — what the turn is doing,
+ * then how long and how to stop it. The star is a pseudo-element, not text.
+ */
+describe('a send still connecting, in the terminal style', () => {
+  beforeEach(() => {
+    settings.state.chatTranscriptStyle = 'terminal';
+  });
+  const liveLine = () => container.querySelector('[data-slot="turn-live-line"]')?.textContent ?? '';
+
+  it('[THS-T1] connecting, on one line, with the clock and the stop key after it', async () => {
+    await sent('handshake');
+    expect(liveLine()).toMatch(/^Connecting to the chat engine… \(\d+s · esc to interrupt\)$/);
+    expect(count(CONNECTING)).toBe(1);
+  });
+
+  it('[THS-T2] then thinking, on the same line', async () => {
+    await sent('awaiting');
+    expect(text()).not.toContain(CONNECTING);
+    expect(liveLine()).toMatch(/^Thinking… \(\d+s · esc to interrupt\)$/);
+    expect(count('↑ 5 chars')).toBe(0);
+  });
+
+  it('[THS-T3] a slow wait still keeps its second row', async () => {
+    await sent('awaiting', 50);
+    expect(liveLine()).toMatch(/^Thinking… \(\d+s · esc to interrupt\)$/);
+    expect(text()).toContain('Still waiting · 50s');
   });
 });

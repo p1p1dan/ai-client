@@ -105,6 +105,10 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   'components/chat/LockedRepoLabel.tsx',
   'components/chat/ToolRows.tsx',
   'components/chat/toolCard.ts',
+  // Decision 208 (user ruling 2026-11-03): the terminal transcript style draws
+  // the assistant's side in the mono stack, as Claude Code's CLI does — its
+  // class assemblers live here.
+  'components/chat/chatTimelineLayout.ts',
   'components/files/EditorLineComment.tsx',
   'components/files/MarkdownPreview.tsx',
   'components/files/editorDefinitionProvider.ts',

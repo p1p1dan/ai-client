@@ -61,3 +61,11 @@
 | | 「改动」面板 | ✅ | 改动内容沿用时间线 diff 画法（一列行号、+/− 单列、折行、未改动折叠）；顶部「本次对话 / 工作区」切换，工作区是 git status（预览 `docs/design/2026-10-23-session-changes-preview.html`） |
 | | 环境卡显示对话记录路径 | ✅ | 复制与打开文件夹，和上下文面板共用一份 |
 | | 改动只有参数预览（issue #27） | ✅ | 实测 DSH 桥接层早已从 diff 卡产出 `details.review`（`dshFileReview.ts`），缺的是 Claude SDK 引擎：现从 CLI 的 `tool_use_result`（直播）与转录行的 `toolUseResult`（历史）建记录（`sdkFileReview.ts`），带真实行号；假网关上真 CLI 跑过 Edit / Write，直播与重开历史都有完整 diff |
+
+| **9 对话显示方式（2026-11-03，决策 208）** | 两轮可回放对比稿 | ✅ | `transcript-density-options.html`：现状、①～⑤，可播放、拖动、并排；用户选 ①（用户消息改回气泡）与 ③ |
+| | 设置「对话显示方式」：终端式 / 桌面式 | ✅ | 外观 → 聊天区；默认终端式；未知值回落终端式 |
+| | 终端式：圆点列、`Bash(说明)`、`⎿` 结果行、等宽、有色行内代码 | ✅ | 分支 `feat/chat-transcript-style`；规则见 [决策 208](../dsh-rebase/decisions/208-chat-transcript-styles.md) |
+| | 桌面式：连续步骤收成一行，点开是原来的工具行 | ✅ | 原生 `<details>`，权限卡未答时强制展开，异常结束的末段默认展开 |
+| | 撤掉「最终输出」分隔线与折叠头遗留代码 | ✅ | `STEPS_INLINE`、`TurnProgressHead`、`turnWorkGroupSummaryClass` 等删除 |
+| | Windows 开发版实测两种样式 | ✅ | 亮色、暗色截图核对，设置即时切换；修了 `Shell cwd was reset` 噪音行、展开行改英文名；跟随终端配色与减少动画只有测试 |
+| | 第二轮：对齐对比稿第 3、4、5 处，思考画回原位置 | ✅ | 终端式运行行「✻ 正在做的那一步… (用时 · esc 中断)」、只合并相邻的读与搜、路径照写；两种样式的思考都画在发生的位置，回合末尾「思考 N 秒」只剩合计；见决策 208 第 2a、3.5、6.1 节 |

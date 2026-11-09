@@ -35,6 +35,53 @@ describe('StatusIcon', () => {
     expect(labelled).toContain('aria-label="Failed"');
     expect(labelled).toContain('role="img"');
   });
+
+  describe('decision 208: the bullet shape', () => {
+    const bullet = (status: RunStatus) =>
+      renderToStaticMarkup(h(StatusIcon, { shape: 'bullet', status }));
+
+    it.each(statuses)('draws "%s" as a pseudo-element dot with no text of its own', (status) => {
+      const html = bullet(status);
+      expect(html).toContain(`data-status="${status}"`);
+      expect(html).toContain('data-shape="bullet"');
+      // The quotes come out entity-escaped from the static renderer.
+      expect(html).toMatch(/before:content-\[(?:'|&#x27;)●(?:'|&#x27;)\]/);
+      // Never a glyph inside: copied and searched text must not pick it up.
+      expect(html).toMatch(/<span[^>]*><\/span>$/);
+      expect(html).toContain('aria-hidden="true"');
+    });
+
+    it('colours: success green, failed red, running neutral and blinking', () => {
+      expect(bullet('success')).toContain('text-success');
+      expect(bullet('failed')).toContain('text-destructive');
+      const running = bullet('running');
+      expect(running).toContain('text-foreground-faint');
+      expect(running).toContain('animate-blink');
+      expect(running).toContain('motion-reduce:animate-none');
+      expect(running).not.toMatch(/text-(info|status-running)/);
+    });
+  });
+
+  // Decision 208, second round (user ruling 2026-11-03): the terminal live
+  // line's star, the CLI spinner's glyphs cycling on a pseudo-element.
+  describe('decision 208: the star shape', () => {
+    const star = (status: RunStatus) =>
+      renderToStaticMarkup(h(StatusIcon, { shape: 'star', status }));
+
+    it('running cycles in the brand ink and stops for reduced motion; no glyph of its own', () => {
+      const html = star('running');
+      expect(html).toContain('data-shape="star"');
+      expect(html).toMatch(/before:content-\[(?:'|&#x27;)✻(?:'|&#x27;)\]/);
+      expect(html).toContain('text-primary');
+      expect(html).toContain('before:animate-star');
+      expect(html).toContain('motion-reduce:before:animate-none');
+      expect(html).toMatch(/<span[^>]*><\/span>$/);
+    });
+
+    it('a settled star does not move', () => {
+      expect(star('success')).not.toContain('animate-star');
+    });
+  });
 });
 
 describe('DockCard', () => {

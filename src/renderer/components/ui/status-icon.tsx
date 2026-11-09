@@ -18,9 +18,66 @@ interface StatusIconProps extends Omit<React.ComponentProps<'span'>, 'children'>
   status: RunStatus;
   /** Accessible name; omit when an adjacent label already says it. */
   label?: string;
+  /**
+   * Decision 208: `bullet` is the terminal transcript's `●`, coloured by the
+   * same states. It takes the font and size of where it sits (the transcript's
+   * bullet column) and is drawn as a pseudo-element, so it never reaches copied
+   * or searched text. `star` is the CLI's working star (`✻`), cycling its
+   * spinner glyphs while running — the terminal style's live line.
+   */
+  shape?: 'icon' | 'bullet' | 'star';
 }
 
-function StatusIcon({ status, label, className, ...props }: StatusIconProps) {
+const BULLET_TONE: Record<RunStatus, string> = {
+  // Neutral and blinking, as the CLI's dot for a call still in flight.
+  running: 'text-foreground-faint animate-blink motion-reduce:animate-none',
+  waiting: 'text-primary animate-breathe motion-reduce:animate-none',
+  success: 'text-success',
+  failed: 'text-destructive',
+  stopped: 'text-foreground-faint',
+  idle: 'text-foreground-faint',
+};
+
+const STAR_TONE: Record<RunStatus, string> = {
+  // The brand ink, as the 「思考中 / 等你处理」 hint (design system v2 §1 rule 7).
+  running: 'text-primary before:animate-star motion-reduce:before:animate-none',
+  waiting: 'text-primary animate-breathe motion-reduce:animate-none',
+  success: 'text-success',
+  failed: 'text-destructive',
+  stopped: 'text-foreground-faint',
+  idle: 'text-foreground-faint',
+};
+
+function StatusIcon({ status, label, shape = 'icon', className, ...props }: StatusIconProps) {
+  if (shape === 'bullet' || shape === 'star') {
+    const bulletClass =
+      shape === 'star'
+        ? cn("before:content-['✻']", STAR_TONE[status], className)
+        : cn("before:content-['●']", BULLET_TONE[status], className);
+    if (label) {
+      return (
+        <span
+          aria-label={label}
+          className={bulletClass}
+          data-shape={shape}
+          data-slot="status-icon"
+          data-status={status}
+          role="img"
+          {...props}
+        />
+      );
+    }
+    return (
+      <span
+        aria-hidden
+        className={bulletClass}
+        data-shape={shape}
+        data-slot="status-icon"
+        data-status={status}
+        {...props}
+      />
+    );
+  }
   const glyph = (
     <>
       {status === 'running' && (

@@ -41,7 +41,7 @@ vi.mock('@/stores/chatSessionActions', async (importOriginal) => ({
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { MessageTimeline } from '../MessageTimeline';
 
-it('the answer stays on screen through completion; the thinking opens from the footer', async () => {
+it('the answer stays on screen through completion; the thinking opens where it happened', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   useChatSessionsStore.setState({
     activeSessionId: 's',
@@ -88,9 +88,10 @@ it('the answer stays on screen through completion; the thinking opens from the f
     );
   };
   try {
-    // PiLab R1 (user ruling 2026-10-30): thinking is no row and nothing folds —
-    // the answer is on screen running and settled, and the thinking text opens
-    // from the footer's 「思考」 once the turn ends.
+    // PiLab R1 (user ruling 2026-10-30): nothing folds — the answer is on
+    // screen running and settled. Decision 208 (user ruling 2026-11-03): the
+    // thinking is one closed `∴` line where it happened, before the answer, not
+    // a toggle on the footer (the default terminal style here).
     await render('running');
     expect(container.querySelectorAll('details')).toHaveLength(0);
     expect(container.textContent).not.toContain('Reading evidence.');
@@ -103,10 +104,23 @@ it('the answer stays on screen through completion; the thinking opens from the f
     await render('idle');
     expect(container.querySelectorAll('details')).toHaveLength(0);
     expect(container.textContent).toContain('FINAL_RESULT');
-    const toggle = container.querySelector<HTMLButtonElement>('[data-slot="turn-thinking-toggle"]');
-    expect(toggle, 'the footer offers the thinking').not.toBeNull();
+    expect(container.querySelector('[data-slot="turn-thinking-toggle"]')).toBeNull();
+    const marks = container.querySelectorAll('[data-slot="terminal-thought-mark"]');
+    expect(marks, 'the two thoughts in a row are one line').toHaveLength(1);
+    const thought = marks[0]?.closest<HTMLElement>('[data-slot="terminal-block"]');
+    const answer = [...container.querySelectorAll('[data-slot="terminal-block"]')].find((block) =>
+      block.textContent?.includes('FINAL_RESULT')
+    );
+    expect(thought && answer, 'both are blocks').toBeTruthy();
+    expect(
+      (thought as HTMLElement).compareDocumentPosition(answer as Element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      'the thought comes before the answer'
+    ).toBeTruthy();
     expect(container.textContent).not.toContain('Reading evidence.');
-    await act(async () => toggle?.click());
+    const trigger = thought?.querySelector<HTMLElement>('[data-slot="collapsible-trigger"]');
+    expect(trigger, 'the line opens the text').not.toBeNull();
+    await act(async () => trigger?.click());
     expect(container.textContent).toContain('Reading evidence.');
     expect(container.textContent).toContain('Checking the result.');
   } finally {
