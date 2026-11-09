@@ -29,6 +29,8 @@ Role: implementation-status。更新日期：2026-10-14。只放当前阶段、�
 
 ## Next Target
 
+**对话区两种显示方式合入 main，步骤下的输出预览改为开头几行（2026-11-08，[决策 208](decisions/208-chat-transcript-styles.md)、[决策 210](decisions/210-step-output-preview-head.md)）**：用户同意后，`feat/chat-transcript-style` 合入 main（`f2a677cd`，无文本冲突），设置里有了「对话显示方式」（终端式、桌面式）。用户嫌 1.2.2 截图里终端命令下的「末行 · N 行」是噪音，决策 210 照两个参考改：终端式取输出开头最多 3 行（同终端版），桌面式点开后的步骤行不再显示正常跑完的命令输出（同桌面版）。开发版用假网关实测过两种画法，用户也在开发版上看过。用户要求推送并出测试包：推送 main，测试包 `1.2.3-test.1` 从测试分支 `test/1.2.3-test.1` 手动触发 CI，用户装到真机上实测；决策 208 第 4 节、决策 210 第 4 节的自主条目待用户审批。
+
 **会话侧栏「产出」卡、旁问独立窗口、侧栏与卡片窗并存、最小窗口 640×480（2026-11-04，[决策 209](decisions/209-session-rail-outputs-side-chat-window-narrow-shell.md)，清单 [rail-windows-tasks.md](../ui-cohesion/rail-windows-tasks.md)）**：五个阶段做完，快进合入 main 并推送；用户装测试包 `1.2.2-test.2` 实测后，**2026-11-04 发布 `v1.2.2`**（Build run 41801924785 全部通过，release 标为 latest，1.2.x 用户经自动更新收到）。决策 209 §8.4 的自主细节待用户审批。决策 208（`feat/chat-transcript-style`）没有合入，不在 1.2.2 里。
 
 **DSH 升到 0.2.1-rc.5（2026-11-03，[决策 207](decisions/207-dsh-0-2-1-rc-5-upgrade.md)，阶段看板 [dsh-0.2.1-upgrade-tasks.md](dsh-0.2.1-upgrade-tasks.md)）**：已合入 main（`2aade4bf`），已推送，随 1.2.2 发布（2026-11-04，发版说明已补这次升级）。测试包 `1.2.2-test.1` 从测试分支 `test/1.2.2-test.1` 手动触发 CI。决策 207 里标「自主」的条目与第 15 节的观察项待用户看。

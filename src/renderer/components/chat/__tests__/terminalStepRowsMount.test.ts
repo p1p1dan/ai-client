@@ -108,12 +108,12 @@ describe('decision 208: terminal style steps', () => {
     expect(blockOf('删除残留目录').textContent).toContain('Bash(删除残留目录)');
   });
 
-  it('a command shows its last three lines and opens to the rest', async () => {
+  it('a command shows its first three lines and opens to the rest (decision 210)', async () => {
     const { blockOf } = await render();
     const block = blockOf('列出所有本地分支');
     const result = block.querySelector<HTMLElement>('[data-slot="terminal-step-result"]');
-    expect(result?.textContent).toContain('line 3\nline 4\nline 5');
-    expect(result?.textContent).not.toContain('line 1');
+    expect(result?.textContent).toContain('line 1\nline 2\nline 3');
+    expect(result?.textContent).not.toContain('line 5');
     const more = [...block.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('… +2 lines')
     );
@@ -121,7 +121,7 @@ describe('decision 208: terminal style steps', () => {
     await act(async () => more?.click());
     // Open, the body shows the whole output and the preview steps aside.
     expect(block.querySelector('[data-slot="terminal-step-result"]')).toBeNull();
-    expect(block.textContent).toContain('line 1');
+    expect(block.textContent).toContain('line 5');
     expect(useToolExpansionStore.getState().bySession.s).toBeDefined();
   });
 

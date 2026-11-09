@@ -815,7 +815,7 @@ function TerminalRunningLine({ liveToolCallId }: { liveToolCallId: string | null
   );
 }
 
-/** Decision 208: `⎿` and up to three lines of what came of a step, then `… +N lines`. */
+/** Decisions 208 and 210: `⎿` and the first lines of what came of a step, then `… +N lines`. */
 function TerminalStepResult({
   result,
   onShowAll,
@@ -1065,7 +1065,7 @@ function isMergedStep(view: ToolRowView): boolean {
   return view.key.startsWith('lookup:') || view.key.startsWith('edits:');
 }
 
-/** `⎿ 38 passed · 12 行` — the one line under a step (`deriveStepResult`). */
+/** `⎿ ENOENT: no such file` — the one line under a step that went wrong (`deriveStepResult`). */
 function StepResult({ line }: { line: StepResultLine }) {
   return (
     <div

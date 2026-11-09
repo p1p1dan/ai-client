@@ -17,7 +17,7 @@ import {
   PERMISSION_DENIED_STOPPED,
 } from './questionCardModel';
 import { isDelegationTool, type ToolRowView } from './toolCard';
-import { meaningfulLines, SPILLED } from './turnSteps';
+import { meaningfulLines, outputPreviewLines, SPILLED } from './turnSteps';
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -154,14 +154,27 @@ function clipLine(line: string): string {
 }
 
 /**
+ * The first lines, as the CLI folds a tool's output (Claude Code 2.1.273,
+ * `OutputLine`): three, or all four when only one would be left over —
+ * `… +1 lines` takes the same room as the line it hides.
+ */
+function headOf(all: readonly string[], tone: TerminalResultTone): TerminalStepResult {
+  const shown =
+    all.length === TERMINAL_RESULT_LINES + 1 ? all : all.slice(0, TERMINAL_RESULT_LINES);
+  return { lines: shown.map(clipLine), tone, hidden: all.length - shown.length };
+}
+
+/**
  * The `⎿` lines under a step, or `null` for none.
  *
  *  - refused: one line, the decision word and why;
  *  - outcome unknown: the warning the step model already words;
  *  - not run / stopped: none (the row's own word says it);
  *  - failed: the first lines of what it said;
- *  - a settled command: its LAST lines — a build's or a test run's verdict is
- *    at the end (the 2026-10-30 rule `deriveStepResult` follows), up to three.
+ *  - a settled command: its FIRST lines, as the CLI shows them. Decision 208
+ *    took the last three; the user found the end of an output mostly a
+ *    closing brace, a rule or a total (decision 210, 2026-11-08), and the CLI
+ *    itself shows the head. DSH's own markers are not output and stay out.
  */
 export function deriveTerminalStepResult(
   view: ToolRowView,
@@ -196,27 +209,21 @@ export function deriveTerminalStepResult(
     };
   }
   if (view.outcome) return null;
-  const all = meaningfulLines(view.output);
-  if (view.failed) {
-    if (all.length === 0) return null;
-    const shown = all.slice(0, TERMINAL_RESULT_LINES).map(clipLine);
-    return { lines: shown, tone: 'bad', hidden: all.length - shown.length };
+  const all = outputPreviewLines(view.output);
+  if (view.failed) return all.length === 0 ? null : headOf(all, 'bad');
+  if (view.iconKind !== 'terminal') return null;
+  if (all.length === 0) {
+    // Only DSH's spill note came back: the output is in a file the step opens.
+    return meaningfulLines(view.output).some((line) => SPILLED.test(line))
+      ? {
+          lines: [t('Large output, open the step to see it')],
+          tone: 'muted',
+          hidden: 0,
+          note: true,
+        }
+      : null;
   }
-  if (view.iconKind !== 'terminal' || all.length === 0) return null;
-  if (all.every((line) => SPILLED.test(line))) {
-    return {
-      lines: [t('Large output, open the step to see it')],
-      tone: 'muted',
-      hidden: 0,
-      note: true,
-    };
-  }
-  const shown = all.slice(-TERMINAL_RESULT_LINES).map(clipLine);
-  return {
-    lines: shown,
-    tone: typeof view.exitCode === 'number' && view.exitCode !== 0 ? 'bad' : 'muted',
-    hidden: all.length - shown.length,
-  };
+  return headOf(all, typeof view.exitCode === 'number' && view.exitCode !== 0 ? 'bad' : 'muted');
 }
 
 /** The step line's trailing words that the `⎿` line already says. */

@@ -16,9 +16,13 @@
  *     Decision 208 (user ruling 2026-11-03): the terminal style merges only
  *     adjacent calls, as the CLI and the comparison mockup's ① do (`merge:
  *     'adjacent'`); the desktop style keeps the stretch-wide rule.
- *  2. Every other call is one step, with a one-line RESULT under it when the
- *     call produced something worth a glance: a command's last output line,
- *     a failure's first line, an unknown outcome's warning.
+ *  2. Every other call is one step, with a one-line RESULT under it only when
+ *     something went wrong: a failure's first line, an unknown outcome's
+ *     warning. A command that ran clean says nothing more (decision 210, user
+ *     2026-11-08: its last output line was mostly a closing brace or a rule).
+ *     Claude Code's desktop app shows no output under a step either; it opens
+ *     with a click. The terminal style previews output as the CLI does
+ *     (`deriveTerminalStepResult`).
  *  3. Thinking is drawn where it happened. Rule 3 used to keep it out of the
  *     steps, readable only from the footer's 「思考 N 秒」; the user overruled
  *     that on 2026-11-03 (decision 208): neither the CLI nor the desktop app
@@ -28,6 +32,7 @@
  */
 
 import type { ToolGroupEntry, ToolRowView } from './toolCard';
+import { dshShellOutputHead } from './toolOutputHead';
 import { formatWorkedForDuration } from './turnTiming';
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
@@ -243,18 +248,64 @@ export function meaningfulLines(text: string | undefined): string[] {
     .filter((line) => line.length > 0 && !NO_OUTPUT.test(line) && !CWD_RESET.test(line));
 }
 
+/**
+ * Lines DSH's shells write around a command's output rather than in it
+ * (`dsh-tool-bash` / `dsh-tool-pwsh`): the stderr section's heading, the note
+ * that only the tail was kept (it names a scratch path), and the exit marker,
+ * which the row already says as 「退出码 N」. The opened body keeps them.
+ */
+const DSH_SHELL_MARKERS = [
+  /^\[stderr\]$/,
+  /^\[output truncated; full output: /,
+  /^\[exit code: -?\d+\]$/,
+];
+
+/**
+ * A command's output as a preview may show it (decision 210): from the first
+ * whole line on (a tail DSH cut mid-line starts at the next one), without
+ * blank lines, placeholders, Claude Code's cwd-reset note, DSH's markers or a
+ * spill note. Unlike `meaningfulLines`, leading whitespace stays: code, JSON
+ * and trees read by their indentation, and the CLI keeps it too.
+ */
+export function outputPreviewLines(text: string | undefined): string[] {
+  if (!text) return [];
+  return dshShellOutputHead(text)
+    .text.replace(ANSI, '')
+    .split(/\r\n|\n|\r/)
+    .map((line) => line.trimEnd())
+    .filter((line) => {
+      const bare = line.trim();
+      return (
+        bare.length > 0 &&
+        !NO_OUTPUT.test(bare) &&
+        !CWD_RESET.test(bare) &&
+        !SPILLED.test(bare) &&
+        !DSH_SHELL_MARKERS.some((marker) => marker.test(bare))
+      );
+    });
+}
+
 function clip(line: string): string {
   return line.length > RESULT_MAX_CHARS ? `${line.slice(0, RESULT_MAX_CHARS - 1)}…` : line;
 }
+
+/** How Claude Code opens a failed command's result: the code, then what it printed. */
+const EXIT_CODE_LEAD = /^Exit code -?\d+$/;
 
 /**
  * The one line under a step (rule 2), or `null`.
  *
  *  - an unknown outcome: the warning Claude Code gives for a call the session
  *    ended under — check before re-running;
- *  - a failure: the first line of what it said;
- *  - a settled command: its LAST output line (a test run's or build's summary
- *    is where they put the verdict), with the total when there was more.
+ *  - a failure: the first line of what it said, red. A leading `Exit code N`
+ *    gives way to the line after it: the red mark already says it failed, and
+ *    the one line is better spent on why (the full text opens with the step).
+ *
+ * Nothing else. Until decision 210 a settled command showed its LAST output
+ * line and the count (「} · 69 行」); the user found it noise (2026-11-08).
+ * A non-zero exit gets no line either: the row says 「退出码 N」, and which
+ * line explains it differs by tool (a test run's verdict is last, a compiler's
+ * first error first), so a guess here would often be the wrong line.
  */
 export function deriveStepResult(row: ToolRowView, t: Translate): StepResultLine | null {
   if (row.running) return null;
@@ -267,21 +318,10 @@ export function deriveStepResult(row: ToolRowView, t: Translate): StepResultLine
     };
   }
   if (row.outcome) return null; // refused / not started / stopped: the row's own word says it
-  const lines = meaningfulLines(row.output);
-  if (row.failed) {
-    return lines.length ? { text: clip(lines[0]), tone: 'bad' } : null;
-  }
-  if (row.iconKind !== 'terminal' || lines.length === 0) return null;
-  if (lines.every((line) => SPILLED.test(line))) {
-    return { text: t('Large output, open the step to see it'), tone: 'muted' };
-  }
-  const last = clip(lines[lines.length - 1]);
-  return {
-    text: lines.length > 1 ? `${last} · ${t('{{count}} lines', { count: lines.length })}` : last,
-    // A non-zero exit is not a failed call (the row says 「退出码 N」 neutrally),
-    // but the line it ended on is usually why: worth the red.
-    tone: typeof row.exitCode === 'number' && row.exitCode !== 0 ? 'bad' : 'muted',
-  };
+  if (!row.failed) return null;
+  const [first, second] = outputPreviewLines(row.output);
+  const line = second !== undefined && EXIT_CODE_LEAD.test(first.trim()) ? second : first;
+  return line ? { text: clip(line.trim()), tone: 'bad' } : null;
 }
 
 export interface StepRowView extends ToolRowView {

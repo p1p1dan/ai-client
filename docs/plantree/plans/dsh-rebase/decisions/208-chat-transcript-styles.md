@@ -4,7 +4,9 @@
 
 **状态**：方向、选项、默认值、配色与英文用词都由用户 2026-11-03 定下（第 2 节）；同日第二轮裁决见第 2a 节。第 4 节标「自主」的各条待用户审批。
 
-**代码**：本地分支 `feat/chat-transcript-style`，基于 origin/main `197e75e1`，未推送。
+**代码**：分支 `feat/chat-transcript-style`，基于 origin/main `197e75e1`，已推送；2026-11-08 合入 main（`f2a677cd`）并推送，不在 1.2.2 里，随测试包 `1.2.3-test.1` 出包。
+
+**后续修订**：[决策 210](210-step-output-preview-head.md)（2026-11-08）把第 3.2 节的「终端命令取末尾最多 3 行」改为取开头几行，经典步骤行不再给正常跑完的命令加结果行。
 
 **证据**：
 - 两轮可回放对比稿 [`ui-cohesion/transcript-density-options.html`](../../ui-cohesion/transcript-density-options.html)；

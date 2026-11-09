@@ -68,19 +68,40 @@ describe('[PILAB-R1-STEPS] the turn as steps (user ruling 2026-10-30)', () => {
     expect(steps.map((step) => step.key)).toEqual(['r1', 'e1']);
   });
 
-  it('gives a command its last output line, red on a non-zero exit, and drops placeholders', () => {
-    expect(deriveStepResult(row('t', 'terminal', { output: 'a\n\n✓ 38 passed\n' }), t)).toEqual({
-      text: '✓ 38 passed · {{count}} lines'.replace('{{count}}', '2'),
-      tone: 'muted',
+  // Decision 210 (user, 2026-11-08): the last line (「} · 69 行」, 「---- 」)
+  // was noise. As in Claude Code's desktop app, a clean command's output waits
+  // behind the step; only what went wrong gets a line.
+  it('gives a command that ran clean no line, whatever it printed', () => {
+    for (const output of ['a\n\n✓ 38 passed\n', '}', '(no output)', '(Omitted 14376 bytes. x)']) {
+      expect(deriveStepResult(row('t', 'terminal', { output }), t)).toBeNull();
+    }
+  });
+
+  it('leaves a non-zero exit to the row’s 「退出码 N」', () => {
+    const output = 'FAIL src/a.test.ts\nTests 1 failed\n[exit code: 1]';
+    expect(deriveStepResult(row('t', 'terminal', { output, exitCode: 1 }), t)).toBeNull();
+  });
+
+  it('gives a failure its first real line, past DSH’s stderr heading', () => {
+    const output = '[stderr]\nbash: foo: command not found\n[exit code: 127]';
+    expect(deriveStepResult(row('t', 'terminal', { failed: true, output }), t)).toEqual({
+      text: 'bash: foo: command not found',
+      tone: 'bad',
     });
-    expect(deriveStepResult(row('t', 'terminal', { output: 'boom', exitCode: 1 }), t)?.tone).toBe(
-      'bad'
+    expect(deriveStepResult(row('t', 'terminal', { failed: true, output: '' }), t)).toBeNull();
+  });
+
+  // Dev-app check 2026-11-08: the one line read 「Exit code 128」 under a red
+  // ✕ that already said so, and the reason stayed behind the click.
+  it('spends the line on why a Claude engine command failed, not on its exit code', () => {
+    const output = "Exit code 128\nfatal: ambiguous argument 'no-such-ref'\nUse '--' to separate";
+    expect(deriveStepResult(row('t', 'terminal', { failed: true, output }), t)?.text).toBe(
+      "fatal: ambiguous argument 'no-such-ref'"
     );
-    expect(deriveStepResult(row('t', 'terminal', { output: '(no output)' }), t)).toBeNull();
+    // With nothing after it, the code is all there is to say.
     expect(
-      deriveStepResult(row('t', 'terminal', { output: '(Omitted 14376 bytes. Full … /tmp/x)' }), t)
-        ?.text
-    ).toBe('Large output, open the step to see it');
+      deriveStepResult(row('t', 'terminal', { failed: true, output: 'Exit code 1' }), t)?.text
+    ).toBe('Exit code 1');
   });
 
   it('says an unknown outcome as a warning, and nothing while running', () => {

@@ -97,21 +97,71 @@ describe('stepBulletStatus', () => {
 describe('deriveTerminalStepResult', () => {
   const output = ['line 1', '', 'line 2', 'line 3', 'line 4', 'line 5'].join('\n');
 
-  it('a settled command shows its last three lines and counts the rest', () => {
+  // Decision 210 (user, 2026-11-08): the head, as the CLI shows it. The last
+  // lines decision 208 took were mostly `}`, `----` or a `wc` total.
+  it('a settled command shows its first three lines and counts the rest', () => {
     expect(deriveTerminalStepResult(bash({ output }), zh)).toEqual({
-      lines: ['line 3', 'line 4', 'line 5'],
+      lines: ['line 1', 'line 2', 'line 3'],
       tone: 'muted',
       hidden: 2,
     });
   });
 
-  it("leaves out Claude Code's cwd-reset note, which says nothing about the result", () => {
-    const withNote = `${output}\nShell cwd was reset to C:\\work\\repo`;
-    expect(deriveTerminalStepResult(bash({ output: withNote }), zh)).toEqual({
-      lines: ['line 3', 'line 4', 'line 5'],
+  it('shows all four lines rather than fold one away, as the CLI does', () => {
+    const four = ['a', 'b', 'c', 'd'].join('\n');
+    expect(deriveTerminalStepResult(bash({ output: four }), zh)).toEqual({
+      lines: ['a', 'b', 'c', 'd'],
       tone: 'muted',
-      hidden: 2,
+      hidden: 0,
     });
+  });
+
+  it('keeps the indentation code and trees read by', () => {
+    const json = ['{', '  "name": "x",', '  "version": "1.0.0",', '  "private": true', '}'].join(
+      '\n'
+    );
+    expect(deriveTerminalStepResult(bash({ output: json }), zh)?.lines).toEqual([
+      '{',
+      '  "name": "x",',
+      '  "version": "1.0.0",',
+    ]);
+  });
+
+  it("leaves out Claude Code's cwd-reset note, which says nothing about the result", () => {
+    const withNote = 'ok\nShell cwd was reset to C:\\work\\repo';
+    expect(deriveTerminalStepResult(bash({ output: withNote }), zh)).toEqual({
+      lines: ['ok'],
+      tone: 'muted',
+      hidden: 0,
+    });
+  });
+
+  it("leaves out DSH's own markers: stderr heading, exit code, truncation note", () => {
+    const failedRun = ['[stderr]', 'fatal: not a git repository', '[exit code: 128]'].join('\n');
+    expect(deriveTerminalStepResult(bash({ output: failedRun, exitCode: 128 }), zh)).toEqual({
+      lines: ['fatal: not a git repository'],
+      tone: 'bad',
+      hidden: 0,
+    });
+    // A long command whose head DSH dropped: the partial first line goes too.
+    const cut = ['ne 612 of the middle', 'line 613', 'line 614'].join('\n');
+    const truncated = `${cut}\n[output truncated; full output: /tmp/dsh/out.txt]`;
+    expect(deriveTerminalStepResult(bash({ output: truncated }), zh)?.lines).toEqual([
+      'line 613',
+      'line 614',
+    ]);
+  });
+
+  it('only a spill note back: says the output is behind the step', () => {
+    expect(
+      deriveTerminalStepResult(bash({ output: '(Omitted 14376 bytes. Full … /tmp/x)' }), zh)
+    ).toEqual({
+      lines: [zh('Large output, open the step to see it')],
+      tone: 'muted',
+      hidden: 0,
+      note: true,
+    });
+    expect(deriveTerminalStepResult(bash({ output: '(no output)' }), zh)).toBeNull();
   });
 
   it('a non-zero exit turns the lines red', () => {
