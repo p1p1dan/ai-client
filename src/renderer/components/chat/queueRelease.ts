@@ -18,7 +18,7 @@
  * §12 verification first: __tests__/queueRelease.test.ts.
  */
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
-import type { QueuedMessage, QueuePauseReason } from './messageQueue';
+import type { MessageQueueState, QueuedMessage, QueuePauseReason } from './messageQueue';
 
 // ---- shared predicate ----
 
@@ -213,28 +213,55 @@ export function decideAdmittedTimeoutOutcome(input: {
 }
 
 /**
- * Whether `runSend` should stop waiting on an admitted turn that the engine is
- * retrying upstream, and hand it to the pending-reply watch.
+ * Whether `runSend` should stop waiting on an admitted turn and hand it to the
+ * pending-reply watch.
  *
  * The composer has ONE send slot for every conversation (`sendingSessionId` /
- * `inFlightRef`), and the wait holds it until the first assistant block. An
- * upstream retry loop sends a liveness frame per attempt, so the silence
- * budget never runs out and the slot stays held for up to
- * `SEND_WAIT_LOOP_BOUND_MS` — while every other conversation's send is queued
- * behind it and its queue cannot release (2026-10-19 report: a new chat's
- * first message sat in the queue while another chat showed the retry
- * countdown). Once the Host has admitted the turn there is nothing left that
- * only the wait can do: the pending-reply watch keeps the turn head and Stop,
- * and restores the payload if the turn later fails.
+ * `inFlightRef`), and the wait holds it until the first assistant block —
+ * while every other conversation's send is queued behind it and its queue
+ * cannot release. Once the Host has admitted the turn there is nothing left
+ * that only the wait can do: the pending-reply watch keeps the turn head and
+ * Stop, and restores the payload if the turn later fails. Two reasons to let
+ * go early:
+ *
+ * - `sawNetworkRetry`: the engine is retrying upstream. Each attempt is a
+ *   liveness frame, so the silence budget never runs out and the slot stays
+ *   held for up to `SEND_WAIT_LOOP_BOUND_MS` (2026-10-19 report: a new chat's
+ *   first message sat in the queue while another chat showed the retry
+ *   countdown).
+ * - `otherSessionWaiting`: another conversation has a message queued for the
+ *   slot (`hasOtherSessionWaitingForSlot`). A request that hangs with no retry
+ *   frame (the network dropped mid-connection) or a slow first reply held the
+ *   slot until the first block or the silence ceiling, minutes later
+ *   (2026-11-09 report: after a 502 the next message sat in the queue while
+ *   another chat's turn was still waiting for its reply).
  *
  * Admission is required: a turn with no echo may still be refused, and then
  * its payload belongs back in the composer or the queue.
  */
-export function shouldHandOffRetryingTurn(input: {
+export function shouldHandOffAdmittedTurn(input: {
   sawUserEcho: boolean;
   sawNetworkRetry: boolean;
+  otherSessionWaiting: boolean;
 }): boolean {
-  return input.sawUserEcho && input.sawNetworkRetry;
+  return input.sawUserEcho && (input.sawNetworkRetry || input.otherSessionWaiting);
+}
+
+/**
+ * Whether a conversation other than `sessionId` has a queued message that only
+ * the send slot keeps back: entries, and a queue that is not paused (or whose
+ * head the user picked with "Send now", which passes the pause). A paused
+ * queue waits for the user, not for the slot.
+ */
+export function hasOtherSessionWaitingForSlot(
+  state: Pick<MessageQueueState, 'bySession'>,
+  sessionId: string
+): boolean {
+  for (const [id, bucket] of Object.entries(state.bySession)) {
+    if (id === sessionId || bucket.entries.length === 0) continue;
+    if (bucket.paused == null || bucket.priorityEntryId === bucket.entries[0]?.id) return true;
+  }
+  return false;
 }
 
 /**

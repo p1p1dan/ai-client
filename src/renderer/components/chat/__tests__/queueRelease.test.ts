@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createEmptyState,
   enqueue,
+  pauseSession,
   prioritizeEntry,
   type QueuedMessage,
   selectSessionQueue,
@@ -28,6 +29,7 @@ import {
   deriveQueueStripModel,
   type FailureAffordance,
   FORCE_STOP_TITLE,
+  hasOtherSessionWaitingForSlot,
   isAdmittedOutcome,
   isReleasableStatus,
   isRunningStatus,
@@ -41,7 +43,7 @@ import {
   shouldArmRetryable,
   shouldClearPauseOnSend,
   shouldClearRetryableOnOutcome,
-  shouldHandOffRetryingTurn,
+  shouldHandOffAdmittedTurn,
   shouldPauseQueueOnRejection,
   shouldRetryBusySend,
   shouldRevokeRestoredDraft,
@@ -1894,13 +1896,38 @@ describe('decision 046 — stoppable stopping, releasable disconnected', () => {
   });
 });
 
-describe('shouldHandOffRetryingTurn (2026-10-19: a retrying turn held the one send slot)', () => {
-  it('hands off only an admitted turn the engine is retrying', () => {
-    expect(shouldHandOffRetryingTurn({ sawUserEcho: true, sawNetworkRetry: true })).toBe(true);
-    expect(shouldHandOffRetryingTurn({ sawUserEcho: true, sawNetworkRetry: false })).toBe(false);
+describe('shouldHandOffAdmittedTurn (the one send slot, held by a turn with no reply yet)', () => {
+  it('2026-10-19: hands off an admitted turn the engine is retrying', () => {
+    const quiet = { otherSessionWaiting: false };
+    expect(shouldHandOffAdmittedTurn({ ...quiet, sawUserEcho: true, sawNetworkRetry: true })).toBe(
+      true
+    );
+    expect(shouldHandOffAdmittedTurn({ ...quiet, sawUserEcho: true, sawNetworkRetry: false })).toBe(
+      false
+    );
+  });
+
+  it('2026-11-09: hands off an admitted turn when another chat is queued for the slot', () => {
+    // A request hanging with no retry frame held the slot until the first
+    // block or the silence ceiling, and the other chat's message sat queued.
+    const noRetry = { sawNetworkRetry: false };
+    expect(
+      shouldHandOffAdmittedTurn({ ...noRetry, sawUserEcho: true, otherSessionWaiting: true })
+    ).toBe(true);
+    expect(
+      shouldHandOffAdmittedTurn({ ...noRetry, sawUserEcho: true, otherSessionWaiting: false })
+    ).toBe(false);
+  });
+
+  it('never hands off a turn the Host has not admitted', () => {
     // No echo: the Host may still refuse the turn, and its payload is still ours.
-    expect(shouldHandOffRetryingTurn({ sawUserEcho: false, sawNetworkRetry: true })).toBe(false);
-    expect(shouldHandOffRetryingTurn({ sawUserEcho: false, sawNetworkRetry: false })).toBe(false);
+    for (const sawNetworkRetry of [false, true]) {
+      for (const otherSessionWaiting of [false, true]) {
+        expect(
+          shouldHandOffAdmittedTurn({ sawUserEcho: false, sawNetworkRetry, otherSessionWaiting })
+        ).toBe(false);
+      }
+    }
   });
 
   it('lands on the pending-reply exit, never on the unadmitted abandon', () => {
@@ -1909,5 +1936,36 @@ describe('shouldHandOffRetryingTurn (2026-10-19: a retrying turn held the one se
     expect(decideAdmittedTimeoutOutcome({ sawUserEcho: true, sawAssistantProgress: false })).toBe(
       'pending'
     );
+  });
+});
+
+describe('hasOtherSessionWaitingForSlot', () => {
+  const entry = (id: string, sessionId: string): QueuedMessage => ({
+    id,
+    sessionId,
+    text: id,
+    attachments: [],
+    queuedAt: 1,
+  });
+  const withEntry = (sessionId: string) => {
+    const added = enqueue(createEmptyState(), entry(`${sessionId}-q1`, sessionId));
+    if (!added.ok) throw new Error('enqueue');
+    return added.state;
+  };
+
+  it('counts another chat with a queued message', () => {
+    expect(hasOtherSessionWaitingForSlot(withEntry('b'), 'a')).toBe(true);
+  });
+
+  it("ignores the sending chat's own queue and empty queues", () => {
+    expect(hasOtherSessionWaitingForSlot(withEntry('a'), 'a')).toBe(false);
+    expect(hasOtherSessionWaitingForSlot(createEmptyState(), 'a')).toBe(false);
+  });
+
+  it('ignores a paused queue unless its head was picked with Send now', () => {
+    const paused = pauseSession(withEntry('b'), 'b', 'stopped');
+    expect(hasOtherSessionWaitingForSlot(paused, 'a')).toBe(false);
+    const picked = prioritizeEntry(paused, 'b', 'b-q1');
+    expect(hasOtherSessionWaitingForSlot(picked, 'a')).toBe(true);
   });
 });

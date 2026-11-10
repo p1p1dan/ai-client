@@ -213,6 +213,7 @@ import {
   deriveQueueStripModel,
   type FailureAffordanceContext,
   FORCE_STOP_TITLE,
+  hasOtherSessionWaitingForSlot,
   isAdmittedOutcome,
   isStoppableStatus,
   QUEUED_SEND_NOW_BLOCKER_COPY,
@@ -224,7 +225,7 @@ import {
   STOP_TITLE_DSH,
   shouldClearPauseOnSend,
   shouldClearRetryableOnOutcome,
-  shouldHandOffRetryingTurn,
+  shouldHandOffAdmittedTurn,
   shouldPauseQueueOnRejection,
   shouldRetryBusySend,
   shouldRevokeRestoredDraft,
@@ -504,11 +505,12 @@ type WaitResult =
   /** The silence ceiling (or the absolute loop bound) elapsed. NOT a verdict. */
   | 'ceiling'
   /**
-   * The Host admitted this turn and the engine is retrying upstream; the wait
-   * hands the turn to the pending-reply watch so the composer's one send slot
-   * is free for other conversations (`shouldHandOffRetryingTurn`).
+   * The Host admitted this turn and the engine is retrying upstream, or
+   * another conversation is queued for the slot; the wait hands the turn to
+   * the pending-reply watch so the composer's one send slot is free for other
+   * conversations (`shouldHandOffAdmittedTurn`).
    */
-  | 'retrying';
+  | 'handed-off';
 
 /**
  * What a draft does once `handleSend`'s shared gate says a turn is running:
@@ -3306,9 +3308,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       turnStartedAtMs = phaseStartedAtRef.current;
       updateTurnSend(sendOwner, { elapsedSeconds: 0, phase: 'awaiting' });
 
-      // Set by the predicate when its only reason to release is the retry
-      // hand-off, so the classification below can tell it from progress.
-      let handedOffForRetry = false;
+      // Set by the predicate when its only reason to release is the hand-off,
+      // so the classification below can tell it from progress.
+      let handedOff = false;
       // Running alone is not success — wait for assistant / tool / permission / terminal.
       const released = await waitUntil(
         () => {
@@ -3360,8 +3362,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             return true;
           }
           // Last, so any real verdict above wins over the hand-off.
-          if (shouldHandOffRetryingTurn({ sawUserEcho, sawNetworkRetry })) {
-            handedOffForRetry = true;
+          if (
+            shouldHandOffAdmittedTurn({
+              sawUserEcho,
+              sawNetworkRetry,
+              otherSessionWaiting: hasOtherSessionWaitingForSlot(
+                useMessageQueueStore.getState().state,
+                sessionId
+              ),
+            })
+          ) {
+            handedOff = true;
             return true;
           }
           return false;
@@ -3381,7 +3392,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // may also carry a stale `fatalHostError` and must still read as a Stop.
       if (sawSessionStopped || sawSessionCompleted) return 'terminal';
       if (sendGenerationRef.current !== myGeneration) return 'cancelled';
-      if (released && handedOffForRetry && !sawAssistantProgress) return 'retrying';
+      if (released && handedOff && !sawAssistantProgress) return 'handed-off';
       return released ? 'progress' : 'ceiling';
     };
 
@@ -3914,7 +3925,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // side, the same event as a silence expiry: we stopped waiting and the
       // Host has said nothing. Normalised here so the switch has exactly ONE
       // "we stopped waiting" exit instead of two that must be kept in step.
-      // A `'retrying'` hand-off is that exit too: the echo it requires makes
+      // A `'handed-off'` wait is that exit too: the echo it requires makes
       // the ceiling case below arm the pending-reply watch.
       const settled: WaitResult =
         waitResult === 'terminal' || waitResult === 'cancelled'

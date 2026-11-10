@@ -11,6 +11,9 @@
  * Every scenario ends with deterministic `[check]` lines (terminal event, tools that ran,
  * cards, orphan cleanup, history growth); the probe exits 1 when any of them fails.
  *
+ * `retry-stop` (2026-11-09): a Stop while the CLI retries a 502 ("give up now") ends the
+ * turn, nothing reports the session running afterwards, and the next message completes.
+ *
  * Route B S-1 adds two. `errors`: one `CC-ERR` turn per HTTP status (the gateway answers
  * with `x-should-retry: false`), checking each `session.failed` errorCode and that its text
  * never says "Claude Code". `repoenv`: before the host starts, the workspace gets a
@@ -3317,6 +3320,48 @@ async function main(): Promise<void> {
           'errors',
           "the host's stderr never carries the key",
           !hostStderr.some((line) => line.includes(apiKey))
+        );
+        break;
+      }
+      case 'retry-stop': {
+        // A Stop while the CLI is in an upstream retry loop ("give up now"): once
+        // the turn has ended, the session must read idle until the next send.
+        await send('CC-ERR {"status":502,"retry":true}');
+        await waitFor(
+          (e) => e.type === 'session.status' && e.payload?.retry != null,
+          'first upstream retry',
+          90_000
+        );
+        const t = Date.now();
+        await request('worker.stop', { logicalSessionId, reason: 'user' });
+        const end = await waitFor(terminal, 'retry-stop turn end', 20_000);
+        console.log(`  terminal ${end.type} after ${Date.now() - t} ms`);
+        const endIndex = events.indexOf(end);
+        const watchMs = Number(process.env.PROBE_RETRY_STOP_WATCH_S ?? 45) * 1000;
+        await new Promise((r) => setTimeout(r, watchMs));
+        const after = events.slice(endIndex + 1);
+        for (const e of after) {
+          if (e.type === 'message.delta' || e.type === 'thinking.delta') continue;
+          console.log(`  after stop: ${e.type} ${JSON.stringify(e.payload ?? {}).slice(0, 200)}`);
+        }
+        check(
+          'retry-stop',
+          'the stopped turn ends in session.stopped',
+          end.type === 'session.stopped'
+        );
+        check(
+          'retry-stop',
+          'nothing reports the session running after the Stop ended its turn',
+          !after.some((e) => e.type === 'session.status' && e.payload?.status !== 'idle')
+        );
+        await send('CC-TEXT {"pieces":["after the stopped retry"]}');
+        const next = await waitFor(terminal, 'turn after the stopped retry', 90_000);
+        show('retry-stop next turn');
+        check('retry-stop', 'the next turn completes', next.type === 'session.completed');
+        check(
+          'retry-stop',
+          'the next turn answers the next message',
+          assistantText().includes('after the stopped retry')
         );
         break;
       }
